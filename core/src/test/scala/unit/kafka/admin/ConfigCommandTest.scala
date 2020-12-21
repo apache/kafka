@@ -39,7 +39,6 @@ import org.apache.kafka.test.TestUtils
 import org.easymock.EasyMock
 import org.junit.Assert._
 import org.junit.Test
-import org.scalatest.Assertions.intercept
 
 import scala.collection.{Seq, mutable}
 import scala.jdk.CollectionConverters._
@@ -477,9 +476,7 @@ class ConfigCommandTest extends ZooKeeperTestHarness with Logging {
     val mockAdminClient: Admin = EasyMock.createStrictMock(classOf[Admin])
     val opts = new ConfigCommandOptions(Array("--bootstrap-server", "localhost:9092",
       "--alter") ++ alterOpts)
-    val e = intercept[IllegalArgumentException] {
-      ConfigCommand.alterConfig(mockAdminClient, opts)
-    }
+    val e = assertThrows(classOf[IllegalArgumentException], () => ConfigCommand.alterConfig(mockAdminClient, opts))
     assertTrue(s"Unexpected exception: $e", e.getMessage.contains(expectedErrorMessage))
   }
 
@@ -1195,14 +1192,14 @@ class ConfigCommandTest extends ZooKeeperTestHarness with Logging {
 
     // Listener configs: should work only with listener name
     alterAndVerifyConfig(Map("listener.name.external.ssl.keystore.location" -> "/tmp/test.jks"), Some(brokerId))
-    intercept[ConfigException](alterConfigWithZk(Map("ssl.keystore.location" -> "/tmp/test.jks"), Some(brokerId)))
+    assertThrows(classOf[ConfigException], () => alterConfigWithZk(Map("ssl.keystore.location" -> "/tmp/test.jks"), Some(brokerId)))
 
     // Per-broker config configured at default cluster-level should fail
-    intercept[ConfigException](alterConfigWithZk(Map("listener.name.external.ssl.keystore.location" -> "/tmp/test.jks"), None))
+    assertThrows(classOf[ConfigException], () => alterConfigWithZk(Map("listener.name.external.ssl.keystore.location" -> "/tmp/test.jks"), None))
     deleteAndVerifyConfig(Set("listener.name.external.ssl.keystore.location"), Some(brokerId))
 
     // Password config update without encoder secret should fail
-    intercept[IllegalArgumentException](alterConfigWithZk(Map("listener.name.external.ssl.keystore.password" -> "secret"), Some(brokerId)))
+    assertThrows(classOf[IllegalArgumentException], () => alterConfigWithZk(Map("listener.name.external.ssl.keystore.password" -> "secret"), Some(brokerId)))
 
     // Password config update with encoder secret should succeed and encoded password must be stored in ZK
     val configs = Map("listener.name.external.ssl.keystore.password" -> "secret", "log.cleaner.threads" -> "2")
@@ -1231,12 +1228,12 @@ class ConfigCommandTest extends ZooKeeperTestHarness with Logging {
 
 
     // Password config update at default cluster-level should fail
-    intercept[ConfigException](alterConfigWithZk(configs, None, encoderConfigs))
+    assertThrows(classOf[ConfigException], () => alterConfigWithZk(configs, None, encoderConfigs))
 
     // Dynamic config updates using ZK should fail if broker is running.
     registerBrokerInZk(brokerId.toInt)
-    intercept[IllegalArgumentException](alterConfigWithZk(Map("message.max.size" -> "210000"), Some(brokerId)))
-    intercept[IllegalArgumentException](alterConfigWithZk(Map("message.max.size" -> "220000"), None))
+    assertThrows(classOf[IllegalArgumentException], () => alterConfigWithZk(Map("message.max.size" -> "210000"), Some(brokerId)))
+    assertThrows(classOf[IllegalArgumentException], () => alterConfigWithZk(Map("message.max.size" -> "220000"), None))
 
     // Dynamic config updates using ZK should for a different broker that is not running should succeed
     alterAndVerifyConfig(Map("message.max.size" -> "230000"), Some("2"))

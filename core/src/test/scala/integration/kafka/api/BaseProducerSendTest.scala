@@ -34,7 +34,6 @@ import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.common.{KafkaException, TopicPartition}
 import org.junit.Assert._
 import org.junit.{After, Before, Test}
-import org.scalatest.Assertions.fail
 
 import scala.annotation.nowarn
 import scala.jdk.CollectionConverters._
@@ -127,7 +126,7 @@ abstract class BaseProducerSendTest extends KafkaServerTestHarness {
           assertNotEquals(metadata.checksum(), 0)
           offset += 1
         } else {
-          fail("Send callback returns the following exception", exception)
+          fail(s"Send callback returns the following exception: $exception")
         }
       }
     }
@@ -239,7 +238,7 @@ abstract class BaseProducerSendTest extends KafkaServerTestHarness {
           offset += 1
           timestampDiff += 1
         } else {
-          fail("Send callback returns the following exception", exception)
+          fail(s"Send callback returns the following exception: $exception")
         }
       }
     }

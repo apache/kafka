@@ -21,9 +21,8 @@ import java.io.ByteArrayOutputStream
 import java.text.SimpleDateFormat
 
 import kafka.utils.Exit
-import org.junit.Assert.assertEquals
+import org.junit.Assert.{assertEquals, assertThrows}
 import org.junit.Test
-import org.scalatest.Assertions.assertThrows
 
 class ConsumerPerformanceTest {
 
@@ -108,7 +107,7 @@ class ConsumerPerformanceTest {
       "--messages", "10",
       "--new-consumer"
     )
-    try assertThrows[IllegalArgumentException](new ConsumerPerformance.ConsumerPerfConfig(args))
+    try assertThrows(classOf[IllegalArgumentException], () => new ConsumerPerformance.ConsumerPerfConfig(args))
     finally Exit.resetExitProcedure()
   }
 

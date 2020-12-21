@@ -33,7 +33,6 @@ import org.apache.kafka.common.errors.{InvalidProducerEpochException, ProducerFe
 import org.apache.kafka.common.{KafkaException, TopicPartition}
 import org.junit.Assert._
 import org.junit.{After, Before, Test}
-import org.scalatest.Assertions.fail
 
 import scala.jdk.CollectionConverters._
 import scala.collection.Seq
@@ -332,7 +331,7 @@ class TransactionsTest extends KafkaServerTestHarness {
       case _: ProducerFencedException =>
         // good!
       case e: Exception =>
-        fail("Got an unexpected exception from a fenced producer.", e)
+        throw new AssertionError("Got an unexpected exception from a fenced producer.", e)
     }
 
     producer2.commitTransaction()  // ok
@@ -371,7 +370,7 @@ class TransactionsTest extends KafkaServerTestHarness {
       case _: ProducerFencedException =>
         // good!
       case e: Exception =>
-        fail("Got an unexpected exception from a fenced producer.", e)
+        throw new AssertionError("Got an unexpected exception from a fenced producer.", e)
     }
 
     producer2.commitTransaction()  // ok
@@ -482,7 +481,7 @@ class TransactionsTest extends KafkaServerTestHarness {
       case e: ExecutionException =>
         assertTrue(e.getCause.isInstanceOf[InvalidProducerEpochException])
       case e: Exception =>
-        fail("Got an unexpected exception from a fenced producer.", e)
+        throw new AssertionError("Got an unexpected exception from a fenced producer.", e)
     }
 
     producer2.commitTransaction() // ok
@@ -528,7 +527,7 @@ class TransactionsTest extends KafkaServerTestHarness {
       case e: ExecutionException =>
         assertTrue(e.getCause.isInstanceOf[ProducerFencedException])
       case e: Exception =>
-        fail("Got an unexpected exception from a fenced producer.", e)
+        throw new AssertionError("Got an unexpected exception from a fenced producer.", e)
     }
 
     producer2.commitTransaction()  // ok
@@ -714,7 +713,7 @@ class TransactionsTest extends KafkaServerTestHarness {
       case _: TimeoutException =>
         // good!
       case e: Exception =>
-        fail("Got an unexpected exception from initTransactions", e)
+        throw new AssertionError("Got an unexpected exception from initTransactions", e)
     } finally {
       producer2.close()
     }
@@ -728,7 +727,7 @@ class TransactionsTest extends KafkaServerTestHarness {
       case _: ProducerFencedException =>
         // good!
       case e: Exception =>
-        fail("Got an unexpected exception from commitTransaction", e)
+        throw new AssertionError("Got an unexpected exception from commitTransaction", e)
     } finally {
       producer1.close()
     }

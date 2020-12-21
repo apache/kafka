@@ -106,17 +106,16 @@ public class ByteBufferLogInputStreamTest {
         ByteBuffer buffer = ByteBuffer.allocate(1024);
         MemoryRecordsBuilder builder = MemoryRecords.builder(buffer, CompressionType.NONE, TimestampType.CREATE_TIME, 0L);
         builder.append(15L, "a".getBytes(), "1".getBytes());
-        builder.append(20L, "b".getBytes(), "2".getBytes());
         builder.close();
 
         builder = MemoryRecords.builder(buffer, CompressionType.NONE, TimestampType.CREATE_TIME, 2L);
         builder.append(30L, "c".getBytes(), "3".getBytes());
         builder.append(40L, "d".getBytes(), "4".getBytes());
         builder.close();
-
         buffer.flip();
 
-        ByteBufferLogInputStream logInputStream = new ByteBufferLogInputStream(buffer, 25);
+        ByteBufferLogInputStream logInputStream = new ByteBufferLogInputStream(buffer, 60);
+        assertNotNull(logInputStream.nextBatch());
         assertThrows(CorruptRecordException.class, logInputStream::nextBatch);
     }
 

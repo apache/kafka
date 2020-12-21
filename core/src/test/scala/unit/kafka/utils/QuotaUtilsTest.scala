@@ -17,16 +17,13 @@
 
 package kafka.utils
 
-import java.util.concurrent.TimeUnit
-
 import org.apache.kafka.common.MetricName
-import org.apache.kafka.common.metrics.{KafkaMetric, MetricConfig, Quota, QuotaViolationException}
 import org.apache.kafka.common.metrics.stats.{Rate, Value}
-
-import scala.jdk.CollectionConverters._
+import org.apache.kafka.common.metrics.{KafkaMetric, MetricConfig, Quota, QuotaViolationException}
 import org.junit.Assert._
 import org.junit.Test
-import org.scalatest.Assertions.assertThrows
+
+import java.util.concurrent.TimeUnit
 
 class QuotaUtilsTest {
 
@@ -34,7 +31,7 @@ class QuotaUtilsTest {
   private val numSamples = 10
   private val sampleWindowSec = 1
   private val maxThrottleTimeMs = 500
-  private val metricName = new MetricName("test-metric", "groupA", "testA", Map.empty.asJava)
+  private val metricName = new MetricName("test-metric", "groupA", "testA", java.util.Collections.emptyMap())
 
   @Test
   def testThrottleTimeObservedRateEqualsQuota(): Unit = {
@@ -102,18 +99,16 @@ class QuotaUtilsTest {
   def testThrottleTimeThrowsExceptionIfProvidedNonRateMetric(): Unit = {
     val testMetric = new KafkaMetric(new Object(), metricName, new Value(), new MetricConfig, time);
 
-    assertThrows[IllegalArgumentException] {
-      QuotaUtils.throttleTime(new QuotaViolationException(testMetric, 10.0, 20.0), time.milliseconds)
-    }
+    assertThrows(classOf[IllegalArgumentException],
+      () => QuotaUtils.throttleTime(new QuotaViolationException(testMetric, 10.0, 20.0), time.milliseconds))
   }
 
   @Test
   def testBoundedThrottleTimeThrowsExceptionIfProvidedNonRateMetric(): Unit = {
     val testMetric = new KafkaMetric(new Object(), metricName, new Value(), new MetricConfig, time);
 
-    assertThrows[IllegalArgumentException] {
-      QuotaUtils.boundedThrottleTime(new QuotaViolationException(testMetric, 10.0, 20.0), maxThrottleTimeMs, time.milliseconds)
-    }
+    assertThrows(classOf[IllegalArgumentException],
+      () => QuotaUtils.boundedThrottleTime(new QuotaViolationException(testMetric, 10.0, 20.0), maxThrottleTimeMs, time.milliseconds))
   }
 
   // the `metric` passed into the returned QuotaViolationException will return windowSize = 'numSamples' - 1

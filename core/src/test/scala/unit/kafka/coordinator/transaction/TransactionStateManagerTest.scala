@@ -35,9 +35,8 @@ import org.apache.kafka.common.requests.ProduceResponse.PartitionResponse
 import org.apache.kafka.common.requests.TransactionResult
 import org.apache.kafka.common.utils.MockTime
 import org.easymock.{Capture, EasyMock, IAnswer}
-import org.junit.Assert.{assertEquals, assertFalse, assertTrue}
+import org.junit.Assert.{assertEquals, assertFalse, assertTrue, fail}
 import org.junit.{After, Before, Test}
-import org.scalatest.Assertions.fail
 
 import scala.jdk.CollectionConverters._
 import scala.collection.{Map, mutable}
@@ -278,12 +277,12 @@ class TransactionStateManagerTest {
     )
 
     val cachedPidMetadata1 = transactionManager.getTransactionState(transactionalId1).fold(
-      err => fail(transactionalId1 + "'s transaction state access returns error " + err),
-      entry => entry.getOrElse(fail(transactionalId1 + "'s transaction state was not loaded into the cache"))
+      err => throw new AssertionError(transactionalId1 + "'s transaction state access returns error " + err),
+      entry => entry.getOrElse(throw new AssertionError(transactionalId1 + "'s transaction state was not loaded into the cache"))
     )
     val cachedPidMetadata2 = transactionManager.getTransactionState(transactionalId2).fold(
-      err => fail(transactionalId2 + "'s transaction state access returns error " + err),
-      entry => entry.getOrElse(fail(transactionalId2 + "'s transaction state was not loaded into the cache"))
+      err => throw new AssertionError(transactionalId2 + "'s transaction state access returns error " + err),
+      entry => entry.getOrElse(throw new AssertionError(transactionalId2 + "'s transaction state was not loaded into the cache"))
     )
 
     // they should be equal to the latest status of the transaction

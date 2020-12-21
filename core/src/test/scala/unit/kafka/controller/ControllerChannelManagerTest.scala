@@ -34,7 +34,6 @@ import org.apache.kafka.common.message.LeaderAndIsrResponseData.LeaderAndIsrTopi
 import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.junit.Assert._
 import org.junit.Test
-import org.scalatest.Assertions
 
 import scala.jdk.CollectionConverters._
 import scala.collection.mutable
@@ -552,7 +551,7 @@ class ControllerChannelManagerTest {
     // We should only receive events for the topic being deleted
     val includedPartitions = batch.sentEvents.flatMap {
       case event: TopicDeletionStopReplicaResponseReceived => event.partitionErrors.keySet
-      case otherEvent => Assertions.fail(s"Unexpected sent event: $otherEvent")
+      case otherEvent => throw new AssertionError(s"Unexpected sent event: $otherEvent")
     }.toSet
     assertEquals(partitions.keys.filter(_.topic == "foo"), includedPartitions)
   }

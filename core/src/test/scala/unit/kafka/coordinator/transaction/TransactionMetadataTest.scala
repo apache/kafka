@@ -22,7 +22,6 @@ import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.record.RecordBatch
 import org.junit.Assert._
 import org.junit.Test
-import org.scalatest.Assertions
 
 import scala.collection.mutable
 
@@ -482,7 +481,7 @@ class TransactionMetadataTest {
                                                       now: Option[Long] = None): TxnTransitMetadata = {
     val result = txnMetadata.prepareIncrementProducerEpoch(30000, expectedProducerEpoch,
       now.getOrElse(time.milliseconds()))
-    result.getOrElse(Assertions.fail(s"prepareIncrementProducerEpoch failed with $result"))
+    result.getOrElse(throw new AssertionError(s"prepareIncrementProducerEpoch failed with $result"))
   }
 
 }

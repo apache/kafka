@@ -33,9 +33,8 @@ import org.apache.zookeeper.Watcher.Event.{EventType, KeeperState}
 import org.apache.zookeeper.ZooKeeper.States
 import org.apache.zookeeper.client.ZKClientConfig
 import org.apache.zookeeper.{CreateMode, WatchedEvent, ZooDefs}
-import org.junit.Assert.{assertArrayEquals, assertEquals, assertFalse, assertTrue}
+import org.junit.Assert.{assertArrayEquals, assertEquals, assertFalse, assertTrue, assertThrows, fail}
 import org.junit.{After, Before, Test}
-import org.scalatest.Assertions.{assertThrows, fail, intercept}
 
 import scala.jdk.CollectionConverters._
 
@@ -82,7 +81,7 @@ class ZooKeeperClientTest extends ZooKeeperTestHarness {
   @Test
   def testConnectionTimeout(): Unit = {
     zookeeper.shutdown()
-    assertThrows[ZooKeeperClientTimeoutException](new ZooKeeperClient(zkConnect, zkSessionTimeout,
+    assertThrows(classOf[ZooKeeperClientTimeoutException], () => new ZooKeeperClient(zkConnect, zkSessionTimeout,
       connectionTimeoutMs = 10, Int.MaxValue, time, "testMetricGroup", "testMetricType").close())
   }
 
@@ -116,10 +115,9 @@ class ZooKeeperClientTest extends ZooKeeperTestHarness {
       // For a sanity check, make sure a bad client connection socket class name generates an exception
       val badClientConfig = new ZKClientConfig()
       KafkaConfig.setZooKeeperClientProperty(badClientConfig, propKey, propVal + "BadClassName")
-      intercept[Exception] {
-          new ZooKeeperClient(zkConnect, zkSessionTimeout, zkConnectionTimeout, Int.MaxValue, time, "testMetricGroup",
-            "testMetricType", None, Some(badClientConfig))
-      }
+      assertThrows(classOf[Exception],
+        () => new ZooKeeperClient(zkConnect, zkSessionTimeout, zkConnectionTimeout, Int.MaxValue, time, "testMetricGroup",
+            "testMetricType", None, Some(badClientConfig)))
     } finally {
       client.close()
     }
@@ -129,9 +127,7 @@ class ZooKeeperClientTest extends ZooKeeperTestHarness {
   def testDeleteNonExistentZNode(): Unit = {
     val deleteResponse = zooKeeperClient.handleRequest(DeleteRequest(mockPath, -1))
     assertEquals("Response code should be NONODE", Code.NONODE, deleteResponse.resultCode)
-    intercept[NoNodeException] {
-      deleteResponse.maybeThrow()
-    }
+    assertThrows(classOf[NoNodeException], () => deleteResponse.maybeThrow())
   }
 
   @Test
@@ -715,7 +711,7 @@ class ZooKeeperClientTest extends ZooKeeperTestHarness {
 
   private def cleanMetricsRegistry(): Unit = {
     val metrics = KafkaYammerMetrics.defaultRegistry
-    metrics.allMetrics.keySet.forEach(metrics.removeMetric)
+    metrics.allMetrics.keySet.forEach(m => metrics.removeMetric(m))
   }
 
   private def bytes = UUID.randomUUID().toString.getBytes(StandardCharsets.UTF_8)

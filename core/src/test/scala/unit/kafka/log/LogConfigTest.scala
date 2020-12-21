@@ -17,16 +17,15 @@
 
 package kafka.log
 
-import java.util.{Collections, Properties}
-
 import kafka.server.{KafkaConfig, KafkaServer, ThrottledReplicaListValidator}
 import kafka.utils.TestUtils
 import org.apache.kafka.common.config.ConfigDef.Importance.MEDIUM
 import org.apache.kafka.common.config.ConfigDef.Type.INT
 import org.apache.kafka.common.config.{ConfigException, TopicConfig}
-import org.junit.{Assert, Test}
 import org.junit.Assert._
-import org.scalatest.Assertions._
+import org.junit.{Assert, Test}
+
+import java.util.Properties
 
 class LogConfigTest {
 
@@ -88,9 +87,7 @@ class LogConfigTest {
     val props = new Properties
     props.setProperty(LogConfig.MaxCompactionLagMsProp, "100")
     props.setProperty(LogConfig.MinCompactionLagMsProp, "200")
-    intercept[Exception] {
-      LogConfig.validate(props)
-    }
+    assertThrows(classOf[Exception], () => LogConfig.validate(props))
   }
 
   @Test
@@ -128,7 +125,7 @@ class LogConfigTest {
   /* Sanity check that toHtml produces one of the expected configs */
   @Test
   def testToHtml(): Unit = {
-    val html = LogConfig.configDefCopy.toHtml(4, (key: String) => "prefix_" + key, Collections.emptyMap())
+    val html = LogConfig.configDefCopy.toHtml(4, (key: String) => "prefix_" + key)
     val expectedConfig = "<h4><a id=\"file.delete.delay.ms\"></a><a id=\"prefix_file.delete.delay.ms\" href=\"#prefix_file.delete.delay.ms\">file.delete.delay.ms</a></h4>"
     assertTrue(s"Could not find `$expectedConfig` in:\n $html", html.contains(expectedConfig))
   }
@@ -178,9 +175,7 @@ class LogConfigTest {
     values.foreach((value) => {
       val props = new Properties
       props.setProperty(name, value.toString)
-      intercept[Exception] {
-        LogConfig(props)
-      }
+      assertThrows(classOf[Exception], () => LogConfig(props))
     })
   }
 

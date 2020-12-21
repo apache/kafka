@@ -44,12 +44,11 @@ import org.apache.kafka.common.utils.{Time, Utils}
 import org.easymock.EasyMock
 import org.junit.Assert._
 import org.junit.{After, Before, Test}
-import org.scalatest.Assertions
 
 import scala.collection.{Iterable, Map, mutable}
 import scala.jdk.CollectionConverters._
 import scala.collection.mutable.ListBuffer
-import org.scalatest.Assertions.{assertThrows, intercept, withClue}
+import org.scalatest.Assertions.withClue
 
 class LogTest {
   var config: KafkaConfig = null
@@ -145,7 +144,7 @@ class LogTest {
     // Create clean shutdown file and then simulate error while loading logs such that log loading does not complete.
     Files.createFile(cleanShutdownFile.toPath)
     simulateError = true
-    assertThrows[RuntimeException](logManager.loadLogs())
+    assertThrows(classOf[RuntimeException], () => logManager.loadLogs())
     assertTrue("Clean shutdown file must not have existed", !cleanShutdownFile.exists())
     // Do not simulate error on next call to LogManager#loadLogs. LogManager must understand that log had unclean shutdown the last time.
     simulateError = false
@@ -573,7 +572,7 @@ class LogTest {
     log.appendAsLeader(records, leaderEpoch = 0)
 
     val nextRecords = TestUtils.records(List(new SimpleRecord(mockTime.milliseconds, "key".getBytes, "value".getBytes)), producerId = pid, producerEpoch = epoch, sequence = 2)
-    assertThrows[OutOfOrderSequenceException](log.appendAsLeader(nextRecords, leaderEpoch = 0))
+    assertThrows(classOf[OutOfOrderSequenceException], () => log.appendAsLeader(nextRecords, leaderEpoch = 0))
   }
 
   @Test
@@ -664,7 +663,7 @@ class LogTest {
     assertEquals(List[Long](10), getSegmentOffsets(log, 13, 17))
 
     // from < to is bad
-    assertThrows[IllegalArgumentException]({ log.logSegments(10, 0) })
+    assertThrows(classOf[IllegalArgumentException], () => log.logSegments(10, 0))
   }
 
   @Test
@@ -826,9 +825,7 @@ class LogTest {
       log.roll()
     }
 
-    assertThrows[IllegalArgumentException] {
-      log.logSegments(5, 1)
-    }
+    assertThrows(classOf[IllegalArgumentException], () => log.logSegments(5, 1))
   }
 
   @Test
@@ -1925,7 +1922,7 @@ class LogTest {
     log.appendAsLeader(records, leaderEpoch = 0)
 
     val nextRecords = TestUtils.records(List(new SimpleRecord(mockTime.milliseconds, "key".getBytes, "value".getBytes)), producerId = pid, producerEpoch = oldEpoch, sequence = 0)
-    assertThrows[InvalidProducerEpochException](log.appendAsLeader(nextRecords, leaderEpoch = 0))
+    assertThrows(classOf[InvalidProducerEpochException], () => log.appendAsLeader(nextRecords, leaderEpoch = 0))
   }
 
   @Test
@@ -2085,7 +2082,7 @@ class LogTest {
     val logConfig = LogTest.createLogConfig()
     val log = createLog(logDir,  logConfig)
     log.closeHandlers()
-    assertThrows[KafkaStorageException](log.roll(Some(1L)))
+    assertThrows(classOf[KafkaStorageException], () => log.roll(Some(1L)))
   }
 
   @Test
@@ -2303,25 +2300,22 @@ class LogTest {
 
     val errorMsgPrefix = "Compacted topic cannot accept message without key"
 
-    var e = intercept[RecordValidationException] {
-      log.appendAsLeader(messageSetWithUnkeyedMessage, leaderEpoch = 0)
-    }
+    var e = assertThrows(classOf[RecordValidationException],
+      () => log.appendAsLeader(messageSetWithUnkeyedMessage, leaderEpoch = 0))
     assertTrue(e.invalidException.isInstanceOf[InvalidRecordException])
     assertEquals(1, e.recordErrors.size)
     assertEquals(0, e.recordErrors.head.batchIndex)
     assertTrue(e.recordErrors.head.message.startsWith(errorMsgPrefix))
 
-    e = intercept[RecordValidationException] {
-      log.appendAsLeader(messageSetWithOneUnkeyedMessage, leaderEpoch = 0)
-    }
+    e = assertThrows(classOf[RecordValidationException],
+      () => log.appendAsLeader(messageSetWithOneUnkeyedMessage, leaderEpoch = 0))
     assertTrue(e.invalidException.isInstanceOf[InvalidRecordException])
     assertEquals(1, e.recordErrors.size)
     assertEquals(0, e.recordErrors.head.batchIndex)
     assertTrue(e.recordErrors.head.message.startsWith(errorMsgPrefix))
 
-    e = intercept[RecordValidationException] {
-      log.appendAsLeader(messageSetWithCompressedUnkeyedMessage, leaderEpoch = 0)
-    }
+    e = assertThrows(classOf[RecordValidationException],
+      () => log.appendAsLeader(messageSetWithCompressedUnkeyedMessage, leaderEpoch = 0))
     assertTrue(e.invalidException.isInstanceOf[InvalidRecordException])
     assertEquals(1, e.recordErrors.size)
     assertEquals(1, e.recordErrors.head.batchIndex)     // batch index is 1
@@ -2828,9 +2822,9 @@ class LogTest {
     buffer.flip()
     val memoryRecords = MemoryRecords.readableRecords(buffer)
 
-    assertThrows[OffsetsOutOfOrderException] {
+    assertThrows(classOf[OffsetsOutOfOrderException], () =>
       log.appendAsFollower(memoryRecords)
-    }
+    )
   }
 
   @Test
@@ -2844,9 +2838,9 @@ class LogTest {
     for (magic <- magicVals; compression <- compressionTypes) {
       val invalidRecord = MemoryRecords.withRecords(magic, compression, new SimpleRecord(1.toString.getBytes))
       withClue(s"Magic=$magic, compressionType=$compression") {
-        assertThrows[UnexpectedAppendOffsetException] {
+        assertThrows(classOf[UnexpectedAppendOffsetException], () =>
           log.appendAsFollower(invalidRecord)
-        }
+        )
       }
     }
   }
@@ -2869,9 +2863,7 @@ class LogTest {
                                     baseOffset = firstOffset)
 
       withClue(s"Magic=$magic, compressionType=$compression") {
-        val exception = intercept[UnexpectedAppendOffsetException] {
-          log.appendAsFollower(records = batch)
-        }
+        val exception = assertThrows(classOf[UnexpectedAppendOffsetException], () => log.appendAsFollower(records = batch))
         assertEquals(s"Magic=$magic, compressionType=$compression, UnexpectedAppendOffsetException#firstOffset",
                      firstOffset, exception.firstOffset)
         assertEquals(s"Magic=$magic, compressionType=$compression, UnexpectedAppendOffsetException#lastOffset",
@@ -3232,7 +3224,7 @@ class LogTest {
     val log = createLog(logDir, logConfig, recoveryPoint = Long.MaxValue)
 
     val segmentWithOverflow = LogTest.firstOverflowSegment(log).getOrElse {
-      Assertions.fail("Failed to create log with a segment which has overflowed offsets")
+      throw new AssertionError("Failed to create log with a segment which has overflowed offsets")
     }
 
     val allRecordsBeforeSplit = LogTest.allRecords(log)
@@ -4412,7 +4404,7 @@ class LogTest {
     append(5)
     appendEndTxnMarkerAsLeader(log, pid, epoch, ControlRecordType.COMMIT, coordinatorEpoch = 2)
 
-    assertThrows[TransactionCoordinatorFencedException](appendEndTxnMarkerAsLeader(log, pid, epoch,
+    assertThrows(classOf[TransactionCoordinatorFencedException], () => appendEndTxnMarkerAsLeader(log, pid, epoch,
       ControlRecordType.ABORT, coordinatorEpoch = 1))
   }
 
@@ -4434,9 +4426,8 @@ class LogTest {
 
     appendEndTxnMarkerAsLeader(log, pid, epoch, ControlRecordType.ABORT, coordinatorEpoch = 2, leaderEpoch = 1)
     appendEndTxnMarkerAsLeader(log, pid, epoch, ControlRecordType.ABORT, coordinatorEpoch = 2, leaderEpoch = 1)
-    assertThrows[TransactionCoordinatorFencedException] {
-      appendEndTxnMarkerAsLeader(log, pid, epoch, ControlRecordType.ABORT, coordinatorEpoch = 1, leaderEpoch = 1)
-    }
+    assertThrows(classOf[TransactionCoordinatorFencedException],
+      () => appendEndTxnMarkerAsLeader(log, pid, epoch, ControlRecordType.ABORT, coordinatorEpoch = 1, leaderEpoch = 1))
   }
 
   @Test
@@ -4447,9 +4438,8 @@ class LogTest {
     val log = createLog(logDir, logConfig)
     appendEndTxnMarkerAsLeader(log, producerId, epoch, ControlRecordType.ABORT, coordinatorEpoch = 1)
 
-    assertThrows[InvalidProducerEpochException] {
-      appendEndTxnMarkerAsLeader(log, producerId, (epoch - 1).toShort, ControlRecordType.ABORT, coordinatorEpoch = 1)
-    }
+    assertThrows(classOf[InvalidProducerEpochException],
+      () => appendEndTxnMarkerAsLeader(log, producerId, (epoch - 1).toShort, ControlRecordType.ABORT, coordinatorEpoch = 1))
   }
 
   @Test
@@ -4520,9 +4510,8 @@ class LogTest {
     log.activeSegment.txnIndex.renameTo(log.dir)
 
     // The append will be written to the log successfully, but the write to the index will fail
-    assertThrows[KafkaStorageException] {
-      appendEndTxnMarkerAsLeader(log, pid, epoch, ControlRecordType.ABORT, coordinatorEpoch = 1)
-    }
+    assertThrows(classOf[KafkaStorageException],
+      () => appendEndTxnMarkerAsLeader(log, pid, epoch, ControlRecordType.ABORT, coordinatorEpoch = 1))
     assertEquals(11L, log.logEndOffset)
     assertEquals(0L, log.lastStableOffset)
 
@@ -4778,7 +4767,7 @@ class LogTest {
 
     val log = createLog(logDir, logConfig, recoveryPoint = Long.MaxValue)
     val segmentWithOverflow = LogTest.firstOverflowSegment(log).getOrElse {
-      Assertions.fail("Failed to create log with a segment which has overflowed offsets")
+      throw new AssertionError("Failed to create log with a segment which has overflowed offsets")
     }
 
     (log, segmentWithOverflow)

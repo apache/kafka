@@ -36,7 +36,6 @@ import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.common.{KafkaException, requests}
 import org.junit.Assert._
 import org.junit.{After, Before, Test}
-import org.scalatest.Assertions.intercept
 
 import scala.annotation.nowarn
 import scala.jdk.CollectionConverters._
@@ -165,7 +164,7 @@ class DynamicConnectionQuotaTest extends BaseRequestTest {
     plaintextConns ++= (0 until 2).map(_ => connect("PLAINTEXT"))
     TestUtils.waitUntilTrue(() => connectionCount <= 10, "Internal connections not closed")
     plaintextConns.foreach(verifyConnection)
-    intercept[IOException](internalConns.foreach { socket =>
+    assertThrows(classOf[IOException], () => internalConns.foreach { socket =>
       sendAndReceive[ProduceResponse](produceRequest, socket)
     })
     plaintextConns.foreach(_.close())
@@ -359,7 +358,7 @@ class DynamicConnectionQuotaTest extends BaseRequestTest {
     conns = conns :+ connect("PLAINTEXT")
 
     // now try one more (should fail)
-    intercept[IOException](connectWithFailure.apply())
+    assertThrows(classOf[IOException], () => connectWithFailure.apply())
 
     //close one connection
     conns.head.close()

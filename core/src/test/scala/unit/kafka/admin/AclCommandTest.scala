@@ -36,9 +36,8 @@ import org.apache.kafka.common.security.auth.{KafkaPrincipal, SecurityProtocol}
 import org.apache.kafka.common.utils.{AppInfoParser, SecurityUtils}
 import org.apache.kafka.server.authorizer.Authorizer
 import org.apache.log4j.Level
-import org.junit.Assert.assertFalse
+import org.junit.Assert.{assertFalse, assertThrows}
 import org.junit.{After, Assert, Before, Test}
-import org.scalatest.Assertions.intercept
 
 class AclCommandTest extends ZooKeeperTestHarness with Logging {
 
@@ -284,7 +283,7 @@ class AclCommandTest extends ZooKeeperTestHarness with Logging {
       if (isValid)
         callMain(cmd)
       else
-        intercept[RuntimeException](callMain(cmd))
+        assertThrows(classOf[RuntimeException], () => callMain(cmd))
     }
     try {
       PatternType.values.foreach { patternType =>

@@ -27,7 +27,6 @@ import org.apache.kafka.common.internals.Topic
 import org.junit.Assert._
 import org.junit.rules.TestName
 import org.junit.{After, Before, Rule, Test}
-import org.scalatest.Assertions.intercept
 
 import scala.util.Random
 
@@ -89,9 +88,7 @@ class TopicCommandWithZKClientTest extends ZooKeeperTestHarness with Logging wit
     topicService.createTopic(createOpts)
 
     // try to re-create the topic without --if-not-exists
-    intercept[TopicExistsException] {
-      topicService.createTopic(createOpts)
-    }
+    assertThrows(classOf[TopicExistsException], () => topicService.createTopic(createOpts))
 
     // try to re-create the topic with --if-not-exists
     val createNotExistsOpts = new TopicCommandOptions(
@@ -119,10 +116,9 @@ class TopicCommandWithZKClientTest extends ZooKeeperTestHarness with Logging wit
     val brokers = List(0)
     TestUtils.createBrokersInZk(zkClient, brokers)
 
-    intercept[InvalidReplicationFactorException] {
-      topicService.createTopic(new TopicCommandOptions(
-        Array("--partitions", "2", "--replication-factor", (Short.MaxValue+1).toString, "--topic", testTopicName)))
-    }
+    assertThrows(classOf[InvalidReplicationFactorException],
+      () => topicService.createTopic(new TopicCommandOptions(
+        Array("--partitions", "2", "--replication-factor", (Short.MaxValue+1).toString, "--topic", testTopicName))))
   }
 
   @Test
@@ -130,10 +126,9 @@ class TopicCommandWithZKClientTest extends ZooKeeperTestHarness with Logging wit
     val brokers = List(0)
     TestUtils.createBrokersInZk(zkClient, brokers)
 
-    intercept[InvalidReplicationFactorException] {
-      topicService.createTopic(new TopicCommandOptions(
-        Array("--partitions", "2", "--replication-factor", "-1", "--topic", testTopicName)))
-    }
+    assertThrows(classOf[InvalidReplicationFactorException],
+      () => topicService.createTopic(new TopicCommandOptions(
+        Array("--partitions", "2", "--replication-factor", "-1", "--topic", testTopicName))))
   }
 
   @Test
@@ -141,10 +136,9 @@ class TopicCommandWithZKClientTest extends ZooKeeperTestHarness with Logging wit
     val brokers = List(0)
     TestUtils.createBrokersInZk(zkClient, brokers)
 
-    intercept[InvalidPartitionsException] {
-      topicService.createTopic(new TopicCommandOptions(
-        Array("--partitions", "-1", "--replication-factor", "1", "--topic", testTopicName)))
-    }
+    assertThrows(classOf[InvalidPartitionsException],
+      () => topicService.createTopic(new TopicCommandOptions(
+        Array("--partitions", "-1", "--replication-factor", "1", "--topic", testTopicName))))
   }
 
   @Test
@@ -155,17 +149,13 @@ class TopicCommandWithZKClientTest extends ZooKeeperTestHarness with Logging wit
     val createOpts = new TopicCommandOptions(
       Array("--partitions", "1", "--replication-factor", "1", "--topic", testTopicName,
         "--config", "message.timestamp.type=boom"))
-    intercept[ConfigException] {
-      topicService.createTopic(createOpts)
-    }
+    assertThrows(classOf[ConfigException], () => topicService.createTopic(createOpts))
 
     // try to create the topic with another invalid config
     val createOpts2 = new TopicCommandOptions(
       Array("--partitions", "1", "--replication-factor", "1", "--topic", testTopicName,
         "--config", "message.format.version=boom"))
-    intercept[ConfigException] {
-      topicService.createTopic(createOpts2)
-    }
+    assertThrows(classOf[ConfigException], () => topicService.createTopic(createOpts2))
   }
 
   @Test
@@ -253,10 +243,9 @@ class TopicCommandWithZKClientTest extends ZooKeeperTestHarness with Logging wit
     topicService.createTopic(new TopicCommandOptions(
       Array("--partitions", "1", "--replication-factor", "1", "--topic", testTopicName)))
 
-    intercept[InvalidPartitionsException] {
-      topicService.alterTopic(new TopicCommandOptions(
-        Array("--partitions", "-1", "--topic", testTopicName)))
-    }
+    assertThrows(classOf[InvalidPartitionsException],
+      () => topicService.alterTopic(new TopicCommandOptions(
+        Array("--partitions", "-1", "--topic", testTopicName))))
   }
 
   @Test
@@ -267,9 +256,7 @@ class TopicCommandWithZKClientTest extends ZooKeeperTestHarness with Logging wit
 
     // alter a topic that does not exist without --if-exists
     val alterOpts = new TopicCommandOptions(Array("--topic", testTopicName, "--partitions", "1"))
-    intercept[IllegalArgumentException] {
-      topicService.alterTopic(alterOpts)
-    }
+    assertThrows(classOf[IllegalArgumentException], () => topicService.alterTopic(alterOpts))
 
     // alter a topic that does not exist with --if-exists
     val alterExistsOpts = new TopicCommandOptions(Array("--topic", testTopicName, "--partitions", "1", "--if-exists"))
@@ -362,9 +349,7 @@ class TopicCommandWithZKClientTest extends ZooKeeperTestHarness with Logging wit
     val deleteOffsetTopicOpts = new TopicCommandOptions(Array("--topic", Topic.GROUP_METADATA_TOPIC_NAME))
     val deleteOffsetTopicPath = DeleteTopicsTopicZNode.path(Topic.GROUP_METADATA_TOPIC_NAME)
     assertFalse("Delete path for topic shouldn't exist before deletion.", zkClient.pathExists(deleteOffsetTopicPath))
-    intercept[AdminOperationException] {
-      topicService.deleteTopic(deleteOffsetTopicOpts)
-    }
+    assertThrows(classOf[AdminOperationException], () => topicService.deleteTopic(deleteOffsetTopicOpts))
     assertFalse("Delete path for topic shouldn't exist after deletion.", zkClient.pathExists(deleteOffsetTopicPath))
   }
 
@@ -376,9 +361,7 @@ class TopicCommandWithZKClientTest extends ZooKeeperTestHarness with Logging wit
 
     // delete a topic that does not exist without --if-exists
     val deleteOpts = new TopicCommandOptions(Array("--topic", testTopicName))
-    intercept[IllegalArgumentException] {
-      topicService.deleteTopic(deleteOpts)
-    }
+    assertThrows(classOf[IllegalArgumentException], () => topicService.deleteTopic(deleteOpts))
 
     // delete a topic that does not exist with --if-exists
     val deleteExistsOpts = new TopicCommandOptions(Array("--topic", testTopicName, "--if-exists"))
@@ -399,9 +382,7 @@ class TopicCommandWithZKClientTest extends ZooKeeperTestHarness with Logging wit
     val deleteOffsetTopicOpts = new TopicCommandOptions(Array("--topic", Topic.GROUP_METADATA_TOPIC_NAME))
     val deleteOffsetTopicPath = DeleteTopicsTopicZNode.path(Topic.GROUP_METADATA_TOPIC_NAME)
     assertFalse("Delete path for topic shouldn't exist before deletion.", zkClient.pathExists(deleteOffsetTopicPath))
-    intercept[AdminOperationException] {
-      topicService.deleteTopic(deleteOffsetTopicOpts)
-    }
+    assertThrows(classOf[AdminOperationException], () => topicService.deleteTopic(deleteOffsetTopicOpts))
   }
 
   @Test
@@ -412,9 +393,7 @@ class TopicCommandWithZKClientTest extends ZooKeeperTestHarness with Logging wit
 
     // describe topic that does not exist
     val describeOpts = new TopicCommandOptions(Array("--topic", testTopicName))
-    intercept[IllegalArgumentException] {
-      topicService.describeTopic(describeOpts)
-    }
+    assertThrows(classOf[IllegalArgumentException], () => topicService.describeTopic(describeOpts))
 
     // describe all topics
     val describeOptsAllTopics = new TopicCommandOptions(Array())
@@ -612,9 +591,7 @@ class TopicCommandWithZKClientTest extends ZooKeeperTestHarness with Logging wit
     }
     Exit.setExitProcedure(mockExitProcedure)
     try {
-      intercept[RuntimeException] {
-        method()
-      }
+      assertThrows(classOf[RuntimeException], () => method())
     } finally {
       Exit.resetExitProcedure()
     }

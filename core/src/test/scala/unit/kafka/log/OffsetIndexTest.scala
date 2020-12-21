@@ -24,7 +24,6 @@ import org.junit.Assert._
 import java.util.{Arrays, Collections}
 
 import org.junit._
-import org.scalatest.Assertions.intercept
 
 import scala.collection._
 import scala.util.Random
@@ -192,7 +191,7 @@ class OffsetIndexTest {
     val idx = new OffsetIndex(nonExistentTempFile(), baseOffset = 0L, maxIndexSize = 10 * 8)
     idx.forceUnmap()
     // mmap should be null after unmap causing lookup to throw a NPE
-    intercept[NullPointerException](idx.lookup(1))
+    assertThrows(classOf[NullPointerException], () => idx.lookup(1))
   }
 
   @Test

@@ -27,7 +27,6 @@ import kafka.utils.TestUtils
 import org.apache.kafka.common.utils.Time
 import org.junit.{After, Before, Test}
 import org.junit.Assert._
-import org.scalatest.Assertions.intercept
 
 import scala.jdk.CollectionConverters._
 
@@ -175,7 +174,7 @@ class DelayedOperationTest {
     assertTrue(s"Time for expiration $elapsed should at least $expirationMs", elapsed >= expirationMs)
     assertEquals(40, futures4.head.get)
     assertEquals(classOf[org.apache.kafka.common.errors.TimeoutException],
-      intercept[ExecutionException](futures4(1).get).getCause.getClass)
+      assertThrows(classOf[ExecutionException], () => futures4(1).get).getCause.getClass)
     assertEquals(40, result.get())
   }
 

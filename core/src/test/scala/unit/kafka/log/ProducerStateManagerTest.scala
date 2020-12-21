@@ -34,7 +34,6 @@ import org.apache.kafka.common.utils.{MockTime, Utils}
 import org.easymock.EasyMock
 import org.junit.Assert._
 import org.junit.{After, Before, Test}
-import org.scalatest.Assertions.{assertThrows, fail}
 
 class ProducerStateManagerTest {
   var logDir: File = null
@@ -66,22 +65,16 @@ class ProducerStateManagerTest {
     append(stateManager, producerId, epoch, 1, 0L, 1L)
 
     // Duplicates are checked separately and should result in OutOfOrderSequence if appended
-    assertThrows[OutOfOrderSequenceException] {
-      append(stateManager, producerId, epoch, 1, 0L, 1L)
-    }
+    assertThrows(classOf[OutOfOrderSequenceException], () => append(stateManager, producerId, epoch, 1, 0L, 1L))
 
     // Invalid sequence number (greater than next expected sequence number)
-    assertThrows[OutOfOrderSequenceException] {
-      append(stateManager, producerId, epoch, 5, 0L, 2L)
-    }
+    assertThrows(classOf[OutOfOrderSequenceException], () => append(stateManager, producerId, epoch, 5, 0L, 2L))
 
     // Change epoch
     append(stateManager, producerId, (epoch + 1).toShort, 0, 0L, 3L)
 
     // Incorrect epoch
-    assertThrows[InvalidProducerEpochException] {
-      append(stateManager, producerId, epoch, 0, 0L, 4L)
-    }
+    assertThrows(classOf[InvalidProducerEpochException], () => append(stateManager, producerId, epoch, 0, 0L, 4L))
   }
 
   @Test
@@ -89,25 +82,21 @@ class ProducerStateManagerTest {
     val producerEpoch = 2.toShort
     appendEndTxnMarker(stateManager, producerId, producerEpoch, ControlRecordType.COMMIT, offset = 27L)
 
-    val firstEntry = stateManager.lastEntry(producerId).getOrElse(fail("Expected last entry to be defined"))
+    val firstEntry = stateManager.lastEntry(producerId).getOrElse(throw new RuntimeException("Expected last entry to be defined"))
     assertEquals(producerEpoch, firstEntry.producerEpoch)
     assertEquals(producerId, firstEntry.producerId)
     assertEquals(RecordBatch.NO_SEQUENCE, firstEntry.lastSeq)
 
     // Fencing should continue to work even if the marker is the only thing left
-    assertThrows[InvalidProducerEpochException] {
-      append(stateManager, producerId, 0.toShort, 0, 0L, 4L)
-    }
+    assertThrows(classOf[InvalidProducerEpochException], () => append(stateManager, producerId, 0.toShort, 0, 0L, 4L))
 
     // If the transaction marker is the only thing left in the log, then an attempt to write using a
     // non-zero sequence number should cause an OutOfOrderSequenceException, so that the producer can reset its state
-    assertThrows[OutOfOrderSequenceException] {
-      append(stateManager, producerId, producerEpoch, 17, 0L, 4L)
-    }
+    assertThrows(classOf[OutOfOrderSequenceException], () => append(stateManager, producerId, producerEpoch, 17, 0L, 4L))
 
     // The broker should accept the request if the sequence number is reset to 0
     append(stateManager, producerId, producerEpoch, 0, 39L, 4L)
-    val secondEntry = stateManager.lastEntry(producerId).getOrElse(fail("Expected last entry to be defined"))
+    val secondEntry = stateManager.lastEntry(producerId).getOrElse(throw new RuntimeException("Expected last entry to be defined"))
     assertEquals(producerEpoch, secondEntry.producerEpoch)
     assertEquals(producerId, secondEntry.producerId)
     assertEquals(0, secondEntry.lastSeq)
@@ -418,13 +407,11 @@ class ProducerStateManagerTest {
     appendEndTxnMarker(stateManager, producerId, bumpedEpoch, ControlRecordType.ABORT, 1L)
 
     // next append is invalid since we expect the sequence to be reset
-    assertThrows[OutOfOrderSequenceException] {
-      append(stateManager, producerId, bumpedEpoch, 2, 2L, isTransactional = true)
-    }
+    assertThrows(classOf[OutOfOrderSequenceException],
+      () => append(stateManager, producerId, bumpedEpoch, 2, 2L, isTransactional = true))
 
-    assertThrows[OutOfOrderSequenceException] {
-      append(stateManager, producerId, (bumpedEpoch + 1).toShort, 2, 2L, isTransactional = true)
-    }
+    assertThrows(classOf[OutOfOrderSequenceException],
+      () => append(stateManager, producerId, (bumpedEpoch + 1).toShort, 2, 2L, isTransactional = true))
 
     // Append with the bumped epoch should be fine if starting from sequence 0
     append(stateManager, producerId, bumpedEpoch, 0, 0L, isTransactional = true)

@@ -32,7 +32,6 @@ import kafka.controller.{OfflineReplica, PartitionAndReplica, ReplicaAssignment,
 import org.apache.kafka.clients.admin.{Admin, AdminClientConfig, NewPartitionReassignment, NewPartitions}
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.errors.UnknownTopicOrPartitionException
-import org.scalatest.Assertions.fail
 import scala.jdk.CollectionConverters._
 
 class DeleteTopicTest extends ZooKeeperTestHarness {
@@ -171,7 +170,7 @@ class DeleteTopicTest extends ZooKeeperTestHarness {
   }
 
   private def getController() : (KafkaServer, Int) = {
-    val controllerId = zkClient.getControllerId.getOrElse(fail("Controller doesn't exist"))
+    val controllerId = zkClient.getControllerId.getOrElse(throw new AssertionError("Controller doesn't exist"))
     val controller = servers.find(s => s.config.brokerId == controllerId).get
     (controller, controllerId)
   }

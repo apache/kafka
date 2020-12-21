@@ -17,14 +17,13 @@
 
 package kafka.tools
 
-import java.util
-
-import ConsoleProducer.LineMessageReader
-import org.apache.kafka.clients.producer.ProducerConfig
-import org.junit.{Assert, Test}
-import Assert.assertEquals
+import kafka.tools.ConsoleProducer.LineMessageReader
 import kafka.utils.Exit
-import org.scalatest.Assertions.assertThrows
+import org.apache.kafka.clients.producer.ProducerConfig
+import org.junit.Assert.{assertEquals, assertThrows}
+import org.junit.Test
+
+import java.util
 
 class ConsoleProducerTest {
 
@@ -88,7 +87,7 @@ class ConsoleProducerTest {
   @Test
   def testInvalidConfigs(): Unit = {
     Exit.setExitProcedure((_, message) => throw new IllegalArgumentException(message.orNull))
-    try assertThrows[IllegalArgumentException](new ConsoleProducer.ProducerConfig(invalidArgs))
+    try assertThrows(classOf[IllegalArgumentException], () => new ConsoleProducer.ProducerConfig(invalidArgs))
     finally Exit.resetExitProcedure()
   }
 

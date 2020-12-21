@@ -22,8 +22,7 @@ import java.io.File
 import kafka.utils.TestUtils
 import org.apache.kafka.common.errors.InvalidOffsetException
 import org.junit.{After, Before, Test}
-import org.junit.Assert.assertEquals
-import org.scalatest.Assertions.intercept
+import org.junit.Assert.{assertEquals, assertThrows}
 
 /**
  * Unit test for time index.
@@ -88,12 +87,8 @@ class TimeIndexTest {
   @Test
   def testAppend(): Unit = {
     appendEntries(maxEntries - 1)
-    intercept[IllegalArgumentException] {
-      idx.maybeAppend(10000L, 1000L)
-    }
-    intercept[InvalidOffsetException] {
-      idx.maybeAppend(10000L, (maxEntries - 2) * 10, true)
-    }
+    assertThrows(classOf[IllegalArgumentException], () => idx.maybeAppend(10000L, 1000L))
+    assertThrows(classOf[InvalidOffsetException], () => idx.maybeAppend(10000L, (maxEntries - 2) * 10, true))
     idx.maybeAppend(10000L, 1000L, true)
   }
 
@@ -133,15 +128,15 @@ class TimeIndexTest {
     }
 
     shouldCorruptOffset = true
-    intercept[CorruptIndexException](idx.sanityCheck())
+    assertThrows(classOf[CorruptIndexException], () => idx.sanityCheck())
     shouldCorruptOffset = false
 
     shouldCorruptTimestamp = true
-    intercept[CorruptIndexException](idx.sanityCheck())
+    assertThrows(classOf[CorruptIndexException], () => idx.sanityCheck())
     shouldCorruptTimestamp = false
 
     shouldCorruptLength = true
-    intercept[CorruptIndexException](idx.sanityCheck())
+    assertThrows(classOf[CorruptIndexException], () => idx.sanityCheck())
     shouldCorruptLength = false
 
     idx.sanityCheck()

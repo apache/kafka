@@ -202,7 +202,7 @@ public class MetricsTest {
         Sensor p = metrics.sensor("parent");
         Sensor c1 = metrics.sensor("child1", p);
         Sensor c2 = metrics.sensor("child2", p);
-        assertThrows(IllegalArgumentException.class, () -> metrics.sensor("gc", c1, c2)); // should fail
+        assertThrows(IllegalArgumentException.class, () -> metrics.sensor("gc", c1, c2));
     }
 
     @Test

@@ -23,7 +23,6 @@ import org.apache.kafka.common.errors.KafkaStorageException
 import org.junit.Assert._
 import org.junit.Test
 import org.mockito.Mockito
-import org.scalatest.Assertions.assertThrows
 
 import scala.collection.Map
 
@@ -129,9 +128,8 @@ class OffsetCheckpointFileTest extends Logging {
     val logDir = "/tmp/kafka-logs"
     val mockCheckpointFile = Mockito.mock(classOf[OffsetCheckpointFile])
     val lazyCheckpoints = new LazyOffsetCheckpoints(Map(logDir -> mockCheckpointFile))
-    assertThrows[IllegalArgumentException] {
-      lazyCheckpoints.fetch("/invalid/kafka-logs", new TopicPartition("foo", 0))
-    }
+    assertThrows(classOf[IllegalArgumentException],
+      () => lazyCheckpoints.fetch("/invalid/kafka-logs", new TopicPartition("foo", 0)))
   }
 
 }
