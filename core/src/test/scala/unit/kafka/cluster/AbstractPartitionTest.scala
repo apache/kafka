@@ -43,7 +43,7 @@ class AbstractPartitionTest {
   var alterIsrManager: MockAlterIsrManager = _
   var isrChangeListener: MockIsrChangeListener = _
   var logConfig: LogConfig = _
-  val stateStore: PartitionStateStore = mock(classOf[PartitionStateStore])
+  var topicConfigProvider: TopicConfigFetcher = _
   val delayedOperations: DelayedOperations = mock(classOf[DelayedOperations])
   val metadataCache: MetadataCache = mock(classOf[MetadataCache])
   val offsetCheckpoints: OffsetCheckpoints = mock(classOf[OffsetCheckpoints])
@@ -55,6 +55,7 @@ class AbstractPartitionTest {
 
     val logProps = createLogProperties(Map.empty)
     logConfig = LogConfig(logProps)
+    topicConfigProvider = TestUtils.createTopicConfigProvider(logProps)
 
     tmpDir = TestUtils.tempDir()
     logDir1 = TestUtils.randomPartitionLogDir(tmpDir)
@@ -70,14 +71,13 @@ class AbstractPartitionTest {
       interBrokerProtocolVersion = ApiVersion.latestVersion,
       localBrokerId = brokerId,
       time,
-      stateStore,
+      topicConfigProvider,
       isrChangeListener,
       delayedOperations,
       metadataCache,
       logManager,
       alterIsrManager)
 
-    when(stateStore.fetchTopicConfig()).thenReturn(createLogProperties(Map.empty))
     when(offsetCheckpoints.fetch(ArgumentMatchers.anyString, ArgumentMatchers.eq(topicPartition)))
       .thenReturn(None)
   }
