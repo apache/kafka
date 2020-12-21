@@ -1324,13 +1324,14 @@ project(':tools') {
   archivesBaseName = "kafka-tools"
 
   dependencies {
-    compile project(':clients')
-    compile project(':core')
-    compile project(':log4j-appender')
     compile libs.argparse4j
     compile libs.jacksonDatabind
     compile libs.jacksonJDK8Datatypes
+    compile libs.jline
     compile libs.slf4jApi
+    compile project(':clients')
+    compile project(':core')
+    compile project(':log4j-appender')
 
     compile libs.jacksonJaxrsJsonProvider
     compile libs.jerseyContainerServlet

@@ -266,6 +266,7 @@
     <subpackage name="metadata">
       <allow pkg="kafka.raft"/>
       <allow pkg="kafka.server"/>
+      <allow pkg="kafka.tools"/>
       <allow pkg="scala.compat"/>
     </subpackage>
   </subpackage>
