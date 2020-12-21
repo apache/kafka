@@ -13,10 +13,12 @@
 
 package kafka.server
 
-import org.apache.kafka.common.Uuid;
-
+import org.apache.kafka.common.Uuid
 import java.io.File
+
 import kafka.server.KafkaServer.BrokerRole
+import org.apache.kafka.common.utils.Utils
+import org.apache.kafka.test.TestUtils
 import org.junit.Assert.assertEquals
 import org.junit.Test
 
@@ -46,5 +48,20 @@ class BrokerMetadataCheckpointTest {
     val properties = RawMetaProperties(meta.toProperties)
     val meta2 = MetaProperties.parse(properties, Set(BrokerRole))
     assertEquals(meta, meta2)
+  }
+
+  @Test
+  def testGetBrokerMetadataAndOfflineDirsWithNonexistentDirectories(): Unit = {
+    val tempDir = TestUtils.tempDirectory()
+    try {
+      assertEquals((new RawMetaProperties(), Seq(tempDir.getAbsolutePath.toString())),
+        BrokerMetadataCheckpoint.getBrokerMetadataAndOfflineDirs(
+          Seq(tempDir.getAbsolutePath.toString()), false))
+      assertEquals((new RawMetaProperties(), Seq()),
+        BrokerMetadataCheckpoint.getBrokerMetadataAndOfflineDirs(
+          Seq(tempDir.getAbsolutePath.toString()), true))
+    } finally {
+      Utils.delete(tempDir)
+    }
   }
 }

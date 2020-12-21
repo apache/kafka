@@ -195,7 +195,7 @@ class LegacyBroker(val config: KafkaConfig,
 
         /* load metadata */
         val (preloadedMetaProperties, initialOfflineDirs) =
-          BrokerMetadataCheckpoint.getBrokerMetadataAndOfflineDirs(config.logDirs)
+          BrokerMetadataCheckpoint.getBrokerMetadataAndOfflineDirs(config.logDirs, true)
 
         /* check cluster id */
         if (preloadedMetaProperties.clusterId.exists(_ != _clusterId))

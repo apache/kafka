@@ -170,7 +170,8 @@ case class MetaProperties(
 
 object BrokerMetadataCheckpoint extends Logging {
   def getBrokerMetadataAndOfflineDirs(
-    logDirs: collection.Seq[String]
+    logDirs: collection.Seq[String],
+    ignoreMissing: Boolean
   ): (RawMetaProperties, collection.Seq[String]) = {
     require(logDirs.nonEmpty, "Must have at least one log dir to read meta.properties")
 
@@ -182,9 +183,14 @@ object BrokerMetadataCheckpoint extends Logging {
       val brokerCheckpoint = new BrokerMetadataCheckpoint(brokerCheckpointFile)
 
       try {
-        brokerCheckpoint.read().foreach(properties => {
-          brokerMetadataMap += logDir -> properties
-        })
+        brokerCheckpoint.read() match {
+          case Some(properties) => brokerMetadataMap += logDir -> properties
+          case None => if (ignoreMissing) {
+            logDir -> new Properties()
+          } else {
+            throw new IOException("Not found")
+          }
+        }
       } catch {
         case e: IOException =>
           offlineDirs += logDir

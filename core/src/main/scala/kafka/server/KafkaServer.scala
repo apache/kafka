@@ -156,7 +156,8 @@ class Kip500Server(
 
   private def loadMetaProperties(): (MetaProperties, Seq[String]) = {
     val logDirs = config.logDirs ++ Seq(config.metadataLogDir)
-    val (rawMetaProperties, offlineDirs) = BrokerMetadataCheckpoint.getBrokerMetadataAndOfflineDirs(logDirs)
+    val (rawMetaProperties, offlineDirs) = BrokerMetadataCheckpoint.
+      getBrokerMetadataAndOfflineDirs(logDirs, false)
 
     if (offlineDirs.contains(config.metadataLogDir)) {
       throw new RuntimeException("Cannot start server since `meta.properties` could not be " +
