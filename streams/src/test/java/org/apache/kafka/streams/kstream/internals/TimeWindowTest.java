@@ -128,7 +128,7 @@ public class TimeWindowTest {
         final TimeWindows windows = TimeWindows.of(ofMillis(12L)).advanceBy(ofMillis(5L));
         final Map<Long, TimeWindow> matched = windows.windowsFor(21L);
 
-        final Long[] expected = matched.keySet().toArray(new Long[matched.size()]);
+        final Long[] expected = matched.keySet().toArray(new Long[0]);
         assertEquals(expected[0].longValue(), 10L);
         assertEquals(expected[1].longValue(), 15L);
         assertEquals(expected[2].longValue(), 20L);

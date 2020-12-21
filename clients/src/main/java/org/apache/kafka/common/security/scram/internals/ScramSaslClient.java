@@ -241,7 +241,7 @@ public class ScramSaslClient implements SaslClient {
         @Override
         public String[] getMechanismNames(Map<String, ?> props) {
             Collection<String> mechanisms = ScramMechanism.mechanismNames();
-            return mechanisms.toArray(new String[mechanisms.size()]);
+            return mechanisms.toArray(new String[0]);
         }
     }
 }

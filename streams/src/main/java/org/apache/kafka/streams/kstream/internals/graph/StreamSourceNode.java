@@ -84,7 +84,7 @@ public class StreamSourceNode<K, V> extends SourceGraphNode<K, V> {
                                       consumedInternal().timestampExtractor(),
                                       consumedInternal().keyDeserializer(),
                                       consumedInternal().valueDeserializer(),
-                                      topicNames().toArray(new String[topicNames().size()]));
+                                      topicNames().toArray(new String[0]));
 
         }
     }

@@ -133,7 +133,7 @@ public class RestServer {
             }
         }
 
-        jettyServer.setConnectors(connectors.toArray(new Connector[connectors.size()]));
+        jettyServer.setConnectors(connectors.toArray(new Connector[0]));
 
         if (adminListeners != null && !adminListeners.isEmpty()) {
             for (String adminListener : adminListeners) {
@@ -300,7 +300,7 @@ public class RestServer {
         contextHandlers.add(new DefaultHandler());
         contextHandlers.add(requestLogHandler);
 
-        handlers.setHandlers(contextHandlers.toArray(new Handler[]{}));
+        handlers.setHandlers(contextHandlers.toArray(new Handler[0]));
         try {
             context.start();
         } catch (Exception e) {
