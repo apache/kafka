@@ -36,7 +36,11 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import scala.compat.java8.OptionConverters;
 
+import java.io.BufferedWriter;
 import java.io.File;
+import java.io.OutputStreamWriter;
+import java.io.PrintWriter;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
@@ -134,32 +138,21 @@ public final class MetadataTool {
         this.nodeManager = nodeManager;
     }
 
-    public void run(List<String> args) {
+    public void run(List<String> args) throws Exception {
         if (args == null || args.isEmpty()) {
-            runShell();
+            // Shell mode.
+            try (MetadataShell shell = new MetadataShell()) {
+                shell.runMainLoop(nodeManager);
+            }
         } else {
-            runCommand(args);
+            // Non-interactive mode.
+            try (PrintWriter writer = new PrintWriter(new BufferedWriter(
+                    new OutputStreamWriter(System.out, StandardCharsets.UTF_8)))) {
+                Command.Handler handler = Command.parseCommand(args);
+                handler.run(Optional.empty(), writer, nodeManager);
+                writer.flush();
+            }
         }
-    }
-
-    public void runShell() {
-        log.info("runShell");
-//        Console console = System.console();
-//        if (console == null) {
-//            log.error("No system console available.");
-//        } else {
-//            while (true) {
-//                String line = console.readLine("metadata> ");
-//                // ok... so we need to get this into "list of strings" format, which is annoying.
-//                // we need to implement quoting and so forth, I guess.
-//                // OR just start out using jline from the start.
-//                Command.PARSER.par
-//            }
-//        }
-    }
-
-    void runCommand(List<String> args) {
-        log.info("runCommand " + String.join(",", args));
     }
 
     public void close() {
@@ -181,32 +174,36 @@ public final class MetadataTool {
             .nargs("*")
             .help("The command to run.");
         Namespace res = parser.parseArgsOrFail(args);
-        Builder builder = new Builder();
-        builder.setControllers(res.getString("controllers"));
-        builder.setConfigPath(res.getString("config"));
-        Path tempDir = Files.createTempDirectory("MetadataTool");
-        Exit.addShutdownHook("agent-shutdown-hook", () -> {
-            log.debug("Removing temporary directory " + tempDir.toAbsolutePath().toString());
-            try {
-                Utils.delete(tempDir.toFile());
-            } catch (Exception e) {
-                log.error("Got exception while removing temporary directory " +
-                    tempDir.toAbsolutePath().toString());
-            }
-        });
-        builder.setTempDir(tempDir.toFile());
-        MetadataTool tool = null;
         try {
-            tool = builder.build();
+            Builder builder = new Builder();
+            builder.setControllers(res.getString("controllers"));
+            builder.setConfigPath(res.getString("config"));
+            Path tempDir = Files.createTempDirectory("MetadataTool");
+            Exit.addShutdownHook("agent-shutdown-hook", () -> {
+                log.debug("Removing temporary directory " + tempDir.toAbsolutePath().toString());
+                try {
+                    Utils.delete(tempDir.toFile());
+                } catch (Exception e) {
+                    log.error("Got exception while removing temporary directory " +
+                        tempDir.toAbsolutePath().toString());
+                }
+            });
+            builder.setTempDir(tempDir.toFile());
+            MetadataTool tool = builder.build();
+            try {
+                tool.run(res.getList("command"));
+            } finally {
+                tool.close();
+            }
+            Exit.exit(0);
         } catch (TerseFailure e) {
             System.err.println("Error: " + e.getMessage());
             Exit.exit(1);
+        } catch (Throwable e) {
+            System.err.println("Unexpected error: " +
+                (e.getMessage() == null ? "" : e.getMessage()));
+            e.printStackTrace(System.err);
+            Exit.exit(1);
         }
-        try {
-            tool.run(res.getList("command"));
-        } finally {
-            tool.close();
-        }
-        Exit.exit(0);
     }
 }

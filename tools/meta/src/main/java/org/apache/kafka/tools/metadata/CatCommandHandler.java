@@ -18,13 +18,23 @@
 package org.apache.kafka.tools.metadata;
 
 import java.io.PrintWriter;
+import java.util.List;
+import java.util.Optional;
 
 /**
  * Implements the cat command.
  */
 public final class CatCommandHandler implements Command.Handler {
+    private final List<String> targets;
+
+    public CatCommandHandler(List<String> targets) {
+        this.targets = targets;
+    }
+
     @Override
-    public void run(PrintWriter writer, MetadataNodeManager manager) {
-        Command.PARSER.printHelp(writer);
+    public void run(Optional<MetadataShell> shell,
+                    PrintWriter writer,
+                    MetadataNodeManager manager) {
+        writer.println("cat " + targets);
     }
 }

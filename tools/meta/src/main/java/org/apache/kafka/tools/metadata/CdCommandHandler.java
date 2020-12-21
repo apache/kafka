@@ -18,13 +18,22 @@
 package org.apache.kafka.tools.metadata;
 
 import java.io.PrintWriter;
+import java.util.Optional;
 
 /**
  * Implements the cd command.
  */
 public final class CdCommandHandler implements Command.Handler {
+    private final Optional<String> target;
+
+    public CdCommandHandler(Optional<String> target) {
+        this.target = target;
+    }
+
     @Override
-    public void run(PrintWriter writer, MetadataNodeManager manager) {
-        Command.PARSER.printHelp(writer);
+    public void run(Optional<MetadataShell> shell,
+                    PrintWriter writer,
+                    MetadataNodeManager manager) {
+        writer.println("cd " + target);
     }
 }

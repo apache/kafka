@@ -18,13 +18,23 @@
 package org.apache.kafka.tools.metadata;
 
 import java.io.PrintWriter;
+import java.util.List;
+import java.util.Optional;
 
 /**
  * Implements the ls command.
  */
 public final class LsCommandHandler implements Command.Handler {
+    private final List<String> targets;
+
+    public LsCommandHandler(List<String> targets) {
+        this.targets = targets;
+    }
+
     @Override
-    public void run(PrintWriter writer, MetadataNodeManager manager) {
-        Command.PARSER.printHelp(writer);
+    public void run(Optional<MetadataShell> shell,
+                    PrintWriter writer,
+                    MetadataNodeManager manager) {
+        writer.println("ls " + targets);
     }
 }

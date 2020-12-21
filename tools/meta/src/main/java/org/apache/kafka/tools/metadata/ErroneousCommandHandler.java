@@ -18,6 +18,7 @@
 package org.apache.kafka.tools.metadata;
 
 import java.io.PrintWriter;
+import java.util.Optional;
 
 /**
  * Handles erroneous commands.
@@ -30,7 +31,9 @@ public final class ErroneousCommandHandler implements Command.Handler {
     }
 
     @Override
-    public void run(PrintWriter writer, MetadataNodeManager manager) {
+    public void run(Optional<MetadataShell> shell,
+                    PrintWriter writer,
+                    MetadataNodeManager manager) {
         writer.println(message);
     }
 }

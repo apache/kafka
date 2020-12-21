@@ -836,7 +836,6 @@ project(':core') {
   configurations {
     // manually excludes some unnecessary dependencies
     compile.exclude module: 'javax'
-    compile.exclude module: 'jline'
     compile.exclude module: 'jms'
     compile.exclude module: 'jmxri'
     compile.exclude module: 'jmxtools'

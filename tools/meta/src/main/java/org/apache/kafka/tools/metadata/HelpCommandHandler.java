@@ -18,13 +18,16 @@
 package org.apache.kafka.tools.metadata;
 
 import java.io.PrintWriter;
+import java.util.Optional;
 
 /**
  * Implements the help command.
  */
 public final class HelpCommandHandler implements Command.Handler {
     @Override
-    public void run(PrintWriter writer, MetadataNodeManager manager) {
+    public void run(Optional<MetadataShell> shell,
+                    PrintWriter writer,
+                    MetadataNodeManager manager) {
         Command.PARSER.printHelp(writer);
     }
 }

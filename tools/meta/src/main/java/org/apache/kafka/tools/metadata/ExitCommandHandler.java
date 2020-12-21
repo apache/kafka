@@ -20,13 +20,16 @@ package org.apache.kafka.tools.metadata;
 import org.apache.kafka.common.utils.Exit;
 
 import java.io.PrintWriter;
+import java.util.Optional;
 
 /**
  * Implements the exit command.
  */
 public final class ExitCommandHandler implements Command.Handler {
     @Override
-    public void run(PrintWriter writer, MetadataNodeManager manager) {
+    public void run(Optional<MetadataShell> shell,
+                    PrintWriter writer,
+                    MetadataNodeManager manager) {
         Exit.exit(0);
     }
 }

@@ -268,6 +268,7 @@
       <allow pkg="kafka.server"/>
       <allow pkg="kafka.tools"/>
       <allow pkg="scala.compat"/>
+      <allow pkg="org.jline"/>
     </subpackage>
   </subpackage>
 
