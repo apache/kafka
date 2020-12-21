@@ -139,6 +139,7 @@ public final class MetadataTool {
     }
 
     public void run(List<String> args) throws Exception {
+        this.raftManager.register(nodeManager);
         if (args == null || args.isEmpty()) {
             // Shell mode.
             try (MetadataShell shell = new MetadataShell()) {

@@ -17,29 +17,14 @@
 
 package org.apache.kafka.tools.metadata;
 
-import java.io.PrintWriter;
-import java.util.Optional;
-
 /**
- * Implements the cd command.
+ * An exception that is thrown when a non-file node is treated like a
+ * file.
  */
-public final class CdCommandHandler implements Command.Handler {
-    private final Optional<String> target;
+public class NotFileException extends RuntimeException {
+    private static final long serialVersionUID = 1L;
 
-    public CdCommandHandler(Optional<String> target) {
-        this.target = target;
-    }
-
-    @Override
-    public void run(Optional<MetadataShell> shell,
-                    PrintWriter writer,
-                    MetadataNodeManager manager) throws Exception {
-        manager.visit(data -> {
-            if (target.isPresent()) {
-                data.setWorkingDirectory(target.get());
-            } else {
-                data.setWorkingDirectory("/");
-            }
-        });
+    public NotFileException() {
+        super();
     }
 }

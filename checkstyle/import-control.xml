@@ -267,8 +267,10 @@
       <allow pkg="kafka.raft"/>
       <allow pkg="kafka.server"/>
       <allow pkg="kafka.tools"/>
-      <allow pkg="scala.compat"/>
+      <allow pkg="org.apache.kafka.metalog"/>
+      <allow pkg="org.apache.kafka.tools.metadata"/>
       <allow pkg="org.jline"/>
+      <allow pkg="scala.compat"/>
     </subpackage>
   </subpackage>
 

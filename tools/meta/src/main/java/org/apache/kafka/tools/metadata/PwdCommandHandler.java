@@ -21,25 +21,15 @@ import java.io.PrintWriter;
 import java.util.Optional;
 
 /**
- * Implements the cd command.
+ * Implements the pwd command.
  */
-public final class CdCommandHandler implements Command.Handler {
-    private final Optional<String> target;
-
-    public CdCommandHandler(Optional<String> target) {
-        this.target = target;
-    }
-
+public final class PwdCommandHandler implements Command.Handler {
     @Override
     public void run(Optional<MetadataShell> shell,
                     PrintWriter writer,
                     MetadataNodeManager manager) throws Exception {
         manager.visit(data -> {
-            if (target.isPresent()) {
-                data.setWorkingDirectory(target.get());
-            } else {
-                data.setWorkingDirectory("/");
-            }
+            writer.println(data.workingDirectory());
         });
     }
 }

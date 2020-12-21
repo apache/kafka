@@ -51,7 +51,7 @@ public final class MetadataShell implements AutoCloseable {
             build();
     }
 
-    public void runMainLoop(MetadataNodeManager nodeManager) {
+    public void runMainLoop(MetadataNodeManager nodeManager) throws Exception {
         terminal.writer().println("[ Kafka Metadata Shell ]");
         terminal.flush();
         while (true) {

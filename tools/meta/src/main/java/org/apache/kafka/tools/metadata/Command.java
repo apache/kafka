@@ -53,7 +53,7 @@ public final class Command {
             nargs("+").
             help("The metadata nodes to display.");
         Subparser cdParser = subparsers.addParser("cd").
-            help("Change to a new directory.");
+            help("Set the current working directory.");
         cdParser.addArgument("target").
             nargs("?").
             help("The metadata node directory to change to.");
@@ -70,13 +70,15 @@ public final class Command {
         lsParser.addArgument("targets").
             nargs("+").
             help("The metadata node paths to list.");
+        subparsers.addParser("pwd").
+            help("Print the current working directory.");
         return parser;
     }
 
     public interface Handler {
         void run(Optional<MetadataShell> shell,
                  PrintWriter writer,
-                 MetadataNodeManager manager);
+                 MetadataNodeManager manager) throws Exception;
     }
 
     final static ArgumentParser PARSER = createParser(true);
@@ -99,6 +101,8 @@ public final class Command {
             return new HelpCommandHandler();
         } else if ("ls".equals(command)) {
             return new LsCommandHandler(namespace.getList("targets"));
+        } else if ("pwd".equals(command)) {
+            return new PwdCommandHandler();
         } else {
             return new ErroneousCommandHandler("Unknown command specified: " + command);
         }
