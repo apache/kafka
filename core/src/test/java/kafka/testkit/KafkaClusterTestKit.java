@@ -20,7 +20,6 @@ package kafka.testkit;
 import kafka.raft.RaftManager;
 import kafka.server.KafkaConfig;
 import kafka.server.KafkaConfig$;
-import kafka.server.Kip500Broker;
 import kafka.server.Kip500Controller;
 import kafka.server.MetaProperties;
 import kafka.tools.StorageTool;
