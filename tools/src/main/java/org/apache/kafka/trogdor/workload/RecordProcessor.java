@@ -14,20 +14,25 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.common.network;
 
-import java.nio.channels.GatheringByteChannel;
+package org.apache.kafka.trogdor.workload;
 
-public final class TransportLayers {
+import com.fasterxml.jackson.annotation.JsonSubTypes;
+import com.fasterxml.jackson.annotation.JsonTypeInfo;
+import com.fasterxml.jackson.databind.JsonNode;
+import org.apache.kafka.clients.consumer.ConsumerRecords;
 
-    private TransportLayers() {}
-
-    // This is temporary workaround as Send and Receive interfaces are used by BlockingChannel.
-    // Once BlockingChannel is removed we can make Send and Receive work with TransportLayer rather than
-    // GatheringByteChannel or ScatteringByteChannel.
-    public static boolean hasPendingWrites(GatheringByteChannel channel) {
-        if (channel instanceof TransportLayer)
-            return ((TransportLayer) channel).hasPendingWrites();
-        return false;
-    }
+/**
+ * RecordProcessor allows for acting on data polled from ConsumeBench workloads.
+ */
+@JsonTypeInfo(use = JsonTypeInfo.Id.NAME,
+        include = JsonTypeInfo.As.PROPERTY,
+        property = "type")
+@JsonSubTypes(value = {
+        @JsonSubTypes.Type(value = TimestampRecordProcessor.class, name = "timestamp"),
+})
+public interface RecordProcessor {
+    void processRecords(ConsumerRecords<byte[], byte[]> consumerRecords);
+    JsonNode processorStatus();
 }
+

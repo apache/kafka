@@ -55,6 +55,7 @@ public class CreatePartitionsRequest extends AbstractRequest {
         this.data = data;
     }
 
+    @Override
     public CreatePartitionsRequestData data() {
         return data;
     }

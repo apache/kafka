@@ -60,9 +60,9 @@ import org.apache.kafka.common.message.ApiVersionsRequestData;
 import org.apache.kafka.common.message.ApiVersionsResponseData;
 import org.apache.kafka.common.message.ApiVersionsResponseData.ApiVersionsResponseKey;
 import org.apache.kafka.common.message.ApiVersionsResponseData.ApiVersionsResponseKeyCollection;
-import org.apache.kafka.common.message.ListOffsetResponseData;
-import org.apache.kafka.common.message.ListOffsetResponseData.ListOffsetTopicResponse;
-import org.apache.kafka.common.message.ListOffsetResponseData.ListOffsetPartitionResponse;
+import org.apache.kafka.common.message.ListOffsetsResponseData;
+import org.apache.kafka.common.message.ListOffsetsResponseData.ListOffsetsTopicResponse;
+import org.apache.kafka.common.message.ListOffsetsResponseData.ListOffsetsPartitionResponse;
 import org.apache.kafka.common.message.RequestHeaderData;
 import org.apache.kafka.common.message.SaslAuthenticateRequestData;
 import org.apache.kafka.common.message.SaslHandshakeRequestData;
@@ -83,7 +83,7 @@ import org.apache.kafka.common.network.TransportLayer;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.types.SchemaException;
-import org.apache.kafka.common.requests.ListOffsetResponse;
+import org.apache.kafka.common.requests.ListOffsetsResponse;
 import org.apache.kafka.common.requests.RequestTestUtils;
 import org.apache.kafka.common.security.auth.Login;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
@@ -711,9 +711,9 @@ public class SaslAuthenticatorTest {
         ByteBuffer responseBuffer = waitForResponse();
         ResponseHeader.parse(responseBuffer, ApiKeys.API_VERSIONS.responseHeaderVersion((short) 0));
         ApiVersionsResponse response = ApiVersionsResponse.parse(responseBuffer, (short) 0);
-        assertEquals(Errors.UNSUPPORTED_VERSION.code(), response.data.errorCode());
+        assertEquals(Errors.UNSUPPORTED_VERSION.code(), response.data().errorCode());
 
-        ApiVersionsResponseKey apiVersion = response.data.apiKeys().find(ApiKeys.API_VERSIONS.id);
+        ApiVersionsResponseKey apiVersion = response.data().apiKeys().find(ApiKeys.API_VERSIONS.id);
         assertNotNull(apiVersion);
         assertEquals(ApiKeys.API_VERSIONS.id, apiVersion.apiKey());
         assertEquals(ApiKeys.API_VERSIONS.oldestVersion(), apiVersion.minVersion());
@@ -770,7 +770,7 @@ public class SaslAuthenticatorTest {
         ResponseHeader.parse(responseBuffer, ApiKeys.API_VERSIONS.responseHeaderVersion(version));
         ApiVersionsResponse response =
             ApiVersionsResponse.parse(responseBuffer, version);
-        assertEquals(Errors.INVALID_REQUEST.code(), response.data.errorCode());
+        assertEquals(Errors.INVALID_REQUEST.code(), response.data().errorCode());
 
         // Send ApiVersionsRequest with a supported version. This should succeed.
         sendVersionRequestReceiveResponse(node);
@@ -811,7 +811,7 @@ public class SaslAuthenticatorTest {
         ByteBuffer responseBuffer = waitForResponse();
         ResponseHeader.parse(responseBuffer, ApiKeys.API_VERSIONS.responseHeaderVersion(version));
         ApiVersionsResponse response = ApiVersionsResponse.parse(responseBuffer, version);
-        assertEquals(Errors.NONE.code(), response.data.errorCode());
+        assertEquals(Errors.NONE.code(), response.data().errorCode());
 
         // Test that client can authenticate successfully
         sendHandshakeRequestReceiveResponse(node, handshakeVersion);
@@ -1593,17 +1593,17 @@ public class SaslAuthenticatorTest {
 
     @Test
     public void testConvertListOffsetResponseToSaslHandshakeResponse() {
-        ListOffsetResponseData data = new ListOffsetResponseData()
+        ListOffsetsResponseData data = new ListOffsetsResponseData()
                 .setThrottleTimeMs(0)
-                .setTopics(Collections.singletonList(new ListOffsetTopicResponse()
+                .setTopics(Collections.singletonList(new ListOffsetsTopicResponse()
                         .setName("topic")
-                        .setPartitions(Collections.singletonList(new ListOffsetPartitionResponse()
+                        .setPartitions(Collections.singletonList(new ListOffsetsPartitionResponse()
                                 .setErrorCode(Errors.NONE.code())
-                                .setLeaderEpoch(ListOffsetResponse.UNKNOWN_EPOCH)
+                                .setLeaderEpoch(ListOffsetsResponse.UNKNOWN_EPOCH)
                                 .setPartitionIndex(0)
                                 .setOffset(0)
                                 .setTimestamp(0)))));
-        ListOffsetResponse response = new ListOffsetResponse(data);
+        ListOffsetsResponse response = new ListOffsetsResponse(data);
         ByteBuffer buffer = RequestTestUtils.serializeResponseWithHeader(response, LIST_OFFSETS.latestVersion(), 0);
         final RequestHeader header0 = new RequestHeader(LIST_OFFSETS, LIST_OFFSETS.latestVersion(), "id", SaslClientAuthenticator.MIN_RESERVED_CORRELATION_ID);
         Assert.assertThrows(SchemaException.class, () -> NetworkClient.parseResponse(buffer.duplicate(), header0));
@@ -1901,7 +1901,7 @@ public class SaslAuthenticatorTest {
                     protected ApiVersionsResponse apiVersionsResponse() {
                         ApiVersionsResponse defaultApiVersionResponse = ApiVersionsResponse.DEFAULT_API_VERSIONS_RESPONSE;
                         ApiVersionsResponseKeyCollection apiVersions = new ApiVersionsResponseKeyCollection();
-                        for (ApiVersionsResponseKey apiVersion : defaultApiVersionResponse.data.apiKeys()) {
+                        for (ApiVersionsResponseKey apiVersion : defaultApiVersionResponse.data().apiKeys()) {
                             if (apiVersion.apiKey() != ApiKeys.SASL_AUTHENTICATE.id) {
                                 // ApiVersionsResponseKey can NOT be reused in second ApiVersionsResponseKeyCollection
                                 // due to the internal pointers it contains.
@@ -2183,7 +2183,7 @@ public class SaslAuthenticatorTest {
     private ApiVersionsResponse sendVersionRequestReceiveResponse(String node) throws Exception {
         ApiVersionsRequest handshakeRequest = createApiVersionsRequestV0();
         ApiVersionsResponse response =  (ApiVersionsResponse) sendKafkaRequestReceiveResponse(node, ApiKeys.API_VERSIONS, handshakeRequest);
-        assertEquals(Errors.NONE.code(), response.data.errorCode());
+        assertEquals(Errors.NONE.code(), response.data().errorCode());
         return response;
     }
 

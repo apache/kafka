@@ -34,13 +34,14 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
 
-import static org.apache.kafka.common.protocol.CommonFields.ERROR_CODE;
 import static org.apache.kafka.common.requests.AbstractResponse.DEFAULT_THROTTLE_TIME;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
 public class OffsetFetchResponseTest {
+
+    private static final String ERROR_CODE = "error_code";
 
     private final int throttleTimeMs = 10;
     private final int offset = 100;
@@ -106,7 +107,7 @@ public class OffsetFetchResponseTest {
         OffsetFetchResponse latestResponse = new OffsetFetchResponse(throttleTimeMs, Errors.NONE, partitionDataMap);
 
         for (short version = 0; version <= ApiKeys.OFFSET_FETCH.latestVersion(); version++) {
-            Struct struct = latestResponse.data.toStruct(version);
+            Struct struct = latestResponse.data().toStruct(version);
 
             OffsetFetchResponse oldResponse = OffsetFetchResponse.parse(latestResponse.serialize(version), version);
 
@@ -193,7 +194,7 @@ public class OffsetFetchResponseTest {
                                 .setMetadata(null))
                         ))
                 );
-        assertEquals(expectedData, response.data);
+        assertEquals(expectedData, response.data());
     }
 
     @Test
@@ -226,6 +227,6 @@ public class OffsetFetchResponseTest {
                             .setMetadata(metadata))
                     ))
                 );
-        assertEquals(expectedData, response.data);
+        assertEquals(expectedData, response.data());
     }
 }

@@ -21,6 +21,7 @@ import kafka.controller.KafkaController;
 import kafka.coordinator.group.GroupCoordinator;
 import kafka.coordinator.transaction.TransactionCoordinator;
 import kafka.network.RequestChannel;
+import kafka.network.RequestConvertToJson;
 import kafka.server.AdminManager;
 import kafka.server.BrokerFeatures;
 import kafka.server.BrokerTopicStats;
@@ -151,7 +152,7 @@ public class MetadataRequestBenchmark {
         UpdateMetadataRequest updateMetadataRequest = new UpdateMetadataRequest.Builder(
             ApiKeys.UPDATE_METADATA.latestVersion(),
             1, 1, 1,
-            partitionStates, liveBrokers).build();
+            partitionStates, liveBrokers, Collections.emptyMap()).build();
         metadataCache.updateMetadata(100, updateMetadataRequest);
     }
 
@@ -212,5 +213,10 @@ public class MetadataRequestBenchmark {
     @Benchmark
     public void testMetadataRequestForAllTopics() {
         kafkaApis.handleTopicMetadataRequest(allTopicMetadataRequest);
+    }
+
+    @Benchmark
+    public String testRequestToJson() {
+        return RequestConvertToJson.requestDesc(allTopicMetadataRequest.header(), allTopicMetadataRequest.requestLog(), allTopicMetadataRequest.isForwarded()).toString();
     }
 }

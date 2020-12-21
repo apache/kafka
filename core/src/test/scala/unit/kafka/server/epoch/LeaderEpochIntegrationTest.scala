@@ -16,10 +16,9 @@
   */
 package kafka.server.epoch
 
-import java.util.Optional
-
 import kafka.server.KafkaConfig._
 import kafka.server.{BlockingSend, KafkaServer, ReplicaFetcherBlockingSend}
+import kafka.utils.Implicits._
 import kafka.utils.TestUtils._
 import kafka.utils.{Logging, TestUtils}
 import kafka.zk.ZooKeeperTestHarness
@@ -29,6 +28,9 @@ import org.apache.kafka.common.protocol.Errors._
 import org.apache.kafka.common.serialization.StringSerializer
 import org.apache.kafka.common.utils.{LogContext, SystemTime}
 import org.apache.kafka.common.TopicPartition
+import org.apache.kafka.common.message.OffsetForLeaderEpochRequestData.OffsetForLeaderPartition
+import org.apache.kafka.common.message.OffsetForLeaderEpochRequestData.OffsetForLeaderTopic
+import org.apache.kafka.common.message.OffsetForLeaderEpochRequestData.OffsetForLeaderTopicCollection
 import org.apache.kafka.common.message.OffsetForLeaderEpochResponseData.EpochEndOffset
 import org.apache.kafka.common.protocol.ApiKeys
 import org.apache.kafka.common.requests.{OffsetsForLeaderEpochRequest, OffsetsForLeaderEpochResponse}
@@ -274,12 +276,20 @@ class LeaderEpochIntegrationTest extends ZooKeeperTestHarness with Logging {
   private[epoch] class TestFetcherThread(sender: BlockingSend) extends Logging {
 
     def leaderOffsetsFor(partitions: Map[TopicPartition, Int]): Map[TopicPartition, EpochEndOffset] = {
-      val partitionData = partitions.map { case (k, v) =>
-        k -> new OffsetsForLeaderEpochRequest.PartitionData(Optional.empty(), v)
+      val topics = new OffsetForLeaderTopicCollection(partitions.size)
+      partitions.forKeyValue { (topicPartition, leaderEpoch) =>
+        var topic = topics.find(topicPartition.topic)
+        if (topic == null) {
+          topic = new OffsetForLeaderTopic().setTopic(topicPartition.topic)
+          topics.add(topic)
+        }
+        topic.partitions.add(new OffsetForLeaderPartition()
+          .setPartition(topicPartition.partition)
+          .setLeaderEpoch(leaderEpoch))
       }
 
       val request = OffsetsForLeaderEpochRequest.Builder.forFollower(
-        ApiKeys.OFFSET_FOR_LEADER_EPOCH.latestVersion, partitionData.asJava, 1)
+        ApiKeys.OFFSET_FOR_LEADER_EPOCH.latestVersion, topics, 1)
       val response = sender.sendRequest(request)
       response.responseBody.asInstanceOf[OffsetsForLeaderEpochResponse].data.topics.asScala.flatMap { topic =>
         topic.partitions.asScala.map { partition =>

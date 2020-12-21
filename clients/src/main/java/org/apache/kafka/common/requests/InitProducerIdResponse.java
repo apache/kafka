@@ -36,7 +36,7 @@ import java.util.Map;
  *   - {@link Errors#PRODUCER_FENCED}
  */
 public class InitProducerIdResponse extends AbstractResponse {
-    public final InitProducerIdResponseData data;
+    private final InitProducerIdResponseData data;
 
     public InitProducerIdResponse(InitProducerIdResponseData data) {
         super(ApiKeys.INIT_PRODUCER_ID);
@@ -54,7 +54,7 @@ public class InitProducerIdResponse extends AbstractResponse {
     }
 
     @Override
-    protected InitProducerIdResponseData data() {
+    public InitProducerIdResponseData data() {
         return data;
     }
 

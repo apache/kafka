@@ -30,6 +30,7 @@ import java.io.File;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.nio.file.Files;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
@@ -56,7 +57,7 @@ public class FileStreamSourceTaskTest extends EasyMockSupport {
         config.put(FileStreamSourceConnector.FILE_CONFIG, tempFile.getAbsolutePath());
         config.put(FileStreamSourceConnector.TOPIC_CONFIG, TOPIC);
         config.put(FileStreamSourceConnector.TASK_BATCH_SIZE_CONFIG, String.valueOf(FileStreamSourceConnector.DEFAULT_TASK_BATCH_SIZE));
-        task = new FileStreamSourceTask();
+        task = new FileStreamSourceTask(2);
         offsetStorageReader = createMock(OffsetStorageReader.class);
         context = createMock(SourceTaskContext.class);
         task.initialize(context);
@@ -137,19 +138,67 @@ public class FileStreamSourceTaskTest extends EasyMockSupport {
         task.start(config);
 
         OutputStream os = Files.newOutputStream(tempFile.toPath());
-        for (int i = 0; i < 10_000; i++) {
-            os.write("Neque porro quisquam est qui dolorem ipsum quia dolor sit amet, consectetur, adipisci velit...\n".getBytes());
-        }
-        os.flush();
+        writeTimesAndFlush(os, 10_000,
+                "Neque porro quisquam est qui dolorem ipsum quia dolor sit amet, consectetur, adipisci velit...\n".getBytes()
+        );
 
+        assertEquals(2, task.bufferSize());
         List<SourceRecord> records = task.poll();
         assertEquals(5000, records.size());
+        assertEquals(128, task.bufferSize());
 
         records = task.poll();
         assertEquals(5000, records.size());
+        assertEquals(128, task.bufferSize());
 
         os.close();
         task.stop();
+    }
+
+    @Test
+    public void testBufferResize() throws IOException, InterruptedException {
+        int batchSize = 1000;
+        expectOffsetLookupReturnNone();
+        replay();
+
+        config.put(FileStreamSourceConnector.TASK_BATCH_SIZE_CONFIG, Integer.toString(batchSize));
+        task.start(config);
+
+        OutputStream os = Files.newOutputStream(tempFile.toPath());
+
+        assertEquals(2, task.bufferSize());
+        writeAndAssertBufferSize(batchSize, os, "1\n".getBytes(), 2);
+        writeAndAssertBufferSize(batchSize, os, "3 \n".getBytes(), 4);
+        writeAndAssertBufferSize(batchSize, os, "7     \n".getBytes(), 8);
+        writeAndAssertBufferSize(batchSize, os, "8      \n".getBytes(), 8);
+        writeAndAssertBufferSize(batchSize, os, "9       \n".getBytes(), 16);
+
+        byte[] bytes = new byte[1025];
+        Arrays.fill(bytes, (byte) '*');
+        bytes[bytes.length - 1] = '\n';
+        writeAndAssertBufferSize(batchSize, os, bytes, 2048);
+        writeAndAssertBufferSize(batchSize, os, "9       \n".getBytes(), 2048);
+        os.close();
+        task.stop();
+    }
+
+    private void writeAndAssertBufferSize(int batchSize, OutputStream os, byte[] bytes, int expectBufferSize)
+            throws IOException, InterruptedException {
+        writeTimesAndFlush(os, batchSize, bytes);
+        List<SourceRecord> records = task.poll();
+        assertEquals(batchSize, records.size());
+        String expectedLine = new String(bytes, 0, bytes.length - 1); // remove \n
+        for (SourceRecord record : records) {
+            assertEquals(expectedLine, record.value());
+        }
+        assertEquals(expectBufferSize, task.bufferSize());
+    }
+
+    private void writeTimesAndFlush(OutputStream os, int times, byte[] line) throws IOException {
+        for (int i = 0; i < times; i++) {
+            os.write(line);
+        }
+        os.flush();
     }
 
     @Test

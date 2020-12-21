@@ -18,11 +18,11 @@ package kafka.controller
 
 import java.util.Properties
 
-import kafka.api.{ApiVersion, KAFKA_0_10_0_IV1, KAFKA_0_10_2_IV0, KAFKA_0_9_0, KAFKA_1_0_IV0, KAFKA_2_2_IV0, KAFKA_2_4_IV0, KAFKA_2_4_IV1, KAFKA_2_6_IV0, LeaderAndIsr}
+import kafka.api.{ApiVersion, KAFKA_0_10_0_IV1, KAFKA_0_10_2_IV0, KAFKA_0_9_0, KAFKA_1_0_IV0, KAFKA_2_2_IV0, KAFKA_2_4_IV0, KAFKA_2_4_IV1, KAFKA_2_6_IV0, KAFKA_2_8_IV1, LeaderAndIsr}
 import kafka.cluster.{Broker, EndPoint}
 import kafka.server.KafkaConfig
 import kafka.utils.TestUtils
-import org.apache.kafka.common.TopicPartition
+import org.apache.kafka.common.{TopicPartition, Uuid}
 import org.apache.kafka.common.message.{LeaderAndIsrResponseData, StopReplicaResponseData, UpdateMetadataResponseData}
 import org.apache.kafka.common.message.LeaderAndIsrResponseData.LeaderAndIsrPartitionError
 import org.apache.kafka.common.message.StopReplicaRequestData.StopReplicaPartitionState
@@ -30,6 +30,7 @@ import org.apache.kafka.common.message.StopReplicaResponseData.StopReplicaPartit
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.requests.{AbstractControlRequest, AbstractResponse, LeaderAndIsrRequest, LeaderAndIsrResponse, StopReplicaRequest, StopReplicaResponse, UpdateMetadataRequest, UpdateMetadataResponse}
+import org.apache.kafka.common.message.LeaderAndIsrResponseData.LeaderAndIsrTopicError
 import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.junit.Assert._
 import org.junit.Test
@@ -49,7 +50,7 @@ class ControllerChannelManagerTest {
 
   @Test
   def testLeaderAndIsrRequestSent(): Unit = {
-    val context = initContext(Seq(1, 2, 3), Set("foo", "bar"), 2, 3)
+    val context = initContext(Seq(1, 2, 3), 2, 3, Set("foo", "bar"))
     val batch = new MockControllerBrokerRequestBatch(context)
 
     val partitions = Map(
@@ -72,6 +73,8 @@ class ControllerChannelManagerTest {
     assertEquals(1, updateMetadataRequests.size)
 
     val leaderAndIsrRequest = leaderAndIsrRequests.head
+    val topicIds = leaderAndIsrRequest.topicIds();
+    val topicNames = topicIds.asScala.map { case (k, v) => (v, k) }
     assertEquals(controllerId, leaderAndIsrRequest.controllerId)
     assertEquals(controllerEpoch, leaderAndIsrRequest.controllerEpoch)
     assertEquals(partitions.keySet,
@@ -87,12 +90,15 @@ class ControllerChannelManagerTest {
     val LeaderAndIsrResponseReceived(leaderAndIsrResponse, brokerId) = batch.sentEvents.head
     assertEquals(2, brokerId)
     assertEquals(partitions.keySet,
-      leaderAndIsrResponse.partitions.asScala.map(p => new TopicPartition(p.topicName, p.partitionIndex)).toSet)
+      leaderAndIsrResponse.topics.asScala.flatMap(t => t.partitionErrors.asScala.map(p =>
+        new TopicPartition(topicNames(t.topicId), p.partitionIndex))).toSet)
+    leaderAndIsrResponse.topics.forEach(topic =>
+      assertEquals(topicIds.get(topicNames.get(topic.topicId).get), topic.topicId))
   }
 
   @Test
   def testLeaderAndIsrRequestIsNew(): Unit = {
-    val context = initContext(Seq(1, 2, 3), Set("foo", "bar"), 2, 3)
+    val context = initContext(Seq(1, 2, 3), 2, 3, Set("foo", "bar"))
     val batch = new MockControllerBrokerRequestBatch(context)
 
     val partition = new TopicPartition("foo", 0)
@@ -120,7 +126,7 @@ class ControllerChannelManagerTest {
 
   @Test
   def testLeaderAndIsrRequestSentToLiveOrShuttingDownBrokers(): Unit = {
-    val context = initContext(Seq(1, 2, 3), Set("foo", "bar"), 2, 3)
+    val context = initContext(Seq(1, 2, 3), 2, 3, Set("foo", "bar"))
     val batch = new MockControllerBrokerRequestBatch(context)
 
     // 2 is shutting down, 3 is dead
@@ -157,7 +163,8 @@ class ControllerChannelManagerTest {
 
     for (apiVersion <- ApiVersion.allVersions) {
       val leaderAndIsrRequestVersion: Short =
-        if (apiVersion >= KAFKA_2_4_IV1) 4
+        if (apiVersion >= KAFKA_2_8_IV1) 5
+        else if (apiVersion >= KAFKA_2_4_IV1) 4
         else if (apiVersion >= KAFKA_2_4_IV0) 3
         else if (apiVersion >= KAFKA_2_2_IV0) 2
         else if (apiVersion >= KAFKA_1_0_IV0) 1
@@ -169,7 +176,7 @@ class ControllerChannelManagerTest {
 
   private def testLeaderAndIsrRequestFollowsInterBrokerProtocolVersion(interBrokerProtocolVersion: ApiVersion,
                                                                        expectedLeaderAndIsrVersion: Short): Unit = {
-    val context = initContext(Seq(1, 2, 3), Set("foo", "bar"), 2, 3)
+    val context = initContext(Seq(1, 2, 3), 2, 3, Set("foo", "bar"))
     val config = createConfig(interBrokerProtocolVersion)
     val batch = new MockControllerBrokerRequestBatch(context, config)
 
@@ -187,11 +194,28 @@ class ControllerChannelManagerTest {
     assertEquals(1, leaderAndIsrRequests.size)
     assertEquals(s"IBP $interBrokerProtocolVersion should use version $expectedLeaderAndIsrVersion",
       expectedLeaderAndIsrVersion, leaderAndIsrRequests.head.version)
+    
+    val request = leaderAndIsrRequests.head
+    val byteBuffer = request.serialize
+    val deserializedRequest = LeaderAndIsrRequest.parse(byteBuffer, expectedLeaderAndIsrVersion)
+    
+    if (interBrokerProtocolVersion >= KAFKA_2_8_IV1) {
+      assertTrue(!request.topicIds().get("foo").equals(Uuid.ZERO_UUID))
+      assertTrue(!deserializedRequest.topicIds().get("foo").equals(Uuid.ZERO_UUID))
+    } else if (interBrokerProtocolVersion >= KAFKA_2_2_IV0) {
+      assertTrue(!request.topicIds().get("foo").equals(Uuid.ZERO_UUID))
+      assertTrue(deserializedRequest.topicIds().get("foo").equals(Uuid.ZERO_UUID))
+    } else {
+      assertTrue(request.topicIds().get("foo") == null)
+      assertTrue(deserializedRequest.topicIds().get("foo") == null)
+    }
   }
 
   @Test
   def testUpdateMetadataRequestSent(): Unit = {
-    val context = initContext(Seq(1, 2, 3), Set("foo", "bar"), 2, 3)
+
+    val topicIds = Map("foo" -> Uuid.randomUuid(), "bar" -> Uuid.randomUuid())
+    val context = initContext(Seq(1, 2, 3), 2, 3, topicIds)
     val batch = new MockControllerBrokerRequestBatch(context)
 
     val partitions = Map(
@@ -219,6 +243,12 @@ class ControllerChannelManagerTest {
     assertEquals(partitions.map { case (k, v) => (k, v.isr) },
       partitionStates.map(ps => (new TopicPartition(ps.topicName, ps.partitionIndex), ps.isr.asScala)).toMap)
 
+    val topicStates = updateMetadataRequest.topicStates()
+    assertEquals(2, topicStates.size)
+    for (topicState <- topicStates.asScala) {
+      assertEquals(topicState.topicId(), topicIds(topicState.topicName()))
+    }
+
     assertEquals(controllerId, updateMetadataRequest.controllerId)
     assertEquals(controllerEpoch, updateMetadataRequest.controllerEpoch)
     assertEquals(3, updateMetadataRequest.liveBrokers.size)
@@ -234,7 +264,7 @@ class ControllerChannelManagerTest {
 
   @Test
   def testUpdateMetadataDoesNotIncludePartitionsWithoutLeaderAndIsr(): Unit = {
-    val context = initContext(Seq(1, 2, 3), Set("foo", "bar"), 2, 3)
+    val context = initContext(Seq(1, 2, 3), 2, 3, Set("foo", "bar"))
     val batch = new MockControllerBrokerRequestBatch(context)
 
     val partitions = Set(
@@ -262,7 +292,7 @@ class ControllerChannelManagerTest {
 
   @Test
   def testUpdateMetadataRequestDuringTopicDeletion(): Unit = {
-    val context = initContext(Seq(1, 2, 3), Set("foo", "bar"), 2, 3)
+    val context = initContext(Seq(1, 2, 3), 2, 3, Set("foo", "bar"))
     val batch = new MockControllerBrokerRequestBatch(context)
 
     val partitions = Map(
@@ -304,7 +334,7 @@ class ControllerChannelManagerTest {
 
   @Test
   def testUpdateMetadataIncludesLiveOrShuttingDownBrokers(): Unit = {
-    val context = initContext(Seq(1, 2, 3), Set("foo", "bar"), 2, 3)
+    val context = initContext(Seq(1, 2, 3), 2, 3, Set("foo", "bar"))
     val batch = new MockControllerBrokerRequestBatch(context)
 
     // 2 is shutting down, 3 is dead
@@ -334,7 +364,8 @@ class ControllerChannelManagerTest {
 
     for (apiVersion <- ApiVersion.allVersions) {
       val updateMetadataRequestVersion: Short =
-        if (apiVersion >= KAFKA_2_4_IV1) 6
+        if (apiVersion >= KAFKA_2_8_IV1) 7
+        else if (apiVersion >= KAFKA_2_4_IV1) 6
         else if (apiVersion >= KAFKA_2_2_IV0) 5
         else if (apiVersion >= KAFKA_1_0_IV0) 4
         else if (apiVersion >= KAFKA_0_10_2_IV0) 3
@@ -348,7 +379,7 @@ class ControllerChannelManagerTest {
 
   private def testUpdateMetadataFollowsInterBrokerProtocolVersion(interBrokerProtocolVersion: ApiVersion,
                                                                   expectedUpdateMetadataVersion: Short): Unit = {
-    val context = initContext(Seq(1, 2, 3), Set("foo", "bar"), 2, 3)
+    val context = initContext(Seq(1, 2, 3), 2, 3, Set("foo", "bar"))
     val config = createConfig(interBrokerProtocolVersion)
     val batch = new MockControllerBrokerRequestBatch(context, config)
 
@@ -369,7 +400,7 @@ class ControllerChannelManagerTest {
 
   @Test
   def testStopReplicaRequestSent(): Unit = {
-    val context = initContext(Seq(1, 2, 3), Set("foo", "bar"), 2, 3)
+    val context = initContext(Seq(1, 2, 3), 2, 3, Set("foo", "bar"))
     val batch = new MockControllerBrokerRequestBatch(context)
 
     val partitions = Map(
@@ -404,7 +435,7 @@ class ControllerChannelManagerTest {
 
   @Test
   def testStopReplicaRequestWithAlreadyDefinedDeletedPartition(): Unit = {
-    val context = initContext(Seq(1, 2, 3), Set("foo", "bar"), 2, 3)
+    val context = initContext(Seq(1, 2, 3), 2, 3, Set("foo", "bar"))
     val batch = new MockControllerBrokerRequestBatch(context)
 
     val partition = new TopicPartition("foo", 0)
@@ -432,7 +463,7 @@ class ControllerChannelManagerTest {
   }
 
   private def testStopReplicaRequestsWhileTopicQueuedForDeletion(interBrokerProtocolVersion: ApiVersion): Unit = {
-    val context = initContext(Seq(1, 2, 3), Set("foo", "bar"), 2, 3)
+    val context = initContext(Seq(1, 2, 3), 2, 3, Set("foo", "bar"))
     val config = createConfig(interBrokerProtocolVersion)
     val batch = new MockControllerBrokerRequestBatch(context, config)
 
@@ -479,7 +510,7 @@ class ControllerChannelManagerTest {
   }
 
   private def testStopReplicaRequestsWhileTopicDeletionStarted(interBrokerProtocolVersion: ApiVersion): Unit = {
-    val context = initContext(Seq(1, 2, 3), Set("foo", "bar"), 2, 3)
+    val context = initContext(Seq(1, 2, 3), 2, 3, Set("foo", "bar"))
     val config = createConfig(interBrokerProtocolVersion)
     val batch = new MockControllerBrokerRequestBatch(context, config)
 
@@ -534,7 +565,7 @@ class ControllerChannelManagerTest {
   }
 
   private def testStopReplicaRequestWithoutDeletePartitionWhileTopicDeletionStarted(interBrokerProtocolVersion: ApiVersion): Unit = {
-    val context = initContext(Seq(1, 2, 3), Set("foo", "bar"), 2, 3)
+    val context = initContext(Seq(1, 2, 3), 2, 3, Set("foo", "bar"))
     val config = createConfig(interBrokerProtocolVersion)
     val batch = new MockControllerBrokerRequestBatch(context, config)
 
@@ -592,7 +623,7 @@ class ControllerChannelManagerTest {
 
   private def testMixedDeleteAndNotDeleteStopReplicaRequests(interBrokerProtocolVersion: ApiVersion,
                                                              expectedStopReplicaRequestVersion: Short): Unit = {
-    val context = initContext(Seq(1, 2, 3), Set("foo", "bar"), 2, 3)
+    val context = initContext(Seq(1, 2, 3), 2, 3, Set("foo", "bar"))
     val config = createConfig(interBrokerProtocolVersion)
     val batch = new MockControllerBrokerRequestBatch(context, config)
 
@@ -651,7 +682,7 @@ class ControllerChannelManagerTest {
 
   @Test
   def testStopReplicaGroupsByBroker(): Unit = {
-    val context = initContext(Seq(1, 2, 3), Set("foo", "bar"), 2, 3)
+    val context = initContext(Seq(1, 2, 3), 2, 3, Set("foo", "bar"))
     val batch = new MockControllerBrokerRequestBatch(context)
 
     val partitions = Map(
@@ -689,7 +720,7 @@ class ControllerChannelManagerTest {
 
   @Test
   def testStopReplicaSentOnlyToLiveAndShuttingDownBrokers(): Unit = {
-    val context = initContext(Seq(1, 2, 3), Set("foo", "bar"), 2, 3)
+    val context = initContext(Seq(1, 2, 3), 2, 3, Set("foo", "bar"))
     val batch = new MockControllerBrokerRequestBatch(context)
 
     // 2 is shutting down, 3 is dead
@@ -741,7 +772,7 @@ class ControllerChannelManagerTest {
 
   private def testStopReplicaFollowsInterBrokerProtocolVersion(interBrokerProtocolVersion: ApiVersion,
                                                                expectedStopReplicaRequestVersion: Short): Unit = {
-    val context = initContext(Seq(1, 2, 3), Set("foo"), 2, 3)
+    val context = initContext(Seq(1, 2, 3), 2, 3, Set("foo"))
     val config = createConfig(interBrokerProtocolVersion)
     val batch = new MockControllerBrokerRequestBatch(context, config)
 
@@ -818,15 +849,18 @@ class ControllerChannelManagerTest {
   private def applyLeaderAndIsrResponseCallbacks(error: Errors, sentRequests: List[SentRequest]): Unit = {
     sentRequests.filter(_.request.apiKey == ApiKeys.LEADER_AND_ISR).filter(_.responseCallback != null).foreach { sentRequest =>
       val leaderAndIsrRequest = sentRequest.request.build().asInstanceOf[LeaderAndIsrRequest]
-      val partitionErrors = leaderAndIsrRequest.partitionStates.asScala.map(p =>
-        new LeaderAndIsrPartitionError()
-          .setTopicName(p.topicName)
-          .setPartitionIndex(p.partitionIndex)
-          .setErrorCode(error.code))
+      val topicIds = leaderAndIsrRequest.topicIds
+      val topicErrors = leaderAndIsrRequest.data.topicStates.asScala.map(t =>
+        new LeaderAndIsrTopicError()
+          .setTopicId(topicIds.get(t.topicName))
+          .setPartitionErrors(t.partitionStates.asScala.map(p =>
+            new LeaderAndIsrPartitionError()
+              .setPartitionIndex(p.partitionIndex)
+              .setErrorCode(error.code)).asJava))
       val leaderAndIsrResponse = new LeaderAndIsrResponse(
         new LeaderAndIsrResponseData()
           .setErrorCode(error.code)
-          .setPartitionErrors(partitionErrors.toBuffer.asJava))
+          .setTopics(topicErrors.toBuffer.asJava), leaderAndIsrRequest.version())
       sentRequest.responseCallback(leaderAndIsrResponse)
     }
   }
@@ -850,9 +884,15 @@ class ControllerChannelManagerTest {
   private def replicaAssignment(replicas: Seq[Int]): ReplicaAssignment = ReplicaAssignment(replicas, Seq(), Seq())
 
   private def initContext(brokers: Seq[Int],
-                          topics: Set[String],
                           numPartitions: Int,
-                          replicationFactor: Int): ControllerContext = {
+                          replicationFactor: Int,
+                          topics: Set[String]): ControllerContext = initContext(brokers, numPartitions,
+    replicationFactor, topics.map(_ -> Uuid.randomUuid()).toMap)
+
+  private def initContext(brokers: Seq[Int],
+                          numPartitions: Int,
+                          replicationFactor: Int,
+                          topicIds: Map[String, Uuid]): ControllerContext = {
     val context = new ControllerContext
     val brokerEpochs = brokers.map { brokerId =>
       val endpoint = new EndPoint("localhost", 9900 + brokerId, new ListenerName("PLAINTEXT"),
@@ -861,10 +901,12 @@ class ControllerChannelManagerTest {
     }.toMap
 
     context.setLiveBrokers(brokerEpochs)
+    context.setAllTopics(topicIds.keySet)
+    topicIds.foreach { case (name, id) => context.addTopicId(name, id) }
 
     // Simple round-robin replica assignment
     var leaderIndex = 0
-    for (topic <- topics; partitionId <- 0 until numPartitions) {
+    for (topic <- topicIds.keys; partitionId <- 0 until numPartitions) {
       val partition = new TopicPartition(topic, partitionId)
       val replicas = (0 until replicationFactor).map { i =>
         val replica = brokers((i + leaderIndex) % brokers.size)
@@ -873,6 +915,7 @@ class ControllerChannelManagerTest {
       context.updatePartitionFullReplicaAssignment(partition, ReplicaAssignment(replicas))
       leaderIndex += 1
     }
+
     context
   }
 

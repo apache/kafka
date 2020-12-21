@@ -257,7 +257,7 @@ public abstract class AbstractCoordinator implements Closeable {
             } else if (coordinator != null && client.isUnavailable(coordinator)) {
                 // we found the coordinator, but the connection has failed, so mark
                 // it dead and backoff before retrying discovery
-                markCoordinatorUnknown();
+                markCoordinatorUnknown("coordinator unavailable");
                 timer.sleep(rebalanceConfig.retryBackoffMs);
             }
         } while (coordinatorUnknown() && timer.notExpired());
@@ -619,7 +619,7 @@ public abstract class AbstractCoordinator implements Closeable {
             } else if (error == Errors.COORDINATOR_NOT_AVAILABLE
                     || error == Errors.NOT_COORDINATOR) {
                 // re-discover the coordinator and retry with backoff
-                markCoordinatorUnknown();
+                markCoordinatorUnknown(error);
                 log.info("JoinGroup failed: {} Marking coordinator unknown. Sent generation was {}",
                           error.message(), sentGeneration);
                 future.raise(error);
@@ -732,9 +732,9 @@ public abstract class AbstractCoordinator implements Closeable {
                            RequestFuture<ByteBuffer> future) {
             Errors error = syncResponse.error();
             if (error == Errors.NONE) {
-                if (isProtocolTypeInconsistent(syncResponse.data.protocolType())) {
+                if (isProtocolTypeInconsistent(syncResponse.data().protocolType())) {
                     log.error("SyncGroup failed due to inconsistent Protocol Type, received {} but expected {}",
-                        syncResponse.data.protocolType(), protocolType());
+                        syncResponse.data().protocolType(), protocolType());
                     future.raise(Errors.INCONSISTENT_GROUP_PROTOCOL);
                 } else {
                     log.debug("Received successful SyncGroup response: {}", syncResponse);
@@ -743,7 +743,7 @@ public abstract class AbstractCoordinator implements Closeable {
                     synchronized (AbstractCoordinator.this) {
                         if (!generation.equals(Generation.NO_GENERATION) && state == MemberState.COMPLETING_REBALANCE) {
                             // check protocol name only if the generation is not reset
-                            final String protocolName = syncResponse.data.protocolName();
+                            final String protocolName = syncResponse.data().protocolName();
                             final boolean protocolNameInconsistent = protocolName != null &&
                                 !protocolName.equals(generation.protocolName);
 
@@ -761,7 +761,7 @@ public abstract class AbstractCoordinator implements Closeable {
                                 sensors.successfulRebalanceSensor.record(lastRebalanceEndMs - lastRebalanceStartMs);
                                 lastRebalanceStartMs = -1L;
 
-                                future.complete(ByteBuffer.wrap(syncResponse.data.assignment()));
+                                future.complete(ByteBuffer.wrap(syncResponse.data().assignment()));
                             }
                         } else {
                             log.info("Generation data was cleared by heartbeat thread to {} and state is now {} before " +
@@ -799,7 +799,7 @@ public abstract class AbstractCoordinator implements Closeable {
                         || error == Errors.NOT_COORDINATOR) {
                     log.info("SyncGroup failed: {} Marking coordinator unknown. Sent generation was {}",
                              error.message(), sentGeneration);
-                    markCoordinatorUnknown();
+                    markCoordinatorUnknown(error);
                     future.raise(error);
                 } else {
                     future.raise(new KafkaException("Unexpected error from SyncGroup: " + error.message()));
@@ -880,7 +880,7 @@ public abstract class AbstractCoordinator implements Closeable {
      */
     protected synchronized Node checkAndGetCoordinator() {
         if (coordinator != null && client.isUnavailable(coordinator)) {
-            markCoordinatorUnknown(true);
+            markCoordinatorUnknown(true, "coordinator unavailable");
             return null;
         }
         return this.coordinator;
@@ -890,13 +890,20 @@ public abstract class AbstractCoordinator implements Closeable {
         return this.coordinator;
     }
 
-    protected synchronized void markCoordinatorUnknown() {
-        markCoordinatorUnknown(false);
+
+    protected synchronized void markCoordinatorUnknown(Errors error) {
+        markCoordinatorUnknown(false, "error response " + error.name());
     }
 
-    protected synchronized void markCoordinatorUnknown(boolean isDisconnected) {
+    protected synchronized void markCoordinatorUnknown(String cause) {
+        markCoordinatorUnknown(false, cause);
+    }
+
+    protected synchronized void markCoordinatorUnknown(boolean isDisconnected, String cause) {
         if (this.coordinator != null) {
-            log.info("Group coordinator {} is unavailable or invalid, will attempt rediscovery", this.coordinator);
+            log.info("Group coordinator {} is unavailable or invalid due to cause: {}."
+                    + "isDisconnected: {}. Rediscovery will be attempted.", this.coordinator,
+                    cause, isDisconnected);
             Node oldCoordinator = this.coordinator;
 
             // Mark the coordinator dead before disconnecting requests since the callbacks for any pending
@@ -1094,7 +1101,7 @@ public abstract class AbstractCoordinator implements Closeable {
                     || error == Errors.NOT_COORDINATOR) {
                 log.info("Attempt to heartbeat failed since coordinator {} is either not started or not valid",
                         coordinator());
-                markCoordinatorUnknown();
+                markCoordinatorUnknown(error);
                 future.raise(error);
             } else if (error == Errors.REBALANCE_IN_PROGRESS) {
                 // since we may be sending the request during rebalance, we should check
@@ -1143,7 +1150,7 @@ public abstract class AbstractCoordinator implements Closeable {
         public void onFailure(RuntimeException e, RequestFuture<T> future) {
             // mark the coordinator as dead
             if (e instanceof DisconnectException) {
-                markCoordinatorUnknown(true);
+                markCoordinatorUnknown(true, e.getMessage());
             }
             future.raise(e);
         }
@@ -1355,7 +1362,8 @@ public abstract class AbstractCoordinator implements Closeable {
                         } else if (heartbeat.sessionTimeoutExpired(now)) {
                             // the session timeout has expired without seeing a successful heartbeat, so we should
                             // probably make sure the coordinator is still healthy.
-                            markCoordinatorUnknown();
+                            markCoordinatorUnknown("session timed out without receiving a "
+                                    + "heartbeat response");
                         } else if (heartbeat.pollTimeoutExpired(now)) {
                             // the poll timeout has expired, which means that the foreground thread has stalled
                             // in between calls to poll().
