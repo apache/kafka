@@ -23,7 +23,6 @@ import java.util
 import java.util.Arrays.asList
 import java.util.concurrent.TimeUnit
 import java.util.{Collections, Optional, Properties, Random}
-
 import kafka.api.{ApiVersion, KAFKA_0_10_2_IV0, KAFKA_2_2_IV1, LeaderAndIsr}
 import kafka.cluster.{Broker, Partition}
 import kafka.controller.KafkaController
@@ -71,6 +70,7 @@ import org.easymock.EasyMock._
 import org.easymock.{Capture, EasyMock, IAnswer, IArgumentMatcher}
 import org.junit.Assert._
 import org.junit.{After, Test}
+import org.mockito.{ArgumentMatchers, Mockito}
 
 import scala.annotation.nowarn
 import scala.collection.{Map, Seq, mutable}
@@ -3067,5 +3067,32 @@ class KafkaApisTest {
     assertEquals(Map(Errors.NONE -> 1,
       Errors.LOG_DIR_NOT_FOUND -> 1,
       Errors.INVALID_TOPIC_EXCEPTION -> 1).asJava, response.errorCounts)
+  }
+
+  @Test
+  def testSizeOfThrottledPartitions(): Unit = {
+    def fetchResponse(data: Map[TopicPartition, String]): FetchResponse[Records] = {
+      val responseData = new util.LinkedHashMap[TopicPartition, FetchResponse.PartitionData[Records]](
+        data.map { case (tp, raw) =>
+          tp -> new FetchResponse.PartitionData(Errors.NONE,
+            105, 105, 0, Optional.empty(), Collections.emptyList(), Optional.empty(),
+            MemoryRecords.withRecords(CompressionType.NONE,
+              new SimpleRecord(100, raw.getBytes(StandardCharsets.UTF_8))).asInstanceOf[Records])
+      }.toMap.asJava)
+      new FetchResponse(Errors.NONE, responseData, 100, 100)
+    }
+
+    val throttledPartition = new TopicPartition("throttledData", 0)
+    val throttledData = Map(throttledPartition -> "throttledData")
+    val expectedSize = FetchResponse.sizeOf(FetchResponseData.HIGHEST_SUPPORTED_VERSION,
+      fetchResponse(throttledData).responseData.entrySet.iterator)
+
+    val response = fetchResponse(throttledData ++ Map(new TopicPartition("nonThrottledData", 0) -> "nonThrottledData"))
+
+    val quota = Mockito.mock(classOf[ReplicationQuotaManager])
+    Mockito.when(quota.isThrottled(ArgumentMatchers.any(classOf[TopicPartition])))
+      .thenAnswer(invocation => throttledPartition == invocation.getArgument(0).asInstanceOf[TopicPartition])
+
+    assertEquals(expectedSize, KafkaApis.sizeOfThrottledPartitions(FetchResponseData.HIGHEST_SUPPORTED_VERSION, response, quota))
   }
 }
