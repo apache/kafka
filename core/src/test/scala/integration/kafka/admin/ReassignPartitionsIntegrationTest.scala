@@ -19,10 +19,9 @@ package kafka.admin
 
 import java.io.Closeable
 import java.util.{Collections, HashMap, List}
-
 import kafka.admin.ReassignPartitionsCommand._
 import kafka.api.KAFKA_2_7_IV1
-import kafka.server.{IsrChangePropagationConfig, KafkaConfig, KafkaServer, ReplicaManager}
+import kafka.server.{IsrChangePropagationConfig, KafkaConfig, KafkaServer, ZkIsrManager}
 import kafka.utils.Implicits._
 import kafka.utils.TestUtils
 import kafka.zk.{KafkaZkClient, ZooKeeperTestHarness}
@@ -88,7 +87,7 @@ class ReassignPartitionsIntegrationTest extends ZooKeeperTestHarness {
 
     // Override change notification settings so that test is not delayed by ISR
     // change notification delay
-    ReplicaManager.DefaultIsrPropagationConfig = IsrChangePropagationConfig(
+    ZkIsrManager.DefaultIsrPropagationConfig = IsrChangePropagationConfig(
       checkIntervalMs = 500,
       lingerMs = 100,
       maxDelayMs = 500

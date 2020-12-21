@@ -21,7 +21,7 @@ import java.util.Properties
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent._
 
-import kafka.api.{ApiVersion, LeaderAndIsr}
+import kafka.api.ApiVersion
 import kafka.log._
 import kafka.server._
 import kafka.server.checkpoints.OffsetCheckpoints
@@ -248,7 +248,7 @@ class PartitionLockTest extends Logging {
     val leaderEpoch = 1
     val brokerId = 0
     val topicPartition = new TopicPartition("test-topic", 0)
-    val stateStore: PartitionStateStore = mock(classOf[PartitionStateStore])
+    val topicConfigProvider = TestUtils.createTopicConfigProvider(createLogProperties(Map.empty))
     val isrChangeListener: IsrChangeListener = mock(classOf[IsrChangeListener])
     val delayedOperations: DelayedOperations = mock(classOf[DelayedOperations])
     val metadataCache: MetadataCache = mock(classOf[MetadataCache])
@@ -261,7 +261,7 @@ class PartitionLockTest extends Logging {
       interBrokerProtocolVersion = ApiVersion.latestVersion,
       localBrokerId = brokerId,
       mockTime,
-      stateStore,
+      topicConfigProvider,
       isrChangeListener,
       delayedOperations,
       metadataCache,
@@ -282,14 +282,9 @@ class PartitionLockTest extends Logging {
         new SlowLog(log, mockTime, appendSemaphore)
       }
     }
-    when(stateStore.fetchTopicConfig()).thenReturn(createLogProperties(Map.empty))
     when(offsetCheckpoints.fetch(ArgumentMatchers.anyString, ArgumentMatchers.eq(topicPartition)))
       .thenReturn(None)
-    when(stateStore.shrinkIsr(ArgumentMatchers.anyInt, ArgumentMatchers.any[LeaderAndIsr]))
-      .thenReturn(Some(2))
-    when(stateStore.expandIsr(ArgumentMatchers.anyInt, ArgumentMatchers.any[LeaderAndIsr]))
-      .thenReturn(Some(2))
-    when(alterIsrManager.enqueue(ArgumentMatchers.any[AlterIsrItem]))
+    when(alterIsrManager.submit(ArgumentMatchers.any[AlterIsrItem]))
       .thenReturn(true)
 
     partition.createLogIfNotExists(isNew = false, isFutureReplica = false, offsetCheckpoints)
