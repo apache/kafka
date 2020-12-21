@@ -3500,12 +3500,12 @@ class KafkaApis(val requestChannel: RequestChannel,
 }
 
 object KafkaApis {
-    // Traffic from both in-sync and out of sync replicas are accounted for in replication quota to ensure total replication
+  // Traffic from both in-sync and out of sync replicas are accounted for in replication quota to ensure total replication
   // traffic doesn't exceed quota.
   private[server] def sizeOfThrottledPartitions(versionId: Short,
                                                 unconvertedResponse: FetchResponse[Records],
                                                 quota: ReplicationQuotaManager): Int = {
-    FetchResponse.sizeOf(versionId, unconvertedResponse.responseData.entrySet()
-      .iterator().asScala.filter(element => quota.isThrottled(element.getKey)).asJava)
+    FetchResponse.sizeOf(versionId, unconvertedResponse.responseData.entrySet
+      .iterator.asScala.filter(element => quota.isThrottled(element.getKey)).asJava)
   }
 }

@@ -3072,8 +3072,8 @@ class KafkaApisTest {
   @Test
   def testSizeOfThrottledPartitions(): Unit = {
     def fetchResponse(data: Map[TopicPartition, String]): FetchResponse[Records] = {
-      val responseData = new util.LinkedHashMap[TopicPartition, FetchResponse.PartitionData[Records]](data.map {
-        case (tp, raw) =>
+      val responseData = new util.LinkedHashMap[TopicPartition, FetchResponse.PartitionData[Records]](
+        data.map { case (tp, raw) =>
           tp -> new FetchResponse.PartitionData(Errors.NONE,
             105, 105, 0, Optional.empty(), Collections.emptyList(), Optional.empty(),
             MemoryRecords.withRecords(CompressionType.NONE,
@@ -3085,7 +3085,7 @@ class KafkaApisTest {
     val throttledPartition = new TopicPartition("throttledData", 0)
     val throttledData = Map(throttledPartition -> "throttledData")
     val expectedSize = FetchResponse.sizeOf(FetchResponseData.HIGHEST_SUPPORTED_VERSION,
-      fetchResponse(throttledData).responseData().entrySet().iterator)
+      fetchResponse(throttledData).responseData.entrySet.iterator)
 
     val response = fetchResponse(throttledData ++ Map(new TopicPartition("nonThrottledData", 0) -> "nonThrottledData"))
 
