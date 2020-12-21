@@ -1325,6 +1325,7 @@ project(':tools') {
 
   dependencies {
     compile project(':clients')
+    compile project(':core')
     compile project(':log4j-appender')
     compile libs.argparse4j
     compile libs.jacksonDatabind

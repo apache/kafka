@@ -262,6 +262,12 @@
     <allow pkg="com.fasterxml.jackson" />
     <allow pkg="net.sourceforge.argparse4j" />
     <allow pkg="org.apache.log4j" />
+
+    <subpackage name="metadata">
+      <allow pkg="kafka.raft"/>
+      <allow pkg="kafka.server"/>
+      <allow pkg="scala.compat"/>
+    </subpackage>
   </subpackage>
 
   <subpackage name="trogdor">
