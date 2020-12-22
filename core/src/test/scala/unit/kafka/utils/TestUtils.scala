@@ -347,6 +347,9 @@ object TestUtils extends Logging {
       !hasSessionExpirationException},
       s"Can't create topic $topic")
 
+    // wait until we've got the expected partition size
+    waitUntilMetadataIsPropagatedWithExpectedSize(servers, topic, numPartitions)
+
     // wait until the update metadata request for new topic reaches all servers
     (0 until numPartitions).map { i =>
       TestUtils.waitUntilMetadataIsPropagated(servers, topic, i)
@@ -388,6 +391,9 @@ object TestUtils extends Logging {
       }
       !hasSessionExpirationException},
       s"Can't create topic $topic")
+
+    // wait until we've got the expected partition size
+    waitUntilMetadataIsPropagatedWithExpectedSize(servers, topic, partitionReplicaAssignment.size)
 
     // wait until the update metadata request for new topic reaches all servers
     partitionReplicaAssignment.keySet.map { i =>
@@ -913,6 +919,24 @@ object TestUtils extends Logging {
     waitUntilTrue(() => servers.forall(server =>
       expectedBrokerIds == server.dataPlaneRequestProcessor.metadataCache.getAliveBrokers.map(_.id).toSet
     ), "Timed out waiting for broker metadata to propagate to all servers", timeout)
+  }
+
+  /**
+   * Wait until the expected number of partitions is in the metadata cache in each broker.
+   *
+   * @param servers The list of servers that the metadata should reach to
+   * @param topic The topic name
+   * @param expectedNumPartitions The expected number of partitions
+   */
+  def waitUntilMetadataIsPropagatedWithExpectedSize(servers: Seq[KafkaServer], topic: String, expectedNumPartitions: Int): Unit = {
+    waitUntilTrue(
+      () => servers.forall { server =>
+        server.dataPlaneRequestProcessor.metadataCache.numPartitions(topic) match {
+          case Some(numPartitions) => numPartitions == expectedNumPartitions
+          case _ => false
+        }
+      },
+      s"Topic [$topic] metadata not propagated after 60000 ms", waitTimeMs = 60000L)
   }
 
   /**
