@@ -596,6 +596,12 @@ final public class KafkaRaftClientSnapshotTest {
         assertTrue(false);
     }
 
+    @Disabled
+    @Test
+    public void testFetchSnapshotResponseWithInvalidId() throws Exception {
+        assertTrue(false);
+    }
+
     private static FetchSnapshotRequestData fetchSnapshotRequest(
         TopicPartition topicPartition,
         int epoch,

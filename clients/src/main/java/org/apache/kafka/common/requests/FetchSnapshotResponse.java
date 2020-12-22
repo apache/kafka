@@ -71,7 +71,7 @@ final public class FetchSnapshotResponse extends AbstractResponse {
      * @param error the top level error
      * @return the created fetch snapshot response data
      */
-    public static FetchSnapshotResponseData withTopError(Errors error) {
+    public static FetchSnapshotResponseData withTopLevelError(Errors error) {
         return new FetchSnapshotResponseData().setErrorCode(error.code());
     }
 

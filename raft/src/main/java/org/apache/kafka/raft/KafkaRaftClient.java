@@ -949,8 +949,6 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
     ) {
         Optional<Errors> errorOpt = validateLeaderOnlyRequest(request.currentLeaderEpoch());
         if (errorOpt.isPresent()) {
-            // TODO: The replica should return what information it knows about the current epoch and
-            // leader.
             return buildEmptyFetchResponse(errorOpt.get(), Optional.empty());
         }
 
@@ -1052,30 +1050,27 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
                 // The leader is asking us to fetch a snapshot
 
                 if (partitionResponse.snapshotId().epoch() < 0) {
-                    throw new KafkaException(
-                        String.format(
-                            "The leader sent a snapshot id with a valid end offset %s but with an invalid epoch %s",
-                            partitionResponse.snapshotId().endOffset(),
-                            partitionResponse.snapshotId().epoch()
-                        )
+                    logger.error(
+                        "The leader sent a snapshot id with a valid end offset {} but with an invalid epoch {}",
+                        partitionResponse.snapshotId().endOffset(),
+                        partitionResponse.snapshotId().epoch()
                     );
-                }
-                if (partitionResponse.snapshotId().endOffset() < 0) {
-                    throw new KafkaException(
-                        String.format(
-                            "The leader sent a snapshot id with a valid epoch %s but with an invalid end offset %s",
-                            partitionResponse.snapshotId().epoch(),
-                            partitionResponse.snapshotId().endOffset()
-                        )
+                    return false;
+                } else if (partitionResponse.snapshotId().endOffset() < 0) {
+                    logger.error(
+                        "The leader sent a snapshot id with a valid epoch {} but with an invalid end offset {}",
+                        partitionResponse.snapshotId().epoch(),
+                        partitionResponse.snapshotId().endOffset()
                     );
+                    return false;
+                } else {
+                    OffsetAndEpoch snapshotId = new OffsetAndEpoch(
+                        partitionResponse.snapshotId().endOffset(),
+                        partitionResponse.snapshotId().epoch()
+                    );
+
+                    state.setFetchingSnapshot(Optional.of(log.createSnapshot(snapshotId)));
                 }
-
-                OffsetAndEpoch snapshotId = new OffsetAndEpoch(
-                    partitionResponse.snapshotId().endOffset(),
-                    partitionResponse.snapshotId().epoch()
-                );
-
-                state.setFetchingSnapshot(Optional.of(log.createSnapshot(snapshotId)));
             } else {
                 Records records = (Records) partitionResponse.recordSet();
                 if (records.sizeInBytes() > 0) {
@@ -1146,7 +1141,7 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
         FetchSnapshotRequestData data = (FetchSnapshotRequestData) requestMetadata.data;
 
         if (data.topics().size() != 1 && data.topics().get(0).partitions().size() != 1) {
-            return FetchSnapshotResponse.withTopError(Errors.INVALID_REQUEST);
+            return FetchSnapshotResponse.withTopLevelError(Errors.INVALID_REQUEST);
         }
 
         Optional<FetchSnapshotRequestData.PartitionSnapshot> partitionSnapshotOpt = FetchSnapshotRequest
@@ -1197,6 +1192,16 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
         }
 
         try (RawSnapshotReader snapshot = snapshotOpt.get()) {
+            if (partitionSnapshot.position() < 0 || partitionSnapshot.position() >= snapshot.sizeInBytes()) {
+                return FetchSnapshotResponse.singleton(
+                    log.topicPartition(),
+                    responsePartitionSnapshot -> {
+                        return addQuorumLeader(responsePartitionSnapshot)
+                            .setErrorCode(Errors.POSITION_OUT_OF_RANGE.code());
+                    }
+                );
+            }
+
             int maxSnapshotSize;
             try {
                 maxSnapshotSize = Math.toIntExact(snapshot.sizeInBytes());
@@ -1204,7 +1209,6 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
                 maxSnapshotSize = Integer.MAX_VALUE;
             }
 
-            // TODO: Make sure that we also limit based on the fetch max bytes configuration
             ByteBuffer buffer = ByteBuffer.allocate(Math.min(data.maxBytes(), maxSnapshotSize));
             snapshot.read(buffer, partitionSnapshot.position());
             buffer.flip();
@@ -1235,7 +1239,6 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
         FetchSnapshotResponseData data = (FetchSnapshotResponseData) responseMetadata.data;
         Errors topLevelError = Errors.forCode(data.errorCode());
         if (topLevelError != Errors.NONE) {
-            // TODO: check what values this expression returns
             return handleTopLevelError(topLevelError, responseMetadata);
         }
 
@@ -1259,7 +1262,6 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
         Optional<Boolean> handled = maybeHandleCommonResponse(
             error, responseLeaderId, responseEpoch, currentTimeMs);
         if (handled.isPresent()) {
-            // TODO: check what values this expression returns
             return handled.get();
         }
 
@@ -1272,6 +1274,7 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
             /* The leader deleted the snapshot before the follower could download it. Start over by
              * reseting the fetching snapshot state and sending another fetch request.
              */
+            logger.trace("Leader doesn't know about snapshot id {}, returned error {} and snapshot id {}", state.fetchingSnapshot(), partitionSnapshot.errorCode(), partitionSnapshot.snapshotId());
             state.setFetchingSnapshot(Optional.empty());
             state.resetFetchTimeout(currentTimeMs);
             return true;
@@ -1286,7 +1289,7 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
         if (state.fetchingSnapshot().isPresent()) {
             snapshot = state.fetchingSnapshot().get();
         } else {
-            throw new IllegalStateException("Received unexpected fetch snapshot response: " + partitionSnapshot);
+            throw new IllegalStateException(String.format("Received unexpected fetch snapshot response: %s", partitionSnapshot));
         }
 
         if (!snapshot.snapshotId().equals(snapshotId)) {
@@ -1872,23 +1875,7 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
             transitionToCandidate(currentTimeMs);
             return 0L;
         } else {
-            long backoffMs;
-            if (state.fetchingSnapshot().isPresent()) {
-                RawSnapshotWriter snapshot = state.fetchingSnapshot().get();
-                long snapshotSize = snapshot.sizeInBytes();
-
-                backoffMs = maybeSendRequest(
-                    currentTimeMs,
-                    state.leaderId(),
-                    () -> buildFetchSnapshotRequest(snapshot.snapshotId(), snapshotSize)
-                );
-            } else {
-                backoffMs = maybeSendRequest(
-                    currentTimeMs,
-                    state.leaderId(),
-                    this::buildFetchRequest
-                );
-            }
+            long backoffMs = maybeSendFetchOrFetchSnapshot(state, currentTimeMs);
 
             return Math.min(backoffMs, state.remainingFetchTimeMs(currentTimeMs));
         }
@@ -1910,26 +1897,26 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
             } else if (connection.isBackingOff(currentTimeMs)) {
                 backoffMs = maybeSendAnyVoterFetch(currentTimeMs);
             } else {
-                if (state.fetchingSnapshot().isPresent()) {
-                    RawSnapshotWriter snapshot = state.fetchingSnapshot().get();
-                    long snapshotSize = snapshot.sizeInBytes();
-
-                    backoffMs = maybeSendRequest(
-                        currentTimeMs,
-                        state.leaderId(),
-                        () -> buildFetchSnapshotRequest(snapshot.snapshotId(), snapshotSize)
-                    );
-                } else {
-                    backoffMs = maybeSendRequest(
-                        currentTimeMs,
-                        state.leaderId(),
-                        this::buildFetchRequest
-                    );
-                }
+                backoffMs = maybeSendFetchOrFetchSnapshot(state, currentTimeMs);
             }
 
             return Math.min(backoffMs, state.remainingFetchTimeMs(currentTimeMs));
         }
+    }
+
+    private long maybeSendFetchOrFetchSnapshot(FollowerState state, long currentTimeMs) throws IOException {
+        final Supplier<ApiMessage> requestSupplier;
+
+        if (state.fetchingSnapshot().isPresent()) {
+            RawSnapshotWriter snapshot = state.fetchingSnapshot().get();
+            long snapshotSize = snapshot.sizeInBytes();
+
+            requestSupplier = () -> buildFetchSnapshotRequest(snapshot.snapshotId(), snapshotSize);
+        } else {
+            requestSupplier = this::buildFetchRequest;
+        }
+
+        return maybeSendRequest(currentTimeMs, state.leaderId(), requestSupplier);
     }
 
     private long pollVoted(long currentTimeMs) throws IOException {
