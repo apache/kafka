@@ -28,6 +28,7 @@ import org.jline.terminal.Terminal;
 import org.jline.terminal.TerminalBuilder;
 
 import java.io.IOException;
+import java.util.List;
 import java.util.Optional;
 
 /**
@@ -58,6 +59,10 @@ public final class MetadataShell implements AutoCloseable {
             try {
                 reader.readLine(">> ");
                 ParsedLine parsedLine = reader.getParsedLine();
+                List<String> words = parsedLine.words();
+                if (words.isEmpty() || (words.size() == 1 && words.get(0).equals(""))) {
+                    continue;
+                }
                 Command.Handler handler = Command.parseCommand(parsedLine.words());
                 handler.run(Optional.of(this), terminal.writer(), nodeManager);
                 terminal.writer().flush();
