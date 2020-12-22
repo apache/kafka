@@ -29,6 +29,8 @@ import org.junit.Test
 import java.util
 import java.util.concurrent.{ExecutionException, TimeUnit}
 
+import kafka.utils.TestUtils
+
 import scala.jdk.CollectionConverters._
 
 class ClientQuotasRequestTest extends BaseRequestTest {
@@ -200,7 +202,7 @@ class ClientQuotasRequestTest extends BaseRequestTest {
     val defaultEntityFilter = ClientQuotaFilterComponent.ofDefaultEntity(ClientQuotaEntity.IP)
     val allIpEntityFilter = ClientQuotaFilterComponent.ofEntityType(ClientQuotaEntity.IP)
 
-    def verifyIpQuotas(entityFilter: ClientQuotaFilterComponent, expectedMatches: Map[ClientQuotaEntity, Double]): Unit = {
+    def verifyIpQuotas(entityFilter: ClientQuotaFilterComponent, expectedMatches: Map[ClientQuotaEntity, Double]): Unit = TestUtils.retry(10000L){
       val result = describeClientQuotas(ClientQuotaFilter.containsOnly(List(entityFilter).asJava))
       assertEquals(expectedMatches.keySet, result.asScala.keySet)
       result.asScala.foreach { case (entity, props) =>
