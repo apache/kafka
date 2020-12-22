@@ -39,7 +39,7 @@ public final class MetadataNodeManager implements AutoCloseable, MetaLogListener
     private static final Logger log = LoggerFactory.getLogger(MetadataNodeManager.class);
 
     public static class Data {
-        private final DirectoryNode root = new DirectoryNode();
+        private final DirectoryNode root = new DirectoryNode(null);
         private String workingDirectory = "/";
 
         public DirectoryNode root() {

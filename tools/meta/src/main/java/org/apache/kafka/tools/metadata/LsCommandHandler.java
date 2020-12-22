@@ -34,7 +34,17 @@ public final class LsCommandHandler implements Command.Handler {
     @Override
     public void run(Optional<MetadataShell> shell,
                     PrintWriter writer,
-                    MetadataNodeManager manager) {
-        writer.println("ls " + targets);
+                    MetadataNodeManager manager) throws Exception {
+        String target = null;
+        if (targets.size() == 0) {
+            target = "/";
+        } else if (targets.size() == 1) {
+            target = targets.get(0);
+        } else if (targets.size() > 1) {
+            throw new RuntimeException("can't handle multiple paths yet");
+        }
+        manager.visit(new GlobVisitor(target, entry -> {
+            writer.println(entry.getKey());
+        }));
     }
 }
