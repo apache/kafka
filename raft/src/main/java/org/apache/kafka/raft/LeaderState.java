@@ -26,6 +26,12 @@ import java.util.OptionalLong;
 import java.util.Set;
 import java.util.stream.Collectors;
 
+/**
+ * In the context of LeaderState, an acknowledged voter means one who has acknowledged the current leader by either
+ * responding to a `BeginQuorumEpoch` request from the leader or by beginning to send `Fetch` requests.
+ * More specifically, the set of unacknowledged voters are targets for BeginQuorumEpoch requests from the leader until
+ * they acknowledge the leader.
+ */
 public class LeaderState implements EpochState {
     private final int localId;
     private final int epoch;
@@ -50,8 +56,8 @@ public class LeaderState implements EpochState {
         this.highWatermark = Optional.empty();
 
         for (int voterId : voters) {
-            boolean hasEndorsedLeader = voterId == localId;
-            this.voterReplicaStates.put(voterId, new VoterState(voterId, hasEndorsedLeader));
+            boolean hasAcknowledgedLeader = voterId == localId;
+            this.voterReplicaStates.put(voterId, new VoterState(voterId, hasAcknowledgedLeader));
         }
         this.grantingVoters.addAll(grantingVoters);
     }
@@ -83,13 +89,13 @@ public class LeaderState implements EpochState {
         return localId;
     }
 
-    public Set<Integer> nonEndorsingVoters() {
-        Set<Integer> nonEndorsing = new HashSet<>();
+    public Set<Integer> nonAcknowledgingVoters() {
+        Set<Integer> nonAcknowledging = new HashSet<>();
         for (VoterState state : voterReplicaStates.values()) {
-            if (!state.hasEndorsedLeader)
-                nonEndorsing.add(state.nodeId);
+            if (!state.hasAcknowledgedLeader)
+                nonAcknowledging.add(state.nodeId);
         }
-        return nonEndorsing;
+        return nonAcknowledging;
     }
 
     private boolean updateHighWatermark() {
@@ -180,22 +186,22 @@ public class LeaderState implements EpochState {
         state.endOffset = Optional.of(endOffsetMetadata);
 
         if (isVoter(state.nodeId)) {
-            ((VoterState) state).hasEndorsedLeader = true;
-            addEndorsementFrom(state.nodeId);
+            ((VoterState) state).hasAcknowledgedLeader = true;
+            addAcknowledgementFrom(state.nodeId);
             return updateHighWatermark();
         }
         return false;
     }
 
-    public void addEndorsementFrom(int remoteNodeId) {
+    public void addAcknowledgementFrom(int remoteNodeId) {
         VoterState voterState = ensureValidVoter(remoteNodeId);
-        voterState.hasEndorsedLeader = true;
+        voterState.hasAcknowledgedLeader = true;
     }
 
     private VoterState ensureValidVoter(int remoteNodeId) {
         VoterState state = voterReplicaStates.get(remoteNodeId);
         if (state == null)
-            throw new IllegalArgumentException("Unexpected endorsement from non-voter " + remoteNodeId);
+            throw new IllegalArgumentException("Unexpected acknowledgement from non-voter " + remoteNodeId);
         return state;
     }
 
@@ -272,12 +278,12 @@ public class LeaderState implements EpochState {
     }
 
     private static class VoterState extends ReplicaState {
-        boolean hasEndorsedLeader;
+        boolean hasAcknowledgedLeader;
 
         public VoterState(int nodeId,
-                          boolean hasEndorsedLeader) {
+                          boolean hasAcknowledgedLeader) {
             super(nodeId);
-            this.hasEndorsedLeader = hasEndorsedLeader;
+            this.hasAcknowledgedLeader = hasAcknowledgedLeader;
         }
     }
 
