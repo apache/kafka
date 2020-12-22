@@ -57,6 +57,7 @@ public final class MetadataTool {
         private String controllers;
         private String configPath;
         private File tempDir;
+        private String snapshotPath;
 
         public Builder setControllers(String controllers) {
             this.controllers = controllers;
@@ -68,12 +69,29 @@ public final class MetadataTool {
             return this;
         }
 
+        public Builder setSnapshotPath(String snapshotPath) {
+            this.snapshotPath = snapshotPath;
+            return this;
+        }
+
         public Builder setTempDir(File tempDir) {
             this.tempDir = tempDir;
             return this;
         }
 
         public MetadataTool build() throws Exception {
+            if (snapshotPath != null) {
+                if (controllers != null) {
+                    throw new RuntimeException("If you specify a snapshot path, you " +
+                        "must not also specify controllers to connect to.");
+                }
+                return buildWithSnapshotReader();
+            } else {
+                return buildWithControllerConnect();
+            }
+        }
+
+        public MetadataTool buildWithControllerConnect() throws Exception {
             Properties properties = null;
             if (configPath != null) {
                 properties = Utils.loadProps(configPath);
@@ -91,7 +109,7 @@ public final class MetadataTool {
             // In particular, it should be possible to run the KafkRaftManager without
             // using a log directory at all.  And we should be able to set -1 as our ID,
             // since we're not a voter.
-            final int fakeId = Integer.MAX_VALUE;
+            final int fakeId = 100; //Integer.MAX_VALUE;
             properties.setProperty(KafkaConfig$.MODULE$.MetadataLogDirProp(),
                 tempDir.getAbsolutePath());
             properties.remove(KafkaConfig$.MODULE$.LogDirProp());
@@ -124,23 +142,53 @@ public final class MetadataTool {
                 }
                 throw e;
             }
-            return new MetadataTool(raftManager, nodeManager);
+            return new MetadataTool(raftManager, null, nodeManager);
         }
+
+        public MetadataTool buildWithSnapshotReader() throws Exception {
+            MetadataNodeManager nodeManager = null;
+            SnapshotReader snapshotReader = null;
+            try {
+                nodeManager = new MetadataNodeManager();
+                snapshotReader = new SnapshotReader(snapshotPath, nodeManager.logListener());
+            } catch (Throwable e) {
+                log.error("Initialization error", e);
+                if (snapshotReader != null) {
+                    snapshotReader.close();
+                }
+                if (nodeManager != null) {
+                    nodeManager.close();
+                }
+                throw e;
+            }
+            return new MetadataTool(null, snapshotReader, nodeManager);
+        }
+
     }
 
     private final KafkaRaftManager raftManager;
 
+    private final SnapshotReader snapshotReader;
+
     private final MetadataNodeManager nodeManager;
 
     public MetadataTool(KafkaRaftManager raftManager,
+                        SnapshotReader snapshotReader,
                         MetadataNodeManager nodeManager) {
         this.raftManager = raftManager;
+        this.snapshotReader = snapshotReader;
         this.nodeManager = nodeManager;
     }
 
     public void run(List<String> args) throws Exception {
-        this.raftManager.startup();
-        this.raftManager.register(nodeManager.logListener());
+        if (raftManager != null) {
+            raftManager.startup();
+            raftManager.register(nodeManager.logListener());
+        } else if (snapshotReader != null) {
+            snapshotReader.startup();
+        } else {
+            throw new RuntimeException("Expected either a raft manager or snapshot reader");
+        }
         if (args == null || args.isEmpty()) {
             // Shell mode.
             try (MetadataShell shell = new MetadataShell()) {
@@ -172,6 +220,9 @@ public final class MetadataTool {
         parser.addArgument("--config", "-c")
             .type(String.class)
             .help("The configuration file to use.");
+        parser.addArgument("--snapshot", "-s")
+            .type(String.class)
+            .help("The snapshot file to read.");
         parser.addArgument("command")
             .nargs("*")
             .help("The command to run.");
@@ -180,6 +231,7 @@ public final class MetadataTool {
             Builder builder = new Builder();
             builder.setControllers(res.getString("controllers"));
             builder.setConfigPath(res.getString("config"));
+            builder.setSnapshotPath(res.getString("snapshot"));
             Path tempDir = Files.createTempDirectory("MetadataTool");
             Exit.addShutdownHook("agent-shutdown-hook", () -> {
                 log.debug("Removing temporary directory " + tempDir.toAbsolutePath().toString());

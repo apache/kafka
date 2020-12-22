@@ -35,7 +35,7 @@ import java.util.function.Consumer;
 /**
  * Maintains the in-memory metadata for the metadata tool.
  */
-public final class MetadataNodeManager implements AutoCloseable, MetaLogListener {
+public final class MetadataNodeManager implements AutoCloseable {
     private static final Logger log = LoggerFactory.getLogger(MetadataNodeManager.class);
 
     public static class Data {
@@ -55,7 +55,41 @@ public final class MetadataNodeManager implements AutoCloseable, MetaLogListener
         }
     }
 
+    class LogListener implements MetaLogListener {
+        @Override
+        public void handleCommits(long lastOffset, List<ApiMessage> messages) {
+            appendEvent("handleCommits", () -> {
+                DirectoryNode dir = data.root.mkdirs("@metadata");
+                dir.create("offset").setContents(String.valueOf(lastOffset));
+            }, null);
+        }
+
+        @Override
+        public void handleNewLeader(MetaLogLeader leader) {
+            appendEvent("handleNewLeader", () -> {
+                DirectoryNode dir = data.root.mkdirs("@metadata");
+                dir.create("leader").
+                    setContents(leader.toString());
+            }, null);
+        }
+
+        @Override
+        public void handleRenounce(long epoch) {
+            // This shouldn't happen because we should never be the leader.
+            log.error("RaftManager sent handleRenounce(epoch=" + epoch + ")");
+        }
+
+        @Override
+        public void beginShutdown() {
+            // This shouldn't happen because it indicates a problem with Raft.
+            // TODO: we should somehow monitor the quorum state so we know when we're
+            // disconnected, etc.
+            log.error("RaftManager sent beginShutdown");
+        }
+    }
+
     private final Data data = new Data();
+    private final LogListener logListener = new LogListener();
     private final KafkaEventQueue queue;
 
     public MetadataNodeManager() {
@@ -63,26 +97,13 @@ public final class MetadataNodeManager implements AutoCloseable, MetaLogListener
             new LogContext("[node-manager-event-queue] "), "");
     }
 
+    public LogListener logListener() {
+        return logListener;
+    }
+
     @Override
     public void close() throws Exception {
         queue.close();
-    }
-
-    @Override
-    public void handleCommits(long lastOffset, List<ApiMessage> messages) {
-        appendEvent("handleCommits", () -> {
-            DirectoryNode dir = data.root.mkdirs("@metadata");
-            dir.create("offset").setContents(String.valueOf(lastOffset));
-        }, null);
-    }
-
-    @Override
-    public void handleNewLeader(MetaLogLeader leader) {
-        appendEvent("handleNewLeader", () -> {
-            DirectoryNode dir = data.root.mkdirs("@metadata");
-            dir.create("leader").
-                setContents(leader.toString());
-        }, null);
     }
 
     public void visit(Consumer<Data> consumer) throws Exception {
@@ -95,6 +116,7 @@ public final class MetadataNodeManager implements AutoCloseable, MetaLogListener
     }
 
     private void appendEvent(String name, Runnable runnable, CompletableFuture<?> future) {
+        //System.out.println("WATERMELON appendEvent(name=" + name + ")");
         queue.append(new EventQueue.Event() {
             @Override
             public void run() throws Exception {
