@@ -22,6 +22,7 @@ import java.nio.ByteBuffer
 import kafka.network.RequestChannel
 import kafka.utils.Logging
 import org.apache.kafka.clients.ClientResponse
+import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests.{AbstractRequest, AbstractResponse, EnvelopeRequest, EnvelopeResponse, RequestHeader}
 import org.apache.kafka.common.utils.Time
@@ -29,12 +30,55 @@ import org.apache.kafka.common.utils.Time
 import scala.compat.java8.OptionConverters._
 import scala.concurrent.TimeoutException
 
-class ForwardingManager(channelManager: BrokerToControllerChannelManager,
-                        time: Time,
-                        retryTimeoutMs: Long) extends Logging {
+trait ForwardingManager {
+  def forwardRequest(
+    request: RequestChannel.Request,
+    responseCallback: AbstractResponse => Unit
+  ): Unit
 
-  def forwardRequest(request: RequestChannel.Request,
-                     responseCallback: AbstractResponse => Unit): Unit = {
+  def start(): Unit = {}
+
+  def shutdown(): Unit = {}
+}
+
+object ForwardingManager {
+
+  def apply(
+    config: KafkaConfig,
+    metadataCache: MetadataCache,
+    time: Time,
+    metrics: Metrics,
+    threadNamePrefix: Option[String]
+  ): ForwardingManager = {
+    val channelManager = new BrokerToControllerChannelManager(
+      metadataCache = metadataCache,
+      time = time,
+      metrics = metrics,
+      config = config,
+      channelName = "forwardingChannel",
+      threadNamePrefix = threadNamePrefix,
+      retryTimeoutMs = config.requestTimeoutMs.longValue
+    )
+    new ForwardingManagerImpl(channelManager)
+  }
+}
+
+class ForwardingManagerImpl(
+  channelManager: BrokerToControllerChannelManager
+) extends ForwardingManager with Logging {
+
+  override def start(): Unit = {
+    channelManager.start()
+  }
+
+  override def shutdown(): Unit = {
+    channelManager.shutdown()
+  }
+
+  override def forwardRequest(
+    request: RequestChannel.Request,
+    responseCallback: AbstractResponse => Unit
+  ): Unit = {
     val principalSerde = request.context.principalSerde.asScala.getOrElse(
       throw new IllegalArgumentException(s"Cannot deserialize principal from request $request " +
         "since there is no serde defined")
@@ -75,14 +119,7 @@ class ForwardingManager(channelManager: BrokerToControllerChannelManager,
       }
     }
 
-    val currentTime = time.milliseconds()
-    val deadlineMs =
-      if (Long.MaxValue - currentTime < retryTimeoutMs)
-        Long.MaxValue
-      else
-        currentTime + retryTimeoutMs
-
-    channelManager.sendRequest(envelopeRequest, new ForwardingResponseHandler, deadlineMs)
+    channelManager.sendRequest(envelopeRequest, new ForwardingResponseHandler)
   }
 
   private def parseResponse(

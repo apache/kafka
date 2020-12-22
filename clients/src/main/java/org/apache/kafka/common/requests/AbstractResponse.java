@@ -19,7 +19,6 @@ package org.apache.kafka.common.requests;
 import org.apache.kafka.common.network.Send;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.protocol.Message;
 import org.apache.kafka.common.protocol.MessageUtil;
 import org.apache.kafka.common.protocol.SendBuilder;
 
@@ -89,8 +88,6 @@ public abstract class AbstractResponse implements AbstractRequestResponse {
         Integer count = errorCounts.getOrDefault(error, 0);
         errorCounts.put(error, count + 1);
     }
-
-    protected abstract Message data();
 
     /**
      * Parse a response from the provided buffer. The buffer is expected to hold both

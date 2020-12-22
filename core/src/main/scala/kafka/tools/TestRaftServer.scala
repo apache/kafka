@@ -95,6 +95,8 @@ class TestRaftServer(
     val metadataLog = buildMetadataLog(logDir)
     val networkChannel = buildNetworkChannel(raftConfig, logContext)
 
+    networkChannel.start()
+
     val raftClient = buildRaftClient(
       raftConfig,
       metadataLog,
@@ -114,7 +116,7 @@ class TestRaftServer(
     raftClient.initialize()
 
     val requestHandler = new TestRaftRequestHandler(
-      networkChannel,
+      raftClient,
       socketServer.dataPlaneRequestChannel,
       time
     )
@@ -163,9 +165,7 @@ class TestRaftServer(
   private def buildNetworkChannel(raftConfig: RaftConfig,
                                   logContext: LogContext): KafkaNetworkChannel = {
     val netClient = buildNetworkClient(raftConfig, logContext)
-    val clientId = s"Raft-${config.brokerId}"
-    new KafkaNetworkChannel(time, netClient, clientId,
-      raftConfig.retryBackoffMs, raftConfig.requestTimeoutMs)
+    new KafkaNetworkChannel(time, netClient, raftConfig.requestTimeoutMs)
   }
 
   private def buildMetadataLog(logDir: File): KafkaMetadataLog = {

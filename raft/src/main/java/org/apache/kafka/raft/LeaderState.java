@@ -159,14 +159,15 @@ public class LeaderState implements EpochState {
 
     public List<Integer> nonLeaderVotersByDescendingFetchOffset() {
         return followersByDescendingFetchOffset().stream()
-                   .filter(state -> state.nodeId != localId)
-                   .map(state -> state.nodeId)
-                   .collect(Collectors.toList());
+            .filter(state -> state.nodeId != localId)
+            .map(state -> state.nodeId)
+            .collect(Collectors.toList());
     }
 
     private List<VoterState> followersByDescendingFetchOffset() {
-        return new ArrayList<>(this.voterReplicaStates.values())
-            .stream().sorted().collect(Collectors.toList());
+        return new ArrayList<>(this.voterReplicaStates.values()).stream()
+            .sorted()
+            .collect(Collectors.toList());
     }
 
     private boolean updateEndOffset(ReplicaState state,
