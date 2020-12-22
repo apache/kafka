@@ -1055,14 +1055,14 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
                         partitionResponse.snapshotId().endOffset(),
                         partitionResponse.snapshotId().epoch()
                     );
-                    return false;
+                    return true;
                 } else if (partitionResponse.snapshotId().endOffset() < 0) {
                     logger.error(
                         "The leader sent a snapshot id with a valid epoch {} but with an invalid end offset {}",
                         partitionResponse.snapshotId().epoch(),
                         partitionResponse.snapshotId().endOffset()
                     );
-                    return false;
+                    return true;
                 } else {
                     OffsetAndEpoch snapshotId = new OffsetAndEpoch(
                         partitionResponse.snapshotId().endOffset(),
@@ -1274,7 +1274,12 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
             /* The leader deleted the snapshot before the follower could download it. Start over by
              * reseting the fetching snapshot state and sending another fetch request.
              */
-            logger.trace("Leader doesn't know about snapshot id {}, returned error {} and snapshot id {}", state.fetchingSnapshot(), partitionSnapshot.errorCode(), partitionSnapshot.snapshotId());
+            logger.trace(
+                "Leader doesn't know about snapshot id {}, returned error {} and snapshot id {}",
+                state.fetchingSnapshot(),
+                partitionSnapshot.errorCode(),
+                partitionSnapshot.snapshotId()
+            );
             state.setFetchingSnapshot(Optional.empty());
             state.resetFetchTimeout(currentTimeMs);
             return true;

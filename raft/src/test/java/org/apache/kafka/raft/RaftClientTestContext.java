@@ -85,11 +85,12 @@ public final class RaftClientTestContext {
 
     final TopicPartition metadataPartition = Builder.METADATA_PARTITION;
     final int electionBackoffMaxMs = Builder.ELECTION_BACKOFF_MAX_MS;
-    final int electionTimeoutMs = Builder.DEFAULT_ELECTION_TIMEOUT_MS;
     final int electionFetchMaxWaitMs = Builder.FETCH_MAX_WAIT_MS;
     final int fetchTimeoutMs = Builder.FETCH_TIMEOUT_MS;
-    final int requestTimeoutMs = Builder.DEFAULT_REQUEST_TIMEOUT_MS;
     final int retryBackoffMs = Builder.RETRY_BACKOFF_MS;
+
+    final int electionTimeoutMs;
+    final int requestTimeoutMs;
 
     private final QuorumStateStore quorumStateStore;
     final int localId;
@@ -223,7 +224,9 @@ public final class RaftClientTestContext {
                 quorumStateStore,
                 voters,
                 metrics,
-                listener
+                listener,
+                electionTimeoutMs,
+                requestTimeoutMs
             );
         }
     }
@@ -237,7 +240,9 @@ public final class RaftClientTestContext {
         QuorumStateStore quorumStateStore,
         Set<Integer> voters,
         Metrics metrics,
-        MockListener listener
+        MockListener listener,
+        int electionTimeoutMs,
+        int requestTimeoutMs
     ) {
         this.localId = localId;
         this.client = client;
@@ -248,6 +253,9 @@ public final class RaftClientTestContext {
         this.voters = voters;
         this.metrics = metrics;
         this.listener = listener;
+
+        this.electionTimeoutMs = electionTimeoutMs;
+        this.requestTimeoutMs = requestTimeoutMs;
     }
 
     MemoryRecords buildBatch(
