@@ -30,7 +30,7 @@ import java.util.stream.Collectors;
  * In the context of LeaderState, an acknowledged voter means one who has acknowledged the current leader by either
  * responding to a `BeginQuorumEpoch` request from the leader or by beginning to send `Fetch` requests.
  * More specifically, the set of unacknowledged voters are targets for BeginQuorumEpoch requests from the leader until
- * it doesn't receive an acknowledgement from them.
+ * they acknowledge the leader.
  */
 public class LeaderState implements EpochState {
     private final int localId;
