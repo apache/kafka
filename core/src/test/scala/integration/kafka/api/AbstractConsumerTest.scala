@@ -148,17 +148,16 @@ abstract class AbstractConsumerTest extends BaseRequestTest {
 
   protected def consumeRecords[K, V](consumer: Consumer[K, V],
                                      numRecords: Int,
-                                     maxPollRecords: Int = Int.MaxValue,
-                                     waitTimeMs: Int = 60000): ArrayBuffer[ConsumerRecord[K, V]] = {
-    val records = new ArrayBuffer[ConsumerRecord[K, V]]
+                                     maxPollRecords: Int = Int.MaxValue): ArrayBuffer[ConsumerRecord[K, V]] = {
+    val records = new ArrayBuffer[ConsumerRecord[K, V]](numRecords)
     def pollAction(polledRecords: ConsumerRecords[K, V]): Boolean = {
       assertTrue(polledRecords.asScala.size <= maxPollRecords)
       records ++= polledRecords.asScala
       records.size >= numRecords
     }
-    TestUtils.pollRecordsUntilTrue(consumer, pollAction, waitTimeMs = waitTimeMs,
+    TestUtils.pollRecordsUntilTrue(consumer, pollAction, waitTimeMs = 60000,
       msg = s"Timed out before consuming expected $numRecords records. " +
-        s"The number consumed was ${records.size} after ${waitTimeMs} ms")
+        s"The number consumed was ${records.size}.")
     records
   }
 
