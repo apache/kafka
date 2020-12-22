@@ -771,7 +771,7 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     checkLargeRecord(maxPartitionFetchBytes + 1)
   }
 
-  /** Test that we consume all partitions if fetch max bytes and max.partition.fetch.bytes are low */
+  /** Test that we consume all partitions if fetch.max.bytes and max.partition.fetch.bytes are low */
   @Test
   def testLowMaxFetchSizeForRequestAndPartition(): Unit = {
     // one of the effects of this is that there will be some log reads where `0 > remaining limit bytes < message size`
@@ -801,8 +801,10 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     awaitAssignment(consumer, partitions.toSet)
 
     val producer = createProducer()
-    val producerRecords = partitions.flatMap(sendRecords(producer, numRecords = 15, _))
-    val consumerRecords = consumeRecords(consumer, producerRecords.size)
+    // we produce 10 records for each topic partition. There are 3 topics, and 30 partitions each topic,
+    // so total producerRecords size should be 10 * 3 * 30 = 900
+    val producerRecords = partitions.flatMap(sendRecords(producer, numRecords = 10, _))
+    val consumerRecords = consumeRecords(consumer, producerRecords.size, waitTimeMs = 90 * 1000)
 
     val expected = producerRecords.map { record =>
       (record.topic, record.partition, new String(record.key), new String(record.value), record.timestamp)
