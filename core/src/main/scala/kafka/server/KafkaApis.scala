@@ -2005,7 +2005,7 @@ class KafkaApis(val requestChannel: RequestChannel,
     } else {
       deleteTopicRequest.topics().forEach { topic =>
         val name = if (topic.name() != null) topic.name() 
-          else controller.controllerContext.topicNames.getOrElse(topic.topicId(), "")
+          else controller.controllerContext.topicNames.getOrElse(topic.topicId(), null)
         results.add(new DeletableTopicResult()
           .setName(name)
           .setTopicId(topic.topicId()))
@@ -2014,19 +2014,16 @@ class KafkaApis(val requestChannel: RequestChannel,
       val authorizedTopics = filterByAuthorized(request.context, DELETE, TOPIC,
         results.asScala)(_.name)
       results.forEach { topic =>
-         val foundTopicId = !topic.topicId().equals(Uuid.ZERO_UUID) && !topic.name().equals("")
-         val topicIdZero = topic.topicId().equals(Uuid.ZERO_UUID)
-         if (!foundTopicId && !topicIdZero)
+         val foundTopicId = !topic.topicId().equals(Uuid.ZERO_UUID) && topic.name() != null
+         val topicIdSpecified = !topic.topicId().equals(Uuid.ZERO_UUID)
+         if (!foundTopicId && topicIdSpecified)
            topic.setErrorCode(Errors.UNKNOWN_TOPIC_ID.code)
          else if (!authorizedTopics.contains(topic.name))
            topic.setErrorCode(Errors.TOPIC_AUTHORIZATION_FAILED.code)
          else if (!metadataCache.contains(topic.name))
            topic.setErrorCode(Errors.UNKNOWN_TOPIC_OR_PARTITION.code)
-         else {
-           if (topicIdZero)
-             topic.setTopicId(controller.controllerContext.topicIds(topic.name()))
+         else
            toDelete += topic.name
-         }
       }
       // If no authorized topics return immediately
       if (toDelete.isEmpty)

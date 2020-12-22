@@ -28,10 +28,10 @@
   "validVersions": "0-6",
   "flexibleVersions": "4+",
   "fields": [
-    { "name":  "Topics", "type": "[]DeleteTopicState", "versions": "6+", "about": "The name or topic ID of the topic",
+    { "name": "Topics", "type": "[]DeleteTopicState", "versions": "6+", "about": "The name or topic ID of the topic",
       "fields": [
-        {"name": "Name", "type": "string", "versions": "6+", "nullableVersions":  "6+", "about": "The topic name"},
-        {"name":  "TopicId", "type": "uuid", "versions": "6+", "about": "The unique topic ID"}
+        {"name": "Name", "type": "string", "versions": "6+", "nullableVersions": "6+", "about": "The topic name"},
+        {"name": "TopicId", "type": "uuid", "versions": "6+", "about": "The unique topic ID"}
     ]},
     { "name": "TopicNames", "type": "[]string", "versions": "0-5", "entityType": "topicName", "ignorable": true,
       "about": "The names of the topics to delete" },
