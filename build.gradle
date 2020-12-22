@@ -1427,6 +1427,7 @@ project(':streams') {
             ':streams:upgrade-system-tests-24:test',
             ':streams:upgrade-system-tests-25:test',
             ':streams:upgrade-system-tests-26:test',
+            ':streams:upgrade-system-tests-27:test',
             ':streams:examples:test'
     ]
   )
@@ -1700,6 +1701,18 @@ project(':streams:upgrade-system-tests-26') {
   systemTestLibs {
     dependsOn testJar
   }
+}
+
+project(':streams:upgrade-system-tests-27') {
+    archivesBaseName = "kafka-streams-upgrade-system-tests-27"
+
+    dependencies {
+        testCompile libs.kafkaStreams_27
+    }
+
+    systemTestLibs {
+        dependsOn testJar
+    }
 }
 
 project(':jmh-benchmarks') {
