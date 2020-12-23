@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.common.requests;
 
+import java.nio.ByteBuffer;
 import java.util.Collections;
 import java.util.Optional;
 import java.util.function.UnaryOperator;
@@ -24,12 +25,13 @@ import org.apache.kafka.common.message.FetchSnapshotRequestData;
 import org.apache.kafka.common.message.FetchSnapshotResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.ApiMessage;
+import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
 
 final public class FetchSnapshotRequest extends AbstractRequest {
     public final FetchSnapshotRequestData data;
 
-    public FetchSnapshotRequest(FetchSnapshotRequestData data) {
+    public FetchSnapshotRequest(FetchSnapshotRequestData data, short version) {
         super(ApiKeys.FETCH_SNAPSHOT, (short) (FetchSnapshotRequestData.SCHEMAS.length - 1));
         this.data = data;
     }
@@ -93,5 +95,28 @@ final public class FetchSnapshotRequest extends AbstractRequest {
             .flatMap(topic -> topic.partitions().stream())
             .filter(partition -> partition.partition() == topicPartition.partition())
             .findAny();
+    }
+
+    public static FetchSnapshotRequest parse(ByteBuffer buffer, short version) {
+        return new FetchSnapshotRequest(new FetchSnapshotRequestData(new ByteBufferAccessor(buffer), version), version);
+    }
+
+    public static class Builder extends AbstractRequest.Builder<FetchSnapshotRequest> {
+        private final FetchSnapshotRequestData data;
+
+        public Builder(FetchSnapshotRequestData  data) {
+            super(ApiKeys.FETCH_SNAPSHOT);
+            this.data = data;
+        }
+
+        @Override
+        public FetchSnapshotRequest build(short version) {
+            return new FetchSnapshotRequest(data, version);
+        }
+
+        @Override
+        public String toString() {
+            return data.toString();
+        }
     }
 }
