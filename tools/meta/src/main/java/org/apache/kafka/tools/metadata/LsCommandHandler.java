@@ -19,6 +19,8 @@ package org.apache.kafka.tools.metadata;
 
 import org.apache.kafka.tools.metadata.MetadataNode.DirectoryNode;
 import org.apache.kafka.tools.metadata.MetadataNode.FileNode;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.PrintWriter;
 import java.util.ArrayList;
@@ -31,6 +33,8 @@ import java.util.OptionalInt;
  * Implements the ls command.
  */
 public final class LsCommandHandler implements Command.Handler {
+    private static final Logger log = LoggerFactory.getLogger(LsCommandHandler.class);
+
     private final List<String> targets;
 
     public LsCommandHandler(List<String> targets) {
@@ -52,7 +56,7 @@ public final class LsCommandHandler implements Command.Handler {
                     PrintWriter writer,
                     MetadataNodeManager manager) throws Exception {
         List<String> effectiveTargets = targets.size() == 0 ?
-            Collections.singletonList("/") : targets;
+            Collections.singletonList(".") : targets;
         List<String> targetFiles = new ArrayList<>();
         List<TargetDirectory> targetDirectories = new ArrayList<>();
         for (String target : effectiveTargets) {
@@ -70,7 +74,8 @@ public final class LsCommandHandler implements Command.Handler {
         }
         OptionalInt screenWidth = shell.isPresent() ?
             OptionalInt.of(shell.get().screenWidth()) : OptionalInt.empty();
-        System.out.println("LS : targetFiles = " + targetFiles + ", targetDirectories = " + targetDirectories + ", screenWidth = " + screenWidth);
+        log.trace("LS : targetFiles = {}, targetDirectories = {}, screenWidth = {}",
+            targetFiles, targetDirectories, screenWidth);
         printEntries(writer, "", screenWidth, targetFiles);
         boolean needIntro = targetFiles.size() > 0 || targetDirectories.size() > 1;
         boolean firstIntro = targetFiles.isEmpty();
@@ -83,7 +88,8 @@ public final class LsCommandHandler implements Command.Handler {
                 intro = intro + targetDirectory.name + ":";
                 firstIntro = false;
             }
-            System.out.println("LS : targetDirectory(name=" + targetDirectory.name + ", children=" + targetDirectory.children + ")");
+            log.trace("LS : targetDirectory name = {}, children = {}",
+                targetDirectory.name, targetDirectory.children);
             printEntries(writer, intro, screenWidth, targetDirectory.children);
         }
     }
