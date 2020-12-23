@@ -30,6 +30,7 @@ import java.util.List;
 import java.util.Map;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.fail;
 
 public class SchemaProjectorTest {
@@ -495,11 +496,11 @@ public class SchemaProjectorTest {
         assertEquals(null, ((Struct) SchemaProjector.project(source, new Struct(source), target)).getInt64("id"));
     }
 
-    @Test(expected = SchemaProjectorException.class)
+    @Test
     public void testProjectMissingRequiredField() {
         final Schema source = SchemaBuilder.struct().build();
         final Schema target = SchemaBuilder.struct().field("id", SchemaBuilder.INT64_SCHEMA).build();
-        SchemaProjector.project(source, new Struct(source), target);
+        assertThrows(SchemaProjectorException.class, () -> SchemaProjector.project(source, new Struct(source), target));
     }
 
     private void verifyOptionalProjection(Schema source, Type targetType, Object value, Object defaultValue, Object expectedProjected, boolean optional) {

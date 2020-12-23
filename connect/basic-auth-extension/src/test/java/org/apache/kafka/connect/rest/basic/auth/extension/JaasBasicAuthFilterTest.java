@@ -22,6 +22,7 @@ import javax.security.auth.callback.CallbackHandler;
 import javax.security.auth.callback.ChoiceCallback;
 import javax.ws.rs.HttpMethod;
 import javax.ws.rs.core.UriInfo;
+
 import org.apache.kafka.common.security.JaasUtils;
 import org.apache.kafka.connect.errors.ConnectException;
 import org.easymock.EasyMock;
@@ -46,6 +47,7 @@ import javax.security.auth.login.Configuration;
 import javax.ws.rs.container.ContainerRequestContext;
 import javax.ws.rs.core.Response;
 
+import static org.junit.Assert.assertThrows;
 import static org.powermock.api.easymock.PowerMock.replayAll;
 
 @RunWith(PowerMockRunner.class)
@@ -173,8 +175,8 @@ public class JaasBasicAuthFilterTest {
         EasyMock.verify(requestContext);
     }
 
-    @Test(expected = ConnectException.class)
-    public void testUnsupportedCallback() throws Exception {
+    @Test
+    public void testUnsupportedCallback() {
         String authHeader = authHeader("basic", "user", "pwd");
         CallbackHandler callbackHandler = new JaasBasicAuthFilter.BasicAuthCallBackHandler(authHeader);
         Callback unsupportedCallback = new ChoiceCallback(
@@ -184,7 +186,7 @@ public class JaasBasicAuthFilterTest {
             1,
             true
         );
-        callbackHandler.handle(new Callback[] {unsupportedCallback});
+        assertThrows(ConnectException.class, () -> callbackHandler.handle(new Callback[] {unsupportedCallback}));
     }
 
     private String authHeader(String authorization, String username, String password) {

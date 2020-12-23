@@ -97,9 +97,10 @@ class AclAuthorizerTest extends ZooKeeperTestHarness with BaseAuthorizerTest {
     super.tearDown()
   }
 
-  @Test(expected = classOf[IllegalArgumentException])
+  @Test
   def testAuthorizeThrowsOnNonLiteralResource(): Unit = {
-    authorize(aclAuthorizer, requestContext, READ, new ResourcePattern(TOPIC, "something", PREFIXED))
+    assertThrows(classOf[IllegalArgumentException], () => authorize(aclAuthorizer, requestContext, READ,
+      new ResourcePattern(TOPIC, "something", PREFIXED)))
   }
 
   @Test

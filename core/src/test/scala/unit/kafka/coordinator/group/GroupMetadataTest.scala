@@ -127,9 +127,9 @@ class GroupMetadataTest {
     assertState(group, Stable)
   }
 
-  @Test(expected = classOf[IllegalStateException])
+  @Test
   def testEmptyToStableIllegalTransition(): Unit = {
-    group.transitionTo(Stable)
+    assertThrows(classOf[IllegalStateException], () => group.transitionTo(Stable))
   }
 
   @Test
@@ -145,28 +145,28 @@ class GroupMetadataTest {
     }
   }
 
-  @Test(expected = classOf[IllegalStateException])
+  @Test
   def testEmptyToAwaitingRebalanceIllegalTransition(): Unit = {
-    group.transitionTo(CompletingRebalance)
+    assertThrows(classOf[IllegalStateException], () => group.transitionTo(CompletingRebalance))
   }
 
-  @Test(expected = classOf[IllegalStateException])
+  @Test
   def testPreparingRebalanceToPreparingRebalanceIllegalTransition(): Unit = {
     group.transitionTo(PreparingRebalance)
-    group.transitionTo(PreparingRebalance)
+    assertThrows(classOf[IllegalStateException], () => group.transitionTo(PreparingRebalance))
   }
 
-  @Test(expected = classOf[IllegalStateException])
+  @Test
   def testPreparingRebalanceToStableIllegalTransition(): Unit = {
     group.transitionTo(PreparingRebalance)
-    group.transitionTo(Stable)
+    assertThrows(classOf[IllegalStateException], () => group.transitionTo(Stable))
   }
 
-  @Test(expected = classOf[IllegalStateException])
+  @Test
   def testAwaitingRebalanceToAwaitingRebalanceIllegalTransition(): Unit = {
     group.transitionTo(PreparingRebalance)
     group.transitionTo(CompletingRebalance)
-    group.transitionTo(CompletingRebalance)
+    assertThrows(classOf[IllegalStateException], () => group.transitionTo(CompletingRebalance))
   }
 
   def testDeadToDeadIllegalTransition(): Unit = {
@@ -176,25 +176,25 @@ class GroupMetadataTest {
     assertState(group, Dead)
   }
 
-  @Test(expected = classOf[IllegalStateException])
+  @Test
   def testDeadToStableIllegalTransition(): Unit = {
     group.transitionTo(PreparingRebalance)
     group.transitionTo(Dead)
-    group.transitionTo(Stable)
+    assertThrows(classOf[IllegalStateException], () => group.transitionTo(Stable))
   }
 
-  @Test(expected = classOf[IllegalStateException])
+  @Test
   def testDeadToPreparingRebalanceIllegalTransition(): Unit = {
     group.transitionTo(PreparingRebalance)
     group.transitionTo(Dead)
-    group.transitionTo(PreparingRebalance)
+    assertThrows(classOf[IllegalStateException], () => group.transitionTo(PreparingRebalance))
   }
 
-  @Test(expected = classOf[IllegalStateException])
+  @Test
   def testDeadToAwaitingRebalanceIllegalTransition(): Unit = {
     group.transitionTo(PreparingRebalance)
     group.transitionTo(Dead)
-    group.transitionTo(CompletingRebalance)
+    assertThrows(classOf[IllegalStateException], () => group.transitionTo(CompletingRebalance))
   }
 
   @Test
@@ -223,10 +223,9 @@ class GroupMetadataTest {
     assertEquals("roundrobin", group.selectProtocol)
   }
 
-  @Test(expected = classOf[IllegalStateException])
+  @Test
   def testSelectProtocolRaisesIfNoMembers(): Unit = {
-    group.selectProtocol
-    fail()
+    assertThrows(classOf[IllegalStateException], () => group.selectProtocol)
   }
 
   @Test
@@ -519,7 +518,7 @@ class GroupMetadataTest {
     assertFalse(group.hasPendingOffsetCommitsFromProducer(producerId))
   }
 
-  @Test(expected = classOf[IllegalArgumentException])
+  @Test
   def testReplaceGroupInstanceWithEmptyGroupInstanceId(): Unit = {
     group.add(member)
     group.addStaticMember(groupInstanceId, memberId)
@@ -527,13 +526,13 @@ class GroupMetadataTest {
     assertEquals(memberId, group.getStaticMemberId(groupInstanceId))
 
     val newMemberId = "newMemberId"
-    group.replaceGroupInstance(memberId, newMemberId, Option.empty)
+    assertThrows(classOf[IllegalArgumentException], () => group.replaceGroupInstance(memberId, newMemberId, Option.empty))
   }
 
-  @Test(expected = classOf[IllegalArgumentException])
+  @Test
   def testReplaceGroupInstanceWithNonExistingMember(): Unit = {
     val newMemberId = "newMemberId"
-    group.replaceGroupInstance(memberId, newMemberId, groupInstanceId)
+    assertThrows(classOf[IllegalArgumentException], () => group.replaceGroupInstance(memberId, newMemberId, groupInstanceId))
   }
 
   @Test

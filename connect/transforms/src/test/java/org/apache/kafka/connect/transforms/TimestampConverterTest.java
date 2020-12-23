@@ -84,19 +84,21 @@ public class TimestampConverterTest {
         xformValue.close();
     }
 
-    @Test(expected = ConfigException.class)
+    @Test
     public void testConfigNoTargetType() {
-        xformValue.configure(Collections.<String, String>emptyMap());
+        assertThrows(ConfigException.class, () -> xformValue.configure(Collections.<String, String>emptyMap()));
     }
 
-    @Test(expected = ConfigException.class)
+    @Test
     public void testConfigInvalidTargetType() {
-        xformValue.configure(Collections.singletonMap(TimestampConverter.TARGET_TYPE_CONFIG, "invalid"));
+        assertThrows(ConfigException.class,
+            () -> xformValue.configure(Collections.singletonMap(TimestampConverter.TARGET_TYPE_CONFIG, "invalid")));
     }
 
-    @Test(expected = ConfigException.class)
+    @Test
     public void testConfigMissingFormat() {
-        xformValue.configure(Collections.singletonMap(TimestampConverter.TARGET_TYPE_CONFIG, "string"));
+        assertThrows(ConfigException.class,
+            () -> xformValue.configure(Collections.singletonMap(TimestampConverter.TARGET_TYPE_CONFIG, "string")));
     }
 
     @Test

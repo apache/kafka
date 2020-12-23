@@ -96,9 +96,9 @@ class OffsetIndexTest {
       assertEquals(OffsetPosition(idx.baseOffset + i + 1, i), idx.entry(i))
   }
 
-  @Test(expected = classOf[IllegalArgumentException])
+  @Test
   def testEntryOverflow(): Unit = {
-    idx.entry(0)
+    assertThrows(classOf[IllegalArgumentException], () => idx.entry(0))
   }
   
   @Test
@@ -110,10 +110,10 @@ class OffsetIndexTest {
     assertWriteFails("Append should fail on a full index", idx, idx.maxEntries + 1, classOf[IllegalArgumentException])
   }
   
-  @Test(expected = classOf[InvalidOffsetException])
+  @Test
   def appendOutOfOrder(): Unit = {
     idx.append(51, 0)
-    idx.append(50, 1)
+    assertThrows(classOf[InvalidOffsetException], () => idx.append(50, 1))
   }
 
   @Test

@@ -17,6 +17,7 @@
 package org.apache.kafka.connect.data;
 
 import org.apache.kafka.connect.errors.DataException;
+
 import org.junit.Test;
 
 import java.nio.ByteBuffer;
@@ -114,38 +115,43 @@ public class StructTest {
     // tests in SchemaTest. These are meant to ensure that we are invoking the same code path and that we do deeper
     // inspection than just checking the class of the object
 
-    @Test(expected = DataException.class)
+    @Test
     public void testInvalidFieldType() {
-        new Struct(FLAT_STRUCT_SCHEMA).put("int8", "should fail because this is a string, not int8");
+        assertThrows(DataException.class,
+            () -> new Struct(FLAT_STRUCT_SCHEMA).put("int8", "should fail because this is a string, not int8"));
     }
 
-    @Test(expected = DataException.class)
+    @Test
     public void testInvalidArrayFieldElements() {
-        new Struct(NESTED_SCHEMA).put("array", Arrays.asList("should fail since elements should be int8s"));
+        assertThrows(DataException.class,
+            () -> new Struct(NESTED_SCHEMA).put("array", Collections.singletonList("should fail since elements should be int8s")));
     }
 
-    @Test(expected = DataException.class)
+    @Test
     public void testInvalidMapKeyElements() {
-        new Struct(NESTED_SCHEMA).put("map", Collections.singletonMap("should fail because keys should be int8s", (byte) 12));
+        assertThrows(DataException.class,
+            () -> new Struct(NESTED_SCHEMA).put("map", Collections.singletonMap("should fail because keys should be int8s", (byte) 12)));
     }
 
-    @Test(expected = DataException.class)
+    @Test
     public void testInvalidStructFieldSchema() {
-        new Struct(NESTED_SCHEMA).put("nested", new Struct(MAP_SCHEMA));
+        assertThrows(DataException.class,
+            () -> new Struct(NESTED_SCHEMA).put("nested", new Struct(MAP_SCHEMA)));
     }
 
-    @Test(expected = DataException.class)
+    @Test
     public void testInvalidStructFieldValue() {
-        new Struct(NESTED_SCHEMA).put("nested", new Struct(NESTED_CHILD_SCHEMA));
+        assertThrows(DataException.class,
+            () -> new Struct(NESTED_SCHEMA).put("nested", new Struct(NESTED_CHILD_SCHEMA)));
     }
 
 
-    @Test(expected = DataException.class)
+    @Test
     public void testMissingFieldValidation() {
         // Required int8 field
         Schema schema = SchemaBuilder.struct().field("field", REQUIRED_FIELD_SCHEMA).build();
         Struct struct = new Struct(schema);
-        struct.validate();
+        assertThrows(DataException.class, struct::validate);
     }
 
     @Test

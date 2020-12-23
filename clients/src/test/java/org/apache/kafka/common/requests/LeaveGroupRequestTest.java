@@ -30,6 +30,7 @@ import java.util.Collections;
 import java.util.List;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
@@ -121,8 +122,9 @@ public class LeaveGroupRequestTest {
         }
     }
 
-    @Test(expected = IllegalArgumentException.class)
+    @Test
     public void testBuildEmptyMembers() {
-        new LeaveGroupRequest.Builder(groupId, Collections.emptyList());
+        assertThrows(IllegalArgumentException.class,
+            () -> new LeaveGroupRequest.Builder(groupId, Collections.emptyList()));
     }
 }

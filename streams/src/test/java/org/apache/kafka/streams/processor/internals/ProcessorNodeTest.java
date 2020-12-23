@@ -49,18 +49,17 @@ import static org.junit.Assert.assertTrue;
 public class ProcessorNodeTest {
 
     @SuppressWarnings("unchecked")
-    @Test(expected = StreamsException.class)
+    @Test
     public void shouldThrowStreamsExceptionIfExceptionCaughtDuringInit() {
         final ProcessorNode node = new ProcessorNode("name", new ExceptionalProcessor(), Collections.emptySet());
-        node.init(null);
+        assertThrows(StreamsException.class, () -> node.init(null));
     }
 
     @SuppressWarnings("unchecked")
-    @Test(expected = StreamsException.class)
+    @Test
     public void shouldThrowStreamsExceptionIfExceptionCaughtDuringClose() {
         final ProcessorNode node = new ProcessorNode("name", new ExceptionalProcessor(), Collections.emptySet());
-        node.init(null);
-        node.close();
+        assertThrows(StreamsException.class, () -> node.init(null));
     }
 
     private static class ExceptionalProcessor implements Processor<Object, Object> {

@@ -68,9 +68,9 @@ class TimeIndexTest {
     assertEquals(TimestampOffset(40L, 85L), idx.entry(3))
   }
 
-  @Test(expected = classOf[IllegalArgumentException])
+  @Test
   def testEntryOverflow(): Unit = {
-    idx.entry(0)
+    assertThrows(classOf[IllegalArgumentException], () => idx.entry(0))
   }
 
   @Test

@@ -140,13 +140,13 @@ class ProducerStateManagerTest {
     assertEquals(2020L, lastEntry.lastDataOffset)
   }
 
-  @Test(expected = classOf[OutOfOrderSequenceException])
+  @Test
   def testProducerSequenceInvalidWrapAround(): Unit = {
     val epoch = 15.toShort
     val sequence = Int.MaxValue
     val offset = 735L
     append(stateManager, producerId, epoch, sequence, offset, origin = AppendOrigin.Replication)
-    append(stateManager, producerId, epoch, 1, offset + 500)
+    assertThrows(classOf[OutOfOrderSequenceException], () => append(stateManager, producerId, epoch, 1, offset + 500))
   }
 
   @Test
@@ -419,11 +419,11 @@ class ProducerStateManagerTest {
     assertEquals(0, stateManager.lastEntry(producerId).get.lastSeq)
   }
 
-  @Test(expected = classOf[InvalidTxnStateException])
+  @Test
   def testNonTransactionalAppendWithOngoingTransaction(): Unit = {
     val epoch = 0.toShort
     append(stateManager, producerId, epoch, 0, 0L, isTransactional = true)
-    append(stateManager, producerId, epoch, 1, 1L, isTransactional = false)
+    assertThrows(classOf[InvalidTxnStateException], () => append(stateManager, producerId, epoch, 1, 1L, isTransactional = false))
   }
 
   @Test
@@ -786,7 +786,7 @@ class ProducerStateManagerTest {
       isTransactional = true, origin = AppendOrigin.Coordinator)
   }
 
-  @Test(expected = classOf[InvalidProducerEpochException])
+  @Test
   def testOldEpochForControlRecord(): Unit = {
     val epoch = 5.toShort
     val sequence = 0
@@ -794,7 +794,8 @@ class ProducerStateManagerTest {
     assertEquals(None, stateManager.firstUndecidedOffset)
 
     append(stateManager, producerId, epoch, sequence, offset = 99, isTransactional = true)
-    appendEndTxnMarker(stateManager, producerId, 3.toShort, ControlRecordType.COMMIT, offset=100)
+    assertThrows(classOf[InvalidProducerEpochException], () => appendEndTxnMarker(stateManager, producerId, 3.toShort,
+      ControlRecordType.COMMIT, offset=100))
   }
 
   @Test
@@ -823,7 +824,7 @@ class ProducerStateManagerTest {
     }
   }
 
-  @Test(expected = classOf[TransactionCoordinatorFencedException])
+  @Test
   def testCoordinatorFencedAfterReload(): Unit = {
     val producerEpoch = 0.toShort
     append(stateManager, producerId, producerEpoch, 0, offset = 99, isTransactional = true)
@@ -834,7 +835,8 @@ class ProducerStateManagerTest {
     recoveredMapping.truncateAndReload(0L, 2L, 70000)
 
     // append from old coordinator should be rejected
-    appendEndTxnMarker(stateManager, producerId, producerEpoch, ControlRecordType.COMMIT, offset = 100, coordinatorEpoch = 0)
+    assertThrows(classOf[TransactionCoordinatorFencedException], () => appendEndTxnMarker(stateManager, producerId,
+      producerEpoch, ControlRecordType.COMMIT, offset = 100, coordinatorEpoch = 0))
   }
 
   @Test

@@ -557,10 +557,10 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     assertFalse(partitions.isEmpty)
   }
 
-  @Test(expected = classOf[InvalidTopicException])
+  @Test
   def testPartitionsForInvalidTopic(): Unit = {
     val consumer = createConsumer()
-    consumer.partitionsFor(";3# ads,{234")
+    assertThrows(classOf[InvalidTopicException], () => consumer.partitionsFor(";3# ads,{234"))
   }
 
   @Test

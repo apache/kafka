@@ -28,6 +28,7 @@ import org.junit.Test;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 
 public class NodeApiVersionsTest {
@@ -103,28 +104,32 @@ public class NodeApiVersionsTest {
         assertEquals(3, apiVersions.latestUsableVersion(ApiKeys.PRODUCE, (short) 3, (short) 4));
     }
 
-    @Test(expected = UnsupportedVersionException.class)
+    @Test
     public void testLatestUsableVersionOutOfRangeLow() {
         NodeApiVersions apiVersions = NodeApiVersions.create(ApiKeys.PRODUCE.id, (short) 1, (short) 2);
-        apiVersions.latestUsableVersion(ApiKeys.PRODUCE, (short) 3, (short) 4);
+        assertThrows(UnsupportedVersionException.class,
+            () -> apiVersions.latestUsableVersion(ApiKeys.PRODUCE, (short) 3, (short) 4));
     }
 
-    @Test(expected = UnsupportedVersionException.class)
+    @Test
     public void testLatestUsableVersionOutOfRangeHigh() {
         NodeApiVersions apiVersions = NodeApiVersions.create(ApiKeys.PRODUCE.id, (short) 2, (short) 3);
-        apiVersions.latestUsableVersion(ApiKeys.PRODUCE, (short) 0, (short) 1);
+        assertThrows(UnsupportedVersionException.class,
+            () -> apiVersions.latestUsableVersion(ApiKeys.PRODUCE, (short) 0, (short) 1));
     }
 
-    @Test(expected = UnsupportedVersionException.class)
+    @Test
     public void testUsableVersionCalculationNoKnownVersions() {
         NodeApiVersions versions = new NodeApiVersions(new ApiVersionsResponseKeyCollection());
-        versions.latestUsableVersion(ApiKeys.FETCH);
+        assertThrows(UnsupportedVersionException.class,
+            () -> versions.latestUsableVersion(ApiKeys.FETCH));
     }
 
-    @Test(expected = UnsupportedVersionException.class)
+    @Test
     public void testLatestUsableVersionOutOfRange() {
         NodeApiVersions apiVersions = NodeApiVersions.create(ApiKeys.PRODUCE.id, (short) 300, (short) 300);
-        apiVersions.latestUsableVersion(ApiKeys.PRODUCE);
+        assertThrows(UnsupportedVersionException.class,
+            () -> apiVersions.latestUsableVersion(ApiKeys.PRODUCE));
     }
 
     @Test

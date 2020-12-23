@@ -63,6 +63,7 @@ import static java.util.Arrays.asList;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
@@ -693,7 +694,7 @@ public class RecordAccumulatorTest {
         assertTrue("The batch should have been drained.", drained.get(node1.id()).size() > 0);
     }
 
-    @Test(expected = UnsupportedVersionException.class)
+    @Test
     public void testIdempotenceWithOldMagic() throws InterruptedException {
         // Simulate talking to an older broker, ie. one which supports a lower magic.
         ApiVersions apiVersions = new ApiVersions();
@@ -709,7 +710,8 @@ public class RecordAccumulatorTest {
         RecordAccumulator accum = new RecordAccumulator(logContext, batchSize + DefaultRecordBatch.RECORD_BATCH_OVERHEAD,
             CompressionType.NONE, lingerMs, retryBackoffMs, deliveryTimeoutMs, metrics, metricGrpName, time, apiVersions, transactionManager,
             new BufferPool(totalSize, batchSize, metrics, time, metricGrpName));
-        accum.append(tp1, 0L, key, value, Record.EMPTY_HEADERS, null, 0, false, time.milliseconds());
+        assertThrows(UnsupportedVersionException.class,
+            () -> accum.append(tp1, 0L, key, value, Record.EMPTY_HEADERS, null, 0, false, time.milliseconds()));
     }
 
     @Test

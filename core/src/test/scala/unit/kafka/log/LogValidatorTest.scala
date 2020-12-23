@@ -1240,7 +1240,7 @@ class LogValidatorTest {
     assertTrue(meterCount(s"${BrokerTopicStats.InvalidOffsetOrSequenceRecordsPerSec}") > 0)
   }
 
-  @Test(expected = classOf[InvalidRecordException])
+  @Test
   def testCompressedBatchWithoutRecordsNotAllowed(): Unit = {
     testBatchWithoutRecordsNotAllowed(DefaultCompressionCodec, DefaultCompressionCodec)
   }
@@ -1267,12 +1267,12 @@ class LogValidatorTest {
       brokerTopicStats = brokerTopicStats))
   }
 
-  @Test(expected = classOf[InvalidRecordException])
+  @Test
   def testUncompressedBatchWithoutRecordsNotAllowed(): Unit = {
     testBatchWithoutRecordsNotAllowed(NoCompressionCodec, NoCompressionCodec)
   }
 
-  @Test(expected = classOf[InvalidRecordException])
+  @Test
   def testRecompressedBatchWithoutRecordsNotAllowed(): Unit = {
     testBatchWithoutRecordsNotAllowed(NoCompressionCodec, DefaultCompressionCodec)
   }
@@ -1362,7 +1362,7 @@ class LogValidatorTest {
       isTransactional, false)
     buffer.flip()
     val records = MemoryRecords.readableRecords(buffer)
-    LogValidator.validateMessagesAndAssignOffsets(records,
+    assertThrows(classOf[InvalidRecordException], () => LogValidator.validateMessagesAndAssignOffsets(records,
       topicPartition,
       offsetCounter = new LongRef(offset),
       time = time,
@@ -1376,7 +1376,7 @@ class LogValidatorTest {
       partitionLeaderEpoch = RecordBatch.NO_PARTITION_LEADER_EPOCH,
       origin = AppendOrigin.Client,
       interBrokerProtocolVersion = ApiVersion.latestVersion,
-      brokerTopicStats = brokerTopicStats)
+      brokerTopicStats = brokerTopicStats))
   }
 
   private def createRecords(magicValue: Byte,

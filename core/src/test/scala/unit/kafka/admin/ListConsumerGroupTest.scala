@@ -43,10 +43,10 @@ class ListConsumerGroupTest extends ConsumerGroupCommandTest {
     }, s"Expected --list to show groups $expectedGroups, but found $foundGroups.")
   }
 
-  @Test(expected = classOf[OptionException])
+  @Test
   def testListWithUnrecognizedNewConsumerOption(): Unit = {
     val cgcArgs = Array("--new-consumer", "--bootstrap-server", brokerList, "--list")
-    getConsumerGroupService(cgcArgs)
+    assertThrows(classOf[OptionException], () => getConsumerGroupService(cgcArgs))
   }
 
   @Test

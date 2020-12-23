@@ -20,7 +20,6 @@ import java.lang.management.ManagementFactory
 import java.nio.ByteBuffer
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.locks.ReentrantLock
-
 import javax.management.ObjectName
 import kafka.log.{AppendOrigin, Log}
 import kafka.server.{FetchDataInfo, FetchLogEnd, LogOffsetMetadata, ReplicaManager}
@@ -35,7 +34,7 @@ import org.apache.kafka.common.requests.ProduceResponse.PartitionResponse
 import org.apache.kafka.common.requests.TransactionResult
 import org.apache.kafka.common.utils.MockTime
 import org.easymock.{Capture, EasyMock, IAnswer}
-import org.junit.Assert.{assertEquals, assertFalse, assertTrue, fail}
+import org.junit.Assert.{assertEquals, assertFalse, assertThrows, assertTrue, fail}
 import org.junit.{After, Before, Test}
 
 import scala.jdk.CollectionConverters._
@@ -455,7 +454,7 @@ class TransactionStateManagerTest {
     transactionManager.appendTransactionToLog(transactionalId1, coordinatorEpoch = 10, newMetadata, assertCallback)
   }
 
-  @Test(expected = classOf[IllegalStateException])
+  @Test
   def testAppendTransactionToLogWhilePendingStateChanged(): Unit = {
     // first insert the initial transaction metadata
     transactionManager.addLoadedTransactionsToCache(partitionId, coordinatorEpoch, new Pool[String, TransactionMetadata]())
@@ -471,7 +470,8 @@ class TransactionStateManagerTest {
     txnMetadata1.pendingState = None
 
     // append the new metadata into log
-    transactionManager.appendTransactionToLog(transactionalId1, coordinatorEpoch = 10, newMetadata, assertCallback)
+    assertThrows(classOf[IllegalStateException], () => transactionManager.appendTransactionToLog(transactionalId1,
+      coordinatorEpoch = 10, newMetadata, assertCallback))
   }
 
   @Test
