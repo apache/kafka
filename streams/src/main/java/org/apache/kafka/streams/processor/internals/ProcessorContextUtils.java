@@ -39,9 +39,7 @@ public final class ProcessorContextUtils {
      * removing the need for this method.
      */
     public static long getCurrentSystemTime(final ProcessorContext context) {
-        return context instanceof InternalProcessorContext
-            ? ((InternalProcessorContext) context).currentSystemTimeMs()
-            : System.currentTimeMillis();
+        return context.currentSystemTimeMs();
     }
 
     /**

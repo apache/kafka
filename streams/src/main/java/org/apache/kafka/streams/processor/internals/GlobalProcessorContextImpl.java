@@ -116,6 +116,11 @@ public class GlobalProcessorContextImpl extends AbstractProcessorContext {
     }
 
     @Override
+    public long currentSystemTimeMs() {
+        throw new UnsupportedOperationException("this method is not supported in global processor context.");
+    }
+
+    @Override
     public long currentStreamTimeMs() {
         throw new UnsupportedOperationException("this method is not supported in global processor context.");
     }

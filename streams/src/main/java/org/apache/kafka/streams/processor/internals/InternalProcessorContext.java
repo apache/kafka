@@ -44,11 +44,6 @@ public interface InternalProcessorContext
     StreamsMetricsImpl metrics();
 
     /**
-     * @param timeMs current wall-clock system timestamp in milliseconds
-     */
-    void setSystemTimeMs(long timeMs);
-
-    /**
      * Returns the current {@link RecordContext}
      * @return the current {@link RecordContext}
      */

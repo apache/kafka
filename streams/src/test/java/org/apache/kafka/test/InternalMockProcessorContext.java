@@ -23,6 +23,7 @@ import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.MockTime;
+import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.processor.Cancellable;
@@ -116,7 +117,7 @@ public class InternalMockProcessorContext
         );
     }
 
-    public InternalMockProcessorContext(final File stateDir,
+    public  InternalMockProcessorContext(final File stateDir,
                                         final StreamsConfig config,
                                         final RecordCollector collector) {
         this(
@@ -367,6 +368,11 @@ public class InternalMockProcessorContext
             return timestamp;
         }
         return recordContext.timestamp();
+    }
+
+    @Override
+    public long currentSystemTimeMs() {
+        return Time.SYSTEM.milliseconds();
     }
 
     @Override

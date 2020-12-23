@@ -17,6 +17,7 @@
 package org.apache.kafka.test;
 
 import org.apache.kafka.common.utils.Bytes;
+import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.processor.MockProcessorContext;
 import org.apache.kafka.streams.processor.StateRestoreCallback;
 import org.apache.kafka.streams.processor.StateStore;
@@ -45,7 +46,6 @@ public class MockInternalProcessorContext extends MockProcessorContext implement
     private final Map<String, StateRestoreCallback> restoreCallbacks = new LinkedHashMap<>();
     private ProcessorNode currentNode;
     private RecordCollector recordCollector;
-    private long currentSystemTimeMs;
     private TaskType taskType = TaskType.ACTIVE;
 
     public MockInternalProcessorContext() {
@@ -56,13 +56,8 @@ public class MockInternalProcessorContext extends MockProcessorContext implement
     }
 
     @Override
-    public void setSystemTimeMs(long timeMs) {
-        currentSystemTimeMs = timeMs;
-    }
-
-    @Override
     public long currentSystemTimeMs() {
-        return currentSystemTimeMs;
+        return Time.SYSTEM.milliseconds();
     }
 
     @Override
