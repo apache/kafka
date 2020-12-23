@@ -46,7 +46,7 @@ public final class CatCommandHandler implements Command.Handler {
         for (String target : targets) {
             manager.visit(new GlobVisitor(target, entryOption -> {
                 if (entryOption.isPresent()) {
-                    MetadataNode node = entryOption.get().getValue();
+                    MetadataNode node = entryOption.get().node();
                     if (node instanceof DirectoryNode) {
                         writer.println("cat: " + target + ": Is a directory");
                     } else if (node instanceof FileNode) {

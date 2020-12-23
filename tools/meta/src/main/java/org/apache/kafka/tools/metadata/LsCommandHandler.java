@@ -62,7 +62,7 @@ public final class LsCommandHandler implements Command.Handler {
         for (String target : effectiveTargets) {
             manager.visit(new GlobVisitor(target, entryOption -> {
                 if (entryOption.isPresent()) {
-                    MetadataNode node = entryOption.get().getValue();
+                    MetadataNode node = entryOption.get().node();
                     if (node instanceof DirectoryNode) {
                         DirectoryNode directory = (DirectoryNode) node;
                         List<String> children = new ArrayList<>();

@@ -17,8 +17,11 @@
 
 package org.apache.kafka.tools.metadata;
 
+import org.apache.kafka.tools.metadata.MetadataNode.DirectoryNode;
+
 import java.io.PrintWriter;
 import java.util.Optional;
+import java.util.function.Consumer;
 
 /**
  * Implements the cd command.
@@ -34,11 +37,22 @@ public final class CdCommandHandler implements Command.Handler {
     public void run(Optional<MetadataShell> shell,
                     PrintWriter writer,
                     MetadataNodeManager manager) throws Exception {
-        manager.visit(data -> {
-            if (target.isPresent()) {
-                data.setWorkingDirectory(target.get());
-            } else {
-                data.setWorkingDirectory("/");
+        String effectiveTarget = target.orElse("/");
+        manager.visit(new Consumer<MetadataNodeManager.Data>() {
+            @Override
+            public void accept(MetadataNodeManager.Data data) {
+                new GlobVisitor(effectiveTarget, entryOption -> {
+                    if (entryOption.isPresent()) {
+                        if (!(entryOption.get().node() instanceof DirectoryNode)) {
+                            writer.println("cd: " + effectiveTarget + ": not a directory.");
+                        } else {
+                            String[] path = entryOption.get().path();
+                            data.setWorkingDirectory("/" + String.join("/", path));
+                        }
+                    } else {
+                        writer.println("cd: " + effectiveTarget + ": no such directory.");
+                    }
+                }).accept(data);
             }
         });
     }

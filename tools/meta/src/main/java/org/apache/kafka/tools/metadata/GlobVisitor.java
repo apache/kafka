@@ -17,7 +17,6 @@
 
 package org.apache.kafka.tools.metadata;
 
-import java.util.AbstractMap.SimpleImmutableEntry;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map.Entry;
@@ -29,12 +28,30 @@ import java.util.function.Consumer;
  */
 public final class GlobVisitor implements Consumer<MetadataNodeManager.Data> {
     private final String glob;
-    private final Consumer<Optional<Entry<String, MetadataNode>>> handler;
+    private final Consumer<Optional<MetadataNodeInfo>> handler;
 
     public GlobVisitor(String glob,
-                       Consumer<Optional<Entry<String, MetadataNode>>> handler) {
+                       Consumer<Optional<MetadataNodeInfo>> handler) {
         this.glob = glob;
         this.handler = handler;
+    }
+
+    public static class MetadataNodeInfo {
+        private final String[] path;
+        private final MetadataNode node;
+
+        MetadataNodeInfo(String[] path, MetadataNode node) {
+            this.path = path;
+            this.node = node;
+        }
+
+        public String[] path() {
+            return path;
+        }
+
+        public MetadataNode node() {
+            return node;
+        }
     }
 
     @Override
@@ -48,33 +65,36 @@ public final class GlobVisitor implements Consumer<MetadataNodeManager.Data> {
 
     private void accept(MetadataNode.DirectoryNode root, String fullGlob) {
         List<String> globComponents = pathComponents(fullGlob);
-        if (!accept(globComponents, 0, root)) {
+        if (!accept(globComponents, 0, root, new String[0])) {
             handler.accept(Optional.empty());
         }
     }
 
     private boolean accept(List<String> globComponents,
                            int componentIndex,
-                           MetadataNode node) {
+                           MetadataNode node,
+                           String[] path) {
         if (componentIndex >= globComponents.size()) {
-            String name = "";
-            if (componentIndex > 0) {
-                // Unless this is the root directory, it has a name.
-                name = globComponents.get(componentIndex - 1);
-            }
-            handler.accept(Optional.of(new SimpleImmutableEntry<>(name, node)));
+            handler.accept(Optional.of(new MetadataNodeInfo(path, node)));
             return true;
         }
         String globComponentString = globComponents.get(componentIndex);
         if (globComponentString.equals(".")) {
-            return accept(globComponents, componentIndex + 1, node);
+            return accept(globComponents, componentIndex + 1, node, path);
         }
         if (globComponentString.equals("..")) {
             if (!(node instanceof MetadataNode.DirectoryNode)) {
                 return false;
             }
+            String[] newPath;
+            if (path.length == 0) {
+                newPath = path;
+            } else {
+                newPath = new String[path.length - 1];
+                System.arraycopy(path, 0, newPath, 0, path.length - 1);
+            }
             MetadataNode.DirectoryNode directory = (MetadataNode.DirectoryNode) node;
-            return accept(globComponents, componentIndex + 1, directory.parent());
+            return accept(globComponents, componentIndex + 1, directory.parent(), newPath);
         }
         GlobComponent globComponent = new GlobComponent(globComponentString);
         if (globComponent.literal()) {
@@ -86,7 +106,10 @@ public final class GlobVisitor implements Consumer<MetadataNodeManager.Data> {
             if (child == null) {
                 return false;
             }
-            return accept(globComponents, componentIndex + 1, child);
+            String[] newPath = new String[path.length + 1];
+            System.arraycopy(path, 0, newPath, 0, path.length);
+            newPath[path.length] = globComponent.component();
+            return accept(globComponents, componentIndex + 1, child, newPath);
         }
         if (!(node instanceof MetadataNode.DirectoryNode)) {
             return false;
@@ -96,7 +119,10 @@ public final class GlobVisitor implements Consumer<MetadataNodeManager.Data> {
         for (Entry<String, MetadataNode> entry : directory.children().entrySet()) {
             String nodeName = entry.getKey();
             if (globComponent.matches(nodeName)) {
-                if (accept(globComponents, componentIndex + 1, entry.getValue())) {
+                String[] newPath = new String[path.length + 1];
+                System.arraycopy(path, 0, newPath, 0, path.length);
+                newPath[path.length] = nodeName;
+                if (accept(globComponents, componentIndex + 1, entry.getValue(), newPath)) {
                     matchedAny = true;
                 }
             }
