@@ -38,7 +38,7 @@ import java.io.File;
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
-import java.util.concurrent.Callable;
+import java.util.concurrent.CompletableFuture;
 
 /**
  * The Kafka metadata tool.
@@ -59,16 +59,27 @@ public final class SnapshotReader implements AutoCloseable {
             new LogContext("[snapshotReaderQueue] "), "snapshotReaderQueue_");
     }
 
-    public void startup() {
-        appendEvent("startup", () -> {
-            fileRecords = FileRecords.open(new File(snapshotPath), false);
-            batchIterator = fileRecords.batches().iterator();
-            handleNextBatch();
-            return null;
+    public void startup() throws Exception {
+        CompletableFuture<Void> future = new CompletableFuture<>();
+        queue.append(new EventQueue.Event() {
+            @Override
+            public void run() throws Exception {
+                fileRecords = FileRecords.open(new File(snapshotPath), false);
+                batchIterator = fileRecords.batches().iterator();
+                scheduleHandleNextBatch();
+                future.complete(null);
+            }
+
+            @Override
+            public void handleException(Throwable e) {
+                future.completeExceptionally(e);
+                beginShutdown("startup error");
+            }
         });
+        future.get();
     }
 
-    public void handleNextBatch() {
+    private void handleNextBatch() {
         if (!batchIterator.hasNext()) {
             beginShutdown("done");
             return;
@@ -79,9 +90,21 @@ public final class SnapshotReader implements AutoCloseable {
         } else {
             handleMetadataBatch(batch);
         }
-        appendEvent("handleNextBatch", () -> {
-            handleNextBatch();
-            return null;
+        scheduleHandleNextBatch();
+    }
+
+    private void scheduleHandleNextBatch() {
+        queue.append(new EventQueue.Event() {
+            @Override
+            public void run() throws Exception {
+                handleNextBatch();
+            }
+
+            @Override
+            public void handleException(Throwable e) {
+                log.error("Unexpected error while handling a batch of events", e);
+                beginShutdown("handleBatch error");
+            }
         });
     }
 
@@ -155,20 +178,5 @@ public final class SnapshotReader implements AutoCloseable {
     public void close() throws Exception {
         beginShutdown("closing");
         queue.close();
-    }
-
-    private void appendEvent(String name, Callable<Void> callable) {
-        queue.append(new EventQueue.Event() {
-            @Override
-            public void run() throws Exception {
-                callable.call();
-            }
-
-            @Override
-            public void handleException(Throwable e) {
-                log.error("Unexpected error while handling event " + name, e);
-                beginShutdown(name + " error");
-            }
-        });
     }
 }

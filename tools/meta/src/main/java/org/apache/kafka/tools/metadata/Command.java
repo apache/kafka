@@ -68,7 +68,7 @@ public final class Command {
         Subparser lsParser = subparsers.addParser("ls").
             help("List metadata nodes.");
         lsParser.addArgument("targets").
-            nargs("+").
+            nargs("*").
             help("The metadata node paths to list.");
         subparsers.addParser("pwd").
             help("Print the current working directory.");

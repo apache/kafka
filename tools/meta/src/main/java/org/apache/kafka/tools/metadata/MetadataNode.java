@@ -17,7 +17,7 @@
 
 package org.apache.kafka.tools.metadata;
 
-import java.util.Map;
+import java.util.NavigableMap;
 import java.util.TreeMap;
 
 /**
@@ -36,6 +36,7 @@ public interface MetadataNode {
             MetadataNode node = children.get(name);
             if (node == null) {
                 node = new DirectoryNode(this);
+                children.put(name, node);
             } else {
                 if (!(node instanceof DirectoryNode)) {
                     throw new NotDirectoryException();
@@ -48,6 +49,7 @@ public interface MetadataNode {
             MetadataNode node = children.get(name);
             if (node == null) {
                 node = new FileNode();
+                children.put(name, node);
             } else {
                 if (!(node instanceof FileNode)) {
                     throw new NotFileException();
@@ -64,8 +66,8 @@ public interface MetadataNode {
             return children.get(component);
         }
 
-        public Iterable<Map.Entry<String, MetadataNode>> children() {
-            return children.entrySet();
+        public NavigableMap<String, MetadataNode> children() {
+            return children;
         }
     }
 

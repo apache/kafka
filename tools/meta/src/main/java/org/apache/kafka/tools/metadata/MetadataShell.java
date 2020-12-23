@@ -77,6 +77,10 @@ public final class MetadataShell implements AutoCloseable {
         }
     }
 
+    public int screenWidth() {
+        return terminal.getWidth();
+    }
+
     @Override
     public void close() throws IOException {
         terminal.close();

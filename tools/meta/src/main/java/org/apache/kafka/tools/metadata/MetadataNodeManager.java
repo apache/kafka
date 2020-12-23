@@ -59,6 +59,7 @@ public final class MetadataNodeManager implements AutoCloseable {
         @Override
         public void handleCommits(long lastOffset, List<ApiMessage> messages) {
             appendEvent("handleCommits", () -> {
+                log.error("handleCommits " + messages + " at offset " + lastOffset);
                 DirectoryNode dir = data.root.mkdirs("@metadata");
                 dir.create("offset").setContents(String.valueOf(lastOffset));
             }, null);
@@ -67,6 +68,7 @@ public final class MetadataNodeManager implements AutoCloseable {
         @Override
         public void handleNewLeader(MetaLogLeader leader) {
             appendEvent("handleNewLeader", () -> {
+                log.error("handleNewLeader " + leader);
                 DirectoryNode dir = data.root.mkdirs("@metadata");
                 dir.create("leader").
                     setContents(leader.toString());
@@ -76,15 +78,12 @@ public final class MetadataNodeManager implements AutoCloseable {
         @Override
         public void handleRenounce(long epoch) {
             // This shouldn't happen because we should never be the leader.
-            log.error("RaftManager sent handleRenounce(epoch=" + epoch + ")");
+            log.debug("MetaLogListener sent handleRenounce(epoch=" + epoch + ")");
         }
 
         @Override
         public void beginShutdown() {
-            // This shouldn't happen because it indicates a problem with Raft.
-            // TODO: we should somehow monitor the quorum state so we know when we're
-            // disconnected, etc.
-            log.error("RaftManager sent beginShutdown");
+            log.debug("MetaLogListener sent beginShutdown");
         }
     }
 

@@ -151,6 +151,7 @@ public final class MetadataTool {
             try {
                 nodeManager = new MetadataNodeManager();
                 snapshotReader = new SnapshotReader(snapshotPath, nodeManager.logListener());
+                return new MetadataTool(null, snapshotReader, nodeManager);
             } catch (Throwable e) {
                 log.error("Initialization error", e);
                 if (snapshotReader != null) {
@@ -161,9 +162,7 @@ public final class MetadataTool {
                 }
                 throw e;
             }
-            return new MetadataTool(null, snapshotReader, nodeManager);
         }
-
     }
 
     private final KafkaRaftManager raftManager;
@@ -205,8 +204,14 @@ public final class MetadataTool {
         }
     }
 
-    public void close() {
-        raftManager.shutdown();
+    public void close() throws Exception {
+        if (raftManager != null) {
+            raftManager.shutdown();
+        }
+        if (snapshotReader != null) {
+            snapshotReader.close();
+        }
+        nodeManager.close();
     }
 
     public static void main(String[] args) throws Exception {

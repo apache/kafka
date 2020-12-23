@@ -91,7 +91,7 @@ public final class GlobVisitor implements Consumer<MetadataNodeManager.Data> {
             return;
         }
         MetadataNode.DirectoryNode directory = (MetadataNode.DirectoryNode) node;
-        for (Entry<String, MetadataNode> entry : directory.children()) {
+        for (Entry<String, MetadataNode> entry : directory.children().entrySet()) {
             String nodeName = entry.getKey();
             if (globComponent.matches(nodeName)) {
                 accept(globComponents, componentIndex + 1, entry.getValue());
