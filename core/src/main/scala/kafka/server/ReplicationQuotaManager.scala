@@ -62,6 +62,10 @@ object Constants {
   val AllReplicas = Seq[Int](-1)
 }
 
+object ReplicationQuotaManager extends Logging {
+
+}
+
 /**
   * Tracks replication metrics and comparing them to any quotas for throttled partitions.
   *
@@ -73,7 +77,7 @@ object Constants {
 class ReplicationQuotaManager(val config: ReplicationQuotaManagerConfig,
                               private val metrics: Metrics,
                               private val replicationType: QuotaType,
-                              private val time: Time) extends Logging with ReplicaQuota {
+                              private val time: Time) extends ReplicaQuota {
   private val lock = new ReentrantReadWriteLock()
   private val throttledPartitions = new ConcurrentHashMap[String, Seq[Int]]()
   private var quota: Quota = null

@@ -271,7 +271,7 @@ class BrokerTopicMetrics(name: Option[String]) extends KafkaMetricsGroup {
   def close(): Unit = metricTypeMap.values.foreach(_.close())
 }
 
-object BrokerTopicStats {
+object BrokerTopicStats extends Logging {
   val MessagesInPerSec = "MessagesInPerSec"
   val BytesInPerSec = "BytesInPerSec"
   val BytesOutPerSec = "BytesOutPerSec"
@@ -296,7 +296,7 @@ object BrokerTopicStats {
   private val valueFactory = (k: String) => new BrokerTopicMetrics(Some(k))
 }
 
-class BrokerTopicStats extends Logging {
+class BrokerTopicStats {
   import BrokerTopicStats._
 
   private val stats = new Pool[String, BrokerTopicMetrics](Some(valueFactory))

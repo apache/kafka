@@ -106,7 +106,9 @@ object BrokerApiVersionsCommand {
                             val requestTimeoutMs: Int,
                             val retryBackoffMs: Long,
                             val client: ConsumerNetworkClient,
-                            val bootstrapBrokers: List[Node]) extends Logging {
+                            val bootstrapBrokers: List[Node]) {
+
+    import AdminClient._
 
     @volatile var running: Boolean = true
     val pendingFutures = new ConcurrentLinkedQueue[RequestFuture[ClientResponse]]()
@@ -203,7 +205,7 @@ object BrokerApiVersionsCommand {
 
   }
 
-  private object AdminClient {
+  private object AdminClient extends Logging {
     val DefaultConnectionMaxIdleMs = 9 * 60 * 1000
     val DefaultRequestTimeoutMs = 5000
     val DefaultSocketConnectionSetupMs = CommonClientConfigs.SOCKET_CONNECTION_SETUP_TIMEOUT_MS_CONFIG

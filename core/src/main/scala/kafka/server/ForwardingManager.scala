@@ -63,9 +63,15 @@ object ForwardingManager {
   }
 }
 
+object ForwardingManagerImpl extends Logging {
+
+}
+
 class ForwardingManagerImpl(
   channelManager: BrokerToControllerChannelManager
-) extends ForwardingManager with Logging {
+) extends ForwardingManager {
+
+  import ForwardingManagerImpl._
 
   override def start(): Unit = {
     channelManager.start()

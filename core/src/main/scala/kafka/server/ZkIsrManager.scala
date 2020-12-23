@@ -33,7 +33,7 @@ import scala.collection.mutable
  */
 case class IsrChangePropagationConfig(checkIntervalMs: Long, maxDelayMs: Long, lingerMs: Long)
 
-object ZkIsrManager {
+object ZkIsrManager extends Logging {
   // This field is mutable to allow overriding change notification behavior in test cases
   @volatile var DefaultIsrPropagationConfig: IsrChangePropagationConfig = IsrChangePropagationConfig(
     checkIntervalMs = 2500,
@@ -42,7 +42,8 @@ object ZkIsrManager {
   )
 }
 
-class ZkIsrManager(scheduler: Scheduler, time: Time, zkClient: KafkaZkClient) extends AlterIsrManager with Logging {
+class ZkIsrManager(scheduler: Scheduler, time: Time, zkClient: KafkaZkClient) extends AlterIsrManager {
+  import ZkIsrManager._
 
   private val isrChangeNotificationConfig = ZkIsrManager.DefaultIsrPropagationConfig
   // Visible for testing

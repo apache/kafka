@@ -47,11 +47,16 @@ trait ConfigHandler {
   def processConfigChanges(entityName: String, value: Properties): Unit
 }
 
+object TopicConfigHandler extends Logging {
+
+}
+
 /**
   * The TopicConfigHandler will process topic config changes in ZK.
   * The callback provides the topic name and the full properties set read from ZK
   */
-class TopicConfigHandler(private val logManager: LogManager, kafkaConfig: KafkaConfig, val quotas: QuotaManagers, kafkaController: KafkaController) extends ConfigHandler with Logging  {
+class TopicConfigHandler(private val logManager: LogManager, kafkaConfig: KafkaConfig, val quotas: QuotaManagers, kafkaController: KafkaController) extends ConfigHandler {
+  import TopicConfigHandler._
 
   private def updateLogConfig(topic: String,
                               topicConfig: Properties,
@@ -187,7 +192,7 @@ class UserConfigHandler(private val quotaManagers: QuotaManagers, val credential
   }
 }
 
-class IpConfigHandler(private val connectionQuotas: ConnectionQuotas) extends ConfigHandler with Logging {
+class IpConfigHandler(private val connectionQuotas: ConnectionQuotas) extends ConfigHandler {
 
   def processConfigChanges(ip: String, config: Properties): Unit = {
     val ipConnectionRateQuota = Option(config.getProperty(DynamicConfig.Ip.IpConnectionRateOverrideProp)).map(_.toInt)
@@ -211,7 +216,7 @@ class IpConfigHandler(private val connectionQuotas: ConnectionQuotas) extends Co
   * This implementation reports the overrides to the respective ReplicationQuotaManager objects
   */
 class BrokerConfigHandler(private val brokerConfig: KafkaConfig,
-                          private val quotaManagers: QuotaManagers) extends ConfigHandler with Logging {
+                          private val quotaManagers: QuotaManagers) extends ConfigHandler {
 
   def processConfigChanges(brokerId: String, properties: Properties): Unit = {
     def getOrDefault(prop: String): Long = {

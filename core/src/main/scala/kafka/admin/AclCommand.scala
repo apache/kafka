@@ -86,7 +86,12 @@ object AclCommand extends Logging {
     def listAcls(): Unit
   }
 
-  class AdminClientService(val opts: AclCommandOptions) extends AclCommandService with Logging {
+  object AdminClientService extends Logging {
+
+  }
+
+  class AdminClientService(val opts: AclCommandOptions) extends AclCommandService {
+    import AdminClientService._
 
     private def withAdminClient(opts: AclCommandOptions)(f: Admin => Unit): Unit = {
       val props = if (opts.options.has(opts.commandConfigOpt))
@@ -189,7 +194,11 @@ object AclCommand extends Logging {
     }
   }
 
-  class AuthorizerService(val authorizerClassName: String, val opts: AclCommandOptions) extends AclCommandService with Logging {
+  object AuthorizerService extends Logging {
+
+  }
+  class AuthorizerService(val authorizerClassName: String, val opts: AclCommandOptions) extends AclCommandService {
+    import AuthorizerService._
 
     private def withAuthorizer()(f: Authorizer => Unit): Unit = {
       // It is possible that zookeeper.set.acl could be true without SASL if mutual certificate authentication is configured.
@@ -218,7 +227,7 @@ object AclCommand extends Logging {
         authZ.configure(authorizerProperties.asJava)
         f(authZ)
       }
-      finally CoreUtils.swallow(authZ.close(), this)
+      finally CoreUtils.swallow(authZ.close(), AuthorizerService)
     }
 
     def addAcls(): Unit = {

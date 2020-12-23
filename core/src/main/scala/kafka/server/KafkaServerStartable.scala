@@ -24,7 +24,7 @@ import kafka.utils.{Exit, Logging, VerifiableProperties}
 
 import scala.collection.Seq
 
-object KafkaServerStartable {
+object KafkaServerStartable extends Logging {
   def fromProps(serverProps: Properties): KafkaServerStartable = {
     fromProps(serverProps, None)
   }
@@ -35,7 +35,8 @@ object KafkaServerStartable {
   }
 }
 
-class KafkaServerStartable(val staticServerConfig: KafkaConfig, reporters: Seq[KafkaMetricsReporter], threadNamePrefix: Option[String] = None) extends Logging {
+class KafkaServerStartable(val staticServerConfig: KafkaConfig, reporters: Seq[KafkaMetricsReporter], threadNamePrefix: Option[String] = None) {
+  import KafkaServerStartable._
   private val server = new KafkaServer(staticServerConfig, kafkaMetricsReporters = reporters, threadNamePrefix = threadNamePrefix)
 
   def this(serverConfig: KafkaConfig) = this(serverConfig, Seq.empty)

@@ -60,7 +60,7 @@ private[log] class LogCleaningException(val log: Log,
   */
 private[log] class LogCleanerManager(val logDirs: Seq[File],
                                      val logs: Pool[TopicPartition, Log],
-                                     val logDirFailureChannel: LogDirFailureChannel) extends Logging with KafkaMetricsGroup {
+                                     val logDirFailureChannel: LogDirFailureChannel) extends KafkaMetricsGroup {
   import LogCleanerManager._
 
 

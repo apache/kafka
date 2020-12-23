@@ -337,9 +337,15 @@ class ControllerBrokerRequestBatch(config: KafkaConfig,
 
 }
 
+object AbstractControllerBrokerRequestBatch extends Logging {
+
+}
+
 abstract class AbstractControllerBrokerRequestBatch(config: KafkaConfig,
                                                     controllerContext: ControllerContext,
-                                                    stateChangeLogger: StateChangeLogger) extends Logging {
+                                                    stateChangeLogger: StateChangeLogger) {
+  import AbstractControllerBrokerRequestBatch._
+
   val controllerId: Int = config.brokerId
   val leaderAndIsrRequestMap = mutable.Map.empty[Int, mutable.Map[TopicPartition, LeaderAndIsrPartitionState]]
   val stopReplicaRequestMap = mutable.Map.empty[Int, mutable.Map[TopicPartition, StopReplicaPartitionState]]

@@ -23,6 +23,10 @@ import java.util.concurrent.{ArrayBlockingQueue, ConcurrentHashMap}
 
 import kafka.utils.Logging
 
+object LogDirFailureChannel extends Logging {
+
+}
+
 /*
  * LogDirFailureChannel allows an external thread to block waiting for new offline log dirs.
  *
@@ -34,7 +38,8 @@ import kafka.utils.Logging
  * An offline log directory will stay offline until the broker is restarted.
  *
  */
-class LogDirFailureChannel(logDirNum: Int) extends Logging {
+class LogDirFailureChannel(logDirNum: Int) {
+  import LogDirFailureChannel._
 
   private val offlineLogDirs = new ConcurrentHashMap[String, String]
   private val offlineLogDirQueue = new ArrayBlockingQueue[String](logDirNum)

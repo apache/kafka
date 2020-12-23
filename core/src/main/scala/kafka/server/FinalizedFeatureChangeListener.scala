@@ -26,6 +26,10 @@ import org.apache.kafka.common.internals.FatalExitError
 
 import scala.concurrent.TimeoutException
 
+object FinalizedFeatureChangeListener extends Logging {
+
+}
+
 /**
  * Listens to changes in the ZK feature node, via the ZK client. Whenever a change notification
  * is received from ZK, the feature cache in FinalizedFeatureCache is asynchronously updated
@@ -36,8 +40,8 @@ import scala.concurrent.TimeoutException
  * @param zkClient                the Zookeeper client
  */
 class FinalizedFeatureChangeListener(private val finalizedFeatureCache: FinalizedFeatureCache,
-                                     private val zkClient: KafkaZkClient) extends Logging {
-
+                                     private val zkClient: KafkaZkClient) {
+  import FinalizedFeatureChangeListener._
   /**
    * Helper class used to update the FinalizedFeatureCache.
    *

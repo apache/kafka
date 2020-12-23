@@ -33,7 +33,7 @@ import scala.collection.mutable
 import scala.jdk.CollectionConverters._
 
 @deprecated("Use kafka.security.authorizer.AclAuthorizer", "Since 2.4")
-object SimpleAclAuthorizer {
+object SimpleAclAuthorizer extends Logging {
   //optional override zookeeper cluster configuration where acls will be stored, if not specified acls will be stored in
   //same zookeeper where all other kafka broker info is stored.
   val ZkUrlProp = AclAuthorizer.ZkUrlProp
@@ -69,7 +69,9 @@ object SimpleAclAuthorizer {
 }
 
 @deprecated("Use kafka.security.authorizer.AclAuthorizer", "Since 2.4")
-class SimpleAclAuthorizer extends Authorizer with Logging {
+class SimpleAclAuthorizer extends Authorizer {
+
+  import SimpleAclAuthorizer._
 
   private val aclAuthorizer = new BaseAuthorizer
 

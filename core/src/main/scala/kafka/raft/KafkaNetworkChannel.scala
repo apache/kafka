@@ -32,7 +32,7 @@ import org.apache.kafka.raft.{NetworkChannel, RaftRequest, RaftResponse, RaftUti
 
 import scala.collection.mutable
 
-object KafkaNetworkChannel {
+object KafkaNetworkChannel extends Logging {
 
   private[raft] def buildRequest(requestData: ApiMessage): AbstractRequest.Builder[_ <: AbstractRequest] = {
     requestData match {
@@ -97,7 +97,8 @@ class KafkaNetworkChannel(
   time: Time,
   client: KafkaClient,
   requestTimeoutMs: Int
-) extends NetworkChannel with Logging {
+) extends NetworkChannel  {
+
   import KafkaNetworkChannel._
 
   type ResponseHandler = AbstractResponse => Unit

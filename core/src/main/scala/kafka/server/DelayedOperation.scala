@@ -131,7 +131,7 @@ abstract class DelayedOperation(override val delayMs: Long,
   }
 }
 
-object DelayedOperationPurgatory {
+object DelayedOperationPurgatory extends Logging {
 
   private val Shards = 512 // Shard the watcher list to reduce lock contention
 
@@ -155,7 +155,9 @@ final class DelayedOperationPurgatory[T <: DelayedOperation](purgatoryName: Stri
                                                              purgeInterval: Int = 1000,
                                                              reaperEnabled: Boolean = true,
                                                              timerEnabled: Boolean = true)
-        extends Logging with KafkaMetricsGroup {
+        extends KafkaMetricsGroup {
+  import DelayedOperationPurgatory._
+
   /* a list of operation watching keys */
   private class WatcherList {
     val watchersByKey = new Pool[Any, Watchers](Some((key: Any) => new Watchers(key)))

@@ -31,9 +31,12 @@ import org.apache.kafka.common.utils.Utils
 
 private trait KafkaCSVMetricsReporterMBean extends KafkaMetricsReporterMBean
 
+private object KafkaCSVMetricsReporter extends Logging {
+
+}
+
 private class KafkaCSVMetricsReporter extends KafkaMetricsReporter
-                              with KafkaCSVMetricsReporterMBean
-                              with Logging {
+                              with KafkaCSVMetricsReporterMBean {
 
   private var csvDir: File = null
   private var underlying: CsvReporter = null

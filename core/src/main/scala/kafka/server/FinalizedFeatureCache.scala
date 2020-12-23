@@ -34,6 +34,10 @@ case class FinalizedFeaturesAndEpoch(features: Features[FinalizedVersionRange], 
   }
 }
 
+object FinalizedFeatureCache extends Logging {
+
+}
+
 /**
  * A common mutable cache containing the latest finalized features and epoch. By default the contents of
  * the cache are empty. This cache needs to be populated at least once for its contents to become
@@ -44,7 +48,8 @@ case class FinalizedFeaturesAndEpoch(features: Features[FinalizedVersionRange], 
  *
  * @see FinalizedFeatureChangeListener
  */
-class FinalizedFeatureCache(private val brokerFeatures: BrokerFeatures) extends Logging {
+class FinalizedFeatureCache(private val brokerFeatures: BrokerFeatures) {
+  import FinalizedFeatureCache._
   @volatile private var featuresAndEpoch: Option[FinalizedFeaturesAndEpoch] = Option.empty
 
   /**

@@ -103,14 +103,18 @@ object AlterIsrManager {
 
 }
 
+object DefaultAlterIsrManager extends Logging {
+
+}
+
 class DefaultAlterIsrManager(
   val controllerChannelManager: BrokerToControllerChannelManager,
   val scheduler: Scheduler,
   val time: Time,
   val brokerId: Int,
   val brokerEpochSupplier: () => Long
-) extends AlterIsrManager with Logging with KafkaMetricsGroup {
-
+) extends AlterIsrManager with KafkaMetricsGroup {
+  import DefaultAlterIsrManager._
   // Used to allow only one pending ISR update per partition (visible for testing)
   private[server] val unsentIsrUpdates: util.Map[TopicPartition, AlterIsrItem] = new ConcurrentHashMap[TopicPartition, AlterIsrItem]()
 

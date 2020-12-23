@@ -31,6 +31,10 @@ import org.apache.kafka.common.utils.Time
 
 import scala.jdk.CollectionConverters._
 
+object TestRaftRequestHandler extends Logging {
+
+}
+
 /**
  * Simple request handler implementation for use by [[TestRaftServer]].
  */
@@ -38,7 +42,9 @@ class TestRaftRequestHandler(
   raftManager: RaftManager[_],
   requestChannel: RequestChannel,
   time: Time,
-) extends ApiRequestHandler with Logging {
+) extends ApiRequestHandler {
+
+  import TestRaftRequestHandler._
 
   override def handle(request: RequestChannel.Request): Unit = {
     try {

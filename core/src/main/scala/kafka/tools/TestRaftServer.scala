@@ -47,7 +47,7 @@ class TestRaftServer(
   val config: KafkaConfig,
   val throughput: Int,
   val recordSize: Int
-) extends Logging {
+)  {
   import kafka.tools.TestRaftServer._
 
   private val partition = new TopicPartition("__cluster_metadata", 0)
@@ -251,7 +251,6 @@ class TestRaftServer(
 }
 
 object TestRaftServer extends Logging {
-
   case class PendingAppend(
     offset: Long,
     appendTimeMs: Long

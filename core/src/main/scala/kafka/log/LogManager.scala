@@ -63,7 +63,7 @@ class LogManager(logDirs: Seq[File],
                  val brokerState: BrokerState,
                  brokerTopicStats: BrokerTopicStats,
                  logDirFailureChannel: LogDirFailureChannel,
-                 time: Time) extends Logging with KafkaMetricsGroup {
+                 time: Time) extends KafkaMetricsGroup {
 
   import LogManager._
 
@@ -223,7 +223,7 @@ class LogManager(logDirs: Seq[File],
 
       warn(s"Logs for partitions ${offlineCurrentTopicPartitions.mkString(",")} are offline and " +
            s"logs for future partitions ${offlineFutureTopicPartitions.mkString(",")} are offline due to failure on log directory $dir")
-      dirLocks.filter(_.file.getParent == dir).foreach(dir => CoreUtils.swallow(dir.destroy(), this))
+      dirLocks.filter(_.file.getParent == dir).foreach(dir => CoreUtils.swallow(dir.destroy(), LogManager))
     }
   }
 
@@ -452,7 +452,7 @@ class LogManager(logDirs: Seq[File],
 
     // stop the cleaner first
     if (cleaner != null) {
-      CoreUtils.swallow(cleaner.shutdown(), this)
+      CoreUtils.swallow(cleaner.shutdown(), LogManager)
     }
 
     val localLogsByDir = logsByDir
@@ -1158,7 +1158,7 @@ class LogManager(logDirs: Seq[File],
   }
 }
 
-object LogManager {
+object LogManager extends Logging {
 
   /**
    * Wait all jobs to complete

@@ -1829,7 +1829,12 @@ class KafkaZkClient private[zk] (zooKeeperClient: ZooKeeperClient, isSecure: Boo
     currentZooKeeperSessionId = newSessionId
   }
 
-  private class CheckedEphemeral(path: String, data: Array[Byte]) extends Logging {
+  object CheckedEphemeral extends Logging {
+
+  }
+
+  private class CheckedEphemeral(path: String, data: Array[Byte]) {
+    import CheckedEphemeral._
     def create(): Stat = {
       val response = retryRequestUntilConnected(
         MultiRequest(Seq(

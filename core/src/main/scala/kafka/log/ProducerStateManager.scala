@@ -162,6 +162,10 @@ private[log] class ProducerStateEntry(val producerId: Long,
   }
 }
 
+object ProducerAppendInfo extends Logging {
+
+}
+
 /**
  * This class is used to validate the records appended by a given producer before they are written to the log.
  * It is initialized with the producer's state after the last successful append, and transitively validates the
@@ -181,8 +185,9 @@ private[log] class ProducerStateEntry(val producerId: Long,
 private[log] class ProducerAppendInfo(val topicPartition: TopicPartition,
                                       val producerId: Long,
                                       val currentEntry: ProducerStateEntry,
-                                      val origin: AppendOrigin) extends Logging {
+                                      val origin: AppendOrigin) {
 
+  import ProducerAppendInfo._
   private val transactions = ListBuffer.empty[TxnMetadata]
   private val updatedEntry = ProducerStateEntry.empty(producerId)
 

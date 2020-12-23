@@ -32,7 +32,13 @@ import org.apache.zookeeper.KeeperException.Code
 
 import scala.collection.{Map, Seq, mutable}
 
-abstract class PartitionStateMachine(controllerContext: ControllerContext) extends Logging {
+object PartitionStateMachine extends Logging {
+
+}
+
+abstract class PartitionStateMachine(controllerContext: ControllerContext) extends {
+  import PartitionStateMachine._
+
   /**
    * Invoked on successful controller election.
    */
@@ -132,6 +138,7 @@ class ZkPartitionStateMachine(config: KafkaConfig,
                               controllerBrokerRequestBatch: ControllerBrokerRequestBatch)
   extends PartitionStateMachine(controllerContext) {
 
+  import PartitionStateMachine._
   private val controllerId = config.brokerId
   protected implicit val logIdent = Some(LogIdent(s"[PartitionStateMachine controllerId=$controllerId] "))
 
@@ -342,7 +349,7 @@ class ZkPartitionStateMachine(config: KafkaConfig,
       finishedElections ++= finished
 
       if (remaining.nonEmpty)
-        logger.info(s"Retrying leader election with strategy $partitionLeaderElectionStrategy for partitions $remaining")
+        info(s"Retrying leader election with strategy $partitionLeaderElectionStrategy for partitions $remaining")
     }
 
     finishedElections.toMap
