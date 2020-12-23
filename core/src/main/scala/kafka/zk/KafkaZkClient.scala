@@ -51,8 +51,8 @@ import scala.collection.{Map, Seq, mutable}
  * easier to migrate away from `ZkUtils` (since removed). We should revisit this. We should also consider whether a
  * monolithic [[kafka.zk.ZkData]] is the way to go.
  */
-class KafkaZkClient private[zk] (zooKeeperClient: ZooKeeperClient, isSecure: Boolean, time: Time) extends AutoCloseable with
-  Logging with KafkaMetricsGroup {
+class KafkaZkClient private[zk] (zooKeeperClient: ZooKeeperClient, isSecure: Boolean, time: Time) extends AutoCloseable
+  with KafkaMetricsGroup {
 
   override def metricName(name: String, metricTags: scala.collection.Map[String, String]): MetricName = {
     explicitMetricName("kafka.server", "ZooKeeperClientMetrics", name, metricTags)
@@ -887,7 +887,7 @@ class KafkaZkClient private[zk] (zooKeeperClient: ZooKeeperClient, isSecure: Boo
       case Code.OK =>
         ReassignPartitionsZNode.decode(getDataResponse.data) match {
           case Left(e) =>
-            logger.warn(s"Ignoring partition reassignment due to invalid json: ${e.getMessage}", e)
+            warn(s"Ignoring partition reassignment due to invalid json: ${e.getMessage}", e)
             Map.empty[TopicPartition, Seq[Int]]
           case Right(assignments) => assignments
         }
@@ -1917,7 +1917,7 @@ class KafkaZkClient private[zk] (zooKeeperClient: ZooKeeperClient, isSecure: Boo
   }
 }
 
-object KafkaZkClient {
+object KafkaZkClient extends Logging {
 
   /**
    * @param finishedPartitions Partitions that finished either in successfully

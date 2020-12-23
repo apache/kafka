@@ -33,10 +33,13 @@ trait CheckpointFileFormatter[T]{
   def fromLine(line: String): Option[T]
 }
 
+object CheckpointReadBuffer {
+
+}
 class CheckpointReadBuffer[T](location: String,
                               reader: BufferedReader,
                               version: Int,
-                              formatter: CheckpointFileFormatter[T]) extends Logging {
+                              formatter: CheckpointFileFormatter[T]) {
   def read(): Seq[T] = {
     def malformedLineException(line: String) =
       new IOException(s"Malformed line in checkpoint file ($location): '$line'")
@@ -75,11 +78,14 @@ class CheckpointReadBuffer[T](location: String,
   }
 }
 
+object CheckpointFile extends Logging {
+
+}
 class CheckpointFile[T](val file: File,
                         version: Int,
                         formatter: CheckpointFileFormatter[T],
                         logDirFailureChannel: LogDirFailureChannel,
-                        logDir: String) extends Logging {
+                        logDir: String) {
   private val path = file.toPath.toAbsolutePath
   private val tempPath = Paths.get(path.toString + ".tmp")
   private val lock = new Object()

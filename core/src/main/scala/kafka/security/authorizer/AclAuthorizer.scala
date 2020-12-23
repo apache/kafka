@@ -21,7 +21,6 @@ import java.util.concurrent.{CompletableFuture, CompletionStage}
 
 import com.typesafe.scalalogging.Logger
 import kafka.api.KAFKA_2_0_IV1
-import kafka.security.authorizer.AclAuthorizer.{AclSeqs, ResourceOrdering, VersionedAcls}
 import kafka.security.authorizer.AclEntry.ResourceSeparator
 import kafka.server.{KafkaConfig, KafkaServer}
 import kafka.utils._
@@ -46,7 +45,7 @@ import scala.collection.{Seq, immutable, mutable}
 import scala.jdk.CollectionConverters._
 import scala.util.{Failure, Random, Success, Try}
 
-object AclAuthorizer {
+object AclAuthorizer extends Logging {
   // Optional override zookeeper cluster configuration where acls will be stored. If not specified,
   // acls will be stored in the same zookeeper where all other kafka broker metadata is stored.
   val configPrefix = "authorizer."
@@ -120,7 +119,8 @@ object AclAuthorizer {
   }
 }
 
-class AclAuthorizer extends Authorizer with Logging {
+class AclAuthorizer extends Authorizer {
+  import AclAuthorizer._
   private[security] val authorizerLogger = Logger("kafka.authorizer.logger")
   private var superUsers = Set.empty[KafkaPrincipal]
   private var shouldAllowEveryoneIfNoAclIsFound = false

@@ -20,12 +20,17 @@ import java.io._
 import java.nio.channels._
 import java.nio.file.StandardOpenOption
 
+object FileLock extends Logging {
+
+}
+
 /**
  * A file lock a la flock/funlock
  * 
  * The given path will be created and opened if it doesn't exist.
  */
-class FileLock(val file: File) extends Logging {
+class FileLock(val file: File) {
+  import FileLock._
 
   private val channel = FileChannel.open(file.toPath, StandardOpenOption.CREATE, StandardOpenOption.READ,
     StandardOpenOption.WRITE)

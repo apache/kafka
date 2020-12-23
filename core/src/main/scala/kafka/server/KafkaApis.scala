@@ -39,7 +39,7 @@ import kafka.message.ZStdCompressionCodec
 import kafka.network.RequestChannel
 import kafka.security.authorizer.{AclEntry, AuthorizerUtils}
 import kafka.server.QuotaFactory.{QuotaManagers, UnboundedQuota}
-import kafka.utils.{CoreUtils, Logging}
+import kafka.utils.{CoreUtils, LogIdent, Logging}
 import kafka.utils.Implicits._
 import kafka.zk.{AdminZkClient, KafkaZkClient}
 import org.apache.kafka.clients.admin.{AlterConfigOp, ConfigEntry}
@@ -119,10 +119,11 @@ class KafkaApis(val requestChannel: RequestChannel,
                 time: Time,
                 val tokenManager: DelegationTokenManager,
                 val brokerFeatures: BrokerFeatures,
-                val finalizedFeatureCache: FinalizedFeatureCache) extends ApiRequestHandler with Logging {
+                val finalizedFeatureCache: FinalizedFeatureCache) extends ApiRequestHandler {
 
+  import KafkaApis._
   type FetchResponseStats = Map[TopicPartition, RecordConversionStats]
-  this.logIdent = "[KafkaApi-%d] ".format(brokerId)
+  protected implicit val logIdent = Some(LogIdent("[KafkaApi-%d] ".format(brokerId)))
   val adminZkClient = new AdminZkClient(zkClient)
   private val alterAclsPurgatory = new DelayedFuturePurgatory(purgatoryName = "AlterAcls", brokerId = config.brokerId)
 
@@ -331,7 +332,7 @@ class KafkaApis(val requestChannel: RequestChannel,
         }.toBuffer.asJava)))
     }
 
-    CoreUtils.swallow(replicaManager.replicaFetcherManager.shutdownIdleFetcherThreads(), this)
+    CoreUtils.swallow(replicaManager.replicaFetcherManager.shutdownIdleFetcherThreads(), KafkaApis)
   }
 
   def handleUpdateMetadataRequest(request: RequestChannel.Request): Unit = {
@@ -583,7 +584,6 @@ class KafkaApis(val requestChannel: RequestChannel,
     // The construction of ProduceResponse is able to accept auto-generated protocol data so
     // KafkaApis#handleProduceRequest should apply auto-generated protocol to avoid extra conversion.
     // https://issues.apache.org/jira/browse/KAFKA-10730
-    @nowarn("cat=deprecation")
     def sendResponseCallback(responseStatus: Map[TopicPartition, PartitionResponse]): Unit = {
       val mergedResponseStatus = responseStatus ++ unauthorizedTopicResponses ++ nonExistingTopicResponses ++ invalidRequestResponses
       var errorInResponse = false
@@ -3587,7 +3587,7 @@ class KafkaApis(val requestChannel: RequestChannel,
 
 }
 
-object KafkaApis {
+object KafkaApis extends Logging {
   // Traffic from both in-sync and out of sync replicas are accounted for in replication quota to ensure total replication
   // traffic doesn't exceed quota.
   private[server] def sizeOfThrottledPartitions(versionId: Short,

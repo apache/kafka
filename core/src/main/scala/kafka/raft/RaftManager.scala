@@ -20,7 +20,7 @@ import kafka.log.{Log, LogConfig, LogManager}
 import kafka.raft.KafkaRaftManager.RaftIoThread
 import kafka.server.{BrokerTopicStats, KafkaConfig, KafkaServer, LogDirFailureChannel}
 import kafka.utils.timer.SystemTimer
-import kafka.utils.{KafkaScheduler, Logging, ShutdownableThread}
+import kafka.utils.{KafkaScheduler, Logging, LogIdent, ShutdownableThread}
 import org.apache.kafka.clients.{ApiVersions, ClientDnsLookup, ManualMetadataUpdater, NetworkClient}
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.metrics.Metrics
@@ -36,13 +36,15 @@ import java.nio.file.Files
 import java.util.concurrent.CompletableFuture
 import scala.jdk.CollectionConverters._
 
-object KafkaRaftManager {
+object KafkaRaftManager extends Logging {
   class RaftIoThread(
     client: KafkaRaftClient[_]
   ) extends ShutdownableThread(
     name = "raft-io-thread",
     isInterruptible = false
   ) {
+
+    import ShutdownableThread._
     override def doWork(): Unit = {
       client.poll()
     }
@@ -100,11 +102,13 @@ class KafkaRaftManager[T](
   config: KafkaConfig,
   time: Time,
   metrics: Metrics
-) extends RaftManager[T] with Logging {
+) extends RaftManager[T]  {
+
+  import KafkaRaftManager._
 
   private val raftConfig = new RaftConfig(config.originals)
   private val logContext = new LogContext(s"[RaftManager $nodeId] ")
-  this.logIdent = logContext.logPrefix()
+  private implicit val logIdent  = Some(LogIdent(logContext.logPrefix()))
 
   private val scheduler = new KafkaScheduler(threads = 1)
   scheduler.startup()

@@ -32,10 +32,16 @@ case class BrokerMetadata(brokerId: Int,
   }
 }
 
+object BrokerMetadataCheckpoint extends Logging {
+
+}
+
 /**
   * This class saves broker's metadata to a file
   */
-class BrokerMetadataCheckpoint(val file: File) extends Logging {
+class BrokerMetadataCheckpoint(val file: File) {
+  import BrokerMetadataCheckpoint._
+
   private val lock = new Object()
 
   def write(brokerMetadata: BrokerMetadata) = {

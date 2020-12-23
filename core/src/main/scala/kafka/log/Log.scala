@@ -253,7 +253,7 @@ class Log(@volatile private var _dir: File,
 
   import kafka.log.Log._
 
-  this.logIdent = s"[Log partition=$topicPartition, dir=${dir.getParent}] "
+  protected implicit val logIdent = Some(LogIdent(s"[Log partition=$topicPartition, dir=${dir.getParent}] "))
 
   /* A lock that guards all modifications to the log */
   private val lock = new Object

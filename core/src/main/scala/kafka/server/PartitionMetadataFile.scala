@@ -43,9 +43,13 @@ object PartitionMetadataFile {
 
   }
 
+  object PartitionMetadataReadBuffer extends Logging {
+
+  }
+
   class PartitionMetadataReadBuffer[T](location: String,
                                        reader: BufferedReader,
-                                       version: Int) extends Logging {
+                                       version: Int) {
     def read(): PartitionMetadata = {
       def malformedLineException(line: String) =
         new IOException(s"Malformed line in checkpoint file ($location): '$line'")

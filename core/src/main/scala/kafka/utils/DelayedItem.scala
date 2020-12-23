@@ -23,7 +23,7 @@ import org.apache.kafka.common.utils.Time
 
 import scala.math._
 
-class DelayedItem(val delayMs: Long) extends Delayed with Logging {
+class DelayedItem(val delayMs: Long) extends Delayed {
 
   private val dueMs = Time.SYSTEM.milliseconds + delayMs
 

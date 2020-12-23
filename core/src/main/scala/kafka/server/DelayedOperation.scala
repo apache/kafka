@@ -29,6 +29,9 @@ import kafka.utils.timer._
 import scala.collection._
 import scala.collection.mutable.ListBuffer
 
+object DelayedOperation extends Logging {
+
+}
 /**
  * An operation whose processing needs to be delayed for at most the given delayMs. For example
  * a delayed produce operation could be waiting for specified number of acks; or
@@ -47,8 +50,7 @@ import scala.collection.mutable.ListBuffer
  */
 abstract class DelayedOperation(override val delayMs: Long,
                                 lockOpt: Option[Lock] = None)
-  extends TimerTask with Logging {
-
+  extends TimerTask {
   private val completed = new AtomicBoolean(false)
   // Visible for testing
   private[server] val lock: Lock = lockOpt.getOrElse(new ReentrantLock)

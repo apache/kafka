@@ -20,7 +20,7 @@ import java.util.Properties
 import java.util.concurrent.atomic.AtomicBoolean
 
 import kafka.server.{KafkaConfig, MetadataCache, ReplicaManager}
-import kafka.utils.{Logging, Scheduler}
+import kafka.utils.{Logging, LogIdent, Scheduler}
 import kafka.zk.KafkaZkClient
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.internals.Topic
@@ -30,7 +30,7 @@ import org.apache.kafka.common.record.RecordBatch
 import org.apache.kafka.common.requests.TransactionResult
 import org.apache.kafka.common.utils.{LogContext, ProducerIdAndEpoch, Time}
 
-object TransactionCoordinator {
+object TransactionCoordinator extends Logging {
 
   def apply(config: KafkaConfig,
             replicaManager: ReplicaManager,
@@ -87,10 +87,9 @@ class TransactionCoordinator(brokerId: Int,
                              txnManager: TransactionStateManager,
                              txnMarkerChannelManager: TransactionMarkerChannelManager,
                              time: Time,
-                             logContext: LogContext) extends Logging {
-  this.logIdent = logContext.logPrefix
-
+                             logContext: LogContext) {
   import TransactionCoordinator._
+  protected implicit val logIdent = Some(LogIdent(logContext.logPrefix))
 
   type InitProducerIdCallback = InitProducerIdResult => Unit
   type AddPartitionsCallback = Errors => Unit

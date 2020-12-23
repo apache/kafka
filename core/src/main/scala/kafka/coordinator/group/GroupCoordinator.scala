@@ -18,12 +18,11 @@ package kafka.coordinator.group
 
 import java.util.Properties
 import java.util.concurrent.atomic.AtomicBoolean
-
 import kafka.common.OffsetAndMetadata
 import kafka.log.LogConfig
 import kafka.message.ProducerCompressionCodec
 import kafka.server._
-import kafka.utils.Logging
+import kafka.utils.{LogIdent, Logging}
 import kafka.zk.KafkaZkClient
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.internals.Topic
@@ -57,7 +56,7 @@ class GroupCoordinator(val brokerId: Int,
                        val heartbeatPurgatory: DelayedOperationPurgatory[DelayedHeartbeat],
                        val joinPurgatory: DelayedOperationPurgatory[DelayedJoin],
                        time: Time,
-                       metrics: Metrics) extends Logging {
+                       metrics: Metrics) {
   import GroupCoordinator._
 
   type JoinCallback = JoinGroupResult => Unit
@@ -84,7 +83,7 @@ class GroupCoordinator(val brokerId: Int,
       "group-coordinator-metrics",
       "The total number of completed rebalance")))
 
-  this.logIdent = "[GroupCoordinator " + brokerId + "]: "
+  protected implicit val logIdent = LogIdent("[GroupCoordinator " + brokerId + "]: ")
 
   private val isActive = new AtomicBoolean(false)
 
@@ -1311,7 +1310,7 @@ class GroupCoordinator(val brokerId: Int,
   private def isCoordinatorLoadInProgress(groupId: String) = groupManager.isGroupLoading(groupId)
 }
 
-object GroupCoordinator {
+object GroupCoordinator extends Logging {
 
   val NoState = ""
   val NoProtocolType = ""

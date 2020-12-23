@@ -181,6 +181,7 @@ case class CommitRecordMetadataAndOffset(appendedBatchOffset: Option[Long], offs
   def olderThan(that: CommitRecordMetadataAndOffset): Boolean = appendedBatchOffset.get < that.appendedBatchOffset.get
 }
 
+
 /**
  * Group contains the following metadata:
  *
@@ -195,7 +196,9 @@ case class CommitRecordMetadataAndOffset(appendedBatchOffset: Option[Long], offs
  *  3. leader id
  */
 @nonthreadsafe
-private[group] class GroupMetadata(val groupId: String, initialState: GroupState, time: Time) extends Logging {
+private[group] class GroupMetadata(val groupId: String, initialState: GroupState, time: Time) {
+  import GroupMetadata._
+
   type JoinCallback = JoinGroupResult => Unit
 
   private[group] val lock = new ReentrantLock

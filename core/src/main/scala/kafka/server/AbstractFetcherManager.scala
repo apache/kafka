@@ -20,21 +20,26 @@ package kafka.server
 import kafka.cluster.BrokerEndPoint
 import kafka.metrics.KafkaMetricsGroup
 import kafka.utils.Implicits._
-import kafka.utils.Logging
+import kafka.utils.{LogIdent, Logging}
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.utils.Utils
 
 import scala.collection.{Map, Set, mutable}
 
+object AbstractFetcherManager extends Logging {
+
+}
+
 abstract class AbstractFetcherManager[T <: AbstractFetcherThread](val name: String, clientId: String, numFetchers: Int)
-  extends Logging with KafkaMetricsGroup {
+  extends KafkaMetricsGroup {
+  import AbstractFetcherManager._
   // map of (source broker_id, fetcher_id per source broker) => fetcher.
   // package private for test
   private[server] val fetcherThreadMap = new mutable.HashMap[BrokerIdAndFetcherId, T]
   private val lock = new Object
   private var numFetchersPerBroker = numFetchers
   val failedPartitions = new FailedPartitions
-  this.logIdent = "[" + name + "] "
+  protected implicit val logIdent = Some(LogIdent("[" + name + "] "))
 
   private val tags = Map("clientId" -> clientId)
 

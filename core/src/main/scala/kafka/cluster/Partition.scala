@@ -70,7 +70,8 @@ class DelayedOperations(topicPartition: TopicPartition,
   def numDelayedDelete: Int = deleteRecords.numDelayed
 }
 
-object Partition extends KafkaMetricsGroup {
+
+object Partition extends Logging with KafkaMetricsGroup {
   def apply(topicPartition: TopicPartition,
             time: Time,
             replicaManager: ReplicaManager): Partition = {
@@ -204,7 +205,6 @@ case class CommittedIsr(
   }
 }
 
-
 /**
  * Data structure that represents a topic partition. The leader maintains the AR, ISR, CUR, RAR
  *
@@ -233,7 +233,9 @@ class Partition(val topicPartition: TopicPartition,
                 delayedOperations: DelayedOperations,
                 metadataCache: MetadataCache,
                 logManager: LogManager,
-                alterIsrManager: AlterIsrManager) extends Logging with KafkaMetricsGroup {
+                alterIsrManager: AlterIsrManager) extends KafkaMetricsGroup {
+
+  import Partition._
 
   def topic: String = topicPartition.topic
   def partitionId: Int = topicPartition.partition
@@ -268,7 +270,7 @@ class Partition(val topicPartition: TopicPartition,
    * In addition to the leader, the controller can also send the epoch of the controller that elected the leader for
    * each partition. */
   private var controllerEpoch: Int = KafkaController.InitialControllerEpoch
-  this.logIdent = s"[Partition $topicPartition broker=$localBrokerId] "
+  protected implicit val logIdent = Some(LogIdent(s"[Partition $topicPartition broker=$localBrokerId] "))
 
   private val tags = Map("topic" -> topic, "partition" -> partitionId.toString)
 

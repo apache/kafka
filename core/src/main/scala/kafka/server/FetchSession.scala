@@ -271,7 +271,13 @@ class FetchSession(val id: Int,
   }
 }
 
-trait FetchContext extends Logging {
+object FetchContext extends Logging {
+
+}
+
+trait FetchContext {
+  import FetchContext._
+
   /**
     * Get the fetch offset for a given partition.
     */
@@ -309,6 +315,8 @@ trait FetchContext extends Logging {
   */
 class SessionErrorContext(val error: Errors,
                           val reqMetadata: JFetchMetadata) extends FetchContext {
+  import FetchContext._
+
   override def getFetchOffset(part: TopicPartition): Option[Long] = None
 
   override def foreachPartition(fun: (TopicPartition, FetchRequest.PartitionData) => Unit): Unit = {}
@@ -330,6 +338,8 @@ class SessionErrorContext(val error: Errors,
   * @param fetchData          The partition data from the fetch request.
   */
 class SessionlessFetchContext(val fetchData: util.Map[TopicPartition, FetchRequest.PartitionData]) extends FetchContext {
+  import FetchContext._
+
   override def getFetchOffset(part: TopicPartition): Option[Long] =
     Option(fetchData.get(part)).map(_.fetchOffset)
 
@@ -361,6 +371,8 @@ class FullFetchContext(private val time: Time,
                        private val reqMetadata: JFetchMetadata,
                        private val fetchData: util.Map[TopicPartition, FetchRequest.PartitionData],
                        private val isFromFollower: Boolean) extends FetchContext {
+  import FetchContext._
+
   override def getFetchOffset(part: TopicPartition): Option[Long] =
     Option(fetchData.get(part)).map(_.fetchOffset)
 
@@ -399,6 +411,8 @@ class FullFetchContext(private val time: Time,
 class IncrementalFetchContext(private val time: Time,
                               private val reqMetadata: JFetchMetadata,
                               private val session: FetchSession) extends FetchContext {
+
+  import FetchContext._
 
   override def getFetchOffset(tp: TopicPartition): Option[Long] = session.getFetchOffset(tp)
 
@@ -511,6 +525,10 @@ case class EvictableKey(privileged: Boolean, size: Int, id: Int) extends Compara
     (privileged, size, id) compare (other.privileged, other.size, other.id)
 }
 
+object FetchSessionCache extends Logging {
+
+}
+
 /**
   * Caches fetch sessions.
   *
@@ -525,7 +543,10 @@ case class EvictableKey(privileged: Boolean, size: Int, id: Int) extends Compara
   * @param evictionMs The minimum time that an entry must be unused in order to be evictable.
   */
 class FetchSessionCache(private val maxEntries: Int,
-                        private val evictionMs: Long) extends Logging with KafkaMetricsGroup {
+                        private val evictionMs: Long) extends KafkaMetricsGroup {
+
+  import FetchSessionCache._
+
   private var numPartitions: Long = 0
 
   // A map of session ID to FetchSession.
@@ -723,8 +744,13 @@ class FetchSessionCache(private val maxEntries: Int,
   }
 }
 
+object FetchManager extends Logging {
+
+}
 class FetchManager(private val time: Time,
-                   private val cache: FetchSessionCache) extends Logging {
+                   private val cache: FetchSessionCache) {
+  import FetchManager._
+
   def newContext(reqMetadata: JFetchMetadata,
                  fetchData: FetchSession.REQ_MAP,
                  toForget: util.List[TopicPartition],

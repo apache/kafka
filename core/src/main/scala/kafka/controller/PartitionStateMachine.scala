@@ -21,7 +21,7 @@ import kafka.common.StateChangeFailedException
 import kafka.controller.Election._
 import kafka.server.KafkaConfig
 import kafka.utils.Implicits._
-import kafka.utils.Logging
+import kafka.utils.{LogIdent, Logging}
 import kafka.zk.KafkaZkClient
 import kafka.zk.KafkaZkClient.UpdateLeaderAndIsrResult
 import kafka.zk.TopicPartitionStateZNode
@@ -29,6 +29,7 @@ import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.errors.ControllerMovedException
 import org.apache.zookeeper.KeeperException
 import org.apache.zookeeper.KeeperException.Code
+
 import scala.collection.{Map, Seq, mutable}
 
 abstract class PartitionStateMachine(controllerContext: ControllerContext) extends Logging {
@@ -132,7 +133,7 @@ class ZkPartitionStateMachine(config: KafkaConfig,
   extends PartitionStateMachine(controllerContext) {
 
   private val controllerId = config.brokerId
-  this.logIdent = s"[PartitionStateMachine controllerId=$controllerId] "
+  protected implicit val logIdent = Some(LogIdent(s"[PartitionStateMachine controllerId=$controllerId] "))
 
   /**
    * Try to change the state of the given partitions to the given targetState, using the given

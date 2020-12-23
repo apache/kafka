@@ -38,46 +38,42 @@ private object Logging {
   private val FatalMarker: Marker = MarkerFactory.getMarker("FATAL")
 }
 
+/** Used as an implicit parameter to format log messages */
+case class LogIdent(prefix : String)
+
 trait Logging {
 
   protected lazy val logger = Logger(LoggerFactory.getLogger(loggerName))
-
-  protected var logIdent: String = _
 
   Log4jControllerRegistration
 
   protected def loggerName: String = getClass.getName
 
-  protected def msgWithLogIdent(msg: String): String =
-    if (logIdent == null) msg else logIdent + msg
+  protected def msgWithLogIdent(msg: String)(implicit logIndent : Option[LogIdent]): String =
+    logIndent match {
+      case None => msg
+      case Some(LogIdent(prefix)) => prefix + msg
+    }
 
-  def trace(msg: => String): Unit = logger.trace(msgWithLogIdent(msg))
-
-  def trace(msg: => String, e: => Throwable): Unit = logger.trace(msgWithLogIdent(msg),e)
+  def trace(msg: => String, e: => Throwable = null)(implicit logIndent : Option[LogIdent] = None): Unit =
+    if (e == null) logger.trace(msgWithLogIdent(msg)) else logger.trace(msgWithLogIdent(msg),e)
 
   def isDebugEnabled: Boolean = logger.underlying.isDebugEnabled
 
   def isTraceEnabled: Boolean = logger.underlying.isTraceEnabled
 
-  def debug(msg: => String): Unit = logger.debug(msgWithLogIdent(msg))
+  def debug(msg: => String, e: => Throwable = null)(implicit logIndent : Option[LogIdent] = None): Unit =
+    if (e == null) logger.debug(msgWithLogIdent(msg)) else logger.debug(msgWithLogIdent(msg), e)
 
-  def debug(msg: => String, e: => Throwable): Unit = logger.debug(msgWithLogIdent(msg),e)
+  def info(msg: => String, e: => Throwable = null)(implicit logIndent : Option[LogIdent] = None): Unit =
+    if (e == null) logger.info(msgWithLogIdent(msg)) else logger.info(msgWithLogIdent(msg), e)
 
-  def info(msg: => String): Unit = logger.info(msgWithLogIdent(msg))
+  def warn(msg: => String, e: => Throwable = null)(implicit logIndent : Option[LogIdent] = None): Unit =
+    if (e == null) logger.warn(msgWithLogIdent(msg)) else logger.warn(msgWithLogIdent(msg),e)
 
-  def info(msg: => String,e: => Throwable): Unit = logger.info(msgWithLogIdent(msg),e)
+  def error(msg: => String, e: => Throwable = null)(implicit logIndent : Option[LogIdent] = None): Unit =
+    if (e == null) logger.error(msgWithLogIdent(msg)) else logger.error(msgWithLogIdent(msg),e)
 
-  def warn(msg: => String): Unit = logger.warn(msgWithLogIdent(msg))
-
-  def warn(msg: => String, e: => Throwable): Unit = logger.warn(msgWithLogIdent(msg),e)
-
-  def error(msg: => String): Unit = logger.error(msgWithLogIdent(msg))
-
-  def error(msg: => String, e: => Throwable): Unit = logger.error(msgWithLogIdent(msg),e)
-
-  def fatal(msg: => String): Unit =
-    logger.error(Logging.FatalMarker, msgWithLogIdent(msg))
-
-  def fatal(msg: => String, e: => Throwable): Unit =
-    logger.error(Logging.FatalMarker, msgWithLogIdent(msg), e)
+  def fatal(msg: => String, e: => Throwable = null)(implicit logIndent : Option[LogIdent] = None): Unit =
+    if (e == null) logger.error(Logging.FatalMarker, msgWithLogIdent(msg)) else logger.error(Logging.FatalMarker, msgWithLogIdent(msg), e)
 }
