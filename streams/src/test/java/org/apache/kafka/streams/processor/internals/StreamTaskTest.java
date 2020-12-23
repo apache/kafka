@@ -494,7 +494,9 @@ public class StreamTaskTest {
 
         // e2e latency = 10
         task.addRecords(partition1, singletonList(getConsumerRecord(0, 0L)));
-        task.process(10L);
+        time = new MockTime(0L, 10L, 0L);
+        task.setTime(time);
+        task.process(time.milliseconds());
 
         assertThat(sourceAvg.metricValue(), equalTo(10.0));
         assertThat(sourceMin.metricValue(), equalTo(10.0));
@@ -507,8 +509,10 @@ public class StreamTaskTest {
 
 
         // e2e latency = 15
+        time = new MockTime(0L, 15L, 0L);
+        task.setTime(time);
         task.addRecords(partition1, singletonList(getConsumerRecord(1, 0L)));
-        task.process(15L);
+        task.process(time.milliseconds());
 
         assertThat(sourceAvg.metricValue(), equalTo(12.5));
         assertThat(sourceMin.metricValue(), equalTo(10.0));
@@ -521,8 +525,10 @@ public class StreamTaskTest {
 
 
         // e2e latency = 23
+        time = new MockTime(0L, 23L, 0L);
+        task.setTime(time);
         task.addRecords(partition1, singletonList(getConsumerRecord(2, 0L)));
-        task.process(23L);
+        task.process(time.milliseconds());
 
         assertThat(sourceAvg.metricValue(), equalTo(16.0));
         assertThat(sourceMin.metricValue(), equalTo(10.0));
@@ -535,8 +541,10 @@ public class StreamTaskTest {
 
 
         // e2e latency = 5
+        time = new MockTime(0L, 5L, 0L);
+        task.setTime(time);
         task.addRecords(partition1, singletonList(getConsumerRecord(3, 0L)));
-        task.process(5L);
+        task.process(time.milliseconds());
 
         assertThat(sourceAvg.metricValue(), equalTo(13.25));
         assertThat(sourceMin.metricValue(), equalTo(5.0));
