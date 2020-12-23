@@ -374,7 +374,7 @@ public final class RaftClientTestContext {
         TestUtils.waitForCondition(() -> {
             client.poll();
             return condition.conditionMet();
-        }, 500000000, "Condition failed to be satisfied before timeout");
+        }, 5000, "Condition failed to be satisfied before timeout");
     }
 
     void pollUntilResponse() throws InterruptedException {

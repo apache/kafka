@@ -360,9 +360,6 @@ final public class KafkaRaftClientSnapshotTest {
             .withElectedLeader(epoch, leaderId)
             .build();
 
-        context.time.sleep(1);
-        slept += 1;
-
         context.pollUntilRequest();
         RaftRequest.Outbound fetchRequest = context.assertSentFetchRequest();
         context.assertFetchRequestData(fetchRequest, epoch, 0L, 0);
@@ -373,8 +370,12 @@ final public class KafkaRaftClientSnapshotTest {
             snapshotFetchResponse(context.metadataPartition, epoch, leaderId, invalidEpoch, 200L)
         );
 
-        context.time.sleep(1);
-        slept += 1;
+        // Handle the invalid response
+        context.client.poll();
+
+        // Expect another fetch request after backoff has expired
+        context.time.sleep(context.retryBackoffMs);
+        slept += context.retryBackoffMs;
 
         context.pollUntilRequest();
         fetchRequest = context.assertSentFetchRequest();
@@ -386,8 +387,12 @@ final public class KafkaRaftClientSnapshotTest {
             snapshotFetchResponse(context.metadataPartition, epoch, leaderId, invalidEndOffset, 200L)
         );
 
-        context.time.sleep(1);
-        slept += 1;
+        // Handle the invalid response
+        context.client.poll();
+
+        // Expect another fetch request after backoff has expired
+        context.time.sleep(context.retryBackoffMs);
+        slept += context.retryBackoffMs;
 
         context.pollUntilRequest();
         fetchRequest = context.assertSentFetchRequest();

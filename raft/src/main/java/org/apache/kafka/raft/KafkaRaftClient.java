@@ -1071,14 +1071,14 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
                         partitionResponse.snapshotId().endOffset(),
                         partitionResponse.snapshotId().epoch()
                     );
-                    return true;
+                    return false;
                 } else if (partitionResponse.snapshotId().endOffset() < 0) {
                     logger.error(
                         "The leader sent a snapshot id with a valid epoch {} but with an invalid end offset {}",
                         partitionResponse.snapshotId().epoch(),
                         partitionResponse.snapshotId().endOffset()
                     );
-                    return true;
+                    return false;
                 } else {
                     OffsetAndEpoch snapshotId = new OffsetAndEpoch(
                         partitionResponse.snapshotId().endOffset(),
@@ -1609,7 +1609,9 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
         ConnectionState connection = requestManager.getOrCreate(destinationId);
 
         if (connection.isBackingOff(currentTimeMs)) {
-            return connection.remainingBackoffMs(currentTimeMs);
+            long remainingBackoffMs = connection.remainingBackoffMs(currentTimeMs);
+            logger.debug("Connection for {} is backing off for {} ms", destinationId, remainingBackoffMs);
+            return remainingBackoffMs;
         }
 
         if (connection.isReady(currentTimeMs)) {
