@@ -73,7 +73,7 @@ public final class LsCommandHandler implements Command.Handler {
         System.out.println("LS : targetFiles = " + targetFiles + ", targetDirectories = " + targetDirectories + ", screenWidth = " + screenWidth);
         printEntries(writer, "", screenWidth, targetFiles);
         boolean needIntro = targetFiles.size() > 0 || targetDirectories.size() > 1;
-        boolean firstIntro = true;
+        boolean firstIntro = targetFiles.isEmpty();
         for (TargetDirectory targetDirectory : targetDirectories) {
             String intro = "";
             if (needIntro) {
