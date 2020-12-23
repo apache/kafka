@@ -139,7 +139,7 @@ public class EosBetaUpgradeIntegrationTest {
     private final static String MULTI_PARTITION_OUTPUT_TOPIC = "multiPartitionOutputTopic";
     private final static String APP_DIR_1 = "appDir1";
     private final static String APP_DIR_2 = "appDir2";
-    private final static String UNEXPECTED_EXCEPTION_MSG = "Fail the test since we got an unexpected exception or" +
+    private final static String UNEXPECTED_EXCEPTION_MSG = "Fail the test since we got an unexpected exception or " +
         "there are too many exceptions thrown, please check standard error log for more info.";
     private final String storeName = "store";
 
@@ -155,7 +155,6 @@ public class EosBetaUpgradeIntegrationTest {
     private final AtomicInteger commitRequested = new AtomicInteger(0);
 
     private int testNumber = 0;
-    private boolean hasUnexpectedError = false;
     private Map<String, Integer> exceptionCounts = new HashMap<String, Integer>() {
         {
             put(APP_DIR_1, 0);
@@ -164,6 +163,8 @@ public class EosBetaUpgradeIntegrationTest {
     };
     private int prevNumAssignments = 0;
     private int expectedNumAssignments = 0;
+
+    private volatile boolean hasUnexpectedError = false;
 
     @Before
     public void createTopics() throws Exception {
