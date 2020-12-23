@@ -363,7 +363,7 @@ final public class KafkaRaftClientSnapshotTest {
         context.time.sleep(1);
         slept += 1;
 
-        context.pollUntilSend();
+        context.pollUntilRequest();
         RaftRequest.Outbound fetchRequest = context.assertSentFetchRequest();
         context.assertFetchRequestData(fetchRequest, epoch, 0L, 0);
 
@@ -376,7 +376,7 @@ final public class KafkaRaftClientSnapshotTest {
         context.time.sleep(1);
         slept += 1;
 
-        context.pollUntilSend();
+        context.pollUntilRequest();
         fetchRequest = context.assertSentFetchRequest();
         context.assertFetchRequestData(fetchRequest, epoch, 0L, 0);
 
@@ -389,16 +389,16 @@ final public class KafkaRaftClientSnapshotTest {
         context.time.sleep(1);
         slept += 1;
 
-        context.pollUntilSend();
+        context.pollUntilRequest();
         fetchRequest = context.assertSentFetchRequest();
         context.assertFetchRequestData(fetchRequest, epoch, 0L, 0);
 
         // Fetch timer is not reset; sleeping for remainder should transition to candidate
         context.time.sleep(context.fetchTimeoutMs - slept);
 
-        context.pollUntilSend();
+        context.pollUntilRequest();
 
-        context.assertSentVoteRequest(epoch + 1, 0, 0L);
+        context.assertSentVoteRequest(epoch + 1, 0, 0L, 1);
         context.assertVotedCandidate(epoch + 1, context.localId);
     }
 
@@ -414,7 +414,7 @@ final public class KafkaRaftClientSnapshotTest {
             .withElectedLeader(epoch, leaderId)
             .build();
 
-        context.pollUntilSend();
+        context.pollUntilRequest();
         RaftRequest.Outbound fetchRequest = context.assertSentFetchRequest();
         context.assertFetchRequestData(fetchRequest, epoch, 0L, 0);
 
@@ -424,7 +424,7 @@ final public class KafkaRaftClientSnapshotTest {
             snapshotFetchResponse(context.metadataPartition, epoch, leaderId, snapshotId, 200L)
         );
 
-        context.pollUntilSend();
+        context.pollUntilRequest();
         RaftRequest.Outbound snapshotRequest = context.assertSentFetchSnapshotRequest();
         FetchSnapshotRequestData.PartitionSnapshot request = assertFetchSnapshotRequest(
                 snapshotRequest,
@@ -457,7 +457,7 @@ final public class KafkaRaftClientSnapshotTest {
             )
         );
 
-        context.pollUntilSend();
+        context.pollUntilRequest();
 
         try (RawSnapshotReader snapshot = context.log.readSnapshot(snapshotId).get()) {
             assertEquals(memorySnapshot.buffer().remaining(), snapshot.sizeInBytes());
@@ -477,7 +477,7 @@ final public class KafkaRaftClientSnapshotTest {
             .withElectedLeader(epoch, leaderId)
             .build();
 
-        context.pollUntilSend();
+        context.pollUntilRequest();
         RaftRequest.Outbound fetchRequest = context.assertSentFetchRequest();
         context.assertFetchRequestData(fetchRequest, epoch, 0L, 0);
 
@@ -487,7 +487,7 @@ final public class KafkaRaftClientSnapshotTest {
             snapshotFetchResponse(context.metadataPartition, epoch, leaderId, snapshotId, 200L)
         );
 
-        context.pollUntilSend();
+        context.pollUntilRequest();
         RaftRequest.Outbound snapshotRequest = context.assertSentFetchSnapshotRequest();
         FetchSnapshotRequestData.PartitionSnapshot request = assertFetchSnapshotRequest(
                 snapshotRequest,
@@ -523,7 +523,7 @@ final public class KafkaRaftClientSnapshotTest {
             )
         );
 
-        context.pollUntilSend();
+        context.pollUntilRequest();
         snapshotRequest = context.assertSentFetchSnapshotRequest();
         request = assertFetchSnapshotRequest(
                 snapshotRequest,
@@ -552,7 +552,7 @@ final public class KafkaRaftClientSnapshotTest {
             )
         );
 
-        context.pollUntilSend();
+        context.pollUntilRequest();
 
         try (RawSnapshotReader snapshot = context.log.readSnapshot(snapshotId).get()) {
             assertEquals(memorySnapshot.buffer().remaining(), snapshot.sizeInBytes());
@@ -572,7 +572,7 @@ final public class KafkaRaftClientSnapshotTest {
             .withElectedLeader(epoch, leaderId)
             .build();
 
-        context.pollUntilSend();
+        context.pollUntilRequest();
         RaftRequest.Outbound fetchRequest = context.assertSentFetchRequest();
         context.assertFetchRequestData(fetchRequest, epoch, 0L, 0);
 
@@ -582,7 +582,7 @@ final public class KafkaRaftClientSnapshotTest {
             snapshotFetchResponse(context.metadataPartition, epoch, leaderId, snapshotId, 200L)
         );
 
-        context.pollUntilSend();
+        context.pollUntilRequest();
         RaftRequest.Outbound snapshotRequest = context.assertSentFetchSnapshotRequest();
         FetchSnapshotRequestData.PartitionSnapshot request = assertFetchSnapshotRequest(
                 snapshotRequest,
@@ -612,7 +612,7 @@ final public class KafkaRaftClientSnapshotTest {
             )
         );
 
-        context.pollUntilSend();
+        context.pollUntilRequest();
         fetchRequest = context.assertSentFetchRequest();
         context.assertFetchRequestData(fetchRequest, epoch, 0L, 0);
     }
@@ -630,7 +630,7 @@ final public class KafkaRaftClientSnapshotTest {
             .withElectedLeader(epoch, firstLeaderId)
             .build();
 
-        context.pollUntilSend();
+        context.pollUntilRequest();
         RaftRequest.Outbound fetchRequest = context.assertSentFetchRequest();
         context.assertFetchRequestData(fetchRequest, epoch, 0L, 0);
 
@@ -640,7 +640,7 @@ final public class KafkaRaftClientSnapshotTest {
             snapshotFetchResponse(context.metadataPartition, epoch, firstLeaderId, snapshotId, 200L)
         );
 
-        context.pollUntilSend();
+        context.pollUntilRequest();
         RaftRequest.Outbound snapshotRequest = context.assertSentFetchSnapshotRequest();
         FetchSnapshotRequestData.PartitionSnapshot request = assertFetchSnapshotRequest(
                 snapshotRequest,
@@ -670,7 +670,7 @@ final public class KafkaRaftClientSnapshotTest {
             )
         );
 
-        context.pollUntilSend();
+        context.pollUntilRequest();
         fetchRequest = context.assertSentFetchRequest();
         context.assertFetchRequestData(fetchRequest, epoch + 1, 0L, 0);
     }
@@ -687,7 +687,7 @@ final public class KafkaRaftClientSnapshotTest {
             .withElectedLeader(epoch, leaderId)
             .build();
 
-        context.pollUntilSend();
+        context.pollUntilRequest();
         RaftRequest.Outbound fetchRequest = context.assertSentFetchRequest();
         context.assertFetchRequestData(fetchRequest, epoch, 0L, 0);
 
@@ -697,7 +697,7 @@ final public class KafkaRaftClientSnapshotTest {
             snapshotFetchResponse(context.metadataPartition, epoch, leaderId, snapshotId, 200L)
         );
 
-        context.pollUntilSend();
+        context.pollUntilRequest();
         RaftRequest.Outbound snapshotRequest = context.assertSentFetchSnapshotRequest();
         FetchSnapshotRequestData.PartitionSnapshot request = assertFetchSnapshotRequest(
                 snapshotRequest,
@@ -727,7 +727,7 @@ final public class KafkaRaftClientSnapshotTest {
             )
         );
 
-        context.pollUntilSend();
+        context.pollUntilRequest();
         fetchRequest = context.assertSentFetchRequest();
         context.assertFetchRequestData(fetchRequest, epoch + 1, 0L, 0);
     }
@@ -744,7 +744,7 @@ final public class KafkaRaftClientSnapshotTest {
             .withElectedLeader(epoch, leaderId)
             .build();
 
-        context.pollUntilSend();
+        context.pollUntilRequest();
         RaftRequest.Outbound fetchRequest = context.assertSentFetchRequest();
         context.assertFetchRequestData(fetchRequest, epoch, 0L, 0);
 
@@ -754,7 +754,7 @@ final public class KafkaRaftClientSnapshotTest {
             snapshotFetchResponse(context.metadataPartition, epoch, leaderId, snapshotId, 200L)
         );
 
-        context.pollUntilSend();
+        context.pollUntilRequest();
         RaftRequest.Outbound snapshotRequest = context.assertSentFetchSnapshotRequest();
         FetchSnapshotRequestData.PartitionSnapshot request = assertFetchSnapshotRequest(
                 snapshotRequest,
@@ -784,7 +784,7 @@ final public class KafkaRaftClientSnapshotTest {
             )
         );
 
-        context.pollUntilSend();
+        context.pollUntilRequest();
 
         // Follower should resend the fetch snapshot request
         snapshotRequest = context.assertSentFetchSnapshotRequest();
@@ -811,7 +811,7 @@ final public class KafkaRaftClientSnapshotTest {
             .withElectedLeader(epoch, leaderId)
             .build();
 
-        context.pollUntilSend();
+        context.pollUntilRequest();
         RaftRequest.Outbound fetchRequest = context.assertSentFetchRequest();
         context.assertFetchRequestData(fetchRequest, epoch, 0L, 0);
 
@@ -821,7 +821,7 @@ final public class KafkaRaftClientSnapshotTest {
             snapshotFetchResponse(context.metadataPartition, epoch, leaderId, snapshotId, 200L)
         );
 
-        context.pollUntilSend();
+        context.pollUntilRequest();
         RaftRequest.Outbound snapshotRequest = context.assertSentFetchSnapshotRequest();
         FetchSnapshotRequestData.PartitionSnapshot request = assertFetchSnapshotRequest(
                 snapshotRequest,
@@ -855,7 +855,7 @@ final public class KafkaRaftClientSnapshotTest {
             )
         );
 
-        context.pollUntilSend();
+        context.pollUntilRequest();
 
         // Follower should send a fetch request
         fetchRequest = context.assertSentFetchRequest();
@@ -867,7 +867,7 @@ final public class KafkaRaftClientSnapshotTest {
             snapshotFetchResponse(context.metadataPartition, epoch, leaderId, snapshotId, 200L)
         );
 
-        context.pollUntilSend();
+        context.pollUntilRequest();
 
         snapshotRequest = context.assertSentFetchSnapshotRequest();
         request = assertFetchSnapshotRequest(
@@ -902,7 +902,7 @@ final public class KafkaRaftClientSnapshotTest {
             )
         );
 
-        context.pollUntilSend();
+        context.pollUntilRequest();
 
         // Follower should send a fetch request
         fetchRequest = context.assertSentFetchRequest();
@@ -921,7 +921,7 @@ final public class KafkaRaftClientSnapshotTest {
             .withElectedLeader(epoch, leaderId)
             .build();
 
-        context.pollUntilSend();
+        context.pollUntilRequest();
         RaftRequest.Outbound fetchRequest = context.assertSentFetchRequest();
         context.assertFetchRequestData(fetchRequest, epoch, 0L, 0);
 
@@ -931,7 +931,7 @@ final public class KafkaRaftClientSnapshotTest {
             snapshotFetchResponse(context.metadataPartition, epoch, leaderId, snapshotId, 200L)
         );
 
-        context.pollUntilSend();
+        context.pollUntilRequest();
 
         RaftRequest.Outbound snapshotRequest = context.assertSentFetchSnapshotRequest();
         FetchSnapshotRequestData.PartitionSnapshot request = assertFetchSnapshotRequest(
@@ -947,9 +947,9 @@ final public class KafkaRaftClientSnapshotTest {
         // Sleeping for fetch timeout should transition to candidate
         context.time.sleep(context.fetchTimeoutMs);
 
-        context.pollUntilSend();
+        context.pollUntilRequest();
 
-        context.assertSentVoteRequest(epoch + 1, 0, 0L);
+        context.assertSentVoteRequest(epoch + 1, 0, 0L, 1);
         context.assertVotedCandidate(epoch + 1, context.localId);
 
         // Send the response late

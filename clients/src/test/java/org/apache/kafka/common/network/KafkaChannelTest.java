@@ -42,11 +42,12 @@ public class KafkaChannelTest {
 
         KafkaChannel channel = new KafkaChannel("0", transport, () -> authenticator,
             1024, pool, metadataRegistry);
-        NetworkSend send = new NetworkSend("0", ByteBuffer.wrap(TestUtils.randomBytes(128)));
+        ByteBufferSend send = ByteBufferSend.sizePrefixed(ByteBuffer.wrap(TestUtils.randomBytes(128)));
+        NetworkSend networkSend = new NetworkSend("0", send);
 
-        channel.setSend(send);
+        channel.setSend(networkSend);
         assertTrue(channel.hasSend());
-        assertThrows(IllegalStateException.class, () -> channel.setSend(send));
+        assertThrows(IllegalStateException.class, () -> channel.setSend(networkSend));
 
         Mockito.when(transport.write(Mockito.any(ByteBuffer[].class))).thenReturn(4L);
         assertEquals(4L, channel.write());
@@ -61,7 +62,7 @@ public class KafkaChannelTest {
         Mockito.when(transport.write(Mockito.any(ByteBuffer[].class))).thenReturn(64L);
         assertEquals(64, channel.write());
         assertEquals(0, send.remaining());
-        assertEquals(send, channel.maybeCompleteSend());
+        assertEquals(networkSend, channel.maybeCompleteSend());
     }
 
     @Test

@@ -132,7 +132,7 @@ class TransactionMarkerChannelManagerTest {
         response)
 
       TestUtils.waitUntilTrue(() => {
-        val requests = channelManager.drainQueuedTransactionMarkers()
+        val requests = channelManager.generateRequests()
         if (requests.nonEmpty) {
           assertEquals(1, requests.size)
           val request = requests.head

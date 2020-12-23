@@ -27,13 +27,13 @@ import org.apache.kafka.common.network.ListenerName;
 import org.apache.kafka.common.network.TransportLayer;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.requests.ApiVersionsRequest;
+import org.apache.kafka.common.requests.RequestTestUtils;
 import org.apache.kafka.common.security.auth.AuthenticateCallbackHandler;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.apache.kafka.common.requests.RequestHeader;
 import org.apache.kafka.common.security.plain.PlainLoginModule;
 import org.apache.kafka.common.utils.AppInfoParser;
 import org.apache.kafka.common.utils.Time;
-import org.apache.kafka.test.TestUtils;
 import org.junit.Test;
 
 import javax.security.auth.Subject;
@@ -80,7 +80,7 @@ public class SaslServerAuthenticatorTest {
             SCRAM_SHA_256.mechanismName(), new DefaultChannelMetadataRegistry());
 
         RequestHeader header = new RequestHeader(ApiKeys.METADATA, (short) 0, "clientId", 13243);
-        ByteBuffer headerBuffer = TestUtils.serializeRequestHeader(header);
+        ByteBuffer headerBuffer = RequestTestUtils.serializeRequestHeader(header);
 
         when(transportLayer.read(any(ByteBuffer.class))).then(invocation -> {
             invocation.<ByteBuffer>getArgument(0).putInt(headerBuffer.remaining());
@@ -123,10 +123,10 @@ public class SaslServerAuthenticatorTest {
             SCRAM_SHA_256.mechanismName(), metadataRegistry);
 
         RequestHeader header = new RequestHeader(ApiKeys.API_VERSIONS, version, "clientId", 0);
-        ByteBuffer headerBuffer = TestUtils.serializeRequestHeader(header);
+        ByteBuffer headerBuffer = RequestTestUtils.serializeRequestHeader(header);
 
         ApiVersionsRequest request = new ApiVersionsRequest.Builder().build(version);
-        ByteBuffer requestBuffer = request.serializeBody();
+        ByteBuffer requestBuffer = request.serialize();
         requestBuffer.rewind();
 
         when(transportLayer.socketChannel().socket().getInetAddress()).thenReturn(InetAddress.getLoopbackAddress());

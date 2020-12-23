@@ -60,6 +60,7 @@ import org.apache.kafka.common.utils.Timer;
 import org.apache.kafka.raft.RequestManager.ConnectionState;
 import org.apache.kafka.raft.internals.BatchAccumulator;
 import org.apache.kafka.raft.internals.BatchMemoryPool;
+import org.apache.kafka.raft.internals.BlockingMessageQueue;
 import org.apache.kafka.raft.internals.CloseListener;
 import org.apache.kafka.raft.internals.FuturePurgatory;
 import org.apache.kafka.raft.internals.KafkaRaftMetrics;
@@ -79,6 +80,7 @@ import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.OptionalInt;
 import java.util.OptionalLong;
@@ -149,6 +151,8 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
     private final FuturePurgatory<Long> fetchPurgatory;
     private final RecordSerde<T> serde;
     private final MemoryPool memoryPool;
+    private final RaftMessageQueue messageQueue;
+
     private final List<ListenerContext> listenerContexts = new ArrayList<>();
     private final ConcurrentLinkedQueue<Listener<T>> pendingListeners = new ConcurrentLinkedQueue<>();
 
@@ -166,6 +170,7 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
     ) {
         this(serde,
             channel,
+            new BlockingMessageQueue(),
             log,
             quorum,
             new BatchMemoryPool(5, MAX_BATCH_SIZE),
@@ -185,6 +190,7 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
     public KafkaRaftClient(
         RecordSerde<T> serde,
         NetworkChannel channel,
+        RaftMessageQueue messageQueue,
         ReplicatedLog log,
         QuorumState quorum,
         MemoryPool memoryPool,
@@ -202,6 +208,7 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
     ) {
         this.serde = serde;
         this.channel = channel;
+        this.messageQueue = messageQueue;
         this.log = log;
         this.quorum = quorum;
         this.memoryPool = memoryPool;
@@ -322,7 +329,7 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
 
         long currentTimeMs = time.milliseconds();
         if (quorum.isLeader()) {
-            onBecomeLeader(currentTimeMs);
+            throw new IllegalStateException("Voter cannot initialize as a Leader");
         } else if (quorum.isCandidate()) {
             onBecomeCandidate(currentTimeMs);
         } else if (quorum.isFollower()) {
@@ -341,7 +348,7 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
     @Override
     public void register(Listener<T> listener) {
         pendingListeners.add(listener);
-        channel.wakeup();
+        wakeup();
     }
 
     private OffsetAndEpoch endOffset() {
@@ -379,14 +386,23 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
         );
     }
 
-    private void appendLeaderChangeMessage(LeaderState state, long currentTimeMs) {
-        List<Voter> voters = state.followers().stream()
+    private static List<Voter> convertToVoters(Set<Integer> voterIds) {
+        return voterIds.stream()
             .map(follower -> new Voter().setVoterId(follower))
             .collect(Collectors.toList());
+    }
+
+    private void appendLeaderChangeMessage(LeaderState state, long currentTimeMs) {
+        List<Voter> voters = convertToVoters(state.followers());
+        List<Voter> grantingVoters = convertToVoters(state.grantingVoters());
+
+        // Adding the leader to the voters as any voter always votes for itself.
+        voters.add(new Voter().setVoterId(state.election().leaderId()));
 
         LeaderChangeMessage leaderChangeMessage = new LeaderChangeMessage()
             .setLeaderId(state.election().leaderId())
-            .setVoters(voters);
+            .setVoters(voters)
+            .setGrantingVoters(grantingVoters);
 
         MemoryRecords records = MemoryRecords.withLeaderChangeMessage(
             currentTimeMs, quorum.epoch(), leaderChangeMessage);
@@ -444,6 +460,7 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
     }
 
     private void transitionToResigned(List<Integer> preferredSuccessors) {
+        fetchPurgatory.completeAllExceptionally(Errors.BROKER_NOT_AVAILABLE.exception("The broker is shutting down"));
         quorum.transitionToResigned(preferredSuccessors);
         resetConnections();
     }
@@ -722,7 +739,7 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
         } else if (partitionError == Errors.NONE) {
             if (quorum.isLeader()) {
                 LeaderState state = quorum.leaderStateOrThrow();
-                state.addEndorsementFrom(remoteNodeId);
+                state.addAcknowledgementFrom(remoteNodeId);
             } else {
                 logger.debug("Ignoring BeginQuorumEpoch response {} since " +
                     "this node is not the leader anymore", response);
@@ -777,9 +794,6 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
             FollowerState state = quorum.followerStateOrThrow();
             if (state.leaderId() == requestLeaderId) {
                 List<Integer> preferredSuccessors = partitionRequest.preferredSuccessors();
-                if (!preferredSuccessors.contains(quorum.localId)) {
-                    return buildEndQuorumEpochResponse(Errors.INCONSISTENT_VOTER_SET);
-                }
                 long electionBackoffMs = endEpochElectionBackoff(preferredSuccessors);
                 logger.debug("Overriding follower fetch timeout to {} after receiving " +
                     "EndQuorumEpoch request from leader {} in epoch {}", electionBackoffMs,
@@ -796,7 +810,7 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
         // voter has a higher chance to be elected. If the node's priority is highest, become
         // candidate immediately instead of waiting for next poll.
         int position = preferredSuccessors.indexOf(quorum.localId);
-        if (position == 0) {
+        if (position <= 0) {
             return 0;
         } else {
             return strictExponentialElectionBackoffMs(position, preferredSuccessors.size());
@@ -930,6 +944,7 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
                 }
             }
 
+            // FIXME: `completionTimeMs`, which can be null
             logger.trace("Completing delayed fetch from {} starting at offset {} at {}",
                 request.replicaId(), fetchPartition.fetchOffset(), completionTimeMs);
 
@@ -965,6 +980,7 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
             return buildFetchResponse(Errors.NONE, MemoryRecords.EMPTY, divergingEpoch, state.highWatermark());
         } else {
             LogFetchInfo info = log.read(fetchOffset, Isolation.UNCOMMITTED);
+
             if (state.updateReplicaState(replicaId, currentTimeMs, info.startOffsetMetadata)) {
                 onUpdateLeaderHighWatermark(state, currentTimeMs);
             }
@@ -1436,7 +1452,7 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
 
     private boolean handleUnexpectedError(Errors error, RaftResponse.Inbound response) {
         logger.error("Unexpected error {} in {} response: {}",
-            error, response.data.apiKey(), response);
+            error, ApiKeys.forId(response.data.apiKey()), response);
         return false;
     }
 
@@ -1472,7 +1488,7 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
 
         ConnectionState connection = requestManager.getOrCreate(response.sourceId());
         if (handledSuccessfully) {
-            connection.onResponseReceived(response.correlationId, currentTimeMs);
+            connection.onResponseReceived(response.correlationId);
         } else {
             connection.onResponseError(response.correlationId, currentTimeMs);
         }
@@ -1556,7 +1572,10 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
             } else {
                 message = RaftUtil.errorResponse(apiKey, Errors.forException(exception));
             }
-            sendOutboundMessage(new RaftResponse.Outbound(request.correlationId(), message));
+
+            RaftResponse.Outbound responseMessage = new RaftResponse.Outbound(request.correlationId(), message);
+            request.completion.complete(responseMessage);
+            logger.trace("Sent response {} to inbound request {}", responseMessage, request);
         });
     }
 
@@ -1568,15 +1587,15 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
             handleRequest(request, currentTimeMs);
         } else if (message instanceof RaftResponse.Inbound) {
             RaftResponse.Inbound response = (RaftResponse.Inbound) message;
-            handleResponse(response, currentTimeMs);
+            ConnectionState connection = requestManager.getOrCreate(response.sourceId());
+            if (connection.isResponseExpected(response.correlationId)) {
+                handleResponse(response, currentTimeMs);
+            } else {
+                logger.debug("Ignoring response {} since it is no longer needed", response);
+            }
         } else {
             throw new IllegalArgumentException("Unexpected message " + message);
         }
-    }
-
-    private void sendOutboundMessage(RaftMessage message) {
-        channel.send(message);
-        logger.trace("Sent outbound message: {}", message);
     }
 
     /**
@@ -1596,7 +1615,32 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
         if (connection.isReady(currentTimeMs)) {
             int correlationId = channel.newCorrelationId();
             ApiMessage request = requestSupplier.get();
-            sendOutboundMessage(new RaftRequest.Outbound(correlationId, request, destinationId, currentTimeMs));
+
+            RaftRequest.Outbound requestMessage = new RaftRequest.Outbound(
+                correlationId,
+                request,
+                destinationId,
+                currentTimeMs
+            );
+
+            requestMessage.completion.whenComplete((response, exception) -> {
+                if (exception != null) {
+                    ApiKeys api = ApiKeys.forId(request.apiKey());
+                    Errors error = Errors.forException(exception);
+                    ApiMessage errorResponse = RaftUtil.errorResponse(api, error);
+
+                    response = new RaftResponse.Inbound(
+                        correlationId,
+                        errorResponse,
+                        destinationId
+                    );
+                }
+
+                messageQueue.add(response);
+            });
+
+            channel.send(requestMessage);
+            logger.trace("Sent outbound request: {}", requestMessage);
             connection.onRequestSent(correlationId, currentTimeMs);
             return Long.MAX_VALUE;
         }
@@ -1807,7 +1851,7 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
 
         long timeUntilSend = maybeSendRequests(
             currentTimeMs,
-            state.nonEndorsingFollowers(),
+            state.nonAcknowledgingVoters(),
             this::buildBeginQuorumEpochRequest
         );
 
@@ -2031,6 +2075,26 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
         return false;
     }
 
+    private void wakeup() {
+        messageQueue.wakeup();
+    }
+
+    /**
+     * Handle an inbound request. The response will be returned through
+     * {@link RaftRequest.Inbound#completion}.
+     *
+     * @param request The inbound request
+     */
+    public void handle(RaftRequest.Inbound request) {
+        messageQueue.add(Objects.requireNonNull(request));
+    }
+
+    /**
+     * Poll for new events. This allows the client to handle inbound
+     * requests and send any needed outbound requests.
+     *
+     * @throws IOException for any IO errors encountered
+     */
     public void poll() throws IOException {
         pollListeners();
 
@@ -2042,14 +2106,13 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
         long pollTimeoutMs = pollCurrentState(currentTimeMs);
         kafkaRaftMetrics.updatePollStart(currentTimeMs);
 
-        List<RaftMessage> inboundMessages = channel.receive(pollTimeoutMs);
+        RaftMessage message = messageQueue.poll(pollTimeoutMs);
 
         currentTimeMs = time.milliseconds();
         kafkaRaftMetrics.updatePollEnd(currentTimeMs);
 
-        for (RaftMessage message : inboundMessages) {
+        if (message != null) {
             handleInboundMessage(message, currentTimeMs);
-            currentTimeMs = time.milliseconds();
         }
     }
 
@@ -2060,9 +2123,16 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
             return Long.MAX_VALUE;
         }
 
+        boolean isFirstAppend = accumulator.isEmpty();
         Long offset = accumulator.append(epoch, records);
-        if (accumulator.needsDrain(time.milliseconds())) {
-            channel.wakeup();
+
+        // Wakeup the network channel if either this is the first append
+        // or the accumulator is ready to drain now. Checking for the first
+        // append ensures that we give the IO thread a chance to observe
+        // the linger timeout so that it can schedule its own wakeup in case
+        // there are no additional appends.
+        if (isFirstAppend || accumulator.needsDrain(time.milliseconds())) {
+            wakeup();
         }
         return offset;
     }
@@ -2072,7 +2142,7 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
         logger.info("Beginning graceful shutdown");
         CompletableFuture<Void> shutdownComplete = new CompletableFuture<>();
         shutdown.set(new GracefulShutdown(timeoutMs, shutdownComplete));
-        channel.wakeup();
+        wakeup();
         return shutdownComplete;
     }
 
@@ -2234,7 +2304,7 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
 
             if (lastSent == reader) {
                 lastSent = null;
-                channel.wakeup();
+                wakeup();
             }
         }
 

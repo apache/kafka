@@ -62,7 +62,7 @@ public interface Selectable {
      * Queue the given request for sending in the subsequent {@link #poll(long) poll()} calls
      * @param send The request to send
      */
-    void send(Send send);
+    void send(NetworkSend send);
 
     /**
      * Do I/O. Reads, writes, connection establishment, etc.
@@ -74,7 +74,7 @@ public interface Selectable {
     /**
      * The list of sends that completed on the last {@link #poll(long) poll()} call.
      */
-    List<Send> completedSends();
+    List<NetworkSend> completedSends();
 
     /**
      * The collection of receives that completed on the last {@link #poll(long) poll()} call.

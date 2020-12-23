@@ -35,6 +35,7 @@ public class CreatePartitionsResponse extends AbstractResponse {
         this.data = data;
     }
 
+    @Override
     public CreatePartitionsResponseData data() {
         return data;
     }

@@ -17,6 +17,7 @@
 
 package org.apache.kafka.jmh.common;
 
+import kafka.network.RequestConvertToJson;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.network.Send;
 import org.apache.kafka.common.protocol.ApiKeys;
@@ -86,7 +87,7 @@ public class FetchRequestBenchmark {
             .build(ApiKeys.FETCH.latestVersion());
         this.replicaRequest = FetchRequest.Builder.forReplica(ApiKeys.FETCH.latestVersion(), 1, 0, 0, fetchData)
             .build(ApiKeys.FETCH.latestVersion());
-        this.requestBuffer = this.consumerRequest.serializeBody();
+        this.requestBuffer = this.consumerRequest.serialize();
 
     }
 
@@ -112,7 +113,7 @@ public class FetchRequestBenchmark {
 
     @Benchmark
     public int testSerializeFetchRequestForConsumer() throws IOException {
-        Send send = consumerRequest.toSend("dest", header);
+        Send send = consumerRequest.toSend(header);
         ByteBufferChannel channel = new ByteBufferChannel(send.size());
         send.writeTo(channel);
         return channel.buffer().limit();
@@ -120,9 +121,14 @@ public class FetchRequestBenchmark {
 
     @Benchmark
     public int testSerializeFetchRequestForReplica() throws IOException {
-        Send send = replicaRequest.toSend("dest", header);
+        Send send = replicaRequest.toSend(header);
         ByteBufferChannel channel = new ByteBufferChannel(send.size());
         send.writeTo(channel);
         return channel.buffer().limit();
+    }
+
+    @Benchmark
+    public String testRequestToJson() {
+        return RequestConvertToJson.request(consumerRequest).toString();
     }
 }

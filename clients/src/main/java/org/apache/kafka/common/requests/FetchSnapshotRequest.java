@@ -23,8 +23,8 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.message.FetchSnapshotRequestData;
 import org.apache.kafka.common.message.FetchSnapshotResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
+import org.apache.kafka.common.protocol.ApiMessage;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.protocol.Message;
 
 final public class FetchSnapshotRequest extends AbstractRequest {
     public final FetchSnapshotRequestData data;
@@ -44,7 +44,7 @@ final public class FetchSnapshotRequest extends AbstractRequest {
     }
 
     @Override
-    protected Message data() {
+    public ApiMessage data() {
         return data;
     }
 

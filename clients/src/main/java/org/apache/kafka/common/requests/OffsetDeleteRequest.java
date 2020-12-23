@@ -46,7 +46,7 @@ public class OffsetDeleteRequest extends AbstractRequest {
         }
     }
 
-    public final OffsetDeleteRequestData data;
+    private final OffsetDeleteRequestData data;
 
     public OffsetDeleteRequest(OffsetDeleteRequestData data, short version) {
         super(ApiKeys.OFFSET_DELETE, version);
@@ -71,7 +71,7 @@ public class OffsetDeleteRequest extends AbstractRequest {
     }
 
     @Override
-    protected OffsetDeleteRequestData data() {
+    public OffsetDeleteRequestData data() {
         return data;
     }
 }

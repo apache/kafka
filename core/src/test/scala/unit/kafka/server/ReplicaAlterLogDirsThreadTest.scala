@@ -25,10 +25,11 @@ import kafka.server.AbstractFetcherThread.ResultWithPartitions
 import kafka.server.QuotaFactory.UnboundedQuota
 import kafka.utils.{DelayedItem, TestUtils}
 import org.apache.kafka.common.errors.KafkaStorageException
+import org.apache.kafka.common.message.OffsetForLeaderEpochRequestData.OffsetForLeaderPartition
 import org.apache.kafka.common.message.OffsetForLeaderEpochResponseData.EpochEndOffset
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.record.MemoryRecords
-import org.apache.kafka.common.requests.{FetchRequest, OffsetsForLeaderEpochRequest}
+import org.apache.kafka.common.requests.FetchRequest
 import org.apache.kafka.common.{IsolationLevel, TopicPartition}
 import org.easymock.EasyMock._
 import org.easymock.{Capture, CaptureType, EasyMock, IExpectationSetters}
@@ -321,8 +322,12 @@ class ReplicaAlterLogDirsThreadTest {
       brokerTopicStats = null)
 
     val result = thread.fetchEpochEndOffsets(Map(
-      t1p0 -> new OffsetsForLeaderEpochRequest.PartitionData(Optional.empty(), leaderEpochT1p0),
-      t1p1 -> new OffsetsForLeaderEpochRequest.PartitionData(Optional.empty(), leaderEpochT1p1)))
+      t1p0 -> new OffsetForLeaderPartition()
+        .setPartition(t1p0.partition)
+        .setLeaderEpoch(leaderEpochT1p0),
+      t1p1 -> new OffsetForLeaderPartition()
+        .setPartition(t1p1.partition)
+        .setLeaderEpoch(leaderEpochT1p1)))
 
     val expected = Map(
       t1p0 -> new EpochEndOffset()
@@ -382,8 +387,12 @@ class ReplicaAlterLogDirsThreadTest {
       brokerTopicStats = null)
 
     val result = thread.fetchEpochEndOffsets(Map(
-      t1p0 -> new OffsetsForLeaderEpochRequest.PartitionData(Optional.empty(), leaderEpoch),
-      t1p1 -> new OffsetsForLeaderEpochRequest.PartitionData(Optional.empty(), leaderEpoch)))
+      t1p0 -> new OffsetForLeaderPartition()
+        .setPartition(t1p0.partition)
+        .setLeaderEpoch(leaderEpoch),
+      t1p1 -> new OffsetForLeaderPartition()
+        .setPartition(t1p1.partition)
+        .setLeaderEpoch(leaderEpoch)))
 
     val expected = Map(
       t1p0 -> new EpochEndOffset()

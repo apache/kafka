@@ -33,6 +33,7 @@ public class ListGroupsResponse extends AbstractResponse {
         this.data = data;
     }
 
+    @Override
     public ListGroupsResponseData data() {
         return data;
     }

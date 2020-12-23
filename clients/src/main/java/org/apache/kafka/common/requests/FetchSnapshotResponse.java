@@ -24,8 +24,8 @@ import java.util.function.UnaryOperator;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.message.FetchSnapshotResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
+import org.apache.kafka.common.protocol.ApiMessage;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.protocol.Message;
 
 final public class FetchSnapshotResponse extends AbstractResponse {
     public final FetchSnapshotResponseData data;
@@ -61,7 +61,7 @@ final public class FetchSnapshotResponse extends AbstractResponse {
     }
 
     @Override
-    protected Message data() {
+    public ApiMessage data() {
         return data;
     }
 

@@ -71,6 +71,7 @@ public class UpdateFeaturesRequest extends AbstractRequest {
         return new UpdateFeaturesResponse(responseData);
     }
 
+    @Override
     public UpdateFeaturesRequestData data() {
         return data;
     }

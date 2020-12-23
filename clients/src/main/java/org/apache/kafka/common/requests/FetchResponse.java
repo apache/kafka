@@ -67,6 +67,7 @@ public class FetchResponse<T extends BaseRecords> extends AbstractResponse {
     private final FetchResponseData data;
     private final LinkedHashMap<TopicPartition, PartitionData<T>> responseDataMap;
 
+    @Override
     public FetchResponseData data() {
         return data;
     }

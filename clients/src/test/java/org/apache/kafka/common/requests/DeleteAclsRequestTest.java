@@ -64,7 +64,7 @@ public class DeleteAclsRequestTest {
     @Test
     public void shouldRoundTripLiteralV0() {
         final DeleteAclsRequest original = new DeleteAclsRequest.Builder(requestData(LITERAL_FILTER)).build(V0);
-        final ByteBuffer buffer = original.serializeBody();
+        final ByteBuffer buffer = original.serialize();
 
         final DeleteAclsRequest result = DeleteAclsRequest.parse(buffer, V0);
 
@@ -82,7 +82,7 @@ public class DeleteAclsRequestTest {
                 ANY_FILTER.entryFilter()))
         ).build(V0);
 
-        final DeleteAclsRequest result = DeleteAclsRequest.parse(original.serializeBody(), V0);
+        final DeleteAclsRequest result = DeleteAclsRequest.parse(original.serialize(), V0);
 
         assertRequestEquals(expected, result);
     }
@@ -92,7 +92,7 @@ public class DeleteAclsRequestTest {
         final DeleteAclsRequest original = new DeleteAclsRequest.Builder(
                 requestData(LITERAL_FILTER, PREFIXED_FILTER, ANY_FILTER)
         ).build(V1);
-        final ByteBuffer buffer = original.serializeBody();
+        final ByteBuffer buffer = original.serialize();
 
         final DeleteAclsRequest result = DeleteAclsRequest.parse(buffer, V1);
 
