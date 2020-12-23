@@ -17,6 +17,11 @@
 
 package org.apache.kafka.tools.metadata;
 
+import org.apache.kafka.tools.metadata.MetadataNode.DirectoryNode;
+import org.apache.kafka.tools.metadata.MetadataNode.FileNode;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import java.io.PrintWriter;
 import java.util.List;
 import java.util.Optional;
@@ -25,6 +30,8 @@ import java.util.Optional;
  * Implements the cat command.
  */
 public final class CatCommandHandler implements Command.Handler {
+    private static final Logger log = LoggerFactory.getLogger(CatCommandHandler.class);
+
     private final List<String> targets;
 
     public CatCommandHandler(List<String> targets) {
@@ -34,7 +41,18 @@ public final class CatCommandHandler implements Command.Handler {
     @Override
     public void run(Optional<MetadataShell> shell,
                     PrintWriter writer,
-                    MetadataNodeManager manager) {
-        writer.println("cat " + targets);
+                    MetadataNodeManager manager) throws Exception {
+        log.trace("cat " + targets);
+        for (String target : targets) {
+            manager.visit(new GlobVisitor(target, entry -> {
+                MetadataNode node = entry.getValue();
+                if (node instanceof DirectoryNode) {
+                    writer.println("cat: " + target + ": Is a directory");
+                } else if (node instanceof FileNode) {
+                    FileNode fileNode = (FileNode) node;
+                    writer.println(fileNode.contents());
+                }
+            }));
+        }
     }
 }
