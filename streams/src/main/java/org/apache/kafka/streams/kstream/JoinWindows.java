@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.streams.kstream;
 
-import org.apache.kafka.streams.internals.ApiUtils;
 import org.apache.kafka.streams.processor.TimestampExtractor;
 
 import java.time.Duration;
@@ -24,6 +23,7 @@ import java.util.Map;
 import java.util.Objects;
 
 import static org.apache.kafka.streams.internals.ApiUtils.prepareMillisCheckFailMsgPrefix;
+import static org.apache.kafka.streams.internals.ApiUtils.validateMillisecondDuration;
 import static org.apache.kafka.streams.kstream.internals.WindowingDefaults.DEFAULT_RETENTION_MS;
 
 /**
@@ -133,7 +133,7 @@ public final class JoinWindows extends Windows<Window> {
      */
     public static JoinWindows of(final Duration timeDifference) throws IllegalArgumentException {
         final String msgPrefix = prepareMillisCheckFailMsgPrefix(timeDifference, "timeDifference");
-        return of(ApiUtils.validateMillisecondDuration(timeDifference, msgPrefix));
+        return of(validateMillisecondDuration(timeDifference, msgPrefix));
     }
 
     /**
@@ -164,7 +164,7 @@ public final class JoinWindows extends Windows<Window> {
      */
     public JoinWindows before(final Duration timeDifference) throws IllegalArgumentException {
         final String msgPrefix = prepareMillisCheckFailMsgPrefix(timeDifference, "timeDifference");
-        return before(ApiUtils.validateMillisecondDuration(timeDifference, msgPrefix));
+        return before(validateMillisecondDuration(timeDifference, msgPrefix));
     }
 
     /**
@@ -195,7 +195,7 @@ public final class JoinWindows extends Windows<Window> {
      */
     public JoinWindows after(final Duration timeDifference) throws IllegalArgumentException {
         final String msgPrefix = prepareMillisCheckFailMsgPrefix(timeDifference, "timeDifference");
-        return after(ApiUtils.validateMillisecondDuration(timeDifference, msgPrefix));
+        return after(validateMillisecondDuration(timeDifference, msgPrefix));
     }
 
     /**
@@ -227,7 +227,7 @@ public final class JoinWindows extends Windows<Window> {
     @SuppressWarnings("deprecation") // removing segments from Windows will fix this
     public JoinWindows grace(final Duration afterWindowEnd) throws IllegalArgumentException {
         final String msgPrefix = prepareMillisCheckFailMsgPrefix(afterWindowEnd, "afterWindowEnd");
-        final long afterWindowEndMs = ApiUtils.validateMillisecondDuration(afterWindowEnd, msgPrefix);
+        final long afterWindowEndMs = validateMillisecondDuration(afterWindowEnd, msgPrefix);
         if (afterWindowEndMs < 0) {
             throw new IllegalArgumentException("Grace period must not be negative.");
         }
