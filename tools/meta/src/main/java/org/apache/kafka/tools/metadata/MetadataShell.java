@@ -18,17 +18,23 @@
 package org.apache.kafka.tools.metadata;
 
 import org.jline.reader.EndOfFileException;
+import org.jline.reader.History;
 import org.jline.reader.LineReader;
 import org.jline.reader.LineReaderBuilder;
 import org.jline.reader.ParsedLine;
 import org.jline.reader.Parser;
 import org.jline.reader.UserInterruptException;
 import org.jline.reader.impl.DefaultParser;
+import org.jline.reader.impl.history.DefaultHistory;
 import org.jline.terminal.Terminal;
 import org.jline.terminal.TerminalBuilder;
 
 import java.io.IOException;
+import java.util.AbstractMap;
+import java.util.Iterator;
 import java.util.List;
+import java.util.Map.Entry;
+import java.util.NoSuchElementException;
 import java.util.Optional;
 
 /**
@@ -37,6 +43,7 @@ import java.util.Optional;
 public final class MetadataShell implements AutoCloseable {
     private final Terminal terminal;
     private final Parser parser;
+    private final History history;
     private final LineReader reader;
 
     public MetadataShell() throws IOException {
@@ -45,9 +52,11 @@ public final class MetadataShell implements AutoCloseable {
             nativeSignals(true);
         this.terminal = builder.build();
         this.parser = new DefaultParser();
+        this.history = new DefaultHistory();
         this.reader = LineReaderBuilder.builder().
             terminal(terminal).
             parser(parser).
+            history(history).
             option(LineReader.Option.AUTO_FRESH_LINE, false).
             build();
     }
@@ -79,6 +88,45 @@ public final class MetadataShell implements AutoCloseable {
 
     public int screenWidth() {
         return terminal.getWidth();
+    }
+
+    public Iterator<Entry<Integer, String>> history(int numEntriesToShow) {
+        if (numEntriesToShow < 0) {
+            numEntriesToShow = 0;
+        }
+        int last = history.last();
+        if (numEntriesToShow > last + 1) {
+            numEntriesToShow = last + 1;
+        }
+        int first = last - numEntriesToShow + 1;
+        if (first < history.first()) {
+            first = history.first();
+        }
+        return new HistoryIterator(first, last);
+    }
+
+    public class HistoryIterator implements  Iterator<Entry<Integer, String>> {
+        private int index;
+        private int last;
+
+        HistoryIterator(int index, int last) {
+            this.index = index;
+            this.last = last;
+        }
+
+        @Override
+        public boolean hasNext() {
+            return index <= last;
+        }
+
+        @Override
+        public Entry<Integer, String> next() {
+            if (index > last) {
+                throw new NoSuchElementException();
+            }
+            int p = index++;
+            return new AbstractMap.SimpleImmutableEntry<>(p, history.get(p));
+        }
     }
 
     @Override

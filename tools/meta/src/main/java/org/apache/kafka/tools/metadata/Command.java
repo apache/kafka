@@ -23,6 +23,7 @@ import net.sourceforge.argparse4j.inf.ArgumentParserException;
 import net.sourceforge.argparse4j.inf.Namespace;
 import net.sourceforge.argparse4j.inf.Subparser;
 import net.sourceforge.argparse4j.inf.Subparsers;
+import net.sourceforge.argparse4j.internal.HelpScreenException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -62,6 +63,14 @@ public final class Command {
                 help("Exit the metadata shell.");
         }
         if (addShellCommands) {
+            Subparser historyParser = subparsers.addParser("history").
+                help("Print command history.");
+            historyParser.addArgument("numEntriesToShow").
+                nargs("?").
+                type(Integer.class).
+                help("The number of entries to show.");
+        }
+        if (addShellCommands) {
             subparsers.addParser("help").
                 help("Display this help message.");
         }
@@ -87,6 +96,8 @@ public final class Command {
         Namespace namespace = null;
         try {
             namespace = PARSER.parseArgs(arguments.toArray(new String[0]));
+        } catch (HelpScreenException e) {
+            return new NoOpCommandHandler();
         } catch (ArgumentParserException e) {
             return new ErroneousCommandHandler(e.getMessage());
         }
@@ -99,6 +110,10 @@ public final class Command {
             return new ExitCommandHandler();
         } else if ("help".equals(command)) {
             return new HelpCommandHandler();
+        } else if ("history".equals(command)) {
+            Integer numEntriesToShow = namespace.getInt("numEntriesToShow");
+            return new HistoryCommandHandler(numEntriesToShow == null ?
+                Integer.MAX_VALUE : numEntriesToShow);
         } else if ("ls".equals(command)) {
             return new LsCommandHandler(namespace.getList("targets"));
         } else if ("pwd".equals(command)) {
