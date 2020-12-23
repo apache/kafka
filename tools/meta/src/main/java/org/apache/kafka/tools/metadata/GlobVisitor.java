@@ -21,6 +21,7 @@ import java.util.AbstractMap.SimpleImmutableEntry;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map.Entry;
+import java.util.Optional;
 import java.util.function.Consumer;
 
 /**
@@ -28,9 +29,10 @@ import java.util.function.Consumer;
  */
 public final class GlobVisitor implements Consumer<MetadataNodeManager.Data> {
     private final String glob;
-    private final Consumer<Entry<String, MetadataNode>> handler;
+    private final Consumer<Optional<Entry<String, MetadataNode>>> handler;
 
-    public GlobVisitor(String glob, Consumer<Entry<String, MetadataNode>> handler) {
+    public GlobVisitor(String glob,
+                       Consumer<Optional<Entry<String, MetadataNode>>> handler) {
         this.glob = glob;
         this.handler = handler;
     }
@@ -46,57 +48,60 @@ public final class GlobVisitor implements Consumer<MetadataNodeManager.Data> {
 
     private void accept(MetadataNode.DirectoryNode root, String fullGlob) {
         List<String> globComponents = pathComponents(fullGlob);
-        accept(globComponents, 0, root);
+        if (!accept(globComponents, 0, root)) {
+            handler.accept(Optional.empty());
+        }
     }
 
-    private void accept(List<String> globComponents,
-                        int componentIndex,
-                        MetadataNode node) {
+    private boolean accept(List<String> globComponents,
+                           int componentIndex,
+                           MetadataNode node) {
         if (componentIndex >= globComponents.size()) {
             String name = "";
             if (componentIndex > 0) {
                 // Unless this is the root directory, it has a name.
                 name = globComponents.get(componentIndex - 1);
             }
-            handler.accept(new SimpleImmutableEntry<>(name, node));
-            return;
+            handler.accept(Optional.of(new SimpleImmutableEntry<>(name, node)));
+            return true;
         }
         String globComponentString = globComponents.get(componentIndex);
         if (globComponentString.equals(".")) {
-            accept(globComponents, componentIndex + 1, node);
-            return;
+            return accept(globComponents, componentIndex + 1, node);
         }
         if (globComponentString.equals("..")) {
             if (!(node instanceof MetadataNode.DirectoryNode)) {
-                return;
+                return false;
             }
             MetadataNode.DirectoryNode directory = (MetadataNode.DirectoryNode) node;
-            accept(globComponents, componentIndex + 1, directory.parent());
-            return;
+            return accept(globComponents, componentIndex + 1, directory.parent());
         }
         GlobComponent globComponent = new GlobComponent(globComponentString);
         if (globComponent.literal()) {
             if (!(node instanceof MetadataNode.DirectoryNode)) {
-                return;
+                return false;
             }
             MetadataNode.DirectoryNode directory = (MetadataNode.DirectoryNode) node;
             MetadataNode child = directory.child(globComponent.component());
             if (child == null) {
-                return;
+                return false;
             }
-            accept(globComponents, componentIndex + 1, child);
-            return;
+            return accept(globComponents, componentIndex + 1, child);
         }
         if (!(node instanceof MetadataNode.DirectoryNode)) {
-            return;
+            return false;
         }
         MetadataNode.DirectoryNode directory = (MetadataNode.DirectoryNode) node;
+        boolean matchedAny = false;
         for (Entry<String, MetadataNode> entry : directory.children().entrySet()) {
             String nodeName = entry.getKey();
             if (globComponent.matches(nodeName)) {
-                accept(globComponents, componentIndex + 1, entry.getValue());
+                if (accept(globComponents, componentIndex + 1, entry.getValue())) {
+                    matchedAny = true;
+                }
             }
         }
+        return matchedAny;
     }
 
     /**

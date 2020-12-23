@@ -60,15 +60,19 @@ public final class LsCommandHandler implements Command.Handler {
         List<String> targetFiles = new ArrayList<>();
         List<TargetDirectory> targetDirectories = new ArrayList<>();
         for (String target : effectiveTargets) {
-            manager.visit(new GlobVisitor(target, entry -> {
-                MetadataNode node = entry.getValue();
-                if (node instanceof DirectoryNode) {
-                    DirectoryNode directory = (DirectoryNode) node;
-                    List<String> children = new ArrayList<>();
-                    children.addAll(directory.children().keySet());
-                    targetDirectories.add(new TargetDirectory(target, children));
-                } else if (node instanceof FileNode) {
-                    targetFiles.add(target);
+            manager.visit(new GlobVisitor(target, entryOption -> {
+                if (entryOption.isPresent()) {
+                    MetadataNode node = entryOption.get().getValue();
+                    if (node instanceof DirectoryNode) {
+                        DirectoryNode directory = (DirectoryNode) node;
+                        List<String> children = new ArrayList<>();
+                        children.addAll(directory.children().keySet());
+                        targetDirectories.add(new TargetDirectory(target, children));
+                    } else if (node instanceof FileNode) {
+                        targetFiles.add(target);
+                    }
+                } else {
+                    writer.println("ls: " + target + ": no such file or directory.");
                 }
             }));
         }

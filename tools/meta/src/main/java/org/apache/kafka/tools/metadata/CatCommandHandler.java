@@ -44,13 +44,17 @@ public final class CatCommandHandler implements Command.Handler {
                     MetadataNodeManager manager) throws Exception {
         log.trace("cat " + targets);
         for (String target : targets) {
-            manager.visit(new GlobVisitor(target, entry -> {
-                MetadataNode node = entry.getValue();
-                if (node instanceof DirectoryNode) {
-                    writer.println("cat: " + target + ": Is a directory");
-                } else if (node instanceof FileNode) {
-                    FileNode fileNode = (FileNode) node;
-                    writer.println(fileNode.contents());
+            manager.visit(new GlobVisitor(target, entryOption -> {
+                if (entryOption.isPresent()) {
+                    MetadataNode node = entryOption.get().getValue();
+                    if (node instanceof DirectoryNode) {
+                        writer.println("cat: " + target + ": Is a directory");
+                    } else if (node instanceof FileNode) {
+                        FileNode fileNode = (FileNode) node;
+                        writer.println(fileNode.contents());
+                    }
+                } else {
+                    writer.println("cat: " + target + ": No such file or directory.");
                 }
             }));
         }
