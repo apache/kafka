@@ -246,6 +246,11 @@ public class AbstractProcessorContextTest {
         public void commit() {}
 
         @Override
+        public long currentSystemTimeMs() {
+            throw new UnsupportedOperationException("this method is not supported in TestProcessorContext");
+        }
+
+        @Override
         public long currentStreamTimeMs() {
             throw new UnsupportedOperationException("this method is not supported in TestProcessorContext");
         }
