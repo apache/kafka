@@ -202,7 +202,7 @@ class ClientQuotasRequestTest extends BaseRequestTest {
     val defaultEntityFilter = ClientQuotaFilterComponent.ofDefaultEntity(ClientQuotaEntity.IP)
     val allIpEntityFilter = ClientQuotaFilterComponent.ofEntityType(ClientQuotaEntity.IP)
 
-    def verifyIpQuotas(entityFilter: ClientQuotaFilterComponent, expectedMatches: Map[ClientQuotaEntity, Double]): Unit = TestUtils.retry(10000L){
+    def verifyIpQuotas(entityFilter: ClientQuotaFilterComponent, expectedMatches: Map[ClientQuotaEntity, Double]): Unit = {
       val result = describeClientQuotas(ClientQuotaFilter.containsOnly(List(entityFilter).asJava))
       assertEquals(expectedMatches.keySet, result.asScala.keySet)
       result.asScala.foreach { case (entity, props) =>
@@ -214,7 +214,9 @@ class ClientQuotasRequestTest extends BaseRequestTest {
           InetAddress.getByName(unknownHost)
         else
           InetAddress.getByName(entityName)
-        assertEquals(expectedMatches(entity), servers.head.socketServer.connectionQuotas.connectionRateForIp(entityIp), 0.01)
+        TestUtils.retry(10000L) {
+          assertEquals(expectedMatches(entity), servers.head.socketServer.connectionQuotas.connectionRateForIp(entityIp), 0.01)
+        }
       }
     }
 
