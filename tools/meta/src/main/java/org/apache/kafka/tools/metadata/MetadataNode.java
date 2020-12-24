@@ -32,17 +32,35 @@ public interface MetadataNode {
             this.parent = parent == null ? this : parent;
         }
 
-        public DirectoryNode mkdirs(String name) {
-            MetadataNode node = children.get(name);
-            if (node == null) {
-                node = new DirectoryNode(this);
-                children.put(name, node);
-            } else {
-                if (!(node instanceof DirectoryNode)) {
-                    throw new NotDirectoryException();
-                }
+        public DirectoryNode mkdirs(String... names) {
+            if (names.length == 0) {
+                throw new RuntimeException("Invalid zero-length path");
             }
-            return (DirectoryNode) node;
+            DirectoryNode node = this;
+            for (int i = 0; i < names.length; i++) {
+                MetadataNode nextNode = node.children.get(names[i]);
+                if (nextNode == null) {
+                    nextNode = new DirectoryNode(this);
+                    children.put(names[i], node);
+                } else {
+                    if (!(nextNode instanceof DirectoryNode)) {
+                        throw new NotDirectoryException();
+                    }
+                }
+                node = (DirectoryNode) nextNode;
+            }
+            return node;
+        }
+
+        public void rmrf(String... names) {
+            if (names.length == 0) {
+                throw new RuntimeException("Invalid zero-length path");
+            }
+            DirectoryNode node = this;
+            for (int i = 0; i < names.length - 1; i++) {
+                node = node.directory(names[i]);
+            }
+            node.children.remove(names[names.length - 1]);
         }
 
         public FileNode create(String name) {
@@ -68,6 +86,47 @@ public interface MetadataNode {
 
         public NavigableMap<String, MetadataNode> children() {
             return children;
+        }
+
+        public void addChild(String name, DirectoryNode child) {
+            children.put(name, child);
+        }
+
+        public DirectoryNode directory(String... names) {
+            if (names.length == 0) {
+                throw new RuntimeException("Invalid zero-length path");
+            }
+            DirectoryNode node = this;
+            for (int i = 0; i < names.length; i++) {
+                MetadataNode nextNode = node.children.get(names[i]);
+                if (nextNode == null || !(nextNode instanceof DirectoryNode)) {
+                    throw new RuntimeException("Unable to locate directory /" +
+                        String.join("/", names));
+                }
+                node = (DirectoryNode) nextNode;
+            }
+            return node;
+        }
+
+        public FileNode file(String... names) {
+            if (names.length == 0) {
+                throw new RuntimeException("Invalid zero-length path");
+            }
+            DirectoryNode node = this;
+            for (int i = 0; i < names.length - 1; i++) {
+                MetadataNode nextNode = node.children.get(names[i]);
+                if (nextNode == null || !(nextNode instanceof DirectoryNode)) {
+                    throw new RuntimeException("Unable to locate file /" +
+                        String.join("/", names));
+                }
+                node = (DirectoryNode) nextNode;
+            }
+            MetadataNode nextNode = node.child(names[names.length -  1]);
+            if (nextNode == null || !(nextNode instanceof FileNode)) {
+                throw new RuntimeException("Unable to locate file /" +
+                    String.join("/", names));
+            }
+            return (FileNode) nextNode;
         }
     }
 
