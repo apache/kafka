@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.kstream;
 
+import java.util.Objects;
 import java.util.function.Consumer;
 import java.util.function.Function;
 
@@ -56,8 +57,7 @@ public class Branched<K, V> implements NamedOperation<Branched<K, V>> {
     /**
      * Create an instance of {@code Branched} with provided chain function.
      *
-     * @param chain A function that will be applied to the branch. If {@code null}, the identity
-     *              {@code kStream -> kStream} function will be used. If the provided function returns
+     * @param chain A function that will be applied to the branch. If the provided function returns
      *              {@code null}, its result is ignored, otherwise it is added to the {@code Map} returned
      *              by {@link BranchedKStream#defaultBranch()} or {@link BranchedKStream#noDefaultBranch()} (see
      *              {@link BranchedKStream} description for details).
@@ -67,13 +67,14 @@ public class Branched<K, V> implements NamedOperation<Branched<K, V>> {
      */
     public static <K, V> Branched<K, V> withFunction(
             final Function<? super KStream<K, V>, ? extends KStream<K, V>> chain) {
+        Objects.requireNonNull(chain, "chain function should not be null");
         return new Branched<>(null, chain, null);
     }
 
     /**
      * Create an instance of {@code Branched} with provided chain consumer.
      *
-     * @param chain A consumer to which the branch will be sent. If a non-null consumer is provided here,
+     * @param chain A consumer to which the branch will be sent. If a consumer is provided here,
      *              the respective branch will not be added to the resulting {@code Map} returned
      *              by {@link BranchedKStream#defaultBranch()} or {@link BranchedKStream#noDefaultBranch()} (see
      *              {@link BranchedKStream} description for details). If {@code null}, a no-op consumer will be used
@@ -83,6 +84,7 @@ public class Branched<K, V> implements NamedOperation<Branched<K, V>> {
      * @return a new instance of {@code Branched}
      */
     public static <K, V> Branched<K, V> withConsumer(final Consumer<KStream<K, V>> chain) {
+        Objects.requireNonNull(chain, "chain consumer should not be null");
         return new Branched<>(null, null, chain);
     }
 
@@ -102,6 +104,7 @@ public class Branched<K, V> implements NamedOperation<Branched<K, V>> {
      */
     public static <K, V> Branched<K, V> withFunction(
             final Function<? super KStream<K, V>, ? extends KStream<K, V>> chain, final String name) {
+        Objects.requireNonNull(chain, "chain function should not be null");
         return new Branched<>(name, chain, null);
     }
 
@@ -121,6 +124,7 @@ public class Branched<K, V> implements NamedOperation<Branched<K, V>> {
      */
     public static <K, V> Branched<K, V> withConsumer(final Consumer<? super KStream<K, V>> chain,
                                                      final String name) {
+        Objects.requireNonNull(chain, "chain consumer should not be null");
         return new Branched<>(name, null, chain);
     }
 
