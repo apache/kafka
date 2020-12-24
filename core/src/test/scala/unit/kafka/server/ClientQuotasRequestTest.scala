@@ -215,6 +215,7 @@ class ClientQuotasRequestTest extends BaseRequestTest {
         else
           InetAddress.getByName(entityName)
         TestUtils.retry(10000L) {
+          //retry until Broker update prop from Zookeeper
           assertEquals(expectedMatches(entity), servers.head.socketServer.connectionQuotas.connectionRateForIp(entityIp), 0.01)
         }
       }
