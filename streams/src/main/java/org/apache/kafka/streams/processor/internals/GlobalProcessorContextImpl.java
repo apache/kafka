@@ -17,6 +17,7 @@
 package org.apache.kafka.streams.processor.internals;
 
 import org.apache.kafka.common.utils.Bytes;
+import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.processor.Cancellable;
 import org.apache.kafka.streams.processor.PunctuationType;
@@ -117,7 +118,7 @@ public class GlobalProcessorContextImpl extends AbstractProcessorContext {
 
     @Override
     public long currentSystemTimeMs() {
-        throw new UnsupportedOperationException("this method is not supported in global processor context.");
+        return Time.SYSTEM.milliseconds();
     }
 
     @Override
