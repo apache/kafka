@@ -782,7 +782,7 @@ public interface KStream<K, V> {
     KStream<K, V>[] branch(final Named named, final Predicate<? super K, ? super V>... predicates);
 
     /**
-     * Splits this stream. {@link BranchedKStream} can be used for routing the records to different branches depending
+     * Split this stream. {@link BranchedKStream} can be used for routing the records to different branches depending
      * on evaluation against the supplied predicates.
      * Stream branching is a stateless record-by-record operation.
      *
@@ -791,7 +791,7 @@ public interface KStream<K, V> {
     BranchedKStream<K, V> split();
 
     /**
-     * Splits this stream. {@link BranchedKStream} can be used for routing the records to different branches depending
+     * Split this stream. {@link BranchedKStream} can be used for routing the records to different branches depending
      * on evaluation against the supplied predicates.
      * Stream branching is a stateless record-by-record operation.
      *

@@ -35,7 +35,7 @@ public class BranchedKStreamImpl<K, V> implements BranchedKStream<K, V> {
     private final KStreamImpl<K, V> source;
     private final boolean repartitionRequired;
     private final String splitterName;
-    private final Map<String, KStream<K, V>> result = new HashMap<>();
+    private final Map<String, KStream<K, V>> outputBranches = new HashMap<>();
 
     private final List<Predicate<? super K, ? super V>> predicates = new ArrayList<>();
     private final List<String> childNames = new ArrayList<>();
@@ -47,10 +47,10 @@ public class BranchedKStreamImpl<K, V> implements BranchedKStream<K, V> {
         this.splitterName = named.orElseGenerateWithPrefix(source.builder, BRANCH_NAME);
 
         // predicates and childNames are passed by reference so when the user adds a branch they get added to
-        final ProcessorParameters<K, V> processorParameters =
+        final ProcessorParameters<K, V, ?, ?> processorParameters =
                 new ProcessorParameters<>(new KStreamBranch<>(predicates, childNames), splitterName);
         splitterNode = new ProcessorGraphNode<>(splitterName, processorParameters);
-        source.builder.addGraphNode(source.streamsGraphNode, splitterNode);
+        source.builder.addGraphNode(source.graphNode, splitterNode);
     }
 
     @Override
@@ -73,25 +73,47 @@ public class BranchedKStreamImpl<K, V> implements BranchedKStream<K, V> {
     @Override
     public Map<String, KStream<K, V>> defaultBranch(final Branched<K, V> branched) {
         createBranch(branched, 0);
-        return result;
+        return outputBranches;
     }
 
     private void createBranch(final Branched<K, V> branched, final int index) {
         final BranchedInternal<K, V> branchedInternal = new BranchedInternal<>(branched);
-        final String branchChildName = branchedInternal.branchProcessorName(splitterName, index);
+        final String branchChildName = getBranchChildName(index, branchedInternal);
         childNames.add(branchChildName);
         source.builder.newProcessorName(branchChildName);
-        final ProcessorParameters<K, V> parameters = new ProcessorParameters<>(new PassThrough<>(), branchChildName);
+        final ProcessorParameters<K, V, ?, ?> parameters = new ProcessorParameters<>(new PassThrough<>(), branchChildName);
         final ProcessorGraphNode<K, V> branchChildNode = new ProcessorGraphNode<>(branchChildName, parameters);
         source.builder.addGraphNode(splitterNode, branchChildNode);
-        final KStreamImpl<K, V> newStream = new KStreamImpl<>(branchChildName, source.keySerde,
+        final KStreamImpl<K, V> branch = new KStreamImpl<>(branchChildName, source.keySerde,
                 source.valueSerde, source.subTopologySourceNodes,
                 repartitionRequired, branchChildNode, source.builder);
-        branchedInternal.process(newStream, branchChildName, result);
+        process(branch, branchChildName, branchedInternal);
+    }
+
+    private String getBranchChildName(final int index, final BranchedInternal<K, V> branchedInternal) {
+        if (branchedInternal.getName() == null) {
+            return splitterName + index;
+        } else {
+            return splitterName + branchedInternal.getName();
+        }
+    }
+
+    private void process(final KStreamImpl<K, V> branch, final String branchChildName,
+                         final BranchedInternal<K, V> branchedInternal) {
+        if (branchedInternal.getChainFunction() != null) {
+            final KStream<K, V> transformedStream = branchedInternal.getChainFunction().apply(branch);
+            if (transformedStream != null) {
+                outputBranches.put(branchChildName, transformedStream);
+            }
+        } else if (branchedInternal.getChainConsumer() != null) {
+            branchedInternal.getChainConsumer().accept(branch);
+        } else {
+            outputBranches.put(branchChildName, branch);
+        }
     }
 
     @Override
     public Map<String, KStream<K, V>> noDefaultBranch() {
-        return result;
+        return outputBranches;
     }
 }

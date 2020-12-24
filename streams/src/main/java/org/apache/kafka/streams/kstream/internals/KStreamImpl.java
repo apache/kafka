@@ -503,6 +503,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
 
     @Override
     public BranchedKStream<K, V> split(final Named named) {
+        Objects.requireNonNull(named, "named can't be null");
         return new BranchedKStreamImpl<>(this, repartitionRequired, new NamedInternal(named));
     }
 

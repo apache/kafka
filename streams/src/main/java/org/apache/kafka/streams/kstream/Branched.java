@@ -29,8 +29,7 @@ import java.util.function.Function;
 public class Branched<K, V> implements NamedOperation<Branched<K, V>> {
 
     protected final String name;
-    protected final Function<? super KStream<K, V>,
-            ? extends KStream<K, V>> chainFunction;
+    protected final Function<? super KStream<K, V>, ? extends KStream<K, V>> chainFunction;
     protected final Consumer<? super KStream<K, V>> chainConsumer;
 
     protected Branched(final String name,
@@ -42,16 +41,100 @@ public class Branched<K, V> implements NamedOperation<Branched<K, V>> {
     }
 
     /**
-     * Create an instance of {@link Branched} from an existing instance.
+     * Create an instance of {@code Branched} with provided branch name postfix.
      *
-     * @param branched the instance of {@link Branched} to copy
+     * @param name the branch name postfix to be used. If {@code null}, a default branch name postfix will be generated
+     *             (see {@link BranchedKStream} description for details)
+     * @param <K>  key type
+     * @param <V>  value type
+     * @return a new instance of {@code Branched}
+     */
+    public static <K, V> Branched<K, V> as(final String name) {
+        return new Branched<>(name, null, null);
+    }
+
+    /**
+     * Create an instance of {@code Branched} with provided chain function.
+     *
+     * @param chain A function that will be applied to the branch. If {@code null}, the identity
+     *              {@code kStream -> kStream} function will be used. If the provided function returns
+     *              {@code null}, its result is ignored, otherwise it is added to the {@code Map} returned
+     *              by {@link BranchedKStream#defaultBranch()} or {@link BranchedKStream#noDefaultBranch()} (see
+     *              {@link BranchedKStream} description for details).
+     * @param <K>   key type
+     * @param <V>   value type
+     * @return a new instance of {@code Branched}
+     */
+    public static <K, V> Branched<K, V> withFunction(
+            final Function<? super KStream<K, V>, ? extends KStream<K, V>> chain) {
+        return new Branched<>(null, chain, null);
+    }
+
+    /**
+     * Create an instance of {@code Branched} with provided chain consumer.
+     *
+     * @param chain A consumer to which the branch will be sent. If a non-null consumer is provided here,
+     *              the respective branch will not be added to the resulting {@code Map} returned
+     *              by {@link BranchedKStream#defaultBranch()} or {@link BranchedKStream#noDefaultBranch()} (see
+     *              {@link BranchedKStream} description for details). If {@code null}, a no-op consumer will be used
+     *              and the branch will be added to the resulting {@code Map}.
+     * @param <K>   key type
+     * @param <V>   value type
+     * @return a new instance of {@code Branched}
+     */
+    public static <K, V> Branched<K, V> withConsumer(final Consumer<KStream<K, V>> chain) {
+        return new Branched<>(null, null, chain);
+    }
+
+    /**
+     * Create an instance of {@code Branched} with provided chain function and branch name postfix.
+     *
+     * @param chain A function that will be applied to the branch. If {@code null}, the identity
+     *              {@code kStream -> kStream} function will be used. If the provided function returns
+     *              {@code null}, its result is ignored, otherwise it is added to the {@code Map} returned
+     *              by {@link BranchedKStream#defaultBranch()} or {@link BranchedKStream#noDefaultBranch()} (see
+     *              {@link BranchedKStream} description for details).
+     * @param name  the branch name postfix to be used. If {@code null}, a default branch name postfix will be generated
+     *              (see {@link BranchedKStream} description for details)
+     * @param <K>   key type
+     * @param <V>   value type
+     * @return a new instance of {@code Branched}
+     */
+    public static <K, V> Branched<K, V> withFunction(
+            final Function<? super KStream<K, V>, ? extends KStream<K, V>> chain, final String name) {
+        return new Branched<>(name, chain, null);
+    }
+
+    /**
+     * Create an instance of {@code Branched} with provided chain function and branch name postfix.
+     *
+     * @param chain A consumer to which the branch will be sent. If a non-null consumer is provided here,
+     *              the respective branch will not be added to the resulting {@code Map} returned
+     *              by {@link BranchedKStream#defaultBranch()} or {@link BranchedKStream#noDefaultBranch()} (see
+     *              {@link BranchedKStream} description for details). If {@code null}, a no-op consumer will be used
+     *              and the branch will be added to the resulting {@code Map}.
+     * @param name  the branch name postfix to be used. If {@code null}, a default branch name postfix will be generated
+     *              (see {@link BranchedKStream} description for details)
+     * @param <K>   key type
+     * @param <V>   value type
+     * @return a new instance of {@code Branched}
+     */
+    public static <K, V> Branched<K, V> withConsumer(final Consumer<? super KStream<K, V>> chain,
+                                                     final String name) {
+        return new Branched<>(name, null, chain);
+    }
+
+    /**
+     * Create an instance of {@code Branched} from an existing instance.
+     *
+     * @param branched the instance of {@code Branched} to copy
      */
     protected Branched(final Branched<K, V> branched) {
         this(branched.name, branched.chainFunction, branched.chainConsumer);
     }
 
     /**
-     * Configure the instance of {@link Branched} with a branch name postfix.
+     * Configure the instance of {@code Branched} with a branch name postfix.
      *
      * @param name the branch name postfix to be used. If {@code null} a default branch name postfix will be generated (see
      *             {@link BranchedKStream} description for details)
@@ -60,91 +143,5 @@ public class Branched<K, V> implements NamedOperation<Branched<K, V>> {
     @Override
     public Branched<K, V> withName(final String name) {
         return new Branched<>(name, chainFunction, chainConsumer);
-    }
-
-    /**
-     * Create an instance of {@link Branched} with provided branch name postfix.
-     *
-     * @param name the branch name postfix to be used. If {@code null}, a default branch name postfix will be generated
-     *             (see {@link BranchedKStream} description for details)
-     * @param <K>  key type
-     * @param <V>  value type
-     * @return a new instance of {@link Branched}
-     */
-    public static <K, V> Branched<K, V> as(final String name) {
-        return new Branched<>(name, null, null);
-    }
-
-    /**
-     * Create an instance of {@link Branched} with provided chain function.
-     *
-     * @param chain A function that will be applied to the branch. If {@code null}, the identity
-     *              {@code kStream -> kStream} function will be supposed. If this function returns
-     *              {@code null}, its result is ignored, otherwise it is added to the {@code Map} returned
-     *              by {@link BranchedKStream#defaultBranch()} or {@link BranchedKStream#noDefaultBranch()} (see
-     *              {@link BranchedKStream} description for details).
-     * @param <K>   key type
-     * @param <V>   value type
-     * @return a new instance of {@link Branched}
-     */
-    public static <K, V> Branched<K, V> withFunction(
-            final Function<? super KStream<K, V>,
-                    ? extends KStream<K, V>> chain) {
-        return new Branched<>(null, chain, null);
-    }
-
-    /**
-     * Create an instance of {@link Branched} with provided chain consumer.
-     *
-     * @param chain A consumer to which the branch will be sent. If a non-null branch is provided here,
-     *              the respective branch will not be added to the resulting {@code Map} returned
-     *              by {@link BranchedKStream#defaultBranch()} or {@link BranchedKStream#noDefaultBranch()} (see
-     *              {@link BranchedKStream} description for details). If {@code null}, a no-op consumer will be supposed
-     *              and the branch will be added to the resulting {@code Map}.
-     * @param <K>   key type
-     * @param <V>   value type
-     * @return a new instance of {@link Branched}
-     */
-    public static <K, V> Branched<K, V> withConsumer(final Consumer<KStream<K, V>> chain) {
-        return new Branched<K, V>(null, null, chain);
-    }
-
-    /**
-     * Create an instance of {@link Branched} with provided chain function and branch name postfix.
-     *
-     * @param chain A function that will be applied to the branch. If {@code null}, the identity
-     *              {@code kStream -> kStream} function will be supposed. If this function returns
-     *              {@code null}, its result is ignored, otherwise it is added to the {@code Map} returned
-     *              by {@link BranchedKStream#defaultBranch()} or {@link BranchedKStream#noDefaultBranch()} (see
-     *              {@link BranchedKStream} description for details).
-     * @param name  the branch name postfix to be used. If {@code null}, a default branch name postfix will be generated
-     *              (see {@link BranchedKStream} description for details)
-     * @param <K>   key type
-     * @param <V>   value type
-     * @return a new instance of {@link Branched}
-     */
-    public static <K, V> Branched<K, V> withFunction(
-            final Function<? super KStream<K, V>,
-                    ? extends KStream<K, V>> chain, final String name) {
-        return new Branched<>(name, chain, null);
-    }
-
-    /**
-     * Create an instance of {@link Branched} with provided chain function and branch name postfix.
-     *
-     * @param chain A consumer to which the branch will be sent. If a non-null branch is provided here,
-     *              the respective branch will not be added to the resulting {@code Map} returned
-     *              by {@link BranchedKStream#defaultBranch()} or {@link BranchedKStream#noDefaultBranch()} (see
-     *              {@link BranchedKStream} description for details). If {@code null}, a no-op consumer will be supposed
-     *              and the branch will be added to the resulting {@code Map}.
-     * @param name  the branch name postfix to be used. If {@code null}, a default branch name postfix will be generated
-     *              (see {@link BranchedKStream} description for details)
-     * @param <K>   key type
-     * @param <V>   value type
-     * @return a new instance of {@link Branched}
-     */
-    public static <K, V> Branched<K, V> withConsumer(final Consumer<? super KStream<K, V>> chain,
-                                                     final String name) {
-        return new Branched<>(name, null, chain);
     }
 }

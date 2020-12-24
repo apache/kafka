@@ -19,7 +19,8 @@ package org.apache.kafka.streams.kstream.internals;
 import org.apache.kafka.streams.kstream.Branched;
 import org.apache.kafka.streams.kstream.KStream;
 
-import java.util.Map;
+import java.util.function.Consumer;
+import java.util.function.Function;
 
 class BranchedInternal<K, V> extends Branched<K, V> {
     BranchedInternal(final Branched<K, V> branched) {
@@ -34,29 +35,15 @@ class BranchedInternal<K, V> extends Branched<K, V> {
         return new BranchedInternal<>();
     }
 
-    String branchProcessorName(final String prefix, final int index) {
-        if (name == null) {
-            return prefix + index;
-        } else {
-            return prefix + name;
-        }
+    String getName() {
+        return name;
     }
 
-    public void process(final KStreamImpl<K, V> newStream, final String branchChildName, final Map<String, KStream<K, V>> result) {
-        final KStream<K, V> transformedStream;
-        if (chainFunction == null) {
-            transformedStream = newStream;
-        } else {
-            transformedStream = chainFunction.apply(newStream);
-        }
-        if (transformedStream == null) {
-            return;
-        }
-        if (chainConsumer != null) {
-            chainConsumer.accept(transformedStream);
-            return;
-        } else {
-            result.put(branchChildName, transformedStream);
-        }
+    public Function<? super KStream<K, V>, ? extends KStream<K, V>> getChainFunction() {
+        return chainFunction;
+    }
+
+    public Consumer<? super KStream<K, V>> getChainConsumer() {
+        return chainConsumer;
     }
 }
