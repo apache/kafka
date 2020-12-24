@@ -416,7 +416,7 @@ public class ProtocolSerializationTest {
         oldFormat.writeTo(buffer);
         buffer.flip();
         SchemaException e = assertThrows(SchemaException.class, () -> newSchema.read(buffer));
-        assertThat(e.getMessage(), containsString("Error reading field 'field2': java.nio.BufferUnderflowException"));
+        assertThat(e.getMessage(), containsString("Error reading field 'field2':"));
     }
 
     @Test
