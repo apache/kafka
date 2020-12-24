@@ -188,7 +188,7 @@ class DumpLogSegmentsTest {
     val metadataRecords = Seq(
       new RegisterBrokerRecord().setBrokerId(0).setBrokerEpoch(10),
       new RegisterBrokerRecord().setBrokerId(1).setBrokerEpoch(20),
-      new TopicRecord().setName("test-topic").setDeleting(false).setTopicId(Uuid.randomUuid()),
+      new TopicRecord().setName("test-topic").setTopicId(Uuid.randomUuid()),
       new IsrChangeRecord().setTopicId(Uuid.randomUuid()).setLeader(1).setPartitionId(0).setLeaderEpoch(100).setIsr(util.Arrays.asList(0, 1, 2))
     )
 

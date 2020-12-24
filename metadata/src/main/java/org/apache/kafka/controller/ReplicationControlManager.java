@@ -226,7 +226,6 @@ public class ReplicationControlManager {
         Uuid topicId = Uuid.randomUuid();
         records.add(new ApiMessageAndVersion(new TopicRecord().
             setName(topic.name()).
-            setDeleting(false).
             setTopicId(topicId), (short) 0));
         for (Entry<Integer, PartitionControlInfo> partEntry : newParts.entrySet()) {
             int partitionIndex = partEntry.getKey();

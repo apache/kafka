@@ -364,7 +364,7 @@ class PartitionMetadataProcessor(kafkaConfig: KafkaConfig,
     metadataLogEvent.apiMessages.asScala.foreach {
       case _: RegisterBrokerRecord | _: UnfenceBrokerRecord => numBrokersAdding += 1
       case _: FenceBrokerRecord => numBrokersFencing += 1
-      case topic: TopicRecord => if (!topic.deleting()) numTopicsAdding += 1
+      case _: TopicRecord => numTopicsAdding += 1
       case _ => // no need to do anything for other record types
     }
 
@@ -605,38 +605,13 @@ class PartitionMetadataProcessor(kafkaConfig: KafkaConfig,
   private def process(topicRecord: TopicRecord, mgr: MetadataMgr): Unit = {
     val topicId = topicRecord.topicId()
     val topicName = topicRecord.name()
-    if (!topicRecord.deleting()) { // topic adding
-      if (mgr.getCurrentTopicIdMap().containsKey(topicId) || mgr.getCurrentPartitionStates().get(topicName).isDefined) {
-        error(s"Skipping metadata message for a new topic that already exists: $topicRecord")
-      } else {
-        mgr.getCopiedPartitionStates()(topicName) = mutable.LongMap.empty
-        mgr.getCopiedTopicIdMap().put(topicId, topicName)
-        if (metadataCache.stateChangeTraceEnabled()) {
-          metadataCache.logStateChangeTrace(s"Caching new topic $topicId/$topicName with no partitions (yet) via metadata log")
-        }
-      }
-    } else { // topic deleting
-      val currentPartitionStatesForTopic = mgr.getCurrentPartitionStates().get(topicName)
-      if (currentPartitionStatesForTopic.isEmpty) {
-        error(s"Skipping metadata message for a topic to be deleted that doesn't exist: $topicRecord")
-      } else {
-        val deletingPartitionsForThisTopic = currentPartitionStatesForTopic.get.keySet.map(
-          partition => new TopicPartition(topicName, partition.toInt))
-        val copiedPartitionStates = mgr.getCopiedPartitionStates()
-        // collect the topic partitions where we are a replica so we can stop/delete
-        deletingPartitionsForThisTopic.filter(tp =>
-          copiedPartitionStates.get(topicName).exists(infos => infos.get(tp.partition()).exists(partitionState =>
-            partitionState.replicas().contains(kafkaConfig.brokerId)))).foreach(partition =>
-          mgr.topicPartitionsNeedingStopReplica(partition) = LeaderAndIsr.EpochDuringDelete)
-        // delete the partitions from the metadata
-        deletingPartitionsForThisTopic.foreach(tp => {
-          MetadataCache.removePartitionInfo(copiedPartitionStates, topicName, tp.partition())
-          if (metadataCache.stateChangeTraceEnabled())
-            metadataCache.logStateChangeTrace(s"Deleting partition $tp from metadata cache in response to a TopicRecord on the metadata log")
-        })
-        // notify group coordinator of the deleting partitions right away since this isn't too expensive
-        groupCoordinator.handleDeletedPartitions(deletingPartitionsForThisTopic.toSeq)
-        mgr.requiresUpdateQuotaMetricConfigs = true
+    if (mgr.getCurrentTopicIdMap().containsKey(topicId) || mgr.getCurrentPartitionStates().get(topicName).isDefined) {
+      error(s"Skipping metadata message for a new topic that already exists: $topicRecord")
+    } else {
+      mgr.getCopiedPartitionStates()(topicName) = mutable.LongMap.empty
+      mgr.getCopiedTopicIdMap().put(topicId, topicName)
+      if (metadataCache.stateChangeTraceEnabled()) {
+        metadataCache.logStateChangeTrace(s"Caching new topic $topicId/$topicName with no partitions (yet) via metadata log")
       }
     }
   }
@@ -787,13 +762,40 @@ class PartitionMetadataProcessor(kafkaConfig: KafkaConfig,
    * @param mgr the current state to use
    */
   private def process(removeTopic: RemoveTopicRecord, mgr: MetadataMgr): Unit = {
-    mgr.getCopiedTopicIdMap().remove(removeTopic.topicId())
+    val topicName = mgr.getCopiedTopicIdMap().remove(removeTopic.topicId())
+    if (topicName == null) {
+      error("Found RemoveTopicRecord for topic id " + removeTopic.topicId() + ", but " +
+        "there was no corresponding entry in the topicId map.")
+    } else {
+      val currentPartitionStatesForTopic = mgr.getCurrentPartitionStates().get(topicName)
+      if (currentPartitionStatesForTopic.isEmpty) {
+        error(s"Skipping metadata message for a topic to be deleted that doesn't exist: $topicName")
+      } else {
+        val deletingPartitionsForThisTopic = currentPartitionStatesForTopic.get.keySet.map(
+          partition => new TopicPartition(topicName, partition.toInt))
+        val copiedPartitionStates = mgr.getCopiedPartitionStates()
+        // collect the topic partitions where we are a replica so we can stop/delete
+        deletingPartitionsForThisTopic.filter(tp =>
+          copiedPartitionStates.get(topicName).exists(infos => infos.get(tp.partition()).exists(partitionState =>
+            partitionState.replicas().contains(kafkaConfig.brokerId)))).foreach(partition =>
+          mgr.topicPartitionsNeedingStopReplica(partition) = LeaderAndIsr.EpochDuringDelete)
+        // delete the partitions from the metadata
+        deletingPartitionsForThisTopic.foreach(tp => {
+          MetadataCache.removePartitionInfo(copiedPartitionStates, topicName, tp.partition())
+          if (metadataCache.stateChangeTraceEnabled())
+            metadataCache.logStateChangeTrace(s"Deleting partition $tp from metadata cache in response to a TopicRecord on the metadata log")
+        })
+        // notify group coordinator of the deleting partitions right away since this isn't too expensive
+        groupCoordinator.handleDeletedPartitions(deletingPartitionsForThisTopic.toSeq)
+        mgr.requiresUpdateQuotaMetricConfigs = true
+      }
+    }
   }
 
-  /**
-   * Handle Config Record
-   *
-   * Update configs as indicated.
+/**
+ * Handle Config Record
+ *
+ * Update configs as indicated.
    *
    * @param config the record to process
    */

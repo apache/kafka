@@ -26,7 +26,7 @@ import kafka.server.{ClientQuotaManager, ClientRequestQuotaManager, ConfigHandle
 import org.apache.kafka.common.config.ConfigResource
 import org.apache.kafka.common.message.UpdateMetadataRequestData.UpdateMetadataPartitionState
 import org.apache.kafka.common.metadata.RegisterBrokerRecord.BrokerEndpointCollection
-import org.apache.kafka.common.metadata.{RegisterBrokerRecord, ConfigRecord, TopicRecord}
+import org.apache.kafka.common.metadata.{ConfigRecord, RegisterBrokerRecord, RemoveTopicRecord, TopicRecord}
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.protocol.ApiMessage
 import org.apache.kafka.common.security.auth.SecurityProtocol
@@ -73,7 +73,7 @@ class PartitionMetadataProcessorTest {
 
     val uuid0 = Uuid.randomUuid()
     val name0 = "topic0"
-    val topicRecord0 = new TopicRecord().setDeleting(false).setName(name0).setTopicId(uuid0)
+    val topicRecord0 = new TopicRecord().setName(name0).setTopicId(uuid0)
 
     val host0 = "host0"
     val listener0 = "listener0"
@@ -160,8 +160,8 @@ class PartitionMetadataProcessorTest {
     // now add a different topic and delete the first topic as part of a batch
     val uuid1 = Uuid.randomUuid()
     val name1 = "topic1"
-    val topicRecord1 = new TopicRecord().setDeleting(false).setName(name1).setTopicId(uuid1)
-    val topicRecord0Deleting = new TopicRecord().setDeleting(true).setName(name0).setTopicId(uuid0)
+    val topicRecord1 = new TopicRecord().setName(name1).setTopicId(uuid1)
+    val topicRecord0Deleting = new RemoveTopicRecord().setTopicId(uuid0)
 
     // there should be no change until we process the message
     // confirm no broker-related changes from last update

@@ -19,11 +19,9 @@
   "name": "TopicRecord",
   "validVersions": "0",
   "fields": [
-        { "name": "Name", "type": "string", "versions": "0+",
-          "about": "The topic name." },
-        { "name": "TopicId", "type": "uuid", "versions": "0+",
-          "about": "The unique ID of this topic." },
-        { "name": "Deleting", "type": "bool", "versions": "0+",
-          "about": "True if this topic is in the process of being deleted." }
+    { "name": "Name", "type": "string", "versions": "0+",
+      "about": "The topic name." },
+    { "name": "TopicId", "type": "uuid", "versions": "0+",
+      "about": "The unique ID of this topic." }
   ]
 }
