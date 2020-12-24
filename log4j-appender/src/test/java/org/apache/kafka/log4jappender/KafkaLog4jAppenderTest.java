@@ -120,7 +120,7 @@ public class KafkaLog4jAppenderTest {
     }
 
     @Test
-    public void syncSendAndSimulateProducerFailShouldThrowException() {
+    public void testSyncSendAndSimulateProducerFailShouldThrowException() {
         Properties props = getLog4jConfig(true);
         props.put("log4j.appender.KAFKA.IgnoreExceptions", "false");
         PropertyConfigurator.configure(props);
@@ -132,7 +132,7 @@ public class KafkaLog4jAppenderTest {
     }
 
     @Test
-    public void syncSendWithoutIgnoringExceptionsShouldNotThrowException() {
+    public void testSyncSendWithoutIgnoringExceptionsShouldNotThrowException() {
         Properties props = getLog4jConfig(true);
         props.put("log4j.appender.KAFKA.IgnoreExceptions", "false");
         PropertyConfigurator.configure(props);
@@ -144,7 +144,7 @@ public class KafkaLog4jAppenderTest {
     }
 
     @Test
-    public void realProducerConfigWithSyncSendShouldNotThrowException() {
+    public void testRealProducerConfigWithSyncSendShouldNotThrowException() {
         Properties props = getLog4jConfigWithRealProducer(true);
         PropertyConfigurator.configure(props);
 
@@ -152,7 +152,7 @@ public class KafkaLog4jAppenderTest {
     }
 
     @Test
-    public void realProducerConfigWithSyncSendAndNotIgnoringExceptionsShouldThrowException() {
+    public void testRealProducerConfigWithSyncSendAndNotIgnoringExceptionsShouldThrowException() {
         Properties props = getLog4jConfigWithRealProducer(false);
         PropertyConfigurator.configure(props);
 
