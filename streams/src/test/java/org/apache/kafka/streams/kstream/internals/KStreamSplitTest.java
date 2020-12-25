@@ -127,4 +127,17 @@ public class KStreamSplitTest {
             assertEquals(Arrays.asList("V1"), defaultBranch.readValuesToList());
         });
     }
+
+    @Test
+    public void testBranchingWithNoTerminalOperation() {
+        source.split()
+                .branch(isEven, Branched.withConsumer(ks -> ks.to("output")))
+                .branch(isMultipleOfFive, Branched.withConsumer(ks -> ks.to("output")));
+        builder.build();
+        withDriver(driver -> {
+            final TestOutputTopic<Integer, String> outputTopic =
+                    driver.createOutputTopic("output", new IntegerDeserializer(), new StringDeserializer());
+            assertEquals(Arrays.asList("V2", "V4", "V5", "V6"), outputTopic.readValuesToList());
+        });
+    }
 }
