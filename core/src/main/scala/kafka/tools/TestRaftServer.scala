@@ -317,7 +317,8 @@ class RaftSocketServer(
     listenerName: ListenerName,
     securityProtocol: SecurityProtocol,
     memoryPool: MemoryPool,
-    isPrivilegedListener: Boolean
+    isPrivilegedListener: Boolean,
+    isControlPlane: Boolean
   ): Processor = {
     new Processor(id,
       time,
@@ -333,7 +334,8 @@ class RaftSocketServer(
       credentialProvider,
       memoryPool,
       logContext,
-      isPrivilegedListener = isPrivilegedListener
+      isPrivilegedListener = isPrivilegedListener,
+      isControlPlane = isControlPlane
     ) {
       // We extend this API to skip the check for only enabled APIs. This
       // gets us access to Vote, BeginQuorumEpoch, etc. which are not usable

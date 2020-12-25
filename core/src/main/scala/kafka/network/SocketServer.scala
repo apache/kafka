@@ -262,7 +262,7 @@ class SocketServer(val config: KafkaConfig,
       connectionQuotas.addListener(config, endpoint.listenerName)
       val controlPlaneAcceptor = createAcceptor(endpoint, ControlPlaneMetricPrefix)
       val controlPlaneProcessor = newProcessor(nextProcessorId, controlPlaneRequestChannelOpt.get,
-        connectionQuotas, endpoint.listenerName, endpoint.securityProtocol, memoryPool, isPrivilegedListener = true)
+        connectionQuotas, endpoint.listenerName, endpoint.securityProtocol, memoryPool, isPrivilegedListener = true, isControlPlane = true)
       controlPlaneAcceptorOpt = Some(controlPlaneAcceptor)
       controlPlaneProcessorOpt = Some(controlPlaneProcessor)
       val listenerProcessors = new ArrayBuffer[Processor]()
@@ -289,7 +289,7 @@ class SocketServer(val config: KafkaConfig,
 
     for (_ <- 0 until newProcessorsPerListener) {
       val processor = newProcessor(nextProcessorId, dataPlaneRequestChannel, connectionQuotas,
-        listenerName, securityProtocol, memoryPool, isPrivilegedListener)
+        listenerName, securityProtocol, memoryPool, isPrivilegedListener, false)
       listenerProcessors += processor
       dataPlaneRequestChannel.addProcessor(processor)
       nextProcessorId += 1
@@ -415,7 +415,7 @@ class SocketServer(val config: KafkaConfig,
 
   // `protected` for test usage
   protected[network] def newProcessor(id: Int, requestChannel: RequestChannel, connectionQuotas: ConnectionQuotas, listenerName: ListenerName,
-                                      securityProtocol: SecurityProtocol, memoryPool: MemoryPool, isPrivilegedListener: Boolean): Processor = {
+                                      securityProtocol: SecurityProtocol, memoryPool: MemoryPool, isPrivilegedListener: Boolean , isControlPlane: Boolean): Processor = {
     new Processor(id,
       time,
       config.socketRequestMaxBytes,
@@ -430,7 +430,8 @@ class SocketServer(val config: KafkaConfig,
       credentialProvider,
       memoryPool,
       logContext,
-      isPrivilegedListener = isPrivilegedListener
+      isPrivilegedListener = isPrivilegedListener,
+      isControlPlane = isControlPlane
     )
   }
 
@@ -752,7 +753,8 @@ private[kafka] class Processor(val id: Int,
                                memoryPool: MemoryPool,
                                logContext: LogContext,
                                connectionQueueSize: Int = ConnectionQueueSize,
-                               isPrivilegedListener: Boolean = false) extends AbstractServerThread(connectionQuotas) with KafkaMetricsGroup {
+                               isPrivilegedListener: Boolean = false,
+                               isControlPlane: Boolean = false) extends AbstractServerThread(connectionQuotas) with KafkaMetricsGroup {
 
   private object ConnectionId {
     def fromString(s: String): Option[ConnectionId] = s.split("-") match {
@@ -949,12 +951,31 @@ private[kafka] class Processor(val id: Int,
     header
   }
 
+  protected def isControlRequest(header: RequestHeader): Boolean = {
+    if (isControlPlane) {
+      header.apiKey() match {
+        case ApiKeys.LEADER_AND_ISR => true
+        case ApiKeys.STOP_REPLICA => true
+        case ApiKeys.UPDATE_METADATA => true
+        case ApiKeys.CONTROLLED_SHUTDOWN => true
+        case _ => false
+      }
+    }else {
+      true
+    }
+  }
+
   private def processCompletedReceives(): Unit = {
     selector.completedReceives.forEach { receive =>
       try {
         openOrClosingChannel(receive.source) match {
           case Some(channel) =>
             val header = parseRequestHeader(receive.payload)
+            if (!isControlRequest(header)) {
+              info(s"Current plane is control-plan, disconnecting non controller channel: $channel : $header")
+              close(channel.id)
+              expiredConnectionsKilledCount.record(null, 1, 0)
+            }
             if (header.apiKey == ApiKeys.SASL_HANDSHAKE && channel.maybeBeginServerReauthentication(receive,
               () => time.nanoseconds()))
               trace(s"Begin re-authentication: $channel")
