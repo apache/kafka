@@ -18,13 +18,58 @@
 package org.apache.kafka.tools.metadata;
 
 import static java.util.concurrent.TimeUnit.MILLISECONDS;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 
 @Timeout(value = 120000, unit = MILLISECONDS)
 public class GlobComponentTest {
+    private void verifyIsLiteral(GlobComponent globComponent, String component) {
+        assertTrue(globComponent.literal());
+        assertEquals(component, globComponent.component());
+        assertTrue(globComponent.matches(component));
+        assertFalse(globComponent.matches(component + "foo"));
+    }
+
     @Test
-    void testLiteralComponent() {
+    public void testLiteralComponent() {
+        verifyIsLiteral(new GlobComponent("abc"), "abc");
+        verifyIsLiteral(new GlobComponent(""), "");
+        verifyIsLiteral(new GlobComponent("foobar_123"), "foobar_123");
+        verifyIsLiteral(new GlobComponent("$blah+"), "$blah+");
+    }
+
+    @Test
+    public void testToRegularExpression() {
+        assertEquals(null, GlobComponent.toRegularExpression("blah"));
+        assertEquals(null, GlobComponent.toRegularExpression(""));
+        assertEquals(null, GlobComponent.toRegularExpression("does not need a regex, actually"));
+        assertEquals("^\\$blah.*$", GlobComponent.toRegularExpression("$blah*"));
+        assertEquals("^.*$", GlobComponent.toRegularExpression("*"));
+        assertEquals("^foo(?:(?:bar)|(?:baz))$", GlobComponent.toRegularExpression("foo{bar,baz}"));
+    }
+
+    @Test
+    public void testGlobMatch() {
+        GlobComponent star = new GlobComponent("*");
+        assertFalse(star.literal());
+        assertTrue(star.matches(""));
+        assertTrue(star.matches("anything"));
+        GlobComponent question = new GlobComponent("b?b");
+        assertFalse(question.literal());
+        assertFalse(question.matches(""));
+        assertTrue(question.matches("bob"));
+        assertTrue(question.matches("bib"));
+        assertFalse(question.matches("bic"));
+        GlobComponent foobarOrFoobaz = new GlobComponent("foo{bar,baz}");
+        assertFalse(foobarOrFoobaz.literal());
+        assertTrue(foobarOrFoobaz.matches("foobar"));
+        assertTrue(foobarOrFoobaz.matches("foobaz"));
+        assertFalse(foobarOrFoobaz.matches("foobah"));
+        assertFalse(foobarOrFoobaz.matches("foo"));
+        assertFalse(foobarOrFoobaz.matches("baz"));
     }
 }

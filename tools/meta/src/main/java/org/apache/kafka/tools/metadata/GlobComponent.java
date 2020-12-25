@@ -72,7 +72,7 @@ public final class GlobComponent {
      * Returns null if the glob should be handled as a literal (can only match one string).
      * Throws an exception if the glob is malformed.
      */
-    private static String toRegularExpression(String glob) {
+    static String toRegularExpression(String glob) {
         StringBuilder output = new StringBuilder("^");
         boolean literal = true;
         boolean processingGroup = false;
@@ -82,11 +82,11 @@ public final class GlobComponent {
             switch (c) {
                 case '?':
                     literal = false;
-                    output.append("[^/]");
+                    output.append(".");
                     break;
                 case '*':
                     literal = false;
-                    output.append("[^/]*");
+                    output.append(".*");
                     break;
                 case '\\':
                     if (i == glob.length()) {
@@ -137,7 +137,7 @@ public final class GlobComponent {
         if (processingGroup) {
             throw new RuntimeException("Unterminated glob group.");
         }
-        if (!literal) {
+        if (literal) {
             return null;
         }
         output.append('$');
