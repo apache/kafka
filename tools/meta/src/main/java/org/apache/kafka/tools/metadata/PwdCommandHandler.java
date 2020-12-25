@@ -32,4 +32,15 @@ public final class PwdCommandHandler implements Command.Handler {
             writer.println(data.workingDirectory());
         });
     }
+
+    @Override
+    public int hashCode() {
+        return 0;
+    }
+
+    @Override
+    public boolean equals(Object other) {
+        if (!(other instanceof PwdCommandHandler)) return false;
+        return true;
+    }
 }

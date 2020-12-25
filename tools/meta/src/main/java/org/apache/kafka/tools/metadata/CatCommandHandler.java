@@ -24,6 +24,7 @@ import org.slf4j.LoggerFactory;
 
 import java.io.PrintWriter;
 import java.util.List;
+import java.util.Objects;
 import java.util.Optional;
 
 /**
@@ -58,5 +59,18 @@ public final class CatCommandHandler implements Command.Handler {
                 }
             }));
         }
+    }
+
+    @Override
+    public int hashCode() {
+        return targets.hashCode();
+    }
+
+    @Override
+    public boolean equals(Object other) {
+        if (!(other instanceof CatCommandHandler)) return false;
+        CatCommandHandler o = (CatCommandHandler) other;
+        if (!Objects.equals(o.targets, targets)) return false;
+        return true;
     }
 }

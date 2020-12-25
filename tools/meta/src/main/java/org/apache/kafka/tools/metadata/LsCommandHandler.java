@@ -26,6 +26,7 @@ import java.io.PrintWriter;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.OptionalInt;
 
@@ -194,5 +195,18 @@ public final class LsCommandHandler implements Command.Handler {
         int entriesPerColumn() {
             return entriesPerColumn;
         }
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hashCode(targets);
+    }
+
+    @Override
+    public boolean equals(Object other) {
+        if (!(other instanceof LsCommandHandler)) return false;
+        LsCommandHandler o = (LsCommandHandler) other;
+        if (!Objects.equals(o.targets, targets)) return false;
+        return true;
     }
 }

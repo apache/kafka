@@ -20,6 +20,7 @@ package org.apache.kafka.tools.metadata;
 import org.apache.kafka.tools.metadata.MetadataNode.DirectoryNode;
 
 import java.io.PrintWriter;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.function.Consumer;
 
@@ -55,5 +56,18 @@ public final class CdCommandHandler implements Command.Handler {
                 }).accept(data);
             }
         });
+    }
+
+    @Override
+    public int hashCode() {
+        return target.hashCode();
+    }
+
+    @Override
+    public boolean equals(Object other) {
+        if (!(other instanceof CdCommandHandler)) return false;
+        CdCommandHandler o = (CdCommandHandler) other;
+        if (!o.target.equals(target)) return false;
+        return true;
     }
 }

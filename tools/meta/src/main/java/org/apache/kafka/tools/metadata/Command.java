@@ -63,16 +63,16 @@ public final class Command {
                 help("Exit the metadata shell.");
         }
         if (addShellCommands) {
+            subparsers.addParser("help").
+                help("Display this help message.");
+        }
+        if (addShellCommands) {
             Subparser historyParser = subparsers.addParser("history").
                 help("Print command history.");
             historyParser.addArgument("numEntriesToShow").
                 nargs("?").
                 type(Integer.class).
                 help("The number of entries to show.");
-        }
-        if (addShellCommands) {
-            subparsers.addParser("help").
-                help("Display this help message.");
         }
         Subparser lsParser = subparsers.addParser("ls").
             help("List metadata nodes.");
@@ -93,6 +93,9 @@ public final class Command {
     final static ArgumentParser PARSER = createParser(true);
 
     public static Handler parseCommand(List<String> arguments) {
+        if (arguments.isEmpty() || (arguments.size() == 1 && arguments.get(0).equals(""))) {
+            return new NoOpCommandHandler();
+        }
         Namespace namespace = null;
         try {
             namespace = PARSER.parseArgs(arguments.toArray(new String[0]));

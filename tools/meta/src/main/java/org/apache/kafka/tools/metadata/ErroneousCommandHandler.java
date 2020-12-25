@@ -18,6 +18,7 @@
 package org.apache.kafka.tools.metadata;
 
 import java.io.PrintWriter;
+import java.util.Objects;
 import java.util.Optional;
 
 /**
@@ -35,5 +36,23 @@ public final class ErroneousCommandHandler implements Command.Handler {
                     PrintWriter writer,
                     MetadataNodeManager manager) {
         writer.println(message);
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hashCode(message);
+    }
+
+    @Override
+    public boolean equals(Object other) {
+        if (!(other instanceof ErroneousCommandHandler)) return false;
+        ErroneousCommandHandler o = (ErroneousCommandHandler) other;
+        if (!Objects.equals(o.message, message)) return false;
+        return true;
+    }
+
+    @Override
+    public String toString() {
+        return "ErroneousCommandHandler(" + message + ")";
     }
 }

@@ -18,6 +18,7 @@
 package org.apache.kafka.tools.metadata;
 
 import java.io.PrintWriter;
+import java.util.Objects;
 import java.util.Optional;
 
 /**
@@ -29,5 +30,16 @@ public final class HelpCommandHandler implements Command.Handler {
                     PrintWriter writer,
                     MetadataNodeManager manager) {
         Command.PARSER.printHelp(writer);
+    }
+
+    @Override
+    public int hashCode() {
+        return 0;
+    }
+
+    @Override
+    public boolean equals(Object other) {
+        if (!(other instanceof HelpCommandHandler)) return false;
+        return true;
     }
 }

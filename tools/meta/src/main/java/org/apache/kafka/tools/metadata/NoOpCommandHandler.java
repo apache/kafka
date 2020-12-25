@@ -29,4 +29,15 @@ public final class NoOpCommandHandler implements Command.Handler {
                     PrintWriter writer,
                     MetadataNodeManager manager) {
     }
+
+    @Override
+    public int hashCode() {
+        return 0;
+    }
+
+    @Override
+    public boolean equals(Object other) {
+        if (!(other instanceof NoOpCommandHandler)) return false;
+        return true;
+    }
 }

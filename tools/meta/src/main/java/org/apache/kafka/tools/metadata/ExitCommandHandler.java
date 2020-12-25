@@ -20,6 +20,7 @@ package org.apache.kafka.tools.metadata;
 import org.apache.kafka.common.utils.Exit;
 
 import java.io.PrintWriter;
+import java.util.Objects;
 import java.util.Optional;
 
 /**
@@ -31,5 +32,16 @@ public final class ExitCommandHandler implements Command.Handler {
                     PrintWriter writer,
                     MetadataNodeManager manager) {
         Exit.exit(0);
+    }
+
+    @Override
+    public int hashCode() {
+        return 0;
+    }
+
+    @Override
+    public boolean equals(Object other) {
+        if (!(other instanceof ExitCommandHandler)) return false;
+        return true;
     }
 }

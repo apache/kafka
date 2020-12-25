@@ -23,6 +23,7 @@ import org.slf4j.LoggerFactory;
 import java.io.PrintWriter;
 import java.util.Iterator;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 
 /**
@@ -49,5 +50,17 @@ public final class HistoryCommandHandler implements Command.Handler {
             Map.Entry<Integer, String> entry = iter.next();
             writer.printf("% 5d  %s%n", entry.getKey(), entry.getValue());
         }
+    }
+
+    @Override
+    public int hashCode() {
+        return numEntriesToShow;
+    }
+
+    @Override
+    public boolean equals(Object other) {
+        if (!(other instanceof HistoryCommandHandler)) return false;
+        HistoryCommandHandler o = (HistoryCommandHandler) other;
+        return o.numEntriesToShow == numEntriesToShow;
     }
 }
