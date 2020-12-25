@@ -41,7 +41,7 @@ public interface MetadataNode {
                 MetadataNode nextNode = node.children.get(names[i]);
                 if (nextNode == null) {
                     nextNode = new DirectoryNode(this);
-                    children.put(names[i], node);
+                    node.children.put(names[i], nextNode);
                 } else {
                     if (!(nextNode instanceof DirectoryNode)) {
                         throw new NotDirectoryException();
