@@ -108,17 +108,18 @@ public class ConsumerConfig extends AbstractConfig {
      */
     public static final String PARTITION_ASSIGNMENT_STRATEGY_CONFIG = "partition.assignment.strategy";
     private static final String PARTITION_ASSIGNMENT_STRATEGY_DOC = "A list of class names or class types, " +
-            "ordered by preference, of supported partition assignment " +
-            "strategies that the client will use to distribute partition " +
-            "ownership amongst consumer instances when group management is " +
-            "used.<p>In addition to the default class specified below, " +
-            "you can use the " +
-            "<code>org.apache.kafka.clients.consumer.RoundRobinAssignor</code>" +
-            "class for round robin assignments of partitions to consumers. " +
-            "</p><p>Implementing the " +
-            "<code>org.apache.kafka.clients.consumer.ConsumerPartitionAssignor" +
-            "</code> interface allows you to plug in a custom assignment" +
-            "strategy.";
+        "ordered by preference, of supported partition assignment strategies that the client will use to distribute " +
+        "partition ownership amongst consumer instances when group management is used. Available options are:" +
+        "<ul>" +
+        "<li><code>org.apache.kafka.clients.consumer.RangeAssignor</code>: The default assignor, which works on a per-topic basis.</li>" +
+        "<li><code>org.apache.kafka.clients.consumer.RoundRobinAssignor</code>: It works for round robin assignments of partitions.</li>" +
+        "<li><code>org.apache.kafka.clients.consumer.StickyAssignor</code>: It guarantees an assignment that is " +
+        "as balanced as possible and preserved as many existing assignment as possible when a reassignment occurs.</li>" +
+        "<li><code>org.apache.kafka.clients.consumer.CooperativeStickyAssignor</code>: It follows the same StickyAssignor " +
+        "logic, but allows for cooperative rebalancing.</li>" +
+        "</ul>" +
+        "<p>Implementing the <code>org.apache.kafka.clients.consumer.ConsumerPartitionAssignor</code> " +
+        "interface allows you to plug in a custom assignment strategy.";
 
     /**
      * <code>auto.offset.reset</code>
