@@ -267,11 +267,11 @@ subprojects {
   }
 
   def shouldUseJUnit5 = [
+    "common",
+    "meta",
     "metadata",
     "raft",
-    "tools:common",
-    "tools:meta",
-    "tools:trogdor"
+    "trogdor"
   ].contains(it.project.name)
 
   def testLoggingEvents = ["passed", "skipped", "failed"]
