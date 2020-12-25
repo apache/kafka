@@ -975,37 +975,38 @@ private[kafka] class Processor(val id: Int,
               info(s"Current plane is control-plan, disconnecting non controller channel: $channel : $header")
               close(channel.id)
               expiredConnectionsKilledCount.record(null, 1, 0)
-            }
-            if (header.apiKey == ApiKeys.SASL_HANDSHAKE && channel.maybeBeginServerReauthentication(receive,
-              () => time.nanoseconds()))
-              trace(s"Begin re-authentication: $channel")
-            else {
-              val nowNanos = time.nanoseconds()
-              if (channel.serverAuthenticationSessionExpired(nowNanos)) {
-                // be sure to decrease connection count and drop any in-flight responses
-                debug(s"Disconnecting expired channel: $channel : $header")
-                close(channel.id)
-                expiredConnectionsKilledCount.record(null, 1, 0)
-              } else {
-                val connectionId = receive.source
-                val context = new RequestContext(header, connectionId, channel.socketAddress,
-                  channel.principal, listenerName, securityProtocol,
-                  channel.channelMetadataRegistry.clientInformation, isPrivilegedListener)
-                val req = new RequestChannel.Request(processor = id, context = context,
-                  startTimeNanos = nowNanos, memoryPool, receive.payload, requestChannel.metrics)
-                // KIP-511: ApiVersionsRequest is intercepted here to catch the client software name
-                // and version. It is done here to avoid wiring things up to the api layer.
-                if (header.apiKey == ApiKeys.API_VERSIONS) {
-                  val apiVersionsRequest = req.body[ApiVersionsRequest]
-                  if (apiVersionsRequest.isValid) {
-                    channel.channelMetadataRegistry.registerClientInformation(new ClientInformation(
-                      apiVersionsRequest.data.clientSoftwareName,
-                      apiVersionsRequest.data.clientSoftwareVersion))
+            }else{
+              if (header.apiKey == ApiKeys.SASL_HANDSHAKE && channel.maybeBeginServerReauthentication(receive,
+                () => time.nanoseconds()))
+                trace(s"Begin re-authentication: $channel")
+              else {
+                val nowNanos = time.nanoseconds()
+                if (channel.serverAuthenticationSessionExpired(nowNanos)) {
+                  // be sure to decrease connection count and drop any in-flight responses
+                  debug(s"Disconnecting expired channel: $channel : $header")
+                  close(channel.id)
+                  expiredConnectionsKilledCount.record(null, 1, 0)
+                } else {
+                  val connectionId = receive.source
+                  val context = new RequestContext(header, connectionId, channel.socketAddress,
+                    channel.principal, listenerName, securityProtocol,
+                    channel.channelMetadataRegistry.clientInformation, isPrivilegedListener)
+                  val req = new RequestChannel.Request(processor = id, context = context,
+                    startTimeNanos = nowNanos, memoryPool, receive.payload, requestChannel.metrics)
+                  // KIP-511: ApiVersionsRequest is intercepted here to catch the client software name
+                  // and version. It is done here to avoid wiring things up to the api layer.
+                  if (header.apiKey == ApiKeys.API_VERSIONS) {
+                    val apiVersionsRequest = req.body[ApiVersionsRequest]
+                    if (apiVersionsRequest.isValid) {
+                      channel.channelMetadataRegistry.registerClientInformation(new ClientInformation(
+                        apiVersionsRequest.data.clientSoftwareName,
+                        apiVersionsRequest.data.clientSoftwareVersion))
+                    }
                   }
+                  requestChannel.sendRequest(req)
+                  selector.mute(connectionId)
+                  handleChannelMuteEvent(connectionId, ChannelMuteEvent.REQUEST_RECEIVED)
                 }
-                requestChannel.sendRequest(req)
-                selector.mute(connectionId)
-                handleChannelMuteEvent(connectionId, ChannelMuteEvent.REQUEST_RECEIVED)
               }
             }
           case None =>
