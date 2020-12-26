@@ -24,11 +24,13 @@ import org.slf4j.LoggerFactory;
 
 import java.io.PrintWriter;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.OptionalInt;
+import java.util.stream.Collectors;
 
 /**
  * Implements the ls command.
@@ -81,6 +83,13 @@ public final class LsCommandHandler implements Command.Handler {
             OptionalInt.of(shell.get().screenWidth()) : OptionalInt.empty();
         log.trace("LS : targetFiles = {}, targetDirectories = {}, screenWidth = {}",
             targetFiles, targetDirectories, screenWidth);
+        printTargets(writer, screenWidth, targetFiles, targetDirectories);
+    }
+
+    static void printTargets(PrintWriter writer,
+                             OptionalInt screenWidth,
+                             List<String> targetFiles,
+                             List<TargetDirectory> targetDirectories) {
         printEntries(writer, "", screenWidth, targetFiles);
         boolean needIntro = targetFiles.size() > 0 || targetDirectories.size() > 1;
         boolean firstIntro = targetFiles.isEmpty();
@@ -99,10 +108,10 @@ public final class LsCommandHandler implements Command.Handler {
         }
     }
 
-    private void printEntries(PrintWriter writer,
-                              String intro,
-                              OptionalInt screenWidth,
-                              List<String> entries) {
+    static void printEntries(PrintWriter writer,
+                             String intro,
+                             OptionalInt screenWidth,
+                             List<String> entries) {
         if (entries.isEmpty()) {
             return;
         }
@@ -121,7 +130,7 @@ public final class LsCommandHandler implements Command.Handler {
                     output.append(entry);
                     if (column < numColumns - 1) {
                         int width = columnSchema.columnWidth(column);
-                        for (int i = 0; i < width - entry.length() + 2; i++) {
+                        for (int i = 0; i < width - entry.length(); i++) {
                             output.append(" ");
                         }
                     }
@@ -131,8 +140,8 @@ public final class LsCommandHandler implements Command.Handler {
         }
     }
 
-    private ColumnSchema calculateColumnSchema(OptionalInt screenWidth,
-                                               List<String> entries) {
+    static ColumnSchema calculateColumnSchema(OptionalInt screenWidth,
+                                              List<String> entries) {
         if (!screenWidth.isPresent()) {
             return new ColumnSchema(1, entries.size());
         }
@@ -154,7 +163,8 @@ public final class LsCommandHandler implements Command.Handler {
         }
         for (int s = schemas.length - 1; s > 0; s--) {
             ColumnSchema schema = schemas[s];
-            if (schema.totalWidth() <= screenWidth.getAsInt()) {
+            if (schema.columnWidths[schema.columnWidths.length - 1] != 0 &&
+                    schema.totalWidth() <= screenWidth.getAsInt()) {
                 return schema;
             }
         }
@@ -168,6 +178,13 @@ public final class LsCommandHandler implements Command.Handler {
         ColumnSchema(int numColumns, int entriesPerColumn) {
             this.columnWidths = new int[numColumns];
             this.entriesPerColumn = entriesPerColumn;
+        }
+
+        ColumnSchema setColumnWidths(Integer... widths) {
+            for (int i = 0; i < widths.length; i++) {
+                columnWidths[i] = widths[i];
+            }
+            return this;
         }
 
         void process(int entryIndex, String output) {
@@ -194,6 +211,33 @@ public final class LsCommandHandler implements Command.Handler {
 
         int entriesPerColumn() {
             return entriesPerColumn;
+        }
+
+        @Override
+        public int hashCode() {
+            return Objects.hash(columnWidths, entriesPerColumn);
+        }
+
+        @Override
+        public boolean equals(Object o) {
+            if (!(o instanceof ColumnSchema)) return false;
+            ColumnSchema other = (ColumnSchema) o;
+            if (entriesPerColumn != other.entriesPerColumn) return false;
+            if (!Arrays.equals(columnWidths, other.columnWidths)) return false;
+            return true;
+        }
+
+        @Override
+        public String toString() {
+            StringBuilder bld = new StringBuilder("ColumnSchema(columnWidths=[");
+            String prefix = "";
+            for (int i = 0; i < columnWidths.length; i++) {
+                bld.append(prefix);
+                bld.append(columnWidths[i]);
+                prefix = ", ";
+            }
+            bld.append("], entriesPerColumn=").append(entriesPerColumn).append(")");
+            return bld.toString();
         }
     }
 
