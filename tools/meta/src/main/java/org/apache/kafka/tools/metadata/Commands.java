@@ -26,10 +26,11 @@ import net.sourceforge.argparse4j.inf.Subparsers;
 import net.sourceforge.argparse4j.internal.HelpScreenException;
 
 import java.io.PrintWriter;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
-import java.util.Map;
+import java.util.NavigableMap;
 import java.util.Optional;
 import java.util.TreeMap;
 
@@ -40,7 +41,7 @@ public final class Commands {
     /**
      * A map from command names to command types.
      */
-    static final Map<String, Type> TYPES;
+    static final NavigableMap<String, Type> TYPES;
 
     static {
         TreeMap<String, Type> typesMap = new TreeMap<>();
@@ -115,12 +116,20 @@ public final class Commands {
      * @return              The command handler.
      */
     public Handler parseCommand(List<String> arguments) {
-        if (arguments.isEmpty() || (arguments.size() == 1 && arguments.get(0).equals(""))) {
-            return new NoOpCommandHandler();
+        List<String> trimmedArguments = new ArrayList<>(arguments);
+        while (true) {
+            if (trimmedArguments.isEmpty()) {
+                return new NoOpCommandHandler();
+            }
+            String last = trimmedArguments.get(trimmedArguments.size() - 1);
+            if (!last.isEmpty()) {
+                break;
+            }
+            trimmedArguments.remove(trimmedArguments.size() - 1);
         }
-        Namespace namespace = null;
+        Namespace namespace;
         try {
-            namespace = parser.parseArgs(arguments.toArray(new String[0]));
+            namespace = parser.parseArgs(trimmedArguments.toArray(new String[0]));
         } catch (HelpScreenException e) {
             return new NoOpCommandHandler();
         } catch (ArgumentParserException e) {

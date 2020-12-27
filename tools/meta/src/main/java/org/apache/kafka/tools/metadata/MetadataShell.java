@@ -17,6 +17,8 @@
 
 package org.apache.kafka.tools.metadata;
 
+import org.jline.reader.Candidate;
+import org.jline.reader.Completer;
 import org.jline.reader.EndOfFileException;
 import org.jline.reader.History;
 import org.jline.reader.LineReader;
@@ -32,6 +34,7 @@ import org.jline.terminal.TerminalBuilder;
 import java.io.IOException;
 import java.util.AbstractMap;
 import java.util.Iterator;
+import java.util.List;
 import java.util.Map.Entry;
 import java.util.NoSuchElementException;
 import java.util.Optional;
@@ -40,9 +43,34 @@ import java.util.Optional;
  * The Kafka metadata shell.
  */
 public final class MetadataShell implements AutoCloseable {
+    static class MetadataShellCompleter implements Completer {
+        @Override
+        public void complete(LineReader reader, ParsedLine line, List<Candidate> candidates) {
+            if (line.words().size() == 0) {
+                completeCommand("", candidates);
+            } else if (line.words().size() == 1) {
+                completeCommand(line.words().get(0), candidates);
+            } else {
+                // do nothing
+            }
+        }
+
+        private void completeCommand(String commandPrefix, List<Candidate> candidates) {
+            String command = Commands.TYPES.ceilingKey(commandPrefix);
+            while (true) {
+                if (command == null || !command.startsWith(commandPrefix)) {
+                    return;
+                }
+                candidates.add(new Candidate(command));
+                command = Commands.TYPES.higherKey(command);
+            }
+        }
+    }
+
     private final Terminal terminal;
     private final Parser parser;
     private final History history;
+    private final MetadataShellCompleter completer;
     private final LineReader reader;
 
     public MetadataShell() throws IOException {
@@ -52,10 +80,12 @@ public final class MetadataShell implements AutoCloseable {
         this.terminal = builder.build();
         this.parser = new DefaultParser();
         this.history = new DefaultHistory();
+        this.completer = new MetadataShellCompleter();
         this.reader = LineReaderBuilder.builder().
             terminal(terminal).
             parser(parser).
             history(history).
+            completer(completer).
             option(LineReader.Option.AUTO_FRESH_LINE, false).
             build();
     }
