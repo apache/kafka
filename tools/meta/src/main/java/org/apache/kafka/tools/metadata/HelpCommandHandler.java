@@ -63,6 +63,7 @@ public final class HelpCommandHandler implements Commands.Handler {
     public void run(Optional<MetadataShell> shell,
                     PrintWriter writer,
                     MetadataNodeManager manager) {
+        writer.printf("Welcome to the Apache Kafka metadata shell.%n%n");
         new Commands(true).parser().printHelp(writer);
     }
 

@@ -89,9 +89,7 @@ public final class Commands {
      * @param addShellCommands  True if we should include the shell-only commands.
      */
     public Commands(boolean addShellCommands) {
-        this.parser = ArgumentParsers.
-            newArgumentParser("", false).
-                description("Commands for the Apache Kafka metadata tool");
+        this.parser = ArgumentParsers.newArgumentParser("", false);
         Subparsers subparsers = this.parser.addSubparsers().dest("command");
         for (Type type : TYPES.values()) {
             if (addShellCommands || !type.shellOnly()) {
