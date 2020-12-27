@@ -48,6 +48,7 @@ public final class Commands {
                 CatCommandHandler.TYPE,
                 CdCommandHandler.TYPE,
                 ExitCommandHandler.TYPE,
+                FindCommandHandler.TYPE,
                 HelpCommandHandler.TYPE,
                 HistoryCommandHandler.TYPE,
                 LsCommandHandler.TYPE,
