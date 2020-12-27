@@ -27,7 +27,6 @@ import org.slf4j.LoggerFactory;
 import java.io.PrintWriter;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
@@ -93,11 +92,9 @@ public final class LsCommandHandler implements Commands.Handler {
     public void run(Optional<MetadataShell> shell,
                     PrintWriter writer,
                     MetadataNodeManager manager) throws Exception {
-        List<String> effectiveTargets = targets.size() == 0 ?
-            Collections.singletonList(".") : targets;
         List<String> targetFiles = new ArrayList<>();
         List<TargetDirectory> targetDirectories = new ArrayList<>();
-        for (String target : effectiveTargets) {
+        for (String target : CommandUtils.getEffectivePaths(targets)) {
             manager.visit(new GlobVisitor(target, entryOption -> {
                 if (entryOption.isPresent()) {
                     MetadataNode node = entryOption.get().node();

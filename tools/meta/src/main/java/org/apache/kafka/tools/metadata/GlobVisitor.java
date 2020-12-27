@@ -55,6 +55,10 @@ public final class GlobVisitor implements Consumer<MetadataNodeManager.Data> {
             return node;
         }
 
+        public String absolutePath() {
+            return "/" + String.join("/", path);
+        }
+
         @Override
         public int hashCode() {
             return Objects.hash(path, node);

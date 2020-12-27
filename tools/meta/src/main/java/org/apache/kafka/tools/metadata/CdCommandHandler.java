@@ -82,8 +82,7 @@ public final class CdCommandHandler implements Commands.Handler {
                         if (!(entryOption.get().node() instanceof DirectoryNode)) {
                             writer.println("cd: " + effectiveTarget + ": not a directory.");
                         } else {
-                            String[] path = entryOption.get().path();
-                            data.setWorkingDirectory("/" + String.join("/", path));
+                            data.setWorkingDirectory(entryOption.get().absolutePath());
                         }
                     } else {
                         writer.println("cd: " + effectiveTarget + ": no such directory.");

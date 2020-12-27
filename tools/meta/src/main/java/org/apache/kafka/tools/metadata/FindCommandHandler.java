@@ -22,7 +22,6 @@ import net.sourceforge.argparse4j.inf.Namespace;
 import org.apache.kafka.tools.metadata.MetadataNode.DirectoryNode;
 
 import java.io.PrintWriter;
-import java.util.Collections;
 import java.util.List;
 import java.util.Map.Entry;
 import java.util.Objects;
@@ -76,9 +75,7 @@ public final class FindCommandHandler implements Commands.Handler {
     public void run(Optional<MetadataShell> shell,
                     PrintWriter writer,
                     MetadataNodeManager manager) throws Exception {
-        List<String> effectivePaths = paths.size() == 0 ?
-            Collections.singletonList(".") : paths;
-        for (String path : effectivePaths) {
+        for (String path : CommandUtils.getEffectivePaths(paths)) {
             manager.visit(new GlobVisitor(path, entryOption -> {
                 if (entryOption.isPresent()) {
                     find(writer, path, entryOption.get().node());
@@ -94,7 +91,9 @@ public final class FindCommandHandler implements Commands.Handler {
         if (node instanceof DirectoryNode) {
             DirectoryNode directory = (DirectoryNode) node;
             for (Entry<String, MetadataNode> entry : directory.children().entrySet()) {
-                find(writer, path + "/" + entry.getKey(), entry.getValue());
+                String nextPath = path.equals("/") ?
+                    path + entry.getKey() : path + "/" + entry.getKey();
+                find(writer, nextPath, entry.getValue());
             }
         }
     }
