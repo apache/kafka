@@ -24,6 +24,7 @@ import net.sourceforge.argparse4j.inf.Namespace;
 import net.sourceforge.argparse4j.inf.Subparser;
 import net.sourceforge.argparse4j.inf.Subparsers;
 import net.sourceforge.argparse4j.internal.HelpScreenException;
+import org.jline.reader.Candidate;
 
 import java.io.PrintWriter;
 import java.util.ArrayList;
@@ -81,6 +82,9 @@ public final class Commands {
         boolean shellOnly();
         void addArguments(ArgumentParser parser);
         Handler createHandler(Namespace namespace);
+        void completeNext(MetadataNodeManager nodeManager,
+                          List<String> nextWords,
+                          List<Candidate> candidates) throws Exception;
     }
 
     private final ArgumentParser parser;

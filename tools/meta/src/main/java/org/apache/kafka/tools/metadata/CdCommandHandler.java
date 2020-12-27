@@ -20,8 +20,10 @@ package org.apache.kafka.tools.metadata;
 import net.sourceforge.argparse4j.inf.ArgumentParser;
 import net.sourceforge.argparse4j.inf.Namespace;
 import org.apache.kafka.tools.metadata.MetadataNode.DirectoryNode;
+import org.jline.reader.Candidate;
 
 import java.io.PrintWriter;
+import java.util.List;
 import java.util.Optional;
 import java.util.function.Consumer;
 
@@ -60,6 +62,14 @@ public final class CdCommandHandler implements Commands.Handler {
         @Override
         public Commands.Handler createHandler(Namespace namespace) {
             return new CdCommandHandler(Optional.ofNullable(namespace.getString("target")));
+        }
+
+        @Override
+        public void completeNext(MetadataNodeManager nodeManager, List<String> nextWords,
+                                 List<Candidate> candidates) throws Exception {
+            if (nextWords.size() == 1) {
+                CommandUtils.completePath(nodeManager, nextWords.get(0), candidates);
+            }
         }
     }
 

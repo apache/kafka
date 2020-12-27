@@ -20,6 +20,7 @@ package org.apache.kafka.tools.metadata;
 import net.sourceforge.argparse4j.inf.ArgumentParser;
 import net.sourceforge.argparse4j.inf.Namespace;
 import org.apache.kafka.tools.metadata.MetadataNode.DirectoryNode;
+import org.jline.reader.Candidate;
 
 import java.io.PrintWriter;
 import java.util.List;
@@ -62,6 +63,13 @@ public final class FindCommandHandler implements Commands.Handler {
         @Override
         public Commands.Handler createHandler(Namespace namespace) {
             return new FindCommandHandler(namespace.getList("paths"));
+        }
+
+        @Override
+        public void completeNext(MetadataNodeManager nodeManager, List<String> nextWords,
+                                 List<Candidate> candidates) throws Exception {
+            CommandUtils.completePath(nodeManager, nextWords.get(nextWords.size() - 1),
+                candidates);
         }
     }
 

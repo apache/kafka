@@ -69,14 +69,6 @@ public class GlobVisitorTest {
     }
 
     @Test
-    public void testPathComponents() {
-        assertEquals(Arrays.asList("alpha", "beta"),
-            GlobVisitor.pathComponents("/alpha/beta"));
-        assertEquals(Arrays.asList("alpha", "beta"),
-            GlobVisitor.pathComponents("//alpha/beta/"));
-    }
-
-    @Test
     public void testStarGlob() {
         InfoConsumer consumer = new InfoConsumer();
         GlobVisitor visitor = new GlobVisitor("*", consumer);

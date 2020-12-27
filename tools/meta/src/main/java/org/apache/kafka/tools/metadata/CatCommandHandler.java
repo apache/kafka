@@ -21,6 +21,7 @@ import net.sourceforge.argparse4j.inf.ArgumentParser;
 import net.sourceforge.argparse4j.inf.Namespace;
 import org.apache.kafka.tools.metadata.MetadataNode.DirectoryNode;
 import org.apache.kafka.tools.metadata.MetadataNode.FileNode;
+import org.jline.reader.Candidate;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -66,6 +67,13 @@ public final class CatCommandHandler implements Commands.Handler {
         @Override
         public Commands.Handler createHandler(Namespace namespace) {
             return new CatCommandHandler(namespace.getList("targets"));
+        }
+
+        @Override
+        public void completeNext(MetadataNodeManager nodeManager, List<String> nextWords,
+                                 List<Candidate> candidates) throws Exception {
+            CommandUtils.completePath(nodeManager, nextWords.get(nextWords.size() - 1),
+                candidates);
         }
     }
 

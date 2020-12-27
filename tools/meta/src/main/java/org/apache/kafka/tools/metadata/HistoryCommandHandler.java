@@ -19,9 +19,11 @@ package org.apache.kafka.tools.metadata;
 
 import net.sourceforge.argparse4j.inf.ArgumentParser;
 import net.sourceforge.argparse4j.inf.Namespace;
+import org.jline.reader.Candidate;
 
 import java.io.PrintWriter;
 import java.util.Iterator;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
@@ -63,6 +65,12 @@ public final class HistoryCommandHandler implements Commands.Handler {
             Integer numEntriesToShow = namespace.getInt("numEntriesToShow");
             return new HistoryCommandHandler(numEntriesToShow == null ?
                 Integer.MAX_VALUE : numEntriesToShow);
+        }
+
+        @Override
+        public void completeNext(MetadataNodeManager nodeManager, List<String> nextWords,
+                                 List<Candidate> candidates) throws Exception {
+            // nothing to do
         }
     }
 

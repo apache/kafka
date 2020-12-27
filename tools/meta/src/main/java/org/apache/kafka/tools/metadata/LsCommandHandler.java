@@ -19,8 +19,10 @@ package org.apache.kafka.tools.metadata;
 
 import net.sourceforge.argparse4j.inf.ArgumentParser;
 import net.sourceforge.argparse4j.inf.Namespace;
+import org.apache.kafka.tools.metadata.GlobVisitor.MetadataNodeInfo;
 import org.apache.kafka.tools.metadata.MetadataNode.DirectoryNode;
 import org.apache.kafka.tools.metadata.MetadataNode.FileNode;
+import org.jline.reader.Candidate;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -70,6 +72,13 @@ public final class LsCommandHandler implements Commands.Handler {
         public Commands.Handler createHandler(Namespace namespace) {
             return new LsCommandHandler(namespace.getList("targets"));
         }
+
+        @Override
+        public void completeNext(MetadataNodeManager nodeManager, List<String> nextWords,
+                                 List<Candidate> candidates) throws Exception {
+            CommandUtils.completePath(nodeManager, nextWords.get(nextWords.size() - 1),
+                candidates);
+        }
     }
 
     private final List<String> targets;
@@ -97,14 +106,16 @@ public final class LsCommandHandler implements Commands.Handler {
         for (String target : CommandUtils.getEffectivePaths(targets)) {
             manager.visit(new GlobVisitor(target, entryOption -> {
                 if (entryOption.isPresent()) {
-                    MetadataNode node = entryOption.get().node();
+                    MetadataNodeInfo info = entryOption.get();
+                    MetadataNode node = info.node();
                     if (node instanceof DirectoryNode) {
                         DirectoryNode directory = (DirectoryNode) node;
                         List<String> children = new ArrayList<>();
                         children.addAll(directory.children().keySet());
-                        targetDirectories.add(new TargetDirectory(target, children));
+                        targetDirectories.add(
+                            new TargetDirectory(info.lastPathComponent(), children));
                     } else if (node instanceof FileNode) {
-                        targetFiles.add(target);
+                        targetFiles.add(info.lastPathComponent());
                     }
                 } else {
                     writer.println("ls: " + target + ": no such file or directory.");

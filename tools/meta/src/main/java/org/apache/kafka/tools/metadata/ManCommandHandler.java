@@ -20,8 +20,10 @@ package org.apache.kafka.tools.metadata;
 import net.sourceforge.argparse4j.ArgumentParsers;
 import net.sourceforge.argparse4j.inf.ArgumentParser;
 import net.sourceforge.argparse4j.inf.Namespace;
+import org.jline.reader.Candidate;
 
 import java.io.PrintWriter;
+import java.util.List;
 import java.util.Optional;
 
 /**
@@ -61,6 +63,14 @@ public final class ManCommandHandler implements Commands.Handler {
         @Override
         public Commands.Handler createHandler(Namespace namespace) {
             return new ManCommandHandler(namespace.<String>getList("cmd").get(0));
+        }
+
+        @Override
+        public void completeNext(MetadataNodeManager nodeManager, List<String> nextWords,
+                                 List<Candidate> candidates) throws Exception {
+            if (nextWords.size() == 1) {
+                CommandUtils.completeCommand(nextWords.get(0), candidates);
+            }
         }
     }
 

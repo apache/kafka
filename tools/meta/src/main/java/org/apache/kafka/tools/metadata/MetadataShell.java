@@ -33,6 +33,7 @@ import org.jline.terminal.TerminalBuilder;
 
 import java.io.IOException;
 import java.util.AbstractMap;
+import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map.Entry;
@@ -44,43 +45,54 @@ import java.util.Optional;
  */
 public final class MetadataShell implements AutoCloseable {
     static class MetadataShellCompleter implements Completer {
+        private final MetadataNodeManager nodeManager;
+
+        MetadataShellCompleter(MetadataNodeManager nodeManager) {
+            this.nodeManager = nodeManager;
+        }
+
         @Override
         public void complete(LineReader reader, ParsedLine line, List<Candidate> candidates) {
             if (line.words().size() == 0) {
-                completeCommand("", candidates);
+                CommandUtils.completeCommand("", candidates);
             } else if (line.words().size() == 1) {
-                completeCommand(line.words().get(0), candidates);
+                CommandUtils.completeCommand(line.words().get(0), candidates);
             } else {
-                // do nothing
-            }
-        }
-
-        private void completeCommand(String commandPrefix, List<Candidate> candidates) {
-            String command = Commands.TYPES.ceilingKey(commandPrefix);
-            while (true) {
-                if (command == null || !command.startsWith(commandPrefix)) {
+                Iterator<String> iter = line.words().iterator();
+                String command = iter.next();
+                List<String> nextWords = new ArrayList<>();
+                while (iter.hasNext()) {
+                    nextWords.add(iter.next());
+                }
+                Commands.Type type = Commands.TYPES.get(command);
+                if (type == null) {
                     return;
                 }
-                candidates.add(new Candidate(command));
-                command = Commands.TYPES.higherKey(command);
+                try {
+                    type.completeNext(nodeManager, nextWords, candidates);
+                } catch (Exception e) {
+                    throw new RuntimeException(e);
+                }
             }
         }
     }
 
+    private final MetadataNodeManager nodeManager;
     private final Terminal terminal;
     private final Parser parser;
     private final History history;
     private final MetadataShellCompleter completer;
     private final LineReader reader;
 
-    public MetadataShell() throws IOException {
+    public MetadataShell(MetadataNodeManager nodeManager) throws IOException {
+        this.nodeManager = nodeManager;
         TerminalBuilder builder = TerminalBuilder.builder().
             system(true).
             nativeSignals(true);
         this.terminal = builder.build();
         this.parser = new DefaultParser();
         this.history = new DefaultHistory();
-        this.completer = new MetadataShellCompleter();
+        this.completer = new MetadataShellCompleter(nodeManager);
         this.reader = LineReaderBuilder.builder().
             terminal(terminal).
             parser(parser).
@@ -90,7 +102,7 @@ public final class MetadataShell implements AutoCloseable {
             build();
     }
 
-    public void runMainLoop(MetadataNodeManager nodeManager) throws Exception {
+    public void runMainLoop() throws Exception {
         terminal.writer().println("[ Kafka Metadata Shell ]");
         terminal.flush();
         Commands commands = new Commands(true);

@@ -20,8 +20,10 @@ package org.apache.kafka.tools.metadata;
 import net.sourceforge.argparse4j.inf.ArgumentParser;
 import net.sourceforge.argparse4j.inf.Namespace;
 import org.apache.kafka.common.utils.Exit;
+import org.jline.reader.Candidate;
 
 import java.io.PrintWriter;
+import java.util.List;
 import java.util.Optional;
 
 /**
@@ -57,6 +59,12 @@ public final class ExitCommandHandler implements Commands.Handler {
         @Override
         public Commands.Handler createHandler(Namespace namespace) {
             return new ExitCommandHandler();
+        }
+
+        @Override
+        public void completeNext(MetadataNodeManager nodeManager, List<String> nextWords,
+                                 List<Candidate> candidates) throws Exception {
+            // nothing to do
         }
     }
 

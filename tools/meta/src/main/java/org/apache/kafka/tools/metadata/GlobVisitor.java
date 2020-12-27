@@ -17,7 +17,6 @@
 
 package org.apache.kafka.tools.metadata;
 
-import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map.Entry;
@@ -53,6 +52,14 @@ public final class GlobVisitor implements Consumer<MetadataNodeManager.Data> {
 
         public MetadataNode node() {
             return node;
+        }
+
+        public String lastPathComponent() {
+            if (path.length == 0) {
+                return "/";
+            } else {
+                return path[path.length - 1];
+            }
         }
 
         public String absolutePath() {
@@ -95,7 +102,7 @@ public final class GlobVisitor implements Consumer<MetadataNodeManager.Data> {
     }
 
     private void accept(MetadataNode.DirectoryNode root, String fullGlob) {
-        List<String> globComponents = pathComponents(fullGlob);
+        List<String> globComponents = CommandUtils.splitPath(fullGlob);
         if (!accept(globComponents, 0, root, new String[0])) {
             handler.accept(Optional.empty());
         }
@@ -159,21 +166,5 @@ public final class GlobVisitor implements Consumer<MetadataNodeManager.Data> {
             }
         }
         return matchedAny;
-    }
-
-    /**
-     * Convert a path to a list of path components.
-     * Multiple slashes in a row are treated the same as a single slash.
-     * Trailing slashes are ignored.
-     */
-    public static List<String> pathComponents(String path) {
-        List<String> results = new ArrayList<>();
-        String[] components = path.split("/");
-        for (int i = 0; i < components.length; i++) {
-            if (!components[i].isEmpty()) {
-                results.add(components[i]);
-            }
-        }
-        return results;
     }
 }

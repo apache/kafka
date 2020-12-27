@@ -190,8 +190,8 @@ public final class MetadataTool {
         }
         if (args == null || args.isEmpty()) {
             // Shell mode.
-            try (MetadataShell shell = new MetadataShell()) {
-                shell.runMainLoop(nodeManager);
+            try (MetadataShell shell = new MetadataShell(nodeManager)) {
+                shell.runMainLoop();
             }
         } else {
             // Non-interactive mode.
