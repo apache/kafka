@@ -195,9 +195,10 @@ public final class MetadataTool {
             }
         } else {
             // Non-interactive mode.
+            Commands commands = new Commands(false);
             try (PrintWriter writer = new PrintWriter(new BufferedWriter(
                     new OutputStreamWriter(System.out, StandardCharsets.UTF_8)))) {
-                Command.Handler handler = Command.parseCommand(args);
+                Commands.Handler handler = commands.parseCommand(args);
                 handler.run(Optional.empty(), writer, nodeManager);
                 writer.flush();
             }

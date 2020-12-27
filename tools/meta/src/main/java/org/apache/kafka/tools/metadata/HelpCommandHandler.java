@@ -17,19 +17,53 @@
 
 package org.apache.kafka.tools.metadata;
 
+import net.sourceforge.argparse4j.inf.ArgumentParser;
+import net.sourceforge.argparse4j.inf.Namespace;
+
 import java.io.PrintWriter;
-import java.util.Objects;
 import java.util.Optional;
 
 /**
  * Implements the help command.
  */
-public final class HelpCommandHandler implements Command.Handler {
+public final class HelpCommandHandler implements Commands.Handler {
+    public final static Commands.Type TYPE = new HelpCommandType();
+
+    public static class HelpCommandType implements Commands.Type {
+        private HelpCommandType() {
+        }
+
+        @Override
+        public String name() {
+            return "help";
+        }
+
+        @Override
+        public String description() {
+            return "Display this help message.";
+        }
+
+        @Override
+        public boolean shellOnly() {
+            return true;
+        }
+
+        @Override
+        public void addArguments(ArgumentParser parser) {
+            // nothing to do
+        }
+
+        @Override
+        public Commands.Handler createHandler(Namespace namespace) {
+            return new HelpCommandHandler();
+        }
+    }
+
     @Override
     public void run(Optional<MetadataShell> shell,
                     PrintWriter writer,
                     MetadataNodeManager manager) {
-        Command.PARSER.printHelp(writer);
+        new Commands(true).parser().printHelp(writer);
     }
 
     @Override

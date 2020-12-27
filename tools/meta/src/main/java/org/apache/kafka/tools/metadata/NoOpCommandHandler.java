@@ -23,7 +23,7 @@ import java.util.Optional;
 /**
  * Does nothing.
  */
-public final class NoOpCommandHandler implements Command.Handler {
+public final class NoOpCommandHandler implements Commands.Handler {
     @Override
     public void run(Optional<MetadataShell> shell,
                     PrintWriter writer,

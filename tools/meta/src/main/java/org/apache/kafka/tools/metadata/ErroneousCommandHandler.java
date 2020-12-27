@@ -24,7 +24,7 @@ import java.util.Optional;
 /**
  * Handles erroneous commands.
  */
-public final class ErroneousCommandHandler implements Command.Handler {
+public final class ErroneousCommandHandler implements Commands.Handler {
     private final String message;
 
     public ErroneousCommandHandler(String message) {

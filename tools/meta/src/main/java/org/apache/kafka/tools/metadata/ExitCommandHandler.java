@@ -17,16 +17,49 @@
 
 package org.apache.kafka.tools.metadata;
 
+import net.sourceforge.argparse4j.inf.ArgumentParser;
+import net.sourceforge.argparse4j.inf.Namespace;
 import org.apache.kafka.common.utils.Exit;
 
 import java.io.PrintWriter;
-import java.util.Objects;
 import java.util.Optional;
 
 /**
  * Implements the exit command.
  */
-public final class ExitCommandHandler implements Command.Handler {
+public final class ExitCommandHandler implements Commands.Handler {
+    public final static Commands.Type TYPE = new ExitCommandType();
+
+    public static class ExitCommandType implements Commands.Type {
+        private ExitCommandType() {
+        }
+
+        @Override
+        public String name() {
+            return "exit";
+        }
+
+        @Override
+        public String description() {
+            return "Exit the metadata shell.";
+        }
+
+        @Override
+        public boolean shellOnly() {
+            return true;
+        }
+
+        @Override
+        public void addArguments(ArgumentParser parser) {
+            // nothing to do
+        }
+
+        @Override
+        public Commands.Handler createHandler(Namespace namespace) {
+            return new ExitCommandHandler();
+        }
+    }
+
     @Override
     public void run(Optional<MetadataShell> shell,
                     PrintWriter writer,

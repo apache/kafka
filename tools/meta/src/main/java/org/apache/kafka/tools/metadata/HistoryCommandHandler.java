@@ -17,20 +17,54 @@
 
 package org.apache.kafka.tools.metadata;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import net.sourceforge.argparse4j.inf.ArgumentParser;
+import net.sourceforge.argparse4j.inf.Namespace;
 
 import java.io.PrintWriter;
 import java.util.Iterator;
 import java.util.Map;
-import java.util.Objects;
 import java.util.Optional;
 
 /**
  * Implements the history command.
  */
-public final class HistoryCommandHandler implements Command.Handler {
-    private static final Logger log = LoggerFactory.getLogger(HistoryCommandHandler.class);
+public final class HistoryCommandHandler implements Commands.Handler {
+    public final static Commands.Type TYPE = new HistoryCommandType();
+
+    public static class HistoryCommandType implements Commands.Type {
+        private HistoryCommandType() {
+        }
+
+        @Override
+        public String name() {
+            return "history";
+        }
+
+        @Override
+        public String description() {
+            return "Print command history.";
+        }
+
+        @Override
+        public boolean shellOnly() {
+            return true;
+        }
+
+        @Override
+        public void addArguments(ArgumentParser parser) {
+            parser.addArgument("numEntriesToShow").
+                nargs("?").
+                type(Integer.class).
+                help("The number of entries to show.");
+        }
+
+        @Override
+        public Commands.Handler createHandler(Namespace namespace) {
+            Integer numEntriesToShow = namespace.getInt("numEntriesToShow");
+            return new HistoryCommandHandler(numEntriesToShow == null ?
+                Integer.MAX_VALUE : numEntriesToShow);
+        }
+    }
 
     private final int numEntriesToShow;
 

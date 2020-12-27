@@ -17,6 +17,8 @@
 
 package org.apache.kafka.tools.metadata;
 
+import net.sourceforge.argparse4j.inf.ArgumentParser;
+import net.sourceforge.argparse4j.inf.Namespace;
 import org.apache.kafka.tools.metadata.MetadataNode.DirectoryNode;
 import org.apache.kafka.tools.metadata.MetadataNode.FileNode;
 import org.slf4j.Logger;
@@ -30,13 +32,46 @@ import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.OptionalInt;
-import java.util.stream.Collectors;
 
 /**
  * Implements the ls command.
  */
-public final class LsCommandHandler implements Command.Handler {
+public final class LsCommandHandler implements Commands.Handler {
     private static final Logger log = LoggerFactory.getLogger(LsCommandHandler.class);
+
+    public final static Commands.Type TYPE = new LsCommandType();
+
+    public static class LsCommandType implements Commands.Type {
+        private LsCommandType() {
+        }
+
+        @Override
+        public String name() {
+            return "ls";
+        }
+
+        @Override
+        public String description() {
+            return "List metadata nodes.";
+        }
+
+        @Override
+        public boolean shellOnly() {
+            return false;
+        }
+
+        @Override
+        public void addArguments(ArgumentParser parser) {
+            parser.addArgument("targets").
+                nargs("*").
+                help("The metadata node paths to list.");
+        }
+
+        @Override
+        public Commands.Handler createHandler(Namespace namespace) {
+            return new LsCommandHandler(namespace.getList("targets"));
+        }
+    }
 
     private final List<String> targets;
 

@@ -17,17 +17,52 @@
 
 package org.apache.kafka.tools.metadata;
 
+import net.sourceforge.argparse4j.inf.ArgumentParser;
+import net.sourceforge.argparse4j.inf.Namespace;
 import org.apache.kafka.tools.metadata.MetadataNode.DirectoryNode;
 
 import java.io.PrintWriter;
-import java.util.Objects;
 import java.util.Optional;
 import java.util.function.Consumer;
 
 /**
  * Implements the cd command.
  */
-public final class CdCommandHandler implements Command.Handler {
+public final class CdCommandHandler implements Commands.Handler {
+    public final static Commands.Type TYPE = new CdCommandType();
+
+    public static class CdCommandType implements Commands.Type {
+        private CdCommandType() {
+        }
+
+        @Override
+        public String name() {
+            return "cd";
+        }
+
+        @Override
+        public String description() {
+            return "Set the current working directory.";
+        }
+
+        @Override
+        public boolean shellOnly() {
+            return true;
+        }
+
+        @Override
+        public void addArguments(ArgumentParser parser) {
+            parser.addArgument("target").
+                nargs("?").
+                help("The directory to change to.");
+        }
+
+        @Override
+        public Commands.Handler createHandler(Namespace namespace) {
+            return new CdCommandHandler(Optional.ofNullable(namespace.getString("target")));
+        }
+    }
+
     private final Optional<String> target;
 
     public CdCommandHandler(Optional<String> target) {

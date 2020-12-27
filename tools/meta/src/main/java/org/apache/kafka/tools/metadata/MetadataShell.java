@@ -32,7 +32,6 @@ import org.jline.terminal.TerminalBuilder;
 import java.io.IOException;
 import java.util.AbstractMap;
 import java.util.Iterator;
-import java.util.List;
 import java.util.Map.Entry;
 import java.util.NoSuchElementException;
 import java.util.Optional;
@@ -64,11 +63,12 @@ public final class MetadataShell implements AutoCloseable {
     public void runMainLoop(MetadataNodeManager nodeManager) throws Exception {
         terminal.writer().println("[ Kafka Metadata Shell ]");
         terminal.flush();
+        Commands commands = new Commands(true);
         while (true) {
             try {
                 reader.readLine(">> ");
                 ParsedLine parsedLine = reader.getParsedLine();
-                Command.Handler handler = Command.parseCommand(parsedLine.words());
+                Commands.Handler handler = commands.parseCommand(parsedLine.words());
                 handler.run(Optional.of(this), terminal.writer(), nodeManager);
                 terminal.writer().flush();
             } catch (UserInterruptException eof) {

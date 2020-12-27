@@ -32,37 +32,39 @@ public class CommandTest {
     @Test
     public void testParseCommands() {
         assertEquals(new CatCommandHandler(Arrays.asList("foo")),
-            Command.parseCommand(Arrays.asList("cat", "foo")));
+            new Commands(true).parseCommand(Arrays.asList("cat", "foo")));
         assertEquals(new CdCommandHandler(Optional.empty()),
-            Command.parseCommand(Arrays.asList("cd")));
+            new Commands(true).parseCommand(Arrays.asList("cd")));
         assertEquals(new CdCommandHandler(Optional.of("foo")),
-            Command.parseCommand(Arrays.asList("cd", "foo")));
+            new Commands(true).parseCommand(Arrays.asList("cd", "foo")));
         assertEquals(new ExitCommandHandler(),
-            Command.parseCommand(Arrays.asList("exit")));
+            new Commands(true).parseCommand(Arrays.asList("exit")));
         assertEquals(new HelpCommandHandler(),
-            Command.parseCommand(Arrays.asList("help")));
+            new Commands(true).parseCommand(Arrays.asList("help")));
         assertEquals(new HistoryCommandHandler(3),
-            Command.parseCommand(Arrays.asList("history", "3")));
+            new Commands(true).parseCommand(Arrays.asList("history", "3")));
         assertEquals(new HistoryCommandHandler(Integer.MAX_VALUE),
-            Command.parseCommand(Arrays.asList("history")));
+            new Commands(true).parseCommand(Arrays.asList("history")));
         assertEquals(new LsCommandHandler(Collections.emptyList()),
-            Command.parseCommand(Arrays.asList("ls")));
+            new Commands(true).parseCommand(Arrays.asList("ls")));
         assertEquals(new LsCommandHandler(Arrays.asList("abc", "123")),
-            Command.parseCommand(Arrays.asList("ls", "abc", "123")));
+            new Commands(true).parseCommand(Arrays.asList("ls", "abc", "123")));
         assertEquals(new PwdCommandHandler(),
-            Command.parseCommand(Arrays.asList("pwd")));
+            new Commands(true).parseCommand(Arrays.asList("pwd")));
     }
 
     @Test
     public void testParseInvalidCommand() {
         assertEquals(new ErroneousCommandHandler("invalid choice: 'blah' (choose " +
-            "from 'cat', 'cd', 'exit', 'help', 'history', 'ls', 'pwd')"),
-            Command.parseCommand(Arrays.asList("blah")));
+            "from 'cat', 'cd', 'exit', 'help', 'history', 'ls', 'man', 'pwd')"),
+            new Commands(true).parseCommand(Arrays.asList("blah")));
     }
 
     @Test
     public void testEmptyCommandLine() {
-        assertEquals(new NoOpCommandHandler(), Command.parseCommand(Arrays.asList("")));
-        assertEquals(new NoOpCommandHandler(), Command.parseCommand(Collections.emptyList()));
+        assertEquals(new NoOpCommandHandler(),
+            new Commands(true).parseCommand(Arrays.asList("")));
+        assertEquals(new NoOpCommandHandler(),
+            new Commands(true).parseCommand(Collections.emptyList()));
     }
 }

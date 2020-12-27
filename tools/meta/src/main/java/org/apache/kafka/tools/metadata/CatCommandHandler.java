@@ -17,6 +17,8 @@
 
 package org.apache.kafka.tools.metadata;
 
+import net.sourceforge.argparse4j.inf.ArgumentParser;
+import net.sourceforge.argparse4j.inf.Namespace;
 import org.apache.kafka.tools.metadata.MetadataNode.DirectoryNode;
 import org.apache.kafka.tools.metadata.MetadataNode.FileNode;
 import org.slf4j.Logger;
@@ -30,8 +32,42 @@ import java.util.Optional;
 /**
  * Implements the cat command.
  */
-public final class CatCommandHandler implements Command.Handler {
+public final class CatCommandHandler implements Commands.Handler {
     private static final Logger log = LoggerFactory.getLogger(CatCommandHandler.class);
+
+    public final static Commands.Type TYPE = new CatCommandType();
+
+    public static class CatCommandType implements Commands.Type {
+        private CatCommandType() {
+        }
+
+        @Override
+        public String name() {
+            return "cat";
+        }
+
+        @Override
+        public String description() {
+            return "Show the contents of metadata nodes.";
+        }
+
+        @Override
+        public boolean shellOnly() {
+            return false;
+        }
+
+        @Override
+        public void addArguments(ArgumentParser parser) {
+            parser.addArgument("targets").
+                nargs("+").
+                help("The metadata nodes to display.");
+        }
+
+        @Override
+        public Commands.Handler createHandler(Namespace namespace) {
+            return new CatCommandHandler(namespace.getList("targets"));
+        }
+    }
 
     private final List<String> targets;
 
