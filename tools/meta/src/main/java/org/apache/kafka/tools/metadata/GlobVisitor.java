@@ -18,8 +18,10 @@
 package org.apache.kafka.tools.metadata;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Map.Entry;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.function.Consumer;
 
@@ -51,6 +53,31 @@ public final class GlobVisitor implements Consumer<MetadataNodeManager.Data> {
 
         public MetadataNode node() {
             return node;
+        }
+
+        @Override
+        public int hashCode() {
+            return Objects.hash(path, node);
+        }
+
+        @Override
+        public boolean equals(Object o) {
+            if (!(o instanceof MetadataNodeInfo)) return false;
+            MetadataNodeInfo other = (MetadataNodeInfo) o;
+            if (!Arrays.equals(path, other.path)) return false;
+            if (!node.equals(other.node)) return false;
+            return true;
+        }
+
+        @Override
+        public String toString() {
+            StringBuilder bld = new StringBuilder("MetadataNodeInfo(path=");
+            for (int i = 0; i < path.length; i++) {
+                bld.append("/");
+                bld.append(path[i]);
+            }
+            bld.append(", node=").append(node).append(")");
+            return bld.toString();
         }
     }
 

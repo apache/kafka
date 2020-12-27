@@ -58,7 +58,12 @@ public interface MetadataNode {
             }
             DirectoryNode node = this;
             for (int i = 0; i < names.length - 1; i++) {
-                node = node.directory(names[i]);
+                MetadataNode nextNode = node.children.get(names[i]);
+                if (nextNode == null || !(nextNode instanceof DirectoryNode)) {
+                    throw new RuntimeException("Unable to locate directory /" +
+                        String.join("/", names));
+                }
+                node = (DirectoryNode) nextNode;
             }
             node.children.remove(names[names.length - 1]);
         }
