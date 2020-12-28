@@ -22,6 +22,7 @@ import org.jline.reader.Candidate;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map.Entry;
 
 /**
  * Utility functions for command handlers.
@@ -82,6 +83,20 @@ public final class CommandUtils {
         return results;
     }
 
+    public static List<String> stripDotPathComponents(List<String> input) {
+        List<String> output = new ArrayList<>();
+        for (String string : input) {
+            if (string.equals("..")) {
+                if (output.size() > 0) {
+                    output.remove(output.size() - 1);
+                }
+            } else if (!string.equals(".")) {
+                output.add(string);
+            }
+        }
+        return output;
+    }
+
     /**
      * Generate a list of potential completions for a path.
      *
@@ -93,23 +108,43 @@ public final class CommandUtils {
                                     String pathPrefix,
                                     List<Candidate> candidates) throws Exception {
         nodeManager.visit(data -> {
-            String effectivePath = pathPrefix.startsWith("/") ?
-                data.workingDirectory() + "/" + pathPrefix : "./" + pathPrefix;
-            List<String> pathComponents = splitPath(effectivePath);
+            String absolutePath = pathPrefix.startsWith("/") ?
+                pathPrefix : data.workingDirectory() + "/" + pathPrefix;
+            List<String> pathComponents = stripDotPathComponents(splitPath(absolutePath));
             DirectoryNode directory = data.root();
-            for (int i = 0; i < pathComponents.size() - 1; i++) {
+            int numDirectories = pathPrefix.endsWith("/") ?
+                pathComponents.size() : pathComponents.size() - 1;
+            for (int i = 0; i < numDirectories; i++) {
                 MetadataNode node = directory.child(pathComponents.get(i));
                 if (node == null || !(node instanceof DirectoryNode)) {
                     return;
                 }
                 directory = (DirectoryNode) node;
             }
-            String lastComponent = pathComponents.size() == 0 ? "" :
-                pathComponents.get(pathComponents.size() - 1);
-            String candidate = directory.children().ceilingKey(lastComponent);
-            while (candidate != null && candidate.startsWith(lastComponent)) {
-                candidates.add(new Candidate(candidate));
-                candidate = directory.children().higherKey(candidate);
+            String lastComponent = "";
+            if (numDirectories >= 0 && numDirectories < pathComponents.size()) {
+                lastComponent = pathComponents.get(numDirectories);
+            }
+            Entry<String, MetadataNode> candidate =
+                directory.children().ceilingEntry(lastComponent);
+            String effectivePrefix;
+            int lastSlash = pathPrefix.lastIndexOf('/');
+            if (lastSlash < 0) {
+                effectivePrefix = "";
+            } else {
+                effectivePrefix = pathPrefix.substring(0, lastSlash + 1);
+            }
+            while (candidate != null && candidate.getKey().startsWith(lastComponent)) {
+                StringBuilder candidateBuilder = new StringBuilder();
+                candidateBuilder.append(effectivePrefix).append(candidate.getKey());
+                boolean complete = true;
+                if (candidate.getValue() instanceof DirectoryNode) {
+                    candidateBuilder.append("/");
+                    complete = false;
+                }
+                candidates.add(new Candidate(candidateBuilder.toString(),
+                    candidateBuilder.toString(), null, null, null, null, complete));
+                candidate = directory.children().higherEntry(candidate.getKey());
             }
         });
     }
