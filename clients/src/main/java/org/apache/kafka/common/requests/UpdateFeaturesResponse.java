@@ -16,16 +16,17 @@
  */
 package org.apache.kafka.common.requests;
 
-import java.nio.ByteBuffer;
-import java.util.Map;
-import java.util.stream.Collectors;
-
 import org.apache.kafka.common.message.UpdateFeaturesResponseData;
 import org.apache.kafka.common.message.UpdateFeaturesResponseData.UpdatableFeatureResult;
 import org.apache.kafka.common.message.UpdateFeaturesResponseData.UpdatableFeatureResultCollection;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
+
+import java.nio.ByteBuffer;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.stream.Collectors;
 
 
 /**
@@ -52,9 +53,18 @@ public class UpdateFeaturesResponse extends AbstractResponse {
                 result -> new ApiError(Errors.forCode(result.errorCode()), result.errorMessage())));
     }
 
+    public ApiError topLevelError() {
+        return new ApiError(Errors.forCode(data.errorCode()), data.errorMessage());
+    }
+
     @Override
     public Map<Errors, Integer> errorCounts() {
-        return apiErrorCounts(errors());
+        Map<Errors, Integer> errorCounts = new HashMap<>();
+        updateErrorCounts(errorCounts, Errors.forCode(data.errorCode()));
+        for (UpdatableFeatureResult result : data.results().valuesSet()) {
+            updateErrorCounts(errorCounts, Errors.forCode(result.errorCode()));
+        }
+        return errorCounts;
     }
 
     @Override

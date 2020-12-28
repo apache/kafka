@@ -53,7 +53,7 @@ public class UpdateFeaturesRequest extends AbstractRequest {
     }
 
     @Override
-    public AbstractResponse getErrorResponse(int throttleTimeMs, Throwable e) {
+    public UpdateFeaturesResponse getErrorResponse(int throttleTimeMs, Throwable e) {
         return UpdateFeaturesResponse.createWithErrors(
             ApiError.fromThrowable(e),
             Collections.emptyMap(),
