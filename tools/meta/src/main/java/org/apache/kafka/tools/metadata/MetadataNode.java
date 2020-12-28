@@ -25,12 +25,7 @@ import java.util.TreeMap;
  */
 public interface MetadataNode {
     class DirectoryNode implements MetadataNode {
-        private final DirectoryNode parent;
         private final TreeMap<String, MetadataNode> children = new TreeMap<>();
-
-        public DirectoryNode(DirectoryNode parent) {
-            this.parent = parent == null ? this : parent;
-        }
 
         public DirectoryNode mkdirs(String... names) {
             if (names.length == 0) {
@@ -40,7 +35,7 @@ public interface MetadataNode {
             for (int i = 0; i < names.length; i++) {
                 MetadataNode nextNode = node.children.get(names[i]);
                 if (nextNode == null) {
-                    nextNode = new DirectoryNode(this);
+                    nextNode = new DirectoryNode();
                     node.children.put(names[i], nextNode);
                 } else {
                     if (!(nextNode instanceof DirectoryNode)) {
@@ -79,10 +74,6 @@ public interface MetadataNode {
                 }
             }
             return (FileNode) node;
-        }
-
-        public DirectoryNode parent() {
-            return parent;
         }
 
         public MetadataNode child(String component) {

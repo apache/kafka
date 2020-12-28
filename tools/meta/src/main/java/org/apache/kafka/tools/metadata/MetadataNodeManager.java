@@ -50,7 +50,7 @@ public final class MetadataNodeManager implements AutoCloseable {
     private static final Logger log = LoggerFactory.getLogger(MetadataNodeManager.class);
 
     public static class Data {
-        private final DirectoryNode root = new DirectoryNode(null);
+        private final DirectoryNode root = new DirectoryNode();
         private String workingDirectory = "/";
 
         public DirectoryNode root() {

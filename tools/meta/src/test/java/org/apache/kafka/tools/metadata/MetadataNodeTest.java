@@ -35,7 +35,7 @@ import java.util.HashSet;
 public class MetadataNodeTest {
     @Test
     public void testMkdirs() {
-        DirectoryNode root = new DirectoryNode(null);
+        DirectoryNode root = new DirectoryNode();
         DirectoryNode defNode = root.mkdirs("abc", "def");
         DirectoryNode defNode2 = root.mkdirs("abc", "def");
         assertTrue(defNode == defNode2);
@@ -49,9 +49,8 @@ public class MetadataNodeTest {
 
     @Test
     public void testRmrf() {
-        DirectoryNode root = new DirectoryNode(null);
+        DirectoryNode root = new DirectoryNode();
         DirectoryNode foo = root.mkdirs("foo");
-        assertTrue(root == foo.parent());
         foo.mkdirs("a");
         foo.mkdirs("b");
         root.mkdirs("baz");
@@ -64,7 +63,7 @@ public class MetadataNodeTest {
 
     @Test
     public void testCreateFiles() {
-        DirectoryNode root = new DirectoryNode(null);
+        DirectoryNode root = new DirectoryNode();
         DirectoryNode abcdNode = root.mkdirs("abcd");
         FileNode quuxNodde = abcdNode.create("quux");
         quuxNodde.setContents("quux contents");

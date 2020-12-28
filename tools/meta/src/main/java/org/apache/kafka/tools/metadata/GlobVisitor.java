@@ -94,16 +94,11 @@ public final class GlobVisitor implements Consumer<MetadataNodeManager.Data> {
 
     @Override
     public void accept(MetadataNodeManager.Data data) {
-        if (glob.startsWith("/")) {
-            accept(data.root(), glob);
-        } else {
-            accept(data.root(), data.workingDirectory() + "/" + glob);
-        }
-    }
-
-    private void accept(MetadataNode.DirectoryNode root, String fullGlob) {
-        List<String> globComponents = CommandUtils.splitPath(fullGlob);
-        if (!accept(globComponents, 0, root, new String[0])) {
+        String fullGlob = glob.startsWith("/") ? glob :
+            data.workingDirectory() + "/" + glob;
+        List<String> globComponents =
+            CommandUtils.stripDotPathComponents(CommandUtils.splitPath(fullGlob));
+        if (!accept(globComponents, 0, data.root(), new String[0])) {
             handler.accept(Optional.empty());
         }
     }
@@ -117,23 +112,6 @@ public final class GlobVisitor implements Consumer<MetadataNodeManager.Data> {
             return true;
         }
         String globComponentString = globComponents.get(componentIndex);
-        if (globComponentString.equals(".")) {
-            return accept(globComponents, componentIndex + 1, node, path);
-        }
-        if (globComponentString.equals("..")) {
-            if (!(node instanceof MetadataNode.DirectoryNode)) {
-                return false;
-            }
-            String[] newPath;
-            if (path.length == 0) {
-                newPath = path;
-            } else {
-                newPath = new String[path.length - 1];
-                System.arraycopy(path, 0, newPath, 0, path.length - 1);
-            }
-            MetadataNode.DirectoryNode directory = (MetadataNode.DirectoryNode) node;
-            return accept(globComponents, componentIndex + 1, directory.parent(), newPath);
-        }
         GlobComponent globComponent = new GlobComponent(globComponentString);
         if (globComponent.literal()) {
             if (!(node instanceof MetadataNode.DirectoryNode)) {
