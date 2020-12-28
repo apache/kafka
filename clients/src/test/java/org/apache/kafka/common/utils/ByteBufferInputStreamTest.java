@@ -25,7 +25,7 @@ import org.junit.Test;
 public class ByteBufferInputStreamTest {
 
     @Test
-    public void testReadUnsignedIntFromInputStream() throws Exception {
+    public void testReadUnsignedIntFromInputStream() {
         ByteBuffer buffer = ByteBuffer.allocate(8);
         buffer.put((byte) 10);
         buffer.put((byte) 20);

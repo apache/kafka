@@ -119,4 +119,5 @@ public class ByteBufferLogInputStreamTest {
         assertNotNull(logInputStream.nextBatch());
         logInputStream.nextBatch();
     }
+
 }
