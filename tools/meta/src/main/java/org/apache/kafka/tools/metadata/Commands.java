@@ -140,6 +140,10 @@ public final class Commands {
             return new ErroneousCommandHandler(e.getMessage());
         }
         String command = namespace.get("command");
+        if (!command.equals(trimmedArguments.get(0))) {
+            return new ErroneousCommandHandler("invalid choice: '" +
+                trimmedArguments.get(0) + "': did you mean '" + command + "'?");
+        }
         Type type = TYPES.get(command);
         if (type == null) {
             return new ErroneousCommandHandler("Unknown command specified: " + command);
