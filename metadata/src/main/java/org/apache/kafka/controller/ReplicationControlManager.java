@@ -32,16 +32,20 @@ import org.apache.kafka.common.metadata.TopicRecord;
 import org.apache.kafka.common.protocol.ApiMessageAndVersion;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.ApiError;
+import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.timeline.SnapshotRegistry;
 import org.apache.kafka.timeline.TimelineHashMap;
+import org.slf4j.Logger;
 
 import java.util.AbstractMap.SimpleImmutableEntry;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
+import java.util.Objects;
 import java.util.Random;
 
 import static org.apache.kafka.clients.admin.AlterConfigOp.OpType.SET;
@@ -66,6 +70,15 @@ public class ReplicationControlManager {
         private final int leader;
         private final int leaderEpoch;
 
+        PartitionControlInfo(PartitionRecord record) {
+            this(toArray(record.replicas()),
+                toArray(record.isr()),
+                toArray(record.removingReplicas()),
+                toArray(record.addingReplicas()),
+                record.leader(),
+                record.leaderEpoch());
+        }
+
         PartitionControlInfo(int[] replicas, int[] isr, int[] removingReplicas,
                              int[] addingReplicas, int leader, int leaderEpoch) {
             this.replicas = replicas;
@@ -75,21 +88,84 @@ public class ReplicationControlManager {
             this.leader = leader;
             this.leaderEpoch = leaderEpoch;
         }
+
+        String diff(PartitionControlInfo prev) {
+            StringBuilder builder = new StringBuilder();
+            String prefix = "";
+            if (!Arrays.equals(replicas, prev.replicas)) {
+                builder.append("replicas=").append(Arrays.toString(replicas));
+                prefix = ", ";
+            }
+            if (!Arrays.equals(isr, prev.isr)) {
+                builder.append(prefix).append("isr=").append(Arrays.toString(isr));
+                prefix = ", ";
+            }
+            if (!Arrays.equals(removingReplicas, prev.removingReplicas)) {
+                builder.append(prefix).append("removingReplicas=").
+                    append(Arrays.toString(removingReplicas));
+                prefix = ", ";
+            }
+            if (!Arrays.equals(addingReplicas, prev.addingReplicas)) {
+                builder.append(prefix).append("addingReplicas=").
+                    append(Arrays.toString(addingReplicas));
+                prefix = ", ";
+            }
+            if (leader != prev.leader) {
+                builder.append(prefix).append("leader=").append(leader);
+                prefix = ", ";
+            }
+            if (leaderEpoch != prev.leaderEpoch) {
+                builder.append(prefix).append("leaderEpoch=").append(leaderEpoch);
+            }
+            return builder.toString();
+        }
+
+        @Override
+        public int hashCode() {
+            return Objects.hash(replicas, isr, removingReplicas, addingReplicas, leader,
+                leaderEpoch);
+        }
+
+        @Override
+        public boolean equals(Object o) {
+            if (!(o instanceof PartitionControlInfo)) return false;
+            PartitionControlInfo other = (PartitionControlInfo) o;
+            return diff(other).isEmpty();
+        }
+
+        @Override
+        public String toString() {
+            StringBuilder builder = new StringBuilder("PartitionControlInfo(");
+            builder.append("replicas=").append(Arrays.toString(replicas));
+            builder.append(", isr=").append(Arrays.toString(isr));
+            builder.append(", removingReplicas=").append(Arrays.toString(removingReplicas));
+            builder.append(", addingReplicas=").append(Arrays.toString(addingReplicas));
+            builder.append(", leader=").append(leader);
+            builder.append(", leaderEpoch=").append(leaderEpoch);
+            builder.append(")");
+            return builder.toString();
+        }
     }
 
     private final SnapshotRegistry snapshotRegistry;
+    private final Logger log;
     private final Random random;
+    private final int defaultReplicationFactor;
     private final ConfigurationControlManager configurationControl;
     private final ClusterControlManager clusterControl;
     private final TimelineHashMap<String, Uuid> topicsByName;
     private final TimelineHashMap<Uuid, TopicControlInfo> topics;
 
     ReplicationControlManager(SnapshotRegistry snapshotRegistry,
+                              LogContext logContext,
                               Random random,
+                              int defaultReplicationFactor,
                               ConfigurationControlManager configurationControl,
                               ClusterControlManager clusterControl) {
         this.snapshotRegistry = snapshotRegistry;
+        this.log = logContext.logger(ReplicationControlManager.class);
         this.random = random;
+        this.defaultReplicationFactor = defaultReplicationFactor;
         this.configurationControl = configurationControl;
         this.clusterControl = clusterControl;
         this.topicsByName = new TimelineHashMap<>(snapshotRegistry, 0);
@@ -97,13 +173,31 @@ public class ReplicationControlManager {
     }
 
     public void replay(TopicRecord record) {
-        // TODO: Complete implementation
         topicsByName.put(record.name(), record.topicId());
         topics.put(record.topicId(), new TopicControlInfo(snapshotRegistry, record.topicId()));
+        log.info("Created topic {} with ID {}.", record.name(), record.topicId());
     }
 
     public void replay(PartitionRecord message) {
-        // TODO: Complete implementation
+        TopicControlInfo topicInfo = topics.get(message.topicId());
+        if (topicInfo == null) {
+            throw new RuntimeException("Tried to create partition " + message.topicId() +
+                "-" + message.partitionId() + ", but no topic with that ID was found.");
+        }
+        PartitionControlInfo newPartInfo = new PartitionControlInfo(message);
+        PartitionControlInfo prevPartInfo = topicInfo.parts.get(message.partitionId());
+        if (prevPartInfo == null) {
+            log.info("Created partition {}-{} with {}.", message.topicId(),
+                message.partitionId(), newPartInfo.toString());
+            topicInfo.parts.put(message.partitionId(), newPartInfo);
+        } else {
+            String diff = newPartInfo.diff(prevPartInfo);
+            if (!diff.isEmpty()) {
+                log.info("Modified partition {}-{}: {}.", message.topicId(),
+                    message.partitionId(), diff);
+                topicInfo.parts.put(message.partitionId(), newPartInfo);
+            }
+        }
     }
 
     public ControllerResult<CreateTopicsResponseData>
@@ -138,13 +232,18 @@ public class ReplicationControlManager {
 
         // Create responses for all topics.
         CreateTopicsResponseData data = new CreateTopicsResponseData();
+        StringBuilder resultsBuilder = new StringBuilder();
+        String resultsPrefix = "";
         for (CreatableTopic topic : request.topics()) {
             ApiError error = topicErrors.get(topic.name());
             if (error != null) {
                 data.topics().add(new CreatableTopicResult().
                     setName(topic.name()).
                     setErrorCode(error.error().code()).
-                    setErrorMessage(error.error().message()));
+                    setErrorMessage(error.message()));
+                resultsBuilder.append(resultsPrefix).append(topic).append(": ").
+                    append(error.error()).append(" (").append(error.message()).append(")");
+                resultsPrefix = ", ";
                 continue;
             }
             CreatableTopicResult result = new CreatableTopicResult().
@@ -152,7 +251,11 @@ public class ReplicationControlManager {
                 setErrorCode((short) 0).
                 setErrorMessage(null);
             data.topics().add(result);
+            resultsBuilder.append(resultsPrefix).append(topic).append(": ").
+                append("SUCCESS");
+            resultsPrefix = ", ";
         }
+        log.info("createTopics result(s): {}", resultsBuilder.toString());
         return new ControllerResult<>(records, data);
     }
 
@@ -162,11 +265,11 @@ public class ReplicationControlManager {
             return new ApiError(Errors.INVALID_REQUEST,
                 "The number of partitions must be greater than 0.");
         }
-        if (topic.replicationFactor() == -1) {
-            if (topic.assignments().isEmpty()) {
+        if (!topic.assignments().isEmpty()) {
+            if (topic.replicationFactor() != -1) {
                 return new ApiError(Errors.INVALID_REQUEST,
-                    "Replication factor was set to -1 but a manual partition " +
-                        "assignment was not specified.");
+                    "A manual partition assignment was specified, but replication " +
+                    "factor was not set to -1.");
             } else if (topic.assignments().size() != topic.numPartitions()) {
                 return new ApiError(Errors.INVALID_REQUEST, "" + topic.numPartitions() +
                     " partitions were specified, but only " + topic.assignments().size() +
@@ -201,7 +304,7 @@ public class ReplicationControlManager {
                 newParts.put(assignment.partitionIndex(),
                     new PartitionControlInfo(replicas, isr, null, null, isr[0], 0));
             }
-        } else if (topic.replicationFactor() <= 0) {
+        } else if (topic.replicationFactor() < -1 || topic.replicationFactor() == 0) {
             return new ApiError(Errors.INVALID_REQUEST,
                 "Replication factor was set to an invalid non-positive value.");
         } else if (!topic.assignments().isEmpty()) {
@@ -209,14 +312,15 @@ public class ReplicationControlManager {
                 "Replication factor was not set to -1 but a manual partition " +
                     "assignment was specified.");
         } else {
+            int replicationFactor = topic.replicationFactor() == -1 ?
+                defaultReplicationFactor : topic.replicationFactor();
             for (int partitionId = 0; partitionId < topic.numPartitions(); partitionId++) {
                 List<Integer> replicas;
                 try {
-                    replicas = clusterControl.chooseRandomUsable(random,
-                        topic.replicationFactor());
+                    replicas = clusterControl.chooseRandomUsable(random, replicationFactor);
                 } catch (Exception e) {
                     return new ApiError(Errors.INVALID_REQUEST,
-                        "Unable to replicate the partition " + topic.replicationFactor() +
+                        "Unable to replicate the partition " + replicationFactor +
                             " times: " + e.getMessage());
                 }
                 newParts.put(partitionId, new PartitionControlInfo(toArray(replicas),
@@ -244,6 +348,7 @@ public class ReplicationControlManager {
     }
 
     private static List<Integer> toList(int[] array) {
+        if (array == null) return null;
         ArrayList<Integer> list = new ArrayList<>(array.length);
         for (int i = 0; i < array.length; i++) {
             list.add(array[i]);
@@ -252,6 +357,7 @@ public class ReplicationControlManager {
     }
 
     private static int[] toArray(List<Integer> list) {
+        if (list == null) return null;
         int[] array = new int[list.size()];
         for (int i = 0; i < list.size(); i++) {
             array[i] = list.get(i);
