@@ -21,6 +21,13 @@ services:
 jdk:
   - openjdk8
 
+jobs:
+  include:
+    - name: arm64
+      arch: arm64-graviton2
+      group: edge
+      virt: vm
+
 env:
   - _DUCKTAPE_OPTIONS="--subset 0  --subsets 15"
   - _DUCKTAPE_OPTIONS="--subset 1  --subsets 15"
