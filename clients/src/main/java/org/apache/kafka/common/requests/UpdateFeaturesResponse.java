@@ -26,8 +26,6 @@ import org.apache.kafka.common.protocol.Errors;
 import java.nio.ByteBuffer;
 import java.util.HashMap;
 import java.util.Map;
-import java.util.stream.Collectors;
-
 
 /**
  * Possible error codes:
@@ -44,13 +42,6 @@ public class UpdateFeaturesResponse extends AbstractResponse {
     public UpdateFeaturesResponse(UpdateFeaturesResponseData data) {
         super(ApiKeys.UPDATE_FEATURES);
         this.data = data;
-    }
-
-    public Map<String, ApiError> errors() {
-        return data.results().valuesSet().stream().collect(
-            Collectors.toMap(
-                result -> result.feature(),
-                result -> new ApiError(Errors.forCode(result.errorCode()), result.errorMessage())));
     }
 
     public ApiError topLevelError() {
