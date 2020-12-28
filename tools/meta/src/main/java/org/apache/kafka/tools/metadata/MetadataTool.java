@@ -180,6 +180,7 @@ public final class MetadataTool {
     }
 
     public void run(List<String> args) throws Exception {
+        nodeManager.setup();
         if (raftManager != null) {
             raftManager.startup();
             raftManager.register(nodeManager.logListener());

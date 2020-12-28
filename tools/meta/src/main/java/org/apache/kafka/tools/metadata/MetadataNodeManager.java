@@ -28,6 +28,7 @@ import org.apache.kafka.common.metadata.TopicRecord;
 import org.apache.kafka.common.metadata.UnfenceBrokerRecord;
 import org.apache.kafka.common.metadata.UnregisterBrokerRecord;
 import org.apache.kafka.common.protocol.ApiMessage;
+import org.apache.kafka.common.utils.AppInfoParser;
 import org.apache.kafka.common.utils.EventQueue;
 import org.apache.kafka.common.utils.KafkaEventQueue;
 import org.apache.kafka.common.utils.LogContext;
@@ -71,7 +72,7 @@ public final class MetadataNodeManager implements AutoCloseable {
         public void handleCommits(long lastOffset, List<ApiMessage> messages) {
             appendEvent("handleCommits", () -> {
                 log.error("handleCommits " + messages + " at offset " + lastOffset);
-                DirectoryNode dir = data.root.mkdirs("@metadata");
+                DirectoryNode dir = data.root.mkdirs("metadataQuorum");
                 dir.create("offset").setContents(String.valueOf(lastOffset));
                 for (ApiMessage message : messages) {
                     handleCommit(message);
@@ -83,7 +84,7 @@ public final class MetadataNodeManager implements AutoCloseable {
         public void handleNewLeader(MetaLogLeader leader) {
             appendEvent("handleNewLeader", () -> {
                 log.error("handleNewLeader " + leader);
-                DirectoryNode dir = data.root.mkdirs("@metadata");
+                DirectoryNode dir = data.root.mkdirs("metadataQuorum");
                 dir.create("leader").setContents(leader.toString());
             }, null);
         }
@@ -107,6 +108,17 @@ public final class MetadataNodeManager implements AutoCloseable {
     public MetadataNodeManager() {
         this.queue = new KafkaEventQueue(Time.SYSTEM,
             new LogContext("[node-manager-event-queue] "), "");
+    }
+
+    public void setup() throws Exception {
+        CompletableFuture<Void> future = new CompletableFuture<>();
+        appendEvent("createShellNodes", () -> {
+            DirectoryNode directory = data.root().mkdirs("local");
+            directory.create("version").setContents(AppInfoParser.getVersion());
+            directory.create("commitId").setContents(AppInfoParser.getCommitId());
+            future.complete(null);
+        }, future);
+        future.get();
     }
 
     public LogListener logListener() {
