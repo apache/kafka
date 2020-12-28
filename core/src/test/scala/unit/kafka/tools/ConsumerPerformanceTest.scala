@@ -18,9 +18,10 @@
 package kafka.tools
 
 import java.io.ByteArrayOutputStream
+import java.nio.file.Files
 import java.text.SimpleDateFormat
 
-import kafka.utils.Exit
+import kafka.utils.{Exit, TestUtils}
 import org.junit.Assert.assertEquals
 import org.junit.Test
 
