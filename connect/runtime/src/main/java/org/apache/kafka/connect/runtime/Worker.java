@@ -71,6 +71,7 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -111,7 +112,9 @@ public class Worker {
     private final Converter internalValueConverter;
     private final OffsetBackingStore offsetBackingStore;
 
+    private final Set<String> startFailedConnectors = new HashSet<>();
     private final ConcurrentMap<String, WorkerConnector> connectors = new ConcurrentHashMap<>();
+    private final Set<ConnectorTaskId> startFailedTasks = new HashSet<>();
     private final ConcurrentMap<ConnectorTaskId, WorkerTask> tasks = new ConcurrentHashMap<>();
     private SourceTaskOffsetCommitter sourceTaskOffsetCommitter;
     private final WorkerConfigTransformer workerConfigTransformer;
@@ -286,6 +289,8 @@ public class Worker {
                 Plugins.compareAndSwapLoaders(savedLoader);
             } catch (Throwable t) {
                 log.error("Failed to start connector {}", connName, t);
+                // add to startFailedConnectors so that we won't take it as unexpected connector and warn user
+                startFailedConnectors.add(connName);
                 // Can't be put in a finally block because it needs to be swapped before the call on
                 // statusListener
                 Plugins.compareAndSwapLoaders(savedLoader);
@@ -387,7 +392,9 @@ public class Worker {
             log.info("Stopping connector {}", connName);
 
             if (workerConnector == null) {
-                log.warn("Ignoring stop request for unowned connector {}", connName);
+                if (!startFailedConnectors.contains(connName)) {
+                    log.warn("Ignoring stop request for unowned connector {}", connName);
+                }
                 return;
             }
 
@@ -412,7 +419,9 @@ public class Worker {
         try (LoggingContext loggingContext = LoggingContext.forConnector(connName)) {
             WorkerConnector connector = connectors.remove(connName);
             if (connector == null) {
-                log.warn("Ignoring await stop request for non-present connector {}", connName);
+                if (!startFailedConnectors.remove(connName)) {
+                    log.warn("Ignoring await stop request for non-present connector {}", connName);
+                }
                 return;
             }
 
@@ -558,6 +567,8 @@ public class Worker {
                 Plugins.compareAndSwapLoaders(savedLoader);
             } catch (Throwable t) {
                 log.error("Failed to start task {}", id, t);
+                // add it to the startFailedTasks so that we won't take it as unexpected task and warn user
+                startFailedTasks.add(id);
                 // Can't be put in a finally block because it needs to be swapped before the call on
                 // statusListener
                 Plugins.compareAndSwapLoaders(savedLoader);
@@ -829,7 +840,9 @@ public class Worker {
         try (LoggingContext loggingContext = LoggingContext.forTask(taskId)) {
             WorkerTask task = tasks.get(taskId);
             if (task == null) {
-                log.warn("Ignoring stop request for unowned task {}", taskId);
+                if (!startFailedTasks.contains(taskId)) {
+                    log.warn("Ignoring stop request for unowned task {}", taskId);
+                }
                 return;
             }
 
@@ -859,7 +872,9 @@ public class Worker {
         try (LoggingContext loggingContext = LoggingContext.forTask(taskId)) {
             WorkerTask task = tasks.remove(taskId);
             if (task == null) {
-                log.warn("Ignoring await stop request for non-present task {}", taskId);
+                if (!startFailedTasks.remove(taskId)) {
+                    log.warn("Ignoring await stop request for non-present task {}", taskId);
+                }
                 return;
             }
 
