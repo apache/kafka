@@ -214,10 +214,9 @@ class ClientQuotasRequestTest extends BaseRequestTest {
           InetAddress.getByName(unknownHost)
         else
           InetAddress.getByName(entityName)
-        TestUtils.retry(10000L) {
-          //retry until Broker update prop from Zookeeper
-          assertEquals(expectedMatches(entity), servers.head.socketServer.connectionQuotas.connectionRateForIp(entityIp), 0.01)
-        }
+        TestUtils.waitUntilTrue(
+          () => expectedMatches(entity) - servers.head.socketServer.connectionQuotas.connectionRateForIp(entityIp) < 0.01
+          ,"Broker didn't update prop from Zookeeper")
       }
     }
 
