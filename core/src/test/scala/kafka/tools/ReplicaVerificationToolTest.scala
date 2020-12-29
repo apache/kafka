@@ -18,6 +18,7 @@
 package kafka.tools
 
 import org.apache.kafka.common.TopicPartition
+import org.apache.kafka.common.message.FetchResponseData
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.record.{CompressionType, MemoryRecords, SimpleRecord}
 import org.apache.kafka.common.requests.FetchResponse
@@ -44,7 +45,14 @@ class ReplicaVerificationToolTest {
         }
         val initialOffset = 4
         val memoryRecords = MemoryRecords.withRecords(initialOffset, CompressionType.NONE, records: _*)
-        val partitionData = new FetchResponse.PartitionData(Errors.NONE, 20, 20, 0L, null, memoryRecords)
+        val partitionData = new FetchResponse.PartitionData[MemoryRecords](new FetchResponseData.FetchablePartitionResponse()
+          .setErrorCode(Errors.NONE.code())
+          .setHighWatermark(20)
+          .setLastStableOffset(20)
+          .setLogStartOffset(0)
+          .setAbortedTransactions(null)
+          .setRecordSet(memoryRecords)
+          .setPreferredReadReplica(FetchResponse.INVALID_PREFERRED_REPLICA_ID))
 
         replicaBuffer.addFetchedData(tp, replicaId, partitionData)
       }

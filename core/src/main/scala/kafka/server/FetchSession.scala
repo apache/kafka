@@ -20,7 +20,6 @@ package kafka.server
 import java.util
 import java.util.Optional
 import java.util.concurrent.{ThreadLocalRandom, TimeUnit}
-
 import kafka.metrics.KafkaMetricsGroup
 import kafka.utils.Logging
 import org.apache.kafka.common.TopicPartition

@@ -19,6 +19,7 @@ package org.apache.kafka.jmh.fetchsession;
 
 import org.apache.kafka.clients.FetchSessionHandler;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.message.FetchResponseData;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.record.MemoryRecords;
 import org.apache.kafka.common.requests.FetchRequest;
@@ -78,12 +79,14 @@ public class FetchSessionBenchmark {
             fetches.put(tp, partitionData);
             builder.add(tp, partitionData);
             respMap.put(tp, new FetchResponse.PartitionData<>(
-                    Errors.NONE,
-                    0L,
-                    0L,
-                    0,
-                    null,
-                    null));
+                    new FetchResponseData.FetchablePartitionResponse()
+                            .setErrorCode(Errors.NONE.code())
+                            .setHighWatermark(0)
+                            .setLastStableOffset(0)
+                            .setLogStartOffset(0)
+                            .setAbortedTransactions(null)
+                            .setRecordSet(null)
+                            .setPreferredReadReplica(FetchResponse.INVALID_PREFERRED_REPLICA_ID)));
         }
         builder.build();
         // build and handle an initial response so that the next fetch will be incremental

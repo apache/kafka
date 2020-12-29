@@ -16,9 +16,6 @@
   */
 package kafka.server
 
-import java.nio.charset.StandardCharsets
-import java.util.{Collections, Optional}
-
 import kafka.api.{ApiVersion, KAFKA_2_6_IV0}
 import kafka.cluster.{BrokerEndPoint, Partition}
 import kafka.log.{Log, LogAppendInfo, LogManager}
@@ -33,16 +30,18 @@ import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.protocol.Errors._
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.record.{CompressionType, MemoryRecords, Records, SimpleRecord}
-import org.apache.kafka.common.requests.OffsetsForLeaderEpochResponse.{UNDEFINED_EPOCH, UNDEFINED_EPOCH_OFFSET}
 import org.apache.kafka.common.requests.FetchResponse
+import org.apache.kafka.common.requests.OffsetsForLeaderEpochResponse.{UNDEFINED_EPOCH, UNDEFINED_EPOCH_OFFSET}
 import org.apache.kafka.common.utils.SystemTime
 import org.easymock.EasyMock._
 import org.easymock.{Capture, CaptureType}
 import org.junit.Assert._
 import org.junit.{After, Test}
 
-import scala.jdk.CollectionConverters._
+import java.nio.charset.StandardCharsets
+import java.util.Collections
 import scala.collection.{Map, mutable}
+import scala.jdk.CollectionConverters._
 
 class ReplicaFetcherThreadTest {
 
@@ -536,8 +535,16 @@ class ReplicaFetcherThreadTest {
 
     def partitionData(divergingEpoch: FetchResponseData.EpochEndOffset): FetchResponse.PartitionData[Records] = {
       new FetchResponse.PartitionData[Records](
-        Errors.NONE, 0, 0, 0, Optional.empty(), Collections.emptyList(),
-        Optional.of(divergingEpoch), MemoryRecords.EMPTY)
+        new FetchResponseData.FetchablePartitionResponse()
+          .setErrorCode(Errors.NONE.code())
+          .setHighWatermark(0)
+          .setLastStableOffset(0)
+          .setLogStartOffset(0)
+          .setAbortedTransactions(Collections.emptyList())
+          .setRecordSet(MemoryRecords.EMPTY)
+          .setPreferredReadReplica(FetchResponse.INVALID_PREFERRED_REPLICA_ID)
+          .setDivergingEpoch(divergingEpoch)
+      )
     }
 
     // Loop 2 should truncate based on diverging epoch and continue to send fetch requests.
@@ -967,9 +974,15 @@ class ReplicaFetcherThreadTest {
 
     val records = MemoryRecords.withRecords(CompressionType.NONE,
       new SimpleRecord(1000, "foo".getBytes(StandardCharsets.UTF_8)))
-
     val partitionData: thread.FetchData = new FetchResponse.PartitionData[Records](
-      Errors.NONE, 0, 0, 0, Optional.empty(), Collections.emptyList(), records)
+      new FetchResponseData.FetchablePartitionResponse()
+        .setErrorCode(Errors.NONE.code())
+        .setHighWatermark(0)
+        .setLastStableOffset(0)
+        .setLogStartOffset(0)
+        .setAbortedTransactions(Collections.emptyList())
+        .setRecordSet(records)
+        .setPreferredReadReplica(FetchResponse.INVALID_PREFERRED_REPLICA_ID))
     thread.processPartitionData(t1p0, 0, partitionData)
 
     if (isReassigning)

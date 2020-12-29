@@ -17,28 +17,26 @@
 
 package kafka.server
 
-import java.util
-import java.util.Optional
-
 import kafka.api.Request
 import kafka.cluster.BrokerEndPoint
 import kafka.log.{LeaderOffsetIncremented, LogAppendInfo}
-import kafka.server.AbstractFetcherThread.ReplicaFetch
-import kafka.server.AbstractFetcherThread.ResultWithPartitions
+import kafka.server.AbstractFetcherThread.{ReplicaFetch, ResultWithPartitions}
 import kafka.server.QuotaFactory.UnboundedQuota
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.errors.KafkaStorageException
+import org.apache.kafka.common.message.FetchResponseData
 import org.apache.kafka.common.message.OffsetForLeaderEpochResponseData.EpochEndOffset
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.record.Records
 import org.apache.kafka.common.requests.FetchResponse.PartitionData
-import org.apache.kafka.common.requests.{FetchRequest, FetchResponse}
 import org.apache.kafka.common.requests.OffsetsForLeaderEpochResponse.UNDEFINED_EPOCH
-import org.apache.kafka.common.requests.RequestUtils
+import org.apache.kafka.common.requests.{FetchRequest, FetchResponse, RequestUtils}
 
-import scala.jdk.CollectionConverters._
+import java.util
+import java.util.Optional
 import scala.collection.{Map, Seq, Set, mutable}
 import scala.compat.java8.OptionConverters._
+import scala.jdk.CollectionConverters._
 
 class ReplicaAlterLogDirsThread(name: String,
                                 sourceBroker: BrokerEndPoint,
@@ -84,8 +82,14 @@ class ReplicaAlterLogDirsThread(name: String,
       partitionData = responsePartitionData.map { case (tp, data) =>
         val abortedTransactions = data.abortedTransactions.map(_.asJava).orNull
         val lastStableOffset = data.lastStableOffset.getOrElse(FetchResponse.INVALID_LAST_STABLE_OFFSET)
-        tp -> new FetchResponse.PartitionData(data.error, data.highWatermark, lastStableOffset,
-          data.logStartOffset, abortedTransactions, data.records)
+        tp -> new FetchResponse.PartitionData(new FetchResponseData.FetchablePartitionResponse()
+          .setErrorCode(data.error.code())
+          .setHighWatermark(data.highWatermark)
+          .setLastStableOffset(lastStableOffset)
+          .setLogStartOffset(data.logStartOffset)
+          .setAbortedTransactions(abortedTransactions)
+          .setRecordSet(data.records)
+          .setPreferredReadReplica(FetchResponse.INVALID_PREFERRED_REPLICA_ID))
       }
     }
 

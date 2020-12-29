@@ -17,6 +17,7 @@
 package org.apache.kafka.clients;
 
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.message.FetchResponseData;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.record.MemoryRecords;
 import org.apache.kafka.common.requests.FetchRequest;
@@ -39,6 +40,7 @@ import java.util.TreeSet;
 
 import static org.apache.kafka.common.requests.FetchMetadata.INITIAL_EPOCH;
 import static org.apache.kafka.common.requests.FetchMetadata.INVALID_SESSION_ID;
+import static org.apache.kafka.common.requests.FetchResponse.INVALID_PREFERRED_REPLICA_ID;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
@@ -157,13 +159,17 @@ public class FetchSessionHandlerTest {
 
         RespEntry(String topic, int partition, long highWatermark, long lastStableOffset) {
             this.part = new TopicPartition(topic, partition);
+
             this.data = new FetchResponse.PartitionData<>(
-                Errors.NONE,
-                highWatermark,
-                lastStableOffset,
-                0,
-                null,
-                null);
+                new FetchResponseData.FetchablePartitionResponse()
+                        .setErrorCode(Errors.NONE.code())
+                        .setHighWatermark(highWatermark)
+                        .setLastStableOffset(lastStableOffset)
+                        .setLogStartOffset(0)
+                        .setAbortedTransactions(null)
+                        .setRecordSet(null)
+                        .setPreferredReadReplica(INVALID_PREFERRED_REPLICA_ID)
+            );
         }
     }
 

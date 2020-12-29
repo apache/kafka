@@ -18,6 +18,7 @@
 package org.apache.kafka.jmh.common;
 
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.message.FetchResponseData;
 import org.apache.kafka.common.network.Send;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
@@ -44,7 +45,6 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.util.Collections;
 import java.util.LinkedHashMap;
-import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 
@@ -79,7 +79,14 @@ public class FetchResponseBenchmark {
             String topic = UUID.randomUUID().toString();
             for (int partitionId = 0; partitionId < partitionCount; partitionId++) {
                 FetchResponse.PartitionData<MemoryRecords> partitionData = new FetchResponse.PartitionData<>(
-                    Errors.NONE, 0, 0, 0, Optional.empty(), Collections.emptyList(), records);
+                        new FetchResponseData.FetchablePartitionResponse()
+                                .setErrorCode(Errors.NONE.code())
+                                .setHighWatermark(0)
+                                .setLastStableOffset(0)
+                                .setLogStartOffset(0)
+                                .setAbortedTransactions(Collections.emptyList())
+                                .setRecordSet(records)
+                                .setPreferredReadReplica(FetchResponse.INVALID_PREFERRED_REPLICA_ID));
                 responseData.put(new TopicPartition(topic, partitionId), partitionData);
             }
         }

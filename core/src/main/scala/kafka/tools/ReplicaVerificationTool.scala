@@ -24,7 +24,6 @@ import java.util.concurrent.CountDownLatch
 import java.util.concurrent.atomic.{AtomicInteger, AtomicReference}
 import java.util.regex.{Pattern, PatternSyntaxException}
 import java.util.{Date, Optional, Properties}
-
 import joptsimple.OptionParser
 import kafka.api._
 import kafka.utils.IncludeList
@@ -418,8 +417,7 @@ private class ReplicaFetcher(name: String, sourceBroker: Node, topicPartitions: 
         replicaBuffer.addFetchedData(tp, sourceBroker.id, partitionData)
       }
     } else {
-      val emptyResponse = new FetchResponse.PartitionData(Errors.NONE, FetchResponse.INVALID_HIGHWATERMARK,
-        FetchResponse.INVALID_LAST_STABLE_OFFSET, FetchResponse.INVALID_LOG_START_OFFSET, null, MemoryRecords.EMPTY)
+      val emptyResponse = new FetchResponse.PartitionData[MemoryRecords](FetchResponse.partitionResponse(Errors.NONE))
       for (topicAndPartition <- topicPartitions)
         replicaBuffer.addFetchedData(topicAndPartition, sourceBroker.id, emptyResponse)
     }

@@ -45,6 +45,7 @@ import org.apache.kafka.common.errors.InvalidGroupIdException;
 import org.apache.kafka.common.errors.InvalidTopicException;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.errors.WakeupException;
+import org.apache.kafka.common.message.FetchResponseData;
 import org.apache.kafka.common.message.HeartbeatResponseData;
 import org.apache.kafka.common.message.JoinGroupRequestData;
 import org.apache.kafka.common.message.JoinGroupResponseData;
@@ -2254,8 +2255,14 @@ public class KafkaConsumerTest {
                 records = builder.build();
             }
             tpResponses.put(partition, new FetchResponse.PartitionData<>(
-                    Errors.NONE, 0, FetchResponse.INVALID_LAST_STABLE_OFFSET,
-                    0L, null, records));
+                    new FetchResponseData.FetchablePartitionResponse()
+                            .setErrorCode(Errors.NONE.code())
+                            .setHighWatermark(0)
+                            .setLastStableOffset(FetchResponse.INVALID_LAST_STABLE_OFFSET)
+                            .setLogStartOffset(0)
+                            .setAbortedTransactions(null)
+                            .setRecordSet(records)
+                            .setPreferredReadReplica(FetchResponse.INVALID_PREFERRED_REPLICA_ID)));
         }
         return new FetchResponse<>(Errors.NONE, tpResponses, 0, INVALID_SESSION_ID);
     }

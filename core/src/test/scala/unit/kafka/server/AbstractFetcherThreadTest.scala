@@ -18,9 +18,8 @@
 package kafka.server
 
 import java.nio.ByteBuffer
-import java.util.Optional
+import java.util.{Collections, Optional}
 import java.util.concurrent.atomic.AtomicInteger
-
 import kafka.cluster.BrokerEndPoint
 import kafka.log.LogAppendInfo
 import kafka.message.NoCompressionCodec
@@ -37,7 +36,7 @@ import org.apache.kafka.common.message.OffsetForLeaderEpochResponseData.EpochEnd
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.record._
 import org.apache.kafka.common.requests.OffsetsForLeaderEpochResponse.{UNDEFINED_EPOCH, UNDEFINED_EPOCH_OFFSET}
-import org.apache.kafka.common.requests.FetchRequest
+import org.apache.kafka.common.requests.{FetchRequest, FetchResponse}
 import org.apache.kafka.common.utils.Time
 import org.junit.Assert._
 import org.junit.{Before, Test}
@@ -1144,8 +1143,15 @@ class AbstractFetcherThreadTest {
           (Errors.NONE, records)
         }
 
-        (partition, new FetchData(error, leaderState.highWatermark, leaderState.highWatermark, leaderState.logStartOffset,
-          Optional.empty[Integer], List.empty.asJava, divergingEpoch.asJava, records))
+        (partition, new FetchData(new FetchResponseData.FetchablePartitionResponse()
+          .setErrorCode(error.code())
+          .setHighWatermark(leaderState.highWatermark)
+          .setLastStableOffset(leaderState.highWatermark)
+          .setLogStartOffset(leaderState.logStartOffset)
+          .setAbortedTransactions(Collections.emptyList())
+          .setRecordSet(records)
+          .setPreferredReadReplica(FetchResponse.INVALID_PREFERRED_REPLICA_ID)
+          .setDivergingEpoch(divergingEpoch.getOrElse(new FetchResponseData.EpochEndOffset))))
       }.toMap
     }
 

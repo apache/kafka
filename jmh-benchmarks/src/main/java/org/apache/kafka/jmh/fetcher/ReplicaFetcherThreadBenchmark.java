@@ -44,6 +44,7 @@ import kafka.server.checkpoints.OffsetCheckpoints;
 import kafka.utils.KafkaScheduler;
 import kafka.utils.Pool;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.message.FetchResponseData;
 import org.apache.kafka.common.message.LeaderAndIsrRequestData;
 import org.apache.kafka.common.message.OffsetForLeaderEpochRequestData.OffsetForLeaderPartition;
 import org.apache.kafka.common.message.OffsetForLeaderEpochResponseData.EpochEndOffset;
@@ -82,7 +83,6 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.LinkedHashMap;
-import java.util.LinkedList;
 import java.util.List;
 import java.util.Optional;
 import java.util.Properties;
@@ -174,8 +174,14 @@ public class ReplicaFetcherThreadBenchmark {
                     return null;
                 }
             };
-            initialFetched.put(tp, new FetchResponse.PartitionData<>(Errors.NONE, 0, 0, 0,
-                    new LinkedList<>(), fetched));
+            initialFetched.put(tp, new FetchResponse.PartitionData<>(new FetchResponseData.FetchablePartitionResponse()
+                    .setErrorCode(Errors.NONE.code())
+                    .setHighWatermark(0)
+                    .setLastStableOffset(0)
+                    .setLogStartOffset(0)
+                    .setAbortedTransactions(Collections.emptyList())
+                    .setRecordSet(fetched)
+                    .setPreferredReadReplica(FetchResponse.INVALID_PREFERRED_REPLICA_ID)));
         }
 
         ReplicaManager replicaManager = Mockito.mock(ReplicaManager.class);

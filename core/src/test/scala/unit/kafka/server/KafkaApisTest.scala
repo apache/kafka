@@ -3033,13 +3033,18 @@ class KafkaApisTest {
 
   @Test
   def testSizeOfThrottledPartitions(): Unit = {
+
     def fetchResponse(data: Map[TopicPartition, String]): FetchResponse[Records] = {
       val responseData = new util.LinkedHashMap[TopicPartition, FetchResponse.PartitionData[Records]](
         data.map { case (tp, raw) =>
-          tp -> new FetchResponse.PartitionData(Errors.NONE,
-            105, 105, 0, Optional.empty(), Collections.emptyList(), Optional.empty(),
-            MemoryRecords.withRecords(CompressionType.NONE,
-              new SimpleRecord(100, raw.getBytes(StandardCharsets.UTF_8))).asInstanceOf[Records])
+          tp -> new FetchResponse.PartitionData[Records](new FetchResponseData.FetchablePartitionResponse()
+            .setErrorCode(Errors.NONE.code())
+            .setHighWatermark(105)
+            .setLastStableOffset(105)
+            .setLogStartOffset(0)
+            .setAbortedTransactions(null)
+            .setRecordSet(MemoryRecords.withRecords(CompressionType.NONE, new SimpleRecord(100, raw.getBytes(StandardCharsets.UTF_8))))
+            .setPreferredReadReplica(FetchResponse.INVALID_PREFERRED_REPLICA_ID))
       }.toMap.asJava)
       new FetchResponse(Errors.NONE, responseData, 100, 100)
     }
