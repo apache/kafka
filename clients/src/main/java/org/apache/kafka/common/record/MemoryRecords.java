@@ -198,7 +198,7 @@ public class MemoryRecords extends AbstractRecords {
             if (!retainedRecords.isEmpty()) {
                 if (writeOriginalBatch) {
                     batch.writeTo(bufferOutputStream);
-                    filterResult.updateRetainedBatchMetadata(batch, retainedRecords.get(0).offset(), retainedRecords.size(), false);
+                    filterResult.updateRetainedBatchMetadata(batch, batch.baseOffset(), retainedRecords.size(), false);
                 } else {
                     MemoryRecordsBuilder builder = buildRetainedRecordsInto(batch, retainedRecords, bufferOutputStream);
                     MemoryRecords records = builder.build();
@@ -210,8 +210,10 @@ public class MemoryRecords extends AbstractRecords {
                                 partition, batch.lastOffset(), maxRecordBatchSize, filteredBatchSize);
 
                     MemoryRecordsBuilder.RecordsInfo info = builder.info();
+                    long baseOffset = batch.magic() >= RecordBatch.MAGIC_VALUE_V2 ?
+                            batch.baseOffset() : retainedRecords.get(0).offset();
                     filterResult.updateRetainedBatchMetadata(info.maxTimestamp, info.shallowOffsetOfMaxTimestamp,
-                            maxOffset,  retainedRecords.get(0).offset(), retainedRecords.size(), filteredBatchSize);
+                            maxOffset, baseOffset, retainedRecords.size(), filteredBatchSize);
                 }
             } else if (batchRetention == BatchRetention.RETAIN_EMPTY) {
                 if (batchMagic < RecordBatch.MAGIC_VALUE_V2)
@@ -330,10 +332,11 @@ public class MemoryRecords extends AbstractRecords {
         private int messagesRetained = 0;
         private int bytesRetained = 0;
         private long maxOffset = -1L;
+        // Retains invariant `minOffset` = the baseOffset of the first batch of retained records
+        // or -1 if no batches are retained
         private long minOffset = -1L;
         private long maxTimestamp = RecordBatch.NO_TIMESTAMP;
         private long shallowOffsetOfMaxTimestamp = -1L;
-        private boolean offsetDetermined = false;
 
         private FilterResult(ByteBuffer outputBuffer) {
             this.outputBuffer = outputBuffer;
@@ -353,8 +356,7 @@ public class MemoryRecords extends AbstractRecords {
                 this.shallowOffsetOfMaxTimestamp = shallowOffsetOfMaxTimestamp;
             }
             this.maxOffset = Math.max(maxOffset, this.maxOffset);
-            if (!offsetDetermined) this.minOffset = minOffset;
-            this.offsetDetermined = true;
+            if (this.bytesRetained == 0) this.minOffset = minOffset;
             this.messagesRetained += messagesRetained;
             this.bytesRetained += bytesRetained;
         }

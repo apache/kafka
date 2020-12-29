@@ -57,6 +57,9 @@ import scala.util.control.ControlThrowable
  * Once the key=>last_offset map is built, the log is cleaned by recopying each log segment but omitting any key that appears in the offset map with a
  * higher offset than what is found in the segment (i.e. messages with a key that appears in the dirty section of the log).
  *
+ * When cleaning, the segment base offset will always be the base offset of the first batch in the segment.
+ * The log start offset will also be the base offset of the first batch in the log.
+ *
  * To avoid segments shrinking to very small sizes with repeated cleanings we implement a rule by which if we will merge successive segments when
  * doing a cleaning if their log and index size are less than the maximum log and index size prior to the clean beginning.
  *
@@ -539,9 +542,7 @@ private[log] class Cleaner(val id: Int,
       cleanSegments(log, group, offsetMap, deleteHorizonMs, stats, transactionMetadata)
     
     val segments = log.logSegments.iterator
-    var segment = segments.next()
-    while (segment.size == 0 && segments.hasNext)
-      segment = segments.next()
+    val segment = segments.next()
     log.maybeIncrementLogStartOffset(segment.baseOffset, SegmentCompaction)
 
     // record buffer utilization

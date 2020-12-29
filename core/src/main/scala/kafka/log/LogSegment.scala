@@ -47,7 +47,7 @@ import scala.math._
  * @param lazyOffsetIndex The offset index
  * @param lazyTimeIndex The timestamp index
  * @param txnIndex The transaction index
- * @param baseOffset A lower bound on the offsets in this segment
+ * @param baseOffset A lower bound on the offsets in this segment, maintains the invariant baseOffset <= baseOffset of first batch in segment
  * @param indexIntervalBytes The approximate number of bytes between entries in the index
  * @param rollJitterMs The maximum random jitter subtracted from the scheduled segment roll time
  * @param time The time instance

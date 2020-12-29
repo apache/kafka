@@ -228,6 +228,9 @@ case object SegmentCompaction extends LogStartOffsetIncrementReason {
  *                       - Earliest offset of the log in response to ListOffsetRequest. To avoid OffsetOutOfRange exception after user seeks to earliest offset,
  *                         we make sure that logStartOffset <= log's highWatermark
  *                       Other activities such as log cleaning are not affected by logStartOffset.
+ *                       Log cleaning may update the logStartOffset.
+ *                       All updates to logStartOffset must maintain the invariant logStartOffset <= end offset of first
+ *                       batch that can be returned by Fetch.
  * @param recoveryPoint The offset at which to begin recovery--i.e. the first offset which has not been flushed to disk
  * @param scheduler The thread pool scheduler used for background actions
  * @param brokerTopicStats Container for Broker Topic Yammer Metrics

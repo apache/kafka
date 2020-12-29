@@ -1279,46 +1279,58 @@ class PlaintextConsumerTest extends BaseConsumerTest {
   def testBeginningOffsetsOnCompactedTopic(): Unit = {
     val topic0 = "topicWithoutCompaction"
     val topic1 = "topicWithCompaction"
-    val producer = createProducer()
+    val t0p0 = new TopicPartition(topic0, 0)
+    val t1p0 = new TopicPartition(topic1, 0)
+    val t1p1 = new TopicPartition(topic1, 1)
+    val partitions = Set(t0p0, t1p0, t1p1).asJava
+
+    val producerProps = new Properties()
+    // Each batch will hold about 10 records
+    producerProps.setProperty(ProducerConfig.BATCH_SIZE_CONFIG, "256")
+    val producer = createProducer(configOverrides = producerProps)
     // First topic will not have compaction. Simply a sanity test.
-    createTopicAndSendRecords(producer, topicName = topic0, numPartitions = 1, recordsPerPartition = 1000)
-    val props = new Properties()
+    createTopicAndSendRecords(producer, topicName = topic0, numPartitions = 1, recordsPerPartition = 100)
+
     
     // Second topic will have compaction. 
     // The first partition will have compaction occur at offset 0 so beginningOffsets should be nonzero.
     // The second partition will not have compaction occur at offset 0, so beginningOffsets will remain 0.
+    val props = new Properties()
     props.setProperty(LogConfig.MaxCompactionLagMsProp, "1")
     props.setProperty(LogConfig.CleanupPolicyProp, "compact")
     props.setProperty(LogConfig.MinCleanableDirtyRatioProp, "0.01")
-    props.setProperty(LogConfig.SegmentMsProp, "100")
+    props.setProperty(LogConfig.SegmentBytesProp, "512")
+
+    // Send records to first partition -- all duplicates.
     createTopic(topic1, numPartitions = 2, replicationFactor = 1, props)
-    sendDuplicateRecords(producer, numRecords = 1000, 0L, new TopicPartition(topic1, 0))
-    val t1p1 = new TopicPartition(topic1, 1)
-    sendRecords(producer, 1000, t1p1)
-    sendDuplicateRecords(producer, numRecords = 1000, 1000L, new TopicPartition(topic1, 1))
+    sendDuplicateRecords(producer, numRecords = 100, 0L, new TopicPartition(topic1, 0))
+
+    // Send records fo second partition -- only last 50 records are duplicates.
+    sendRecords(producer, 50, t1p1)
+    sendDuplicateRecords(producer, numRecords = 50, 50L, new TopicPartition(topic1, 1))
 
     // Sleep to allow compaction to take place.
     Thread.sleep(25000)
 
-    val t0p0 = new TopicPartition(topic0, 0)
-    val t1p0 = new TopicPartition(topic1, 0)
-    val partitions = Set(t0p0, t1p0, t1p1).asJava
     val consumer = createConsumer()
-
     val zero = long2Long(0L)
     val timestamps = Map(t0p0 -> zero, t1p0 -> zero, t1p1 -> zero).asJava
 
-    // As stated in KAFKA-7556, beginningOffsets should return the same values as offsetsForTimes with timestamp 0L.
-    val earliests = consumer.beginningOffsets(partitions)
-    val earliestsByDate = consumer.offsetsForTimes(timestamps)
-    
-    assertEquals(earliests.get(t1p0), earliestsByDate.get(t1p0).offset())
-    assertEquals(0L, earliests.get(t0p0))
-    assertNotEquals(0L, earliests.get(t1p0))
-    assertEquals(0L, earliests.get(t1p1))
-    assertEquals(0L, earliestsByDate.get(t0p0).offset())
-    assertNotEquals(0L, earliestsByDate.get(t1p0).offset())
-    assertEquals(0L, earliestsByDate.get(t1p1).offset())
+    // As stated in KAFKA-7556, beginningOffsets should not return 0. Instead it will return the baseOffset of the
+    // first segment in the log, which should be the baseOffset of the first record batch in the segment.
+    val offsetFromTimestampZero = consumer.offsetsForTimes(timestamps)
+    val beginningOffset = consumer.beginningOffsets(partitions)
+
+    assertEquals(0L, beginningOffset.get(t0p0))
+    assertNotEquals(0L, beginningOffset.get(t1p0))
+    assertEquals(0L, beginningOffset.get(t1p1))
+    assertEquals(0L, offsetFromTimestampZero.get(t0p0).offset())
+    assertNotEquals(0L, offsetFromTimestampZero.get(t1p0).offset())
+    assertEquals(0L, offsetFromTimestampZero.get(t1p1).offset())
+
+    // beginningOffset should be the baseOffset of the batch that contains the record at offset offsetFromTimestampZero.
+    // Since each batch is about 10 records, the difference should be less than 15
+    assertTrue(offsetFromTimestampZero.get(t1p0).offset() - beginningOffset.get(t1p0) < 15)
   }
 
   @Test

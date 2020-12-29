@@ -1644,6 +1644,7 @@ class LogCleanerTest {
     val log = makeLog(config = LogConfig.fromProps(logConfig.originals, logProps))
     
     // Each segment can contain 3 records
+    // Each record is in its own batch.
     log.appendAsLeader(record(1,0), leaderEpoch = 0)
     log.appendAsLeader(record(1,1), leaderEpoch = 0)
     log.appendAsLeader(record(1,2), leaderEpoch = 0)
@@ -1660,18 +1661,59 @@ class LogCleanerTest {
     
     cleaner.clean(LogToClean(new TopicPartition("test", 0), log, 0, log.activeSegment.baseOffset))
     
-    // The log cleaner will not delete the first empty segment, but it will update logStartOffset
+    // The log cleaner will delete the first empty segment, and it will update logStartOffset
     assertEquals(3, log.logSegments.size)
     assertEquals(4, log.logStartOffset)
     val offset = log.fetchOffsetByTimestamp(ListOffsetRequest.EARLIEST_TIMESTAMP)
     assertTrue(offset.isDefined)
     assertEquals(4L, offset.get.offset)
     
-    // Each baseOffset of the segment will be the offset of the first record or the original baseOffset if it is empty.
+    // Each baseOffset of the segment will be the baseOffset of the first batch in the segment
+    for (segment <- log.logSegments; batch <- segment.log.batches.asScala) {
+      assertEquals(segment.baseOffset, batch.baseOffset())
+    }
     val segments = log.logSegments.iterator
     assertEquals(4, segments.next().baseOffset)
     assertEquals(7, segments.next().baseOffset)
     assertEquals(8, segments.next().baseOffset)
+  }
+
+  @Test
+  def testSegmentBaseOffsetsWithPartialBatch(): Unit = {
+    val cleaner = makeCleaner(Int.MaxValue)
+
+    val logProps = new Properties()
+    logProps.put(LogConfig.SegmentBytesProp, 128: java.lang.Integer)
+    val log = makeLog(config = LogConfig.fromProps(logConfig.originals, logProps))
+
+    // Each segment can contain 2 records
+    // Two records form a batch.
+    log.appendAsLeader(records(1,0), leaderEpoch = 0)
+
+    log.appendAsLeader(records(1,2), leaderEpoch = 0)
+
+    log.appendAsLeader(records(1,4), leaderEpoch = 0)
+    log.roll()
+
+    assertEquals(4, log.logSegments.size)
+
+    cleaner.clean(LogToClean(new TopicPartition("test", 0), log, 0, log.activeSegment.baseOffset))
+
+    // The log cleaner will delete the first two empty segments, and it will update logStartOffset
+    assertEquals(2, log.logSegments.size)
+    assertEquals(4, log.logStartOffset)
+    // With ListOffsetRequest.ListOffsetRequest.EARLIEST_TIMESTAMP we will see the logStartOffset as the first offset.
+    val offset = log.fetchOffsetByTimestamp(ListOffsetRequest.EARLIEST_TIMESTAMP)
+    assertTrue(offset.isDefined)
+    assertEquals(4L, offset.get.offset)
+
+    // Each baseOffset of the segment will be the baseOffset of the first batch in the segment
+    for (segment <- log.logSegments; batch <- segment.log.batches.asScala) {
+      assertEquals(segment.baseOffset, batch.baseOffset())
+    }
+    val segments = log.logSegments.iterator
+    assertEquals(4, segments.next().baseOffset)
+    assertEquals(6, segments.next().baseOffset)
   }
 
   @Test
@@ -1696,6 +1738,9 @@ class LogCleanerTest {
     val offset = log.fetchOffsetByTimestamp(ListOffsetRequest.EARLIEST_TIMESTAMP)
     assertTrue(offset.isDefined)
     assertEquals(42L, offset.get.offset)
+    for (segment <- log.logSegments; batch <- segment.log.batches.asScala) {
+      assertEquals(segment.baseOffset, batch.baseOffset())
+    }
   }
 
 
@@ -1763,6 +1808,16 @@ class LogCleanerTest {
              partitionLeaderEpoch: Int = RecordBatch.NO_PARTITION_LEADER_EPOCH): MemoryRecords = {
     MemoryRecords.withIdempotentRecords(RecordBatch.CURRENT_MAGIC_VALUE, 0L, CompressionType.NONE, producerId, producerEpoch, sequence,
       partitionLeaderEpoch, new SimpleRecord(key.toString.getBytes, value.toString.getBytes))
+  }
+
+  private def records(key: Int, value: Int,
+                     producerId: Long = RecordBatch.NO_PRODUCER_ID,
+                     producerEpoch: Short = RecordBatch.NO_PRODUCER_EPOCH,
+                     sequence: Int = RecordBatch.NO_SEQUENCE,
+                     partitionLeaderEpoch: Int = RecordBatch.NO_PARTITION_LEADER_EPOCH): MemoryRecords = {
+    MemoryRecords.withIdempotentRecords(RecordBatch.CURRENT_MAGIC_VALUE, 0L, CompressionType.NONE, producerId, producerEpoch, sequence,
+      partitionLeaderEpoch, new SimpleRecord(key.toString.getBytes, value.toString.getBytes),
+      new SimpleRecord(key.toString.getBytes, (value + 1).toString.getBytes))
   }
 
   private def appendTransactionalAsLeader(log: Log,
