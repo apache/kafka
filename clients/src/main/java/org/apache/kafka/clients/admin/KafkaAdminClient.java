@@ -4421,8 +4421,8 @@ public class KafkaAdminClient extends AdminClient {
                 final UpdateFeaturesResponse response =
                     (UpdateFeaturesResponse) abstractResponse;
 
-                Errors topLevelError = Errors.forCode(response.data().errorCode());
-                switch (topLevelError) {
+                ApiError topLevelError = response.topLevelError();
+                switch (topLevelError.error()) {
                     case NONE:
                         for (final UpdatableFeatureResult result : response.data().results()) {
                             final KafkaFutureImpl<Void> future = updateFutures.get(result.feature());
@@ -4442,12 +4442,11 @@ public class KafkaAdminClient extends AdminClient {
                             feature -> "The controller response did not contain a result for feature " + feature);
                         break;
                     case NOT_CONTROLLER:
-                        handleNotControllerError(topLevelError);
+                        handleNotControllerError(topLevelError.error());
                         break;
                     default:
                         for (final Map.Entry<String, KafkaFutureImpl<Void>> entry : updateFutures.entrySet()) {
-                            final String errorMsg = response.data().errorMessage();
-                            entry.getValue().completeExceptionally(topLevelError.exception(errorMsg));
+                            entry.getValue().completeExceptionally(topLevelError.exception());
                         }
                         break;
                 }
