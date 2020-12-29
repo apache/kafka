@@ -35,15 +35,15 @@ class BranchedInternal<K, V> extends Branched<K, V> {
         return new BranchedInternal<>();
     }
 
-    String getName() {
+    String name() {
         return name;
     }
 
-    public Function<? super KStream<K, V>, ? extends KStream<K, V>> getChainFunction() {
+    public Function<? super KStream<K, V>, ? extends KStream<K, V>> chainFunction() {
         return chainFunction;
     }
 
-    public Consumer<? super KStream<K, V>> getChainConsumer() {
+    public Consumer<? super KStream<K, V>> chainConsumer() {
         return chainConsumer;
     }
 }

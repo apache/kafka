@@ -91,22 +91,22 @@ public class BranchedKStreamImpl<K, V> implements BranchedKStream<K, V> {
     }
 
     private String getBranchChildName(final int index, final BranchedInternal<K, V> branchedInternal) {
-        if (branchedInternal.getName() == null) {
+        if (branchedInternal.name() == null) {
             return splitterName + index;
         } else {
-            return splitterName + branchedInternal.getName();
+            return splitterName + branchedInternal.name();
         }
     }
 
     private void process(final KStreamImpl<K, V> branch, final String branchChildName,
                          final BranchedInternal<K, V> branchedInternal) {
-        if (branchedInternal.getChainFunction() != null) {
-            final KStream<K, V> transformedStream = branchedInternal.getChainFunction().apply(branch);
+        if (branchedInternal.chainFunction() != null) {
+            final KStream<K, V> transformedStream = branchedInternal.chainFunction().apply(branch);
             if (transformedStream != null) {
                 outputBranches.put(branchChildName, transformedStream);
             }
-        } else if (branchedInternal.getChainConsumer() != null) {
-            branchedInternal.getChainConsumer().accept(branch);
+        } else if (branchedInternal.chainConsumer() != null) {
+            branchedInternal.chainConsumer().accept(branch);
         } else {
             outputBranches.put(branchChildName, branch);
         }
