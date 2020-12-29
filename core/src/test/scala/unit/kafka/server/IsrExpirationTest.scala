@@ -22,6 +22,7 @@ import java.util.concurrent.atomic.AtomicBoolean
 
 import kafka.cluster.Partition
 import kafka.log.{Log, LogManager}
+import kafka.server.QuotaFactory.QuotaManagers
 import kafka.utils.TestUtils.MockAlterIsrManager
 import kafka.utils._
 import org.apache.kafka.common.TopicPartition
@@ -51,6 +52,7 @@ class IsrExpirationTest {
   val time = new MockTime
   val metrics = new Metrics
 
+  var quotaManager: QuotaManagers = null
   var replicaManager: ReplicaManager = null
 
   var alterIsrManager: MockAlterIsrManager = _
@@ -62,14 +64,16 @@ class IsrExpirationTest {
     EasyMock.replay(logManager)
 
     alterIsrManager = TestUtils.createAlterIsrManager()
+    quotaManager = QuotaFactory.instantiate(configs.head, metrics, time, "")
     replicaManager = new ReplicaManager(configs.head, metrics, time, null, null, logManager, new AtomicBoolean(false),
-      QuotaFactory.instantiate(configs.head, metrics, time, ""), new BrokerTopicStats, new MetadataCache(configs.head.brokerId),
+      quotaManager, new BrokerTopicStats, new MetadataCache(configs.head.brokerId),
       new LogDirFailureChannel(configs.head.logDirs.size), alterIsrManager)
   }
 
   @After
   def tearDown(): Unit = {
-    replicaManager.shutdown(false)
+    Option(replicaManager).foreach(_.shutdown(false))
+    Option(quotaManager).foreach(_.shutdown())
     metrics.close()
   }
 

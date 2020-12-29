@@ -785,7 +785,8 @@ class KafkaConfigTest {
         case KafkaConfig.PasswordEncoderIterationsProp => assertPropertyInvalid(baseProperties, name, "not_a_number", "-1", "0")
 
         //delegation token configs
-        case KafkaConfig.DelegationTokenMasterKeyProp => // ignore
+        case KafkaConfig.DelegationTokenSecretKeyAliasProp => // ignore
+        case KafkaConfig.DelegationTokenSecretKeyProp => // ignore
         case KafkaConfig.DelegationTokenMaxLifeTimeProp => assertPropertyInvalid(baseProperties, name, "not_a_number", "0")
         case KafkaConfig.DelegationTokenExpiryTimeMsProp => assertPropertyInvalid(baseProperties, name, "not_a_number", "0")
         case KafkaConfig.DelegationTokenExpiryCheckIntervalMsProp => assertPropertyInvalid(baseProperties, name, "not_a_number", "0")
@@ -925,7 +926,7 @@ class KafkaConfigTest {
     assertEquals(24 * 60L * 60L * 1000L, config.delegationTokenExpiryTimeMs)
     assertEquals(1 * 60L * 1000L * 60, config.delegationTokenExpiryCheckIntervalMs)
 
-    defaults.put(KafkaConfig.DelegationTokenMasterKeyProp, "1234567890")
+    defaults.put(KafkaConfig.DelegationTokenSecretKeyProp, "1234567890")
     val config1 = KafkaConfig.fromProps(defaults)
     assertEquals(true, config1.tokenAuthEnabled)
   }

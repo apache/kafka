@@ -67,19 +67,6 @@ public class ConnectMetricsTest {
         assertNotNull(metrics.metrics());
     }
 
-    @Test
-    public void testCreatingTags() {
-        Map<String, String> tags = ConnectMetrics.tags("k1", "v1", "k2", "v2");
-        assertEquals("v1", tags.get("k1"));
-        assertEquals("v2", tags.get("k2"));
-        assertEquals(2, tags.size());
-    }
-
-    @Test(expected = IllegalArgumentException.class)
-    public void testCreatingTagsWithOddNumberOfTags() {
-        ConnectMetrics.tags("k1", "v1", "k2", "v2", "extra");
-    }
-
     @Test(expected = IllegalArgumentException.class)
     public void testGettingGroupWithOddNumberOfTags() {
         metrics.group("name", "k1", "v1", "k2", "v2", "extra");

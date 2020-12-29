@@ -17,6 +17,7 @@
 
 package kafka.server
 
+import java.net.{InetAddress, UnknownHostException}
 import java.util.Properties
 
 import kafka.log.LogConfig
@@ -125,6 +126,33 @@ object DynamicConfig {
     def names = userConfigs.names
 
     def validate(props: Properties) = DynamicConfig.validate(userConfigs, props, customPropsAllowed = false)
+  }
+
+  object Ip {
+    val IpConnectionRateOverrideProp = "connection_creation_rate"
+    val UnlimitedConnectionCreationRate = Int.MaxValue
+    val DefaultConnectionCreationRate = UnlimitedConnectionCreationRate
+    val IpOverrideDoc = "An int representing the upper bound of connections accepted for the specified IP."
+
+    private val ipConfigs = new ConfigDef()
+      .define(IpConnectionRateOverrideProp, INT, DefaultConnectionCreationRate, atLeast(0), MEDIUM, IpOverrideDoc)
+
+    def configKeys = ipConfigs.configKeys
+
+    def names = ipConfigs.names
+
+    def validate(props: Properties) = DynamicConfig.validate(ipConfigs, props, customPropsAllowed = false)
+
+    def isValidIpEntity(ip: String): Boolean = {
+      if (ip != ConfigEntityName.Default) {
+        try {
+          InetAddress.getByName(ip)
+        } catch {
+          case _: UnknownHostException => return false
+        }
+      }
+      true
+    }
   }
 
   private def validate(configDef: ConfigDef, props: Properties, customPropsAllowed: Boolean) = {

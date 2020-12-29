@@ -25,12 +25,12 @@ from kafkatest.services.streams import StreamsSmokeTestDriverService, StreamsSmo
 from kafkatest.services.zookeeper import ZookeeperService
 from kafkatest.tests.streams.utils import extract_generation_from_logs, extract_generation_id
 from kafkatest.version import LATEST_0_10_0, LATEST_0_10_1, LATEST_0_10_2, LATEST_0_11_0, LATEST_1_0, LATEST_1_1, \
-    LATEST_2_0, LATEST_2_1, LATEST_2_2, LATEST_2_3, LATEST_2_4, LATEST_2_5, LATEST_2_6, DEV_BRANCH, DEV_VERSION, KafkaVersion
+    LATEST_2_0, LATEST_2_1, LATEST_2_2, LATEST_2_3, LATEST_2_4, LATEST_2_5, LATEST_2_6, LATEST_2_7, DEV_BRANCH, DEV_VERSION, KafkaVersion
 
 # broker 0.10.0 is not compatible with newer Kafka Streams versions
 broker_upgrade_versions = [str(LATEST_0_10_1), str(LATEST_0_10_2), str(LATEST_0_11_0), str(LATEST_1_0), str(LATEST_1_1), \
                            str(LATEST_2_0), str(LATEST_2_1), str(LATEST_2_2), str(LATEST_2_3), \
-                           str(LATEST_2_4), str(LATEST_2_5), str(LATEST_2_6), str(DEV_BRANCH)]
+                           str(LATEST_2_4), str(LATEST_2_5), str(LATEST_2_6), str(LATEST_2_7), str(DEV_BRANCH)]
 
 metadata_1_versions = [str(LATEST_0_10_0)]
 metadata_2_versions = [str(LATEST_0_10_1), str(LATEST_0_10_2), str(LATEST_0_11_0), str(LATEST_1_0), str(LATEST_1_1)]
@@ -472,12 +472,12 @@ class StreamsUpgradeTest(Test):
                     monitors[first_other_processor] = first_other_monitor
                     monitors[second_other_processor] = second_other_monitor
 
-                    end_of_upgrade_message = "Sent a version 8 subscription and group.s latest commonly supported version is 9 (successful version probing and end of rolling upgrade). Upgrading subscription metadata version to 9 for next rebalance."
+                    end_of_upgrade_message = "Sent a version 9 subscription and group.s latest commonly supported version is 10 (successful version probing and end of rolling upgrade). Upgrading subscription metadata version to 10 for next rebalance."
                     end_of_upgrade_error_message = "Could not detect 'successful version probing and end of rolling upgrade' at upgraded node "
                     followup_rebalance_message = "Triggering the followup rebalance scheduled for 0 ms."
                     followup_rebalance_error_message = "Could not detect 'Triggering followup rebalance' at node "
                     if len(self.old_processors) > 0:
-                        log_monitor.wait_until("Sent a version 9 subscription and got version 8 assignment back (successful version probing). Downgrade subscription metadata to commonly supported version 8 and trigger new rebalance.",
+                        log_monitor.wait_until("Sent a version 10 subscription and got version 9 assignment back (successful version probing). Downgrade subscription metadata to commonly supported version 9 and trigger new rebalance.",
                                                timeout_sec=60,
                                                err_msg="Could not detect 'successful version probing' at upgrading node " + str(node.account))
                         log_monitor.wait_until(followup_rebalance_message,

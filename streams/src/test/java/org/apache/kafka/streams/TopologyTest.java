@@ -37,7 +37,6 @@ import org.apache.kafka.streams.state.internals.KeyValueStoreBuilder;
 import org.apache.kafka.test.MockApiProcessorSupplier;
 import org.apache.kafka.test.MockKeyValueStore;
 import org.apache.kafka.test.MockProcessorSupplier;
-import org.apache.kafka.test.TestUtils;
 import org.easymock.EasyMock;
 import org.junit.Assert;
 import org.junit.Test;
@@ -45,7 +44,6 @@ import org.junit.Test;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashSet;
-import java.util.Properties;
 import java.util.Set;
 import java.util.regex.Pattern;
 
@@ -339,9 +337,6 @@ public class TopologyTest {
         final String goodNodeName = "goodGuy";
         final String badNodeName = "badGuy";
 
-        final Properties config = new Properties();
-        config.put(StreamsConfig.APPLICATION_ID_CONFIG, "appId");
-        config.put(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory().getAbsolutePath());
         mockStoreBuilder();
         EasyMock.expect(storeBuilder.build()).andReturn(new MockKeyValueStore("store", false));
         EasyMock.replay(storeBuilder);
@@ -354,7 +349,7 @@ public class TopologyTest {
             .addProcessor(badNodeName, new LocalMockProcessorSupplier(), sourceNodeName);
 
         try {
-            new TopologyTestDriver(topology, config);
+            new TopologyTestDriver(topology);
             fail("Should have thrown StreamsException");
         } catch (final StreamsException e) {
             final String error = e.toString();

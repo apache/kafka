@@ -22,6 +22,7 @@ import org.apache.kafka.streams.errors.MissingSourceTopicException;
 import org.apache.kafka.streams.errors.TaskAssignmentException;
 import org.apache.kafka.streams.processor.internals.StreamThread.State;
 import org.apache.kafka.streams.processor.internals.assignment.AssignorError;
+import org.easymock.EasyMock;
 import org.junit.Before;
 import org.junit.Test;
 import org.slf4j.LoggerFactory;
@@ -31,6 +32,7 @@ import java.util.Collections;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.easymock.EasyMock.expect;
+import static org.easymock.EasyMock.expectLastCall;
 import static org.easymock.EasyMock.mock;
 import static org.easymock.EasyMock.replay;
 import static org.easymock.EasyMock.verify;
@@ -60,6 +62,8 @@ public class StreamsRebalanceListenerTest {
 
     @Test
     public void shouldThrowMissingSourceTopicException() {
+        taskManager.handleRebalanceComplete();
+        expectLastCall();
         replay(taskManager, streamThread);
         assignmentErrorCode.set(AssignorError.INCOMPLETE_SOURCE_TOPIC_METADATA.code());
 
@@ -82,7 +86,21 @@ public class StreamsRebalanceListenerTest {
     }
 
     @Test
+    public void shouldSendShutdown() {
+        streamThread.shutdownToError();
+        EasyMock.expectLastCall();
+        taskManager.handleRebalanceComplete();
+        EasyMock.expectLastCall();
+        replay(taskManager, streamThread);
+        assignmentErrorCode.set(AssignorError.SHUTDOWN_REQUESTED.code());
+        streamsRebalanceListener.onPartitionsAssigned(Collections.emptyList());
+        verify(taskManager, streamThread);
+    }
+
+    @Test
     public void shouldThrowTaskAssignmentException() {
+        taskManager.handleRebalanceComplete();
+        expectLastCall();
         replay(taskManager, streamThread);
         assignmentErrorCode.set(AssignorError.ASSIGNMENT_ERROR.code());
 

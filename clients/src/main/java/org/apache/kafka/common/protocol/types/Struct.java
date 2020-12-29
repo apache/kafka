@@ -16,7 +16,7 @@
  */
 package org.apache.kafka.common.protocol.types;
 
-import org.apache.kafka.common.UUID;
+import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.record.BaseRecords;
 
 import java.nio.ByteBuffer;
@@ -89,8 +89,8 @@ public class Struct {
         return getLong(field.name);
     }
 
-    public UUID get(Field.UUID field) {
-        return getUUID(field.name);
+    public Uuid get(Field.UUID field) {
+        return getUuid(field.name);
     }
 
     public Short get(Field.Int16 field) {
@@ -127,9 +127,9 @@ public class Struct {
         return alternative;
     }
 
-    public UUID getOrElse(Field.UUID field, UUID alternative) {
+    public Uuid getOrElse(Field.UUID field, Uuid alternative) {
         if (hasField(field.name))
-            return getUUID(field.name);
+            return getUuid(field.name);
         return alternative;
     }
 
@@ -266,12 +266,12 @@ public class Struct {
         return (Long) get(name);
     }
 
-    public UUID getUUID(BoundField field) {
-        return (UUID) get(field);
+    public Uuid getUuid(BoundField field) {
+        return (Uuid) get(field);
     }
 
-    public UUID getUUID(String name) {
-        return (UUID) get(name);
+    public Uuid getUuid(String name) {
+        return (Uuid) get(name);
     }
 
     public Double getDouble(BoundField field) {
@@ -379,7 +379,7 @@ public class Struct {
         return set(def.name, value);
     }
 
-    public Struct set(Field.UUID def, UUID value) {
+    public Struct set(Field.UUID def, Uuid value) {
         return set(def.name, value);
     }
 

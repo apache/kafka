@@ -26,8 +26,11 @@ import org.apache.kafka.clients.NodeApiVersions;
 import org.apache.kafka.clients.producer.Callback;
 import org.apache.kafka.common.errors.InvalidRequestException;
 import org.apache.kafka.common.errors.TransactionAbortedException;
+import org.apache.kafka.common.message.ProduceRequestData;
 import org.apache.kafka.common.requests.FindCoordinatorRequest.CoordinatorType;
 import org.apache.kafka.common.requests.MetadataRequest;
+import org.apache.kafka.common.requests.RequestTestUtils;
+import org.apache.kafka.common.requests.RequestUtils;
 import org.apache.kafka.common.utils.ProducerIdAndEpoch;
 import org.apache.kafka.clients.producer.RecordMetadata;
 import org.apache.kafka.common.Cluster;
@@ -156,6 +159,15 @@ public class SenderTest {
         this.metrics.close();
     }
 
+    private static Map<TopicPartition, MemoryRecords> partitionRecords(ProduceRequest request) {
+        Map<TopicPartition, MemoryRecords> partitionRecords = new HashMap<>();
+        request.data().topicData().forEach(tpData -> tpData.partitionData().forEach(p -> {
+            TopicPartition tp = new TopicPartition(tpData.name(), p.index());
+            partitionRecords.put(tp, (MemoryRecords) p.records());
+        }));
+        return Collections.unmodifiableMap(partitionRecords);
+    }
+ 
     @Test
     public void testSimple() throws Exception {
         long offset = 0;
@@ -195,7 +207,7 @@ public class SenderTest {
             if (request.version() != 2)
                 return false;
 
-            MemoryRecords records = request.partitionRecordsOrFail().get(tp0);
+            MemoryRecords records = partitionRecords(request).get(tp0);
             return records != null &&
                     records.sizeInBytes() > 0 &&
                     records.hasMatchingMagic(RecordBatch.MAGIC_VALUE_V1);
@@ -208,6 +220,7 @@ public class SenderTest {
         assertEquals(offset, future.get().offset());
     }
 
+    @SuppressWarnings("deprecation")
     @Test
     public void testDownConversionForMismatchedMagicValues() throws Exception {
         // it can happen that we construct a record set with mismatching magic values (perhaps
@@ -241,7 +254,7 @@ public class SenderTest {
             if (request.version() != 2)
                 return false;
 
-            Map<TopicPartition, MemoryRecords> recordsMap = request.partitionRecordsOrFail();
+            Map<TopicPartition, MemoryRecords> recordsMap = partitionRecords(request);
             if (recordsMap.size() != 2)
                 return false;
 
@@ -262,6 +275,7 @@ public class SenderTest {
     /*
      * Send multiple requests. Verify that the client side quota metrics have the right values
      */
+    @SuppressWarnings("deprecation")
     @Test
     public void testQuotaMetrics() {
         MockSelector selector = new MockSelector(time);
@@ -272,10 +286,10 @@ public class SenderTest {
                 1000, 1000, 64 * 1024, 64 * 1024, 1000, 10 * 1000, 127 * 1000, ClientDnsLookup.USE_ALL_DNS_IPS,
                 time, true, new ApiVersions(), throttleTimeSensor, logContext);
 
-        ByteBuffer buffer = ApiVersionsResponse.createApiVersionsResponse(
-            400,
-            RecordBatch.CURRENT_MAGIC_VALUE
-        ).serialize(ApiKeys.API_VERSIONS, ApiKeys.API_VERSIONS.latestVersion(), 0);
+        ByteBuffer buffer = RequestTestUtils.serializeResponseWithHeader(
+            ApiVersionsResponse.createApiVersionsResponse(400, RecordBatch.CURRENT_MAGIC_VALUE),
+            ApiKeys.API_VERSIONS.latestVersion(), 0);
+
         selector.delayedReceive(new DelayedReceive(node.idString(), new NetworkReceive(node.idString(), buffer)));
         while (!client.ready(node, time.milliseconds())) {
             client.poll(1, time.milliseconds());
@@ -286,14 +300,15 @@ public class SenderTest {
 
         for (int i = 1; i <= 3; i++) {
             int throttleTimeMs = 100 * i;
-            ProduceRequest.Builder builder = ProduceRequest.Builder.forCurrentMagic((short) 1, 1000,
-                            Collections.emptyMap());
+            ProduceRequest.Builder builder = ProduceRequest.forCurrentMagic(new ProduceRequestData()
+                    .setTopicData(new ProduceRequestData.TopicProduceDataCollection())
+                    .setAcks((short) 1)
+                    .setTimeoutMs(1000));
             ClientRequest request = client.newClientRequest(node.idString(), builder, time.milliseconds(), true);
             client.send(request, time.milliseconds());
             client.poll(1, time.milliseconds());
             ProduceResponse response = produceResponse(tp0, i, Errors.NONE, throttleTimeMs);
-            buffer = response.
-                serialize(ApiKeys.PRODUCE, ApiKeys.PRODUCE.latestVersion(), request.correlationId());
+            buffer = RequestTestUtils.serializeResponseWithHeader(response, ApiKeys.PRODUCE.latestVersion(), request.correlationId());
             selector.completeReceive(new NetworkReceive(node.idString(), buffer));
             client.poll(1, time.milliseconds());
             // If a throttled response is received, advance the time to ensure progress.
@@ -404,7 +419,7 @@ public class SenderTest {
             Sender sender = new Sender(logContext, client, metadata, this.accumulator, true, MAX_REQUEST_SIZE, ACKS_ALL, maxRetries,
                     senderMetrics, time, REQUEST_TIMEOUT, RETRY_BACKOFF_MS, null, apiVersions);
             // Create a two broker cluster, with partition 0 on broker 0 and partition 1 on broker 1
-            MetadataResponse metadataUpdate1 = TestUtils.metadataUpdateWith(2, Collections.singletonMap("test", 2));
+            MetadataResponse metadataUpdate1 = RequestTestUtils.metadataUpdateWith(2, Collections.singletonMap("test", 2));
             client.prepareMetadataUpdate(metadataUpdate1);
 
             // Send the first message.
@@ -425,7 +440,7 @@ public class SenderTest {
             appendToAccumulator(tp2, 0L, "key2", "value2");
 
             // Update metadata before sender receives response from broker 0. Now partition 2 moves to broker 0
-            MetadataResponse metadataUpdate2 = TestUtils.metadataUpdateWith(1, Collections.singletonMap("test", 2));
+            MetadataResponse metadataUpdate2 = RequestTestUtils.metadataUpdateWith(1, Collections.singletonMap("test", 2));
             client.prepareMetadataUpdate(metadataUpdate2);
             // Sender should not send the second message to node 0.
             assertEquals(1, sender.inFlightBatches(tp2).size());
@@ -492,12 +507,12 @@ public class SenderTest {
     @Test
     public void testMetadataTopicExpiry() throws Exception {
         long offset = 0;
-        client.updateMetadata(TestUtils.metadataUpdateWith(1, Collections.singletonMap("test", 2)));
+        client.updateMetadata(RequestTestUtils.metadataUpdateWith(1, Collections.singletonMap("test", 2)));
 
         Future<RecordMetadata> future = appendToAccumulator(tp0);
         sender.runOnce();
         assertTrue("Topic not added to metadata", metadata.containsTopic(tp0.topic()));
-        client.updateMetadata(TestUtils.metadataUpdateWith(1, Collections.singletonMap("test", 2)));
+        client.updateMetadata(RequestTestUtils.metadataUpdateWith(1, Collections.singletonMap("test", 2)));
         sender.runOnce();  // send produce request
         client.respond(produceResponse(tp0, offset, Errors.NONE, 0));
         sender.runOnce();
@@ -509,12 +524,12 @@ public class SenderTest {
 
         assertTrue("Topic not retained in metadata list", metadata.containsTopic(tp0.topic()));
         time.sleep(TOPIC_IDLE_MS);
-        client.updateMetadata(TestUtils.metadataUpdateWith(1, Collections.singletonMap("test", 2)));
+        client.updateMetadata(RequestTestUtils.metadataUpdateWith(1, Collections.singletonMap("test", 2)));
         assertFalse("Unused topic has not been expired", metadata.containsTopic(tp0.topic()));
         future = appendToAccumulator(tp0);
         sender.runOnce();
         assertTrue("Topic not added to metadata", metadata.containsTopic(tp0.topic()));
-        client.updateMetadata(TestUtils.metadataUpdateWith(1, Collections.singletonMap("test", 2)));
+        client.updateMetadata(RequestTestUtils.metadataUpdateWith(1, Collections.singletonMap("test", 2)));
         sender.runOnce();  // send produce request
         client.respond(produceResponse(tp0, offset + 1, Errors.NONE, 0));
         sender.runOnce();
@@ -557,7 +572,7 @@ public class SenderTest {
 
         // Process metadata response, prepare FindCoordinator and InitProducerId responses.
         // Verify producerId after the sender is run to process responses.
-        MetadataResponse metadataUpdate = TestUtils.metadataUpdateWith(1, Collections.emptyMap());
+        MetadataResponse metadataUpdate = RequestTestUtils.metadataUpdateWith(1, Collections.emptyMap());
         client.respond(metadataUpdate);
         prepareFindCoordinatorResponse(Errors.NONE);
         prepareInitProducerResponse(Errors.NONE, producerIdAndEpoch.producerId, producerIdAndEpoch.epoch);
@@ -582,7 +597,7 @@ public class SenderTest {
 
         // Process metadata and InitProducerId responses.
         // Verify producerId after the sender is run to process responses.
-        MetadataResponse metadataUpdate = TestUtils.metadataUpdateWith(1, Collections.emptyMap());
+        MetadataResponse metadataUpdate = RequestTestUtils.metadataUpdateWith(1, Collections.emptyMap());
         client.respond(metadataUpdate);
         sender.runOnce();
         sender.runOnce();
@@ -650,7 +665,7 @@ public class SenderTest {
 
         client.respond(body -> {
             ProduceRequest request = (ProduceRequest) body;
-            assertFalse(request.hasIdempotentRecords());
+            assertFalse(RequestUtils.hasIdempotentRecords(request));
             return true;
         }, produceResponse(tp0, -1L, Errors.TOPIC_AUTHORIZATION_FAILED, 0));
         sender.runOnce();
@@ -1808,9 +1823,9 @@ public class SenderTest {
     void sendIdempotentProducerResponse(final int expectedSequence, TopicPartition tp, Errors responseError, long responseOffset, long logStartOffset) {
         client.respond(body -> {
             ProduceRequest produceRequest = (ProduceRequest) body;
-            assertTrue(produceRequest.hasIdempotentRecords());
+            assertTrue(RequestUtils.hasIdempotentRecords(produceRequest));
 
-            MemoryRecords records = produceRequest.partitionRecordsOrFail().get(tp0);
+            MemoryRecords records = partitionRecords(produceRequest).get(tp0);
             Iterator<MutableRecordBatch> batchIterator = records.batches().iterator();
             RecordBatch firstBatch = batchIterator.next();
             assertFalse(batchIterator.hasNext());
@@ -1831,8 +1846,7 @@ public class SenderTest {
         // cluster authorization is a fatal error for the producer
         Future<RecordMetadata> future = appendToAccumulator(tp0);
         client.prepareResponse(
-            body -> body instanceof ProduceRequest &&
-                ((ProduceRequest) body).hasIdempotentRecords(),
+            body -> body instanceof ProduceRequest && RequestUtils.hasIdempotentRecords((ProduceRequest) body),
             produceResponse(tp0, -1, Errors.CLUSTER_AUTHORIZATION_FAILED, 0));
 
         sender.runOnce();
@@ -1860,8 +1874,7 @@ public class SenderTest {
         sender.runOnce();
 
         client.respond(
-            body -> body instanceof ProduceRequest &&
-                ((ProduceRequest) body).hasIdempotentRecords(),
+            body -> body instanceof ProduceRequest && RequestUtils.hasIdempotentRecords((ProduceRequest) body),
             produceResponse(tp0, -1, Errors.CLUSTER_AUTHORIZATION_FAILED, 0));
 
         sender.runOnce();
@@ -1873,8 +1886,7 @@ public class SenderTest {
 
         // Should be fine if the second response eventually returns
         client.respond(
-            body -> body instanceof ProduceRequest &&
-                ((ProduceRequest) body).hasIdempotentRecords(),
+            body -> body instanceof ProduceRequest && RequestUtils.hasIdempotentRecords((ProduceRequest) body),
             produceResponse(tp1, 0, Errors.NONE, 0));
         sender.runOnce();
     }
@@ -1890,8 +1902,7 @@ public class SenderTest {
 
         Future<RecordMetadata> future = appendToAccumulator(tp0);
         client.prepareResponse(
-            body -> body instanceof ProduceRequest &&
-                ((ProduceRequest) body).hasIdempotentRecords(),
+            body -> body instanceof ProduceRequest && RequestUtils.hasIdempotentRecords((ProduceRequest) body),
             produceResponse(tp0, -1, Errors.UNSUPPORTED_FOR_MESSAGE_FORMAT, 0));
 
         sender.runOnce();
@@ -1912,8 +1923,7 @@ public class SenderTest {
 
         Future<RecordMetadata> future = appendToAccumulator(tp0);
         client.prepareUnsupportedVersionResponse(
-            body -> body instanceof ProduceRequest &&
-                ((ProduceRequest) body).hasIdempotentRecords());
+            body -> body instanceof ProduceRequest && RequestUtils.hasIdempotentRecords((ProduceRequest) body));
 
         sender.runOnce();
         assertFutureFailure(future, UnsupportedVersionException.class);
@@ -1942,7 +1952,7 @@ public class SenderTest {
         client.prepareResponse(body -> {
             if (body instanceof ProduceRequest) {
                 ProduceRequest request = (ProduceRequest) body;
-                MemoryRecords records = request.partitionRecordsOrFail().get(tp0);
+                MemoryRecords records = partitionRecords(request).get(tp0);
                 Iterator<MutableRecordBatch> batchIterator = records.batches().iterator();
                 assertTrue(batchIterator.hasNext());
                 RecordBatch batch = batchIterator.next();
@@ -2059,6 +2069,7 @@ public class SenderTest {
         testSplitBatchAndSend(txnManager, producerIdAndEpoch, tp);
     }
 
+    @SuppressWarnings("deprecation")
     private void testSplitBatchAndSend(TransactionManager txnManager,
                                        ProducerIdAndEpoch producerIdAndEpoch,
                                        TopicPartition tp) throws Exception {
@@ -2077,7 +2088,7 @@ public class SenderTest {
             Sender sender = new Sender(logContext, client, metadata, this.accumulator, true, MAX_REQUEST_SIZE, ACKS_ALL, maxRetries,
                     senderMetrics, time, REQUEST_TIMEOUT, 1000L, txnManager, new ApiVersions());
             // Create a two broker cluster, with partition 0 on broker 0 and partition 1 on broker 1
-            MetadataResponse metadataUpdate1 = TestUtils.metadataUpdateWith(2, Collections.singletonMap(topic, 2));
+            MetadataResponse metadataUpdate1 = RequestTestUtils.metadataUpdateWith(2, Collections.singletonMap(topic, 2));
             client.prepareMetadataUpdate(metadataUpdate1);
             // Send the first message.
             long nowMs = time.milliseconds();
@@ -2172,6 +2183,7 @@ public class SenderTest {
         assertEquals(0, sender.inFlightBatches(tp0).size());
     }
 
+    @SuppressWarnings("deprecation")
     @Test
     public void testInflightBatchesExpireOnDeliveryTimeout() throws InterruptedException {
         long deliveryTimeoutMs = 1500L;
@@ -2298,8 +2310,7 @@ public class SenderTest {
 
         InOrder inOrder = inOrder(client);
         inOrder.verify(client, atLeastOnce()).ready(any(), anyLong());
-        inOrder.verify(client, atLeastOnce()).newClientRequest(anyString(), any(), anyLong(), anyBoolean(), anyInt(),
-                any());
+        inOrder.verify(client, atLeastOnce()).newClientRequest(anyString(), any(), anyLong(), anyBoolean(), anyInt(), any());
         inOrder.verify(client, atLeastOnce()).send(any(), anyLong());
         inOrder.verify(client).poll(eq(0L), anyLong());
         inOrder.verify(client).poll(eq(accumulator.getDeliveryTimeoutMs()), anyLong());
@@ -2307,6 +2318,7 @@ public class SenderTest {
 
     }
 
+    @SuppressWarnings("deprecation")
     @Test
     public void testExpiredBatchesInMultiplePartitions() throws Exception {
         long deliveryTimeoutMs = 1500L;
@@ -2604,7 +2616,7 @@ public class SenderTest {
                 return false;
 
             ProduceRequest request = (ProduceRequest) body;
-            Map<TopicPartition, MemoryRecords> recordsMap = request.partitionRecordsOrFail();
+            Map<TopicPartition, MemoryRecords> recordsMap = partitionRecords(request);
             MemoryRecords records = recordsMap.get(tp);
             if (records == null)
                 return false;
@@ -2640,6 +2652,7 @@ public class SenderTest {
                 null, MAX_BLOCK_TIMEOUT, false, time.milliseconds()).future;
     }
 
+    @SuppressWarnings("deprecation")
     private ProduceResponse produceResponse(TopicPartition tp, long offset, Errors error, int throttleTimeMs, long logStartOffset, String errorMessage) {
         ProduceResponse.PartitionResponse resp = new ProduceResponse.PartitionResponse(error, offset,
                 RecordBatch.NO_TIMESTAMP, logStartOffset, Collections.emptyList(), errorMessage);
@@ -2647,6 +2660,7 @@ public class SenderTest {
         return new ProduceResponse(partResp, throttleTimeMs);
     }
 
+    @SuppressWarnings("deprecation")
     private ProduceResponse produceResponse(Map<TopicPartition, OffsetAndError> responses) {
         Map<TopicPartition, ProduceResponse.PartitionResponse> partResponses = new LinkedHashMap<>();
         for (Map.Entry<TopicPartition, OffsetAndError> entry : responses.entrySet()) {
@@ -2689,7 +2703,7 @@ public class SenderTest {
 
         metadata.add("test", time.milliseconds());
         if (updateMetadata)
-            this.client.updateMetadata(TestUtils.metadataUpdateWith(1, Collections.singletonMap("test", 2)));
+            this.client.updateMetadata(RequestTestUtils.metadataUpdateWith(1, Collections.singletonMap("test", 2)));
     }
 
     private void assertSendFailure(Class<? extends RuntimeException> expectedError) throws Exception {
@@ -2714,7 +2728,7 @@ public class SenderTest {
 
         client.prepareResponse(
             body -> body instanceof InitProducerIdRequest &&
-                ((InitProducerIdRequest) body).data.transactionalId() == null,
+                ((InitProducerIdRequest) body).data().transactionalId() == null,
             initProducerIdResponse(producerId, producerEpoch, error));
         sender.runOnce();
     }

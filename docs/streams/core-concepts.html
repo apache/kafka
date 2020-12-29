@@ -58,7 +58,7 @@
         We first summarize the key concepts of Kafka Streams.
     </p>
 
-    <h3><a id="streams_topology" href="#streams_topology">Stream Processing Topology</a></h3>
+    <h3 class="anchor-heading"><a id="streams_topology" class="anchor-link"></a><a href="#streams_topology">Stream Processing Topology</a></h3>
 
     <ul>
         <li>A <b>stream</b> is the most important abstraction provided by Kafka Streams: it represents an unbounded, continuously updating data set. A stream is an ordered, replayable, and fault-tolerant sequence of immutable data records, where a <b>data record</b> is defined as a key-value pair.</li>
@@ -88,7 +88,7 @@
         At runtime, the logical topology is instantiated and replicated inside the application for parallel processing (see <a href="/{{version}}/documentation/streams/architecture#streams_architecture_tasks"><b>Stream Partitions and Tasks</b></a> for details).
     </p>
 
-    <h3><a id="streams_time" href="#streams_time">Time</a></h3>
+    <h3 class="anchor-heading"><a id="streams_time" class="anchor-link"></a><a href="#streams_time">Time</a></h3>
 
     <p>
         A critical aspect in stream processing is the notion of <b>time</b>, and how it is modeled and integrated.
@@ -157,7 +157,7 @@
 
     </p>
 
-    <h3><a id="streams_concepts_duality" href="#streams-concepts-duality">Duality of Streams and Tables</a></h3>
+    <h3 class="anchor-heading"><a id="streams_concepts_duality" class="anchor-link"></a><a href="#streams_concepts_duality">Duality of Streams and Tables</a></h3>
     <p>
         When implementing stream processing use cases in practice, you typically need both <strong>streams</strong> and also <strong>databases</strong>.
         An example use case that is very common in practice is an e-commerce application that enriches an incoming <em>stream</em> of customer
@@ -176,9 +176,9 @@
       or to run <a id="streams-developer-guide-interactive-queries" href="/{{version}}/documentation/streams/developer-guide/interactive-queries#interactive-queries">interactive queries</a>
       against your application's latest processing results. And, beyond its internal usage, the Kafka Streams API
       also allows developers to exploit this duality in their own applications.
-    </p>
+  </p>
 
-    <p>
+  <p>
       Before we discuss concepts such as <a id="streams-developer-guide-dsl-aggregating" href="/{{version}}/documentation/streams/developer-guide/dsl-api#aggregating">aggregations</a>
       in Kafka Streams, we must first introduce <strong>tables</strong> in more detail, and talk about the aforementioned stream-table duality.
       Essentially, this duality means that a stream can be viewed as a table, and a table can be viewed as a stream. Kafka's log compaction feature, for example, exploits this duality.
@@ -274,7 +274,7 @@
     </p>
     <br>
 
-    <h2><a id="streams_processing_guarantee" href="#streams_processing_guarantee">Processing Guarantees</a></h2>
+    <h2 class="anchor-heading"><a id="streams_processing_guarantee" class="anchor-link"></a><a href="#streams_processing_guarantee">Processing Guarantees</a></h2>
 
     <p>
         In stream processing, one of the most frequently asked question is "does my stream processing system guarantee that each record is processed once and only once, even if some failures are encountered in the middle of processing?"
@@ -304,7 +304,7 @@
         For more information, see the <a href="/{{version}}/documentation/streams/developer-guide/config-streams.html">Kafka Streams Configs</a> section.
     </p>
 
-    <h3><a id="streams_out_of_ordering" href="#streams_out_of_ordering">Out-of-Order Handling</a></h3>
+    <h3 class="anchor-heading"><a id="streams_out_of_ordering" class="anchor-link"></a><a href="#streams_out_of_ordering">Out-of-Order Handling</a></h3>
 
     <p>
         Besides the guarantee that each record will be processed exactly-once, another issue that many stream processing application will face is how to
@@ -343,10 +343,10 @@
 
 <!--#include virtual="../../includes/_header.htm" -->
 <!--#include virtual="../../includes/_top.htm" -->
-<div class="content documentation documentation--current">
+<div class="content documentation ">
     <!--#include virtual="../../includes/_nav.htm" -->
     <div class="right">
-        <!--#include virtual="../../includes/_docs_banner.htm" -->
+        <!--//#include virtual="../../includes/_docs_banner.htm" -->
         <ul class="breadcrumbs">
             <li><a href="/documentation">Documentation</a></li>
             <li><a href="/documentation/streams">Kafka Streams</a></li>

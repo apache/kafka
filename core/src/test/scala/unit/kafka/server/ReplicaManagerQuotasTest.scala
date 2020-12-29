@@ -30,6 +30,7 @@ import org.apache.kafka.common.record.{CompressionType, MemoryRecords, SimpleRec
 import org.apache.kafka.common.requests.FetchRequest.PartitionData
 import org.easymock.EasyMock
 import EasyMock._
+import kafka.server.QuotaFactory.QuotaManagers
 import org.junit.Assert._
 import org.junit.{After, Test}
 
@@ -45,6 +46,7 @@ class ReplicaManagerQuotasTest {
   val fetchInfo = Seq(
     topicPartition1 -> new PartitionData(0, 0, 100, Optional.empty()),
     topicPartition2 -> new PartitionData(0, 0, 100, Optional.empty()))
+  var quotaManager: QuotaManagers = _
   var replicaManager: ReplicaManager = _
 
   @Test
@@ -240,8 +242,9 @@ class ReplicaManagerQuotasTest {
     val alterIsrManager: AlterIsrManager = createMock(classOf[AlterIsrManager])
 
     val leaderBrokerId = configs.head.brokerId
+    quotaManager = QuotaFactory.instantiate(configs.head, metrics, time, "")
     replicaManager = new ReplicaManager(configs.head, metrics, time, zkClient, scheduler, logManager,
-      new AtomicBoolean(false), QuotaFactory.instantiate(configs.head, metrics, time, ""),
+      new AtomicBoolean(false), quotaManager,
       new BrokerTopicStats, new MetadataCache(leaderBrokerId), new LogDirFailureChannel(configs.head.logDirs.size), alterIsrManager)
 
     //create the two replicas
@@ -262,8 +265,8 @@ class ReplicaManagerQuotasTest {
 
   @After
   def tearDown(): Unit = {
-    if (replicaManager != null)
-      replicaManager.shutdown(false)
+    Option(replicaManager).foreach(_.shutdown(false))
+    Option(quotaManager).foreach(_.shutdown())
     metrics.close()
   }
 

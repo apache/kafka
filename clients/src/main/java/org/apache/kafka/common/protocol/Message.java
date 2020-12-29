@@ -47,7 +47,20 @@ public interface Message {
      *                      If the specified version is too new to be supported
      *                      by this software.
      */
-    int size(ObjectSerializationCache cache, short version);
+    default int size(ObjectSerializationCache cache, short version) {
+        MessageSizeAccumulator size = new MessageSizeAccumulator();
+        addSize(size, cache, version);
+        return size.totalSize();
+    }
+
+    /**
+     * Add the size of this message to an accumulator.
+     *
+     * @param size          The size accumulator to add to
+     * @param cache         The serialization size cache to populate.
+     * @param version       The version to use.
+     */
+    void addSize(MessageSizeAccumulator size, ObjectSerializationCache cache, short version);
 
     /**
      * Writes out this message to the given Writable.

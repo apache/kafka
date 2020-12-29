@@ -24,21 +24,23 @@
   // Version 3 adds ReplicaId (the default is -2 which conventionally represents a
   //    "debug" consumer which is allowed to see offsets beyond the high watermark).
   //    Followers will use this replicaId when using an older version of the protocol.
-  "validVersions": "0-3",
-  "flexibleVersions": "none",
+  //
+  // Version 4 enables flexible versions.
+  "validVersions": "0-4",
+  "flexibleVersions": "4+",
   "fields": [
     { "name": "ReplicaId", "type": "int32", "versions": "3+", "default": -2, "ignorable": true,
       "about": "The broker ID of the follower, of -1 if this request is from a consumer." },
     { "name": "Topics", "type": "[]OffsetForLeaderTopic", "versions": "0+",
       "about": "Each topic to get offsets for.", "fields": [
-      { "name": "Name", "type": "string", "versions": "0+", "entityType": "topicName",
-        "about": "The topic name." },
+      { "name": "Topic", "type": "string", "versions": "0+", "entityType": "topicName",
+        "mapKey": true, "about": "The topic name." },
       { "name": "Partitions", "type": "[]OffsetForLeaderPartition", "versions": "0+",
         "about": "Each partition to get offsets for.", "fields": [
-        { "name": "PartitionIndex", "type": "int32", "versions": "0+",
+        { "name": "Partition", "type": "int32", "versions": "0+",
           "about": "The partition index." },
         { "name": "CurrentLeaderEpoch", "type": "int32", "versions": "2+", "default": "-1", "ignorable": true,
-          "about": "An epoch used to fence consumers/replicas with old metadata.  If the epoch provided by the client is larger than the current epoch known to the broker, then the UNKNOWN_LEADER_EPOCH error code will be returned. If the provided epoch is smaller, then the FENCED_LEADER_EPOCH error code will be returned." },
+          "about": "An epoch used to fence consumers/replicas with old metadata. If the epoch provided by the client is larger than the current epoch known to the broker, then the UNKNOWN_LEADER_EPOCH error code will be returned. If the provided epoch is smaller, then the FENCED_LEADER_EPOCH error code will be returned." },
         { "name": "LeaderEpoch", "type": "int32", "versions": "0+",
           "about": "The epoch to look up an offset for." }
       ]}

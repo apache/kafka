@@ -20,8 +20,8 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.message.DescribeQuorumResponseData;
 import org.apache.kafka.common.message.DescribeQuorumResponseData.ReplicaState;
 import org.apache.kafka.common.protocol.ApiKeys;
+import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.protocol.types.Struct;
 
 import java.nio.ByteBuffer;
 import java.util.Collections;
@@ -41,37 +41,35 @@ import java.util.Map;
  * - {@link Errors#UNKNOWN_TOPIC_OR_PARTITION}
  */
 public class DescribeQuorumResponse extends AbstractResponse {
-    public final DescribeQuorumResponseData data;
+    private final DescribeQuorumResponseData data;
 
     public DescribeQuorumResponse(DescribeQuorumResponseData data) {
+        super(ApiKeys.DESCRIBE_QUORUM);
         this.data = data;
-    }
-
-    public DescribeQuorumResponse(Struct struct, short version) {
-        this.data = new DescribeQuorumResponseData(struct, version);
-    }
-
-    @Override
-    protected Struct toStruct(short version) {
-        return data.toStruct(version);
     }
 
     @Override
     public Map<Errors, Integer> errorCounts() {
         Map<Errors, Integer> errors = new HashMap<>();
 
-        Errors topLevelError = Errors.forCode(data.errorCode());
-        if (topLevelError != Errors.NONE) {
-            errors.put(topLevelError, 1);
-        }
+        errors.put(Errors.forCode(data.errorCode()), 1);
 
         for (DescribeQuorumResponseData.TopicData topicResponse : data.topics()) {
             for (DescribeQuorumResponseData.PartitionData partitionResponse : topicResponse.partitions()) {
-                errors.compute(Errors.forCode(partitionResponse.errorCode()),
-                    (error, count) -> count == null ? 1 : count + 1);
+                updateErrorCounts(errors, Errors.forCode(partitionResponse.errorCode()));
             }
         }
         return errors;
+    }
+
+    @Override
+    public DescribeQuorumResponseData data() {
+        return data;
+    }
+
+    @Override
+    public int throttleTimeMs() {
+        return DEFAULT_THROTTLE_TIME;
     }
 
     public static DescribeQuorumResponseData singletonResponse(TopicPartition topicPartition,
@@ -93,6 +91,6 @@ public class DescribeQuorumResponse extends AbstractResponse {
     }
 
     public static DescribeQuorumResponse parse(ByteBuffer buffer, short version) {
-        return new DescribeQuorumResponse(ApiKeys.DESCRIBE_QUORUM.responseSchema(version).read(buffer), version);
+        return new DescribeQuorumResponse(new DescribeQuorumResponseData(new ByteBufferAccessor(buffer), version));
     }
 }

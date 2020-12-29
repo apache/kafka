@@ -24,6 +24,7 @@ import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.connect.util.clusters.EmbeddedConnectCluster;
 import org.apache.kafka.connect.util.clusters.EmbeddedKafkaCluster;
+import org.apache.kafka.connect.util.clusters.UngracefulShutdownException;
 import org.apache.kafka.test.IntegrationTest;
 import org.apache.kafka.common.utils.Exit;
 import org.junit.After;
@@ -44,13 +45,11 @@ import java.util.Map;
 import java.util.Properties;
 import java.util.Set;
 import java.util.concurrent.TimeoutException;
-import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
 import static org.apache.kafka.test.TestUtils.waitForCondition;
 import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
 
@@ -75,14 +74,45 @@ public class MirrorConnectorsIntegrationTest {
     private static final int RECORD_CONSUME_DURATION_MS = 20_000;
     private static final int OFFSET_SYNC_DURATION_MS = 30_000;
 
-    private final AtomicBoolean exited = new AtomicBoolean(false);
+    private volatile boolean shuttingDown;
     private Map<String, String> mm2Props;
     private MirrorMakerConfig mm2Config;
     private EmbeddedConnectCluster primary;
     private EmbeddedConnectCluster backup;
 
+    private Exit.Procedure exitProcedure;
+    private Exit.Procedure haltProcedure;
+
     @Before
     public void setup() throws InterruptedException {
+        shuttingDown = false;
+        exitProcedure = (code, message) -> {
+            if (shuttingDown) {
+                // ignore this since we're shutting down Connect and Kafka and timing isn't always great
+                return;
+            }
+            if (code != 0) {
+                String exitMessage = "Abrupt service exit with code " + code + " and message " + message;
+                log.warn(exitMessage);
+                throw new UngracefulShutdownException(exitMessage);
+            }
+        };
+        haltProcedure = (code, message) -> {
+            if (shuttingDown) {
+                // ignore this since we're shutting down Connect and Kafka and timing isn't always great
+                return;
+            }
+            if (code != 0) {
+                String haltMessage = "Abrupt service halt with code " + code + " and message " + message;
+                log.warn(haltMessage);
+                throw new UngracefulShutdownException(haltMessage);
+            }
+        };
+        // Override the exit and halt procedure that Connect and Kafka will use. For these integration tests,
+        // we don't want to exit the JVM and instead simply want to fail the test
+        Exit.setExitProcedure(exitProcedure);
+        Exit.setHaltProcedure(haltProcedure);
+
         Properties brokerProps = new Properties();
         brokerProps.put("auto.create.topics.enable", "false");
 
@@ -116,6 +146,7 @@ public class MirrorConnectorsIntegrationTest {
                 .numBrokers(1)
                 .brokerProps(brokerProps)
                 .workerProps(primaryWorkerProps)
+                .maskExitProcedures(false)
                 .build();
 
         backup = new EmbeddedConnectCluster.Builder()
@@ -124,6 +155,7 @@ public class MirrorConnectorsIntegrationTest {
                 .numBrokers(1)
                 .brokerProps(brokerProps)
                 .workerProps(backupWorkerProps)
+                .maskExitProcedures(false)
                 .build();
 
         primary.start();
@@ -164,8 +196,6 @@ public class MirrorConnectorsIntegrationTest {
         mm2Props.put("primary.bootstrap.servers", primary.kafka().bootstrapServers());
         mm2Props.put("backup.bootstrap.servers", backup.kafka().bootstrapServers());
         mm2Config = new MirrorMakerConfig(mm2Props);
-
-        Exit.setExitProcedure((status, errorCode) -> exited.set(true));
     }
 
 
@@ -194,20 +224,27 @@ public class MirrorConnectorsIntegrationTest {
 
     @After
     public void close() {
-        for (String x : primary.connectors()) {
-            primary.deleteConnector(x);
-        }
-        for (String x : backup.connectors()) {
-            backup.deleteConnector(x);
-        }
-        deleteAllTopics(primary.kafka());
-        deleteAllTopics(backup.kafka());
-        primary.stop();
-        backup.stop();
         try {
-            assertFalse(exited.get());
+            for (String x : primary.connectors()) {
+                primary.deleteConnector(x);
+            }
+            for (String x : backup.connectors()) {
+                backup.deleteConnector(x);
+            }
+            deleteAllTopics(primary.kafka());
+            deleteAllTopics(backup.kafka());
         } finally {
-            Exit.resetExitProcedure();
+            shuttingDown = true;
+            try {
+                try {
+                    primary.stop();
+                } finally {
+                    backup.stop();
+                }
+            } finally {
+                Exit.resetExitProcedure();
+                Exit.resetHaltProcedure();
+            }
         }
     }
 
@@ -304,6 +341,9 @@ public class MirrorConnectorsIntegrationTest {
 
         Map<TopicPartition, OffsetAndMetadata> primaryOffsets = primaryClient.remoteConsumerOffsets(consumerGroupName, "backup",
                 Duration.ofMillis(CHECKPOINT_DURATION_MS));
+
+        primaryClient.close();
+        backupClient.close();
 
         // Failback consumer group to primary cluster
         primaryConsumer = primary.kafka().createConsumer(consumerProps);

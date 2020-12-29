@@ -471,6 +471,19 @@ public class ThreadCacheTest {
         assertEquals(cache.sizeBytes(), node.size());
     }
 
+    @Test
+    public void shouldResizeAndShrink() {
+        final ThreadCache cache = new ThreadCache(logContext, 10000, new MockStreamsMetrics(new Metrics()));
+        cache.put(namespace, Bytes.wrap(new byte[]{1}), cleanEntry(new byte[]{0}));
+        cache.put(namespace, Bytes.wrap(new byte[]{2}), cleanEntry(new byte[]{0}));
+        cache.put(namespace, Bytes.wrap(new byte[]{3}), cleanEntry(new byte[]{0}));
+        assertEquals(141, cache.sizeBytes());
+        cache.resize(100);
+        assertEquals(94, cache.sizeBytes());
+        cache.put(namespace1, Bytes.wrap(new byte[]{4}), cleanEntry(new byte[]{0}));
+        assertEquals(94, cache.sizeBytes());
+    }
+
     private LRUCacheEntry dirtyEntry(final byte[] key) {
         return new LRUCacheEntry(key, null, true, -1, -1, -1, "");
     }

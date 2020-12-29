@@ -154,18 +154,6 @@ public class StandaloneHerder extends AbstractHerder {
     }
 
     @Override
-    public void connectorConfig(String connName, final Callback<Map<String, String>> callback) {
-        // Subset of connectorInfo, so piggy back on that implementation
-        connectorInfo(connName, (error, result) -> {
-            if (error != null) {
-                callback.onCompletion(error, null);
-                return;
-            }
-            callback.onCompletion(null, result.config());
-        });
-    }
-
-    @Override
     public synchronized void deleteConnectorConfig(String connName, Callback<Created<ConnectorInfo>> callback) {
         try {
             if (!configState.contains(connName)) {

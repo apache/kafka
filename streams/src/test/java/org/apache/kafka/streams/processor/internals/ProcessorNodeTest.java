@@ -36,7 +36,7 @@ import org.junit.Test;
 import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.Map;
-import java.util.Properties;
+
 
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.ROLLUP_VALUE;
 import static org.hamcrest.CoreMatchers.containsString;
@@ -162,9 +162,6 @@ public class ProcessorNodeTest {
 
     @Test
     public void testTopologyLevelClassCastException() {
-        final Properties props = new Properties();
-        props.put(StreamsConfig.APPLICATION_ID_CONFIG, "test");
-        props.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "dummy:1234");
         // Serdes configuration is missing (default will be used which don't match the DSL below), which will trigger the new exception
         final StreamsBuilder builder = new StreamsBuilder();
 
@@ -174,7 +171,7 @@ public class ProcessorNodeTest {
             });
         final Topology topology = builder.build();
 
-        final TopologyTestDriver testDriver = new TopologyTestDriver(topology, props);
+        final TopologyTestDriver testDriver = new TopologyTestDriver(topology);
         final TestInputTopic<String, String> topic = testDriver.createInputTopic("streams-plaintext-input", new StringSerializer(), new StringSerializer());
 
         final StreamsException se = assertThrows(StreamsException.class, () -> topic.pipeInput("a-key", "a value"));

@@ -154,6 +154,10 @@ class CachedPartition(val topic: String,
         highWatermark = -1
       mustRespond = true
     }
+    if (respData.divergingEpoch.isPresent) {
+      // Partitions with diverging epoch are always included in response to trigger truncation.
+      mustRespond = true
+    }
     mustRespond
   }
 

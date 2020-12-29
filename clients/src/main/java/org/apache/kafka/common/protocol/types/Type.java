@@ -16,7 +16,7 @@
  */
 package org.apache.kafka.common.protocol.types;
 
-import org.apache.kafka.common.UUID;
+import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.record.BaseRecords;
 import org.apache.kafka.common.record.MemoryRecords;
 import org.apache.kafka.common.utils.ByteUtils;
@@ -331,14 +331,14 @@ public abstract class Type {
     public static final DocumentedType UUID = new DocumentedType() {
         @Override
         public void write(ByteBuffer buffer, Object o) {
-            final UUID uuid = (UUID) o;
+            final Uuid uuid = (Uuid) o;
             buffer.putLong(uuid.getMostSignificantBits());
             buffer.putLong(uuid.getLeastSignificantBits());
         }
 
         @Override
         public Object read(ByteBuffer buffer) {
-            return new UUID(buffer.getLong(), buffer.getLong());
+            return new Uuid(buffer.getLong(), buffer.getLong());
         }
 
         @Override
@@ -352,16 +352,16 @@ public abstract class Type {
         }
 
         @Override
-        public UUID validate(Object item) {
-            if (item instanceof UUID)
-                return (UUID) item;
+        public Uuid validate(Object item) {
+            if (item instanceof Uuid)
+                return (Uuid) item;
             else
-                throw new SchemaException(item + " is not a UUID.");
+                throw new SchemaException(item + " is not a Uuid.");
         }
 
         @Override
         public String documentation() {
-            return "Represents a type 4 immutable universally unique identifier (UUID). " +
+            return "Represents a type 4 immutable universally unique identifier (Uuid). " +
                     "The values are encoded using sixteen bytes in network byte order (big-endian).";
         }
     };

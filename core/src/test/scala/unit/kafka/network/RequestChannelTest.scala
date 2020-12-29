@@ -18,10 +18,12 @@
 package kafka.network
 
 
+import java.io.IOException
 import java.net.InetAddress
 import java.nio.ByteBuffer
 import java.util.Collections
 
+import com.fasterxml.jackson.databind.ObjectMapper
 import kafka.network
 import org.apache.kafka.clients.admin.AlterConfigOp.OpType
 import org.apache.kafka.common.config.types.Password
@@ -46,12 +48,13 @@ class RequestChannelTest {
 
     val sensitiveValue = "secret"
     def verifyConfig(resource: ConfigResource, entries: Seq[ConfigEntry], expectedValues: Map[String, String]): Unit = {
-      val alterConfigs = request(new AlterConfigsRequest.Builder(Collections.singletonMap(resource,
-        new Config(entries.asJavaCollection)), true).build())
+      val alterConfigs = request(new AlterConfigsRequest.Builder(
+          Collections.singletonMap(resource, new Config(entries.asJavaCollection)), true).build())
+
       val loggableAlterConfigs = alterConfigs.loggableRequest.asInstanceOf[AlterConfigsRequest]
       val loggedConfig = loggableAlterConfigs.configs.get(resource)
       assertEquals(expectedValues, toMap(loggedConfig))
-      val alterConfigsDesc = alterConfigs.requestDesc(details = true)
+      val alterConfigsDesc = RequestConvertToJson.requestDesc(alterConfigs.header, alterConfigs.requestLog, alterConfigs.isForwarded).toString
       assertFalse(s"Sensitive config logged $alterConfigsDesc", alterConfigsDesc.contains(sensitiveValue))
     }
 
@@ -85,7 +88,8 @@ class RequestChannelTest {
     verifyConfig(topicResource, Seq(customConfig), Map(customConfig.name -> Password.HIDDEN))
 
     // Verify empty request
-    val alterConfigs = request(new AlterConfigsRequest.Builder(Collections.emptyMap[ConfigResource, Config], true).build())
+    val alterConfigs = request(new AlterConfigsRequest.Builder(
+        Collections.emptyMap[ConfigResource, Config], true).build())
     assertEquals(Collections.emptyMap, alterConfigs.loggableRequest.asInstanceOf[AlterConfigsRequest].configs)
   }
 
@@ -114,7 +118,7 @@ class RequestChannelTest {
       val loggableAlterConfigs = alterConfigs.loggableRequest.asInstanceOf[IncrementalAlterConfigsRequest]
       val loggedConfig = loggableAlterConfigs.data.resources.find(resource.`type`.id, resource.name).configs
       assertEquals(expectedValues, toMap(loggedConfig))
-      val alterConfigsDesc = alterConfigs.requestDesc(details = true)
+      val alterConfigsDesc = RequestConvertToJson.requestDesc(alterConfigs.header, alterConfigs.requestLog, alterConfigs.isForwarded).toString
       assertFalse(s"Sensitive config logged $alterConfigsDesc", alterConfigsDesc.contains(sensitiveValue))
     }
 
@@ -162,8 +166,32 @@ class RequestChannelTest {
     assertSame(metadataRequest.body[MetadataRequest], metadataRequest.loggableRequest)
   }
 
+  @Test
+  def testJsonRequests(): Unit = {
+    val sensitiveValue = "secret"
+    val resource = new ConfigResource(ConfigResource.Type.BROKER, "1")
+    val keystorePassword = new ConfigEntry(SslConfigs.SSL_KEYSTORE_PASSWORD_CONFIG, sensitiveValue)
+    val entries = Seq(keystorePassword)
+
+    val alterConfigs = request(new AlterConfigsRequest.Builder(Collections.singletonMap(resource,
+      new Config(entries.asJavaCollection)), true).build())
+
+    assertTrue(isValidJson(RequestConvertToJson.request(alterConfigs.loggableRequest).toString))
+  }
+
+  private def isValidJson(str: String): Boolean = {
+    try {
+      val mapper = new ObjectMapper
+      mapper.readTree(str)
+      true
+    } catch {
+      case _: IOException => false
+    }
+  }
+
   def request(req: AbstractRequest): RequestChannel.Request = {
-    val buffer = req.serialize(new RequestHeader(req.api, req.version, "client-id", 1))
+    val buffer = RequestTestUtils.serializeRequestWithHeader(new RequestHeader(req.apiKey, req.version, "client-id", 1),
+      req)
     val requestContext = newRequestContext(buffer)
     new network.RequestChannel.Request(processor = 1,
       requestContext,
@@ -182,7 +210,8 @@ class RequestChannelTest {
       new KafkaPrincipal(KafkaPrincipal.USER_TYPE, "user"),
       ListenerName.forSecurityProtocol(SecurityProtocol.PLAINTEXT),
       SecurityProtocol.PLAINTEXT,
-      new ClientInformation("name", "version"))
+      new ClientInformation("name", "version"),
+      false)
   }
 
   private def toMap(config: Config): Map[String, String] = {

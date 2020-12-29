@@ -21,6 +21,7 @@ import java.net.InetAddress
 import java.nio.ByteBuffer
 import java.util.concurrent._
 
+import com.fasterxml.jackson.databind.JsonNode
 import com.typesafe.scalalogging.Logger
 import com.yammer.metrics.core.Meter
 import kafka.log.LogConfig
@@ -34,7 +35,7 @@ import org.apache.kafka.common.memory.MemoryPool
 import org.apache.kafka.common.message.IncrementalAlterConfigsRequestData
 import org.apache.kafka.common.message.IncrementalAlterConfigsRequestData._
 import org.apache.kafka.common.network.Send
-import org.apache.kafka.common.protocol.{ApiKeys, Errors}
+import org.apache.kafka.common.protocol.{ApiKeys, Errors, ObjectSerializationCache}
 import org.apache.kafka.common.requests._
 import org.apache.kafka.common.security.auth.KafkaPrincipal
 import org.apache.kafka.common.utils.{Sanitizer, Time}
@@ -80,8 +81,9 @@ object RequestChannel extends Logging {
                 val context: RequestContext,
                 val startTimeNanos: Long,
                 memoryPool: MemoryPool,
-                @volatile private var buffer: ByteBuffer,
-                metrics: RequestChannel.Metrics) extends BaseRequest {
+                @volatile var buffer: ByteBuffer,
+                metrics: RequestChannel.Metrics,
+                val envelope: Option[RequestChannel.Request] = None) extends BaseRequest {
     // These need to be volatile because the readers are in the network thread and the writers are in the request
     // handler threads or the purgatory threads
     @volatile var requestDequeueTimeNanos = -1L
@@ -94,10 +96,20 @@ object RequestChannel extends Logging {
     @volatile var recordNetworkThreadTimeCallback: Option[Long => Unit] = None
 
     val session = Session(context.principal, context.clientAddress)
+
     private val bodyAndSize: RequestAndSize = context.parseRequest(buffer)
 
+    // This is constructed on creation of a Request so that the JSON representation is computed before the request is
+    // processed by the api layer. Otherwise, a ProduceRequest can occur without its data (ie. it goes into purgatory).
+    val requestLog: Option[JsonNode] =
+      if (RequestChannel.isRequestLoggingEnabled) Some(RequestConvertToJson.request(loggableRequest))
+      else None
+
     def header: RequestHeader = context.header
+
     def sizeOfBodyInBytes: Int = bodyAndSize.size
+
+    def sizeInBytes: Int = header.size(new ObjectSerializationCache) + sizeOfBodyInBytes
 
     //most request types are parsed entirely into objects at this point. for those we can release the underlying buffer.
     //some (like produce, or any time the schema contains fields of types BYTES or NULLABLE_BYTES) retain a reference
@@ -106,7 +118,41 @@ object RequestChannel extends Logging {
       releaseBuffer()
     }
 
-    def requestDesc(details: Boolean): String = s"$header -- ${loggableRequest.toString(details)}"
+    def isForwarded: Boolean = envelope.isDefined
+
+    def buildResponseSend(abstractResponse: AbstractResponse): Send = {
+      envelope match {
+        case Some(request) =>
+          val responseBytes = context.buildResponseEnvelopePayload(abstractResponse)
+          val envelopeResponse = new EnvelopeResponse(responseBytes, Errors.NONE)
+          request.context.buildResponseSend(envelopeResponse)
+        case None =>
+          context.buildResponseSend(abstractResponse)
+      }
+    }
+
+    def responseNode(response: AbstractResponse): Option[JsonNode] = {
+      if (RequestChannel.isRequestLoggingEnabled)
+        Some(RequestConvertToJson.response(response, context.apiVersion))
+      else
+        None
+    }
+
+    def headerForLoggingOrThrottling(): RequestHeader = {
+      envelope match {
+        case Some(request) =>
+          request.context.header
+        case None =>
+          context.header
+      }
+    }
+
+    def requestDesc(details: Boolean): String = {
+      val forwardDescription = envelope.map { request =>
+        s"Forwarded request: ${request.context} "
+      }.getOrElse("")
+      s"$forwardDescription$header -- ${loggableRequest.toString(details)}"
+    }
 
     def body[T <: AbstractRequest](implicit classTag: ClassTag[T], @nowarn("cat=unused") nn: NotNothing[T]): T = {
       bodyAndSize.request match {
@@ -223,36 +269,25 @@ object RequestChannel extends Logging {
       recordNetworkThreadTimeCallback.foreach(record => record(networkThreadTimeNanos))
 
       if (isRequestLoggingEnabled) {
-        val detailsEnabled = requestLogger.underlying.isTraceEnabled
-        val responseString = response.responseString.getOrElse(
-          throw new IllegalStateException("responseAsString should always be defined if request logging is enabled"))
-        val builder = new StringBuilder(256)
-        builder.append("Completed request:").append(requestDesc(detailsEnabled))
-          .append(",response:").append(responseString)
-          .append(" from connection ").append(context.connectionId)
-          .append(";totalTime:").append(totalTimeMs)
-          .append(",requestQueueTime:").append(requestQueueTimeMs)
-          .append(",localTime:").append(apiLocalTimeMs)
-          .append(",remoteTime:").append(apiRemoteTimeMs)
-          .append(",throttleTime:").append(apiThrottleTimeMs)
-          .append(",responseQueueTime:").append(responseQueueTimeMs)
-          .append(",sendTime:").append(responseSendTimeMs)
-          .append(",securityProtocol:").append(context.securityProtocol)
-          .append(",principal:").append(session.principal)
-          .append(",listener:").append(context.listenerName.value)
-          .append(",clientInformation:").append(context.clientInformation)
-        if (temporaryMemoryBytes > 0)
-          builder.append(",temporaryMemoryBytes:").append(temporaryMemoryBytes)
-        if (messageConversionsTimeMs > 0)
-          builder.append(",messageConversionsTime:").append(messageConversionsTimeMs)
-        requestLogger.debug(builder.toString)
+        val desc = RequestConvertToJson.requestDescMetrics(header, requestLog, response.responseLog,
+          context, session, isForwarded,
+          totalTimeMs, requestQueueTimeMs, apiLocalTimeMs,
+          apiRemoteTimeMs, apiThrottleTimeMs, responseQueueTimeMs,
+          responseSendTimeMs, temporaryMemoryBytes,
+          messageConversionsTimeMs)
+        requestLogger.debug("Completed request:" + desc.toString)
       }
     }
 
     def releaseBuffer(): Unit = {
-      if (buffer != null) {
-        memoryPool.release(buffer)
-        buffer = null
+      envelope match {
+        case Some(request) =>
+          request.releaseBuffer()
+        case None =>
+          if (buffer != null) {
+            memoryPool.release(buffer)
+            buffer = null
+          }
       }
     }
 
@@ -261,32 +296,33 @@ object RequestChannel extends Logging {
       s"session=$session, " +
       s"listenerName=${context.listenerName}, " +
       s"securityProtocol=${context.securityProtocol}, " +
-      s"buffer=$buffer)"
+      s"buffer=$buffer, " +
+      s"envelope=$envelope)"
 
   }
 
-  abstract class Response(val request: Request) {
+  sealed abstract class Response(val request: Request) {
 
     def processor: Int = request.processor
 
-    def responseString: Option[String] = Some("")
+    def responseLog: Option[JsonNode] = None
 
     def onComplete: Option[Send => Unit] = None
 
     override def toString: String
   }
 
-  /** responseAsString should only be defined if request logging is enabled */
+  /** responseLogValue should only be defined if request logging is enabled */
   class SendResponse(request: Request,
                      val responseSend: Send,
-                     val responseAsString: Option[String],
+                     val responseLogValue: Option[JsonNode],
                      val onCompleteCallback: Option[Send => Unit]) extends Response(request) {
-    override def responseString: Option[String] = responseAsString
+    override def responseLog: Option[JsonNode] = responseLogValue
 
     override def onComplete: Option[Send => Unit] = onCompleteCallback
 
     override def toString: String =
-      s"Response(type=Send, request=$request, send=$responseSend, asString=$responseAsString)"
+      s"Response(type=Send, request=$request, send=$responseSend, asString=$responseLogValue)"
   }
 
   class NoOpResponse(request: Request) extends Response(request) {
@@ -351,7 +387,7 @@ class RequestChannel(val queueSize: Int,
   def sendResponse(response: RequestChannel.Response): Unit = {
 
     if (isTraceEnabled) {
-      val requestHeader = response.request.header
+      val requestHeader = response.request.headerForLoggingOrThrottling()
       val message = response match {
         case sendResponse: SendResponse =>
           s"Sending ${requestHeader.apiKey} response to client ${requestHeader.clientId} of ${sendResponse.responseSend.size} bytes."
