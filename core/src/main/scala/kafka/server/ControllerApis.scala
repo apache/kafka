@@ -21,7 +21,7 @@ import kafka.network.RequestChannel
 import kafka.raft.RaftManager
 import kafka.server.QuotaFactory.QuotaManagers
 import kafka.utils.Logging
-import org.apache.kafka.common.acl.AclOperation.{ALTER, CLUSTER_ACTION, CREATE, DESCRIBE}
+import org.apache.kafka.common.acl.AclOperation.{ALTER, ALTER_CONFIGS, CLUSTER_ACTION, CREATE, DESCRIBE}
 import org.apache.kafka.common.errors.ApiException
 import org.apache.kafka.common.internals.FatalExitError
 import org.apache.kafka.common.message.ApiVersionsResponseData.{ApiVersionsResponseKey, FinalizedFeatureKey, SupportedFeatureKey}
@@ -87,8 +87,7 @@ class ControllerApis(val requestChannel: RequestChannel,
     //ApiKeys.INCREMENTAL_ALTER_CONFIGS
     //ApiKeys.ALTER_PARTITION_REASSIGNMENTS
     //ApiKeys.LIST_PARTITION_REASSIGNMENTS
-    //ApiKeys.DESCRIBE_CLIENT_QUOTAS
-    //ApiKeys.ALTER_CLIENT_QUOTAS
+    ApiKeys.ALTER_CLIENT_QUOTAS,
     //ApiKeys.DESCRIBE_USER_SCRAM_CREDENTIALS
     //ApiKeys.ALTER_USER_SCRAM_CREDENTIALS
     //ApiKeys.UPDATE_FEATURES
@@ -144,6 +143,7 @@ class ControllerApis(val requestChannel: RequestChannel,
         case ApiKeys.BROKER_REGISTRATION => handleBrokerRegistration(request)
         case ApiKeys.BROKER_HEARTBEAT => handleBrokerHeartBeatRequest(request)
         case ApiKeys.DECOMMISSION_BROKER => handleDecommissionBroker(request)
+        case ApiKeys.ALTER_CLIENT_QUOTAS => handleAlterClientQuotas(request)
         case _ => throw new ApiException(s"Unsupported ApiKey ${request.context.header.apiKey()}")
       }
     } catch {
@@ -442,5 +442,20 @@ class ControllerApis(val requestChannel: RequestChannel,
       }
       apisUtils.sendResponseExemptThrottle(request, response)
     })
+  }
+
+  def handleAlterClientQuotas(request: RequestChannel.Request): Unit = {
+    val quotaRequest = request.body[AlterClientQuotasRequest]
+    apisUtils.authorize(request.context, ALTER_CONFIGS, CLUSTER, CLUSTER_NAME)
+
+    controller.alterClientQuotas(quotaRequest.entries(), quotaRequest.validateOnly())
+      .whenComplete((results, exception) => {
+        if (exception != null) {
+          apisUtils.handleError(request, exception)
+        } else {
+          apisUtils.sendResponseMaybeThrottle(request, requestThrottleMs =>
+            AlterClientQuotasResponse.fromQuotaEntities(results, requestThrottleMs))
+        }
+      })
   }
 }

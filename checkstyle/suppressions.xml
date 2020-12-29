@@ -148,7 +148,7 @@
 
     <!-- Controller -->
     <suppress checks="CyclomaticComplexity|NPathComplexity"
-              files="(LocalLogManager).java"/>
+              files="(LocalLogManager|ClientQuotaControlManager).java"/>
 
     <!-- Streams -->
     <suppress checks="ClassFanOutComplexity"

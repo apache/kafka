@@ -33,6 +33,7 @@ import org.apache.kafka.common.metadata.ConfigRecord;
 import org.apache.kafka.common.metadata.FenceBrokerRecord;
 import org.apache.kafka.common.metadata.MetadataRecordType;
 import org.apache.kafka.common.metadata.PartitionRecord;
+import org.apache.kafka.common.metadata.QuotaRecord;
 import org.apache.kafka.common.metadata.RegisterBrokerRecord;
 import org.apache.kafka.common.metadata.TopicRecord;
 import org.apache.kafka.common.metadata.UnfenceBrokerRecord;
@@ -40,6 +41,8 @@ import org.apache.kafka.common.metadata.UnregisterBrokerRecord;
 import org.apache.kafka.common.protocol.ApiMessage;
 import org.apache.kafka.common.protocol.ApiMessageAndVersion;
 import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.common.quota.ClientQuotaAlteration;
+import org.apache.kafka.common.quota.ClientQuotaEntity;
 import org.apache.kafka.common.requests.ApiError;
 import org.apache.kafka.common.utils.EventQueue;
 import org.apache.kafka.common.utils.KafkaEventQueue;
@@ -484,6 +487,9 @@ public final class QuorumController implements Controller {
             case CONFIG_RECORD:
                 configurationControl.replay((ConfigRecord) message);
                 break;
+            case QUOTA_RECORD:
+                clientQuotaControlManager.replay((QuotaRecord) message);
+                break;
             case ISR_CHANGE_RECORD:
                 throw new RuntimeException("Unhandled record type " + type);
             case ACCESS_CONTROL_RECORD:
@@ -525,6 +531,12 @@ public final class QuorumController implements Controller {
      * This must be accessed only by the event queue thread.
      */
     private final ConfigurationControlManager configurationControl;
+
+    /**
+     * An object which stores the controller's dynamic client quotas.
+     * This must be accessed only by the event queue thread.
+     */
+    private final ClientQuotaControlManager clientQuotaControlManager;
 
     /**
      * An object which stores the controller's view of the cluster.
@@ -589,6 +601,7 @@ public final class QuorumController implements Controller {
         this.purgatory = new ControllerPurgatory();
         this.configurationControl = new ConfigurationControlManager(snapshotRegistry,
             configDefs);
+        this.clientQuotaControlManager = new ClientQuotaControlManager(snapshotRegistry);
         this.clusterControl =
             new ClusterControlManager(logContext, time, snapshotRegistry, 18000, 9000);
         this.featureControl =
@@ -690,6 +703,20 @@ public final class QuorumController implements Controller {
         return appendWriteEvent("registerBroker", () ->
             clusterControl.registerBroker(request, writeOffset + 1,
                 featureControl.finalizedFeaturesAndEpoch(Long.MAX_VALUE)));
+    }
+
+    @Override
+    public CompletableFuture<Map<ClientQuotaEntity, ApiError>> alterClientQuotas(
+            Collection<ClientQuotaAlteration> quotaAlterations, boolean validateOnly) {
+        return appendWriteEvent("alterClientQuotas", () -> {
+            ControllerResult<Map<ClientQuotaEntity, ApiError>> result =
+                clientQuotaControlManager.alterClientQuotas(quotaAlterations);
+            if (validateOnly) {
+                return result.withoutRecords();
+            } else {
+                return result;
+            }
+        });
     }
 
     @Override
