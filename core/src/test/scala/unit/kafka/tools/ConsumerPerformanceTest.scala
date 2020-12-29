@@ -109,6 +109,7 @@ class ConsumerPerformanceTest {
     val args: Array[String] = Array(
       "--broker-list", "localhost:9092",
       "--topic", "test",
+      "--group", "test_group_id2",
       "--messages", "10",
       "--consumer.config", propsFile.getAbsolutePath
     )
