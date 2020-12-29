@@ -51,6 +51,7 @@ import org.apache.kafka.common.metrics.MetricsReporter;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.network.ChannelBuilder;
 import org.apache.kafka.common.network.Selector;
+import org.apache.kafka.common.record.RecordBatch;
 import org.apache.kafka.common.requests.MetadataRequest;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.utils.AppInfoParser;
@@ -1217,6 +1218,13 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
     }
 
     /**
+     * modify the public poll method to return a RecordBatch not a Record。
+     */
+    public RecordBatch pollForBatch(final Duration timeout) {
+        return pollForBatch(time.timer(timeout), true);
+    }
+
+    /**
      * @throws KafkaException if the rebalance callback throws exception
      */
     private ConsumerRecords<K, V> poll(final Timer timer, final boolean includeMetadataInTimeout) {
@@ -1257,6 +1265,54 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
             } while (timer.notExpired());
 
             return ConsumerRecords.empty();
+        } finally {
+            release();
+            this.kafkaConsumerMetrics.recordPollEnd(timer.currentTimeMs());
+        }
+    }
+    private RecordBatch pollForBatch(final Timer timer, final boolean includeMetadataInTimeout) {
+        acquireAndEnsureOpen();
+        try {
+            this.kafkaConsumerMetrics.recordPollStart(timer.currentTimeMs());
+
+            if (this.subscriptions.hasNoSubscriptionOrUserAssignment()) {
+                throw new IllegalStateException("Consumer is not subscribed to any topics or assigned any partitions");
+            }
+
+            // poll for new data until the timeout expires
+            do {
+                client.maybeTriggerWakeup();
+
+                if (includeMetadataInTimeout) {
+                    // try to update assignment metadata BUT do not need to block on the timer,
+                    // since even if we are 1) in the middle of a rebalance or 2) have partitions
+                    // with unknown starting positions we may still want to return some data
+                    // as long as there are some partitions fetchable; NOTE we always use a timer with 0ms
+                    // to never block on completing the rebalance procedure if there's any
+                    updateAssignmentMetadataIfNeeded(time.timer(0L));
+                } else {
+                    while (!updateAssignmentMetadataIfNeeded(time.timer(Long.MAX_VALUE))) {
+                        log.warn("Still waiting for metadata");
+                    }
+                }
+
+                final RecordBatch records = pollForFetchesForBatch(timer);
+                if (records != null) {
+                    // before returning the fetched records, we can send off the next round of fetches
+                    // and avoid block waiting for their responses to enable pipelining while the user
+                    // is handling the fetched records.
+                    //
+                    // NOTE: since the consumed position has already been updated, we must not allow
+                    // wakeups or any other errors to be triggered prior to returning the fetched records.
+                    if (fetcher.sendFetches() > 0 || client.hasPendingRequests()) {
+                        client.transmitSends();
+                    }
+
+                    return records;
+                }
+            } while (timer.notExpired());
+
+            return null;
         } finally {
             release();
             this.kafkaConsumerMetrics.recordPollEnd(timer.currentTimeMs());
@@ -1312,6 +1368,39 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
         timer.update(pollTimer.currentTimeMs());
 
         return fetcher.fetchedRecords();
+    }
+
+    private RecordBatch pollForFetchesForBatch(Timer timer) {
+        long pollTimeout = coordinator == null ? timer.remainingMs() :
+                Math.min(coordinator.timeToNextPoll(timer.currentTimeMs()), timer.remainingMs());
+
+        // if data is available already, return it immediately
+        final RecordBatch records = fetcher.fetchedBatch();
+        if (records != null) {
+            return records;
+        }
+
+        // send any new fetches (won't resend pending fetches)
+        fetcher.sendFetches();
+
+        // We do not want to be stuck blocking in poll if we are missing some positions
+        // since the offset lookup may be backing off after a failure
+
+        // NOTE: the use of cachedSubscriptionHashAllFetchPositions means we MUST call
+        // updateAssignmentMetadataIfNeeded before this method.
+        if (!cachedSubscriptionHashAllFetchPositions && pollTimeout > retryBackoffMs) {
+            pollTimeout = retryBackoffMs;
+        }
+
+        Timer pollTimer = time.timer(pollTimeout);
+        client.poll(pollTimer, () -> {
+            // since a fetch might be completed by the background thread, we need this poll condition
+            // to ensure that we do not block unnecessarily in poll()
+            return !fetcher.hasAvailableFetches();
+        });
+        timer.update(pollTimer.currentTimeMs());
+
+        return fetcher.fetchedBatch();
     }
 
     /**

@@ -95,6 +95,11 @@ public final class ProducerBatch {
         recordsBuilder.setEstimatedCompressionRatio(compressionRatioEstimation);
     }
 
+    public ProducerBatch(TopicPartition tp, MemoryRecordsBuilder recordsBuilder, long createdMs,int flag){
+        this(tp, recordsBuilder, createdMs, false);
+        this.recordCount = recordsBuilder.numRecords();
+        this.maxRecordSize = recordsBuilder.estimatedSizeInBytes() / recordsBuilder.numRecords();
+    }
     /**
      * Append the record to the current record set and return the relative offset within that record set
      *

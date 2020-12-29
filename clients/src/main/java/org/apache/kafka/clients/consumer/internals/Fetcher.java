@@ -58,12 +58,7 @@ import org.apache.kafka.common.metrics.stats.Value;
 import org.apache.kafka.common.metrics.stats.WindowedCount;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.record.BufferSupplier;
-import org.apache.kafka.common.record.ControlRecordType;
-import org.apache.kafka.common.record.Record;
-import org.apache.kafka.common.record.RecordBatch;
-import org.apache.kafka.common.record.Records;
-import org.apache.kafka.common.record.TimestampType;
+import org.apache.kafka.common.record.*;
 import org.apache.kafka.common.requests.FetchRequest;
 import org.apache.kafka.common.requests.FetchResponse;
 import org.apache.kafka.common.requests.ListOffsetRequest;
@@ -661,6 +656,107 @@ public class Fetcher<K, V> implements Closeable {
         }
 
         return fetched;
+    }
+
+    public RecordBatch fetchedBatch() {
+        Map<TopicPartition, List<ConsumerRecord<K, V>>> fetched = new HashMap<>();
+        Queue<CompletedFetch> pausedCompletedFetches = new ArrayDeque<>();
+        int recordsRemaining = maxPollRecords;
+
+        try {
+            while (true) {
+                if (nextInLineFetch == null || nextInLineFetch.isConsumed) {
+                    CompletedFetch records = completedFetches.peek();
+                    if (records == null) break;
+
+                    if (records.notInitialized()) {
+                        try {
+                            nextInLineFetch = initializeCompletedFetch(records);
+                        } catch (Exception e) {
+                            FetchResponse.PartitionData partition = records.partitionData;
+                            if (fetched.isEmpty() && (partition.records == null || partition.records.sizeInBytes() == 0)) {
+                                completedFetches.poll();
+                            }
+                            throw e;
+                        }
+                    } else {
+                        nextInLineFetch = records;
+                    }
+                    completedFetches.poll();
+                } else if (subscriptions.isPaused(nextInLineFetch.partition)) {
+                    log.debug("Skipping fetching records for assigned partition {} because it is paused", nextInLineFetch.partition);
+                    pausedCompletedFetches.add(nextInLineFetch);
+                    nextInLineFetch = null;
+                } else {
+                    return fetchBatch(nextInLineFetch, recordsRemaining);
+
+                }
+            }
+        } catch (KafkaException e) {
+            if (fetched.isEmpty())
+                throw e;
+        } finally {
+            // add any polled completed fetches for paused partitions back to the completed fetches queue to be
+            // re-evaluated in the next poll
+            completedFetches.addAll(pausedCompletedFetches);
+        }
+        return null;
+
+    }
+
+    private RecordBatch fetchBatch(CompletedFetch completedFetch, int maxRecords) {
+        if (!subscriptions.isAssigned(completedFetch.partition)) {
+            // this can happen when a rebalance happened before fetched records are returned to the consumer's poll call
+            log.debug("Not returning fetched records for partition {} since it is no longer assigned",
+                    completedFetch.partition);
+        } else if (!subscriptions.isFetchable(completedFetch.partition)) {
+            // this can happen when a partition is paused before fetched records are returned to the consumer's
+            // poll call or if the offset is being reset
+            log.debug("Not returning fetched records for assigned partition {} since it is no longer fetchable",
+                    completedFetch.partition);
+        } else {
+            SubscriptionState.FetchPosition position = subscriptions.position(completedFetch.partition);
+            if (completedFetch.nextFetchOffset == position.offset) {
+                RecordBatch recordBatch = completedFetch.fetchBatch(maxRecords);
+
+                if (completedFetch.nextFetchOffset > position.offset) {
+                    SubscriptionState.FetchPosition nextPosition = new SubscriptionState.FetchPosition(
+                            completedFetch.nextFetchOffset,
+                            completedFetch.lastEpoch,
+                            position.currentLeader);
+                    log.trace("Returning fetched records at offset {} for assigned partition {} and update " +
+                            "position to {}", position, completedFetch.partition, nextPosition);
+                    subscriptions.position(completedFetch.partition, nextPosition);
+                }
+
+                Long partitionLag = subscriptions.partitionLag(completedFetch.partition, isolationLevel);
+                if (partitionLag != null)
+                    this.sensors.recordPartitionLag(completedFetch.partition, partitionLag);
+
+                Long lead = subscriptions.partitionLead(completedFetch.partition);
+                if (lead != null) {
+                    this.sensors.recordPartitionLead(completedFetch.partition, lead);
+                }
+
+                return recordBatch;
+            } else {
+                // these records aren't next in line based on the last consumed position, ignore them
+                // they must be from an obsolete request
+                log.debug("Ignoring fetched records for {} at offset {} since the current position is {}",
+                        completedFetch.partition, completedFetch.nextFetchOffset, position);
+            }
+
+            log.trace("Draining fetched records for partition {}", completedFetch.partition);
+            completedFetch.drain();
+
+            return null;
+
+        }
+
+        log.trace("Draining fetched records for partition {}", completedFetch.partition);
+        completedFetch.drain();
+
+        return null;
     }
 
     private List<ConsumerRecord<K, V>> fetchRecords(CompletedFetch completedFetch, int maxRecords) {
@@ -1530,6 +1626,46 @@ public class Fetcher<K, V> implements Closeable {
             }
         }
 
+        private RecordBatch nextFetchedBatch() {
+            while (true) {
+                if (!batches.hasNext()) {
+                    // Message format v2 preserves the last offset in a batch even if the last record is removed
+                    // through compaction. By using the next offset computed from the last offset in the batch,
+                    // we ensure that the offset of the next fetch will point to the next batch, which avoids
+                    // unnecessary re-fetching of the same batch (in the worst case, the consumer could get stuck
+                    // fetching the same batch repeatedly).
+                    if (currentBatch != null)
+                        nextFetchOffset = currentBatch.nextOffset();
+                    drain();
+                    return null;
+                }
+                currentBatch = batches.next();
+                lastEpoch = currentBatch.partitionLeaderEpoch() == RecordBatch.NO_PARTITION_LEADER_EPOCH ?
+                        Optional.empty() : Optional.of(currentBatch.partitionLeaderEpoch());
+                maybeEnsureValid(currentBatch);
+
+                if (isolationLevel == IsolationLevel.READ_COMMITTED && currentBatch.hasProducerId()) {
+                    // remove from the aborted transaction queue all aborted transactions which have begun
+                    // before the current batch's last offset and add the associated producerIds to the
+                    // aborted producer set
+                    consumeAbortedTransactionsUpTo(currentBatch.lastOffset());
+
+                    long producerId = currentBatch.producerId();
+                    if (containsAbortMarker(currentBatch)) {
+                        abortedProducerIds.remove(producerId);
+                    } else if (isBatchAborted(currentBatch)) {
+                        log.debug("Skipping aborted record batch from partition {} with producerId {} and " +
+                                        "offsets {} to {}",
+                                partition, producerId, currentBatch.baseOffset(), currentBatch.lastOffset());
+                        nextFetchOffset = currentBatch.nextOffset();
+                        continue;
+                    }
+                }
+                DefaultRecordBatch defaultRecordBatch  = ((DefaultRecordBatch)currentBatch);
+                return new DefaultRecordBatchModify(defaultRecordBatch.getBuffer(),currentBatch,partition);
+            }
+        }
+
         private List<ConsumerRecord<K, V>> fetchRecords(int maxRecords) {
             // Error when fetching the next record before deserialization.
             if (corruptLastRecord)
@@ -1572,6 +1708,44 @@ public class Fetcher<K, V> implements Closeable {
                                                  + "continue consumption.", e);
             }
             return records;
+        }
+
+        private RecordBatch fetchBatch(int maxRecords) {
+            // Error when fetching the next record before deserialization.
+            if (corruptLastRecord)
+                throw new KafkaException("Received exception when fetching the next record from " + partition
+                        + ". If needed, please seek past the record to "
+                        + "continue consumption.", cachedRecordException);
+
+            if (isConsumed)
+                return null;
+
+            try {
+                // Only move to next record if there was no exception in the last fetch. Otherwise we should
+                // use the last record to do deserialization again.
+                if (cachedRecordException == null) {
+                    corruptLastRecord = true;
+                    currentBatch = nextFetchedBatch();
+                    corruptLastRecord = false;
+                }
+                if(currentBatch == null)
+                    return null;
+                recordsRead = (int) (currentBatch.lastOffset() - currentBatch.baseOffset() + 1);
+                bytesRead = currentBatch.sizeInBytes();
+                nextFetchOffset = currentBatch.lastOffset() + 1;
+                // In some cases, the deserialization may have thrown an exception and the retry may succeed,
+                // we allow user to move forward in this case.
+                cachedRecordException = null;
+            } catch (SerializationException se) {
+                cachedRecordException = se;
+                throw se;
+            } catch (KafkaException e) {
+                cachedRecordException = e;
+                throw new KafkaException("Received exception when fetching the next record from " + partition
+                        + ". If needed, please seek past the record to "
+                        + "continue consumption.", e);
+            }
+            return currentBatch;
         }
 
         private void consumeAbortedTransactionsUpTo(long offset) {

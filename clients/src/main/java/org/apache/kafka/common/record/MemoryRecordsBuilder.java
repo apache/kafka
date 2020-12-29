@@ -169,6 +169,71 @@ public class MemoryRecordsBuilder implements AutoCloseable {
                 writeLimit);
     }
 
+    public MemoryRecordsBuilder(ByteBuffer buffer,
+                                byte magic,
+                                CompressionType compressionType,
+                                TimestampType timestampType,
+                                long baseOffset,
+                                long logAppendTime,
+                                long producerId,
+                                short producerEpoch,
+                                int baseSequence,
+                                boolean isTransactional,
+                                boolean isControlBatch,
+                                int partitionLeaderEpoch,
+                                int writeLimit,
+                                int numRecords,
+                                int uncompressedRecordsSizeInBytes,
+                                Long lastOffset,
+                                long maxTimestamp,
+                                long offsetOfMaxTimestamp,
+                                long firstTimestamp) {
+
+        ByteBufferOutputStream bufferStream= new ByteBufferOutputStream(buffer);
+        this.magic = magic;
+        this.timestampType = timestampType;
+
+        // 这里初始化compressionType，在下面使用到compressionType来构造输出流。
+        this.compressionType = compressionType;
+
+        this.baseOffset = baseOffset;
+        this.logAppendTime = logAppendTime;
+        this.numRecords = 0;
+        this.uncompressedRecordsSizeInBytes = uncompressedRecordsSizeInBytes;
+        this.actualCompressionRatio = 1;
+        this.maxTimestamp = RecordBatch.NO_TIMESTAMP;
+        this.producerId = producerId;
+        this.producerEpoch = producerEpoch;
+        this.baseSequence = baseSequence;
+        this.isTransactional = isTransactional;
+        this.isControlBatch = isControlBatch;
+        this.partitionLeaderEpoch = partitionLeaderEpoch;
+        this.writeLimit = writeLimit;
+        this.initialPosition = 0; // 此时不能通过 ByteBuffer.position()来获取，ByteBuffer已经写入过数据了。
+        this.batchHeaderSizeInBytes = AbstractRecords.recordBatchHeaderSizeInBytes(magic, compressionType); // v2为61。
+        // 下面的position方法会判断 position 的值是否超过 ByteBuffer 的capacity，如果超过了就会对 ByteBuffer 扩容。
+        // 使用 MM Producer 已经一次性将数据完整写入到 ByteBuffer 中，此时 position 值已经是写入数据后的值，不用再将 position 置到消息开始的位置。
+        //bufferStream.position(initialPosition + batchHeaderSizeInBytes);
+        this.bufferStream = bufferStream;
+
+        /**
+         * 追加 Batch 时自定义构造函数，将 appendStream 直接赋为 CLOSED_STREAM。
+         * 这样在Sender线程判断 Batch 是否准备好时，可以直接返回 true。
+         * */
+        this.appendStream = MemoryRecordsBuilder.CLOSED_STREAM;
+
+        this.numRecords = numRecords;
+        this.lastOffset = lastOffset;
+        this.maxTimestamp = maxTimestamp;
+        this.offsetOfMaxTimestamp = offsetOfMaxTimestamp;
+
+        /**
+         * 这个属性在构造器初始化时要赋值，不然在本类的Sender线程层层调用close，最后调用 DefaultRecordBatch.writeHeader 时会NullPointerException，
+         * 也就是Long类型向long值向下拆箱时报空指针异常。
+         */
+        this.firstTimestamp = firstTimestamp;
+    }
+
     public ByteBuffer buffer() {
         return bufferStream.buffer();
     }

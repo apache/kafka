@@ -1002,14 +1002,14 @@ project(':generator') {
 }
 
 project(':clients') {
-  archivesBaseName = "kafka-clients"
+  archivesBaseName = "kafka-clients-v252"
 
-  configurations {
-    jacksonDatabindConfig
-  }
+//  configurations {
+//    jacksonDatabindConfig
+//  }
 
   // add jacksonDatabindConfig as provided scope config with high priority (1000)
-  conf2ScopeMappings.addMapping(1000, configurations.jacksonDatabindConfig, "provided")
+//  conf2ScopeMappings.addMapping(1000, configurations.jacksonDatabindConfig, "provided")
 
   dependencies {
     compile libs.zstd
@@ -1020,7 +1020,7 @@ project(':clients') {
     compileOnly libs.jacksonDatabind // for SASL/OAUTHBEARER bearer token parsing
     compileOnly libs.jacksonJDK8Datatypes
 
-    jacksonDatabindConfig libs.jacksonDatabind // to publish as provided scope dependency.
+//    jacksonDatabindConfig libs.jacksonDatabind // to publish as provided scope dependency.
 
     testCompile libs.bcpkix
     testCompile libs.junit

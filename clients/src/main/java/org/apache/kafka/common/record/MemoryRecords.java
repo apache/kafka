@@ -426,6 +426,31 @@ public class MemoryRecords extends AbstractRecords {
                 RecordBatch.NO_PARTITION_LEADER_EPOCH);
     }
 
+    public static MemoryRecordsBuilder builder(DefaultRecordBatch batch,
+                                               ByteBuffer buffer,
+                                               byte magic,
+                                               CompressionType compressionType,
+                                               TimestampType timestampType,
+                                               long baseOffset) {
+        long logAppendTime = RecordBatch.NO_TIMESTAMP;
+        if (timestampType == TimestampType.LOG_APPEND_TIME)
+            logAppendTime = System.currentTimeMillis();
+
+        int numRecords = batch.countOrNull();
+        final int V2_HEAD_BYTE_SIZE = DefaultRecordBatch.RECORD_BATCH_OVERHEAD;
+        int uncompressedRecordsSizeInBytes = buffer.capacity() - V2_HEAD_BYTE_SIZE;
+        Long lastOffset = batch.lastOffset() - batch.baseOffset(); //producer 的 baseOffset 从0开始，这里要将 ConsumerBatch 的 offset 区间进行转换。
+        long maxTimestamp = batch.maxTimestamp();
+        long offsetOfMaxTimestamp = batch.lastOffset();
+        long firstTimestamp = batch.firstTimestamp();
+
+        return new MemoryRecordsBuilder(buffer, magic, compressionType, timestampType, baseOffset,
+                logAppendTime, RecordBatch.NO_PRODUCER_ID, RecordBatch.NO_PRODUCER_EPOCH, RecordBatch.NO_SEQUENCE
+                , false, false, RecordBatch.NO_PARTITION_LEADER_EPOCH,
+                buffer.remaining(),numRecords,uncompressedRecordsSizeInBytes,lastOffset,
+                maxTimestamp,offsetOfMaxTimestamp,firstTimestamp);
+    }
+
     public static MemoryRecordsBuilder builder(ByteBuffer buffer,
                                                byte magic,
                                                CompressionType compressionType,

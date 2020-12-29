@@ -62,6 +62,7 @@ import org.apache.kafka.common.network.ChannelBuilder;
 import org.apache.kafka.common.network.Selector;
 import org.apache.kafka.common.record.AbstractRecords;
 import org.apache.kafka.common.record.CompressionType;
+import org.apache.kafka.common.record.DefaultRecordBatchModify;
 import org.apache.kafka.common.record.RecordBatch;
 import org.apache.kafka.common.requests.JoinGroupRequest;
 import org.apache.kafka.common.serialization.Serializer;
@@ -748,6 +749,67 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
     @Override
     public Future<RecordMetadata> send(ProducerRecord<K, V> record) {
         return send(record, null);
+    }
+
+    /**
+     * modify the public send method to send a RecordBatch directly to a topic。
+     */
+    public Future<RecordMetadata> send(RecordBatch recordBatchRaw,String batchTopic) throws InterruptedException {
+        if(recordBatchRaw == null || !(recordBatchRaw instanceof DefaultRecordBatchModify)){
+            return null;
+        }
+        DefaultRecordBatchModify recordBatch = (DefaultRecordBatchModify)recordBatchRaw;
+        int partition = recordBatch.getPartition().partition();
+        TopicPartition newTopicPartition = new TopicPartition(batchTopic, partition);
+        recordBatch.setPartition(newTopicPartition);
+
+        try {
+            throwIfProducerClosed();
+            // first make sure the metadata for the batchTopic is available
+            long nowMs = time.milliseconds();
+            KafkaProducer.ClusterAndWaitTime clusterAndWaitTime;
+            try {
+                clusterAndWaitTime = waitOnMetadata(batchTopic, partition, nowMs, maxBlockTimeMs);
+            } catch (KafkaException e) {
+                if (metadata.isClosed())
+                    throw new KafkaException("Producer closed while send in progress", e);
+                throw e;
+            }
+            nowMs += clusterAndWaitTime.waitedOnMetadataMs;
+            long remainingWaitMs = Math.max(0, maxBlockTimeMs - clusterAndWaitTime.waitedOnMetadataMs);
+            Cluster cluster = clusterAndWaitTime.cluster;
+
+            long timestamp = (recordBatch.firstTimestamp() + recordBatch.maxTimestamp()) / 2;
+            if (log.isTraceEnabled()) {
+                log.trace("Attempting to append recordBatch {} to batchTopic {} partition {}", recordBatch, batchTopic, partition);
+            }
+            // producer callback will make sure to call both 'callback' and interceptor callback
+            Callback interceptCallback = new KafkaProducer.InterceptorCallback<>(null, this.interceptors, newTopicPartition);
+
+            if (transactionManager != null && transactionManager.isTransactional()) {
+                transactionManager.failIfNotReadyForSend();
+            }
+
+            //实际调用accumulator的append方法追加数据。
+            RecordAccumulator.RecordAppendResult result = accumulator.append(recordBatch,
+                    newTopicPartition, timestamp, interceptCallback, remainingWaitMs, false, nowMs);
+
+
+            if (transactionManager != null && transactionManager.isTransactional())
+                transactionManager.maybeAddPartitionToTransaction(newTopicPartition);
+
+            if (result.batchIsFull || result.newBatchCreated) {
+                log.trace("Waking up the sender since batchTopic {} partition {} is either full or getting a new batch", batchTopic, partition);
+                this.sender.wakeup();
+            }
+            return result.future;
+            // handling exceptions and record the errors;
+            // for API exceptions return them in the future,
+            // for other exceptions throw directly
+        } catch (Exception e) {
+            // we notify interceptor about all exceptions, since onSend is called before anything else in this method
+            throw e;
+        }
     }
 
     /**

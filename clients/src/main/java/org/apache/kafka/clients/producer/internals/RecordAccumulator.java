@@ -31,6 +31,7 @@ import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.atomic.AtomicInteger;
 import org.apache.kafka.clients.ApiVersions;
 import org.apache.kafka.clients.producer.Callback;
+import org.apache.kafka.common.record.*;
 import org.apache.kafka.common.utils.ProducerIdAndEpoch;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.KafkaException;
@@ -45,14 +46,6 @@ import org.apache.kafka.common.metrics.MetricConfig;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.metrics.stats.Meter;
-import org.apache.kafka.common.record.AbstractRecords;
-import org.apache.kafka.common.record.CompressionRatioEstimator;
-import org.apache.kafka.common.record.CompressionType;
-import org.apache.kafka.common.record.MemoryRecords;
-import org.apache.kafka.common.record.MemoryRecordsBuilder;
-import org.apache.kafka.common.record.Record;
-import org.apache.kafka.common.record.RecordBatch;
-import org.apache.kafka.common.record.TimestampType;
 import org.apache.kafka.common.utils.CopyOnWriteMap;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
@@ -252,12 +245,74 @@ public final class RecordAccumulator {
         }
     }
 
+    public RecordAppendResult append(DefaultRecordBatchModify recordBatch,
+                                     TopicPartition tp,
+                                     long timestamp,
+                                     Callback callback,
+                                     long maxTimeToBlock,
+                                     boolean abortOnNewBatch,
+                                     long nowMs) throws InterruptedException {
+        // We keep track of the number of appending thread to make sure we do not miss batches in
+        // abortIncompleteBatches().
+        appendsInProgress.incrementAndGet();
+        ByteBuffer buffer = null;
+        try {
+            // check if we have an in-progress batch
+            //这里获取或者创建CurrentHashMap中的特定Topic和Partition下的deque。
+            Deque<ProducerBatch> dq = getOrCreateDeque(tp);
+
+            // we don't have an in-progress record batch try to allocate a new batch
+            if (abortOnNewBatch) {
+                // Return a result that will cause another call to append.
+                return new RecordAppendResult(null, false, false, true);
+            }
+
+            byte maxUsableMagic = apiVersions.maxUsableProduceMagic();
+
+            // 下面代码是“浅拷贝”，社区本身也是这么使用共享buffer的。
+            buffer = recordBatch.getBuffer().duplicate();
+            int currentBatchBeginOffset = buffer.arrayOffset();
+            int currentBatchReadingDelta = buffer.limit(); // 社区将 buffer 的 limit 当成 delta 使用了。
+            ByteBuffer constructBatchBuffer = free.allocate(currentBatchReadingDelta,maxTimeToBlock); //使用 buffer 池进行分配。
+
+            System.arraycopy(buffer.array(),currentBatchBeginOffset,constructBatchBuffer.array(),0,currentBatchReadingDelta);
+            constructBatchBuffer.position(constructBatchBuffer.capacity());
+            //log.trace("Allocating a new {} byte message buffer for topic {} partition {}", size, tp.topic(), tp.partition());
+
+            // Update the current time in case the buffer allocation blocked above.
+            nowMs = time.milliseconds();
+            synchronized (dq) {
+                // Need to check if producer is closed again after grabbing the dequeue lock.
+                if (closed)
+                    throw new KafkaException("Producer closed while send in progress");
+
+                //ProducerBatch中的MemoryRecordsBuilder不是在ProducerBatch中的构造函数创建，而是在RecordAccumulator创建再传到构造函数的。
+                //下面的方法返回了一个MemoryRecordsBuilder。
+                MemoryRecordsBuilder recordsBuilder = recordsBuilder(recordBatch, constructBatchBuffer, maxUsableMagic);
+                ProducerBatch batch = new ProducerBatch(tp, recordsBuilder, nowMs,0);
+                dq.addLast(batch);
+                incomplete.add(batch); // 将当前 batch 加入 incomplete 中，incomplete 将用于 Sender 发送之后的释放 BufferPool 中 ByteBuffer。
+                return new RecordAppendResult(null, dq.size() > 1 || batch.isFull(), true, false);
+            }
+        } finally {
+            appendsInProgress.decrementAndGet();
+        }
+    }
+
     private MemoryRecordsBuilder recordsBuilder(ByteBuffer buffer, byte maxUsableMagic) {
         if (transactionManager != null && maxUsableMagic < RecordBatch.MAGIC_VALUE_V2) {
             throw new UnsupportedVersionException("Attempting to use idempotence with a broker which does not " +
                 "support the required message format (v2). The broker must be version 0.11 or later.");
         }
         return MemoryRecords.builder(buffer, maxUsableMagic, compression, TimestampType.CREATE_TIME, 0L);
+    }
+
+    private MemoryRecordsBuilder recordsBuilder(DefaultRecordBatchModify batch, ByteBuffer buffer, byte maxUsableMagic) {
+        if (transactionManager != null && maxUsableMagic < RecordBatch.MAGIC_VALUE_V2) {
+            throw new UnsupportedVersionException("Attempting to use idempotence with a broker which does not " +
+                    "support the required message format (v2). The broker must be version 0.11 or later.");
+        }
+        return MemoryRecords.builder(batch,buffer, maxUsableMagic, compression, TimestampType.CREATE_TIME, 0L);
     }
 
     /**

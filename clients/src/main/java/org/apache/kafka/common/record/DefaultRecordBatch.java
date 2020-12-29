@@ -138,6 +138,10 @@ public class DefaultRecordBatch extends AbstractRecordBatch implements MutableRe
         this.buffer = buffer;
     }
 
+    public ByteBuffer getBuffer(){
+        return buffer;
+    }
+
     @Override
     public byte magic() {
         return buffer.get(MAGIC_OFFSET);
