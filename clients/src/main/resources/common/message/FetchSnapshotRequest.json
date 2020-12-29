@@ -1,0 +1,50 @@
+// Licensed to the Apache Software Foundation (ASF) under one or more
+// contributor license agreements.  See the NOTICE file distributed with
+// this work for additional information regarding copyright ownership.
+// The ASF licenses this file to You under the Apache License, Version 2.0
+// (the "License"); you may not use this file except in compliance with
+// the License.  You may obtain a copy of the License at
+//
+//    http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+{
+  "apiKey": 59,
+  "type": "request",
+  "name": "FetchSnapshotRequest",
+  "validVersions": "0",
+  "flexibleVersions": "0+",
+  "fields": [
+    { "name": "ClusterId", "type": "string", "versions": "0+", "nullableVersions": "0+", "default": "null", "taggedVersions": "0+", "tag": 0,
+      "about": "The clusterId if known, this is used to validate metadata fetches prior to broker registration" },
+    { "name": "ReplicaId", "type": "int32", "versions": "0+", "default": "-1",
+      "about": "The broker ID of the follower" },
+    { "name": "MaxBytes", "type": "int32", "versions": "0+", "default": "0x7fffffff",
+      "about": "The maximum bytes to fetch from all of the snapshots" },
+    { "name": "Topics", "type": "[]TopicSnapshot", "versions": "0+",
+      "about": "The topics to fetch", "fields": [
+      { "name": "Name", "type": "string", "versions": "0+", "entityType": "topicName",
+        "about": "The name of the topic to fetch" },
+      { "name": "Partitions", "type": "[]PartitionSnapshot", "versions": "0+",
+        "about": "The partitions to fetch", "fields": [
+        { "name": "Partition", "type": "int32", "versions": "0+",
+          "about": "The partition index" },
+        { "name": "CurrentLeaderEpoch", "type": "int32", "versions": "0+",
+          "about": "The current leader epoch of the partition, -1 for unknown leader epoch" },
+        { "name": "SnapshotId", "type": "SnapshotId", "versions": "0+",
+          "about": "The snapshot endOffset and epoch to fetch",
+          "fields": [
+          { "name": "EndOffset", "type": "int64", "versions": "0+" },
+          { "name": "Epoch", "type": "int32", "versions": "0+" }
+        ]},
+        { "name": "Position", "type": "int64", "versions": "0+",
+          "about": "The byte position within the snapshot to start fetching from" }
+      ]}
+    ]}
+  ]
+}

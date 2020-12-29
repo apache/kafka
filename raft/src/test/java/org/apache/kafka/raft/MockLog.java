@@ -514,6 +514,10 @@ public class MockLog implements ReplicatedLog {
 
         @Override
         public long sizeInBytes() {
+            if (frozen) {
+                throw new RuntimeException("Snapshot is already frozen " + snapshotId);
+            }
+
             return data.position();
         }
 

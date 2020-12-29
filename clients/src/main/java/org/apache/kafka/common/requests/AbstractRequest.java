@@ -272,6 +272,8 @@ public abstract class AbstractRequest implements AbstractRequestResponse {
                 return UpdateFeaturesRequest.parse(buffer, apiVersion);
             case ENVELOPE:
                 return EnvelopeRequest.parse(buffer, apiVersion);
+            case FETCH_SNAPSHOT:
+                return FetchSnapshotRequest.parse(buffer, apiVersion);
             default:
                 throw new AssertionError(String.format("ApiKey %s is not currently handled in `parseRequest`, the " +
                         "code should be updated to do so.", apiKey));

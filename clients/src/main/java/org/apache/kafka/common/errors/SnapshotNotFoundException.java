@@ -14,30 +14,18 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.raft;
+package org.apache.kafka.common.errors;
 
-import java.io.Closeable;
-import java.util.Optional;
+public class SnapshotNotFoundException extends ApiException {
 
-public interface EpochState extends Closeable {
+    private static final long serialVersionUID = 1;
 
-    default Optional<LogOffsetMetadata> highWatermark() {
-        return Optional.empty();
+    public SnapshotNotFoundException(String s) {
+        super(s);
     }
 
-    /**
-     * Get the current election state, which is guaranteed to be immutable.
-     */
-    ElectionState election();
-
-    /**
-     * Get the current (immutable) epoch.
-     */
-    int epoch();
-
-    /**
-     * User-friendly description of the state
-     */
-    String name();
+    public SnapshotNotFoundException(String message, Throwable cause) {
+        super(message, cause);
+    }
 
 }

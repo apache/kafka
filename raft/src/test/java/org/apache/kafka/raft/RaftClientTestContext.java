@@ -20,14 +20,15 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.memory.MemoryPool;
 import org.apache.kafka.common.message.BeginQuorumEpochRequestData;
 import org.apache.kafka.common.message.BeginQuorumEpochResponseData;
-import org.apache.kafka.common.message.DescribeQuorumResponseData;
 import org.apache.kafka.common.message.DescribeQuorumResponseData.ReplicaState;
+import org.apache.kafka.common.message.DescribeQuorumResponseData;
 import org.apache.kafka.common.message.EndQuorumEpochRequestData;
 import org.apache.kafka.common.message.EndQuorumEpochResponseData;
 import org.apache.kafka.common.message.FetchRequestData;
 import org.apache.kafka.common.message.FetchResponseData;
-import org.apache.kafka.common.message.LeaderChangeMessage;
+import org.apache.kafka.common.message.FetchSnapshotResponseData;
 import org.apache.kafka.common.message.LeaderChangeMessage.Voter;
+import org.apache.kafka.common.message.LeaderChangeMessage;
 import org.apache.kafka.common.message.VoteRequestData;
 import org.apache.kafka.common.message.VoteResponseData;
 import org.apache.kafka.common.metrics.Metrics;
@@ -45,6 +46,7 @@ import org.apache.kafka.common.requests.BeginQuorumEpochResponse;
 import org.apache.kafka.common.requests.DescribeQuorumResponse;
 import org.apache.kafka.common.requests.EndQuorumEpochRequest;
 import org.apache.kafka.common.requests.EndQuorumEpochResponse;
+import org.apache.kafka.common.requests.FetchSnapshotResponse;
 import org.apache.kafka.common.requests.VoteRequest;
 import org.apache.kafka.common.requests.VoteResponse;
 import org.apache.kafka.common.utils.LogContext;
@@ -85,11 +87,12 @@ public final class RaftClientTestContext {
 
     final TopicPartition metadataPartition = Builder.METADATA_PARTITION;
     final int electionBackoffMaxMs = Builder.ELECTION_BACKOFF_MAX_MS;
-    final int electionTimeoutMs = Builder.DEFAULT_ELECTION_TIMEOUT_MS;
     final int electionFetchMaxWaitMs = Builder.FETCH_MAX_WAIT_MS;
     final int fetchTimeoutMs = Builder.FETCH_TIMEOUT_MS;
-    final int requestTimeoutMs = Builder.DEFAULT_REQUEST_TIMEOUT_MS;
     final int retryBackoffMs = Builder.RETRY_BACKOFF_MS;
+
+    final int electionTimeoutMs;
+    final int requestTimeoutMs;
 
     private final QuorumStateStore quorumStateStore;
     private final QuorumState quorum;
@@ -230,7 +233,9 @@ public final class RaftClientTestContext {
                 quorum,
                 voters,
                 metrics,
-                listener
+                listener,
+                electionTimeoutMs,
+                requestTimeoutMs
             );
         }
     }
@@ -246,7 +251,9 @@ public final class RaftClientTestContext {
         QuorumState quorum,
         Set<Integer> voters,
         Metrics metrics,
-        MockListener listener
+        MockListener listener,
+        int electionTimeoutMs,
+        int requestTimeoutMs
     ) {
         this.localId = localId;
         this.client = client;
@@ -259,6 +266,9 @@ public final class RaftClientTestContext {
         this.voters = voters;
         this.metrics = metrics;
         this.listener = listener;
+
+        this.electionTimeoutMs = electionTimeoutMs;
+        this.requestTimeoutMs = requestTimeoutMs;
     }
 
     MemoryRecords buildBatch(
@@ -364,7 +374,7 @@ public final class RaftClientTestContext {
         TestUtils.waitForCondition(() -> {
             client.poll();
             return condition.conditionMet();
-        }, 500000000, "Condition failed to be satisfied before timeout");
+        }, 5000, "Condition failed to be satisfied before timeout");
     }
 
     void pollUntilResponse() throws InterruptedException {
@@ -593,6 +603,26 @@ public final class RaftClientTestContext {
         assertEquals(leaderEpoch, partitionResponse.currentLeader().leaderEpoch());
         assertEquals(highWatermark, partitionResponse.highWatermark());
         return (MemoryRecords) partitionResponse.recordSet();
+    }
+
+    RaftRequest.Outbound assertSentFetchSnapshotRequest() {
+        List<RaftRequest.Outbound> sentRequests = channel.drainSentRequests(Optional.of(ApiKeys.FETCH_SNAPSHOT));
+        assertEquals(1, sentRequests.size());
+
+        return sentRequests.get(0);
+    }
+
+    Optional<FetchSnapshotResponseData.PartitionSnapshot> assertSentFetchSnapshotResponse(TopicPartition topicPartition) {
+        List<RaftResponse.Outbound> sentMessages = drainSentResponses(ApiKeys.FETCH_SNAPSHOT);
+        assertEquals(1, sentMessages.size());
+
+        RaftMessage message = sentMessages.get(0);
+        assertTrue(message.data() instanceof FetchSnapshotResponseData);
+
+        FetchSnapshotResponseData response = (FetchSnapshotResponseData) message.data();
+        assertEquals(Errors.NONE, Errors.forCode(response.errorCode()));
+
+        return FetchSnapshotResponse.forTopicPartition(response, topicPartition);
     }
 
     void buildFollowerSet(
@@ -846,7 +876,7 @@ public final class RaftClientTestContext {
         });
     }
 
-    FetchResponseData outOfRangeFetchRecordsResponse(
+    FetchResponseData divergingFetchResponse(
         int epoch,
         int leaderId,
         long divergingEpochEndOffset,

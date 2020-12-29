@@ -107,4 +107,6 @@ public class VotedState implements EpochState {
             ')';
     }
 
+    @Override
+    public void close() {}
 }
