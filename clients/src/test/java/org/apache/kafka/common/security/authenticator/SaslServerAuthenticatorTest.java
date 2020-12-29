@@ -69,6 +69,7 @@ public class SaslServerAuthenticatorTest {
             return 4;
         });
         assertThrows(InvalidReceiveException.class, authenticator::authenticate);
+        verify(transportLayer).read(any(ByteBuffer.class));
     }
 
     @Test

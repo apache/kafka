@@ -623,7 +623,13 @@ public class MockProducerTest {
         producer.beginTransaction();
 
         String group2 = "g2";
-        producer.sendOffsetsToTransaction(groupCommit, new ConsumerGroupMetadata(group2));
+        Map<TopicPartition, OffsetAndMetadata> groupCommit2 = new HashMap<TopicPartition, OffsetAndMetadata>() {
+            {
+                put(new TopicPartition(topic, 2), new OffsetAndMetadata(53L, null));
+                put(new TopicPartition(topic, 3), new OffsetAndMetadata(84L, null));
+            }
+        };
+        producer.sendOffsetsToTransaction(groupCommit2, new ConsumerGroupMetadata(group2));
         producer.abortTransaction();
 
         Map<String, Map<TopicPartition, OffsetAndMetadata>> expectedResult = new HashMap<>();

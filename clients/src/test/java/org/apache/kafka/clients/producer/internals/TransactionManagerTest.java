@@ -445,18 +445,18 @@ public class TransactionManagerTest {
     }
 
     @Test
-    public void testMaybeAddPartitionToTransactionBeforeInitTransactions() {
+    public void testNotReadyForSendBeforeInitTransactions() {
         assertThrows(IllegalStateException.class, () -> transactionManager.failIfNotReadyForSend());
     }
 
     @Test
-    public void testMaybeAddPartitionToTransactionBeforeBeginTransaction() {
+    public void testNotReadyForSendBeforeBeginTransaction() {
         doInitTransactions();
         assertThrows(IllegalStateException.class, () -> transactionManager.failIfNotReadyForSend());
     }
 
     @Test
-    public void testMaybeAddPartitionToTransactionAfterAbortableError() {
+    public void testNotReadyForSendAfterAbortableError() {
         doInitTransactions();
         transactionManager.beginTransaction();
         transactionManager.transitionToAbortableError(new KafkaException());
@@ -464,7 +464,7 @@ public class TransactionManagerTest {
     }
 
     @Test
-    public void testMaybeAddPartitionToTransactionAfterFatalError() {
+    public void testNotReadyForSendAfterFatalError() {
         doInitTransactions();
         transactionManager.transitionToFatalError(new KafkaException());
         assertThrows(KafkaException.class, () -> transactionManager.failIfNotReadyForSend());

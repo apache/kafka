@@ -196,7 +196,6 @@ public class KafkaProducerTest {
     public void testNoSerializerProvided() {
         Properties producerProps = new Properties();
         producerProps.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9000");
-
         assertThrows(ConfigException.class, () -> new KafkaProducer(producerProps));
     }
 
