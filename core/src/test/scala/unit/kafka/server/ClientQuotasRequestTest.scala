@@ -216,7 +216,7 @@ class ClientQuotasRequestTest extends BaseRequestTest {
           InetAddress.getByName(entityName)
         TestUtils.waitUntilTrue(
           () => expectedMatches(entity) - servers.head.socketServer.connectionQuotas.connectionRateForIp(entityIp) < 0.01
-          ,"Broker didn't update prop from Zookeeper")
+          ,"Broker didn't update quotas from Zookeeper")
       }
     }
 
