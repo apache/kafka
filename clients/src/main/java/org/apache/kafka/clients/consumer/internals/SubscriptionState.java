@@ -18,7 +18,6 @@ package org.apache.kafka.clients.consumer.internals;
 
 import org.apache.kafka.clients.ApiVersions;
 import org.apache.kafka.clients.Metadata;
-import org.apache.kafka.clients.NodeApiVersions;
 import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
 import org.apache.kafka.clients.consumer.NoOffsetForPartitionException;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
@@ -46,7 +45,6 @@ import java.util.function.LongSupplier;
 import java.util.function.Predicate;
 import java.util.regex.Pattern;
 
-import static org.apache.kafka.clients.consumer.internals.Fetcher.hasUsableOffsetForLeaderEpochVersion;
 import static org.apache.kafka.common.requests.OffsetsForLeaderEpochResponse.UNDEFINED_EPOCH;
 import static org.apache.kafka.common.requests.OffsetsForLeaderEpochResponse.UNDEFINED_EPOCH_OFFSET;
 
@@ -456,17 +454,15 @@ public class SubscriptionState {
                                                                       TopicPartition tp,
                                                                       Metadata.LeaderAndEpoch leaderAndEpoch) {
         if (leaderAndEpoch.leader.isPresent()) {
-            NodeApiVersions nodeApiVersions = apiVersions.get(leaderAndEpoch.leader.get().idString());
-            if (nodeApiVersions == null || hasUsableOffsetForLeaderEpochVersion(nodeApiVersions)) {
+            if (DivergingOffsetDetector.useOffsetForLeaderEpoch(apiVersions.get(leaderAndEpoch.leader.get().idString())))
                 return assignedState(tp).maybeValidatePosition(leaderAndEpoch);
-            } else {
-                // If the broker does not support a newer version of OffsetsForLeaderEpoch, we skip validation
+            else {
+                // If the broker support for truncation detection directly into the `Fetch` protocol or
+                // does not support a newer version of OffsetsForLeaderEpoch, we skip validation
                 assignedState(tp).updatePositionLeaderNoValidation(leaderAndEpoch);
                 return false;
             }
-        } else {
-            return assignedState(tp).maybeValidatePosition(leaderAndEpoch);
-        }
+        } else return assignedState(tp).maybeValidatePosition(leaderAndEpoch);
     }
 
     /**
@@ -476,48 +472,66 @@ public class SubscriptionState {
     public synchronized Optional<LogTruncation> maybeCompleteValidation(TopicPartition tp,
                                                                         FetchPosition requestPosition,
                                                                         EpochEndOffset epochEndOffset) {
+        return validateOffset(tp, requestPosition, epochEndOffset, true);
+    }
+
+    public synchronized Optional<LogTruncation> validateOffset(TopicPartition tp,
+                                                               FetchPosition requestPosition,
+                                                               EpochEndOffset epochEndOffset) {
+        return validateOffset(tp, requestPosition, epochEndOffset, false);
+    }
+
+    private Optional<LogTruncation> validateOffset(TopicPartition tp,
+                                                   FetchPosition requestPosition,
+                                                   EpochEndOffset epochEndOffset,
+                                                   boolean requireInValidation) {
         TopicPartitionState state = assignedStateOrNull(tp);
+
         if (state == null) {
             log.debug("Skipping completed validation for partition {} which is not currently assigned.", tp);
-        } else if (!state.awaitingValidation()) {
+            return Optional.empty();
+        }
+
+        if (requireInValidation && !state.awaitingValidation()) {
             log.debug("Skipping completed validation for partition {} which is no longer expecting validation.", tp);
-        } else {
-            SubscriptionState.FetchPosition currentPosition = state.position;
-            if (!currentPosition.equals(requestPosition)) {
-                log.debug("Skipping completed validation for partition {} since the current position {} " +
-                          "no longer matches the position {} when the request was sent",
-                          tp, currentPosition, requestPosition);
-            } else if (epochEndOffset.endOffset() == UNDEFINED_EPOCH_OFFSET ||
-                        epochEndOffset.leaderEpoch() == UNDEFINED_EPOCH) {
-                if (hasDefaultOffsetResetPolicy()) {
-                    log.info("Truncation detected for partition {} at offset {}, resetting offset",
-                             tp, currentPosition);
-                    requestOffsetReset(tp);
-                } else {
-                    log.warn("Truncation detected for partition {} at offset {}, but no reset policy is set",
-                             tp, currentPosition);
-                    return Optional.of(new LogTruncation(tp, requestPosition, Optional.empty()));
-                }
-            } else if (epochEndOffset.endOffset() < currentPosition.offset) {
-                if (hasDefaultOffsetResetPolicy()) {
-                    SubscriptionState.FetchPosition newPosition = new SubscriptionState.FetchPosition(
-                            epochEndOffset.endOffset(), Optional.of(epochEndOffset.leaderEpoch()),
-                            currentPosition.currentLeader);
-                    log.info("Truncation detected for partition {} at offset {}, resetting offset to " +
-                             "the first offset known to diverge {}", tp, currentPosition, newPosition);
-                    state.seekValidated(newPosition);
-                } else {
-                    OffsetAndMetadata divergentOffset = new OffsetAndMetadata(epochEndOffset.endOffset(),
-                        Optional.of(epochEndOffset.leaderEpoch()), null);
-                    log.warn("Truncation detected for partition {} at offset {} (the end offset from the " +
-                             "broker is {}), but no reset policy is set", tp, currentPosition, divergentOffset);
-                    return Optional.of(new LogTruncation(tp, requestPosition, Optional.of(divergentOffset)));
-                }
+            return Optional.empty();
+        }
+
+        if (!state.position.equals(requestPosition)) {
+            log.debug("Skipping completed validation for partition {} since the current position {} "
+                + "no longer matches the position {} when the request was sent", tp, state.position, requestPosition);
+            return Optional.empty();
+        }
+
+        if (epochEndOffset.endOffset() == UNDEFINED_EPOCH_OFFSET || epochEndOffset.leaderEpoch() == UNDEFINED_EPOCH) {
+            if (hasDefaultOffsetResetPolicy()) {
+                log.info("Truncation detected for partition {} at offset {}, resetting offset", tp, state.position);
+                requestOffsetReset(tp);
+                return Optional.empty();
             } else {
-                state.completeValidation();
+                log.warn("Truncation detected for partition {} at offset {}, but no reset policy is set", tp, state.position);
+                return Optional.of(new LogTruncation(tp, requestPosition, Optional.empty()));
             }
         }
 
+        if (epochEndOffset.endOffset() < state.position.offset) {
+            if (hasDefaultOffsetResetPolicy()) {
+                SubscriptionState.FetchPosition newPosition = new SubscriptionState.FetchPosition(
+                    epochEndOffset.endOffset(), Optional.of(epochEndOffset.leaderEpoch()), state.position.currentLeader);
+                log.info("Truncation detected for partition {} at offset {}, resetting offset to " +
+                    "the first offset known to diverge {}", tp, state.position, newPosition);
+                state.seekValidated(newPosition);
+                return Optional.empty();
+            } else {
+                OffsetAndMetadata divergentOffset = new OffsetAndMetadata(epochEndOffset.endOffset(),
+                    Optional.of(epochEndOffset.leaderEpoch()), null);
+                log.warn("Truncation detected for partition {} at offset {} (the end offset from the " +
+                    "broker is {}), but no reset policy is set", tp, state.position, divergentOffset);
+                return Optional.of(new LogTruncation(tp, requestPosition, Optional.of(divergentOffset)));
+            }
+        }
+
+        state.completeValidation();
         return Optional.empty();
     }
 
@@ -535,6 +549,11 @@ public class SubscriptionState {
 
     public synchronized FetchPosition position(TopicPartition tp) {
         return assignedState(tp).position;
+    }
+
+    synchronized FetchPosition positionOrNull(TopicPartition tp) {
+        TopicPartitionState state = this.assignment.stateValue(tp);
+        return state == null ? null : state.position;
     }
 
     synchronized Long partitionLag(TopicPartition tp, IsolationLevel isolationLevel) {

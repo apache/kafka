@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.clients.consumer.internals;
 
+import org.apache.kafka.clients.ApiVersion;
 import org.apache.kafka.clients.ApiVersions;
 import org.apache.kafka.clients.Metadata;
 import org.apache.kafka.clients.NodeApiVersions;
@@ -430,6 +431,8 @@ public class SubscriptionStateTest {
         Node broker1 = new Node(1, "localhost", 9092);
         ApiVersions apiVersions = new ApiVersions();
         apiVersions.update(broker1.idString(), NodeApiVersions.create());
+        apiVersions.update(broker1.idString(),
+                NodeApiVersions.create(Collections.singleton(new ApiVersion(ApiKeys.FETCH.id, (short) 10, (short) 10))));
 
         state.assignFromUser(Collections.singleton(tp0));
 
@@ -530,8 +533,26 @@ public class SubscriptionStateTest {
     }
 
     @Test
+    public void divergingOffsetDetectedByFetchShouldNotEnterValidationPhase() {
+        state.assignFromUser(Collections.singleton(tp0));
+
+        ApiVersions apiVersions = new ApiVersions();
+        apiVersions.update("1", NodeApiVersions.create(
+                Collections.singleton(new ApiVersion(ApiKeys.OFFSET_FOR_LEADER_EPOCH.id, (short) 0, (short) 2))));
+        state.seekUnvalidated(tp0, new SubscriptionState.FetchPosition(10L, Optional.of(5),
+                new Metadata.LeaderAndEpoch(Optional.of(new Node(1, "localhost", 9092)), Optional.of(10))));
+
+        // detecting diverging offset by fetch so we don't enter validation phase
+        assertFalse(state.maybeValidatePositionForCurrentLeader(apiVersions, tp0, new Metadata.LeaderAndEpoch(
+                Optional.of(new Node(1, "localhost", 9092)), Optional.of(10))));
+        assertTrue(state.hasValidPosition(tp0));
+    }
+
+    @Test
     public void testMaybeValidatePositionForCurrentLeader() {
-        NodeApiVersions oldApis = NodeApiVersions.create(ApiKeys.OFFSET_FOR_LEADER_EPOCH.id, (short) 0, (short) 2);
+        NodeApiVersions oldApis = NodeApiVersions.create(Arrays.asList(
+            new ApiVersion(ApiKeys.OFFSET_FOR_LEADER_EPOCH.id, (short) 0, (short) 2),
+            new ApiVersion(ApiKeys.FETCH.id, (short) 10, (short) 10)));
         ApiVersions apiVersions = new ApiVersions();
         apiVersions.update("1", oldApis);
 
@@ -547,7 +568,8 @@ public class SubscriptionStateTest {
         assertTrue(state.hasValidPosition(tp0));
 
         // New API
-        apiVersions.update("1", NodeApiVersions.create());
+        apiVersions.update("1", NodeApiVersions.create(
+                Collections.singleton(new ApiVersion(ApiKeys.FETCH.id, (short) 10, (short) 10))));
         state.seekUnvalidated(tp0, new SubscriptionState.FetchPosition(10L, Optional.of(5),
                 new Metadata.LeaderAndEpoch(Optional.of(broker1), Optional.of(10))));
 
