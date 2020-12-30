@@ -213,7 +213,7 @@ class DivergingOffsetDetector {
     }
 
     private static DetectorMode detectorMode(NodeApiVersions nodeApiVersions) {
-        if (nodeApiVersions == null ) return DetectorMode.NONE;
+        if (nodeApiVersions == null) return DetectorMode.NONE;
         else if (supportFetchResponse(nodeApiVersions)) return DetectorMode.FETCH_RESPONSE;
         else if (supportOffsetForLeaderEpoch(nodeApiVersions)) return DetectorMode.OFFSET_FOR_LEADER_EPOCH;
         else return DetectorMode.NONE;
