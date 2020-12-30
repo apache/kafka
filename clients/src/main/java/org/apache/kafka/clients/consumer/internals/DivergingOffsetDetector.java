@@ -190,7 +190,7 @@ class DivergingOffsetDetector {
             log.error("Discarding error in validating offset because another error is pending", e);
     }
 
-    private static boolean supportOffsetForLeaderEpoch(NodeApiVersions nodeApiVersions) {
+    static boolean supportOffsetForLeaderEpoch(NodeApiVersions nodeApiVersions) {
         ApiVersion apiVersion = nodeApiVersions.apiVersion(ApiKeys.OFFSET_FOR_LEADER_EPOCH);
         return apiVersion != null && apiVersion.maxVersion >= 3;
     }
@@ -213,14 +213,8 @@ class DivergingOffsetDetector {
     }
 
     private static DetectorMode detectorMode(NodeApiVersions nodeApiVersions) {
-        if (nodeApiVersions == null) return DetectorMode.NONE;
-        else if (supportFetchResponse(nodeApiVersions)) return DetectorMode.FETCH_RESPONSE;
+        if (supportFetchResponse(nodeApiVersions)) return DetectorMode.FETCH_RESPONSE;
         else if (supportOffsetForLeaderEpoch(nodeApiVersions)) return DetectorMode.OFFSET_FOR_LEADER_EPOCH;
         else return DetectorMode.NONE;
     }
-
-    static boolean useOffsetForLeaderEpoch(NodeApiVersions nodeApiVersions) {
-        return detectorMode(nodeApiVersions) == DetectorMode.OFFSET_FOR_LEADER_EPOCH;
-    }
-
 }

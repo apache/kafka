@@ -18,6 +18,7 @@ package org.apache.kafka.clients.consumer.internals;
 
 import org.apache.kafka.clients.ApiVersions;
 import org.apache.kafka.clients.Metadata;
+import org.apache.kafka.clients.NodeApiVersions;
 import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
 import org.apache.kafka.clients.consumer.NoOffsetForPartitionException;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
@@ -454,7 +455,8 @@ public class SubscriptionState {
                                                                       TopicPartition tp,
                                                                       Metadata.LeaderAndEpoch leaderAndEpoch) {
         if (leaderAndEpoch.leader.isPresent()) {
-            if (DivergingOffsetDetector.useOffsetForLeaderEpoch(apiVersions.get(leaderAndEpoch.leader.get().idString())))
+            NodeApiVersions nodeApiVersions = apiVersions.get(leaderAndEpoch.leader.get().idString());
+            if (nodeApiVersions == null || DivergingOffsetDetector.supportOffsetForLeaderEpoch(nodeApiVersions))
                 return assignedState(tp).maybeValidatePosition(leaderAndEpoch);
             else {
                 // If the broker support for truncation detection directly into the `Fetch` protocol or
