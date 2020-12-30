@@ -30,7 +30,7 @@ import kafka.utils._
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.errors.CorruptRecordException
 import org.apache.kafka.common.record._
-import org.apache.kafka.common.requests.ListOffsetRequest
+import org.apache.kafka.common.requests.ListOffsetsRequest
 import org.apache.kafka.common.utils.Utils
 import org.junit.Assert._
 import org.junit.{After, Test}
@@ -1665,7 +1665,7 @@ class LogCleanerTest {
     // The log cleaner will delete the first empty segment, and it will update logStartOffset
     assertEquals(3, log.logSegments.size)
     assertEquals(4, log.logStartOffset)
-    val offset = log.fetchOffsetByTimestamp(ListOffsetRequest.EARLIEST_TIMESTAMP)
+    val offset = log.fetchOffsetByTimestamp(ListOffsetsRequest.EARLIEST_TIMESTAMP)
     assertTrue(offset.isDefined)
     assertEquals(4L, offset.get.offset)
     
@@ -1703,8 +1703,8 @@ class LogCleanerTest {
     // The log cleaner will delete the first two empty segments, and it will update logStartOffset
     assertEquals(2, log.logSegments.size)
     assertEquals(4, log.logStartOffset)
-    // With ListOffsetRequest.ListOffsetRequest.EARLIEST_TIMESTAMP we will see the logStartOffset as the first offset.
-    val offset = log.fetchOffsetByTimestamp(ListOffsetRequest.EARLIEST_TIMESTAMP)
+    // With ListOffsetsRequest.EARLIEST_TIMESTAMP we will see the logStartOffset as the first offset.
+    val offset = log.fetchOffsetByTimestamp(ListOffsetsRequest.EARLIEST_TIMESTAMP)
     assertTrue(offset.isDefined)
     assertEquals(4L, offset.get.offset)
 
@@ -1736,7 +1736,7 @@ class LogCleanerTest {
     
     // The log should start from the fourth segment and its base offset should be 42.
     assertEquals(42, log.logStartOffset)
-    val offset = log.fetchOffsetByTimestamp(ListOffsetRequest.EARLIEST_TIMESTAMP)
+    val offset = log.fetchOffsetByTimestamp(ListOffsetsRequest.EARLIEST_TIMESTAMP)
     assertTrue(offset.isDefined)
     assertEquals(42L, offset.get.offset)
     for (segment <- log.logSegments; batch <- segment.log.batches.asScala) {
