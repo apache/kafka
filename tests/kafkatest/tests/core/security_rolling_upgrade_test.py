@@ -65,6 +65,7 @@ class TestSecurityRollingUpgrade(ProduceConsumeValidateTest):
         # Roll cluster to include inter broker security protocol.
         self.kafka.setup_interbroker_listener(broker_protocol)
         self.bounce()
+        print("succeed in bouncing kafka cluster to include inter broker security protocol", flush=True) # Force some stdout for Travis
 
         # Roll cluster to disable PLAINTEXT port
         self.kafka.close_port(SecurityConfig.PLAINTEXT)

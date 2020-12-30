@@ -55,8 +55,8 @@ class TestUpgrade(ProduceConsumeValidateTest):
         # Not trying to detect a problem here leads to failure in the ensuing Kafka roll, which would be a less
         # intuitive failure than seeing a problem here, so detect ZooKeeper upgrade problems before involving Kafka.
         self.zk.describe(self.topic)
-        self.logger.info("First pass bounce - rolling upgrade")
         for node in self.kafka.nodes:
+            print("First pass bounce - rolling upgrade on " + str(node.account), flush=True) # Force some stdout for Travis
             self.kafka.stop_node(node)
             node.version = DEV_BRANCH
             node.config[config_property.INTER_BROKER_PROTOCOL_VERSION] = from_kafka_version
@@ -64,8 +64,8 @@ class TestUpgrade(ProduceConsumeValidateTest):
             self.kafka.start_node(node)
             self.wait_until_rejoin()
 
-        self.logger.info("Second pass bounce - remove inter.broker.protocol.version config")
         for node in self.kafka.nodes:
+            print("Second pass bounce - remove inter.broker.protocol.version config from " + str(node.account), flush=True) # Force some stdout for Travis
             self.kafka.stop_node(node)
             del node.config[config_property.INTER_BROKER_PROTOCOL_VERSION]
             if to_message_format_version is None:

@@ -52,6 +52,7 @@ def clean_bounce(test, broker_type):
     """Chase the leader of one partition and restart it cleanly."""
     for i in range(5):
         prev_broker_node = broker_node(test, broker_type)
+        print("clean_bounce on " + str(prev_broker_node.account), flush=True) # Force some stdout for Travis
         test.kafka.restart_node(prev_broker_node, clean_shutdown=True)
 
 
@@ -59,6 +60,7 @@ def hard_bounce(test, broker_type):
     """Chase the leader and restart it with a hard kill."""
     for i in range(5):
         prev_broker_node = broker_node(test, broker_type)
+        print("hard_bounce on " + str(prev_broker_node.account), flush=True) # Force some stdout for Travis
         test.kafka.signal_node(prev_broker_node, sig=signal.SIGKILL)
 
         # Since this is a hard kill, we need to make sure the process is down and that

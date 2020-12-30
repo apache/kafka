@@ -120,11 +120,11 @@ class TestDowngrade(EndToEndTest):
         self.setup_services(kafka_version, compression_types, security_protocol, static_membership)
         self.await_startup()
 
-        self.logger.info("First pass bounce - rolling upgrade")
+        print("First pass bounce - rolling upgrade", flush=True) # Force some stdout for Travis
         self.upgrade_from(kafka_version)
         self.run_validation()
 
-        self.logger.info("Second pass bounce - rolling downgrade")
+        print("Second pass bounce - rolling downgrade", flush=True) # Force some stdout for Travis
         self.downgrade_to(kafka_version)
         self.run_validation()
         assert self.kafka.check_protocol_errors(self)
