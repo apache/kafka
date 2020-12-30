@@ -23,8 +23,8 @@ import scala.collection.Seq
 import scala.collection.mutable.ListBuffer
 
 import kafka.server.checkpoints.{LeaderEpochCheckpoint, LeaderEpochCheckpointFile}
-import org.apache.kafka.common.requests.EpochEndOffset.{UNDEFINED_EPOCH, UNDEFINED_EPOCH_OFFSET}
 import kafka.utils.TestUtils
+import org.apache.kafka.common.requests.OffsetsForLeaderEpochResponse.{UNDEFINED_EPOCH, UNDEFINED_EPOCH_OFFSET}
 import org.apache.kafka.common.TopicPartition
 import org.junit.Assert._
 import org.junit.Test
@@ -527,7 +527,7 @@ class LeaderEpochFileCacheTest {
     cache.assign(epoch = 4, startOffset = 11)
 
     //When reset to offset on epoch boundary
-    cache.truncateFromEnd(endOffset = UNDEFINED_EPOCH_OFFSET)
+    cache.truncateFromStart(startOffset = UNDEFINED_EPOCH_OFFSET)
 
     //Then should do nothing
     assertEquals(3, cache.epochEntries.size)

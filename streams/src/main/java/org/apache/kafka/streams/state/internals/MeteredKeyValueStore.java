@@ -22,6 +22,7 @@ import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.errors.ProcessorStateException;
+import org.apache.kafka.streams.kstream.internals.WrappingNullableUtils;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.StateStoreContext;
@@ -37,6 +38,7 @@ import org.apache.kafka.streams.state.internals.metrics.StateStoreMetrics;
 import java.util.ArrayList;
 import java.util.List;
 
+import static org.apache.kafka.streams.kstream.internals.WrappingNullableUtils.prepareKeySerde;
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.maybeMeasureLatency;
 
 /**
@@ -130,29 +132,34 @@ public class MeteredKeyValueStore<K, V>
         e2eLatencySensor = StateStoreMetrics.e2ELatencySensor(taskId, metricsScope, name(), streamsMetrics);
     }
 
+    protected Serde<V> prepareValueSerdeForStore(final Serde<V> valueSerde, final Serde<?> contextKeySerde, final Serde<?> contextValueSerde) {
+        return WrappingNullableUtils.prepareValueSerde(valueSerde, contextKeySerde, contextValueSerde);
+    }
+
+
     @Deprecated
-    @SuppressWarnings("unchecked")
-    void initStoreSerde(final ProcessorContext context) {
+    private void initStoreSerde(final ProcessorContext context) {
         final String storeName = name();
         final String changelogTopic = ProcessorContextUtils.changelogFor(context, storeName);
         serdes = new StateSerdes<>(
             changelogTopic != null ?
                 changelogTopic :
                 ProcessorStateManager.storeChangelogTopic(context.applicationId(), storeName),
-            keySerde == null ? (Serde<K>) context.keySerde() : keySerde,
-            valueSerde == null ? (Serde<V>) context.valueSerde() : valueSerde);
+            prepareKeySerde(keySerde, context.keySerde(), context.valueSerde()),
+            prepareValueSerdeForStore(valueSerde, context.keySerde(), context.valueSerde())
+        );
     }
 
-    @SuppressWarnings("unchecked")
-    void initStoreSerde(final StateStoreContext context) {
+    private void initStoreSerde(final StateStoreContext context) {
         final String storeName = name();
         final String changelogTopic = ProcessorContextUtils.changelogFor(context, storeName);
         serdes = new StateSerdes<>(
-             changelogTopic != null ?
+            changelogTopic != null ?
                 changelogTopic :
                 ProcessorStateManager.storeChangelogTopic(context.applicationId(), storeName),
-            keySerde == null ? (Serde<K>) context.keySerde() : keySerde,
-            valueSerde == null ? (Serde<V>) context.valueSerde() : valueSerde);
+            prepareKeySerde(keySerde, context.keySerde(), context.valueSerde()),
+            prepareValueSerdeForStore(valueSerde, context.keySerde(), context.valueSerde())
+        );
     }
 
     @SuppressWarnings("unchecked")

@@ -24,7 +24,7 @@ import kafka.api.KAFKA_2_7_IV0
 import kafka.utils.TestUtils
 import kafka.zk.{FeatureZNode, FeatureZNodeStatus, ZkVersion}
 import kafka.utils.TestUtils.waitUntilTrue
-import org.apache.kafka.clients.admin.{Admin, DescribeFeaturesOptions, FeatureUpdate, UpdateFeaturesOptions, UpdateFeaturesResult}
+import org.apache.kafka.clients.admin.{Admin, FeatureUpdate, UpdateFeaturesOptions, UpdateFeaturesResult}
 import org.apache.kafka.common.errors.InvalidRequestException
 import org.apache.kafka.common.feature.FinalizedVersionRange
 import org.apache.kafka.common.feature.{Features, SupportedVersionRange}
@@ -121,8 +121,7 @@ class UpdateFeaturesTest extends BaseRequestTest {
                             expectedFinalizedFeaturesEpoch: Long,
                             expectedSupportedFeatures: Features[SupportedVersionRange]): Unit = {
     assertEquals(expectedNode, getFeatureZNode())
-    val featureMetadata = client.describeFeatures(
-      new DescribeFeaturesOptions().sendRequestToController(true)).featureMetadata.get
+    val featureMetadata = client.describeFeatures.featureMetadata.get
     assertEquals(expectedFinalizedFeatures, finalizedFeatures(featureMetadata.finalizedFeatures))
     assertEquals(expectedSupportedFeatures, supportedFeatures(featureMetadata.supportedFeatures))
     assertEquals(Optional.of(expectedFinalizedFeaturesEpoch), featureMetadata.finalizedFeaturesEpoch)

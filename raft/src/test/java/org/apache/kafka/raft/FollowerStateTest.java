@@ -42,6 +42,7 @@ public class FollowerStateTest {
             epoch,
             leaderId,
             Utils.mkSet(1, 2, 3),
+            Optional.empty(),
             fetchTimeoutMs
         );
 
@@ -68,6 +69,7 @@ public class FollowerStateTest {
             epoch,
             leaderId,
             Utils.mkSet(1, 2, 3),
+            Optional.empty(),
             fetchTimeoutMs
         );
 

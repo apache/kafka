@@ -43,7 +43,6 @@ import org.apache.kafka.common.record._
 import org.apache.kafka.common.requests.OffsetFetchResponse
 import org.apache.kafka.common.requests.ProduceResponse.PartitionResponse
 import org.apache.kafka.common.utils.Utils
-import org.apache.kafka.common.KafkaException
 import org.easymock.{Capture, EasyMock, IAnswer}
 import org.junit.Assert.{assertEquals, assertFalse, assertNull, assertTrue, assertThrows}
 import org.junit.{Before, Test}
@@ -945,9 +944,9 @@ class GroupMetadataManagerTest {
     // reset the position to the starting position 0 so that it can read the data in correct order
     groupMetadataRecordValue.position(0)
 
-    val e = assertThrows(classOf[KafkaException],
+    val e = assertThrows(classOf[IllegalStateException],
       () => GroupMetadataManager.readGroupMessageValue(groupId, groupMetadataRecordValue, time))
-    assertEquals(s"Unknown group metadata version ${unsupportedVersion}", e.getMessage)
+    assertEquals(s"Unknown group metadata message version: ${unsupportedVersion}", e.getMessage)
   }
 
   @Test

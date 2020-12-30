@@ -25,6 +25,7 @@ import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.types.Struct;
 import org.apache.kafka.common.record.RecordBatch;
 import org.apache.kafka.common.requests.OffsetFetchResponse.PartitionData;
+import org.apache.kafka.common.utils.Utils;
 import org.junit.Before;
 import org.junit.Test;
 
@@ -33,13 +34,14 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
 
-import static org.apache.kafka.common.protocol.CommonFields.ERROR_CODE;
 import static org.apache.kafka.common.requests.AbstractResponse.DEFAULT_THROTTLE_TIME;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
 public class OffsetFetchResponseTest {
+
+    private static final String ERROR_CODE = "error_code";
 
     private final int throttleTimeMs = 10;
     private final int offset = 100;
@@ -75,7 +77,11 @@ public class OffsetFetchResponseTest {
     public void testConstructor() {
         OffsetFetchResponse response = new OffsetFetchResponse(throttleTimeMs, Errors.NOT_COORDINATOR, partitionDataMap);
         assertEquals(Errors.NOT_COORDINATOR, response.error());
-        assertEquals(Collections.singletonMap(Errors.NOT_COORDINATOR, 1), response.errorCounts());
+        assertEquals(3, response.errorCounts().size());
+        assertEquals(Utils.mkMap(Utils.mkEntry(Errors.NOT_COORDINATOR, 1),
+                Utils.mkEntry(Errors.TOPIC_AUTHORIZATION_FAILED, 1),
+                Utils.mkEntry(Errors.UNKNOWN_TOPIC_OR_PARTITION, 1)),
+                response.errorCounts());
 
         assertEquals(throttleTimeMs, response.throttleTimeMs());
 
@@ -101,22 +107,26 @@ public class OffsetFetchResponseTest {
         OffsetFetchResponse latestResponse = new OffsetFetchResponse(throttleTimeMs, Errors.NONE, partitionDataMap);
 
         for (short version = 0; version <= ApiKeys.OFFSET_FETCH.latestVersion(); version++) {
-            Struct struct = latestResponse.data.toStruct(version);
+            Struct struct = latestResponse.data().toStruct(version);
 
-            OffsetFetchResponse oldResponse =  new OffsetFetchResponse(struct, version);
+            OffsetFetchResponse oldResponse = OffsetFetchResponse.parse(latestResponse.serialize(version), version);
 
             if (version <= 1) {
                 assertFalse(struct.hasField(ERROR_CODE));
 
                 // Partition level error populated in older versions.
                 assertEquals(Errors.GROUP_AUTHORIZATION_FAILED, oldResponse.error());
-                assertEquals(Collections.singletonMap(Errors.GROUP_AUTHORIZATION_FAILED, 1), oldResponse.errorCounts());
+                assertEquals(Utils.mkMap(Utils.mkEntry(Errors.GROUP_AUTHORIZATION_FAILED, 2),
+                        Utils.mkEntry(Errors.TOPIC_AUTHORIZATION_FAILED, 1)), oldResponse.errorCounts());
 
             } else {
                 assertTrue(struct.hasField(ERROR_CODE));
 
                 assertEquals(Errors.NONE, oldResponse.error());
-                assertEquals(Collections.singletonMap(Errors.NONE, 1), oldResponse.errorCounts());
+                assertEquals(Utils.mkMap(
+                        Utils.mkEntry(Errors.NONE, 1),
+                        Utils.mkEntry(Errors.GROUP_AUTHORIZATION_FAILED, 1),
+                        Utils.mkEntry(Errors.TOPIC_AUTHORIZATION_FAILED, 1)), oldResponse.errorCounts());
             }
 
             if (version <= 2) {
@@ -139,9 +149,7 @@ public class OffsetFetchResponseTest {
             Map<TopicPartition, PartitionData> responseData = oldResponse.responseData();
             assertEquals(expectedDataMap, responseData);
 
-            responseData.forEach(
-                (tp, data) -> assertTrue(data.hasError())
-            );
+            responseData.forEach((tp, data) -> assertTrue(data.hasError()));
         }
     }
 
@@ -159,14 +167,15 @@ public class OffsetFetchResponseTest {
 
     @Test
     public void testNullableMetadata() {
+        PartitionData pd = new PartitionData(
+            offset,
+            leaderEpochOne,
+            null,
+            Errors.UNKNOWN_TOPIC_OR_PARTITION);
+        // test PartitionData.equals with null metadata
+        assertEquals(pd, pd);
         partitionDataMap.clear();
-        partitionDataMap.put(new TopicPartition(topicOne, partitionOne),
-                             new PartitionData(
-                                 offset,
-                                 leaderEpochOne,
-                                 null,
-                                 Errors.UNKNOWN_TOPIC_OR_PARTITION)
-        );
+        partitionDataMap.put(new TopicPartition(topicOne, partitionOne), pd);
 
         OffsetFetchResponse response = new OffsetFetchResponse(throttleTimeMs, Errors.GROUP_AUTHORIZATION_FAILED, partitionDataMap);
         OffsetFetchResponseData expectedData =
@@ -185,7 +194,7 @@ public class OffsetFetchResponseTest {
                                 .setMetadata(null))
                         ))
                 );
-        assertEquals(expectedData, response.data);
+        assertEquals(expectedData, response.data());
     }
 
     @Test
@@ -218,6 +227,6 @@ public class OffsetFetchResponseTest {
                             .setMetadata(metadata))
                     ))
                 );
-        assertEquals(expectedData, response.data);
+        assertEquals(expectedData, response.data());
     }
 }

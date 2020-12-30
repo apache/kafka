@@ -29,10 +29,8 @@
         "versions": "0+", "fields": [
         { "name": "PartitionIndex", "type": "int32", "versions": "0+",
           "about": "The partition index." },
-        { "name": "ReplicaId", "type": "int32", "versions": "0+",
-          "about": "The ID of the replica sending this request"},
         { "name": "LeaderId", "type": "int32", "versions": "0+",
-          "about": "The current leader ID or -1 if there is a vote in progress"},
+          "about": "The current leader ID that is resigning"},
         { "name": "LeaderEpoch", "type": "int32", "versions": "0+",
           "about": "The current epoch"},
         { "name": "PreferredSuccessors", "type": "[]int32", "versions": "0+",

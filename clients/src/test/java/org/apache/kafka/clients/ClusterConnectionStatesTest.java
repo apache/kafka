@@ -29,7 +29,7 @@ import java.lang.reflect.Method;
 import java.net.InetAddress;
 import java.net.UnknownHostException;
 
-import java.util.Set;
+import java.util.List;
 import org.apache.kafka.common.errors.AuthenticationException;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
@@ -386,7 +386,7 @@ public class ClusterConnectionStatesTest {
         time.sleep((long) (connectionSetupTimeoutMs / 2 + connectionSetupTimeoutMs * connectionSetupTimeoutJitter));
 
         // Expect two timed out connections.
-        Set<String> timedOutConnections = connectionStates.nodesWithConnectionSetupTimeout(time.milliseconds());
+        List<String> timedOutConnections = connectionStates.nodesWithConnectionSetupTimeout(time.milliseconds());
         assertEquals(2, timedOutConnections.size());
         assertTrue(timedOutConnections.contains(nodeId1));
         assertTrue(timedOutConnections.contains(nodeId2));

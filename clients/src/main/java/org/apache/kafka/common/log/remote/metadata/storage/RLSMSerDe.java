@@ -17,6 +17,7 @@
 package org.apache.kafka.common.log.remote.metadata.storage;
 
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.log.remote.storage.RemoteLogSegmentId;
 import org.apache.kafka.common.log.remote.storage.RemoteLogSegmentMetadata;
 import org.apache.kafka.common.protocol.types.Field;
@@ -28,6 +29,7 @@ import org.apache.kafka.common.serialization.Serializer;
 
 import java.nio.ByteBuffer;
 import java.util.Collections;
+import java.util.UUID;
 
 public class RLSMSerDe extends Serdes.WrapperSerde<RemoteLogSegmentMetadata> {
 
@@ -91,7 +93,8 @@ public class RLSMSerDe extends Serdes.WrapperSerde<RemoteLogSegmentMetadata> {
 
             Struct rlsIdStruct = new Struct(REMOTE_LOG_SEGMENT_ID_SCHEMA_V0);
             rlsIdStruct.set(TOPIC_PARTITION, tpStruct);
-            rlsIdStruct.set(ID, data.remoteLogSegmentId().id());
+            UUID uuid = data.remoteLogSegmentId().id();
+            rlsIdStruct.set(ID, new Uuid(uuid.getMostSignificantBits(), uuid.getLeastSignificantBits()));
 
             Struct rlsmStruct = new Struct(SCHEMA_V0);
             rlsmStruct.set(REMOTE_LOG_SEGMENT_ID_NAME, rlsIdStruct);
@@ -132,9 +135,10 @@ public class RLSMSerDe extends Serdes.WrapperSerde<RemoteLogSegmentMetadata> {
             final Struct rlsIdStruct = (Struct) struct.get(REMOTE_LOG_SEGMENT_ID_NAME);
             final Struct tpStruct = (Struct) rlsIdStruct.get(TOPIC_PARTITION);
 
+            Uuid uuid = rlsIdStruct.get(ID_FIELD);
             RemoteLogSegmentId rlsId = new RemoteLogSegmentId(
                     new TopicPartition(tpStruct.get(TOPIC_FIELD), tpStruct.get(PARTITION_FIELD)),
-                    rlsIdStruct.get(ID_FIELD));
+                    new UUID(uuid.getMostSignificantBits(), uuid.getLeastSignificantBits()));
 
             return new RemoteLogSegmentMetadata(rlsId,
                     struct.get(START_OFFSET_FIELD),

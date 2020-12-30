@@ -44,6 +44,7 @@ import org.apache.kafka.common.{ConsumerGroupState, ElectionType, TopicPartition
 import org.junit.Assert._
 import org.junit.{After, Before, Ignore, Test}
 import org.scalatest.Assertions.intercept
+import org.slf4j.LoggerFactory
 
 import scala.annotation.nowarn
 import scala.jdk.CollectionConverters._
@@ -342,7 +343,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
     assertFalse(maxMessageBytes2.isSensitive)
     assertFalse(maxMessageBytes2.isReadOnly)
 
-    assertEquals(servers(1).config.values.size, configs.get(brokerResource1).entries.size)
+    assertEquals(servers(1).config.nonInternalValues.size, configs.get(brokerResource1).entries.size)
     assertEquals(servers(1).config.brokerId.toString, configs.get(brokerResource1).get(KafkaConfig.BrokerIdProp).value)
     val listenerSecurityProtocolMap = configs.get(brokerResource1).get(KafkaConfig.ListenerSecurityProtocolMapProp)
     assertEquals(servers(1).config.getString(KafkaConfig.ListenerSecurityProtocolMapProp), listenerSecurityProtocolMap.value)
@@ -363,7 +364,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
     assertFalse(compressionType.isSensitive)
     assertFalse(compressionType.isReadOnly)
 
-    assertEquals(servers(2).config.values.size, configs.get(brokerResource2).entries.size)
+    assertEquals(servers(2).config.nonInternalValues.size, configs.get(brokerResource2).entries.size)
     assertEquals(servers(2).config.brokerId.toString, configs.get(brokerResource2).get(KafkaConfig.BrokerIdProp).value)
     assertEquals(servers(2).config.logCleanerThreads.toString,
       configs.get(brokerResource2).get(KafkaConfig.LogCleanerThreadsProp).value)
@@ -2061,11 +2062,12 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
   @Test
   def testDescribeConfigsForLog4jLogLevels(): Unit = {
     client = Admin.create(createConfig)
-
+    LoggerFactory.getLogger("kafka.cluster.Replica").trace("Message to create the logger")
     val loggerConfig = describeBrokerLoggers()
-    val rootLogLevel = loggerConfig.get(Log4jController.ROOT_LOGGER).value()
+    val kafkaLogLevel = loggerConfig.get("kafka").value()
     val logCleanerLogLevelConfig = loggerConfig.get("kafka.cluster.Replica")
-    assertEquals(rootLogLevel, logCleanerLogLevelConfig.value()) // we expect an undefined log level to be the same as the root logger
+    // we expect the log level to be inherited from the first ancestor with a level configured
+    assertEquals(kafkaLogLevel, logCleanerLogLevelConfig.value())
     assertEquals("kafka.cluster.Replica", logCleanerLogLevelConfig.name())
     assertEquals(ConfigEntry.ConfigSource.DYNAMIC_BROKER_LOGGER_CONFIG, logCleanerLogLevelConfig.source())
     assertEquals(false, logCleanerLogLevelConfig.isReadOnly)

@@ -109,6 +109,8 @@
       <allow pkg="org.apache.kafka.common.config" />
       <allow pkg="org.apache.kafka.common.protocol" />
       <allow pkg="org.apache.kafka.common.errors" />
+      <!-- To access DefaultPrincipalData -->
+      <allow pkg="org.apache.kafka.common.message" />
       <subpackage name="authenticator">
         <allow pkg="org.apache.kafka.common.message" />
         <allow pkg="org.apache.kafka.common.protocol.types" />
@@ -166,6 +168,8 @@
       <allow pkg="org.apache.kafka.common.record" />
       <!-- for AuthorizableRequestContext interface -->
       <allow pkg="org.apache.kafka.server.authorizer" />
+      <!-- for IncrementalAlterConfigsRequest Builder -->
+      <allow pkg="org.apache.kafka.clients.admin" />
       <!-- for testing -->
       <allow pkg="org.apache.kafka.common.errors" />
     </subpackage>
@@ -320,6 +324,7 @@
 
   <subpackage name="raft">
     <allow pkg="org.apache.kafka.raft" />
+    <allow pkg="org.apache.kafka.snapshot" />
     <allow pkg="org.apache.kafka.clients" />
     <allow pkg="org.apache.kafka.common.config" />
     <allow pkg="org.apache.kafka.common.message" />
@@ -329,6 +334,12 @@
     <allow pkg="org.apache.kafka.common.protocol" />
     <allow pkg="org.apache.kafka.test"/>
     <allow pkg="com.fasterxml.jackson" />
+  </subpackage>
+
+  <subpackage name="snapshot">
+    <allow pkg="org.apache.kafka.common.record" />
+    <allow pkg="org.apache.kafka.raft" />
+    <allow pkg="org.apache.kafka.test"/>
   </subpackage>
 
   <subpackage name="connect">

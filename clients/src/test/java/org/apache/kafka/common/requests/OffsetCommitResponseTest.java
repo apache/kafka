@@ -22,9 +22,11 @@ import org.apache.kafka.common.message.OffsetCommitResponseData.OffsetCommitResp
 import org.apache.kafka.common.message.OffsetCommitResponseData.OffsetCommitResponseTopic;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.common.protocol.MessageUtil;
 import org.junit.Before;
 import org.junit.Test;
 
+import java.nio.ByteBuffer;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
@@ -69,22 +71,23 @@ public class OffsetCommitResponseTest {
     }
 
     @Test
-    public void testConstructorWithStruct() {
+    public void testParse() {
         OffsetCommitResponseData data = new OffsetCommitResponseData()
-                                            .setTopics(Arrays.asList(
-                                                new OffsetCommitResponseTopic().setPartitions(
-                                                    Collections.singletonList(new OffsetCommitResponsePartition()
-                                                                                  .setPartitionIndex(partitionOne)
-                                                                                  .setErrorCode(errorOne.code()))),
-                                                new OffsetCommitResponseTopic().setPartitions(
-                                                    Collections.singletonList(new OffsetCommitResponsePartition()
-                                                                                  .setPartitionIndex(partitionTwo)
-                                                                                  .setErrorCode(errorTwo.code())))
-                                            ))
-                                            .setThrottleTimeMs(throttleTimeMs);
+            .setTopics(Arrays.asList(
+                new OffsetCommitResponseTopic().setPartitions(
+                    Collections.singletonList(new OffsetCommitResponsePartition()
+                        .setPartitionIndex(partitionOne)
+                        .setErrorCode(errorOne.code()))),
+                new OffsetCommitResponseTopic().setPartitions(
+                    Collections.singletonList(new OffsetCommitResponsePartition()
+                        .setPartitionIndex(partitionTwo)
+                        .setErrorCode(errorTwo.code())))
+            ))
+            .setThrottleTimeMs(throttleTimeMs);
 
         for (short version = 0; version <= ApiKeys.OFFSET_COMMIT.latestVersion(); version++) {
-            OffsetCommitResponse response = new OffsetCommitResponse(data.toStruct(version), version);
+            ByteBuffer buffer = MessageUtil.toByteBuffer(data, version);
+            OffsetCommitResponse response = OffsetCommitResponse.parse(buffer, version);
             assertEquals(expectedErrorCounts, response.errorCounts());
 
             if (version >= 3) {
@@ -96,4 +99,5 @@ public class OffsetCommitResponseTest {
             assertEquals(version >= 4, response.shouldClientThrottle(version));
         }
     }
+
 }

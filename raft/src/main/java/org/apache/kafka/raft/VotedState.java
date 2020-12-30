@@ -19,6 +19,7 @@ package org.apache.kafka.raft;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Timer;
 
+import java.util.Optional;
 import java.util.OptionalInt;
 import java.util.Set;
 
@@ -34,17 +35,20 @@ public class VotedState implements EpochState {
     private final Set<Integer> voters;
     private final int electionTimeoutMs;
     private final Timer electionTimer;
+    private final Optional<LogOffsetMetadata> highWatermark;
 
     public VotedState(
         Time time,
         int epoch,
         int votedId,
         Set<Integer> voters,
+        Optional<LogOffsetMetadata> highWatermark,
         int electionTimeoutMs
     ) {
         this.epoch = epoch;
         this.votedId = votedId;
         this.voters = voters;
+        this.highWatermark = highWatermark;
         this.electionTimeoutMs = electionTimeoutMs;
         this.electionTimer = time.timer(electionTimeoutMs);
     }
@@ -89,6 +93,11 @@ public class VotedState implements EpochState {
     }
 
     @Override
+    public Optional<LogOffsetMetadata> highWatermark() {
+        return highWatermark;
+    }
+
+    @Override
     public String toString() {
         return "Voted(" +
             "epoch=" + epoch +
@@ -98,4 +107,6 @@ public class VotedState implements EpochState {
             ')';
     }
 
+    @Override
+    public void close() {}
 }

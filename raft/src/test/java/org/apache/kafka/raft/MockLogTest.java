@@ -37,7 +37,6 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
-import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -315,7 +314,7 @@ public class MockLogTest {
         // Now update to a high watermark with invalid metadata
         assertThrows(IllegalArgumentException.class, () ->
             log.updateHighWatermark(new LogOffsetMetadata(10L,
-                Optional.of(new MockLog.MockOffsetMetadata(UUID.randomUUID())))));
+                Optional.of(new MockLog.MockOffsetMetadata(98230980L)))));
 
         // Ensure we can update the high watermark to the end offset
         LogFetchInfo readFromEndInfo = log.read(15L, Isolation.UNCOMMITTED);
@@ -380,6 +379,20 @@ public class MockLogTest {
         assertEquals(Optional.of(new OffsetAndEpoch(5L, 1)), log.endOffsetForEpoch(1));
         assertEquals(Optional.of(new OffsetAndEpoch(5L, 1)), log.endOffsetForEpoch(2));
         assertEquals(Optional.of(new OffsetAndEpoch(5L, 3)), log.endOffsetForEpoch(3));
+    }
+
+    @Test
+    public void testUnflushedRecordsLostAfterReopen() {
+        appendBatch(5, 1);
+        appendBatch(10, 2);
+        log.flush();
+
+        appendBatch(5, 3);
+        appendBatch(10, 4);
+        log.reopen();
+
+        assertEquals(15L, log.endOffset().offset);
+        assertEquals(2, log.lastFetchedEpoch());
     }
 
     private Optional<OffsetRange> readOffsets(long startOffset, Isolation isolation) {

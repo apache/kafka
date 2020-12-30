@@ -20,11 +20,13 @@ import org.apache.kafka.common.message.AlterClientQuotasRequestData;
 import org.apache.kafka.common.message.AlterClientQuotasRequestData.EntityData;
 import org.apache.kafka.common.message.AlterClientQuotasRequestData.EntryData;
 import org.apache.kafka.common.message.AlterClientQuotasRequestData.OpData;
+import org.apache.kafka.common.message.AlterClientQuotasResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
-import org.apache.kafka.common.protocol.types.Struct;
+import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.quota.ClientQuotaAlteration;
 import org.apache.kafka.common.quota.ClientQuotaEntity;
 
+import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
@@ -85,12 +87,7 @@ public class AlterClientQuotasRequest extends AbstractRequest {
         this.data = data;
     }
 
-    public AlterClientQuotasRequest(Struct struct, short version) {
-        super(ApiKeys.ALTER_CLIENT_QUOTAS, version);
-        this.data = new AlterClientQuotasRequestData(struct, version);
-    }
-
-    public Collection<ClientQuotaAlteration> entries() {
+    public List<ClientQuotaAlteration> entries() {
         List<ClientQuotaAlteration> entries = new ArrayList<>(data.entries().size());
         for (EntryData entryData : data.entries()) {
             Map<String, String> entity = new HashMap<>(entryData.entity().size());
@@ -114,20 +111,29 @@ public class AlterClientQuotasRequest extends AbstractRequest {
     }
 
     @Override
-    public AlterClientQuotasResponse getErrorResponse(int throttleTimeMs, Throwable e) {
-        ArrayList<ClientQuotaEntity> entities = new ArrayList<>(data.entries().size());
-        for (EntryData entryData : data.entries()) {
-            Map<String, String> entity = new HashMap<>(entryData.entity().size());
-            for (EntityData entityData : entryData.entity()) {
-                entity.put(entityData.entityType(), entityData.entityName());
-            }
-            entities.add(new ClientQuotaEntity(entity));
-        }
-        return new AlterClientQuotasResponse(entities, throttleTimeMs, e);
+    public AlterClientQuotasRequestData data() {
+        return data;
     }
 
     @Override
-    protected Struct toStruct() {
-        return data.toStruct(version());
+    public AlterClientQuotasResponse getErrorResponse(int throttleTimeMs, Throwable e) {
+        List<AlterClientQuotasResponseData.EntryData> responseEntries = new ArrayList<>();
+        for (EntryData entryData : data.entries()) {
+            List<AlterClientQuotasResponseData.EntityData> responseEntities = new ArrayList<>();
+            for (EntityData entityData : entryData.entity()) {
+                responseEntities.add(new AlterClientQuotasResponseData.EntityData()
+                    .setEntityType(entityData.entityType())
+                    .setEntityName(entityData.entityName()));
+            }
+            responseEntries.add(new AlterClientQuotasResponseData.EntryData().setEntity(responseEntities));
+        }
+        AlterClientQuotasResponseData responseData = new AlterClientQuotasResponseData()
+                .setThrottleTimeMs(throttleTimeMs)
+                .setEntries(responseEntries);
+        return new AlterClientQuotasResponse(responseData);
+    }
+
+    public static AlterClientQuotasRequest parse(ByteBuffer buffer, short version) {
+        return new AlterClientQuotasRequest(new AlterClientQuotasRequestData(new ByteBufferAccessor(buffer), version), version);
     }
 }

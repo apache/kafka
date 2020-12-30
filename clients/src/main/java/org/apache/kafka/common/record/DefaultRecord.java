@@ -576,17 +576,16 @@ public class DefaultRecord implements Record {
                                          ByteBuffer key,
                                          ByteBuffer value,
                                          Header[] headers) {
-
         int keySize = key == null ? -1 : key.remaining();
         int valueSize = value == null ? -1 : value.remaining();
         return sizeOfBodyInBytes(offsetDelta, timestampDelta, keySize, valueSize, headers);
     }
 
-    private static int sizeOfBodyInBytes(int offsetDelta,
-                                         long timestampDelta,
-                                         int keySize,
-                                         int valueSize,
-                                         Header[] headers) {
+    public static int sizeOfBodyInBytes(int offsetDelta,
+                                        long timestampDelta,
+                                        int keySize,
+                                        int valueSize,
+                                        Header[] headers) {
         int size = 1; // always one byte for attributes
         size += ByteUtils.sizeOfVarint(offsetDelta);
         size += ByteUtils.sizeOfVarlong(timestampDelta);

@@ -84,7 +84,7 @@ esac
 # Loop in case we encounter an error.
 for attempt in 1 2 3; do
   if [ ! -e $APP_HOME/gradle/wrapper/gradle-wrapper.jar ]; then
-    if ! curl -s -S --retry 3 -L -o "$APP_HOME/gradle/wrapper/gradle-wrapper.jar" "https://raw.githubusercontent.com/gradle/gradle/v6.6.0/gradle/wrapper/gradle-wrapper.jar"; then
+    if ! curl -s -S --retry 3 -L -o "$APP_HOME/gradle/wrapper/gradle-wrapper.jar" "https://raw.githubusercontent.com/gradle/gradle/v6.7.1/gradle/wrapper/gradle-wrapper.jar"; then
       rm -f "$APP_HOME/gradle/wrapper/gradle-wrapper.jar"
       # Pause for a bit before looping in case the server throttled us.
       sleep 5
@@ -143,7 +143,7 @@ fi
 if [ "$cygwin" = "true" -o "$msys" = "true" ] ; then
     APP_HOME=`cygpath --path --mixed "$APP_HOME"`
     CLASSPATH=`cygpath --path --mixed "$CLASSPATH"`
-    
+
     JAVACMD=`cygpath --unix "$JAVACMD"`
 
     # We build the pattern for arguments to be converted via cygpath

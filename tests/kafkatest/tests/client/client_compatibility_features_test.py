@@ -55,7 +55,7 @@ def run_command(node, cmd, ssh_log_file):
                 f.write(line)
         except Exception as e:
             f.write("** Command failed!")
-            print(e)
+            print(e, flush=True)
             raise
 
 

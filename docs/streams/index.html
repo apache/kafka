@@ -48,16 +48,16 @@
                 <h3>TOUR OF THE STREAMS API</h3>
                 <div class="video__list">
                    <p class="video__item video_list_1 active" onclick="$('.video__item').removeClass('active'); $(this).addClass('active');$('.yt_series').hide();$('.video_1').show();">
-                       <span class="number">1</span><span class="video__text">Intro to Streams</span>
+                       <span class="video-number">1</span><span class="video__text">Intro to Streams</span>
                    </p>
                    <p class="video__item video_list_2" onclick="$('.video__item').removeClass('active'); $(this).addClass('active');$('.yt_series').hide();$('.video_2').show();">
-                       <span class="number">2</span><span class="video__text">Creating a Streams Application</span>
+                       <span class="video-number">2</span><span class="video__text">Creating a Streams Application</span>
                    </p>
                    <p class="video__item video_list_3" onclick="$('.video__item').removeClass('active'); $(this).addClass('active');$('.yt_series').hide();$('.video_3').show();">
-                       <span class="number">3</span><span class="video__text">Transforming Data Pt. 1</span>
+                       <span class="video-number">3</span><span class="video__text">Transforming Data Pt. 1</span>
                    </p>
                    <p class="video__item video_list_4" onclick="$('.video__item').removeClass('active'); $(this).addClass('active');$('.yt_series').hide();$('.video_4').show();">
-                      <span class="number">4</span><span class="video__text">Transforming Data Pt. 11</span>
+                      <span class="video-number">4</span><span class="video__text">Transforming Data Pt. 11</span>
                    </p>
                 </div>
             </div>
@@ -103,7 +103,7 @@
                <p class="grid__item__customer__description extra__space">As the leading online fashion retailer in Europe, Zalando uses Kafka as an ESB (Enterprise Service Bus), which helps us in transitioning from a monolithic to a micro services architecture. Using Kafka for processing
                  <a href="https://www.confluent.io/blog/ranking-websites-real-time-apache-kafkas-streams-api/" target='blank'> event streams</a> enables our technical team to do near-real time business intelligence.
                </p>
-           </div>
+            </div>
            </div>
            <div class="customer__grid">
              <div class="customer__item  streams_logo_grid streams__line__grid">
@@ -154,8 +154,7 @@
            </div>
 
            <div class="code-example__snippet b-java-8 selected">
-               <pre class="brush: java;">
-                   import org.apache.kafka.common.serialization.Serdes;
+               <pre class="line-numbers"><code class="language-java">                   import org.apache.kafka.common.serialization.Serdes;
                    import org.apache.kafka.common.utils.Bytes;
                    import org.apache.kafka.streams.KafkaStreams;
                    import org.apache.kafka.streams.StreamsBuilder;
@@ -190,13 +189,11 @@
                            streams.start();
                        }
 
-                   }
-               </pre>
+                   }</code></pre>
            </div>
 
            <div class="code-example__snippet b-java-7">
-               <pre class="brush: java;">
-                   import org.apache.kafka.common.serialization.Serdes;
+               <pre class="line-numbers"><code class="language-java">                   import org.apache.kafka.common.serialization.Serdes;
                    import org.apache.kafka.common.utils.Bytes;
                    import org.apache.kafka.streams.KafkaStreams;
                    import org.apache.kafka.streams.StreamsBuilder;
@@ -245,13 +242,11 @@
                            streams.start();
                        }
 
-                   }
-               </pre>
+                   }</code></pre>
            </div>
 
            <div class="code-example__snippet b-scala">
-               <pre class="brush: scala;">
-import java.util.Properties
+               <pre class="line-numbers"><code class="language-scala">import java.util.Properties
 import java.util.concurrent.TimeUnit
 
 import org.apache.kafka.streams.kstream.Materialized
@@ -284,8 +279,7 @@ object WordCountApplication extends App {
   sys.ShutdownHookThread {
      streams.close(10, TimeUnit.SECONDS)
   }
-}
-               </pre>
+}</code></pre>
            </div>
        </div>
 
@@ -297,10 +291,10 @@ object WordCountApplication extends App {
 </script>
 <!--#include virtual="../../includes/_header.htm" -->
 <!--#include virtual="../../includes/_top.htm" -->
-<div class="content documentation documentation--current">
+<div class="content documentation">
   <!--#include virtual="../../includes/_nav.htm" -->
   <div class="right">
-    <!--#include virtual="../../includes/_docs_banner.htm" -->
+    <!--//#include virtual="../../includes/_docs_banner.htm" -->
     <ul class="breadcrumbs">
       <li><a href="/documentation">Documentation</a>
       <li><a href="/documentation/streams">Kafka Streams</a></li>

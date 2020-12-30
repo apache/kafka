@@ -54,7 +54,6 @@ import org.junit.runners.Parameterized.Parameter;
 import org.junit.runners.Parameterized.Parameters;
 
 import java.io.IOException;
-import java.lang.Thread.UncaughtExceptionHandler;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -730,7 +729,7 @@ public class KStreamRepartitionIntegrationTest {
     private KafkaStreams startStreams(final StreamsBuilder builder,
                                       final State expectedOldState,
                                       final State expectedNewState,
-                                      final UncaughtExceptionHandler uncaughtExceptionHandler) throws InterruptedException {
+                                      final Thread.UncaughtExceptionHandler uncaughtExceptionHandler) throws InterruptedException {
         final CountDownLatch latch;
         final KafkaStreams kafkaStreams = new KafkaStreams(builder.build(streamsConfiguration), streamsConfiguration);
 
@@ -738,9 +737,16 @@ public class KStreamRepartitionIntegrationTest {
             latch = new CountDownLatch(1);
         } else {
             latch = new CountDownLatch(2);
-            kafkaStreams.setUncaughtExceptionHandler((t, e) -> {
-                uncaughtExceptionHandler.uncaughtException(t, e);
+            kafkaStreams.setUncaughtExceptionHandler(e -> {
+                uncaughtExceptionHandler.uncaughtException(Thread.currentThread(), e);
                 latch.countDown();
+                if (e instanceof RuntimeException) {
+                    throw (RuntimeException) e;
+                } else if (e instanceof Error) {
+                    throw (Error) e;
+                } else {
+                    throw new RuntimeException("Unexpected checked exception caught in the uncaught exception handler", e);
+                }
             });
         }
 

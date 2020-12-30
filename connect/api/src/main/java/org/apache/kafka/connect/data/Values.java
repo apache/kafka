@@ -1193,7 +1193,7 @@ public class Values {
             boolean escaped = false;
             int start = iter.getIndex();
             char c = iter.current();
-            while (c != CharacterIterator.DONE) {
+            while (canConsumeNextToken()) {
                 switch (c) {
                     case '\\':
                         escaped = !escaped;

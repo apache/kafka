@@ -14,11 +14,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-if [ $# -lt 1 ];
-then
-	echo "USAGE: $0 [-daemon] server.properties [--override property=value]*"
-	exit 1
-fi
 base_dir=$(dirname $0)
 
 if [ "x$KAFKA_LOG4J_OPTS" = "x" ]; then

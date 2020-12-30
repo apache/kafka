@@ -75,18 +75,25 @@ public class InMemorySessionStore implements SessionStore<Bytes, byte[]> {
     @Deprecated
     @Override
     public void init(final ProcessorContext context, final StateStore root) {
-        this.context = (InternalProcessorContext) context;
-
-        final StreamsMetricsImpl metrics = this.context.metrics();
         final String threadId = Thread.currentThread().getName();
         final String taskName = context.taskId().toString();
-        expiredRecordSensor = TaskMetrics.droppedRecordsSensorOrExpiredWindowRecordDropSensor(
-            threadId,
-            taskName,
-            metricScope,
-            name,
-            metrics
-        );
+
+        // The provided context is not required to implement InternalProcessorContext,
+        // If it doesn't, we can't record this metric.
+        if (context instanceof InternalProcessorContext) {
+            this.context = (InternalProcessorContext) context;
+            final StreamsMetricsImpl metrics = this.context.metrics();
+            expiredRecordSensor = TaskMetrics.droppedRecordsSensorOrExpiredWindowRecordDropSensor(
+                threadId,
+                taskName,
+                metricScope,
+                name,
+                metrics
+            );
+        } else {
+            this.context = null;
+            expiredRecordSensor = null;
+        }
 
         if (root != null) {
             context.register(root, (key, value) -> put(SessionKeySchema.from(Bytes.wrap(key)), value));
@@ -102,7 +109,11 @@ public class InMemorySessionStore implements SessionStore<Bytes, byte[]> {
         observedStreamTime = Math.max(observedStreamTime, windowEndTimestamp);
 
         if (windowEndTimestamp <= observedStreamTime - retentionPeriod) {
-            expiredRecordSensor.record(1.0d, context.currentSystemTimeMs());
+            // The provided context is not required to implement InternalProcessorContext,
+            // If it doesn't, we can't record this metric (in fact, we wouldn't have even initialized it).
+            if (expiredRecordSensor != null && context != null) {
+                expiredRecordSensor.record(1.0d, context.currentSystemTimeMs());
+            }
             LOG.warn("Skipping record for expired segment.");
         } else {
             if (aggregate != null) {

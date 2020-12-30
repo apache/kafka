@@ -67,6 +67,19 @@ class DescribeUserScramCredentialsRequestTest extends BaseRequestTest {
   }
 
   @Test
+  def testDescribeWithNull(): Unit = {
+    val request = new DescribeUserScramCredentialsRequest.Builder(
+      new DescribeUserScramCredentialsRequestData().setUsers(null)).build()
+    val response = sendDescribeUserScramCredentialsRequest(request)
+
+    val error = response.data.errorCode
+    assertEquals("Expected no error when describing everything and there are no credentials",
+      Errors.NONE.code, error)
+    assertEquals("Expected no credentials when describing everything and there are no credentials",
+      0, response.data.results.size)
+  }
+
+  @Test
   def testDescribeNotController(): Unit = {
     val request = new DescribeUserScramCredentialsRequest.Builder(
       new DescribeUserScramCredentialsRequestData()).build()

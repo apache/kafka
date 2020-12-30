@@ -18,8 +18,8 @@ package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.message.DeleteTopicsResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
+import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.protocol.types.Struct;
 
 import java.nio.ByteBuffer;
 import java.util.HashMap;
@@ -38,19 +38,11 @@ public class DeleteTopicsResponse extends AbstractResponse {
      * INVALID_REQUEST(42)
      * TOPIC_DELETION_DISABLED(73)
      */
-    private DeleteTopicsResponseData data;
+    private final DeleteTopicsResponseData data;
 
     public DeleteTopicsResponse(DeleteTopicsResponseData data) {
+        super(ApiKeys.DELETE_TOPICS);
         this.data = data;
-    }
-
-    public DeleteTopicsResponse(Struct struct, short version) {
-        this.data = new DeleteTopicsResponseData(struct, version);
-    }
-
-    @Override
-    protected Struct toStruct(short version) {
-        return data.toStruct(version);
     }
 
     @Override
@@ -58,6 +50,7 @@ public class DeleteTopicsResponse extends AbstractResponse {
         return data.throttleTimeMs();
     }
 
+    @Override
     public DeleteTopicsResponseData data() {
         return data;
     }
@@ -72,7 +65,7 @@ public class DeleteTopicsResponse extends AbstractResponse {
     }
 
     public static DeleteTopicsResponse parse(ByteBuffer buffer, short version) {
-        return new DeleteTopicsResponse(ApiKeys.DELETE_TOPICS.parseResponse(version, buffer), version);
+        return new DeleteTopicsResponse(new DeleteTopicsResponseData(new ByteBufferAccessor(buffer), version));
     }
 
     @Override

@@ -58,6 +58,7 @@ import static org.apache.kafka.test.StreamsTestUtils.getMetricByName;
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.CoreMatchers.hasItem;
 import static org.hamcrest.MatcherAssert.assertThat;
+import static org.hamcrest.Matchers.is;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
@@ -322,6 +323,10 @@ public class KTableKTableLeftJoinTest {
         joined = table1.leftJoin(table2, MockValueJoiner.TOSTRING_JOINER);
 
         ((KTableImpl<?, ?, ?>) joined).enableSendingOldValues(true);
+
+        assertThat(((KTableImpl<?, ?, ?>) table1).sendingOldValueEnabled(), is(true));
+        assertThat(((KTableImpl<?, ?, ?>) table2).sendingOldValueEnabled(), is(true));
+        assertThat(((KTableImpl<?, ?, ?>) joined).sendingOldValueEnabled(), is(true));
 
         final Topology topology = builder.build().addProcessor("proc", supplier, ((KTableImpl<?, ?, ?>) joined).name);
 

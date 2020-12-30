@@ -507,7 +507,7 @@ public class MockClient implements KafkaClient {
     @Override
     public ClientRequest newClientRequest(String nodeId, AbstractRequest.Builder<?> requestBuilder, long createdTimeMs,
                                           boolean expectResponse) {
-        return newClientRequest(nodeId, requestBuilder, createdTimeMs, expectResponse, 5000, null, null, null);
+        return newClientRequest(nodeId, requestBuilder, createdTimeMs, expectResponse, 5000, null);
     }
 
     @Override
@@ -516,11 +516,9 @@ public class MockClient implements KafkaClient {
                                           long createdTimeMs,
                                           boolean expectResponse,
                                           int requestTimeoutMs,
-                                          String initialPrincipalName,
-                                          String initialClientId,
                                           RequestCompletionHandler callback) {
         return new ClientRequest(nodeId, requestBuilder, correlation++, "mockClientId", createdTimeMs,
-                expectResponse, requestTimeoutMs, initialPrincipalName, initialClientId, callback);
+                expectResponse, requestTimeoutMs, callback);
     }
 
     @Override

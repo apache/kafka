@@ -20,6 +20,7 @@ import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Utils;
 import org.junit.jupiter.api.Test;
 
+import java.util.Optional;
 import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -42,6 +43,7 @@ class VotedStateTest {
             epoch,
             votedId,
             voters,
+            Optional.empty(),
             electionTimeoutMs
         );
 

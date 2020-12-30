@@ -44,18 +44,4 @@ public class ApiVersionsTest {
         apiVersions.remove("1");
         assertEquals(RecordBatch.CURRENT_MAGIC_VALUE, apiVersions.maxUsableProduceMagic());
     }
-
-    @Test
-    public void testConcMapsIter() {
-        Map<Integer, String> map = new ConcurrentHashMap<>();
-        IntStream.range(0, 10).forEach( x -> map.put(x, x+""));
-
-        for (Map.Entry<Integer, String> entry : map.entrySet()) {
-
-                map.remove(entry.getKey());
-
-        }
-        assertTrue(map.isEmpty());
-    }
-
 }

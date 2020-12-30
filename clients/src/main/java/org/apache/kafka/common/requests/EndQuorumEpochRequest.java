@@ -20,9 +20,10 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.message.EndQuorumEpochRequestData;
 import org.apache.kafka.common.message.EndQuorumEpochResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
+import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.protocol.types.Struct;
 
+import java.nio.ByteBuffer;
 import java.util.Collections;
 import java.util.List;
 
@@ -46,21 +47,16 @@ public class EndQuorumEpochRequest extends AbstractRequest {
         }
     }
 
-    public final EndQuorumEpochRequestData data;
+    private final EndQuorumEpochRequestData data;
 
     private EndQuorumEpochRequest(EndQuorumEpochRequestData data, short version) {
         super(ApiKeys.END_QUORUM_EPOCH, version);
         this.data = data;
     }
 
-    public EndQuorumEpochRequest(Struct struct, short version) {
-        super(ApiKeys.END_QUORUM_EPOCH, version);
-        this.data = new EndQuorumEpochRequestData(struct, version);
-    }
-
     @Override
-    protected Struct toStruct() {
-        return data.toStruct(version());
+    public EndQuorumEpochRequestData data() {
+        return data;
     }
 
     @Override
@@ -69,17 +65,19 @@ public class EndQuorumEpochRequest extends AbstractRequest {
             .setErrorCode(Errors.forException(e).code()));
     }
 
+    public static EndQuorumEpochRequest parse(ByteBuffer buffer, short version) {
+        return new EndQuorumEpochRequest(new EndQuorumEpochRequestData(new ByteBufferAccessor(buffer), version), version);
+    }
+
     public static EndQuorumEpochRequestData singletonRequest(TopicPartition topicPartition,
-                                                             int replicaId,
                                                              int leaderEpoch,
                                                              int leaderId,
                                                              List<Integer> preferredSuccessors) {
-        return singletonRequest(topicPartition, null, replicaId, leaderEpoch, leaderId, preferredSuccessors);
+        return singletonRequest(topicPartition, null, leaderEpoch, leaderId, preferredSuccessors);
     }
 
     public static EndQuorumEpochRequestData singletonRequest(TopicPartition topicPartition,
                                                              String clusterId,
-                                                             int replicaId,
                                                              int leaderEpoch,
                                                              int leaderId,
                                                              List<Integer> preferredSuccessors) {
@@ -91,7 +89,6 @@ public class EndQuorumEpochRequest extends AbstractRequest {
                            .setPartitions(Collections.singletonList(
                                new EndQuorumEpochRequestData.PartitionData()
                                    .setPartitionIndex(topicPartition.partition())
-                                   .setReplicaId(replicaId)
                                    .setLeaderEpoch(leaderEpoch)
                                    .setLeaderId(leaderId)
                                    .setPreferredSuccessors(preferredSuccessors))))

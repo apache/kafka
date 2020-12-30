@@ -113,6 +113,8 @@ class LogConfigTest {
     assertFalse(isValid("100 :0,10:   "))
     assertFalse(isValid("100: 0,10:   "))
     assertFalse(isValid("100:0,10 :   "))
+    assertFalse(isValid("*,100:10"))
+    assertFalse(isValid("* ,100:10"))
   }
 
   /* Sanity check that toHtmlTable produces one of the expected configs */

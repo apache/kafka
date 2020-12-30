@@ -23,7 +23,6 @@ import java.time.Duration
 import java.util.concurrent.CountDownLatch
 import java.util.regex.Pattern
 import java.util.{Collections, Locale, Map, Properties, Random}
-
 import com.typesafe.scalalogging.LazyLogging
 import joptsimple._
 import kafka.utils.Implicits._
@@ -32,7 +31,7 @@ import org.apache.kafka.clients.consumer.{Consumer, ConsumerConfig, ConsumerReco
 import org.apache.kafka.common.{MessageFormatter, TopicPartition}
 import org.apache.kafka.common.errors.{AuthenticationException, TimeoutException, WakeupException}
 import org.apache.kafka.common.record.TimestampType
-import org.apache.kafka.common.requests.ListOffsetRequest
+import org.apache.kafka.common.requests.ListOffsetsRequest
 import org.apache.kafka.common.serialization.{ByteArrayDeserializer, Deserializer}
 import org.apache.kafka.common.utils.Utils
 
@@ -338,8 +337,8 @@ object ConsoleConsumer extends Logging {
     val offsetArg =
       if (options.has(offsetOpt)) {
         options.valueOf(offsetOpt).toLowerCase(Locale.ROOT) match {
-          case "earliest" => ListOffsetRequest.EARLIEST_TIMESTAMP
-          case "latest" => ListOffsetRequest.LATEST_TIMESTAMP
+          case "earliest" => ListOffsetsRequest.EARLIEST_TIMESTAMP
+          case "latest" => ListOffsetsRequest.LATEST_TIMESTAMP
           case offsetString =>
             try {
               val offset = offsetString.toLong
@@ -351,8 +350,8 @@ object ConsoleConsumer extends Logging {
             }
         }
       }
-      else if (fromBeginning) ListOffsetRequest.EARLIEST_TIMESTAMP
-      else ListOffsetRequest.LATEST_TIMESTAMP
+      else if (fromBeginning) ListOffsetsRequest.EARLIEST_TIMESTAMP
+      else ListOffsetsRequest.LATEST_TIMESTAMP
 
     CommandLineUtils.checkRequiredArgs(parser, options, bootstrapServerOpt)
 
@@ -405,7 +404,7 @@ object ConsoleConsumer extends Logging {
           seek(topic, partitionId, offset)
         case (Some(topic), Some(partitionId), None, None) =>
           // default to latest if no offset is provided
-          seek(topic, partitionId, ListOffsetRequest.LATEST_TIMESTAMP)
+          seek(topic, partitionId, ListOffsetsRequest.LATEST_TIMESTAMP)
         case (Some(topic), None, None, None) =>
           consumer.subscribe(Collections.singletonList(topic))
         case (None, None, None, Some(whitelist)) =>
@@ -422,8 +421,8 @@ object ConsoleConsumer extends Logging {
       val topicPartition = new TopicPartition(topic, partitionId)
       consumer.assign(Collections.singletonList(topicPartition))
       offset match {
-        case ListOffsetRequest.EARLIEST_TIMESTAMP => consumer.seekToBeginning(Collections.singletonList(topicPartition))
-        case ListOffsetRequest.LATEST_TIMESTAMP => consumer.seekToEnd(Collections.singletonList(topicPartition))
+        case ListOffsetsRequest.EARLIEST_TIMESTAMP => consumer.seekToBeginning(Collections.singletonList(topicPartition))
+        case ListOffsetsRequest.LATEST_TIMESTAMP => consumer.seekToEnd(Collections.singletonList(topicPartition))
         case _ => consumer.seek(topicPartition, offset)
       }
     }

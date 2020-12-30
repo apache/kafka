@@ -170,7 +170,9 @@ class KafkaServer(val config: KafkaConfig, time: Time = Time.SYSTEM, threadNameP
 
   var kafkaController: KafkaController = null
 
-  var brokerToControllerChannelManager: BrokerToControllerChannelManager = null
+  var forwardingManager: ForwardingManager = null
+
+  var alterIsrManager: AlterIsrManager = null
 
   var kafkaScheduler: KafkaScheduler = null
 
@@ -304,16 +306,33 @@ class KafkaServer(val config: KafkaConfig, time: Time = Time.SYSTEM, threadNameP
         // Create and start the socket server acceptor threads so that the bound port is known.
         // Delay starting processors until the end of the initialization sequence to ensure
         // that credentials have been loaded before processing authentications.
-        socketServer = new SocketServer(config, metrics, time, credentialProvider)
+        //
+        // Note that we allow the use of disabled APIs when experimental support for
+        // the internal metadata quorum has been enabled
+        socketServer = new SocketServer(config, metrics, time, credentialProvider,
+          allowDisabledApis = config.metadataQuorumEnabled)
         socketServer.startup(startProcessingRequests = false)
 
         remoteLogManager = createRemoteLogManager(remoteLogManagerConfig, config.advertisedListeners)
 
         /* start replica manager */
-        brokerToControllerChannelManager = new BrokerToControllerChannelManagerImpl(metadataCache, time, metrics, config, threadNamePrefix)
+        alterIsrManager = if (config.interBrokerProtocolVersion.isAlterIsrSupported) {
+          AlterIsrManager(
+            config = config,
+            metadataCache = metadataCache,
+            scheduler = kafkaScheduler,
+            time = time,
+            metrics = metrics,
+            threadNamePrefix = threadNamePrefix,
+            brokerEpochSupplier = () => kafkaController.brokerEpoch
+          )
+        } else {
+          AlterIsrManager(kafkaScheduler, time, zkClient)
+        }
+        alterIsrManager.start()
+
         replicaManager = createReplicaManager(isShuttingDown)
         replicaManager.startup()
-        brokerToControllerChannelManager.start()
 
         val brokerInfo = createBrokerInfo
         val brokerEpoch = zkClient.registerBroker(brokerInfo)
@@ -328,6 +347,17 @@ class KafkaServer(val config: KafkaConfig, time: Time = Time.SYSTEM, threadNameP
         /* start kafka controller */
         kafkaController = new KafkaController(config, zkClient, time, metrics, brokerInfo, brokerEpoch, tokenManager, brokerFeatures, featureCache, threadNamePrefix)
         kafkaController.startup()
+
+        if (config.metadataQuorumEnabled) {
+          forwardingManager = ForwardingManager(
+            config,
+            metadataCache,
+            time,
+            metrics,
+            threadNamePrefix
+          )
+          forwardingManager.start()
+        }
 
         adminManager = new AdminManager(config, metrics, metadataCache, zkClient)
 
@@ -361,7 +391,7 @@ class KafkaServer(val config: KafkaConfig, time: Time = Time.SYSTEM, threadNameP
 
         /* start processing requests */
         dataPlaneRequestProcessor = new KafkaApis(socketServer.dataPlaneRequestChannel, replicaManager, adminManager, groupCoordinator, transactionCoordinator,
-          kafkaController, zkClient, config.brokerId, config, metadataCache, metrics, authorizer, quotaManagers,
+          kafkaController, forwardingManager, zkClient, config.brokerId, config, metadataCache, metrics, authorizer, quotaManagers,
           fetchManager, brokerTopicStats, clusterId, time, tokenManager, brokerFeatures, featureCache)
 
         dataPlaneRequestHandlerPool = new KafkaRequestHandlerPool(config.brokerId, socketServer.dataPlaneRequestChannel, dataPlaneRequestProcessor, time,
@@ -369,7 +399,7 @@ class KafkaServer(val config: KafkaConfig, time: Time = Time.SYSTEM, threadNameP
 
         socketServer.controlPlaneRequestChannelOpt.foreach { controlPlaneRequestChannel =>
           controlPlaneRequestProcessor = new KafkaApis(controlPlaneRequestChannel, replicaManager, adminManager, groupCoordinator, transactionCoordinator,
-            kafkaController, zkClient, config.brokerId, config, metadataCache, metrics, authorizer, quotaManagers,
+            kafkaController, forwardingManager, zkClient, config.brokerId, config, metadataCache, metrics, authorizer, quotaManagers,
             fetchManager, brokerTopicStats, clusterId, time, tokenManager, brokerFeatures, featureCache)
 
           controlPlaneRequestHandlerPool = new KafkaRequestHandlerPool(config.brokerId, socketServer.controlPlaneRequestChannelOpt.get, controlPlaneRequestProcessor, time,
@@ -385,7 +415,8 @@ class KafkaServer(val config: KafkaConfig, time: Time = Time.SYSTEM, threadNameP
         dynamicConfigHandlers = Map[String, ConfigHandler](ConfigType.Topic -> new TopicConfigHandler(logManager, config, quotaManagers, kafkaController),
                                                            ConfigType.Client -> new ClientIdConfigHandler(quotaManagers),
                                                            ConfigType.User -> new UserConfigHandler(quotaManagers, credentialProvider),
-                                                           ConfigType.Broker -> new BrokerConfigHandler(config, quotaManagers))
+                                                           ConfigType.Broker -> new BrokerConfigHandler(config, quotaManagers),
+                                                           ConfigType.Ip -> new IpConfigHandler(socketServer.connectionQuotas))
 
         // Create the config manager. start listening to notifications
         dynamicConfigManager = new DynamicConfigManager(zkClient, dynamicConfigHandlers)
@@ -462,10 +493,8 @@ class KafkaServer(val config: KafkaConfig, time: Time = Time.SYSTEM, threadNameP
   }
 
   protected def createReplicaManager(isShuttingDown: AtomicBoolean): ReplicaManager = {
-    val alterIsrManager = new AlterIsrManagerImpl(brokerToControllerChannelManager, kafkaScheduler,
-      time, config.brokerId, () => kafkaController.brokerEpoch)
-    new ReplicaManager(config, metrics, time, zkClient, kafkaScheduler, logManager, remoteLogManager, isShuttingDown,
-      quotaManagers, brokerTopicStats, metadataCache, logDirFailureChannel, alterIsrManager)
+    new ReplicaManager(config, metrics, time, zkClient, kafkaScheduler, logManager, remoteLogManager, isShuttingDown, quotaManagers,
+      brokerTopicStats, metadataCache, logDirFailureChannel, alterIsrManager)
   }
 
   private def initZkClient(time: Time): Unit = {
@@ -748,8 +777,11 @@ class KafkaServer(val config: KafkaConfig, time: Time = Time.SYSTEM, threadNameP
         if (replicaManager != null)
           CoreUtils.swallow(replicaManager.shutdown(), this)
 
-        if (brokerToControllerChannelManager != null)
-          CoreUtils.swallow(brokerToControllerChannelManager.shutdown(), this)
+        if (alterIsrManager != null)
+          CoreUtils.swallow(alterIsrManager.shutdown(), this)
+
+        if (forwardingManager != null)
+          CoreUtils.swallow(forwardingManager.shutdown(), this)
 
         if (logManager != null)
           CoreUtils.swallow(logManager.shutdown(), this)

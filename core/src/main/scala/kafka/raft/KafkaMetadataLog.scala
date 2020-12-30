@@ -16,6 +16,7 @@
  */
 package kafka.raft
 
+import java.nio.file.NoSuchFileException
 import java.util.Optional
 
 import kafka.log.{AppendOrigin, Log}
@@ -24,12 +25,18 @@ import org.apache.kafka.common.record.{MemoryRecords, Records}
 import org.apache.kafka.common.{KafkaException, TopicPartition}
 import org.apache.kafka.raft
 import org.apache.kafka.raft.{LogAppendInfo, LogFetchInfo, LogOffsetMetadata, Isolation, ReplicatedLog}
+import org.apache.kafka.snapshot.FileRawSnapshotReader
+import org.apache.kafka.snapshot.FileRawSnapshotWriter
+import org.apache.kafka.snapshot.RawSnapshotReader
+import org.apache.kafka.snapshot.RawSnapshotWriter
 
 import scala.compat.java8.OptionConverters._
 
-class KafkaMetadataLog(log: Log,
-                       topicPartition: TopicPartition,
-                       maxFetchSizeInBytes: Int = 1024 * 1024) extends ReplicatedLog {
+class KafkaMetadataLog(
+  log: Log,
+  topicPartition: TopicPartition,
+  maxFetchSizeInBytes: Int = 1024 * 1024
+) extends ReplicatedLog {
 
   override def read(startOffset: Long, readIsolation: Isolation): LogFetchInfo = {
     val isolation = readIsolation match {
@@ -124,11 +131,31 @@ class KafkaMetadataLog(log: Log,
     }
   }
 
+  override def flush(): Unit = {
+    log.flush()
+  }
+
+  override def lastFlushedOffset(): Long = {
+    log.recoveryPoint
+  }
+
   /**
    * Return the topic partition associated with the log.
    */
   override def topicPartition(): TopicPartition = {
     topicPartition
+  }
+
+  override def createSnapshot(snapshotId: raft.OffsetAndEpoch): RawSnapshotWriter = {
+    FileRawSnapshotWriter.create(log.dir.toPath, snapshotId)
+  }
+
+  override def readSnapshot(snapshotId: raft.OffsetAndEpoch): Optional[RawSnapshotReader] = {
+    try {
+      Optional.of(FileRawSnapshotReader.open(log.dir.toPath, snapshotId))
+    } catch {
+      case e: NoSuchFileException => Optional.empty()
+    }
   }
 
   override def close(): Unit = {

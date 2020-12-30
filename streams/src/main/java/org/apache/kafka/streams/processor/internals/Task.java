@@ -153,7 +153,7 @@ public interface Task {
     /**
      * Updates input partitions and topology after rebalance
      */
-    void update(final Set<TopicPartition> topicPartitions, final Map<String, List<String>> nodeToSourceTopics);
+    void update(final Set<TopicPartition> topicPartitions, final Map<String, List<String>> allTopologyNodesToSourceTopics);
 
     /**
      * Attempt a clean close but do not close the underlying state
@@ -206,8 +206,11 @@ public interface Task {
         return false;
     }
 
+    /**
+     * @throws TimeoutException if {@code currentWallClockMs > task-timeout-deadline}
+     */
     void maybeInitTaskTimeoutOrThrow(final long currentWallClockMs,
-                                     final TimeoutException timeoutException) throws StreamsException;
+                                     final Exception cause);
 
     void clearTaskTimeout();
 }

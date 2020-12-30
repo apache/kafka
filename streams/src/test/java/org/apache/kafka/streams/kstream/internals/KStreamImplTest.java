@@ -87,6 +87,7 @@ import static java.util.Arrays.asList;
 import static java.util.Collections.emptyMap;
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
+import static org.hamcrest.CoreMatchers.containsString;
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
@@ -1866,6 +1867,46 @@ public class KStreamImplTest {
     }
 
     @Test
+    public void shouldNotAllowBadTransformerSupplierOnFlatTransform() {
+        final Transformer<String, String, Iterable<KeyValue<String, String>>> transformer = flatTransformerSupplier.get();
+        final IllegalArgumentException exception = assertThrows(
+            IllegalArgumentException.class,
+            () -> testStream.flatTransform(() -> transformer)
+        );
+        assertThat(exception.getMessage(), containsString("#get() must return a new object each time it is called."));
+    }
+
+    @Test
+    public void shouldNotAllowBadTransformerSupplierOnFlatTransformWithStores() {
+        final Transformer<String, String, Iterable<KeyValue<String, String>>> transformer = flatTransformerSupplier.get();
+        final IllegalArgumentException exception = assertThrows(
+                IllegalArgumentException.class,
+            () -> testStream.flatTransform(() -> transformer, "storeName")
+        );
+        assertThat(exception.getMessage(), containsString("#get() must return a new object each time it is called."));
+    }
+
+    @Test
+    public void shouldNotAllowBadTransformerSupplierOnFlatTransformWithNamed() {
+        final Transformer<String, String, Iterable<KeyValue<String, String>>> transformer = flatTransformerSupplier.get();
+        final IllegalArgumentException exception = assertThrows(
+                IllegalArgumentException.class,
+            () -> testStream.flatTransform(() -> transformer, Named.as("flatTransformer"))
+        );
+        assertThat(exception.getMessage(), containsString("#get() must return a new object each time it is called."));
+    }
+
+    @Test
+    public void shouldNotAllowBadTransformerSupplierOnFlatTransformWithNamedAndStores() {
+        final Transformer<String, String, Iterable<KeyValue<String, String>>> transformer = flatTransformerSupplier.get();
+        final IllegalArgumentException exception = assertThrows(
+                IllegalArgumentException.class,
+            () -> testStream.flatTransform(() -> transformer, Named.as("flatTransformer"), "storeName")
+        );
+        assertThat(exception.getMessage(), containsString("#get() must return a new object each time it is called."));
+    }
+
+    @Test
     public void shouldNotAllowNullTransformerSupplierOnFlatTransform() {
         final NullPointerException exception = assertThrows(
             NullPointerException.class,
@@ -1946,11 +1987,51 @@ public class KStreamImplTest {
     }
 
     @Test
+    public void shouldNotAllowBadTransformerSupplierOnTransformValues() {
+        final ValueTransformer<String, String> transformer = valueTransformerSupplier.get();
+        final IllegalArgumentException exception = assertThrows(
+                IllegalArgumentException.class,
+            () -> testStream.transformValues(() -> transformer)
+        );
+        assertThat(exception.getMessage(), containsString("#get() must return a new object each time it is called."));
+    }
+
+    @Test
+    public void shouldNotAllowBadTransformerSupplierOnTransformValuesWithNamed() {
+        final ValueTransformer<String, String> transformer = valueTransformerSupplier.get();
+        final IllegalArgumentException exception = assertThrows(
+                IllegalArgumentException.class,
+            () -> testStream.transformValues(() -> transformer, Named.as("transformer"))
+        );
+        assertThat(exception.getMessage(), containsString("#get() must return a new object each time it is called."));
+    }
+
+    @Test
     public void shouldNotAllowNullValueTransformerSupplierOnTransformValues() {
         final NullPointerException exception = assertThrows(
             NullPointerException.class,
             () -> testStream.transformValues((ValueTransformerSupplier<Object, Object>) null));
         assertThat(exception.getMessage(), equalTo("valueTransformerSupplier can't be null"));
+    }
+
+    @Test
+    public void shouldNotAllowBadValueTransformerWithKeySupplierOnTransformValues() {
+        final ValueTransformerWithKey<String, String, String> transformer = valueTransformerWithKeySupplier.get();
+        final IllegalArgumentException exception = assertThrows(
+                IllegalArgumentException.class,
+            () -> testStream.transformValues(() -> transformer)
+        );
+        assertThat(exception.getMessage(), containsString("#get() must return a new object each time it is called."));
+    }
+
+    @Test
+    public void shouldNotAllowBadValueTransformerWithKeySupplierOnTransformValuesWithNamed() {
+        final ValueTransformerWithKey<String, String, String> transformer = valueTransformerWithKeySupplier.get();
+        final IllegalArgumentException exception = assertThrows(
+                IllegalArgumentException.class,
+            () -> testStream.transformValues(() -> transformer, Named.as("transformer"))
+        );
+        assertThat(exception.getMessage(), containsString("#get() must return a new object each time it is called."));
     }
 
     @Test

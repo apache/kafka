@@ -20,12 +20,13 @@ package org.apache.kafka.message;
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonProperty;
 
+import java.nio.ByteBuffer;
 import java.util.ArrayList;
+import java.util.Base64;
 import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
-import java.util.UUID;
 import java.util.regex.Pattern;
 
 public final class FieldSpec {
@@ -360,17 +361,18 @@ public final class FieldSpec {
         } else if (type instanceof FieldType.UUIDFieldType) {
             headerGenerator.addImport(MessageGenerator.UUID_CLASS);
             if (fieldDefault.isEmpty()) {
-                headerGenerator.addImport(MessageGenerator.MESSAGE_UTIL_CLASS);
-                return "MessageUtil.ZERO_UUID";
+                return "Uuid.ZERO_UUID";
             } else {
                 try {
-                    UUID.fromString(fieldDefault);
+                    ByteBuffer uuidBytes = ByteBuffer.wrap(Base64.getUrlDecoder().decode(fieldDefault));
+                    uuidBytes.getLong();
+                    uuidBytes.getLong();
                 } catch (IllegalArgumentException e) {
                     throw new RuntimeException("Invalid default for uuid field " +
                         name + ": " + fieldDefault, e);
                 }
                 headerGenerator.addImport(MessageGenerator.UUID_CLASS);
-                return "UUID.fromString(\"" + fieldDefault + "\")";
+                return "Uuid.fromString(\"" + fieldDefault + "\")";
             }
         } else if (type instanceof FieldType.Float64FieldType) {
             if (fieldDefault.isEmpty()) {
@@ -461,7 +463,7 @@ public final class FieldSpec {
             return "long";
         } else if (type instanceof FieldType.UUIDFieldType) {
             headerGenerator.addImport(MessageGenerator.UUID_CLASS);
-            return "UUID";
+            return "Uuid";
         } else if (type instanceof FieldType.Float64FieldType) {
             return "double";
         } else if (type.isString()) {

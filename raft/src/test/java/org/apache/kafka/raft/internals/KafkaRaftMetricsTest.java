@@ -107,7 +107,7 @@ public class KafkaRaftMetricsTest {
         assertEquals((double) 1, getMetric(metrics, "current-leader").metricValue());
         assertEquals((double) -1, getMetric(metrics, "current-vote").metricValue());
         assertEquals((double) 2, getMetric(metrics, "current-epoch").metricValue());
-        assertEquals((double) -1L, getMetric(metrics, "high-watermark").metricValue());
+        assertEquals((double) 5L, getMetric(metrics, "high-watermark").metricValue());
 
         state.followerStateOrThrow().updateHighWatermark(OptionalLong.of(10L));
         assertEquals((double) 10L, getMetric(metrics, "high-watermark").metricValue());
@@ -117,14 +117,14 @@ public class KafkaRaftMetricsTest {
         assertEquals((double) -1, getMetric(metrics, "current-leader").metricValue());
         assertEquals((double) 2, getMetric(metrics, "current-vote").metricValue());
         assertEquals((double) 3, getMetric(metrics, "current-epoch").metricValue());
-        assertEquals((double) -1L, getMetric(metrics, "high-watermark").metricValue());
+        assertEquals((double) 10L, getMetric(metrics, "high-watermark").metricValue());
 
         state.transitionToUnattached(4);
         assertEquals("unattached", getMetric(metrics, "current-state").metricValue());
         assertEquals((double) -1, getMetric(metrics, "current-leader").metricValue());
         assertEquals((double) -1, getMetric(metrics, "current-vote").metricValue());
         assertEquals((double) 4, getMetric(metrics, "current-epoch").metricValue());
-        assertEquals((double) -1L, getMetric(metrics, "high-watermark").metricValue());
+        assertEquals((double) 10L, getMetric(metrics, "high-watermark").metricValue());
     }
 
     @Test
@@ -154,7 +154,7 @@ public class KafkaRaftMetricsTest {
         assertEquals((double) -1, getMetric(metrics, "current-leader").metricValue());
         assertEquals((double) -1, getMetric(metrics, "current-vote").metricValue());
         assertEquals((double) 4, getMetric(metrics, "current-epoch").metricValue());
-        assertEquals((double) -1L, getMetric(metrics, "high-watermark").metricValue());
+        assertEquals((double) 10L, getMetric(metrics, "high-watermark").metricValue());
     }
 
     @Test
