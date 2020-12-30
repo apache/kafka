@@ -1419,7 +1419,7 @@ class LogTest {
     mockTime.sleep(1)
     // We delete the snapshot from the second segment, so now we have 2 snapshot files 
     assertEquals(2, ProducerStateManager.listSnapshotFiles(logDir).size)
-    assertEquals("expected a snapshot file per segment base offset, excluding the first", log.logSegments.map(_.baseOffset).toSeq.sorted, ProducerStateManager.listSnapshotFiles(logDir).map(_.offset).sorted)
+    assertEquals("expected a snapshot file per segment base offset", log.logSegments.map(_.baseOffset).toSeq.sorted, ProducerStateManager.listSnapshotFiles(logDir).map(_.offset).sorted)
   }
 
   /**

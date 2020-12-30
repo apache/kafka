@@ -601,6 +601,9 @@ private[log] object LogCleanerManager extends Logging {
       // the active segment is always uncleanable
       Option(log.activeSegment.baseOffset),
 
+      // we do not want to clean past the high watermark
+      Option(log.highWatermark),
+
       // the first segment whose largest message timestamp is within a minimum time lag from now
       if (minCompactionLagMs > 0) {
         // dirty log segments

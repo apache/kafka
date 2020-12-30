@@ -1311,7 +1311,7 @@ class Log(@volatile private var _dir: File,
     // in an unclean manner within log.flush.start.offset.checkpoint.interval.ms. The chance of this happening is low.
     maybeHandleIOException(s"Exception while increasing log start offset for $topicPartition to $newLogStartOffset in dir ${dir.getParent}") {
       lock synchronized {
-        if (reason != SegmentCompaction && newLogStartOffset > highWatermark)
+        if (newLogStartOffset > highWatermark)
           throw new OffsetOutOfRangeException(s"Cannot increment the log start offset to $newLogStartOffset of partition $topicPartition " +
             s"since it is larger than the high watermark $highWatermark")
 
@@ -1751,9 +1751,6 @@ class Log(@volatile private var _dir: File,
           checkIfMemoryMappedBufferClosed()
           // remove the segments for lookups
           removeAndDeleteSegments(deletable, asyncDelete = true, reason)
-          if (reason == LogCompaction) {
-            maybeIncrementLogStartOffset(segments.firstEntry.getValue.baseOffset, SegmentCompaction)
-          }
           maybeIncrementLogStartOffset(segments.firstEntry.getValue.baseOffset, SegmentDeletion)
         }
       }
