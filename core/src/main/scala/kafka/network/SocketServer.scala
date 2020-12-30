@@ -990,17 +990,10 @@ private[kafka] class Processor(val id: Int,
     }
   }
 
-  protected def isControlRequest(header: RequestHeader): Boolean = {
-    if (isControlPlane) {
-      header.apiKey() match {
-        case ApiKeys.LEADER_AND_ISR => true
-        case ApiKeys.STOP_REPLICA => true
-        case ApiKeys.UPDATE_METADATA => true
-        case ApiKeys.CONTROLLED_SHUTDOWN => true
-        case _ => false
-      }
-    }else {
-      true
+  private def isControlRequest(header: RequestHeader): Boolean = {
+    header.apiKey() match {
+      case ApiKeys.LEADER_AND_ISR | ApiKeys.STOP_REPLICA | ApiKeys.UPDATE_METADATA | ApiKeys.CONTROLLED_SHUTDOWN => true
+      case _ => false
     }
   }
 
@@ -1010,10 +1003,10 @@ private[kafka] class Processor(val id: Int,
         openOrClosingChannel(receive.source) match {
           case Some(channel) =>
             val header = parseRequestHeader(receive.payload)
-            if (!isControlRequest(header)) {
-              info(s"Current plane is control-plan, disconnecting non controller channel: $channel : $header")
+            if (isControlPlane && !isControlRequest(header)) {
+              info(s"Current plane is control plane, disconnecting non controller channel: $channel : $header")
               close(channel.id)
-            }else{
+            } else {
               if (header.apiKey == ApiKeys.SASL_HANDSHAKE && channel.maybeBeginServerReauthentication(receive,
                 () => time.nanoseconds()))
                 trace(s"Begin re-authentication: $channel")
