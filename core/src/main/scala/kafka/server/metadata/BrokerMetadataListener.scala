@@ -21,6 +21,7 @@ import kafka.coordinator.group.GroupCoordinator
 import kafka.coordinator.transaction.TransactionCoordinator
 import kafka.log.LogManager
 import kafka.metrics.KafkaMetricsGroup
+import kafka.network.SocketServer
 import kafka.server._
 import kafka.utils.ShutdownableThread
 import org.apache.kafka.common.config.ConfigResource
@@ -47,13 +48,16 @@ object BrokerMetadataListener {
                         quotaManagers: QuotaFactory.QuotaManagers,
                         replicaManager: ReplicaManager,
                         txnCoordinator: TransactionCoordinator,
-                        logManager: LogManager): List[BrokerMetadataProcessor] = {
+                        logManager: LogManager,
+                        socketServer: SocketServer,
+                        quotaCache: QuotaCache): List[BrokerMetadataProcessor] = {
     val configHandlers = Map[ConfigResource.Type, ConfigHandler](
       ConfigResource.Type.TOPIC -> new TopicConfigHandler(logManager, kafkaConfig, quotaManagers, None),
       ConfigResource.Type.BROKER -> new BrokerConfigHandler(kafkaConfig, quotaManagers))
     List(
       new PartitionMetadataProcessor(kafkaConfig, clusterId, metadataCache, groupCoordinator, quotaManagers,
-        replicaManager, txnCoordinator, configHandlers)
+        replicaManager, txnCoordinator, configHandlers),
+      new QuotaMetadataProcessor(quotaManagers, socketServer.connectionQuotas, quotaCache)
     )
   }
 }

@@ -242,7 +242,7 @@ public enum ApiKeys {
             ListPartitionReassignmentsResponseData.SCHEMAS),
     OFFSET_DELETE(47, "OffsetDelete", OffsetDeleteRequestData.SCHEMAS, OffsetDeleteResponseData.SCHEMAS),
     DESCRIBE_CLIENT_QUOTAS(48, "DescribeClientQuotas", DescribeClientQuotasRequestData.SCHEMAS,
-            DescribeClientQuotasResponseData.SCHEMAS),
+            DescribeClientQuotasResponseData.SCHEMAS, true),
     ALTER_CLIENT_QUOTAS(49, "AlterClientQuotas", AlterClientQuotasRequestData.SCHEMAS,
             AlterClientQuotasResponseData.SCHEMAS, true),
     DESCRIBE_USER_SCRAM_CREDENTIALS(50, "DescribeUserScramCredentials", DescribeUserScramCredentialsRequestData.SCHEMAS,

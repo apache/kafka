@@ -22,7 +22,6 @@ import java.net.{InetAddress, SocketTimeoutException}
 import java.util
 import java.util.concurrent._
 import java.util.concurrent.atomic.{AtomicBoolean, AtomicInteger, AtomicReference}
-
 import kafka.api.{KAFKA_0_9_0, KAFKA_2_2_IV0, KAFKA_2_4_IV1}
 import kafka.cluster.Broker
 import kafka.common.{GenerateBrokerIdException, InconsistentBrokerIdException, InconsistentClusterIdException}
@@ -33,6 +32,7 @@ import kafka.log.LogManager
 import kafka.metrics.{KafkaMetricsReporter, KafkaYammerMetrics}
 import kafka.network.SocketServer
 import kafka.security.CredentialProvider
+import kafka.server.metadata.QuotaCache
 import kafka.utils._
 import kafka.zk.{BrokerInfo, KafkaZkClient}
 import org.apache.kafka.clients.{ApiVersions, ClientDnsLookup, ManualMetadataUpdater, NetworkClient, NetworkClientUtils}
@@ -326,7 +326,8 @@ class LegacyBroker(val config: KafkaConfig,
         dataPlaneRequestProcessor = new KafkaApis(socketServer.dataPlaneRequestChannel,
           replicaManager, adminManager, groupCoordinator, transactionCoordinator,
           kafkaController, forwardingManager, zkClient, config.brokerId, config, metadataCache, metrics, authorizer, quotaManagers,
-          fetchManager, brokerTopicStats, _clusterId, time, tokenManager, brokerFeatures, featureCache, null)
+          fetchManager, brokerTopicStats, _clusterId, time, tokenManager, brokerFeatures, featureCache, null,
+          new QuotaCache())
 
         dataPlaneRequestHandlerPool = new KafkaRequestHandlerPool(config.brokerId, socketServer.dataPlaneRequestChannel, dataPlaneRequestProcessor, time,
           config.numIoThreads, s"${SocketServer.DataPlaneMetricPrefix}RequestHandlerAvgIdlePercent", SocketServer.DataPlaneThreadPrefix)
@@ -335,7 +336,8 @@ class LegacyBroker(val config: KafkaConfig,
           controlPlaneRequestProcessor = new KafkaApis(controlPlaneRequestChannel,
             replicaManager, adminManager, groupCoordinator, transactionCoordinator,
             kafkaController, forwardingManager, zkClient, config.brokerId, config, metadataCache, metrics, authorizer, quotaManagers,
-            fetchManager, brokerTopicStats, _clusterId, time, tokenManager, brokerFeatures, featureCache, null)
+            fetchManager, brokerTopicStats, _clusterId, time, tokenManager, brokerFeatures, featureCache, null,
+            new QuotaCache())
 
           controlPlaneRequestHandlerPool = new KafkaRequestHandlerPool(config.brokerId, socketServer.controlPlaneRequestChannelOpt.get, controlPlaneRequestProcessor, time,
             1, s"${SocketServer.ControlPlaneMetricPrefix}RequestHandlerAvgIdlePercent", SocketServer.ControlPlaneThreadPrefix)

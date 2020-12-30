@@ -20,7 +20,6 @@ package kafka.server
 import java.util.concurrent.CompletableFuture
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.locks.ReentrantLock
-
 import kafka.cluster.{Broker, EndPoint}
 import kafka.controller.KafkaController
 import kafka.coordinator.group.GroupCoordinator
@@ -30,7 +29,7 @@ import kafka.metrics.KafkaYammerMetrics
 import kafka.network.SocketServer
 import kafka.security.CredentialProvider
 import kafka.server.KafkaBroker.metricsPrefix
-import kafka.server.metadata.BrokerMetadataListener
+import kafka.server.metadata.{BrokerMetadataListener, QuotaCache}
 import kafka.utils.{CoreUtils, KafkaScheduler}
 import kafka.zk.KafkaZkClient
 import org.apache.kafka.common.feature.{Features, SupportedVersionRange}
@@ -107,7 +106,10 @@ class Kip500Broker(
   var kafkaScheduler: KafkaScheduler = null
 
   var metadataCache: MetadataCache = null
+
   var quotaManagers: QuotaFactory.QuotaManagers = null
+
+  var quotaCache: QuotaCache = null
 
   private var _brokerTopicStats: BrokerTopicStats = null
 
@@ -161,6 +163,7 @@ class Kip500Broker(
       _brokerTopicStats = new BrokerTopicStats
 
       quotaManagers = QuotaFactory.instantiate(config, metrics, time, threadNamePrefix.getOrElse(""))
+      quotaCache = new QuotaCache()
 
       logDirFailureChannel = new LogDirFailureChannel(config.logDirs.size)
 
@@ -216,11 +219,13 @@ class Kip500Broker(
       /* Add all reconfigurables for config change notification before starting the metadata listener */
       config.dynamicConfig.addReconfigurables(this)
 
+
+
       brokerMetadataListener = new BrokerMetadataListener(
         config, metadataCache, time,
         BrokerMetadataListener.defaultProcessors(
           config, clusterId, metadataCache, groupCoordinator, quotaManagers, replicaManager, transactionCoordinator,
-          logManager))
+          logManager, socketServer, quotaCache))
       brokerMetadataListener.start()
 
       lifecycleManager.start(() => brokerMetadataListener.currentMetadataOffset(),
@@ -277,7 +282,8 @@ class Kip500Broker(
       dataPlaneRequestProcessor = new KafkaApis(socketServer.dataPlaneRequestChannel,
         replicaManager, adminManager, groupCoordinator, transactionCoordinator,
         kafkaController, forwardingManager, zkClient, config.brokerId, config, metadataCache, metrics, authorizer, quotaManagers,
-        fetchManager, brokerTopicStats, clusterId, time, tokenManager, brokerFeatures, featureCache, brokerMetadataListener)
+        fetchManager, brokerTopicStats, clusterId, time, tokenManager, brokerFeatures, featureCache, brokerMetadataListener,
+        quotaCache)
 
       dataPlaneRequestHandlerPool = new KafkaRequestHandlerPool(config.brokerId, socketServer.dataPlaneRequestChannel, dataPlaneRequestProcessor, time,
         config.numIoThreads, s"${SocketServer.DataPlaneMetricPrefix}RequestHandlerAvgIdlePercent", SocketServer.DataPlaneThreadPrefix)
@@ -286,7 +292,8 @@ class Kip500Broker(
         controlPlaneRequestProcessor = new KafkaApis(controlPlaneRequestChannel,
           replicaManager, adminManager, groupCoordinator, transactionCoordinator,
           kafkaController, forwardingManager, zkClient, config.brokerId, config, metadataCache, metrics, authorizer, quotaManagers,
-          fetchManager, brokerTopicStats, clusterId, time, tokenManager, brokerFeatures, featureCache, brokerMetadataListener)
+          fetchManager, brokerTopicStats, clusterId, time, tokenManager, brokerFeatures, featureCache, brokerMetadataListener,
+          quotaCache)
 
         controlPlaneRequestHandlerPool = new KafkaRequestHandlerPool(config.brokerId, socketServer.controlPlaneRequestChannelOpt.get, controlPlaneRequestProcessor, time,
           1, s"${SocketServer.ControlPlaneMetricPrefix}RequestHandlerAvgIdlePercent", SocketServer.ControlPlaneThreadPrefix)

@@ -23,7 +23,6 @@ import java.util
 import java.util.{Collections, Optional, Properties}
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicInteger
-
 import kafka.admin.{AdminUtils, RackAwareMode}
 import kafka.api.ElectLeadersRequestOps
 import kafka.api.{ApiVersion, KAFKA_0_11_0_IV0, KAFKA_2_3_IV0}
@@ -90,8 +89,9 @@ import scala.collection.mutable.ArrayBuffer
 import scala.collection.{Map, Seq, Set, immutable, mutable}
 import scala.util.{Failure, Success, Try}
 import kafka.coordinator.group.GroupOverview
-import kafka.server.metadata.BrokerMetadataListener
+import kafka.server.metadata.{BrokerMetadataListener, QuotaCache}
 import org.apache.kafka.common.message.DescribeConfigsRequestData.DescribeConfigsResource
+import org.apache.kafka.common.quota.ClientQuotaEntity
 import org.apache.kafka.common.requests.DescribeConfigsResponse.ConfigSource
 
 import scala.annotation.nowarn
@@ -120,7 +120,8 @@ class KafkaApis(val requestChannel: RequestChannel,
                 val tokenManager: DelegationTokenManager,
                 val brokerFeatures: BrokerFeatures,
                 val finalizedFeatureCache: FinalizedFeatureCache,
-                brokerMetadataListener: BrokerMetadataListener) extends ApiRequestHandler with Logging {
+                brokerMetadataListener: BrokerMetadataListener,
+                val quotaCache: QuotaCache) extends ApiRequestHandler with Logging {
 
   val apisUtils = new ApisUtils(new LogContext(s"[BrokerApis id=${config.brokerId}] "),
     requestChannel, authorizer, quotas, time, Some(groupCoordinator), Some(txnCoordinator))
@@ -249,7 +250,7 @@ class KafkaApis(val requestChannel: RequestChannel,
         case ApiKeys.ALTER_PARTITION_REASSIGNMENTS => maybeForward(request, handleAlterPartitionReassignmentsRequest)
         case ApiKeys.LIST_PARTITION_REASSIGNMENTS => handleListPartitionReassignmentsRequest(request)
         case ApiKeys.OFFSET_DELETE => handleOffsetDeleteRequest(request)
-        case ApiKeys.DESCRIBE_CLIENT_QUOTAS => maybeForward(request, handleDescribeClientQuotasRequest)
+        case ApiKeys.DESCRIBE_CLIENT_QUOTAS => handleDescribeClientQuotasRequest(request)
         case ApiKeys.ALTER_CLIENT_QUOTAS => maybeForward(request, handleAlterClientQuotasRequest)
         case ApiKeys.DESCRIBE_USER_SCRAM_CREDENTIALS => handleDescribeUserScramCredentialsRequest(request)
         case ApiKeys.ALTER_USER_SCRAM_CREDENTIALS => maybeForward(request, handleAlterUserScramCredentialsRequest)
@@ -3205,8 +3206,15 @@ class KafkaApis(val requestChannel: RequestChannel,
           .setThrottleTimeMs(requestThrottleMs)
           .setEntries(entriesData.asJava)))
     } else {
+      val result = quotaCache.describeClientQuotas(describeClientQuotasRequest.filter())
+      val resultAsJava = new util.HashMap[ClientQuotaEntity, util.Map[String, java.lang.Double]](result.size)
+      result.foreach { case (entity, quotas) =>
+        resultAsJava.put(new ClientQuotaEntity(entity.toMap.asJava),
+          quotas.map { case (key, quota) => key -> Double.box(quota)}.asJava)
+      }
       apisUtils.sendResponseMaybeThrottle(request, requestThrottleMs =>
-        describeClientQuotasRequest.getErrorResponse(requestThrottleMs, Errors.CLUSTER_AUTHORIZATION_FAILED.exception))
+        DescribeClientQuotasResponse.fromQuotaEntities(resultAsJava, requestThrottleMs)
+      )
     }
   }
 
