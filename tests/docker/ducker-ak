@@ -421,6 +421,18 @@ EOF
     exec 3>&-
 }
 
+# this script run ducktape inside container so the "latest" is linked to the container path.
+correct_latest_link() {
+  latest_link="$kafka_dir/results/latest"
+  # re-build only if it is a broken soft link
+  if [[ -L "$latest_link" ]] && [[ ! -e "$latest_link" ]]; then
+    # the path inside container is /opt/kafka-dev/results/year-m-d--number
+    folder=$(echo $(readlink $latest_link) | cut -d'/' -f5)
+    unlink $latest_link
+    ln -s "$kafka_dir/results/$folder" "$latest_link"
+  fi
+}
+
 ducker_test() {
     require_commands docker
     docker inspect ducker01 &>/dev/null || \
@@ -443,7 +455,8 @@ ducker_test() {
     must_popd
     cmd="cd /opt/kafka-dev && ducktape --cluster-file /opt/kafka-dev/tests/docker/build/cluster.json $args"
     echo "docker exec ducker01 bash -c \"${cmd}\""
-    exec docker exec --user=ducker ducker01 bash -c "${cmd}"
+    docker exec --user=ducker ducker01 bash -c "${cmd}"
+    correct_latest_link
 }
 
 ducker_ssh() {
