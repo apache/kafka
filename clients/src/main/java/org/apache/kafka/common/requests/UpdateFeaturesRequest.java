@@ -16,14 +16,12 @@
  */
 package org.apache.kafka.common.requests;
 
-import java.nio.ByteBuffer;
-import org.apache.kafka.common.message.UpdateFeaturesRequestData.FeatureUpdateKey;
-import org.apache.kafka.common.message.UpdateFeaturesResponseData;
 import org.apache.kafka.common.message.UpdateFeaturesRequestData;
-import org.apache.kafka.common.message.UpdateFeaturesResponseData.UpdatableFeatureResult;
-import org.apache.kafka.common.message.UpdateFeaturesResponseData.UpdatableFeatureResultCollection;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.ByteBufferAccessor;
+
+import java.nio.ByteBuffer;
+import java.util.Collections;
 
 public class UpdateFeaturesRequest extends AbstractRequest {
 
@@ -55,20 +53,12 @@ public class UpdateFeaturesRequest extends AbstractRequest {
     }
 
     @Override
-    public AbstractResponse getErrorResponse(int throttleTimeMs, Throwable e) {
-        final ApiError apiError = ApiError.fromThrowable(e);
-        final UpdatableFeatureResultCollection results = new UpdatableFeatureResultCollection();
-        for (FeatureUpdateKey update : this.data.featureUpdates().valuesSet()) {
-            final UpdatableFeatureResult result = new UpdatableFeatureResult()
-                .setFeature(update.feature())
-                .setErrorCode(apiError.error().code())
-                .setErrorMessage(apiError.message());
-            results.add(result);
-        }
-        final UpdateFeaturesResponseData responseData = new UpdateFeaturesResponseData()
-            .setThrottleTimeMs(throttleTimeMs)
-            .setResults(results);
-        return new UpdateFeaturesResponse(responseData);
+    public UpdateFeaturesResponse getErrorResponse(int throttleTimeMs, Throwable e) {
+        return UpdateFeaturesResponse.createWithErrors(
+            ApiError.fromThrowable(e),
+            Collections.emptyMap(),
+            throttleTimeMs
+        );
     }
 
     @Override

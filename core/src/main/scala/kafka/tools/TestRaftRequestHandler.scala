@@ -22,10 +22,10 @@ import kafka.network.RequestConvertToJson
 import kafka.server.ApiRequestHandler
 import kafka.utils.Logging
 import org.apache.kafka.common.internals.FatalExitError
-import org.apache.kafka.common.message.{BeginQuorumEpochResponseData, EndQuorumEpochResponseData, FetchResponseData, VoteResponseData}
+import org.apache.kafka.common.message.{BeginQuorumEpochResponseData, EndQuorumEpochResponseData, FetchResponseData, FetchSnapshotResponseData, VoteResponseData}
 import org.apache.kafka.common.protocol.{ApiKeys, ApiMessage, Errors}
 import org.apache.kafka.common.record.BaseRecords
-import org.apache.kafka.common.requests.{AbstractRequest, AbstractResponse, BeginQuorumEpochResponse, EndQuorumEpochResponse, FetchResponse, VoteResponse}
+import org.apache.kafka.common.requests.{AbstractRequest, AbstractResponse, BeginQuorumEpochResponse, EndQuorumEpochResponse, FetchResponse, FetchSnapshotResponse, VoteResponse}
 import org.apache.kafka.common.utils.Time
 import org.apache.kafka.raft.{KafkaRaftClient, RaftRequest}
 
@@ -49,7 +49,7 @@ class TestRaftRequestHandler(
         case ApiKeys.BEGIN_QUORUM_EPOCH => handleBeginQuorumEpoch(request)
         case ApiKeys.END_QUORUM_EPOCH => handleEndQuorumEpoch(request)
         case ApiKeys.FETCH => handleFetch(request)
-
+        case ApiKeys.FETCH_SNAPSHOT => handleFetchSnapshot(request)
         case _ => throw new IllegalArgumentException(s"Unsupported api key: ${request.header.apiKey}")
       }
     } catch {
@@ -76,6 +76,10 @@ class TestRaftRequestHandler(
 
   private def handleFetch(request: RequestChannel.Request): Unit = {
     handle(request, response => new FetchResponse[BaseRecords](response.asInstanceOf[FetchResponseData]))
+  }
+
+  private def handleFetchSnapshot(request: RequestChannel.Request): Unit = {
+    handle(request, response => new FetchSnapshotResponse(response.asInstanceOf[FetchSnapshotResponseData]))
   }
 
   private def handle(
