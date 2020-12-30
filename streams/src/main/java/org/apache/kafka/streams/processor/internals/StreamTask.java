@@ -103,6 +103,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
     private long idleStartTimeMs;
     private boolean commitNeeded = false;
     private boolean commitRequested = false;
+    private boolean hasPendingTransaction = false;
 
     public StreamTask(final TaskId id,
                       final Set<TopicPartition> partitions,
@@ -378,6 +379,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
                     // TODO: this should be removed after we decouple caching with emitting
                     stateMgr.flushCache();
                     recordCollector.flush();
+                    hasPendingTransaction = eosEnabled;
 
                     log.debug("Prepared {} task for committing", state());
                     return committableOffsetsAndMetadata();
@@ -476,6 +478,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
 
         commitRequested = false;
         commitNeeded = false;
+        hasPendingTransaction = false;
     }
 
     private Map<TopicPartition, Long> extractPartitionTimes() {
@@ -630,6 +633,10 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
             // would soon be updated to not return any records for this task anymore.
             log.info("Stream task {} is already in {} state, skip processing it.", id(), state());
 
+            return false;
+        }
+
+        if (hasPendingTransaction) {
             return false;
         }
 
