@@ -1295,7 +1295,7 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
         final TargetState initialState = configState.targetState(connectorName);
         final Callback<TargetState> onInitialStateChange = (error, newState) -> {
             if (error != null) {
-                callback.onCompletion(new ConnectException("Failed to start connector: " + connectorName), null);
+                callback.onCompletion(new ConnectException("Failed to start connector: " + connectorName, error), null);
                 return;
             }
 
