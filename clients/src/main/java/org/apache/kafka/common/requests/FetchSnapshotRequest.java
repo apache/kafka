@@ -32,7 +32,7 @@ final public class FetchSnapshotRequest extends AbstractRequest {
     public final FetchSnapshotRequestData data;
 
     public FetchSnapshotRequest(FetchSnapshotRequestData data, short version) {
-        super(ApiKeys.FETCH_SNAPSHOT, (short) (FetchSnapshotRequestData.SCHEMAS.length - 1));
+        super(ApiKeys.FETCH_SNAPSHOT, version);
         this.data = data;
     }
 
