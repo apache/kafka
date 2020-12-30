@@ -854,7 +854,7 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
     private FetchResponseData buildFetchResponse(
         Errors error,
         Records records,
-        Optional<FetchResponseData.EpochEndOffset> divergingEpoch,
+        ValidatedFetchOffsetAndEpoch validatedOffsetAndEpoch,
         Optional<LogOffsetMetadata> highWatermark
     ) {
         return RaftUtil.singletonFetchResponse(log.topicPartition(), Errors.NONE, partitionData -> {
@@ -870,7 +870,19 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
                 .setLeaderEpoch(quorum.epoch())
                 .setLeaderId(quorum.leaderIdOrNil());
 
-            divergingEpoch.ifPresent(partitionData::setDivergingEpoch);
+            switch (validatedOffsetAndEpoch.type) {
+                case DIVERGING:
+                    partitionData.divergingEpoch()
+                        .setEpoch(validatedOffsetAndEpoch.offsetAndEpoch.epoch)
+                        .setEndOffset(validatedOffsetAndEpoch.offsetAndEpoch.offset);
+                    break;
+                case SNAPSHOT:
+                    partitionData.snapshotId()
+                        .setEpoch(validatedOffsetAndEpoch.offsetAndEpoch.epoch)
+                        .setEndOffset(validatedOffsetAndEpoch.offsetAndEpoch.offset);
+                    break;
+                default:
+            }
         });
     }
 
@@ -878,7 +890,12 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
         Errors error,
         Optional<LogOffsetMetadata> highWatermark
     ) {
-        return buildFetchResponse(error, MemoryRecords.EMPTY, Optional.empty(), highWatermark);
+        return buildFetchResponse(
+            error,
+            MemoryRecords.EMPTY,
+            ValidatedFetchOffsetAndEpoch.valid(new OffsetAndEpoch(-1, -1)),
+            highWatermark
+        );
     }
 
     /**
@@ -914,6 +931,8 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
                 Errors.INVALID_REQUEST, Optional.empty()));
         }
 
+        // TODO: The other tryCompleteFetchRequest is protected by a try...catch. If this can throw we should catch it and complete
+        // the future. Method that return Future and can also throw are hard to use.
         FetchResponseData response = tryCompleteFetchRequest(request.replicaId(), fetchPartition, currentTimeMs);
         FetchResponseData.FetchablePartitionResponse partitionResponse =
             response.responses().get(0).partitionResponses().get(0);
@@ -951,6 +970,7 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
             try {
                 return tryCompleteFetchRequest(request.replicaId(), fetchPartition, time.milliseconds());
             } catch (Exception e) {
+                // TODO: Why do we catch an exception here but not in the synchronous tryCompleteFetchRequest above?
                 logger.error("Caught unexpected error in fetch completion of request {}", request, e);
                 return buildEmptyFetchResponse(Errors.UNKNOWN_SERVER_ERROR, Optional.empty());
             }
@@ -970,40 +990,81 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
         long fetchOffset = request.fetchOffset();
         int lastFetchedEpoch = request.lastFetchedEpoch();
         LeaderState state = quorum.leaderStateOrThrow();
-        Optional<OffsetAndEpoch> divergingEpochOpt = validateFetchOffsetAndEpoch(fetchOffset, lastFetchedEpoch);
+        ValidatedFetchOffsetAndEpoch validatedOffsetAndEpoch = validateFetchOffsetAndEpoch(fetchOffset, lastFetchedEpoch);
 
-        if (divergingEpochOpt.isPresent()) {
-            Optional<FetchResponseData.EpochEndOffset> divergingEpoch =
-                divergingEpochOpt.map(offsetAndEpoch -> new FetchResponseData.EpochEndOffset()
-                    .setEpoch(offsetAndEpoch.epoch)
-                    .setEndOffset(offsetAndEpoch.offset));
-            return buildFetchResponse(Errors.NONE, MemoryRecords.EMPTY, divergingEpoch, state.highWatermark());
-        } else {
+        final Records records;
+        if (validatedOffsetAndEpoch.type() == ValidatedFetchOffsetAndEpoch.Type.VALID) {
             LogFetchInfo info = log.read(fetchOffset, Isolation.UNCOMMITTED);
 
             if (state.updateReplicaState(replicaId, currentTimeMs, info.startOffsetMetadata)) {
                 onUpdateLeaderHighWatermark(state, currentTimeMs);
             }
 
-            return buildFetchResponse(Errors.NONE, info.records, Optional.empty(), state.highWatermark());
+            records = info.records;
+        } else {
+            records = MemoryRecords.EMPTY;
         }
+
+        return buildFetchResponse(Errors.NONE, records, validatedOffsetAndEpoch, state.highWatermark());
     }
 
     /**
      * Check whether a fetch offset and epoch is valid. Return the diverging epoch, which
      * is the largest epoch such that subsequent records are known to diverge.
      */
-    private Optional<OffsetAndEpoch> validateFetchOffsetAndEpoch(long fetchOffset, int lastFetchedEpoch) {
+    private ValidatedFetchOffsetAndEpoch validateFetchOffsetAndEpoch(long fetchOffset, int lastFetchedEpoch) {
         if (fetchOffset == 0 && lastFetchedEpoch == 0) {
-            return Optional.empty();
+            return ValidatedFetchOffsetAndEpoch.valid(new OffsetAndEpoch(fetchOffset, lastFetchedEpoch));
+        }
+
+        if (fetchOffset < log.startOffset() || (fetchOffset == log.startOffset() && lastFetchedEpoch != log.lastFetchedEpoch())) {
+            return ValidatedFetchOffsetAndEpoch.snapshot(
+                log.latestSnapshotId().orElseThrow(
+                    () -> new KafkaException(String.format("The log start offset was greater than zero (%s) but no snapshot was found"))
+                )
+            );
         }
 
         OffsetAndEpoch endOffsetAndEpoch = log.endOffsetForEpoch(lastFetchedEpoch)
             .orElse(new OffsetAndEpoch(-1L, -1));
         if (endOffsetAndEpoch.epoch != lastFetchedEpoch || endOffsetAndEpoch.offset < fetchOffset) {
-            return Optional.of(endOffsetAndEpoch);
-        } else {
-            return Optional.empty();
+            return ValidatedFetchOffsetAndEpoch.diverging(endOffsetAndEpoch);
+        }
+
+        return ValidatedFetchOffsetAndEpoch.valid(new OffsetAndEpoch(fetchOffset, lastFetchedEpoch));
+    }
+
+    private final static class ValidatedFetchOffsetAndEpoch {
+        final private Type type;
+        final private OffsetAndEpoch offsetAndEpoch;
+
+        ValidatedFetchOffsetAndEpoch(Type type, OffsetAndEpoch offsetAndEpoch) {
+            this.type = type;
+            this.offsetAndEpoch = offsetAndEpoch;
+        }
+
+        Type type() {
+            return type;
+        }
+
+        OffsetAndEpoch offsetAndEpoch() {
+            return offsetAndEpoch;
+        }
+
+        public static enum Type {
+            DIVERGING, SNAPSHOT, VALID
+        }
+
+        static ValidatedFetchOffsetAndEpoch diverging(OffsetAndEpoch offsetAndEpoch) {
+            return new ValidatedFetchOffsetAndEpoch(Type.DIVERGING, offsetAndEpoch);
+        }
+
+        static ValidatedFetchOffsetAndEpoch snapshot(OffsetAndEpoch offsetAndEpoch) {
+            return new ValidatedFetchOffsetAndEpoch(Type.SNAPSHOT, offsetAndEpoch);
+        }
+
+        static ValidatedFetchOffsetAndEpoch valid(OffsetAndEpoch offsetAndEpoch) {
+            return new ValidatedFetchOffsetAndEpoch(Type.VALID, offsetAndEpoch);
         }
     }
 
@@ -1057,10 +1118,8 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
                     }
                 });
 
-                log.truncateToEndOffset(divergingOffsetAndEpoch).ifPresent(truncationOffset -> {
-                    logger.info("Truncated to offset {} from Fetch response from leader {}",
-                        truncationOffset, quorum.leaderIdOrNil());
-                });
+                long truncationOffset = log.truncateToEndOffset(divergingOffsetAndEpoch);
+                logger.info("Truncated to offset {} from Fetch response from leader {}", truncationOffset, quorum.leaderIdOrNil());
             } else if (partitionResponse.snapshotId().epoch() >= 0 ||
                        partitionResponse.snapshotId().endOffset() >= 0) {
                 // The leader is asking us to fetch a snapshot
@@ -1326,6 +1385,15 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
             // Finished fetching the snapshot.
             snapshot.freeze();
             state.setFetchingSnapshot(Optional.empty());
+
+            if (!log.truncateFullyToLatestSnapshot()) {
+                logger.error(
+                    "Full log trunctation expected but didn't happend. Snapshot of {}, log end offset {}, last fetched {}",
+                    snapshot.snapshotId(),
+                    log.endOffset(),
+                    log.lastFetchedEpoch()
+                );
+            }
         }
 
         state.resetFetchTimeout(currentTimeMs);
@@ -2015,6 +2083,11 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
     }
 
     private long pollCurrentState(long currentTimeMs) throws IOException {
+        // TODO: File a jira for this: Okay for now but the logic should be a little different.
+        // Leader should only advance the log start offset if all of followers fetched past it or there is a timeout
+        // While followers should only call maybeUpdateLogStartOffset if the leader's logStartOffset is greater than ours
+        log.maybeUpdateLogStartOffset();
+
         if (quorum.isLeader()) {
             return pollLeader(currentTimeMs);
         } else if (quorum.isCandidate()) {

@@ -189,7 +189,8 @@ class TestRaftServer(
       producerIdExpirationCheckIntervalMs = LogManager.ProducerIdExpirationCheckIntervalMs,
       logDirFailureChannel = new LogDirFailureChannel(5)
     )
-    new KafkaMetadataLog(log, partition)
+
+    KafkaMetadataLog(log, partition)
   }
 
   private def createLogDirectory(logDir: File, logDirName: String): File = {

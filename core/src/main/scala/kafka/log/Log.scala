@@ -51,11 +51,11 @@ import scala.collection.{Seq, Set, mutable}
 
 object LogAppendInfo {
   val UnknownLogAppendInfo = LogAppendInfo(None, -1, None, RecordBatch.NO_TIMESTAMP, -1L, RecordBatch.NO_TIMESTAMP, -1L,
-    RecordConversionStats.EMPTY, NoCompressionCodec, NoCompressionCodec, -1, -1, offsetsMonotonic = false, -1L)
+    RecordConversionStats.EMPTY, false, NoCompressionCodec, NoCompressionCodec, -1, -1, offsetsMonotonic = false, -1L)
 
   def unknownLogAppendInfoWithLogStartOffset(logStartOffset: Long): LogAppendInfo =
     LogAppendInfo(None, -1, None, RecordBatch.NO_TIMESTAMP, -1L, RecordBatch.NO_TIMESTAMP, logStartOffset,
-      RecordConversionStats.EMPTY, NoCompressionCodec, NoCompressionCodec, -1, -1,
+      RecordConversionStats.EMPTY, false, NoCompressionCodec, NoCompressionCodec, -1, -1,
       offsetsMonotonic = false, -1L)
 
   /**
@@ -65,7 +65,7 @@ object LogAppendInfo {
    */
   def unknownLogAppendInfoWithAdditionalInfo(logStartOffset: Long, recordErrors: Seq[RecordError], errorMessage: String): LogAppendInfo =
     LogAppendInfo(None, -1, None, RecordBatch.NO_TIMESTAMP, -1L, RecordBatch.NO_TIMESTAMP, logStartOffset,
-      RecordConversionStats.EMPTY, NoCompressionCodec, NoCompressionCodec, -1, -1,
+      RecordConversionStats.EMPTY, false, NoCompressionCodec, NoCompressionCodec, -1, -1,
       offsetsMonotonic = false, -1L, recordErrors, errorMessage)
 }
 
@@ -106,6 +106,7 @@ case class LogAppendInfo(var firstOffset: Option[Long],
                          var logAppendTime: Long,
                          var logStartOffset: Long,
                          var recordConversionStats: RecordConversionStats,
+                         var rolled: Boolean,
                          sourceCodec: CompressionCodec,
                          targetCodec: CompressionCodec,
                          shallowCount: Int,
@@ -204,6 +205,9 @@ case object LeaderOffsetIncremented extends LogStartOffsetIncrementReason {
 }
 case object SegmentDeletion extends LogStartOffsetIncrementReason {
   override def toString: String = "segment deletion"
+}
+case object SnapshotGenerated extends LogStartOffsetIncrementReason {
+  override def toString: String = "snapshot generated"
 }
 
 /**
@@ -1298,11 +1302,13 @@ class Log(@volatile private var _dir: File,
 
   /**
    * Increment the log start offset if the provided offset is larger.
+   *  TODO improve documentation
    */
-  def maybeIncrementLogStartOffset(newLogStartOffset: Long, reason: LogStartOffsetIncrementReason): Unit = {
+  def maybeIncrementLogStartOffset(newLogStartOffset: Long, reason: LogStartOffsetIncrementReason): Boolean = {
     // We don't have to write the log start offset to log-start-offset-checkpoint immediately.
     // The deleteRecordsOffset may be lost only if all in-sync replicas of this broker are shutdown
     // in an unclean manner within log.flush.start.offset.checkpoint.interval.ms. The chance of this happening is low.
+    var updatedLogStartOffset = false
     maybeHandleIOException(s"Exception while increasing log start offset for $topicPartition to $newLogStartOffset in dir ${dir.getParent}") {
       lock synchronized {
         if (newLogStartOffset > highWatermark)
@@ -1311,6 +1317,7 @@ class Log(@volatile private var _dir: File,
 
         checkIfMemoryMappedBufferClosed()
         if (newLogStartOffset > logStartOffset) {
+          updatedLogStartOffset = true
           updateLogStartOffset(newLogStartOffset)
           info(s"Incremented log start offset to $newLogStartOffset due to $reason")
           leaderEpochCache.foreach(_.truncateFromStart(logStartOffset))
@@ -1319,6 +1326,8 @@ class Log(@volatile private var _dir: File,
         }
       }
     }
+
+    updatedLogStartOffset
   }
 
   private def analyzeAndValidateProducerState(appendOffsetMetadata: LogOffsetMetadata,
@@ -1452,7 +1461,7 @@ class Log(@volatile private var _dir: File,
     else
       None
     LogAppendInfo(firstOffset, lastOffset, lastLeaderEpochOpt, maxTimestamp, offsetOfMaxTimestamp, RecordBatch.NO_TIMESTAMP, logStartOffset,
-      RecordConversionStats.EMPTY, sourceCodec, targetCodec, shallowMessageCount, validBytesCount, monotonic, lastOffsetOfFirstBatch)
+      RecordConversionStats.EMPTY, false, sourceCodec, targetCodec, shallowMessageCount, validBytesCount, monotonic, lastOffsetOfFirstBatch)
   }
 
   /**
@@ -1881,6 +1890,8 @@ class Log(@volatile private var _dir: File,
         s"time_index_size = ${segment.timeIndex.entries}/${segment.timeIndex.maxEntries}, " +
         s"inactive_time_ms = ${segment.timeWaitedForRoll(now, maxTimestampInMessages)}/${config.segmentMs - segment.rollJitterMs}).")
 
+      appendInfo.rolled = true
+
       /*
         maxOffsetInMessages - Integer.MAX_VALUE is a heuristic value for the first offset in the set of messages.
         Since the offset in messages will not differ by more than Integer.MAX_VALUE, this is guaranteed <= the real
@@ -2100,7 +2111,7 @@ class Log(@volatile private var _dir: File,
    *
    *  @param newOffset The new offset to start the log with
    */
-  private[log] def truncateFullyAndStartAt(newOffset: Long): Unit = {
+  def truncateFullyAndStartAt(newOffset: Long): Unit = {
     maybeHandleIOException(s"Error while truncating the entire log for $topicPartition in dir ${dir.getParent}") {
       debug(s"Truncate and start at offset $newOffset")
       lock synchronized {

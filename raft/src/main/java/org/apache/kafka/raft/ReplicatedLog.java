@@ -24,7 +24,6 @@ import org.apache.kafka.snapshot.RawSnapshotWriter;
 import java.io.Closeable;
 import java.io.IOException;
 import java.util.Optional;
-import java.util.OptionalLong;
 
 public interface ReplicatedLog extends Closeable {
 
@@ -97,6 +96,9 @@ public interface ReplicatedLog extends Closeable {
      */
     void truncateTo(long offset);
 
+    // TODO: write documentation
+    boolean truncateFullyToLatestSnapshot();
+
     /**
      * Update the high watermark and associated metadata (which is used to avoid
      * index lookups when handling reads with {@link #read(long, Isolation)} with
@@ -125,9 +127,9 @@ public interface ReplicatedLog extends Closeable {
      * Truncate to an offset and epoch.
      *
      * @param endOffset offset and epoch to truncate to
-     * @return the truncation offset or empty if no truncation occurred
+     * @return the truncation offset
      */
-    default OptionalLong truncateToEndOffset(OffsetAndEpoch endOffset) {
+    default long truncateToEndOffset(OffsetAndEpoch endOffset) {
         final long truncationOffset;
         int leaderEpoch = endOffset.epoch;
         if (leaderEpoch == 0) {
@@ -149,7 +151,7 @@ public interface ReplicatedLog extends Closeable {
         }
 
         truncateTo(truncationOffset);
-        return OptionalLong.of(truncationOffset);
+        return truncationOffset;
     }
 
     /**
@@ -175,6 +177,19 @@ public interface ReplicatedLog extends Closeable {
      */
     Optional<RawSnapshotReader> readSnapshot(OffsetAndEpoch snapshotId) throws IOException;
 
-    default void close() {}
+    // TODO: write documentation
+    Optional<OffsetAndEpoch> latestSnapshotId();
 
+    /**
+     * TODO: document this method
+     * TODO document that this method is thread safe
+     */
+    void snapshotFrozen(OffsetAndEpoch snapshotId);
+
+    /**
+     * TODO: document this method
+     */
+    boolean maybeUpdateLogStartOffset();
+
+    default void close() {}
 }

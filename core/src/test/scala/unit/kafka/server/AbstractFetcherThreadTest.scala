@@ -955,6 +955,7 @@ class AbstractFetcherThreadTest {
         logAppendTime = Time.SYSTEM.milliseconds(),
         logStartOffset = state.logStartOffset,
         recordConversionStats = RecordConversionStats.EMPTY,
+        rolled = false,
         sourceCodec = NoCompressionCodec,
         targetCodec = NoCompressionCodec,
         shallowCount = batches.size,

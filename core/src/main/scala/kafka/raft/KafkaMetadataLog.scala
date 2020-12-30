@@ -16,10 +16,13 @@
  */
 package kafka.raft
 
+import java.nio.file.Files
 import java.nio.file.NoSuchFileException
+import java.util.NoSuchElementException
 import java.util.Optional
+import java.util.concurrent.ConcurrentSkipListSet
 
-import kafka.log.{AppendOrigin, Log}
+import kafka.log.{AppendOrigin, Log, SnapshotGenerated}
 import kafka.server.{FetchHighWatermark, FetchLogEnd}
 import org.apache.kafka.common.record.{MemoryRecords, Records}
 import org.apache.kafka.common.{KafkaException, TopicPartition}
@@ -29,13 +32,15 @@ import org.apache.kafka.snapshot.FileRawSnapshotReader
 import org.apache.kafka.snapshot.FileRawSnapshotWriter
 import org.apache.kafka.snapshot.RawSnapshotReader
 import org.apache.kafka.snapshot.RawSnapshotWriter
+import org.apache.kafka.snapshot.Snapshots
 
 import scala.compat.java8.OptionConverters._
 
-class KafkaMetadataLog(
+final class KafkaMetadataLog private (
   log: Log,
+  snapshotIds: ConcurrentSkipListSet[raft.OffsetAndEpoch],
   topicPartition: TopicPartition,
-  maxFetchSizeInBytes: Int = 1024 * 1024
+  maxFetchSizeInBytes: Int
 ) extends ReplicatedLog {
 
   override def read(startOffset: Long, readIsolation: Isolation): LogFetchInfo = {
@@ -69,6 +74,11 @@ class KafkaMetadataLog(
     val appendInfo = log.appendAsLeader(records.asInstanceOf[MemoryRecords],
       leaderEpoch = epoch,
       origin = AppendOrigin.Coordinator)
+
+    if (appendInfo.rolled) {
+      log.deleteOldSegments()
+    }
+
     new LogAppendInfo(appendInfo.firstOffset.getOrElse {
       throw new KafkaException("Append failed unexpectedly")
     }, appendInfo.lastOffset)
@@ -79,13 +89,30 @@ class KafkaMetadataLog(
       throw new IllegalArgumentException("Attempt to append an empty record set")
 
     val appendInfo = log.appendAsFollower(records.asInstanceOf[MemoryRecords])
+
+    if (appendInfo.rolled) {
+      log.deleteOldSegments()
+    }
+
     new LogAppendInfo(appendInfo.firstOffset.getOrElse {
       throw new KafkaException("Append failed unexpectedly")
     }, appendInfo.lastOffset)
   }
 
   override def lastFetchedEpoch: Int = {
-    log.latestEpoch.getOrElse(0)
+    log.latestEpoch.getOrElse {
+      latestSnapshotId.map { snapshotId =>
+        val logEndOffset = endOffset().offset
+        if (snapshotId.offset == logEndOffset) {
+          snapshotId.epoch
+        } else {
+          throw new KafkaException(
+            s"Log doesn't have a last fetch epoch and there is a snapshot ($snapshotId). " +
+            s"Expected the snapshot's end offset to match the logs end offset ($logEndOffset)"
+          )
+        }
+      } orElse(0)
+    }
   }
 
   override def endOffsetForEpoch(leaderEpoch: Int): Optional[raft.OffsetAndEpoch] = {
@@ -105,12 +132,26 @@ class KafkaMetadataLog(
       )
   }
 
-  override def startOffset: Long = {
+  override def startOffset(): Long = {
     log.logStartOffset
   }
 
   override def truncateTo(offset: Long): Unit = {
     log.truncateTo(offset)
+  }
+
+  override def truncateFullyToLatestSnapshot(): Boolean = {
+    // Truncate the log fully if the latest snapshot is greater than the log end offset
+    var truncated = false
+    latestSnapshotId.ifPresent { snapshotId =>
+      if (snapshotId.epoch > log.latestEpoch.getOrElse(0) ||
+        (snapshotId.epoch == log.latestEpoch.getOrElse(0) && snapshotId.offset > endOffset().offset)) {
+        log.truncateFullyAndStartAt(snapshotId.offset)
+        truncated = true
+      }
+    }
+
+    truncated
   }
 
   override def initializeLeaderEpoch(epoch: Int): Unit = {
@@ -147,18 +188,90 @@ class KafkaMetadataLog(
   }
 
   override def createSnapshot(snapshotId: raft.OffsetAndEpoch): RawSnapshotWriter = {
-    FileRawSnapshotWriter.create(log.dir.toPath, snapshotId)
+    // TODO: validate that the snapshotId is less than the high-watermark and greater than log start offset
+
+    // Do let the state machine create snapshots older than the latest snapshot
+    latestSnapshotId().ifPresent { latest =>
+      if (latest.epoch > snapshotId.epoch || latest.offset > snapshotId.offset) {
+        // Since snapshots are less than the high-watermark absolute offset comparison is okay.
+        throw new IllegalArgumentException(
+          s"Attemting to create a snapshot ($snapshotId) that is not greater than the latest snapshot ($latest)"
+        )
+      }
+    }
+
+    FileRawSnapshotWriter.create(log.dir.toPath, snapshotId, Optional.of(this))
   }
 
   override def readSnapshot(snapshotId: raft.OffsetAndEpoch): Optional[RawSnapshotReader] = {
     try {
-      Optional.of(FileRawSnapshotReader.open(log.dir.toPath, snapshotId))
+      if (snapshotIds.contains(snapshotId)) {
+        Optional.of(FileRawSnapshotReader.open(log.dir.toPath, snapshotId))
+      } else {
+        Optional.empty()
+      }
     } catch {
       case e: NoSuchFileException => Optional.empty()
     }
   }
 
+  override def latestSnapshotId(): Optional[raft.OffsetAndEpoch] = {
+    try {
+      Optional.of(snapshotIds.last)
+    } catch {
+      case _: NoSuchElementException =>
+        Optional.empty()
+    }
+  }
+
+  override def snapshotFrozen(snapshotId: raft.OffsetAndEpoch): Unit = {
+    snapshotIds.add(snapshotId)
+  }
+
+  override def maybeUpdateLogStartOffset(): Boolean = {
+    var updated = false
+    latestSnapshotId.ifPresent { snapshotId =>
+      if (log.logStartOffset < snapshotId.offset &&
+          log.maybeIncrementLogStartOffset(snapshotId.offset, SnapshotGenerated)) {
+        log.deleteOldSegments()
+        updated = true
+      } else if (log.logStartOffset > snapshotId.offset) {
+        throw new KafkaException(s"Log start offset (${log.logStartOffset}) is greater than the latest snapshot ($snapshotId)")
+      }
+    }
+
+    updated
+  }
+
   override def close(): Unit = {
     log.close()
+  }
+}
+
+object KafkaMetadataLog {
+  def apply(
+    log: Log,
+    topicPartition: TopicPartition,
+    maxFetchSizeInBytes: Int = 1024 * 1024
+  ): KafkaMetadataLog = {
+    val snapshotIds = new ConcurrentSkipListSet[raft.OffsetAndEpoch]()
+    // Scan the log directory; deleting partial snapshots and remembering immutable snapshots
+    Files
+      .walk(log.dir.toPath, 0)
+      .map(Snapshots.parse)
+      .forEach { path =>
+        path.ifPresent { snapshotPath =>
+          if (snapshotPath.partial) {
+            Files.deleteIfExists(snapshotPath.path)
+          } else {
+            snapshotIds.add(snapshotPath.snapshotId)
+          }
+        }
+      }
+
+    val replicatedLog = new KafkaMetadataLog(log, snapshotIds, topicPartition, maxFetchSizeInBytes)
+    replicatedLog.truncateFullyToLatestSnapshot()
+
+    replicatedLog
   }
 }

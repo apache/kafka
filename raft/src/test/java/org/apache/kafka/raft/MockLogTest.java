@@ -27,9 +27,11 @@ import org.apache.kafka.common.record.RecordBatch;
 import org.apache.kafka.common.record.Records;
 import org.apache.kafka.common.record.SimpleRecord;
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.snapshot.RawSnapshotWriter;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
+import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -195,14 +197,20 @@ public class MockLogTest {
     }
 
     @Test
-    public void testAppendAsFollower() {
-        final long initialOffset = 5L;
+    public void testAppendAsFollower() throws IOException {
+        final long initialOffset = 5;
         final int epoch = 3;
         SimpleRecord recordFoo = new SimpleRecord("foo".getBytes());
+
+        try (RawSnapshotWriter snapshot = log.createSnapshot(new OffsetAndEpoch(initialOffset, 0))) {
+            snapshot.freeze();
+        }
+        log.truncateFullyToLatestSnapshot();
+
         log.appendAsFollower(MemoryRecords.withRecords(initialOffset, CompressionType.NONE, epoch, recordFoo));
 
-        assertEquals(5L, log.startOffset());
-        assertEquals(6L, log.endOffset().offset);
+        assertEquals(initialOffset, log.startOffset());
+        assertEquals(initialOffset + 1, log.endOffset().offset);
         assertEquals(3, log.lastFetchedEpoch());
 
         Records records = log.read(5L, Isolation.UNCOMMITTED).records;
@@ -353,11 +361,18 @@ public class MockLogTest {
     }
 
     @Test
-    public void testReadOutOfRangeOffset() {
+    public void testReadOutOfRangeOffset() throws IOException {
         final long initialOffset = 5L;
         final int epoch = 3;
         SimpleRecord recordFoo = new SimpleRecord("foo".getBytes());
+
+        try (RawSnapshotWriter snapshot = log.createSnapshot(new OffsetAndEpoch(initialOffset, 0))) {
+            snapshot.freeze();
+        }
+        log.truncateFullyToLatestSnapshot();
+
         log.appendAsFollower(MemoryRecords.withRecords(initialOffset, CompressionType.NONE, epoch, recordFoo));
+
         assertThrows(OffsetOutOfRangeException.class, () -> log.read(log.startOffset() - 1,
             Isolation.UNCOMMITTED));
         assertThrows(OffsetOutOfRangeException.class, () -> log.read(log.endOffset().offset + 1,
