@@ -126,21 +126,30 @@ class AlterIsrManagerTest {
   }
 
   @Test
-  def testTopLevelErrors(): Unit = {
-    val errors = Seq(Errors.CLUSTER_AUTHORIZATION_FAILED, Errors.STALE_BROKER_EPOCH, Errors.UNKNOWN_SERVER_ERROR)
-    errors.foreach(error => {
-      val isrs = Seq(AlterIsrItem(tp0, new LeaderAndIsr(1, 1, List(1,2,3), 10), _ => { }, 0))
-      val manager = testTopLevelError(isrs, error)
-      // Any top-level error, we want to retry, so we don't clear items from the pending map
-      assertFalse(manager.submit(AlterIsrItem(tp0, null, _ => { }, 0)))
-    })
-
+  def testAuthorizationFailed(): Unit = {
+    checkTopLevelError(Errors.CLUSTER_AUTHORIZATION_FAILED)
   }
 
-  def testTopLevelError(isrs: Seq[AlterIsrItem], error: Errors): AlterIsrManager = {
+  @Test
+  def testStaleBrokerEpoch(): Unit = {
+    checkTopLevelError(Errors.STALE_BROKER_EPOCH)
+  }
+
+  @Test
+  def testUnknownServer(): Unit = {
+    checkTopLevelError(Errors.UNKNOWN_SERVER_ERROR)
+  }
+
+  private def checkTopLevelError(error: Errors): Unit = {
+    val isrs = Seq(AlterIsrItem(tp0, new LeaderAndIsr(1, 1, List(1,2,3), 10), _ => { }, 0))
+    val alterIsrManager = testTopLevelError(isrs, error)
+    // Any top-level error, we want to retry, so we don't clear items from the pending map
+    assertFalse(alterIsrManager.submit(AlterIsrItem(tp0, null, _ => { }, 0)))
+  }
+
+  private def testTopLevelError(isrs: Seq[AlterIsrItem], error: Errors): AlterIsrManager = {
     val callbackCapture = EasyMock.newCapture[ControllerRequestCompletionHandler]()
 
-    EasyMock.reset(brokerToController)
     EasyMock.expect(brokerToController.start())
     EasyMock.expect(brokerToController.sendRequest(EasyMock.anyObject(), EasyMock.capture(callbackCapture))).once()
     EasyMock.replay(brokerToController)
@@ -163,16 +172,27 @@ class AlterIsrManagerTest {
   }
 
   @Test
-  def testPartitionErrors(): Unit = {
-    val errors = Seq(Errors.INVALID_UPDATE_VERSION, Errors.UNKNOWN_TOPIC_OR_PARTITION, Errors.NOT_LEADER_OR_FOLLOWER)
-    errors.foreach(error => {
-      val alterIsrManager = testPartitionError(tp0, error)
-      // Any partition-level error should clear the item from the pending queue allowing for future updates
-      assertTrue(alterIsrManager.submit(AlterIsrItem(tp0, null, _ => { }, 0)))
-    })
+  def testInvalidUpdateVersion(): Unit = {
+    checkPartitionError(Errors.INVALID_UPDATE_VERSION)
   }
 
-  def testPartitionError(tp: TopicPartition, error: Errors): AlterIsrManager = {
+  @Test
+  def testUnknownTopicPartition(): Unit = {
+    checkPartitionError(Errors.UNKNOWN_TOPIC_OR_PARTITION)
+  }
+
+  @Test
+  def testNotLeaderOrFollower(): Unit = {
+    checkPartitionError(Errors.NOT_LEADER_OR_FOLLOWER)
+  }
+
+  private def checkPartitionError(error: Errors): Unit = {
+    val alterIsrManager = testPartitionError(tp0, error)
+    // Any partition-level error should clear the item from the pending queue allowing for future updates
+    assertTrue(alterIsrManager.submit(AlterIsrItem(tp0, null, _ => {}, 0)))
+  }
+
+  private def testPartitionError(tp: TopicPartition, error: Errors): AlterIsrManager = {
     val callbackCapture = EasyMock.newCapture[ControllerRequestCompletionHandler]()
     EasyMock.reset(brokerToController)
     EasyMock.expect(brokerToController.start())
