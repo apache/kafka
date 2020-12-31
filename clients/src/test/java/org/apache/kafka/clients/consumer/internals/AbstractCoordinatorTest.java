@@ -837,8 +837,19 @@ public class AbstractCoordinatorTest {
         assertTrue(consumerClient.poll(future, mockTime.timer(REQUEST_TIMEOUT_MS)));
         assertTrue(future.exception().getClass().isInstance(Errors.REBALANCE_IN_PROGRESS.exception()));
         assertEquals(Errors.REBALANCE_IN_PROGRESS.message(), future.exception().getMessage());
-        // should request rejoin
         assertTrue(coordinator.rejoinNeededOrPending());
+
+        // make sure we'll retry on next poll
+        assertEquals(0, coordinator.onJoinPrepareInvokes);
+        assertEquals(0, coordinator.onJoinCompleteInvokes);
+
+        mockClient.prepareResponse(joinGroupFollowerResponse(defaultGeneration, memberId, JoinGroupRequest.UNKNOWN_MEMBER_ID, Errors.NONE));
+        mockClient.prepareResponse(syncGroupResponse(Errors.NONE));
+
+        coordinator.ensureActiveGroup();
+        // make sure both onJoinPrepare and onJoinComplete got called
+        assertEquals(1, coordinator.onJoinPrepareInvokes);
+        assertEquals(1, coordinator.onJoinCompleteInvokes);
     }
 
     @Test
