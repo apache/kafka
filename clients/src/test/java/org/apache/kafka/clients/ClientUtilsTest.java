@@ -97,25 +97,34 @@ public class ClientUtilsTest {
 
     @Test(expected = UnknownHostException.class)
     public void testResolveUnknownHostException() throws UnknownHostException {
-        ClientUtils.resolve("some.invalid.hostname.foo.bar.local", ClientDnsLookup.USE_ALL_DNS_IPS);
+        DnsNameResolver dnsNameResolver = new MockDnsNameResolver.Builder()
+                .withUnknownHostname("some.invalid.hostname.foo.bar.local")
+                .build();
+        ClientUtils.resolve("some.invalid.hostname.foo.bar.local", dnsNameResolver, ClientDnsLookup.USE_ALL_DNS_IPS);
     }
 
     @Test
     public void testResolveDnsLookup() throws UnknownHostException {
-        // Note that kafka.apache.org resolves to at least 2 IP addresses
-        assertEquals(1, ClientUtils.resolve("kafka.apache.org", ClientDnsLookup.DEFAULT).size());
+        DnsNameResolver dnsNameResolver = new MockDnsNameResolver.Builder()
+                .withMapping("kafka.apache.org", InetAddress.getByName("95.216.24.32"), InetAddress.getByName("40.79.78.1"))
+                .build();
+        assertEquals(1, ClientUtils.resolve("kafka.apache.org", dnsNameResolver, ClientDnsLookup.DEFAULT).size());
     }
 
     @Test
     public void testResolveDnsLookupAllIps() throws UnknownHostException {
-        // Note that kafka.apache.org resolves to at least 2 IP addresses
-        assertTrue(ClientUtils.resolve("kafka.apache.org", ClientDnsLookup.USE_ALL_DNS_IPS).size() > 1);
+        DnsNameResolver dnsNameResolver = new MockDnsNameResolver.Builder()
+                .withMapping("kafka.apache.org", InetAddress.getByName("95.216.24.32"), InetAddress.getByName("40.79.78.1"))
+                .build();
+        assertEquals(2, ClientUtils.resolve("kafka.apache.org", dnsNameResolver, ClientDnsLookup.USE_ALL_DNS_IPS).size());
     }
 
     @Test
     public void testResolveDnsLookupResolveCanonicalBootstrapServers() throws UnknownHostException {
-        // Note that kafka.apache.org resolves to at least 2 IP addresses
-        assertTrue(ClientUtils.resolve("kafka.apache.org", ClientDnsLookup.RESOLVE_CANONICAL_BOOTSTRAP_SERVERS_ONLY).size() > 1);
+        DnsNameResolver dnsNameResolver = new MockDnsNameResolver.Builder()
+                .withMapping("kafka.apache.org", InetAddress.getByName("95.216.24.32"), InetAddress.getByName("40.79.78.1"))
+                .build();
+        assertEquals(2, ClientUtils.resolve("kafka.apache.org", dnsNameResolver, ClientDnsLookup.RESOLVE_CANONICAL_BOOTSTRAP_SERVERS_ONLY).size());
     }
 
     private List<InetSocketAddress> checkWithoutLookup(String... url) {
