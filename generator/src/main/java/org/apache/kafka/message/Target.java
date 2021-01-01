@@ -40,19 +40,20 @@ public final class Target {
 
     public Target nonNullableCopy() {
         FieldSpec nonNullableField = new FieldSpec(field.name(),
-            field.versionsString(),
-            field.fields(),
-            field.typeString(),
-            field.mapKey(),
-            Versions.NONE.toString(),
-            field.defaultString(),
-            field.ignorable(),
-            field.entityType(),
-            field.about(),
-            field.taggedVersionsString(),
-            field.flexibleVersionsString(),
-            field.tagInteger(),
-            field.zeroCopy());
+                field.versionsString(),
+                field.fields(),
+                field.typeString(),
+                field.mapKey(),
+                Versions.NONE.toString(),
+                field.defaultString(),
+                field.ignorable(),
+                field.entityType(),
+                field.about(),
+                field.taggedVersionsString(),
+                field.flexibleVersionsString(),
+                field.tagInteger(),
+                field.zeroCopy(),
+                field.jsonFieldNameStrategy());
         return new Target(nonNullableField, sourceVariable, humanReadableName, assignmentStatementGenerator);
     }
 
@@ -74,7 +75,8 @@ public final class Target {
                 Versions.NONE.toString(),
                 field.flexibleVersionsString(),
                 null,
-                field.zeroCopy());
+                field.zeroCopy(),
+                field.jsonFieldNameStrategy());
         return new Target(elementField, "_element", humanReadableName + " element",
             assignmentStatementGenerator);
     }

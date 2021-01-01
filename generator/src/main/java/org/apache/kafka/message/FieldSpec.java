@@ -60,6 +60,8 @@ public final class FieldSpec {
 
     private final boolean zeroCopy;
 
+    private final FieldNameStrategy jsonFieldNameStrategy;
+
     @JsonCreator
     public FieldSpec(@JsonProperty("name") String name,
                      @JsonProperty("versions") String versions,
@@ -74,7 +76,8 @@ public final class FieldSpec {
                      @JsonProperty("taggedVersions") String taggedVersions,
                      @JsonProperty("flexibleVersions") String flexibleVersions,
                      @JsonProperty("tag") Integer tag,
-                     @JsonProperty("zeroCopy") boolean zeroCopy) {
+                     @JsonProperty("zeroCopy") boolean zeroCopy,
+                     @JsonProperty("jsonFieldNameStrategy") FieldNameStrategy jsonFieldNameStrategy) {
         this.name = Objects.requireNonNull(name);
         if (!VALID_FIELD_NAMES.matcher(this.name).matches()) {
             throw new RuntimeException("Invalid field name " + this.name);
@@ -133,6 +136,8 @@ public final class FieldSpec {
             throw new RuntimeException("Invalid zeroCopy value for " + name +
                 ". Only fields of type bytes can use zeroCopy flag.");
         }
+
+        this.jsonFieldNameStrategy = jsonFieldNameStrategy == null ? FieldNameStrategy.CAMEL : jsonFieldNameStrategy;
     }
 
     private void checkTagInvariants() {
@@ -273,6 +278,11 @@ public final class FieldSpec {
     @JsonProperty("zeroCopy")
     public boolean zeroCopy() {
         return zeroCopy;
+    }
+
+    @JsonProperty("jsonFieldStrategy")
+    public FieldNameStrategy jsonFieldNameStrategy() {
+        return jsonFieldNameStrategy;
     }
 
     /**

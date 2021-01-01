@@ -44,7 +44,8 @@ public final class MessageSpec {
                        @JsonProperty("apiKey") Short apiKey,
                        @JsonProperty("type") MessageSpecType type,
                        @JsonProperty("commonStructs") List<StructSpec> commonStructs,
-                       @JsonProperty("flexibleVersions") String flexibleVersions) {
+                       @JsonProperty("flexibleVersions") String flexibleVersions,
+                       @JsonProperty("jsonFieldNameStrategy") FieldNameStrategy jsonFieldNameStrategy) {
         this.struct = new StructSpec(name, validVersions, fields);
         this.apiKey = apiKey == null ? Optional.empty() : Optional.of(apiKey);
         this.type = Objects.requireNonNull(type);

@@ -100,8 +100,7 @@ public final class JsonConverterGenerator implements MessageClassGenerator {
         for (FieldSpec field : struct.fields()) {
             String sourceVariable = String.format("_%sNode", field.camelCaseName());
             buffer.printf("JsonNode %s = _node.get(\"%s\");%n",
-                sourceVariable,
-                field.camelCaseName());
+                sourceVariable, field.jsonFieldNameStrategy().getFieldName(field));
             buffer.printf("if (%s == null) {%n", sourceVariable);
             buffer.incrementIndent();
             Versions mandatoryVersions = field.versions().subtract(field.taggedVersions());
@@ -290,7 +289,7 @@ public final class JsonConverterGenerator implements MessageClassGenerator {
             Target target = new Target(field,
                 String.format("_object.%s", field.camelCaseName()),
                 field.camelCaseName(),
-                input -> String.format("_node.set(\"%s\", %s)", field.camelCaseName(), input));
+                input -> String.format("_node.set(\"%s\", %s)", field.jsonFieldNameStrategy().getFieldName(field), input));
             VersionConditional cond = VersionConditional.forVersions(field.versions(), curVersions).
                 ifMember(presentVersions -> {
                     VersionConditional.forVersions(field.taggedVersions(), presentVersions).
