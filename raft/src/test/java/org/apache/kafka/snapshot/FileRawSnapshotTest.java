@@ -27,11 +27,14 @@ import java.util.stream.IntStream;
 import org.apache.kafka.common.record.BufferSupplier.GrowableBufferSupplier;
 import org.apache.kafka.common.record.CompressionType;
 import org.apache.kafka.common.record.MemoryRecords;
+import org.apache.kafka.common.record.Record;
 import org.apache.kafka.common.record.RecordBatch;
 import org.apache.kafka.common.record.SimpleRecord;
-import org.apache.kafka.common.record.Record;
+import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.raft.OffsetAndEpoch;
 import org.apache.kafka.test.TestUtils;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -39,9 +42,20 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public final class FileRawSnapshotTest {
+    private Path tempDir = null;
+
+    @BeforeEach
+    public void setUp() {
+        tempDir = TestUtils.tempDirectory().toPath();
+    }
+
+    @AfterEach
+    public void tearDown() throws IOException {
+        Utils.delete(tempDir.toFile());
+    }
+
     @Test
     public void testWritingSnapshot() throws IOException {
-        Path tempDir = TestUtils.tempDirectory().toPath();
         OffsetAndEpoch offsetAndEpoch = new OffsetAndEpoch(10L, 3);
         int bufferSize = 256;
         int batches = 10;
@@ -68,7 +82,6 @@ public final class FileRawSnapshotTest {
 
     @Test
     public void testWriteReadSnapshot() throws IOException {
-        Path tempDir = TestUtils.tempDirectory().toPath();
         OffsetAndEpoch offsetAndEpoch = new OffsetAndEpoch(10L, 3);
         int bufferSize = 256;
         int batches = 10;
@@ -110,7 +123,6 @@ public final class FileRawSnapshotTest {
 
     @Test
     public void testBatchWriteReadSnapshot() throws IOException {
-        Path tempDir = TestUtils.tempDirectory().toPath();
         OffsetAndEpoch offsetAndEpoch = new OffsetAndEpoch(10L, 3);
         int bufferSize = 256;
         int batchSize = 3;
@@ -153,7 +165,6 @@ public final class FileRawSnapshotTest {
 
     @Test
     public void testBufferWriteReadSnapshot() throws IOException {
-        Path tempDir = TestUtils.tempDirectory().toPath();
         OffsetAndEpoch offsetAndEpoch = new OffsetAndEpoch(10L, 3);
         int bufferSize = 256;
         int batchSize = 3;
@@ -206,7 +217,6 @@ public final class FileRawSnapshotTest {
 
     @Test
     public void testAbortedSnapshot() throws IOException {
-        Path tempDir = TestUtils.tempDirectory().toPath();
         OffsetAndEpoch offsetAndEpoch = new OffsetAndEpoch(20L, 2);
         int bufferSize = 256;
         int batches = 10;
@@ -225,7 +235,6 @@ public final class FileRawSnapshotTest {
 
     @Test
     public void testAppendToFrozenSnapshot() throws IOException {
-        Path tempDir = TestUtils.tempDirectory().toPath();
         OffsetAndEpoch offsetAndEpoch = new OffsetAndEpoch(10L, 3);
         int bufferSize = 256;
         int batches = 10;
@@ -248,7 +257,6 @@ public final class FileRawSnapshotTest {
 
     @Test
     public void testCreateSnapshotWithSameId() throws IOException {
-        Path tempDir = TestUtils.tempDirectory().toPath();
         OffsetAndEpoch offsetAndEpoch = new OffsetAndEpoch(20L, 2);
         int bufferSize = 256;
         int batches = 1;

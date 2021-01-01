@@ -29,4 +29,9 @@ public final class SnapshotPath {
         this.snapshotId = snapshotId;
         this.partial = partial;
     }
+
+    @Override
+    public String toString() {
+        return String.format("SnapshotPath(path=%s, snapshotId=%s, partial=%s)", path, snapshotId, partial);
+    }
 }

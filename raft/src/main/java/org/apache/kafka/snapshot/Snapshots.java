@@ -57,7 +57,7 @@ public final class Snapshots {
         return source.resolveSibling(filenameFromSnapshotId(snapshotId) + SUFFIX);
     }
 
-    static Path createTempFile(Path logDir, OffsetAndEpoch snapshotId) throws IOException {
+    public static Path createTempFile(Path logDir, OffsetAndEpoch snapshotId) throws IOException {
         Path dir = snapshotDir(logDir);
 
         // Create the snapshot directory if it doesn't exists

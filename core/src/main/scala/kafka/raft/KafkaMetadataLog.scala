@@ -132,7 +132,7 @@ final class KafkaMetadataLog private (
       )
   }
 
-  override def startOffset(): Long = {
+  override def startOffset: Long = {
     log.logStartOffset
   }
 
@@ -188,7 +188,9 @@ final class KafkaMetadataLog private (
   }
 
   override def createSnapshot(snapshotId: raft.OffsetAndEpoch): RawSnapshotWriter = {
-    // TODO: validate that the snapshotId is less than the high-watermark and greater than log start offset
+    // TODO: Talk to Jason about truncation past the high-watermark since it can lead to truncation past snapshots.
+    // This can result in the leader having a snapshot that is less that the follower's snapshot. I think that the Raft Client
+    // checks against this and aborts. If so, then this check and exception is okay.
 
     // Do let the state machine create snapshots older than the latest snapshot
     latestSnapshotId().ifPresent { latest =>
@@ -231,12 +233,12 @@ final class KafkaMetadataLog private (
   override def maybeUpdateLogStartOffset(): Boolean = {
     var updated = false
     latestSnapshotId.ifPresent { snapshotId =>
-      if (log.logStartOffset < snapshotId.offset &&
+      if (startOffset < snapshotId.offset &&
           log.maybeIncrementLogStartOffset(snapshotId.offset, SnapshotGenerated)) {
         log.deleteOldSegments()
         updated = true
-      } else if (log.logStartOffset > snapshotId.offset) {
-        throw new KafkaException(s"Log start offset (${log.logStartOffset}) is greater than the latest snapshot ($snapshotId)")
+      } else if (startOffset > snapshotId.offset) {
+        throw new KafkaException(s"Log start offset ($startOffset) is greater than the latest snapshot ($snapshotId)")
       }
     }
 
@@ -257,8 +259,14 @@ object KafkaMetadataLog {
     val snapshotIds = new ConcurrentSkipListSet[raft.OffsetAndEpoch]()
     // Scan the log directory; deleting partial snapshots and remembering immutable snapshots
     Files
-      .walk(log.dir.toPath, 0)
-      .map(Snapshots.parse)
+      .walk(log.dir.toPath, 1)
+      .map { path =>
+        if (path != log.dir.toPath) {
+          Snapshots.parse(path)
+        } else {
+          Optional.empty()
+        }
+      }
       .forEach { path =>
         path.ifPresent { snapshotPath =>
           if (snapshotPath.partial) {

@@ -1028,6 +1028,8 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
         OffsetAndEpoch endOffsetAndEpoch = log.endOffsetForEpoch(lastFetchedEpoch)
             .orElse(new OffsetAndEpoch(-1L, -1));
         if (endOffsetAndEpoch.epoch != lastFetchedEpoch || endOffsetAndEpoch.offset < fetchOffset) {
+            // TODO: Investiage this. Can the diverging offset be less than log start offset? If so, then we might as well avoid a round
+            // trip and return the snapshot id instead.
             return ValidatedFetchOffsetAndEpoch.diverging(endOffsetAndEpoch);
         }
 
@@ -2234,6 +2236,7 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
     }
 
     private void close() {
+        log.close();
         kafkaRaftMetrics.close();
     }
 
