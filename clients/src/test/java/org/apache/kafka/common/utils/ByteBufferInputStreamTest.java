@@ -18,9 +18,9 @@ package org.apache.kafka.common.utils;
 
 import org.junit.Test;
 
-import static org.junit.Assert.assertEquals;
-
 import java.nio.ByteBuffer;
+
+import static org.junit.Assert.assertEquals;
 
 public class ByteBufferInputStreamTest {
 
