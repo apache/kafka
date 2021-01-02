@@ -28,21 +28,18 @@ import java.util.Optional;
 import java.util.Properties;
 import java.util.concurrent.CountDownLatch;
 
-public class Consumer extends ShutdownableThread {
+public class Consumer implements Runnable {
     private final KafkaConsumer<Integer, String> consumer;
     private final String topic;
     private final String groupId;
     private final int numMessageToConsume;
     private int messageRemaining;
-    private final CountDownLatch latch;
 
     public Consumer(final String topic,
                     final String groupId,
                     final Optional<String> instanceId,
                     final boolean readCommitted,
-                    final int numMessageToConsume,
-                    final CountDownLatch latch) {
-        super("KafkaConsumerExample", false);
+                    final int numMessageToConsume) {
         this.groupId = groupId;
         Properties props = new Properties();
         props.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, KafkaProperties.KAFKA_SERVER_URL + ":" + KafkaProperties.KAFKA_SERVER_PORT);
@@ -62,7 +59,6 @@ public class Consumer extends ShutdownableThread {
         this.topic = topic;
         this.numMessageToConsume = numMessageToConsume;
         this.messageRemaining = numMessageToConsume;
-        this.latch = latch;
     }
 
     KafkaConsumer<Integer, String> get() {
@@ -70,26 +66,17 @@ public class Consumer extends ShutdownableThread {
     }
 
     @Override
-    public void doWork() {
+    public void run() {
         consumer.subscribe(Collections.singletonList(this.topic));
-        ConsumerRecords<Integer, String> records = consumer.poll(Duration.ofSeconds(1));
-        for (ConsumerRecord<Integer, String> record : records) {
-            System.out.println(groupId + " received message : from partition " + record.partition() + ", (" + record.key() + ", " + record.value() + ") at offset " + record.offset());
+        while (!Thread.currentThread().isInterrupted() &&  messageRemaining > 0) {
+            ConsumerRecords<Integer, String> records = consumer.poll(Duration.ofSeconds(1));
+            for (ConsumerRecord<Integer, String> record : records) {
+                System.out.println(groupId + " received message : from partition " + record.partition() + ", (" + record.key() + ", " + record.value() + ") at offset " + record.offset());
+            }
+            messageRemaining -= records.count();
         }
-        messageRemaining -= records.count();
         if (messageRemaining <= 0) {
             System.out.println(groupId + " finished reading " + numMessageToConsume + " messages");
-            latch.countDown();
         }
-    }
-
-    @Override
-    public String name() {
-        return null;
-    }
-
-    @Override
-    public boolean isInterruptible() {
-        return false;
     }
 }
