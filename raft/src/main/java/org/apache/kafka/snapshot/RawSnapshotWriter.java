@@ -17,10 +17,11 @@
 
 package org.apache.kafka.snapshot;
 
+import org.apache.kafka.common.record.BaseRecords;
+import org.apache.kafka.raft.OffsetAndEpoch;
+
 import java.io.Closeable;
 import java.io.IOException;
-import java.nio.ByteBuffer;
-import org.apache.kafka.raft.OffsetAndEpoch;
 
 /**
  * Interface for writing snapshot as a sequence of records.
@@ -44,10 +45,10 @@ public interface RawSnapshotWriter extends Closeable {
      * If the method returns without an exception the given buffer was fully writing the
      * snapshot.
      *
-     * @param buffer the buffer to append
+     * @param records the region to append
      * @throws IOException for any IO error during append
      */
-    public void append(ByteBuffer buffer) throws IOException;
+    public void append(BaseRecords records) throws IOException;
 
     /**
      * Returns true if the snapshot has been frozen, otherwise false is returned.

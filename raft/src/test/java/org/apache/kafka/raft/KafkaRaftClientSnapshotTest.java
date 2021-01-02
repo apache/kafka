@@ -16,19 +16,15 @@
  */
 package org.apache.kafka.raft;
 
-import java.io.IOException;
-import java.nio.ByteBuffer;
-import java.util.Arrays;
-import java.util.List;
-import java.util.Optional;
-import java.util.Set;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.memory.MemoryPool;
 import org.apache.kafka.common.message.FetchResponseData;
 import org.apache.kafka.common.message.FetchSnapshotRequestData;
 import org.apache.kafka.common.message.FetchSnapshotResponseData;
 import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.common.record.BaseRecords;
 import org.apache.kafka.common.record.CompressionType;
+import org.apache.kafka.common.record.MemoryRecords;
 import org.apache.kafka.common.requests.FetchSnapshotRequest;
 import org.apache.kafka.common.requests.FetchSnapshotResponse;
 import org.apache.kafka.common.utils.Utils;
@@ -37,7 +33,16 @@ import org.apache.kafka.snapshot.RawSnapshotReader;
 import org.apache.kafka.snapshot.RawSnapshotWriter;
 import org.apache.kafka.snapshot.SnapshotWriter;
 import org.apache.kafka.snapshot.SnapshotWriterTest;
+import org.apache.kafka.test.TestUtils;
 import org.junit.jupiter.api.Test;
+
+import java.io.IOException;
+import java.nio.ByteBuffer;
+import java.util.Arrays;
+import java.util.List;
+import java.util.Optional;
+import java.util.Set;
+
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -126,13 +131,11 @@ final public class KafkaRaftClientSnapshotTest {
             assertEquals(Errors.NONE, Errors.forCode(response.errorCode()));
             assertEquals(snapshot.sizeInBytes(), response.size());
             assertEquals(0, response.position());
-            assertEquals(snapshot.sizeInBytes(), response.bytes().remaining());
+            assertEquals(snapshot.sizeInBytes(), response.bytes().sizeInBytes());
 
-            ByteBuffer buffer = ByteBuffer.allocate(Math.toIntExact(snapshot.sizeInBytes()));
-            snapshot.read(buffer, 0);
-            buffer.flip();
+            MemoryRecords memoryRecords = (MemoryRecords) snapshot.read(0, Math.toIntExact(snapshot.sizeInBytes()));
 
-            assertEquals(buffer.slice(), response.bytes());
+            assertEquals(memoryRecords, response.bytes());
         }
     }
 
@@ -172,14 +175,13 @@ final public class KafkaRaftClientSnapshotTest {
             assertEquals(Errors.NONE, Errors.forCode(response.errorCode()));
             assertEquals(snapshot.sizeInBytes(), response.size());
             assertEquals(0, response.position());
-            assertEquals(snapshot.sizeInBytes() / 2, response.bytes().remaining());
+            assertEquals(snapshot.sizeInBytes() / 2, response.bytes().sizeInBytes());
 
-            ByteBuffer snapshotBuffer = ByteBuffer.allocate(Math.toIntExact(snapshot.sizeInBytes()));
-            snapshot.read(snapshotBuffer, 0);
-            snapshotBuffer.flip();
+            MemoryRecords memoryRecords = (MemoryRecords) snapshot.read(0, Math.toIntExact(snapshot.sizeInBytes()));
+            ByteBuffer snapshotBuffer = memoryRecords.buffer();
 
             ByteBuffer responseBuffer = ByteBuffer.allocate(Math.toIntExact(snapshot.sizeInBytes()));
-            responseBuffer.put(response.bytes());
+            responseBuffer.put(((MemoryRecords) response.bytes()).buffer());
 
             ByteBuffer expectedBytes = snapshotBuffer.duplicate();
             expectedBytes.limit(Math.toIntExact(snapshot.sizeInBytes() / 2));
@@ -203,9 +205,9 @@ final public class KafkaRaftClientSnapshotTest {
             assertEquals(Errors.NONE, Errors.forCode(response.errorCode()));
             assertEquals(snapshot.sizeInBytes(), response.size());
             assertEquals(responseBuffer.position(), response.position());
-            assertEquals(snapshot.sizeInBytes() - (snapshot.sizeInBytes() / 2), response.bytes().remaining());
+            assertEquals(snapshot.sizeInBytes() - (snapshot.sizeInBytes() / 2), response.bytes().sizeInBytes());
 
-            responseBuffer.put(response.bytes());
+            responseBuffer.put(((MemoryRecords) response.bytes()).buffer());
             assertEquals(snapshotBuffer, responseBuffer.flip());
         }
     }
@@ -1031,7 +1033,7 @@ final public class KafkaRaftClientSnapshotTest {
                 return partitionSnapshot
                     .setSize(size)
                     .setPosition(position)
-                    .setBytes(buffer);
+                    .setBytes(MemoryRecords.readableRecords(buffer.slice()));
             }
         );
     }
@@ -1111,11 +1113,11 @@ final public class KafkaRaftClientSnapshotTest {
         }
 
         @Override
-        public void append(ByteBuffer buffer) {
+        public void append(BaseRecords records) {
             if (frozen) {
                 throw new RuntimeException("Snapshot is already frozen " + snapshotId);
             }
-
+            ByteBuffer buffer = TestUtils.toBuffer(records);
             if (!(data.remaining() >= buffer.remaining())) {
                 ByteBuffer old = data;
                 old.flip();

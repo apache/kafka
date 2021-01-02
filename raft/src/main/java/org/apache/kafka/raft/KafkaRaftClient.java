@@ -40,6 +40,7 @@ import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.ApiMessage;
 import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.common.record.BaseRecords;
 import org.apache.kafka.common.record.BufferSupplier;
 import org.apache.kafka.common.record.CompressionType;
 import org.apache.kafka.common.record.MemoryRecords;
@@ -74,7 +75,6 @@ import org.slf4j.Logger;
 
 import java.io.IOException;
 import java.net.InetSocketAddress;
-import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Iterator;
@@ -1191,10 +1191,8 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
 
             return FetchSnapshotResponse.singleton(
                 unknownTopicPartition,
-                responsePartitionSnapshot -> {
-                    return responsePartitionSnapshot
-                        .setErrorCode(Errors.UNKNOWN_TOPIC_OR_PARTITION.code());
-                }
+                responsePartitionSnapshot -> responsePartitionSnapshot
+                    .setErrorCode(Errors.UNKNOWN_TOPIC_OR_PARTITION.code())
             );
         }
 
@@ -1205,10 +1203,8 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
         if (leaderValidation.isPresent()) {
             return FetchSnapshotResponse.singleton(
                 log.topicPartition(),
-                responsePartitionSnapshot -> {
-                    return addQuorumLeader(responsePartitionSnapshot)
-                        .setErrorCode(leaderValidation.get().code());
-                }
+                responsePartitionSnapshot -> addQuorumLeader(responsePartitionSnapshot)
+                    .setErrorCode(leaderValidation.get().code())
             );
         }
 
@@ -1220,10 +1216,8 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
         if (!snapshotOpt.isPresent()) {
             return FetchSnapshotResponse.singleton(
                 log.topicPartition(),
-                responsePartitionSnapshot -> {
-                    return addQuorumLeader(responsePartitionSnapshot)
-                        .setErrorCode(Errors.SNAPSHOT_NOT_FOUND.code());
-                }
+                responsePartitionSnapshot -> addQuorumLeader(responsePartitionSnapshot)
+                    .setErrorCode(Errors.SNAPSHOT_NOT_FOUND.code())
             );
         }
 
@@ -1231,23 +1225,26 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
             if (partitionSnapshot.position() < 0 || partitionSnapshot.position() >= snapshot.sizeInBytes()) {
                 return FetchSnapshotResponse.singleton(
                     log.topicPartition(),
-                    responsePartitionSnapshot -> {
-                        return addQuorumLeader(responsePartitionSnapshot)
-                            .setErrorCode(Errors.POSITION_OUT_OF_RANGE.code());
-                    }
+                    responsePartitionSnapshot -> addQuorumLeader(responsePartitionSnapshot)
+                        .setErrorCode(Errors.POSITION_OUT_OF_RANGE.code())
                 );
             }
 
             int maxSnapshotSize;
+            int maxSnapshotPosition;
             try {
                 maxSnapshotSize = Math.toIntExact(snapshot.sizeInBytes());
             } catch (ArithmeticException e) {
                 maxSnapshotSize = Integer.MAX_VALUE;
             }
 
-            ByteBuffer buffer = ByteBuffer.allocate(Math.min(data.maxBytes(), maxSnapshotSize));
-            snapshot.read(buffer, partitionSnapshot.position());
-            buffer.flip();
+            try {
+                maxSnapshotPosition = Math.toIntExact(partitionSnapshot.position());
+            } catch (ArithmeticException e) {
+                maxSnapshotPosition = Integer.MAX_VALUE;
+            }
+
+            BaseRecords records = snapshot.read(maxSnapshotPosition, Math.min(data.maxBytes(), maxSnapshotSize));
 
             long snapshotSize = snapshot.sizeInBytes();
 
@@ -1262,7 +1259,7 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
                     return responsePartitionSnapshot
                         .setSize(snapshotSize)
                         .setPosition(partitionSnapshot.position())
-                        .setBytes(buffer);
+                        .setBytes(records);
                 }
             );
         }

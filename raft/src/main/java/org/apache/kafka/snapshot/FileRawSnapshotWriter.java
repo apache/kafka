@@ -16,6 +16,9 @@
  */
 package org.apache.kafka.snapshot;
 
+import org.apache.kafka.common.record.BaseRecords;
+import org.apache.kafka.common.record.FileRecords;
+import org.apache.kafka.common.record.MemoryRecords;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.raft.OffsetAndEpoch;
 
@@ -53,13 +56,20 @@ public final class FileRawSnapshotWriter implements RawSnapshotWriter {
     }
 
     @Override
-    public void append(ByteBuffer buffer) throws IOException {
+    public void append(BaseRecords records) throws IOException {
         if (frozen) {
             throw new IllegalStateException(
-                String.format("Append is not supported. Snapshot is already frozen: id = %s; temp path = %s", snapshotId, tempSnapshotPath)
+                    String.format("Append is not supported. Snapshot is already frozen: id = %s; temp path = %s", snapshotId, tempSnapshotPath)
             );
         }
-
+        ByteBuffer buffer;
+        if (records instanceof MemoryRecords) {
+            buffer = ((MemoryRecords) records).buffer();
+        } else {
+            buffer = ByteBuffer.allocate(records.sizeInBytes());
+            ((FileRecords) records).channel().read(buffer);
+            buffer.flip();
+        }
         Utils.writeFully(channel, buffer);
     }
 

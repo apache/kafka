@@ -18,6 +18,7 @@ package org.apache.kafka.raft;
 
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.OffsetOutOfRangeException;
+import org.apache.kafka.common.record.BaseRecords;
 import org.apache.kafka.common.record.CompressionType;
 import org.apache.kafka.common.record.MemoryRecords;
 import org.apache.kafka.common.record.MemoryRecordsBuilder;
@@ -30,6 +31,7 @@ import org.apache.kafka.common.utils.ByteBufferOutputStream;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.snapshot.RawSnapshotReader;
 import org.apache.kafka.snapshot.RawSnapshotWriter;
+import org.apache.kafka.test.TestUtils;
 
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
@@ -522,12 +524,13 @@ public class MockLog implements ReplicatedLog {
         }
 
         @Override
-        public void append(ByteBuffer buffer) {
+        public void append(BaseRecords records) {
             if (frozen) {
                 throw new RuntimeException("Snapshot is already frozen " + snapshotId);
             }
-
+            ByteBuffer buffer = TestUtils.toBuffer(records);
             data.write(buffer);
+
         }
 
         @Override
@@ -577,14 +580,11 @@ public class MockLog implements ReplicatedLog {
         }
 
         @Override
-        public int read(ByteBuffer buffer, long position) {
-            ByteBuffer copy = data.buffer();
-            copy.position((int) position);
-            copy.limit((int) position + Math.min(copy.remaining(), buffer.remaining()));
-
-            buffer.put(copy);
-
-            return copy.remaining();
+        public BaseRecords read(long position, int size) {
+            ByteBuffer buffer = data.buffer();
+            buffer.position(Math.toIntExact(position));
+            buffer.limit(Math.min(buffer.limit(), Math.toIntExact(position + size)));
+            return MemoryRecords.readableRecords(buffer.slice());
         }
 
         @Override

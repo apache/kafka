@@ -1093,9 +1093,11 @@ public final class Utils {
         destinationBuffer.position(destinationBuffer.position() + totalBytesRead);
     }
 
-    public static void writeFully(FileChannel channel, ByteBuffer sourceBuffer) throws IOException {
+    public static int writeFully(FileChannel channel, ByteBuffer sourceBuffer) throws IOException {
+        int size = 0;
         while (sourceBuffer.hasRemaining())
-            channel.write(sourceBuffer);
+            size += channel.write(sourceBuffer);
+        return size;
     }
 
     /**

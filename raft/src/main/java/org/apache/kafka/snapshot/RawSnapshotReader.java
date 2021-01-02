@@ -16,11 +16,12 @@
  */
 package org.apache.kafka.snapshot;
 
-import java.io.Closeable;
-import java.io.IOException;
-import java.nio.ByteBuffer;
+import org.apache.kafka.common.record.BaseRecords;
 import org.apache.kafka.common.record.RecordBatch;
 import org.apache.kafka.raft.OffsetAndEpoch;
+
+import java.io.Closeable;
+import java.io.IOException;
 
 /**
  * Interface for reading snapshots as a sequence of records.
@@ -43,10 +44,10 @@ public interface RawSnapshotReader extends Closeable, Iterable<RecordBatch> {
      *
      * It is not guarantee that the given buffer will be filled.
      *
-     * @param buffer byte buffer to put the read files
+     * @param size size to read from snapshot file
      * @param position the starting position in the snapshot to read
-     * @return the number of bytes read
+     * @return the region read from snapshot
      * @throws IOException for any IO error while reading the snapshot
      */
-    public int read(ByteBuffer buffer, long position) throws IOException;
+    BaseRecords read(long position, int size) throws IOException;
 }

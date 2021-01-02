@@ -51,8 +51,7 @@
           "about": "The total size of the snapshot." },
         { "name": "Position", "type": "int64", "versions": "0+",
           "about": "The starting byte position within the snapshot included in the Bytes field." },
-        { "name": "Bytes", "type": "bytes", "versions": "0+", "zeroCopy": true,
-          "about": "Snapshot data." }
+        { "name": "Bytes", "type": "records", "versions": "0+", "about": "Snapshot data." }
       ]}
     ]}
   ]
