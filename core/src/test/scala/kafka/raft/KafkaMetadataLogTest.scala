@@ -64,16 +64,19 @@ final class KafkaMetadataLogTest {
   @Test
   def testCreateSnapshot(): Unit = {
     val topicPartition = new TopicPartition("cluster-metadata", 0)
+    val numberOfRecords = 10
+    val epoch = 0
+    val snapshotId = new OffsetAndEpoch(numberOfRecords, epoch)
     val log = buildMetadataLog(tempDir, mockTime, topicPartition)
 
-    append(log, 10, 0)
-    log.updateHighWatermark(new LogOffsetMetadata(10))
+    append(log, numberOfRecords, epoch)
+    log.updateHighWatermark(new LogOffsetMetadata(numberOfRecords))
 
-    TestUtils.resource(log.createSnapshot(new OffsetAndEpoch(10, 0))) { snapshot =>
+    TestUtils.resource(log.createSnapshot(snapshotId)) { snapshot =>
       snapshot.freeze()
     }
 
-    TestUtils.resource(log.readSnapshot(new OffsetAndEpoch(10, 0)).get()) { snapshot =>
+    TestUtils.resource(log.readSnapshot(snapshotId).get()) { snapshot =>
       assertEquals(0, snapshot.sizeInBytes())
     }
   }
@@ -280,7 +283,7 @@ object KafkaMetadataLogTest {
       logStartOffset = 0,
       recoveryPoint = 0,
       scheduler = time.scheduler,
-      brokerTopicStats = new BrokerTopicStats, // Is there a noop for this?
+      brokerTopicStats = new BrokerTopicStats,
       time = time,
       maxProducerIdExpirationMs = 60 * 60 * 1000,
       producerIdExpirationCheckIntervalMs = LogManager.ProducerIdExpirationCheckIntervalMs,
@@ -296,11 +299,11 @@ object KafkaMetadataLogTest {
   }
 
 
-  def append(log: ReplicatedLog, numberOfRecors: Int, epoch: Int): LogAppendInfo = {
+  def append(log: ReplicatedLog, numberOfRecords: Int, epoch: Int): LogAppendInfo = {
     log.appendAsLeader(
       MemoryRecords.withRecords(
         CompressionType.NONE,
-        (0 until numberOfRecors).map(number => new SimpleRecord(number.toString.getBytes)): _*
+        (0 until numberOfRecords).map(number => new SimpleRecord(number.toString.getBytes)): _*
       ),
       epoch
     )

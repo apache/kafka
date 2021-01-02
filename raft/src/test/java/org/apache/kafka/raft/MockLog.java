@@ -41,6 +41,7 @@ import java.util.NavigableMap;
 import java.util.NoSuchElementException;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.OptionalInt;
 import java.util.OptionalLong;
 import java.util.TreeMap;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -81,11 +82,16 @@ public class MockLog implements ReplicatedLog {
     public boolean truncateFullyToLatestSnapshot() {
         AtomicBoolean truncated = new AtomicBoolean(false);
         latestSnapshotId().ifPresent(snapshotId -> {
-            if (snapshotId.epoch > lastFetchedEpoch() ||
-                (snapshotId.epoch == lastFetchedEpoch() && snapshotId.offset > endOffset().offset)) {
+            if (snapshotId.epoch > logLastFetchedEpoch().orElse(0) ||
+                (snapshotId.epoch == logLastFetchedEpoch().orElse(0) &&
+                 snapshotId.offset > endOffset().offset)) {
 
                 batches.clear();
+                epochStartOffsets.clear();
                 logStartOffset = snapshotId.offset;
+                updateHighWatermark(new LogOffsetMetadata(snapshotId.offset));
+                flush();
+
                 truncated.set(true);
             }
         });
@@ -156,11 +162,19 @@ public class MockLog implements ReplicatedLog {
         return highWatermark;
     }
 
+    private OptionalInt logLastFetchedEpoch() {
+        if (epochStartOffsets.isEmpty()) {
+            return OptionalInt.empty();
+        } else {
+            return OptionalInt.of(epochStartOffsets.get(epochStartOffsets.size() - 1).epoch);
+        }
+    }
+
     @Override
     public int lastFetchedEpoch() {
-        if (epochStartOffsets.isEmpty())
-            return 0;
-        return epochStartOffsets.get(epochStartOffsets.size() - 1).epoch;
+        return logLastFetchedEpoch().orElseGet(() -> {
+            return latestSnapshotId().map(id -> id.epoch).orElse(0);
+        });
     }
 
     @Override
@@ -268,7 +282,6 @@ public class MockLog implements ReplicatedLog {
         batches.add(batch);
         return batch.firstOffset();
     }
-
 
     @Override
     public LogAppendInfo appendAsFollower(Records records) {
@@ -410,14 +423,16 @@ public class MockLog implements ReplicatedLog {
     @Override
     public void snapshotFrozen(OffsetAndEpoch snapshotId) {}
 
-    // TODO: How are we going to test this?
     @Override
     public boolean maybeUpdateLogStartOffset() {
         boolean updated = false;
         Optional<OffsetAndEpoch> snapshotIdOpt = latestSnapshotId();
         if (snapshotIdOpt.isPresent()) {
             OffsetAndEpoch snapshotId = snapshotIdOpt.get();
-            if (logStartOffset < snapshotId.offset) {
+            System.out.println(String.format("logStartOffset = %s, snapshotId = %s", logStartOffset, snapshotId));
+            // TODO: I think snapshotId.offset can <= highWatermark.offset + 1. Need to investigate if highWatermark is inclusive or
+            // exclusive
+            if (logStartOffset < snapshotId.offset && highWatermark.offset >= snapshotId.offset) {
                 logStartOffset = snapshotId.offset;
                 batches.removeIf(entry -> entry.lastOffset() < logStartOffset);
 
@@ -436,9 +451,14 @@ public class MockLog implements ReplicatedLog {
                 });
 
                 updated = true;
-            } else if (logStartOffset > snapshotId.offset) {
-                throw new IllegalStateException(
-                    String.format("The log start offset (%s) is greater than the latest snapshot (%s)", logStartOffset, snapshotId)
+            } else if (logStartOffset > snapshotId.offset || highWatermark.offset < snapshotId.offset) {
+                throw new OffsetOutOfRangeException(
+                    String.format(
+                        "The latest snapshot (%s) is less than log start offset (%s) or is greater than the high watermark (%s)",
+                        snapshotId,
+                        logStartOffset,
+                        highWatermark.offset
+                    )
                 );
             }
         }
