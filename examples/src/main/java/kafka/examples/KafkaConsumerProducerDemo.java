@@ -16,6 +16,8 @@
  */
 package kafka.examples;
 
+import org.apache.kafka.common.utils.Exit;
+
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
@@ -40,7 +42,7 @@ public class KafkaConsumerProducerDemo {
             e.printStackTrace();
         } catch (java.util.concurrent.TimeoutException e) {
             System.out.println("Timeout after 5 minutes waiting for demo producer and consumer to finish");
-            System.exit(1);
+            Exit.exit(1);
         }
 
         threads.shutdownNow();

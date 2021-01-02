@@ -16,7 +16,6 @@
  */
 package kafka.examples;
 
-import kafka.utils.ShutdownableThread;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
@@ -26,7 +25,6 @@ import java.time.Duration;
 import java.util.Collections;
 import java.util.Optional;
 import java.util.Properties;
-import java.util.concurrent.CountDownLatch;
 
 public class Consumer implements Runnable {
     private final KafkaConsumer<Integer, String> consumer;

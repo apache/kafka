@@ -21,6 +21,7 @@ import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.common.errors.TopicExistsException;
 import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
+import org.apache.kafka.common.utils.Exit;
 
 import java.util.Arrays;
 import java.util.List;
@@ -98,7 +99,7 @@ public class KafkaExactlyOnceDemo {
             CompletableFuture.runAsync(producerTask, driver).get(5, TimeUnit.MINUTES);
         } catch (TimeoutException e) {
             System.out.println("Timeout after 5 minutes waiting for data pre-population");
-            System.exit(1);
+            Exit.exit(1);
         }
 
 
@@ -110,13 +111,13 @@ public class KafkaExactlyOnceDemo {
             messageProcessors[instanceIdx] = CompletableFuture.runAsync(
                     new ExactlyOnceMessageProcessor(INPUT_TOPIC, OUTPUT_TOPIC, instanceIdx),
                     processorThreads);
-        };
+        }
 
         try {
             CompletableFuture.allOf(messageProcessors).get(5, TimeUnit.MINUTES);
         } catch (TimeoutException e) {
             System.out.println("Timeout after 5 minutes waiting for transactional message copy");
-            System.exit(1);
+            Exit.exit(1);
         }
 
         /* Stage 4: consume all processed messages to verify exactly once.
@@ -129,7 +130,7 @@ public class KafkaExactlyOnceDemo {
             CompletableFuture.runAsync(consumerTask, driver).get(5, TimeUnit.MINUTES);
         } catch (TimeoutException e) {
             System.out.println("Timeout after 5 minutes waiting for output data consumption");
-            System.exit(1);
+            Exit.exit(1);
         }
 
         processorThreads.shutdownNow();
