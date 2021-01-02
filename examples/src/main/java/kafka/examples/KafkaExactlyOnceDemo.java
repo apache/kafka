@@ -28,7 +28,6 @@ import java.util.Optional;
 import java.util.Properties;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -120,8 +119,11 @@ public class KafkaExactlyOnceDemo {
             System.exit(1);
         }
 
-        /* Stage 4: consume all processed messages to verify exactly once */
-        Consumer consumerTask = new Consumer(OUTPUT_TOPIC, "Verify-consumer", Optional.empty(), true, numRecords);
+        /* Stage 4: consume all processed messages to verify exactly once.
+        Consumer uses read committed to guarantee that uncommitted events will not be included in verification
+        but the consumer is not part of the transaction itself
+        */
+        Consumer consumerTask = new Consumer(OUTPUT_TOPIC, "Verify-consumer", Optional.empty(), true, numRecords, KafkaProperties.NON_TRANSACTIONAL);
 
         try {
             CompletableFuture.runAsync(consumerTask, driver).get(5, TimeUnit.MINUTES);

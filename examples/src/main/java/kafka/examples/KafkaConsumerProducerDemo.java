@@ -22,7 +22,6 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.TimeoutException;
 
 public class KafkaConsumerProducerDemo {
     public static void main(String[] args) throws InterruptedException {
@@ -30,7 +29,7 @@ public class KafkaConsumerProducerDemo {
         ExecutorService threads = Executors.newFixedThreadPool(2);
 
         Producer producerTask = new Producer(KafkaProperties.TOPIC, isAsync, null, false, 10000, -1);
-        Consumer consumerTask = new Consumer(KafkaProperties.TOPIC, "DemoConsumer", Optional.empty(), false, 10000);
+        Consumer consumerTask = new Consumer(KafkaProperties.TOPIC, "DemoConsumer", Optional.empty(), false, 10000, KafkaProperties.NON_TRANSACTIONAL);
 
         try {
             CompletableFuture.allOf(

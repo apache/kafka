@@ -65,11 +65,12 @@ public class ExactlyOnceMessageProcessor implements Runnable {
         final int transactionTimeoutMs = 10000;
         producer = new Producer(outputTopic, true, transactionalId, true, -1, transactionTimeoutMs).get();
         // Consumer can be in read_committed mode, which means it won't be able to read uncommitted data
+        // Consumer is part of the transaction, so it does not commit its own offsets and auto-commit will be disabled
         // if the producer that populated the input topic was transactional.
         // Consumer could optionally configure groupInstanceId to avoid unnecessary rebalances.
         this.groupInstanceId = "Txn-consumer-" + instanceIdx;
         consumer = new Consumer(inputTopic, "Eos-consumer",
-            Optional.of(groupInstanceId), READ_COMMITTED, -1).get();
+            Optional.of(groupInstanceId), READ_COMMITTED, -1, KafkaProperties.TRANSACTIONAL).get();
     }
 
     @Override

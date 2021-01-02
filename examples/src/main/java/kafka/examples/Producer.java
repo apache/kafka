@@ -50,8 +50,10 @@ public class Producer implements Runnable {
         }
         if (transactionalId != null) {
             props.put(ProducerConfig.TRANSACTIONAL_ID_CONFIG, transactionalId);
+        } else {
+            // Transactions are always idempotent, but in other cases we need to explicitly set idempotence
+            props.put(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG, enableIdempotency);
         }
-        props.put(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG, enableIdempotency);
 
         producer = new KafkaProducer<>(props);
         this.topic = topic;
