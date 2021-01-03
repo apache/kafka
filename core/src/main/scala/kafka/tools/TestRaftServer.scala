@@ -618,7 +618,7 @@ object TestRaftServer extends Logging {
       case e: OptionException =>
         CommandLineUtils.printUsageAndDie(opts.parser, e.getMessage)
       case e: Throwable =>
-        fatal("Exiting Kafka due to fatal exception", e)
+        fatal("Exiting raft server due to fatal exception", e)
         Exit.exit(1)
     }
   }
