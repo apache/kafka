@@ -1758,6 +1758,7 @@ class SocketServerTest {
     testProps.put("listeners", "PLAINTEXT://localhost:0,CONTROLLER://localhost:0")
     testProps.put("listener.security.protocol.map", "PLAINTEXT:PLAINTEXT,CONTROLLER:PLAINTEXT")
     testProps.put("control.plane.listener.name", "CONTROLLER")
+    testProps.put("control.plane.force.controller.requests.enable", "true")
     val config = KafkaConfig.fromProps(testProps)
     withTestableServer(config, { testableServer =>
       val controlPlaneSocket = connect(testableServer, config.controlPlaneListenerName.get,
