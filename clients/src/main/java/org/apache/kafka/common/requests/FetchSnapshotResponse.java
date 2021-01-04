@@ -30,11 +30,10 @@ import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
 
 final public class FetchSnapshotResponse extends AbstractResponse {
-    public final FetchSnapshotResponseData data;
+    private final FetchSnapshotResponseData data;
 
     public FetchSnapshotResponse(FetchSnapshotResponseData data) {
         super(ApiKeys.FETCH_SNAPSHOT);
-
         this.data = data;
     }
 
@@ -63,7 +62,7 @@ final public class FetchSnapshotResponse extends AbstractResponse {
     }
 
     @Override
-    public ApiMessage data() {
+    public FetchSnapshotResponseData data() {
         return data;
     }
 
