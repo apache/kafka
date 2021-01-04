@@ -214,9 +214,12 @@ class ClientQuotasRequestTest extends BaseRequestTest {
           InetAddress.getByName(unknownHost)
         else
           InetAddress.getByName(entityName)
+        var currentServerQuota = 0
         TestUtils.waitUntilTrue(
-          () => expectedMatches(entity) - servers.head.socketServer.connectionQuotas.connectionRateForIp(entityIp) < 0.01
-          ,"Broker didn't update quotas from Zookeeper")
+          () => {
+            currentServerQuota = servers.head.socketServer.connectionQuotas.connectionRateForIp(entityIp)
+            Math.abs(expectedMatches(entity) - currentServerQuota) < 0.01
+          }, s"Broker didn't update quotas from Zookeeper, expect: ${expectedMatches(entity)}, got: $currentServerQuota")
       }
     }
 
