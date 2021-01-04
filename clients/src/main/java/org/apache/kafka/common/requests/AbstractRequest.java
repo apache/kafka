@@ -20,7 +20,6 @@ import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.network.Send;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.protocol.Message;
 import org.apache.kafka.common.protocol.MessageUtil;
 import org.apache.kafka.common.protocol.ObjectSerializationCache;
 import org.apache.kafka.common.protocol.SendBuilder;
@@ -101,8 +100,6 @@ public abstract class AbstractRequest implements AbstractRequestResponse {
     public final Send toSend(RequestHeader header) {
         return SendBuilder.buildRequestSend(header, data());
     }
-
-    public abstract Message data();
 
     // Visible for testing
     public final ByteBuffer serialize() {
@@ -275,6 +272,8 @@ public abstract class AbstractRequest implements AbstractRequestResponse {
                 return UpdateFeaturesRequest.parse(buffer, apiVersion);
             case ENVELOPE:
                 return EnvelopeRequest.parse(buffer, apiVersion);
+            case FETCH_SNAPSHOT:
+                return FetchSnapshotRequest.parse(buffer, apiVersion);
             default:
                 throw new AssertionError(String.format("ApiKey %s is not currently handled in `parseRequest`, the " +
                         "code should be updated to do so.", apiKey));

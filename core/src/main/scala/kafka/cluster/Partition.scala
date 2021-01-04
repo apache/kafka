@@ -28,7 +28,7 @@ import kafka.server._
 import kafka.server.checkpoints.OffsetCheckpoints
 import kafka.utils.CoreUtils.{inReadLock, inWriteLock}
 import kafka.utils._
-import kafka.zk.{AdminZkClient, KafkaZkClient}
+import kafka.zk.AdminZkClient
 import kafka.zookeeper.ZooKeeperClientException
 import org.apache.kafka.common.errors._
 import org.apache.kafka.common.message.FetchResponseData
@@ -51,40 +51,8 @@ trait IsrChangeListener {
   def markFailed(): Unit
 }
 
-trait PartitionStateStore {
-  def fetchTopicConfig(): Properties
-  def shrinkIsr(controllerEpoch: Int, leaderAndIsr: LeaderAndIsr): Option[Int]
-  def expandIsr(controllerEpoch: Int, leaderAndIsr: LeaderAndIsr): Option[Int]
-}
-
-class ZkPartitionStateStore(topicPartition: TopicPartition,
-                            zkClient: KafkaZkClient) extends PartitionStateStore {
-
-  override def fetchTopicConfig(): Properties = {
-    val adminZkClient = new AdminZkClient(zkClient)
-    adminZkClient.fetchEntityConfig(ConfigType.Topic, topicPartition.topic)
-  }
-
-  override def shrinkIsr(controllerEpoch: Int, leaderAndIsr: LeaderAndIsr): Option[Int] = {
-    val newVersionOpt = updateIsr(controllerEpoch, leaderAndIsr)
-    newVersionOpt
-  }
-
-  override def expandIsr(controllerEpoch: Int, leaderAndIsr: LeaderAndIsr): Option[Int] = {
-    val newVersionOpt = updateIsr(controllerEpoch, leaderAndIsr)
-    newVersionOpt
-  }
-
-  private def updateIsr(controllerEpoch: Int, leaderAndIsr: LeaderAndIsr): Option[Int] = {
-    val (updateSucceeded, newVersion) = ReplicationUtils.updateLeaderAndIsr(zkClient, topicPartition,
-      leaderAndIsr, controllerEpoch)
-
-    if (updateSucceeded) {
-      Some(newVersion)
-    } else {
-      None
-    }
-  }
+trait TopicConfigFetcher {
+  def fetch(): Properties
 }
 
 class DelayedOperations(topicPartition: TopicPartition,
@@ -109,21 +77,22 @@ object Partition extends KafkaMetricsGroup {
 
     val isrChangeListener = new IsrChangeListener {
       override def markExpand(): Unit = {
-        replicaManager.recordIsrChange(topicPartition)
         replicaManager.isrExpandRate.mark()
       }
 
       override def markShrink(): Unit = {
-        replicaManager.recordIsrChange(topicPartition)
         replicaManager.isrShrinkRate.mark()
       }
 
       override def markFailed(): Unit = replicaManager.failedIsrUpdatesRate.mark()
     }
 
-    val zkIsrBackingStore = new ZkPartitionStateStore(
-      topicPartition,
-      replicaManager.zkClient)
+    val configProvider = new TopicConfigFetcher {
+      override def fetch(): Properties = {
+        val adminZkClient = new AdminZkClient(replicaManager.zkClient)
+        adminZkClient.fetchEntityConfig(ConfigType.Topic, topicPartition.topic)
+      }
+    }
 
     val delayedOperations = new DelayedOperations(
       topicPartition,
@@ -136,7 +105,7 @@ object Partition extends KafkaMetricsGroup {
       interBrokerProtocolVersion = replicaManager.config.interBrokerProtocolVersion,
       localBrokerId = replicaManager.config.brokerId,
       time = time,
-      stateStore = zkIsrBackingStore,
+      topicConfigProvider = configProvider,
       isrChangeListener = isrChangeListener,
       delayedOperations = delayedOperations,
       metadataCache = replicaManager.metadataCache,
@@ -259,7 +228,7 @@ class Partition(val topicPartition: TopicPartition,
                 interBrokerProtocolVersion: ApiVersion,
                 localBrokerId: Int,
                 time: Time,
-                stateStore: PartitionStateStore,
+                topicConfigProvider: TopicConfigFetcher,
                 isrChangeListener: IsrChangeListener,
                 delayedOperations: DelayedOperations,
                 metadataCache: MetadataCache,
@@ -284,8 +253,6 @@ class Partition(val topicPartition: TopicPartition,
   @volatile var leaderReplicaIdOpt: Option[Int] = None
   @volatile private[cluster] var isrState: IsrState = CommittedIsr(Set.empty)
   @volatile var assignmentState: AssignmentState = SimpleAssignmentState(Seq.empty)
-
-  private val useAlterIsr: Boolean = interBrokerProtocolVersion.isAlterIsrSupported
 
   // Logs belonging to this partition. Majority of time it will be only one log, but if log directory
   // is getting changed (as a result of ReplicaAlterLogDirs command), we may have two logs until copy
@@ -375,7 +342,7 @@ class Partition(val topicPartition: TopicPartition,
   // Visible for testing
   private[cluster] def createLog(isNew: Boolean, isFutureReplica: Boolean, offsetCheckpoints: OffsetCheckpoints): Log = {
     def fetchLogConfig: LogConfig = {
-      val props = stateStore.fetchTopicConfig()
+      val props = topicConfigProvider.fetch()
       LogConfig.fromProps(logManager.currentDefaultConfig.originals, props)
     }
 
@@ -1325,14 +1292,6 @@ class Partition(val topicPartition: TopicPartition,
   }
 
   private[cluster] def expandIsr(newInSyncReplica: Int): Unit = {
-    if (useAlterIsr) {
-      expandIsrWithAlterIsr(newInSyncReplica)
-    } else {
-      expandIsrWithZk(newInSyncReplica)
-    }
-  }
-
-  private def expandIsrWithAlterIsr(newInSyncReplica: Int): Unit = {
     // This is called from maybeExpandIsr which holds the ISR write lock
     if (!isrState.isInflight) {
       // When expanding the ISR, we can safely assume the new replica will make it into the ISR since this puts us in
@@ -1343,26 +1302,7 @@ class Partition(val topicPartition: TopicPartition,
     }
   }
 
-  private def expandIsrWithZk(newInSyncReplica: Int): Unit = {
-    val newInSyncReplicaIds = isrState.isr + newInSyncReplica
-    info(s"Expanding ISR from ${isrState.isr.mkString(",")} to ${newInSyncReplicaIds.mkString(",")}")
-    val newLeaderAndIsr = new LeaderAndIsr(localBrokerId, leaderEpoch, newInSyncReplicaIds.toList, zkVersion)
-    val zkVersionOpt = stateStore.expandIsr(controllerEpoch, newLeaderAndIsr)
-    if (zkVersionOpt.isDefined) {
-      isrChangeListener.markExpand()
-    }
-    maybeUpdateIsrAndVersionWithZk(newInSyncReplicaIds, zkVersionOpt)
-  }
-
   private[cluster] def shrinkIsr(outOfSyncReplicas: Set[Int]): Unit = {
-    if (useAlterIsr) {
-      shrinkIsrWithAlterIsr(outOfSyncReplicas)
-    } else {
-      shrinkIsrWithZk(isrState.isr -- outOfSyncReplicas)
-    }
-  }
-
-  private def shrinkIsrWithAlterIsr(outOfSyncReplicas: Set[Int]): Unit = {
     // This is called from maybeShrinkIsr which holds the ISR write lock
     if (!isrState.isInflight) {
       // When shrinking the ISR, we cannot assume that the update will succeed as this could erroneously advance the HW
@@ -1374,47 +1314,29 @@ class Partition(val topicPartition: TopicPartition,
     }
   }
 
-  private def shrinkIsrWithZk(newIsr: Set[Int]): Unit = {
-    val newLeaderAndIsr = new LeaderAndIsr(localBrokerId, leaderEpoch, newIsr.toList, zkVersion)
-    val zkVersionOpt = stateStore.shrinkIsr(controllerEpoch, newLeaderAndIsr)
-    if (zkVersionOpt.isDefined) {
-      isrChangeListener.markShrink()
-    }
-    maybeUpdateIsrAndVersionWithZk(newIsr, zkVersionOpt)
-  }
-
-  private def maybeUpdateIsrAndVersionWithZk(isr: Set[Int], zkVersionOpt: Option[Int]): Unit = {
-    zkVersionOpt match {
-      case Some(newVersion) =>
-        isrState = CommittedIsr(isr)
-        zkVersion = newVersion
-        info("ISR updated to [%s] and zkVersion updated to [%d]".format(isr.mkString(","), zkVersion))
-
-      case None =>
-        info(s"Cached zkVersion $zkVersion not equal to that in zookeeper, skip updating ISR")
-        isrChangeListener.markFailed()
-    }
-  }
-
   private def sendAlterIsrRequest(proposedIsrState: IsrState): Unit = {
     val isrToSend: Set[Int] = proposedIsrState match {
       case PendingExpandIsr(isr, newInSyncReplicaId) => isr + newInSyncReplicaId
       case PendingShrinkIsr(isr, outOfSyncReplicaIds) => isr -- outOfSyncReplicaIds
       case state =>
-        throw new IllegalStateException(s"Invalid state $state for `AlterIsr` request for partition $topicPartition")
+        isrChangeListener.markFailed()
+        throw new IllegalStateException(s"Invalid state $state for ISR change for partition $topicPartition")
     }
 
     val newLeaderAndIsr = new LeaderAndIsr(localBrokerId, leaderEpoch, isrToSend.toList, zkVersion)
-    val alterIsrItem = AlterIsrItem(topicPartition, newLeaderAndIsr, handleAlterIsrResponse(proposedIsrState))
+    val alterIsrItem = AlterIsrItem(topicPartition, newLeaderAndIsr, handleAlterIsrResponse(proposedIsrState), controllerEpoch)
 
-    if (!alterIsrManager.enqueue(alterIsrItem)) {
+    val oldState = isrState
+    isrState = proposedIsrState
+
+    if (!alterIsrManager.submit(alterIsrItem)) {
+      // If the ISR manager did not accept our update, we need to revert back to previous state
+      isrState = oldState
       isrChangeListener.markFailed()
-      throw new IllegalStateException(s"Failed to enqueue `AlterIsr` request with state " +
-        s"$newLeaderAndIsr for partition $topicPartition")
+      throw new IllegalStateException(s"Failed to enqueue ISR change state $newLeaderAndIsr for partition $topicPartition")
     }
 
-    isrState = proposedIsrState
-    debug(s"Sent `AlterIsr` request to change state to $newLeaderAndIsr after transition to $proposedIsrState")
+    debug(s"Enqueued ISR change to state $newLeaderAndIsr after transition to $proposedIsrState")
   }
 
   /**
@@ -1438,27 +1360,27 @@ class Partition(val topicPartition: TopicPartition,
           isrChangeListener.markFailed()
           error match {
             case Errors.UNKNOWN_TOPIC_OR_PARTITION =>
-              debug(s"Controller failed to update ISR to $proposedIsrState since it doesn't know about this topic or partition. Giving up.")
+              debug(s"Failed to update ISR to $proposedIsrState since it doesn't know about this topic or partition. Giving up.")
             case Errors.FENCED_LEADER_EPOCH =>
-              debug(s"Controller failed to update ISR to $proposedIsrState since we sent an old leader epoch. Giving up.")
+              debug(s"Failed to update ISR to $proposedIsrState since we sent an old leader epoch. Giving up.")
             case Errors.INVALID_UPDATE_VERSION =>
-              debug(s"Controller failed to update ISR to $proposedIsrState due to invalid zk version. Giving up.")
+              debug(s"Failed to update ISR to $proposedIsrState due to invalid zk version. Giving up.")
             case _ =>
-              warn(s"Controller failed to update ISR to $proposedIsrState due to unexpected $error. Retrying.")
+              warn(s"Failed to update ISR to $proposedIsrState due to unexpected $error. Retrying.")
               sendAlterIsrRequest(proposedIsrState)
           }
         case Right(leaderAndIsr: LeaderAndIsr) =>
           // Success from controller, still need to check a few things
           if (leaderAndIsr.leaderEpoch != leaderEpoch) {
-            debug(s"Ignoring ISR from AlterIsr with ${leaderAndIsr} since we have a stale leader epoch $leaderEpoch.")
+            debug(s"Ignoring new ISR ${leaderAndIsr} since we have a stale leader epoch $leaderEpoch.")
             isrChangeListener.markFailed()
           } else if (leaderAndIsr.zkVersion <= zkVersion) {
-            debug(s"Ignoring ISR from AlterIsr with ${leaderAndIsr} since we have a newer version $zkVersion.")
+            debug(s"Ignoring new ISR ${leaderAndIsr} since we have a newer version $zkVersion.")
             isrChangeListener.markFailed()
           } else {
             isrState = CommittedIsr(leaderAndIsr.isr.toSet)
             zkVersion = leaderAndIsr.zkVersion
-            info(s"ISR updated from AlterIsr to ${isrState.isr.mkString(",")} and version updated to [$zkVersion]")
+            info(s"ISR updated to ${isrState.isr.mkString(",")} and version updated to [$zkVersion]")
             proposedIsrState match {
               case PendingExpandIsr(_, _) => isrChangeListener.markExpand()
               case PendingShrinkIsr(_, _) => isrChangeListener.markShrink()

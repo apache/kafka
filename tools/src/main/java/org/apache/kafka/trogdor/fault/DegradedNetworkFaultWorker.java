@@ -109,19 +109,19 @@ public class DegradedNetworkFaultWorker implements TaskWorker {
             List<String> delay = new ArrayList<>();
             rootHandler(networkDevice, delay::add);
             netemDelay(delayMs, deviationMs, delay::add);
-            platform.runCommand(delay.toArray(new String[]{}));
+            platform.runCommand(delay.toArray(new String[0]));
 
             if (rateLimitKbps > 0) {
                 List<String> rate = new ArrayList<>();
                 childHandler(networkDevice, rate::add);
                 tbfRate(rateLimitKbps, rate::add);
-                platform.runCommand(rate.toArray(new String[]{}));
+                platform.runCommand(rate.toArray(new String[0]));
             }
         } else if (rateLimitKbps > 0) {
             List<String> rate = new ArrayList<>();
             rootHandler(networkDevice, rate::add);
             tbfRate(rateLimitKbps, rate::add);
-            platform.runCommand(rate.toArray(new String[]{}));
+            platform.runCommand(rate.toArray(new String[0]));
         } else {
             log.warn("Not applying any rate limiting or latency");
         }

@@ -19,7 +19,7 @@ package kafka.server
 import java.io.File
 import java.util.Optional
 import java.util.concurrent.TimeUnit
-import java.util.concurrent.atomic.{AtomicBoolean, AtomicLong}
+import java.util.concurrent.atomic.{AtomicBoolean}
 import java.util.concurrent.locks.Lock
 
 import com.yammer.metrics.core.Meter
@@ -166,26 +166,8 @@ object HostedPartition {
   final object Offline extends HostedPartition
 }
 
-case class IsrChangePropagationConfig(
-  // How often to check for ISR
-  checkIntervalMs: Long,
-
-  // Maximum time that an ISR change may be delayed before sending the notification
-  maxDelayMs: Long,
-
-  // Maximum time to await additional changes before sending the notification
-  lingerMs: Long
-)
-
 object ReplicaManager {
   val HighWatermarkFilename = "replication-offset-checkpoint"
-
-  // This field is mutable to allow overriding change notification behavior in test cases
-  @volatile var DefaultIsrPropagationConfig: IsrChangePropagationConfig = IsrChangePropagationConfig(
-    checkIntervalMs = 2500,
-    lingerMs = 5000,
-    maxDelayMs = 60000,
-  )
 }
 
 class ReplicaManager(val config: KafkaConfig,
@@ -251,11 +233,6 @@ class ReplicaManager(val config: KafkaConfig,
   this.logIdent = s"[ReplicaManager broker=$localBrokerId] "
   private val stateChangeLogger = new StateChangeLogger(localBrokerId, inControllerContext = false, None)
 
-  private val isrChangeNotificationConfig = ReplicaManager.DefaultIsrPropagationConfig
-  private val isrChangeSet: mutable.Set[TopicPartition] = new mutable.HashSet[TopicPartition]()
-  private val lastIsrChangeMs = new AtomicLong(time.milliseconds())
-  private val lastIsrPropagationMs = new AtomicLong(time.milliseconds())
-
   private var logDirFailureHandler: LogDirFailureHandler = null
 
   private class LogDirFailureHandler(name: String, haltBrokerOnDirFailure: Boolean) extends ShutdownableThread(name) {
@@ -294,34 +271,6 @@ class ReplicaManager(val config: KafkaConfig,
       scheduler.schedule("highwatermark-checkpoint", checkpointHighWatermarks _, period = config.replicaHighWatermarkCheckpointIntervalMs, unit = TimeUnit.MILLISECONDS)
   }
 
-  def recordIsrChange(topicPartition: TopicPartition): Unit = {
-    if (!config.interBrokerProtocolVersion.isAlterIsrSupported) {
-      isrChangeSet synchronized {
-        isrChangeSet += topicPartition
-        lastIsrChangeMs.set(time.milliseconds())
-      }
-    }
-  }
-  /**
-   * This function periodically runs to see if ISR needs to be propagated. It propagates ISR when:
-   * 1. There is ISR change not propagated yet.
-   * 2. There is no ISR Change in the last five seconds, or it has been more than 60 seconds since the last ISR propagation.
-   * This allows an occasional ISR change to be propagated within a few seconds, and avoids overwhelming controller and
-   * other brokers when large amount of ISR change occurs.
-   */
-  def maybePropagateIsrChanges(): Unit = {
-    val now = time.milliseconds()
-    isrChangeSet synchronized {
-      if (isrChangeSet.nonEmpty &&
-        (lastIsrChangeMs.get() + isrChangeNotificationConfig.lingerMs < now ||
-          lastIsrPropagationMs.get() + isrChangeNotificationConfig.maxDelayMs < now)) {
-        zkClient.propagateIsrChanges(isrChangeSet)
-        isrChangeSet.clear()
-        lastIsrPropagationMs.set(now)
-      }
-    }
-  }
-
   // When ReplicaAlterDirThread finishes replacing a current replica with a future replica, it will
   // remove the partition from the partition state map. But it will not close itself even if the
   // partition state map is empty. Thus we need to call shutdownIdleReplicaAlterDirThread() periodically
@@ -343,13 +292,6 @@ class ReplicaManager(val config: KafkaConfig,
     // start ISR expiration thread
     // A follower can lag behind leader for up to config.replicaLagTimeMaxMs x 1.5 before it is removed from ISR
     scheduler.schedule("isr-expiration", maybeShrinkIsr _, period = config.replicaLagTimeMaxMs / 2, unit = TimeUnit.MILLISECONDS)
-    // If using AlterIsr, we don't need the znode ISR propagation
-    if (!config.interBrokerProtocolVersion.isAlterIsrSupported) {
-      scheduler.schedule("isr-change-propagation", maybePropagateIsrChanges _,
-        period = isrChangeNotificationConfig.checkIntervalMs, unit = TimeUnit.MILLISECONDS)
-    } else {
-      alterIsrManager.start()
-    }
     scheduler.schedule("shutdown-idle-replica-alter-log-dirs-thread", shutdownIdleReplicaAlterLogDirsThread _, period = 10000L, unit = TimeUnit.MILLISECONDS)
 
     // If inter-broker protocol (IBP) < 1.0, the controller will send LeaderAndIsrRequest V0 which does not include isNew field.
