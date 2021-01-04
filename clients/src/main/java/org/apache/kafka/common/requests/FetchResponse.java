@@ -338,12 +338,11 @@ public class FetchResponse<T extends BaseRecords> extends AbstractResponse {
             partitionData.partitionResponse.setPartition(entry.getKey().partition());
             // We have to keep the order of input topic-partition. Hence, we batch the partitions only if the last
             // batch is in the same topic group.
-            if (!topicResponseList.isEmpty() && topicResponseList.get(topicResponseList.size() - 1)
-                    .topic().equals(entry.getKey().topic())) {
-                topicResponseList.get(topicResponseList.size() - 1)
-                        .partitionResponses()
-                        .add(partitionData.partitionResponse);
-            } else {
+            FetchResponseData.FetchableTopicResponse previousTopic = topicResponseList.isEmpty() ? null
+                    : topicResponseList.get(topicResponseList.size() - 1);
+            if (previousTopic != null && previousTopic.topic().equals(entry.getKey().topic()))
+                previousTopic.partitionResponses().add(partitionData.partitionResponse);
+            else {
                 List<FetchResponseData.FetchablePartitionResponse> partitionResponses = new ArrayList<>();
                 partitionResponses.add(partitionData.partitionResponse);
                 topicResponseList.add(new FetchResponseData.FetchableTopicResponse()
