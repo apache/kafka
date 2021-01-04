@@ -71,7 +71,7 @@ import scala.util.control.ControlThrowable
  *    - The threading model is
  *      1 Acceptor thread that handles new connections
  *      Acceptor has 1 Processor thread that has its own selector and read requests from the socket.
- *      1 Handler thread that handles requests and produce responses back to the processor thread for writing.
+ *      1 Handler thread that handles requests and produces responses back to the processor thread for writing.
  */
 class SocketServer(val config: KafkaConfig,
                    val metrics: Metrics,
