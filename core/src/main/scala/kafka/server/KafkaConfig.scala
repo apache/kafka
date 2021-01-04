@@ -374,6 +374,7 @@ object KafkaConfig {
   val MaxConnectionCreationRateProp = "max.connection.creation.rate"
   val ConnectionsMaxIdleMsProp = "connections.max.idle.ms"
   val FailedAuthenticationDelayMsProp = "connection.failed.authentication.delay.ms"
+  val ControlPlaneForceControllerRequestsEnableProp = "control.plane.force.controller.requests.enable"
   /***************** rack configuration *************/
   val RackProp = "broker.rack"
   /** ********* Log Configuration ***********/
@@ -720,6 +721,7 @@ object KafkaConfig {
   val ConnectionsMaxIdleMsDoc = "Idle connections timeout: the server socket processor threads close the connections that idle more than this"
   val FailedAuthenticationDelayMsDoc = "Connection close delay on failed authentication: this is the time (in milliseconds) by which connection close will be delayed on authentication failure. " +
     s"This must be configured to be less than $ConnectionsMaxIdleMsProp to prevent connection timeout."
+  val ControlPlaneForceControllerRequestsEnablePropDoc = "Enable the control plane to force the validation of control requests. If true, the control plane will only receive control requests."
   /************* Rack Configuration **************/
   val RackDoc = "Rack of the broker. This will be used in rack aware replication assignment for fault tolerance. Examples: `RACK1`, `us-east-1d`"
   /** ********* Log Configuration ***********/
@@ -1054,6 +1056,7 @@ object KafkaConfig {
       .define(MaxConnectionCreationRateProp, INT, Defaults.MaxConnectionCreationRate, atLeast(0), MEDIUM, MaxConnectionCreationRateDoc)
       .define(ConnectionsMaxIdleMsProp, LONG, Defaults.ConnectionsMaxIdleMs, MEDIUM, ConnectionsMaxIdleMsDoc)
       .define(FailedAuthenticationDelayMsProp, INT, Defaults.FailedAuthenticationDelayMs, atLeast(0), LOW, FailedAuthenticationDelayMsDoc)
+      .define(ControlPlaneForceControllerRequestsEnableProp, BOOLEAN, false, LOW, ControlPlaneForceControllerRequestsEnablePropDoc)
 
       /************ Rack Configuration ******************/
       .define(RackProp, STRING, null, MEDIUM, RackDoc)
@@ -1485,6 +1488,7 @@ class KafkaConfig(val props: java.util.Map[_, _], doLog: Boolean, dynamicConfigO
   def maxConnectionCreationRate = getInt(KafkaConfig.MaxConnectionCreationRateProp)
   val connectionsMaxIdleMs = getLong(KafkaConfig.ConnectionsMaxIdleMsProp)
   val failedAuthenticationDelayMs = getInt(KafkaConfig.FailedAuthenticationDelayMsProp)
+  val controlPlaneForceControllerRequestsEnable = getBoolean(KafkaConfig.ControlPlaneForceControllerRequestsEnableProp)
 
   /***************** rack configuration **************/
   val rack = Option(getString(KafkaConfig.RackProp))
@@ -1812,6 +1816,11 @@ class KafkaConfig(val props: java.util.Map[_, _], doLog: Boolean, dynamicConfigO
       require(!controlPlaneListenerName.get.value().equals(interBrokerListenerName.value()),
         s"${KafkaConfig.ControlPlaneListenerNameProp}, when defined, should have a different value from the inter broker listener name. " +
         s"Currently they both have the value ${controlPlaneListenerName.get}")
+    }
+
+    if (controlPlaneForceControllerRequestsEnable) {
+      require(controlPlaneListenerName.isDefined,
+        s"${KafkaConfig.ControlPlaneForceControllerRequestsEnableProp} can only be enabled after the ${KafkaConfig.ControlPlaneListenerNameProp} is used")
     }
 
     val recordVersion = logMessageFormatVersion.recordVersion

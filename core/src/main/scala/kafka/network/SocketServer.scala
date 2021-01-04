@@ -812,6 +812,7 @@ private[kafka] class Processor(val id: Int,
   private val newConnections = new ArrayBlockingQueue[SocketChannel](connectionQueueSize)
   private val inflightResponses = mutable.Map[String, RequestChannel.Response]()
   private val responseQueue = new LinkedBlockingDeque[RequestChannel.Response]()
+  private val forceControllerRequests = config.controlPlaneForceControllerRequestsEnable
 
   private[kafka] val metricTags = mutable.LinkedHashMap(
     ListenerMetricTag -> listenerName.value,
@@ -1003,7 +1004,7 @@ private[kafka] class Processor(val id: Int,
         openOrClosingChannel(receive.source) match {
           case Some(channel) =>
             val header = parseRequestHeader(receive.payload)
-            if (isControlPlane && !isControlRequest(header)) {
+            if (isControlPlane && forceControllerRequests && !isControlRequest(header)) {
               info(s"Current plane is control plane, disconnecting non controller channel: $channel : $header")
               close(channel.id)
             } else {
