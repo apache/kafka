@@ -107,7 +107,7 @@ final class KafkaMetadataLogTest {
     assertEquals(offset, log.startOffset)
     assertEquals(epoch, log.lastFetchedEpoch)
     assertEquals(offset, log.endOffset().offset)
-    assertEquals(offset, log.highWatermark().offset)
+    assertEquals(offset, log.highWatermark)
 
     val newRecords = 10
     append(log, newRecords, epoch + 1)
@@ -118,7 +118,7 @@ final class KafkaMetadataLogTest {
 
     assertEquals(epoch + 1, log.lastFetchedEpoch)
     assertEquals(offset + newRecords, log.endOffset().offset)
-    assertEquals(offset, log.highWatermark().offset)
+    assertEquals(offset, log.highWatermark)
   }
 
   @Test
@@ -130,7 +130,7 @@ final class KafkaMetadataLogTest {
     assertEquals(0, log.startOffset)
     assertEquals(0, log.lastFetchedEpoch)
     assertEquals(0, log.endOffset().offset)
-    assertEquals(0, log.highWatermark().offset)
+    assertEquals(0, log.highWatermark)
   }
 
   @Test
@@ -172,7 +172,7 @@ final class KafkaMetadataLogTest {
     assertEquals(sameEpochSnapshotId.offset, log.startOffset)
     assertEquals(sameEpochSnapshotId.epoch, log.lastFetchedEpoch)
     assertEquals(sameEpochSnapshotId.offset, log.endOffset().offset)
-    assertEquals(sameEpochSnapshotId.offset, log.highWatermark().offset)
+    assertEquals(sameEpochSnapshotId.offset, log.highWatermark)
 
     val greaterEpochSnapshotId = new OffsetAndEpoch(3 * numberOfRecords, epoch + 1)
 
@@ -186,7 +186,7 @@ final class KafkaMetadataLogTest {
     assertEquals(greaterEpochSnapshotId.offset, log.startOffset)
     assertEquals(greaterEpochSnapshotId.epoch, log.lastFetchedEpoch)
     assertEquals(greaterEpochSnapshotId.offset, log.endOffset().offset)
-    assertEquals(greaterEpochSnapshotId.offset, log.highWatermark().offset)
+    assertEquals(greaterEpochSnapshotId.offset, log.highWatermark)
   }
 
   @Test
@@ -241,7 +241,7 @@ final class KafkaMetadataLogTest {
     assertEquals(0, log.startOffset)
     assertEquals(epoch, log.lastFetchedEpoch)
     assertEquals(numberOfRecords, log.endOffset().offset)
-    assertEquals(0, secondLog.highWatermark().offset)
+    assertEquals(0, secondLog.highWatermark)
 
     // Assert that the log dir doesn't contain any partial snapshots
     Files
@@ -274,7 +274,7 @@ final class KafkaMetadataLogTest {
     assertEquals(snapshotId.offset, secondLog.startOffset)
     assertEquals(snapshotId.epoch, secondLog.lastFetchedEpoch)
     assertEquals(snapshotId.offset, secondLog.endOffset().offset)
-    assertEquals(snapshotId.offset, secondLog.highWatermark().offset)
+    assertEquals(snapshotId.offset, secondLog.highWatermark)
   }
 }
 

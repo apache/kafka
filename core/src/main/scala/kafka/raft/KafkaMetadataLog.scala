@@ -247,6 +247,11 @@ final class KafkaMetadataLog private (
     updated
   }
 
+  // TODO: Needed for tests. Need to test that raft client updates the high watermark after a log is fully truncated
+  def highWatermark: Long = {
+    log.highWatermark
+  }
+
   override def close(): Unit = {
     log.close()
   }
