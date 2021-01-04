@@ -117,7 +117,7 @@ public class InternalMockProcessorContext
         );
     }
 
-    public  InternalMockProcessorContext(final File stateDir,
+    public InternalMockProcessorContext(final File stateDir,
                                         final StreamsConfig config,
                                         final RecordCollector collector) {
         this(

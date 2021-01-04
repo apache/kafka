@@ -37,13 +37,16 @@ import static org.apache.kafka.streams.processor.internals.AbstractReadWriteDeco
 public class GlobalProcessorContextImpl extends AbstractProcessorContext {
 
     private final GlobalStateManager stateManager;
+    private final Time time;
 
     public GlobalProcessorContextImpl(final StreamsConfig config,
                                       final GlobalStateManager stateMgr,
                                       final StreamsMetricsImpl metrics,
-                                      final ThreadCache cache) {
+                                      final ThreadCache cache,
+                                      final Time time) {
         super(new TaskId(-1, -1), config, metrics, cache);
         stateManager = stateMgr;
+        this.time = time;
     }
 
     @Override
@@ -118,12 +121,12 @@ public class GlobalProcessorContextImpl extends AbstractProcessorContext {
 
     @Override
     public long currentSystemTimeMs() {
-        return Time.SYSTEM.milliseconds();
+        return time.milliseconds();
     }
 
     @Override
     public long currentStreamTimeMs() {
-        throw new UnsupportedOperationException("this method is not supported in global processor context.");
+        throw new UnsupportedOperationException("There is no concept of stream-time for a global processor.");
     }
 
     /**

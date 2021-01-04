@@ -18,7 +18,9 @@ package org.apache.kafka.streams.processor;
 
 import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.serialization.Serde;
+import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsMetrics;
+import org.apache.kafka.streams.Topology;
 import org.apache.kafka.streams.errors.StreamsException;
 
 import java.io.File;
@@ -290,16 +292,35 @@ public interface ProcessorContext {
     Map<String, Object> appConfigsWithPrefix(final String prefix);
 
     /**
-     * Returns current cached wall-clock system timestamp in milliseconds.
+     * Return the current system timestamp (also called wall-clock time) in milliseconds.
      *
-     * @return the current cached wall-clock system timestamp in milliseconds
+     * <p>
+     * Note: this method returns the internally cached system timestamp from the Kafka Stream runtime.
+     * Thus, it may return a different value compared to `System.currentTimeMillis()`.
+     * <p>
+     *
+     * For a global processor, Kafka Streams does not cache system time and thus calling this method will return
+     * the same value as `System.currentTimeMillis()`.
+     *
+     * @return the current system timestamp in milliseconds
      */
     long currentSystemTimeMs();
 
     /**
-     * Returns the maximum timestamp of any record yet processed by the task.
+     * Return the current stream-time in milliseconds.
      *
-     * @return the maximum timestamp of any record yet processed by the task
+     * <p>
+     * Stream-time is the maximum observed {@link TimestampExtractor record timestamp} so far
+     * (including the currently processed record), i.e., it can be considered a high-watermark.
+     * Stream-time is tracked on a per-task basis and is preserved across restarts and during task migration.
+     * <p>
+     *
+     * Note: this method is not supported for global processors (cf. {@link Topology#addGlobalStore} (...)
+     * and {@link StreamsBuilder#addGlobalStore} (...),
+     * because there is no concept of stream-time for this case.
+     * Calling this method in a global processor with result in an {@link UnsupportedOperationException}.
+     *
+     * @return the current stream-time in milliseconds
      */
     long currentStreamTimeMs();
 }

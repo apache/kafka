@@ -70,7 +70,6 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
     // visible for testing
     static final byte LATEST_MAGIC_BYTE = 1;
 
-    // This time is wall clock time
     private Time time;
     private final Consumer<byte[], byte[]> mainConsumer;
 
@@ -1111,11 +1110,11 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
         return recordCollector;
     }
 
-    public long streamTime() {
+    long streamTime() {
         return partitionGroup.streamTime();
     }
 
-    public long currentSystemTimeMs() {
+    long currentSystemTimeMs() {
         return time.milliseconds(); 
     }
 

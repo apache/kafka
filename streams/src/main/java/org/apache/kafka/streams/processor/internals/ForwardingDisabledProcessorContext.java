@@ -169,11 +169,11 @@ public final class ForwardingDisabledProcessorContext implements ProcessorContex
 
     @Override
     public long currentSystemTimeMs() {
-        throw new UnsupportedOperationException("this method is not supported in ForwardingDisabledProcessor context");
+        return delegate.currentSystemTimeMs();
     }
 
     @Override
     public long currentStreamTimeMs() {
-        throw new UnsupportedOperationException("this method is not supported in ForwardingDisabledProcessor context");
+        return delegate.currentStreamTimeMs();
     }
 }

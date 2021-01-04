@@ -122,12 +122,12 @@ public class NoOpProcessorContext extends AbstractProcessorContext {
 
     @Override
     public long currentSystemTimeMs() {
-        throw new UnsupportedOperationException("this method is not supported in NoOpProcessorContext");
+        throw new UnsupportedOperationException("Not implemented yet.");
     }
 
     @Override
     public long currentStreamTimeMs() {
-        throw new UnsupportedOperationException("this method is not supported in NoOpProcessorContext");
+        throw new UnsupportedOperationException("Not implemented yet.");
     }
 
     @Override

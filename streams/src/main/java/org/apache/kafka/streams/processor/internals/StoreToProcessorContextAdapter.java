@@ -163,11 +163,11 @@ public final class StoreToProcessorContextAdapter implements ProcessorContext {
 
     @Override
     public long currentSystemTimeMs() {
-        throw new UnsupportedOperationException("this method is not supported in StoreToProcessorContextAdapter");
+        throw new UnsupportedOperationException("StateStores can't access system time.");
     }
 
     @Override
     public long currentStreamTimeMs() {
-        throw new UnsupportedOperationException("this method is not supported in StoreToProcessorContextAdapter");
+        throw new UnsupportedOperationException("StateStores can't access stream time.");
     }
 }

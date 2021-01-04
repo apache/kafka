@@ -560,8 +560,12 @@ public class ProcessorContextImplTest {
     }
 
     @Test
-    public void shouldMatchSystemAndStreamTime() {
+    public void shouldMatchSystemTime() {
         assertEquals(TIMESTAMP, context.currentSystemTimeMs());
+    }
+
+    @Test
+    public void shouldMatchStreamTime() {
         assertEquals(STREAM_TIME, context.currentStreamTimeMs());
     }
 

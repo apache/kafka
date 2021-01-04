@@ -220,7 +220,6 @@ public class TopologyTestDriver implements Closeable {
     private Metrics metrics;
     ProcessorTopology processorTopology;
     ProcessorTopology globalTopology;
-    InternalProcessorContext context;
 
     private final MockConsumer<byte[], byte[]> consumer;
     private final MockProducer<byte[], byte[]> producer;
@@ -459,7 +458,7 @@ public class TopologyTestDriver implements Closeable {
             );
 
             final GlobalProcessorContextImpl globalProcessorContext =
-                new GlobalProcessorContextImpl(streamsConfig, globalStateManager, streamsMetrics, cache);
+                new GlobalProcessorContextImpl(streamsConfig, globalStateManager, streamsMetrics, cache, mockWallClockTime);
             globalStateManager.setGlobalProcessorContext(globalProcessorContext);
 
             globalStateTask = new GlobalStateUpdateTask(
@@ -506,7 +505,7 @@ public class TopologyTestDriver implements Closeable {
                 streamsMetrics
             );
 
-            context = new ProcessorContextImpl(
+            final InternalProcessorContext context = new ProcessorContextImpl(
                 TASK_ID,
                 streamsConfig,
                 stateManager,
