@@ -503,6 +503,7 @@ public class MockLogTest {
         assertEquals(sameEpochSnapshotId.offset, log.startOffset());
         assertEquals(sameEpochSnapshotId.epoch, log.lastFetchedEpoch());
         assertEquals(sameEpochSnapshotId.offset, log.endOffset().offset);
+        assertEquals(sameEpochSnapshotId.offset, log.highWatermark().offset);
 
         OffsetAndEpoch greaterEpochSnapshotId = new OffsetAndEpoch(3 * numberOfRecords, epoch + 1);
 
@@ -516,6 +517,7 @@ public class MockLogTest {
         assertEquals(greaterEpochSnapshotId.offset, log.startOffset());
         assertEquals(greaterEpochSnapshotId.epoch, log.lastFetchedEpoch());
         assertEquals(greaterEpochSnapshotId.offset, log.endOffset().offset);
+        assertEquals(greaterEpochSnapshotId.offset, log.highWatermark().offset);
     }
 
     @Test

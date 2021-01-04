@@ -213,7 +213,9 @@ final class KafkaMetadataLog private (
         Optional.empty()
       }
     } catch {
-      case e: NoSuchFileException => Optional.empty()
+      case e: NoSuchFileException =>
+        snapshotIds.remove(snapshotId)
+        Optional.empty()
     }
   }
 

@@ -1013,23 +1013,38 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
      * is the largest epoch such that subsequent records are known to diverge.
      */
     private ValidatedFetchOffsetAndEpoch validateFetchOffsetAndEpoch(long fetchOffset, int lastFetchedEpoch) {
-        if (fetchOffset == 0 && lastFetchedEpoch == 0) {
+        if (log.startOffset() == 0 && fetchOffset == 0) {
+            if (lastFetchedEpoch != 0) {
+                logger.warn(
+                    "Replica sent a zero fetch offset ({}) but the last fetched epoch ({}) was not zero",
+                    fetchOffset,
+                    lastFetchedEpoch
+                );
+            }
             return ValidatedFetchOffsetAndEpoch.valid(new OffsetAndEpoch(fetchOffset, lastFetchedEpoch));
         }
 
-        if (fetchOffset < log.startOffset() || (fetchOffset == log.startOffset() && lastFetchedEpoch != log.lastFetchedEpoch())) {
-            return ValidatedFetchOffsetAndEpoch.snapshot(
-                log.latestSnapshotId().orElseThrow(
-                    () -> new KafkaException(String.format("The log start offset was greater than zero (%s) but no snapshot was found"))
-                )
-            );
+        if (fetchOffset < log.startOffset() || fetchOffset == log.startOffset()) {
+            // Snapshot must be present if start offset is non zero.
+            OffsetAndEpoch latestSnapshotId = log.latestSnapshotId().orElseThrow(() -> {
+                return new IllegalStateException(
+                    String.format(
+                        "The log start offset (%s) was greater than zero but no snapshot was found",
+                        log.startOffset()
+                    )
+                );
+            });
+
+            if (fetchOffset < log.startOffset() || lastFetchedEpoch != latestSnapshotId.epoch) {
+                return ValidatedFetchOffsetAndEpoch.snapshot(latestSnapshotId);
+            }
         }
 
         OffsetAndEpoch endOffsetAndEpoch = log.endOffsetForEpoch(lastFetchedEpoch)
             .orElse(new OffsetAndEpoch(-1L, -1));
         if (endOffsetAndEpoch.epoch != lastFetchedEpoch || endOffsetAndEpoch.offset < fetchOffset) {
-            // TODO: Investiage this. Can the diverging offset be less than log start offset? If so, then we might as well avoid a round
-            // trip and return the snapshot id instead.
+            // TODO: Investiage this. Can the diverging offset be less than log start offset? If so, then we might as well
+            // avoid a round trip and return the snapshot id instead.
             return ValidatedFetchOffsetAndEpoch.diverging(endOffsetAndEpoch);
         }
 
