@@ -202,14 +202,14 @@ public class KafkaStreams implements AutoCloseable {
      *         |              |                  |
      *         |              v                  |
      *         |       +------+-------+     +----+-------+
-     *         +-----&gt; | Pending      |&lt;--- | Error (5)  |
-     *                 | Shutdown (3) |     +------------+
-     *                 +------+-------+
-     *                        |
-     *                        v
-     *                 +------+-------+
-     *                 | Not          |
-     *                 | Running (4)  |
+     *         +-----&gt; | Pending      |     | Pending    |
+     *                 | Shutdown (3) |     | Error (5)  |
+     *                 +------+-------+     +-----+------+
+     *                        |                   |
+     *                        v                   v
+     *                 +------+-------+     +-----+--------+
+     *                 | Not          |     | Error (6)    |
+     *                 | Running (4)  |     +--------------+
      *                 +--------------+
      *
      *
@@ -217,9 +217,9 @@ public class KafkaStreams implements AutoCloseable {
      * Note the following:
      * - RUNNING state will transit to REBALANCING if any of its threads is in PARTITION_REVOKED or PARTITIONS_ASSIGNED state
      * - REBALANCING state will transit to RUNNING if all of its threads are in RUNNING state
-     * - Any state except NOT_RUNNING can go to PENDING_SHUTDOWN (whenever close is called)
+     * - Any state except NOT_RUNNING, PENDING_ERROR or ERROR can go to PENDING_SHUTDOWN (whenever close is called)
      * - Of special importance: If the global stream thread dies, or all stream threads die (or both) then
-     *   the instance will be in the ERROR state. The user will need to close it.
+     *   the instance will be in the ERROR state. The user will not need to close it.
      */
     public enum State {
         CREATED(1, 3),          // 0
@@ -228,7 +228,7 @@ public class KafkaStreams implements AutoCloseable {
         PENDING_SHUTDOWN(4),    // 3
         NOT_RUNNING,            // 4
         PENDING_ERROR(6),       // 5
-        ERROR;               // 6
+        ERROR;                  // 6
 
         private final Set<Integer> validTransitions = new HashSet<>();
 

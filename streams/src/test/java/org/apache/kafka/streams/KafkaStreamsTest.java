@@ -319,6 +319,17 @@ public class KafkaStreamsTest {
                 StreamThread.State.PARTITIONS_ASSIGNED);
             return null;
         }).anyTimes();
+        EasyMock.expect(thread.threadMetadata()).andReturn(new ThreadMetadata(
+                "newThead",
+                "DEAD",
+                "",
+                "",
+                Collections.emptySet(),
+                "",
+                Collections.emptySet(),
+                Collections.emptySet()
+            )
+        ).anyTimes();
         EasyMock.expect(thread.threadMetadata()).andStubReturn(threadMetadata);
         thread.waitOnThreadState(StreamThread.State.DEAD);
         EasyMock.expectLastCall().anyTimes();
@@ -470,6 +481,10 @@ public class KafkaStreamsTest {
                     "Thread never stopped.");
                 streams.threads.get(i).join();
             }
+            TestUtils.waitForCondition(
+                () -> streams.localThreadsMetadata().stream().allMatch(t -> t.threadState().equals("DEAD")),
+                "Streams never stopped"
+            );
         } finally {
             streams.close();
         }
