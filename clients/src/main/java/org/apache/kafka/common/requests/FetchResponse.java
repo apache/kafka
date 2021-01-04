@@ -122,8 +122,8 @@ public class FetchResponse<T extends BaseRecords> extends AbstractResponse {
         this.data = fetchResponseData;
         this.responseDataMap = new LinkedHashMap<>();
         fetchResponseData.responses().forEach(topicResponse ->
-                topicResponse.partitionResponses().forEach(partitionResponse ->
-                        responseDataMap.put(new TopicPartition(topicResponse.topic(), partitionResponse.partition()), new PartitionData<>(partitionResponse)))
+            topicResponse.partitionResponses().forEach(partitionResponse ->
+                responseDataMap.put(new TopicPartition(topicResponse.topic(), partitionResponse.partition()), new PartitionData<>(partitionResponse)))
         );
     }
 
