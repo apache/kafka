@@ -72,7 +72,7 @@ class ReplicaScaleTest(Test):
         produce_spec = ProduceBenchWorkloadSpec(0, TaskSpec.MAX_DURATION_MS,
                                                 producer_workload_service.producer_node,
                                                 producer_workload_service.bootstrap_servers,
-                                                target_messages_per_sec=10000,
+                                                target_messages_per_sec=150000,
                                                 max_messages=3400000,
                                                 producer_conf={},
                                                 admin_client_conf={},
@@ -83,12 +83,12 @@ class ReplicaScaleTest(Test):
                                                 }})
         produce_workload = trogdor.create_task("replicas-produce-workload", produce_spec)
         produce_workload.wait_for_done(timeout_sec=600)
-        self.logger.info("Completed produce bench")
+        print("Completed produce bench", flush=True)  # Force some stdout for Travis
 
         consume_spec = ConsumeBenchWorkloadSpec(0, TaskSpec.MAX_DURATION_MS,
                                                 consumer_workload_service.consumer_node,
                                                 consumer_workload_service.bootstrap_servers,
-                                                target_messages_per_sec=10000,
+                                                target_messages_per_sec=150000,
                                                 max_messages=3400000,
                                                 consumer_conf={},
                                                 admin_client_conf={},
