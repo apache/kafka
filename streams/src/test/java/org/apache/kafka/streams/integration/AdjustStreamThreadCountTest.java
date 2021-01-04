@@ -37,6 +37,8 @@ import org.junit.rules.TestName;
 import java.io.IOException;
 import java.util.Optional;
 import java.util.Properties;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
 
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
@@ -127,6 +129,31 @@ public class AdjustStreamThreadCountTest {
             assertThat(kafkaStreams.removeStreamThread().get().split("-")[0], equalTo(appId));
             assertThat(kafkaStreams.localThreadsMetadata().size(), equalTo(oldThreadCount - 1));
         }
+    }
+
+    @Test
+    public void shouldAddAndRemoveThreads() throws InterruptedException {
+        try (final KafkaStreams kafkaStreams = new KafkaStreams(builder.build(), properties)) {
+            StreamsTestUtils.startKafkaStreamsAndWaitForRunningState(kafkaStreams);
+            final int oldThreadCount = kafkaStreams.localThreadsMetadata().size();
+            final CountDownLatch latch = new CountDownLatch(2);
+            final Thread one = adjustCountHelperThread(kafkaStreams, 4, latch);
+            final Thread two = adjustCountHelperThread(kafkaStreams, 6, latch);
+            two.start();
+            one.start();
+            latch.await(30, TimeUnit.SECONDS);
+            assertThat(kafkaStreams.localThreadsMetadata().size(), equalTo(oldThreadCount));
+        }
+    }
+
+    private Thread adjustCountHelperThread(final KafkaStreams kafkaStreams, final int count, final CountDownLatch latch) {
+        return new Thread(() -> {
+            for (int i = 0; i < count; i++) {
+                kafkaStreams.addStreamThread();
+                kafkaStreams.removeStreamThread();
+            }
+            latch.countDown();
+        });
     }
 
     @Test
