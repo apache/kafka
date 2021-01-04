@@ -659,8 +659,8 @@ public abstract class AbstractCoordinator implements Closeable {
                 }
                 future.raise(error);
             } else if (error == Errors.REBALANCE_IN_PROGRESS) {
-                log.info("JoinGroup failed with a REBALANCE_IN_PROGRESS error, which could indicate a replication timeout " +
-                    "on the broker. Will retry.");
+                log.info("JoinGroup failed due to non-fatal error: REBALANCE_IN_PROGRESS, " +
+                    "which could indicate a replication timeout on the broker. Will retry.");
                 future.raise(error);
             } else {
                 // unexpected error, throw the exception
