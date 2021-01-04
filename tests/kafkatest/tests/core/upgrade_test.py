@@ -77,9 +77,11 @@ class TestUpgrade(ProduceConsumeValidateTest):
 
     @cluster(num_nodes=6)
     @parametrize(from_kafka_version=str(LATEST_2_7), to_message_format_version=None, compression_types=["none"])
-    @parametrize(from_kafka_version=str(LATEST_2_7), to_message_format_version=None, compression_types=["zstd"])
+    @parametrize(from_kafka_version=str(LATEST_2_7), to_message_format_version=None, compression_types=["lz4"])
+    @parametrize(from_kafka_version=str(LATEST_2_7), to_message_format_version=None, compression_types=["snappy"])
     @parametrize(from_kafka_version=str(LATEST_2_6), to_message_format_version=None, compression_types=["none"])
-    @parametrize(from_kafka_version=str(LATEST_2_6), to_message_format_version=None, compression_types=["zstd"])
+    @parametrize(from_kafka_version=str(LATEST_2_6), to_message_format_version=None, compression_types=["lz4"])
+    @parametrize(from_kafka_version=str(LATEST_2_6), to_message_format_version=None, compression_types=["snappy"])
     @parametrize(from_kafka_version=str(LATEST_2_5), to_message_format_version=None, compression_types=["none"])
     @parametrize(from_kafka_version=str(LATEST_2_5), to_message_format_version=None, compression_types=["zstd"])
     @parametrize(from_kafka_version=str(LATEST_2_4), to_message_format_version=None, compression_types=["none"])
