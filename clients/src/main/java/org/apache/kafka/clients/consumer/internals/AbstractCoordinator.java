@@ -658,6 +658,10 @@ public abstract class AbstractCoordinator implements Closeable {
                     AbstractCoordinator.this.generation = new Generation(OffsetCommitRequest.DEFAULT_GENERATION_ID, memberId, null);
                 }
                 future.raise(error);
+            } else if (error == Errors.REBALANCE_IN_PROGRESS) {
+                log.info("JoinGroup failed due to non-fatal error: REBALANCE_IN_PROGRESS, " +
+                    "which could indicate a replication timeout on the broker. Will retry.");
+                future.raise(error);
             } else {
                 // unexpected error, throw the exception
                 log.error("JoinGroup failed due to unexpected error: {}", error.message());
