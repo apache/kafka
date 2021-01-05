@@ -15,7 +15,7 @@
 # specific language governing permissions and limitations
 # under the License
 
-name: Pull Request Build and Test Workflow
+name: Pull Request Build with Unit Test Workflow
 
 # Run this workflow every time a new pull request is created in the repository
 on:
@@ -25,7 +25,7 @@ on:
 jobs:
   build:
     # Name the Job
-    name: Build Pull Request
+    name: Build Pull Request and run all unit tests
     # Set the type of machine to run on
     runs-on: ubuntu-latest
     steps:
@@ -40,8 +40,6 @@ jobs:
         uses: actions/setup-java@v1
         with:
           java-version: 1.8
-      - name: Build with Gradle
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Build with Gradle and run all unit tests
         # exclude the streams test and connect test
         run: ./gradlew cleanTest :clients:unitTest :core:unitTest --no-daemon -PxmlFindBugsReport=true -PtestLoggingEvents=started,passed,skipped,failed

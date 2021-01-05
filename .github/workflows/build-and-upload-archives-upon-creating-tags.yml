@@ -15,7 +15,7 @@
 # specific language governing permissions and limitations
 # under the License
 
-name: Build and Upload Archives upon Creating Tags
+name: Build with All Tests and Upload Archives upon Creating Tags Workflow
 
 # Run this workflow every time a tag is created/pushed
 on:
@@ -44,17 +44,12 @@ jobs:
       - name: Set up release version env variable
         run: |
           echo "RELEASE_VERSION=${GITHUB_REF#refs/*/}" >> $GITHUB_ENV
-      - name: Verify the release version
+      - name: Print the release version
         run: |
-          echo "Release version: ${{ env.RELEASE_VERSION }}"
+          echo "Release version (tag name): ${{ env.RELEASE_VERSION }}"
       - name: Build with Gradle and run all tests
         # exclude the streams test and connect test
         run: ./gradlew cleanTest :clients:test :core:test --no-daemon -PxmlFindBugsReport=true -PtestLoggingEvents=started,passed,skipped,failed
       - name: Upload archive
         run: |
-          # TODO: uncomment the below command which uploads the archive once we have verified below things:
-          #       1. This workflow gets triggered upon tag creation/push
-          #       2. The release version (${{ env.RELEASE_VERSION }}) is extracted and printed in the console correctly
-          #       3. Disable the uploading archive feature in Travis. Otherwise, both Travis and Github Action will
-          #          try to upload the same archive
-          # ./gradlew -Pversion=${{ env.RELEASE_VERSION }} :clients:uploadArchives :core:uploadArchives --no-daemon
+          ./gradlew -Pversion=${{ env.RELEASE_VERSION }} :clients:uploadArchives :core:uploadArchives --no-daemon
