@@ -302,6 +302,12 @@ public class MockProducer<K, V> implements Producer<K, V> {
         int partition = 0;
         if (!this.cluster.partitionsForTopic(record.topic()).isEmpty())
             partition = partition(record, this.cluster);
+        else {
+            //just to throw ClassCastException if serializers are not the proper ones to serialize key/value
+            keySerializer.serialize(record.topic(), record.key());
+            valueSerializer.serialize(record.topic(), record.value());
+        }
+            
         TopicPartition topicPartition = new TopicPartition(record.topic(), partition);
         ProduceRequestResult result = new ProduceRequestResult(topicPartition);
         FutureRecordMetadata future = new FutureRecordMetadata(result, 0, RecordBatch.NO_TIMESTAMP,

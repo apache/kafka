@@ -16,20 +16,21 @@
  */
 package org.apache.kafka.common.record;
 
+import org.apache.kafka.common.network.TransferableChannel;
+
 import java.io.IOException;
-import java.nio.channels.GatheringByteChannel;
 
 public class DefaultRecordsSend extends RecordsSend<Records> {
-    public DefaultRecordsSend(String destination, Records records) {
-        this(destination, records, records.sizeInBytes());
+    public DefaultRecordsSend(Records records) {
+        this(records, records.sizeInBytes());
     }
 
-    public DefaultRecordsSend(String destination, Records records, int maxBytesToWrite) {
-        super(destination, records, maxBytesToWrite);
+    public DefaultRecordsSend(Records records, int maxBytesToWrite) {
+        super(records, maxBytesToWrite);
     }
 
     @Override
-    protected long writeTo(GatheringByteChannel channel, long previouslyWritten, int remaining) throws IOException {
+    protected long writeTo(TransferableChannel channel, long previouslyWritten, int remaining) throws IOException {
         return records().writeTo(channel, previouslyWritten, remaining);
     }
 }

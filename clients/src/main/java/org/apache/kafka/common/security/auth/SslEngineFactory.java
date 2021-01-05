@@ -62,7 +62,7 @@ public interface SslEngineFactory extends Configurable, Closeable {
      * <p>
      * For example, if the implementation depends on file-based key material, it can check if the file was updated
      * compared to the previous/last-loaded timestamp and return true.
-     * </>
+     * </p>
      *
      * @param nextConfigs       The new configuration we want to use.
      * @return                  True only if the underlying <code>SSLEngine</code> object should be rebuilt.

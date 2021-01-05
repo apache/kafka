@@ -31,7 +31,7 @@ import kafka.security.authorizer.AclEntry
 import kafka.server.{ConfigType, DelegationTokenManager}
 import kafka.utils.Json
 import kafka.utils.json.JsonObject
-import org.apache.kafka.common.{KafkaException, TopicPartition}
+import org.apache.kafka.common.{KafkaException, TopicPartition, Uuid}
 import org.apache.kafka.common.errors.UnsupportedVersionException
 import org.apache.kafka.common.feature.{Features, FinalizedVersionRange, SupportedVersionRange}
 import org.apache.kafka.common.feature.Features._
@@ -46,7 +46,7 @@ import org.apache.zookeeper.data.{ACL, Stat}
 import scala.beans.BeanProperty
 import scala.jdk.CollectionConverters._
 import scala.collection.mutable.ArrayBuffer
-import scala.collection.{Map, Seq, mutable}
+import scala.collection.{Map, Seq, immutable, mutable}
 import scala.util.{Failure, Success, Try}
 
 // This file contains objects for encoding/decoding data stored in ZooKeeper nodes (znodes).
@@ -233,7 +233,7 @@ object BrokerIdZNode {
     *   "timestamp":"2233345666",
     *   "endpoints":["CLIENT://host1:9092", "REPLICATION://host1:9093"],
     *   "rack":"dc1",
-    *   "features": {"feature": {"min_version": 1, "max_version": 5}}
+    *   "features": {"feature": {"min_version":1, "first_active_version":2, "max_version":3}}
     * }
     */
   def decode(id: Int, jsonBytes: Array[Byte]): BrokerInfo = {
@@ -279,8 +279,12 @@ object TopicsZNode {
 }
 
 object TopicZNode {
+  case class TopicIdReplicaAssignment(topic: String,
+                                      topicId: Option[Uuid],
+                                      assignment: Map[TopicPartition, ReplicaAssignment])
   def path(topic: String) = s"${TopicsZNode.path}/$topic"
-  def encode(assignment: collection.Map[TopicPartition, ReplicaAssignment]): Array[Byte] = {
+  def encode(topicId: Uuid,
+             assignment: collection.Map[TopicPartition, ReplicaAssignment]): Array[Byte] = {
     val replicaAssignmentJson = mutable.Map[String, util.List[Int]]()
     val addingReplicasAssignmentJson = mutable.Map[String, util.List[Int]]()
     val removingReplicasAssignmentJson = mutable.Map[String, util.List[Int]]()
@@ -293,14 +297,17 @@ object TopicZNode {
         removingReplicasAssignmentJson += (partition.partition.toString -> replicaAssignment.removingReplicas.asJava)
     }
 
-    Json.encodeAsBytes(Map(
-      "version" -> 2,
+    val topicAssignment = mutable.Map(
+      "version" -> 3,
+      "topic_id" -> topicId.toString,
       "partitions" -> replicaAssignmentJson.asJava,
       "adding_replicas" -> addingReplicasAssignmentJson.asJava,
       "removing_replicas" -> removingReplicasAssignmentJson.asJava
-    ).asJava)
+    )
+
+    Json.encodeAsBytes(topicAssignment.asJava)
   }
-  def decode(topic: String, bytes: Array[Byte]): Map[TopicPartition, ReplicaAssignment] = {
+  def decode(topic: String, bytes: Array[Byte]): TopicIdReplicaAssignment = {
     def getReplicas(replicasJsonOpt: Option[JsonObject], partition: String): Seq[Int] = {
       replicasJsonOpt match {
         case Some(replicasJson) => replicasJson.get(partition) match {
@@ -311,21 +318,24 @@ object TopicZNode {
       }
     }
 
-    Json.parseBytes(bytes).flatMap { js =>
+    Json.parseBytes(bytes).map { js =>
       val assignmentJson = js.asJsonObject
-      val partitionsJsonOpt = assignmentJson.get("partitions").map(_.asJsonObject)
+      val topicId = assignmentJson.get("topic_id").map(_.to[String]).map(Uuid.fromString)
       val addingReplicasJsonOpt = assignmentJson.get("adding_replicas").map(_.asJsonObject)
       val removingReplicasJsonOpt = assignmentJson.get("removing_replicas").map(_.asJsonObject)
-      partitionsJsonOpt.map { partitionsJson =>
+      val partitionsJsonOpt = assignmentJson.get("partitions").map(_.asJsonObject)
+      val partitions = partitionsJsonOpt.map { partitionsJson =>
         partitionsJson.iterator.map { case (partition, replicas) =>
           new TopicPartition(topic, partition.toInt) -> ReplicaAssignment(
             replicas.to[Seq[Int]],
             getReplicas(addingReplicasJsonOpt, partition),
             getReplicas(removingReplicasJsonOpt, partition)
           )
-        }
-      }
-    }.map(_.toMap).getOrElse(Map.empty)
+        }.toMap
+      }.getOrElse(immutable.Map.empty[TopicPartition, ReplicaAssignment])
+
+      TopicIdReplicaAssignment(topic, topicId, partitions)
+    }.getOrElse(TopicIdReplicaAssignment(topic, None, Map.empty[TopicPartition, ReplicaAssignment]))
   }
 }
 
@@ -797,48 +807,26 @@ object DelegationTokenInfoZNode {
  *             the finalized features stored in the FeatureZNode is not relevant. This status is
  *             written by the controller to the FeatureZNode only when the broker IBP config
  *             is less than KAFKA_2_7_IV0.
- *
- * The purpose behind the FeatureZNodeStatus is that it helps differentiates between the following
- * cases:
- *
- * 1. New cluster bootstrap:
- *    For a new Kafka cluster (i.e. it is deployed first time), we would like to start the cluster
- *    with all the possible supported features finalized immediately. The new cluster will almost
- *    never be started with an old IBP config that’s less than KAFKA_2_7_IV0. In such a case, the
- *    controller will start up and notice that the FeatureZNode is absent in the new cluster.
- *    To handle the requirement, the controller will create a FeatureZNode (with enabled status)
- *    containing the entire list of supported features as its finalized features.
- *
- * 2. Cluster upgrade:
- *    Imagine there is an existing Kafka cluster with IBP config less than KAFKA_2_7_IV0, but
- *    the Broker binary has been upgraded to a state where it supports the feature versioning
- *    system (KIP-584). This means the user is upgrading from an earlier version of the Broker
- *    binary. In this case, we want to start with no finalized features and allow the user to enable
- *    them whenever they are ready i.e. in the future whenever the user sets IBP config
- *    to be greater than or equal to KAFKA_2_7_IV0. The reason is that enabling all the possible
- *    features immediately after an upgrade could be harmful to the cluster.
- *    In such a case:
- *      - Before the Broker upgrade (i.e. IBP config set to less than KAFKA_2_7_IV0), the controller
- *        will start up and check if the FeatureZNode is absent. If true, then it will react by
- *        creating a FeatureZNode with disabled status and empty features.
- *      - After the Broker upgrade (i.e. IBP config set to greater than or equal to KAFKA_2_7_IV0),
- *        when the controller starts up it will check if the FeatureZNode exists and whether it is
- *        disabled. In such a case, it won’t upgrade all features immediately. Instead it will just
- *        switch the FeatureZNode status to enabled status. This lets the user finalize the features
- *        later.
- *
- * 3. Cluster downgrade:
- *    Imagine that a Kafka cluster exists already and the IBP config is greater than or equal to
- *    KAFKA_2_7_IV0. Then, the user decided to downgrade the cluster by setting IBP config to a
- *    value less than KAFKA_2_7_IV0. This means the user is also disabling the feature versioning
- *    system (KIP-584). In this case, when the controller starts up with the lower IBP config, it
- *    will switch the FeatureZNode status to disabled with empty features.
  */
-object FeatureZNodeStatus extends Enumeration {
-  val Disabled, Enabled = Value
+sealed trait FeatureZNodeStatus {
+  def id: Int
+}
 
-  def withNameOpt(value: Int): Option[Value] = {
-    values.find(_.id == value)
+object FeatureZNodeStatus {
+  case object Disabled extends FeatureZNodeStatus {
+    val id: Int = 0
+  }
+
+  case object Enabled extends FeatureZNodeStatus {
+    val id: Int = 1
+  }
+
+  def withNameOpt(id: Int): Option[FeatureZNodeStatus] = {
+    id match {
+      case Disabled.id => Some(Disabled)
+      case Enabled.id => Some(Enabled)
+      case _ => Option.empty
+    }
   }
 }
 
@@ -848,7 +836,7 @@ object FeatureZNodeStatus extends Enumeration {
  * @param status     the status of the ZK node
  * @param features   the cluster-wide finalized features
  */
-case class FeatureZNode(status: FeatureZNodeStatus.Value, features: Features[FinalizedVersionRange]) {
+case class FeatureZNode(status: FeatureZNodeStatus, features: Features[FinalizedVersionRange]) {
 }
 
 object FeatureZNode {

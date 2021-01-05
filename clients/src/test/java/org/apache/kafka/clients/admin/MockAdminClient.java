@@ -837,6 +837,16 @@ public class MockAdminClient extends AdminClient {
     }
 
     @Override
+    public DescribeFeaturesResult describeFeatures(DescribeFeaturesOptions options) {
+        throw new UnsupportedOperationException("Not implemented yet");
+    }
+
+    @Override
+    public UpdateFeaturesResult updateFeatures(Map<String, FeatureUpdate> featureUpdates, UpdateFeaturesOptions options) {
+        throw new UnsupportedOperationException("Not implemented yet");
+    }
+
+    @Override
     synchronized public void close(Duration timeout) {}
 
     public synchronized void updateBeginningOffsets(Map<TopicPartition, Long> newOffsets) {

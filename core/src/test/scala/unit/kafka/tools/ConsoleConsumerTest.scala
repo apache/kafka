@@ -518,18 +518,24 @@ class ConsoleConsumerTest {
     formatter.configure(configs)
     out = new ByteArrayOutputStream()
     formatter.writeTo(record, new PrintStream(out))
-    assertEquals("key\tvalue\t0\n", out.toString)
+    assertEquals("Partition:0\tkey\tvalue\n", out.toString)
 
     configs.put("print.timestamp", "true")
     formatter.configure(configs)
     out = new ByteArrayOutputStream()
     formatter.writeTo(record, new PrintStream(out))
-    assertEquals("NO_TIMESTAMP\tkey\tvalue\t0\n", out.toString)
+    assertEquals("NO_TIMESTAMP\tPartition:0\tkey\tvalue\n", out.toString)
+
+    configs.put("print.offset", "true")
+    formatter.configure(configs)
+    out = new ByteArrayOutputStream()
+    formatter.writeTo(record, new PrintStream(out))
+    assertEquals("NO_TIMESTAMP\tPartition:0\tOffset:123\tkey\tvalue\n", out.toString)
 
     out = new ByteArrayOutputStream()
     val record2 = new ConsumerRecord("topic", 0, 123, 123L, TimestampType.CREATE_TIME, 321L, -1, -1, "key".getBytes, "value".getBytes)
     formatter.writeTo(record2, new PrintStream(out))
-    assertEquals("CreateTime:123\tkey\tvalue\t0\n", out.toString)
+    assertEquals("CreateTime:123\tPartition:0\tOffset:123\tkey\tvalue\n", out.toString)
     formatter.close()
   }
 

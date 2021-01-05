@@ -111,8 +111,8 @@ public class TaskAssignorIntegrationTest {
 
             final Field threads = KafkaStreams.class.getDeclaredField("threads");
             threads.setAccessible(true);
-            final StreamThread[] streamThreads = (StreamThread[]) threads.get(kafkaStreams);
-            final StreamThread streamThread = streamThreads[0];
+            final  List<StreamThread> streamThreads = (List<StreamThread>) threads.get(kafkaStreams);
+            final StreamThread streamThread = streamThreads.get(0);
 
             final Field mainConsumer = StreamThread.class.getDeclaredField("mainConsumer");
             mainConsumer.setAccessible(true);

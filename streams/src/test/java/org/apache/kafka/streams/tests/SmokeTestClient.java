@@ -25,6 +25,7 @@ import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.Topology;
+import org.apache.kafka.streams.errors.StreamsUncaughtExceptionHandler;
 import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.kstream.Grouped;
 import org.apache.kafka.streams.kstream.KGroupedStream;
@@ -111,12 +112,12 @@ public class SmokeTestClient extends SmokeTestUtil {
             }
         });
 
-        streams.setUncaughtExceptionHandler((t, e) -> {
+        streams.setUncaughtExceptionHandler(e -> {
             System.out.println(name + ": SMOKE-TEST-CLIENT-EXCEPTION");
-            System.out.println(name + ": FATAL: An unexpected exception is encountered on thread " + t + ": " + e);
+            System.out.println(name + ": FATAL: An unexpected exception is encountered on thread " + Thread.currentThread() + ": " + e);
             e.printStackTrace(System.out);
             uncaughtException = true;
-            streams.close(Duration.ofSeconds(30));
+            return StreamsUncaughtExceptionHandler.StreamThreadExceptionResponse.SHUTDOWN_CLIENT;
         });
 
         addShutdownHook("streams-shutdown-hook", this::close);

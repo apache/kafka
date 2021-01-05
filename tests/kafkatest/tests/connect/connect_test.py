@@ -16,7 +16,7 @@
 from ducktape.tests.test import Test
 from ducktape.mark.resource import cluster
 from ducktape.utils.util import wait_until
-from ducktape.mark import parametrize, matrix
+from ducktape.mark import parametrize
 from ducktape.cluster.remoteaccount import RemoteCommandError
 from ducktape.errors import TimeoutError
 
@@ -28,7 +28,6 @@ from kafkatest.services.security.security_config import SecurityConfig
 
 import hashlib
 import json
-import os.path
 
 
 class ConnectStandaloneFileTest(Test):
@@ -130,7 +129,7 @@ class ConnectStandaloneFileTest(Test):
     def validate_output(self, value):
         try:
             output_hash = list(self.sink.node.account.ssh_capture("md5sum " + self.OUTPUT_FILE))[0].strip().split()[0]
-            return output_hash == hashlib.md5(value).hexdigest()
+            return output_hash == hashlib.md5(value.encode('utf-8')).hexdigest()
         except RemoteCommandError:
             return False
 

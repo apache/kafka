@@ -4,7 +4,7 @@ See our [web site](https://kafka.apache.org) for details on the project.
 
 You need to have [Java](http://www.oracle.com/technetwork/java/javase/downloads/index.html) installed.
 
-We build and test Apache Kafka with Java 8, 11 and 14. We set the `release` parameter in javac and scalac
+We build and test Apache Kafka with Java 8, 11 and 15. We set the `release` parameter in javac and scalac
 to `8` to ensure the generated binaries are compatible with Java 8 or higher (independently of the Java version
 used for compilation).
 
@@ -198,6 +198,11 @@ You can run spotbugs using:
 
 The spotbugs warnings will be found in `reports/spotbugs/main.html` and `reports/spotbugs/test.html` files in the subproject build
 directories.  Use -PxmlSpotBugsReport=true to generate an XML report instead of an HTML one.
+
+### JMH microbenchmarks ###
+We use [JMH](https://openjdk.java.net/projects/code-tools/jmh/) to write microbenchmarks that produce reliable results in the JVM.
+    
+See [jmh-benchmarks/README.md](https://github.com/apache/kafka/blob/trunk/jmh-benchmarks/README.md) for details on how to run the microbenchmarks.
 
 ### Common build options ###
 

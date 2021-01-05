@@ -152,6 +152,20 @@ class ControllerContextTest {
   }
 
   @Test
+  def testReassignToIdempotence(): Unit = {
+    val assignment1 = ReplicaAssignment(Seq(1, 2, 3))
+    assertEquals(assignment1, assignment1.reassignTo(assignment1.targetReplicas))
+
+    val assignment2 = ReplicaAssignment(Seq(4, 5, 6, 1, 2, 3),
+      addingReplicas = Seq(4, 5, 6), removingReplicas = Seq(1, 2, 3))
+    assertEquals(assignment2, assignment2.reassignTo(assignment2.targetReplicas))
+
+    val assignment3 = ReplicaAssignment(Seq(4, 2, 3, 1),
+      addingReplicas = Seq(4), removingReplicas = Seq(1))
+    assertEquals(assignment3, assignment3.reassignTo(assignment3.targetReplicas))
+  }
+
+  @Test
   def testReassignTo(): Unit = {
     val assignment = ReplicaAssignment(Seq(1, 2, 3))
     val firstReassign = assignment.reassignTo(Seq(4, 5, 6))

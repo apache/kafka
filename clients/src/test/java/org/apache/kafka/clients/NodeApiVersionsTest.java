@@ -27,6 +27,7 @@ import org.apache.kafka.common.requests.ApiVersionsResponse;
 import org.junit.Test;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 
 public class NodeApiVersionsTest {
@@ -36,7 +37,7 @@ public class NodeApiVersionsTest {
         NodeApiVersions versions = new NodeApiVersions(new ApiVersionsResponseKeyCollection());
         StringBuilder bld = new StringBuilder();
         String prefix = "(";
-        for (ApiKeys apiKey : ApiKeys.values()) {
+        for (ApiKeys apiKey : ApiKeys.enabledApis()) {
             bld.append(prefix).append(apiKey.name).
                     append("(").append(apiKey.id).append("): UNSUPPORTED");
             prefix = ", ";
@@ -129,23 +130,27 @@ public class NodeApiVersionsTest {
     @Test
     public void testUsableVersionLatestVersions() {
         List<ApiVersion> versionList = new LinkedList<>();
-        for (ApiVersionsResponseKey apiVersion: ApiVersionsResponse.DEFAULT_API_VERSIONS_RESPONSE.data.apiKeys()) {
+        for (ApiVersionsResponseKey apiVersion: ApiVersionsResponse.DEFAULT_API_VERSIONS_RESPONSE.data().apiKeys()) {
             versionList.add(new ApiVersion(apiVersion));
         }
         // Add an API key that we don't know about.
         versionList.add(new ApiVersion((short) 100, (short) 0, (short) 1));
         NodeApiVersions versions = new NodeApiVersions(versionList);
         for (ApiKeys apiKey: ApiKeys.values()) {
-            assertEquals(apiKey.latestVersion(), versions.latestUsableVersion(apiKey));
+            if (apiKey.isEnabled) {
+                assertEquals(apiKey.latestVersion(), versions.latestUsableVersion(apiKey));
+            } else {
+                assertNull(versions.apiVersion(apiKey));
+            }
         }
     }
 
     @Test
     public void testConstructionFromApiVersionsResponse() {
         ApiVersionsResponse apiVersionsResponse = ApiVersionsResponse.DEFAULT_API_VERSIONS_RESPONSE;
-        NodeApiVersions versions = new NodeApiVersions(apiVersionsResponse.data.apiKeys());
+        NodeApiVersions versions = new NodeApiVersions(apiVersionsResponse.data().apiKeys());
 
-        for (ApiVersionsResponseKey apiVersionKey : apiVersionsResponse.data.apiKeys()) {
+        for (ApiVersionsResponseKey apiVersionKey : apiVersionsResponse.data().apiKeys()) {
             ApiVersion apiVersion = versions.apiVersion(ApiKeys.forId(apiVersionKey.apiKey()));
             assertEquals(apiVersionKey.apiKey(), apiVersion.apiKey);
             assertEquals(apiVersionKey.minVersion(), apiVersion.minVersion);

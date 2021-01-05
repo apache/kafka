@@ -16,10 +16,10 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
-import java.util.List;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.streams.errors.LockException;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.processor.StateStore;
@@ -29,6 +29,7 @@ import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
@@ -152,7 +153,7 @@ public interface Task {
     /**
      * Updates input partitions and topology after rebalance
      */
-    void update(final Set<TopicPartition> topicPartitions, final Map<String, List<String>> nodeToSourceTopics);
+    void update(final Set<TopicPartition> topicPartitions, final Map<String, List<String>> allTopologyNodesToSourceTopics);
 
     /**
      * Attempt a clean close but do not close the underlying state
@@ -205,4 +206,11 @@ public interface Task {
         return false;
     }
 
+    /**
+     * @throws TimeoutException if {@code currentWallClockMs > task-timeout-deadline}
+     */
+    void maybeInitTaskTimeoutOrThrow(final long currentWallClockMs,
+                                     final Exception cause);
+
+    void clearTaskTimeout();
 }

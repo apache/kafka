@@ -48,6 +48,8 @@ import java.time.Instant;
 import java.util.List;
 import java.util.Properties;
 
+import static org.hamcrest.MatcherAssert.assertThat;
+import static org.hamcrest.Matchers.is;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNull;
 
@@ -297,17 +299,31 @@ public class KTableFilterTest {
         doTestNotSendingOldValue(builder, table1, table2, topic1);
     }
 
+    @Test
+    public void shouldNotEnableSendingOldValuesIfNotAlreadyMaterializedAndNotForcedToMaterialize() {
+        final StreamsBuilder builder = new StreamsBuilder();
+        final String topic1 = "topic1";
+
+        final KTableImpl<String, Integer, Integer> table1 =
+            (KTableImpl<String, Integer, Integer>) builder.table(topic1, consumed);
+        final KTableImpl<String, Integer, Integer> table2 = (KTableImpl<String, Integer, Integer>) table1.filter(predicate);
+
+        table2.enableSendingOldValues(false);
+
+        doTestNotSendingOldValue(builder, table1, table2, topic1);
+    }
+
     private void doTestSendingOldValue(final StreamsBuilder builder,
                                        final KTableImpl<String, Integer, Integer> table1,
                                        final KTableImpl<String, Integer, Integer> table2,
                                        final String topic1) {
-        table2.enableSendingOldValues();
-
         final MockApiProcessorSupplier<String, Integer, Void, Void> supplier = new MockApiProcessorSupplier<>();
         final Topology topology = builder.build();
 
         topology.addProcessor("proc1", supplier, table1.name);
         topology.addProcessor("proc2", supplier, table2.name);
+
+        final boolean parentSendOldVals = table1.sendingOldValueEnabled();
 
         try (final TopologyTestDriver driver = new TopologyTestDriver(topology, props)) {
             final TestInputTopic<String, Integer> inputTopic =
@@ -318,36 +334,52 @@ public class KTableFilterTest {
             inputTopic.pipeInput("C", 1, 15L);
 
             final List<MockApiProcessor<String, Integer, Void, Void>> processors = supplier.capturedProcessors(2);
+            final MockApiProcessor<String, Integer, Void, Void> table1Output = processors.get(0);
+            final MockApiProcessor<String, Integer, Void, Void> table2Output = processors.get(1);
 
-            processors.get(0).checkAndClearProcessResult(new KeyValueTimestamp<>("A", new Change<>(1, null), 5),
+            table1Output.checkAndClearProcessResult(
+                new KeyValueTimestamp<>("A", new Change<>(1, null), 5),
                 new KeyValueTimestamp<>("B", new Change<>(1, null), 10),
-                new KeyValueTimestamp<>("C", new Change<>(1, null), 15));
-            processors.get(1).checkEmptyAndClearProcessResult();
+                new KeyValueTimestamp<>("C", new Change<>(1, null), 15)
+            );
+            table2Output.checkEmptyAndClearProcessResult();
 
             inputTopic.pipeInput("A", 2, 15L);
             inputTopic.pipeInput("B", 2, 8L);
 
-            processors.get(0).checkAndClearProcessResult(new KeyValueTimestamp<>("A", new Change<>(2, 1), 15),
-                new KeyValueTimestamp<>("B", new Change<>(2, 1), 8));
-            processors.get(1).checkAndClearProcessResult(new KeyValueTimestamp<>("A", new Change<>(2, null), 15),
-                new KeyValueTimestamp<>("B", new Change<>(2, null), 8));
+            table1Output.checkAndClearProcessResult(
+                new KeyValueTimestamp<>("A", new Change<>(2, parentSendOldVals ? 1 : null), 15),
+                new KeyValueTimestamp<>("B", new Change<>(2, parentSendOldVals ? 1 : null), 8)
+            );
+            table2Output.checkAndClearProcessResult(
+                new KeyValueTimestamp<>("A", new Change<>(2, null), 15),
+                new KeyValueTimestamp<>("B", new Change<>(2, null), 8)
+            );
 
             inputTopic.pipeInput("A", 3, 20L);
 
-            processors.get(0).checkAndClearProcessResult(new KeyValueTimestamp<>("A", new Change<>(3, 2), 20));
-            processors.get(1).checkAndClearProcessResult(new KeyValueTimestamp<>("A", new Change<>(null, 2), 20));
+            table1Output.checkAndClearProcessResult(
+                new KeyValueTimestamp<>("A", new Change<>(3, parentSendOldVals ? 2 : null), 20)
+            );
+            table2Output.checkAndClearProcessResult(
+                new KeyValueTimestamp<>("A", new Change<>(null, 2), 20)
+            );
 
             inputTopic.pipeInput("A", null, 10L);
             inputTopic.pipeInput("B", null, 20L);
 
-            processors.get(0).checkAndClearProcessResult(new KeyValueTimestamp<>("A", new Change<>(null, 3), 10),
-                new KeyValueTimestamp<>("B", new Change<>(null, 2), 20));
-            processors.get(1).checkAndClearProcessResult(new KeyValueTimestamp<>("B", new Change<>(null, 2), 20));
+            table1Output.checkAndClearProcessResult(
+                new KeyValueTimestamp<>("A", new Change<>(null, parentSendOldVals ? 3 : null), 10),
+                new KeyValueTimestamp<>("B", new Change<>(null, parentSendOldVals ? 2 : null), 20)
+            );
+            table2Output.checkAndClearProcessResult(
+                new KeyValueTimestamp<>("B", new Change<>(null, 2), 20)
+            );
         }
     }
 
     @Test
-    public void shouldSendOldValuesWhenEnabledWithoutMaterialization() {
+    public void shouldEnableSendOldValuesWhenNotMaterializedAlreadyButForcedToMaterialize() {
         final StreamsBuilder builder = new StreamsBuilder();
         final String topic1 = "topic1";
 
@@ -356,11 +388,16 @@ public class KTableFilterTest {
         final KTableImpl<String, Integer, Integer> table2 =
             (KTableImpl<String, Integer, Integer>) table1.filter(predicate);
 
+        table2.enableSendingOldValues(true);
+
+        assertThat(table1.sendingOldValueEnabled(), is(true));
+        assertThat(table2.sendingOldValueEnabled(), is(true));
+
         doTestSendingOldValue(builder, table1, table2, topic1);
     }
 
     @Test
-    public void shouldSendOldValuesWhenEnabledOnMaterialization() {
+    public void shouldEnableSendOldValuesWhenMaterializedAlreadyAndForcedToMaterialize() {
         final StreamsBuilder builder = new StreamsBuilder();
         final String topic1 = "topic1";
 
@@ -368,6 +405,29 @@ public class KTableFilterTest {
             (KTableImpl<String, Integer, Integer>) builder.table(topic1, consumed);
         final KTableImpl<String, Integer, Integer> table2 =
             (KTableImpl<String, Integer, Integer>) table1.filter(predicate, Materialized.as("store2"));
+
+        table2.enableSendingOldValues(true);
+
+        assertThat(table1.sendingOldValueEnabled(), is(false));
+        assertThat(table2.sendingOldValueEnabled(), is(true));
+
+        doTestSendingOldValue(builder, table1, table2, topic1);
+    }
+
+    @Test
+    public void shouldSendOldValuesWhenEnabledOnUpStreamMaterialization() {
+        final StreamsBuilder builder = new StreamsBuilder();
+        final String topic1 = "topic1";
+
+        final KTableImpl<String, Integer, Integer> table1 =
+            (KTableImpl<String, Integer, Integer>) builder.table(topic1, consumed, Materialized.as("store2"));
+        final KTableImpl<String, Integer, Integer> table2 =
+            (KTableImpl<String, Integer, Integer>) table1.filter(predicate);
+
+        table2.enableSendingOldValues(false);
+
+        assertThat(table1.sendingOldValueEnabled(), is(true));
+        assertThat(table2.sendingOldValueEnabled(), is(true));
 
         doTestSendingOldValue(builder, table1, table2, topic1);
     }

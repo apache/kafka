@@ -28,7 +28,7 @@ import org.apache.kafka.streams.kstream.Reducer;
 import org.apache.kafka.streams.kstream.internals.graph.GroupedTableOperationRepartitionNode;
 import org.apache.kafka.streams.kstream.internals.graph.ProcessorParameters;
 import org.apache.kafka.streams.kstream.internals.graph.StatefulProcessorNode;
-import org.apache.kafka.streams.kstream.internals.graph.StreamsGraphNode;
+import org.apache.kafka.streams.kstream.internals.graph.GraphNode;
 import org.apache.kafka.streams.processor.ProcessorSupplier;
 import org.apache.kafka.streams.state.KeyValueStore;
 
@@ -56,14 +56,14 @@ public class KGroupedTableImpl<K, V> extends AbstractStream<K, V> implements KGr
 
     private final Aggregator<K, V, Long> countSubtractor = (aggKey, value, aggregate) -> aggregate - 1L;
 
-    private StreamsGraphNode repartitionGraphNode;
+    private GraphNode repartitionGraphNode;
 
     KGroupedTableImpl(final InternalStreamsBuilder builder,
                       final String name,
                       final Set<String> subTopologySourceNodes,
                       final GroupedInternal<K, V> groupedInternal,
-                      final StreamsGraphNode streamsGraphNode) {
-        super(name, groupedInternal.keySerde(), groupedInternal.valueSerde(), subTopologySourceNodes, streamsGraphNode, builder);
+                      final GraphNode graphNode) {
+        super(name, groupedInternal.keySerde(), groupedInternal.valueSerde(), subTopologySourceNodes, graphNode, builder);
 
         this.userProvidedRepartitionTopicName = groupedInternal.name();
     }
@@ -85,7 +85,7 @@ public class KGroupedTableImpl<K, V> extends AbstractStream<K, V> implements KGr
 
 
         // the passed in StreamsGraphNode must be the parent of the repartition node
-        builder.addGraphNode(this.streamsGraphNode, repartitionGraphNode);
+        builder.addGraphNode(this.graphNode, repartitionGraphNode);
 
         final StatefulProcessorNode statefulProcessorNode = new StatefulProcessorNode<>(
             funcName,

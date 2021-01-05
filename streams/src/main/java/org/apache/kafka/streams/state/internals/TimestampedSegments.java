@@ -48,7 +48,7 @@ class TimestampedSegments extends AbstractSegments<TimestampedSegment> {
                 throw new IllegalStateException("TimestampedSegment already exists. Possible concurrent access.");
             }
 
-            newSegment.openDB(context);
+            newSegment.openDB(context.appConfigs(), context.stateDir());
             return newSegment;
         }
     }

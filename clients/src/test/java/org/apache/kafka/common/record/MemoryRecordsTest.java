@@ -19,6 +19,8 @@ package org.apache.kafka.common.record;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.CorruptRecordException;
 import org.apache.kafka.common.header.internals.RecordHeaders;
+import org.apache.kafka.common.message.LeaderChangeMessage;
+import org.apache.kafka.common.message.LeaderChangeMessage.Voter;
 import org.apache.kafka.common.record.MemoryRecords.RecordFilter.BatchRetention;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.test.TestUtils;
@@ -30,6 +32,7 @@ import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.List;
 import java.util.function.Supplier;
 
@@ -438,6 +441,44 @@ public class MemoryRecordsTest {
             EndTransactionMarker deserializedMarker = EndTransactionMarker.deserialize(record);
             assertEquals(ControlRecordType.COMMIT, deserializedMarker.controlType());
             assertEquals(coordinatorEpoch, deserializedMarker.coordinatorEpoch());
+        }
+    }
+
+    @Test
+    public void testBuildLeaderChangeMessage() {
+        if (magic >= RecordBatch.MAGIC_VALUE_V2) {
+
+            final int leaderId = 5;
+            final int leaderEpoch = 20;
+            final int voterId = 6;
+
+            LeaderChangeMessage leaderChangeMessage = new LeaderChangeMessage()
+                .setLeaderId(leaderId)
+                .setVoters(Collections.singletonList(
+                    new Voter().setVoterId(voterId)));
+            MemoryRecords records = MemoryRecords.withLeaderChangeMessage(System.currentTimeMillis(),
+                leaderEpoch, leaderChangeMessage);
+
+            List<MutableRecordBatch> batches = TestUtils.toList(records.batches());
+            assertEquals(1, batches.size());
+
+            RecordBatch batch = batches.get(0);
+            assertTrue(batch.isControlBatch());
+            assertEquals(0, batch.baseOffset());
+            assertEquals(leaderEpoch, batch.partitionLeaderEpoch());
+            assertTrue(batch.isValid());
+
+            List<Record> createdRecords = TestUtils.toList(batch);
+            assertEquals(1, createdRecords.size());
+
+            Record record = createdRecords.get(0);
+            assertTrue(record.isValid());
+            assertEquals(ControlRecordType.LEADER_CHANGE, ControlRecordType.parse(record.key()));
+
+            LeaderChangeMessage deserializedMessage = ControlRecordUtils.deserializeLeaderChangeMessage(record);
+            assertEquals(leaderId, deserializedMessage.leaderId());
+            assertEquals(1, deserializedMessage.voters().size());
+            assertEquals(voterId, deserializedMessage.voters().get(0).voterId());
         }
     }
 

@@ -17,9 +17,17 @@
 
 package kafka.api
 
-import org.apache.kafka.common.record.RecordVersion
-import org.junit.Test
+import java.util
+
+import org.apache.kafka.common.feature.{Features, FinalizedVersionRange, SupportedVersionRange}
+import org.apache.kafka.common.protocol.ApiKeys
+import org.apache.kafka.common.record.{RecordBatch, RecordVersion}
+import org.apache.kafka.common.requests.{AbstractResponse, ApiVersionsResponse}
+import org.apache.kafka.common.utils.Utils
 import org.junit.Assert._
+import org.junit.Test
+
+import scala.jdk.CollectionConverters._
 
 class ApiVersionTest {
 
@@ -96,6 +104,20 @@ class ApiVersionTest {
     assertEquals(KAFKA_2_4_IV1, ApiVersion("2.4"))
     assertEquals(KAFKA_2_4_IV0, ApiVersion("2.4-IV0"))
     assertEquals(KAFKA_2_4_IV1, ApiVersion("2.4-IV1"))
+
+    assertEquals(KAFKA_2_5_IV0, ApiVersion("2.5"))
+    assertEquals(KAFKA_2_5_IV0, ApiVersion("2.5-IV0"))
+
+    assertEquals(KAFKA_2_6_IV0, ApiVersion("2.6"))
+    assertEquals(KAFKA_2_6_IV0, ApiVersion("2.6-IV0"))
+
+    assertEquals(KAFKA_2_7_IV0, ApiVersion("2.7-IV0"))
+    assertEquals(KAFKA_2_7_IV1, ApiVersion("2.7-IV1"))
+    assertEquals(KAFKA_2_7_IV2, ApiVersion("2.7-IV2"))
+
+    assertEquals(KAFKA_2_8_IV1, ApiVersion("2.8"))
+    assertEquals(KAFKA_2_8_IV0, ApiVersion("2.8-IV0"))
+    assertEquals(KAFKA_2_8_IV1, ApiVersion("2.8-IV1"))
   }
 
   @Test
@@ -140,6 +162,10 @@ class ApiVersionTest {
     assertEquals("2.3", KAFKA_2_3_IV0.shortVersion)
     assertEquals("2.3", KAFKA_2_3_IV1.shortVersion)
     assertEquals("2.4", KAFKA_2_4_IV0.shortVersion)
+    assertEquals("2.5", KAFKA_2_5_IV0.shortVersion)
+    assertEquals("2.6", KAFKA_2_6_IV0.shortVersion)
+    assertEquals("2.7", KAFKA_2_7_IV2.shortVersion)
+    assertEquals("2.8", KAFKA_2_8_IV0.shortVersion)
   }
 
   @Test
@@ -149,4 +175,90 @@ class ApiVersionTest {
     assertEquals(ApiVersion.allVersions.size, apiVersions.length)
   }
 
+  @Test
+  def shouldCreateApiResponseOnlyWithKeysSupportedByMagicValue(): Unit = {
+    val response = ApiVersion.apiVersionsResponse(
+      10,
+      RecordBatch.MAGIC_VALUE_V1,
+      Features.emptySupportedFeatures
+    )
+    verifyApiKeysForMagic(response, RecordBatch.MAGIC_VALUE_V1)
+    assertEquals(10, response.throttleTimeMs)
+    assertTrue(response.data.supportedFeatures.isEmpty)
+    assertTrue(response.data.finalizedFeatures.isEmpty)
+    assertEquals(ApiVersionsResponse.UNKNOWN_FINALIZED_FEATURES_EPOCH, response.data.finalizedFeaturesEpoch)
+  }
+
+  @Test
+  def shouldReturnFeatureKeysWhenMagicIsCurrentValueAndThrottleMsIsDefaultThrottle(): Unit = {
+    val response = ApiVersion.apiVersionsResponse(
+      10,
+      RecordBatch.MAGIC_VALUE_V1,
+      Features.supportedFeatures(
+        Utils.mkMap(Utils.mkEntry("feature", new SupportedVersionRange(1.toShort, 4.toShort)))),
+      Features.finalizedFeatures(
+        Utils.mkMap(Utils.mkEntry("feature", new FinalizedVersionRange(2.toShort, 3.toShort)))),
+      10
+    )
+
+    verifyApiKeysForMagic(response, RecordBatch.MAGIC_VALUE_V1)
+    assertEquals(10, response.throttleTimeMs)
+    assertEquals(1, response.data.supportedFeatures.size)
+    val sKey = response.data.supportedFeatures.find("feature")
+    assertNotNull(sKey)
+    assertEquals(1, sKey.minVersion)
+    assertEquals(4, sKey.maxVersion)
+    assertEquals(1, response.data.finalizedFeatures.size)
+    val fKey = response.data.finalizedFeatures.find("feature")
+    assertNotNull(fKey)
+    assertEquals(2, fKey.minVersionLevel)
+    assertEquals(3, fKey.maxVersionLevel)
+    assertEquals(10, response.data.finalizedFeaturesEpoch)
+  }
+
+  private def verifyApiKeysForMagic(response: ApiVersionsResponse, maxMagic: Byte): Unit = {
+    for (version <- response.data.apiKeys.asScala) {
+      assertTrue(ApiKeys.forId(version.apiKey).minRequiredInterBrokerMagic <= maxMagic)
+    }
+  }
+
+  @Test
+  def shouldReturnAllKeysWhenMagicIsCurrentValueAndThrottleMsIsDefaultThrottle(): Unit = {
+    val response = ApiVersion.apiVersionsResponse(
+      AbstractResponse.DEFAULT_THROTTLE_TIME,
+      RecordBatch.CURRENT_MAGIC_VALUE,
+      Features.emptySupportedFeatures
+    )
+    assertEquals(new util.HashSet[ApiKeys](ApiKeys.enabledApis), apiKeysInResponse(response))
+    assertEquals(AbstractResponse.DEFAULT_THROTTLE_TIME, response.throttleTimeMs)
+    assertTrue(response.data.supportedFeatures.isEmpty)
+    assertTrue(response.data.finalizedFeatures.isEmpty)
+    assertEquals(ApiVersionsResponse.UNKNOWN_FINALIZED_FEATURES_EPOCH, response.data.finalizedFeaturesEpoch)
+  }
+
+  @Test
+  def testMetadataQuorumApisAreDisabled(): Unit = {
+    val response = ApiVersion.apiVersionsResponse(
+      AbstractResponse.DEFAULT_THROTTLE_TIME,
+      RecordBatch.CURRENT_MAGIC_VALUE,
+      Features.emptySupportedFeatures
+    )
+
+    // Ensure that APIs needed for the internal metadata quorum (KIP-500)
+    // are not exposed through ApiVersions until we are ready for them
+    val exposedApis = apiKeysInResponse(response)
+    assertFalse(exposedApis.contains(ApiKeys.ENVELOPE))
+    assertFalse(exposedApis.contains(ApiKeys.VOTE))
+    assertFalse(exposedApis.contains(ApiKeys.BEGIN_QUORUM_EPOCH))
+    assertFalse(exposedApis.contains(ApiKeys.END_QUORUM_EPOCH))
+    assertFalse(exposedApis.contains(ApiKeys.DESCRIBE_QUORUM))
+  }
+
+  private def apiKeysInResponse(apiVersions: ApiVersionsResponse) = {
+    val apiKeys = new util.HashSet[ApiKeys]
+    for (version <- apiVersions.data.apiKeys.asScala) {
+      apiKeys.add(ApiKeys.forId(version.apiKey))
+    }
+    apiKeys
+  }
 }

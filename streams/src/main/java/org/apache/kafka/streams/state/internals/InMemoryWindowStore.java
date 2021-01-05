@@ -85,6 +85,7 @@ public class InMemoryWindowStore implements WindowStore<Bytes, byte[]> {
         return name;
     }
 
+    @Deprecated
     @Override
     public void init(final ProcessorContext context, final StateStore root) {
         this.context = context;

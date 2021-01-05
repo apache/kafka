@@ -153,7 +153,7 @@ public class KTableKTableInnerJoinTest {
         table2 = builder.table(topic2, consumed);
         joined = table1.join(table2, MockValueJoiner.TOSTRING_JOINER);
 
-        ((KTableImpl<?, ?, ?>) joined).enableSendingOldValues();
+        ((KTableImpl<?, ?, ?>) joined).enableSendingOldValues(true);
 
         builder.build().addProcessor("proc", supplier, ((KTableImpl<?, ?, ?>) joined).name);
 

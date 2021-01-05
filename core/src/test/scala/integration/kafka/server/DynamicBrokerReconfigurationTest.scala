@@ -98,6 +98,9 @@ class DynamicBrokerReconfigurationTest extends ZooKeeperTestHarness with SaslSet
   private val sslProperties2 = TestUtils.sslConfigs(Mode.SERVER, clientCert = false, Some(trustStoreFile2), "kafka")
   private val invalidSslProperties = invalidSslConfigs
 
+  def addExtraProps(props: Properties): Unit = {
+  }
+
   @Before
   override def setUp(): Unit = {
     startSasl(jaasSections(kafkaServerSaslMechanisms, Some(kafkaClientSaslMechanism)))
@@ -123,6 +126,7 @@ class DynamicBrokerReconfigurationTest extends ZooKeeperTestHarness with SaslSet
       props.put(KafkaConfig.PasswordEncoderSecretProp, "dynamic-config-secret")
       props.put(KafkaConfig.LogRetentionTimeMillisProp, 1680000000.toString)
       props.put(KafkaConfig.LogRetentionTimeHoursProp, 168.toString)
+      addExtraProps(props)
 
       props ++= sslProperties1
       props ++= securityProps(sslProperties1, KEYSTORE_PROPS, listenerPrefix(SecureInternal))
@@ -206,7 +210,11 @@ class DynamicBrokerReconfigurationTest extends ZooKeeperTestHarness with SaslSet
     }
 
     def verifySslConfig(prefix: String, expectedProps: Properties, configDesc: Config): Unit = {
-      KEYSTORE_PROPS.forEach { configName =>
+      // Validate file-based SSL keystore configs
+      val keyStoreProps = new util.HashSet[String](KEYSTORE_PROPS)
+      keyStoreProps.remove(SSL_KEYSTORE_KEY_CONFIG)
+      keyStoreProps.remove(SSL_KEYSTORE_CERTIFICATE_CHAIN_CONFIG)
+      keyStoreProps.forEach { configName =>
         val desc = configEntry(configDesc, s"$prefix$configName")
         val isSensitive = configName.contains("password")
         verifyConfig(configName, desc, isSensitive, isReadOnly = prefix.nonEmpty, if (prefix.isEmpty) invalidSslProperties else sslProperties1)
@@ -841,7 +849,9 @@ class DynamicBrokerReconfigurationTest extends ZooKeeperTestHarness with SaslSet
         val fetcherThreads = replicaFetcherManager.fetcherThreadMap.filter(_._2.fetchState(tp).isDefined)
         assertEquals(1, fetcherThreads.size)
         assertEquals(replicaFetcherManager.getFetcherId(tp), fetcherThreads.head._1.fetcherId)
-        assertEquals(Some(truncationOffset), fetcherThreads.head._2.fetchState(tp).map(_.fetchOffset))
+        val thread = fetcherThreads.head._2
+        assertEquals(Some(truncationOffset), thread.fetchState(tp).map(_.fetchOffset))
+        assertEquals(Some(Truncating), thread.fetchState(tp).map(_.state))
       }
     }
   }
@@ -1665,7 +1675,6 @@ class DynamicBrokerReconfigurationTest extends ZooKeeperTestHarness with SaslSet
     def requestTimeoutMs(timeoutMs: Int): ProducerBuilder = { _requestTimeoutMs = timeoutMs; this }
     def deliveryTimeoutMs(timeoutMs: Int): ProducerBuilder = { _deliveryTimeoutMs= timeoutMs; this }
 
-    @nowarn("cat=deprecation")
     override def build(): KafkaProducer[String, String] = {
       val producerProps = propsOverride
       producerProps.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers)

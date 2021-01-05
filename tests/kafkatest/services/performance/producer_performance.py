@@ -78,7 +78,7 @@ class ProducerPerformanceService(HttpMetricsCollector, PerformanceService):
             'bootstrap_servers': self.kafka.bootstrap_servers(self.security_config.security_protocol),
             'client_id': self.client_id,
             'kafka_run_class': self.path.script("kafka-run-class.sh", node),
-            'metrics_props': ' '.join(["%s=%s" % (k, v) for k, v in self.http_metrics_client_configs.iteritems()])
+            'metrics_props': ' '.join("%s=%s" % (k, v) for k, v in self.http_metrics_client_configs.items())
             })
 
         cmd = ""

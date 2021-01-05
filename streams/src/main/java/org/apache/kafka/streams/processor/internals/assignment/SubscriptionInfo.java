@@ -21,6 +21,8 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+
+import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.ObjectSerializationCache;
 import org.apache.kafka.streams.errors.TaskAssignmentException;
@@ -81,11 +83,14 @@ public class SubscriptionInfo {
                             final int latestSupportedVersion,
                             final UUID processId,
                             final String userEndPoint,
-                            final Map<TaskId, Long> taskOffsetSums) {
+                            final Map<TaskId, Long> taskOffsetSums,
+                            final byte uniqueField,
+                            final int errorCode) {
         validateVersions(version, latestSupportedVersion);
         final SubscriptionInfoData data = new SubscriptionInfoData();
         data.setVersion(version);
-        data.setProcessId(processId);
+        data.setProcessId(new Uuid(processId.getMostSignificantBits(),
+                processId.getLeastSignificantBits()));
 
         if (version >= 2) {
             data.setUserEndPoint(userEndPoint == null
@@ -94,6 +99,12 @@ public class SubscriptionInfo {
         }
         if (version >= 3) {
             data.setLatestSupportedVersion(latestSupportedVersion);
+        }
+        if (version >= 8) {
+            data.setUniqueField(uniqueField);
+        }
+        if (version >= 9) {
+            data.setErrorCode(errorCode);
         }
 
         this.data = data;
@@ -108,6 +119,10 @@ public class SubscriptionInfo {
     private SubscriptionInfo(final SubscriptionInfoData subscriptionInfoData) {
         validateVersions(subscriptionInfoData.version(), subscriptionInfoData.latestSupportedVersion());
         this.data = subscriptionInfoData;
+    }
+
+    public int errorCode() {
+        return data.errorCode();
     }
 
     private void setTaskOffsetSumDataFromTaskOffsetSumMap(final Map<TaskId, Long> taskOffsetSums) {
@@ -163,7 +178,7 @@ public class SubscriptionInfo {
     }
 
     public UUID processId() {
-        return data.processId();
+        return new UUID(data.processId().getMostSignificantBits(), data.processId().getLeastSignificantBits());
     }
 
     public Set<TaskId> prevTasks() {

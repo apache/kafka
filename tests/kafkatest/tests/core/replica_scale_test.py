@@ -16,7 +16,6 @@
 from ducktape.mark.resource import cluster
 from ducktape.mark import parametrize
 from ducktape.tests.test import Test
-from ducktape.utils.util import wait_until
 
 from kafkatest.services.trogdor.produce_bench_workload import ProduceBenchWorkloadService, ProduceBenchWorkloadSpec
 from kafkatest.services.trogdor.consume_bench_workload import ConsumeBenchWorkloadService, ConsumeBenchWorkloadSpec
@@ -25,7 +24,6 @@ from kafkatest.services.kafka import KafkaService
 from kafkatest.services.trogdor.trogdor import TrogdorService
 from kafkatest.services.zookeeper import ZookeeperService
 
-import json
 import time
 
 
@@ -48,12 +46,12 @@ class ReplicaScaleTest(Test):
         self.zk.stop()
 
     @cluster(num_nodes=12)
-    @parametrize(topic_count=500, partition_count=34, replication_factor=3)
+    @parametrize(topic_count=50, partition_count=34, replication_factor=3)
     def test_produce_consume(self, topic_count, partition_count, replication_factor):
         topics_create_start_time = time.time()
         for i in range(topic_count):
             topic = "replicas_produce_consume_%d" % i
-            print("Creating topic %s" % topic)  # Force some stdout for Jenkins
+            print("Creating topic %s" % topic, flush=True)  # Force some stdout for Jenkins
             topic_cfg = {
                 "topic": topic,
                 "partitions": partition_count,
@@ -74,7 +72,7 @@ class ReplicaScaleTest(Test):
         produce_spec = ProduceBenchWorkloadSpec(0, TaskSpec.MAX_DURATION_MS,
                                                 producer_workload_service.producer_node,
                                                 producer_workload_service.bootstrap_servers,
-                                                target_messages_per_sec=10000,
+                                                target_messages_per_sec=150000,
                                                 max_messages=3400000,
                                                 producer_conf={},
                                                 admin_client_conf={},
@@ -85,12 +83,12 @@ class ReplicaScaleTest(Test):
                                                 }})
         produce_workload = trogdor.create_task("replicas-produce-workload", produce_spec)
         produce_workload.wait_for_done(timeout_sec=600)
-        self.logger.info("Completed produce bench")
+        print("Completed produce bench", flush=True)  # Force some stdout for Travis
 
         consume_spec = ConsumeBenchWorkloadSpec(0, TaskSpec.MAX_DURATION_MS,
                                                 consumer_workload_service.consumer_node,
                                                 consumer_workload_service.bootstrap_servers,
-                                                target_messages_per_sec=10000,
+                                                target_messages_per_sec=150000,
                                                 max_messages=3400000,
                                                 consumer_conf={},
                                                 admin_client_conf={},
@@ -103,12 +101,12 @@ class ReplicaScaleTest(Test):
         trogdor.stop()
 
     @cluster(num_nodes=12)
-    @parametrize(topic_count=500, partition_count=34, replication_factor=3)
+    @parametrize(topic_count=50, partition_count=34, replication_factor=3)
     def test_clean_bounce(self, topic_count, partition_count, replication_factor):
         topics_create_start_time = time.time()
         for i in range(topic_count):
             topic = "topic-%04d" % i
-            print("Creating topic %s" % topic)  # Force some stdout for Jenkins
+            print("Creating topic %s" % topic, flush=True)  # Force some stdout for Jenkins
             topic_cfg = {
                 "topic": topic,
                 "partitions": partition_count,

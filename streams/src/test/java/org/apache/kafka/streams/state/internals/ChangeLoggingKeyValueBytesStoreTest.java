@@ -21,10 +21,15 @@ import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.streams.KeyValue;
+import org.apache.kafka.streams.processor.ProcessorContext;
+import org.apache.kafka.streams.processor.StateStore;
+import org.apache.kafka.streams.processor.StateStoreContext;
 import org.apache.kafka.streams.processor.internals.MockStreamsMetrics;
+import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.test.InternalMockProcessorContext;
 import org.apache.kafka.test.MockRecordCollector;
 import org.apache.kafka.test.TestUtils;
+import org.easymock.EasyMock;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
@@ -48,19 +53,49 @@ public class ChangeLoggingKeyValueBytesStoreTest {
 
     @Before
     public void before() {
-        final InternalMockProcessorContext context = new InternalMockProcessorContext(
+        final InternalMockProcessorContext context = mockContext();
+        context.setTime(0);
+        store.init((StateStoreContext) context, store);
+    }
+
+    private InternalMockProcessorContext mockContext() {
+        return new InternalMockProcessorContext(
             TestUtils.tempDirectory(),
             Serdes.String(),
             Serdes.Long(),
             collector,
-            new ThreadCache(new LogContext("testCache "), 0, new MockStreamsMetrics(new Metrics())));
-        context.setTime(0);
-        store.init(context, store);
+            new ThreadCache(new LogContext("testCache "), 0, new MockStreamsMetrics(new Metrics()))
+        );
     }
 
     @After
     public void after() {
         store.close();
+    }
+
+    @SuppressWarnings("deprecation")
+    @Test
+    public void shouldDelegateDeprecatedInit() {
+        final InternalMockProcessorContext context = mockContext();
+        final KeyValueStore<Bytes, byte[]> innerMock = EasyMock.mock(InMemoryKeyValueStore.class);
+        final StateStore outer = new ChangeLoggingKeyValueBytesStore(innerMock);
+        innerMock.init((ProcessorContext) context, outer);
+        EasyMock.expectLastCall();
+        EasyMock.replay(innerMock);
+        outer.init((ProcessorContext) context, outer);
+        EasyMock.verify(innerMock);
+    }
+
+    @Test
+    public void shouldDelegateInit() {
+        final InternalMockProcessorContext context = mockContext();
+        final KeyValueStore<Bytes, byte[]> innerMock = EasyMock.mock(InMemoryKeyValueStore.class);
+        final StateStore outer = new ChangeLoggingKeyValueBytesStore(innerMock);
+        innerMock.init((StateStoreContext) context, outer);
+        EasyMock.expectLastCall();
+        EasyMock.replay(innerMock);
+        outer.init((StateStoreContext) context, outer);
+        EasyMock.verify(innerMock);
     }
 
     @Test

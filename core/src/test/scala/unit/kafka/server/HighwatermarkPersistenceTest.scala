@@ -47,6 +47,8 @@ class HighwatermarkPersistenceTest {
     new LogDirFailureChannel(config.logDirs.size)
   }
 
+  val alterIsrManager = TestUtils.createAlterIsrManager()
+
   @After
   def teardown(): Unit = {
     for (manager <- logManagers; dir <- manager.liveLogDirs)
@@ -63,10 +65,11 @@ class HighwatermarkPersistenceTest {
     scheduler.startup()
     val metrics = new Metrics
     val time = new MockTime
+    val quotaManager = QuotaFactory.instantiate(configs.head, metrics, time, "")
     // create replica manager
     val replicaManager = new ReplicaManager(configs.head, metrics, time, zkClient, scheduler,
-      logManagers.head, new AtomicBoolean(false), QuotaFactory.instantiate(configs.head, metrics, time, ""),
-      new BrokerTopicStats, new MetadataCache(configs.head.brokerId), logDirFailureChannels.head)
+      logManagers.head, new AtomicBoolean(false), quotaManager,
+      new BrokerTopicStats, new MetadataCache(configs.head.brokerId), logDirFailureChannels.head, alterIsrManager)
     replicaManager.startup()
     try {
       replicaManager.checkpointHighWatermarks()
@@ -97,6 +100,7 @@ class HighwatermarkPersistenceTest {
     } finally {
       // shutdown the replica manager upon test completion
       replicaManager.shutdown(false)
+      quotaManager.shutdown()
       metrics.close()
       scheduler.shutdown()
     }
@@ -113,10 +117,11 @@ class HighwatermarkPersistenceTest {
     scheduler.startup()
     val metrics = new Metrics
     val time = new MockTime
+    val quotaManager = QuotaFactory.instantiate(configs.head, metrics, time, "")
     // create replica manager
     val replicaManager = new ReplicaManager(configs.head, metrics, time, zkClient,
-      scheduler, logManagers.head, new AtomicBoolean(false), QuotaFactory.instantiate(configs.head, metrics, time, ""),
-      new BrokerTopicStats, new MetadataCache(configs.head.brokerId), logDirFailureChannels.head)
+      scheduler, logManagers.head, new AtomicBoolean(false), quotaManager,
+      new BrokerTopicStats, new MetadataCache(configs.head.brokerId), logDirFailureChannels.head, alterIsrManager)
     replicaManager.startup()
     try {
       replicaManager.checkpointHighWatermarks()
@@ -167,6 +172,7 @@ class HighwatermarkPersistenceTest {
     } finally {
       // shutdown the replica manager upon test completion
       replicaManager.shutdown(false)
+      quotaManager.shutdown()
       metrics.close()
       scheduler.shutdown()
     }

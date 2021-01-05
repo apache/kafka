@@ -32,6 +32,7 @@ import org.apache.kafka.streams.processor.StateRestoreCallback;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.To;
+import org.apache.kafka.streams.processor.api.Record;
 import org.apache.kafka.streams.processor.internals.AbstractProcessorContext;
 import org.apache.kafka.streams.processor.internals.ProcessorNode;
 import org.apache.kafka.streams.processor.internals.ProcessorRecordContext;
@@ -261,9 +262,10 @@ public class InternalMockProcessorContext
         stateManager().registerStore(store, func);
     }
 
+    @SuppressWarnings("unchecked")
     @Override
-    public StateStore getStateStore(final String name) {
-        return storeMap.get(name);
+    public <S extends StateStore> S getStateStore(final String name) {
+        return (S) storeMap.get(name);
     }
 
     @Override
@@ -281,6 +283,28 @@ public class InternalMockProcessorContext
 
     @Override
     public void commit() {}
+
+    @Override
+    public <K, V> void forward(final Record<K, V> record) {
+        forward(record, null);
+    }
+
+    @SuppressWarnings("unchecked")
+    @Override
+    public <K, V> void forward(final Record<K, V> record, final String childName) {
+        if (recordContext != null && record.timestamp() != recordContext.timestamp()) {
+            setTime(record.timestamp());
+        }
+        final ProcessorNode<?, ?, ?, ?> thisNode = currentNode;
+        try {
+            for (final ProcessorNode<?, ?, ?, ?> childNode : thisNode.children()) {
+                currentNode = childNode;
+                ((ProcessorNode<K, V, ?, ?>) childNode).process(record);
+            }
+        } finally {
+            currentNode = thisNode;
+        }
+    }
 
     @Override
     public void forward(final Object key, final Object value) {
@@ -311,7 +335,8 @@ public class InternalMockProcessorContext
             for (final ProcessorNode<?, ?, ?, ?> childNode : thisNode.children()) {
                 if (toInternal.child() == null || toInternal.child().equals(childNode.name())) {
                     currentNode = childNode;
-                    ((ProcessorNode<Object, Object, ?, ?>) childNode).process(key, value);
+                    final Record<Object, Object> record = new Record<>(key, value, toInternal.timestamp(), headers());
+                    ((ProcessorNode<Object, Object, ?, ?>) childNode).process(record);
                     toInternal.update(to); // need to reset because MockProcessorContext is shared over multiple
                                            // Processors and toInternal might have been modified
                 }

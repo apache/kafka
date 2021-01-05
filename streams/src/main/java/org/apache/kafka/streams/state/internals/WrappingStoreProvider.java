@@ -46,11 +46,22 @@ public class WrappingStoreProvider implements StateStoreProvider {
     public <T> List<T> stores(final String storeName,
                               final QueryableStoreType<T> queryableStoreType) {
         final List<T> allStores = new ArrayList<>();
-        for (final StreamThreadStateStoreProvider provider : storeProviders) {
-            final List<T> stores = provider.stores(storeQueryParameters);
-            allStores.addAll(stores);
+        for (final StreamThreadStateStoreProvider storeProvider : storeProviders) {
+            final List<T> stores = storeProvider.stores(storeQueryParameters);
+            if (!stores.isEmpty()) {
+                allStores.addAll(stores);
+                if (storeQueryParameters.partition() != null) {
+                    break;
+                }
+            }
         }
         if (allStores.isEmpty()) {
+            if (storeQueryParameters.partition() != null) {
+                throw new InvalidStateStoreException(
+                        String.format("The specified partition %d for store %s does not exist.",
+                                storeQueryParameters.partition(),
+                                storeName));
+            }
             throw new InvalidStateStoreException("The state store, " + storeName + ", may have migrated to another instance.");
         }
         return allStores;

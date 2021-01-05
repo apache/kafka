@@ -262,7 +262,7 @@ def command_stage_docs():
     # version due to already having bumped the bugfix version number.
     gradle_version_override = docs_release_version(version)
 
-    cmd("Building docs", "./gradlew -Pversion=%s clean aggregatedJavadoc" % gradle_version_override, cwd=REPO_HOME, env=jdk8_env)
+    cmd("Building docs", "./gradlew -Pversion=%s clean siteDocsTar aggregatedJavadoc" % gradle_version_override, cwd=REPO_HOME, env=jdk8_env)
 
     docs_tar = os.path.join(REPO_HOME, 'core', 'build', 'distributions', 'kafka_2.13-%s-site-docs.tgz' % gradle_version_override)
 

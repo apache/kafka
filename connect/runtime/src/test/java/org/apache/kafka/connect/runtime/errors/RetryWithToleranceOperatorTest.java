@@ -41,8 +41,17 @@ import org.powermock.core.classloader.annotations.PrepareForTest;
 import org.powermock.modules.junit4.PowerMockRunner;
 
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
+import java.util.stream.Collectors;
+import java.util.stream.IntStream;
 
 import static java.util.Collections.emptyMap;
 import static java.util.Collections.singletonMap;
@@ -341,6 +350,96 @@ public class RetryWithToleranceOperatorTest {
 
         PowerMock.verifyAll();
     }
+
+    @Test
+    public void testThreadSafety() throws Throwable {
+        long runtimeMs = 5_000;
+        int numThreads = 10;
+        // Check that multiple threads using RetryWithToleranceOperator concurrently
+        // can't corrupt the state of the ProcessingContext
+        AtomicReference<Throwable> failed = new AtomicReference<>(null);
+        RetryWithToleranceOperator retryWithToleranceOperator = new RetryWithToleranceOperator(0,
+                ERRORS_RETRY_MAX_DELAY_DEFAULT, ALL, SYSTEM, new ProcessingContext() {
+                    private AtomicInteger count = new AtomicInteger();
+                    private AtomicInteger attempt = new AtomicInteger();
+
+                    @Override
+                    public void error(Throwable error) {
+                        if (count.getAndIncrement() > 0) {
+                            failed.compareAndSet(null, new AssertionError("Concurrent call to error()"));
+                        }
+                        super.error(error);
+                    }
+
+                    @Override
+                    public Future<Void> report() {
+                        if (count.getAndSet(0) > 1) {
+                            failed.compareAndSet(null, new AssertionError("Concurrent call to error() in report()"));
+                        }
+
+                        return super.report();
+                    }
+
+                    @Override
+                    public void currentContext(Stage stage, Class<?> klass) {
+                        this.attempt.set(0);
+                        super.currentContext(stage, klass);
+                    }
+
+                    @Override
+                    public void attempt(int attempt) {
+                        if (!this.attempt.compareAndSet(attempt - 1, attempt)) {
+                            failed.compareAndSet(null, new AssertionError(
+                                    "Concurrent call to attempt(): Attempts should increase monotonically " +
+                                            "within the scope of a given currentContext()"));
+                        }
+                        super.attempt(attempt);
+                    }
+                });
+        retryWithToleranceOperator.metrics(errorHandlingMetrics);
+
+        ExecutorService pool = Executors.newFixedThreadPool(numThreads);
+        List<? extends Future<?>> futures = IntStream.range(0, numThreads).boxed()
+                .map(id ->
+                        pool.submit(() -> {
+                            long t0 = System.currentTimeMillis();
+                            long i = 0;
+                            while (true) {
+                                if (++i % 10000 == 0 && System.currentTimeMillis() > t0 + runtimeMs) {
+                                    break;
+                                }
+                                if (failed.get() != null) {
+                                    break;
+                                }
+                                try {
+                                    if (id < numThreads / 2) {
+                                        retryWithToleranceOperator.executeFailed(Stage.TASK_PUT,
+                                                SinkTask.class, consumerRecord, new Throwable()).get();
+                                    } else {
+                                        retryWithToleranceOperator.execute(() -> null, Stage.TRANSFORMATION,
+                                                SinkTask.class);
+                                    }
+                                } catch (Exception e) {
+                                    failed.compareAndSet(null, e);
+                                }
+                            }
+                        }))
+                .collect(Collectors.toList());
+        pool.shutdown();
+        pool.awaitTermination((long) (1.5 * runtimeMs), TimeUnit.MILLISECONDS);
+        futures.forEach(future -> {
+            try {
+                future.get();
+            } catch (Exception e) {
+                failed.compareAndSet(null, e);
+            }
+        });
+        Throwable exception = failed.get();
+        if (exception != null) {
+            throw exception;
+        }
+    }
+
 
     private static class ExceptionThrower implements Operation<Object> {
         private Exception e;

@@ -140,8 +140,8 @@ class Benchmark(Test):
         # FIXME we should be generating a graph too
         # Try to break it into 5 blocks, but fall back to a smaller number if
         # there aren't even 5 elements
-        block_size = max(len(self.producer.stats[0]) / 5, 1)
-        nblocks = len(self.producer.stats[0]) / block_size
+        block_size = max(len(self.producer.stats[0]) // 5, 1)
+        nblocks = len(self.producer.stats[0]) // block_size
 
         for i in range(nblocks):
             subset = self.producer.stats[0][i*block_size:min((i+1)*block_size, len(self.producer.stats[0]))]

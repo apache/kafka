@@ -17,6 +17,7 @@
 package org.apache.kafka.streams.processor.internals;
 
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.streams.processor.TaskId;
 
 import java.util.Collection;
 import java.util.Collections;
@@ -38,7 +39,7 @@ public class MockChangelogReader implements ChangelogReader {
     }
 
     @Override
-    public void restore() {
+    public void restore(final Map<TaskId, Task> tasks) {
         // do nothing
     }
 

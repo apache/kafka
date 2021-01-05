@@ -33,7 +33,6 @@ import org.junit.Assert.{assertEquals, assertFalse, assertTrue}
 import org.junit.{Before, Test}
 import org.scalatest.Assertions.fail
 
-import scala.annotation.nowarn
 import scala.jdk.CollectionConverters._
 
 /**
@@ -107,7 +106,6 @@ class LogDirFailureTest extends IntegrationTestHarness {
     testProduceAfterLogDirFailureOnLeader(Checkpoint)
   }
 
-  @nowarn("cat=deprecation")
   @Test
   def testReplicaFetcherThreadAfterLogDirFailureOnFollower(): Unit = {
     this.producerConfig.setProperty(ProducerConfig.RETRIES_CONFIG, "0")
@@ -139,7 +137,6 @@ class LogDirFailureTest extends IntegrationTestHarness {
     }
   }
 
-  @nowarn("cat=deprecation")
   def testProduceErrorsFromLogDirFailureOnLeader(failureType: LogDirFailureType): Unit = {
     // Disable retries to allow exception to bubble up for validation
     this.producerConfig.setProperty(ProducerConfig.RETRIES_CONFIG, "0")

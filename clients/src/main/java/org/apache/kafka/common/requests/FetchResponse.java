@@ -18,21 +18,14 @@ package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.message.FetchResponseData;
-import org.apache.kafka.common.message.ResponseHeaderData;
-import org.apache.kafka.common.network.ByteBufferSend;
-import org.apache.kafka.common.network.Send;
+import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.ObjectSerializationCache;
-import org.apache.kafka.common.protocol.RecordsReadable;
-import org.apache.kafka.common.protocol.RecordsWritable;
-import org.apache.kafka.common.protocol.types.Struct;
 import org.apache.kafka.common.record.BaseRecords;
 import org.apache.kafka.common.record.MemoryRecords;
-import org.apache.kafka.common.record.MultiRecordsSend;
 
 import java.nio.ByteBuffer;
-import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Iterator;
@@ -74,6 +67,7 @@ public class FetchResponse<T extends BaseRecords> extends AbstractResponse {
     private final FetchResponseData data;
     private final LinkedHashMap<TopicPartition, PartitionData<T>> responseDataMap;
 
+    @Override
     public FetchResponseData data() {
         return data;
     }
@@ -278,53 +272,15 @@ public class FetchResponse<T extends BaseRecords> extends AbstractResponse {
                          LinkedHashMap<TopicPartition, PartitionData<T>> responseData,
                          int throttleTimeMs,
                          int sessionId) {
+        super(ApiKeys.FETCH);
         this.data = toMessage(throttleTimeMs, error, responseData.entrySet().iterator(), sessionId);
         this.responseDataMap = responseData;
     }
 
     public FetchResponse(FetchResponseData fetchResponseData) {
+        super(ApiKeys.FETCH);
         this.data = fetchResponseData;
         this.responseDataMap = toResponseDataMap(fetchResponseData);
-    }
-
-    @Override
-    public Struct toStruct(short version) {
-        return data.toStruct(version);
-    }
-
-    @Override
-    public Send toSend(String dest, ResponseHeader responseHeader, short apiVersion) {
-        // Generate the Sends for the response fields and records
-        ArrayDeque<Send> sends = new ArrayDeque<>();
-        ObjectSerializationCache cache = new ObjectSerializationCache();
-        int totalRecordSize = data.responses().stream()
-                .flatMap(fetchableTopicResponse -> fetchableTopicResponse.partitionResponses().stream())
-                .mapToInt(fetchablePartitionResponse -> fetchablePartitionResponse.recordSet().sizeInBytes())
-                .sum();
-        int totalMessageSize = data.size(cache, apiVersion);
-
-        RecordsWritable writer = new RecordsWritable(dest, totalMessageSize - totalRecordSize, sends::add);
-        data.write(writer, cache, apiVersion);
-        writer.flush();
-
-        // Compute the total size of all the Sends and write it out along with the header in the first Send
-        ResponseHeaderData responseHeaderData = responseHeader.data();
-
-        int headerSize = responseHeaderData.size(cache, responseHeader.headerVersion());
-        int bodySize = Math.toIntExact(sends.stream().mapToLong(Send::size).sum());
-
-        ByteBuffer buffer = ByteBuffer.allocate(headerSize + 4);
-        ByteBufferAccessor headerWriter = new ByteBufferAccessor(buffer);
-
-        // Write out the size and header
-        buffer.putInt(headerSize + bodySize);
-        responseHeaderData.write(headerWriter, cache, responseHeader.headerVersion());
-
-        // Rewind the buffer and set this the first Send in the MultiRecordsSend
-        buffer.rewind();
-        sends.addFirst(new ByteBufferSend(dest, buffer));
-
-        return new MultiRecordsSend(dest, sends);
     }
 
     public Errors error() {
@@ -347,6 +303,7 @@ public class FetchResponse<T extends BaseRecords> extends AbstractResponse {
     @Override
     public Map<Errors, Integer> errorCounts() {
         Map<Errors, Integer> errorCounts = new HashMap<>();
+        updateErrorCounts(errorCounts, error());
         responseDataMap.values().forEach(response ->
             updateErrorCounts(errorCounts, response.error())
         );
@@ -354,10 +311,7 @@ public class FetchResponse<T extends BaseRecords> extends AbstractResponse {
     }
 
     public static FetchResponse<MemoryRecords> parse(ByteBuffer buffer, short version) {
-        FetchResponseData fetchResponseData = new FetchResponseData();
-        RecordsReadable reader = new RecordsReadable(buffer);
-        fetchResponseData.read(reader, version);
-        return new FetchResponse<>(fetchResponseData);
+        return new FetchResponse<>(new FetchResponseData(new ByteBufferAccessor(buffer), version));
     }
 
     @SuppressWarnings("unchecked")
@@ -377,28 +331,31 @@ public class FetchResponse<T extends BaseRecords> extends AbstractResponse {
     private static <T extends BaseRecords> FetchResponseData toMessage(int throttleTimeMs, Errors error,
                                                                        Iterator<Map.Entry<TopicPartition, PartitionData<T>>> partIterator,
                                                                        int sessionId) {
-        FetchResponseData message = new FetchResponseData();
-        message.setThrottleTimeMs(throttleTimeMs);
-        message.setErrorCode(error.code());
-        message.setSessionId(sessionId);
-
         List<FetchResponseData.FetchableTopicResponse> topicResponseList = new ArrayList<>();
-        List<FetchRequest.TopicAndPartitionData<PartitionData<T>>> topicsData =
-                FetchRequest.TopicAndPartitionData.batchByTopic(partIterator);
-        topicsData.forEach(partitionDataTopicAndPartitionData -> {
-            List<FetchResponseData.FetchablePartitionResponse> partitionResponses = new ArrayList<>();
-            partitionDataTopicAndPartitionData.partitions.forEach((partitionId, partitionData) -> {
-                // Since PartitionData alone doesn't know the partition ID, we set it here
-                partitionData.partitionResponse.setPartition(partitionId);
+        partIterator.forEachRemaining(entry -> {
+            PartitionData<T> partitionData = entry.getValue();
+            // Since PartitionData alone doesn't know the partition ID, we set it here
+            partitionData.partitionResponse.setPartition(entry.getKey().partition());
+            // We have to keep the order of input topic-partition. Hence, we batch the partitions only if the last
+            // batch is in the same topic group.
+            FetchResponseData.FetchableTopicResponse previousTopic = topicResponseList.isEmpty() ? null
+                    : topicResponseList.get(topicResponseList.size() - 1);
+            if (previousTopic != null && previousTopic.topic().equals(entry.getKey().topic()))
+                previousTopic.partitionResponses().add(partitionData.partitionResponse);
+            else {
+                List<FetchResponseData.FetchablePartitionResponse> partitionResponses = new ArrayList<>();
                 partitionResponses.add(partitionData.partitionResponse);
-            });
-            topicResponseList.add(new FetchResponseData.FetchableTopicResponse()
-                .setTopic(partitionDataTopicAndPartitionData.topic)
-                .setPartitionResponses(partitionResponses));
+                topicResponseList.add(new FetchResponseData.FetchableTopicResponse()
+                        .setTopic(entry.getKey().topic())
+                        .setPartitionResponses(partitionResponses));
+            }
         });
 
-        message.setResponses(topicResponseList);
-        return message;
+        return new FetchResponseData()
+                .setThrottleTimeMs(throttleTimeMs)
+                .setErrorCode(error.code())
+                .setSessionId(sessionId)
+                .setResponses(topicResponseList);
     }
 
     /**

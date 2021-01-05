@@ -44,6 +44,7 @@ import org.apache.kafka.common.requests.JoinGroupRequest;
 import org.apache.kafka.common.requests.JoinGroupResponse;
 import org.apache.kafka.common.requests.LeaveGroupRequest;
 import org.apache.kafka.common.requests.LeaveGroupResponse;
+import org.apache.kafka.common.requests.RequestTestUtils;
 import org.apache.kafka.common.requests.SyncGroupRequest;
 import org.apache.kafka.common.requests.SyncGroupResponse;
 import org.apache.kafka.common.utils.LogContext;
@@ -128,7 +129,7 @@ public class AbstractCoordinatorTest {
                                                         HEARTBEAT_INTERVAL_MS);
         metrics = new Metrics(mockTime);
 
-        mockClient.updateMetadata(TestUtils.metadataUpdateWith(1, emptyMap()));
+        mockClient.updateMetadata(RequestTestUtils.metadataUpdateWith(1, emptyMap()));
         this.node = metadata.fetch().nodes().get(0);
         this.coordinatorNode = new Node(Integer.MAX_VALUE - node.id(), node.host(), node.port());
 
@@ -248,9 +249,9 @@ public class AbstractCoordinatorTest {
         mockClient.prepareResponse(groupCoordinatorResponse(node, Errors.NONE));
         mockClient.prepareResponse(groupCoordinatorResponse(node, Errors.NONE));
 
-        // blackout the coordinator for 10 milliseconds to simulate a disconnect.
+        // cut out the coordinator for 10 milliseconds to simulate a disconnect.
         // after backing off, we should be able to connect.
-        mockClient.blackout(coordinatorNode, 10L);
+        mockClient.backoff(coordinatorNode, 10L);
 
         long initialTime = mockTime.milliseconds();
         coordinator.ensureCoordinatorReady(mockTime.timer(Long.MAX_VALUE));
@@ -446,8 +447,8 @@ public class AbstractCoordinatorTest {
             coordinator.resetGenerationOnLeaveGroup();
 
             SyncGroupRequest syncGroupRequest = (SyncGroupRequest) body;
-            return syncGroupRequest.data.protocolType().equals(PROTOCOL_TYPE)
-                       && syncGroupRequest.data.protocolName().equals(PROTOCOL_NAME);
+            return syncGroupRequest.data().protocolType().equals(PROTOCOL_TYPE)
+                       && syncGroupRequest.data().protocolName().equals(PROTOCOL_NAME);
         }, syncGroupResponse(Errors.NONE, PROTOCOL_TYPE, wrongProtocolName));
 
         // let the retry to complete successfully to break out of the while loop
@@ -466,8 +467,8 @@ public class AbstractCoordinatorTest {
             }
 
             SyncGroupRequest syncGroupRequest = (SyncGroupRequest) body;
-            return syncGroupRequest.data.protocolType().equals(PROTOCOL_TYPE)
-                    && syncGroupRequest.data.protocolName().equals(PROTOCOL_NAME);
+            return syncGroupRequest.data().protocolType().equals(PROTOCOL_TYPE)
+                    && syncGroupRequest.data().protocolName().equals(PROTOCOL_NAME);
         }, syncGroupResponse(Errors.NONE, PROTOCOL_TYPE, PROTOCOL_NAME));
 
         // No exception shall be thrown as the generation is reset.
@@ -496,8 +497,8 @@ public class AbstractCoordinatorTest {
                 return false;
             }
             SyncGroupRequest syncGroupRequest = (SyncGroupRequest) body;
-            return syncGroupRequest.data.protocolType().equals(PROTOCOL_TYPE)
-                && syncGroupRequest.data.protocolName().equals(PROTOCOL_NAME);
+            return syncGroupRequest.data().protocolType().equals(PROTOCOL_TYPE)
+                && syncGroupRequest.data().protocolName().equals(PROTOCOL_NAME);
         }, syncGroupResponse(Errors.NONE, syncGroupResponseProtocolType, syncGroupResponseProtocolName));
 
         return coordinator.joinGroupIfNeeded(mockTime.timer(5000L));
@@ -823,6 +824,35 @@ public class AbstractCoordinatorTest {
     }
 
     @Test
+    public void testJoinGroupRequestWithRebalanceInProgress() {
+        setupCoordinator();
+        mockClient.prepareResponse(groupCoordinatorResponse(node, Errors.NONE));
+        coordinator.ensureCoordinatorReady(mockTime.timer(0));
+
+        mockClient.prepareResponse(
+            joinGroupFollowerResponse(defaultGeneration, memberId, JoinGroupRequest.UNKNOWN_MEMBER_ID, Errors.REBALANCE_IN_PROGRESS));
+
+        RequestFuture<ByteBuffer> future = coordinator.sendJoinGroupRequest();
+
+        assertTrue(consumerClient.poll(future, mockTime.timer(REQUEST_TIMEOUT_MS)));
+        assertTrue(future.exception().getClass().isInstance(Errors.REBALANCE_IN_PROGRESS.exception()));
+        assertEquals(Errors.REBALANCE_IN_PROGRESS.message(), future.exception().getMessage());
+        assertTrue(coordinator.rejoinNeededOrPending());
+
+        // make sure we'll retry on next poll
+        assertEquals(0, coordinator.onJoinPrepareInvokes);
+        assertEquals(0, coordinator.onJoinCompleteInvokes);
+
+        mockClient.prepareResponse(joinGroupFollowerResponse(defaultGeneration, memberId, JoinGroupRequest.UNKNOWN_MEMBER_ID, Errors.NONE));
+        mockClient.prepareResponse(syncGroupResponse(Errors.NONE));
+
+        coordinator.ensureActiveGroup();
+        // make sure both onJoinPrepare and onJoinComplete got called
+        assertEquals(1, coordinator.onJoinPrepareInvokes);
+        assertEquals(1, coordinator.onJoinCompleteInvokes);
+    }
+
+    @Test
     public void testLeaveGroupSentWithGroupInstanceIdUnSet() {
         checkLeaveGroupRequestSent(Optional.empty());
         checkLeaveGroupRequestSent(Optional.of("groupInstanceId"));
@@ -976,7 +1006,7 @@ public class AbstractCoordinatorTest {
     public void testLookupCoordinator() {
         setupCoordinator();
 
-        mockClient.blackout(node, 50);
+        mockClient.backoff(node, 50);
         RequestFuture<Void> noBrokersAvailableFuture = coordinator.lookupCoordinator();
         assertTrue("Failed future expected", noBrokersAvailableFuture.failed());
         mockTime.sleep(50);

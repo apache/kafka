@@ -33,6 +33,7 @@ import static org.junit.Assert.assertTrue;
  * Demonstrate the use of {@link MockProcessorContext} for testing the {@link Transformer} in the {@link WordCountTransformerDemo}.
  */
 public class WordCountTransformerTest {
+    @SuppressWarnings("deprecation") // TODO will be fixed in KAFKA-10437
     @Test
     public void test() {
         final MockProcessorContext context = new MockProcessorContext();

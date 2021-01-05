@@ -408,7 +408,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
                 firstException.compareAndSet(null, invokePartitionsRevoked(revokedPartitions));
 
                 // If revoked any partitions, need to re-join the group afterwards
-                log.debug("Need to revoke partitions {} and re-join the group", revokedPartitions);
+                log.info("Need to revoke partitions {} and re-join the group", revokedPartitions);
                 requestRejoin();
             }
         }
@@ -1208,7 +1208,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
                         } else if (error == Errors.COORDINATOR_NOT_AVAILABLE
                                 || error == Errors.NOT_COORDINATOR
                                 || error == Errors.REQUEST_TIMED_OUT) {
-                            markCoordinatorUnknown();
+                            markCoordinatorUnknown(error);
                             future.raise(error);
                             return;
                         } else if (error == Errors.FENCED_INSTANCE_ID) {
@@ -1311,7 +1311,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
                     future.raise(error);
                 } else if (error == Errors.NOT_COORDINATOR) {
                     // re-discover the coordinator and retry
-                    markCoordinatorUnknown();
+                    markCoordinatorUnknown(error);
                     future.raise(error);
                 } else if (error == Errors.GROUP_AUTHORIZATION_FAILED) {
                     future.raise(GroupAuthorizationException.forGroupId(rebalanceConfig.groupId));

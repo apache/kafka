@@ -24,6 +24,7 @@ import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.{ConcurrentLinkedQueue, TimeUnit}
 
 import kafka.utils.{CommandDefaultOptions, CommandLineUtils}
+import kafka.utils.Implicits._
 import kafka.utils.Logging
 import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.clients.{ApiVersions, ClientDnsLookup, ClientResponse, ClientUtils, CommonClientConfigs, Metadata, NetworkClient, NodeApiVersions}
@@ -59,7 +60,7 @@ object BrokerApiVersionsCommand {
     val adminClient = createAdminClient(opts)
     adminClient.awaitBrokers()
     val brokerMap = adminClient.listAllBrokerVersionInfo()
-    brokerMap.foreach { case (broker, versionInfoOrError) =>
+    brokerMap.forKeyValue { (broker, versionInfoOrError) =>
       versionInfoOrError match {
         case Success(v) => out.print(s"${broker} -> ${v.toString(true)}\n")
         case Failure(v) => out.print(s"${broker} -> ERROR: ${v}\n")

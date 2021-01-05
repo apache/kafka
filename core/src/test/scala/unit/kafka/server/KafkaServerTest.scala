@@ -17,13 +17,14 @@
 
 package kafka.server
 
-import java.util.Properties
+import kafka.api.ApiVersion
 
+import java.util.Properties
 import kafka.utils.TestUtils
 import kafka.zk.ZooKeeperTestHarness
 import org.apache.zookeeper.client.ZKClientConfig
 import org.junit.Test
-import org.junit.Assert.assertEquals
+import org.junit.Assert.{assertEquals, fail}
 import org.scalatest.Assertions.intercept
 
 class KafkaServerTest extends ZooKeeperTestHarness {
@@ -100,6 +101,32 @@ class KafkaServerTest extends ZooKeeperTestHarness {
     }
     KafkaConfig.ZkSslConfigToSystemPropertyMap.keys.foreach(kafkaProp =>
       assertEquals(zkClientValueToExpect(kafkaProp), zkClientConfig.get.getProperty(KafkaConfig.ZkSslConfigToSystemPropertyMap(kafkaProp))))
+  }
+
+  @Test
+  def testZkIsrManager(): Unit = {
+    val props = TestUtils.createBrokerConfigs(1, zkConnect).head
+    props.put(KafkaConfig.InterBrokerProtocolVersionProp, "2.7-IV1")
+
+    val server = TestUtils.createServer(KafkaConfig.fromProps(props))
+    server.replicaManager.alterIsrManager match {
+      case _: ZkIsrManager =>
+      case _ => fail("Should use ZK for ISR manager in versions before 2.7-IV2")
+    }
+    server.shutdown()
+  }
+
+  @Test
+  def testAlterIsrManager(): Unit = {
+    val props = TestUtils.createBrokerConfigs(1, zkConnect).head
+    props.put(KafkaConfig.InterBrokerProtocolVersionProp, ApiVersion.latestVersion.toString)
+
+    val server = TestUtils.createServer(KafkaConfig.fromProps(props))
+    server.replicaManager.alterIsrManager match {
+      case _: DefaultAlterIsrManager =>
+      case _ => fail("Should use AlterIsr for ISR manager in versions after 2.7-IV2")
+    }
+    server.shutdown()
   }
 
   def createServer(nodeId: Int, hostName: String, port: Int): KafkaServer = {

@@ -23,7 +23,7 @@ import kafka.server.checkpoints.LeaderEpochCheckpoint
 import kafka.utils.CoreUtils._
 import kafka.utils.Logging
 import org.apache.kafka.common.TopicPartition
-import org.apache.kafka.common.requests.EpochEndOffset._
+import org.apache.kafka.common.requests.OffsetsForLeaderEpochResponse.{UNDEFINED_EPOCH, UNDEFINED_EPOCH_OFFSET}
 
 import scala.collection.{Seq, mutable}
 import scala.jdk.CollectionConverters._
@@ -154,6 +154,12 @@ class LeaderEpochFileCache(topicPartition: TopicPartition,
    */
   def latestEpoch: Option[Int] = {
     latestEntry.map(_.epoch)
+  }
+
+  def previousEpoch: Option[Int] = {
+    inReadLock(lock) {
+      latestEntry.flatMap(entry => Option(epochs.lowerEntry(entry.epoch))).map(_.getKey)
+    }
   }
 
   /**

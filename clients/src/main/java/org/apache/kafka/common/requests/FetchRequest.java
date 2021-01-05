@@ -19,12 +19,9 @@ package org.apache.kafka.common.requests;
 import org.apache.kafka.common.IsolationLevel;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.message.FetchRequestData;
-import org.apache.kafka.common.message.RequestHeaderData;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.protocol.ObjectSerializationCache;
-import org.apache.kafka.common.protocol.types.Struct;
 import org.apache.kafka.common.record.MemoryRecords;
 import org.apache.kafka.common.record.RecordBatch;
 import org.apache.kafka.common.utils.Utils;
@@ -32,7 +29,6 @@ import org.apache.kafka.common.utils.Utils;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Collections;
-import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -54,10 +50,6 @@ public class FetchRequest extends AbstractRequest {
     private final Map<TopicPartition, PartitionData> fetchData;
     private final List<TopicPartition> toForget;
     private final FetchMetadata metadata;
-
-    public FetchRequestData data() {
-        return data;
-    }
 
     public static final class PartitionData {
         public final long fetchOffset;
@@ -149,30 +141,6 @@ public class FetchRequest extends AbstractRequest {
             )
         );
         return result;
-    }
-
-    static final class TopicAndPartitionData<T> {
-        public final String topic;
-        public final LinkedHashMap<Integer, T> partitions;
-
-        public TopicAndPartitionData(String topic) {
-            this.topic = topic;
-            this.partitions = new LinkedHashMap<>();
-        }
-
-        public static <T> List<TopicAndPartitionData<T>> batchByTopic(Iterator<Map.Entry<TopicPartition, T>> iter) {
-            List<TopicAndPartitionData<T>> topics = new ArrayList<>();
-            while (iter.hasNext()) {
-                Map.Entry<TopicPartition, T> topicEntry = iter.next();
-                String topic = topicEntry.getKey().topic();
-                int partition = topicEntry.getKey().partition();
-                T partitionData = topicEntry.getValue();
-                if (topics.isEmpty() || !topics.get(topics.size() - 1).topic.equals(topic))
-                    topics.add(new TopicAndPartitionData<T>(topic));
-                topics.get(topics.size() - 1).partitions.put(partition, partitionData);
-            }
-            return topics;
-        }
     }
 
     public static class Builder extends AbstractRequest.Builder<FetchRequest> {
@@ -378,34 +346,12 @@ public class FetchRequest extends AbstractRequest {
         return data.rackId();
     }
 
-    @Override
-    public ByteBuffer serialize(RequestHeader header) {
-        // Unlike the custom FetchResponse#toSend, we don't include the buffer size here. This buffer is passed
-        // to a NetworkSend which adds the length value in the eventual serialization
-
-        ObjectSerializationCache cache = new ObjectSerializationCache();
-        RequestHeaderData requestHeaderData = header.data();
-
-        int headerSize = requestHeaderData.size(cache, header.headerVersion());
-        int bodySize = data.size(cache, header.apiVersion());
-
-        ByteBuffer buffer = ByteBuffer.allocate(headerSize + bodySize);
-        ByteBufferAccessor writer = new ByteBufferAccessor(buffer);
-
-        requestHeaderData.write(writer, cache, header.headerVersion());
-        data.write(writer, cache, header.apiVersion());
-
-        buffer.rewind();
-        return buffer;
-    }
-
-    // For testing
     public static FetchRequest parse(ByteBuffer buffer, short version) {
-        return new FetchRequest(new FetchRequestData(ApiKeys.FETCH.parseRequest(version, buffer), version), version);
+        return new FetchRequest(new FetchRequestData(new ByteBufferAccessor(buffer), version), version);
     }
 
     @Override
-    protected Struct toStruct() {
-        return data.toStruct(version());
+    public FetchRequestData data() {
+        return data;
     }
 }

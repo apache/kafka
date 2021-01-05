@@ -19,6 +19,7 @@ package org.apache.kafka.common.utils;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.test.TestUtils;
 import org.junit.Test;
+import org.junit.function.ThrowingRunnable;
 import org.mockito.stubbing.OngoingStubbing;
 
 import java.io.Closeable;
@@ -32,6 +33,11 @@ import java.nio.channels.FileChannel;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.StandardOpenOption;
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
+import java.time.format.DateTimeFormatterBuilder;
+import java.time.temporal.ChronoField;
+import java.time.temporal.ChronoUnit;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashSet;
@@ -58,6 +64,7 @@ import static org.apache.kafka.common.utils.Utils.mkSet;
 import static org.apache.kafka.common.utils.Utils.murmur2;
 import static org.apache.kafka.common.utils.Utils.union;
 import static org.apache.kafka.common.utils.Utils.validHostPattern;
+import static org.hamcrest.CoreMatchers.containsString;
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
@@ -74,6 +81,9 @@ import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import java.text.ParseException;
+import java.text.SimpleDateFormat;
+import java.util.Date;
 
 public class UtilsTest {
 
@@ -784,4 +794,69 @@ public class UtilsTest {
         assertEquals(msg, exception.get().getMessage());
         assertEquals(1, count.get());
     }
+
+    @Test
+    public void shouldAcceptValidDateFormats() throws ParseException {
+        //check valid formats
+        invokeGetDateTimeMethod(new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS"));
+        invokeGetDateTimeMethod(new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSSZ"));
+        invokeGetDateTimeMethod(new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSSX"));
+        invokeGetDateTimeMethod(new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSSXX"));
+        invokeGetDateTimeMethod(new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSSXXX"));
+    }
+
+    @Test
+    public void shouldThrowOnInvalidDateFormatOrNullTimestamp() {
+        //check some invalid formats
+        // test null timestamp
+        assertThat(assertThrows(IllegalArgumentException.class, () -> {
+            Utils.getDateTime(null);
+        }).getMessage(), containsString("Error parsing timestamp with null value"));
+
+        // test pattern: yyyy-MM-dd'T'HH:mm:ss.X
+        checkExceptionForGetDateTimeMethod(() -> {
+            invokeGetDateTimeMethod(new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.X"));
+        });
+
+        // test pattern: yyyy-MM-dd HH:mm:ss
+        assertThat(assertThrows(ParseException.class, () -> {
+            invokeGetDateTimeMethod(new SimpleDateFormat("yyyy-MM-dd HH:mm:ss"));
+        }).getMessage(), containsString("It does not contain a 'T' according to ISO8601 format"));
+
+        // KAFKA-10685: use DateTimeFormatter generate micro/nano second timestamp
+        final DateTimeFormatter formatter = new DateTimeFormatterBuilder()
+            .appendPattern("yyyy-MM-dd'T'HH:mm:ss")
+            .appendFraction(ChronoField.NANO_OF_SECOND, 0, 9, true)
+            .toFormatter();
+        final LocalDateTime timestampWithNanoSeconds = LocalDateTime.of(2020, 11, 9, 12, 34, 56, 123456789);
+        final LocalDateTime timestampWithMicroSeconds = timestampWithNanoSeconds.truncatedTo(ChronoUnit.MICROS);
+        final LocalDateTime timestampWithSeconds = timestampWithNanoSeconds.truncatedTo(ChronoUnit.SECONDS);
+
+        // test pattern: yyyy-MM-dd'T'HH:mm:ss.SSSSSSSSS
+        checkExceptionForGetDateTimeMethod(() -> {
+            Utils.getDateTime(formatter.format(timestampWithNanoSeconds));
+        });
+
+        // test pattern: yyyy-MM-dd'T'HH:mm:ss.SSSSSS
+        checkExceptionForGetDateTimeMethod(() -> {
+            Utils.getDateTime(formatter.format(timestampWithMicroSeconds));
+        });
+
+        // test pattern: yyyy-MM-dd'T'HH:mm:ss
+        checkExceptionForGetDateTimeMethod(() -> {
+            Utils.getDateTime(formatter.format(timestampWithSeconds));
+        });
+    }
+
+    private void checkExceptionForGetDateTimeMethod(ThrowingRunnable runnable) {
+        assertThat(assertThrows(ParseException.class, runnable)
+            .getMessage(), containsString("Unparseable date"));
+    }
+
+    private void invokeGetDateTimeMethod(final SimpleDateFormat format) throws ParseException {
+        final Date checkpoint = new Date();
+        final String formattedCheckpoint = format.format(checkpoint);
+        Utils.getDateTime(formattedCheckpoint);
+    }
+
 }

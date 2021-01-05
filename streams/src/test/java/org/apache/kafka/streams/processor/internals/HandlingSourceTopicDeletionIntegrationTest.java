@@ -68,6 +68,7 @@ public class HandlingSourceTopicDeletionIntegrationTest {
     }
 
     @Test
+    @Deprecated //A single thread should no longer die
     public void shouldThrowErrorAfterSourceTopicDeleted() throws InterruptedException {
         final StreamsBuilder builder = new StreamsBuilder();
         builder.stream(INPUT_TOPIC, Consumed.with(Serdes.Integer(), Serdes.String()))

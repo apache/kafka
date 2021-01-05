@@ -327,10 +327,12 @@ class DynamicBrokerConfigTest {
     EasyMock.replay(kafkaServer)
 
     props.put(KafkaConfig.ListenersProp, "PLAINTEXT://hostname:9092,SASL_PLAINTEXT://hostname:9093")
-    val newConfig = KafkaConfig(props)
+    new DynamicListenerConfig(kafkaServer).validateReconfiguration(KafkaConfig(props))
 
+    // it is illegal to update non-reconfiguable configs of existent listeners
+    props.put("listener.name.plaintext.you.should.not.pass", "failure")
     val dynamicListenerConfig = new DynamicListenerConfig(kafkaServer)
-    dynamicListenerConfig.validateReconfiguration(newConfig)
+    assertThrows(classOf[ConfigException], () => dynamicListenerConfig.validateReconfiguration(KafkaConfig(props)))
   }
 
   @Test
@@ -397,6 +399,33 @@ class DynamicBrokerConfigTest {
     newprops.put(KafkaConfig.NumIoThreadsProp, "10")
     newprops.put(KafkaConfig.BackgroundThreadsProp, "100")
     dynamicBrokerConfig.updateBrokerConfig(0, newprops)
+  }
+
+  @Test
+  def testImproperConfigsAreRemoved(): Unit = {
+    val props = TestUtils.createBrokerConfig(0, TestUtils.MockZkConnect)
+    val configs = KafkaConfig(props)
+
+    assertEquals(Defaults.MaxConnections, configs.maxConnections)
+    assertEquals(Defaults.MessageMaxBytes, configs.messageMaxBytes)
+
+    var newProps = new Properties()
+    newProps.put(KafkaConfig.MaxConnectionsProp, "9999")
+    newProps.put(KafkaConfig.MessageMaxBytesProp, "2222")
+
+    configs.dynamicConfig.updateDefaultConfig(newProps)
+    assertEquals(9999, configs.maxConnections)
+    assertEquals(2222, configs.messageMaxBytes)
+
+    newProps = new Properties()
+    newProps.put(KafkaConfig.MaxConnectionsProp, "INVALID_INT")
+    newProps.put(KafkaConfig.MessageMaxBytesProp, "1111")
+
+    configs.dynamicConfig.updateDefaultConfig(newProps)
+    // Invalid value should be skipped and reassigned as default value
+    assertEquals(Defaults.MaxConnections, configs.maxConnections)
+    // Even if One property is invalid, the below should get correctly updated.
+    assertEquals(1111, configs.messageMaxBytes)
   }
 }
 

@@ -49,7 +49,7 @@ public class StopReplicaResponseTest {
                 15, 20, 0, false, topicStates).build(version);
             StopReplicaResponse response = request
                 .getErrorResponse(0, Errors.CLUSTER_AUTHORIZATION_FAILED.exception());
-            assertEquals(Collections.singletonMap(Errors.CLUSTER_AUTHORIZATION_FAILED, 2),
+            assertEquals(Collections.singletonMap(Errors.CLUSTER_AUTHORIZATION_FAILED, 3),
                 response.errorCounts());
         }
     }
@@ -63,7 +63,7 @@ public class StopReplicaResponseTest {
         StopReplicaResponse response = new StopReplicaResponse(new StopReplicaResponseData()
             .setErrorCode(Errors.UNKNOWN_SERVER_ERROR.code())
             .setPartitionErrors(errors));
-        assertEquals(Collections.singletonMap(Errors.UNKNOWN_SERVER_ERROR, 2), response.errorCounts());
+        assertEquals(Collections.singletonMap(Errors.UNKNOWN_SERVER_ERROR, 3), response.errorCounts());
     }
 
     @Test
@@ -77,7 +77,7 @@ public class StopReplicaResponseTest {
             .setPartitionErrors(errors));
         Map<Errors, Integer> errorCounts = response.errorCounts();
         assertEquals(2, errorCounts.size());
-        assertEquals(1, errorCounts.get(Errors.NONE).intValue());
+        assertEquals(2, errorCounts.get(Errors.NONE).intValue());
         assertEquals(1, errorCounts.get(Errors.CLUSTER_AUTHORIZATION_FAILED).intValue());
     }
 

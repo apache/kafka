@@ -164,9 +164,9 @@ public class InternalTopicManager {
                                 "Error message was: {}", topicName, cause.toString());
                             throw new StreamsException(String.format("Could not create topic %s.", topicName), cause);
                         }
-                    } catch (final TimeoutException retryableException) {
+                    } catch (final TimeoutException retriableException) {
                         log.error("Creating topic {} timed out.\n" +
-                            "Error message was: {}", topicName, retryableException.toString());
+                            "Error message was: {}", topicName, retriableException.toString());
                     }
                 }
             }
@@ -234,10 +234,10 @@ public class InternalTopicManager {
                         "Error message was: {}", topicName, cause.toString());
                     throw new StreamsException(String.format("Could not create topic %s.", topicName), cause);
                 }
-            } catch (final TimeoutException retryableException) {
+            } catch (final TimeoutException retriableException) {
                 tempUnknownTopics.add(topicName);
                 log.debug("Describing topic {} (to get number of partitions) timed out.\n" +
-                    "Error message was: {}", topicName, retryableException.toString());
+                    "Error message was: {}", topicName, retriableException.toString());
             }
         }
 

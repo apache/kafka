@@ -21,7 +21,7 @@ import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.streams.KeyValue;
-import org.apache.kafka.streams.processor.ProcessorContext;
+import org.apache.kafka.streams.processor.StateStoreContext;
 import org.apache.kafka.streams.processor.internals.testutil.LogCaptureAppender;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
@@ -51,7 +51,7 @@ import static org.junit.Assert.fail;
 
 public abstract class AbstractKeyValueStoreTest {
 
-    protected abstract <K, V> KeyValueStore<K, V> createKeyValueStore(final ProcessorContext context);
+    protected abstract <K, V> KeyValueStore<K, V> createKeyValueStore(final StateStoreContext context);
 
     protected InternalMockProcessorContext context;
     protected KeyValueStore<Integer, String> store;

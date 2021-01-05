@@ -17,32 +17,27 @@
 
 package kafka.server
 
-import java.util.concurrent.CountDownLatch
+import java.util.concurrent.{CountDownLatch, TimeoutException}
 
 import kafka.zk.{FeatureZNode, FeatureZNodeStatus, ZkVersion, ZooKeeperTestHarness}
 import kafka.utils.TestUtils
 import org.apache.kafka.common.utils.Exit
 import org.apache.kafka.common.feature.{Features, FinalizedVersionRange, SupportedVersionRange}
+import org.apache.kafka.test.{TestUtils => JTestUtils}
 import org.junit.Assert.{assertEquals, assertFalse, assertNotEquals, assertThrows, assertTrue}
-import org.junit.{Before, Test}
+import org.junit.Test
 
-import scala.concurrent.TimeoutException
 import scala.jdk.CollectionConverters._
 
 class FinalizedFeatureChangeListenerTest extends ZooKeeperTestHarness {
-  @Before
-  override def setUp(): Unit = {
-    super.setUp()
-    FinalizedFeatureCache.clear()
-    SupportedFeatures.clear()
-  }
 
-  private def createSupportedFeatures(): Features[SupportedVersionRange] = {
+  private def createBrokerFeatures(): BrokerFeatures = {
     val supportedFeaturesMap = Map[String, SupportedVersionRange](
       "feature_1" -> new SupportedVersionRange(1, 4),
       "feature_2" -> new SupportedVersionRange(1, 3))
-    SupportedFeatures.update(Features.supportedFeatures(supportedFeaturesMap.asJava))
-    SupportedFeatures.get
+    val brokerFeatures = BrokerFeatures.createDefault()
+    brokerFeatures.setSupportedFeatures(Features.supportedFeatures(supportedFeaturesMap.asJava))
+    brokerFeatures
   }
 
   private def createFinalizedFeatures(): FinalizedFeaturesAndEpoch = {
@@ -56,20 +51,23 @@ class FinalizedFeatureChangeListenerTest extends ZooKeeperTestHarness {
     FinalizedFeaturesAndEpoch(finalizedFeatures, version)
   }
 
-  private def createListener(expectedCacheContent: Option[FinalizedFeaturesAndEpoch]): FinalizedFeatureChangeListener = {
-    val listener = new FinalizedFeatureChangeListener(zkClient)
+  private def createListener(
+    cache: FinalizedFeatureCache,
+    expectedCacheContent: Option[FinalizedFeaturesAndEpoch]
+  ): FinalizedFeatureChangeListener = {
+    val listener = new FinalizedFeatureChangeListener(cache, zkClient)
     assertFalse(listener.isListenerInitiated)
-    assertTrue(FinalizedFeatureCache.isEmpty)
+    assertTrue(cache.isEmpty)
     listener.initOrThrow(15000)
     assertTrue(listener.isListenerInitiated)
     if (expectedCacheContent.isDefined) {
-      val mayBeNewCacheContent = FinalizedFeatureCache.get
+      val mayBeNewCacheContent = cache.get
       assertFalse(mayBeNewCacheContent.isEmpty)
       val newCacheContent = mayBeNewCacheContent.get
       assertEquals(expectedCacheContent.get.features, newCacheContent.features)
       assertEquals(expectedCacheContent.get.epoch, newCacheContent.epoch)
     } else {
-      val mayBeNewCacheContent = FinalizedFeatureCache.get
+      val mayBeNewCacheContent = cache.get
       assertTrue(mayBeNewCacheContent.isEmpty)
     }
     listener
@@ -78,25 +76,42 @@ class FinalizedFeatureChangeListenerTest extends ZooKeeperTestHarness {
   /**
    * Tests that the listener can be initialized, and that it can listen to ZK notifications
    * successfully from an "Enabled" FeatureZNode (the ZK data has no feature incompatibilities).
+   * Particularly the test checks if multiple notifications can be processed in ZK
+   * (i.e. whether the FeatureZNode watch can be re-established).
    */
   @Test
   def testInitSuccessAndNotificationSuccess(): Unit = {
-    createSupportedFeatures()
     val initialFinalizedFeatures = createFinalizedFeatures()
-    val listener = createListener(Some(initialFinalizedFeatures))
+    val brokerFeatures = createBrokerFeatures()
+    val cache = new FinalizedFeatureCache(brokerFeatures)
+    val listener = createListener(cache, Some(initialFinalizedFeatures))
 
-    val updatedFinalizedFeaturesMap = Map[String, FinalizedVersionRange](
-      "feature_1" -> new FinalizedVersionRange(2, 4))
-    val updatedFinalizedFeatures = Features.finalizedFeatures(updatedFinalizedFeaturesMap.asJava)
-    zkClient.updateFeatureZNode(FeatureZNode(FeatureZNodeStatus.Enabled, updatedFinalizedFeatures))
-    val (mayBeFeatureZNodeNewBytes, updatedVersion) = zkClient.getDataAndVersion(FeatureZNode.path)
-    assertNotEquals(updatedVersion, ZkVersion.UnknownVersion)
-    assertFalse(mayBeFeatureZNodeNewBytes.isEmpty)
-    assertTrue(updatedVersion > initialFinalizedFeatures.epoch)
-    TestUtils.waitUntilTrue(() => {
-      FinalizedFeatureCache.get.get.equals(FinalizedFeaturesAndEpoch(updatedFinalizedFeatures, updatedVersion))
-    }, "Timed out waiting for FinalizedFeatureCache to be updated with new features")
-    assertTrue(listener.isListenerInitiated)
+    def updateAndCheckCache(finalizedFeatures: Features[FinalizedVersionRange]): Unit = {
+      zkClient.updateFeatureZNode(FeatureZNode(FeatureZNodeStatus.Enabled, finalizedFeatures))
+      val (mayBeFeatureZNodeNewBytes, updatedVersion) = zkClient.getDataAndVersion(FeatureZNode.path)
+      assertNotEquals(updatedVersion, ZkVersion.UnknownVersion)
+      assertFalse(mayBeFeatureZNodeNewBytes.isEmpty)
+      assertTrue(updatedVersion > initialFinalizedFeatures.epoch)
+
+      cache.waitUntilEpochOrThrow(updatedVersion, JTestUtils.DEFAULT_MAX_WAIT_MS)
+      assertEquals(FinalizedFeaturesAndEpoch(finalizedFeatures, updatedVersion), cache.get.get)
+      assertTrue(listener.isListenerInitiated)
+    }
+
+    // Check if the write succeeds and a ZK notification is received that causes the feature cache
+    // to be populated.
+    updateAndCheckCache(
+      Features.finalizedFeatures(
+        Map[String, FinalizedVersionRange](
+        "feature_1" -> new FinalizedVersionRange(2, 4)).asJava))
+    // Check if second write succeeds and a ZK notification is again received that causes the cache
+    // to be populated. This check is needed to verify that the watch on the FeatureZNode was
+    // re-established after the notification was received due to the first write above.
+    updateAndCheckCache(
+      Features.finalizedFeatures(
+        Map[String, FinalizedVersionRange](
+          "feature_1" -> new FinalizedVersionRange(2, 4),
+          "feature_2" -> new FinalizedVersionRange(1, 3)).asJava))
   }
 
   /**
@@ -105,16 +120,17 @@ class FinalizedFeatureChangeListenerTest extends ZooKeeperTestHarness {
    */
   @Test
   def testFeatureZNodeDeleteNotificationProcessing(): Unit = {
-    createSupportedFeatures()
+    val brokerFeatures = createBrokerFeatures()
+    val cache = new FinalizedFeatureCache(brokerFeatures)
     val initialFinalizedFeatures = createFinalizedFeatures()
-    val listener = createListener(Some(initialFinalizedFeatures))
+    val listener = createListener(cache, Some(initialFinalizedFeatures))
 
     zkClient.deleteFeatureZNode()
     val (mayBeFeatureZNodeDeletedBytes, deletedVersion) = zkClient.getDataAndVersion(FeatureZNode.path)
     assertEquals(deletedVersion, ZkVersion.UnknownVersion)
     assertTrue(mayBeFeatureZNodeDeletedBytes.isEmpty)
     TestUtils.waitUntilTrue(() => {
-      FinalizedFeatureCache.isEmpty
+      cache.isEmpty
     }, "Timed out waiting for FinalizedFeatureCache to become empty")
     assertTrue(listener.isListenerInitiated)
   }
@@ -125,9 +141,34 @@ class FinalizedFeatureChangeListenerTest extends ZooKeeperTestHarness {
    */
   @Test
   def testFeatureZNodeDisablingNotificationProcessing(): Unit = {
-    createSupportedFeatures()
+    val brokerFeatures = createBrokerFeatures()
+    val cache = new FinalizedFeatureCache(brokerFeatures)
     val initialFinalizedFeatures = createFinalizedFeatures()
-    val listener = createListener(Some(initialFinalizedFeatures))
+
+    val updatedFinalizedFeaturesMap = Map[String, FinalizedVersionRange]()
+    val updatedFinalizedFeatures = Features.finalizedFeatures(updatedFinalizedFeaturesMap.asJava)
+    zkClient.updateFeatureZNode(FeatureZNode(FeatureZNodeStatus.Disabled, updatedFinalizedFeatures))
+    val (mayBeFeatureZNodeNewBytes, updatedVersion) = zkClient.getDataAndVersion(FeatureZNode.path)
+    assertNotEquals(updatedVersion, ZkVersion.UnknownVersion)
+    assertFalse(mayBeFeatureZNodeNewBytes.isEmpty)
+    assertTrue(updatedVersion > initialFinalizedFeatures.epoch)
+    assertTrue(cache.get.isEmpty)
+  }
+
+  /**
+   * Tests that the wait operation on the cache fails (as expected) when an epoch can never be
+   * reached. Also tests that the wait operation on the cache succeeds when an epoch is expected to
+   * be reached.
+   */
+  @Test
+  def testCacheUpdateWaitFailsForUnreachableVersion(): Unit = {
+    val initialFinalizedFeatures = createFinalizedFeatures()
+    val cache = new FinalizedFeatureCache(createBrokerFeatures())
+    val listener = createListener(cache, Some(initialFinalizedFeatures))
+
+    assertThrows(
+      classOf[TimeoutException],
+      () => cache.waitUntilEpochOrThrow(initialFinalizedFeatures.epoch + 1, JTestUtils.DEFAULT_MAX_WAIT_MS))
 
     val updatedFinalizedFeaturesMap = Map[String, FinalizedVersionRange]()
     val updatedFinalizedFeatures = Features.finalizedFeatures(updatedFinalizedFeaturesMap.asJava)
@@ -137,9 +178,10 @@ class FinalizedFeatureChangeListenerTest extends ZooKeeperTestHarness {
     assertFalse(mayBeFeatureZNodeNewBytes.isEmpty)
     assertTrue(updatedVersion > initialFinalizedFeatures.epoch)
 
-    TestUtils.waitUntilTrue(() => {
-      FinalizedFeatureCache.get.isEmpty
-    }, "Timed out waiting for FinalizedFeatureCache to become empty")
+    assertThrows(
+      classOf[TimeoutException],
+      () => cache.waitUntilEpochOrThrow(updatedVersion, JTestUtils.DEFAULT_MAX_WAIT_MS))
+    assertTrue(cache.get.isEmpty)
     assertTrue(listener.isListenerInitiated)
   }
 
@@ -149,7 +191,8 @@ class FinalizedFeatureChangeListenerTest extends ZooKeeperTestHarness {
    */
   @Test
   def testInitFailureDueToFeatureIncompatibility(): Unit = {
-    createSupportedFeatures()
+    val brokerFeatures = createBrokerFeatures()
+    val cache = new FinalizedFeatureCache(brokerFeatures)
 
     val incompatibleFinalizedFeaturesMap = Map[String, FinalizedVersionRange](
       "feature_1" -> new FinalizedVersionRange(2, 5))
@@ -162,14 +205,14 @@ class FinalizedFeatureChangeListenerTest extends ZooKeeperTestHarness {
     val exitLatch = new CountDownLatch(1)
     Exit.setExitProcedure((_, _) => exitLatch.countDown())
     try {
-      val listener = new FinalizedFeatureChangeListener(zkClient)
+      val listener = new FinalizedFeatureChangeListener(cache, zkClient)
       assertFalse(listener.isListenerInitiated)
-      assertTrue(FinalizedFeatureCache.isEmpty)
+      assertTrue(cache.isEmpty)
       assertThrows(classOf[TimeoutException], () => listener.initOrThrow(5000))
       exitLatch.await()
       assertFalse(listener.isListenerInitiated)
       assertTrue(listener.isListenerDead)
-      assertTrue(FinalizedFeatureCache.isEmpty)
+      assertTrue(cache.isEmpty)
     } finally {
       Exit.resetExitProcedure()
     }
@@ -180,7 +223,9 @@ class FinalizedFeatureChangeListenerTest extends ZooKeeperTestHarness {
    */
   @Test
   def testInitFailureDueToInvalidWaitTime(): Unit = {
-    val listener = new FinalizedFeatureChangeListener(zkClient)
+    val brokerFeatures = createBrokerFeatures()
+    val cache = new FinalizedFeatureCache(brokerFeatures)
+    val listener = new FinalizedFeatureChangeListener(cache, zkClient)
     assertThrows(classOf[IllegalArgumentException], () => listener.initOrThrow(0))
     assertThrows(classOf[IllegalArgumentException], () => listener.initOrThrow(-1))
   }
@@ -191,14 +236,17 @@ class FinalizedFeatureChangeListenerTest extends ZooKeeperTestHarness {
    */
   @Test
   def testNotificationFailureDueToFeatureIncompatibility(): Unit = {
-    createSupportedFeatures()
+    val brokerFeatures = createBrokerFeatures()
+    val cache = new FinalizedFeatureCache(brokerFeatures)
     val initialFinalizedFeatures = createFinalizedFeatures()
-    val listener = createListener(Some(initialFinalizedFeatures))
+    val listener = createListener(cache, Some(initialFinalizedFeatures))
 
     val exitLatch = new CountDownLatch(1)
     Exit.setExitProcedure((_, _) => exitLatch.countDown())
     val incompatibleFinalizedFeaturesMap = Map[String, FinalizedVersionRange](
-      "feature_1" -> new FinalizedVersionRange(2, 5))
+      "feature_1" -> new FinalizedVersionRange(
+        brokerFeatures.supportedFeatures.get("feature_1").min(),
+        (brokerFeatures.supportedFeatures.get("feature_1").max() + 1).asInstanceOf[Short]))
     val incompatibleFinalizedFeatures = Features.finalizedFeatures(incompatibleFinalizedFeaturesMap.asJava)
     zkClient.updateFeatureZNode(FeatureZNode(FeatureZNodeStatus.Enabled, incompatibleFinalizedFeatures))
     val (mayBeFeatureZNodeIncompatibleBytes, updatedVersion) = zkClient.getDataAndVersion(FeatureZNode.path)
@@ -216,7 +264,7 @@ class FinalizedFeatureChangeListenerTest extends ZooKeeperTestHarness {
         listener.isListenerDead &&
         // Make sure the cache contents are as expected, and, the incompatible features were not
         // applied.
-        FinalizedFeatureCache.get.get.equals(initialFinalizedFeatures)
+        cache.get.get.equals(initialFinalizedFeatures)
       }, "Timed out waiting for listener death and FinalizedFeatureCache to be updated")
     } finally {
       Exit.resetExitProcedure()

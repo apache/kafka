@@ -234,6 +234,17 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
     protected abstract Map<String, String> config(String connName);
 
     @Override
+    public void connectorConfig(String connName, Callback<Map<String, String>> callback) {
+        // Subset of connectorInfo, so piggy back on that implementation
+        connectorInfo(connName, (error, result) -> {
+            if (error != null)
+                callback.onCompletion(error, null);
+            else
+                callback.onCompletion(null, result.config());
+        });
+    }
+
+    @Override
     public Collection<String> connectors() {
         return configBackingStore.snapshot().connectors();
     }
@@ -502,8 +513,8 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
             String configName = configValue.name();
             configValueMap.put(configName, configValue);
             if (!configKeys.containsKey(configName)) {
-                configValue.addErrorMessage("Configuration is not defined: " + configName);
                 configInfoList.add(new ConfigInfo(null, convertConfigValue(configValue, null)));
+                errorCount += configValue.errorMessages().size();
             }
         }
 
