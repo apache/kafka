@@ -266,8 +266,16 @@ class MetadataCache(brokerId: Int) extends Logging {
 
   def getClusterMetadata(clusterId: String, listenerName: ListenerName): Cluster = {
     val snapshot = metadataSnapshot
-    val nodes = snapshot.aliveNodes.map { case (id, nodes) => (id, nodes.get(listenerName).orNull) }
-    def node(id: Integer): Node = nodes.get(id.toLong).orNull
+    val nodes = snapshot.aliveNodes.flatMap { case (id, nodesByListener) =>
+      nodesByListener.get(listenerName).map { node =>
+        id -> node
+      }
+    }
+
+    def node(id: Integer): Node = {
+      nodes.getOrElse(id.toLong, new Node(id, "", -1))
+    }
+
     val partitions = getAllPartitions(snapshot)
       .filter { case (_, state) => state.leader != LeaderAndIsr.LeaderDuringDelete }
       .map { case (tp, state) =>
@@ -278,7 +286,7 @@ class MetadataCache(brokerId: Int) extends Logging {
       }
     val unauthorizedTopics = Collections.emptySet[String]
     val internalTopics = getAllTopics(snapshot).filter(Topic.isInternal).asJava
-    new Cluster(clusterId, nodes.values.filter(_ != null).toBuffer.asJava,
+    new Cluster(clusterId, nodes.values.toBuffer.asJava,
       partitions.toBuffer.asJava,
       unauthorizedTopics, internalTopics,
       snapshot.controllerId.map(id => node(id)).orNull)
