@@ -29,7 +29,6 @@ import org.apache.kafka.common.utils.Utils;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Collections;
-import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -142,30 +141,6 @@ public class FetchRequest extends AbstractRequest {
             )
         );
         return result;
-    }
-
-    static final class TopicAndPartitionData<T> {
-        public final String topic;
-        public final LinkedHashMap<Integer, T> partitions;
-
-        public TopicAndPartitionData(String topic) {
-            this.topic = topic;
-            this.partitions = new LinkedHashMap<>();
-        }
-
-        public static <T> List<TopicAndPartitionData<T>> batchByTopic(Iterator<Map.Entry<TopicPartition, T>> iter) {
-            List<TopicAndPartitionData<T>> topics = new ArrayList<>();
-            while (iter.hasNext()) {
-                Map.Entry<TopicPartition, T> topicEntry = iter.next();
-                String topic = topicEntry.getKey().topic();
-                int partition = topicEntry.getKey().partition();
-                T partitionData = topicEntry.getValue();
-                if (topics.isEmpty() || !topics.get(topics.size() - 1).topic.equals(topic))
-                    topics.add(new TopicAndPartitionData<T>(topic));
-                topics.get(topics.size() - 1).partitions.put(partition, partitionData);
-            }
-            return topics;
-        }
     }
 
     public static class Builder extends AbstractRequest.Builder<FetchRequest> {
