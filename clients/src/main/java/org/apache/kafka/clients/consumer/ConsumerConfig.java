@@ -112,10 +112,10 @@ public class ConsumerConfig extends AbstractConfig {
         "partition ownership amongst consumer instances when group management is used. Available options are:" +
         "<ul>" +
         "<li><code>org.apache.kafka.clients.consumer.RangeAssignor</code>: The default assignor, which works on a per-topic basis.</li>" +
-        "<li><code>org.apache.kafka.clients.consumer.RoundRobinAssignor</code>: It works for round robin assignments of partitions.</li>" +
-        "<li><code>org.apache.kafka.clients.consumer.StickyAssignor</code>: It guarantees an assignment that is " +
-        "as balanced as possible and preserved as many existing assignment as possible when a reassignment occurs.</li>" +
-        "<li><code>org.apache.kafka.clients.consumer.CooperativeStickyAssignor</code>: It follows the same StickyAssignor " +
+        "<li><code>org.apache.kafka.clients.consumer.RoundRobinAssignor</code>: Assigns partitions to consumers in a round-robin fashion.</li>" +
+        "<li><code>org.apache.kafka.clients.consumer.StickyAssignor</code>: Guarantees an assignment that is " +
+        "maximally balanced while preserving as many existing partition assignments as possible.</li>" +
+        "<li><code>org.apache.kafka.clients.consumer.CooperativeStickyAssignor</code>: Follows the same StickyAssignor " +
         "logic, but allows for cooperative rebalancing.</li>" +
         "</ul>" +
         "<p>Implementing the <code>org.apache.kafka.clients.consumer.ConsumerPartitionAssignor</code> " +
