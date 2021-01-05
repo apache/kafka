@@ -16,11 +16,11 @@
  */
 package org.apache.kafka.common.record;
 
+import org.apache.kafka.common.network.TransferableChannel;
 import org.apache.kafka.common.utils.AbstractIterator;
 import org.apache.kafka.common.utils.Time;
 
 import java.io.IOException;
-import java.nio.channels.GatheringByteChannel;
 import java.util.Iterator;
 
 
@@ -64,7 +64,7 @@ public interface Records extends BaseRecords {
      * @return The number of bytes actually written
      * @throws IOException For any IO errors
      */
-    long writeTo(GatheringByteChannel channel, long position, int length) throws IOException;
+    long writeTo(TransferableChannel channel, long position, int length) throws IOException;
 
     /**
      * Get the record batches. Note that the signature allows subclasses

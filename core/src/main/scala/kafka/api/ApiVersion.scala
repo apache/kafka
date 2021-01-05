@@ -111,6 +111,8 @@ object ApiVersion {
     KAFKA_2_7_IV2,
     // Flexible versioning on ListOffsets, WriteTxnMarkers and OffsetsForLeaderEpoch. Also adds topic IDs (KIP-516)
     KAFKA_2_8_IV0,
+    // Introduced topic IDs to LeaderAndIsr and UpdateMetadata requests/responses (KIP-516)
+    KAFKA_2_8_IV1
   )
 
   // Map keys are the union of the short and full versions
@@ -129,6 +131,8 @@ object ApiVersion {
   }
 
   val latestVersion: ApiVersion = allVersions.last
+
+  def isTruncationOnFetchSupported(version: ApiVersion): Boolean = version >= KAFKA_2_7_IV1
 
   /**
    * Return the minimum `ApiVersion` that supports `RecordVersion`.
@@ -189,6 +193,8 @@ sealed trait ApiVersion extends Ordered[ApiVersion] {
   def shortVersion: String
   def recordVersion: RecordVersion
   def id: Int
+
+  def isAlterIsrSupported: Boolean = this >= KAFKA_2_7_IV2
 
   override def compare(that: ApiVersion): Int =
     ApiVersion.orderingByVersion.compare(this, that)
@@ -432,6 +438,14 @@ case object KAFKA_2_8_IV0 extends DefaultApiVersion {
   val recordVersion = RecordVersion.V2
   val id: Int = 31
 }
+
+case object KAFKA_2_8_IV1 extends DefaultApiVersion {
+  val shortVersion: String = "2.8"
+  val subVersion = "IV1"
+  val recordVersion = RecordVersion.V2
+  val id: Int = 32
+}
+
 
 object ApiVersionValidator extends Validator {
 

@@ -61,6 +61,7 @@ RUN mkdir -p "/opt/kafka-2.3.1" && chmod a+rw /opt/kafka-2.3.1 && curl -s "$KAFK
 RUN mkdir -p "/opt/kafka-2.4.1" && chmod a+rw /opt/kafka-2.4.1 && curl -s "$KAFKA_MIRROR/kafka_2.12-2.4.1.tgz" | tar xz --strip-components=1 -C "/opt/kafka-2.4.1"
 RUN mkdir -p "/opt/kafka-2.5.1" && chmod a+rw /opt/kafka-2.5.1 && curl -s "$KAFKA_MIRROR/kafka_2.12-2.5.1.tgz" | tar xz --strip-components=1 -C "/opt/kafka-2.5.1"
 RUN mkdir -p "/opt/kafka-2.6.0" && chmod a+rw /opt/kafka-2.6.0 && curl -s "$KAFKA_MIRROR/kafka_2.12-2.6.0.tgz" | tar xz --strip-components=1 -C "/opt/kafka-2.6.0"
+RUN mkdir -p "/opt/kafka-2.7.0" && chmod a+rw /opt/kafka-2.7.0 && curl -s "$KAFKA_MIRROR/kafka_2.12-2.7.0.tgz" | tar xz --strip-components=1 -C "/opt/kafka-2.7.0"
 
 # Streams test dependencies
 RUN curl -s "$KAFKA_MIRROR/kafka-streams-0.10.0.1-test.jar" -o /opt/kafka-0.10.0.1/libs/kafka-streams-0.10.0.1-test.jar
@@ -76,17 +77,29 @@ RUN curl -s "$KAFKA_MIRROR/kafka-streams-2.3.1-test.jar" -o /opt/kafka-2.3.1/lib
 RUN curl -s "$KAFKA_MIRROR/kafka-streams-2.4.1-test.jar" -o /opt/kafka-2.4.1/libs/kafka-streams-2.4.1-test.jar
 RUN curl -s "$KAFKA_MIRROR/kafka-streams-2.5.1-test.jar" -o /opt/kafka-2.5.1/libs/kafka-streams-2.5.1-test.jar
 RUN curl -s "$KAFKA_MIRROR/kafka-streams-2.6.0-test.jar" -o /opt/kafka-2.6.0/libs/kafka-streams-2.6.0-test.jar
+RUN curl -s "$KAFKA_MIRROR/kafka-streams-2.7.0-test.jar" -o /opt/kafka-2.6.0/libs/kafka-streams-2.7.0-test.jar
 
 # The version of Kibosh to use for testing.
 # If you update this, also update vagrant/base.sh
 ARG KIBOSH_VERSION="8841dd392e6fbf02986e2fb1f1ebf04df344b65a"
+
+# Aligning uid inside/outside docker enables containers to modify files of kafka source (mounted in /opt/kafka-dev")
+# By default, the outside user id is 1000 (UID_MIN). The known exception in QA is travis which gives non-1000 id.
+ARG UID="1000"
 
 # Install Kibosh
 RUN apt-get install fuse
 RUN cd /opt && git clone -q  https://github.com/confluentinc/kibosh.git && cd "/opt/kibosh" && git reset --hard $KIBOSH_VERSION && mkdir "/opt/kibosh/build" && cd "/opt/kibosh/build" && ../configure && make -j 2
 
 # Set up the ducker user.
-RUN useradd -ms /bin/bash ducker && mkdir -p /home/ducker/ && rsync -aiq /root/.ssh/ /home/ducker/.ssh && chown -R ducker /home/ducker/ /mnt/ /var/log/ && echo "PATH=$(runuser -l ducker -c 'echo $PATH'):$JAVA_HOME/bin" >> /home/ducker/.ssh/environment && echo 'PATH=$PATH:'"$JAVA_HOME/bin" >> /home/ducker/.profile && echo 'ducker ALL=(ALL) NOPASSWD: ALL' >> /etc/sudoers
+RUN useradd -u $UID -ms /bin/bash ducker \
+  && mkdir -p /home/ducker/ \
+  && rsync -aiq /root/.ssh/ /home/ducker/.ssh \
+  && chown -R ducker /home/ducker/ /mnt/ /var/log/ \
+  && echo "PATH=$(runuser -l ducker -c 'echo $PATH'):$JAVA_HOME/bin" >> /home/ducker/.ssh/environment \
+  && echo 'PATH=$PATH:'"$JAVA_HOME/bin" >> /home/ducker/.profile \
+  && echo 'ducker ALL=(ALL) NOPASSWD: ALL' >> /etc/sudoers
+
 USER ducker
 
 CMD sudo service ssh start && tail -f /dev/null

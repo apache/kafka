@@ -489,19 +489,7 @@ public class StreamsResetter {
     private void resetByDuration(final Consumer<byte[], byte[]> client,
                                  final Set<TopicPartition> inputTopicPartitions,
                                  final Duration duration) {
-        final Instant now = Instant.now();
-        final long timestamp = now.minus(duration).toEpochMilli();
-
-        final Map<TopicPartition, Long> topicPartitionsAndTimes = new HashMap<>(inputTopicPartitions.size());
-        for (final TopicPartition topicPartition : inputTopicPartitions) {
-            topicPartitionsAndTimes.put(topicPartition, timestamp);
-        }
-
-        final Map<TopicPartition, OffsetAndTimestamp> topicPartitionsAndOffset = client.offsetsForTimes(topicPartitionsAndTimes);
-
-        for (final TopicPartition topicPartition : inputTopicPartitions) {
-            client.seek(topicPartition, topicPartitionsAndOffset.get(topicPartition).offset());
-        }
+        resetToDatetime(client, inputTopicPartitions, Instant.now().minus(duration).toEpochMilli());
     }
 
     private void resetToDatetime(final Consumer<byte[], byte[]> client,

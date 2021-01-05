@@ -24,16 +24,17 @@ import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.concurrent.atomic.AtomicInteger;
 
 public class MockNetworkChannel implements NetworkChannel {
-    private final AtomicInteger requestIdCounter;
-    private List<RaftMessage> sendQueue = new ArrayList<>();
-    private List<RaftMessage> receiveQueue = new ArrayList<>();
-    private Map<Integer, InetSocketAddress> addressCache = new HashMap<>();
+    private final AtomicInteger correlationIdCounter;
+    private final List<RaftRequest.Outbound> sendQueue = new ArrayList<>();
+    private final Map<Integer, RaftRequest.Outbound> awaitingResponse = new HashMap<>();
+    private final Map<Integer, InetSocketAddress> addressCache = new HashMap<>();
 
-    public MockNetworkChannel(AtomicInteger requestIdCounter) {
-        this.requestIdCounter = requestIdCounter;
+    public MockNetworkChannel(AtomicInteger correlationIdCounter) {
+        this.correlationIdCounter = correlationIdCounter;
     }
 
     public MockNetworkChannel() {
@@ -42,82 +43,34 @@ public class MockNetworkChannel implements NetworkChannel {
 
     @Override
     public int newCorrelationId() {
-        return requestIdCounter.getAndIncrement();
+        return correlationIdCounter.getAndIncrement();
     }
 
     @Override
-    public void send(RaftMessage message) {
-        if (message instanceof RaftRequest.Outbound) {
-            RaftRequest.Outbound request = (RaftRequest.Outbound) message;
-            if (!addressCache.containsKey(request.destinationId())) {
-                throw new IllegalArgumentException("Attempted to send to destination " +
-                    request.destinationId() + ", but its address is not yet known");
-            }
+    public void send(RaftRequest.Outbound request) {
+        if (!addressCache.containsKey(request.destinationId())) {
+            throw new IllegalArgumentException("Attempted to send to destination " +
+                request.destinationId() + ", but its address is not yet known");
         }
-        sendQueue.add(message);
+        sendQueue.add(request);
     }
-
-    @Override
-    public List<RaftMessage> receive(long timeoutMs) {
-        List<RaftMessage> messages = receiveQueue;
-        receiveQueue = new ArrayList<>();
-        return messages;
-    }
-
-    @Override
-    public void wakeup() {}
 
     @Override
     public void updateEndpoint(int id, InetSocketAddress address) {
         addressCache.put(id, address);
     }
 
-    public RaftRequest.Outbound drainNextRequest(int destinationId) {
-        Iterator<RaftMessage> iterator = sendQueue.iterator();
-        while (iterator.hasNext()) {
-            RaftMessage message = iterator.next();
-            if (message instanceof RaftRequest.Outbound) {
-                RaftRequest.Outbound request = (RaftRequest.Outbound) message;
-                if (request.destinationId() == destinationId) {
-                    iterator.remove();
-                    return request;
-                }
-            }
-        }
-        return null;
+    public List<RaftRequest.Outbound> drainSendQueue() {
+        return drainSentRequests(Optional.empty());
     }
 
-    public RaftResponse.Outbound drainNextResponse(int correlationId) {
-        Iterator<RaftMessage> iterator = sendQueue.iterator();
-        while (iterator.hasNext()) {
-            RaftMessage message = iterator.next();
-            if (message.correlationId() == correlationId) {
-                if (!(message instanceof RaftResponse.Outbound)) {
-                    throw new IllegalStateException("Message " + message +
-                        " is not an outbound response as we expected");
-                }
-
-                RaftResponse.Outbound response = (RaftResponse.Outbound) message;
-                iterator.remove();
-                return response;
-            }
-        }
-        return null;
-    }
-
-    public List<RaftMessage> drainSendQueue() {
-        List<RaftMessage> messages = sendQueue;
-        sendQueue = new ArrayList<>();
-        return messages;
-    }
-
-    public List<RaftRequest.Outbound> drainSentRequests(ApiKeys apiKey) {
+    public List<RaftRequest.Outbound> drainSentRequests(Optional<ApiKeys> apiKeyFilter) {
         List<RaftRequest.Outbound> requests = new ArrayList<>();
-        Iterator<RaftMessage> iterator = sendQueue.iterator();
+        Iterator<RaftRequest.Outbound> iterator = sendQueue.iterator();
         while (iterator.hasNext()) {
-            RaftMessage message = iterator.next();
-            if (message instanceof RaftRequest.Outbound && message.data().apiKey() == apiKey.id) {
-                RaftRequest.Outbound request = (RaftRequest.Outbound) message;
+            RaftRequest.Outbound request = iterator.next();
+            if (!apiKeyFilter.isPresent() || request.data().apiKey() == apiKeyFilter.get().id) {
+                awaitingResponse.put(request.correlationId, request);
                 requests.add(request);
                 iterator.remove();
             }
@@ -125,32 +78,17 @@ public class MockNetworkChannel implements NetworkChannel {
         return requests;
     }
 
-    public List<RaftResponse.Outbound> drainSentResponses(ApiKeys apiKey) {
-        List<RaftResponse.Outbound> responses = new ArrayList<>();
-        Iterator<RaftMessage> iterator = sendQueue.iterator();
-        while (iterator.hasNext()) {
-            RaftMessage message = iterator.next();
-            if (message instanceof RaftResponse.Outbound && message.data().apiKey() == apiKey.id) {
-                RaftResponse.Outbound response = (RaftResponse.Outbound) message;
-                responses.add(response);
-                iterator.remove();
-            }
-        }
-        return responses;
-    }
 
-
-    public boolean hasSentMessages() {
+    public boolean hasSentRequests() {
         return !sendQueue.isEmpty();
     }
 
-    public void mockReceive(RaftMessage message) {
-        receiveQueue.add(message);
+    public void mockReceive(RaftResponse.Inbound response) {
+        RaftRequest.Outbound request = awaitingResponse.get(response.correlationId);
+        if (request == null) {
+            throw new IllegalStateException("Received response for a request which is not being awaited");
+        }
+        request.completion.complete(response);
     }
 
-    void clear() {
-        sendQueue.clear();
-        receiveQueue.clear();
-        requestIdCounter.set(0);
-    }
 }

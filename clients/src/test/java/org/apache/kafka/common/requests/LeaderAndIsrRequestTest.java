@@ -18,6 +18,7 @@ package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.errors.ClusterAuthorizationException;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.message.LeaderAndIsrRequestData;
@@ -25,15 +26,16 @@ import org.apache.kafka.common.message.LeaderAndIsrRequestData.LeaderAndIsrLiveL
 import org.apache.kafka.common.message.LeaderAndIsrRequestData.LeaderAndIsrPartitionState;
 import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.protocol.MessageTestUtil;
 import org.apache.kafka.test.TestUtils;
 import org.junit.Test;
 
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.stream.StreamSupport;
@@ -51,19 +53,25 @@ public class LeaderAndIsrRequestTest {
     public void testUnsupportedVersion() {
         LeaderAndIsrRequest.Builder builder = new LeaderAndIsrRequest.Builder(
                 (short) (LEADER_AND_ISR.latestVersion() + 1), 0, 0, 0,
-                Collections.emptyList(), Collections.emptySet());
+                Collections.emptyList(), Collections.emptyMap(), Collections.emptySet());
         assertThrows(UnsupportedVersionException.class, builder::build);
     }
 
     @Test
     public void testGetErrorResponse() {
+        Uuid id = Uuid.randomUuid();
         for (short version = LEADER_AND_ISR.oldestVersion(); version < LEADER_AND_ISR.latestVersion(); version++) {
             LeaderAndIsrRequest.Builder builder = new LeaderAndIsrRequest.Builder(version, 0, 0, 0,
-                    Collections.emptyList(), Collections.emptySet());
+                    Collections.emptyList(), Collections.singletonMap("topic", id), Collections.emptySet());
             LeaderAndIsrRequest request = builder.build();
             LeaderAndIsrResponse response = request.getErrorResponse(0,
                     new ClusterAuthorizationException("Not authorized"));
             assertEquals(Errors.CLUSTER_AUTHORIZATION_FAILED, response.error());
+            if (version < 5) {
+                assertEquals(0, response.topics().size());
+            } else {
+                assertEquals(id, response.topics().get(0).topicId());
+            }
         }
     }
 
@@ -116,8 +124,13 @@ public class LeaderAndIsrRequestTest {
                 new Node(0, "host0", 9090),
                 new Node(1, "host1", 9091)
             );
+
+            Map<String, Uuid> topicIds = new HashMap<>();
+            topicIds.put("topic0", Uuid.randomUuid());
+            topicIds.put("topic1", Uuid.randomUuid());
+
             LeaderAndIsrRequest request = new LeaderAndIsrRequest.Builder(version, 1, 2, 3, partitionStates,
-                liveNodes).build();
+                topicIds, liveNodes).build();
 
             List<LeaderAndIsrLiveLeader> liveLeaders = liveNodes.stream().map(n -> new LeaderAndIsrLiveLeader()
                 .setBrokerId(n.id())
@@ -129,7 +142,7 @@ public class LeaderAndIsrRequestTest {
             assertEquals(2, request.controllerEpoch());
             assertEquals(3, request.brokerEpoch());
 
-            ByteBuffer byteBuffer = MessageTestUtil.messageToByteBuffer(request.data(), request.version());
+            ByteBuffer byteBuffer = request.serialize();
             LeaderAndIsrRequest deserializedRequest = new LeaderAndIsrRequest(new LeaderAndIsrRequestData(
                 new ByteBufferAccessor(byteBuffer), version), version);
 
@@ -141,7 +154,21 @@ public class LeaderAndIsrRequestTest {
                     .setRemovingReplicas(emptyList());
             }
 
+            // Prior to version 2, there were no TopicStates, so a map of Topic Ids from a list of
+            // TopicStates is an empty map.
+            if (version < 2) {
+                topicIds = new HashMap<>();
+            }
+
+            //  In versions 2-4 there are TopicStates, but no topicIds, so deserialized requests will have
+            //  Zero Uuids in place.
+            if (version > 1 && version < 5) {
+                topicIds.put("topic0", Uuid.ZERO_UUID);
+                topicIds.put("topic1", Uuid.ZERO_UUID);
+            }
+
             assertEquals(new HashSet<>(partitionStates), iterableToSet(deserializedRequest.partitionStates()));
+            assertEquals(topicIds, deserializedRequest.topicIds());
             assertEquals(liveLeaders, deserializedRequest.liveLeaders());
             assertEquals(1, request.controllerId());
             assertEquals(2, request.controllerEpoch());
@@ -153,20 +180,19 @@ public class LeaderAndIsrRequestTest {
     public void testTopicPartitionGroupingSizeReduction() {
         Set<TopicPartition> tps = TestUtils.generateRandomTopicPartitions(10, 10);
         List<LeaderAndIsrPartitionState> partitionStates = new ArrayList<>();
+        Map<String, Uuid> topicIds = new HashMap<>();
         for (TopicPartition tp : tps) {
             partitionStates.add(new LeaderAndIsrPartitionState()
                 .setTopicName(tp.topic())
                 .setPartitionIndex(tp.partition()));
+            topicIds.put(tp.topic(), Uuid.randomUuid());
         }
         LeaderAndIsrRequest.Builder builder = new LeaderAndIsrRequest.Builder((short) 2, 0, 0, 0,
-            partitionStates, Collections.emptySet());
+            partitionStates, topicIds, Collections.emptySet());
 
         LeaderAndIsrRequest v2 = builder.build((short) 2);
         LeaderAndIsrRequest v1 = builder.build((short) 1);
-        int size2 = MessageTestUtil.messageSize(v2.data(), v2.version());
-        int size1 = MessageTestUtil.messageSize(v1.data(), v1.version());
-
-        assertTrue("Expected v2 < v1: v2=" + size2 + ", v1=" + size1, size2 < size1);
+        assertTrue("Expected v2 < v1: v2=" + v2.sizeInBytes() + ", v1=" + v1.sizeInBytes(), v2.sizeInBytes() < v1.sizeInBytes());
     }
 
     private <T> Set<T> iterableToSet(Iterable<T> iterable) {

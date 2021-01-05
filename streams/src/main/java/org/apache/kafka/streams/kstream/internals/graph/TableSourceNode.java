@@ -34,7 +34,7 @@ import java.util.Collections;
  * Used to represent either a KTable source or a GlobalKTable source. A boolean flag is used to indicate if this represents a GlobalKTable a {@link
  * org.apache.kafka.streams.kstream.GlobalKTable}
  */
-public class TableSourceNode<K, V> extends StreamSourceNode<K, V> {
+public class TableSourceNode<K, V> extends SourceGraphNode<K, V> {
 
     private final MaterializedInternal<K, V, ?> materializedInternal;
     private final ProcessorParameters<K, V, ?, ?> processorParameters;

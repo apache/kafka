@@ -17,8 +17,9 @@
 package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.message.ProduceRequestData;
-import org.apache.kafka.common.protocol.types.Field;
-import org.apache.kafka.common.protocol.types.Struct;
+import org.apache.kafka.common.protocol.ByteBufferAccessor;
+import org.apache.kafka.common.protocol.Message;
+import org.apache.kafka.common.protocol.ObjectSerializationCache;
 import org.apache.kafka.common.record.BaseRecords;
 import org.apache.kafka.common.record.RecordBatch;
 import org.apache.kafka.common.record.Records;
@@ -32,26 +33,9 @@ public final class RequestUtils {
 
     private RequestUtils() {}
 
-    static void setLeaderEpochIfExists(Struct struct, Field.Int32 leaderEpochField, Optional<Integer> leaderEpoch) {
-        struct.setIfExists(leaderEpochField, leaderEpoch.orElse(RecordBatch.NO_PARTITION_LEADER_EPOCH));
-    }
-
-    static Optional<Integer> getLeaderEpoch(Struct struct, Field.Int32 leaderEpochField) {
-        int leaderEpoch = struct.getOrElse(leaderEpochField, RecordBatch.NO_PARTITION_LEADER_EPOCH);
-        return getLeaderEpoch(leaderEpoch);
-    }
-
-    static Optional<Integer> getLeaderEpoch(int leaderEpoch) {
+    public static Optional<Integer> getLeaderEpoch(int leaderEpoch) {
         return leaderEpoch == RecordBatch.NO_PARTITION_LEADER_EPOCH ?
             Optional.empty() : Optional.of(leaderEpoch);
-    }
-
-    public static ByteBuffer serialize(Struct headerStruct, Struct bodyStruct) {
-        ByteBuffer buffer = ByteBuffer.allocate(headerStruct.sizeOf() + bodyStruct.sizeOf());
-        headerStruct.writeTo(buffer);
-        bodyStruct.writeTo(buffer);
-        buffer.rewind();
-        return buffer;
     }
 
     // visible for testing
@@ -72,7 +56,7 @@ public final class RequestUtils {
     public static AbstractMap.SimpleEntry<Boolean, Boolean> flags(ProduceRequest request) {
         boolean hasIdempotentRecords = false;
         boolean hasTransactionalRecords = false;
-        for (ProduceRequestData.TopicProduceData tpd : request.dataOrException().topicData()) {
+        for (ProduceRequestData.TopicProduceData tpd : request.data().topicData()) {
             for (ProduceRequestData.PartitionProduceData ppd : tpd.partitionData()) {
                 BaseRecords records = ppd.records();
                 if (records instanceof Records) {
@@ -89,5 +73,24 @@ public final class RequestUtils {
             }
         }
         return new AbstractMap.SimpleEntry<>(hasIdempotentRecords, hasTransactionalRecords);
+    }
+
+    public static ByteBuffer serialize(
+        Message header,
+        short headerVersion,
+        Message apiMessage,
+        short apiVersion
+    ) {
+        ObjectSerializationCache cache = new ObjectSerializationCache();
+
+        int headerSize = header.size(cache, headerVersion);
+        int messageSize = apiMessage.size(cache, apiVersion);
+        ByteBufferAccessor writable = new ByteBufferAccessor(ByteBuffer.allocate(headerSize + messageSize));
+
+        header.write(writable, cache, headerVersion);
+        apiMessage.write(writable, cache, apiVersion);
+
+        writable.flip();
+        return writable.buffer();
     }
 }

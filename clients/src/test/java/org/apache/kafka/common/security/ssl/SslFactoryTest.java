@@ -35,6 +35,7 @@ import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.config.SecurityConfig;
 import org.apache.kafka.common.config.SslConfigs;
 import org.apache.kafka.common.config.types.Password;
+import org.apache.kafka.common.security.TestSecurityConfig;
 import org.apache.kafka.common.security.auth.SslEngineFactory;
 import org.apache.kafka.common.security.ssl.DefaultSslEngineFactory.FileBasedStore;
 import org.apache.kafka.common.security.ssl.DefaultSslEngineFactory.PemStore;
@@ -59,6 +60,7 @@ import static org.junit.Assert.assertSame;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 import java.security.Security;
+import java.util.Properties;
 
 @RunWith(value = Parameterized.class)
 public class SslFactoryTest {
@@ -318,34 +320,41 @@ public class SslFactoryTest {
 
     @Test
     public void testPemReconfiguration() throws Exception {
-        Map<String, Object> sslConfig = sslConfigsBuilder(Mode.SERVER)
+        Properties props = new Properties();
+        props.putAll(sslConfigsBuilder(Mode.SERVER)
                 .createNewTrustStore(null)
                 .usePem(true)
-                .build();
+                .build());
+        TestSecurityConfig sslConfig = new TestSecurityConfig(props);
+
         SslFactory sslFactory = new SslFactory(Mode.SERVER);
-        sslFactory.configure(sslConfig);
+        sslFactory.configure(sslConfig.values());
         SslEngineFactory sslEngineFactory = sslFactory.sslEngineFactory();
         assertNotNull("SslEngineFactory not created", sslEngineFactory);
 
-        sslConfig.put("some.config", "some.value");
-        sslFactory.reconfigure(sslConfig);
+        props.put("some.config", "some.value");
+        sslConfig = new TestSecurityConfig(props);
+        sslFactory.reconfigure(sslConfig.values());
         assertSame("SslEngineFactory recreated unnecessarily", sslEngineFactory, sslFactory.sslEngineFactory());
 
-        sslConfig.put(SslConfigs.SSL_KEYSTORE_KEY_CONFIG,
-                new Password(((Password) sslConfig.get(SslConfigs.SSL_KEYSTORE_KEY_CONFIG)).value() + " "));
-        sslFactory.reconfigure(sslConfig);
+        props.put(SslConfigs.SSL_KEYSTORE_KEY_CONFIG,
+                new Password(((Password) props.get(SslConfigs.SSL_KEYSTORE_KEY_CONFIG)).value() + " "));
+        sslConfig = new TestSecurityConfig(props);
+        sslFactory.reconfigure(sslConfig.values());
         assertNotSame("SslEngineFactory not recreated", sslEngineFactory, sslFactory.sslEngineFactory());
         sslEngineFactory = sslFactory.sslEngineFactory();
 
-        sslConfig.put(SslConfigs.SSL_KEYSTORE_CERTIFICATE_CHAIN_CONFIG,
-                new Password(((Password) sslConfig.get(SslConfigs.SSL_KEYSTORE_CERTIFICATE_CHAIN_CONFIG)).value() + " "));
-        sslFactory.reconfigure(sslConfig);
+        props.put(SslConfigs.SSL_KEYSTORE_CERTIFICATE_CHAIN_CONFIG,
+                new Password(((Password) props.get(SslConfigs.SSL_KEYSTORE_CERTIFICATE_CHAIN_CONFIG)).value() + " "));
+        sslConfig = new TestSecurityConfig(props);
+        sslFactory.reconfigure(sslConfig.values());
         assertNotSame("SslEngineFactory not recreated", sslEngineFactory, sslFactory.sslEngineFactory());
         sslEngineFactory = sslFactory.sslEngineFactory();
 
-        sslConfig.put(SslConfigs.SSL_TRUSTSTORE_CERTIFICATES_CONFIG,
-                new Password(((Password) sslConfig.get(SslConfigs.SSL_TRUSTSTORE_CERTIFICATES_CONFIG)).value() + " "));
-        sslFactory.reconfigure(sslConfig);
+        props.put(SslConfigs.SSL_TRUSTSTORE_CERTIFICATES_CONFIG,
+                new Password(((Password) props.get(SslConfigs.SSL_TRUSTSTORE_CERTIFICATES_CONFIG)).value() + " "));
+        sslConfig = new TestSecurityConfig(props);
+        sslFactory.reconfigure(sslConfig.values());
         assertNotSame("SslEngineFactory not recreated", sslEngineFactory, sslFactory.sslEngineFactory());
         sslEngineFactory = sslFactory.sslEngineFactory();
     }
@@ -519,6 +528,19 @@ public class SslFactoryTest {
         clientSslConfig.put(SslConfigs.SSL_ENGINE_FACTORY_CLASS_CONFIG, String.class);
         SslFactory sslFactory = new SslFactory(Mode.CLIENT);
         sslFactory.configure(clientSslConfig);
+    }
+
+    @Test
+    public void testUsedConfigs() throws IOException, GeneralSecurityException {
+        Map<String, Object> serverSslConfig = sslConfigsBuilder(Mode.SERVER)
+                .createNewTrustStore(File.createTempFile("truststore", ".jks"))
+                .useClientCert(false)
+                .build();
+        serverSslConfig.put(SslConfigs.SSL_ENGINE_FACTORY_CLASS_CONFIG, TestSslUtils.TestSslEngineFactory.class);
+        TestSecurityConfig securityConfig = new TestSecurityConfig(serverSslConfig);
+        SslFactory sslFactory = new SslFactory(Mode.SERVER);
+        sslFactory.configure(securityConfig.values());
+        assertFalse(securityConfig.unused().contains(SslConfigs.SSL_ENGINE_FACTORY_CLASS_CONFIG));
     }
 
     private KeyStore sslKeyStore(Map<String, Object> sslConfig) {
