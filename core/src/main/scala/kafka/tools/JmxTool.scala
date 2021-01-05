@@ -101,7 +101,7 @@ object JmxTool extends Logging {
         .defaultsTo(false)
     val waitOpt: OptionSpecBuilder = parser.accepts("wait",
       "Wait for requested JMX objects to become available before starting output. " +
-      "Only supported when the list of objects is non-empty and contains no object name patterns.")
+      "Each of the given names or patterns must select at least one MBean before reporting starts.")
     val helpOpt: OptionSpecBuilder = parser.accepts("help", "Print usage information.")
     if(args.length == 0)
       CommandLineUtils.printUsageAndDie(parser, "Dump JMX values to standard output.")
