@@ -29,7 +29,7 @@ import org.apache.kafka.common.message.OffsetForLeaderEpochResponseData.EpochEnd
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.protocol.Errors._
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
-import org.apache.kafka.common.record.{CompressionType, MemoryRecords, Records, SimpleRecord}
+import org.apache.kafka.common.record.{CompressionType, MemoryRecords, SimpleRecord}
 import org.apache.kafka.common.requests.FetchResponse
 import org.apache.kafka.common.requests.OffsetsForLeaderEpochResponse.{UNDEFINED_EPOCH, UNDEFINED_EPOCH_OFFSET}
 import org.apache.kafka.common.utils.SystemTime
@@ -533,10 +533,9 @@ class ReplicaFetcherThreadTest {
     assertEquals(1, mockNetwork.fetchCount)
     partitions.foreach { tp => assertEquals(Fetching, thread.fetchState(tp).get.state) }
 
-    def partitionData(divergingEpoch: FetchResponseData.EpochEndOffset): FetchResponse.PartitionData[Records] = {
-      new FetchResponse.PartitionData[Records](
-        new FetchResponseData.FetchablePartitionResponse()
-          .setErrorCode(Errors.NONE.code())
+    def partitionData(divergingEpoch: FetchResponseData.EpochEndOffset): FetchResponseData.FetchablePartitionResponse = {
+      new FetchResponseData.FetchablePartitionResponse()
+          .setErrorCode(Errors.NONE.code)
           .setHighWatermark(0)
           .setLastStableOffset(0)
           .setLogStartOffset(0)
@@ -544,7 +543,6 @@ class ReplicaFetcherThreadTest {
           .setRecordSet(MemoryRecords.EMPTY)
           .setPreferredReadReplica(FetchResponse.INVALID_PREFERRED_REPLICA_ID)
           .setDivergingEpoch(divergingEpoch)
-      )
     }
 
     // Loop 2 should truncate based on diverging epoch and continue to send fetch requests.
@@ -974,15 +972,14 @@ class ReplicaFetcherThreadTest {
 
     val records = MemoryRecords.withRecords(CompressionType.NONE,
       new SimpleRecord(1000, "foo".getBytes(StandardCharsets.UTF_8)))
-    val partitionData: thread.FetchData = new FetchResponse.PartitionData[Records](
-      new FetchResponseData.FetchablePartitionResponse()
-        .setErrorCode(Errors.NONE.code())
+    val partitionData: thread.FetchData = new FetchResponseData.FetchablePartitionResponse()
+        .setErrorCode(Errors.NONE.code)
         .setHighWatermark(0)
         .setLastStableOffset(0)
         .setLogStartOffset(0)
         .setAbortedTransactions(Collections.emptyList())
         .setRecordSet(records)
-        .setPreferredReadReplica(FetchResponse.INVALID_PREFERRED_REPLICA_ID))
+        .setPreferredReadReplica(FetchResponse.INVALID_PREFERRED_REPLICA_ID)
     thread.processPartitionData(t1p0, 0, partitionData)
 
     if (isReassigning)

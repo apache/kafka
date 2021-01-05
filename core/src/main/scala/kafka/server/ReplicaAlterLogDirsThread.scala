@@ -27,8 +27,6 @@ import org.apache.kafka.common.errors.KafkaStorageException
 import org.apache.kafka.common.message.FetchResponseData
 import org.apache.kafka.common.message.OffsetForLeaderEpochResponseData.EpochEndOffset
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
-import org.apache.kafka.common.record.Records
-import org.apache.kafka.common.requests.FetchResponse.PartitionData
 import org.apache.kafka.common.requests.OffsetsForLeaderEpochResponse.UNDEFINED_EPOCH
 import org.apache.kafka.common.requests.{FetchRequest, FetchResponse, RequestUtils}
 
@@ -75,21 +73,22 @@ class ReplicaAlterLogDirsThread(name: String,
   }
 
   def fetchFromLeader(fetchRequest: FetchRequest.Builder): Map[TopicPartition, FetchData] = {
-    var partitionData: Seq[(TopicPartition, FetchResponse.PartitionData[Records])] = null
+    var partitionData: Seq[(TopicPartition, FetchData)] = null
     val request = fetchRequest.build()
 
     def processResponseCallback(responsePartitionData: Seq[(TopicPartition, FetchPartitionData)]): Unit = {
       partitionData = responsePartitionData.map { case (tp, data) =>
         val abortedTransactions = data.abortedTransactions.map(_.asJava).orNull
         val lastStableOffset = data.lastStableOffset.getOrElse(FetchResponse.INVALID_LAST_STABLE_OFFSET)
-        tp -> new FetchResponse.PartitionData(new FetchResponseData.FetchablePartitionResponse()
-          .setErrorCode(data.error.code())
+        tp -> new FetchResponseData.FetchablePartitionResponse()
+          .setPartition(tp.partition)
+          .setErrorCode(data.error.code)
           .setHighWatermark(data.highWatermark)
           .setLastStableOffset(lastStableOffset)
           .setLogStartOffset(data.logStartOffset)
           .setAbortedTransactions(abortedTransactions)
           .setRecordSet(data.records)
-          .setPreferredReadReplica(FetchResponse.INVALID_PREFERRED_REPLICA_ID))
+          .setPreferredReadReplica(FetchResponse.INVALID_PREFERRED_REPLICA_ID)
       }
     }
 
@@ -114,10 +113,10 @@ class ReplicaAlterLogDirsThread(name: String,
   // process fetched data
   override def processPartitionData(topicPartition: TopicPartition,
                                     fetchOffset: Long,
-                                    partitionData: PartitionData[Records]): Option[LogAppendInfo] = {
+                                    partitionData: FetchResponseData.FetchablePartitionResponse): Option[LogAppendInfo] = {
     val partition = replicaMgr.nonOfflinePartition(topicPartition).get
     val futureLog = partition.futureLocalLogOrException
-    val records = toMemoryRecords(partitionData.records)
+    val records = toMemoryRecords(partitionData.recordSet)
 
     if (fetchOffset != futureLog.logEndOffset)
       throw new IllegalStateException("Offset mismatch for the future replica %s: fetched offset = %d, log end offset = %d.".format(

@@ -22,16 +22,13 @@ import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.ObjectSerializationCache;
-import org.apache.kafka.common.record.BaseRecords;
 import org.apache.kafka.common.record.MemoryRecords;
-import org.apache.kafka.common.record.Records;
 
 import java.nio.ByteBuffer;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
-import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.stream.Collectors;
@@ -58,49 +55,18 @@ import static org.apache.kafka.common.requests.FetchMetadata.INVALID_SESSION_ID;
  *     the fetch offset after the index lookup
  * - {@link Errors#UNKNOWN_SERVER_ERROR} For any unexpected errors
  */
-public class FetchResponse<T extends BaseRecords> extends AbstractResponse {
-
-    public static FetchResponseData.FetchablePartitionResponse partitionResponse(Errors error) {
-        return new FetchResponseData.FetchablePartitionResponse()
-                .setErrorCode(error.code())
-                .setHighWatermark(FetchResponse.INVALID_HIGH_WATERMARK)
-                .setLastStableOffset(FetchResponse.INVALID_LAST_STABLE_OFFSET)
-                .setLogStartOffset(FetchResponse.INVALID_LOG_START_OFFSET)
-                .setAbortedTransactions(null)
-                .setRecordSet(MemoryRecords.EMPTY)
-                .setPreferredReadReplica(FetchResponse.INVALID_PREFERRED_REPLICA_ID);
-    }
-
+public class FetchResponse extends AbstractResponse {
     public static final long INVALID_HIGH_WATERMARK = -1L;
     public static final long INVALID_LAST_STABLE_OFFSET = -1L;
     public static final long INVALID_LOG_START_OFFSET = -1L;
     public static final int INVALID_PREFERRED_REPLICA_ID = -1;
 
     private final FetchResponseData data;
-    private final LinkedHashMap<TopicPartition, PartitionData<T>> responseDataMap;
+    private final LinkedHashMap<TopicPartition, FetchResponseData.FetchablePartitionResponse> dataByTopicPartition;
 
     @Override
     public FetchResponseData data() {
         return data;
-    }
-
-    /**
-     * From version 3 or later, the entries in `responseData` should be in the same order as the entries in
-     * `FetchRequest.fetchData`.
-     *
-     * @param error             The top-level error code.
-     * @param responseData      The fetched data grouped by partition.
-     * @param throttleTimeMs    The time in milliseconds that the response was throttled
-     * @param sessionId         The fetch session id.
-     */
-    public FetchResponse(Errors error,
-                         LinkedHashMap<TopicPartition, PartitionData<T>> responseData,
-                         int throttleTimeMs,
-                         int sessionId) {
-        this(error, throttleTimeMs, sessionId, responseData.entrySet().stream().collect(Collectors.toMap(Map.Entry::getKey,
-            entry -> entry.getValue().partitionResponse, (o1, o2) -> {
-                throw new RuntimeException("this is impossible");
-            }, LinkedHashMap::new)));
     }
 
     public FetchResponse(Errors error,
@@ -108,31 +74,32 @@ public class FetchResponse<T extends BaseRecords> extends AbstractResponse {
                          int sessionId,
                          LinkedHashMap<TopicPartition, FetchResponseData.FetchablePartitionResponse> responseData) {
         this(new FetchResponseData()
-                .setSessionId(sessionId)
-                .setErrorCode(error.code())
-                .setThrottleTimeMs(throttleTimeMs)
-                .setResponses(responseData.entrySet().stream().map(entry -> new FetchResponseData.FetchableTopicResponse()
-                        .setTopic(entry.getKey().topic())
-                        .setPartitionResponses(Collections.singletonList(entry.getValue().setPartition(entry.getKey().partition()))))
-                        .collect(Collectors.toList())));
+            .setSessionId(sessionId)
+            .setErrorCode(error.code())
+            .setThrottleTimeMs(throttleTimeMs)
+            .setResponses(responseData.entrySet().stream().map(entry -> new FetchResponseData.FetchableTopicResponse()
+                .setTopic(entry.getKey().topic())
+                .setPartitionResponses(Collections.singletonList(entry.getValue().setPartition(entry.getKey().partition()))))
+                .collect(Collectors.toList())));
     }
 
     public FetchResponse(FetchResponseData fetchResponseData) {
         super(ApiKeys.FETCH);
         this.data = fetchResponseData;
-        this.responseDataMap = new LinkedHashMap<>();
+        this.dataByTopicPartition = new LinkedHashMap<>();
         fetchResponseData.responses().forEach(topicResponse ->
             topicResponse.partitionResponses().forEach(partitionResponse ->
-                responseDataMap.put(new TopicPartition(topicResponse.topic(), partitionResponse.partition()), new PartitionData<>(partitionResponse)))
+                dataByTopicPartition.put(new TopicPartition(topicResponse.topic(), partitionResponse.partition()), partitionResponse))
         );
+
     }
 
     public Errors error() {
         return Errors.forCode(data.errorCode());
     }
 
-    public LinkedHashMap<TopicPartition, PartitionData<T>> responseData() {
-        return responseDataMap;
+    public LinkedHashMap<TopicPartition, FetchResponseData.FetchablePartitionResponse> dataByTopicPartition() {
+        return dataByTopicPartition;
     }
 
     @Override
@@ -148,12 +115,12 @@ public class FetchResponse<T extends BaseRecords> extends AbstractResponse {
     public Map<Errors, Integer> errorCounts() {
         Map<Errors, Integer> errorCounts = new HashMap<>();
         updateErrorCounts(errorCounts, error());
-        responseDataMap.values().forEach(response -> updateErrorCounts(errorCounts, response.error()));
+        dataByTopicPartition.values().forEach(response -> updateErrorCounts(errorCounts, Errors.forCode(response.errorCode())));
         return errorCounts;
     }
 
-    public static FetchResponse<MemoryRecords> parse(ByteBuffer buffer, short version) {
-        return new FetchResponse<>(new FetchResponseData(new ByteBufferAccessor(buffer), version));
+    public static FetchResponse parse(ByteBuffer buffer, short version) {
+        return new FetchResponse(new FetchResponseData(new ByteBufferAccessor(buffer), version));
     }
 
     /**
@@ -163,14 +130,14 @@ public class FetchResponse<T extends BaseRecords> extends AbstractResponse {
      * @param partIterator  The partition iterator.
      * @return              The response size in bytes.
      */
-    public static <T extends Records> int sizeOf(short version,
-                                                 Iterator<Map.Entry<TopicPartition, PartitionData<T>>> partIterator) {
+    public static int sizeOf(short version,
+                             Iterator<Map.Entry<TopicPartition, FetchResponseData.FetchablePartitionResponse>> partIterator) {
         // Since the throttleTimeMs and metadata field sizes are constant and fixed, we can
         // use arbitrary values here without affecting the result.
-        LinkedHashMap<TopicPartition, PartitionData<T>> data = new LinkedHashMap<>();
+        LinkedHashMap<TopicPartition, FetchResponseData.FetchablePartitionResponse> data = new LinkedHashMap<>();
         partIterator.forEachRemaining(entry -> data.put(entry.getKey(), entry.getValue()));
         ObjectSerializationCache cache = new ObjectSerializationCache();
-        return 4 + new FetchResponse<>(Errors.NONE, data, 0, INVALID_SESSION_ID).data.size(cache, version);
+        return 4 + new FetchResponse(Errors.NONE, 0, INVALID_SESSION_ID, data).data.size(cache, version);
     }
 
     @Override
@@ -178,77 +145,25 @@ public class FetchResponse<T extends BaseRecords> extends AbstractResponse {
         return version >= 8;
     }
 
+    public static Optional<FetchResponseData.EpochEndOffset> divergingEpoch(FetchResponseData.FetchablePartitionResponse partitionResponse) {
+        return partitionResponse.divergingEpoch().epoch() < 0 ? Optional.empty()
+                : Optional.of(partitionResponse.divergingEpoch());
+    }
 
-    public static final class PartitionData<T extends BaseRecords> {
+    public static Optional<Integer> preferredReadReplica(FetchResponseData.FetchablePartitionResponse partitionResponse) {
+        return partitionResponse.preferredReadReplica() == INVALID_PREFERRED_REPLICA_ID ? Optional.empty()
+                : Optional.of(partitionResponse.preferredReadReplica());
+    }
 
-        private final FetchResponseData.FetchablePartitionResponse partitionResponse;
-
-        public PartitionData(FetchResponseData.FetchablePartitionResponse partitionResponse) {
-            this.partitionResponse = partitionResponse;
-        }
-
-        @Override
-        public boolean equals(Object o) {
-            if (this == o)
-                return true;
-            if (o == null || getClass() != o.getClass())
-                return false;
-
-            PartitionData that = (PartitionData) o;
-
-            return this.partitionResponse.equals(that.partitionResponse);
-        }
-
-        @Override
-        public int hashCode() {
-            return this.partitionResponse.hashCode();
-        }
-
-        @Override
-        public String toString() {
-            return "(error=" + error() +
-                    ", highWaterMark=" + highWatermark() +
-                    ", lastStableOffset = " + lastStableOffset() +
-                    ", logStartOffset = " + logStartOffset() +
-                    ", preferredReadReplica = " + preferredReadReplica().map(Object::toString).orElse("absent") +
-                    ", abortedTransactions = " + abortedTransactions() +
-                    ", divergingEpoch =" + divergingEpoch().map(Object::toString).orElse("absent") +
-                    ", recordsSizeInBytes=" + records().sizeInBytes() + ")";
-        }
-
-        public Errors error() {
-            return Errors.forCode(partitionResponse.errorCode());
-        }
-
-        public long highWatermark() {
-            return partitionResponse.highWatermark();
-        }
-
-        public long lastStableOffset() {
-            return partitionResponse.lastStableOffset();
-        }
-
-        public long logStartOffset() {
-            return partitionResponse.logStartOffset();
-        }
-
-        public Optional<Integer> preferredReadReplica() {
-            return partitionResponse.preferredReadReplica() == INVALID_PREFERRED_REPLICA_ID ? Optional.empty()
-                    : Optional.of(partitionResponse.preferredReadReplica());
-        }
-
-        public List<FetchResponseData.AbortedTransaction> abortedTransactions() {
-            return partitionResponse.abortedTransactions();
-        }
-
-        public Optional<FetchResponseData.EpochEndOffset> divergingEpoch() {
-            return partitionResponse.divergingEpoch().epoch() < 0 ? Optional.empty()
-                    : Optional.of(partitionResponse.divergingEpoch());
-        }
-
-        @SuppressWarnings("unchecked")
-        public T records() {
-            return (T) partitionResponse.recordSet();
-        }
+    public static FetchResponseData.FetchablePartitionResponse partitionResponse(int partition, Errors error) {
+        return new FetchResponseData.FetchablePartitionResponse()
+                .setPartition(partition)
+                .setErrorCode(error.code())
+                .setHighWatermark(FetchResponse.INVALID_HIGH_WATERMARK)
+                .setLastStableOffset(FetchResponse.INVALID_LAST_STABLE_OFFSET)
+                .setLogStartOffset(FetchResponse.INVALID_LOG_START_OFFSET)
+                .setAbortedTransactions(null)
+                .setRecordSet(MemoryRecords.EMPTY)
+                .setPreferredReadReplica(FetchResponse.INVALID_PREFERRED_REPLICA_ID);
     }
 }

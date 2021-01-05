@@ -298,9 +298,9 @@ public class FetchRequest extends AbstractRequest {
         Errors error = Errors.forException(e);
         LinkedHashMap<TopicPartition, FetchResponseData.FetchablePartitionResponse> responseData = new LinkedHashMap<>();
         for (Map.Entry<TopicPartition, PartitionData> entry : fetchData.entrySet()) {
-            responseData.put(entry.getKey(), FetchResponse.partitionResponse(error));
+            responseData.put(entry.getKey(), FetchResponse.partitionResponse(entry.getKey().partition(), error));
         }
-        return new FetchResponse<>(error, throttleTimeMs, data.sessionId(), responseData);
+        return new FetchResponse(error, throttleTimeMs, data.sessionId(), responseData);
     }
 
     public int replicaId() {

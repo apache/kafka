@@ -318,12 +318,12 @@ public class FetchSessionHandler {
      * @param response  The response.
      * @return          True if the full fetch response partitions are valid.
      */
-    String verifyFullFetchResponsePartitions(FetchResponse<?> response) {
+    String verifyFullFetchResponsePartitions(FetchResponse response) {
         StringBuilder bld = new StringBuilder();
         Set<TopicPartition> extra =
-            findMissing(response.responseData().keySet(), sessionPartitions.keySet());
+            findMissing(response.dataByTopicPartition().keySet(), sessionPartitions.keySet());
         Set<TopicPartition> omitted =
-            findMissing(sessionPartitions.keySet(), response.responseData().keySet());
+            findMissing(sessionPartitions.keySet(), response.dataByTopicPartition().keySet());
         if (!omitted.isEmpty()) {
             bld.append("omitted=(").append(Utils.join(omitted, ", ")).append(", ");
         }
@@ -331,7 +331,7 @@ public class FetchSessionHandler {
             bld.append("extra=(").append(Utils.join(extra, ", ")).append(", ");
         }
         if ((!omitted.isEmpty()) || (!extra.isEmpty())) {
-            bld.append("response=(").append(Utils.join(response.responseData().keySet(), ", ")).append(")");
+            bld.append("response=(").append(Utils.join(response.dataByTopicPartition().keySet(), ", ")).append(")");
             return bld.toString();
         }
         return null;
@@ -343,14 +343,14 @@ public class FetchSessionHandler {
      * @param response  The response.
      * @return          True if the incremental fetch response partitions are valid.
      */
-    String verifyIncrementalFetchResponsePartitions(FetchResponse<?> response) {
+    String verifyIncrementalFetchResponsePartitions(FetchResponse response) {
         Set<TopicPartition> extra =
-            findMissing(response.responseData().keySet(), sessionPartitions.keySet());
+            findMissing(response.dataByTopicPartition().keySet(), sessionPartitions.keySet());
         if (!extra.isEmpty()) {
             StringBuilder bld = new StringBuilder();
             bld.append("extra=(").append(Utils.join(extra, ", ")).append("), ");
             bld.append("response=(").append(
-                Utils.join(response.responseData().keySet(), ", ")).append("), ");
+                Utils.join(response.dataByTopicPartition().keySet(), ", ")).append("), ");
             return bld.toString();
         }
         return null;
@@ -362,25 +362,25 @@ public class FetchSessionHandler {
      * @param response  The FetchResponse.
      * @return          The string to log.
      */
-    private String responseDataToLogString(FetchResponse<?> response) {
+    private String responseDataToLogString(FetchResponse response) {
         if (!log.isTraceEnabled()) {
-            int implied = sessionPartitions.size() - response.responseData().size();
+            int implied = sessionPartitions.size() - response.dataByTopicPartition().size();
             if (implied > 0) {
                 return String.format(" with %d response partition(s), %d implied partition(s)",
-                    response.responseData().size(), implied);
+                    response.dataByTopicPartition().size(), implied);
             } else {
                 return String.format(" with %d response partition(s)",
-                    response.responseData().size());
+                    response.dataByTopicPartition().size());
             }
         }
         StringBuilder bld = new StringBuilder();
         bld.append(" with response=(").
-            append(Utils.join(response.responseData().keySet(), ", ")).
+            append(Utils.join(response.dataByTopicPartition().keySet(), ", ")).
             append(")");
         String prefix = ", implied=(";
         String suffix = "";
         for (TopicPartition partition : sessionPartitions.keySet()) {
-            if (!response.responseData().containsKey(partition)) {
+            if (!response.dataByTopicPartition().containsKey(partition)) {
                 bld.append(prefix);
                 bld.append(partition);
                 prefix = ", ";
@@ -398,7 +398,7 @@ public class FetchSessionHandler {
      * @return          True if the response is well-formed; false if it can't be processed
      *                  because of missing or unexpected partitions.
      */
-    public boolean handleResponse(FetchResponse<?> response) {
+    public boolean handleResponse(FetchResponse response) {
         if (response.error() != Errors.NONE) {
             log.info("Node {} was unable to process the fetch request with {}: {}.",
                 node, nextMetadata, response.error());
@@ -410,7 +410,7 @@ public class FetchSessionHandler {
             return false;
         }
         if (nextMetadata.isFull()) {
-            if (response.responseData().isEmpty() && response.throttleTimeMs() > 0) {
+            if (response.dataByTopicPartition().isEmpty() && response.throttleTimeMs() > 0) {
                 // Normally, an empty full fetch response would be invalid.  However, KIP-219
                 // specifies that if the broker wants to throttle the client, it will respond
                 // to a full fetch request with an empty response and a throttleTimeMs

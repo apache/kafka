@@ -713,7 +713,7 @@ class LogManager(logDirs: Seq[File],
    * as dirty. That will result in reloading of configuration once initialization is done.
    */
   def topicConfigUpdated(topic: String): Unit = {
-    partitionsInitializing.keys.filter(_.topic() == topic).foreach {
+    partitionsInitializing.keys.filter(_.topic == topic).foreach {
       topicPartition => partitionsInitializing.replace(topicPartition, false, true)
     }
   }

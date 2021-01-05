@@ -45,14 +45,14 @@ class ReplicaVerificationToolTest {
         }
         val initialOffset = 4
         val memoryRecords = MemoryRecords.withRecords(initialOffset, CompressionType.NONE, records: _*)
-        val partitionData = new FetchResponse.PartitionData[MemoryRecords](new FetchResponseData.FetchablePartitionResponse()
-          .setErrorCode(Errors.NONE.code())
+        val partitionData = new FetchResponseData.FetchablePartitionResponse()
+          .setErrorCode(Errors.NONE.code)
           .setHighWatermark(20)
           .setLastStableOffset(20)
           .setLogStartOffset(0)
           .setAbortedTransactions(null)
           .setRecordSet(memoryRecords)
-          .setPreferredReadReplica(FetchResponse.INVALID_PREFERRED_REPLICA_ID))
+          .setPreferredReadReplica(FetchResponse.INVALID_PREFERRED_REPLICA_ID)
 
         replicaBuffer.addFetchedData(tp, replicaId, partitionData)
       }

@@ -2238,8 +2238,8 @@ public class KafkaConsumerTest {
         return new ListOffsetsResponse(data);
     }
 
-    private FetchResponse<MemoryRecords> fetchResponse(Map<TopicPartition, FetchInfo> fetches) {
-        LinkedHashMap<TopicPartition, FetchResponse.PartitionData<MemoryRecords>> tpResponses = new LinkedHashMap<>();
+    private FetchResponse fetchResponse(Map<TopicPartition, FetchInfo> fetches) {
+        LinkedHashMap<TopicPartition, FetchResponseData.FetchablePartitionResponse> tpResponses = new LinkedHashMap<>();
         for (Map.Entry<TopicPartition, FetchInfo> fetchEntry : fetches.entrySet()) {
             TopicPartition partition = fetchEntry.getKey();
             long fetchOffset = fetchEntry.getValue().offset;
@@ -2254,7 +2254,7 @@ public class KafkaConsumerTest {
                     builder.append(0L, ("key-" + i).getBytes(), ("value-" + i).getBytes());
                 records = builder.build();
             }
-            tpResponses.put(partition, new FetchResponse.PartitionData<>(
+            tpResponses.put(partition,
                     new FetchResponseData.FetchablePartitionResponse()
                             .setErrorCode(Errors.NONE.code())
                             .setHighWatermark(0)
@@ -2262,12 +2262,12 @@ public class KafkaConsumerTest {
                             .setLogStartOffset(0)
                             .setAbortedTransactions(null)
                             .setRecordSet(records)
-                            .setPreferredReadReplica(FetchResponse.INVALID_PREFERRED_REPLICA_ID)));
+                            .setPreferredReadReplica(FetchResponse.INVALID_PREFERRED_REPLICA_ID));
         }
-        return new FetchResponse<>(Errors.NONE, tpResponses, 0, INVALID_SESSION_ID);
+        return new FetchResponse(Errors.NONE, 0, INVALID_SESSION_ID, tpResponses);
     }
 
-    private FetchResponse<MemoryRecords> fetchResponse(TopicPartition partition, long fetchOffset, int count) {
+    private FetchResponse fetchResponse(TopicPartition partition, long fetchOffset, int count) {
         FetchInfo fetchInfo = new FetchInfo(fetchOffset, count);
         return fetchResponse(Collections.singletonMap(partition, fetchInfo));
     }

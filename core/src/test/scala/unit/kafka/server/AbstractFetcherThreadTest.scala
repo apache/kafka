@@ -595,7 +595,7 @@ class AbstractFetcherThreadTest {
       override def fetchFromLeader(fetchRequest: FetchRequest.Builder): Map[TopicPartition, FetchData] = {
         val fetchedData = super.fetchFromLeader(fetchRequest)
         if (!fetchedOnce) {
-          val records = fetchedData.head._2.records.asInstanceOf[MemoryRecords]
+          val records = fetchedData.head._2.recordSet.asInstanceOf[MemoryRecords]
           val buffer = records.buffer()
           buffer.putInt(15, buffer.getInt(15) ^ 23422)
           buffer.putInt(30, buffer.getInt(30) ^ 93242)
@@ -906,8 +906,8 @@ class AbstractFetcherThreadTest {
                                       partitionData: FetchData): Option[LogAppendInfo] = {
       val state = replicaPartitionState(topicPartition)
 
-      if (isTruncationOnFetchSupported && partitionData.divergingEpoch.isPresent) {
-        val divergingEpoch = partitionData.divergingEpoch.get
+      if (isTruncationOnFetchSupported && FetchResponse.divergingEpoch(partitionData).isPresent) {
+        val divergingEpoch = partitionData.divergingEpoch
         truncateOnFetchResponse(Map(topicPartition -> new EpochEndOffset()
           .setPartition(topicPartition.partition)
           .setErrorCode(Errors.NONE.code)
@@ -922,7 +922,7 @@ class AbstractFetcherThreadTest {
           s"fetched offset = $fetchOffset, log end offset = ${state.logEndOffset}.")
 
       // Now check message's crc
-      val batches = partitionData.records.batches.asScala
+      val batches = partitionData.recordSet.asInstanceOf[Records].batches.asScala
       var maxTimestamp = RecordBatch.NO_TIMESTAMP
       var offsetOfMaxTimestamp = -1L
       var lastOffset = state.logEndOffset
@@ -954,7 +954,7 @@ class AbstractFetcherThreadTest {
         sourceCodec = NoCompressionCodec,
         targetCodec = NoCompressionCodec,
         shallowCount = batches.size,
-        validBytes = partitionData.records.sizeInBytes,
+        validBytes = partitionData.recordSet.sizeInBytes,
         offsetsMonotonic = true,
         lastOffsetOfFirstBatch = batches.headOption.map(_.lastOffset).getOrElse(-1)))
     }
@@ -1143,15 +1143,15 @@ class AbstractFetcherThreadTest {
           (Errors.NONE, records)
         }
 
-        (partition, new FetchData(new FetchResponseData.FetchablePartitionResponse()
-          .setErrorCode(error.code())
+        (partition, new FetchResponseData.FetchablePartitionResponse()
+          .setErrorCode(error.code)
           .setHighWatermark(leaderState.highWatermark)
           .setLastStableOffset(leaderState.highWatermark)
           .setLogStartOffset(leaderState.logStartOffset)
           .setAbortedTransactions(Collections.emptyList())
           .setRecordSet(records)
           .setPreferredReadReplica(FetchResponse.INVALID_PREFERRED_REPLICA_ID)
-          .setDivergingEpoch(divergingEpoch.getOrElse(new FetchResponseData.EpochEndOffset))))
+          .setDivergingEpoch(divergingEpoch.getOrElse(new FetchResponseData.EpochEndOffset)))
       }.toMap
     }
 

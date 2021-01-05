@@ -51,7 +51,6 @@ import org.apache.kafka.common.message.OffsetForLeaderEpochResponseData.EpochEnd
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.record.BaseRecords;
-import org.apache.kafka.common.record.Records;
 import org.apache.kafka.common.record.RecordsSend;
 import org.apache.kafka.common.requests.FetchRequest;
 import org.apache.kafka.common.requests.FetchResponse;
@@ -137,7 +136,7 @@ public class ReplicaFetcherThreadBenchmark {
                 logDirFailureChannel,
                 Time.SYSTEM);
 
-        LinkedHashMap<TopicPartition, FetchResponse.PartitionData<BaseRecords>> initialFetched = new LinkedHashMap<>();
+        LinkedHashMap<TopicPartition, FetchResponseData.FetchablePartitionResponse> initialFetched = new LinkedHashMap<>();
         scala.collection.mutable.Map<TopicPartition, InitialFetchState> initialFetchStates = new scala.collection.mutable.HashMap<>();
         for (int i = 0; i < partitionCount; i++) {
             TopicPartition tp = new TopicPartition("topic", i);
@@ -174,14 +173,15 @@ public class ReplicaFetcherThreadBenchmark {
                     return null;
                 }
             };
-            initialFetched.put(tp, new FetchResponse.PartitionData<>(new FetchResponseData.FetchablePartitionResponse()
+            initialFetched.put(tp, new FetchResponseData.FetchablePartitionResponse()
+                    .setPartition(tp.partition())
                     .setErrorCode(Errors.NONE.code())
                     .setHighWatermark(0)
                     .setLastStableOffset(0)
                     .setLogStartOffset(0)
                     .setAbortedTransactions(Collections.emptyList())
                     .setRecordSet(fetched)
-                    .setPreferredReadReplica(FetchResponse.INVALID_PREFERRED_REPLICA_ID)));
+                    .setPreferredReadReplica(FetchResponse.INVALID_PREFERRED_REPLICA_ID));
         }
 
         ReplicaManager replicaManager = Mockito.mock(ReplicaManager.class);
@@ -192,7 +192,7 @@ public class ReplicaFetcherThreadBenchmark {
         // so that we do not measure this time as part of the steady state work
         fetcher.doWork();
         // handle response to engage the incremental fetch session handler
-        fetcher.fetchSessionHandler().handleResponse(new FetchResponse<>(Errors.NONE, initialFetched, 0, 999));
+        fetcher.fetchSessionHandler().handleResponse(new FetchResponse(Errors.NONE, 0, 999, initialFetched));
     }
 
     @TearDown(Level.Trial)
@@ -298,7 +298,8 @@ public class ReplicaFetcherThreadBenchmark {
         }
 
         @Override
-        public Option<LogAppendInfo> processPartitionData(TopicPartition topicPartition, long fetchOffset, FetchResponse.PartitionData partitionData) {
+        public Option<LogAppendInfo> processPartitionData(TopicPartition topicPartition, long fetchOffset,
+                                                          FetchResponseData.FetchablePartitionResponse partitionData) {
             return Option.empty();
         }
 
@@ -323,7 +324,7 @@ public class ReplicaFetcherThreadBenchmark {
         }
 
         @Override
-        public Map<TopicPartition, FetchResponse.PartitionData<Records>> fetchFromLeader(FetchRequest.Builder fetchRequest) {
+        public Map<TopicPartition, FetchResponseData.FetchablePartitionResponse> fetchFromLeader(FetchRequest.Builder fetchRequest) {
             return new scala.collection.mutable.HashMap<>();
         }
     }

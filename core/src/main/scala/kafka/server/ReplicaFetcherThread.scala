@@ -162,7 +162,7 @@ class ReplicaFetcherThread(name: String,
     val logTrace = isTraceEnabled
     val partition = replicaMgr.nonOfflinePartition(topicPartition).get
     val log = partition.localLogOrException
-    val records = toMemoryRecords(partitionData.records)
+    val records = toMemoryRecords(partitionData.recordSet.asInstanceOf[Records])
 
     maybeWarnIfOversizedRecords(records, topicPartition)
 
@@ -215,11 +215,11 @@ class ReplicaFetcherThread(name: String,
   override protected def fetchFromLeader(fetchRequest: FetchRequest.Builder): Map[TopicPartition, FetchData] = {
     try {
       val clientResponse = leaderEndpoint.sendRequest(fetchRequest)
-      val fetchResponse = clientResponse.responseBody.asInstanceOf[FetchResponse[Records]]
+      val fetchResponse = clientResponse.responseBody.asInstanceOf[FetchResponse]
       if (!fetchSessionHandler.handleResponse(fetchResponse)) {
         Map.empty
       } else {
-        fetchResponse.responseData.asScala
+        fetchResponse.dataByTopicPartition.asScala
       }
     } catch {
       case t: Throwable =>
