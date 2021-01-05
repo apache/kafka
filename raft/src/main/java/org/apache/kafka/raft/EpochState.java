@@ -16,9 +16,10 @@
  */
 package org.apache.kafka.raft;
 
+import java.io.Closeable;
 import java.util.Optional;
 
-public interface EpochState {
+public interface EpochState extends Closeable {
 
     default Optional<LogOffsetMetadata> highWatermark() {
         return Optional.empty();

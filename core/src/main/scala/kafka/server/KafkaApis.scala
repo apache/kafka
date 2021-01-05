@@ -255,6 +255,7 @@ class KafkaApis(val requestChannel: RequestChannel,
           case ApiKeys.BEGIN_QUORUM_EPOCH => closeConnection(request, util.Collections.emptyMap())
           case ApiKeys.END_QUORUM_EPOCH => closeConnection(request, util.Collections.emptyMap())
           case ApiKeys.DESCRIBE_QUORUM => closeConnection(request, util.Collections.emptyMap())
+          case ApiKeys.FETCH_SNAPSHOT => closeConnection(request, util.Collections.emptyMap())
         }
       }
     } catch {

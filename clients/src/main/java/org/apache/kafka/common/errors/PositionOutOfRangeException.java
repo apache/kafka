@@ -14,38 +14,18 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.common.utils;
+package org.apache.kafka.common.errors;
 
-import java.io.InputStream;
-import java.nio.ByteBuffer;
+public class PositionOutOfRangeException extends ApiException {
 
-/**
- * A byte buffer backed input inputStream
- */
-public final class ByteBufferInputStream extends InputStream {
-    private final ByteBuffer buffer;
+    private static final long serialVersionUID = 1;
 
-    public ByteBufferInputStream(ByteBuffer buffer) {
-        this.buffer = buffer;
+    public PositionOutOfRangeException(String s) {
+        super(s);
     }
 
-    public int read() {
-        if (!buffer.hasRemaining()) {
-            return -1;
-        }
-        return buffer.get() & 0xFF;
+    public PositionOutOfRangeException(String message, Throwable cause) {
+        super(message, cause);
     }
 
-    public int read(byte[] bytes, int off, int len) {
-        if (len == 0) {
-            return 0;
-        }
-        if (!buffer.hasRemaining()) {
-            return -1;
-        }
-
-        len = Math.min(len, buffer.remaining());
-        buffer.get(bytes, off, len);
-        return len;
-    }
 }
