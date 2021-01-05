@@ -1,0 +1,56 @@
+# Licensed to the Apache Software Foundation (ASF) under one
+# or more contributor license agreements.  See the NOTICE file
+# distributed with this work for additional information
+# regarding copyright ownership.  The ASF licenses this file
+# to you under the Apache License, Version 2.0 (the
+# "License"); you may not use this file except in compliance
+# with the License.  You may obtain a copy of the License at
+#
+#   http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing,
+# software distributed under the License is distributed on an
+# "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+# KIND, either express or implied.  See the License for the
+# specific language governing permissions and limitations
+# under the License
+
+name: Release build on tags
+
+# Run this workflow every time a tag is created/pushed
+on:
+  push:
+    tags:
+      - '*'
+
+jobs:
+  build:
+    # Name the Job
+    name: Build tagged commit and upload an archive
+    # Set the type of machine to run on
+    runs-on: ubuntu-latest
+    steps:
+      # Checks out a copy of your repository on the ubuntu-latest machine
+      - name: Checkout code
+        uses: actions/checkout@v2
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          # bring in all history because the gradle versions plugin needs to "walk back" to the closest ancestor tag
+          fetch-depth: 0
+      - name: Set up JDK 8
+        uses: actions/setup-java@v1
+        with:
+          java-version: '8'
+      - name: Set up release version env variable
+        run: |
+          echo "RELEASE_VERSION=${GITHUB_REF#refs/*/}" >> $GITHUB_ENV
+      - name: Print the release version
+        run: |
+          echo "Release version (tag name): ${{ env.RELEASE_VERSION }}"
+      - name: Build with Gradle and run all tests
+        # exclude the streams test and connect test
+        # Set maxTestRetries & maxTestRetryFailures for flaky tests.  This is the setup in upstream Jenkinsfile
+        run: ./gradlew -PmaxTestRetries=3 cleanTest rat checkstyleMain checkstyleTest spotbugsMain spotbugsTest :clients:test :core:test --no-daemon -PxmlFindBugsReport=true -PtestLoggingEvents=started,passed,skipped,failed
+      - name: Upload archive
+        run: |
+          ./gradlew -Pversion=${{ env.RELEASE_VERSION }} :clients:uploadArchives :core:uploadArchives --no-daemon
