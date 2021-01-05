@@ -15,17 +15,24 @@
  * limitations under the License.
  */
 
-package org.apache.kafka.common.protocol;
+package org.apache.kafka.trogdor.workload;
 
-import java.nio.ByteBuffer;
+import com.fasterxml.jackson.annotation.JsonSubTypes;
+import com.fasterxml.jackson.annotation.JsonTypeInfo;
+import com.fasterxml.jackson.databind.JsonNode;
+import org.apache.kafka.clients.consumer.ConsumerRecords;
 
-public final class MessageTestUtil {
-    public static ByteBuffer messageToByteBuffer(Message message, short version) {
-        ObjectSerializationCache cache = new ObjectSerializationCache();
-        int size = message.size(cache, version);
-        ByteBuffer bytes = ByteBuffer.allocate(size);
-        message.write(new ByteBufferAccessor(bytes), cache, version);
-        bytes.rewind();
-        return bytes;
-    }
+/**
+ * RecordProcessor allows for acting on data polled from ConsumeBench workloads.
+ */
+@JsonTypeInfo(use = JsonTypeInfo.Id.NAME,
+        include = JsonTypeInfo.As.PROPERTY,
+        property = "type")
+@JsonSubTypes(value = {
+        @JsonSubTypes.Type(value = TimestampRecordProcessor.class, name = "timestamp"),
+})
+public interface RecordProcessor {
+    void processRecords(ConsumerRecords<byte[], byte[]> consumerRecords);
+    JsonNode processorStatus();
 }
+

@@ -41,7 +41,6 @@ import org.apache.kafka.streams.errors.ProcessorStateException;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.errors.StreamsUncaughtExceptionHandler;
 import org.apache.kafka.streams.errors.TopologyException;
-import org.apache.kafka.streams.internals.ApiUtils;
 import org.apache.kafka.streams.internals.metrics.ClientMetrics;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.KTable;
@@ -97,6 +96,7 @@ import java.util.function.Consumer;
 import static org.apache.kafka.streams.StreamsConfig.METRICS_RECORDING_LEVEL_CONFIG;
 import static org.apache.kafka.streams.errors.StreamsUncaughtExceptionHandler.StreamThreadExceptionResponse.SHUTDOWN_CLIENT;
 import static org.apache.kafka.streams.internals.ApiUtils.prepareMillisCheckFailMsgPrefix;
+import static org.apache.kafka.streams.internals.ApiUtils.validateMillisecondDuration;
 import static org.apache.kafka.streams.processor.internals.ClientUtils.fetchEndOffsets;
 
 /**
@@ -436,6 +436,26 @@ public class KafkaStreams implements AutoCloseable {
         }
     }
 
+    private void replaceStreamThread(final Throwable throwable) {
+        if (globalStreamThread != null && Thread.currentThread().getName().equals(globalStreamThread.getName())) {
+            log.warn("The global thread cannot be replaced. Reverting to shutting down the client.");
+            log.error("Encountered the following exception during processing " +
+                    " The streams client is going to shut down now. ", throwable);
+            close(Duration.ZERO);
+        }
+        final StreamThread deadThread = (StreamThread) Thread.currentThread();
+        threads.remove(deadThread);
+        addStreamThread();
+        deadThread.shutdown();
+        if (throwable instanceof RuntimeException) {
+            throw (RuntimeException) throwable;
+        } else if (throwable instanceof Error) {
+            throw (Error) throwable;
+        } else {
+            throw new RuntimeException("Unexpected checked exception caught in the uncaught exception handler", throwable);
+        }
+    }
+
     private void handleStreamsUncaughtException(final Throwable throwable,
                                                 final StreamsUncaughtExceptionHandler streamsUncaughtExceptionHandler) {
         final StreamsUncaughtExceptionHandler.StreamThreadExceptionResponse action = streamsUncaughtExceptionHandler.handle(throwable);
@@ -444,6 +464,9 @@ public class KafkaStreams implements AutoCloseable {
                     "The old handler will be ignored as long as a new handler is set.");
         }
         switch (action) {
+            case REPLACE_THREAD:
+                replaceStreamThread(throwable);
+                break;
             case SHUTDOWN_CLIENT:
                 log.error("Encountered the following exception during processing " +
                         "and the registered exception handler opted to " + action + "." +
@@ -1192,7 +1215,7 @@ public class KafkaStreams implements AutoCloseable {
      */
     public synchronized boolean close(final Duration timeout) throws IllegalArgumentException {
         final String msgPrefix = prepareMillisCheckFailMsgPrefix(timeout, "timeout");
-        final long timeoutMs = ApiUtils.validateMillisecondDuration(timeout, msgPrefix);
+        final long timeoutMs = validateMillisecondDuration(timeout, msgPrefix);
         if (timeoutMs < 0) {
             throw new IllegalArgumentException("Timeout can't be negative.");
         }

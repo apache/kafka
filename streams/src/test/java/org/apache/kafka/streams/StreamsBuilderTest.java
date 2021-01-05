@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.streams;
 
-import java.util.regex.Pattern;
 import org.apache.kafka.common.serialization.LongSerializer;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.StringSerializer;
@@ -62,6 +61,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
+import java.util.regex.Pattern;
 
 import static java.util.Arrays.asList;
 import static org.hamcrest.CoreMatchers.equalTo;
@@ -460,6 +460,35 @@ public class StreamsBuilderTest {
         assertThat(
             internalTopologyBuilder.topicGroups().get(0).nonSourceChangelogTopics().isEmpty(),
             equalTo(true));
+    }
+
+    @Test
+    public void shouldNotReuseRepartitionTopicAsChangelogs() {
+        final String topic = "topic";
+        builder.<Long, String>stream(topic).repartition().toTable(Materialized.as("store"));
+        final Properties props = StreamsTestUtils.getStreamsConfig("appId");
+        props.put(StreamsConfig.TOPOLOGY_OPTIMIZATION_CONFIG, StreamsConfig.OPTIMIZE);
+        final Topology topology = builder.build(props);
+
+        final InternalTopologyBuilder internalTopologyBuilder = TopologyWrapper.getInternalTopologyBuilder(topology);
+        internalTopologyBuilder.rewriteTopology(new StreamsConfig(props));
+
+        assertThat(
+            internalTopologyBuilder.buildTopology().storeToChangelogTopic(),
+            equalTo(Collections.singletonMap("store", "appId-store-changelog"))
+        );
+        assertThat(
+            internalTopologyBuilder.stateStores().keySet(),
+            equalTo(Collections.singleton("store"))
+        );
+        assertThat(
+            internalTopologyBuilder.stateStores().get("store").loggingEnabled(),
+            equalTo(true)
+        );
+        assertThat(
+            internalTopologyBuilder.topicGroups().get(1).stateChangelogTopics.keySet(),
+            equalTo(Collections.singleton("appId-store-changelog"))
+        );
     }
 
     @Test

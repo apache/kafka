@@ -108,7 +108,7 @@ public class DeleteAclsResponseTest {
                 .setThrottleTimeMs(10)
                 .setFilterResults(singletonList(LITERAL_RESPONSE)),
             V0);
-        final ByteBuffer buffer = original.serializeBody(V0);
+        final ByteBuffer buffer = original.serialize(V0);
 
         final DeleteAclsResponse result = DeleteAclsResponse.parse(buffer, V0);
         assertEquals(original.filterResults(), result.filterResults());
@@ -121,7 +121,7 @@ public class DeleteAclsResponseTest {
                 .setThrottleTimeMs(10)
                 .setFilterResults(asList(LITERAL_RESPONSE, PREFIXED_RESPONSE)),
             V1);
-        final ByteBuffer buffer = original.serializeBody(V1);
+        final ByteBuffer buffer = original.serialize(V1);
 
         final DeleteAclsResponse result = DeleteAclsResponse.parse(buffer, V1);
         assertEquals(original.filterResults(), result.filterResults());

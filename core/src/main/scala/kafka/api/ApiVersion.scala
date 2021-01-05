@@ -110,7 +110,9 @@ object ApiVersion {
     // Introduced AlterIsr (KIP-497)
     KAFKA_2_7_IV2,
     // Flexible versioning on ListOffsets, WriteTxnMarkers and OffsetsForLeaderEpoch.
-    KAFKA_2_8_IV0
+    KAFKA_2_8_IV0,
+    // Introduced topic IDs to LeaderAndIsr and UpdateMetadata requests/responses (KIP-516)
+    KAFKA_2_8_IV1
   )
 
   // Map keys are the union of the short and full versions
@@ -435,6 +437,13 @@ case object KAFKA_2_8_IV0 extends DefaultApiVersion {
   val subVersion = "IV0"
   val recordVersion = RecordVersion.V2
   val id: Int = 31
+}
+
+case object KAFKA_2_8_IV1 extends DefaultApiVersion {
+  val shortVersion: String = "2.8"
+  val subVersion = "IV1"
+  val recordVersion = RecordVersion.V2
+  val id: Int = 32
 }
 
 object ApiVersionValidator extends Validator {

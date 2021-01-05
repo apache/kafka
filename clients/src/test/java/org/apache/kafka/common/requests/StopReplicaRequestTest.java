@@ -134,7 +134,7 @@ public class StopReplicaRequestTest {
                 true, topicStates).build(version);
 
             // Construct the request from the buffer
-            StopReplicaRequest request = StopReplicaRequest.parse(baseRequest.serializeBody(), version);
+            StopReplicaRequest request = StopReplicaRequest.parse(baseRequest.serialize(), version);
 
             Map<TopicPartition, StopReplicaPartitionState> partitionStates =
                 StopReplicaRequestTest.partitionStates(request.topicStates());
@@ -169,7 +169,7 @@ public class StopReplicaRequestTest {
                 true, topicStates).build(version);
 
             // Construct the request from the buffer
-            StopReplicaRequest request = StopReplicaRequest.parse(baseRequest.serializeBody(), version);
+            StopReplicaRequest request = StopReplicaRequest.parse(baseRequest.serialize(), version);
 
             Map<TopicPartition, StopReplicaPartitionState> partitionStates = request.partitionStates();
             assertEquals(6, partitionStates.size());

@@ -40,6 +40,7 @@ import scala.collection.{Map, Seq, mutable}
 import scala.compat.java8.OptionConverters._
 import scala.math.Ordered.orderingToOrdered
 
+
 object ReassignPartitionsCommand extends Logging {
   private[admin] val AnyLogDir = "any"
 
@@ -1622,14 +1623,15 @@ object ReassignPartitionsCommand extends Logging {
   }
 
   def parsePartitionReassignmentData(jsonData: String): (Seq[(TopicPartition, Seq[Int])], Map[TopicPartitionReplica, String]) = {
-    Json.parseFull(jsonData) match {
-      case Some(js) =>
+    Json.tryParseFull(jsonData) match {
+      case Right(js) =>
         val version = js.asJsonObject.get("version") match {
           case Some(jsonValue) => jsonValue.to[Int]
           case None => EarliestVersion
         }
         parsePartitionReassignmentData(version, js)
-      case None => throw new AdminOperationException("The input string is not a valid JSON")
+      case Left(f) =>
+        throw new AdminOperationException(f)
     }
   }
 

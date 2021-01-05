@@ -250,6 +250,9 @@ public class CandidateState implements EpochState {
         return "Candidate";
     }
 
+    @Override
+    public void close() {}
+
     private enum State {
         UNRECORDED,
         GRANTED,

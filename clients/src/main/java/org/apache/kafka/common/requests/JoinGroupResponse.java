@@ -33,6 +33,7 @@ public class JoinGroupResponse extends AbstractResponse {
         this.data = data;
     }
 
+    @Override
     public JoinGroupResponseData data() {
         return data;
     }

@@ -605,6 +605,8 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
      * @throws IllegalStateException if no transactional.id has been configured or if {@link #initTransactions()}
      *         has not yet been invoked
      * @throws ProducerFencedException if another producer with the same transactional.id is active
+     * @throws org.apache.kafka.common.errors.InvalidProducerEpochException if the producer has attempted to produce with an old epoch
+     *         to the partition leader. See the exception for more details
      * @throws org.apache.kafka.common.errors.UnsupportedVersionException fatal error indicating the broker
      *         does not support transactions (i.e. if its version is lower than 0.11.0.0)
      * @throws org.apache.kafka.common.errors.AuthorizationException fatal error indicating that the configured
@@ -743,6 +745,8 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
      *
      * @throws IllegalStateException if no transactional.id has been configured or no transaction has been started
      * @throws ProducerFencedException fatal error indicating another producer with the same transactional.id is active
+     * @throws org.apache.kafka.common.errors.InvalidProducerEpochException if the producer has attempted to produce with an old epoch
+     *         to the partition leader. See the exception for more details
      * @throws org.apache.kafka.common.errors.UnsupportedVersionException fatal error indicating the broker
      *         does not support transactions (i.e. if its version is lower than 0.11.0.0)
      * @throws org.apache.kafka.common.errors.AuthorizationException fatal error indicating that the configured

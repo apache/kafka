@@ -106,7 +106,7 @@ public class Selector implements Selectable, AutoCloseable {
     private final Map<String, KafkaChannel> channels;
     private final Set<KafkaChannel> explicitlyMutedChannels;
     private boolean outOfMemory;
-    private final List<Send> completedSends;
+    private final List<NetworkSend> completedSends;
     private final LinkedHashMap<String, NetworkReceive> completedReceives;
     private final Set<SelectionKey> immediatelyConnectedKeys;
     private final Map<String, KafkaChannel> closingChannels;
@@ -383,8 +383,8 @@ public class Selector implements Selectable, AutoCloseable {
      * Queue the given request for sending in the subsequent {@link #poll(long)} calls
      * @param send The request to send
      */
-    public void send(Send send) {
-        String connectionId = send.destination();
+    public void send(NetworkSend send) {
+        String connectionId = send.destinationId();
         KafkaChannel channel = openOrClosingChannelOrFail(connectionId);
         if (closingChannels.containsKey(connectionId)) {
             // ensure notification via `disconnected`, leave channel in the state in which closing was triggered
@@ -642,7 +642,7 @@ public class Selector implements Selectable, AutoCloseable {
     void write(KafkaChannel channel) throws IOException {
         String nodeId = channel.id();
         long bytesSent = channel.write();
-        Send send = channel.maybeCompleteSend();
+        NetworkSend send = channel.maybeCompleteSend();
         // We may complete the send with bytesSent < 1 if `TransportLayer.hasPendingWrites` was true and `channel.write()`
         // caused the pending writes to be written to the socket channel buffer
         if (bytesSent > 0 || send != null) {
@@ -714,7 +714,7 @@ public class Selector implements Selectable, AutoCloseable {
     }
 
     @Override
-    public List<Send> completedSends() {
+    public List<NetworkSend> completedSends() {
         return this.completedSends;
     }
 

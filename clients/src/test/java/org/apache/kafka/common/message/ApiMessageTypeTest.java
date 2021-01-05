@@ -18,8 +18,10 @@
 package org.apache.kafka.common.message;
 
 import org.apache.kafka.common.errors.UnsupportedVersionException;
+import org.apache.kafka.common.protocol.types.Schema;
 import org.junit.Rule;
 import org.junit.Test;
+import org.junit.jupiter.api.Assertions;
 import org.junit.rules.Timeout;
 
 import java.util.HashSet;
@@ -28,6 +30,8 @@ import java.util.Set;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.fail;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class ApiMessageTypeTest {
     @Rule
@@ -93,5 +97,30 @@ public class ApiMessageTypeTest {
 
         assertEquals((short) 2, ApiMessageType.CREATE_TOPICS.requestHeaderVersion((short) 5));
         assertEquals((short) 1, ApiMessageType.CREATE_TOPICS.responseHeaderVersion((short) 5));
+    }
+
+    /**
+     * Kafka currently supports direct upgrades from 0.8 to the latest version. As such, it has to support all apis
+     * starting from version 0 and we must have schemas from the oldest version to the latest.
+     */
+    @Test
+    public void testAllVersionsHaveSchemas() {
+        for (ApiMessageType type : ApiMessageType.values()) {
+            Assertions.assertEquals(0, type.lowestSupportedVersion());
+
+            assertEquals(type.requestSchemas().length, type.responseSchemas().length);
+            for (Schema schema : type.requestSchemas())
+                assertNotNull(schema);
+            for (Schema schema : type.responseSchemas())
+                assertNotNull(schema);
+
+            assertEquals(type.highestSupportedVersion() + 1, type.requestSchemas().length);
+        }
+    }
+
+    @Test
+    public void testApiIdsArePositive() {
+        for (ApiMessageType type : ApiMessageType.values())
+            assertTrue(type.apiKey() >= 0);
     }
 }

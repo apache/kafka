@@ -74,8 +74,8 @@ public class RequestContextTest {
 
         ApiVersionsResponse response = (ApiVersionsResponse) AbstractResponse.parseResponse(ApiKeys.API_VERSIONS,
             responseBuffer, (short) 0);
-        assertEquals(Errors.UNSUPPORTED_VERSION.code(), response.data.errorCode());
-        assertTrue(response.data.apiKeys().isEmpty());
+        assertEquals(Errors.UNSUPPORTED_VERSION.code(), response.data().errorCode());
+        assertTrue(response.data().apiKeys().isEmpty());
     }
 
     @Test
@@ -99,6 +99,7 @@ public class RequestContextTest {
             ClientInformation.EMPTY, true);
 
         ByteBuffer buffer = context.buildResponseEnvelopePayload(new CreateTopicsResponse(expectedResponse));
+        assertEquals("Buffer limit and capacity should be the same", buffer.capacity(), buffer.limit());
         CreateTopicsResponse parsedResponse = (CreateTopicsResponse) AbstractResponse.parseResponse(buffer, header);
         assertEquals(expectedResponse, parsedResponse.data());
     }

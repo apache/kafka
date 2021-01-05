@@ -92,7 +92,8 @@ public interface CogroupedKStream<K, VOut> {
      * For non-local keys, a custom RPC mechanism must be implemented using {@link KafkaStreams#allMetadata()} to query
      * the value of the key on a parallel running instance of your Kafka Streams application.
      * <p>
-     * For failure and recovery the store will be backed by an internal changelog topic that will be created in Kafka.
+     * For failure and recovery the store (which always will be of type {@link TimestampedKeyValueStore}) will be backed by
+     * an internal changelog topic that will be created in Kafka.
      * Therefore, the store name defined by the Materialized instance must be a valid Kafka topic name and cannot
      * contain characters other than ASCII alphanumerics, '.', '_' and '-'.
      * The changelog topic will be named "${applicationId}-${storeName}-changelog", where "applicationId" is
@@ -141,7 +142,8 @@ public interface CogroupedKStream<K, VOut> {
      * For non-local keys, a custom RPC mechanism must be implemented using {@link KafkaStreams#allMetadata()} to query
      * the value of the key on a parallel running instance of your Kafka Streams application.
      * <p>
-     * For failure and recovery the store will be backed by an internal changelog topic that will be created in Kafka.
+     * For failure and recovery the store (which always will be of type {@link TimestampedKeyValueStore}) will be backed by
+     * an internal changelog topic that will be created in Kafka.
      * Therefore, the store name defined by the Materialized instance must be a valid Kafka topic name and cannot
      * contain characters other than ASCII alphanumerics, '.', '_' and '-'.
      * The changelog topic will be named "${applicationId}-${storeName}-changelog", where "applicationId" is
@@ -191,7 +193,8 @@ public interface CogroupedKStream<K, VOut> {
      * For non-local keys, a custom RPC mechanism must be implemented using {@link KafkaStreams#allMetadata()} to query
      * the value of the key on a parallel running instance of your Kafka Streams application.
      * <p>
-     * For failure and recovery the store will be backed by an internal changelog topic that will be created in Kafka.
+     * For failure and recovery the store (which always will be of type {@link TimestampedKeyValueStore} -- regardless of what
+     * is specified in the parameter {@code materialized}) will be backed by an internal changelog topic that will be created in Kafka.
      * Therefore, the store name defined by the Materialized instance must be a valid Kafka topic name and cannot
      * contain characters other than ASCII alphanumerics, '.', '_' and '-'.
      * The changelog topic will be named "${applicationId}-${storeName}-changelog", where "applicationId" is
@@ -243,7 +246,8 @@ public interface CogroupedKStream<K, VOut> {
      * For non-local keys, a custom RPC mechanism must be implemented using {@link KafkaStreams#allMetadata()} to query
      * the value of the key on a parallel running instance of your Kafka Streams application.
      * <p>
-     * For failure and recovery the store will be backed by an internal changelog topic that will be created in Kafka.
+     * For failure and recovery the store (which always will be of type {@link TimestampedKeyValueStore} -- regardless of what
+     * is specified in the parameter {@code materialized}) will be backed by an internal changelog topic that will be created in Kafka.
      * Therefore, the store name defined by the Materialized instance must be a valid Kafka topic name and cannot
      * contain characters other than ASCII alphanumerics, '.', '_' and '-'.
      * The changelog topic will be named "${applicationId}-${storeName}-changelog", where "applicationId" is

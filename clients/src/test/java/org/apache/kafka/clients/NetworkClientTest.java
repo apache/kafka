@@ -37,6 +37,7 @@ import org.apache.kafka.common.requests.MetadataResponse;
 import org.apache.kafka.common.requests.ProduceRequest;
 import org.apache.kafka.common.requests.ProduceResponse;
 import org.apache.kafka.common.requests.RequestHeader;
+import org.apache.kafka.common.requests.RequestTestUtils;
 import org.apache.kafka.common.security.authenticator.SaslClientAuthenticator;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
@@ -199,8 +200,7 @@ public class NetworkClientTest {
         networkClient.poll(1, time.milliseconds());
         assertEquals(1, networkClient.inFlightRequestCount());
         ProduceResponse produceResponse = new ProduceResponse(new ProduceResponseData());
-        ByteBuffer buffer = produceResponse.serializeWithHeader(requestVersion, request.correlationId());
-        buffer.rewind();
+        ByteBuffer buffer = RequestTestUtils.serializeResponseWithHeader(produceResponse, requestVersion, request.correlationId());
         selector.completeReceive(new NetworkReceive(node.idString(), buffer));
         List<ClientResponse> responses = networkClient.poll(1, time.milliseconds());
         assertEquals(1, responses.size());
@@ -211,7 +211,7 @@ public class NetworkClientTest {
     }
 
     private void delayedApiVersionsResponse(int correlationId, short version, ApiVersionsResponse response) {
-        ByteBuffer buffer = response.serializeWithHeader(version, correlationId);
+        ByteBuffer buffer = RequestTestUtils.serializeResponseWithHeader(response, version, correlationId);
         selector.delayedReceive(new DelayedReceive(node.idString(), new NetworkReceive(node.idString(), buffer)));
     }
 
@@ -508,8 +508,7 @@ public class NetworkClientTest {
         client.poll(1, time.milliseconds());
         int throttleTime = 100;
         ProduceResponse produceResponse = new ProduceResponse(new ProduceResponseData().setThrottleTimeMs(throttleTime));
-        ByteBuffer buffer = produceResponse.serializeWithHeader(requestVersion, request.correlationId());
-        buffer.rewind();
+        ByteBuffer buffer = RequestTestUtils.serializeResponseWithHeader(produceResponse, requestVersion, request.correlationId());
         selector.completeReceive(new NetworkReceive(node.idString(), buffer));
         client.poll(1, time.milliseconds());
 
@@ -589,8 +588,7 @@ public class NetworkClientTest {
     }
 
     private void sendResponse(AbstractResponse response, short version, int correlationId) {
-        ByteBuffer buffer = response.serializeWithHeader(version, correlationId);
-        buffer.rewind();
+        ByteBuffer buffer = RequestTestUtils.serializeResponseWithHeader(response, version, correlationId);
         selector.completeReceive(new NetworkReceive(node.idString(), buffer));
     }
 
@@ -652,7 +650,7 @@ public class NetworkClientTest {
     public void testAuthenticationFailureWithInFlightMetadataRequest() {
         int refreshBackoffMs = 50;
 
-        MetadataResponse metadataResponse = TestUtils.metadataUpdateWith(2, Collections.emptyMap());
+        MetadataResponse metadataResponse = RequestTestUtils.metadataUpdateWith(2, Collections.emptyMap());
         Metadata metadata = new Metadata(refreshBackoffMs, 5000, new LogContext(), new ClusterResourceListeners());
         metadata.updateWithCurrentRequestVersion(metadataResponse, false, time.milliseconds());
 
@@ -683,7 +681,7 @@ public class NetworkClientTest {
         RequestHeader header = parseHeader(requestBuffer);
         assertEquals(ApiKeys.METADATA, header.apiKey());
 
-        ByteBuffer responseBuffer = metadataResponse.serializeWithHeader(header.apiVersion(), header.correlationId());
+        ByteBuffer responseBuffer = RequestTestUtils.serializeResponseWithHeader(metadataResponse, header.apiVersion(), header.correlationId());
         selector.delayedReceive(new DelayedReceive(node1.idString(), new NetworkReceive(node1.idString(), responseBuffer)));
 
         int initialUpdateVersion = metadata.updateVersion();

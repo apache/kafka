@@ -60,6 +60,7 @@ public class DescribeDelegationTokenRequest extends AbstractRequest {
         this.data = data;
     }
 
+    @Override
     public DescribeDelegationTokenRequestData data() {
         return data;
     }

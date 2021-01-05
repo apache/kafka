@@ -20,7 +20,7 @@ import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.network.Send;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.protocol.Message;
+import org.apache.kafka.common.protocol.MessageUtil;
 import org.apache.kafka.common.protocol.ObjectSerializationCache;
 import org.apache.kafka.common.protocol.SendBuilder;
 
@@ -97,20 +97,13 @@ public abstract class AbstractRequest implements AbstractRequestResponse {
         return apiKey;
     }
 
-    public final Send toSend(String destination, RequestHeader header) {
-        return SendBuilder.buildRequestSend(destination, header, data());
+    public final Send toSend(RequestHeader header) {
+        return SendBuilder.buildRequestSend(header, data());
     }
 
     // Visible for testing
-    public final ByteBuffer serializeWithHeader(RequestHeader header) {
-        return RequestUtils.serialize(header.data(), header.headerVersion(), data(), version);
-    }
-
-    protected abstract Message data();
-
-    // Visible for testing
-    public final ByteBuffer serializeBody() {
-        return RequestUtils.serialize(null, (short) 0, data(), version);
+    public final ByteBuffer serialize() {
+        return MessageUtil.toByteBuffer(data(), version);
     }
 
     // Visible for testing
@@ -166,7 +159,7 @@ public abstract class AbstractRequest implements AbstractRequestResponse {
             case FETCH:
                 return FetchRequest.parse(buffer, apiVersion);
             case LIST_OFFSETS:
-                return ListOffsetRequest.parse(buffer, apiVersion);
+                return ListOffsetsRequest.parse(buffer, apiVersion);
             case METADATA:
                 return MetadataRequest.parse(buffer, apiVersion);
             case OFFSET_COMMIT:
@@ -279,6 +272,8 @@ public abstract class AbstractRequest implements AbstractRequestResponse {
                 return UpdateFeaturesRequest.parse(buffer, apiVersion);
             case ENVELOPE:
                 return EnvelopeRequest.parse(buffer, apiVersion);
+            case FETCH_SNAPSHOT:
+                return FetchSnapshotRequest.parse(buffer, apiVersion);
             default:
                 throw new AssertionError(String.format("ApiKey %s is not currently handled in `parseRequest`, the " +
                         "code should be updated to do so.", apiKey));

@@ -25,7 +25,6 @@ import java.util
 import java.util.Optional
 import java.util.concurrent._
 import java.util.concurrent.atomic._
-
 import kafka.cluster.{BrokerEndPoint, EndPoint}
 import kafka.metrics.KafkaMetricsGroup
 import kafka.network.ConnectionQuotas._
@@ -42,7 +41,7 @@ import org.apache.kafka.common.memory.{MemoryPool, SimpleMemoryPool}
 import org.apache.kafka.common.metrics._
 import org.apache.kafka.common.metrics.stats.{Avg, CumulativeSum, Meter, Rate}
 import org.apache.kafka.common.network.KafkaChannel.ChannelMuteEvent
-import org.apache.kafka.common.network.{ChannelBuilder, ChannelBuilders, ClientInformation, KafkaChannel, ListenerName, ListenerReconfigurable, Selectable, Send, Selector => KSelector}
+import org.apache.kafka.common.network.{ChannelBuilder, ChannelBuilders, ClientInformation, NetworkSend, KafkaChannel, ListenerName, ListenerReconfigurable, Selectable, Send, Selector => KSelector}
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.requests.{ApiVersionsRequest, EnvelopeRequest, EnvelopeResponse, RequestContext, RequestHeader}
 import org.apache.kafka.common.security.auth.{KafkaPrincipal, KafkaPrincipalSerde, SecurityProtocol}
@@ -72,7 +71,7 @@ import scala.util.control.ControlThrowable
  *    - The threading model is
  *      1 Acceptor thread that handles new connections
  *      Acceptor has 1 Processor thread that has its own selector and read requests from the socket.
- *      1 Handler thread that handles requests and produce responses back to the processor thread for writing.
+ *      1 Handler thread that handles requests and produces responses back to the processor thread for writing.
  */
 class SocketServer(val config: KafkaConfig,
                    val metrics: Metrics,
@@ -964,7 +963,7 @@ private[kafka] class Processor(val id: Int,
     // removed from the Selector after discarding any pending staged receives.
     // `openOrClosingChannel` can be None if the selector closed the connection because it was idle for too long
     if (openOrClosingChannel(connectionId).isDefined) {
-      selector.send(responseSend)
+      selector.send(new NetworkSend(connectionId, responseSend))
       inflightResponses += (connectionId -> response)
     }
   }
@@ -1123,8 +1122,8 @@ private[kafka] class Processor(val id: Int,
   private def processCompletedSends(): Unit = {
     selector.completedSends.forEach { send =>
       try {
-        val response = inflightResponses.remove(send.destination).getOrElse {
-          throw new IllegalStateException(s"Send for ${send.destination} completed, but not in `inflightResponses`")
+        val response = inflightResponses.remove(send.destinationId).getOrElse {
+          throw new IllegalStateException(s"Send for ${send.destinationId} completed, but not in `inflightResponses`")
         }
         updateRequestMetrics(response)
 
@@ -1134,11 +1133,11 @@ private[kafka] class Processor(val id: Int,
         // Try unmuting the channel. If there was no quota violation and the channel has not been throttled,
         // it will be unmuted immediately. If the channel has been throttled, it will unmuted only if the throttling
         // delay has already passed by now.
-        handleChannelMuteEvent(send.destination, ChannelMuteEvent.RESPONSE_SENT)
-        tryUnmuteChannel(send.destination)
+        handleChannelMuteEvent(send.destinationId, ChannelMuteEvent.RESPONSE_SENT)
+        tryUnmuteChannel(send.destinationId)
       } catch {
-        case e: Throwable => processChannelException(send.destination,
-          s"Exception while processing completed send to ${send.destination}", e)
+        case e: Throwable => processChannelException(send.destinationId,
+          s"Exception while processing completed send to ${send.destinationId}", e)
       }
     }
     selector.clearCompletedSends()
@@ -1327,6 +1326,8 @@ object ConnectionQuotas {
   private val ConnectionRateSensorName = "Connection-Accept-Rate"
   private val ConnectionRateMetricName = "connection-accept-rate"
   private val IpMetricTag = "ip"
+  private val ListenerThrottlePrefix = ""
+  private val IpThrottlePrefix = "ip-"
 
   private case class ListenerQuotaEntity(listenerName: String) extends ConnectionQuotaEntity {
     override def sensorName: String = s"$ConnectionRateSensorName-$listenerName"
@@ -1574,7 +1575,7 @@ class ConnectionQuotas(config: KafkaConfig, time: Time, metrics: Metrics) extend
           val throttleTimeMs = math.max(minThrottleTimeMs, listenerThrottleTimeMs)
           // record throttle time due to hitting connection rate quota
           if (throttleTimeMs > 0) {
-            listenerQuota.connectionRateThrottleSensor.record(throttleTimeMs.toDouble, timeMs)
+            listenerQuota.listenerConnectionRateThrottleSensor.record(throttleTimeMs.toDouble, timeMs)
           }
           throttleTimeMs
         }
@@ -1590,19 +1591,23 @@ class ConnectionQuotas(config: KafkaConfig, time: Time, metrics: Metrics) extend
   }
 
   /**
-   * To avoid over-recording listener/broker connection rate, we un-record a listener and broker connection
-   * if the IP gets throttled.
+   * Record IP throttle time on the corresponding listener. To avoid over-recording listener/broker connection rate, we
+   * also un-record the listener and broker connection if the IP gets throttled.
    *
    * @param listenerName listener to un-record connection
+   * @param throttleMs IP throttle time to record for listener
    * @param timeMs current time in milliseconds
    */
-  private def unrecordListenerConnection(listenerName: ListenerName, timeMs: Long): Unit = {
+  private def updateListenerMetrics(listenerName: ListenerName, throttleMs: Long, timeMs: Long): Unit = {
     if (!protectedListener(listenerName)) {
       brokerConnectionRateSensor.record(-1.0, timeMs, false)
     }
     maxConnectionsPerListener
       .get(listenerName)
-      .foreach(_.connectionRateSensor.record(-1.0, timeMs, false))
+      .foreach { listenerQuota =>
+        listenerQuota.ipConnectionRateThrottleSensor.record(throttleMs.toDouble, timeMs)
+        listenerQuota.connectionRateSensor.record(-1.0, timeMs, false)
+      }
   }
 
   /**
@@ -1626,7 +1631,7 @@ class ConnectionQuotas(config: KafkaConfig, time: Time, metrics: Metrics) extend
         trace(s"Throttling $address for $throttleMs ms")
         // unrecord the connection since we won't accept the connection
         sensor.record(-1.0, timeMs, false)
-        unrecordListenerConnection(listenerName, timeMs)
+        updateListenerMetrics(listenerName, throttleMs, timeMs)
         throw new ConnectionThrottledException(address, timeMs, throttleMs)
       }
     }
@@ -1702,7 +1707,8 @@ class ConnectionQuotas(config: KafkaConfig, time: Time, metrics: Metrics) extend
   class ListenerConnectionQuota(lock: Object, listener: ListenerName) extends ListenerReconfigurable with AutoCloseable {
     @volatile private var _maxConnections = Int.MaxValue
     private[network] val connectionRateSensor = getOrCreateConnectionRateQuotaSensor(Int.MaxValue, ListenerQuotaEntity(listener.value))
-    private[network] val connectionRateThrottleSensor = createConnectionRateThrottleSensor()
+    private[network] val listenerConnectionRateThrottleSensor = createConnectionRateThrottleSensor(ListenerThrottlePrefix)
+    private[network] val ipConnectionRateThrottleSensor = createConnectionRateThrottleSensor(IpThrottlePrefix)
 
     def maxConnections: Int = _maxConnections
 
@@ -1737,7 +1743,8 @@ class ConnectionQuotas(config: KafkaConfig, time: Time, metrics: Metrics) extend
 
     def close(): Unit = {
       metrics.removeSensor(connectionRateSensor.name)
-      metrics.removeSensor(connectionRateThrottleSensor.name)
+      metrics.removeSensor(listenerConnectionRateThrottleSensor.name)
+      metrics.removeSensor(ipConnectionRateThrottleSensor.name)
     }
 
     private def maxConnections(configs: util.Map[String, _]): Int = {
@@ -1749,13 +1756,13 @@ class ConnectionQuotas(config: KafkaConfig, time: Time, metrics: Metrics) extend
     }
 
     /**
-     * Creates sensor for tracking the average throttle time on this listener due to hitting connection rate quota.
-     * The average is out of all throttle times > 0, which is consistent with the bandwidth and request quota throttle
-     * time metrics.
+     * Creates sensor for tracking the average throttle time on this listener due to hitting broker/listener connection
+     * rate or IP connection rate quota. The average is out of all throttle times > 0, which is consistent with the
+     * bandwidth and request quota throttle time metrics.
      */
-    private def createConnectionRateThrottleSensor(): Sensor = {
-      val sensor = metrics.sensor(s"ConnectionRateThrottleTime-${listener.value}")
-      val metricName = metrics.metricName("connection-accept-throttle-time",
+    private def createConnectionRateThrottleSensor(throttlePrefix: String): Sensor = {
+      val sensor = metrics.sensor(s"${throttlePrefix}ConnectionRateThrottleTime-${listener.value}")
+      val metricName = metrics.metricName(s"${throttlePrefix}connection-accept-throttle-time",
         MetricsGroup,
         "Tracking average throttle-time, out of non-zero throttle times, per listener",
         Map(ListenerMetricTag -> listener.value).asJava)
