@@ -686,7 +686,10 @@ class LogManagerTest {
   def testWaitForAllToComplete(): Unit = {
     var invokedCount = 0
     val success: Future[Boolean] = Mockito.mock(classOf[Future[Boolean]])
-    Mockito.when(success.get()).thenAnswer(_ => invokedCount += 1)
+    Mockito.when(success.get()).thenAnswer { _ =>
+      invokedCount += 1
+      true
+    }
     val failure: Future[Boolean] = Mockito.mock(classOf[Future[Boolean]])
     Mockito.when(failure.get()).thenAnswer{ _ =>
       invokedCount += 1

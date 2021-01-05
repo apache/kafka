@@ -1161,9 +1161,9 @@ class LogManager(logDirs: Seq[File],
 object LogManager {
 
   /**
-   * wait all jobs to complete
+   * Wait all jobs to complete
    * @param jobs jobs
-   * @param callback handle the exception caused by Future#get
+   * @param callback this will be called to handle the exception caused by each Future#get
    * @return true if all pass. Otherwise, false
    */
   private[log] def waitForAllToComplete(jobs: Seq[Future[_]], callback: Throwable => Unit): Boolean = {
