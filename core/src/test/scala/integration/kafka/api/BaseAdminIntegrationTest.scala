@@ -96,12 +96,10 @@ abstract class BaseAdminIntegrationTest extends IntegrationTestHarness with Logg
     waitForTopics(client, topics, List())
     validateMetadataAndConfigs(createResult)
     val topicIds = zkClient.getTopicIdsForTopics(topics.toSet)
-    assertNotEquals(Uuid.ZERO_UUID, createResult.topicId("mytopic").get())
-    assertNotEquals(Uuid.ZERO_UUID, createResult.topicId("mytopic2").get())
-    assertNotEquals(Uuid.ZERO_UUID, createResult.topicId("mytopic3").get())
-    assertEquals(topicIds("mytopic"), createResult.topicId("mytopic").get())
-    assertEquals(topicIds("mytopic2"), createResult.topicId("mytopic2").get())
-    assertEquals(topicIds("mytopic3"), createResult.topicId("mytopic3").get())
+    topics.foreach { topic =>
+      assertNotEquals(Uuid.ZERO_UUID, createResult.topicId(topic).get())
+      assertEquals(topicIds(topic), createResult.topicId(topic).get())
+    }
     
 
     val failedCreateResult = client.createTopics(newTopics.asJava)
@@ -159,24 +157,6 @@ abstract class BaseAdminIntegrationTest extends IntegrationTestHarness with Logg
     assertEquals(configs.head.defaultReplicationFactor, topic3.partitions.get(0).replicas().size())
 
     client.deleteTopics(topics.asJava).all.get()
-    waitForTopics(client, List(), topics)
-  }
-  
-  @Test
-  def testDeleteTopicsWithIds(): Unit = {
-    client = Admin.create(createConfig)
-    val topics = Seq("mytopic", "mytopic2", "mytopic3")
-    val newTopics = Seq(
-      new NewTopic("mytopic", Map((0: Integer) -> Seq[Integer](1, 2).asJava, (1: Integer) -> Seq[Integer](2, 0).asJava).asJava),
-      new NewTopic("mytopic2", 3, 3.toShort),
-      new NewTopic("mytopic3", Option.empty[Integer].asJava, Option.empty[java.lang.Short].asJava)
-    )
-    val createResult = client.createTopics(newTopics.asJava)
-    createResult.all.get()
-    waitForTopics(client, topics, List())
-    val topicIds = zkClient.getTopicIdsForTopics(topics.toSet).values.toSet
-    
-    client.deleteTopicsWithIds(topicIds.asJava).all.get()
     waitForTopics(client, List(), topics)
   }
 

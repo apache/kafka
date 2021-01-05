@@ -68,6 +68,7 @@ import org.apache.kafka.common.errors.ThrottlingQuotaExceededException;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.errors.UnacceptableCredentialException;
 import org.apache.kafka.common.errors.UnknownServerException;
+import org.apache.kafka.common.errors.UnknownTopicIdException;
 import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
 import org.apache.kafka.common.errors.UnsupportedSaslMechanismException;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
@@ -1633,7 +1634,7 @@ public class KafkaAdminClient extends AdminClient {
         for (Uuid topicId : topicIds) {
             if (topicId.equals(Uuid.ZERO_UUID)) {
                 KafkaFutureImpl<Void> future = new KafkaFutureImpl<>();
-                future.completeExceptionally(new InvalidTopicException("The given topic ID '" +
+                future.completeExceptionally(new UnknownTopicIdException("The given topic ID '" +
                         topicId + "' cannot be represented in a request."));
                 topicFutures.put(topicId, future);
             } else if (!topicFutures.containsKey(topicId)) {
@@ -1750,7 +1751,7 @@ public class KafkaAdminClient extends AdminClient {
                 for (DeletableTopicResult result : response.data().responses()) {
                     KafkaFutureImpl<Void> future = futures.get(result.topicId());
                     if (future == null) {
-                        log.warn("Server response mentioned unknown topic {}", result.name());
+                        log.warn("Server response mentioned unknown topic ID {}", result.topicId());
                     } else {
                         ApiError error = new ApiError(result.errorCode(), result.errorMessage());
                         if (error.isFailure()) {

@@ -26,7 +26,7 @@ import java.util.{Collections, Optional, Random}
 
 import kafka.api.{ApiVersion, KAFKA_0_10_2_IV0, KAFKA_2_2_IV1, LeaderAndIsr}
 import kafka.cluster.Partition
-import kafka.controller.KafkaController
+import kafka.controller.{ControllerContext, KafkaController}
 import kafka.coordinator.group.GroupCoordinatorConcurrencyTest.{JoinGroupCallback, SyncGroupCallback}
 import kafka.coordinator.group.{GroupCoordinator, GroupOverview, GroupSummary, JoinGroupResult, MemberSummary, SyncGroupResult}
 import kafka.coordinator.transaction.{InitProducerIdResult, TransactionCoordinator}
@@ -697,6 +697,7 @@ class KafkaApisTest {
 
     val authorizedTopic = "authorized-topic"
     val unauthorizedTopic = "unauthorized-topic"
+    val authorizedTopicId = Uuid.randomUuid()
 
     authorizeResource(authorizer, AclOperation.CREATE, ResourceType.CLUSTER,
       Resource.CLUSTER_NAME, AuthorizationResult.DENIED, logIfDenied = false)
@@ -744,9 +745,12 @@ class KafkaApisTest {
       anyObject(),
       EasyMock.eq(UnboundedControllerMutationQuota),
       EasyMock.capture(capturedCallback)))
-    
-    EasyMock.expect(zkClient.getTopicIdsForTopics(Set(authorizedTopic, unauthorizedTopic))).andReturn(
-      Map(authorizedTopic -> Uuid.ZERO_UUID, unauthorizedTopic -> Uuid.ZERO_UUID))
+
+    val controllerContext = new ControllerContext
+    controllerContext.allTopics.add(authorizedTopic)
+    controllerContext.addTopicId(authorizedTopic, authorizedTopicId)
+
+    EasyMock.expect(controller.controllerContext).andStubReturn(controllerContext)
 
     EasyMock.replay(replicaManager, clientRequestQuotaManager, clientControllerQuotaManager,
       requestChannel, authorizer, adminManager, controller, zkClient)
@@ -757,7 +761,8 @@ class KafkaApisTest {
 
     verifyCreateTopicsResult(createTopicsRequest,
       capturedResponse, Map(authorizedTopic -> Errors.NONE,
-        unauthorizedTopic -> Errors.TOPIC_AUTHORIZATION_FAILED))
+        unauthorizedTopic -> Errors.TOPIC_AUTHORIZATION_FAILED),  Map(authorizedTopic -> authorizedTopicId,
+        unauthorizedTopic -> Uuid.ZERO_UUID))
 
     verify(authorizer, adminManager, clientControllerQuotaManager)
   }
@@ -813,14 +818,19 @@ class KafkaApisTest {
 
   private def verifyCreateTopicsResult(createTopicsRequest: CreateTopicsRequest,
                                        capturedResponse: Capture[RequestChannel.Response],
-                                       expectedResults: Map[String, Errors]): Unit = {
+                                       expectedResults: Map[String, Errors],
+                                       expectedIds: Map[String, Uuid]): Unit = {
     val response = readResponse(createTopicsRequest, capturedResponse)
       .asInstanceOf[CreateTopicsResponse]
     val responseMap = response.data.topics().asScala.map { topicResponse =>
       topicResponse.name() -> Errors.forCode(topicResponse.errorCode)
     }.toMap
+    val responseIdMap = response.data.topics().asScala.map { topicResponse =>
+      topicResponse.name() -> topicResponse.topicId()
+    }.toMap
 
     assertEquals(expectedResults, responseMap)
+    assertEquals(expectedIds, responseIdMap)
   }
 
   @Test

@@ -49,7 +49,7 @@ public class DeleteTopicsRequest extends AbstractRequest {
                 data.setTopics(groupByTopic(data.topicNames()));
             } else if (version >= 6) {
                 for (DeleteTopicState topic : data.topics()) {
-                    if (topic.name().equals("")) {
+                    if (topic.name() != null && topic.name().equals("")) {
                         topic.setName(null);
                     }
                 }

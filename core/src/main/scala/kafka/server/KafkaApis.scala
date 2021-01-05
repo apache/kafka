@@ -1894,12 +1894,9 @@ class KafkaApis(val requestChannel: RequestChannel,
               .setNumPartitions(-1)
               .setReplicationFactor(-1)
               .setTopicConfigErrorCode(Errors.NONE.code)
+          } else {
+            result.setTopicId(controller.controllerContext.topicIds.getOrElse(result.name(), Uuid.ZERO_UUID))
           }
-        }
-        val topicIds = zkClient.getTopicIdsForTopics(results.asScala.map(result => result.name()).toSet)
-        topicIds.foreach { case (name, id) =>
-          val result = results.find(name)
-          result.setTopicId(id)
         }
         sendResponseCallback(results)
       }
@@ -2004,7 +2001,7 @@ class KafkaApis(val requestChannel: RequestChannel,
       sendResponseCallback(results)
     } else {
       deleteTopicRequest.topics().forEach { topic =>
-        val name = if (topic.name() != null) topic.name() 
+        val name = if (topic.topicId().equals(Uuid.ZERO_UUID)) topic.name()
           else controller.controllerContext.topicNames.getOrElse(topic.topicId(), null)
         results.add(new DeletableTopicResult()
           .setName(name)
@@ -2016,9 +2013,12 @@ class KafkaApis(val requestChannel: RequestChannel,
       results.forEach { topic =>
          val foundTopicId = !topic.topicId().equals(Uuid.ZERO_UUID) && topic.name() != null
          val topicIdSpecified = !topic.topicId().equals(Uuid.ZERO_UUID)
-         if (!foundTopicId && topicIdSpecified)
-           topic.setErrorCode(Errors.UNKNOWN_TOPIC_ID.code)
-         else if (!authorizedTopics.contains(topic.name))
+         if (!foundTopicId && topicIdSpecified) {
+           if (config.usesTopicId)
+             topic.setErrorCode(Errors.UNKNOWN_TOPIC_ID.code)
+           else
+             topic.setErrorCode(Errors.UNSUPPORTED_VERSION.code)
+         } else if (!authorizedTopics.contains(topic.name))
            topic.setErrorCode(Errors.TOPIC_AUTHORIZATION_FAILED.code)
          else if (!metadataCache.contains(topic.name))
            topic.setErrorCode(Errors.UNKNOWN_TOPIC_OR_PARTITION.code)
