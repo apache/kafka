@@ -935,6 +935,88 @@ public class SenderTest {
     }
 
     @Test
+    public void testEpochBumpOnOutOfOrderSequenceForNextBatchWhenThereIsNoBatchInFlight() throws Exception {
+        // Verify that partitions without in-flight batches when the producer epoch
+        // is bumped get their sequence number reset properly.
+        final long producerId = 343434L;
+        TransactionManager transactionManager = createTransactionManager();
+        setupWithTransactionState(transactionManager);
+        prepareAndReceiveInitProducerId(producerId, Errors.NONE);
+        assertTrue(transactionManager.hasProducerId());
+
+        assertEquals(0, transactionManager.producerIdAndEpoch().epoch);
+        assertEquals(0, transactionManager.sequenceNumber(tp0).longValue());
+        assertEquals(0, transactionManager.sequenceNumber(tp1).longValue());
+        assertEquals(OptionalInt.empty(), transactionManager.lastAckedSequence(tp0));
+        assertEquals(OptionalInt.empty(), transactionManager.lastAckedSequence(tp1));
+
+        // Send batch to partition 0 and receive a successful response
+        appendToAccumulator(tp0);
+        sender.runOnce();
+        sendIdempotentProducerResponse(0, tp0, Errors.NONE, 0);
+        sender.runOnce();
+
+        // Verify that the producer epoch has not changed, that the sequence number
+        // have been incremented, and that the acked sequence number is correct
+        assertEquals(0, transactionManager.producerIdAndEpoch().epoch);
+        assertEquals(1, transactionManager.sequenceNumber(tp0).longValue());
+        assertEquals(OptionalInt.of(0), transactionManager.lastAckedSequence(tp0));
+
+        // Send batch to partition 1 and receive a successful response
+        appendToAccumulator(tp1);
+        sender.runOnce();
+        sendIdempotentProducerResponse(0, tp1, Errors.NONE, 0);
+        sender.runOnce();
+
+        // Verify that the producer epoch has not changed, that the sequence number
+        // have been incremented, and that the acked sequence number is correct
+        assertEquals(0, transactionManager.producerIdAndEpoch().epoch);
+        assertEquals(1, transactionManager.sequenceNumber(tp1).longValue());
+        assertEquals(OptionalInt.of(0), transactionManager.lastAckedSequence(tp1));
+
+        // At this point, there is no batches inflight
+
+        // Send batch to partition 0 and receive a OUT_OF_ORDER_SEQUENCE_NUMBER error
+        appendToAccumulator(tp0);
+        sender.runOnce();
+        sendIdempotentProducerResponse(1, tp0, Errors.OUT_OF_ORDER_SEQUENCE_NUMBER, -1L);
+        sender.runOnce(); // Receive
+        sender.runOnce(); // Bump epoch, Reset produce epoch and sequence number of failed batch
+
+        // Verify that the producer epoch has not changed, that the sequence number
+        // have been incremented, and that the acked sequence number is correct
+        assertEquals(1, transactionManager.producerIdAndEpoch().epoch);
+        assertEquals(1, transactionManager.sequenceNumber(tp0).longValue());
+        assertEquals(OptionalInt.empty(), transactionManager.lastAckedSequence(tp0));
+
+        // At this point, the produce epoch has been bumped, the sequence number of
+        // partition 0 has been reset as well.
+
+        // Resend batch to partition 0
+        sendIdempotentProducerResponse(0, tp0, Errors.NONE, 1);
+        sender.runOnce();
+
+        // Verify that the producer epoch has not changed, that the sequence number
+        // have been incremented, and that the acked sequence number is correct
+        assertEquals(1, transactionManager.producerIdAndEpoch().epoch);
+        assertEquals(1, transactionManager.sequenceNumber(tp0).longValue());
+        assertEquals(OptionalInt.of(0), transactionManager.lastAckedSequence(tp0));
+
+        // Send batch to partition 1 and receive a successful response
+        appendToAccumulator(tp1);
+        sender.runOnce();
+        // As the producer epoch has been bumped, we expect sequence number of be zero now
+        sendIdempotentProducerResponse(0, tp1, Errors.NONE, 1);
+        sender.runOnce();
+
+        // Verify that the producer epoch has not changed, that the sequence number
+        // have been incremented, and that the acked sequence number is correct
+        assertEquals(1, transactionManager.producerIdAndEpoch().epoch);
+        assertEquals(1, transactionManager.sequenceNumber(tp1).longValue());
+        assertEquals(OptionalInt.of(0), transactionManager.lastAckedSequence(tp1));
+    }
+
+    @Test
     public void testCorrectHandlingOfOutOfOrderResponses() throws Exception {
         final long producerId = 343434L;
         TransactionManager transactionManager = createTransactionManager();
@@ -1825,7 +1907,7 @@ public class SenderTest {
             ProduceRequest produceRequest = (ProduceRequest) body;
             assertTrue(RequestTestUtils.hasIdempotentRecords(produceRequest));
 
-            MemoryRecords records = partitionRecords(produceRequest).get(tp0);
+            MemoryRecords records = partitionRecords(produceRequest).get(tp);
             Iterator<MutableRecordBatch> batchIterator = records.batches().iterator();
             RecordBatch firstBatch = batchIterator.next();
             assertFalse(batchIterator.hasNext());

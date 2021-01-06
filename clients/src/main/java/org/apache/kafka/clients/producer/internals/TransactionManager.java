@@ -119,6 +119,10 @@ public class TransactionManager {
             return topicPartitions.containsKey(topicPartition);
         }
 
+        private Set<TopicPartition> partitions() {
+            return topicPartitions.keySet();
+        }
+
         private void reset() {
             topicPartitions.clear();
         }
@@ -567,8 +571,18 @@ public class TransactionManager {
             this.topicPartitionBookkeeper.startSequencesAtBeginning(topicPartition, this.producerIdAndEpoch);
             this.partitionsWithUnresolvedSequences.remove(topicPartition);
         }
-
         this.partitionsToRewriteSequences.clear();
+
+        // When the epoch is bumped, reset the sequences for the partitions(s) that do not
+        // have in-flight batches. Sequences of the in-flight batches that did not triggered
+        // the epoch bump are treated when their last in-flight batch is completed.
+        for (TopicPartition topicPartition : this.topicPartitionBookkeeper.partitions()) {
+            TopicPartitionEntry topicPartitionEntry = this.topicPartitionBookkeeper.getPartition(topicPartition);
+            if (topicPartitionEntry.inflightBatchesBySequence.isEmpty()) {
+                this.topicPartitionBookkeeper.startSequencesAtBeginning(topicPartition, this.producerIdAndEpoch);
+            }
+        }
+
         epochBumpRequired = false;
     }
 
