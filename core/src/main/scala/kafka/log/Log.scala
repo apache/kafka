@@ -1112,10 +1112,6 @@ class Log(@volatile private var _dir: File,
         maybeHandleIOException(s"Error while appending records to $topicPartition in dir ${dir.getParent}") {
           checkIfMemoryMappedBufferClosed()
 
-          // check for offline log dir in case a retry following an IOException happens before the log dir
-          // is taken offline, which would result in inconsistent producer state
-          checkForLogDirFailure()
-
           if (assignOffsets) {
             // assign offsets to the message set
             val offset = new LongRef(nextOffsetMetadata.messageOffset)
