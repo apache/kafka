@@ -103,7 +103,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
     private long idleStartTimeMs;
     private boolean commitNeeded = false;
     private boolean commitRequested = false;
-    private boolean hasPendingTransaction = false;
+    private boolean hasPendingTxCommit = false;
 
     public StreamTask(final TaskId id,
                       final Set<TopicPartition> partitions,
@@ -379,7 +379,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
                     // TODO: this should be removed after we decouple caching with emitting
                     stateMgr.flushCache();
                     recordCollector.flush();
-                    hasPendingTransaction = eosEnabled;
+                    hasPendingTxCommit = eosEnabled;
 
                     log.debug("Prepared {} task for committing", state());
                     return committableOffsetsAndMetadata();
@@ -478,7 +478,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
 
         commitRequested = false;
         commitNeeded = false;
-        hasPendingTransaction = false;
+        hasPendingTxCommit = false;
     }
 
     private Map<TopicPartition, Long> extractPartitionTimes() {
@@ -636,7 +636,9 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
             return false;
         }
 
-        if (hasPendingTransaction) {
+        if (hasPendingTxCommit) {
+            // if the task has a pending TX commit, we should just retry the commit but not process any records
+            // thus, the task is not processable, even if there is available data in the record queue
             return false;
         }
 
