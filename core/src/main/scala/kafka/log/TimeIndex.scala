@@ -42,7 +42,7 @@ import org.apache.kafka.common.record.RecordBatch
  * The index support timestamp lookup for a memory map of this file. The lookup is done using a binary search to find
  * the offset of the message whose indexed timestamp is closest but smaller or equals to the target timestamp.
  *
- * Time index files can be opened in two ways: either as an empty, mutable index that allows appends or
+ * Time index files can be opened in two ways: either as an empty, mutable index that allows appending or
  * an immutable read-only index file that has previously been populated. The makeReadOnly method will turn a mutable file into an
  * immutable one and truncate off any extra bytes. This is done when the index file is rolled over.
  *
