@@ -105,7 +105,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
     private boolean commitRequested = false;
 
     public StreamTask(final TaskId id,
-                      final Set<TopicPartition> partitions,
+                      final Set<TopicPartition> inputPartitions,
                       final ProcessorTopology topology,
                       final Consumer<byte[], byte[]> mainConsumer,
                       final StreamsConfig config,
@@ -121,7 +121,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
             topology,
             stateDirectory,
             stateMgr,
-            partitions,
+            inputPartitions,
             config.getLong(StreamsConfig.TASK_TIMEOUT_MS_CONFIG),
             "task",
             StreamTask.class
@@ -502,8 +502,8 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
     }
 
     @Override
-    public void update(final Set<TopicPartition> topicPartitions, final Map<String, List<String>> allTopologyNodesToSourceTopics) {
-        super.update(topicPartitions, allTopologyNodesToSourceTopics);
+    public void updateInputPartitions(final Set<TopicPartition> topicPartitions, final Map<String, List<String>> allTopologyNodesToSourceTopics) {
+        super.updateInputPartitions(topicPartitions, allTopologyNodesToSourceTopics);
         partitionGroup.updatePartitions(topicPartitions, recordQueueCreator::createQueue);
     }
 

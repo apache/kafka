@@ -1947,7 +1947,7 @@ public class StreamTaskTest {
         final Set<TopicPartition> newPartitions = new HashSet<>(task.inputPartitions());
         newPartitions.add(new TopicPartition("newTopic", 0));
 
-        task.update(newPartitions, mkMap(
+        task.updateInputPartitions(newPartitions, mkMap(
             mkEntry(source1.name(), asList(topic1, "newTopic")),
             mkEntry(source2.name(), singletonList(topic2)))
         );

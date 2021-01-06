@@ -52,7 +52,7 @@ public class StandbyTask extends AbstractTask implements Task {
      * @param stateDirectory the {@link StateDirectory} created by the thread
      */
     StandbyTask(final TaskId id,
-                final Set<TopicPartition> partitions,
+                final Set<TopicPartition> inputPartitions,
                 final ProcessorTopology topology,
                 final StreamsConfig config,
                 final StreamsMetricsImpl streamsMetrics,
@@ -65,7 +65,7 @@ public class StandbyTask extends AbstractTask implements Task {
             topology,
             stateDirectory,
             stateMgr,
-            partitions,
+            inputPartitions,
             config.getLong(StreamsConfig.TASK_TIMEOUT_MS_CONFIG),
             "standby-task",
             StandbyTask.class
