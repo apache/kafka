@@ -219,7 +219,7 @@ class ClientQuotasRequestTest extends BaseRequestTest {
           () => {
             currentServerQuota = servers.head.socketServer.connectionQuotas.connectionRateForIp(entityIp)
             Math.abs(expectedMatches(entity) - currentServerQuota) < 0.01
-          }, s"Broker didn't update quotas from Zookeeper, expect: ${expectedMatches(entity)}, got: $currentServerQuota")
+          }, s"Connection quota of $entity is not ${expectedMatches(entity)} but $currentServerQuota")
       }
     }
 
