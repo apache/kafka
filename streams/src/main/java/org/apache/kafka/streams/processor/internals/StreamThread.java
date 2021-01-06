@@ -193,6 +193,10 @@ public class StreamThread extends Thread {
         return state;
     }
 
+    void setPartitionAssignedTime(final long lastPartitionAssignedMs) {
+        this.lastPartitionAssignedMs = lastPartitionAssignedMs;
+    }
+
     /**
      * Sets the state
      *
@@ -273,6 +277,7 @@ public class StreamThread extends Thread {
     private long now;
     private long lastPollMs;
     private long lastCommitMs;
+    private long lastPartitionAssignedMs = 0;
     private int numIterations;
     private volatile State state = State.CREATED;
     private volatile ThreadMetadata threadMetadata;
@@ -777,7 +782,8 @@ public class StreamThread extends Thread {
 
             if (taskManager.tryToCompleteRestoration(now)) {
                 changelogReader.transitToUpdateStandby();
-
+                log.info("Restoration completed for all tasks {}, which took {} ms", taskManager.tasks().keySet(),
+                    time.milliseconds() - lastPartitionAssignedMs);
                 setState(State.RUNNING);
             }
 
