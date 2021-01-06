@@ -546,8 +546,14 @@ class AdminManager(val config: KafkaConfig,
       val loggerName = alterConfigOp.configEntry().name()
       val logLevel = alterConfigOp.configEntry().value()
       alterConfigOp.opType() match {
-        case OpType.SET => Log4jController.logLevel(loggerName, logLevel)
-        case OpType.DELETE => Log4jController.unsetLogLevel(loggerName)
+        case OpType.SET => {
+          info(s"Updating the log level of $loggerName to $logLevel")
+          Log4jController.logLevel(loggerName, logLevel)
+        }
+        case OpType.DELETE => {
+          info(s"Unset the log level of $loggerName")
+          Log4jController.unsetLogLevel(loggerName)
+        }
         case _ => throw new IllegalArgumentException(
           s"Log level cannot be changed for OpType: ${alterConfigOp.opType()}")
       }
