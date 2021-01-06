@@ -232,9 +232,9 @@ public final class Cluster {
     }
 
     /**
-     * Get the node by the node id (or null if no such node exists)
+     * Get the node by the node id (or null if the node is not online or does not exist)
      * @param id The id of the node
-     * @return The node, or null if no such node exists
+     * @return The node, or null if the node is not online or does not exist
      */
     public Node nodeById(int id) {
         return this.nodesById.get(id);
