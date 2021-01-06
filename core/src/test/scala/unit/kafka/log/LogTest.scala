@@ -191,6 +191,59 @@ class LogTest {
   }
 
   @Test
+  def testTruncateBelowFirstUnstableOffset(): Unit = {
+    testTruncateBelowFirstUnstableOffset(_.truncateTo)
+  }
+
+  @Test
+  def testTruncateFullyAndStartBelowFirstUnstableOffset(): Unit = {
+    testTruncateBelowFirstUnstableOffset(_.truncateFullyAndStartAt)
+  }
+
+  def testTruncateBelowFirstUnstableOffset(
+    truncateFunc: Log => (Long => Unit)
+  ): Unit = {
+    // Verify that truncation below the first unstable offset correctly
+    // resets the producer state. Specifically we are testing the case when
+    // the segment position of the first unstable offset is unknown.
+
+    val logConfig = LogTest.createLogConfig(segmentBytes = 1024 * 1024)
+    val log = createLog(logDir, logConfig)
+
+    val producerId = 17L
+    val producerEpoch: Short = 10
+    val sequence = 0
+
+    log.appendAsLeader(TestUtils.records(List(
+      new SimpleRecord("0".getBytes),
+      new SimpleRecord("1".getBytes),
+      new SimpleRecord("2".getBytes)
+    )), leaderEpoch = 0)
+
+    log.appendAsLeader(MemoryRecords.withTransactionalRecords(
+      CompressionType.NONE,
+      producerId,
+      producerEpoch,
+      sequence,
+      new SimpleRecord("3".getBytes),
+      new SimpleRecord("4".getBytes)
+    ), leaderEpoch = 0)
+
+    assertEquals(Some(3L), log.firstUnstableOffset)
+
+    // We close and reopen the log to ensure that the first unstable offset segment
+    // position will be undefined when we truncate the log.
+    log.close()
+
+    val reopened = createLog(logDir, logConfig)
+    assertEquals(Some(LogOffsetMetadata(3L)), reopened.producerStateManager.firstUnstableOffset)
+
+    truncateFunc(reopened)(0L)
+    assertEquals(None, reopened.firstUnstableOffset)
+    assertEquals(Map.empty, reopened.producerStateManager.activeProducers)
+  }
+
+  @Test
   def testHighWatermarkMaintenance(): Unit = {
     val logConfig = LogTest.createLogConfig(segmentBytes = 1024 * 1024)
     val log = createLog(logDir, logConfig)

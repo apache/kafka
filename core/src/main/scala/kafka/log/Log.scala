@@ -460,6 +460,10 @@ class Log(@volatile private var _dir: File,
       throw new IllegalArgumentException("High watermark offset should be non-negative")
 
     lock synchronized {
+      if (newHighWatermark.messageOffset < highWatermarkMetadata.messageOffset) {
+        warn(s"Non-monotonic update of high watermark from $highWatermarkMetadata to $newHighWatermark")
+      }
+
       highWatermarkMetadata = newHighWatermark
       producerStateManager.onHighWatermarkUpdated(newHighWatermark.messageOffset)
       maybeIncrementFirstUnstableOffset()
@@ -2096,10 +2100,14 @@ class Log(@volatile private var _dir: File,
             val deletable = logSegments.filter(segment => segment.baseOffset > targetOffset)
             removeAndDeleteSegments(deletable, asyncDelete = true, LogTruncation)
             activeSegment.truncateTo(targetOffset)
-            updateLogEndOffset(targetOffset)
-            updateLogStartOffset(math.min(targetOffset, this.logStartOffset))
             leaderEpochCache.foreach(_.truncateFromEnd(targetOffset))
+
+            // Load producer state prior to adjusting log start and end offsets
+            // in case the first unstable offset is invalidated by the truncation.
             loadProducerState(targetOffset, reloadFromCleanShutdown = false)
+
+            updateLogStartOffset(math.min(targetOffset, this.logStartOffset))
+            updateLogEndOffset(targetOffset)
           }
           true
         }
@@ -2124,13 +2132,15 @@ class Log(@volatile private var _dir: File,
           time = time,
           initFileSize = initFileSize,
           preallocate = config.preallocate))
-        updateLogEndOffset(newOffset)
         leaderEpochCache.foreach(_.clearAndFlush())
 
-        producerStateManager.truncate()
-        producerStateManager.updateMapEndOffset(newOffset)
+        // Clear producer state prior to adjusting log start and end offsets
+        // in case the first unstable offset is invalidated by the truncation.
+        producerStateManager.truncateFullyAndStartAt(newOffset)
         maybeIncrementFirstUnstableOffset()
+
         updateLogStartOffset(newOffset)
+        updateLogEndOffset(newOffset)
       }
     }
   }
