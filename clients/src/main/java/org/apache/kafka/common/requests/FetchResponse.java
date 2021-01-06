@@ -150,9 +150,17 @@ public class FetchResponse extends AbstractResponse {
                 : Optional.of(partitionResponse.divergingEpoch());
     }
 
+    public static boolean isDivergingEpoch(FetchResponseData.FetchablePartitionResponse partitionResponse) {
+        return partitionResponse.divergingEpoch().epoch() >= 0;
+    }
+
     public static Optional<Integer> preferredReadReplica(FetchResponseData.FetchablePartitionResponse partitionResponse) {
         return partitionResponse.preferredReadReplica() == INVALID_PREFERRED_REPLICA_ID ? Optional.empty()
                 : Optional.of(partitionResponse.preferredReadReplica());
+    }
+
+    public static boolean isPreferredReplica(FetchResponseData.FetchablePartitionResponse partitionResponse) {
+        return partitionResponse.preferredReadReplica() != INVALID_PREFERRED_REPLICA_ID;
     }
 
     public static FetchResponseData.FetchablePartitionResponse partitionResponse(int partition, Errors error) {

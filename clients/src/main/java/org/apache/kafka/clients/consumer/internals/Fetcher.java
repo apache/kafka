@@ -1288,7 +1288,7 @@ public class Fetcher<K, V> implements Closeable {
                     subscriptions.updateLastStableOffset(tp, partition.lastStableOffset());
                 }
 
-                if (FetchResponse.preferredReadReplica(partition).isPresent()) {
+                if (FetchResponse.isPreferredReplica(partition)) {
                     subscriptions.updatePreferredReadReplica(completedFetch.partition, partition.preferredReadReplica(), () -> {
                         long expireTimeMs = time.milliseconds() + metadata.metadataExpireMs();
                         log.debug("Updating preferred read replica for partition {} to {}, set to expire at {}",

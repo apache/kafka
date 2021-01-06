@@ -906,7 +906,7 @@ class AbstractFetcherThreadTest {
                                       partitionData: FetchData): Option[LogAppendInfo] = {
       val state = replicaPartitionState(topicPartition)
 
-      if (isTruncationOnFetchSupported && FetchResponse.divergingEpoch(partitionData).isPresent) {
+      if (isTruncationOnFetchSupported && FetchResponse.isDivergingEpoch(partitionData)) {
         val divergingEpoch = partitionData.divergingEpoch
         truncateOnFetchResponse(Map(topicPartition -> new EpochEndOffset()
           .setPartition(topicPartition.partition)

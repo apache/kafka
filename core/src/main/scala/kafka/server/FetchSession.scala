@@ -141,7 +141,7 @@ class CachedPartition(val topic: String,
       if (updateResponseData)
         localLogStartOffset = respData.logStartOffset
     }
-    if (FetchResponse.preferredReadReplica(respData).isPresent) {
+    if (FetchResponse.isPreferredReplica(respData)) {
       // If the broker computed a preferred read replica, we need to include it in the response
       mustRespond = true
     }
@@ -154,7 +154,7 @@ class CachedPartition(val topic: String,
       mustRespond = true
     }
 
-    if (FetchResponse.divergingEpoch(respData).isPresent) {
+    if (FetchResponse.isDivergingEpoch(respData)) {
       // Partitions with diverging epoch are always included in response to trigger truncation.
       mustRespond = true
     }

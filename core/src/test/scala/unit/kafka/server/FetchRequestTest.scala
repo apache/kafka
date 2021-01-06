@@ -245,7 +245,7 @@ class FetchRequestTest extends BaseRequestTest {
     val partitionData = fetchResponse.dataByTopicPartition.get(topicPartition)
     assertEquals(Errors.NONE.code, partitionData.errorCode)
     assertEquals(0L, partitionData.recordSet.sizeInBytes())
-    assertTrue(FetchResponse.divergingEpoch(partitionData).isPresent)
+    assertTrue(FetchResponse.isDivergingEpoch(partitionData))
 
     val divergingEpoch = partitionData.divergingEpoch
     assertEquals(firstLeaderEpoch, divergingEpoch.epoch)
