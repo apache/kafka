@@ -17,14 +17,10 @@
 
 package kafka.log
 
-import java.io._
-import java.nio.file.Files
-import java.util.{Collections, Properties}
-
 import com.yammer.metrics.core.MetricName
 import kafka.metrics.KafkaYammerMetrics
-import kafka.server.{FetchDataInfo, FetchLogEnd}
 import kafka.server.checkpoints.OffsetCheckpointFile
+import kafka.server.{FetchDataInfo, FetchLogEnd}
 import kafka.utils._
 import org.apache.directory.api.util.FileUtils
 import org.apache.kafka.common.errors.OffsetOutOfRangeException
@@ -34,8 +30,13 @@ import org.easymock.EasyMock
 import org.junit.Assert._
 import org.junit.{After, Before, Test}
 import org.mockito.ArgumentMatchers.any
+import org.mockito.Mockito
 import org.mockito.Mockito.{doAnswer, spy}
 
+import java.io._
+import java.nio.file.Files
+import java.util.concurrent.Future
+import java.util.{Collections, Properties}
 import scala.collection.mutable
 import scala.jdk.CollectionConverters._
 import scala.util.{Failure, Try}
@@ -679,5 +680,35 @@ class LogManagerTest {
     // Trigger the deletion of the former current directory and verify that one set of metrics is still present
     time.sleep(logConfig.fileDeleteDelayMs + 1)
     verifyMetrics(1)
+  }
+
+  @Test
+  def testWaitForAllToComplete(): Unit = {
+    var invokedCount = 0
+    val success: Future[Boolean] = Mockito.mock(classOf[Future[Boolean]])
+    Mockito.when(success.get()).thenAnswer { _ =>
+      invokedCount += 1
+      true
+    }
+    val failure: Future[Boolean] = Mockito.mock(classOf[Future[Boolean]])
+    Mockito.when(failure.get()).thenAnswer{ _ =>
+      invokedCount += 1
+      throw new RuntimeException
+    }
+
+    var failureCount = 0
+    // all futures should be evaluated
+    assertFalse(LogManager.waitForAllToComplete(Seq(success, failure), _ => failureCount += 1))
+    assertEquals(2, invokedCount)
+    assertEquals(1, failureCount)
+    assertFalse(LogManager.waitForAllToComplete(Seq(failure, success), _ => failureCount += 1))
+    assertEquals(4, invokedCount)
+    assertEquals(2, failureCount)
+    assertTrue(LogManager.waitForAllToComplete(Seq(success, success), _ => failureCount += 1))
+    assertEquals(6, invokedCount)
+    assertEquals(2, failureCount)
+    assertFalse(LogManager.waitForAllToComplete(Seq(failure, failure), _ => failureCount += 1))
+    assertEquals(8, invokedCount)
+    assertEquals(4, failureCount)
   }
 }

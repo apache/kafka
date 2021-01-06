@@ -35,6 +35,7 @@ import scala.jdk.CollectionConverters._
 import scala.collection._
 import scala.collection.mutable.ArrayBuffer
 import scala.util.{Failure, Success, Try}
+import kafka.utils.Implicits._
 
 /**
  * The entry point to the kafka log management subsystem. The log manager is responsible for log creation, retrieval, and cleaning.
@@ -478,17 +479,9 @@ class LogManager(logDirs: Seq[File],
     }
 
     try {
-      for ((dir, dirJobs) <- jobs) {
-        val hasErrors = dirJobs.exists  { future =>
-          Try(future.get) match {
-            case Success(_) => false
-            case Failure(e) =>
-              warn(s"There was an error in one of the threads during LogManager shutdown: ${e.getCause}")
-              true
-          }
-        }
-
-        if (!hasErrors) {
+      jobs.forKeyValue { (dir, dirJobs) =>
+        if (waitForAllToComplete(dirJobs,
+          e => warn(s"There was an error in one of the threads during LogManager shutdown: ${e.getCause}"))) {
           val logs = logsInDir(localLogsByDir, dir)
 
           // update the last flush point
@@ -1166,6 +1159,21 @@ class LogManager(logDirs: Seq[File],
 }
 
 object LogManager {
+
+  /**
+   * Wait all jobs to complete
+   * @param jobs jobs
+   * @param callback this will be called to handle the exception caused by each Future#get
+   * @return true if all pass. Otherwise, false
+   */
+  private[log] def waitForAllToComplete(jobs: Seq[Future[_]], callback: Throwable => Unit): Boolean = {
+    jobs.count(future => Try(future.get) match {
+      case Success(_) => false
+      case Failure(e) =>
+        callback(e)
+        true
+    }) == 0
+  }
 
   val RecoveryPointCheckpointFile = "recovery-point-offset-checkpoint"
   val LogStartOffsetCheckpointFile = "log-start-offset-checkpoint"
