@@ -969,7 +969,7 @@ class LogTest {
       producerIdExpirationCheckIntervalMs = 30000,
       topicPartition = Log.parseTopicPartitionName(logDir),
       producerStateManager = stateManager,
-      logDirFailureChannel = null,
+      logDirFailureChannel = new LogDirFailureChannel(1),
       hadCleanShutdown = false)
 
     EasyMock.verify(stateManager)
@@ -2834,6 +2834,25 @@ class LogTest {
   }
 
   @Test
+  def testAppendToOrReadFromLogInFailedLogDir(): Unit = {
+    val pid = 1L
+    val epoch = 0.toShort
+    val log = createLog(logDir, LogConfig())
+    log.appendAsLeader(TestUtils.singletonRecords(value = null), leaderEpoch = 0)
+    assertEquals(0, readLog(log, 0, 4096).records.records.iterator.next().offset)
+    val append = appendTransactionalAsLeader(log, pid, epoch)
+    append(10)
+    // Kind of a hack, but renaming the index to a directory ensures that the append
+    // to the index will fail.
+    log.activeSegment.txnIndex.renameTo(log.dir)
+    assertThrows[KafkaStorageException] {
+      appendEndTxnMarkerAsLeader(log, pid, epoch, ControlRecordType.ABORT, coordinatorEpoch = 1)
+    }
+    assertThrows[KafkaStorageException](log.appendAsLeader(TestUtils.singletonRecords(value = null), leaderEpoch = 0))
+    assertThrows[KafkaStorageException](readLog(log, 0, 4096).records.records.iterator.next().offset)
+  }
+
+  @Test
   def testCorruptLog(): Unit = {
     // append some messages to create some segments
     val logConfig = LogTest.createLogConfig(segmentBytes = 1000, indexIntervalBytes = 1, maxMessageBytes = 64 * 1024)
@@ -4452,23 +4471,25 @@ class LogTest {
     assertEquals(11L, log.logEndOffset)
     assertEquals(0L, log.lastStableOffset)
 
-    // Try the append a second time. The appended offset in the log should still increase.
-    // Note that the second append does not write to the transaction index because the producer
-    // state has already been updated and we do not write index entries for empty transactions.
-    // In the future, we may strengthen the fencing logic so that additional writes to the
-    // log are not possible after an IO error (see KAFKA-10778).
-    appendEndTxnMarkerAsLeader(log, pid, epoch, ControlRecordType.ABORT, coordinatorEpoch = 1)
-    assertEquals(12L, log.logEndOffset)
+    // Try the append a second time. The appended offset in the log should not increase
+    // because the log dir is marked as failed.  Nor will there be a write to the transaction
+    // index.
+    assertThrows[KafkaStorageException] {
+      appendEndTxnMarkerAsLeader(log, pid, epoch, ControlRecordType.ABORT, coordinatorEpoch = 1)
+    }
+    assertEquals(11L, log.logEndOffset)
     assertEquals(0L, log.lastStableOffset)
 
     // Even if the high watermark is updated, the first unstable offset does not move
     log.updateHighWatermark(12L)
     assertEquals(0L, log.lastStableOffset)
 
-    log.close()
+    assertThrows[KafkaStorageException] {
+      log.close()
+    }
 
     val reopenedLog = createLog(logDir, logConfig, lastShutdownClean = false)
-    assertEquals(12L, reopenedLog.logEndOffset)
+    assertEquals(11L, reopenedLog.logEndOffset)
     assertEquals(1, reopenedLog.activeSegment.txnIndex.allAbortedTxns.size)
     reopenedLog.updateHighWatermark(12L)
     assertEquals(None, reopenedLog.firstUnstableOffset)
