@@ -19,7 +19,7 @@ import kafka.utils.TestUtils._
 import kafka.utils.{Logging, TestUtils}
 import kafka.zk.{ReassignPartitionsZNode, ZkVersion, ZooKeeperTestHarness}
 import org.junit.Assert.{assertEquals, assertFalse, assertTrue}
-import org.junit.{After, Before, Test}
+import org.junit.{After, Before, Ignore, Test}
 import kafka.admin.ReplicationQuotaUtils._
 import org.apache.kafka.clients.admin.{Admin, AdminClientConfig, AlterConfigOp, ConfigEntry, NewPartitionReassignment, NewPartitions, PartitionReassignment, AdminClient => JAdminClient}
 import org.apache.kafka.common.{TopicPartition, TopicPartitionReplica}
@@ -798,6 +798,7 @@ class ReassignPartitionsClusterTest extends ZooKeeperTestHarness with Logging {
     assertEquals(Seq(100, 101), zkClient.getReplicasForPartition(tp0))
   }
 
+  @Ignore
   @Test
   def shouldListMovingPartitionsThroughApi(): Unit = {
     startBrokers(Seq(100, 101))
