@@ -288,7 +288,11 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
             }
 
             long nextExpectedOffset = nextExpectedOffsetOpt.getAsLong();
-            if (nextExpectedOffset < highWatermark) {
+            if (nextExpectedOffset < log.startOffset()) {
+                // TODO: File a Jira: This should fire a callback that handles loading snapshot
+                // Assume that the snapshot was loaded
+                listenerContext.onCloseSnapshotReader(log.startOffset());
+            } else if (nextExpectedOffset < highWatermark) {
                 LogFetchInfo readInfo = log.read(nextExpectedOffset, Isolation.COMMITTED);
                 listenerContext.fireHandleCommit(nextExpectedOffset, readInfo.records);
             }
@@ -931,9 +935,13 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
                 Errors.INVALID_REQUEST, Optional.empty()));
         }
 
-        // TODO: The other tryCompleteFetchRequest is protected by a try...catch. If this can throw we should catch it and complete
-        // the future. Method that return Future and can also throw are hard to use.
-        FetchResponseData response = tryCompleteFetchRequest(request.replicaId(), fetchPartition, currentTimeMs);
+        FetchResponseData response;
+        try {
+            response = tryCompleteFetchRequest(request.replicaId(), fetchPartition, currentTimeMs);
+        } catch (Exception e) {
+            logger.error("Caught unexpected error in fetch completion of request {}", request, e);
+            response = buildEmptyFetchResponse(Errors.UNKNOWN_SERVER_ERROR, Optional.empty());
+        }
         FetchResponseData.FetchablePartitionResponse partitionResponse =
             response.responses().get(0).partitionResponses().get(0);
 
@@ -970,7 +978,6 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
             try {
                 return tryCompleteFetchRequest(request.replicaId(), fetchPartition, time.milliseconds());
             } catch (Exception e) {
-                // TODO: Why do we catch an exception here but not in the synchronous tryCompleteFetchRequest above?
                 logger.error("Caught unexpected error in fetch completion of request {}", request, e);
                 return buildEmptyFetchResponse(Errors.UNKNOWN_SERVER_ERROR, Optional.empty());
             }
@@ -1410,6 +1417,8 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
                     log.endOffset(),
                     log.lastFetchedEpoch()
                 );
+            } else {
+                updateFollowerHighWatermark(state, OptionalLong.of(log.highWatermark()));
             }
         }
 
@@ -2307,7 +2316,7 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
         // These fields are visible to both the Raft IO thread and the listener
         // and are protected through synchronization on this `ListenerContext` instance
         private BatchReader<T> lastSent = null;
-        private long lastAckedOffset = 0;
+        private long lastAckedEndOffset = 0;
 
         private ListenerContext(Listener<T> listener) {
             this.listener = listener;
@@ -2317,8 +2326,8 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
          * Get the last acked offset, which is one greater than the offset of the
          * last record which was acked by the state machine.
          */
-        public synchronized long lastAckedOffset() {
-            return lastAckedOffset;
+        public synchronized long lastAckedEndOffset() {
+            return lastAckedEndOffset;
         }
 
         /**
@@ -2338,7 +2347,7 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
                     return OptionalLong.empty();
                 }
             } else {
-                return OptionalLong.of(lastAckedOffset);
+                return OptionalLong.of(lastAckedEndOffset);
             }
         }
 
@@ -2379,7 +2388,7 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
             // up to the start of the leader epoch. This guarantees that the
             // state machine has seen the full committed state before it becomes
             // leader and begins writing to the log.
-            if (epoch > claimedEpoch && lastAckedOffset() >= epochStartOffset) {
+            if (epoch > claimedEpoch && lastAckedEndOffset() >= epochStartOffset) {
                 claimedEpoch = epoch;
                 listener.handleClaim(epoch);
             }
@@ -2389,10 +2398,15 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
             listener.handleResign();
         }
 
+        public synchronized void onCloseSnapshotReader(long lastAckedEndOffset) {
+            this.lastAckedEndOffset = lastAckedEndOffset;
+            this.lastSent = null;
+        }
+
         public synchronized void onClose(BatchReader<T> reader) {
             OptionalLong lastOffset = reader.lastOffset();
             if (lastOffset.isPresent()) {
-                lastAckedOffset = lastOffset.getAsLong() + 1;
+                lastAckedEndOffset = lastOffset.getAsLong() + 1;
             }
 
             if (lastSent == reader) {

@@ -108,6 +108,9 @@ public interface ReplicatedLog extends Closeable {
      */
     void updateHighWatermark(LogOffsetMetadata offsetMetadata);
 
+    // TODO: write documentation; should this return a LogOffsetMetadata
+    long highWatermark();
+
     /**
      * Flush the current log to disk.
      */

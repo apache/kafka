@@ -117,6 +117,11 @@ public class MockLog implements ReplicatedLog {
     }
 
     @Override
+    public long highWatermark() {
+        return highWatermark.offset;
+    }
+
+    @Override
     public TopicPartition topicPartition() {
         return topicPartition;
     }
@@ -156,10 +161,6 @@ public class MockLog implements ReplicatedLog {
                     " log's record entry maintained uuid " + entryId);
             }
         });
-    }
-
-    LogOffsetMetadata highWatermark() {
-        return highWatermark;
     }
 
     private OptionalInt logLastFetchedEpoch() {
@@ -429,9 +430,6 @@ public class MockLog implements ReplicatedLog {
         Optional<OffsetAndEpoch> snapshotIdOpt = latestSnapshotId();
         if (snapshotIdOpt.isPresent()) {
             OffsetAndEpoch snapshotId = snapshotIdOpt.get();
-            System.out.println(String.format("logStartOffset = %s, snapshotId = %s", logStartOffset, snapshotId));
-            // TODO: I think snapshotId.offset can <= highWatermark.offset + 1. Need to investigate if highWatermark is inclusive or
-            // exclusive
             if (logStartOffset < snapshotId.offset && highWatermark.offset >= snapshotId.offset) {
                 logStartOffset = snapshotId.offset;
                 batches.removeIf(entry -> entry.lastOffset() < logStartOffset);
@@ -454,7 +452,7 @@ public class MockLog implements ReplicatedLog {
             } else if (logStartOffset > snapshotId.offset || highWatermark.offset < snapshotId.offset) {
                 throw new OffsetOutOfRangeException(
                     String.format(
-                        "The latest snapshot (%s) is less than log start offset (%s) or is greater than the high watermark (%s)",
+                        "The latest snapshot (%s) is less than start offset (%s) or is greater than the high watermark (%s)",
                         snapshotId,
                         logStartOffset,
                         highWatermark.offset

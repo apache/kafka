@@ -131,7 +131,7 @@ public class MockLogTest {
         appendBatch(5, 1);
         LogOffsetMetadata newOffset = new LogOffsetMetadata(5L);
         log.updateHighWatermark(newOffset);
-        assertEquals(newOffset, log.highWatermark());
+        assertEquals(newOffset.offset, log.highWatermark());
     }
 
     @Test
@@ -319,7 +319,7 @@ public class MockLogTest {
 
         // Update to a high watermark with valid offset metadata
         log.updateHighWatermark(readInfo.startOffsetMetadata);
-        assertEquals(readInfo.startOffsetMetadata, log.highWatermark());
+        assertEquals(readInfo.startOffsetMetadata.offset, log.highWatermark());
 
         // Now update to a high watermark with invalid metadata
         assertThrows(IllegalArgumentException.class, () ->
@@ -503,7 +503,7 @@ public class MockLogTest {
         assertEquals(sameEpochSnapshotId.offset, log.startOffset());
         assertEquals(sameEpochSnapshotId.epoch, log.lastFetchedEpoch());
         assertEquals(sameEpochSnapshotId.offset, log.endOffset().offset);
-        assertEquals(sameEpochSnapshotId.offset, log.highWatermark().offset);
+        assertEquals(sameEpochSnapshotId.offset, log.highWatermark());
 
         OffsetAndEpoch greaterEpochSnapshotId = new OffsetAndEpoch(3 * numberOfRecords, epoch + 1);
 
@@ -517,7 +517,7 @@ public class MockLogTest {
         assertEquals(greaterEpochSnapshotId.offset, log.startOffset());
         assertEquals(greaterEpochSnapshotId.epoch, log.lastFetchedEpoch());
         assertEquals(greaterEpochSnapshotId.offset, log.endOffset().offset);
-        assertEquals(greaterEpochSnapshotId.offset, log.highWatermark().offset);
+        assertEquals(greaterEpochSnapshotId.offset, log.highWatermark());
     }
 
     @Test
