@@ -1271,7 +1271,8 @@ object ReassignPartitionsCommand extends Logging {
       case (part, replicas) =>
         val partMoves = moveMap.getOrElseUpdate(part.topic(), new mutable.HashMap[Int, PartitionMove])
 
-        // If there is a reassignment in progress,
+        // If there is a reassignment in progress, use the sources from moveMap, otherwise
+        // use the sources from currentParts
         val sources = mutable.Set[Int]() ++ (partMoves.get(part.partition()) match {
           case Some(move) => move.sources.toSeq
           case None => currentParts.getOrElse(part,
