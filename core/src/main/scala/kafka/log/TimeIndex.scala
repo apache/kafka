@@ -39,7 +39,7 @@ import org.apache.kafka.common.record.RecordBatch
  *
  * The timestamps in the same time index file are guaranteed to be monotonically increasing.
  *
- * The index support timestamp lookup for a memory map of this file. The lookup is done using a binary search to find
+ * The index supports timestamp lookup for a memory map of this file. The lookup is done using a binary search to find
  * the offset of the message whose indexed timestamp is closest but smaller or equals to the target timestamp.
  *
  * Time index files can be opened in two ways: either as an empty, mutable index that allows appends or
