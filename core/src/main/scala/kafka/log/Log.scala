@@ -270,6 +270,10 @@ class Log(@volatile private var _dir: File,
 
   @volatile private var nextOffsetMetadata: LogOffsetMetadata = _
 
+  // Log dir failure is handled asynchronously we need to prevent threads
+  // from reading inconsistent state caused by a failure in another thread
+  @volatile private var logDirOffline = false
+
   /* The earliest offset which is part of an incomplete transaction. This is used to compute the
    * last stable offset (LSO) in ReplicaManager. Note that it is possible that the "true" first unstable offset
    * gets removed from the log (through record or segment deletion). In this case, the first unstable offset
@@ -1092,19 +1096,21 @@ class Log(@volatile private var _dir: File,
                      assignOffsets: Boolean,
                      leaderEpoch: Int,
                      ignoreRecordSize: Boolean): LogAppendInfo = {
-    maybeHandleIOException(s"Error while appending records to $topicPartition in dir ${dir.getParent}") {
-      val appendInfo = analyzeAndValidateRecords(records, origin, ignoreRecordSize)
 
-      // return if we have no valid messages or if this is a duplicate of the last appended entry
-      if (appendInfo.shallowCount == 0) appendInfo
-      else {
+    val appendInfo = analyzeAndValidateRecords(records, origin, ignoreRecordSize)
 
-        // trim any invalid bytes or partial messages before appending it to the on-disk log
-        var validRecords = trimInvalidBytes(records, appendInfo)
+    // return if we have no valid messages or if this is a duplicate of the last appended entry
+    if (appendInfo.shallowCount == 0) appendInfo
+    else {
 
-        // they are valid, insert them in the log
-        lock synchronized {
+      // trim any invalid bytes or partial messages before appending it to the on-disk log
+      var validRecords = trimInvalidBytes(records, appendInfo)
+
+      // they are valid, insert them in the log
+      lock synchronized {
+        maybeHandleIOException(s"Error while appending records to $topicPartition in dir ${dir.getParent}") {
           checkIfMemoryMappedBufferClosed()
+
           if (assignOffsets) {
             // assign offsets to the message set
             val offset = new LongRef(nextOffsetMetadata.messageOffset)
@@ -1259,6 +1265,12 @@ class Log(@volatile private var _dir: File,
           appendInfo
         }
       }
+    }
+  }
+
+  private def checkForLogDirFailure(): Unit = {
+    if (logDirOffline) {
+      throw new KafkaStorageException(s"The log dir $parentDir is offline due to a previous IO exception.");
     }
   }
 
@@ -2347,9 +2359,11 @@ class Log(@volatile private var _dir: File,
 
   private def maybeHandleIOException[T](msg: => String)(fun: => T): T = {
     try {
+      checkForLogDirFailure()
       fun
     } catch {
       case e: IOException =>
+        logDirOffline = true
         logDirFailureChannel.maybeAddOfflineLogDir(dir.getParent, msg, e)
         throw new KafkaStorageException(msg, e)
     }
