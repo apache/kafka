@@ -1995,8 +1995,10 @@ class KafkaApis(val requestChannel: RequestChannel,
          if (!foundTopicId && topicIdSpecified) {
            if (config.usesTopicId)
              topic.setErrorCode(Errors.UNKNOWN_TOPIC_ID.code)
-           else
+           else {
              topic.setErrorCode(Errors.UNSUPPORTED_VERSION.code)
+             topic.setErrorMessage("Topic IDs are not supported on the server.")
+           }
          } else if (!authorizedTopics.contains(topic.name))
            topic.setErrorCode(Errors.TOPIC_AUTHORIZATION_FAILED.code)
          else if (!metadataCache.contains(topic.name))

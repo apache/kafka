@@ -17,9 +17,8 @@
 
 package kafka.server
 
-import java.util.{Arrays, Collections, Properties}
+import java.util.{Arrays, Collections}
 
-import kafka.api.KAFKA_2_7_IV0
 import kafka.network.SocketServer
 import kafka.utils._
 import org.apache.kafka.common.Uuid
@@ -131,25 +130,6 @@ class DeleteTopicsRequestTest extends BaseRequestTest {
     // The topic should still get deleted eventually
     TestUtils.waitUntilTrue(() => !servers.head.metadataCache.contains(timeoutTopic), s"Topic $timeoutTopic is never deleted")
     validateTopicIsDeleted(timeoutTopic)
-  }
-
-  @Test
-  def testErrorDeleteTopicRequestsOnOldVersions(): Unit = {
-    val timeout = 30000
-    val props = new Properties
-    props.put(KafkaConfig.InterBrokerProtocolVersionProp, KAFKA_2_7_IV0.toString)
-    brokerPropertyOverrides(props)
-
-    createTopic("topic-id-1", 1, 1)
-    val invalidId = Uuid.randomUuid
-    validateErrorDeleteTopicRequestsWithIds(new DeleteTopicsRequest.Builder(
-      new DeleteTopicsRequestData()
-        .setTopics(Arrays.asList(new DeleteTopicState().setTopicId(invalidId)))
-        .setTimeoutMs(timeout)).build(),
-      Map(
-        invalidId -> Errors.UNKNOWN_TOPIC_ID,
-      )
-    )
   }
 
   private def validateErrorDeleteTopicRequests(request: DeleteTopicsRequest, expectedResponse: Map[String, Errors]): Unit = {
