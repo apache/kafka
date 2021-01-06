@@ -35,6 +35,8 @@ import org.junit.experimental.categories.Category;
 import org.junit.rules.TestName;
 
 import java.io.IOException;
+import java.time.Duration;
+import java.util.Collections;
 import java.util.Optional;
 import java.util.Properties;
 import java.util.concurrent.CountDownLatch;
@@ -45,6 +47,7 @@ import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.common.utils.Utils.mkObjectProperties;
 import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.purgeLocalStreamsState;
 import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.safeUniqueTestName;
+import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.waitForApplicationState;
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.CoreMatchers.not;
 import static org.hamcrest.MatcherAssert.assertThat;
@@ -62,6 +65,8 @@ public class AdjustStreamThreadCountTest {
     private static StreamsBuilder builder;
     private static Properties properties;
     private static String appId = "";
+    public static final Duration DEFAULT_DURATION = Duration.ofSeconds(30);
+
 
     @Before
     public void setup() {
@@ -128,6 +133,7 @@ public class AdjustStreamThreadCountTest {
             final int oldThreadCount = kafkaStreams.localThreadsMetadata().size();
             assertThat(kafkaStreams.removeStreamThread().get().split("-")[0], equalTo(appId));
             assertThat(kafkaStreams.localThreadsMetadata().size(), equalTo(oldThreadCount - 1));
+            waitForApplicationState(Collections.singletonList(kafkaStreams), KafkaStreams.State.RUNNING, DEFAULT_DURATION);
         }
     }
 
@@ -143,6 +149,7 @@ public class AdjustStreamThreadCountTest {
             one.start();
             latch.await(30, TimeUnit.SECONDS);
             assertThat(kafkaStreams.localThreadsMetadata().size(), equalTo(oldThreadCount));
+            waitForApplicationState(Collections.singletonList(kafkaStreams), KafkaStreams.State.RUNNING, DEFAULT_DURATION);
         }
     }
 

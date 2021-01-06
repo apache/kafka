@@ -992,7 +992,7 @@ public class KafkaStreams implements AutoCloseable {
         if (isRunningOrRebalancing()) {
             synchronized (changeThreadCount) {
                 for (final StreamThread streamThread : threads) {
-                    if (streamThread.isAlive()) {
+                    if (streamThread.isAlive() && (!streamThread.getName().equals(Thread.currentThread().getName()) || threads.size() == 1)) {
                         streamThread.shutdown();
                         if (!streamThread.getName().equals(Thread.currentThread().getName())) {
                             streamThread.waitOnThreadState(StreamThread.State.DEAD);
