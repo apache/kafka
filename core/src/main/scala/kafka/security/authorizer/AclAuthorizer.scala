@@ -575,6 +575,7 @@ class AclAuthorizer extends Authorizer with Logging {
   private[authorizer] def processAclChangeNotification(resource: ResourcePattern): Unit = {
     lock synchronized {
       val versionedAcls = getAclsFromZk(resource)
+      info(s"Processing Acl change notification for $resource, versionedAcls : ${versionedAcls.acls}, zkVersion : ${versionedAcls.zkVersion}")
       updateCache(resource, versionedAcls)
     }
   }
