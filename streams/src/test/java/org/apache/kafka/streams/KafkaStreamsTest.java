@@ -300,6 +300,8 @@ public class KafkaStreamsTest {
         thread.setStateListener(capture(threadStatelistenerCapture));
         EasyMock.expectLastCall().anyTimes();
 
+        EasyMock.expect(thread.getStateLock()).andReturn(new Object()).anyTimes();
+
         thread.start();
         EasyMock.expectLastCall().andAnswer(() -> {
             state.set(StreamThread.State.STARTING);

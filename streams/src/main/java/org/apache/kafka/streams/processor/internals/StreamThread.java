@@ -249,7 +249,7 @@ public class StreamThread extends Thread {
     private final Time time;
     private final Logger log;
     private final String logPrefix;
-    private final Object stateLock;
+    public final Object stateLock;
     private final Duration pollTime;
     private final long commitTimeMs;
     private final int maxPollTimeMs;
@@ -1125,6 +1125,10 @@ public class StreamThread extends Thread {
 
     public Map<MetricName, Metric> adminClientMetrics() {
         return ClientUtils.adminClientMetrics(adminClient);
+    }
+
+    public Object getStateLock() {
+        return stateLock;
     }
 
     // the following are for testing only
