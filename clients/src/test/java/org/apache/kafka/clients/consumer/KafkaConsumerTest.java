@@ -1123,9 +1123,9 @@ public class KafkaConsumerTest {
         // verify that the fetch occurred as expected
         assertEquals(11, records.count());
         assertEquals(1L, consumer.position(tp0));
-        assertEquals(1L, records.metadata().get(tp0).position());
+        assertEquals(1L, (long) records.metadata().get(tp0).position());
         assertEquals(10L, consumer.position(t2p0));
-        assertEquals(10L, records.metadata().get(t2p0).position());
+        assertEquals(10L, (long) records.metadata().get(t2p0).position());
 
         // subscription change
         consumer.subscribe(asList(topic, topic3), getConsumerRebalanceListener(consumer));
@@ -1156,9 +1156,9 @@ public class KafkaConsumerTest {
         // verify that the fetch occurred as expected
         assertEquals(101, records.count());
         assertEquals(2L, consumer.position(tp0));
-        assertEquals(2L, records.metadata().get(tp0).position());
+        assertEquals(2L, (long) records.metadata().get(tp0).position());
         assertEquals(100L, consumer.position(t3p0));
-        assertEquals(100L, records.metadata().get(t3p0).position());
+        assertEquals(100L, (long) records.metadata().get(t3p0).position());
 
         // verify that the offset commits occurred as expected
         assertTrue(commitReceived.get());
@@ -2079,7 +2079,7 @@ public class KafkaConsumerTest {
         final ConsumerRecords.Metadata actualMetadata = records.metadata().get(tp0);
         assertEquals(1L, actualMetadata.beginningOffset());
         assertEquals(100L, actualMetadata.endOffset());
-        assertEquals(55L, actualMetadata.position());
+        assertEquals(55L, (long) actualMetadata.position());
         assertEquals(45L, actualMetadata.lag());
         consumer.close(Duration.ZERO);
     }
@@ -2119,7 +2119,7 @@ public class KafkaConsumerTest {
         final ConsumerRecords.Metadata tp0Metadata = records.metadata().get(tp0);
         assertEquals(1L, tp0Metadata.beginningOffset());
         assertEquals(100L, tp0Metadata.endOffset());
-        assertEquals(55L, tp0Metadata.position());
+        assertEquals(55L, (long) tp0Metadata.position());
         assertEquals(45L, tp0Metadata.lag());
 
         // we may get back metadata for other assigned partitions even if we don't get records for them
@@ -2127,7 +2127,7 @@ public class KafkaConsumerTest {
         final ConsumerRecords.Metadata tp1Metadata = records.metadata().get(tp1);
         assertEquals(0L, tp1Metadata.beginningOffset());
         assertEquals(30L, tp1Metadata.endOffset());
-        assertEquals(10L, tp1Metadata.position());
+        assertEquals(10L, (long) tp1Metadata.position());
         assertEquals(20L, tp1Metadata.lag());
 
         consumer.close(Duration.ZERO);
@@ -2162,7 +2162,7 @@ public class KafkaConsumerTest {
         final ConsumerRecords.Metadata actualMetadata = records.metadata().get(tp0);
         assertEquals(1L, actualMetadata.beginningOffset());
         assertEquals(100L, actualMetadata.endOffset());
-        assertEquals(50L, actualMetadata.position());
+        assertEquals(50L, (long) actualMetadata.position());
         assertEquals(50L, actualMetadata.lag());
 
         consumer.close(Duration.ZERO);
