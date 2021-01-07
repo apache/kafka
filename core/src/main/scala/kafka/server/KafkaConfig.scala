@@ -244,6 +244,7 @@ object Defaults {
   val SslClientAuthentication = SslClientAuth.NONE.name().toLowerCase(Locale.ROOT)
   val SslClientAuthenticationValidValues = SslClientAuth.VALUES.asScala.map(v => v.toString().toLowerCase(Locale.ROOT)).asJava.toArray(new Array[String](0))
   val SslPrincipalMappingRules = BrokerSecurityConfigs.DEFAULT_SSL_PRINCIPAL_MAPPING_RULES
+  val SslSecurityStoreRefreshIntervalMs = 300000L
 
     /** ********* General Security configuration ***********/
   val ConnectionsMaxReauthMsDefault = 0L
@@ -544,12 +545,14 @@ object KafkaConfig {
   val SslEnabledProtocolsProp = SslConfigs.SSL_ENABLED_PROTOCOLS_CONFIG
   val SslKeystoreTypeProp = SslConfigs.SSL_KEYSTORE_TYPE_CONFIG
   val SslKeystoreLocationProp = SslConfigs.SSL_KEYSTORE_LOCATION_CONFIG
+  val SslKeystoreLocationRefreshIntervalMsProp = SslConfigs.SSL_KEYSTORE_LOCATION_REFRESH_INTERVAL_MS_CONFIG
   val SslKeystorePasswordProp = SslConfigs.SSL_KEYSTORE_PASSWORD_CONFIG
   val SslKeyPasswordProp = SslConfigs.SSL_KEY_PASSWORD_CONFIG
   val SslKeystoreKeyProp = SslConfigs.SSL_KEYSTORE_KEY_CONFIG
   val SslKeystoreCertificateChainProp = SslConfigs.SSL_KEYSTORE_CERTIFICATE_CHAIN_CONFIG
   val SslTruststoreTypeProp = SslConfigs.SSL_TRUSTSTORE_TYPE_CONFIG
   val SslTruststoreLocationProp = SslConfigs.SSL_TRUSTSTORE_LOCATION_CONFIG
+  val SslTruststoreLocationRefreshIntervalMsProp = SslConfigs.SSL_TRUSTSTORE_LOCATION_REFRESH_INTERVAL_MS_CONFIG
   val SslTruststorePasswordProp = SslConfigs.SSL_TRUSTSTORE_PASSWORD_CONFIG
   val SslTruststoreCertificatesProp = SslConfigs.SSL_TRUSTSTORE_CERTIFICATES_CONFIG
   val SslKeyManagerAlgorithmProp = SslConfigs.SSL_KEYMANAGER_ALGORITHM_CONFIG
@@ -963,6 +966,7 @@ object KafkaConfig {
   val SslEnabledProtocolsDoc = SslConfigs.SSL_ENABLED_PROTOCOLS_DOC
   val SslKeystoreTypeDoc = SslConfigs.SSL_KEYSTORE_TYPE_DOC
   val SslKeystoreLocationDoc = SslConfigs.SSL_KEYSTORE_LOCATION_DOC
+  val SslKeystoreLocationRefreshIntervalMsDoc = SslConfigs.SSL_KEYSTORE_LOCATION_REFRESH_INTERVAL_MS_CONFIG
   val SslKeystorePasswordDoc = SslConfigs.SSL_KEYSTORE_PASSWORD_DOC
   val SslKeyPasswordDoc = SslConfigs.SSL_KEY_PASSWORD_DOC
   val SslKeystoreKeyDoc = SslConfigs.SSL_KEYSTORE_KEY_DOC
@@ -970,6 +974,7 @@ object KafkaConfig {
   val SslTruststoreTypeDoc = SslConfigs.SSL_TRUSTSTORE_TYPE_DOC
   val SslTruststorePasswordDoc = SslConfigs.SSL_TRUSTSTORE_PASSWORD_DOC
   val SslTruststoreLocationDoc = SslConfigs.SSL_TRUSTSTORE_LOCATION_DOC
+  val SslTruststoreLocationRefreshIntervalMsDoc = SslConfigs.SSL_TRUSTSTORE_LOCATION_REFRESH_INTERVAL_MS_DOC
   val SslTruststoreCertificatesDoc = SslConfigs.SSL_TRUSTSTORE_CERTIFICATES_DOC
   val SslKeyManagerAlgorithmDoc = SslConfigs.SSL_KEYMANAGER_ALGORITHM_DOC
   val SslTrustManagerAlgorithmDoc = SslConfigs.SSL_TRUSTMANAGER_ALGORITHM_DOC
@@ -1245,12 +1250,14 @@ object KafkaConfig {
       .define(SslEnabledProtocolsProp, LIST, Defaults.SslEnabledProtocols, MEDIUM, SslEnabledProtocolsDoc)
       .define(SslKeystoreTypeProp, STRING, Defaults.SslKeystoreType, MEDIUM, SslKeystoreTypeDoc)
       .define(SslKeystoreLocationProp, STRING, null, MEDIUM, SslKeystoreLocationDoc)
+      .define(SslKeystoreLocationRefreshIntervalMsProp, LONG, Defaults.SslSecurityStoreRefreshIntervalMs, MEDIUM, SslTruststoreLocationRefreshIntervalMsDoc)
       .define(SslKeystorePasswordProp, PASSWORD, null, MEDIUM, SslKeystorePasswordDoc)
       .define(SslKeyPasswordProp, PASSWORD, null, MEDIUM, SslKeyPasswordDoc)
       .define(SslKeystoreKeyProp, PASSWORD, null, MEDIUM, SslKeystoreKeyDoc)
       .define(SslKeystoreCertificateChainProp, PASSWORD, null, MEDIUM, SslKeystoreCertificateChainDoc)
       .define(SslTruststoreTypeProp, STRING, Defaults.SslTruststoreType, MEDIUM, SslTruststoreTypeDoc)
       .define(SslTruststoreLocationProp, STRING, null, MEDIUM, SslTruststoreLocationDoc)
+      .define(SslTruststoreLocationRefreshIntervalMsProp, LONG, Defaults.SslSecurityStoreRefreshIntervalMs, LOW, SslTruststoreLocationRefreshIntervalMsDoc)
       .define(SslTruststorePasswordProp, PASSWORD, null, MEDIUM, SslTruststorePasswordDoc)
       .define(SslTruststoreCertificatesProp, PASSWORD, null, MEDIUM, SslTruststoreCertificatesDoc)
       .define(SslKeyManagerAlgorithmProp, STRING, Defaults.SslKeyManagerAlgorithm, MEDIUM, SslKeyManagerAlgorithmDoc)

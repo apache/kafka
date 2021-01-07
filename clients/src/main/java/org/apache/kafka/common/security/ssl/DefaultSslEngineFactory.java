@@ -25,6 +25,9 @@ import org.apache.kafka.common.errors.InvalidConfigurationException;
 import org.apache.kafka.common.network.Mode;
 import org.apache.kafka.common.security.auth.SslEngineFactory;
 import org.apache.kafka.common.utils.SecurityUtils;
+import org.apache.kafka.common.utils.SystemTime;
+import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.common.utils.Timer;
 import org.apache.kafka.common.utils.Utils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -32,8 +35,14 @@ import org.slf4j.LoggerFactory;
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.nio.file.FileSystems;
 import java.nio.file.Files;
+import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.nio.file.StandardWatchEventKinds;
+import java.nio.file.WatchEvent;
+import java.nio.file.WatchKey;
+import java.nio.file.WatchService;
 import java.security.GeneralSecurityException;
 import java.security.Key;
 import java.security.KeyFactory;
@@ -49,10 +58,13 @@ import java.util.Arrays;
 import java.util.Base64;
 import java.util.Collections;
 import java.util.Date;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
@@ -73,6 +85,7 @@ public final class DefaultSslEngineFactory implements SslEngineFactory {
 
     private static final Logger log = LoggerFactory.getLogger(DefaultSslEngineFactory.class);
     public static final String PEM_TYPE = "PEM";
+    private static final long DEFAULT_SECURITY_STORE_REFRESH_INTERVAL_MS = 300_000L;
 
     private Map<String, ?> configs;
     private String protocol;
@@ -81,12 +94,31 @@ public final class DefaultSslEngineFactory implements SslEngineFactory {
     private String tmfAlgorithm;
     private SecurityStore keystore;
     private SecurityStore truststore;
+    private long keyStoreRefreshIntervalMs = DEFAULT_SECURITY_STORE_REFRESH_INTERVAL_MS;
+    private long trustStoreRefreshIntervalMs = DEFAULT_SECURITY_STORE_REFRESH_INTERVAL_MS;
+    private final SecurityFileChangeListener securityFileChangeListener;
+    private final Thread securityStoreRefreshThread;
+
     private String[] cipherSuites;
     private String[] enabledProtocols;
     private SecureRandom secureRandomImplementation;
-    private SSLContext sslContext;
+    private AtomicReference<SSLContext> sslContext = new AtomicReference<>(null);
     private SslClientAuth sslClientAuth;
 
+    public DefaultSslEngineFactory() throws IOException {
+        this(SystemTime.SYSTEM);
+    }
+
+    // For testing only
+    public DefaultSslEngineFactory(Time time) throws IOException {
+        this.securityFileChangeListener = new SecurityFileChangeListener(time.timer(Long.MAX_VALUE), time.timer(Long.MAX_VALUE));
+        this.securityStoreRefreshThread = new Thread(securityFileChangeListener, "security-store-refresh-thread");
+    }
+
+    // For testing only
+    SecurityFileChangeListener securityFileChangeListener() {
+        return securityFileChangeListener;
+    }
 
     @Override
     public SSLEngine createClientSslEngine(String peerHost, int peerPort, String endpointIdentification) {
@@ -106,10 +138,7 @@ public final class DefaultSslEngineFactory implements SslEngineFactory {
         if (truststore != null && truststore.modified()) {
             return true;
         }
-        if (keystore != null && keystore.modified()) {
-            return true;
-        }
-        return false;
+        return keystore != null && keystore.modified();
     }
 
     @Override
@@ -125,6 +154,138 @@ public final class DefaultSslEngineFactory implements SslEngineFactory {
     @Override
     public KeyStore truststore() {
         return this.truststore != null ? this.truststore.get() : null;
+    }
+
+    class SecurityFileChangeListener implements Runnable {
+        private final Timer keyStoreRefreshTimer;
+        private final Timer trustStoreRefreshTimer;
+        private final WatchService watchService;
+        private final Map<WatchKey, Path> watchKeyPathMap = new HashMap<>();
+        private final Map<Path, SecurityStore> fileToStoreMap = new HashMap<>();
+        private final AtomicReference<Exception> lastLoadFailure = new AtomicReference<>(null);
+
+        SecurityFileChangeListener(final Timer keyStoreRefreshTimer,
+                                   final Timer trustStoreRefreshTimer) throws IOException {
+            this.keyStoreRefreshTimer = keyStoreRefreshTimer;
+            this.trustStoreRefreshTimer = trustStoreRefreshTimer;
+            try {
+                watchService = FileSystems.getDefault().newWatchService();
+            } catch (IOException e) {
+                log.error("Failed to run the listener thread due to IO exception", e);
+                throw e;
+            }
+        }
+
+        void updateStoreKey(SecurityStore store, final String watchFile) {
+            try {
+                Path filePath = Paths.get(watchFile);
+                fileToStoreMap.put(filePath, store);
+
+                Path dirPath = filePath.getParent();
+                if (dirPath == null) {
+                    throw new IOException("Unexpected null path with no parent");
+                }
+
+                if (!Files.exists(dirPath)) {
+                    Files.createDirectories(dirPath);
+                }
+                WatchKey watchkey = dirPath.register(watchService,
+                    StandardWatchEventKinds.ENTRY_CREATE,
+                    StandardWatchEventKinds.ENTRY_MODIFY,
+                    StandardWatchEventKinds.ENTRY_DELETE,
+                    StandardWatchEventKinds.OVERFLOW);
+                watchKeyPathMap.put(watchkey, dirPath);
+                log.info("Watch service registered for store path = {}", dirPath);
+            } catch (IOException e) {
+                // If the update failed, we will try to use existing store path instead.
+                log.error("Could not register store path for file {}", watchFile, e);
+            }
+        }
+
+        // For testing purpose now.
+        Exception lastLoadFailure() {
+            return lastLoadFailure.get();
+        }
+
+        public void run() {
+            for (Map.Entry<WatchKey, Path> key : watchKeyPathMap.entrySet()) {
+                log.debug("Starting listening for change key {} for path {}", key.getKey(), key.getValue());
+            }
+            resetKeyStoreTimer();
+            resetTrustStoreTimer();
+
+            try {
+                runLoop();
+            } catch (InterruptedException ie) {
+                log.debug("Security file listener {} was interrupted to shutdown", watchKeyPathMap);
+            } catch (Exception e) {
+                log.warn("Hit a fatal exception in security file listener", e);
+            }
+        }
+
+        private void runLoop() throws InterruptedException {
+            while (!watchKeyPathMap.isEmpty()) {
+                keyStoreRefreshTimer.update();
+                trustStoreRefreshTimer.update();
+                final long maxPollIntervalMs = Math.min(keyStoreRefreshTimer.remainingMs(),
+                    trustStoreRefreshTimer.remainingMs());
+                log.debug("Max poll interval is {} with trust store remaining time {} and trust store time {}",
+                    maxPollIntervalMs, trustStoreRefreshTimer.remainingMs(), trustStoreRefreshIntervalMs);
+                WatchKey watchKey = watchService.poll(maxPollIntervalMs, TimeUnit.MILLISECONDS);
+
+                // Handle file update triggered events.
+                if (watchKey != null && watchKeyPathMap.containsKey(watchKey)) {
+                    for (WatchEvent<?> event: watchKey.pollEvents()) {
+                        log.debug("Got file change event: {} {}", event.kind(), event.context());
+
+                        @SuppressWarnings("unchecked")
+                        Path filePath = watchKeyPathMap.get(watchKey).resolve(((WatchEvent<Path>) event).context());
+
+                        if (fileToStoreMap.containsKey(filePath)) {
+                            maybeReloadStore(fileToStoreMap.get(filePath));
+                            sslContext.set(createSSLContext(keystore, truststore));
+                        } else {
+                            log.debug("Unknown file name: {}", filePath);
+                        }
+                    }
+                    if (!watchKey.reset()) {
+                        watchKeyPathMap.remove(watchKey);
+                    }
+                }
+
+                keyStoreRefreshTimer.update();
+                if (keyStoreRefreshTimer.isExpired()) {
+                    maybeReloadStore(keystore);
+                    resetKeyStoreTimer();
+                }
+
+                trustStoreRefreshTimer.update();
+                if (trustStoreRefreshTimer.isExpired()) {
+                    maybeReloadStore(truststore);
+                    resetTrustStoreTimer();
+                }
+            }
+        }
+
+        private void resetKeyStoreTimer() {
+            keyStoreRefreshTimer.updateAndReset(keyStoreRefreshIntervalMs);
+        }
+
+        private void resetTrustStoreTimer() {
+            trustStoreRefreshTimer.updateAndReset(trustStoreRefreshIntervalMs);
+        }
+
+        private void maybeReloadStore(SecurityStore store) {
+            try {
+                if (!(store instanceof FileBasedStore))
+                    throw new IllegalStateException("Store " + store + " is expected to be file-based for reloading.");
+                ((FileBasedStore) store).reloadStore(store == keystore);
+                log.info("Reloaded store {}", store);
+            } catch (Exception e) {
+                log.error("Encountered a load failure for store {}", store, e);
+                lastLoadFailure.set(e);
+            }
+        }
     }
 
     @SuppressWarnings("unchecked")
@@ -158,33 +319,51 @@ public final class DefaultSslEngineFactory implements SslEngineFactory {
         this.kmfAlgorithm = (String) configs.get(SslConfigs.SSL_KEYMANAGER_ALGORITHM_CONFIG);
         this.tmfAlgorithm = (String) configs.get(SslConfigs.SSL_TRUSTMANAGER_ALGORITHM_CONFIG);
 
+        final String keyStoreLocation = (String) configs.get(SslConfigs.SSL_KEYSTORE_LOCATION_CONFIG);
         this.keystore = createKeystore((String) configs.get(SslConfigs.SSL_KEYSTORE_TYPE_CONFIG),
-                (String) configs.get(SslConfigs.SSL_KEYSTORE_LOCATION_CONFIG),
+                keyStoreLocation,
                 (Password) configs.get(SslConfigs.SSL_KEYSTORE_PASSWORD_CONFIG),
                 (Password) configs.get(SslConfigs.SSL_KEY_PASSWORD_CONFIG),
                 (Password) configs.get(SslConfigs.SSL_KEYSTORE_KEY_CONFIG),
                 (Password) configs.get(SslConfigs.SSL_KEYSTORE_CERTIFICATE_CHAIN_CONFIG));
+        if (keyStoreLocation != null)
+            this.securityFileChangeListener.updateStoreKey(keystore, keyStoreLocation);
+        if (configs.containsKey(SslConfigs.SSL_KEYSTORE_LOCATION_REFRESH_INTERVAL_MS_CONFIG))
+            this.keyStoreRefreshIntervalMs = (Long) configs.get(SslConfigs.SSL_KEYSTORE_LOCATION_REFRESH_INTERVAL_MS_CONFIG);
 
+        final String trustStoreLocation = (String) configs.get(SslConfigs.SSL_TRUSTSTORE_LOCATION_CONFIG);
         this.truststore = createTruststore((String) configs.get(SslConfigs.SSL_TRUSTSTORE_TYPE_CONFIG),
-                (String) configs.get(SslConfigs.SSL_TRUSTSTORE_LOCATION_CONFIG),
+                trustStoreLocation,
                 (Password) configs.get(SslConfigs.SSL_TRUSTSTORE_PASSWORD_CONFIG),
                 (Password) configs.get(SslConfigs.SSL_TRUSTSTORE_CERTIFICATES_CONFIG));
+        if (trustStoreLocation != null)
+            this.securityFileChangeListener.updateStoreKey(truststore, trustStoreLocation);
+        if (configs.containsKey(SslConfigs.SSL_TRUSTSTORE_LOCATION_REFRESH_INTERVAL_MS_CONFIG))
+            this.trustStoreRefreshIntervalMs = (Long) configs.get(SslConfigs.SSL_TRUSTSTORE_LOCATION_REFRESH_INTERVAL_MS_CONFIG);
 
-        this.sslContext = createSSLContext(keystore, truststore);
+        this.sslContext.set(createSSLContext(keystore, truststore));
+
+        securityStoreRefreshThread.start();
     }
 
     @Override
     public void close() {
         this.sslContext = null;
+        this.securityStoreRefreshThread.interrupt();
+        try {
+            this.securityStoreRefreshThread.join(TimeUnit.SECONDS.toMillis(30));
+        } catch (InterruptedException e) {
+            log.warn("Failed to terminate the security listener thread on time.", e);
+        }
     }
 
     //For Test only
     public SSLContext sslContext() {
-        return this.sslContext;
+        return this.sslContext.get();
     }
 
     private SSLEngine createSslEngine(Mode mode, String peerHost, int peerPort, String endpointIdentification) {
-        SSLEngine sslEngine = sslContext.createSSLEngine(peerHost, peerPort);
+        SSLEngine sslEngine = sslContext().createSSLEngine(peerHost, peerPort);
         if (cipherSuites != null) sslEngine.setEnabledCipherSuites(cipherSuites);
         if (enabledProtocols != null) sslEngine.setEnabledProtocols(enabledProtocols);
 
@@ -211,6 +390,7 @@ public final class DefaultSslEngineFactory implements SslEngineFactory {
         }
         return sslEngine;
     }
+
     private static SslClientAuth createSslClientAuth(String key) {
         SslClientAuth auth = SslClientAuth.forConfig(key);
         if (auth != null) {
@@ -218,8 +398,7 @@ public final class DefaultSslEngineFactory implements SslEngineFactory {
         }
         log.warn("Unrecognized client authentication configuration {}.  Falling " +
                 "back to NONE.  Recognized client authentication configurations are {}.",
-                key, String.join(", ", SslClientAuth.VALUES.stream().
-                        map(Enum::name).collect(Collectors.toList())));
+                key, SslClientAuth.VALUES.stream().map(Enum::name).collect(Collectors.joining(", ")));
         return SslClientAuth.NONE;
     }
 
@@ -295,7 +474,7 @@ public final class DefaultSslEngineFactory implements SslEngineFactory {
             throw new InvalidConfigurationException("SSL key store is not specified, but key store password is specified.");
         } else if (path != null && password == null) {
             throw new InvalidConfigurationException("SSL key store is specified, but key store password is not specified.");
-        } else if (path != null && password != null) {
+        } else if (path != null) {
             return new FileBasedStore(type, path, password, keyPassword, true);
         } else
             return null; // path == null, clients may use this path with brokers that don't require client auth
@@ -336,8 +515,8 @@ public final class DefaultSslEngineFactory implements SslEngineFactory {
         protected final String path;
         private final Password password;
         protected final Password keyPassword;
-        private final Long fileLastModifiedMs;
-        private final KeyStore keyStore;
+        private Long fileLastModifiedMs;
+        private KeyStore keyStore;
 
         FileBasedStore(String type, String path, Password password, Password keyPassword, boolean isKeyStore) {
             Objects.requireNonNull(type, "type must not be null");
@@ -345,8 +524,12 @@ public final class DefaultSslEngineFactory implements SslEngineFactory {
             this.path = path;
             this.password = password;
             this.keyPassword = keyPassword;
+            this.reloadStore(isKeyStore);
+        }
+
+        public void reloadStore(final boolean isKeyStore) {
             fileLastModifiedMs = lastModifiedMs(path);
-            this.keyStore = load(isKeyStore);
+            keyStore = load(isKeyStore);
         }
 
         @Override
@@ -413,6 +596,7 @@ public final class DefaultSslEngineFactory implements SslEngineFactory {
                     new PemStore(storeContents);
                 return pemStore.keyStore;
             } catch (Exception e) {
+                log.error("Failed to load store", e);
                 throw new InvalidConfigurationException("Failed to load PEM SSL keystore " + path, e);
             }
         }

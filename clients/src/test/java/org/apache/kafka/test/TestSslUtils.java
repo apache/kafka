@@ -173,6 +173,9 @@ public class TestSslUtils {
         sslConfigs.put(SslConfigs.SSL_KEYMANAGER_ALGORITHM_CONFIG, keyManagerAlgorithm);
         sslConfigs.put(SslConfigs.SSL_TRUSTMANAGER_ALGORITHM_CONFIG, trustManagerAlgorithm);
 
+        sslConfigs.put(SslConfigs.SSL_TRUSTMANAGER_ALGORITHM_CONFIG, trustManagerAlgorithm);
+        sslConfigs.put(SslConfigs.SSL_TRUSTMANAGER_ALGORITHM_CONFIG, trustManagerAlgorithm);
+
         List<String> enabledProtocols  = new ArrayList<>();
         enabledProtocols.add(tlsProtocol);
         sslConfigs.put(SslConfigs.SSL_ENABLED_PROTOCOLS_CONFIG, enabledProtocols);
@@ -536,6 +539,7 @@ public class TestSslUtils {
             }
 
             sslConfigs.put(SslConfigs.SSL_TRUSTSTORE_LOCATION_CONFIG, trustStoreFile.getPath());
+            sslConfigs.put(SslConfigs.SSL_TRUSTSTORE_LOCATION_REFRESH_INTERVAL_MS_CONFIG, 5000L);
             sslConfigs.put(SslConfigs.SSL_TRUSTSTORE_PASSWORD_CONFIG, trustStorePassword);
             sslConfigs.put(SslConfigs.SSL_TRUSTSTORE_TYPE_CONFIG, "JKS");
             sslConfigs.put(SslConfigs.SSL_TRUSTMANAGER_ALGORITHM_CONFIG, TrustManagerFactory.getDefaultAlgorithm());
@@ -579,6 +583,9 @@ public class TestSslUtils {
 
         DefaultSslEngineFactory defaultSslEngineFactory = new DefaultSslEngineFactory();
 
+        public TestSslEngineFactory() throws IOException {
+        }
+
         @Override
         public SSLEngine createClientSslEngine(String peerHost, int peerPort, String endpointIdentification) {
             return defaultSslEngineFactory.createClientSslEngine(peerHost, peerPort, endpointIdentification);
@@ -610,7 +617,7 @@ public class TestSslUtils {
         }
 
         @Override
-        public void close() throws IOException {
+        public void close() {
             defaultSslEngineFactory.close();
             closed = true;
         }

@@ -33,6 +33,7 @@ import javax.net.ssl.SSLException;
 import java.io.Closeable;
 import java.net.InetSocketAddress;
 import java.net.Socket;
+import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.security.cert.Certificate;
 import java.security.cert.X509Certificate;
@@ -133,7 +134,12 @@ public class SslFactory implements Reconfigurable, Closeable {
                 (Class<? extends SslEngineFactory>) configs.get(SslConfigs.SSL_ENGINE_FACTORY_CLASS_CONFIG);
         SslEngineFactory sslEngineFactory;
         if (sslEngineFactoryClass == null) {
-            sslEngineFactory = new DefaultSslEngineFactory();
+            try {
+                sslEngineFactory = new DefaultSslEngineFactory();
+            } catch (IOException e) {
+                log.error("Failed to instantiate new ssl factory due to IOException", e);
+                return null;
+            }
         } else {
             sslEngineFactory = Utils.newInstance(sslEngineFactoryClass);
         }

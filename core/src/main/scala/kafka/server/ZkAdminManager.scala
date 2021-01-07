@@ -59,7 +59,8 @@ import scala.jdk.CollectionConverters._
 class ZkAdminManager(val config: KafkaConfig,
                      val metrics: Metrics,
                      val metadataCache: MetadataCache,
-                     val zkClient: KafkaZkClient) extends Logging with KafkaMetricsGroup {
+                     val zkClient: KafkaZkClient,
+                     val enableForwarding: Boolean) extends Logging with KafkaMetricsGroup {
 
   this.logIdent = "[Admin Manager on Broker " + config.brokerId + "]: "
 
@@ -492,7 +493,7 @@ class ZkAdminManager(val config: KafkaConfig,
       None
     else {
       val id = resourceNameToBrokerId(resource.name)
-      if (id != this.config.brokerId)
+      if (id != this.config.brokerId && !enableForwarding)
         throw new InvalidRequestException(s"Unexpected broker id, expected ${this.config.brokerId}, but received ${resource.name}")
       Some(id)
     }
