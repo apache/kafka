@@ -65,7 +65,7 @@ object KafkaRaftManager {
     }
 
     override def isRunning: Boolean = {
-      client.isRunning
+      client.isRunning && !isThreadFailed
     }
   }
 

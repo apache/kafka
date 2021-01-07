@@ -49,4 +49,20 @@ class RaftManagerTest {
     assertTrue(ioThread.isShutdownComplete)
   }
 
+  @Test
+  def testUncaughtExceptionInIoThread(): Unit = {
+    val raftClient = mock(classOf[KafkaRaftClient[String]])
+    val ioThread = new RaftIoThread(raftClient)
+
+    when(raftClient.isRunning).thenReturn(true)
+    assertTrue(ioThread.isRunning)
+
+    when(raftClient.poll()).thenThrow(new RuntimeException)
+    ioThread.run()
+
+    assertTrue(ioThread.isShutdownComplete)
+    assertTrue(ioThread.isThreadFailed)
+    assertFalse(ioThread.isRunning)
+  }
+
 }
