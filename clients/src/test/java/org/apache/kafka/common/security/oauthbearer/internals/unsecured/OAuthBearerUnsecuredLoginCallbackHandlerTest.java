@@ -53,7 +53,7 @@ public class OAuthBearerUnsecuredLoginCallbackHandlerTest {
     }
 
     @Test
-    public void throwsErrorOnInvalidExtensionName() throws IOException, UnsupportedCallbackException {
+    public void throwsErrorOnInvalidExtensionName() {
         Map<String, String> options = new HashMap<>();
         options.put("unsecuredLoginExtension_test.Id", "1");
         OAuthBearerUnsecuredLoginCallbackHandler callbackHandler = createCallbackHandler(options, new MockTime());
@@ -63,7 +63,7 @@ public class OAuthBearerUnsecuredLoginCallbackHandlerTest {
     }
 
     @Test
-    public void throwsErrorOnInvalidExtensionValue() throws IOException, UnsupportedCallbackException {
+    public void throwsErrorOnInvalidExtensionValue() {
         Map<String, String> options = new HashMap<>();
         options.put("unsecuredLoginExtension_testId", "Çalifornia");
         OAuthBearerUnsecuredLoginCallbackHandler callbackHandler = createCallbackHandler(options, new MockTime());

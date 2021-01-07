@@ -190,7 +190,7 @@ public class OAuthBearerSaslServerTest {
     }
 
     @Test
-    public void authorizatonIdNotEqualsAuthenticationId() throws Exception {
+    public void authorizatonIdNotEqualsAuthenticationId() {
         assertThrows(SaslAuthenticationException.class,
             () -> saslServer.evaluateResponse(clientInitialResponse(USER + "x")));
     }

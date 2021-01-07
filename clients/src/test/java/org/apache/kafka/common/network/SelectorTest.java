@@ -178,7 +178,7 @@ public class SelectorTest {
      * Sending a request to a node without an existing connection should result in an exception
      */
     @Test
-    public void testSendWithoutConnecting() throws Exception {
+    public void testSendWithoutConnecting() {
         assertThrows(IllegalStateException.class, () -> selector.send(createSend("0", "test")));
     }
 
@@ -186,7 +186,7 @@ public class SelectorTest {
      * Sending a request to a node with a bad hostname should result in an exception during connect
      */
     @Test
-    public void testNoRouteToHost() throws Exception {
+    public void testNoRouteToHost() {
         assertThrows(IOException.class,
             () -> selector.connect("0", new InetSocketAddress("some.invalid.hostname.foo.bar.local", server.port), BUFFER_SIZE, BUFFER_SIZE));
     }

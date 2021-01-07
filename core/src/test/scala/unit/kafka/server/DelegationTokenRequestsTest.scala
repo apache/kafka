@@ -16,8 +16,6 @@
   */
 package kafka.server
 
-import java.util
-
 import kafka.api.{KafkaSasl, SaslSetup}
 import kafka.utils.{JaasTestUtils, TestUtils}
 import org.apache.kafka.clients.admin.{Admin, AdminClientConfig, CreateDelegationTokenOptions, DescribeDelegationTokenOptions}
@@ -27,8 +25,9 @@ import org.apache.kafka.common.utils.SecurityUtils
 import org.junit.Assert._
 import org.junit.{After, Before, Test}
 
-import scala.jdk.CollectionConverters._
+import java.util
 import scala.concurrent.ExecutionException
+import scala.jdk.CollectionConverters._
 
 class DelegationTokenRequestsTest extends BaseRequestTest with SaslSetup {
   override protected def securityProtocol = SecurityProtocol.SASL_PLAINTEXT

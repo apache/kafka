@@ -352,7 +352,7 @@ public class MockProducerTest {
     }
 
     @Test
-    public void shouldThrowOnAbortForNonAutoCompleteIfTransactionsAreEnabled() throws Exception {
+    public void shouldThrowOnAbortForNonAutoCompleteIfTransactionsAreEnabled() {
         buildMockProducer(false);
         producer.initTransactions();
         producer.beginTransaction();
@@ -700,11 +700,11 @@ public class MockProducerTest {
         producer.close();
         assertThrows(IllegalStateException.class, producer::flush);
     }
-
+    
     @Test
     @SuppressWarnings("unchecked")
     public void shouldThrowClassCastException() {
-        try (MockProducer<Integer, String> customProducer = new MockProducer<>(true, new IntegerSerializer(), new StringSerializer());) {
+        try (MockProducer<Integer, String> customProducer = new MockProducer<>(true, new IntegerSerializer(), new StringSerializer())) {
             assertThrows(ClassCastException.class, () -> customProducer.send(new ProducerRecord(topic, "key1", "value1")));
         }
     }

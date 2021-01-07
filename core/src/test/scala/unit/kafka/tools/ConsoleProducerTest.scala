@@ -17,13 +17,13 @@
 
 package kafka.tools
 
-import java.util
-
-import ConsoleProducer.LineMessageReader
-import org.apache.kafka.clients.producer.ProducerConfig
-import org.junit.Test
-import org.junit.Assert.{assertEquals, assertThrows}
+import kafka.tools.ConsoleProducer.LineMessageReader
 import kafka.utils.Exit
+import org.apache.kafka.clients.producer.ProducerConfig
+import org.junit.Assert.{assertEquals, assertThrows}
+import org.junit.Test
+
+import java.util
 
 class ConsoleProducerTest {
 

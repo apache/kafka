@@ -3143,7 +3143,7 @@ public class TransactionManagerTest {
     }
 
     @Test
-    public void testRetryAbortTransactionAfterCommitTimeout() throws InterruptedException {
+    public void testRetryAbortTransactionAfterCommitTimeout() {
         assertThrows(KafkaException.class, () -> verifyCommitOrAbortTransactionRetriable(TransactionResult.COMMIT, TransactionResult.ABORT));
     }
 

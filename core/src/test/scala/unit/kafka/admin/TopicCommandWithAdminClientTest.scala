@@ -16,8 +16,6 @@
   */
 package kafka.admin
 
-import java.util.{Collections, Optional, Properties}
-
 import kafka.admin.TopicCommand.{AdminClientTopicService, TopicCommandOptions}
 import kafka.integration.KafkaServerTestHarness
 import kafka.server.{ConfigType, KafkaConfig}
@@ -25,28 +23,24 @@ import kafka.utils.{Logging, TestUtils}
 import kafka.zk.{ConfigEntityChangeNotificationZNode, DeleteTopicsTopicZNode}
 import org.apache.kafka.clients.CommonClientConfigs
 import org.apache.kafka.clients.admin._
-import org.apache.kafka.common.Node
-import org.apache.kafka.common.TopicPartition
-import org.apache.kafka.common.TopicPartitionInfo
+import org.apache.kafka.common.{Node, TopicPartition, TopicPartitionInfo}
 import org.apache.kafka.common.config.{ConfigException, ConfigResource, TopicConfig}
-import org.apache.kafka.common.errors.ClusterAuthorizationException
-import org.apache.kafka.common.errors.ThrottlingQuotaExceededException
-import org.apache.kafka.common.errors.TopicExistsException
+import org.apache.kafka.common.errors.{ClusterAuthorizationException, ThrottlingQuotaExceededException, TopicExistsException}
 import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.security.auth.SecurityProtocol
-import org.junit.Assert.assertThrows
-import org.junit.Assert.{assertEquals, assertFalse, assertTrue}
+import org.junit.Assert._
 import org.junit.rules.TestName
 import org.junit.{After, Before, Rule, Test}
 import org.mockito.ArgumentMatcher
 import org.mockito.ArgumentMatchers.{eq => eqThat, _}
 import org.mockito.Mockito._
 
-import scala.jdk.CollectionConverters._
+import java.util.{Collections, Optional, Properties}
 import scala.collection.Seq
 import scala.concurrent.ExecutionException
+import scala.jdk.CollectionConverters._
 import scala.util.Random
 
 class TopicCommandWithAdminClientTest extends KafkaServerTestHarness with Logging with RackAwareTest {

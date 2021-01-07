@@ -64,7 +64,7 @@ public class ScramSaslServerTest {
     }
 
     @Test
-    public void authorizatonIdNotEqualsAuthenticationId() throws Exception {
+    public void authorizatonIdNotEqualsAuthenticationId() {
         assertThrows(SaslAuthenticationException.class, () -> saslServer.evaluateResponse(clientFirstMessage(USER_A, USER_B)));
     }
 

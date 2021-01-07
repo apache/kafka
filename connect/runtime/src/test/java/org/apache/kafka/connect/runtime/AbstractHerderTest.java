@@ -275,7 +275,7 @@ public class AbstractHerderTest {
 
 
     @Test
-    public void testConfigValidationEmptyConfig() throws Throwable {
+    public void testConfigValidationEmptyConfig() {
         AbstractHerder herder = createConfigValidationHerder(TestSourceConnector.class, noneConnectorClientConfigOverridePolicy, 0);
         replayAll();
 
@@ -314,7 +314,7 @@ public class AbstractHerderTest {
     }
 
     @Test
-    public void testConfigValidationInvalidTopics() throws Throwable {
+    public void testConfigValidationInvalidTopics() {
         AbstractHerder herder = createConfigValidationHerder(TestSinkConnector.class, noneConnectorClientConfigOverridePolicy);
         replayAll();
 
