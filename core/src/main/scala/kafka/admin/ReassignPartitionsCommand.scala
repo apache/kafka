@@ -597,17 +597,17 @@ object ReassignPartitionsCommand extends Logging {
                                 : String = {
     val bld = new mutable.ArrayBuffer[String]
     states.keySet.toBuffer.sortWith(compareTopicPartitionReplicas).foreach {
-      case replica =>
+      replica =>
         val state = states(replica)
         state match {
-          case MissingLogDirMoveState(targetLogDir) =>
+          case MissingLogDirMoveState(_) =>
             bld.append(s"Partition ${replica.topic()}-${replica.partition()} is not found " +
               s"in any live log dir on broker ${replica.brokerId()}. There is likely an " +
               s"offline log directory on the broker.")
-          case MissingReplicaMoveState(targetLogDir) =>
+          case MissingReplicaMoveState(_) =>
             bld.append(s"Partition ${replica.topic()}-${replica.partition()} cannot be found " +
               s"in any live log directory on broker ${replica.brokerId()}.")
-          case ActiveMoveState(currentLogDir, targetLogDir, futureLogDir) =>
+          case ActiveMoveState(_, targetLogDir, futureLogDir) =>
             if (targetLogDir.equals(futureLogDir)) {
               bld.append(s"Reassignment of replica ${replica} is still in progress.")
             } else {
@@ -619,7 +619,7 @@ object ReassignPartitionsCommand extends Logging {
             bld.append(s"Partition ${replica.topic()}-${replica.partition()} on broker " +
               s"${replica.brokerId()} is not being moved from log dir ${currentLogDir} to " +
               s"${targetLogDir}.")
-          case CompletedMoveState(targetLogDir) =>
+          case CompletedMoveState(_) =>
             bld.append(s"Reassignment of replica ${replica} completed successfully.")
         }
     }
@@ -674,8 +674,8 @@ object ReassignPartitionsCommand extends Logging {
    */
   def clearBrokerLevelThrottles(adminClient: Admin, brokers: Set[Int]): Unit = {
     val configOps = new util.HashMap[ConfigResource, util.Collection[AlterConfigOp]]()
-    brokers.foreach {
-      case brokerId => configOps.put(
+    brokers.foreach { brokerId =>
+      configOps.put(
         new ConfigResource(ConfigResource.Type.BROKER, brokerId.toString),
         brokerLevelThrottles.map(throttle => new AlterConfigOp(
           new ConfigEntry(throttle, null), OpType.DELETE)).asJava)
@@ -1191,7 +1191,7 @@ object ReassignPartitionsCommand extends Logging {
                                   reassignments: Map[TopicPartition, Seq[Int]]): Map[TopicPartition, Throwable] = {
     val results: Map[TopicPartition, KafkaFuture[Void]] =
       adminClient.alterPartitionReassignments(reassignments.map { case (part, replicas) =>
-        (part, Optional.of(new NewPartitionReassignment(replicas.map(Integer.valueOf(_)).asJava)))
+        (part, Optional.of(new NewPartitionReassignment(replicas.map(Integer.valueOf).asJava)))
       }.asJava).values().asScala
     results.flatMap {
       case (part, future) => {
@@ -1229,19 +1229,23 @@ object ReassignPartitionsCommand extends Logging {
     }
   }
 
+  /**
+   * Compute the in progress partition move from the current reassignments.
+   * @param currentReassignments All replicas, adding replicas and removing replicas of target partitions
+   */
   private def calculateCurrentMoveMap(currentReassignments: Map[TopicPartition, PartitionReassignment]): MoveMap = {
     val moveMap = new mutable.HashMap[String, mutable.Map[Int, PartitionMove]]()
     // Add the current reassignments to the move map.
     currentReassignments.foreach { case (part, reassignment) =>
-      val move = PartitionMove(new mutable.HashSet[Int](), new mutable.HashSet[Int]())
-      reassignment.replicas.forEach { replica =>
-        move.sources += replica
-        move.destinations += replica
-      }
-      reassignment.addingReplicas.forEach(move.destinations += _)
-      reassignment.removingReplicas.forEach(move.destinations -= _)
+      val allReplicas = reassignment.replicas().asScala.map(Int.unbox)
+      val addingReplicas = reassignment.addingReplicas.asScala.map(Int.unbox)
+
+      // The addingReplicas is included in the replicas during reassignment
+      val sources = mutable.Set[Int]() ++ allReplicas.diff(addingReplicas)
+      val destinations = mutable.Set[Int]() ++ addingReplicas
+
       val partMoves = moveMap.getOrElseUpdate(part.topic, new mutable.HashMap[Int, PartitionMove])
-      partMoves.put(part.partition, move)
+      partMoves.put(part.partition, PartitionMove(sources, destinations))
     }
     moveMap
   }
@@ -1250,7 +1254,7 @@ object ReassignPartitionsCommand extends Logging {
    * Calculate the global map of all partitions that are moving.
    *
    * @param currentReassignments    The currently active reassignments.
-   * @param proposedReassignments   The proposed reassignments (destinations replicas only).
+   * @param proposedParts           The proposed location of the partitions (destinations replicas only).
    * @param currentParts            The current location of the partitions that we are
    *                                proposing to move.
    * @return                        A map from topic name to partition map.
@@ -1258,40 +1262,25 @@ object ReassignPartitionsCommand extends Logging {
    *                                the movements for that partition.
    */
   def calculateProposedMoveMap(currentReassignments: Map[TopicPartition, PartitionReassignment],
-                               proposedReassignments: Map[TopicPartition, Seq[Int]],
+                               proposedParts: Map[TopicPartition, Seq[Int]],
                                currentParts: Map[TopicPartition, Seq[Int]]): MoveMap = {
     val moveMap = calculateCurrentMoveMap(currentReassignments)
 
-    // Add the proposed reassignments to the move map.  The proposals will overwrite
-    // the current reassignments.
-    proposedReassignments.foreach {
-      case (part, replicas) => {
-        val move = PartitionMove(new mutable.HashSet[Int](), new mutable.HashSet[Int]())
-        move.destinations ++= replicas
+    proposedParts.foreach {
+      case (part, replicas) =>
         val partMoves = moveMap.getOrElseUpdate(part.topic(), new mutable.HashMap[Int, PartitionMove])
-        partMoves.put(part.partition(), move)
-      }
-    }
-    // For partitions we are moving, add the current replica locations as sources.
-    // Ignore partitions that are not being moved.
-    moveMap.foreach {
-      case (topicName, partMap) =>
-        partMap.foreach {
-          case (partitionIndex, moves) =>
-            currentParts.get(new TopicPartition(topicName, partitionIndex)) match {
-              case None =>
-              case Some(replicas) => moves.sources ++= replicas
-            }
-        }
-    }
-    // Remove sources from destinations.  If something is a source, the data is already there,
-    // so it doesn't need to be treated as a destination (by having follower throttle applied, etc.)
-    moveMap.foreach {
-      case (_, partMap) =>
-        partMap.foreach {
-          case (_, moves) =>
-            moves.destinations --= moves.sources
-        }
+
+        // If there is a reassignment in progress, use the sources from moveMap, otherwise
+        // use the sources from currentParts
+        val sources = mutable.Set[Int]() ++ (partMoves.get(part.partition()) match {
+          case Some(move) => move.sources.toSeq
+          case None => currentParts.getOrElse(part,
+            throw new RuntimeException(s"Trying to reassign a topic partition $part with 0 replicas"))
+        })
+        val destinations = mutable.Set[Int]() ++ replicas.diff(sources.toSeq)
+
+        partMoves.put(part.partition,
+          PartitionMove(sources, destinations))
     }
     moveMap
   }
