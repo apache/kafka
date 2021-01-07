@@ -108,6 +108,8 @@ class TestRaftServer(
   }
 
   def shutdown(): Unit = {
+    if (raftManager != null)
+      CoreUtils.swallow(raftManager.shutdown(), this)
     if (workloadGenerator != null)
       CoreUtils.swallow(workloadGenerator.shutdown(), this)
     if (dataPlaneRequestHandlerPool != null)
