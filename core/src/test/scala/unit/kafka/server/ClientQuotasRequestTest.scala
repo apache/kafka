@@ -270,7 +270,7 @@ class ClientQuotasRequestTest extends BaseRequestTest {
 
   @Test
   def testAlterClientQuotasEmptyEntity(): Unit = {
-    val entity = new ClientQuotaEntity(util.Collections.emptyMap())
+    val entity = new ClientQuotaEntity(Map.empty.asJava)
     assertThrows(classOf[InvalidRequestException], () => alterEntityQuotas(entity, Map(ProducerByteRateProp -> Some(10000.5)), validateOnly = true))
   }
 

@@ -25,7 +25,7 @@ import org.apache.kafka.common.config.{ConfigException, TopicConfig}
 import org.junit.Assert._
 import org.junit.{Assert, Test}
 
-import java.util.Properties
+import java.util.{Collections, Properties}
 
 class LogConfigTest {
 
@@ -125,7 +125,7 @@ class LogConfigTest {
   /* Sanity check that toHtml produces one of the expected configs */
   @Test
   def testToHtml(): Unit = {
-    val html = LogConfig.configDefCopy.toHtml(4, (key: String) => "prefix_" + key)
+    val html = LogConfig.configDefCopy.toHtml(4, (key: String) => "prefix_" + key, Collections.emptyMap())
     val expectedConfig = "<h4><a id=\"file.delete.delay.ms\"></a><a id=\"prefix_file.delete.delay.ms\" href=\"#prefix_file.delete.delay.ms\">file.delete.delay.ms</a></h4>"
     assertTrue(s"Could not find `$expectedConfig` in:\n $html", html.contains(expectedConfig))
   }
