@@ -149,6 +149,7 @@ public class AdjustStreamThreadCountTest {
             one.start();
             latch.await(30, TimeUnit.SECONDS);
             assertThat(kafkaStreams.localThreadsMetadata().size(), equalTo(oldThreadCount));
+            waitForApplicationState(Collections.singletonList(kafkaStreams), KafkaStreams.State.REBALANCING, DEFAULT_DURATION);
             waitForApplicationState(Collections.singletonList(kafkaStreams), KafkaStreams.State.RUNNING, DEFAULT_DURATION);
         }
     }
