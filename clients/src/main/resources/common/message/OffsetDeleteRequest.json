@@ -19,11 +19,11 @@
   "name": "OffsetDeleteRequest",
   "validVersions": "0",
   "fields": [
-    { "name": "GroupId", "type": "string", "versions": "0+",
+    { "name": "GroupId", "type": "string", "versions": "0+", "entityType": "groupId",
       "about": "The unique group identifier." },
     { "name": "Topics", "type": "[]OffsetDeleteRequestTopic", "versions": "0+",
       "about": "The topics to delete offsets for", "fields": [
-        { "name": "Name",  "type": "string",  "versions": "0+", "mapKey": true,
+        { "name": "Name",  "type": "string",  "versions": "0+", "mapKey": true, "entityType": "topicName",
           "about": "The topic name." },
         { "name": "Partitions", "type": "[]OffsetDeleteRequestPartition", "versions": "0+",
           "about": "Each partition to delete offsets for.", "fields": [
