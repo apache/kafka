@@ -18,7 +18,7 @@ package kafka.server
 
 import java.util
 import java.util.concurrent.atomic.{AtomicBoolean, AtomicLong}
-import java.util.concurrent.{ConcurrentHashMap, TimeUnit}
+import java.util.concurrent.ConcurrentHashMap
 import kafka.api.LeaderAndIsr
 import kafka.metrics.KafkaMetricsGroup
 import kafka.utils.{KafkaScheduler, Logging, Scheduler}
@@ -131,7 +131,7 @@ class DefaultAlterIsrManager(
     if (unsentIsrUpdates.putIfAbsent(alterIsrItem.topicPartition, alterIsrItem) == null) {
       if (inflightRequest.compareAndSet(false, true)) {
         // optimistically set the inflight flag even though we haven't sent the request yet
-        scheduler.schedule("send-alter-isr", propagateIsrChanges, 50, -1, TimeUnit.MILLISECONDS)
+        scheduler.schedule("send-alter-isr", propagateIsrChanges)
       }
       true
     } else {
@@ -162,13 +162,6 @@ class DefaultAlterIsrManager(
   private def sendRequest(inflightAlterIsrItems: Seq[AlterIsrItem]): Unit = {
     val message = buildRequest(inflightAlterIsrItems)
 
-    def clearInflightRequests(): Unit = {
-      // Be sure to clear the in-flight flag to allow future AlterIsr requests
-      if (!inflightRequest.compareAndSet(true, false)) {
-        throw new IllegalStateException("AlterIsr response callback called when no requests were in flight")
-      }
-    }
-
     debug(s"Sending AlterIsr to controller $message")
 
     // We will not timeout AlterISR request, instead letting it retry indefinitely
@@ -182,7 +175,11 @@ class DefaultAlterIsrManager(
             val body = response.responseBody().asInstanceOf[AlterIsrResponse]
             handleAlterIsrResponse(body, message.brokerEpoch, inflightAlterIsrItems)
           } finally {
-            clearInflightRequests()
+            // Make sure we send any waiting items or clear the inflight flag
+            if (!inflightRequest.get()) {
+              throw new IllegalStateException("AlterIsr response callback called when no requests were in flight")
+            }
+            propagateIsrChanges()
           }
         }
 
