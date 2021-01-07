@@ -14,10 +14,9 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.log.remote.metadata.storage;
+package org.apache.kafka.common.log.remote.metadata.storage;
 
 import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.common.log.remote.metadata.storage.RLSMSerDe;
 import org.apache.kafka.common.log.remote.storage.RemoteLogSegmentId;
 import org.apache.kafka.common.log.remote.storage.RemoteLogSegmentMetadata;
 import org.apache.kafka.common.serialization.Deserializer;

@@ -26,8 +26,6 @@ import org.apache.kafka.common.log.remote.storage.RemoteLogSegmentId;
 import org.apache.kafka.common.log.remote.storage.RemoteLogSegmentMetadata;
 import org.apache.kafka.common.log.remote.storage.RemoteStorageException;
 import org.apache.kafka.common.log.remote.storage.RemoteStorageManager;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.io.File;
 import java.io.IOException;
@@ -37,7 +35,6 @@ import java.util.Map;
 
 public class HDFSRemoteStorageManager implements RemoteStorageManager {
 
-    private static final Logger LOGGER = LoggerFactory.getLogger(HDFSRemoteStorageManager.class);
     private static final String LOG_FILE_NAME = "log";
     private static final String OFFSET_INDEX_FILE_NAME = "index";
     private static final String TIME_INDEX_FILE_NAME = "timeindex";
@@ -117,11 +114,11 @@ public class HDFSRemoteStorageManager implements RemoteStorageManager {
 
             delete = getFS().delete(new Path(path), true);
         } catch (Exception e) {
-            throw new RemoteStorageException( "Failed to delete remote log segment with id:" +
+            throw new RemoteStorageException("Failed to delete remote log segment with id:" +
                     remoteLogSegmentMetadata.remoteLogSegmentId(), e);
         }
 
-        if(!delete) {
+        if (!delete) {
             throw new RemoteStorageException("Failed to delete remote log segment with id:" +
                     remoteLogSegmentMetadata.remoteLogSegmentId());
         }
@@ -130,14 +127,12 @@ public class HDFSRemoteStorageManager implements RemoteStorageManager {
     private class CachedInputStream extends InputStream {
         private Path logFile;
         private long currentPos;
-        private long endPos;
         private long fileLen;
         private FSDataInputStream inputStream;
 
         CachedInputStream(Path logFile, long currentPos, long endPos) throws IOException {
             this.logFile = logFile;
             this.currentPos = currentPos;
-            this.endPos = endPos;
             FileSystem fs = getFS();
             fileLen = Math.min(fs.getFileStatus(logFile).getLen(), endPos);
         }
@@ -173,11 +168,11 @@ public class HDFSRemoteStorageManager implements RemoteStorageManager {
 
         @Override
         public int available() throws IOException {
-            long available = (fileLen - currentPos);
+            long available = fileLen - currentPos;
             if (available > Integer.MAX_VALUE)
                 return Integer.MAX_VALUE;
 
-            return (int)available;
+            return (int) available;
         }
 
         private byte[] getCachedData(long position) throws IOException {

@@ -39,8 +39,14 @@ import static java.lang.String.format;
 import static java.nio.file.Files.newInputStream;
 import static java.nio.file.StandardOpenOption.READ;
 import static org.apache.kafka.common.log.remote.storage.LocalTieredStorageEvent.EventType;
-import static org.apache.kafka.common.log.remote.storage.LocalTieredStorageEvent.EventType.*;
-import static org.apache.kafka.common.log.remote.storage.RemoteLogSegmentFileset.RemoteLogSegmentFileType.*;
+import static org.apache.kafka.common.log.remote.storage.LocalTieredStorageEvent.EventType.DELETE_SEGMENT;
+import static org.apache.kafka.common.log.remote.storage.LocalTieredStorageEvent.EventType.FETCH_OFFSET_INDEX;
+import static org.apache.kafka.common.log.remote.storage.LocalTieredStorageEvent.EventType.FETCH_SEGMENT;
+import static org.apache.kafka.common.log.remote.storage.LocalTieredStorageEvent.EventType.FETCH_TIME_INDEX;
+import static org.apache.kafka.common.log.remote.storage.LocalTieredStorageEvent.EventType.OFFLOAD_SEGMENT;
+import static org.apache.kafka.common.log.remote.storage.RemoteLogSegmentFileset.RemoteLogSegmentFileType.OFFSET_INDEX;
+import static org.apache.kafka.common.log.remote.storage.RemoteLogSegmentFileset.RemoteLogSegmentFileType.SEGMENT;
+import static org.apache.kafka.common.log.remote.storage.RemoteLogSegmentFileset.RemoteLogSegmentFileType.TIME_INDEX;
 import static org.apache.kafka.common.log.remote.storage.RemoteLogSegmentFileset.openFileset;
 import static org.apache.kafka.common.log.remote.storage.RemoteTopicPartitionDirectory.openExistingTopicPartitionDirectory;
 

@@ -22,7 +22,6 @@ import kafka.log.CleanerConfig;
 import kafka.log.LogConfig;
 import kafka.log.LogManager;
 import kafka.log.remote.RemoteLogManager;
-import kafka.log.remote.RemoteLogManagerConfig;
 import kafka.server.AlterIsrManager;
 import kafka.server.BrokerTopicStats;
 import kafka.server.KafkaConfig;
@@ -139,8 +138,8 @@ public class CheckpointBench {
                 brokerTopicStats,
                 metadataCache,
                 this.failureChannel,
-                Option.empty(),
-                alterIsrManager);
+                alterIsrManager,
+                Option.empty());
         replicaManager.startup();
 
         List<TopicPartition> topicPartitions = new ArrayList<>();

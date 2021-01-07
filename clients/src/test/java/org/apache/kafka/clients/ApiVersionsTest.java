@@ -21,12 +21,6 @@ import org.apache.kafka.common.record.RecordBatch;
 import org.junit.Test;
 
 import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertThrows;
-import static org.junit.Assert.assertTrue;
-
-import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.stream.IntStream;
 
 public class ApiVersionsTest {
 

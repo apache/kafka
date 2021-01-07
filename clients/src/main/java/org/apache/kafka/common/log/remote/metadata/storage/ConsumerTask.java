@@ -21,7 +21,6 @@ import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.common.errors.WakeupException;
 import org.apache.kafka.common.internals.Topic;
 import org.apache.kafka.common.log.remote.storage.RemoteLogSegmentMetadata;
 import org.slf4j.Logger;
@@ -68,7 +67,7 @@ class ConsumerTask implements Runnable, Closeable {
     private volatile boolean closed = false;
     private volatile boolean reassign = false;
 
-    private Map<Integer, Long> targetEndOffsets = new ConcurrentHashMap<>();
+    private final Map<Integer, Long> targetEndOffsets = new ConcurrentHashMap<>();
 
     // map of topic-partition vs committed offsets
     private volatile Map<Integer, Long> committedOffsets = new ConcurrentHashMap<>();
@@ -150,8 +149,6 @@ class ConsumerTask implements Runnable, Closeable {
                         TopicPartition tp = buildTopicPartition(key);
                         remoteLogSegmentMetadataUpdater.updateRemoteLogSegmentMetadata(tp, record.value());
                         committedOffsets.put(record.partition(), record.offset());
-                    } catch (WakeupException e) {
-                        throw e;
                     } catch (Exception e) {
                         log.error(String.format("Error encountered while consuming record: {%s}", record), e);
                     }
@@ -170,6 +167,8 @@ class ConsumerTask implements Runnable, Closeable {
                 // write data and sync offsets.
                 syncCommittedDataAndOffsets(false);
             }
+        } catch (RuntimeException e) {
+            throw e;
         } catch (Exception e) {
             if (closed) {
                 log.info("ConsumerTask is closed");

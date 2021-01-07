@@ -27,7 +27,7 @@ public class LRUCacheTest {
     @Test
     public void testLRUCache() {
         LRUCache cache = new LRUCache(1000);
-        for (int i=0;i<100;i++)
+        for (int i = 0; i < 100; i++)
             cache.put("a", i * 10, String.format("a%09d", i).getBytes(StandardCharsets.UTF_8));
 
         assertEquals(String.format("a%09d", 0), new String(cache.get("a", 0), StandardCharsets.UTF_8));

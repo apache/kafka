@@ -25,6 +25,7 @@ import java.io.IOException;
 import java.util.Collection;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
@@ -86,7 +87,7 @@ public final class RemoteLogSegmentFileset {
          * e.g. uuid-segment.
          */
         public String toFilename(final UUID uuid) {
-            return format("%s-%s", uuid.toString(), name().toLowerCase());
+            return format("%s-%s", uuid.toString(), name().toLowerCase(Locale.ROOT));
         }
 
         /**
@@ -94,7 +95,7 @@ public final class RemoteLogSegmentFileset {
          */
         public static RemoteLogSegmentFileType getFileType(final String filename) {
             try {
-                return RemoteLogSegmentFileType.valueOf(substr(filename, GROUP_FILE_TYPE).toUpperCase());
+                return RemoteLogSegmentFileType.valueOf(substr(filename, GROUP_FILE_TYPE).toUpperCase(Locale.ROOT));
 
             } catch (final RuntimeException e) {
                 throw new IllegalArgumentException(format("Not a remote log segment file: %s", filename), e);

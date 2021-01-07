@@ -134,7 +134,7 @@ public class RLMMWithTopicStorage implements RemoteLogMetadataManager, RemoteLog
         int partitionNo = metadataPartitionFor(remoteLogSegmentId.topicPartition());
         try {
             final ProducerCallback callback = new ProducerCallback();
-            if(partitionNo >= noOfMetadataTopicPartitions) {
+            if (partitionNo >= noOfMetadataTopicPartitions) {
                 log.error("Chosen partition no [{}] is more than the partition count: [{}]", partitionNo, noOfMetadataTopicPartitions);
             }
             producer.send(new ProducerRecord<>(REMOTE_LOG_METADATA_TOPIC_NAME, partitionNo,
@@ -305,13 +305,13 @@ public class RLMMWithTopicStorage implements RemoteLogMetadataManager, RemoteLog
         // close resources
         try {
             if (producer != null) producer.close(Duration.ofSeconds(60));
-        } catch (Exception ex) { /* ignore */}
+        } catch (Exception ex) { /* ignore */ }
         try {
             if (consumer != null) consumer.close(Duration.ofSeconds(60));
-        } catch (Exception ex) { /* ignore */}
+        } catch (Exception ex) { /* ignore */ }
         try {
             if (adminClient != null) adminClient.close(Duration.ofSeconds(60));
-        } catch (Exception ex) { /* ignore */}
+        } catch (Exception ex) { /* ignore */ }
 
         Utils.closeQuietly(consumerTask, "ConsumerTask");
         idWithSegmentMetadata = new ConcurrentSkipListMap<>();
@@ -365,7 +365,7 @@ public class RLMMWithTopicStorage implements RemoteLogMetadataManager, RemoteLog
         }
     }
 
-    public void syncLogMetadataDataFile() throws IOException {
+    public synchronized void syncLogMetadataDataFile() throws IOException {
         ensureInitialized();
 
         // idWithSegmentMetadata and partitionsWithSegmentIds are not going to be modified while this is being done.

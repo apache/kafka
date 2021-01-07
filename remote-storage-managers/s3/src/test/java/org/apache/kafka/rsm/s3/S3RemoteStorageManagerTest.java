@@ -61,8 +61,6 @@ import java.util.Map;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
-import javax.swing.text.Segment;
-
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.containsInAnyOrder;
 import static org.junit.Assert.assertArrayEquals;
@@ -285,8 +283,9 @@ public class S3RemoteStorageManagerTest {
     }
 
     private RemoteLogSegmentMetadata createLogSegmentMetadata(RemoteLogSegmentId remoteLogSegmentId, LogSegment logSegment) {
-        return new RemoteLogSegmentMetadata(remoteLogSegmentId, logSegment.baseOffset(), logSegment.readNextOffset()-1, logSegment.largestTimestamp(),
-                0, logSegment.size(), Collections.emptyMap() );
+        return new RemoteLogSegmentMetadata(remoteLogSegmentId, logSegment.baseOffset(),
+                logSegment.readNextOffset() - 1, logSegment.largestTimestamp(),
+                0, logSegment.size(), Collections.emptyMap());
     }
 
     private LogSegment createLogSegment(final long offset) {

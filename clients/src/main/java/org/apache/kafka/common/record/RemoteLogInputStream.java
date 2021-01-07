@@ -30,7 +30,7 @@ import static org.apache.kafka.common.record.Records.OFFSET_OFFSET;
 import static org.apache.kafka.common.record.Records.SIZE_OFFSET;
 
 public class RemoteLogInputStream implements LogInputStream<RecordBatch> {
-    private InputStream is;
+    private final InputStream is;
     private final ByteBuffer logHeaderBuffer = ByteBuffer.allocate(HEADER_SIZE_UP_TO_MAGIC);
 
     public RemoteLogInputStream(InputStream is) {
@@ -46,7 +46,7 @@ public class RemoteLogInputStream implements LogInputStream<RecordBatch> {
             return null;
 
         logHeaderBuffer.rewind();
-        long offset = logHeaderBuffer.getLong(OFFSET_OFFSET);
+        logHeaderBuffer.getLong(OFFSET_OFFSET);
         int size = logHeaderBuffer.getInt(SIZE_OFFSET);
 
         // V0 has the smallest overhead, stricter checking is done later

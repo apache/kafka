@@ -485,8 +485,8 @@ public final class LocalTieredStorageTest {
                 final ByteBuffer buffer = ByteBuffer.allocate(128);
                 final byte magic = RecordBatch.MAGIC_VALUE_V2;
 
-                MemoryRecordsBuilder builder = MemoryRecords.builder
-                        (buffer, magic, CompressionType.NONE, TimestampType.CREATE_TIME, baseOffset);
+                MemoryRecordsBuilder builder = MemoryRecords.builder(
+                        buffer, magic, CompressionType.NONE, TimestampType.CREATE_TIME, baseOffset);
 
                 for (byte[] value : data) {
                     builder.append(System.currentTimeMillis(), null, value);
