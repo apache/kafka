@@ -1302,7 +1302,18 @@ class Log(@volatile private var _dir: File,
 
   /**
    * Increment the log start offset if the provided offset is larger.
-   *  TODO improve documentation
+   *
+   * If the log start offset changed, then this method:
+   *
+   * 1. Records the new log start offset.
+   * 2. Updates the high watermark if it is less than the new log start offset
+   * 3. Remove any leader epoch with an end offset less than the log start offset
+   * 4. Update the oldest leader epoch such that the start offset is equal to the log start offset
+   * 5. Notify the producer state manager of new log start offset
+   * 6. Update the first stable offset if it is less than the new log start offset
+   *
+   * @throws OffsetOutOfRangeException if the log start offset is greater than the high watermark
+   * @return true if the log start offset was updated; otherwise false
    */
   def maybeIncrementLogStartOffset(newLogStartOffset: Long, reason: LogStartOffsetIncrementReason): Boolean = {
     // We don't have to write the log start offset to log-start-offset-checkpoint immediately.

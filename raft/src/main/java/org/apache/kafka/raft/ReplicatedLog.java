@@ -96,7 +96,14 @@ public interface ReplicatedLog extends Closeable {
      */
     void truncateTo(long offset);
 
-    // TODO: write documentation
+    /**
+     * Fully truncate the log if the latest snapshot is later than the log end offset.
+     *
+     * In general this operation empties the log and sets the log start offset, high watermark and
+     * log end offset to the latest snapshot's end offset.
+     *
+     * @return true when the log is fully truncated, otherwise returns false
+     */
     boolean truncateFullyToLatestSnapshot();
 
     /**
@@ -108,7 +115,9 @@ public interface ReplicatedLog extends Closeable {
      */
     void updateHighWatermark(LogOffsetMetadata offsetMetadata);
 
-    // TODO: write documentation; should this return a LogOffsetMetadata
+    /**
+     * Get the high watermark.
+     */
     long highWatermark();
 
     /**
@@ -180,17 +189,24 @@ public interface ReplicatedLog extends Closeable {
      */
     Optional<RawSnapshotReader> readSnapshot(OffsetAndEpoch snapshotId) throws IOException;
 
-    // TODO: write documentation
+    /**
+     * Returns the latest snapshot id if one exists.
+     *
+     * @return an Optional snapshot id of the latest snashot if one exists, otherwise returns an
+     * empty Optional
+     */
     Optional<OffsetAndEpoch> latestSnapshotId();
 
     /**
-     * TODO: document this method
-     * TODO document that this method is thread safe
+     * Notifies the replicted log when a new snapshot is available.
      */
     void snapshotFrozen(OffsetAndEpoch snapshotId);
 
     /**
-     * TODO: document this method
+     * Updates the log start offset if necessary.
+     *
+     * The replicated log's start offset can be increased when there is a snapshot greater than the
+     * current log start offset.
      */
     boolean maybeUpdateLogStartOffset();
 

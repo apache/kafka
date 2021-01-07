@@ -238,7 +238,7 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
             if (state.updateHighWatermark(OptionalLong.of(newHighWatermark))) {
                 logger.debug("Follower high watermark updated to {}", newHighWatermark);
                 log.updateHighWatermark(new LogOffsetMetadata(newHighWatermark));
-                maybeFireHandleCommit(newHighWatermark);
+                onHighWatermarkUpdated(newHighWatermark);
             }
         });
     }
@@ -272,30 +272,29 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
             // It is also possible that the high watermark is being updated
             // for the first time following the leader election, so we need
             // to give lagging listeners an opportunity to catch up as well
-            maybeFireHandleCommit(highWatermark.offset);
+            onHighWatermarkUpdated(highWatermark.offset);
         });
     }
 
-    private void maybeFireHandleCommit(long highWatermark) {
-        maybeFireHandleCommit(listenerContexts, highWatermark);
+    private void onHighWatermarkUpdated(long highWatermark) {
+        onHighWatermarkUpdated(listenerContexts, highWatermark);
     }
 
-    private void maybeFireHandleCommit(List<ListenerContext> listenerContexts, long highWatermark) {
+    private void onHighWatermarkUpdated(List<ListenerContext> listenerContexts, long highWatermark) {
         for (ListenerContext listenerContext : listenerContexts) {
-            OptionalLong nextExpectedOffsetOpt = listenerContext.nextExpectedOffset();
-            if (!nextExpectedOffsetOpt.isPresent()) {
-                continue;
-            }
+            listenerContext.nextExpectedOffset().ifPresent(nextExpectedOffset -> {
+                if (nextExpectedOffset < log.startOffset()) {
+                    listenerContext.fireHandleSnapshot(log.startOffset());
+                }
+            });
 
-            long nextExpectedOffset = nextExpectedOffsetOpt.getAsLong();
-            if (nextExpectedOffset < log.startOffset()) {
-                // TODO: File a Jira: This should fire a callback that handles loading snapshot
-                // Assume that the snapshot was loaded
-                listenerContext.onCloseSnapshotReader(log.startOffset());
-            } else if (nextExpectedOffset < highWatermark) {
-                LogFetchInfo readInfo = log.read(nextExpectedOffset, Isolation.COMMITTED);
-                listenerContext.fireHandleCommit(nextExpectedOffset, readInfo.records);
-            }
+            // Re-read the expected offset in case the snapshot had to be reloaded
+            listenerContext.nextExpectedOffset().ifPresent(nextExpectedOffset -> {
+                if (nextExpectedOffset < highWatermark) {
+                    LogFetchInfo readInfo = log.read(nextExpectedOffset, Isolation.COMMITTED);
+                    listenerContext.fireHandleCommit(nextExpectedOffset, readInfo.records);
+                }
+            });
         }
     }
 
@@ -2149,7 +2148,7 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
                 })
                 .collect(Collectors.toList());
 
-            maybeFireHandleCommit(listenersToUpdate, highWatermarkMetadata.offset);
+            onHighWatermarkUpdated(listenersToUpdate, highWatermarkMetadata.offset);
         });
     }
 
@@ -2352,6 +2351,17 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
         }
 
         /**
+         * This API is used when the Listener needs to be notified of a new Snapshot. This happens
+         * when the context last acked end offset is less that then log start offset.
+         */
+        public void fireHandleSnapshot(long logStartOffset) {
+            synchronized (this) {
+                this.lastAckedEndOffset = logStartOffset;
+                this.lastSent = null;
+            }
+        }
+
+        /**
          * This API is used for committed records that have been received through
          * replication. In general, followers will write new data to disk before they
          * know whether it has been committed. Rather than retaining the uncommitted
@@ -2396,11 +2406,6 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
 
         void fireHandleResign() {
             listener.handleResign();
-        }
-
-        public synchronized void onCloseSnapshotReader(long lastAckedEndOffset) {
-            this.lastAckedEndOffset = lastAckedEndOffset;
-            this.lastSent = null;
         }
 
         public synchronized void onClose(BatchReader<T> reader) {
