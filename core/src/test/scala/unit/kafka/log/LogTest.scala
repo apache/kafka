@@ -200,7 +200,7 @@ class LogTest {
     testTruncateBelowFirstUnstableOffset(_.truncateFullyAndStartAt)
   }
 
-  def testTruncateBelowFirstUnstableOffset(
+  private def testTruncateBelowFirstUnstableOffset(
     truncateFunc: Log => (Long => Unit)
   ): Unit = {
     // Verify that truncation below the first unstable offset correctly

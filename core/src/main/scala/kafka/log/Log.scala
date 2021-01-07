@@ -2106,8 +2106,8 @@ class Log(@volatile private var _dir: File,
             // in case the first unstable offset is invalidated by the truncation.
             loadProducerState(targetOffset, reloadFromCleanShutdown = false)
 
-            updateLogStartOffset(math.min(targetOffset, this.logStartOffset))
             updateLogEndOffset(targetOffset)
+            updateLogStartOffset(math.min(targetOffset, this.logStartOffset))
           }
           true
         }
@@ -2139,8 +2139,8 @@ class Log(@volatile private var _dir: File,
         producerStateManager.truncateFullyAndStartAt(newOffset)
         maybeIncrementFirstUnstableOffset()
 
-        updateLogStartOffset(newOffset)
         updateLogEndOffset(newOffset)
+        updateLogStartOffset(newOffset)
       }
     }
   }
