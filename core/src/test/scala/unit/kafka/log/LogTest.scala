@@ -2891,11 +2891,9 @@ class LogTest {
     // Kind of a hack, but renaming the index to a directory ensures that the append
     // to the index will fail.
     log.activeSegment.txnIndex.renameTo(log.dir)
-    assertThrows[KafkaStorageException] {
-      appendEndTxnMarkerAsLeader(log, pid, epoch, ControlRecordType.ABORT, coordinatorEpoch = 1)
-    }
-    assertThrows[KafkaStorageException](log.appendAsLeader(TestUtils.singletonRecords(value = null), leaderEpoch = 0))
-    assertThrows[KafkaStorageException](readLog(log, 0, 4096).records.records.iterator.next().offset)
+    assertThrows(classOf[KafkaStorageException], () => appendEndTxnMarkerAsLeader(log, pid, epoch, ControlRecordType.ABORT, coordinatorEpoch = 1))
+    assertThrows(classOf[KafkaStorageException], () => log.appendAsLeader(TestUtils.singletonRecords(value = null), leaderEpoch = 0))
+    assertThrows(classOf[KafkaStorageException], () => readLog(log, 0, 4096).records.records.iterator.next().offset)
   }
 
   @Test
@@ -4518,9 +4516,7 @@ class LogTest {
     // Try the append a second time. The appended offset in the log should not increase
     // because the log dir is marked as failed.  Nor will there be a write to the transaction
     // index.
-    assertThrows[KafkaStorageException] {
-      appendEndTxnMarkerAsLeader(log, pid, epoch, ControlRecordType.ABORT, coordinatorEpoch = 1)
-    }
+    assertThrows(classOf[KafkaStorageException], () => appendEndTxnMarkerAsLeader(log, pid, epoch, ControlRecordType.ABORT, coordinatorEpoch = 1))
     assertEquals(11L, log.logEndOffset)
     assertEquals(0L, log.lastStableOffset)
 
@@ -4528,10 +4524,7 @@ class LogTest {
     log.updateHighWatermark(12L)
     assertEquals(0L, log.lastStableOffset)
 
-    assertThrows[KafkaStorageException] {
-      log.close()
-    }
-
+    assertThrows(classOf[KafkaStorageException], () => log.close())
     val reopenedLog = createLog(logDir, logConfig, lastShutdownClean = false)
     assertEquals(11L, reopenedLog.logEndOffset)
     assertEquals(1, reopenedLog.activeSegment.txnIndex.allAbortedTxns.size)
