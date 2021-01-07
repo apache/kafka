@@ -447,28 +447,37 @@ public class MockLogTest {
             snapshot.freeze();
         }
 
-        assertTrue(log.maybeUpdateLogStartOffset());
+        assertTrue(log.updateLogStartOffset(snapshotId.offset));
         assertEquals(offset, log.startOffset());
         assertEquals(epoch, log.lastFetchedEpoch());
         assertEquals(offset, log.endOffset().offset);
 
         int newRecords = 10;
         appendBatch(newRecords, epoch + 1);
+        log.updateHighWatermark(new LogOffsetMetadata(offset + newRecords));
 
         // Start offset should not change since a new snapshot was not generated
-        assertFalse(log.maybeUpdateLogStartOffset());
+        assertFalse(log.updateLogStartOffset(offset + newRecords));
         assertEquals(offset, log.startOffset());
 
         assertEquals(epoch + 1, log.lastFetchedEpoch());
         assertEquals(offset + newRecords, log.endOffset().offset);
+        assertEquals(offset + newRecords, log.highWatermark());
     }
 
     @Test
     public void testUpdateLogStartOffsetWithMissingSnapshot() {
-        assertFalse(log.maybeUpdateLogStartOffset());
+        int offset = 10;
+        int epoch = 0;
+
+        appendBatch(offset, epoch);
+        log.updateHighWatermark(new LogOffsetMetadata(offset));
+
+        assertFalse(log.updateLogStartOffset(1));
         assertEquals(0, log.startOffset());
-        assertEquals(0, log.lastFetchedEpoch());
-        assertEquals(0, log.endOffset().offset);
+        assertEquals(epoch, log.lastFetchedEpoch());
+        assertEquals(offset, log.endOffset().offset);
+        assertEquals(offset, log.highWatermark());
     }
 
     @Test
@@ -484,7 +493,10 @@ public class MockLogTest {
             snapshot.freeze();
         }
 
-        assertThrows(OffsetOutOfRangeException.class, () -> log.maybeUpdateLogStartOffset());
+        assertThrows(
+            OffsetOutOfRangeException.class,
+            () -> log.updateLogStartOffset(snapshotId.offset)
+        );
     }
 
     @Test

@@ -236,15 +236,14 @@ final class KafkaMetadataLog private (
     snapshotIds.add(snapshotId)
   }
 
-  override def maybeUpdateLogStartOffset(): Boolean = {
+  override def updateLogStartOffset(logStartOffset: Long): Boolean = {
     var updated = false
     latestSnapshotId.ifPresent { snapshotId =>
-      if (startOffset < snapshotId.offset &&
-          log.maybeIncrementLogStartOffset(snapshotId.offset, SnapshotGenerated)) {
+      if (startOffset < logStartOffset &&
+          logStartOffset <= snapshotId.offset &&
+          log.maybeIncrementLogStartOffset(logStartOffset, SnapshotGenerated)) {
         log.deleteOldSegments()
         updated = true
-      } else if (startOffset > snapshotId.offset) {
-        throw new KafkaException(s"Log start offset ($startOffset) is greater than the latest snapshot ($snapshotId)")
       }
     }
 

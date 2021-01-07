@@ -74,6 +74,11 @@ public interface ReplicatedLog extends Closeable {
     LogOffsetMetadata endOffset();
 
     /**
+     * Get the high watermark.
+     */
+    long highWatermark();
+
+    /**
      * Get the current log start offset. This is the offset of the first written
      * entry, if one exists, or the end offset otherwise.
      */
@@ -116,9 +121,12 @@ public interface ReplicatedLog extends Closeable {
     void updateHighWatermark(LogOffsetMetadata offsetMetadata);
 
     /**
-     * Get the high watermark.
+     * Updates the log start offset if necessary.
+     *
+     * The replicated log's start offset can be increased when there is a snapshot greater than the
+     * current log start offset.
      */
-    long highWatermark();
+    boolean updateLogStartOffset(long logStartOffset);
 
     /**
      * Flush the current log to disk.
@@ -201,14 +209,6 @@ public interface ReplicatedLog extends Closeable {
      * Notifies the replicted log when a new snapshot is available.
      */
     void snapshotFrozen(OffsetAndEpoch snapshotId);
-
-    /**
-     * Updates the log start offset if necessary.
-     *
-     * The replicated log's start offset can be increased when there is a snapshot greater than the
-     * current log start offset.
-     */
-    boolean maybeUpdateLogStartOffset();
 
     default void close() {}
 }

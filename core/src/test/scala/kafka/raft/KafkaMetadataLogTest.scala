@@ -103,7 +103,7 @@ final class KafkaMetadataLogTest {
       snapshot.freeze()
     }
 
-    assertTrue(log.maybeUpdateLogStartOffset())
+    assertTrue(log.updateLogStartOffset(offset))
     assertEquals(offset, log.startOffset)
     assertEquals(epoch, log.lastFetchedEpoch)
     assertEquals(offset, log.endOffset().offset)
@@ -113,7 +113,7 @@ final class KafkaMetadataLogTest {
     append(log, newRecords, epoch + 1)
 
     // Start offset should not change since a new snapshot was not generated
-    assertFalse(log.maybeUpdateLogStartOffset())
+    assertFalse(log.updateLogStartOffset(offset + newRecords))
     assertEquals(offset, log.startOffset)
 
     assertEquals(epoch + 1, log.lastFetchedEpoch)
@@ -125,12 +125,17 @@ final class KafkaMetadataLogTest {
   def testUpdateLogStartOffsetWithMissingSnapshot(): Unit = {
     val topicPartition = new TopicPartition("cluster-metadata", 0)
     val log = buildMetadataLog(tempDir, mockTime, topicPartition)
+    val offset = 10
+    val epoch = 0
 
-    assertFalse(log.maybeUpdateLogStartOffset())
+    append(log, offset, epoch)
+    log.updateHighWatermark(new LogOffsetMetadata(offset))
+
+    assertFalse(log.updateLogStartOffset(1))
     assertEquals(0, log.startOffset)
-    assertEquals(0, log.lastFetchedEpoch)
-    assertEquals(0, log.endOffset().offset)
-    assertEquals(0, log.highWatermark)
+    assertEquals(epoch, log.lastFetchedEpoch)
+    assertEquals(offset, log.endOffset().offset)
+    assertEquals(offset, log.highWatermark)
   }
 
   @Test
@@ -150,7 +155,7 @@ final class KafkaMetadataLogTest {
 
     assertThrows(
       classOf[OffsetOutOfRangeException],
-      () => log.maybeUpdateLogStartOffset()
+      () => log.updateLogStartOffset(snapshotId.offset)
     )
   }
 

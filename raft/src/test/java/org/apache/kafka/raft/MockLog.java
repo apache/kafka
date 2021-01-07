@@ -425,18 +425,33 @@ public class MockLog implements ReplicatedLog {
     public void snapshotFrozen(OffsetAndEpoch snapshotId) {}
 
     @Override
-    public boolean maybeUpdateLogStartOffset() {
+    public boolean updateLogStartOffset(long newLogStartOffset) {
+        if (logStartOffset > newLogStartOffset || highWatermark.offset < newLogStartOffset) {
+            throw new OffsetOutOfRangeException(
+                String.format(
+                    "New start offset (%s) is less than start offset (%s) or is greater than the high watermark (%s)",
+                    newLogStartOffset,
+                    logStartOffset,
+                    highWatermark.offset
+                )
+            );
+        }
+
         boolean updated = false;
         Optional<OffsetAndEpoch> snapshotIdOpt = latestSnapshotId();
         if (snapshotIdOpt.isPresent()) {
             OffsetAndEpoch snapshotId = snapshotIdOpt.get();
-            if (logStartOffset < snapshotId.offset && highWatermark.offset >= snapshotId.offset) {
-                logStartOffset = snapshotId.offset;
-                batches.removeIf(entry -> entry.lastOffset() < logStartOffset);
+            if (logStartOffset < newLogStartOffset &&
+                highWatermark.offset >= newLogStartOffset &&
+                snapshotId.offset >= newLogStartOffset) {
+
+                logStartOffset = newLogStartOffset;
+
+                batches.removeIf(entry -> entry.lastOffset() < newLogStartOffset);
 
                 AtomicReference<Optional<EpochStartOffset>> last = new AtomicReference<>(Optional.empty());
                 epochStartOffsets.removeIf(epochStartOffset -> {
-                    if (epochStartOffset.startOffset <= logStartOffset) {
+                    if (epochStartOffset.startOffset <= newLogStartOffset) {
                         last.set(Optional.of(epochStartOffset));
                         return true;
                     }
@@ -445,19 +460,10 @@ public class MockLog implements ReplicatedLog {
                 });
 
                 last.get().ifPresent(epochStartOffset -> {
-                    epochStartOffsets.add(0, new EpochStartOffset(epochStartOffset.epoch, logStartOffset));
+                    epochStartOffsets.add(0, new EpochStartOffset(epochStartOffset.epoch, newLogStartOffset));
                 });
 
                 updated = true;
-            } else if (logStartOffset > snapshotId.offset || highWatermark.offset < snapshotId.offset) {
-                throw new OffsetOutOfRangeException(
-                    String.format(
-                        "The latest snapshot (%s) is less than start offset (%s) or is greater than the high watermark (%s)",
-                        snapshotId,
-                        logStartOffset,
-                        highWatermark.offset
-                    )
-                );
             }
         }
 

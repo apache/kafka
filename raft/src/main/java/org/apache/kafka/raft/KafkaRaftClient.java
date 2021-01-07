@@ -1409,15 +1409,15 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
             snapshot.freeze();
             state.setFetchingSnapshot(Optional.empty());
 
-            if (!log.truncateFullyToLatestSnapshot()) {
+            if (log.truncateFullyToLatestSnapshot()) {
+                updateFollowerHighWatermark(state, OptionalLong.of(log.highWatermark()));
+            } else {
                 logger.error(
                     "Full log trunctation expected but didn't happend. Snapshot of {}, log end offset {}, last fetched {}",
                     snapshot.snapshotId(),
                     log.endOffset(),
                     log.lastFetchedEpoch()
                 );
-            } else {
-                updateFollowerHighWatermark(state, OptionalLong.of(log.highWatermark()));
             }
         }
 
@@ -2108,10 +2108,7 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
     }
 
     private long pollCurrentState(long currentTimeMs) throws IOException {
-        // TODO: File a jira for this: Okay for now but the logic should be a little different.
-        // Leader should only advance the log start offset if all of followers fetched past it or there is a timeout
-        // While followers should only call maybeUpdateLogStartOffset if the leader's logStartOffset is greater than ours
-        log.maybeUpdateLogStartOffset();
+        maybeUpdateLogStartOffset();
 
         if (quorum.isLeader()) {
             return pollLeader(currentTimeMs);
@@ -2173,6 +2170,10 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
         }
 
         return false;
+    }
+
+    private void maybeUpdateLogStartOffset() {
+        log.latestSnapshotId().ifPresent(snapshotId -> log.updateLogStartOffset(snapshotId.offset));
     }
 
     private void wakeup() {
@@ -2356,8 +2357,8 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
          */
         public void fireHandleSnapshot(long logStartOffset) {
             synchronized (this) {
-                this.lastAckedEndOffset = logStartOffset;
-                this.lastSent = null;
+                lastAckedEndOffset = logStartOffset;
+                lastSent = null;
             }
         }
 
