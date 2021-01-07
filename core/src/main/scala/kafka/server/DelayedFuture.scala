@@ -34,6 +34,8 @@ class DelayedFuture[T](timeoutMs: Long,
                        responseCallback: () => Unit)
   extends DelayedOperation(timeoutMs) {
 
+  import DelayedOperation._
+
   /**
    * The operation can be completed if all the futures have completed successfully
    * or failed with exceptions.

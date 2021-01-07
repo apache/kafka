@@ -34,6 +34,8 @@ class DelayedElectLeader(
   responseCallback: Map[TopicPartition, ApiError] => Unit
 ) extends DelayedOperation(delayMs) {
 
+  import DelayedOperation._
+
   private val waitingPartitions = mutable.Map() ++= expectedLeaders
   private val fullResults = mutable.Map() ++= results
 
