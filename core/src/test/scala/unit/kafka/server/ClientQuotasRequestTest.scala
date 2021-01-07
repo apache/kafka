@@ -29,6 +29,8 @@ import org.junit.Test
 import java.util
 import java.util.concurrent.{ExecutionException, TimeUnit}
 
+import kafka.utils.TestUtils
+
 import scala.jdk.CollectionConverters._
 
 class ClientQuotasRequestTest extends BaseRequestTest {
@@ -212,7 +214,12 @@ class ClientQuotasRequestTest extends BaseRequestTest {
           InetAddress.getByName(unknownHost)
         else
           InetAddress.getByName(entityName)
-        assertEquals(expectedMatches(entity), servers.head.socketServer.connectionQuotas.connectionRateForIp(entityIp), 0.01)
+        var currentServerQuota = 0
+        TestUtils.waitUntilTrue(
+          () => {
+            currentServerQuota = servers.head.socketServer.connectionQuotas.connectionRateForIp(entityIp)
+            Math.abs(expectedMatches(entity) - currentServerQuota) < 0.01
+          }, s"Connection quota of $entity is not ${expectedMatches(entity)} but $currentServerQuota")
       }
     }
 
