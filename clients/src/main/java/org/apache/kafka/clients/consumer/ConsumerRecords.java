@@ -45,7 +45,7 @@ public class ConsumerRecords<K, V> implements Iterable<ConsumerRecord<K, V>> {
     public static final class Metadata {
 
         private final long receivedTimestamp;
-        private final long position;
+        private final Long position;
         private final long beginningOffset;
         private final long endOffset;
 
