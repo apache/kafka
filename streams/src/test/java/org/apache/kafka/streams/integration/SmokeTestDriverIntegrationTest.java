@@ -23,7 +23,6 @@ import org.apache.kafka.streams.integration.utils.IntegrationTestUtils;
 import org.apache.kafka.streams.tests.SmokeTestClient;
 import org.apache.kafka.streams.tests.SmokeTestDriver;
 import org.apache.kafka.test.IntegrationTest;
-
 import org.junit.Assert;
 import org.junit.ClassRule;
 import org.junit.Test;
@@ -100,6 +99,7 @@ public class SmokeTestDriverIntegrationTest {
 
         final Properties props = new Properties();
         props.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers);
+        props.put(StreamsConfig.MAX_TASK_IDLE_MS_CONFIG, StreamsConfig.MAX_TASK_IDLE_MS_DISABLED);
 
         // cycle out Streams instances as long as the test is running.
         while (driver.isAlive()) {
