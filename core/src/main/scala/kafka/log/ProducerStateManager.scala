@@ -201,7 +201,7 @@ private[log] class ProducerAppendInfo(val topicPartition: TopicPartition,
 
   private def checkProducerEpoch(producerEpoch: Short, offset: Long): Unit = {
     if (producerEpoch < updatedEntry.producerEpoch) {
-      val message = s"Epoch of producer $producerId at offset $offset in $topicPartition is $producerEpoch," +
+      val message = s"Epoch of producer $producerId at offset $offset in $topicPartition is $producerEpoch, " +
         s"which is smaller than the last seen epoch ${updatedEntry.producerEpoch}"
 
       if (origin == AppendOrigin.Replication) {
@@ -220,7 +220,8 @@ private[log] class ProducerAppendInfo(val topicPartition: TopicPartition,
       if (appendFirstSeq != 0) {
         if (updatedEntry.producerEpoch != RecordBatch.NO_PRODUCER_EPOCH) {
           throw new OutOfOrderSequenceException(s"Invalid sequence number for new epoch of producer $producerId " +
-            s"at offset $offset in partition $topicPartition: $producerEpoch (request epoch), $appendFirstSeq (seq. number)")
+            s"at offset $offset in partition $topicPartition: $producerEpoch (request epoch), $appendFirstSeq (seq. number), " +
+            s"${updatedEntry.producerEpoch} (current producer epoch)")
         }
       }
     } else {
