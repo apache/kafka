@@ -17,13 +17,16 @@
 
 package kafka.utils
 
+import java.util.concurrent.TimeUnit
+
 import org.apache.kafka.common.MetricName
-import org.apache.kafka.common.metrics.stats.{Rate, Value}
 import org.apache.kafka.common.metrics.{KafkaMetric, MetricConfig, Quota, QuotaViolationException}
+import org.apache.kafka.common.metrics.stats.{Rate, Value}
+
+import scala.jdk.CollectionConverters._
 import org.junit.Assert._
 import org.junit.Test
-
-import java.util.concurrent.TimeUnit
+import org.scalatest.Assertions.assertThrows
 
 class QuotaUtilsTest {
 
@@ -31,7 +34,7 @@ class QuotaUtilsTest {
   private val numSamples = 10
   private val sampleWindowSec = 1
   private val maxThrottleTimeMs = 500
-  private val metricName = new MetricName("test-metric", "groupA", "testA", java.util.Collections.emptyMap())
+  private val metricName = new MetricName("test-metric", "groupA", "testA", Map.empty.asJava)
 
   @Test
   def testThrottleTimeObservedRateEqualsQuota(): Unit = {
