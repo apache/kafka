@@ -119,10 +119,8 @@ public class AdjustStreamThreadCountTest {
                     .sorted().toArray(),
                 equalTo(new String[] {"1", "2", "3"})
             );
-            TestUtils.waitForCondition(
-                () -> kafkaStreams.state() == KafkaStreams.State.RUNNING,
-                "Kafka Streams client did not reach state RUNNING"
-            );
+            waitForApplicationState(Collections.singletonList(kafkaStreams), KafkaStreams.State.REBALANCING, DEFAULT_DURATION);
+            waitForApplicationState(Collections.singletonList(kafkaStreams), KafkaStreams.State.RUNNING, DEFAULT_DURATION);
         }
     }
 
@@ -133,6 +131,7 @@ public class AdjustStreamThreadCountTest {
             final int oldThreadCount = kafkaStreams.localThreadsMetadata().size();
             assertThat(kafkaStreams.removeStreamThread().get().split("-")[0], equalTo(appId));
             assertThat(kafkaStreams.localThreadsMetadata().size(), equalTo(oldThreadCount - 1));
+            waitForApplicationState(Collections.singletonList(kafkaStreams), KafkaStreams.State.REBALANCING, DEFAULT_DURATION);
             waitForApplicationState(Collections.singletonList(kafkaStreams), KafkaStreams.State.RUNNING, DEFAULT_DURATION);
         }
     }
@@ -199,10 +198,8 @@ public class AdjustStreamThreadCountTest {
                     .toArray(),
                 equalTo(new String[] {"1", "2", "3"})
             );
-            TestUtils.waitForCondition(
-                () -> kafkaStreams.state() == KafkaStreams.State.RUNNING,
-                "Kafka Streams client did not reach state RUNNING"
-            );
+            waitForApplicationState(Collections.singletonList(kafkaStreams), KafkaStreams.State.RUNNING, DEFAULT_DURATION);
+
             oldThreadCount = kafkaStreams.localThreadsMetadata().size();
 
             final Optional<String> removedThread = kafkaStreams.removeStreamThread();
@@ -229,10 +226,8 @@ public class AdjustStreamThreadCountTest {
                 equalTo(new String[] {"1", "2", "3"})
             );
             assertThat("the new thread should have received the old threads name", name2.equals(removedThread));
-            TestUtils.waitForCondition(
-                () -> kafkaStreams.state() == KafkaStreams.State.RUNNING,
-                "Kafka Streams client did not reach state RUNNING"
-            );
+            waitForApplicationState(Collections.singletonList(kafkaStreams), KafkaStreams.State.REBALANCING, DEFAULT_DURATION);
+            waitForApplicationState(Collections.singletonList(kafkaStreams), KafkaStreams.State.RUNNING, DEFAULT_DURATION);
         }
     }
 }
