@@ -16,9 +16,9 @@
  */
 package org.apache.kafka.streams.processor.internals.assignment;
 
-import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.streams.errors.TopologyException;
+import org.apache.kafka.streams.processor.internals.ClusterMetadata;
 import org.apache.kafka.streams.processor.internals.InternalTopicConfig;
 import org.slf4j.Logger;
 
@@ -43,7 +43,7 @@ public class CopartitionedTopicsEnforcer {
 
     public void enforce(final Set<String> copartitionGroup,
                         final Map<String, InternalTopicConfig> allRepartitionTopicsNumPartitions,
-                        final Cluster metadata) {
+                        final ClusterMetadata clusterMetadata) {
         if (copartitionGroup.isEmpty()) {
             return;
         }
@@ -56,7 +56,7 @@ public class CopartitionedTopicsEnforcer {
         final Map<String, Integer> nonRepartitionTopicPartitions =
             copartitionGroup.stream().filter(topic -> !allRepartitionTopicsNumPartitions.containsKey(topic))
                             .collect(Collectors.toMap(topic -> topic, topic -> {
-                                final Integer partitions = metadata.partitionCountForTopic(topic);
+                                final Integer partitions = clusterMetadata.partitionCountForTopic(topic);
                                 if (partitions == null) {
                                     final String str = String.format("%sTopic not found: %s", logPrefix, topic);
                                     log.error(str);

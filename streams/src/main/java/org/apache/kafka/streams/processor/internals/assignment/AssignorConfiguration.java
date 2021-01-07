@@ -194,10 +194,6 @@ public final class AssignorConfiguration {
         return new InternalTopicManager(referenceContainer.time, referenceContainer.adminClient, streamsConfig);
     }
 
-    public CopartitionedTopicsEnforcer copartitionedTopicsEnforcer() {
-        return new CopartitionedTopicsEnforcer(logPrefix);
-    }
-
     public AssignmentConfigs assignmentConfigs() {
         return new AssignmentConfigs(streamsConfig);
     }
