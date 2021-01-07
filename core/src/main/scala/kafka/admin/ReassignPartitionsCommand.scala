@@ -1237,16 +1237,15 @@ object ReassignPartitionsCommand extends Logging {
     val moveMap = new mutable.HashMap[String, mutable.Map[Int, PartitionMove]]()
     // Add the current reassignments to the move map.
     currentReassignments.foreach { case (part, reassignment) =>
-      val partMoves = moveMap.getOrElseUpdate(part.topic, new mutable.HashMap[Int, PartitionMove])
+      val allReplicas = reassignment.replicas().asScala.map(Int.unbox)
+      val addingReplicas = reassignment.addingReplicas.asScala.map(Int.unbox)
 
       // The addingReplicas is included in the replicas during reassignment
-      val sources = mutable.Set[Int]() ++ reassignment.replicas().asScala.map(Int.unbox)
-        .diff(reassignment.addingReplicas.asScala.map(Int.unbox))
+      val sources = mutable.Set[Int]() ++ allReplicas.diff(addingReplicas)
+      val destinations = mutable.Set[Int]() ++ addingReplicas
 
-      val destinations = mutable.Set[Int]() ++ reassignment.addingReplicas.asScala.map(Int.unbox)
-
-      partMoves.put(part.partition,
-        PartitionMove(sources, destinations))
+      val partMoves = moveMap.getOrElseUpdate(part.topic, new mutable.HashMap[Int, PartitionMove])
+      partMoves.put(part.partition, PartitionMove(sources, destinations))
     }
     moveMap
   }

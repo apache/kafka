@@ -378,38 +378,68 @@ class ReassignPartitionsUnitTest {
 
   @Test
   def testMoveMap(): Unit = {
+    // overwrite foo-0 with different reassignments
+    // keep old reassignments of foo-1
+    // overwrite foo-2 with same reassignments
+    // overwrite foo-3 with new reassignments without overlap of old reassignments
+    // overwrite foo-4 with a subset of old reassignments
+    // overwrite foo-5 with a superset of old reassignments
+    // add new reassignments to bar-0
     val moveMap = calculateProposedMoveMap(Map(
       new TopicPartition("foo", 0) -> new PartitionReassignment(
         Arrays.asList(1,2,3,4), Arrays.asList(4), Arrays.asList(3)),
       new TopicPartition("foo", 1) -> new PartitionReassignment(
-        Arrays.asList(4,5,6,7,8), Arrays.asList(7, 8), Arrays.asList(4, 5))
+        Arrays.asList(4,5,6,7,8), Arrays.asList(7, 8), Arrays.asList(4, 5)),
+      new TopicPartition("foo", 2) -> new PartitionReassignment(
+        Arrays.asList(1,2,3,4), Arrays.asList(3,4), Arrays.asList(1,2)),
+      new TopicPartition("foo", 3) -> new PartitionReassignment(
+        Arrays.asList(1,2,3,4), Arrays.asList(3,4), Arrays.asList(1,2)),
+      new TopicPartition("foo", 4) -> new PartitionReassignment(
+        Arrays.asList(1,2,3,4), Arrays.asList(3,4), Arrays.asList(1,2)),
+      new TopicPartition("foo", 5) -> new PartitionReassignment(
+        Arrays.asList(1,2,3,4), Arrays.asList(3,4), Arrays.asList(1,2))
     ), Map(
       new TopicPartition("foo", 0) -> Seq(1,2,5),
+      new TopicPartition("foo", 2) -> Seq(3,4),
+      new TopicPartition("foo", 3) -> Seq(5,6),
+      new TopicPartition("foo", 4) -> Seq(3),
+      new TopicPartition("foo", 5) -> Seq(3,4,5,6),
       new TopicPartition("bar", 0) -> Seq(1,2,3)
     ), Map(
       new TopicPartition("foo", 0) -> Seq(1,2,3,4),
       new TopicPartition("foo", 1) -> Seq(4,5,6,7,8),
+      new TopicPartition("foo", 2) -> Seq(1,2,3,4),
+      new TopicPartition("foo", 3) -> Seq(1,2,3,4),
+      new TopicPartition("foo", 4) -> Seq(1,2,3,4),
+      new TopicPartition("foo", 5) -> Seq(1,2,3,4),
       new TopicPartition("bar", 0) -> Seq(2,3,4),
       new TopicPartition("baz", 0) -> Seq(1,2,3)
     ))
+
     assertEquals(
       mutable.Map("foo" -> mutable.Map(
-          0 -> PartitionMove(mutable.Set(1,2,3), mutable.Set(5)),
-          1 -> PartitionMove(mutable.Set(4,5,6), mutable.Set(7, 8))
-        ),
-        "bar" -> mutable.Map(
-          0 -> PartitionMove(mutable.Set(2,3,4), mutable.Set(1)),
-        )
-      ), moveMap)
+        0 -> PartitionMove(mutable.Set(1,2,3), mutable.Set(5)),
+        1 -> PartitionMove(mutable.Set(4,5,6), mutable.Set(7,8)),
+        2 -> PartitionMove(mutable.Set(1,2), mutable.Set(3,4)),
+        3 -> PartitionMove(mutable.Set(1,2), mutable.Set(5,6)),
+        4 -> PartitionMove(mutable.Set(1,2), mutable.Set(3)),
+        5 -> PartitionMove(mutable.Set(1,2), mutable.Set(3,4,5,6))
+      ), "bar" -> mutable.Map(
+        0 -> PartitionMove(mutable.Set(2,3,4), mutable.Set(1)),
+      )), moveMap)
+
     assertEquals(Map(
-        "foo" -> "0:1,0:2,0:3,1:4,1:5,1:6",
+        "foo" -> "0:1,0:2,0:3,1:4,1:5,1:6,2:1,2:2,3:1,3:2,4:1,4:2,5:1,5:2",
         "bar" -> "0:2,0:3,0:4"
       ), calculateLeaderThrottles(moveMap))
+
     assertEquals(Map(
-        "foo" -> "0:5,1:7,1:8",
+        "foo" -> "0:5,1:7,1:8,2:3,2:4,3:5,3:6,4:3,5:3,5:4,5:5,5:6",
         "bar" -> "0:1"
       ), calculateFollowerThrottles(moveMap))
+
     assertEquals(Set(1,2,3,4,5,6,7,8), calculateReassigningBrokers(moveMap))
+
     assertEquals(Set(0,2), calculateMovingBrokers(
       Set(new TopicPartitionReplica("quux", 0, 0),
           new TopicPartitionReplica("quux", 1, 2))))
