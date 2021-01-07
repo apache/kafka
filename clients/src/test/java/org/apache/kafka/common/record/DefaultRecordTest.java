@@ -90,7 +90,7 @@ public class DefaultRecordTest {
     public void testBasicSerdeInvalidHeaderCountTooHigh() throws IOException {
         Header[] headers = new Header[] {
             new RecordHeader("foo", "value".getBytes()),
-            new RecordHeader("bar", null),
+            new RecordHeader("bar", (byte[]) null),
             new RecordHeader("\"A\\u00ea\\u00f1\\u00fcC\"", "value".getBytes())
         };
 
@@ -161,7 +161,7 @@ public class DefaultRecordTest {
     }
 
     @Test
-    public void testInvalidKeySizePartial() {
+    public void testInvalidKeySizePartial() throws IOException {
         byte attributes = 0;
         long timestampDelta = 2;
         int offsetDelta = 1;
@@ -183,7 +183,7 @@ public class DefaultRecordTest {
     }
 
     @Test
-    public void testInvalidValueSize() {
+    public void testInvalidValueSize() throws IOException {
         byte attributes = 0;
         long timestampDelta = 2;
         int offsetDelta = 1;
@@ -228,7 +228,7 @@ public class DefaultRecordTest {
     }
 
     @Test
-    public void testInvalidNumHeaders() {
+    public void testInvalidNumHeaders() throws IOException {
         byte attributes = 0;
         long timestampDelta = 2;
         int offsetDelta = 1;
@@ -250,7 +250,7 @@ public class DefaultRecordTest {
     }
 
     @Test
-    public void testInvalidNumHeadersPartial() {
+    public void testInvalidNumHeadersPartial() throws IOException {
         byte attributes = 0;
         long timestampDelta = 2;
         int offsetDelta = 1;
@@ -296,7 +296,7 @@ public class DefaultRecordTest {
     }
 
     @Test
-    public void testInvalidHeaderKeyPartial() {
+    public void testInvalidHeaderKeyPartial() throws IOException {
         byte attributes = 0;
         long timestampDelta = 2;
         int offsetDelta = 1;
@@ -343,7 +343,7 @@ public class DefaultRecordTest {
     }
 
     @Test
-    public void testNullHeaderKeyPartial() {
+    public void testNullHeaderKeyPartial() throws IOException {
         byte attributes = 0;
         long timestampDelta = 2;
         int offsetDelta = 1;
@@ -392,7 +392,7 @@ public class DefaultRecordTest {
     }
 
     @Test
-    public void testInvalidHeaderValuePartial() {
+    public void testInvalidHeaderValuePartial() throws IOException {
         byte attributes = 0;
         long timestampDelta = 2;
         int offsetDelta = 1;

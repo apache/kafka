@@ -662,7 +662,7 @@ public class WorkerSourceTaskWithTopicCreationTest extends ThreadedTest {
     }
 
     @Test
-    public void testSendRecordsProducerSendFailsImmediately() {
+    public void testSendRecordsProducerSendFailsImmediately() throws Exception {
         createWorkerTask();
 
         SourceRecord record1 = new SourceRecord(PARTITION, OFFSET, TOPIC, 1, KEY_SCHEMA, KEY, RECORD_SCHEMA, RECORD);
@@ -1058,7 +1058,7 @@ public class WorkerSourceTaskWithTopicCreationTest extends ThreadedTest {
     }
 
     @Test
-    public void testTopicDescribeFails() {
+    public void testTopicDescribeFails() throws Exception {
         createWorkerTask();
 
         SourceRecord record1 = new SourceRecord(PARTITION, OFFSET, TOPIC, 1, KEY_SCHEMA, KEY, RECORD_SCHEMA, RECORD);

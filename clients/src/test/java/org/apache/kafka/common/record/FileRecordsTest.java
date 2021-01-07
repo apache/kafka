@@ -94,7 +94,7 @@ public class FileRecordsTest {
     }
 
     @Test
-    public void testOutOfRangeSlice() {
+    public void testOutOfRangeSlice() throws Exception {
         assertThrows(IllegalArgumentException.class,
             () -> this.fileRecords.slice(fileRecords.sizeInBytes() + 1, 15).sizeInBytes());
     }

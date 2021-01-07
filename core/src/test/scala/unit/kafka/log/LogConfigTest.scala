@@ -17,15 +17,15 @@
 
 package kafka.log
 
+import java.util.{Collections, Properties}
+
 import kafka.server.{KafkaConfig, KafkaServer, ThrottledReplicaListValidator}
 import kafka.utils.TestUtils
 import org.apache.kafka.common.config.ConfigDef.Importance.MEDIUM
 import org.apache.kafka.common.config.ConfigDef.Type.INT
 import org.apache.kafka.common.config.{ConfigException, TopicConfig}
-import org.junit.Assert._
 import org.junit.{Assert, Test}
-
-import java.util.{Collections, Properties}
+import org.junit.Assert._
 
 class LogConfigTest {
 

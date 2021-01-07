@@ -198,7 +198,7 @@ public class KafkaFutureTest {
     }
 
     @Test
-    public void testFutureTimeoutWithZeroWait() {
+    public void testFutureTimeoutWithZeroWait() throws Exception {
         final KafkaFutureImpl<String> future = new KafkaFutureImpl<>();
         assertThrows(TimeoutException.class, () -> future.get(0, TimeUnit.MILLISECONDS));
     }

@@ -336,7 +336,7 @@ public class ConnectorPluginsResourceTest {
     }
 
     @Test
-    public void testValidateConfigWithNonExistentName() {
+    public void testValidateConfigWithNonExistentName() throws Throwable {
         // make a request to connector-plugins resource using a non-loaded connector with the same
         // simple name but different package.
         String customClassname = "com.custom.package."
@@ -345,7 +345,7 @@ public class ConnectorPluginsResourceTest {
     }
 
     @Test
-    public void testValidateConfigWithNonExistentAlias() {
+    public void testValidateConfigWithNonExistentAlias() throws Throwable {
         assertThrows(BadRequestException.class, () -> connectorPluginsResource.validateConfigs("ConnectorPluginsTest", props));
     }
 

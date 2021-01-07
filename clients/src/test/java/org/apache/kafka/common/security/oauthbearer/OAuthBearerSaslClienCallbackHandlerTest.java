@@ -63,7 +63,7 @@ public class OAuthBearerSaslClienCallbackHandlerTest {
     }
 
     @Test
-    public void testWithZeroTokens() {
+    public void testWithZeroTokens() throws Throwable {
         OAuthBearerSaslClientCallbackHandler handler = createCallbackHandler();
         PrivilegedActionException e = assertThrows(PrivilegedActionException.class, () -> Subject.doAs(new Subject(),
             (PrivilegedExceptionAction<Void>) () -> {

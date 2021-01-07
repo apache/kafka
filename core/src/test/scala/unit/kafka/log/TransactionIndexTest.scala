@@ -16,12 +16,12 @@
  */
 package kafka.log
 
+import java.io.File
+
 import kafka.utils.TestUtils
 import org.apache.kafka.common.requests.FetchResponse.AbortedTransaction
 import org.junit.Assert._
 import org.junit.{After, Before, Test}
-
-import java.io.File
 
 class TransactionIndexTest {
   var file: File = _

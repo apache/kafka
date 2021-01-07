@@ -16,6 +16,9 @@
  */
 package kafka.cluster
 
+import java.nio.ByteBuffer
+import java.util.Optional
+import java.util.concurrent.{CountDownLatch, Semaphore}
 import com.yammer.metrics.core.Metric
 import kafka.api.{ApiVersion, KAFKA_2_6_IV0}
 import kafka.common.UnexpectedAppendOffsetException
@@ -42,9 +45,6 @@ import org.mockito.ArgumentMatchers.{any, anyString}
 import org.mockito.Mockito._
 import org.mockito.invocation.InvocationOnMock
 
-import java.nio.ByteBuffer
-import java.util.Optional
-import java.util.concurrent.{CountDownLatch, Semaphore}
 import scala.jdk.CollectionConverters._
 
 class PartitionTest extends AbstractPartitionTest {

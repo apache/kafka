@@ -97,7 +97,7 @@ public class ConvertingFutureCallbackTest {
     }
   
     @Test
-    public void shouldCancelBeforeGetIfMayCancelWhileRunning() {
+    public void shouldCancelBeforeGetIfMayCancelWhileRunning() throws Exception {
         TestConvertingFutureCallback testCallback = new TestConvertingFutureCallback();
         assertTrue(testCallback.cancel(true));
         assertThrows(CancellationException.class, testCallback::get);
@@ -153,7 +153,7 @@ public class ConvertingFutureCallbackTest {
     }
 
     @Test
-    public void shouldBlockUntilCancellation() {
+    public void shouldBlockUntilCancellation() throws Exception {
         AtomicReference<Exception> testThreadException = new AtomicReference<>();
         TestConvertingFutureCallback testCallback = new TestConvertingFutureCallback();
         executor.submit(() -> {

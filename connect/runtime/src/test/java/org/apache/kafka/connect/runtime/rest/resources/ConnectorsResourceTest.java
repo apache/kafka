@@ -362,7 +362,7 @@ public class ConnectorsResourceTest {
     }
 
     @Test
-    public void testCreateConnectorExists() {
+    public void testCreateConnectorExists() throws Throwable {
         CreateConnectorRequest body = new CreateConnectorRequest(CONNECTOR_NAME, Collections.singletonMap(ConnectorConfig.NAME_CONFIG, CONNECTOR_NAME));
 
         final Capture<Callback<Herder.Created<ConnectorInfo>>> cb = Capture.newInstance();
@@ -507,7 +507,7 @@ public class ConnectorsResourceTest {
     }
 
     @Test
-    public void testGetConnectorConfigConnectorNotFound() {
+    public void testGetConnectorConfigConnectorNotFound() throws Throwable {
         final Capture<Callback<Map<String, String>>> cb = Capture.newInstance();
         herder.connectorConfig(EasyMock.eq(CONNECTOR_NAME), EasyMock.capture(cb));
         expectAndCallbackException(cb, new NotFoundException("not found"));
@@ -604,7 +604,7 @@ public class ConnectorsResourceTest {
     }
 
     @Test
-    public void testPutConnectorConfigNameMismatch() {
+    public void testPutConnectorConfigNameMismatch() throws Throwable {
         Map<String, String> connConfig = new HashMap<>(CONNECTOR_CONFIG);
         connConfig.put(ConnectorConfig.NAME_CONFIG, "mismatched-name");
         assertThrows(BadRequestException.class, () -> connectorsResource.putConnectorConfig(CONNECTOR_NAME,
@@ -612,7 +612,7 @@ public class ConnectorsResourceTest {
     }
 
     @Test
-    public void testCreateConnectorConfigNameMismatch() {
+    public void testCreateConnectorConfigNameMismatch() throws Throwable {
         Map<String, String> connConfig = new HashMap<>();
         connConfig.put(ConnectorConfig.NAME_CONFIG, "mismatched-name");
         CreateConnectorRequest request = new CreateConnectorRequest(CONNECTOR_NAME, connConfig);
@@ -723,7 +723,7 @@ public class ConnectorsResourceTest {
     }
 
     @Test
-    public void testRestartConnectorNotFound() {
+    public void testRestartConnectorNotFound() throws Throwable {
         final Capture<Callback<Void>> cb = Capture.newInstance();
         herder.restartConnector(EasyMock.eq(CONNECTOR_NAME), EasyMock.capture(cb));
         expectAndCallbackException(cb, new NotFoundException("not found"));

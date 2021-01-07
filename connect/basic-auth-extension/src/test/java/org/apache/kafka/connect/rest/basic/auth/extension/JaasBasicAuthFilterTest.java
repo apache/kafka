@@ -22,7 +22,6 @@ import javax.security.auth.callback.CallbackHandler;
 import javax.security.auth.callback.ChoiceCallback;
 import javax.ws.rs.HttpMethod;
 import javax.ws.rs.core.UriInfo;
-
 import org.apache.kafka.common.security.JaasUtils;
 import org.apache.kafka.connect.errors.ConnectException;
 import org.easymock.EasyMock;
@@ -176,7 +175,7 @@ public class JaasBasicAuthFilterTest {
     }
 
     @Test
-    public void testUnsupportedCallback() {
+    public void testUnsupportedCallback() throws Exception {
         String authHeader = authHeader("basic", "user", "pwd");
         CallbackHandler callbackHandler = new JaasBasicAuthFilter.BasicAuthCallBackHandler(authHeader);
         Callback unsupportedCallback = new ChoiceCallback(

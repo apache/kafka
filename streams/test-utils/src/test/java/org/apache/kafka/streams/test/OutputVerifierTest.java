@@ -17,11 +17,8 @@
 package org.apache.kafka.streams.test;
 
 import org.apache.kafka.clients.producer.ProducerRecord;
-
 import org.junit.Test;
-
 import static org.junit.Assert.assertThrows;
-
 @Deprecated
 public class OutputVerifierTest {
     private final byte[] key = new byte[0];

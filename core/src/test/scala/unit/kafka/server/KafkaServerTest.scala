@@ -18,13 +18,13 @@
 package kafka.server
 
 import kafka.api.ApiVersion
+
+import java.util.Properties
 import kafka.utils.TestUtils
 import kafka.zk.ZooKeeperTestHarness
 import org.apache.zookeeper.client.ZKClientConfig
-import org.junit.Assert.{assertEquals, assertThrows, fail}
 import org.junit.Test
-
-import java.util.Properties
+import org.junit.Assert.{assertEquals, assertThrows, fail}
 
 class KafkaServerTest extends ZooKeeperTestHarness {
 

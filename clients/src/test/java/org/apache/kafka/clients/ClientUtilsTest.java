@@ -99,7 +99,7 @@ public class ClientUtilsTest {
     }
 
     @Test
-    public void testResolveUnknownHostException() {
+    public void testResolveUnknownHostException() throws UnknownHostException {
         assertThrows(UnknownHostException.class,
             () -> ClientUtils.resolve("some.invalid.hostname.foo.bar.local", ClientDnsLookup.USE_ALL_DNS_IPS));
     }
