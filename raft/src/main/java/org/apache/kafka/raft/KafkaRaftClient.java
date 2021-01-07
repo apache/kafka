@@ -165,6 +165,7 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
         ReplicatedLog log,
         QuorumState quorum,
         Time time,
+        Metrics metrics,
         ExpirationService expirationService,
         LogContext logContext
     ) {
@@ -175,7 +176,7 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
             quorum,
             new BatchMemoryPool(5, MAX_BATCH_SIZE),
             time,
-            new Metrics(time),
+            metrics,
             expirationService,
             raftConfig.quorumVoterConnections(),
             raftConfig.electionBackoffMaxMs(),
