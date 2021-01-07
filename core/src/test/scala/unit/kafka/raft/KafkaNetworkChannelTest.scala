@@ -65,6 +65,29 @@ class KafkaNetworkChannelTest {
   }
 
   @Test
+  def testWakeupClientOnSend(): Unit = {
+    val destinationId = 2
+    val destinationNode = new Node(destinationId, "127.0.0.1", 9092)
+    channel.updateEndpoint(destinationId, new InetSocketAddress(destinationNode.host, destinationNode.port))
+
+    client.enableBlockingUntilWakeup(1)
+
+    val ioThread: Thread = new Thread() {
+      override def run(): Unit = {
+        channel.pollOnce()
+      }
+    }
+
+    ioThread.start()
+
+    val response = buildResponse(buildTestErrorResponse(ApiKeys.FETCH, Errors.INVALID_REQUEST))
+    client.prepareResponseFrom(response, destinationNode, true)
+    sendAndAssertErrorResponse(ApiKeys.FETCH, destinationId, Errors.BROKER_NOT_AVAILABLE)
+
+    ioThread.join()
+  }
+
+  @Test
   def testSendAndDisconnect(): Unit = {
     val destinationId = 2
     val destinationNode = new Node(destinationId, "127.0.0.1", 9092)
