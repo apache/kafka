@@ -716,14 +716,27 @@ class PlaintextConsumerTest extends BaseConsumerTest {
 
     // consuming a record that is too large should succeed since KIP-74
     consumer.assign(List(tp).asJava)
-    val records = consumer.poll(Duration.ofMillis(20000))
-    assertEquals(1, records.count)
-    val consumerRecord = records.iterator().next()
-    assertEquals(0L, consumerRecord.offset)
-    assertEquals(tp.topic(), consumerRecord.topic())
-    assertEquals(tp.partition(), consumerRecord.partition())
-    assertArrayEquals(record.key(), consumerRecord.key())
-    assertArrayEquals(record.value(), consumerRecord.value())
+    val timeout = 20000
+    val deadline = System.currentTimeMillis() + timeout
+    var passed = false
+    var iterations = 0
+    do {
+      val records = consumer.poll(Duration.ofMillis(deadline - System.currentTimeMillis()))
+      if (records.count() == 0) {
+        assertFalse(records.metadata().isEmpty)
+      } else {
+        assertEquals(1, records.count)
+        val consumerRecord = records.iterator().next()
+        assertEquals(0L, consumerRecord.offset)
+        assertEquals(tp.topic(), consumerRecord.topic())
+        assertEquals(tp.partition(), consumerRecord.partition())
+        assertArrayEquals(record.key(), consumerRecord.key())
+        assertArrayEquals(record.value(), consumerRecord.value())
+        passed = true
+      }
+      iterations += 1
+    } while (!passed && System.currentTimeMillis() < deadline)
+    assertTrue("Did not poll the record in " + timeout + "ms (" + iterations + " calls)", passed)
   }
 
   /** We should only return a large record if it's the first record in the first non-empty partition of the fetch request */

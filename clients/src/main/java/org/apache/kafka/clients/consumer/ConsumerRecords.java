@@ -50,7 +50,7 @@ public class ConsumerRecords<K, V> implements Iterable<ConsumerRecord<K, V>> {
         private final long endOffset;
 
         public Metadata(final long receivedTimestamp,
-                        final long position,
+                        final Long position,
                         final long beginningOffset,
                         final long endOffset) {
             this.receivedTimestamp = receivedTimestamp;
@@ -67,9 +67,9 @@ public class ConsumerRecords<K, V> implements Iterable<ConsumerRecord<K, V>> {
         }
 
         /**
-         * @return The next position the consumer will fetch
+         * @return The next position the consumer will fetch, or null if the consumer has no position.
          */
-        public long position() {
+        public Long position() {
             return position;
         }
 
@@ -105,7 +105,7 @@ public class ConsumerRecords<K, V> implements Iterable<ConsumerRecord<K, V>> {
                 entry.getKey(),
                 new Metadata(
                     entry.getValue().receivedTimestamp(),
-                    entry.getValue().position().offset,
+                    entry.getValue().position() == null ? null : entry.getValue().position().offset,
                     entry.getValue().beginningOffset(),
                     entry.getValue().endOffset()
                 )
