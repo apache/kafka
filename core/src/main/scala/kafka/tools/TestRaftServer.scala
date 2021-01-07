@@ -109,15 +109,15 @@ class TestRaftServer(
 
   def shutdown(): Unit = {
     if (raftManager != null)
-      CoreUtils.swallow(raftManager.shutdown(), this)
+      CoreUtils.swallow(raftManager.shutdown(), kafka.tools.TestRaftServer)
     if (workloadGenerator != null)
-      CoreUtils.swallow(workloadGenerator.shutdown(), this)
+      CoreUtils.swallow(workloadGenerator.shutdown(), TestRaftServer)
     if (dataPlaneRequestHandlerPool != null)
-      CoreUtils.swallow(dataPlaneRequestHandlerPool.shutdown(), this)
+      CoreUtils.swallow(dataPlaneRequestHandlerPool.shutdown(), TestRaftServer)
     if (socketServer != null)
-      CoreUtils.swallow(socketServer.shutdown(), this)
+      CoreUtils.swallow(socketServer.shutdown(), kafka.tools.TestRaftServer)
     if (metrics != null)
-      CoreUtils.swallow(metrics.close(), this)
+      CoreUtils.swallow(metrics.close(), kafka.tools.TestRaftServer)
     shutdownLatch.countDown()
   }
 

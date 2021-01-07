@@ -230,7 +230,7 @@ class RequestSendThread(val controllerId: Int,
   extends ShutdownableThread(name = name) {
 
   import RequestSendThread._
-  protected implicit val logIdent = Some(LogIdent(s"[RequestSendThread controllerId=$controllerId] "))
+  override protected implicit val logIdent = Some(LogIdent(s"[RequestSendThread controllerId=$controllerId] "))
 
   private val socketTimeoutMs = config.controllerSocketTimeoutMs
 

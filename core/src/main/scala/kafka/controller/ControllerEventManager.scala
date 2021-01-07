@@ -119,7 +119,7 @@ class ControllerEventManager(controllerId: Int,
 
   class ControllerEventThread(name: String) extends ShutdownableThread(name = name, isInterruptible = false) {
     import ControllerEventThread._
-    protected implicit val logIdent = Some(LogIdent(s"[ControllerEventThread controllerId=$controllerId] "))
+    override protected implicit val logIdent = Some(LogIdent(s"[ControllerEventThread controllerId=$controllerId] "))
 
     override def doWork(): Unit = {
       val dequeued = pollFromEventQueue()

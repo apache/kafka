@@ -43,6 +43,8 @@ import scala.util.Random
   */
 class FetchRequestTest extends BaseRequestTest {
 
+  import kafka.api.IntegrationTestHarness._
+
   private var producer: KafkaProducer[String, String] = null
 
   override def brokerPropertyOverrides(properties: Properties): Unit = {

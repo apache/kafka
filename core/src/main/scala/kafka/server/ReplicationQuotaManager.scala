@@ -78,6 +78,8 @@ class ReplicationQuotaManager(val config: ReplicationQuotaManagerConfig,
                               private val metrics: Metrics,
                               private val replicationType: QuotaType,
                               private val time: Time) extends ReplicaQuota {
+  import ReplicationQuotaManager._
+
   private val lock = new ReentrantReadWriteLock()
   private val throttledPartitions = new ConcurrentHashMap[String, Seq[Int]]()
   private var quota: Quota = null

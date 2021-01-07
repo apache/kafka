@@ -38,6 +38,8 @@ private object KafkaCSVMetricsReporter extends Logging {
 private class KafkaCSVMetricsReporter extends KafkaMetricsReporter
                               with KafkaCSVMetricsReporterMBean {
 
+  import KafkaCSVMetricsReporter._
+
   private var csvDir: File = null
   private var underlying: CsvReporter = null
   private var running = false

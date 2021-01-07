@@ -73,7 +73,7 @@ import scala.jdk.CollectionConverters._
   * </ul>
   *
   */
-object DynamicBrokerConfig extends Logging {
+object DynamicBrokerConfig {
 
   private[server] val DynamicSecurityConfigs = SslConfigs.RECONFIGURABLE_CONFIGS.asScala
 
@@ -195,9 +195,7 @@ object DynamicBrokerConfig extends Logging {
   }
 }
 
-class DynamicBrokerConfig(private val kafkaConfig: KafkaConfig) {
-
-  import kafka.server.DynamicBrokerConfig.{error, info, debug, trace}
+class DynamicBrokerConfig(private val kafkaConfig: KafkaConfig) extends Logging {
 
   private[server] val staticBrokerConfigs = ConfigDef.convertToStringMapWithPasswordValues(kafkaConfig.originalsFromThisConfig).asScala
   private[server] val staticDefaultConfigs = ConfigDef.convertToStringMapWithPasswordValues(KafkaConfig.defaultValues.asJava).asScala

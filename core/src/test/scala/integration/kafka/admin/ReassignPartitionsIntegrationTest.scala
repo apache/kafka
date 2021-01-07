@@ -40,6 +40,8 @@ import scala.collection.{Map, Seq, mutable}
 import scala.jdk.CollectionConverters._
 
 class ReassignPartitionsIntegrationTest extends ZooKeeperTestHarness {
+  import ZooKeeperTestHarness._
+
   @Rule
   def globalTimeout: Timeout = Timeout.millis(300000)
 
@@ -283,7 +285,7 @@ class ReassignPartitionsIntegrationTest extends ZooKeeperTestHarness {
             result.partStates(new TopicPartition("foo", 0)).targetReplicas)
           assertEquals(Seq(3, 2, 1),
             result.partStates(new TopicPartition("baz", 2)).targetReplicas)
-          logger.info(s"Current result: ${result}")
+          info(s"Current result: ${result}")
           waitForInterBrokerThrottle(Set(0, 1, 2, 3), interBrokerThrottle)
           false
         }

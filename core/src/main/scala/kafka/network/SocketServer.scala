@@ -78,14 +78,12 @@ class SocketServer(val config: KafkaConfig,
                    val time: Time,
                    val credentialProvider: CredentialProvider,
                    val allowDisabledApis: Boolean = false)
-  extends KafkaMetricsGroup with BrokerReconfigurable {
-
-  import kafka.network.SocketServer._
+  extends Logging with KafkaMetricsGroup with BrokerReconfigurable {
 
   private val maxQueuedRequests = config.queuedMaxRequests
 
   private val logContext = new LogContext(s"[SocketServer brokerId=${config.brokerId}] ")
-  protected implicit val logIdent = Some(LogIdent(logContext.logPrefix))
+  private implicit val logIdent = Some(LogIdent(logContext.logPrefix))
 
   private val memoryPoolSensor = metrics.sensor("MemoryPoolUtilization")
   private val memoryPoolDepletedPercentMetricName = metrics.metricName("MemoryPoolAvgDepletedPercent", MetricsGroup)
@@ -444,7 +442,7 @@ class SocketServer(val config: KafkaConfig,
 
 }
 
-object SocketServer extends Logging {
+object SocketServer {
   val MetricsGroup = "socket-server-metrics"
   val DataPlaneThreadPrefix = "data-plane"
   val ControlPlaneThreadPrefix = "control-plane"
@@ -460,15 +458,10 @@ object SocketServer extends Logging {
   val ListenerReconfigurableConfigs = Set(KafkaConfig.MaxConnectionsProp, KafkaConfig.MaxConnectionCreationRateProp)
 }
 
-private[kafka] object AbstractServerThread extends Logging {
-
-}
-
 /**
  * A base class with some helper variables and methods
  */
-private[kafka] abstract class AbstractServerThread(connectionQuotas: ConnectionQuotas) extends Runnable {
-  import AbstractServerThread._
+private[kafka] abstract class AbstractServerThread(connectionQuotas: ConnectionQuotas) extends Runnable with Logging {
 
   private val startupLatch = new CountDownLatch(1)
 
@@ -535,8 +528,8 @@ private[kafka] abstract class AbstractServerThread(connectionQuotas: ConnectionQ
   }
 
   protected def closeSocket(channel: SocketChannel): Unit = {
-    CoreUtils.swallow(channel.socket().close(), AbstractServerThread, Level.ERROR)
-    CoreUtils.swallow(channel.close(), AbstractServerThread, Level.ERROR)
+    CoreUtils.swallow(channel.socket().close(), this, Level.ERROR)
+    CoreUtils.swallow(channel.close(), this, Level.ERROR)
   }
 }
 
@@ -551,7 +544,6 @@ private[kafka] class Acceptor(val endPoint: EndPoint,
                               metricPrefix: String,
                               time: Time) extends AbstractServerThread(connectionQuotas) with KafkaMetricsGroup {
 
-  import AbstractServerThread._
   private val nioSelector = NSelector.open()
   val serverChannel = openServerSocket(endPoint.host, endPoint.port)
   private val processors = new ArrayBuffer[Processor]()
@@ -633,8 +625,8 @@ private[kafka] class Acceptor(val endPoint: EndPoint,
       }
     } finally {
       debug("Closing server socket, selector, and any throttled sockets.")
-      CoreUtils.swallow(serverChannel.close(), AbstractServerThread, Level.ERROR)
-      CoreUtils.swallow(nioSelector.close(), AbstractServerThread, Level.ERROR)
+      CoreUtils.swallow(serverChannel.close(), this, Level.ERROR)
+      CoreUtils.swallow(nioSelector.close(), this, Level.ERROR)
       throttledSockets.foreach(throttledSocket => closeSocket(throttledSocket.socket))
       throttledSockets.clear()
       shutdownComplete()
@@ -898,7 +890,7 @@ private[kafka] class Processor(val id: Int,
       }
     } finally {
       debug(s"Closing selector - processor $id")
-      CoreUtils.swallow(closeAll(), AbstractServerThread, Level.ERROR)
+      CoreUtils.swallow(closeAll(), this, Level.ERROR)
       shutdownComplete()
     }
   }
@@ -1252,7 +1244,7 @@ sealed trait ConnectionQuotaEntity {
   def metricTags: Map[String, String]
 }
 
-object ConnectionQuotas extends Logging {
+object ConnectionQuotas {
   private val InactiveSensorExpirationTimeSeconds = TimeUnit.HOURS.toSeconds(1)
   private val ConnectionRateSensorName = "Connection-Accept-Rate"
   private val ConnectionRateMetricName = "connection-accept-rate"
@@ -1282,8 +1274,7 @@ object ConnectionQuotas extends Logging {
   }
 }
 
-class ConnectionQuotas(config: KafkaConfig, time: Time, metrics: Metrics) extends AutoCloseable {
-  import ConnectionQuotas._
+class ConnectionQuotas(config: KafkaConfig, time: Time, metrics: Metrics) extends Logging with AutoCloseable {
 
   @volatile private var defaultMaxConnectionsPerIp: Int = config.maxConnectionsPerIp
   @volatile private var maxConnectionsPerIpOverrides = config.maxConnectionsPerIpOverrides.map { case (host, count) => (InetAddress.getByName(host), count) }

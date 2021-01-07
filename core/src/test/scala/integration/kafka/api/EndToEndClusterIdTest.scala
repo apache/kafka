@@ -47,7 +47,7 @@ import org.apache.kafka.test.TestUtils.isValidClusterId
   * 9. All the components receive the same cluster id.
   */
 
-object EndToEndClusterIdTest {
+object EndToEndClusterIdTest extends Logging {
 
   object MockConsumerMetricsReporter {
     val CLUSTER_META = new AtomicReference[ClusterResource]

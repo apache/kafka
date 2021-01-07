@@ -59,9 +59,7 @@ class GroupMetadataManager(brokerId: Int,
                            val replicaManager: ReplicaManager,
                            zkClient: KafkaZkClient,
                            time: Time,
-                           metrics: Metrics) extends KafkaMetricsGroup {
-
-  import GroupMetadataManager._
+                           metrics: Metrics) extends KafkaMetricsGroup with Logging {
 
   private val compressionType: CompressionType = CompressionType.forId(config.offsetsTopicCompressionCodec.codec)
 
@@ -993,7 +991,7 @@ class GroupMetadataManager(brokerId: Int,
  * key version 2:       group metadata
  *    -> value version 0:       [protocol_type, generation, protocol, leader, members]
  */
-object GroupMetadataManager extends Logging {
+object GroupMetadataManager {
   // Metrics names
   val MetricsGroup: String = "group-coordinator-metrics"
   val LoadTimeSensor: String = "GroupPartitionLoadTime"

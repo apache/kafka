@@ -19,7 +19,6 @@ package kafka.security.auth
 import java.util
 
 import kafka.network.RequestChannel.Session
-import kafka.security.auth.SimpleAclAuthorizer.BaseAuthorizer
 import kafka.security.authorizer.{AclAuthorizer, AuthorizerUtils, AuthorizerWrapper}
 import kafka.utils._
 import kafka.zk.ZkVersion

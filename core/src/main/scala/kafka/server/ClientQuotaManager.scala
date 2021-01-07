@@ -72,7 +72,7 @@ object QuotaTypes {
   val CustomQuotas = 8 // No metric update optimizations are used with custom quotas
 }
 
-object ClientQuotaManager extends Logging {
+object ClientQuotaManager {
   // Purge sensors after 1 hour of inactivity
   val InactiveSensorExpirationTimeSeconds = 3600
 
@@ -190,8 +190,8 @@ class ClientQuotaManager(private val config: ClientQuotaManagerConfig,
                          private val quotaType: QuotaType,
                          private val time: Time,
                          private val threadNamePrefix: String,
-                         private val clientQuotaCallback: Option[ClientQuotaCallback] = None) {
-  import ClientQuotaManager.{debug}
+                         private val clientQuotaCallback: Option[ClientQuotaCallback] = None) extends Logging {
+
   private val lock = new ReentrantReadWriteLock()
   private val sensorAccessor = new SensorAccess(lock, metrics)
   private val quotaCallback = clientQuotaCallback.getOrElse(new DefaultQuotaCallback)
