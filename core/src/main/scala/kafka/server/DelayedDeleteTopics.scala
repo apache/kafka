@@ -36,6 +36,8 @@ class DelayedDeleteTopics(delayMs: Long,
                           responseCallback: Map[String, Errors] => Unit)
   extends DelayedOperation(delayMs) {
 
+  import DelayedOperation._
+
   /**
     * The operation can be completed if all of the topics not in error have been removed
     */

@@ -67,6 +67,8 @@ class DelayedFetch(delayMs: Long,
                    responseCallback: Seq[(TopicPartition, FetchPartitionData)] => Unit)
   extends DelayedOperation(delayMs) {
 
+  import DelayedOperation._
+
   /**
    * The operation can be completed if:
    *
