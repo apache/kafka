@@ -665,7 +665,7 @@ public class StreamsConfig extends AbstractConfig {
                     DEFAULT_WINDOWED_VALUE_SERDE_INNER_CLASS_DOC)
             .define(MAX_TASK_IDLE_MS_CONFIG,
                     Type.LONG,
-                    0,
+                    0L,
                     Importance.MEDIUM,
                     MAX_TASK_IDLE_MS_DOC)
             .define(MAX_WARMUP_REPLICAS_CONFIG,
