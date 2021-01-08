@@ -17,6 +17,7 @@
 
 package org.apache.kafka.connect.transforms;
 
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
@@ -38,6 +39,7 @@ import java.math.BigDecimal;
 import java.util.Collections;
 import java.util.Date;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.Map;
 
 import static org.junit.Assert.assertEquals;
@@ -58,37 +60,37 @@ public class CastTest {
 
     @Test(expected = ConfigException.class)
     public void testConfigEmpty() {
-        xformKey.configure(Collections.singletonMap(Cast.SPEC_CONFIG, ""));
+        xformKey.configure(Collections.singletonMap(Cast.ConfigName.SPEC, ""));
     }
 
     @Test(expected = ConfigException.class)
     public void testConfigInvalidSchemaType() {
-        xformKey.configure(Collections.singletonMap(Cast.SPEC_CONFIG, "foo:faketype"));
+        xformKey.configure(Collections.singletonMap(Cast.ConfigName.SPEC, "foo:faketype"));
     }
 
     @Test(expected = ConfigException.class)
     public void testConfigInvalidTargetType() {
-        xformKey.configure(Collections.singletonMap(Cast.SPEC_CONFIG, "foo:array"));
+        xformKey.configure(Collections.singletonMap(Cast.ConfigName.SPEC, "foo:array"));
     }
 
     @Test(expected = ConfigException.class)
     public void testUnsupportedTargetType() {
-        xformKey.configure(Collections.singletonMap(Cast.SPEC_CONFIG, "foo:bytes"));
+        xformKey.configure(Collections.singletonMap(Cast.ConfigName.SPEC, "foo:bytes"));
     }
 
     @Test(expected = ConfigException.class)
     public void testConfigInvalidMap() {
-        xformKey.configure(Collections.singletonMap(Cast.SPEC_CONFIG, "foo:int8:extra"));
+        xformKey.configure(Collections.singletonMap(Cast.ConfigName.SPEC, "foo:int8:extra"));
     }
 
     @Test(expected = ConfigException.class)
     public void testConfigMixWholeAndFieldTransformation() {
-        xformKey.configure(Collections.singletonMap(Cast.SPEC_CONFIG, "foo:int8,int32"));
+        xformKey.configure(Collections.singletonMap(Cast.ConfigName.SPEC, "foo:int8,int32"));
     }
 
     @Test
     public void castWholeRecordKeyWithSchema() {
-        xformKey.configure(Collections.singletonMap(Cast.SPEC_CONFIG, "int8"));
+        xformKey.configure(Collections.singletonMap(Cast.ConfigName.SPEC, "int8"));
         SourceRecord transformed = xformKey.apply(new SourceRecord(null, null, "topic", 0,
                 Schema.INT32_SCHEMA, 42, Schema.STRING_SCHEMA, "bogus"));
 
@@ -98,7 +100,7 @@ public class CastTest {
 
     @Test
     public void castWholeRecordValueWithSchemaInt8() {
-        xformValue.configure(Collections.singletonMap(Cast.SPEC_CONFIG, "int8"));
+        xformValue.configure(Collections.singletonMap(Cast.ConfigName.SPEC, "int8"));
         SourceRecord transformed = xformValue.apply(new SourceRecord(null, null, "topic", 0,
                 Schema.INT32_SCHEMA, 42));
 
@@ -108,7 +110,7 @@ public class CastTest {
 
     @Test
     public void castWholeRecordValueWithSchemaInt16() {
-        xformValue.configure(Collections.singletonMap(Cast.SPEC_CONFIG, "int16"));
+        xformValue.configure(Collections.singletonMap(Cast.ConfigName.SPEC, "int16"));
         SourceRecord transformed = xformValue.apply(new SourceRecord(null, null, "topic", 0,
                 Schema.INT32_SCHEMA, 42));
 
@@ -118,7 +120,7 @@ public class CastTest {
 
     @Test
     public void castWholeRecordValueWithSchemaInt32() {
-        xformValue.configure(Collections.singletonMap(Cast.SPEC_CONFIG, "int32"));
+        xformValue.configure(Collections.singletonMap(Cast.ConfigName.SPEC, "int32"));
         SourceRecord transformed = xformValue.apply(new SourceRecord(null, null, "topic", 0,
                 Schema.INT32_SCHEMA, 42));
 
@@ -128,7 +130,7 @@ public class CastTest {
 
     @Test
     public void castWholeRecordValueWithSchemaInt64() {
-        xformValue.configure(Collections.singletonMap(Cast.SPEC_CONFIG, "int64"));
+        xformValue.configure(Collections.singletonMap(Cast.ConfigName.SPEC, "int64"));
         SourceRecord transformed = xformValue.apply(new SourceRecord(null, null, "topic", 0,
                 Schema.INT32_SCHEMA, 42));
 
@@ -138,7 +140,7 @@ public class CastTest {
 
     @Test
     public void castWholeRecordValueWithSchemaFloat32() {
-        xformValue.configure(Collections.singletonMap(Cast.SPEC_CONFIG, "float32"));
+        xformValue.configure(Collections.singletonMap(Cast.ConfigName.SPEC, "float32"));
         SourceRecord transformed = xformValue.apply(new SourceRecord(null, null, "topic", 0,
                 Schema.INT32_SCHEMA, 42));
 
@@ -148,7 +150,7 @@ public class CastTest {
 
     @Test
     public void castWholeRecordValueWithSchemaFloat64() {
-        xformValue.configure(Collections.singletonMap(Cast.SPEC_CONFIG, "float64"));
+        xformValue.configure(Collections.singletonMap(Cast.ConfigName.SPEC, "float64"));
         SourceRecord transformed = xformValue.apply(new SourceRecord(null, null, "topic", 0,
                 Schema.INT32_SCHEMA, 42));
 
@@ -158,7 +160,7 @@ public class CastTest {
 
     @Test
     public void castWholeRecordValueWithSchemaBooleanTrue() {
-        xformValue.configure(Collections.singletonMap(Cast.SPEC_CONFIG, "boolean"));
+        xformValue.configure(Collections.singletonMap(Cast.ConfigName.SPEC, "boolean"));
         SourceRecord transformed = xformValue.apply(new SourceRecord(null, null, "topic", 0,
                 Schema.INT32_SCHEMA, 42));
 
@@ -168,7 +170,7 @@ public class CastTest {
 
     @Test
     public void castWholeRecordValueWithSchemaBooleanFalse() {
-        xformValue.configure(Collections.singletonMap(Cast.SPEC_CONFIG, "boolean"));
+        xformValue.configure(Collections.singletonMap(Cast.ConfigName.SPEC, "boolean"));
         SourceRecord transformed = xformValue.apply(new SourceRecord(null, null, "topic", 0,
                 Schema.INT32_SCHEMA, 0));
 
@@ -178,7 +180,7 @@ public class CastTest {
 
     @Test
     public void castWholeRecordValueWithSchemaString() {
-        xformValue.configure(Collections.singletonMap(Cast.SPEC_CONFIG, "string"));
+        xformValue.configure(Collections.singletonMap(Cast.ConfigName.SPEC, "string"));
         SourceRecord transformed = xformValue.apply(new SourceRecord(null, null, "topic", 0,
                 Schema.INT32_SCHEMA, 42));
 
@@ -189,7 +191,7 @@ public class CastTest {
     @Test
     public void castWholeBigDecimalRecordValueWithSchemaString() {
         BigDecimal bigDecimal = new BigDecimal(42);
-        xformValue.configure(Collections.singletonMap(Cast.SPEC_CONFIG, "string"));
+        xformValue.configure(Collections.singletonMap(Cast.ConfigName.SPEC, "string"));
         SourceRecord transformed = xformValue.apply(new SourceRecord(null, null, "topic", 0,
                 Decimal.schema(bigDecimal.scale()), bigDecimal));
 
@@ -200,7 +202,7 @@ public class CastTest {
     @Test
     public void castWholeDateRecordValueWithSchemaString() {
         Date timestamp = new Date(MILLIS_PER_DAY + 1); // day + 1msec to get a timestamp formatting.
-        xformValue.configure(Collections.singletonMap(Cast.SPEC_CONFIG, "string"));
+        xformValue.configure(Collections.singletonMap(Cast.ConfigName.SPEC, "string"));
         SourceRecord transformed = xformValue.apply(new SourceRecord(null, null, "topic", 0,
                 Timestamp.SCHEMA, timestamp));
 
@@ -211,7 +213,7 @@ public class CastTest {
     @Test
     public void castWholeRecordDefaultValue() {
         // Validate default value in schema is correctly converted
-        xformValue.configure(Collections.singletonMap(Cast.SPEC_CONFIG, "int32"));
+        xformValue.configure(Collections.singletonMap(Cast.ConfigName.SPEC, "int32"));
         SourceRecord transformed = xformValue.apply(new SourceRecord(null, null, "topic", 0,
                 SchemaBuilder.float32().defaultValue(-42.125f).build(), 42.125f));
 
@@ -222,7 +224,7 @@ public class CastTest {
 
     @Test
     public void castWholeRecordKeySchemaless() {
-        xformKey.configure(Collections.singletonMap(Cast.SPEC_CONFIG, "int8"));
+        xformKey.configure(Collections.singletonMap(Cast.ConfigName.SPEC, "int8"));
         SourceRecord transformed = xformKey.apply(new SourceRecord(null, null, "topic", 0,
                 null, 42, Schema.STRING_SCHEMA, "bogus"));
 
@@ -232,7 +234,7 @@ public class CastTest {
 
     @Test
     public void castWholeRecordValueSchemalessInt8() {
-        xformValue.configure(Collections.singletonMap(Cast.SPEC_CONFIG, "int8"));
+        xformValue.configure(Collections.singletonMap(Cast.ConfigName.SPEC, "int8"));
         SourceRecord transformed = xformValue.apply(new SourceRecord(null, null, "topic", 0,
                 null, 42));
 
@@ -242,7 +244,7 @@ public class CastTest {
 
     @Test
     public void castWholeRecordValueSchemalessInt16() {
-        xformValue.configure(Collections.singletonMap(Cast.SPEC_CONFIG, "int16"));
+        xformValue.configure(Collections.singletonMap(Cast.ConfigName.SPEC, "int16"));
         SourceRecord transformed = xformValue.apply(new SourceRecord(null, null, "topic", 0,
                 null, 42));
 
@@ -252,7 +254,7 @@ public class CastTest {
 
     @Test
     public void castWholeRecordValueSchemalessInt32() {
-        xformValue.configure(Collections.singletonMap(Cast.SPEC_CONFIG, "int32"));
+        xformValue.configure(Collections.singletonMap(Cast.ConfigName.SPEC, "int32"));
         SourceRecord transformed = xformValue.apply(new SourceRecord(null, null, "topic", 0,
                 null, 42));
 
@@ -262,7 +264,7 @@ public class CastTest {
 
     @Test
     public void castWholeRecordValueSchemalessInt64() {
-        xformValue.configure(Collections.singletonMap(Cast.SPEC_CONFIG, "int64"));
+        xformValue.configure(Collections.singletonMap(Cast.ConfigName.SPEC, "int64"));
         SourceRecord transformed = xformValue.apply(new SourceRecord(null, null, "topic", 0,
                 null, 42));
 
@@ -272,7 +274,7 @@ public class CastTest {
 
     @Test
     public void castWholeRecordValueSchemalessFloat32() {
-        xformValue.configure(Collections.singletonMap(Cast.SPEC_CONFIG, "float32"));
+        xformValue.configure(Collections.singletonMap(Cast.ConfigName.SPEC, "float32"));
         SourceRecord transformed = xformValue.apply(new SourceRecord(null, null, "topic", 0,
                 null, 42));
 
@@ -282,7 +284,7 @@ public class CastTest {
 
     @Test
     public void castWholeRecordValueSchemalessFloat64() {
-        xformValue.configure(Collections.singletonMap(Cast.SPEC_CONFIG, "float64"));
+        xformValue.configure(Collections.singletonMap(Cast.ConfigName.SPEC, "float64"));
         SourceRecord transformed = xformValue.apply(new SourceRecord(null, null, "topic", 0,
                 null, 42));
 
@@ -292,7 +294,7 @@ public class CastTest {
 
     @Test
     public void castWholeRecordValueSchemalessBooleanTrue() {
-        xformValue.configure(Collections.singletonMap(Cast.SPEC_CONFIG, "boolean"));
+        xformValue.configure(Collections.singletonMap(Cast.ConfigName.SPEC, "boolean"));
         SourceRecord transformed = xformValue.apply(new SourceRecord(null, null, "topic", 0,
                 null, 42));
 
@@ -302,7 +304,7 @@ public class CastTest {
 
     @Test
     public void castWholeRecordValueSchemalessBooleanFalse() {
-        xformValue.configure(Collections.singletonMap(Cast.SPEC_CONFIG, "boolean"));
+        xformValue.configure(Collections.singletonMap(Cast.ConfigName.SPEC, "boolean"));
         SourceRecord transformed = xformValue.apply(new SourceRecord(null, null, "topic", 0,
                 null, 0));
 
@@ -312,7 +314,7 @@ public class CastTest {
 
     @Test
     public void castWholeRecordValueSchemalessString() {
-        xformValue.configure(Collections.singletonMap(Cast.SPEC_CONFIG, "string"));
+        xformValue.configure(Collections.singletonMap(Cast.ConfigName.SPEC, "string"));
         SourceRecord transformed = xformValue.apply(new SourceRecord(null, null, "topic", 0,
                 null, 42));
 
@@ -322,7 +324,7 @@ public class CastTest {
 
     @Test(expected = DataException.class)
     public void castWholeRecordValueSchemalessUnsupportedType() {
-        xformValue.configure(Collections.singletonMap(Cast.SPEC_CONFIG, "int8"));
+        xformValue.configure(Collections.singletonMap(Cast.ConfigName.SPEC, "int8"));
         xformValue.apply(new SourceRecord(null, null, "topic", 0, null, Collections.singletonList("foo")));
     }
 
@@ -338,7 +340,7 @@ public class CastTest {
         );
 
         Date day = new Date(MILLIS_PER_DAY);
-        xformValue.configure(Collections.singletonMap(Cast.SPEC_CONFIG,
+        xformValue.configure(Collections.singletonMap(Cast.ConfigName.SPEC,
             String.join(",", specParts)));
 
         SchemaBuilder builder = SchemaBuilder.struct();
@@ -385,7 +387,7 @@ public class CastTest {
         Date time = new Date(MILLIS_PER_HOUR);
         Date timestamp = new Date();
 
-        xformValue.configure(Collections.singletonMap(Cast.SPEC_CONFIG,
+        xformValue.configure(Collections.singletonMap(Cast.ConfigName.SPEC,
             "date:string,decimal:string,time:string,timestamp:string"));
 
         SchemaBuilder builder = SchemaBuilder.struct();
@@ -419,9 +421,250 @@ public class CastTest {
     }
 
     @Test
+    public void castArrayToString() {
+        xformValue.configure(Collections.singletonMap(Cast.ConfigName.SPEC,
+            "array:string"));
+
+        Schema arraySchema = SchemaBuilder.array(Schema.INT8_SCHEMA).build();
+        Schema supportedTypesSchema = SchemaBuilder.struct()
+                .field("array", arraySchema)
+                .build();
+
+        List<Byte> array = Arrays.asList((byte) 1, (byte) 2);
+
+        Struct recordValue = new Struct(supportedTypesSchema);
+        recordValue.put("array", array);
+
+        SourceRecord transformed = xformValue.apply(
+                new SourceRecord(null, null, "topic", 0,
+                        supportedTypesSchema, recordValue));
+
+        //Compare simple string "[1,2]" against result after removing any spaces (just in case of variations in deepToString)
+        assertEquals("[1,2]", ((Struct) transformed.value()).get("array").toString().replaceAll("\\s+", ""));
+
+        Schema transformedSchema = ((Struct) transformed.value()).schema();
+        assertEquals(Schema.STRING_SCHEMA.type(), transformedSchema.field("array").schema().type());
+    }
+
+    @Test
+    public void castComplexArrayToString() {
+        xformValue.configure(Collections.singletonMap(Cast.ConfigName.SPEC,
+            "array:string"));
+
+        SchemaBuilder builder = SchemaBuilder.struct();
+        builder.field("name", Schema.STRING_SCHEMA);
+        builder.field("value", Schema.INT32_SCHEMA);
+        builder.field("boolean", Schema.BOOLEAN_SCHEMA);
+        Schema arrayMemberSchema = builder.build();
+
+        Schema arraySchema = SchemaBuilder.array(arrayMemberSchema).build();
+
+        builder = SchemaBuilder.struct();
+        builder.field("array", arraySchema);
+        Schema supportedTypesSchema = builder.build();
+
+        Struct arrayMember1 = new Struct(arrayMemberSchema);
+        arrayMember1.put("name", "Member 1");
+        arrayMember1.put("value", 15);
+        arrayMember1.put("boolean", true);
+
+        Struct arrayMember2 = new Struct(arrayMemberSchema);
+        arrayMember2.put("name", "Member 2");
+        arrayMember2.put("value", 800);
+        arrayMember2.put("boolean", false);
+
+        List<Struct> array = new ArrayList<Struct>();
+        array.add(arrayMember1);
+        array.add(arrayMember2);
+
+        Struct recordValue = new Struct(supportedTypesSchema);
+        recordValue.put("array", array);
+
+        SourceRecord transformed = xformValue.apply(
+                new SourceRecord(null, null, "topic", 0,
+                        supportedTypesSchema, recordValue));
+
+        //Compare simple string against result after removing any spaces (just in case of variations in deepToString)
+        assertEquals("[" + arrayMember1.toString().replaceAll("\\s+", "") + "," + arrayMember2.toString().replaceAll("\\s+", "") + "]",
+                ((Struct) transformed.value()).get("array").toString().replaceAll("\\s+", ""));
+
+        Schema transformedSchema = ((Struct) transformed.value()).schema();
+        assertEquals(Schema.STRING_SCHEMA.type(), transformedSchema.field("array").schema().type());
+    }
+
+    @Test
+    public void castComplexArrayToJsonString() {
+        Map<String, Object> config = new HashMap<>();
+        config.put(Cast.ConfigName.SPEC, "array:string");
+        config.put(Cast.ConfigName.COMPLEX_STRING_AS_JSON, true);
+        xformValue.configure(config);
+
+        SchemaBuilder builder = SchemaBuilder.struct();
+        builder.field("name", Schema.STRING_SCHEMA);
+        builder.field("value", Schema.INT32_SCHEMA);
+        builder.field("boolean", Schema.BOOLEAN_SCHEMA);
+        Schema arrayMemberSchema = builder.build();
+
+        Schema arraySchema = SchemaBuilder.array(arrayMemberSchema).build();
+
+        builder = SchemaBuilder.struct();
+        builder.field("array", arraySchema);
+        Schema supportedTypesSchema = builder.build();
+
+        Struct arrayMember1 = new Struct(arrayMemberSchema);
+        arrayMember1.put("name", "Member 1");
+        arrayMember1.put("value", 15);
+        arrayMember1.put("boolean", true);
+
+        Struct arrayMember2 = new Struct(arrayMemberSchema);
+        arrayMember2.put("name", "Member 2");
+        arrayMember2.put("value", 800);
+        arrayMember2.put("boolean", false);
+
+        List<Struct> array = new ArrayList<Struct>();
+        array.add(arrayMember1);
+        array.add(arrayMember2);
+
+        Struct recordValue = new Struct(supportedTypesSchema);
+        recordValue.put("array", array);
+
+        SourceRecord transformed = xformValue.apply(
+                new SourceRecord(null, null, "topic", 0,
+                        supportedTypesSchema, recordValue));
+
+        //Compare simple string against result after removing any spaces (just in case of variations in deepToString)
+        assertEquals("[{\"name\":\"Member 1\",\"value\":15,\"boolean\":true},{\"name\":\"Member 2\",\"value\":800,\"boolean\":false}]",
+                ((Struct) transformed.value()).get("array").toString());
+
+        Schema transformedSchema = ((Struct) transformed.value()).schema();
+        assertEquals(Schema.STRING_SCHEMA.type(), transformedSchema.field("array").schema().type());
+    }
+
+    @Test
+    public void castMapToString() {
+        xformValue.configure(Collections.singletonMap(Cast.ConfigName.SPEC,
+            "map:string"));
+
+        Schema mapSchema = SchemaBuilder.map(Schema.STRING_SCHEMA, Schema.INT32_SCHEMA).build();
+        Schema supportedTypesSchema = SchemaBuilder.struct()
+                .field("map", mapSchema)
+                .build();
+
+        Map<String, Object> map = new LinkedHashMap<String, Object>();
+        map.put("key1", 1);
+        map.put("key2", 2);
+
+        Struct recordValue = new Struct(supportedTypesSchema);
+        recordValue.put("map", map);
+
+        SourceRecord transformed = xformValue.apply(
+                new SourceRecord(null, null, "topic", 0,
+                        supportedTypesSchema, recordValue));
+
+        //Compare map.toString() with result
+        assertEquals(map.toString(), ((Struct) transformed.value()).get("map").toString());
+
+        Schema transformedSchema = ((Struct) transformed.value()).schema();
+        assertEquals(Schema.STRING_SCHEMA.type(), transformedSchema.field("map").schema().type());
+    }
+
+    @Test
+    public void castComplexMapToString() {
+        xformValue.configure(Collections.singletonMap(Cast.ConfigName.SPEC,
+            "map:string"));
+
+        SchemaBuilder builder = SchemaBuilder.struct();
+        builder.field("name", Schema.STRING_SCHEMA);
+        builder.field("value", Schema.INT32_SCHEMA);
+        builder.field("boolean", Schema.BOOLEAN_SCHEMA);
+        Schema mapEntrySchema = builder.build();
+
+        Schema mapSchema = SchemaBuilder.map(Schema.STRING_SCHEMA, mapEntrySchema).build();
+
+        builder = SchemaBuilder.struct();
+        builder.field("map", mapSchema);
+        Schema supportedTypesSchema = builder.build();
+
+        Struct mapEntry1 = new Struct(mapEntrySchema);
+        mapEntry1.put("name", "Member 1");
+        mapEntry1.put("value", 15);
+        mapEntry1.put("boolean", true);
+
+        Struct mapEntry2 = new Struct(mapEntrySchema);
+        mapEntry2.put("name", "Member 2");
+        mapEntry2.put("value", 800);
+        mapEntry2.put("boolean", false);
+
+        Map<String, Object> map = new LinkedHashMap<String, Object>();
+        map.put("key1", mapEntry1);
+        map.put("key2", mapEntry2);
+
+        Struct recordValue = new Struct(supportedTypesSchema);
+        recordValue.put("map", map);
+
+        SourceRecord transformed = xformValue.apply(
+                new SourceRecord(null, null, "topic", 0,
+                        supportedTypesSchema, recordValue));
+
+        //Compare map.toString() with result
+        assertEquals(map.toString(), ((Struct) transformed.value()).get("map").toString());
+
+        Schema transformedSchema = ((Struct) transformed.value()).schema();
+        assertEquals(Schema.STRING_SCHEMA.type(), transformedSchema.field("map").schema().type());
+    }
+
+    @Test
+    public void castComplexMapToJsonString() {
+        Map<String, Object> config = new HashMap<>();
+        config.put(Cast.ConfigName.SPEC, "map:string");
+        config.put(Cast.ConfigName.COMPLEX_STRING_AS_JSON, true);
+        xformValue.configure(config);
+
+        SchemaBuilder builder = SchemaBuilder.struct();
+        builder.field("name", Schema.STRING_SCHEMA);
+        builder.field("value", Schema.INT32_SCHEMA);
+        builder.field("boolean", Schema.BOOLEAN_SCHEMA);
+        Schema mapEntrySchema = builder.build();
+
+        Schema mapSchema = SchemaBuilder.map(Schema.STRING_SCHEMA, mapEntrySchema).build();
+
+        builder = SchemaBuilder.struct();
+        builder.field("map", mapSchema);
+        Schema supportedTypesSchema = builder.build();
+
+        Struct mapEntry1 = new Struct(mapEntrySchema);
+        mapEntry1.put("name", "Member 1");
+        mapEntry1.put("value", 15);
+        mapEntry1.put("boolean", true);
+
+        Struct mapEntry2 = new Struct(mapEntrySchema);
+        mapEntry2.put("name", "Member 2");
+        mapEntry2.put("value", 800);
+        mapEntry2.put("boolean", false);
+
+        Map<String, Object> map = new LinkedHashMap<String, Object>();
+        map.put("key1", mapEntry1);
+        map.put("key2", mapEntry2);
+
+        Struct recordValue = new Struct(supportedTypesSchema);
+        recordValue.put("map", map);
+
+        SourceRecord transformed = xformValue.apply(
+                new SourceRecord(null, null, "topic", 0,
+                        supportedTypesSchema, recordValue));
+
+        //Compare JSON string of map with result
+        assertEquals("{\"key1\":{\"name\":\"Member 1\",\"value\":15,\"boolean\":true},\"key2\":{\"name\":\"Member 2\",\"value\":800,\"boolean\":false}}", 
+                ((Struct) transformed.value()).get("map").toString());
+
+        Schema transformedSchema = ((Struct) transformed.value()).schema();
+        assertEquals(Schema.STRING_SCHEMA.type(), transformedSchema.field("map").schema().type());
+    }
+
+    @Test
     public void castFieldsWithSchema() {
         Date day = new Date(MILLIS_PER_DAY);
-        xformValue.configure(Collections.singletonMap(Cast.SPEC_CONFIG, "int8:int16,int16:int32,int32:int64,int64:boolean,float32:float64,float64:boolean,boolean:int8,string:int32,bigdecimal:string,date:string,optional:int32"));
+        xformValue.configure(Collections.singletonMap(Cast.ConfigName.SPEC, "int8:int16,int16:int32,int32:int64,int64:boolean,float32:float64,float64:boolean,boolean:int8,string:int32,bigdecimal:string,date:string,optional:int32"));
 
         // Include an optional fields and fields with defaults to validate their values are passed through properly
         SchemaBuilder builder = SchemaBuilder.struct();
@@ -492,7 +735,7 @@ public class CastTest {
     @SuppressWarnings("unchecked")
     @Test
     public void castFieldsSchemaless() {
-        xformValue.configure(Collections.singletonMap(Cast.SPEC_CONFIG, "int8:int16,int16:int32,int32:int64,int64:boolean,float32:float64,float64:boolean,boolean:int8,string:int32"));
+        xformValue.configure(Collections.singletonMap(Cast.ConfigName.SPEC, "int8:int16,int16:int32,int32:int64,int64:boolean,float32:float64,float64:boolean,boolean:int8,string:int32"));
         Map<String, Object> recordValue = new HashMap<>();
         recordValue.put("int8", (byte) 8);
         recordValue.put("int16", (short) 16);
@@ -514,6 +757,216 @@ public class CastTest {
         assertEquals(true, ((Map<String, Object>) transformed.value()).get("float64"));
         assertEquals((byte) 1, ((Map<String, Object>) transformed.value()).get("boolean"));
         assertEquals(42, ((Map<String, Object>) transformed.value()).get("string"));
+    }
+
+    @Test
+    public void castFieldsWithSchemaRecursive() {
+        Map<String, Object> config = new HashMap<>();
+        config.put(Cast.ConfigName.SPEC, "int32:int64,boolean:int8,string:int32,bigdecimal:string,optional:int32,arraystring:string,mapstring:string,structstring:string");
+        config.put(Cast.ConfigName.RECURSIVE, true);
+        xformValue.configure(config);
+
+        final Schema schema = SchemaBuilder.struct()
+                .field("int32", SchemaBuilder.int32().defaultValue(2).build())
+                .field("boolean", Schema.BOOLEAN_SCHEMA)
+                .field("string", Schema.STRING_SCHEMA)
+                .field("bigdecimal", Decimal.schema(new BigDecimal(42).scale()))
+                .field("optional", Schema.OPTIONAL_FLOAT32_SCHEMA)
+                .build();
+
+        final Schema arraySchema = SchemaBuilder.array(schema);
+
+        final Schema parentASchema = SchemaBuilder.struct()
+                .field("string", Schema.STRING_SCHEMA)
+                .field("array", arraySchema)
+                .field("arraystring", arraySchema)
+                .field("struct", schema)
+                .field("structstring", schema)
+                .build();
+
+        final Schema mapSchema = SchemaBuilder.map(Schema.STRING_SCHEMA, parentASchema);
+
+        final Schema parentBSchema = SchemaBuilder.struct()
+                .field("array", arraySchema)
+                .field("arraystring", arraySchema)
+                .field("struct", parentASchema)
+                .field("structstring", parentASchema)
+                .field("map", mapSchema)
+                .field("mapstring", mapSchema)
+                .build();
+
+        final Struct struct1 = new Struct(schema)
+                .put("int32", 32)
+                .put("boolean", true)
+                .put("string", "42")
+                .put("bigdecimal", new BigDecimal(42));
+
+        final Struct struct2 = new Struct(schema)
+                .put("int32", 32)
+                .put("boolean", true)
+                .put("string", "42")
+                .put("bigdecimal", new BigDecimal(42));
+
+        final List<Object> array = new ArrayList<Object>();
+        array.add(struct1);
+        array.add(struct2);
+
+        final Struct parentAValue = new Struct(parentASchema)
+                .put("string", "42")
+                .put("array", array)
+                .put("arraystring", array)
+                .put("struct", struct1)
+                .put("structstring", struct2);
+
+        final Map<String, Object> map = new HashMap<>();
+        map.put("key1", parentAValue);
+        map.put("key2", parentAValue);
+
+        final Struct parentBValue = new Struct(parentBSchema)
+                .put("array", array)
+                .put("arraystring", array)
+                .put("struct", parentAValue)
+                .put("structstring", parentAValue)
+                .put("map", map)
+                .put("mapstring", map);
+
+        Struct transformedStruct = (Struct) xformValue.apply(new SourceRecord(null, null, "topic", 0,
+                parentBSchema, parentBValue)).value();
+
+        assertEquals(6, transformedStruct.schema().fields().size());
+        assertEquals(2, transformedStruct.getArray("array").size());
+
+        assertEquals((long) 32, ((Struct) transformedStruct.getArray("array").get(0)).get("int32"));
+        assertEquals(2L, ((Struct) transformedStruct.getArray("array").get(0)).schema().field("int32").schema().defaultValue());
+        assertEquals((byte) 1, ((Struct) transformedStruct.getArray("array").get(0)).get("boolean"));
+        assertEquals(42, ((Struct) transformedStruct.getArray("array").get(0)).get("string"));
+        assertEquals("42", ((Struct) transformedStruct.getArray("array").get(0)).get("bigdecimal"));
+        assertNull(((Struct) transformedStruct.getArray("array").get(0)).get("optional"));
+
+        assertEquals(transformedStruct.getArray("array").get(0), transformedStruct.getArray("array").get(1));
+
+        assertEquals(array.toString(), transformedStruct.get("arraystring"));
+
+        assertEquals(42, transformedStruct.getStruct("struct").get("string"));
+
+        assertEquals(2, transformedStruct.getStruct("struct").getArray("array").size());
+
+        assertEquals((long) 32, ((Struct) transformedStruct.getStruct("struct").getArray("array").get(0)).get("int32"));
+        assertEquals(2L, ((Struct) transformedStruct.getStruct("struct").getArray("array").get(0)).schema().field("int32").schema().defaultValue());
+        assertEquals((byte) 1, ((Struct) transformedStruct.getStruct("struct").getArray("array").get(0)).get("boolean"));
+        assertEquals(42, ((Struct) transformedStruct.getStruct("struct").getArray("array").get(0)).get("string"));
+        assertEquals("42", ((Struct) transformedStruct.getStruct("struct").getArray("array").get(0)).get("bigdecimal"));
+        assertNull(((Struct) transformedStruct.getStruct("struct").getArray("array").get(0)).get("optional"));
+
+        assertEquals(transformedStruct.getStruct("struct").getArray("array").get(0), transformedStruct.getStruct("struct").getArray("array").get(1));
+
+        assertEquals(array.toString(), transformedStruct.getStruct("struct").get("arraystring"));
+
+        assertEquals((long) 32, transformedStruct.getStruct("struct").getStruct("struct").get("int32"));
+        assertEquals(2L, transformedStruct.getStruct("struct").getStruct("struct").schema().field("int32").schema().defaultValue());
+        assertEquals((byte) 1, transformedStruct.getStruct("struct").getStruct("struct").get("boolean"));
+        assertEquals(42, transformedStruct.getStruct("struct").getStruct("struct").get("string"));
+        assertEquals("42", transformedStruct.getStruct("struct").getStruct("struct").get("bigdecimal"));
+        assertNull(transformedStruct.getStruct("struct").getStruct("struct").get("optional"));
+
+        assertEquals(struct2.toString(), transformedStruct.getStruct("struct").get("structstring"));
+
+        assertEquals(parentAValue.toString(), transformedStruct.get("structstring"));
+
+        assertEquals(2, transformedStruct.getMap("map").size());
+
+        assertEquals(42, ((Struct) transformedStruct.getMap("map").get("key1")).get("string"));
+
+        assertEquals(2, ((Struct) transformedStruct.getMap("map").get("key1")).getArray("array").size());
+        assertEquals((long) 32, ((Struct) ((Struct) transformedStruct.getMap("map").get("key1")).getArray("array").get(0)).get("int32"));
+        assertEquals(2L, ((Struct) ((Struct) transformedStruct.getMap("map").get("key1")).getArray("array").get(0)).schema().field("int32").schema().defaultValue());
+        assertEquals((byte) 1, ((Struct) ((Struct) transformedStruct.getMap("map").get("key1")).getArray("array").get(0)).get("boolean"));
+        assertEquals(42, ((Struct) ((Struct) transformedStruct.getMap("map").get("key1")).getArray("array").get(0)).get("string"));
+        assertEquals("42", ((Struct) ((Struct) transformedStruct.getMap("map").get("key1")).getArray("array").get(0)).get("bigdecimal"));
+        assertNull(((Struct) ((Struct) transformedStruct.getMap("map").get("key1")).getArray("array").get(0)).get("optional"));
+
+        assertEquals(((Struct) transformedStruct.getMap("map").get("key1")).getArray("array").get(0), ((Struct) transformedStruct.getMap("map").get("key1")).getArray("array").get(1));
+
+        assertEquals(array.toString(), ((Struct) transformedStruct.getMap("map").get("key1")).get("arraystring"));
+
+        assertEquals((long) 32, ((Struct) transformedStruct.getMap("map").get("key1")).getStruct("struct").get("int32"));
+        assertEquals(2L, ((Struct) transformedStruct.getMap("map").get("key1")).getStruct("struct").schema().field("int32").schema().defaultValue());
+        assertEquals((byte) 1, ((Struct) transformedStruct.getMap("map").get("key1")).getStruct("struct").get("boolean"));
+        assertEquals(42, ((Struct) transformedStruct.getMap("map").get("key1")).getStruct("struct").get("string"));
+        assertEquals("42", ((Struct) transformedStruct.getMap("map").get("key1")).getStruct("struct").get("bigdecimal"));
+        assertNull(((Struct) transformedStruct.getMap("map").get("key1")).getStruct("struct").get("optional"));
+
+        assertEquals(struct2.toString(), ((Struct) transformedStruct.getMap("map").get("key1")).get("structstring"));
+
+        assertEquals(transformedStruct.getMap("map").get("key1"), transformedStruct.getMap("map").get("key2"));
+    }
+
+    @SuppressWarnings("unchecked")
+    @Test
+    public void castFieldsSchemalessRecursive() {
+        Map<String, Object> config = new HashMap<>();
+        config.put(Cast.ConfigName.SPEC, "boolean:int8,int32:string,string:int32,childstring:string,parentstring:string,arraystring:string");
+        config.put(Cast.ConfigName.RECURSIVE, true);
+        xformValue.configure(config);
+
+        Map<String, Object> child = new HashMap<String, Object>();
+        child.put("boolean", true);
+        child.put("int32", 42);
+        child.put("string", "42");
+
+        List<Object> array = new ArrayList<Object>();
+        array.add(child);
+
+        Map<String, Object> parentA = new HashMap<String, Object>();
+        parentA.put("boolean", true);
+        parentA.put("int32", 42);
+        parentA.put("string", "42");
+        parentA.put("child", child);
+        parentA.put("childstring", child);
+        parentA.put("array", array);
+        parentA.put("arraystring", array);
+
+        Map<String, Object> parentB = new HashMap<String, Object>();
+        parentB.put("boolean", true);
+        parentB.put("int32", 42);
+        parentB.put("string", "42");
+        parentB.put("parent", parentA);
+        parentB.put("parentstring", parentA);
+
+        SourceRecord transformed = xformValue.apply(new SourceRecord(null, null, "topic", 0,
+                null, parentB));
+
+        assertNull(transformed.valueSchema());
+
+        Map<String, Object> updatedMap = (Map<String, Object>) transformed.value();
+
+        assertEquals(5, updatedMap.size());
+        assertEquals((byte) 1, updatedMap.get("boolean"));
+        assertEquals("42", updatedMap.get("int32"));
+        assertEquals(42, updatedMap.get("string"));
+
+        assertEquals(7, ((Map<String, Object>) updatedMap.get("parent")).size());
+        assertEquals((byte) 1, ((Map<String, Object>) updatedMap.get("parent")).get("boolean"));
+        assertEquals("42", ((Map<String, Object>) updatedMap.get("parent")).get("int32"));
+        assertEquals(42, ((Map<String, Object>) updatedMap.get("parent")).get("string"));
+
+        assertEquals(3, ((Map<String, Object>) ((Map<String, Object>) updatedMap.get("parent")).get("child")).size());
+        assertEquals((byte) 1, ((Map<String, Object>) ((Map<String, Object>) updatedMap.get("parent")).get("child")).get("boolean"));
+        assertEquals("42", ((Map<String, Object>) ((Map<String, Object>) updatedMap.get("parent")).get("child")).get("int32"));
+        assertEquals(42, ((Map<String, Object>) ((Map<String, Object>) updatedMap.get("parent")).get("child")).get("string"));
+
+        assertEquals(child.toString(), ((Map<String, Object>) updatedMap.get("parent")).get("childstring"));
+
+        assertEquals(1, ((List<Object>) ((Map<String, Object>) updatedMap.get("parent")).get("array")).size());
+
+        assertEquals(3, ((Map<String, Object>) ((List<Object>) ((Map<String, Object>) updatedMap.get("parent")).get("array")).get(0)).size());
+        assertEquals((byte) 1, ((Map<String, Object>) ((List<Object>) ((Map<String, Object>) updatedMap.get("parent")).get("array")).get(0)).get("boolean"));
+        assertEquals("42", ((Map<String, Object>) ((List<Object>) ((Map<String, Object>) updatedMap.get("parent")).get("array")).get(0)).get("int32"));
+        assertEquals(42, ((Map<String, Object>) ((List<Object>) ((Map<String, Object>) updatedMap.get("parent")).get("array")).get(0)).get("string"));
+
+        assertEquals(array.toString(), ((Map<String, Object>) updatedMap.get("parent")).get("arraystring"));
+
+        assertEquals(parentA.toString(), updatedMap.get("parentstring"));
     }
 
 }
