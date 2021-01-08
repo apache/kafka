@@ -72,8 +72,12 @@ class KafkaNetworkChannelTest {
 
     client.enableBlockingUntilWakeup(1)
 
-    val ioThread: Thread = new Thread() {
+    val ioThread = new Thread() {
       override def run(): Unit = {
+        // Block in poll until we get the expected wakeup
+        channel.pollOnce()
+
+        // Poll a second time to send request and receive response
         channel.pollOnce()
       }
     }
