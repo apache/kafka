@@ -18,7 +18,7 @@ package kafka.server
 
 import java.util
 import java.util.concurrent.atomic.{AtomicBoolean, AtomicLong}
-import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.{ConcurrentHashMap, TimeUnit}
 import kafka.api.LeaderAndIsr
 import kafka.metrics.KafkaMetricsGroup
 import kafka.utils.{KafkaScheduler, Logging, Scheduler}
@@ -131,7 +131,7 @@ class DefaultAlterIsrManager(
     if (unsentIsrUpdates.putIfAbsent(alterIsrItem.topicPartition, alterIsrItem) == null) {
       if (inflightRequest.compareAndSet(false, true)) {
         // optimistically set the inflight flag even though we haven't sent the request yet
-        scheduler.schedule("send-alter-isr", propagateIsrChanges)
+        scheduler.schedule("send-alter-isr", propagateIsrChanges, 1, -1, TimeUnit.MILLISECONDS)
       }
       true
     } else {
@@ -154,7 +154,7 @@ class DefaultAlterIsrManager(
       lastIsrPropagationMs.set(now)
       sendRequest(inflightAlterIsrItems.toSeq)
     } else {
-      // Never sent a request, so clear the flag
+      // No request was sent, so clear the flag
       inflightRequest.set(false)
     }
   }
@@ -170,16 +170,15 @@ class DefaultAlterIsrManager(
     controllerChannelManager.sendRequest(new AlterIsrRequest.Builder(message),
       new ControllerRequestCompletionHandler {
         override def onComplete(response: ClientResponse): Unit = {
-          try {
-            debug(s"Received AlterIsr response $response")
-            val body = response.responseBody().asInstanceOf[AlterIsrResponse]
-            handleAlterIsrResponse(body, message.brokerEpoch, inflightAlterIsrItems)
-          } finally {
-            // Make sure we send any waiting items or clear the inflight flag
-            if (!inflightRequest.get()) {
-              throw new IllegalStateException("AlterIsr response callback called when no requests were in flight")
-            }
-            propagateIsrChanges()
+          debug(s"Received AlterIsr response $response")
+          val body = response.responseBody().asInstanceOf[AlterIsrResponse]
+          handleAlterIsrResponse(body, message.brokerEpoch, inflightAlterIsrItems) match {
+            case Errors.NONE =>
+              // In the normal case, check for pending updates to send immediately
+              scheduler.schedule("send-alter-isr", propagateIsrChanges, 1, -1, TimeUnit.MILLISECONDS)
+            case _ =>
+              // If we received a top-level error from the controller, retry a request in the near future
+              scheduler.schedule("send-alter-isr", propagateIsrChanges, 50, -1, TimeUnit.MILLISECONDS)
           }
         }
 
@@ -214,7 +213,7 @@ class DefaultAlterIsrManager(
 
   def handleAlterIsrResponse(alterIsrResponse: AlterIsrResponse,
                              sentBrokerEpoch: Long,
-                             inflightAlterIsrItems: Seq[AlterIsrItem]): Unit = {
+                             inflightAlterIsrItems: Seq[AlterIsrItem]): Errors = {
     val data: AlterIsrResponseData = alterIsrResponse.data
 
     Errors.forCode(data.errorCode) match {
@@ -261,5 +260,7 @@ class DefaultAlterIsrManager(
       case e: Errors =>
         warn(s"Controller returned an unexpected top-level error when handling AlterIsr request: $e")
     }
+
+    Errors.forCode(data.errorCode)
   }
 }

@@ -108,10 +108,9 @@ class AlterIsrManagerTest {
     for (i <- 0 to 9) {
       alterIsrManager.submit(AlterIsrItem(new TopicPartition(topic, i),
         new LeaderAndIsr(1, 1, List(1,2,3), 10), _ => {}, 0))
-      time.sleep(1)
     }
 
-    time.sleep(50)
+    time.sleep(1)
     scheduler.tick()
 
     // This should not be included in the batch
@@ -161,7 +160,7 @@ class AlterIsrManagerTest {
     alterIsrManager.start()
     isrs.foreach(alterIsrManager.submit)
 
-    time.sleep(100)
+    time.sleep(1)
     scheduler.tick()
 
     EasyMock.verify(brokerToController)
@@ -238,14 +237,14 @@ class AlterIsrManagerTest {
     alterIsrManager.start()
     alterIsrManager.submit(AlterIsrItem(tp0, new LeaderAndIsr(1, 1, List(1,2,3), 10), _ => {}, 0))
 
-    time.sleep(100)
+    time.sleep(1)
     scheduler.tick() // Triggers a request
 
     // Enqueue more updates
     alterIsrManager.submit(AlterIsrItem(tp1, new LeaderAndIsr(1, 1, List(1,2,3), 10), _ => {}, 0))
     alterIsrManager.submit(AlterIsrItem(tp2, new LeaderAndIsr(1, 1, List(1,2,3), 10), _ => {}, 0))
 
-    time.sleep(100)
+    time.sleep(1)
     scheduler.tick() // Trigger the schedule again, but no request this time
 
     EasyMock.verify(brokerToController)
