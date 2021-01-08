@@ -17,10 +17,10 @@
 package kafka.server
 
 import java.util
-import java.util.concurrent.atomic.{AtomicBoolean, AtomicLong}
 import java.util.concurrent.{ConcurrentHashMap, TimeUnit}
 import kafka.api.LeaderAndIsr
 import kafka.metrics.KafkaMetricsGroup
+import kafka.utils.CoreUtils.{inReadLock, inWriteLock}
 import kafka.utils.{KafkaScheduler, Logging, Scheduler}
 import kafka.zk.KafkaZkClient
 import org.apache.kafka.clients.ClientResponse
@@ -31,6 +31,7 @@ import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests.{AlterIsrRequest, AlterIsrResponse}
 import org.apache.kafka.common.utils.Time
 
+import java.util.concurrent.locks.ReentrantReadWriteLock
 import scala.collection.mutable
 import scala.collection.mutable.ListBuffer
 import scala.jdk.CollectionConverters._
@@ -115,9 +116,12 @@ class DefaultAlterIsrManager(
   private val unsentIsrUpdates: util.Map[TopicPartition, AlterIsrItem] = new ConcurrentHashMap[TopicPartition, AlterIsrItem]()
 
   // Used to allow only one in-flight request at a time
-  private val inflightRequest: AtomicBoolean = new AtomicBoolean(false)
+  @volatile
+  private var inflightRequest: Boolean = false
 
-  private val lastIsrPropagationMs = new AtomicLong(0)
+  // Protects the updates of the inflight flag and prevents new pending items from being submitted while we are
+  // preparing a request
+  private val inflightLock: ReentrantReadWriteLock = new ReentrantReadWriteLock()
 
   override def start(): Unit = {
     controllerChannelManager.start()
@@ -128,34 +132,39 @@ class DefaultAlterIsrManager(
   }
 
   override def submit(alterIsrItem: AlterIsrItem): Boolean = {
-    if (unsentIsrUpdates.putIfAbsent(alterIsrItem.topicPartition, alterIsrItem) == null) {
-      if (inflightRequest.compareAndSet(false, true)) {
-        // optimistically set the inflight flag even though we haven't sent the request yet
-        scheduler.schedule("send-alter-isr", propagateIsrChanges, 1, -1, TimeUnit.MILLISECONDS)
+    val (didSubmit, needsPropagate) = inReadLock(inflightLock) {
+      if (unsentIsrUpdates.putIfAbsent(alterIsrItem.topicPartition, alterIsrItem) == null) {
+        (true, !inflightRequest)
+      } else {
+        (false, false)
       }
-      true
-    } else {
-      false
     }
+    if (needsPropagate) {
+      propagateIsrChanges(true)
+    }
+    didSubmit
   }
 
   override def clearPending(topicPartition: TopicPartition): Unit = {
     unsentIsrUpdates.remove(topicPartition)
   }
 
-  private def propagateIsrChanges(): Unit = {
-    // Updates could have been cleared by new LeaderAndIsr, so check again
-    if (!unsentIsrUpdates.isEmpty) {
-      // Copy current unsent ISRs but don't remove from the map
-      val inflightAlterIsrItems = new ListBuffer[AlterIsrItem]()
-      unsentIsrUpdates.values().forEach(item => inflightAlterIsrItems.append(item))
+  private def propagateIsrChanges(checkInflight: Boolean): Unit = inWriteLock(inflightLock) {
+    // If we're checking for unsent items in the response handler, we ignore the inflight flag and send a request if
+    // there are any unsent items. Otherwise, we got here from the submit(AlterIsrItem) method and need to check that
+    // there is not an inflight request.
+    if (!checkInflight || !inflightRequest) {
+      if (!unsentIsrUpdates.isEmpty) {
+        // Copy current unsent ISRs but don't remove from the map
+        val inflightAlterIsrItems = new ListBuffer[AlterIsrItem]()
+        unsentIsrUpdates.values().forEach(item => inflightAlterIsrItems.append(item))
 
-      val now = time.milliseconds()
-      lastIsrPropagationMs.set(now)
-      sendRequest(inflightAlterIsrItems.toSeq)
-    } else {
-      // No request was sent, so clear the flag
-      inflightRequest.set(false)
+        sendRequest(inflightAlterIsrItems.toSeq)
+        inflightRequest = true
+      } else {
+        // No items were pending, so no request was sent -- clear the inflight flag
+        inflightRequest = false
+      }
     }
   }
 
@@ -166,7 +175,7 @@ class DefaultAlterIsrManager(
 
     // We will not timeout AlterISR request, instead letting it retry indefinitely
     // until a response is received, or a new LeaderAndIsr overwrites the existing isrState
-    // which causes the inflight requests to be ignored.
+    // which causes the response for those partitions to be ignored.
     controllerChannelManager.sendRequest(new AlterIsrRequest.Builder(message),
       new ControllerRequestCompletionHandler {
         override def onComplete(response: ClientResponse): Unit = {
@@ -175,10 +184,10 @@ class DefaultAlterIsrManager(
           handleAlterIsrResponse(body, message.brokerEpoch, inflightAlterIsrItems) match {
             case Errors.NONE =>
               // In the normal case, check for pending updates to send immediately
-              scheduler.schedule("send-alter-isr", propagateIsrChanges, 1, -1, TimeUnit.MILLISECONDS)
+              propagateIsrChanges(false)
             case _ =>
-              // If we received a top-level error from the controller, retry a request in the near future
-              scheduler.schedule("send-alter-isr", propagateIsrChanges, 50, -1, TimeUnit.MILLISECONDS)
+              // If we received a top-level error from the controller, retry the request in the near future
+              scheduler.schedule("send-alter-isr", () => propagateIsrChanges(false), 50, -1, TimeUnit.MILLISECONDS)
           }
         }
 
