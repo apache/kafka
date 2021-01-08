@@ -878,9 +878,13 @@ public class StreamThread extends Thread {
         final long pollLatency = advanceNowAndComputeLatency();
 
         final int numRecords = records.count();
-        if (numRecords > 0) {
-            log.debug("Main Consumer poll completed in {} ms and fetched {} records", pollLatency, numRecords);
-        }
+
+        log.debug(
+            "Main Consumer poll completed in {} ms and fetched {} records and {} metadata",
+            pollLatency,
+            numRecords,
+            records.metadata().size()
+        );
 
         pollSensor.record(pollLatency, now);
 

@@ -109,6 +109,10 @@ public class PartitionGroup {
         fetchedLags.put(partition, metadata.lag());
     }
 
+    public void clearFetchedMetadata() {
+        fetchedLags.clear();
+    }
+
     public boolean readyToProcess(final long wallClockTime) {
         // Log-level strategy:
         //  TRACE for messages that don't wait for fetches, since these may be logged at extremely high frequency
@@ -117,7 +121,7 @@ public class PartitionGroup {
         //  INFO  when we enforce processing, since this has to wait for fetches AND may result in disorder
 
         if (maxTaskIdleMs == StreamsConfig.MAX_TASK_IDLE_MS_DISABLED) {
-            if (LOG.isTraceEnabled() && !allBuffered) {
+            if (LOG.isTraceEnabled() && !allBuffered && totalBuffered > 0) {
                 final Set<TopicPartition> bufferedPartitions = new HashSet<>();
                 final Set<TopicPartition> emptyPartitions = new HashSet<>();
                 for (final Map.Entry<TopicPartition, RecordQueue> entry : partitionQueues.entrySet()) {
