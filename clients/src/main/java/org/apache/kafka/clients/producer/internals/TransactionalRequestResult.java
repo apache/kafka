@@ -71,7 +71,7 @@ public final class TransactionalRequestResult {
                 throw error();
             }
             if (!success) {
-                throw new TimeoutException("Timeout expired after " + timeout + unit.name().toLowerCase(Locale.ROOT) + " while awaiting " + operation);
+                throw new TimeoutException("Timeout expired after " + timeout + " " + unit.name().toLowerCase(Locale.ROOT) + " while awaiting " + operation);
             }
         } catch (InterruptedException e) {
             throw new InterruptException("Received interrupt while awaiting " + operation, e);
