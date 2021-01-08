@@ -59,13 +59,19 @@ public final class ConfigResource {
 
     /**
      * Create an instance of this class with the provided parameters.
+     * An empty name is used to refer to the default resource of a resource type.
+     * Default configs are not supported for topic resources.
      *
      * @param type a non-null resource type
      * @param name a non-null resource name
+     * @throws IllegalArgumentException if an empty name is passed for a topic resource.
      */
     public ConfigResource(Type type, String name) {
         Objects.requireNonNull(type, "type should not be null");
         Objects.requireNonNull(name, "name should not be null");
+        if (type == Type.TOPIC && name.isEmpty()) {
+            throw new IllegalArgumentException("Default configs are not supported for topic resources");
+        }
         this.type = type;
         this.name = name;
     }
