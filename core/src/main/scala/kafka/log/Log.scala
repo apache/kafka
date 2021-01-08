@@ -2143,7 +2143,7 @@ class Log(@volatile private var _dir: File,
 
   private def completeTruncation(
     startOffset: Long,
-    endOffset: Long,
+    endOffset: Long
   ): Unit = {
     logStartOffset = startOffset
     nextOffsetMetadata = LogOffsetMetadata(endOffset, activeSegment.baseOffset, activeSegment.size)
