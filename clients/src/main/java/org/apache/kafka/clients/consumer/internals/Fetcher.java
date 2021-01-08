@@ -101,6 +101,7 @@ import java.util.Optional;
 import java.util.PriorityQueue;
 import java.util.Queue;
 import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
@@ -148,6 +149,7 @@ public class Fetcher<K, V> implements Closeable {
     private final FetchManagerMetrics sensors;
     private final SubscriptionState subscriptions;
     private final ConcurrentLinkedQueue<CompletedFetch> completedFetches;
+    private final ConcurrentHashMap<TopicPartition, Long> cachedResponseFetches;
     private final BufferSupplier decompressionBufferSupplier = BufferSupplier.create();
     private final Deserializer<K> keyDeserializer;
     private final Deserializer<V> valueDeserializer;
@@ -199,6 +201,7 @@ public class Fetcher<K, V> implements Closeable {
         this.keyDeserializer = keyDeserializer;
         this.valueDeserializer = valueDeserializer;
         this.completedFetches = new ConcurrentLinkedQueue<>();
+        this.cachedResponseFetches = new ConcurrentHashMap<>();
         this.sensors = new FetchManagerMetrics(metrics, metricsRegistry);
         this.retryBackoffMs = retryBackoffMs;
         this.requestTimeoutMs = requestTimeoutMs;
@@ -263,7 +266,7 @@ public class Fetcher<K, V> implements Closeable {
                     .rackId(clientRackId);
 
             if (log.isDebugEnabled()) {
-                log.debug("Sending {} {} to broker {}", isolationLevel, data.toString(), fetchTarget);
+                log.debug("Sending {} {} to broker {}", isolationLevel, data, fetchTarget);
             }
             RequestFuture<ClientResponse> future = client.send(fetchTarget, request);
             // We add the node to the set of nodes with pending fetch requests before adding the
@@ -320,6 +323,15 @@ public class Fetcher<K, V> implements Closeable {
 
                                     completedFetches.add(new CompletedFetch(partition, partitionData,
                                             metricAggregator, batches, fetchOffset, responseVersion, resp.receivedTimeMs()));
+                                }
+                            }
+
+                            // Also, make note of any requested partitions that the broker didn't include a response
+                            // at all for, which indicates that there are no data or metadata updates.
+                            final Set<TopicPartition> responseKeys = response.responseData().keySet();
+                            for (TopicPartition requestKey : request.fetchData().keySet()) {
+                                if (!responseKeys.contains(requestKey)) {
+                                    cachedResponseFetches.put(requestKey, resp.receivedTimeMs());
                                 }
                             }
 
@@ -640,34 +652,24 @@ public class Fetcher<K, V> implements Closeable {
                     TopicPartition partition = nextInLineFetch.partition;
 
                     if (subscriptions.isAssigned(partition)) {
+                        // initializeCompletedFetch, above, has already persisted the metadata from the fetch in the
+                        // SubscriptionState, so we can just read it out, which in particular lets us re-use the logic
+                        // for determining the end offset
                         final long receivedTimestamp = nextInLineFetch.receivedTimestamp;
-
-                        final long startOffset = nextInLineFetch.partitionData.logStartOffset();
-
-                        // read_uncommitted:
-                        //that is, the offset of the last successfully replicated message plus one
-                        final long hwm = nextInLineFetch.partitionData.highWatermark();
-                        // read_committed:
-                        //the minimum of the high watermark and the smallest offset of any open transaction
-                        final long lso = nextInLineFetch.partitionData.lastStableOffset();
-
-                        // end offset is:
-                        final long endOffset =
-                            isolationLevel == IsolationLevel.READ_UNCOMMITTED ? hwm : lso;
-
+                        final Long beginningOffset = subscriptions.logStartOffset(partition);
+                        final Long endOffset = subscriptions.logEndOffset(partition, isolationLevel);
                         final FetchPosition fetchPosition = subscriptions.position(partition);
 
                         final FetchedRecords.FetchMetadata fetchMetadata = fetched.metadata().get(partition);
-
                         if (fetchMetadata == null
                             || !fetchMetadata.position().offsetEpoch.isPresent()
                             || fetchPosition.offsetEpoch.isPresent()
                             && fetchMetadata.position().offsetEpoch.get() <= fetchPosition.offsetEpoch.get()) {
 
-                            fetched.addMetadata(
-                                partition,
-                                new FetchedRecords.FetchMetadata(receivedTimestamp, fetchPosition, startOffset, endOffset)
-                            );
+                            final FetchedRecords.FetchMetadata metadata =
+                                new FetchedRecords.FetchMetadata(receivedTimestamp, fetchPosition, beginningOffset, endOffset);
+
+                            fetched.addMetadata(partition, metadata);
                         }
                     }
 
@@ -676,6 +678,29 @@ public class Fetcher<K, V> implements Closeable {
                         recordsRemaining -= records.size();
                     }
                 }
+            }
+
+            // if the broker determines that it has nothing new to tell us about a partition, then it will just tell
+            // us nothing at all to conserve bytes on the wire. However, we desire to convey to users which partitions
+            // have been fetched via ConsumerRecords.metadata(), so we report our locally cached metadata for such
+            // partitions.
+            final Iterator<Map.Entry<TopicPartition, Long>> entries = cachedResponseFetches.entrySet().iterator();
+            while (entries.hasNext()) {
+                final Map.Entry<TopicPartition, Long> next = entries.next();
+                final TopicPartition partition = next.getKey();
+                if (subscriptions.isAssigned(partition)) {
+                    final FetchPosition position = subscriptions.position(partition);
+                    final Long startOffset = subscriptions.logStartOffset(partition);
+                    final Long endOffset = subscriptions.logEndOffset(partition, isolationLevel);
+                    final FetchedRecords.FetchMetadata metadata = new FetchedRecords.FetchMetadata(
+                        next.getValue(),
+                        position,
+                        startOffset,
+                        endOffset
+                    );
+                    fetched.addMetadata(partition, metadata);
+                }
+                entries.remove();
             }
         } catch (KafkaException e) {
             if (fetched.isEmpty())

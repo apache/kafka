@@ -2077,10 +2077,10 @@ public class KafkaConsumerTest {
 
         // verify that the consumer computes the correct metadata based on the fetch response
         final ConsumerRecords.Metadata actualMetadata = records.metadata().get(tp0);
-        assertEquals(1L, actualMetadata.beginningOffset());
-        assertEquals(100L, actualMetadata.endOffset());
+        assertEquals(1L, (long) actualMetadata.beginningOffset());
+        assertEquals(100L, (long) actualMetadata.endOffset());
         assertEquals(55L, (long) actualMetadata.position());
-        assertEquals(45L, actualMetadata.lag());
+        assertEquals(45L, (long) actualMetadata.lag());
         consumer.close(Duration.ZERO);
     }
 
@@ -2117,18 +2117,18 @@ public class KafkaConsumerTest {
 
         assertEquals(5, records.records(tp0).size());
         final ConsumerRecords.Metadata tp0Metadata = records.metadata().get(tp0);
-        assertEquals(1L, tp0Metadata.beginningOffset());
-        assertEquals(100L, tp0Metadata.endOffset());
+        assertEquals(1L, (long) tp0Metadata.beginningOffset());
+        assertEquals(100L, (long) tp0Metadata.endOffset());
         assertEquals(55L, (long) tp0Metadata.position());
-        assertEquals(45L, tp0Metadata.lag());
+        assertEquals(45L, (long) tp0Metadata.lag());
 
         // we may get back metadata for other assigned partitions even if we don't get records for them
         assertEquals(0, records.records(tp1).size());
         final ConsumerRecords.Metadata tp1Metadata = records.metadata().get(tp1);
-        assertEquals(0L, tp1Metadata.beginningOffset());
-        assertEquals(30L, tp1Metadata.endOffset());
+        assertEquals(0L, (long) tp1Metadata.beginningOffset());
+        assertEquals(30L, (long) tp1Metadata.endOffset());
         assertEquals(10L, (long) tp1Metadata.position());
-        assertEquals(20L, tp1Metadata.lag());
+        assertEquals(20L, (long) tp1Metadata.lag());
 
         consumer.close(Duration.ZERO);
     }
@@ -2160,10 +2160,10 @@ public class KafkaConsumerTest {
 
         // ... but we can still get metadata that was in the fetch response
         final ConsumerRecords.Metadata actualMetadata = records.metadata().get(tp0);
-        assertEquals(1L, actualMetadata.beginningOffset());
-        assertEquals(100L, actualMetadata.endOffset());
+        assertEquals(1L, (long) actualMetadata.beginningOffset());
+        assertEquals(100L, (long) actualMetadata.endOffset());
         assertEquals(50L, (long) actualMetadata.position());
-        assertEquals(50L, actualMetadata.lag());
+        assertEquals(50L, (long) actualMetadata.lag());
 
         consumer.close(Duration.ZERO);
     }

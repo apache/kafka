@@ -46,13 +46,13 @@ public class ConsumerRecords<K, V> implements Iterable<ConsumerRecord<K, V>> {
 
         private final long receivedTimestamp;
         private final Long position;
-        private final long beginningOffset;
-        private final long endOffset;
+        private final Long beginningOffset;
+        private final Long endOffset;
 
         public Metadata(final long receivedTimestamp,
                         final Long position,
-                        final long beginningOffset,
-                        final long endOffset) {
+                        final Long beginningOffset,
+                        final Long endOffset) {
             this.receivedTimestamp = receivedTimestamp;
             this.position = position;
             this.beginningOffset = beginningOffset;
@@ -76,14 +76,14 @@ public class ConsumerRecords<K, V> implements Iterable<ConsumerRecord<K, V>> {
         /**
          * @return The lag between the next position to fetch and the current end of the partition
          */
-        public long lag() {
-            return endOffset - position;
+        public Long lag() {
+            return endOffset == null || position == null ? null : endOffset - position;
         }
 
         /**
          * @return The current first offset in the partition.
          */
-        public long beginningOffset() {
+        public Long beginningOffset() {
             return beginningOffset;
         }
 
@@ -93,8 +93,18 @@ public class ConsumerRecords<K, V> implements Iterable<ConsumerRecord<K, V>> {
          * replicated offset plus one. Under "read_committed," this is the minimum of the last successfully
          * replicated offset plus one or the smallest offset of any open transaction.
          */
-        public long endOffset() {
+        public Long endOffset() {
             return endOffset;
+        }
+
+        @Override
+        public String toString() {
+            return "Metadata{" +
+                "receivedTimestamp=" + receivedTimestamp +
+                ", position=" + position +
+                ", beginningOffset=" + beginningOffset +
+                ", endOffset=" + endOffset +
+                '}';
         }
     }
 
@@ -217,7 +227,7 @@ public class ConsumerRecords<K, V> implements Iterable<ConsumerRecord<K, V>> {
     }
 
     public boolean isEmpty() {
-        return records.isEmpty();
+        return records.isEmpty() && metadata.isEmpty();
     }
 
     @SuppressWarnings("unchecked")
