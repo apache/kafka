@@ -1054,8 +1054,9 @@ class LogTest {
     // Truncation causes the map end offset to reset to 0
     EasyMock.expect(stateManager.mapEndOffset).andReturn(0L)
     // We skip directly to updating the map end offset
-    stateManager.updateMapEndOffset(1L)
-    EasyMock.expectLastCall()
+    EasyMock.expect(stateManager.updateMapEndOffset(1L))
+    EasyMock.expect(stateManager.onHighWatermarkUpdated(0L))
+
     // Finally, we take a snapshot
     stateManager.takeSnapshot()
     EasyMock.expectLastCall().once()

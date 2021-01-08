@@ -383,28 +383,28 @@ class Log(@volatile private var _dir: File,
    * @return the updated high watermark offset
    */
   def updateHighWatermark(hw: Long): Long = {
-    val newHighWatermark = if (hw < logStartOffset)
-      logStartOffset
-    else if (hw > logEndOffset)
-      logEndOffset
-    else
-      hw
-    updateHighWatermarkMetadata(LogOffsetMetadata(newHighWatermark))
-    newHighWatermark
+    updateHighWatermark(LogOffsetMetadata(hw))
   }
 
-  def updateHighWatermarkOffsetMetadata(hw: LogOffsetMetadata): Long = {
-    val newHighWatermark = if (hw.messageOffset < logStartOffset) {
-      updateHighWatermarkMetadata(LogOffsetMetadata(logStartOffset))
-      logStartOffset
-    } else if (hw.messageOffset > logEndOffset) {
-      updateHighWatermarkMetadata(logEndOffsetMetadata)
-      logEndOffset
+  /**
+   * Update high watermark with offset metadata. The new high watermark will be lower
+   * bounded by the log start offset and upper bounded by the log end offset.
+   *
+   * @param highWatermarkMetadata the suggested high watermark with offset metadata
+   * @return the updated high watermark offset
+   */
+  def updateHighWatermark(highWatermarkMetadata: LogOffsetMetadata): Long = {
+    val endOffsetMetadata = logEndOffsetMetadata
+    val newHighWatermarkMetadata = if (highWatermarkMetadata.messageOffset < logStartOffset) {
+      LogOffsetMetadata(logStartOffset)
+    } else if (highWatermarkMetadata.messageOffset >= endOffsetMetadata.messageOffset) {
+      endOffsetMetadata
     } else {
-      updateHighWatermarkMetadata(hw)
-      hw.messageOffset
+      highWatermarkMetadata
     }
-    newHighWatermark
+
+    updateHighWatermarkMetadata(newHighWatermarkMetadata)
+    newHighWatermarkMetadata.messageOffset
   }
 
   /**
@@ -2102,12 +2102,10 @@ class Log(@volatile private var _dir: File,
             activeSegment.truncateTo(targetOffset)
             leaderEpochCache.foreach(_.truncateFromEnd(targetOffset))
 
-            // Load producer state prior to adjusting log start and end offsets
-            // in case the first unstable offset is invalidated by the truncation.
-            loadProducerState(targetOffset, reloadFromCleanShutdown = false)
-
-            updateLogEndOffset(targetOffset)
-            updateLogStartOffset(math.min(targetOffset, this.logStartOffset))
+            completeTruncation(
+              startOffset = math.min(targetOffset, logStartOffset),
+              endOffset = targetOffset
+            )
           }
           true
         }
@@ -2133,16 +2131,25 @@ class Log(@volatile private var _dir: File,
           initFileSize = initFileSize,
           preallocate = config.preallocate))
         leaderEpochCache.foreach(_.clearAndFlush())
-
-        // Clear producer state prior to adjusting log start and end offsets
-        // in case the first unstable offset is invalidated by the truncation.
         producerStateManager.truncateFullyAndStartAt(newOffset)
-        maybeIncrementFirstUnstableOffset()
 
-        updateLogEndOffset(newOffset)
-        updateLogStartOffset(newOffset)
+        completeTruncation(
+          startOffset = newOffset,
+          endOffset = newOffset
+        )
       }
     }
+  }
+
+  private def completeTruncation(
+    startOffset: Long,
+    endOffset: Long,
+  ): Unit = {
+    logStartOffset = startOffset
+    nextOffsetMetadata = LogOffsetMetadata(endOffset, activeSegment.baseOffset, activeSegment.size)
+    recoveryPoint = math.min(recoveryPoint, endOffset)
+    rebuildProducerState(endOffset, reloadFromCleanShutdown = false, producerStateManager)
+    updateHighWatermark(math.min(highWatermark, endOffset))
   }
 
   /**
