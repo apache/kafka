@@ -125,6 +125,7 @@ class KafkaRaftManager[T](
 
   def shutdown(): Unit = {
     raftIoThread.shutdown()
+    raftClient.close()
     scheduler.shutdown()
     netChannel.close()
     metadataLog.close()
