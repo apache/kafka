@@ -340,7 +340,6 @@ public class TaskManagerTest {
 
         replay(stateDirectory);
         taskManager.handleRebalanceStart(singleton("topic"));
-        taskManager.addTask(new StateMachineTask(taskId00, Collections.emptySet(), true));
 
         assertThat(taskManager.getTaskOffsetSums(), is(expectedOffsetSums));
     }
@@ -414,7 +413,6 @@ public class TaskManagerTest {
         expect(stateDirectory.checkpointFileFor(taskId00)).andReturn(getCheckpointFile(taskId00));
         replay(stateDirectory);
         taskManager.handleRebalanceStart(singleton("topic"));
-        taskManager.addTask(new StateMachineTask(taskId00, Collections.emptySet(), true));
 
         assertTrue(taskManager.getTaskOffsetSums().isEmpty());
         verify(stateDirectory);
@@ -435,7 +433,6 @@ public class TaskManagerTest {
         writeCheckpointFile(taskId00, changelogOffsets);
         replay(stateDirectory);
         taskManager.handleRebalanceStart(singleton("topic"));
-        taskManager.addTask(new StateMachineTask(taskId00, Collections.emptySet(), true));
 
         assertThat(taskManager.getTaskOffsetSums(), is(expectedOffsetSums));
     }
