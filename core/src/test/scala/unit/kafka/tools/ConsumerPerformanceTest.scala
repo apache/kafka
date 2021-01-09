@@ -18,9 +18,10 @@
 package kafka.tools
 
 import java.io.ByteArrayOutputStream
+import java.nio.file.Files
 import java.text.SimpleDateFormat
 
-import kafka.utils.Exit
+import kafka.utils.{Exit, TestUtils}
 import org.junit.Assert.assertEquals
 import org.junit.Test
 
@@ -95,6 +96,29 @@ class ConsumerPerformanceTest {
     assertEquals("localhost:9092", config.brokerHostsAndPorts)
     assertEquals("test", config.topic)
     assertEquals(10, config.numMessages)
+  }
+  
+  @Test
+  def testConfigWithRecognizedOptionOverride(): Unit = {
+    val propsFile = TestUtils.tempFile()
+    val propsStream = Files.newOutputStream(propsFile.toPath)
+    propsStream.write("group.id=test_group_id\n".getBytes())
+    propsStream.write("client.id=test_client_id".getBytes())
+    propsStream.close()
+    //Given
+    val args: Array[String] = Array(
+      "--broker-list", "localhost:9092",
+      "--topic", "test",
+      "--group", "test_group_id2",
+      "--messages", "10",
+      "--consumer.config", propsFile.getAbsolutePath
+    )
+    //When
+    val config = new ConsumerPerformance.ConsumerPerfConfig(args)
+
+    //Then
+    assertEquals("test_group_id", config.props.getProperty("group.id"))
+    assertEquals("test_client_id", config.props.getProperty("client.id"))
   }
 
   @Test(expected = classOf[IllegalArgumentException])
