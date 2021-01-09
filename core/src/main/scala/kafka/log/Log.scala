@@ -383,28 +383,28 @@ class Log(@volatile private var _dir: File,
    * @return the updated high watermark offset
    */
   def updateHighWatermark(hw: Long): Long = {
-    val newHighWatermark = if (hw < logStartOffset)
-      logStartOffset
-    else if (hw > logEndOffset)
-      logEndOffset
-    else
-      hw
-    updateHighWatermarkMetadata(LogOffsetMetadata(newHighWatermark))
-    newHighWatermark
+    updateHighWatermark(LogOffsetMetadata(hw))
   }
 
-  def updateHighWatermarkOffsetMetadata(hw: LogOffsetMetadata): Long = {
-    val newHighWatermark = if (hw.messageOffset < logStartOffset) {
-      updateHighWatermarkMetadata(LogOffsetMetadata(logStartOffset))
-      logStartOffset
-    } else if (hw.messageOffset > logEndOffset) {
-      updateHighWatermarkMetadata(logEndOffsetMetadata)
-      logEndOffset
+  /**
+   * Update high watermark with offset metadata. The new high watermark will be lower
+   * bounded by the log start offset and upper bounded by the log end offset.
+   *
+   * @param highWatermarkMetadata the suggested high watermark with offset metadata
+   * @return the updated high watermark offset
+   */
+  def updateHighWatermark(highWatermarkMetadata: LogOffsetMetadata): Long = {
+    val endOffsetMetadata = logEndOffsetMetadata
+    val newHighWatermarkMetadata = if (highWatermarkMetadata.messageOffset < logStartOffset) {
+      LogOffsetMetadata(logStartOffset)
+    } else if (highWatermarkMetadata.messageOffset >= endOffsetMetadata.messageOffset) {
+      endOffsetMetadata
     } else {
-      updateHighWatermarkMetadata(hw)
-      hw.messageOffset
+      highWatermarkMetadata
     }
-    newHighWatermark
+
+    updateHighWatermarkMetadata(newHighWatermarkMetadata)
+    newHighWatermarkMetadata.messageOffset
   }
 
   /**
@@ -460,6 +460,10 @@ class Log(@volatile private var _dir: File,
       throw new IllegalArgumentException("High watermark offset should be non-negative")
 
     lock synchronized {
+      if (newHighWatermark.messageOffset < highWatermarkMetadata.messageOffset) {
+        warn(s"Non-monotonic update of high watermark from $highWatermarkMetadata to $newHighWatermark")
+      }
+
       highWatermarkMetadata = newHighWatermark
       producerStateManager.onHighWatermarkUpdated(newHighWatermark.messageOffset)
       maybeIncrementFirstUnstableOffset()
@@ -2096,10 +2100,12 @@ class Log(@volatile private var _dir: File,
             val deletable = logSegments.filter(segment => segment.baseOffset > targetOffset)
             removeAndDeleteSegments(deletable, asyncDelete = true, LogTruncation)
             activeSegment.truncateTo(targetOffset)
-            updateLogEndOffset(targetOffset)
-            updateLogStartOffset(math.min(targetOffset, this.logStartOffset))
             leaderEpochCache.foreach(_.truncateFromEnd(targetOffset))
-            loadProducerState(targetOffset, reloadFromCleanShutdown = false)
+
+            completeTruncation(
+              startOffset = math.min(targetOffset, logStartOffset),
+              endOffset = targetOffset
+            )
           }
           true
         }
@@ -2124,15 +2130,26 @@ class Log(@volatile private var _dir: File,
           time = time,
           initFileSize = initFileSize,
           preallocate = config.preallocate))
-        updateLogEndOffset(newOffset)
         leaderEpochCache.foreach(_.clearAndFlush())
+        producerStateManager.truncateFullyAndStartAt(newOffset)
 
-        producerStateManager.truncate()
-        producerStateManager.updateMapEndOffset(newOffset)
-        maybeIncrementFirstUnstableOffset()
-        updateLogStartOffset(newOffset)
+        completeTruncation(
+          startOffset = newOffset,
+          endOffset = newOffset
+        )
       }
     }
+  }
+
+  private def completeTruncation(
+    startOffset: Long,
+    endOffset: Long
+  ): Unit = {
+    logStartOffset = startOffset
+    nextOffsetMetadata = LogOffsetMetadata(endOffset, activeSegment.baseOffset, activeSegment.size)
+    recoveryPoint = math.min(recoveryPoint, endOffset)
+    rebuildProducerState(endOffset, reloadFromCleanShutdown = false, producerStateManager)
+    updateHighWatermark(math.min(highWatermark, endOffset))
   }
 
   /**
