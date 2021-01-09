@@ -635,7 +635,7 @@ class ProducerStateManagerTest {
   }
 
   @Test
-  def testTruncate(): Unit = {
+  def testTruncateFullyAndStartAt(): Unit = {
     val epoch = 0.toShort
 
     append(stateManager, producerId, epoch, 0, 0L)
@@ -649,7 +649,7 @@ class ProducerStateManagerTest {
     assertEquals(2, logDir.listFiles().length)
     assertEquals(Set(2, 3), currentSnapshotOffsets)
 
-    stateManager.truncate()
+    stateManager.truncateFullyAndStartAt(0L)
 
     assertEquals(0, logDir.listFiles().length)
     assertEquals(Set(), currentSnapshotOffsets)

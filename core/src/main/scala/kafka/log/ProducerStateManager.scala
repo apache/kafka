@@ -771,7 +771,7 @@ class ProducerStateManager(val topicPartition: TopicPartition,
   /**
    * Truncate the producer id mapping and remove all snapshots. This resets the state of the mapping.
    */
-  def truncate(): Unit = {
+  def truncateFullyAndStartAt(offset: Long): Unit = {
     producers.clear()
     ongoingTxns.clear()
     unreplicatedTxns.clear()
@@ -779,7 +779,7 @@ class ProducerStateManager(val topicPartition: TopicPartition,
       removeAndDeleteSnapshot(snapshot.offset)
     }
     lastSnapOffset = 0L
-    lastMapOffset = 0L
+    lastMapOffset = offset
   }
 
   /**
