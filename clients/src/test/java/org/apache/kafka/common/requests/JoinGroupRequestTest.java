@@ -18,6 +18,7 @@ package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.errors.InvalidConfigurationException;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
+import org.apache.kafka.common.internals.Topic;
 import org.apache.kafka.common.message.JoinGroupRequestData;
 import org.apache.kafka.common.protocol.types.Struct;
 import org.apache.kafka.test.TestUtils;
@@ -64,7 +65,7 @@ public class JoinGroupRequestTest {
 
         for (char c : invalidChars) {
             String instanceId = "Is " + c + "illegal";
-            assertFalse(JoinGroupRequest.containsValidPattern(instanceId));
+            assertFalse(Topic.containsValidPattern(instanceId));
         }
     }
 

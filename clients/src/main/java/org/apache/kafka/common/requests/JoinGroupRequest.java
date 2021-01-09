@@ -18,6 +18,7 @@ package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.errors.InvalidConfigurationException;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
+import org.apache.kafka.common.internals.Topic;
 import org.apache.kafka.common.message.JoinGroupRequestData;
 import org.apache.kafka.common.message.JoinGroupResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
@@ -73,24 +74,9 @@ public class JoinGroupRequest extends AbstractRequest {
         if (id.length() > MAX_GROUP_INSTANCE_ID_LENGTH)
             throw new InvalidConfigurationException("Group instance id can't be longer than " + MAX_GROUP_INSTANCE_ID_LENGTH +
                     " characters: " + id);
-        if (!containsValidPattern(id))
+        if (!Topic.containsValidPattern(id))
             throw new InvalidConfigurationException("Group instance id \"" + id + "\" is illegal, it contains a character other than " +
                     "ASCII alphanumerics, '.', '_' and '-'");
-    }
-
-    /**
-     * Valid characters for Consumer group.instance.id are the ASCII alphanumerics, '.', '_', and '-'
-     */
-    static boolean containsValidPattern(String topic) {
-        for (int i = 0; i < topic.length(); ++i) {
-            char c = topic.charAt(i);
-
-            boolean validChar = (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') || (c >= 'A' && c <= 'Z') || c == '.' ||
-                    c == '_' || c == '-';
-            if (!validChar)
-                return false;
-        }
-        return true;
     }
 
     public JoinGroupRequest(JoinGroupRequestData data, short version) {
