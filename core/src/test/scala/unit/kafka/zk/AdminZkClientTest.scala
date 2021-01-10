@@ -34,8 +34,8 @@ import org.apache.kafka.common.errors.{InvalidReplicaAssignmentException, Invali
 import org.apache.kafka.common.metrics.Quota
 import org.apache.kafka.test.{TestUtils => JTestUtils}
 import org.easymock.EasyMock
-import org.junit.Assert._
-import org.junit.{After, Test}
+import org.junit.jupiter.api.Assertions._
+import org.junit.jupiter.api.{AfterEach, Test}
 
 import scala.jdk.CollectionConverters._
 import scala.collection.{Map, Seq, immutable}
@@ -44,7 +44,7 @@ class AdminZkClientTest extends ZooKeeperTestHarness with Logging with RackAware
 
   var servers: Seq[KafkaServer] = Seq()
 
-  @After
+  @AfterEach
   override def tearDown(): Unit = {
     TestUtils.shutdownServers(servers)
     super.tearDown()
@@ -172,8 +172,8 @@ class AdminZkClientTest extends ZooKeeperTestHarness with Logging with RackAware
       val (_, partitionAssignment) = zkClient.getPartitionAssignmentForTopics(Set(topic)).head
       assertEquals(3, partitionAssignment.size)
       partitionAssignment.foreach { case (partition, partitionReplicaAssignment) =>
-        assertEquals(s"Unexpected replication factor for $partition",
-          1, partitionReplicaAssignment.replicas.size)
+        assertEquals(1,
+          partitionReplicaAssignment.replicas.size, s"Unexpected replication factor for $partition")
       }
       val savedProps = zkClient.getEntityConfigs(ConfigType.Topic, topic)
       assertEquals(props, savedProps)
@@ -268,8 +268,8 @@ class AdminZkClientTest extends ZooKeeperTestHarness with Logging with RackAware
     def checkConfig(limit: Long): Unit = {
       retry(10000) {
         for (server <- servers) {
-          assertEquals("Leader Quota Manager was not updated", limit, server.quotaManagers.leader.upperBound)
-          assertEquals("Follower Quota Manager was not updated", limit, server.quotaManagers.follower.upperBound)
+          assertEquals(limit, server.quotaManagers.leader.upperBound, "Leader Quota Manager was not updated")
+          assertEquals(limit, server.quotaManagers.follower.upperBound, "Follower Quota Manager was not updated")
         }
       }
     }
@@ -316,7 +316,7 @@ class AdminZkClientTest extends ZooKeeperTestHarness with Logging with RackAware
     zkClient.setOrCreateEntityConfigs(ConfigType.Client, clientId, props)
 
     val configInZk: Map[String, Properties] = adminZkClient.fetchAllEntityConfigs(ConfigType.Client)
-    assertEquals("Must have 1 overridden client config", 1, configInZk.size)
+    assertEquals(1, configInZk.size, "Must have 1 overridden client config")
     assertEquals(props, configInZk(clientId))
 
     // Test that the existing clientId overrides are read

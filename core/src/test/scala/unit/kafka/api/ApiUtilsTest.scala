@@ -17,8 +17,8 @@
 
 package kafka.api
 
-import org.junit._
-import org.junit.Assert._
+import org.junit.jupiter.api._
+import org.junit.jupiter.api.Assertions._
 
 import scala.util.Random
 import java.nio.ByteBuffer

@@ -29,8 +29,8 @@ import org.apache.kafka.common.config.types.Password
 import org.apache.kafka.common.config.{ConfigException, SslConfigs}
 import org.apache.kafka.server.authorizer._
 import org.easymock.EasyMock
-import org.junit.Assert._
-import org.junit.Test
+import org.junit.jupiter.api.Assertions._
+import org.junit.jupiter.api.Test
 
 import scala.jdk.CollectionConverters._
 import scala.collection.Set
@@ -275,8 +275,8 @@ class DynamicBrokerConfigTest {
       case e: ConfigException => // expected exception
     }
     val persistedProps = configWithSecret.dynamicConfig.toPersistentProps(dynamicProps, perBrokerConfig = true)
-    assertFalse("Password not encoded",
-      persistedProps.getProperty(KafkaConfig.SaslJaasConfigProp).contains("myLoginModule"))
+    assertFalse(persistedProps.getProperty(KafkaConfig.SaslJaasConfigProp).contains("myLoginModule"),
+      "Password not encoded")
     val decodedProps = configWithSecret.dynamicConfig.fromPersistentProps(persistedProps, perBrokerConfig = true)
     assertEquals("myLoginModule required;", decodedProps.getProperty(KafkaConfig.SaslJaasConfigProp))
   }
@@ -291,8 +291,8 @@ class DynamicBrokerConfigTest {
     dynamicProps.put(KafkaConfig.SaslJaasConfigProp, "dynamicLoginModule required;")
 
     val persistedProps = config.dynamicConfig.toPersistentProps(dynamicProps, perBrokerConfig = true)
-    assertFalse("Password not encoded",
-      persistedProps.getProperty(KafkaConfig.SaslJaasConfigProp).contains("LoginModule"))
+    assertFalse(persistedProps.getProperty(KafkaConfig.SaslJaasConfigProp).contains("LoginModule"),
+      "Password not encoded")
     config.dynamicConfig.updateBrokerConfig(0, persistedProps)
     assertEquals("dynamicLoginModule required;", config.values.get(KafkaConfig.SaslJaasConfigProp).asInstanceOf[Password].value)
 
@@ -361,7 +361,7 @@ class DynamicBrokerConfigTest {
     try {
       kafkaServer.config.dynamicConfig.addReconfigurables(kafkaServer)
     } catch {
-      case _: Throwable => // We are only testing authorizer reconfiguration, ignore any exceptions due to incomplete mock
+      case _: Throwable => // We are only testing authorizer reconfiguration, Disabled any exceptions due to incomplete mock
     }
 
     props.put("super.users", "User:admin")

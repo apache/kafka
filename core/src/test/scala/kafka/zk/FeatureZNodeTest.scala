@@ -21,8 +21,8 @@ import java.nio.charset.StandardCharsets
 
 import org.apache.kafka.common.feature.{Features, FinalizedVersionRange}
 import org.apache.kafka.common.feature.Features._
-import org.junit.Assert.{assertEquals, assertThrows}
-import org.junit.Test
+import org.junit.jupiter.api.Assertions.{assertEquals, assertThrows}
+import org.junit.jupiter.api.Test
 
 import scala.jdk.CollectionConverters._
 

@@ -19,9 +19,10 @@ package kafka.api
 import org.apache.kafka.common.config.SaslConfigs
 import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.common.errors.{GroupAuthorizationException, TopicAuthorizationException}
-import org.junit.{Before, Test}
-import org.junit.Assert.{assertEquals, assertTrue, fail}
+import org.junit.jupiter.api.{BeforeEach, Test, Timeout}
+import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue, fail}
 
+import java.util.concurrent.TimeUnit
 import scala.collection.immutable.List
 import scala.jdk.CollectionConverters._
 
@@ -33,7 +34,7 @@ abstract class SaslEndToEndAuthorizationTest extends EndToEndAuthorizationTest {
   protected def kafkaClientSaslMechanism: String
   protected def kafkaServerSaslMechanisms: List[String]
   
-  @Before
+  @BeforeEach
   override def setUp(): Unit = {
     // create static config including client login context with credentials for JaasTestUtils 'client2'
     startSasl(jaasSections(kafkaServerSaslMechanisms, Option(kafkaClientSaslMechanism), Both))
@@ -51,7 +52,8 @@ abstract class SaslEndToEndAuthorizationTest extends EndToEndAuthorizationTest {
     * The first consumer succeeds because it is allowed by the ACL, 
     * the second one connects ok, but fails to consume messages due to the ACL.
     */
-  @Test(timeout = 15000)
+  @Timeout(value = 15000, unit = TimeUnit.MILLISECONDS)
+  @Test
   def testTwoConsumersWithDifferentSaslCredentials(): Unit = {
     setAclsAndProduce(tp)
     val consumer1 = createConsumer()

@@ -14,7 +14,6 @@ package kafka.api
 
 import java.io.File
 import java.util
-
 import kafka.log.LogConfig
 import kafka.server.{Defaults, KafkaConfig}
 import kafka.utils.{CoreUtils, JaasTestUtils, TestUtils}
@@ -27,8 +26,8 @@ import org.apache.kafka.common.config.ConfigResource
 import org.apache.kafka.common.errors.{ClusterAuthorizationException, InvalidRequestException, TopicAuthorizationException, UnknownTopicOrPartitionException}
 import org.apache.kafka.common.resource.{PatternType, ResourcePattern, ResourcePatternFilter, ResourceType}
 import org.apache.kafka.common.security.auth.{KafkaPrincipal, SecurityProtocol}
-import org.junit.Assert.{assertEquals, assertTrue}
-import org.junit.{After, Assert, Before, Test}
+import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
+import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
 
 import scala.annotation.nowarn
 import scala.jdk.CollectionConverters._
@@ -63,7 +62,7 @@ class SaslSslAdminIntegrationTest extends BaseAdminIntegrationTest with SaslSetu
     authorizationAdmin.initializeAcls()
   }
 
-  @Before
+  @BeforeEach
   override def setUp(): Unit = {
     setUpSasl()
     super.setUp()
@@ -73,7 +72,7 @@ class SaslSslAdminIntegrationTest extends BaseAdminIntegrationTest with SaslSetu
     startSasl(jaasSections(Seq("GSSAPI"), Some("GSSAPI"), Both, JaasTestUtils.KafkaServerContextName))
   }
 
-  @After
+  @AfterEach
   override def tearDown(): Unit = {
     super.tearDown()
     closeSasl()
@@ -434,10 +433,10 @@ class SaslSslAdminIntegrationTest extends BaseAdminIntegrationTest with SaslSetu
     describeResponseConfig.foreach { describeEntry =>
       val name = describeEntry.name
       val createEntry = createResponseConfig.find(_.name == name).get
-      assertEquals(s"Value mismatch for $name", describeEntry.value, createEntry.value)
-      assertEquals(s"isReadOnly mismatch for $name", describeEntry.isReadOnly, createEntry.isReadOnly)
-      assertEquals(s"isSensitive mismatch for $name", describeEntry.isSensitive, createEntry.isSensitive)
-      assertEquals(s"Source mismatch for $name", describeEntry.source, createEntry.source)
+      assertEquals(describeEntry.value, createEntry.value, s"Value mismatch for $name")
+      assertEquals(describeEntry.isReadOnly, createEntry.isReadOnly, s"isReadOnly mismatch for $name")
+      assertEquals(describeEntry.isSensitive, createEntry.isSensitive, s"isSensitive mismatch for $name")
+      assertEquals(describeEntry.source, createEntry.source, s"Source mismatch for $name")
     }
   }
 
@@ -515,7 +514,7 @@ class SaslSslAdminIntegrationTest extends BaseAdminIntegrationTest with SaslSetu
       val acls = Set(clusterAcl(permissionType, operation))
       val authorizer = simpleAclAuthorizer
       val prevAcls = authorizer.getAcls(Resource.ClusterResource)
-      Assert.assertTrue(authorizer.removeAcls(acls, Resource.ClusterResource))
+      assertTrue(authorizer.removeAcls(acls, Resource.ClusterResource))
       TestUtils.waitAndVerifyAcls(prevAcls -- acls, authorizer, Resource.ClusterResource)
     }
 

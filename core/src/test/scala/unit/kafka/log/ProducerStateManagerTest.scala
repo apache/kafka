@@ -32,8 +32,8 @@ import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.record._
 import org.apache.kafka.common.utils.{MockTime, Utils}
 import org.easymock.EasyMock
-import org.junit.Assert._
-import org.junit.{After, Before, Test}
+import org.junit.jupiter.api.Assertions._
+import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
 
 class ProducerStateManagerTest {
   var logDir: File = null
@@ -43,13 +43,13 @@ class ProducerStateManagerTest {
   val maxPidExpirationMs = 60 * 1000
   val time = new MockTime
 
-  @Before
+  @BeforeEach
   def setUp(): Unit = {
     logDir = TestUtils.tempDir()
     stateManager = new ProducerStateManager(partition, logDir, maxPidExpirationMs)
   }
 
-  @After
+  @AfterEach
   def tearDown(): Unit = {
     Utils.delete(logDir)
   }
@@ -456,8 +456,8 @@ class ProducerStateManagerTest {
     stateManager.takeSnapshot()
 
     // Check that file exists and it is not empty
-    assertEquals("Directory doesn't contain a single file as expected", 1, logDir.list().length)
-    assertTrue("Snapshot file is empty", logDir.list().head.length > 0)
+    assertEquals(1, logDir.list().length, "Directory doesn't contain a single file as expected")
+    assertTrue(logDir.list().head.nonEmpty, "Snapshot file is empty")
   }
 
   @Test

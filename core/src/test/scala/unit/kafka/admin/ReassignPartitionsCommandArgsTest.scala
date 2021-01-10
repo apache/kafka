@@ -17,20 +17,20 @@
 package kafka.admin
 
 import kafka.utils.Exit
-import org.junit.Assert._
-import org.junit.rules.Timeout
-import org.junit.{After, Before, Rule, Test}
+import org.junit.jupiter.api.Assertions._
+import org.junit.jupiter.api.{AfterEach, BeforeEach, Test, Timeout}
 
+import java.util.concurrent.TimeUnit
+
+@Timeout(value = 60000, unit = TimeUnit.MILLISECONDS)
 class ReassignPartitionsCommandArgsTest {
-  @Rule
-  def globalTimeout: Timeout = Timeout.millis(60000)
 
-  @Before
+  @BeforeEach
   def setUp(): Unit = {
     Exit.setExitProcedure((_, message) => throw new IllegalArgumentException(message.orNull))
   }
 
-  @After
+  @AfterEach
   def tearDown(): Unit = {
     Exit.resetExitProcedure()
   }
@@ -283,12 +283,9 @@ class ReassignPartitionsCommandArgsTest {
   }
 
   def shouldFailWith(msg: String, args: Array[String]): Unit = {
-    try {
-      ReassignPartitionsCommand.validateAndParseArgs(args)
-      fail(s"Should have failed with [$msg] but no failure occurred.")
-    } catch {
-      case e: Exception => assertTrue(s"Expected exception with message:\n[$msg]\nbut was\n[${e.getMessage}]", e.getMessage.startsWith(msg))
-    }
+    val e = assertThrows(classOf[Exception], () => ReassignPartitionsCommand.validateAndParseArgs(args),
+      () => s"Should have failed with [$msg] but no failure occurred.")
+    assertTrue(e.getMessage.startsWith(msg), s"Expected exception with message:\n[$msg]\nbut was\n[${e.getMessage}]")
   }
 
   ///// Test --cancel

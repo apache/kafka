@@ -31,10 +31,10 @@ import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.errors.TimeoutException
 import org.apache.kafka.common.errors.UnknownTopicOrPartitionException
 import org.apache.kafka.common.network.ListenerName
-import org.junit.After
-import org.junit.Assert._
-import org.junit.Before
-import org.junit.Test
+import org.junit.jupiter.api.AfterEach
+import org.junit.jupiter.api.Assertions._
+import org.junit.jupiter.api.BeforeEach
+import org.junit.jupiter.api.Test
 
 import scala.jdk.CollectionConverters._
 import scala.collection.Seq
@@ -48,7 +48,7 @@ final class LeaderElectionCommandTest extends ZooKeeperTestHarness {
   val broker2 = 1
   val broker3 = 2
 
-  @Before
+  @BeforeEach
   override def setUp(): Unit = {
     super.setUp()
 
@@ -62,7 +62,7 @@ final class LeaderElectionCommandTest extends ZooKeeperTestHarness {
     }
   }
 
-  @After
+  @AfterEach
   override def tearDown(): Unit = {
     TestUtils.shutdownServers(servers)
 

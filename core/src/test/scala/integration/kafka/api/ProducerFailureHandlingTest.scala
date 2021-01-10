@@ -28,8 +28,8 @@ import org.apache.kafka.clients.producer._
 import org.apache.kafka.common.errors._
 import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.record.{DefaultRecord, DefaultRecordBatch}
-import org.junit.Assert._
-import org.junit.{After, Before, Test}
+import org.junit.jupiter.api.Assertions._
+import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
 
 class ProducerFailureHandlingTest extends KafkaServerTestHarness {
   private val producerBufferSize = 30000
@@ -59,7 +59,7 @@ class ProducerFailureHandlingTest extends KafkaServerTestHarness {
   private val topic1 = "topic-1"
   private val topic2 = "topic-2"
 
-  @Before
+  @BeforeEach
   override def setUp(): Unit = {
     super.setUp()
 
@@ -71,7 +71,7 @@ class ProducerFailureHandlingTest extends KafkaServerTestHarness {
       bufferSize = producerBufferSize)
   }
 
-  @After
+  @AfterEach
   override def tearDown(): Unit = {
     if (producer1 != null) producer1.close()
     if (producer2 != null) producer2.close()
@@ -225,7 +225,7 @@ class ProducerFailureHandlingTest extends KafkaServerTestHarness {
     TestUtils.createOffsetsTopic(zkClient, servers)
     val thrown = assertThrows(classOf[ExecutionException],
       () => producer2.send(new ProducerRecord(Topic.GROUP_METADATA_TOPIC_NAME, "test".getBytes, "test".getBytes)).get)
-    assertTrue("Unexpected exception while sending to an invalid topic " + thrown.getCause, thrown.getCause.isInstanceOf[InvalidTopicException])
+    assertTrue(thrown.getCause.isInstanceOf[InvalidTopicException], "Unexpected exception while sending to an invalid topic " + thrown.getCause)
   }
 
   @Test

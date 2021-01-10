@@ -21,8 +21,8 @@ import kafka.api.ApiVersion
 import kafka.utils.TestUtils
 import kafka.zk.ZooKeeperTestHarness
 import org.apache.zookeeper.client.ZKClientConfig
-import org.junit.Assert.{assertEquals, assertThrows, fail}
-import org.junit.Test
+import org.junit.jupiter.api.Assertions.{assertEquals, assertThrows, fail}
+import org.junit.jupiter.api.Test
 
 import java.util.Properties
 

@@ -17,27 +17,25 @@
 
 package kafka.api
 
-import java.lang.{Boolean => JBoolean}
-import java.time.Duration
-import java.util
-import java.util.Collections
-
 import kafka.server.KafkaConfig
 import kafka.utils.TestUtils
 import org.apache.kafka.clients.admin.NewTopic
 import org.apache.kafka.clients.consumer.ConsumerConfig
 import org.apache.kafka.clients.producer.{ProducerConfig, ProducerRecord}
-import org.junit.Assert._
-import org.junit.Test
-import org.junit.runner.RunWith
-import org.junit.runners.Parameterized
-import org.junit.runners.Parameterized.Parameters
+import org.junit.jupiter.api.Assertions._
+import org.junit.jupiter.api.BeforeEach
+import org.junit.jupiter.params.ParameterizedTest
+import org.junit.jupiter.params.provider.{Arguments, MethodSource}
+
+import java.lang.{Boolean => JBoolean}
+import java.time.Duration
+import java.util
+import java.util.Collections
 
 /**
  * Tests behavior of specifying auto topic creation configuration for the consumer and broker
  */
-@RunWith(value = classOf[Parameterized])
-class ConsumerTopicCreationTest(brokerAutoTopicCreationEnable: JBoolean, consumerAllowAutoCreateTopics: JBoolean) extends IntegrationTestHarness {
+class ConsumerTopicCreationTest extends IntegrationTestHarness {
   override protected def brokerCount: Int = 1
 
   val topic_1 = "topic-1"
@@ -45,21 +43,32 @@ class ConsumerTopicCreationTest(brokerAutoTopicCreationEnable: JBoolean, consume
   val producerClientId = "ConsumerTestProducer"
   val consumerClientId = "ConsumerTestConsumer"
 
-  // configure server properties
-  this.serverConfig.setProperty(KafkaConfig.ControlledShutdownEnableProp, "false") // speed up shutdown
-  this.serverConfig.setProperty(KafkaConfig.AutoCreateTopicsEnableProp, brokerAutoTopicCreationEnable.toString)
+  @BeforeEach
+  override def setUp(): Unit = {
+    // junit 5 can't make parametered BeforeEach so we override setup to do nothing as we do setup cluster in test case
+  }
 
-  // configure client properties
-  this.producerConfig.setProperty(ProducerConfig.CLIENT_ID_CONFIG, producerClientId)
-  this.consumerConfig.setProperty(ConsumerConfig.CLIENT_ID_CONFIG, consumerClientId)
-  this.consumerConfig.setProperty(ConsumerConfig.GROUP_ID_CONFIG, "my-test")
-  this.consumerConfig.setProperty(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest")
-  this.consumerConfig.setProperty(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "false")
-  this.consumerConfig.setProperty(ConsumerConfig.METADATA_MAX_AGE_CONFIG, "100")
-  this.consumerConfig.setProperty(ConsumerConfig.ALLOW_AUTO_CREATE_TOPICS_CONFIG, consumerAllowAutoCreateTopics.toString)
+  private[this] def setup(brokerAutoTopicCreationEnable: JBoolean, consumerAllowAutoCreateTopics: JBoolean): Unit = {
+    // configure server properties
+    this.serverConfig.setProperty(KafkaConfig.ControlledShutdownEnableProp, "false") // speed up shutdown
+    this.serverConfig.setProperty(KafkaConfig.AutoCreateTopicsEnableProp, brokerAutoTopicCreationEnable.toString)
 
-  @Test
-  def testAutoTopicCreation(): Unit = {
+    // configure client properties
+    this.producerConfig.setProperty(ProducerConfig.CLIENT_ID_CONFIG, producerClientId)
+    this.consumerConfig.setProperty(ConsumerConfig.CLIENT_ID_CONFIG, consumerClientId)
+    this.consumerConfig.setProperty(ConsumerConfig.GROUP_ID_CONFIG, "my-test")
+    this.consumerConfig.setProperty(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest")
+    this.consumerConfig.setProperty(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "false")
+    this.consumerConfig.setProperty(ConsumerConfig.METADATA_MAX_AGE_CONFIG, "100")
+    this.consumerConfig.setProperty(ConsumerConfig.ALLOW_AUTO_CREATE_TOPICS_CONFIG, consumerAllowAutoCreateTopics.toString)
+
+    super.setUp()
+  }
+
+  @ParameterizedTest
+  @MethodSource(value = Array("parameters"))
+  def testAutoTopicCreation(brokerAutoTopicCreationEnable: JBoolean, consumerAllowAutoCreateTopics: JBoolean): Unit = {
+    this.setup(brokerAutoTopicCreationEnable, consumerAllowAutoCreateTopics)
     val consumer = createConsumer()
     val producer = createProducer()
     val adminClient = createAdminClient()
@@ -87,12 +96,11 @@ class ConsumerTopicCreationTest(brokerAutoTopicCreationEnable: JBoolean, consume
 }
 
 object ConsumerTopicCreationTest {
-  @Parameters(name = "brokerTopicCreation={0}, consumerTopicCreation={1}")
-  def parameters: java.util.Collection[Array[Object]] = {
-    val data = new java.util.ArrayList[Array[Object]]()
+  def parameters: java.util.stream.Stream[Arguments] = {
+    val data = new java.util.ArrayList[Arguments]()
     for (brokerAutoTopicCreationEnable <- Array(JBoolean.TRUE, JBoolean.FALSE))
       for (consumerAutoCreateTopicsPolicy <- Array(JBoolean.TRUE, JBoolean.FALSE))
-        data.add(Array(brokerAutoTopicCreationEnable, consumerAutoCreateTopicsPolicy))
-    data
+        data.add(Arguments.of(brokerAutoTopicCreationEnable, consumerAutoCreateTopicsPolicy))
+    data.stream()
   }
 }

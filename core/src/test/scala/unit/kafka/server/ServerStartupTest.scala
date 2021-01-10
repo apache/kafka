@@ -22,14 +22,14 @@ import kafka.zk.ZooKeeperTestHarness
 import org.apache.kafka.common.KafkaException
 import org.apache.zookeeper.KeeperException.NodeExistsException
 import org.easymock.EasyMock
-import org.junit.Assert._
-import org.junit.{After, Test}
+import org.junit.jupiter.api.Assertions._
+import org.junit.jupiter.api.{AfterEach, Test}
 
 class ServerStartupTest extends ZooKeeperTestHarness {
 
   private var server: KafkaServer = null
 
-  @After
+  @AfterEach
   override def tearDown(): Unit = {
     if (server != null)
       TestUtils.shutdownServers(Seq(server))

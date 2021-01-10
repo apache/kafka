@@ -24,8 +24,8 @@ import org.apache.kafka.common.metrics.{KafkaMetric, MetricConfig, Quota, QuotaV
 import org.apache.kafka.common.metrics.stats.{Rate, Value}
 
 import scala.jdk.CollectionConverters._
-import org.junit.Assert._
-import org.junit.Test
+import org.junit.jupiter.api.Assertions._
+import org.junit.jupiter.api.Test
 
 class QuotaUtilsTest {
 

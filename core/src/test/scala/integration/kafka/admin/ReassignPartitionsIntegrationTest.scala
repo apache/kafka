@@ -32,20 +32,19 @@ import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.common.{TopicPartition, TopicPartitionReplica}
-import org.junit.Assert.{assertEquals, assertFalse, assertTrue}
-import org.junit.rules.Timeout
-import org.junit.{After, Rule, Test}
+import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertTrue}
+import org.junit.jupiter.api.{AfterEach, Test, Timeout}
 
+import java.util.concurrent.TimeUnit
 import scala.collection.{Map, Seq, mutable}
 import scala.jdk.CollectionConverters._
 
+@Timeout(value = 300000, unit = TimeUnit.MILLISECONDS)
 class ReassignPartitionsIntegrationTest extends ZooKeeperTestHarness {
-  @Rule
-  def globalTimeout: Timeout = Timeout.millis(300000)
 
   var cluster: ReassignPartitionsTestCluster = null
 
-  @After
+  @AfterEach
   override def tearDown(): Unit = {
     Utils.closeQuietly(cluster, "ReassignPartitionsTestCluster")
     super.tearDown()
@@ -193,9 +192,8 @@ class ReassignPartitionsIntegrationTest extends ZooKeeperTestHarness {
       cluster.servers(3).replicaManager.nonOfflinePartition(part).
         flatMap(_.leaderLogIfLocal).isDefined
       }, "broker 3 should be the new leader", pause = 10L)
-    assertEquals(s"Expected broker 3 to have the correct high water mark for the " +
-      "partition.", 123L, cluster.servers(3).replicaManager.
-      localLogOrException(part).highWatermark)
+    assertEquals(123L, cluster.servers(3).replicaManager.localLogOrException(part).highWatermark,
+      s"Expected broker 3 to have the correct high water mark for the partition.")
   }
 
   @Test
@@ -277,8 +275,8 @@ class ReassignPartitionsIntegrationTest extends ZooKeeperTestHarness {
         if (!result.partsOngoing) {
           true
         } else {
-          assertTrue("Expected at least one partition reassignment to be ongoing when " +
-            s"result = ${result}", !result.partStates.forall(_._2.done))
+          assertFalse(result.partStates.forall(_._2.done),
+            s"Expected at least one partition reassignment to be ongoing when result = $result")
           assertEquals(Seq(0, 3, 2),
             result.partStates(new TopicPartition("foo", 0)).targetReplicas)
           assertEquals(Seq(3, 2, 1),

@@ -44,8 +44,8 @@ import org.apache.kafka.common.requests.OffsetFetchResponse
 import org.apache.kafka.common.requests.ProduceResponse.PartitionResponse
 import org.apache.kafka.common.utils.Utils
 import org.easymock.{Capture, EasyMock, IAnswer}
-import org.junit.Assert.{assertEquals, assertFalse, assertNull, assertTrue, assertThrows}
-import org.junit.{Before, Test}
+import org.junit.jupiter.api.Assertions._
+import org.junit.jupiter.api.{BeforeEach, Test}
 
 import scala.jdk.CollectionConverters._
 import scala.collection._
@@ -91,7 +91,7 @@ class GroupMetadataManagerTest {
     zkClient
   }
 
-  @Before
+  @BeforeEach
   def setUp(): Unit = {
     defaultOffsetRetentionMs = offsetConfig.offsetsRetentionMs
     metrics = new kMetrics()
@@ -818,8 +818,8 @@ class GroupMetadataManagerTest {
     assertEquals(groupId, group.groupId)
     assertEquals(Stable, group.currentState)
 
-    assertEquals("segment2 group record member should be elected", segment2MemberId, group.leaderOrNull)
-    assertEquals("segment2 group record member should be only member", Set(segment2MemberId), group.allMembers)
+    assertEquals(segment2MemberId, group.leaderOrNull, "segment2 group record member should be elected")
+    assertEquals(Set(segment2MemberId), group.allMembers, "segment2 group record member should be only member")
 
     // offsets of segment1 should be overridden by segment2 offsets of the same topic partitions
     val committedOffsets = segment1Offsets ++ segment2Offsets
@@ -960,11 +960,11 @@ class GroupMetadataManagerTest {
       val deserializedGroupMetadata = GroupMetadataManager.readGroupMessageValue(groupId, groupMetadataRecord.value(), time)
       // GROUP_METADATA_VALUE_SCHEMA_V2 or higher should correctly set the currentStateTimestamp
       if (apiVersion >= KAFKA_2_1_IV0)
-        assertEquals(s"the apiVersion $apiVersion doesn't set the currentStateTimestamp correctly.",
-          Some(time.milliseconds()), deserializedGroupMetadata.currentStateTimestamp)
+        assertEquals(Some(time.milliseconds()), deserializedGroupMetadata.currentStateTimestamp,
+          s"the apiVersion $apiVersion doesn't set the currentStateTimestamp correctly.")
       else
-        assertTrue(s"the apiVersion $apiVersion should not set the currentStateTimestamp.",
-          deserializedGroupMetadata.currentStateTimestamp.isEmpty)
+        assertTrue(deserializedGroupMetadata.currentStateTimestamp.isEmpty,
+          s"the apiVersion $apiVersion should not set the currentStateTimestamp.")
     }
   }
 

@@ -26,8 +26,8 @@ import kafka.server.checkpoints.{LeaderEpochCheckpoint, LeaderEpochCheckpointFil
 import kafka.utils.TestUtils
 import org.apache.kafka.common.requests.OffsetsForLeaderEpochResponse.{UNDEFINED_EPOCH, UNDEFINED_EPOCH_OFFSET}
 import org.apache.kafka.common.TopicPartition
-import org.junit.Assert._
-import org.junit.Test
+import org.junit.jupiter.api.Assertions._
+import org.junit.jupiter.api.Test
 
 /**
   * Unit test for the LeaderEpochFileCache.
@@ -94,8 +94,8 @@ class LeaderEpochFileCacheTest {
     val epochAndOffsetFor = cache.endOffsetFor(UNDEFINED_EPOCH)
 
     //Then
-    assertEquals("Expected undefined epoch and offset if undefined epoch requested. Cache not empty.",
-                 expectedEpochEndOffset, epochAndOffsetFor)
+    assertEquals(expectedEpochEndOffset,
+                 epochAndOffsetFor, "Expected undefined epoch and offset if undefined epoch requested. Cache not empty.")
   }
 
   @Test
@@ -150,8 +150,8 @@ class LeaderEpochFileCacheTest {
     val offsetFor = cache.endOffsetFor(UNDEFINED_EPOCH)
 
     //Then
-    assertEquals("Expected undefined epoch and offset if undefined epoch requested. Empty cache.",
-                 (UNDEFINED_EPOCH, UNDEFINED_EPOCH_OFFSET), offsetFor)
+    assertEquals((UNDEFINED_EPOCH, UNDEFINED_EPOCH_OFFSET),
+                 offsetFor, "Expected undefined epoch and offset if undefined epoch requested. Empty cache.")
   }
 
   @Test
@@ -267,7 +267,7 @@ class LeaderEpochFileCacheTest {
     cache.assign(epoch = 2, startOffset = 6); logEndOffset = 7
 
     //When we update an epoch in the past with a different offset, the log has already reached
-    //an inconsistent state. Our options are either to raise an error, ignore the new append,
+    //an inconsistent state. Our options are either to raise an error, Disabled the new append,
     //or truncate the cached epochs to the point of conflict. We take this latter approach in
     //order to guarantee that epochs and offsets in the cache increase monotonically, which makes
     //the search logic simpler to reason about.

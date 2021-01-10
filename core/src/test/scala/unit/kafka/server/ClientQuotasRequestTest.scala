@@ -24,8 +24,8 @@ import org.apache.kafka.common.errors.{InvalidRequestException, UnsupportedVersi
 import org.apache.kafka.common.internals.KafkaFutureImpl
 import org.apache.kafka.common.quota.{ClientQuotaAlteration, ClientQuotaEntity, ClientQuotaFilter, ClientQuotaFilterComponent}
 import org.apache.kafka.common.requests.{AlterClientQuotasRequest, AlterClientQuotasResponse, DescribeClientQuotasRequest, DescribeClientQuotasResponse}
-import org.junit.Assert._
-import org.junit.Test
+import org.junit.jupiter.api.Assertions._
+import org.junit.jupiter.api.Test
 import java.util
 import java.util.concurrent.{ExecutionException, TimeUnit}
 
@@ -288,7 +288,7 @@ class ClientQuotasRequestTest extends BaseRequestTest {
 
   private def expectInvalidRequestWithMessage(runnable: => Unit, expectedMessage: String): Unit = {
     val exception = assertThrows(classOf[InvalidRequestException], () => runnable)
-    assertTrue(s"Expected message $exception to contain $expectedMessage", exception.getMessage.contains(expectedMessage))
+    assertTrue(exception.getMessage.contains(expectedMessage), s"Expected message $exception to contain $expectedMessage")
   }
 
   @Test

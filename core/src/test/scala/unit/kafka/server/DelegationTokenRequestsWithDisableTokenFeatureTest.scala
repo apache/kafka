@@ -21,8 +21,8 @@ import kafka.utils.{JaasTestUtils, TestUtils}
 import org.apache.kafka.clients.admin.{Admin, AdminClientConfig}
 import org.apache.kafka.common.errors.DelegationTokenDisabledException
 import org.apache.kafka.common.security.auth.SecurityProtocol
-import org.junit.Assert.assertThrows
-import org.junit.{After, Before, Test}
+import org.junit.jupiter.api.Assertions.assertThrows
+import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
 
 import java.util
 import scala.concurrent.ExecutionException
@@ -37,7 +37,7 @@ class DelegationTokenRequestsWithDisableTokenFeatureTest extends BaseRequestTest
 
   override def brokerCount = 1
 
-  @Before
+  @BeforeEach
   override def setUp(): Unit = {
     startSasl(jaasSections(kafkaServerSaslMechanisms, Some(kafkaClientSaslMechanism), KafkaSasl, JaasTestUtils.KafkaServerContextName))
     super.setUp()
@@ -72,7 +72,7 @@ class DelegationTokenRequestsWithDisableTokenFeatureTest extends BaseRequestTest
       () => expireResult.expiryTimestamp().get()).getCause.isInstanceOf[DelegationTokenDisabledException]
   }
 
-  @After
+  @AfterEach
   override def tearDown(): Unit = {
     if (adminClient != null)
       adminClient.close()

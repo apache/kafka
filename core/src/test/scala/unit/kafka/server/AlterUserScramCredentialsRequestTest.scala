@@ -20,7 +20,6 @@ package kafka.server
 import java.nio.charset.StandardCharsets
 import java.util
 import java.util.Properties
-
 import kafka.network.SocketServer
 import kafka.security.authorizer.AclAuthorizer
 import org.apache.kafka.clients.admin.ScramMechanism
@@ -31,9 +30,8 @@ import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.requests.{AlterUserScramCredentialsRequest, AlterUserScramCredentialsResponse, DescribeUserScramCredentialsRequest, DescribeUserScramCredentialsResponse}
 import org.apache.kafka.common.security.auth.{AuthenticationContext, KafkaPrincipal, KafkaPrincipalBuilder}
 import org.apache.kafka.server.authorizer.{Action, AuthorizableRequestContext, AuthorizationResult}
-import org.junit.Assert._
-import org.junit.rules.TestName
-import org.junit.{Rule, Test}
+import org.junit.jupiter.api.Assertions._
+import org.junit.jupiter.api.{BeforeEach, Test, TestInfo}
 
 import scala.jdk.CollectionConverters._
 
@@ -43,19 +41,26 @@ import scala.jdk.CollectionConverters._
  * Also tests the Alter and Describe APIs for the case where credentials are successfully altered/described.
  */
 class AlterUserScramCredentialsRequestTest extends BaseRequestTest {
+
+  private[this] var className = classOf[AlterCredentialsTest.TestPrincipalBuilderReturningAuthorized].getName
+
+  override def setUp(): Unit = {
+    // do nothing as we will setup cluster by 'before'
+  }
+
+  @BeforeEach
+  def before(info: TestInfo): Unit = {
+    if (info.getDisplayName.contains("NotAuthorized"))
+      className = classOf[AlterCredentialsTest.TestPrincipalBuilderReturningUnauthorized].getName
+
+    super.setUp()
+  }
+
   override def brokerPropertyOverrides(properties: Properties): Unit = {
     properties.put(KafkaConfig.ControlledShutdownEnableProp, "false")
     properties.put(KafkaConfig.AuthorizerClassNameProp, classOf[AlterCredentialsTest.TestAuthorizer].getName)
-    properties.put(KafkaConfig.PrincipalBuilderClassProp,
-      if (testName.getMethodName.endsWith("NotAuthorized")) {
-        classOf[AlterCredentialsTest.TestPrincipalBuilderReturningUnauthorized].getName
-      } else {
-        classOf[AlterCredentialsTest.TestPrincipalBuilderReturningAuthorized].getName
-      })
+    properties.put(KafkaConfig.PrincipalBuilderClassProp, className)
   }
-
-  private val _testName = new TestName
-  @Rule def testName = _testName
 
   private val saltedPasswordBytes = "saltedPassword".getBytes(StandardCharsets.UTF_8)
   private val saltBytes = "salt".getBytes(StandardCharsets.UTF_8)
@@ -356,17 +361,17 @@ class AlterUserScramCredentialsRequestTest extends BaseRequestTest {
   }
 
   private def checkAllErrorsAlteringCredentials(resultsToCheck: util.List[AlterUserScramCredentialsResult], expectedError: Errors, contextMsg: String) = {
-    assertEquals(s"Expected all '${expectedError.name}' errors when altering credentials $contextMsg",
-      0, resultsToCheck.asScala.filterNot(_.errorCode == expectedError.code).size)
+    assertEquals(0, resultsToCheck.asScala.filterNot(_.errorCode == expectedError.code).size,
+      s"Expected all '${expectedError.name}' errors when altering credentials $contextMsg")
   }
 
   private def checkNoErrorsAlteringCredentials(resultsToCheck: util.List[AlterUserScramCredentialsResult]) = {
-    assertEquals("Expected no error when altering credentials",
-      0, resultsToCheck.asScala.filterNot(_.errorCode == Errors.NONE.code).size)
+    assertEquals(0, resultsToCheck.asScala.filterNot(_.errorCode == Errors.NONE.code).size,
+      "Expected no error when altering credentials")
   }
 
   private def checkUserAppearsInAlterResults(resultsToCheck: util.List[AlterUserScramCredentialsResult], user: String) = {
-    assertTrue(s"Expected result to contain '$user'", resultsToCheck.asScala.exists(_.user == user))
+    assertTrue(resultsToCheck.asScala.exists(_.user == user), s"Expected result to contain '$user'")
   }
 
   private def describeAllWithNoTopLevelErrorConfirmed() = {
@@ -377,30 +382,30 @@ class AlterUserScramCredentialsRequestTest extends BaseRequestTest {
   }
 
   private def checkNoTopLevelErrorDescribingCredentials(responseToCheck: DescribeUserScramCredentialsResponse) = {
-    assertEquals("Expected no top-level error when describing the credentials", Errors.NONE.code, responseToCheck.data.errorCode)
+    assertEquals(Errors.NONE.code, responseToCheck.data.errorCode, "Expected no top-level error when describing the credentials")
   }
 
   private def checkUserHasTwoCredentials(resultsToCheck: util.List[DescribeUserScramCredentialsResult], user: String) = {
-    assertTrue(s"Expected result to contain '$user' with 2 credentials: $resultsToCheck",
-      resultsToCheck.asScala.exists(result => result.user == user && result.credentialInfos.size == 2 && result.errorCode == Errors.NONE.code))
-    assertTrue(s"Expected result to contain '$user' with SCRAM_SHA_256/4096 and SCRAM_SHA_512/8192 credentials: $resultsToCheck",
-      resultsToCheck.asScala.exists(result => result.user == user && result.credentialInfos.asScala.exists(info =>
+    assertTrue(resultsToCheck.asScala.exists(result => result.user == user && result.credentialInfos.size == 2 && result.errorCode == Errors.NONE.code),
+      s"Expected result to contain '$user' with 2 credentials: $resultsToCheck")
+    assertTrue(resultsToCheck.asScala.exists(result => result.user == user && result.credentialInfos.asScala.exists(info =>
         info.mechanism == ScramMechanism.SCRAM_SHA_256.`type` && info.iterations == 4096)
         && result.credentialInfos.asScala.exists(info =>
-        info.mechanism == ScramMechanism.SCRAM_SHA_512.`type` && info.iterations == 8192)))
+        info.mechanism == ScramMechanism.SCRAM_SHA_512.`type` && info.iterations == 8192)),
+      s"Expected result to contain '$user' with SCRAM_SHA_256/4096 and SCRAM_SHA_512/8192 credentials: $resultsToCheck")
   }
 
   private def checkForSingleSha512Iterations8192Credential(resultsToCheck: util.List[DescribeUserScramCredentialsResult], user: String) = {
-    assertTrue(s"Expected result to contain '$user' with 1 credential: $resultsToCheck",
-      resultsToCheck.asScala.exists(result => result.user == user && result.credentialInfos.size == 1 && result.errorCode == Errors.NONE.code))
-    assertTrue(s"Expected result to contain '$user' with SCRAM_SHA_512/8192 credential: $resultsToCheck",
-      resultsToCheck.asScala.exists(result => result.user == user && result.credentialInfos.asScala.exists(info =>
-        info.mechanism == ScramMechanism.SCRAM_SHA_512.`type` && info.iterations == 8192)))
+    assertTrue(resultsToCheck.asScala.exists(result => result.user == user && result.credentialInfos.size == 1 && result.errorCode == Errors.NONE.code),
+      s"Expected result to contain '$user' with 1 credential: $resultsToCheck")
+    assertTrue(resultsToCheck.asScala.exists(result => result.user == user && result.credentialInfos.asScala.exists(info =>
+        info.mechanism == ScramMechanism.SCRAM_SHA_512.`type` && info.iterations == 8192)),
+      s"Expected result to contain '$user' with SCRAM_SHA_512/8192 credential: $resultsToCheck")
   }
 
   private def checkDescribeForError(resultsToCheck: util.List[DescribeUserScramCredentialsResult], user: String, expectedError: Errors) = {
-    assertTrue(s"Expected result to contain '$user' with a ${expectedError.name} error: $resultsToCheck",
-      resultsToCheck.asScala.exists(result => result.user == user && result.credentialInfos.size == 0 && result.errorCode == expectedError.code))
+    assertTrue(resultsToCheck.asScala.exists(result => result.user == user && result.credentialInfos.size == 0 && result.errorCode == expectedError.code),
+      s"Expected result to contain '$user' with a ${expectedError.name} error: $resultsToCheck")
   }
 }
 

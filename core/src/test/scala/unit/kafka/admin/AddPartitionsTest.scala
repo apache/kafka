@@ -18,7 +18,6 @@
 package kafka.admin
 
 import java.util.Optional
-
 import kafka.controller.ReplicaAssignment
 import kafka.server.BaseRequestTest
 import kafka.utils.TestUtils
@@ -27,8 +26,8 @@ import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.errors.InvalidReplicaAssignmentException
 import org.apache.kafka.common.requests.MetadataResponse.TopicMetadata
 import org.apache.kafka.common.requests.{MetadataRequest, MetadataResponse}
-import org.junit.Assert._
-import org.junit.{Before, Test}
+import org.junit.jupiter.api.Assertions._
+import org.junit.jupiter.api.{BeforeEach, Test}
 
 import scala.jdk.CollectionConverters._
 
@@ -49,7 +48,7 @@ class AddPartitionsTest extends BaseRequestTest {
   val topic5 = "new-topic5"
   val topic5Assignment = Map(1 -> ReplicaAssignment(Seq(0,1), List(), List()))
 
-  @Before
+  @BeforeEach
   override def setUp(): Unit = {
     super.setUp()
 
@@ -188,11 +187,11 @@ class AddPartitionsTest extends BaseRequestTest {
   def validateLeaderAndReplicas(metadata: TopicMetadata, partitionId: Int, expectedLeaderId: Int,
                                 expectedReplicas: Set[Int]): Unit = {
     val partitionOpt = metadata.partitionMetadata.asScala.find(_.partition == partitionId)
-    assertTrue(s"Partition $partitionId should exist", partitionOpt.isDefined)
+    assertTrue(partitionOpt.isDefined, s"Partition $partitionId should exist")
     val partition = partitionOpt.get
 
-    assertEquals("Partition leader id should match", Optional.of(expectedLeaderId), partition.leaderId)
-    assertEquals("Replica set should match", expectedReplicas, partition.replicaIds.asScala.toSet)
+    assertEquals(Optional.of(expectedLeaderId), partition.leaderId, "Partition leader id should match")
+    assertEquals(expectedReplicas, partition.replicaIds.asScala.toSet, "Replica set should match")
   }
 
 }
