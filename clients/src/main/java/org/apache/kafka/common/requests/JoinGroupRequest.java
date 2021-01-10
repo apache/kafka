@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.common.requests;
 
-import org.apache.kafka.common.errors.InvalidConfigurationException;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.internals.Topic;
 import org.apache.kafka.common.message.JoinGroupRequestData;
@@ -60,23 +59,12 @@ public class JoinGroupRequest extends AbstractRequest {
     public static final int UNKNOWN_GENERATION_ID = -1;
     public static final String UNKNOWN_PROTOCOL_NAME = "";
 
-    private static final int MAX_GROUP_INSTANCE_ID_LENGTH = 249;
-
     /**
      * Ported from class Topic in {@link org.apache.kafka.common.internals} to restrict the charset for
      * static member id.
      */
     public static void validateGroupInstanceId(String id) {
-        if (id.equals(""))
-            throw new InvalidConfigurationException("Group instance id must be non-empty string");
-        if (id.equals(".") || id.equals(".."))
-            throw new InvalidConfigurationException("Group instance id cannot be \".\" or \"..\"");
-        if (id.length() > MAX_GROUP_INSTANCE_ID_LENGTH)
-            throw new InvalidConfigurationException("Group instance id can't be longer than " + MAX_GROUP_INSTANCE_ID_LENGTH +
-                    " characters: " + id);
-        if (!Topic.containsValidPattern(id))
-            throw new InvalidConfigurationException("Group instance id \"" + id + "\" is illegal, it contains a character other than " +
-                    "ASCII alphanumerics, '.', '_' and '-'");
+        Topic.validate(id, "Group instance id");
     }
 
     public JoinGroupRequest(JoinGroupRequestData data, short version) {

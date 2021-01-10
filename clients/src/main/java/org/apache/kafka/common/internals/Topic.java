@@ -34,15 +34,19 @@ public class Topic {
     private static final int MAX_NAME_LENGTH = 249;
 
     public static void validate(String topic) {
-        if (topic.isEmpty())
-            throw new InvalidTopicException("Topic name is illegal, it can't be empty");
-        if (topic.equals(".") || topic.equals(".."))
-            throw new InvalidTopicException("Topic name cannot be \".\" or \"..\"");
-        if (topic.length() > MAX_NAME_LENGTH)
-            throw new InvalidTopicException("Topic name is illegal, it can't be longer than " + MAX_NAME_LENGTH +
-                    " characters, topic name: " + topic);
-        if (!containsValidPattern(topic))
-            throw new InvalidTopicException("Topic name \"" + topic + "\" is illegal, it contains a character other than " +
+        validate(topic, "Topic name");
+    }
+
+    public static void validate(String name, String subject) {
+        if (name.isEmpty())
+            throw new InvalidTopicException(subject + " is illegal, it can't be empty");
+        if (name.equals(".") || name.equals(".."))
+            throw new InvalidTopicException(subject + " cannot be \".\" or \"..\"");
+        if (name.length() > MAX_NAME_LENGTH)
+            throw new InvalidTopicException(subject + " is illegal, it can't be longer than " + MAX_NAME_LENGTH +
+                    " characters, " + subject + ": " + name);
+        if (!containsValidPattern(name))
+            throw new InvalidTopicException(subject + " \"" + name + "\" is illegal, it contains a character other than " +
                     "ASCII alphanumerics, '.', '_' and '-'");
     }
 
