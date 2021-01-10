@@ -140,7 +140,7 @@ public class KafkaLog4jAppenderTest {
         MockKafkaLog4jAppender mockKafkaLog4jAppender = getMockKafkaLog4jAppender();
         replaceProducerWithMocked(mockKafkaLog4jAppender, true);
 
-        assertDoesNotThrow(() -> logger.error(getMessage(0)));
+        logger.error(getMessage(0));
     }
 
     @Test
@@ -148,7 +148,7 @@ public class KafkaLog4jAppenderTest {
         Properties props = getLog4jConfigWithRealProducer(true);
         PropertyConfigurator.configure(props);
 
-        assertDoesNotThrow(() -> logger.error(getMessage(0)));
+        logger.error(getMessage(0));
     }
 
     @Test
