@@ -26,7 +26,6 @@ import org.apache.kafka.common.metrics.stats.{Rate, Value}
 import scala.jdk.CollectionConverters._
 import org.junit.Assert._
 import org.junit.Test
-import org.scalatest.Assertions.assertThrows
 
 class QuotaUtilsTest {
 
