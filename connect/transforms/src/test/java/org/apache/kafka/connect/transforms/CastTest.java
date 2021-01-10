@@ -17,6 +17,7 @@
 
 package org.apache.kafka.connect.transforms;
 
+import java.nio.ByteBuffer;
 import java.util.Arrays;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
@@ -425,6 +426,18 @@ public class CastTest {
     @Test
     public void castFieldsWithSchema() {
         Date day = new Date(MILLIS_PER_DAY);
+
+        ByteBuffer byteBuffer = ByteBuffer.allocate(8);
+        byteBuffer.put((byte) 0xFE);
+        byteBuffer.put((byte) 0xDC);
+        byteBuffer.put((byte) 0xBA);
+        byteBuffer.put((byte) 0x98);
+        byteBuffer.put((byte) 0x76);
+        byteBuffer.put((byte) 0x54);
+        byteBuffer.put((byte) 0x32);
+        byteBuffer.put((byte) 0x10);
+        byteBuffer.flip();
+
         xformValue.configure(Collections.singletonMap(Cast.SPEC_CONFIG, "int8:int16,int16:int32,int32:int64,int64:boolean,float32:float64,float64:boolean,boolean:int8,string:int32,bigdecimal:string,date:string,optional:int32"));
 
         // Include an optional fields and fields with defaults to validate their values are passed through properly
@@ -442,6 +455,7 @@ public class CastTest {
         builder.field("date", org.apache.kafka.connect.data.Date.SCHEMA);
         builder.field("optional", Schema.OPTIONAL_FLOAT32_SCHEMA);
         builder.field("timestamp", Timestamp.SCHEMA);
+        builder.field("bytes", Schema.BYTES_SCHEMA);
         Schema supportedTypesSchema = builder.build();
 
         Struct recordValue = new Struct(supportedTypesSchema);
@@ -456,6 +470,8 @@ public class CastTest {
         recordValue.put("date", day);
         recordValue.put("string", "42");
         recordValue.put("timestamp", new Date(0));
+        recordValue.put("bytes", byteBuffer);
+
         // optional field intentionally omitted
 
         SourceRecord transformed = xformValue.apply(new SourceRecord(null, null, "topic", 0,
@@ -475,6 +491,7 @@ public class CastTest {
         assertEquals("42", ((Struct) transformed.value()).get("bigdecimal"));
         assertEquals(Values.dateFormatFor(day).format(day), ((Struct) transformed.value()).get("date"));
         assertEquals(new Date(0), ((Struct) transformed.value()).get("timestamp"));
+        assertEquals("FEDCBA9876543210", ((Struct) transformed.value()).get("bytes"));
         assertNull(((Struct) transformed.value()).get("optional"));
 
         Schema transformedSchema = ((Struct) transformed.value()).schema();
@@ -489,6 +506,7 @@ public class CastTest {
         assertEquals(Schema.STRING_SCHEMA.type(), transformedSchema.field("bigdecimal").schema().type());
         assertEquals(Schema.STRING_SCHEMA.type(), transformedSchema.field("date").schema().type());
         assertEquals(Schema.OPTIONAL_INT32_SCHEMA.type(), transformedSchema.field("optional").schema().type());
+        assertEquals(Schema.STRING_SCHEMA.type(), transformedSchema.field("bytes").schema().type());
         // The following fields are not changed
         assertEquals(Timestamp.SCHEMA.type(), transformedSchema.field("timestamp").schema().type());
     }

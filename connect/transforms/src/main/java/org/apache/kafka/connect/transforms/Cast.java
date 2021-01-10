@@ -39,6 +39,7 @@ import org.apache.kafka.connect.transforms.util.SimpleConfig;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.nio.ByteBuffer;
 import java.util.EnumSet;
 import java.util.HashMap;
 import java.util.List;
@@ -364,7 +365,17 @@ public abstract class Cast<R extends ConnectRecord<R>> implements Transformation
         if (value instanceof java.util.Date) {
             java.util.Date dateValue = (java.util.Date) value;
             return Values.dateFormatFor(dateValue).format(dateValue);
-        } else {
+        }
+        else if (value instanceof ByteBuffer) {
+            ByteBuffer byteBuffer = (ByteBuffer) value;
+
+            StringBuilder sbuf = new StringBuilder();
+            for (byte b : byteBuffer.array()) {
+                sbuf.append(String.format("%02X", b));
+            }
+            return sbuf.toString();
+        }
+        else {
             return value.toString();
         }
     }
