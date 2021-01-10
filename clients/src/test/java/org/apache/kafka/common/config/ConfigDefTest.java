@@ -95,7 +95,7 @@ public class ConfigDefTest {
         ConfigDef def = new ConfigDef().define("a", Type.INT, null, null, null, "docs");
         Map<String, Object> vals = def.parse(new Properties());
 
-        assertEquals(null, vals.get("a"));
+        assertNull(vals.get("a"));
     }
 
     @Test

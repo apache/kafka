@@ -1238,7 +1238,7 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     assertEquals(80, timestampTopic3P0.timestamp)
     assertEquals(Optional.of(0), timestampTopic3P0.leaderEpoch)
 
-    assertEquals(null, timestampOffsets.get(new TopicPartition(topic3, 1)))
+    assertNull(timestampOffsets.get(new TopicPartition(topic3, 1)))
   }
 
   @Test
