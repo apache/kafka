@@ -37,16 +37,16 @@ public class Topic {
         validate(topic, "Topic name");
     }
 
-    public static void validate(String name, String subject) {
+    public static void validate(String name, String logPrefix) {
         if (name.isEmpty())
-            throw new InvalidTopicException(subject + " is illegal, it can't be empty");
+            throw new InvalidTopicException(logPrefix + " is illegal, it can't be empty");
         if (name.equals(".") || name.equals(".."))
-            throw new InvalidTopicException(subject + " cannot be \".\" or \"..\"");
+            throw new InvalidTopicException(logPrefix + " cannot be \".\" or \"..\"");
         if (name.length() > MAX_NAME_LENGTH)
-            throw new InvalidTopicException(subject + " is illegal, it can't be longer than " + MAX_NAME_LENGTH +
-                    " characters, " + subject + ": " + name);
+            throw new InvalidTopicException(logPrefix + " is illegal, it can't be longer than " + MAX_NAME_LENGTH +
+                    " characters, " + logPrefix + ": " + name);
         if (!containsValidPattern(name))
-            throw new InvalidTopicException(subject + " \"" + name + "\" is illegal, it contains a character other than " +
+            throw new InvalidTopicException(logPrefix + " \"" + name + "\" is illegal, it contains a character other than " +
                     "ASCII alphanumerics, '.', '_' and '-'");
     }
 
