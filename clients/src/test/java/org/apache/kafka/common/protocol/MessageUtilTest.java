@@ -29,6 +29,7 @@ import java.util.Collections;
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 
 public final class MessageUtilTest {
@@ -53,7 +54,7 @@ public final class MessageUtilTest {
 
     @Test
     public void testDuplicate() {
-        assertEquals(null, MessageUtil.duplicate(null));
+        assertNull(MessageUtil.duplicate(null));
         assertArrayEquals(new byte[] {},
             MessageUtil.duplicate(new byte[] {}));
         assertArrayEquals(new byte[] {1, 2, 3},

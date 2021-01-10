@@ -129,21 +129,21 @@ public class DirectoryConfigProviderTest {
     public void testEmptyPathWithKey() {
         ConfigData configData = provider.get("", Collections.singleton("foo"));
         assertTrue(configData.data().isEmpty());
-        assertEquals(null, configData.ttl());
+        assertNull(configData.ttl());
     }
 
     @Test
     public void testNullPath() {
         ConfigData configData = provider.get(null);
         assertTrue(configData.data().isEmpty());
-        assertEquals(null, configData.ttl());
+        assertNull(configData.ttl());
     }
 
     @Test
     public void testNullPathWithKey() {
         ConfigData configData = provider.get(null, Collections.singleton("foo"));
         assertTrue(configData.data().isEmpty());
-        assertEquals(null, configData.ttl());
+        assertNull(configData.ttl());
     }
 }
 

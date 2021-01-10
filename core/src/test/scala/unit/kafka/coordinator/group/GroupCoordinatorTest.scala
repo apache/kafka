@@ -1388,7 +1388,7 @@ class GroupCoordinatorTest {
     timer.advanceClock(DefaultRebalanceTimeout + 1)
     // The static leader should already session timeout, moving group towards Empty
     assertEquals(Set.empty, getGroup(groupId).allMembers)
-    assertEquals(null, getGroup(groupId).leaderOrNull)
+    assertNull(getGroup(groupId).leaderOrNull)
     assertEquals(3, getGroup(groupId).generationId)
     assertGroupState(groupState = Empty)
   }

@@ -18,6 +18,7 @@
 package org.apache.kafka.common.utils;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 
@@ -48,9 +49,9 @@ public class CircularIteratorTest {
         assertEquals("B", it.peek());
         assertTrue(it.hasNext());
         assertEquals("B", it.next());
-        assertEquals(null, it.peek());
+        assertNull(it.peek());
         assertTrue(it.hasNext());
-        assertEquals(null, it.next());
+        assertNull(it.next());
         assertEquals("C", it.peek());
         assertTrue(it.hasNext());
         assertEquals("C", it.next());

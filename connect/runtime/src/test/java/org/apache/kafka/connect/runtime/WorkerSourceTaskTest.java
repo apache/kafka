@@ -579,7 +579,7 @@ public class WorkerSourceTaskTest extends ThreadedTest {
 
         Whitebox.setInternalState(workerTask, "toSend", records);
         Whitebox.invokeMethod(workerTask, "sendRecords");
-        assertEquals(null, sent.getValue().timestamp());
+        assertNull(sent.getValue().timestamp());
 
         PowerMock.verifyAll();
     }

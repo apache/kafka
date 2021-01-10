@@ -25,6 +25,7 @@ import java.util.Collections;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertArrayEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 
 public class StringConverterTest {
     private static final String TOPIC = "topic";
@@ -44,7 +45,7 @@ public class StringConverterTest {
 
     @Test
     public void testNullToBytes() {
-        assertEquals(null, converter.fromConnectData(TOPIC, Schema.OPTIONAL_STRING_SCHEMA, null));
+        assertNull(converter.fromConnectData(TOPIC, Schema.OPTIONAL_STRING_SCHEMA, null));
     }
 
     @Test
@@ -69,7 +70,7 @@ public class StringConverterTest {
     public void testBytesNullToString() {
         SchemaAndValue data = converter.toConnectData(TOPIC, null);
         assertEquals(Schema.OPTIONAL_STRING_SCHEMA, data.schema());
-        assertEquals(null, data.value());
+        assertNull(data.value());
     }
 
     @Test
@@ -95,6 +96,6 @@ public class StringConverterTest {
 
     @Test
     public void testNullHeaderValueToBytes() {
-        assertEquals(null, converter.fromConnectHeader(TOPIC, "hdr", Schema.OPTIONAL_STRING_SCHEMA, null));
+        assertNull(converter.fromConnectHeader(TOPIC, "hdr", Schema.OPTIONAL_STRING_SCHEMA, null));
     }
 }

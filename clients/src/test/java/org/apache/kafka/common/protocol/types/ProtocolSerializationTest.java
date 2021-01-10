@@ -29,6 +29,7 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.fail;
 
@@ -399,7 +400,7 @@ public class ProtocolSerializationTest {
         Struct newFormat = newSchema.read(buffer);
         assertEquals(value, newFormat.get("field1"));
         assertEquals("default", newFormat.get("field2"));
-        assertEquals(null, newFormat.get("field3"));
+        assertNull(newFormat.get("field3"));
         assertEquals(ByteBuffer.allocate(0), newFormat.get("field4"));
         assertEquals(Long.MAX_VALUE, newFormat.get("field5"));
     }

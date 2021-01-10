@@ -97,7 +97,7 @@ public class ConnectUtilsTest {
 
         Map<String, Object> prop = new HashMap<>();
         ConnectUtils.addMetricsContextProperties(prop, config, "cluster-1");
-        assertEquals(null, prop.get(CommonClientConfigs.METRICS_CONTEXT_PREFIX + WorkerConfig.CONNECT_GROUP_ID));
+        assertNull(prop.get(CommonClientConfigs.METRICS_CONTEXT_PREFIX + WorkerConfig.CONNECT_GROUP_ID));
         assertEquals("cluster-1", prop.get(CommonClientConfigs.METRICS_CONTEXT_PREFIX + WorkerConfig.CONNECT_KAFKA_CLUSTER_ID));
 
     }

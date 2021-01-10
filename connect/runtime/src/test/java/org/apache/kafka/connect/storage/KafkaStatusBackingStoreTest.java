@@ -54,6 +54,7 @@ import static org.easymock.EasyMock.expect;
 import static org.easymock.EasyMock.expectLastCall;
 import static org.easymock.EasyMock.newCapture;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 
@@ -114,7 +115,7 @@ public class KafkaStatusBackingStoreTest extends EasyMockSupport {
         store.put(status);
 
         // state is not visible until read back from the log
-        assertEquals(null, store.get(CONNECTOR));
+        assertNull(store.get(CONNECTOR));
 
         verifyAll();
     }
@@ -148,7 +149,7 @@ public class KafkaStatusBackingStoreTest extends EasyMockSupport {
         store.put(status);
 
         // state is not visible until read back from the log
-        assertEquals(null, store.get(CONNECTOR));
+        assertNull(store.get(CONNECTOR));
 
         verifyAll();
     }
@@ -176,7 +177,7 @@ public class KafkaStatusBackingStoreTest extends EasyMockSupport {
         store.put(status);
 
         // state is not visible until read back from the log
-        assertEquals(null, store.get(CONNECTOR));
+        assertNull(store.get(CONNECTOR));
 
         verifyAll();
     }
@@ -365,7 +366,7 @@ public class KafkaStatusBackingStoreTest extends EasyMockSupport {
         store.put(status);
 
         // state is not visible until read back from the log
-        assertEquals(null, store.get(TASK));
+        assertNull(store.get(TASK));
 
         verifyAll();
     }
