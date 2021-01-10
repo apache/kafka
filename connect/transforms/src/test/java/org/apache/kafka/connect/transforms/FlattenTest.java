@@ -310,8 +310,8 @@ public class FlattenTest {
                 null, null);
         final SourceRecord transformedRecord = xformValue.apply(record);
 
-        assertEquals(null, transformedRecord.value());
-        assertEquals(null, transformedRecord.valueSchema());
+        assertNull(transformedRecord.value());
+        assertNull(transformedRecord.valueSchema());
     }
 
     @Test
@@ -323,7 +323,7 @@ public class FlattenTest {
                 simpleStructSchema, null);
         final SourceRecord transformedRecord = xformValue.apply(record);
 
-        assertEquals(null, transformedRecord.value());
+        assertNull(transformedRecord.value());
         assertEquals(simpleStructSchema, transformedRecord.valueSchema());
     }
 }

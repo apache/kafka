@@ -1349,7 +1349,7 @@ public class WorkerSinkTaskTest {
         SinkRecord record = records.getValue().iterator().next();
 
         // we expect null for missing timestamp, the sentinel value of Record.NO_TIMESTAMP is Kafka's API
-        assertEquals(null, record.timestamp());
+        assertNull(record.timestamp());
         assertEquals(TimestampType.CREATE_TIME, record.timestampType());
 
         PowerMock.verifyAll();

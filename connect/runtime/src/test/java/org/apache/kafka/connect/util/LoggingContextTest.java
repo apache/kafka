@@ -203,6 +203,6 @@ public class LoggingContextTest {
     }
 
     protected void assertConnectorMdcUnset() {
-        assertEquals(null, MDC.get(EXTRA_KEY3));
+        assertNull(MDC.get(EXTRA_KEY3));
     }
 }

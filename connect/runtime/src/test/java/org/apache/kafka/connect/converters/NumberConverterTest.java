@@ -95,7 +95,7 @@ public abstract class NumberConverterTest<T extends Number> {
 
     @Test
     public void testNullToBytes() {
-        assertEquals(null, converter.fromConnectData(TOPIC, schema, null));
+        assertNull(converter.fromConnectData(TOPIC, schema, null));
     }
 
     @Test

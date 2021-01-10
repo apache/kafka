@@ -28,6 +28,7 @@ import java.util.HashMap;
 import java.util.Map;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 
 public class FileConfigProviderTest {
@@ -46,7 +47,7 @@ public class FileConfigProviderTest {
         result.put("testKey", "testResult");
         result.put("testKey2", "testResult2");
         assertEquals(result, configData.data());
-        assertEquals(null, configData.ttl());
+        assertNull(configData.ttl());
     }
 
     @Test
@@ -55,35 +56,35 @@ public class FileConfigProviderTest {
         Map<String, String> result = new HashMap<>();
         result.put("testKey", "testResult");
         assertEquals(result, configData.data());
-        assertEquals(null, configData.ttl());
+        assertNull(configData.ttl());
     }
 
     @Test
     public void testEmptyPath() throws Exception {
         ConfigData configData = configProvider.get("", Collections.singleton("testKey"));
         assertTrue(configData.data().isEmpty());
-        assertEquals(null, configData.ttl());
+        assertNull(configData.ttl());
     }
 
     @Test
     public void testEmptyPathWithKey() throws Exception {
         ConfigData configData = configProvider.get("");
         assertTrue(configData.data().isEmpty());
-        assertEquals(null, configData.ttl());
+        assertNull(configData.ttl());
     }
 
     @Test
     public void testNullPath() throws Exception {
         ConfigData configData = configProvider.get(null);
         assertTrue(configData.data().isEmpty());
-        assertEquals(null, configData.ttl());
+        assertNull(configData.ttl());
     }
 
     @Test
     public void testNullPathWithKey() throws Exception {
         ConfigData configData = configProvider.get(null, Collections.singleton("testKey"));
         assertTrue(configData.data().isEmpty());
-        assertEquals(null, configData.ttl());
+        assertNull(configData.ttl());
     }
 
     public static class TestFileConfigProvider extends FileConfigProvider {
