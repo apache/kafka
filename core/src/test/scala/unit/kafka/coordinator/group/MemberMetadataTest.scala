@@ -64,24 +64,22 @@ class MemberMetadataTest {
     assertTrue(Arrays.equals(Array[Byte](1), member.metadata("roundrobin")))
   }
 
-  @Test(expected = classOf[IllegalArgumentException])
+  @Test
   def testMetadataRaisesOnUnsupportedProtocol(): Unit = {
     val protocols = List(("range", Array.empty[Byte]), ("roundrobin", Array.empty[Byte]))
 
     val member = new MemberMetadata(memberId, groupId, groupInstanceId, clientId, clientHost, rebalanceTimeoutMs, sessionTimeoutMs,
       protocolType, protocols)
-    member.metadata("blah")
-    fail()
+    assertThrows(classOf[IllegalArgumentException], () => member.metadata("blah"))
   }
 
-  @Test(expected = classOf[IllegalArgumentException])
+  @Test
   def testVoteRaisesOnNoSupportedProtocols(): Unit = {
     val protocols = List(("range", Array.empty[Byte]), ("roundrobin", Array.empty[Byte]))
 
     val member = new MemberMetadata(memberId, groupId, groupInstanceId, clientId, clientHost, rebalanceTimeoutMs, sessionTimeoutMs,
       protocolType, protocols)
-    member.vote(Set("blah"))
-    fail()
+    assertThrows(classOf[IllegalArgumentException], () => member.vote(Set("blah")))
   }
 
   @Test

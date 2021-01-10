@@ -823,10 +823,11 @@ public class JsonConverterTest {
         assertNull(converted);
     }
 
-    @Test(expected = DataException.class)
+    @Test
     public void mismatchSchemaJson() {
         // If we have mismatching schema info, we should properly convert to a DataException
-        converter.fromConnectData(TOPIC, Schema.FLOAT64_SCHEMA, true);
+        assertThrows(DataException.class,
+            () -> converter.fromConnectData(TOPIC, Schema.FLOAT64_SCHEMA, true));
     }
 
     @Test

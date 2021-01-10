@@ -33,6 +33,7 @@ import java.util.Arrays;
 import java.util.Collections;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertThrows;
 
 public class FrequenciesTest {
 
@@ -53,22 +54,22 @@ public class FrequenciesTest {
         metrics.close();
     }
 
-    @Test(expected = IllegalArgumentException.class)
+    @Test
     public void testFrequencyCenterValueAboveMax() {
-        new Frequencies(4, 1.0, 4.0,
-                        freq("1", 1.0), freq("2", 20.0));
+        assertThrows(IllegalArgumentException.class,
+            () -> new Frequencies(4, 1.0, 4.0, freq("1", 1.0), freq("2", 20.0)));
     }
 
-    @Test(expected = IllegalArgumentException.class)
+    @Test
     public void testFrequencyCenterValueBelowMin() {
-        new Frequencies(4, 1.0, 4.0,
-                        freq("1", 1.0), freq("2", -20.0));
+        assertThrows(IllegalArgumentException.class,
+            () -> new Frequencies(4, 1.0, 4.0, freq("1", 1.0), freq("2", -20.0)));
     }
 
-    @Test(expected = IllegalArgumentException.class)
+    @Test
     public void testMoreFrequencyParametersThanBuckets() {
-        new Frequencies(1, 1.0, 4.0,
-                        freq("1", 1.0), freq("2", -20.0));
+        assertThrows(IllegalArgumentException.class,
+            () -> new Frequencies(1, 1.0, 4.0, freq("1", 1.0), freq("2", -20.0)));
     }
 
     @Test

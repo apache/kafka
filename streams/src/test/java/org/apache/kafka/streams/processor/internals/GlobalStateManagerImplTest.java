@@ -163,12 +163,12 @@ public class GlobalStateManagerImplTest {
         assertTrue(new File(stateDirectory.globalStateDir(), ".lock").exists());
     }
 
-    @Test(expected = LockException.class)
+    @Test
     public void shouldThrowLockExceptionIfCantGetLock() throws IOException {
         final StateDirectory stateDir = new StateDirectory(streamsConfig, time, true);
         try {
             stateDir.lockGlobalState();
-            stateManager.initialize();
+            assertThrows(LockException.class, stateManager::initialize);
         } finally {
             stateDir.unlockGlobalState();
         }
@@ -232,10 +232,10 @@ public class GlobalStateManagerImplTest {
         assertTrue(checkpointFile.exists());
     }
 
-    @Test(expected = StreamsException.class)
+    @Test
     public void shouldThrowStreamsExceptionIfFailedToReadCheckpointedOffsets() throws IOException {
         writeCorruptCheckpoint();
-        stateManager.initialize();
+        assertThrows(StreamsException.class, stateManager::initialize);
     }
 
     @Test
@@ -398,7 +398,7 @@ public class GlobalStateManagerImplTest {
         assertTrue(store2.flushed);
     }
 
-    @Test(expected = ProcessorStateException.class)
+    @Test
     public void shouldThrowProcessorStateStoreExceptionIfStoreFlushFailed() {
         stateManager.initialize();
         // register the stores
@@ -409,8 +409,7 @@ public class GlobalStateManagerImplTest {
                 throw new RuntimeException("KABOOM!");
             }
         }, stateRestoreCallback);
-
-        stateManager.flush();
+        assertThrows(StreamsException.class, stateManager::flush);
     }
 
     @Test
@@ -427,7 +426,7 @@ public class GlobalStateManagerImplTest {
         assertFalse(store2.isOpen());
     }
 
-    @Test(expected = ProcessorStateException.class)
+    @Test
     public void shouldThrowProcessorStateStoreExceptionIfStoreCloseFailed() throws IOException {
         stateManager.initialize();
         initializeConsumer(1, 0, t1);
@@ -438,7 +437,7 @@ public class GlobalStateManagerImplTest {
             }
         }, stateRestoreCallback);
 
-        stateManager.close();
+        assertThrows(ProcessorStateException.class, stateManager::close);
     }
 
     @Test

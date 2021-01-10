@@ -24,6 +24,7 @@ import java.util.Map;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 
 public class OAuthBearerExtensionsValidatorCallbackTest {
@@ -78,13 +79,13 @@ public class OAuthBearerExtensionsValidatorCallbackTest {
         assertEquals("nothing", callback.ignoredExtensions().get("nothing"));
     }
 
-    @Test(expected = IllegalArgumentException.class)
+    @Test
     public void testCannotValidateExtensionWhichWasNotGiven() {
         Map<String, String> extensions = new HashMap<>();
         extensions.put("hello", "bye");
 
         OAuthBearerExtensionsValidatorCallback callback = new OAuthBearerExtensionsValidatorCallback(TOKEN, new SaslExtensions(extensions));
 
-        callback.valid("???");
+        assertThrows(IllegalArgumentException.class, () -> callback.valid("???"));
     }
 }

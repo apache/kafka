@@ -29,7 +29,6 @@ import org.apache.kafka.common.requests.UpdateMetadataRequest
 import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.junit.Test
 import org.junit.Assert._
-import org.scalatest.Assertions
 
 import scala.jdk.CollectionConverters._
 
@@ -136,7 +135,7 @@ class MetadataCacheTest {
           assertEquals(Errors.NONE.code, partitionMetadata.errorCode)
           assertEquals(partitionId, partitionMetadata.partitionIndex)
           val partitionState = topicPartitionStates.find(_.partitionIndex == partitionId).getOrElse(
-            Assertions.fail(s"Unable to find partition state for partition $partitionId"))
+            throw new AssertionError(s"Unable to find partition state for partition $partitionId"))
           assertEquals(partitionState.leader, partitionMetadata.leaderId)
           assertEquals(partitionState.leaderEpoch, partitionMetadata.leaderEpoch)
           assertEquals(partitionState.isr, partitionMetadata.isrNodes)

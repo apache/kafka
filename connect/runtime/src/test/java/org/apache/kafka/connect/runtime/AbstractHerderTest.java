@@ -69,6 +69,7 @@ import java.util.stream.Collectors;
 
 import static org.apache.kafka.connect.runtime.AbstractHerder.keysWithVariableValues;
 import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertThrows;
 import static org.powermock.api.easymock.PowerMock.verifyAll;
 import static org.powermock.api.easymock.PowerMock.replayAll;
 import static org.easymock.EasyMock.strictMock;
@@ -273,12 +274,12 @@ public class AbstractHerderTest {
     }
 
 
-    @Test(expected = BadRequestException.class)
-    public void testConfigValidationEmptyConfig() throws Throwable {
-        AbstractHerder herder = createConfigValidationHerder(TestSourceConnector.class, noneConnectorClientConfigOverridePolicy);
+    @Test
+    public void testConfigValidationEmptyConfig() {
+        AbstractHerder herder = createConfigValidationHerder(TestSourceConnector.class, noneConnectorClientConfigOverridePolicy, 0);
         replayAll();
 
-        herder.validateConnectorConfig(Collections.emptyMap(), false);
+        assertThrows(BadRequestException.class, () -> herder.validateConnectorConfig(Collections.emptyMap(), false));
 
         verifyAll();
     }
@@ -312,8 +313,8 @@ public class AbstractHerderTest {
         verifyAll();
     }
 
-    @Test(expected = ConfigException.class)
-    public void testConfigValidationInvalidTopics() throws Throwable {
+    @Test
+    public void testConfigValidationInvalidTopics() {
         AbstractHerder herder = createConfigValidationHerder(TestSinkConnector.class, noneConnectorClientConfigOverridePolicy);
         replayAll();
 
@@ -322,12 +323,12 @@ public class AbstractHerderTest {
         config.put(SinkConnectorConfig.TOPICS_CONFIG, "topic1,topic2");
         config.put(SinkConnectorConfig.TOPICS_REGEX_CONFIG, "topic.*");
 
-        herder.validateConnectorConfig(config, false);
+        assertThrows(ConfigException.class, () -> herder.validateConnectorConfig(config, false));
 
         verifyAll();
     }
 
-    @Test(expected = ConfigException.class)
+    @Test
     public void testConfigValidationTopicsWithDlq() {
         AbstractHerder herder = createConfigValidationHerder(TestSinkConnector.class, noneConnectorClientConfigOverridePolicy);
         replayAll();
@@ -337,12 +338,12 @@ public class AbstractHerderTest {
         config.put(SinkConnectorConfig.TOPICS_CONFIG, "topic1");
         config.put(SinkConnectorConfig.DLQ_TOPIC_NAME_CONFIG, "topic1");
 
-        herder.validateConnectorConfig(config, false);
+        assertThrows(ConfigException.class, () -> herder.validateConnectorConfig(config, false));
 
         verifyAll();
     }
 
-    @Test(expected = ConfigException.class)
+    @Test
     public void testConfigValidationTopicsRegexWithDlq() {
         AbstractHerder herder = createConfigValidationHerder(TestSinkConnector.class, noneConnectorClientConfigOverridePolicy);
         replayAll();
@@ -352,7 +353,7 @@ public class AbstractHerderTest {
         config.put(SinkConnectorConfig.TOPICS_REGEX_CONFIG, "topic.*");
         config.put(SinkConnectorConfig.DLQ_TOPIC_NAME_CONFIG, "topic1");
 
-        herder.validateConnectorConfig(config, false);
+        assertThrows(ConfigException.class, () -> herder.validateConnectorConfig(config, false));
 
         verifyAll();
     }
@@ -789,6 +790,12 @@ public class AbstractHerderTest {
 
     private AbstractHerder createConfigValidationHerder(Class<? extends Connector> connectorClass,
                                                         ConnectorClientConfigOverridePolicy connectorClientConfigOverridePolicy) {
+        return createConfigValidationHerder(connectorClass, connectorClientConfigOverridePolicy, 1);
+    }
+
+    private AbstractHerder createConfigValidationHerder(Class<? extends Connector> connectorClass,
+                                                        ConnectorClientConfigOverridePolicy connectorClientConfigOverridePolicy,
+                                                        int countOfCallingNewConnector) {
 
 
         ConfigBackingStore configStore = strictMock(ConfigBackingStore.class);
@@ -813,8 +820,11 @@ public class AbstractHerderTest {
         } catch (ReflectiveOperationException e) {
             throw new RuntimeException("Couldn't create connector", e);
         }
-        EasyMock.expect(plugins.newConnector(connectorClass.getName())).andReturn(connector);
-        EasyMock.expect(plugins.compareAndSwapLoaders(connector)).andReturn(classLoader);
+        if (countOfCallingNewConnector > 0) {
+            EasyMock.expect(plugins.newConnector(connectorClass.getName())).andReturn(connector).times(countOfCallingNewConnector);
+            EasyMock.expect(plugins.compareAndSwapLoaders(connector)).andReturn(classLoader).times(countOfCallingNewConnector);
+        }
+
         return herder;
     }
 

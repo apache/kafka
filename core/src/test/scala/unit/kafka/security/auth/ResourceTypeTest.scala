@@ -17,9 +17,8 @@
 package kafka.security.auth
 
 import kafka.common.KafkaException
-import org.junit.Assert.assertEquals
+import org.junit.Assert.{assertEquals, fail}
 import org.junit.Test
-import org.scalatest.Assertions.fail
 import org.apache.kafka.common.resource.{ResourceType => JResourceType}
 
 @deprecated("Scala Authorizer API classes gave been deprecated", "Since 2.5")

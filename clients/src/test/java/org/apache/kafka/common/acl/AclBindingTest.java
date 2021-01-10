@@ -26,6 +26,7 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 
 public class AclBindingTest {
@@ -124,18 +125,21 @@ public class AclBindingTest {
         new AclBinding(new ResourcePattern(ResourceType.UNKNOWN, "foo", PatternType.LITERAL), ACL1.entry());
     }
 
-    @Test(expected = IllegalArgumentException.class)
+    @Test
     public void shouldThrowOnMatchPatternType() {
-        new AclBinding(new ResourcePattern(ResourceType.TOPIC, "foo", PatternType.MATCH), ACL1.entry());
+        assertThrows(IllegalArgumentException.class,
+            () -> new AclBinding(new ResourcePattern(ResourceType.TOPIC, "foo", PatternType.MATCH), ACL1.entry()));
     }
 
-    @Test(expected = IllegalArgumentException.class)
+    @Test
     public void shouldThrowOnAnyPatternType() {
-        new AclBinding(new ResourcePattern(ResourceType.TOPIC, "foo", PatternType.ANY), ACL1.entry());
+        assertThrows(IllegalArgumentException.class,
+            () -> new AclBinding(new ResourcePattern(ResourceType.TOPIC, "foo", PatternType.ANY), ACL1.entry()));
     }
 
-    @Test(expected = IllegalArgumentException.class)
+    @Test
     public void shouldThrowOnAnyResourceType() {
-        new AclBinding(new ResourcePattern(ResourceType.ANY, "foo", PatternType.LITERAL), ACL1.entry());
+        assertThrows(IllegalArgumentException.class,
+            () -> new AclBinding(new ResourcePattern(ResourceType.ANY, "foo", PatternType.LITERAL), ACL1.entry()));
     }
 }

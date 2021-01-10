@@ -20,6 +20,7 @@ import org.junit.Test;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotEquals;
+import static org.junit.Assert.assertThrows;
 
 public class WindowTest {
 
@@ -47,14 +48,14 @@ public class WindowTest {
 
     private final TestWindow window = new TestWindow(5, 10);
 
-    @Test(expected = IllegalArgumentException.class)
+    @Test
     public void shouldThrowIfStartIsNegative() {
-        new TestWindow(-1, 0);
+        assertThrows(IllegalArgumentException.class, () -> new TestWindow(-1, 0));
     }
 
-    @Test(expected = IllegalArgumentException.class)
+    @Test
     public void shouldThrowIfEndIsSmallerThanStart() {
-        new TestWindow(1, 0);
+        assertThrows(IllegalArgumentException.class, () -> new TestWindow(1, 0));
     }
 
     @Test

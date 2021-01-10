@@ -61,22 +61,22 @@ class KafkaTest {
     assertEquals(util.Arrays.asList("compact","delete"), config4.logCleanupPolicy)
   }
 
-  @Test(expected = classOf[FatalExitError])
+  @Test
   def testGetKafkaConfigFromArgsNonArgsAtTheEnd(): Unit = {
     val propertiesFile = prepareDefaultConfig()
-    KafkaConfig.fromProps(Kafka.getPropsFromArgs(Array(propertiesFile, "--override", "broker.id=1", "broker.id=2")))
+    assertThrows(classOf[FatalExitError], () => KafkaConfig.fromProps(Kafka.getPropsFromArgs(Array(propertiesFile, "--override", "broker.id=1", "broker.id=2"))))
   }
 
-  @Test(expected = classOf[FatalExitError])
+  @Test
   def testGetKafkaConfigFromArgsNonArgsOnly(): Unit = {
     val propertiesFile = prepareDefaultConfig()
-    KafkaConfig.fromProps(Kafka.getPropsFromArgs(Array(propertiesFile, "broker.id=1", "broker.id=2")))
+    assertThrows(classOf[FatalExitError], () => KafkaConfig.fromProps(Kafka.getPropsFromArgs(Array(propertiesFile, "broker.id=1", "broker.id=2"))))
   }
 
-  @Test(expected = classOf[FatalExitError])
+  @Test
   def testGetKafkaConfigFromArgsNonArgsAtTheBegging(): Unit = {
     val propertiesFile = prepareDefaultConfig()
-    KafkaConfig.fromProps(Kafka.getPropsFromArgs(Array(propertiesFile, "broker.id=1", "--override", "broker.id=2")))
+    assertThrows(classOf[FatalExitError], () => KafkaConfig.fromProps(Kafka.getPropsFromArgs(Array(propertiesFile, "broker.id=1", "--override", "broker.id=2"))))
   }
 
   @Test

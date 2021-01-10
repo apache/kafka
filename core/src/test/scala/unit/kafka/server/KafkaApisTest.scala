@@ -1340,29 +1340,29 @@ class KafkaApisTest {
     checkInvalidPartition(1) // topic has only one partition
   }
 
-  @Test(expected = classOf[UnsupportedVersionException])
+  @Test
   def shouldThrowUnsupportedVersionExceptionOnHandleAddOffsetToTxnRequestWhenInterBrokerProtocolNotSupported(): Unit = {
-    createKafkaApis(KAFKA_0_10_2_IV0).handleAddOffsetsToTxnRequest(null)
+    assertThrows(classOf[UnsupportedVersionException], () => createKafkaApis(KAFKA_0_10_2_IV0).handleAddOffsetsToTxnRequest(null))
   }
 
-  @Test(expected = classOf[UnsupportedVersionException])
+  @Test
   def shouldThrowUnsupportedVersionExceptionOnHandleAddPartitionsToTxnRequestWhenInterBrokerProtocolNotSupported(): Unit = {
-    createKafkaApis(KAFKA_0_10_2_IV0).handleAddPartitionToTxnRequest(null)
+    assertThrows(classOf[UnsupportedVersionException], () => createKafkaApis(KAFKA_0_10_2_IV0).handleAddPartitionToTxnRequest(null))
   }
 
-  @Test(expected = classOf[UnsupportedVersionException])
+  @Test
   def shouldThrowUnsupportedVersionExceptionOnHandleTxnOffsetCommitRequestWhenInterBrokerProtocolNotSupported(): Unit = {
-    createKafkaApis(KAFKA_0_10_2_IV0).handleAddPartitionToTxnRequest(null)
+    assertThrows(classOf[UnsupportedVersionException], () => createKafkaApis(KAFKA_0_10_2_IV0).handleAddPartitionToTxnRequest(null))
   }
 
-  @Test(expected = classOf[UnsupportedVersionException])
+  @Test
   def shouldThrowUnsupportedVersionExceptionOnHandleEndTxnRequestWhenInterBrokerProtocolNotSupported(): Unit = {
-    createKafkaApis(KAFKA_0_10_2_IV0).handleEndTxnRequest(null)
+    assertThrows(classOf[UnsupportedVersionException], () => createKafkaApis(KAFKA_0_10_2_IV0).handleEndTxnRequest(null))
   }
 
-  @Test(expected = classOf[UnsupportedVersionException])
+  @Test
   def shouldThrowUnsupportedVersionExceptionOnHandleWriteTxnMarkersRequestWhenInterBrokerProtocolNotSupported(): Unit = {
-    createKafkaApis(KAFKA_0_10_2_IV0).handleWriteTxnMarkersRequest(null)
+    assertThrows(classOf[UnsupportedVersionException], () => createKafkaApis(KAFKA_0_10_2_IV0).handleWriteTxnMarkersRequest(null))
   }
 
   @Test

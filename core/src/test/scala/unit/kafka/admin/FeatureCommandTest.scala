@@ -26,9 +26,8 @@ import org.apache.kafka.common.utils.Utils
 
 import java.util.Properties
 
-import org.junit.Assert.{assertEquals, assertTrue}
+import org.junit.Assert.{assertEquals, assertTrue, assertThrows}
 import org.junit.Test
-import org.scalatest.Assertions.intercept
 
 class FeatureCommandTest extends BaseRequestTest {
   override def brokerCount: Int = 3
@@ -219,9 +218,7 @@ class FeatureCommandTest extends BaseRequestTest {
                       Utils.mkEntry("feature_3", new SupportedVersionRange(1, 3))))
       featureApis.setSupportedFeatures(targetFeaturesWithIncompatibilities)
       val output = TestUtils.grabConsoleOutput({
-        val exception = intercept[UpdateFeaturesException] {
-          featureApis.upgradeAllFeatures()
-        }
+        val exception = assertThrows(classOf[UpdateFeaturesException], () => featureApis.upgradeAllFeatures())
         assertEquals("2 feature updates failed!", exception.getMessage)
       })
       val expected =

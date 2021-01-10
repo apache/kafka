@@ -31,7 +31,6 @@ import org.apache.kafka.server.authorizer._
 import org.easymock.EasyMock
 import org.junit.Assert._
 import org.junit.Test
-import org.scalatest.Assertions.intercept
 
 import scala.jdk.CollectionConverters._
 import scala.collection.Set
@@ -144,9 +143,8 @@ class DynamicBrokerConfigTest {
       override def validateReconfiguration(configs: util.Map[String, _]): Unit = {}
       override def reconfigure(configs: util.Map[String, _]): Unit = {}
     }
-    intercept[IllegalArgumentException] {
-      config.dynamicConfig.addReconfigurable(createReconfigurable(invalidReconfigurableProps))
-    }
+    assertThrows(classOf[IllegalArgumentException],
+      () => config.dynamicConfig.addReconfigurable(createReconfigurable(invalidReconfigurableProps)))
     config.dynamicConfig.addReconfigurable(createReconfigurable(validReconfigurableProps))
 
     def createBrokerReconfigurable(configs: Set[String]) = new BrokerReconfigurable {
@@ -154,9 +152,8 @@ class DynamicBrokerConfigTest {
       override def validateReconfiguration(newConfig: KafkaConfig): Unit = {}
       override def reconfigure(oldConfig: KafkaConfig, newConfig: KafkaConfig): Unit = {}
     }
-    intercept[IllegalArgumentException] {
-      config.dynamicConfig.addBrokerReconfigurable(createBrokerReconfigurable(invalidReconfigurableProps))
-    }
+    assertThrows(classOf[IllegalArgumentException],
+      () => config.dynamicConfig.addBrokerReconfigurable(createBrokerReconfigurable(invalidReconfigurableProps)))
     config.dynamicConfig.addBrokerReconfigurable(createBrokerReconfigurable(validReconfigurableProps))
   }
 

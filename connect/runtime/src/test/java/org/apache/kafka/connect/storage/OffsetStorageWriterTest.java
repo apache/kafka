@@ -42,6 +42,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.Callable;
 
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 
 @RunWith(PowerMockRunner.class)
@@ -164,7 +165,7 @@ public class OffsetStorageWriterTest {
         PowerMock.verifyAll();
     }
 
-    @Test(expected = ConnectException.class)
+    @Test
     public void testAlreadyFlushing() {
         @SuppressWarnings("unchecked")
         final Callback<Void> callback = PowerMock.createMock(Callback.class);
@@ -177,7 +178,7 @@ public class OffsetStorageWriterTest {
         writer.offset(OFFSET_KEY, OFFSET_VALUE);
         assertTrue(writer.beginFlush());
         writer.doFlush(callback);
-        assertTrue(writer.beginFlush()); // should throw
+        assertThrows(ConnectException.class, writer::beginFlush);
 
         PowerMock.verifyAll();
     }

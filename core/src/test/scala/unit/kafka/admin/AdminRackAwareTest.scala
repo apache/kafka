@@ -20,7 +20,6 @@ import kafka.utils.Logging
 import org.apache.kafka.common.errors.InvalidReplicationFactorException
 import org.junit.Assert._
 import org.junit.Test
-import org.scalatest.Assertions._
 
 import scala.collection.Map
 
@@ -200,14 +199,12 @@ class AdminRackAwareTest extends RackAwareTest with Logging {
     val brokerMetadatas = (0 to 4).map(new BrokerMetadata(_, None))
 
     // test 0 replication factor
-    intercept[InvalidReplicationFactorException] {
-      AdminUtils.assignReplicasToBrokers(brokerMetadatas, 10, 0)
-    }
+    assertThrows(classOf[InvalidReplicationFactorException],
+      () => AdminUtils.assignReplicasToBrokers(brokerMetadatas, 10, 0))
 
     // test wrong replication factor
-    intercept[InvalidReplicationFactorException] {
-      AdminUtils.assignReplicasToBrokers(brokerMetadatas, 10, 6)
-    }
+    assertThrows(classOf[InvalidReplicationFactorException],
+      () => AdminUtils.assignReplicasToBrokers(brokerMetadatas, 10, 6))
 
     // correct assignment
     val expectedAssignment = Map(

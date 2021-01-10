@@ -294,12 +294,13 @@ public class SimpleExampleMessageTest {
             message -> assertEquals(myStruct, message.myStruct()), (short) 2);
     }
 
-    @Test(expected = UnsupportedVersionException.class)
+    @Test
     public void testMyStructUnsupportedVersion() {
         SimpleExampleMessageData.MyStruct myStruct =
                 new SimpleExampleMessageData.MyStruct().setStructId(10);
         // Check serialization throws exception for unsupported version
-        testRoundTrip(new SimpleExampleMessageData().setMyStruct(myStruct), (short) 1);
+        assertThrows(UnsupportedVersionException.class,
+            () -> testRoundTrip(new SimpleExampleMessageData().setMyStruct(myStruct), (short) 1));
     }
 
     /**

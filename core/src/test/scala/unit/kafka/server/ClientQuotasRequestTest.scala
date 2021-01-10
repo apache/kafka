@@ -250,40 +250,40 @@ class ClientQuotasRequestTest extends BaseRequestTest {
     verifyIpQuotas(allIpEntityFilter, Map.empty)
   }
 
-  @Test(expected = classOf[InvalidRequestException])
+  @Test
   def testAlterClientQuotasBadUser(): Unit = {
     val entity = new ClientQuotaEntity(Map((ClientQuotaEntity.USER -> "")).asJava)
-    alterEntityQuotas(entity, Map((RequestPercentageProp -> Some(12.34))), validateOnly = true)
+    assertThrows(classOf[InvalidRequestException], () => alterEntityQuotas(entity, Map(RequestPercentageProp -> Some(12.34)), validateOnly = true))
   }
 
-  @Test(expected = classOf[InvalidRequestException])
+  @Test
   def testAlterClientQuotasBadClientId(): Unit = {
     val entity = new ClientQuotaEntity(Map((ClientQuotaEntity.CLIENT_ID -> "")).asJava)
-    alterEntityQuotas(entity, Map((RequestPercentageProp -> Some(12.34))), validateOnly = true)
+    assertThrows(classOf[InvalidRequestException], () => alterEntityQuotas(entity, Map(RequestPercentageProp -> Some(12.34)), validateOnly = true))
   }
 
-  @Test(expected = classOf[InvalidRequestException])
+  @Test
   def testAlterClientQuotasBadEntityType(): Unit = {
     val entity = new ClientQuotaEntity(Map(("" -> "name")).asJava)
-    alterEntityQuotas(entity, Map((RequestPercentageProp -> Some(12.34))), validateOnly = true)
+    assertThrows(classOf[InvalidRequestException], () => alterEntityQuotas(entity, Map(RequestPercentageProp -> Some(12.34)), validateOnly = true))
   }
 
-  @Test(expected = classOf[InvalidRequestException])
+  @Test
   def testAlterClientQuotasEmptyEntity(): Unit = {
     val entity = new ClientQuotaEntity(Map.empty.asJava)
-    alterEntityQuotas(entity, Map((ProducerByteRateProp -> Some(10000.5))), validateOnly = true)
+    assertThrows(classOf[InvalidRequestException], () => alterEntityQuotas(entity, Map(ProducerByteRateProp -> Some(10000.5)), validateOnly = true))
   }
 
-  @Test(expected = classOf[InvalidRequestException])
+  @Test
   def testAlterClientQuotasBadConfigKey(): Unit = {
-    val entity = new ClientQuotaEntity(Map((ClientQuotaEntity.USER -> "user")).asJava)
-    alterEntityQuotas(entity, Map(("bad" -> Some(1.0))), validateOnly = true)
+    val entity = new ClientQuotaEntity(Map(ClientQuotaEntity.USER -> "user").asJava)
+    assertThrows(classOf[InvalidRequestException], () => alterEntityQuotas(entity, Map("bad" -> Some(1.0)), validateOnly = true))
   }
 
-  @Test(expected = classOf[InvalidRequestException])
+  @Test
   def testAlterClientQuotasBadConfigValue(): Unit = {
-    val entity = new ClientQuotaEntity(Map((ClientQuotaEntity.USER -> "user")).asJava)
-    alterEntityQuotas(entity, Map((ProducerByteRateProp -> Some(10000.5))), validateOnly = true)
+    val entity = new ClientQuotaEntity(Map(ClientQuotaEntity.USER -> "user").asJava)
+    assertThrows(classOf[InvalidRequestException], () => alterEntityQuotas(entity, Map(ProducerByteRateProp -> Some(10000.5)), validateOnly = true))
   }
 
   private def expectInvalidRequestWithMessage(runnable: => Unit, expectedMessage: String): Unit = {

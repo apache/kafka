@@ -24,7 +24,6 @@ import org.apache.kafka.common.Node
 import org.apache.kafka.common.TopicPartitionInfo
 import org.junit.Assert._
 import org.junit.Test
-import org.scalatest.Assertions.intercept
 
 import scala.jdk.CollectionConverters._
 
@@ -106,16 +105,12 @@ class TopicCommandTest {
 
   @Test
   def testParseAssignmentDuplicateEntries(): Unit = {
-    intercept[AdminCommandFailedException] {
-      TopicCommand.parseReplicaAssignment("5:5")
-    }
+    assertThrows(classOf[AdminCommandFailedException], () => TopicCommand.parseReplicaAssignment("5:5"))
   }
 
   @Test
   def testParseAssignmentPartitionsOfDifferentSize(): Unit = {
-    intercept[AdminOperationException] {
-      TopicCommand.parseReplicaAssignment("5:4:3,2:1")
-    }
+    assertThrows(classOf[AdminOperationException], () => TopicCommand.parseReplicaAssignment("5:4:3,2:1"))
   }
 
   @Test
@@ -131,8 +126,6 @@ class TopicCommandTest {
         assertEquals(expected, exitCode)
         throw new RuntimeException
     }
-    try intercept[RuntimeException] {
-      options.checkArgs()
-    } finally Exit.resetExitProcedure()
+    try assertThrows(classOf[RuntimeException], () => options.checkArgs()) finally Exit.resetExitProcedure()
   }
 }

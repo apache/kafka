@@ -177,18 +177,18 @@ public class SelectorTest {
     /**
      * Sending a request to a node without an existing connection should result in an exception
      */
-    @Test(expected = IllegalStateException.class)
-    public void testCantSendWithoutConnecting() throws Exception {
-        selector.send(createSend("0", "test"));
-        selector.poll(1000L);
+    @Test
+    public void testSendWithoutConnecting() {
+        assertThrows(IllegalStateException.class, () -> selector.send(createSend("0", "test")));
     }
 
     /**
      * Sending a request to a node with a bad hostname should result in an exception during connect
      */
-    @Test(expected = IOException.class)
-    public void testNoRouteToHost() throws Exception {
-        selector.connect("0", new InetSocketAddress("some.invalid.hostname.foo.bar.local", server.port), BUFFER_SIZE, BUFFER_SIZE);
+    @Test
+    public void testNoRouteToHost() {
+        assertThrows(IOException.class,
+            () -> selector.connect("0", new InetSocketAddress("some.invalid.hostname.foo.bar.local", server.port), BUFFER_SIZE, BUFFER_SIZE));
     }
 
     /**
@@ -375,10 +375,10 @@ public class SelectorTest {
         }
     }
 
-    @Test(expected = IllegalStateException.class)
+    @Test
     public void testExistingConnectionId() throws IOException {
         blockingConnect("0");
-        blockingConnect("0");
+        assertThrows(IllegalStateException.class, () -> blockingConnect("0"));
     }
 
     @Test

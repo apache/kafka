@@ -16,15 +16,14 @@
  */
 package kafka.log
 
-import java.io.File
-
 import kafka.utils.TestUtils
 import org.apache.kafka.common.requests.FetchResponse.AbortedTransaction
 import org.junit.Assert._
 import org.junit.{After, Before, Test}
-import org.scalatestplus.junit.JUnitSuite
 
-class TransactionIndexTest extends JUnitSuite {
+import java.io.File
+
+class TransactionIndexTest {
   var file: File = _
   var index: TransactionIndex = _
   val offset = 0L
@@ -56,7 +55,7 @@ class TransactionIndexTest extends JUnitSuite {
     assertEquals(abortedTxns ++ List(anotherAbortedTxn), reopenedIndex.allAbortedTxns)
   }
 
-  @Test(expected = classOf[CorruptIndexException])
+  @Test
   def testSanityCheck(): Unit = {
     val abortedTxns = List(
       new AbortedTxn(producerId = 0L, firstOffset = 0, lastOffset = 10, lastStableOffset = 11),
@@ -68,19 +67,21 @@ class TransactionIndexTest extends JUnitSuite {
 
     // open the index with a different starting offset to fake invalid data
     val reopenedIndex = new TransactionIndex(100L, file)
-    reopenedIndex.sanityCheck()
+    assertThrows(classOf[CorruptIndexException], () => reopenedIndex.sanityCheck())
   }
 
-  @Test(expected = classOf[IllegalArgumentException])
+  @Test
   def testLastOffsetMustIncrease(): Unit = {
     index.append(new AbortedTxn(producerId = 1L, firstOffset = 5, lastOffset = 15, lastStableOffset = 13))
-    index.append(new AbortedTxn(producerId = 0L, firstOffset = 0, lastOffset = 15, lastStableOffset = 11))
+    assertThrows(classOf[IllegalArgumentException], () => index.append(new AbortedTxn(producerId = 0L, firstOffset = 0,
+      lastOffset = 15, lastStableOffset = 11)))
   }
 
-  @Test(expected = classOf[IllegalArgumentException])
+  @Test
   def testLastOffsetCannotDecrease(): Unit = {
     index.append(new AbortedTxn(producerId = 1L, firstOffset = 5, lastOffset = 15, lastStableOffset = 13))
-    index.append(new AbortedTxn(producerId = 0L, firstOffset = 0, lastOffset = 10, lastStableOffset = 11))
+    assertThrows(classOf[IllegalArgumentException], () => index.append(new AbortedTxn(producerId = 0L, firstOffset = 0,
+      lastOffset = 10, lastStableOffset = 11)))
   }
 
   @Test

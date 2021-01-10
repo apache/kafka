@@ -28,7 +28,6 @@ import org.apache.kafka.common.record.{CompressionType, MemoryRecords, SimpleRec
 import org.apache.kafka.common.utils.Utils
 import org.junit.Assert._
 import org.junit.{After, Before, Test}
-import org.scalatest.Assertions.fail
 
 import scala.collection.mutable
 import scala.collection.mutable.ArrayBuffer
@@ -99,7 +98,7 @@ class DumpLogSegmentsTest {
             i += 1
           }
         }
-        fail(s"No match for index $index")
+        throw new AssertionError(s"No match for index $index")
       }
 
       val output = runDumpLogSegments(args)

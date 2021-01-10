@@ -22,7 +22,7 @@ import kafka.utils.TestUtils
 import org.apache.kafka.clients.admin.{Admin, AdminClientConfig}
 import org.apache.kafka.common.errors.UnsupportedByAuthenticationException
 import org.junit.{After, Before, Test}
-import org.scalatest.Assertions.intercept
+import org.junit.Assert.assertThrows
 
 import scala.concurrent.ExecutionException
 
@@ -50,16 +50,16 @@ class DelegationTokenRequestsOnPlainTextTest extends BaseRequestTest {
     adminClient = Admin.create(createAdminConfig)
 
     val createResult = adminClient.createDelegationToken()
-    intercept[ExecutionException](createResult.delegationToken().get()).getCause.isInstanceOf[UnsupportedByAuthenticationException]
+    assertThrows(classOf[ExecutionException], () => createResult.delegationToken().get()).getCause.isInstanceOf[UnsupportedByAuthenticationException]
 
     val describeResult = adminClient.describeDelegationToken()
-    intercept[ExecutionException](describeResult.delegationTokens().get()).getCause.isInstanceOf[UnsupportedByAuthenticationException]
+    assertThrows(classOf[ExecutionException], () => describeResult.delegationTokens().get()).getCause.isInstanceOf[UnsupportedByAuthenticationException]
 
     val renewResult = adminClient.renewDelegationToken("".getBytes())
-    intercept[ExecutionException](renewResult.expiryTimestamp().get()).getCause.isInstanceOf[UnsupportedByAuthenticationException]
+    assertThrows(classOf[ExecutionException], () => renewResult.expiryTimestamp().get()).getCause.isInstanceOf[UnsupportedByAuthenticationException]
 
     val expireResult = adminClient.expireDelegationToken("".getBytes())
-    intercept[ExecutionException](expireResult.expiryTimestamp().get()).getCause.isInstanceOf[UnsupportedByAuthenticationException]
+    assertThrows(classOf[ExecutionException], () => expireResult.expiryTimestamp().get()).getCause.isInstanceOf[UnsupportedByAuthenticationException]
   }
 
 

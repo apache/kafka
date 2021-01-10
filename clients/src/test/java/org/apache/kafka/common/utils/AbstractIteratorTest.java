@@ -18,6 +18,7 @@ package org.apache.kafka.common.utils;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 
 import java.util.ArrayList;
@@ -46,10 +47,10 @@ public class AbstractIteratorTest {
         assertFalse(iter.hasNext());
     }
 
-    @Test(expected = NoSuchElementException.class)
+    @Test
     public void testEmptyIterator() {
-        Iterator<Object> iter = new ListIterator<Object>(Collections.emptyList());
-        iter.next();
+        Iterator<Object> iter = new ListIterator<>(Collections.emptyList());
+        assertThrows(NoSuchElementException.class, iter::next);
     }
 
     static class ListIterator<T> extends AbstractIterator<T> {

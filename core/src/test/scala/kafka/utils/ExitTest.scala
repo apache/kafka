@@ -19,9 +19,8 @@ package kafka.utils
 
 import java.io.IOException
 
-import org.junit.Assert.assertEquals
+import org.junit.Assert.{assertEquals, assertThrows}
 import org.junit.Test
-import org.scalatest.Assertions.intercept
 
 class ExitTest {
   @Test
@@ -36,11 +35,11 @@ class ExitTest {
     val statusCode = 0
     val message = Some("message")
     try {
-      intercept[IOException] {Exit.halt(statusCode)}
+      assertThrows(classOf[IOException], () => Exit.halt(statusCode))
       assertEquals(statusCode, array(0))
       assertEquals(None, array(1))
 
-      intercept[IOException] {Exit.halt(statusCode, message)}
+      assertThrows(classOf[IOException], () => Exit.halt(statusCode, message))
       assertEquals(statusCode, array(0))
       assertEquals(message, array(1))
     } finally {
@@ -60,11 +59,11 @@ class ExitTest {
     val statusCode = 0
     val message = Some("message")
     try {
-      intercept[IOException] {Exit.exit(statusCode)}
+      assertThrows(classOf[IOException], () => Exit.exit(statusCode))
       assertEquals(statusCode, array(0))
       assertEquals(None, array(1))
 
-      intercept[IOException] {Exit.exit(statusCode, message)}
+      assertThrows(classOf[IOException], () => Exit.exit(statusCode, message))
       assertEquals(statusCode, array(0))
       assertEquals(message, array(1))
     } finally {

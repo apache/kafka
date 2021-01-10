@@ -30,6 +30,7 @@ import java.util.Map;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertThrows;
 
 public class FileStreamSourceConnectorTest extends EasyMockSupport {
 
@@ -98,10 +99,10 @@ public class FileStreamSourceConnectorTest extends EasyMockSupport {
         EasyMock.verify(ctx);
     }
 
-    @Test(expected = ConfigException.class)
+    @Test
     public void testMultipleSourcesInvalid() {
         sourceProperties.put(FileStreamSourceConnector.TOPIC_CONFIG, MULTIPLE_TOPICS);
-        connector.start(sourceProperties);
+        assertThrows(ConfigException.class, () -> connector.start(sourceProperties));
     }
 
     @Test
@@ -114,22 +115,22 @@ public class FileStreamSourceConnectorTest extends EasyMockSupport {
         EasyMock.verify(ctx);
     }
 
-    @Test(expected = ConfigException.class)
+    @Test
     public void testMissingTopic() {
         sourceProperties.remove(FileStreamSourceConnector.TOPIC_CONFIG);
-        connector.start(sourceProperties);
+        assertThrows(ConfigException.class, () -> connector.start(sourceProperties));
     }
 
-    @Test(expected = ConfigException.class)
+    @Test
     public void testBlankTopic() {
         // Because of trimming this tests is same as testing for empty string.
         sourceProperties.put(FileStreamSourceConnector.TOPIC_CONFIG, "     ");
-        connector.start(sourceProperties);
+        assertThrows(ConfigException.class, () -> connector.start(sourceProperties));
     }
 
-    @Test(expected = ConfigException.class)
+    @Test
     public void testInvalidBatchSize() {
         sourceProperties.put(FileStreamSourceConnector.TASK_BATCH_SIZE_CONFIG, "abcd");
-        connector.start(sourceProperties);
+        assertThrows(ConfigException.class, () -> connector.start(sourceProperties));
     }
 }

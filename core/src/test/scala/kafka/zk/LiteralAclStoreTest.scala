@@ -18,12 +18,11 @@
 package kafka.zk
 
 import java.nio.charset.StandardCharsets.UTF_8
-
 import kafka.security.authorizer.AclEntry
 import org.apache.kafka.common.resource.PatternType.{LITERAL, PREFIXED}
 import org.apache.kafka.common.resource.ResourcePattern
 import org.apache.kafka.common.resource.ResourceType.{GROUP, TOPIC}
-import org.junit.Assert.assertEquals
+import org.junit.Assert.{assertEquals, assertThrows}
 import org.junit.Test
 
 class LiteralAclStoreTest {
@@ -43,9 +42,9 @@ class LiteralAclStoreTest {
     assertEquals(LITERAL, store.patternType)
   }
 
-  @Test(expected = classOf[IllegalArgumentException])
+  @Test
   def shouldThrowFromEncodeOnNoneLiteral(): Unit = {
-    store.changeStore.createChangeNode(prefixedResource)
+    assertThrows(classOf[IllegalArgumentException], () => store.changeStore.createChangeNode(prefixedResource))
   }
 
   @Test

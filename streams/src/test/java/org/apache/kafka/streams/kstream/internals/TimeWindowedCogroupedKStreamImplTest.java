@@ -20,6 +20,7 @@ package org.apache.kafka.streams.kstream.internals;
 import static java.time.Duration.ofMillis;
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.MatcherAssert.assertThat;
+import static org.junit.Assert.assertThrows;
 
 import java.util.Properties;
 import org.apache.kafka.common.serialization.Serdes;
@@ -79,42 +80,45 @@ public class TimeWindowedCogroupedKStreamImplTest {
         windowedCogroupedStream = cogroupedStream.windowedBy(TimeWindows.of(ofMillis(500L)));
     }
 
-    @Test(expected = NullPointerException.class)
+    @Test
     public void shouldNotHaveNullInitializerOnAggregate() {
-        windowedCogroupedStream.aggregate(null);
+        assertThrows(NullPointerException.class, () -> windowedCogroupedStream.aggregate(null));
     }
 
-    @Test(expected = NullPointerException.class)
+    @Test
     public void shouldNotHaveNullMaterializedOnTwoOptionAggregate() {
-        windowedCogroupedStream.aggregate(MockInitializer.STRING_INIT, (Materialized<String, String, WindowStore<Bytes, byte[]>>) null);
+        assertThrows(NullPointerException.class, () -> windowedCogroupedStream.aggregate(MockInitializer.STRING_INIT,
+            (Materialized<String, String, WindowStore<Bytes, byte[]>>) null));
     }
-    @Test(expected = NullPointerException.class)
+
+    @Test
     public void shouldNotHaveNullNamedTwoOptionOnAggregate() {
-        windowedCogroupedStream.aggregate(MockInitializer.STRING_INIT, (Named) null);
+        assertThrows(NullPointerException.class, () -> windowedCogroupedStream.aggregate(MockInitializer.STRING_INIT, (Named) null));
     }
-    @Test(expected = NullPointerException.class)
+
+    @Test
     public void shouldNotHaveNullInitializerTwoOptionNamedOnAggregate() {
-        windowedCogroupedStream.aggregate(null, Named.as("test"));
+        assertThrows(NullPointerException.class, () -> windowedCogroupedStream.aggregate(null, Named.as("test")));
     }
 
-    @Test(expected = NullPointerException.class)
+    @Test
     public void shouldNotHaveNullInitializerTwoOptionMaterializedOnAggregate() {
-        windowedCogroupedStream.aggregate(null, Materialized.as("test"));
+        assertThrows(NullPointerException.class, () -> windowedCogroupedStream.aggregate(null, Materialized.as("test")));
     }
 
-    @Test(expected = NullPointerException.class)
+    @Test
     public void shouldNotHaveNullInitializerThreeOptionOnAggregate() {
-        windowedCogroupedStream.aggregate(null, Named.as("test"), Materialized.as("test"));
+        assertThrows(NullPointerException.class, () -> windowedCogroupedStream.aggregate(null, Named.as("test"), Materialized.as("test")));
     }
 
-    @Test(expected = NullPointerException.class)
+    @Test
     public void shouldNotHaveNullMaterializedOnAggregate() {
-        windowedCogroupedStream.aggregate(MockInitializer.STRING_INIT, Named.as("Test"), null);
+        assertThrows(NullPointerException.class, () -> windowedCogroupedStream.aggregate(MockInitializer.STRING_INIT, Named.as("Test"), null));
     }
 
-    @Test(expected = NullPointerException.class)
+    @Test
     public void shouldNotHaveNullNamedOnAggregate() {
-        windowedCogroupedStream.aggregate(MockInitializer.STRING_INIT, null, Materialized.as("test"));
+        assertThrows(NullPointerException.class, () -> windowedCogroupedStream.aggregate(MockInitializer.STRING_INIT, null, Materialized.as("test")));
     }
 
     @Test

@@ -24,6 +24,7 @@ import java.util.GregorianCalendar;
 import java.util.TimeZone;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertThrows;
 
 public class TimestampTest {
     private static final GregorianCalendar EPOCH;
@@ -56,9 +57,10 @@ public class TimestampTest {
         assertEquals(TOTAL_MILLIS, Timestamp.fromLogical(Timestamp.SCHEMA, EPOCH_PLUS_MILLIS.getTime()));
     }
 
-    @Test(expected = DataException.class)
+    @Test
     public void testFromLogicalInvalidSchema() {
-        Timestamp.fromLogical(Timestamp.builder().name("invalid").build(), EPOCH.getTime());
+        assertThrows(DataException.class,
+            () -> Timestamp.fromLogical(Timestamp.builder().name("invalid").build(), EPOCH.getTime()));
     }
 
     @Test
@@ -67,8 +69,9 @@ public class TimestampTest {
         assertEquals(EPOCH_PLUS_MILLIS.getTime(), Timestamp.toLogical(Timestamp.SCHEMA, TOTAL_MILLIS));
     }
 
-    @Test(expected = DataException.class)
+    @Test
     public void testToLogicalInvalidSchema() {
-        Date.toLogical(Date.builder().name("invalid").build(), 0);
+        assertThrows(DataException.class,
+            () -> Date.toLogical(Date.builder().name("invalid").build(), 0));
     }
 }

@@ -47,6 +47,7 @@ import static org.hamcrest.CoreMatchers.nullValue;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.emptyIterable;
 import static org.hamcrest.Matchers.is;
+import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.fail;
 
 public class AbstractProcessorContextTest {
@@ -78,9 +79,9 @@ public class AbstractProcessorContextTest {
         context.register(stateStore, null);
     }
 
-    @Test(expected = NullPointerException.class)
+    @Test
     public void shouldThrowNullPointerOnRegisterIfStateStoreIsNull() {
-        context.register(null, null);
+        assertThrows(NullPointerException.class, () -> context.register(null, null));
     }
 
     @Test

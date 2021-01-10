@@ -72,7 +72,7 @@ class ProducerIdManagerTest {
     assertEquals(pid2 + ProducerIdManager.PidBlockSize * 2, manager2.generateProducerId())
   }
 
-  @Test(expected = classOf[KafkaException])
+  @Test
   def testExceedProducerIdLimit(): Unit = {
     EasyMock.expect(zkClient.getDataAndVersion(EasyMock.anyString)).andAnswer(() => {
       val json = ProducerIdManager.generateProducerIdBlockJson(
@@ -80,7 +80,7 @@ class ProducerIdManagerTest {
       (Some(json), 0)
     }).anyTimes()
     EasyMock.replay(zkClient)
-    new ProducerIdManager(0, zkClient)
+    assertThrows(classOf[KafkaException], () => new ProducerIdManager(0, zkClient))
   }
 }
 

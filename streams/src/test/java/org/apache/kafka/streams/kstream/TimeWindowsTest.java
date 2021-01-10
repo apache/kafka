@@ -26,6 +26,7 @@ import static org.apache.kafka.streams.EqualityCheck.verifyEquality;
 import static org.apache.kafka.streams.EqualityCheck.verifyInEquality;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotEquals;
+import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.fail;
 
 @SuppressWarnings("deprecation")
@@ -57,14 +58,14 @@ public class TimeWindowsTest {
         assertEquals(windowSize, TimeWindows.of(ofMillis(windowSize)).maintainMs());
     }
 
-    @Test(expected = IllegalArgumentException.class)
+    @Test
     public void windowSizeMustNotBeZero() {
-        TimeWindows.of(ofMillis(0));
+        assertThrows(IllegalArgumentException.class, () -> TimeWindows.of(ofMillis(0)));
     }
 
-    @Test(expected = IllegalArgumentException.class)
+    @Test
     public void windowSizeMustNotBeNegative() {
-        TimeWindows.of(ofMillis(-1));
+        assertThrows(IllegalArgumentException.class, () -> TimeWindows.of(ofMillis(-1)));
     }
 
     @Test

@@ -31,7 +31,6 @@ import org.apache.kafka.common.resource.{PatternType, Resource, ResourcePattern,
 import org.apache.kafka.common.security.auth.{AuthenticationContext, KafkaPrincipal, KafkaPrincipalBuilder}
 import org.junit.Assert._
 import org.junit.{Before, Test}
-import org.scalatest.Assertions.intercept
 
 import scala.jdk.CollectionConverters._
 
@@ -101,17 +100,15 @@ class GroupAuthorizerIntegrationTest extends BaseRequestTest {
     createTopic(topic)
 
     val producer = createProducer()
-    val produceException = intercept[ExecutionException] {
-      producer.send(new ProducerRecord[Array[Byte], Array[Byte]](topic, "message".getBytes)).get()
-    }.getCause
+    val produceException = assertThrows(classOf[ExecutionException],
+      () => producer.send(new ProducerRecord[Array[Byte], Array[Byte]](topic, "message".getBytes)).get()).getCause
     assertTrue(produceException.isInstanceOf[TopicAuthorizationException])
     assertEquals(Set(topic), produceException.asInstanceOf[TopicAuthorizationException].unauthorizedTopics.asScala)
 
     val consumer = createConsumer(configsToRemove = List(ConsumerConfig.GROUP_ID_CONFIG))
     consumer.assign(List(topicPartition).asJava)
-    val consumeException = intercept[TopicAuthorizationException] {
-      TestUtils.pollUntilAtLeastNumRecords(consumer, numRecords = 1)
-    }
+    val consumeException = assertThrows(classOf[TopicAuthorizationException],
+      () => TestUtils.pollUntilAtLeastNumRecords(consumer, numRecords = 1))
     assertEquals(Set(topic), consumeException.unauthorizedTopics.asScala)
   }
 

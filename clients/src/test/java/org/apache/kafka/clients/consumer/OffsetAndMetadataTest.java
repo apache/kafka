@@ -23,6 +23,7 @@ import java.io.IOException;
 import java.util.Optional;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertThrows;
 
 /**
  * This test case ensures OffsetAndMetadata class is serializable and is serialization compatible.
@@ -31,9 +32,9 @@ import static org.junit.Assert.assertEquals;
  */
 public class OffsetAndMetadataTest {
 
-    @Test(expected = IllegalArgumentException.class)
+    @Test
     public void testInvalidNegativeOffset() {
-        new OffsetAndMetadata(-239L, Optional.of(15), "");
+        assertThrows(IllegalArgumentException.class, () -> new OffsetAndMetadata(-239L, Optional.of(15), ""));
     }
 
     @Test

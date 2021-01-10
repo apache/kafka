@@ -41,6 +41,7 @@ import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.fail;
 
 public class SubscriptionInfoTest {
@@ -64,9 +65,9 @@ public class SubscriptionInfoTest {
     private static final int IGNORED_ERROR_CODE = 0;
 
 
-    @Test(expected = IllegalArgumentException.class)
+    @Test
     public void shouldThrowForUnknownVersion1() {
-        new SubscriptionInfo(
+        assertThrows(IllegalArgumentException.class, () -> new SubscriptionInfo(
             0,
             LATEST_SUPPORTED_VERSION,
             UUID_1,
@@ -74,12 +75,12 @@ public class SubscriptionInfoTest {
             TASK_OFFSET_SUMS,
             IGNORED_UNIQUE_FIELD,
             IGNORED_ERROR_CODE
-        );
+        ));
     }
 
-    @Test(expected = IllegalArgumentException.class)
+    @Test
     public void shouldThrowForUnknownVersion2() {
-        new SubscriptionInfo(
+        assertThrows(IllegalArgumentException.class, () -> new SubscriptionInfo(
             LATEST_SUPPORTED_VERSION + 1,
             LATEST_SUPPORTED_VERSION,
             UUID_1,
@@ -87,7 +88,7 @@ public class SubscriptionInfoTest {
             TASK_OFFSET_SUMS,
             IGNORED_UNIQUE_FIELD,
             IGNORED_ERROR_CODE
-        );
+        ));
     }
 
     @Test

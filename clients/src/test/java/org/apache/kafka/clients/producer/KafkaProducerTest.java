@@ -192,11 +192,11 @@ public class KafkaProducerTest {
         new KafkaProducer<>(producerProps, new ByteArraySerializer(), new ByteArraySerializer()).close();
     }
 
-    @Test(expected = ConfigException.class)
+    @Test
     public void testNoSerializerProvided() {
         Properties producerProps = new Properties();
         producerProps.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9000");
-        new KafkaProducer(producerProps);
+        assertThrows(ConfigException.class, () -> new KafkaProducer(producerProps));
     }
 
     @Test
@@ -357,20 +357,20 @@ public class KafkaProducerTest {
         new KafkaProducer<>(config, new ByteArraySerializer(), new ByteArraySerializer()).close();
     }
 
-    @Test(expected = KafkaException.class)
+    @Test
     public void testInvalidSocketSendBufferSize() {
         Map<String, Object> config = new HashMap<>();
         config.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9999");
         config.put(ProducerConfig.SEND_BUFFER_CONFIG, -2);
-        new KafkaProducer<>(config, new ByteArraySerializer(), new ByteArraySerializer());
+        assertThrows(KafkaException.class, () -> new KafkaProducer<>(config, new ByteArraySerializer(), new ByteArraySerializer()));
     }
 
-    @Test(expected = KafkaException.class)
+    @Test
     public void testInvalidSocketReceiveBufferSize() {
         Map<String, Object> config = new HashMap<>();
         config.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9999");
         config.put(ProducerConfig.RECEIVE_BUFFER_CONFIG, -2);
-        new KafkaProducer<>(config, new ByteArraySerializer(), new ByteArraySerializer());
+        assertThrows(KafkaException.class, () -> new KafkaProducer<>(config, new ByteArraySerializer(), new ByteArraySerializer()));
     }
 
     private static KafkaProducer<String, String> producerWithOverrideNewSender(Map<String, Object> configs,

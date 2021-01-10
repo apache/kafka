@@ -37,6 +37,7 @@ import java.nio.file.Files;
 
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.MatcherAssert.assertThat;
+import static org.junit.Assert.assertThrows;
 
 public class PrintedTest {
 
@@ -107,28 +108,28 @@ public class PrintedTest {
         assertThat(sysOut.toString(StandardCharsets.UTF_8.name()), equalTo("[processor]: hello -> 1\n"));
     }
 
-    @Test(expected = NullPointerException.class)
+    @Test
     public void shouldThrowNullPointerExceptionIfFilePathIsNull() {
-        Printed.toFile(null);
+        assertThrows(NullPointerException.class, () -> Printed.toFile(null));
     }
 
-    @Test(expected = NullPointerException.class)
+    @Test
     public void shouldThrowNullPointerExceptionIfMapperIsNull() {
-        sysOutPrinter.withKeyValueMapper(null);
+        assertThrows(NullPointerException.class, () -> sysOutPrinter.withKeyValueMapper(null));
     }
 
-    @Test(expected = NullPointerException.class)
+    @Test
     public void shouldThrowNullPointerExceptionIfLabelIsNull() {
-        sysOutPrinter.withLabel(null);
+        assertThrows(NullPointerException.class, () -> sysOutPrinter.withLabel(null));
     }
 
-    @Test(expected = TopologyException.class)
+    @Test
     public void shouldThrowTopologyExceptionIfFilePathIsEmpty() {
-        Printed.toFile("");
+        assertThrows(TopologyException.class, () -> Printed.toFile(""));
     }
 
-    @Test(expected = TopologyException.class)
+    @Test
     public void shouldThrowTopologyExceptionIfFilePathDoesntExist() {
-        Printed.toFile("/this/should/not/exist");
+        assertThrows(TopologyException.class, () -> Printed.toFile("/this/should/not/exist"));
     }
 }

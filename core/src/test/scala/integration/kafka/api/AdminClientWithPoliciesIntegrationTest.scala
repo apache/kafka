@@ -26,10 +26,9 @@ import org.apache.kafka.common.config.{ConfigResource, TopicConfig}
 import org.apache.kafka.common.errors.{InvalidRequestException, PolicyViolationException}
 import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.server.policy.AlterConfigPolicy
-import org.junit.Assert.{assertEquals, assertNull, assertTrue}
+import org.junit.Assert.{assertEquals, assertNull, assertTrue, assertThrows}
 import org.junit.{After, Before, Rule, Test}
 import org.junit.rules.Timeout
-import org.scalatest.Assertions.intercept
 
 import scala.annotation.nowarn
 import scala.jdk.CollectionConverters._
@@ -132,10 +131,10 @@ class AdminClientWithPoliciesIntegrationTest extends KafkaServerTestHarness with
     ).asJava)
 
     assertEquals(Set(topicResource1, topicResource2, topicResource3, brokerResource).asJava, alterResult.values.keySet)
-    assertTrue(intercept[ExecutionException](alterResult.values.get(topicResource1).get).getCause.isInstanceOf[PolicyViolationException])
+    assertTrue(assertThrows(classOf[ExecutionException], () => alterResult.values.get(topicResource1).get).getCause.isInstanceOf[PolicyViolationException])
     alterResult.values.get(topicResource2).get
-    assertTrue(intercept[ExecutionException](alterResult.values.get(topicResource3).get).getCause.isInstanceOf[InvalidRequestException])
-    assertTrue(intercept[ExecutionException](alterResult.values.get(brokerResource).get).getCause.isInstanceOf[InvalidRequestException])
+    assertTrue(assertThrows(classOf[ExecutionException], () => alterResult.values.get(topicResource3).get).getCause.isInstanceOf[InvalidRequestException])
+    assertTrue(assertThrows(classOf[ExecutionException], () => alterResult.values.get(brokerResource).get).getCause.isInstanceOf[InvalidRequestException])
 
     // Verify that the second resource was updated and the others were not
     var describeResult = client.describeConfigs(Seq(topicResource1, topicResource2, topicResource3, brokerResource).asJava)
@@ -162,10 +161,10 @@ class AdminClientWithPoliciesIntegrationTest extends KafkaServerTestHarness with
     ).asJava, new AlterConfigsOptions().validateOnly(true))
 
     assertEquals(Set(topicResource1, topicResource2, topicResource3, brokerResource).asJava, alterResult.values.keySet)
-    assertTrue(intercept[ExecutionException](alterResult.values.get(topicResource1).get).getCause.isInstanceOf[PolicyViolationException])
+    assertTrue(assertThrows(classOf[ExecutionException], () => alterResult.values.get(topicResource1).get).getCause.isInstanceOf[PolicyViolationException])
     alterResult.values.get(topicResource2).get
-    assertTrue(intercept[ExecutionException](alterResult.values.get(topicResource3).get).getCause.isInstanceOf[InvalidRequestException])
-    assertTrue(intercept[ExecutionException](alterResult.values.get(brokerResource).get).getCause.isInstanceOf[InvalidRequestException])
+    assertTrue(assertThrows(classOf[ExecutionException], () => alterResult.values.get(topicResource3).get).getCause.isInstanceOf[InvalidRequestException])
+    assertTrue(assertThrows(classOf[ExecutionException], () => alterResult.values.get(brokerResource).get).getCause.isInstanceOf[InvalidRequestException])
 
     // Verify that no resources are updated since validate_only = true
     describeResult = client.describeConfigs(Seq(topicResource1, topicResource2, topicResource3, brokerResource).asJava)

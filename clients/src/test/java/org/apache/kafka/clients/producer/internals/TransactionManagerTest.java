@@ -213,9 +213,9 @@ public class TransactionManagerTest {
         assertTrue(transactionManager.nextRequest(false).isEndTxn());
     }
 
-    @Test(expected = IllegalStateException.class)
+    @Test
     public void testFailIfNotReadyForSendNoProducerId() {
-        transactionManager.failIfNotReadyForSend();
+        assertThrows(IllegalStateException.class, () -> transactionManager.failIfNotReadyForSend());
     }
 
     @Test
@@ -224,32 +224,32 @@ public class TransactionManagerTest {
         transactionManager.failIfNotReadyForSend();
     }
 
-    @Test(expected = KafkaException.class)
+    @Test
     public void testFailIfNotReadyForSendIdempotentProducerFatalError() {
         initializeTransactionManager(Optional.empty(), false);
         transactionManager.transitionToFatalError(new KafkaException());
-        transactionManager.failIfNotReadyForSend();
+        assertThrows(KafkaException.class, () -> transactionManager.failIfNotReadyForSend());
     }
 
-    @Test(expected = IllegalStateException.class)
+    @Test
     public void testFailIfNotReadyForSendNoOngoingTransaction() {
         doInitTransactions();
-        transactionManager.failIfNotReadyForSend();
+        assertThrows(IllegalStateException.class, () -> transactionManager.failIfNotReadyForSend());
     }
 
-    @Test(expected = KafkaException.class)
+    @Test
     public void testFailIfNotReadyForSendAfterAbortableError() {
         doInitTransactions();
         transactionManager.beginTransaction();
         transactionManager.transitionToAbortableError(new KafkaException());
-        transactionManager.failIfNotReadyForSend();
+        assertThrows(KafkaException.class, transactionManager::failIfNotReadyForSend);
     }
 
-    @Test(expected = KafkaException.class)
+    @Test
     public void testFailIfNotReadyForSendAfterFatalError() {
         doInitTransactions();
         transactionManager.transitionToFatalError(new KafkaException());
-        transactionManager.failIfNotReadyForSend();
+        assertThrows(KafkaException.class, transactionManager::failIfNotReadyForSend);
     }
 
     @Test
@@ -444,34 +444,30 @@ public class TransactionManagerTest {
         assertEquals(DEFAULT_RETRY_BACKOFF_MS, handler.retryBackoffMs());
     }
 
-    @Test(expected = IllegalStateException.class)
-    public void testMaybeAddPartitionToTransactionBeforeInitTransactions() {
-        transactionManager.failIfNotReadyForSend();
-        transactionManager.maybeAddPartitionToTransaction(new TopicPartition("foo", 0));
+    @Test
+    public void testNotReadyForSendBeforeInitTransactions() {
+        assertThrows(IllegalStateException.class, () -> transactionManager.failIfNotReadyForSend());
     }
 
-    @Test(expected = IllegalStateException.class)
-    public void testMaybeAddPartitionToTransactionBeforeBeginTransaction() {
+    @Test
+    public void testNotReadyForSendBeforeBeginTransaction() {
         doInitTransactions();
-        transactionManager.failIfNotReadyForSend();
-        transactionManager.maybeAddPartitionToTransaction(new TopicPartition("foo", 0));
+        assertThrows(IllegalStateException.class, () -> transactionManager.failIfNotReadyForSend());
     }
 
-    @Test(expected = KafkaException.class)
-    public void testMaybeAddPartitionToTransactionAfterAbortableError() {
+    @Test
+    public void testNotReadyForSendAfterAbortableError() {
         doInitTransactions();
         transactionManager.beginTransaction();
         transactionManager.transitionToAbortableError(new KafkaException());
-        transactionManager.failIfNotReadyForSend();
-        transactionManager.maybeAddPartitionToTransaction(new TopicPartition("foo", 0));
+        assertThrows(KafkaException.class, () -> transactionManager.failIfNotReadyForSend());
     }
 
-    @Test(expected = KafkaException.class)
-    public void testMaybeAddPartitionToTransactionAfterFatalError() {
+    @Test
+    public void testNotReadyForSendAfterFatalError() {
         doInitTransactions();
         transactionManager.transitionToFatalError(new KafkaException());
-        transactionManager.failIfNotReadyForSend();
-        transactionManager.maybeAddPartitionToTransaction(new TopicPartition("foo", 0));
+        assertThrows(KafkaException.class, () -> transactionManager.failIfNotReadyForSend());
     }
 
     @Test
@@ -3146,14 +3142,14 @@ public class TransactionManagerTest {
         verifyCommitOrAbortTransactionRetriable(TransactionResult.COMMIT, TransactionResult.COMMIT);
     }
 
-    @Test(expected = KafkaException.class)
-    public void testRetryAbortTransactionAfterCommitTimeout() throws InterruptedException {
-        verifyCommitOrAbortTransactionRetriable(TransactionResult.COMMIT, TransactionResult.ABORT);
+    @Test
+    public void testRetryAbortTransactionAfterCommitTimeout() {
+        assertThrows(KafkaException.class, () -> verifyCommitOrAbortTransactionRetriable(TransactionResult.COMMIT, TransactionResult.ABORT));
     }
 
-    @Test(expected = KafkaException.class)
+    @Test
     public void testRetryCommitTransactionAfterAbortTimeout() throws InterruptedException {
-        verifyCommitOrAbortTransactionRetriable(TransactionResult.ABORT, TransactionResult.COMMIT);
+        assertThrows(KafkaException.class, () -> verifyCommitOrAbortTransactionRetriable(TransactionResult.ABORT, TransactionResult.COMMIT));
     }
 
     @Test

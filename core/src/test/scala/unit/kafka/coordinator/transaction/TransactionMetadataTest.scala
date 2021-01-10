@@ -22,7 +22,6 @@ import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.record.RecordBatch
 import org.junit.Assert._
 import org.junit.Test
-import org.scalatest.Assertions
 
 import scala.collection.mutable
 
@@ -76,7 +75,7 @@ class TransactionMetadataTest {
     assertEquals(RecordBatch.NO_PRODUCER_EPOCH, txnMetadata.lastProducerEpoch)
   }
 
-  @Test(expected = classOf[IllegalStateException])
+  @Test
   def testBumpEpochNotAllowedIfEpochsExhausted(): Unit = {
     val producerEpoch = (Short.MaxValue - 1).toShort
 
@@ -92,7 +91,8 @@ class TransactionMetadataTest {
       txnLastUpdateTimestamp = time.milliseconds())
     assertTrue(txnMetadata.isProducerEpochExhausted)
 
-    txnMetadata.prepareIncrementProducerEpoch(30000, None, time.milliseconds())
+    assertThrows(classOf[IllegalStateException], () => txnMetadata.prepareIncrementProducerEpoch(30000,
+      None, time.milliseconds()))
   }
 
   @Test
@@ -315,7 +315,7 @@ class TransactionMetadataTest {
     assertEquals(producerId, transitMetadata.producerId)
   }
 
-  @Test(expected = classOf[IllegalStateException])
+  @Test
   def testFenceProducerNotAllowedIfItWouldOverflow(): Unit = {
     val producerEpoch = Short.MaxValue
 
@@ -330,7 +330,7 @@ class TransactionMetadataTest {
       topicPartitions = mutable.Set.empty,
       txnLastUpdateTimestamp = time.milliseconds())
     assertTrue(txnMetadata.isProducerEpochExhausted)
-    txnMetadata.prepareFenceProducerEpoch()
+    assertThrows(classOf[IllegalStateException], () => txnMetadata.prepareFenceProducerEpoch())
   }
 
   @Test
@@ -357,19 +357,19 @@ class TransactionMetadataTest {
     assertEquals(producerEpoch, txnMetadata.lastProducerEpoch)
   }
 
-  @Test(expected = classOf[IllegalStateException])
+  @Test
   def testRotateProducerIdInOngoingState(): Unit = {
-    testRotateProducerIdInOngoingState(Ongoing)
+    assertThrows(classOf[IllegalStateException], () => testRotateProducerIdInOngoingState(Ongoing))
   }
 
-  @Test(expected = classOf[IllegalStateException])
+  @Test
   def testRotateProducerIdInPrepareAbortState(): Unit = {
-    testRotateProducerIdInOngoingState(PrepareAbort)
+    assertThrows(classOf[IllegalStateException], () => testRotateProducerIdInOngoingState(PrepareAbort))
   }
 
-  @Test(expected = classOf[IllegalStateException])
+  @Test
   def testRotateProducerIdInPrepareCommitState(): Unit = {
-    testRotateProducerIdInOngoingState(PrepareCommit)
+    assertThrows(classOf[IllegalStateException], () => testRotateProducerIdInOngoingState(PrepareCommit))
   }
 
   @Test
@@ -482,7 +482,7 @@ class TransactionMetadataTest {
                                                       now: Option[Long] = None): TxnTransitMetadata = {
     val result = txnMetadata.prepareIncrementProducerEpoch(30000, expectedProducerEpoch,
       now.getOrElse(time.milliseconds()))
-    result.getOrElse(Assertions.fail(s"prepareIncrementProducerEpoch failed with $result"))
+    result.getOrElse(throw new AssertionError(s"prepareIncrementProducerEpoch failed with $result"))
   }
 
 }

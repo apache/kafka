@@ -32,6 +32,7 @@ import java.util.Vector;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
@@ -77,7 +78,7 @@ public class LoggingResourceTest {
         assertEquals("ERROR", level.get("level"));
     }
 
-    @Test(expected = NotFoundException.class)
+    @Test
     public void getUnknownLoggerTest() {
         LoggingResource loggingResource = mock(LoggingResource.class);
         Logger root = new Logger("root") {
@@ -91,7 +92,7 @@ public class LoggingResourceTest {
         when(loggingResource.currentLoggers()).thenReturn(loggers(a, b));
         when(loggingResource.rootLogger()).thenReturn(root);
         when(loggingResource.getLogger(any())).thenCallRealMethod();
-        loggingResource.getLogger("c");
+        assertThrows(NotFoundException.class, () -> loggingResource.getLogger("c"));
     }
 
     @Test
@@ -154,7 +155,7 @@ public class LoggingResourceTest {
         assertEquals(z.getLevel(), Level.DEBUG);
     }
 
-    @Test(expected = BadRequestException.class)
+    @Test
     public void setLevelWithEmptyArgTest() {
         LoggingResource loggingResource = mock(LoggingResource.class);
         Logger root = new Logger("root") {
@@ -168,10 +169,10 @@ public class LoggingResourceTest {
         when(loggingResource.currentLoggers()).thenReturn(loggers(a, b));
         when(loggingResource.rootLogger()).thenReturn(root);
         when(loggingResource.setLevel(any(), any())).thenCallRealMethod();
-        loggingResource.setLevel("@root", Collections.emptyMap());
+        assertThrows(BadRequestException.class, () -> loggingResource.setLevel("@root", Collections.emptyMap()));
     }
 
-    @Test(expected = NotFoundException.class)
+    @Test
     public void setLevelWithInvalidArgTest() {
         LoggingResource loggingResource = mock(LoggingResource.class);
         Logger root = new Logger("root") {
@@ -185,7 +186,7 @@ public class LoggingResourceTest {
         when(loggingResource.currentLoggers()).thenReturn(loggers(a, b));
         when(loggingResource.rootLogger()).thenReturn(root);
         when(loggingResource.setLevel(any(), any())).thenCallRealMethod();
-        loggingResource.setLevel("@root", Collections.singletonMap("level", "HIGH"));
+        assertThrows(NotFoundException.class, () -> loggingResource.setLevel("@root", Collections.singletonMap("level", "HIGH")));
     }
 
     private Enumeration<Logger> loggers(Logger... loggers) {

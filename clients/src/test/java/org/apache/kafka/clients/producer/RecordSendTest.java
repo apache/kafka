@@ -18,6 +18,7 @@ package org.apache.kafka.clients.producer;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
@@ -64,11 +65,11 @@ public class RecordSendTest {
     /**
      * Test that an asynchronous request will eventually throw the right exception
      */
-    @Test(expected = ExecutionException.class)
+    @Test
     public void testError() throws Exception {
         FutureRecordMetadata future = new FutureRecordMetadata(asyncRequest(baseOffset, new CorruptRecordException(), 50L),
                 relOffset, RecordBatch.NO_TIMESTAMP, 0L, 0, 0, Time.SYSTEM);
-        future.get();
+        assertThrows(ExecutionException.class, future::get);
     }
 
     /**

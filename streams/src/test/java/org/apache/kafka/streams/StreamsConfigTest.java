@@ -84,10 +84,10 @@ public class StreamsConfigTest {
         streamsConfig = new StreamsConfig(props);
     }
 
-    @Test(expected = ConfigException.class)
+    @Test
     public void testIllegalMetricsRecordingLevel() {
         props.put(StreamsConfig.METRICS_RECORDING_LEVEL_CONFIG, "illegalConfig");
-        new StreamsConfig(props);
+        assertThrows(ConfigException.class, () -> new StreamsConfig(props));
     }
 
     @Test
@@ -97,28 +97,28 @@ public class StreamsConfigTest {
         new StreamsConfig(props);
     }
 
-    @Test(expected = ConfigException.class)
+    @Test
     public void testInvalidSocketSendBufferSize() {
         props.put(StreamsConfig.SEND_BUFFER_CONFIG, -2);
-        new StreamsConfig(props);
+        assertThrows(ConfigException.class, () -> new StreamsConfig(props));
     }
 
-    @Test(expected = ConfigException.class)
+    @Test
     public void testInvalidSocketReceiveBufferSize() {
         props.put(StreamsConfig.RECEIVE_BUFFER_CONFIG, -2);
-        new StreamsConfig(props);
+        assertThrows(ConfigException.class, () -> new StreamsConfig(props));
     }
 
-    @Test(expected = ConfigException.class)
+    @Test
     public void shouldThrowExceptionIfApplicationIdIsNotSet() {
         props.remove(StreamsConfig.APPLICATION_ID_CONFIG);
-        new StreamsConfig(props);
+        assertThrows(ConfigException.class, () -> new StreamsConfig(props));
     }
 
-    @Test(expected = ConfigException.class)
+    @Test
     public void shouldThrowExceptionIfBootstrapServersIsNotSet() {
         props.remove(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG);
-        new StreamsConfig(props);
+        assertThrows(ConfigException.class, () -> new StreamsConfig(props));
     }
 
     @Test
@@ -360,18 +360,18 @@ public class StreamsConfigTest {
         assertEquals(10, configs.get(AdminClientConfig.DEFAULT_API_TIMEOUT_MS_CONFIG));
     }
 
-    @Test(expected = StreamsException.class)
+    @Test
     public void shouldThrowStreamsExceptionIfKeySerdeConfigFails() {
         props.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, MisconfiguredSerde.class);
         final StreamsConfig streamsConfig = new StreamsConfig(props);
-        streamsConfig.defaultKeySerde();
+        assertThrows(StreamsException.class, streamsConfig::defaultKeySerde);
     }
 
-    @Test(expected = StreamsException.class)
+    @Test
     public void shouldThrowStreamsExceptionIfValueSerdeConfigFails() {
         props.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, MisconfiguredSerde.class);
         final StreamsConfig streamsConfig = new StreamsConfig(props);
-        streamsConfig.defaultValueSerde();
+        assertThrows(StreamsException.class, streamsConfig::defaultValueSerde);
     }
 
     @Test
@@ -547,10 +547,10 @@ public class StreamsConfigTest {
         new StreamsConfig(props);
     }
 
-    @Test(expected = ConfigException.class)
+    @Test
     public void shouldThrowExceptionIfNotAtLeastOnceOrExactlyOnce() {
         props.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, "bad_value");
-        new StreamsConfig(props);
+        assertThrows(ConfigException.class, () -> new StreamsConfig(props));
     }
 
     @Test
@@ -891,10 +891,10 @@ public class StreamsConfigTest {
         assertEquals("Optimization should be \"all\"", expectedOptimizeConfig, actualOptimizedConifig);
     }
 
-    @Test(expected = ConfigException.class)
+    @Test
     public void shouldThrowConfigExceptionWhenOptimizationConfigNotValueInRange() {
         props.put(TOPOLOGY_OPTIMIZATION_CONFIG, "maybe");
-        new StreamsConfig(props);
+        assertThrows(ConfigException.class, () -> new StreamsConfig(props));
     }
 
     @SuppressWarnings("deprecation")

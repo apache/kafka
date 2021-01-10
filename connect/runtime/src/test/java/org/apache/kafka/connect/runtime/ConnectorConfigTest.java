@@ -153,7 +153,7 @@ public class ConnectorConfigTest<R extends ConnectRecord<R>> {
         assertEquals(42, xform.magicNumber);
     }
 
-    @Test(expected = ConfigException.class)
+    @Test
     public void multipleTransformsOneDangling() {
         Map<String, String> props = new HashMap<>();
         props.put("name", "test");
@@ -161,7 +161,7 @@ public class ConnectorConfigTest<R extends ConnectRecord<R>> {
         props.put("transforms", "a, b");
         props.put("transforms.a.type", SimpleTransformation.class.getName());
         props.put("transforms.a.magic.number", "42");
-        new ConnectorConfig(MOCK_PLUGINS, props);
+        assertThrows(ConfigException.class, () -> new ConnectorConfig(MOCK_PLUGINS, props));
     }
 
     @Test

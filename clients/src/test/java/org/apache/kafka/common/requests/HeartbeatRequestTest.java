@@ -20,15 +20,17 @@ import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.message.HeartbeatRequestData;
 import org.junit.Test;
 
+import static org.junit.Assert.assertThrows;
+
 public class HeartbeatRequestTest {
 
-    @Test(expected = UnsupportedVersionException.class)
+    @Test
     public void testRequestVersionCompatibilityFailBuild() {
-        new HeartbeatRequest.Builder(
-                new HeartbeatRequestData()
-                        .setGroupId("groupId")
-                        .setMemberId("consumerId")
-                        .setGroupInstanceId("groupInstanceId")
-        ).build((short) 2);
+        assertThrows(UnsupportedVersionException.class, () -> new HeartbeatRequest.Builder(
+            new HeartbeatRequestData()
+                .setGroupId("groupId")
+                .setMemberId("consumerId")
+                .setGroupInstanceId("groupInstanceId")
+        ).build((short) 2));
     }
 }

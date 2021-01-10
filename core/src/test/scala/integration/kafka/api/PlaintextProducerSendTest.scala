@@ -29,12 +29,11 @@ import org.apache.kafka.common.record.{DefaultRecord, DefaultRecordBatch, Record
 import org.apache.kafka.common.serialization.ByteArraySerializer
 import org.junit.Assert._
 import org.junit.Test
-import org.scalatest.Assertions.intercept
 
 
 class PlaintextProducerSendTest extends BaseProducerSendTest {
 
-  @Test(expected = classOf[SerializationException])
+  @Test
   def testWrongSerializer(): Unit = {
     val producerProps = new Properties()
     producerProps.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, brokerList)
@@ -42,7 +41,7 @@ class PlaintextProducerSendTest extends BaseProducerSendTest {
     producerProps.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.StringSerializer")
     val producer = registerProducer(new KafkaProducer(producerProps))
     val record = new ProducerRecord[Array[Byte], Array[Byte]](topic, 0, "key".getBytes, "value".getBytes)
-    producer.send(record)
+    assertThrows(classOf[SerializationException], () => producer.send(record))
   }
 
   @Test
@@ -98,9 +97,8 @@ class PlaintextProducerSendTest extends BaseProducerSendTest {
 
     val producer = createProducer(brokerList = brokerList)
     try {
-      val e = intercept[ExecutionException] {
-        producer.send(new ProducerRecord(topic, 0, System.currentTimeMillis() - 1001, "key".getBytes, "value".getBytes)).get()
-      }.getCause
+      val e = assertThrows(classOf[ExecutionException],
+        () => producer.send(new ProducerRecord(topic, 0, System.currentTimeMillis() - 1001, "key".getBytes, "value".getBytes)).get()).getCause
       assertTrue(e.isInstanceOf[InvalidTimestampException])
       assertEquals("One or more records have been rejected due to invalid timestamp", e.getMessage)
     } finally {
@@ -110,9 +108,8 @@ class PlaintextProducerSendTest extends BaseProducerSendTest {
     // Test compressed messages.
     val compressedProducer = createProducer(brokerList = brokerList, compressionType = "gzip")
     try {
-      val e = intercept[ExecutionException] {
-        compressedProducer.send(new ProducerRecord(topic, 0, System.currentTimeMillis() - 1001, "key".getBytes, "value".getBytes)).get()
-      }.getCause
+      val e = assertThrows(classOf[ExecutionException],
+        () => compressedProducer.send(new ProducerRecord(topic, 0, System.currentTimeMillis() - 1001, "key".getBytes, "value".getBytes)).get()).getCause
       assertTrue(e.isInstanceOf[InvalidTimestampException])
       assertEquals("One or more records have been rejected due to invalid timestamp", e.getMessage)
     } finally {
@@ -154,12 +151,12 @@ class PlaintextProducerSendTest extends BaseProducerSendTest {
 
     def verifyMetadataNotAvailable(future: Future[RecordMetadata]): Unit = {
       assertTrue(future.isDone)  // verify future was completed immediately
-      assertEquals(classOf[TimeoutException], intercept[ExecutionException](future.get).getCause.getClass)
+      assertEquals(classOf[TimeoutException], assertThrows(classOf[ExecutionException], () => future.get).getCause.getClass)
     }
 
     def verifyBufferExhausted(future: Future[RecordMetadata]): Unit = {
       assertTrue(future.isDone)  // verify future was completed immediately
-      assertEquals(classOf[BufferExhaustedException], intercept[ExecutionException](future.get).getCause.getClass)
+      assertEquals(classOf[BufferExhaustedException], assertThrows(classOf[ExecutionException], () => future.get).getCause.getClass)
     }
 
     // Topic metadata not available, send should fail without blocking
@@ -195,7 +192,7 @@ class PlaintextProducerSendTest extends BaseProducerSendTest {
     assertEquals(record0.value.length, producer.send(record0).get.serializedValueSize)
 
     val record1 = new ProducerRecord(topic, new Array[Byte](0), new Array[Byte](valueSize + 1))
-    assertEquals(classOf[RecordTooLargeException], intercept[ExecutionException](producer.send(record1).get).getCause.getClass)
+    assertEquals(classOf[RecordTooLargeException], assertThrows(classOf[ExecutionException], () => producer.send(record1).get).getCause.getClass)
   }
 
 }

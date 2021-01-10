@@ -413,11 +413,11 @@ class ResetConsumerGroupOffsetTest extends ConsumerGroupCommandTest {
     adminZkClient.deleteTopic(topic)
   }
 
-  @Test(expected = classOf[OptionException])
+  @Test
   def testResetWithUnrecognizedNewConsumerOption(): Unit = {
     val cgcArgs = Array("--new-consumer", "--bootstrap-server", brokerList, "--reset-offsets", "--group", group, "--all-topics",
       "--to-offset", "2", "--export")
-    getConsumerGroupService(cgcArgs)
+    assertThrows(classOf[OptionException], () => getConsumerGroupService(cgcArgs))
   }
 
   private def produceMessages(topic: String, numMessages: Int): Unit = {

@@ -17,16 +17,15 @@
 
 package kafka.log
 
-import java.util.{Collections, Properties}
-
 import kafka.server.{KafkaConfig, KafkaServer, ThrottledReplicaListValidator}
 import kafka.utils.TestUtils
 import org.apache.kafka.common.config.ConfigDef.Importance.MEDIUM
 import org.apache.kafka.common.config.ConfigDef.Type.INT
 import org.apache.kafka.common.config.{ConfigException, TopicConfig}
-import org.junit.{Assert, Test}
 import org.junit.Assert._
-import org.scalatest.Assertions._
+import org.junit.{Assert, Test}
+
+import java.util.{Collections, Properties}
 
 class LogConfigTest {
 
@@ -88,9 +87,7 @@ class LogConfigTest {
     val props = new Properties
     props.setProperty(LogConfig.MaxCompactionLagMsProp, "100")
     props.setProperty(LogConfig.MinCompactionLagMsProp, "200")
-    intercept[Exception] {
-      LogConfig.validate(props)
-    }
+    assertThrows(classOf[Exception], () => LogConfig.validate(props))
   }
 
   @Test
@@ -178,9 +175,7 @@ class LogConfigTest {
     values.foreach((value) => {
       val props = new Properties
       props.setProperty(name, value.toString)
-      intercept[Exception] {
-        LogConfig(props)
-      }
+      assertThrows(classOf[Exception], () => LogConfig(props))
     })
   }
 

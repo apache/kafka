@@ -58,7 +58,7 @@ class MirrorMakerIntegrationTest extends KafkaServerTestHarness {
     }
   }
 
-  @Test(expected = classOf[TimeoutException])
+  @Test
   def testCommitOffsetsThrowTimeoutException(): Unit = {
     val consumerProps = new Properties
     consumerProps.put(ConsumerConfig.GROUP_ID_CONFIG, "test-group")
@@ -68,7 +68,7 @@ class MirrorMakerIntegrationTest extends KafkaServerTestHarness {
     val consumer = new KafkaConsumer(consumerProps, new ByteArrayDeserializer, new ByteArrayDeserializer)
     val mirrorMakerConsumer = new ConsumerWrapper(consumer, None, whitelistOpt = Some("any"))
     mirrorMakerConsumer.offsets.put(new TopicPartition("test", 0), 0L)
-    mirrorMakerConsumer.commit()
+    assertThrows(classOf[TimeoutException], () => mirrorMakerConsumer.commit())
   }
 
   @Test

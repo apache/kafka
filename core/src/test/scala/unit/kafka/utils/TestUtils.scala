@@ -64,7 +64,6 @@ import org.apache.zookeeper.KeeperException.SessionExpiredException
 import org.apache.zookeeper.ZooDefs._
 import org.apache.zookeeper.data.ACL
 import org.junit.Assert._
-import org.scalatest.Assertions.fail
 
 import scala.jdk.CollectionConverters._
 import scala.collection.mutable.{ArrayBuffer, ListBuffer}
@@ -753,7 +752,7 @@ object TestUtils extends Logging {
         case _ =>
           s"Timing out after $timeoutMs ms since a leader was not elected for partition $topicPartition"
       }
-      fail(errorMessage)
+      throw new AssertionError(errorMessage)
     }
   }
 
@@ -884,7 +883,7 @@ object TestUtils extends Logging {
                       servers: Iterable[KafkaServer]): Int = {
     val leaderServer = servers.find(_.config.brokerId == brokerId)
     val leaderPartition = leaderServer.flatMap(_.replicaManager.nonOfflinePartition(topicPartition))
-      .getOrElse(fail(s"Failed to find expected replica on broker $brokerId"))
+      .getOrElse(throw new AssertionError(s"Failed to find expected replica on broker $brokerId"))
     leaderPartition.getLeaderEpoch
   }
 
@@ -898,7 +897,7 @@ object TestUtils extends Logging {
     }
     followerOpt
       .map(_.config.brokerId)
-      .getOrElse(fail(s"Unable to locate follower for $topicPartition"))
+      .getOrElse(throw new AssertionError(s"Unable to locate follower for $topicPartition"))
   }
 
   /**
@@ -945,7 +944,7 @@ object TestUtils extends Logging {
 
   def waitUntilControllerElected(zkClient: KafkaZkClient, timeout: Long = JTestUtils.DEFAULT_MAX_WAIT_MS): Int = {
     val (controllerId, _) = TestUtils.computeUntilTrue(zkClient.getControllerId, waitTime = timeout)(_.isDefined)
-    controllerId.getOrElse(fail(s"Controller not elected after $timeout ms"))
+    controllerId.getOrElse(throw new AssertionError(s"Controller not elected after $timeout ms"))
   }
 
   def awaitLeaderChange(servers: Seq[KafkaServer],

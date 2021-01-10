@@ -38,7 +38,6 @@ import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.common.serialization.StringDeserializer
 import org.apache.kafka.clients.admin.{Admin, AdminClientConfig, AlterConfigsResult, Config, ConfigEntry}
 import org.junit.Assert._
-import org.scalatest.Assertions.intercept
 
 import scala.annotation.nowarn
 
@@ -164,9 +163,8 @@ class UncleanLeaderElectionTest extends ZooKeeperTestHarness {
     val topicProps = new Properties()
     topicProps.put("unclean.leader.election.enable", "invalid")
 
-    intercept[ConfigException] {
-      TestUtils.createTopic(zkClient, topic, Map(partitionId -> Seq(brokerId1)), servers, topicProps)
-    }
+    assertThrows(classOf[ConfigException],
+      () => TestUtils.createTopic(zkClient, topic, Map(partitionId -> Seq(brokerId1)), servers, topicProps))
   }
 
   def verifyUncleanLeaderElectionEnabled(): Unit = {

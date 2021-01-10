@@ -87,6 +87,7 @@ import static org.apache.kafka.connect.runtime.TopicCreationConfig.PARTITIONS_CO
 import static org.apache.kafka.connect.runtime.TopicCreationConfig.REPLICATION_FACTOR_CONFIG;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
@@ -155,7 +156,7 @@ public class StandaloneHerderTest {
         PowerMock.verifyAll();
     }
 
-    @Test(expected = BadRequestException.class)
+    @Test
     public void testCreateConnectorFailedValidation() throws Throwable {
         // Basic validation should be performed and return an error, but should still evaluate the connector's config
         connector = PowerMock.createMock(BogusSourceConnector.class);
@@ -181,17 +182,12 @@ public class StandaloneHerderTest {
 
         herder.putConnectorConfig(CONNECTOR_NAME, config, false, createCallback);
 
-        try {
-            createCallback.get(1000L, TimeUnit.SECONDS);
-        } catch (ExecutionException e) {
-            assertNotNull(e.getCause());
-            throw e.getCause();
-        } finally {
-            PowerMock.verifyAll();
-        }
+        ExecutionException exception = assertThrows(ExecutionException.class, () -> createCallback.get(1000L, TimeUnit.SECONDS));
+        assertEquals(BadRequestException.class, exception.getCause().getClass());
+        PowerMock.verifyAll();
     }
 
-    @Test(expected = AlreadyExistsException.class)
+    @Test
     public void testCreateConnectorAlreadyExists() throws Throwable {
         connector = PowerMock.createMock(BogusSourceConnector.class);
         // First addition should succeed
@@ -218,15 +214,9 @@ public class StandaloneHerderTest {
         // Second should fail
         FutureCallback<Herder.Created<ConnectorInfo>> failedCreateCallback = new FutureCallback<>();
         herder.putConnectorConfig(CONNECTOR_NAME, config, false, failedCreateCallback);
-
-        try {
-            failedCreateCallback.get(1000L, TimeUnit.SECONDS);
-        } catch (ExecutionException e) {
-            assertNotNull(e.getCause());
-            throw e.getCause();
-        } finally {
-            PowerMock.verifyAll();
-        }
+        ExecutionException exception = assertThrows(ExecutionException.class, () -> failedCreateCallback.get(1000L, TimeUnit.SECONDS));
+        assertEquals(AlreadyExistsException.class, exception.getCause().getClass());
+        PowerMock.verifyAll();
     }
 
     @Test
@@ -602,17 +592,14 @@ public class StandaloneHerderTest {
         PowerMock.verifyAll();
     }
 
-    @Test(expected = UnsupportedOperationException.class)
+    @Test
     public void testPutTaskConfigs() {
         Callback<Void> cb = PowerMock.createMock(Callback.class);
 
         PowerMock.replayAll();
 
-        herder.putTaskConfigs(CONNECTOR_NAME,
-                Arrays.asList(singletonMap("config", "value")),
-                cb,
-                null);
-
+        assertThrows(UnsupportedOperationException.class, () -> herder.putTaskConfigs(CONNECTOR_NAME,
+                singletonList(singletonMap("config", "value")), cb, null));
         PowerMock.verifyAll();
     }
 

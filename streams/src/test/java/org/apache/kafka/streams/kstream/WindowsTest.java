@@ -21,6 +21,7 @@ import org.junit.Test;
 import java.util.Map;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertThrows;
 
 public class WindowsTest {
 
@@ -48,15 +49,15 @@ public class WindowsTest {
     }
 
     @SuppressWarnings("deprecation") // specifically testing deprecated APIs
-    @Test(expected = IllegalArgumentException.class)
+    @Test
     public void numberOfSegmentsMustBeAtLeastTwo() {
-        new TestWindows().segments(1);
+        assertThrows(IllegalArgumentException.class, () -> new TestWindows().segments(1));
     }
 
     @SuppressWarnings("deprecation") // specifically testing deprecated APIs
-    @Test(expected = IllegalArgumentException.class)
+    @Test
     public void retentionTimeMustNotBeNegative() {
-        new TestWindows().until(-1);
+        assertThrows(IllegalArgumentException.class, () -> new TestWindows().until(-1));
     }
 
 }

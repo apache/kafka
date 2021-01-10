@@ -76,10 +76,10 @@ public class MetadataTest {
                 Collections.emptyList());
     }
 
-    @Test(expected = IllegalStateException.class)
+    @Test
     public void testMetadataUpdateAfterClose() {
         metadata.close();
-        metadata.updateWithCurrentRequestVersion(emptyMetadataResponse(), false, 1000);
+        assertThrows(IllegalStateException.class, () -> metadata.updateWithCurrentRequestVersion(emptyMetadataResponse(), false, 1000));
     }
 
     private static void checkTimeToNextUpdate(long refreshBackoffMs, long metadataExpireMs) {

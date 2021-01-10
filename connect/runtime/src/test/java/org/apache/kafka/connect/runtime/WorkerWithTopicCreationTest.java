@@ -102,6 +102,7 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.fail;
 
 @RunWith(PowerMockRunner.class)
@@ -1169,21 +1170,21 @@ public class WorkerWithTopicCreationTest extends ThreadedTest {
                                                              null, allConnectorClientConfigOverridePolicy, CLUSTER_ID));
     }
 
-    @Test(expected = ConnectException.class)
+    @Test
     public void testConsumerConfigsClientOverridesWithNonePolicy() {
         Map<String, String> props = new HashMap<>(workerProps);
         props.put("consumer.auto.offset.reset", "latest");
         props.put("consumer.max.poll.records", "5000");
         WorkerConfig configWithOverrides = new StandaloneConfig(props);
 
-        Map<String, Object> connConfig = new HashMap<String, Object>();
+        Map<String, Object> connConfig = new HashMap<>();
         connConfig.put("max.poll.records", "5000");
         connConfig.put("max.poll.interval.ms", "1000");
         EasyMock.expect(connectorConfig.originalsWithPrefix(ConnectorConfig.CONNECTOR_CLIENT_CONSUMER_OVERRIDES_PREFIX))
             .andReturn(connConfig);
         PowerMock.replayAll();
-        Worker.consumerConfigs(new ConnectorTaskId("test", 1), configWithOverrides, connectorConfig,
-                               null, noneConnectorClientConfigOverridePolicy, CLUSTER_ID);
+        assertThrows(ConnectException.class, () -> Worker.consumerConfigs(new ConnectorTaskId("test", 1),
+            configWithOverrides, connectorConfig, null, noneConnectorClientConfigOverridePolicy, CLUSTER_ID));
     }
 
     @Test
@@ -1212,7 +1213,7 @@ public class WorkerWithTopicCreationTest extends ThreadedTest {
                                                              null, allConnectorClientConfigOverridePolicy, CLUSTER_ID));
     }
 
-    @Test(expected = ConnectException.class)
+    @Test
     public void testAdminConfigsClientOverridesWithNonePolicy() {
         Map<String, String> props = new HashMap<>(workerProps);
         props.put("admin.client.id", "testid");
@@ -1225,8 +1226,8 @@ public class WorkerWithTopicCreationTest extends ThreadedTest {
         EasyMock.expect(connectorConfig.originalsWithPrefix(ConnectorConfig.CONNECTOR_CLIENT_ADMIN_OVERRIDES_PREFIX))
             .andReturn(connConfig);
         PowerMock.replayAll();
-        Worker.adminConfigs(new ConnectorTaskId("test", 1), "", configWithOverrides, connectorConfig,
-                                                          null, noneConnectorClientConfigOverridePolicy, CLUSTER_ID);
+        assertThrows(ConnectException.class, () -> Worker.adminConfigs(new ConnectorTaskId("test", 1),
+            "", configWithOverrides, connectorConfig, null, noneConnectorClientConfigOverridePolicy, CLUSTER_ID));
     }
 
     private void assertStatusMetrics(long expected, String metricName) {

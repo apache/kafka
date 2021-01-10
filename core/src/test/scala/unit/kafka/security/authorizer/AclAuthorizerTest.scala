@@ -45,7 +45,6 @@ import org.apache.kafka.server.authorizer._
 import org.apache.kafka.common.utils.{Time, SecurityUtils => JSecurityUtils}
 import org.junit.Assert._
 import org.junit.{After, Before, Test}
-import org.scalatest.Assertions.intercept
 
 import scala.jdk.CollectionConverters._
 import scala.collection.mutable
@@ -98,9 +97,10 @@ class AclAuthorizerTest extends ZooKeeperTestHarness with BaseAuthorizerTest {
     super.tearDown()
   }
 
-  @Test(expected = classOf[IllegalArgumentException])
+  @Test
   def testAuthorizeThrowsOnNonLiteralResource(): Unit = {
-    authorize(aclAuthorizer, requestContext, READ, new ResourcePattern(TOPIC, "something", PREFIXED))
+    assertThrows(classOf[IllegalArgumentException], () => authorize(aclAuthorizer, requestContext, READ,
+      new ResourcePattern(TOPIC, "something", PREFIXED)))
   }
 
   @Test
@@ -113,9 +113,8 @@ class AclAuthorizerTest extends ZooKeeperTestHarness with BaseAuthorizerTest {
   // Authorizing the empty resource is not supported because we create a znode with the resource name.
   @Test
   def testEmptyAclThrowsException(): Unit = {
-    val e = intercept[ApiException] {
-      addAcls(aclAuthorizer, Set(allowReadAcl), new ResourcePattern(GROUP, "", LITERAL))
-    }
+    val e = assertThrows(classOf[ApiException],
+      () => addAcls(aclAuthorizer, Set(allowReadAcl), new ResourcePattern(GROUP, "", LITERAL)))
     assertTrue(s"Unexpected exception $e", e.getCause.isInstanceOf[IllegalArgumentException])
   }
 
@@ -718,9 +717,8 @@ class AclAuthorizerTest extends ZooKeeperTestHarness with BaseAuthorizerTest {
   @Test
   def testThrowsOnAddPrefixedAclIfInterBrokerProtocolVersionTooLow(): Unit = {
     givenAuthorizerWithProtocolVersion(Option(KAFKA_2_0_IV0))
-    val e = intercept[ApiException] {
-      addAcls(aclAuthorizer, Set(denyReadAcl), new ResourcePattern(TOPIC, "z_other", PREFIXED))
-    }
+    val e = assertThrows(classOf[ApiException],
+      () => addAcls(aclAuthorizer, Set(denyReadAcl), new ResourcePattern(TOPIC, "z_other", PREFIXED)))
     assertTrue(s"Unexpected exception $e", e.getCause.isInstanceOf[UnsupportedVersionException])
   }
 

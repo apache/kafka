@@ -65,9 +65,9 @@ public class PlainSaslServerTest {
         assertEquals(0, nextChallenge.length);
     }
 
-    @Test(expected = SaslAuthenticationException.class)
-    public void authorizatonIdNotEqualsAuthenticationId() throws Exception {
-        saslServer.evaluateResponse(saslMessage(USER_B, USER_A, PASSWORD_A));
+    @Test
+    public void authorizatonIdNotEqualsAuthenticationId() {
+        assertThrows(SaslAuthenticationException.class, () -> saslServer.evaluateResponse(saslMessage(USER_B, USER_A, PASSWORD_A)));
     }
 
     @Test

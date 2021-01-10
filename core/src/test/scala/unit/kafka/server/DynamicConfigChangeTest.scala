@@ -35,7 +35,6 @@ import org.apache.kafka.common.metrics.Quota
 import org.easymock.EasyMock
 import org.junit.Assert._
 import org.junit.Test
-import org.scalatest.Assertions.assertThrows
 
 import scala.collection.{Map, Seq}
 import scala.jdk.CollectionConverters._
@@ -201,9 +200,7 @@ class DynamicConfigChangeTest extends KafkaServerTestHarness {
     val props: Properties = new Properties()
     props.put(DynamicConfig.Ip.IpConnectionRateOverrideProp, "1")
 
-    assertThrows[IllegalArgumentException]{
-      configHandler.processConfigChanges("illegal-hostname", props)
-    }
+    assertThrows(classOf[IllegalArgumentException], () => configHandler.processConfigChanges("illegal-hostname", props))
   }
 
   @Test

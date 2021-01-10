@@ -57,6 +57,7 @@ import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNotSame;
 import static org.junit.Assert.assertSame;
+import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 import java.security.Security;
@@ -111,7 +112,7 @@ public class SslFactoryTest {
         Security.removeProvider(testProviderCreator.getProvider().getName());
     }
 
-    @Test(expected = KafkaException.class)
+    @Test
     public void testSslFactoryWithoutProviderClassConfiguration() {
         // An exception is thrown as the algorithm is not registered through a provider
         Map<String, Object> serverSslConfig = TestSslUtils.createSslConfig(
@@ -120,10 +121,10 @@ public class SslFactoryTest {
                 tlsProtocol
         );
         SslFactory sslFactory = new SslFactory(Mode.SERVER);
-        sslFactory.configure(serverSslConfig);
+        assertThrows(KafkaException.class, () -> sslFactory.configure(serverSslConfig));
     }
 
-    @Test(expected = KafkaException.class)
+    @Test
     public void testSslFactoryWithIncorrectProviderClassConfiguration() {
         // An exception is thrown as the algorithm is not registered through a provider
         Map<String, Object> serverSslConfig = TestSslUtils.createSslConfig(
@@ -134,7 +135,7 @@ public class SslFactoryTest {
         serverSslConfig.put(SecurityConfig.SECURITY_PROVIDERS_CONFIG,
                 "com.fake.ProviderClass1,com.fake.ProviderClass2");
         SslFactory sslFactory = new SslFactory(Mode.SERVER);
-        sslFactory.configure(serverSslConfig);
+        assertThrows(KafkaException.class, () -> sslFactory.configure(serverSslConfig));
     }
 
     @Test
@@ -518,7 +519,7 @@ public class SslFactoryTest {
     /**
      * Tests invalid ssl.engine.factory configuration
      */
-    @Test(expected = ClassCastException.class)
+    @Test
     public void testInvalidSslEngineFactory() throws Exception {
         File trustStoreFile = File.createTempFile("truststore", ".jks");
         Map<String, Object> clientSslConfig = sslConfigsBuilder(Mode.CLIENT)
@@ -527,7 +528,7 @@ public class SslFactoryTest {
                 .build();
         clientSslConfig.put(SslConfigs.SSL_ENGINE_FACTORY_CLASS_CONFIG, String.class);
         SslFactory sslFactory = new SslFactory(Mode.CLIENT);
-        sslFactory.configure(clientSslConfig);
+        assertThrows(ClassCastException.class, () -> sslFactory.configure(clientSslConfig));
     }
 
     @Test

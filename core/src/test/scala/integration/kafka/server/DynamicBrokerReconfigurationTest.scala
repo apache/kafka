@@ -62,7 +62,6 @@ import org.apache.kafka.common.serialization.{StringDeserializer, StringSerializ
 import org.apache.kafka.test.{TestSslUtils, TestUtils => JTestUtils}
 import org.junit.Assert._
 import org.junit.{After, Before, Ignore, Test}
-import org.scalatest.Assertions.intercept
 
 import scala.annotation.nowarn
 import scala.collection._
@@ -982,10 +981,10 @@ class DynamicBrokerReconfigurationTest extends ZooKeeperTestHarness with SaslSet
       .bootstrapServers(bootstrap)
       .build()
 
-    assertTrue(intercept[ExecutionException] {
+    assertTrue(assertThrows(classOf[ExecutionException], () => {
       val future = producer1.send(new ProducerRecord(topic, "key", "value"))
       future.get(2, TimeUnit.SECONDS)
-    }.getCause.isInstanceOf[org.apache.kafka.common.errors.TimeoutException])
+    }).getCause.isInstanceOf[org.apache.kafka.common.errors.TimeoutException])
 
     alterAdvertisedListener(adminClient, externalAdminClient, invalidHost, "localhost")
     servers.foreach(validateEndpointsInZooKeeper(_, endpoints => !endpoints.contains(invalidHost)))
@@ -1428,7 +1427,7 @@ class DynamicBrokerReconfigurationTest extends ZooKeeperTestHarness with SaslSet
       else
         Seq(new ConfigResource(ConfigResource.Type.BROKER, ""))
       brokerResources.foreach { brokerResource =>
-        val exception = intercept[ExecutionException](alterResult.values.get(brokerResource).get)
+        val exception = assertThrows(classOf[ExecutionException], () => alterResult.values.get(brokerResource).get)
         assertTrue(exception.getCause.isInstanceOf[InvalidRequestException])
       }
       servers.foreach { server =>

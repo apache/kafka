@@ -18,6 +18,7 @@ package org.apache.kafka.common.security.oauthbearer.internals;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.assertNull;
 
@@ -154,8 +155,8 @@ public class OAuthBearerSaslServerTest {
      * If the callback handler handles the `OAuthBearerExtensionsValidatorCallback`
      *  and finds an invalid extension, SaslServer should throw an authentication exception
      */
-    @Test(expected = SaslAuthenticationException.class)
-    public void throwsAuthenticationExceptionOnInvalidExtensions() throws Exception {
+    @Test
+    public void throwsAuthenticationExceptionOnInvalidExtensions() {
         OAuthBearerUnsecuredValidatorCallbackHandler invalidHandler = new OAuthBearerUnsecuredValidatorCallbackHandler() {
             @Override
             public void handle(Callback[] callbacks) throws UnsupportedCallbackException {
@@ -177,7 +178,8 @@ public class OAuthBearerSaslServerTest {
         customExtensions.put("firstKey", "value");
         customExtensions.put("secondKey", "value");
 
-        saslServer.evaluateResponse(clientInitialResponse(null, false, customExtensions));
+        assertThrows(SaslAuthenticationException.class,
+            () -> saslServer.evaluateResponse(clientInitialResponse(null, false, customExtensions)));
     }
 
     @Test
@@ -187,9 +189,10 @@ public class OAuthBearerSaslServerTest {
         assertTrue("Next challenge is not empty", nextChallenge.length == 0);
     }
 
-    @Test(expected = SaslAuthenticationException.class)
-    public void authorizatonIdNotEqualsAuthenticationId() throws Exception {
-        saslServer.evaluateResponse(clientInitialResponse(USER + "x"));
+    @Test
+    public void authorizatonIdNotEqualsAuthenticationId() {
+        assertThrows(SaslAuthenticationException.class,
+            () -> saslServer.evaluateResponse(clientInitialResponse(USER + "x")));
     }
 
     @Test

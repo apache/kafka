@@ -36,6 +36,7 @@ import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.fail;
+import static org.junit.Assert.assertThrows;
 
 /**
  * A unit test for ImplicitLinkedHashCollection.
@@ -594,8 +595,7 @@ public class ImplicitLinkedHashCollectionTest {
         assertTrue(coll.add(e3));
         coll.moveToEnd(e1);
         expectTraversal(coll.iterator(), 2, 3, 1);
-        Assert.assertThrows(RuntimeException.class, () ->
-            coll.moveToEnd(new TestElement(4, 4)));
+        assertThrows(RuntimeException.class, () -> coll.moveToEnd(new TestElement(4, 4)));
     }
 
     @Test

@@ -20,46 +20,52 @@ import kafka.admin.AdminOperationException
 import kafka.utils.CoreUtils._
 import kafka.zk.ZooKeeperTestHarness
 import org.apache.kafka.common.config._
+import org.junit.Assert.assertThrows
 import org.junit.Test
 
 class DynamicConfigTest extends ZooKeeperTestHarness {
   private final val nonExistentConfig: String = "some.config.that.does.not.exist"
   private final val someValue: String = "some interesting value"
 
-  @Test(expected = classOf[IllegalArgumentException])
+  @Test
   def shouldFailWhenChangingClientIdUnknownConfig(): Unit = {
-    adminZkClient.changeClientIdConfig("ClientId", propsWith(nonExistentConfig, someValue))
+    assertThrows(classOf[IllegalArgumentException], () => adminZkClient.changeClientIdConfig("ClientId",
+      propsWith(nonExistentConfig, someValue)))
   }
 
-  @Test(expected = classOf[IllegalArgumentException])
+  @Test
   def shouldFailWhenChangingUserUnknownConfig(): Unit = {
-    adminZkClient.changeUserOrUserClientIdConfig("UserId", propsWith(nonExistentConfig, someValue))
+    assertThrows(classOf[IllegalArgumentException], () => adminZkClient.changeUserOrUserClientIdConfig("UserId",
+      propsWith(nonExistentConfig, someValue)))
   }
 
-  @Test(expected = classOf[ConfigException])
+  @Test
   def shouldFailLeaderConfigsWithInvalidValues(): Unit = {
-    adminZkClient.changeBrokerConfig(Seq(0),
-      propsWith(DynamicConfig.Broker.LeaderReplicationThrottledRateProp, "-100"))
+    assertThrows(classOf[ConfigException], () => adminZkClient.changeBrokerConfig(Seq(0),
+      propsWith(DynamicConfig.Broker.LeaderReplicationThrottledRateProp, "-100")))
   }
 
-  @Test(expected = classOf[ConfigException])
+  @Test
   def shouldFailFollowerConfigsWithInvalidValues(): Unit = {
-    adminZkClient.changeBrokerConfig(Seq(0),
-      propsWith(DynamicConfig.Broker.FollowerReplicationThrottledRateProp, "-100"))
+    assertThrows(classOf[ConfigException], () => adminZkClient.changeBrokerConfig(Seq(0),
+      propsWith(DynamicConfig.Broker.FollowerReplicationThrottledRateProp, "-100")))
   }
 
-  @Test(expected = classOf[ConfigException])
+  @Test
   def shouldFailIpConfigsWithInvalidValues(): Unit = {
-    adminZkClient.changeIpConfig("1.2.3.4", propsWith(DynamicConfig.Ip.IpConnectionRateOverrideProp, "-1"))
+    assertThrows(classOf[ConfigException], () => adminZkClient.changeIpConfig("1.2.3.4",
+      propsWith(DynamicConfig.Ip.IpConnectionRateOverrideProp, "-1")))
   }
 
-  @Test(expected = classOf[AdminOperationException])
+  @Test
   def shouldFailIpConfigsWithInvalidIpv4Entity(): Unit = {
-    adminZkClient.changeIpConfig("1,1.1.1", propsWith(DynamicConfig.Ip.IpConnectionRateOverrideProp, "2"));
+    assertThrows(classOf[AdminOperationException], () => adminZkClient.changeIpConfig("1,1.1.1",
+      propsWith(DynamicConfig.Ip.IpConnectionRateOverrideProp, "2")))
   }
 
-  @Test(expected = classOf[AdminOperationException])
+  @Test
   def shouldFailIpConfigsWithBadHost(): Unit = {
-    adminZkClient.changeIpConfig("ip", propsWith(DynamicConfig.Ip.IpConnectionRateOverrideProp, "2"));
+    assertThrows(classOf[AdminOperationException], () => adminZkClient.changeIpConfig("ip",
+      propsWith(DynamicConfig.Ip.IpConnectionRateOverrideProp, "2")))
   }
 }

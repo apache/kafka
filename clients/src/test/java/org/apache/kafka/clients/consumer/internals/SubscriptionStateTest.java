@@ -46,6 +46,7 @@ import static org.apache.kafka.common.requests.OffsetsForLeaderEpochResponse.UND
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 
 public class SubscriptionStateTest {
@@ -254,13 +255,14 @@ public class SubscriptionStateTest {
         assertTrue(state.isFetchable(tp0));
     }
 
-    @Test(expected = IllegalStateException.class)
+    @Test
     public void invalidPositionUpdate() {
         state.subscribe(singleton(topic), rebalanceListener);
         assertTrue(state.checkAssignmentMatchedSubscription(singleton(tp0)));
         state.assignFromSubscribed(singleton(tp0));
 
-        state.position(tp0, new SubscriptionState.FetchPosition(0, Optional.empty(), leaderAndEpoch));
+        assertThrows(IllegalStateException.class, () -> state.position(tp0,
+            new SubscriptionState.FetchPosition(0, Optional.empty(), leaderAndEpoch)));
     }
 
     @Test
@@ -276,33 +278,34 @@ public class SubscriptionStateTest {
         assertFalse(state.checkAssignmentMatchedSubscription(Collections.singletonList(t1p0)));
     }
 
-    @Test(expected = IllegalStateException.class)
+    @Test
     public void cantChangePositionForNonAssignedPartition() {
-        state.position(tp0, new SubscriptionState.FetchPosition(1, Optional.empty(), leaderAndEpoch));
+        assertThrows(IllegalStateException.class, () -> state.position(tp0,
+            new SubscriptionState.FetchPosition(1, Optional.empty(), leaderAndEpoch)));
     }
 
-    @Test(expected = IllegalStateException.class)
+    @Test
     public void cantSubscribeTopicAndPattern() {
         state.subscribe(singleton(topic), rebalanceListener);
-        state.subscribe(Pattern.compile(".*"), rebalanceListener);
+        assertThrows(IllegalStateException.class, () -> state.subscribe(Pattern.compile(".*"), rebalanceListener));
     }
 
-    @Test(expected = IllegalStateException.class)
+    @Test
     public void cantSubscribePartitionAndPattern() {
         state.assignFromUser(singleton(tp0));
-        state.subscribe(Pattern.compile(".*"), rebalanceListener);
+        assertThrows(IllegalStateException.class, () -> state.subscribe(Pattern.compile(".*"), rebalanceListener));
     }
 
-    @Test(expected = IllegalStateException.class)
+    @Test
     public void cantSubscribePatternAndTopic() {
         state.subscribe(Pattern.compile(".*"), rebalanceListener);
-        state.subscribe(singleton(topic), rebalanceListener);
+        assertThrows(IllegalStateException.class, () -> state.subscribe(singleton(topic), rebalanceListener));
     }
 
-    @Test(expected = IllegalStateException.class)
+    @Test
     public void cantSubscribePatternAndPartition() {
         state.subscribe(Pattern.compile(".*"), rebalanceListener);
-        state.assignFromUser(singleton(tp0));
+        assertThrows(IllegalStateException.class, () -> state.assignFromUser(singleton(tp0)));
     }
 
     @Test

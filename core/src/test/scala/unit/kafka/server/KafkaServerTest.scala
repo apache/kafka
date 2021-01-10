@@ -18,14 +18,13 @@
 package kafka.server
 
 import kafka.api.ApiVersion
-
-import java.util.Properties
 import kafka.utils.TestUtils
 import kafka.zk.ZooKeeperTestHarness
 import org.apache.zookeeper.client.ZKClientConfig
+import org.junit.Assert.{assertEquals, assertThrows, fail}
 import org.junit.Test
-import org.junit.Assert.{assertEquals, fail}
-import org.scalatest.Assertions.intercept
+
+import java.util.Properties
 
 class KafkaServerTest extends ZooKeeperTestHarness {
 
@@ -35,9 +34,8 @@ class KafkaServerTest extends ZooKeeperTestHarness {
     val server1 = createServer(1, "myhost", TestUtils.RandomPort)
 
     //start a server with same advertised listener
-    intercept[IllegalArgumentException] {
-      createServer(2, "myhost", TestUtils.boundPort(server1))
-    }
+    assertThrows(classOf[IllegalArgumentException],
+      () => createServer(2, "myhost", TestUtils.boundPort(server1)))
 
     //start a server with same host but with different port
     val server2 = createServer(2, "myhost", TestUtils.RandomPort)

@@ -24,6 +24,7 @@ import java.util.HashMap;
 import java.util.Map;
 
 import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertThrows;
 
 public class SaslExtensionsTest {
     Map<String, String> map;
@@ -35,10 +36,10 @@ public class SaslExtensionsTest {
         this.map.put("who", "me");
     }
 
-    @Test(expected = UnsupportedOperationException.class)
+    @Test
     public void testReturnedMapIsImmutable() {
         SaslExtensions extensions = new SaslExtensions(this.map);
-        extensions.map().put("hello", "test");
+        assertThrows(UnsupportedOperationException.class, () -> extensions.map().put("hello", "test"));
     }
 
     @Test

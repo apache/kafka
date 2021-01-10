@@ -31,6 +31,7 @@ import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.core.IsNull.nullValue;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertThrows;
 
 public class SerializationTest {
 
@@ -79,15 +80,15 @@ public class SerializationTest {
         }
     }
 
-    @Test(expected = IllegalArgumentException.class)
+    @Test
     public void testSerdeFromUnknown() {
-        Serdes.serdeFrom(DummyClass.class);
+        assertThrows(IllegalArgumentException.class, () -> Serdes.serdeFrom(DummyClass.class));
     }
 
-    @Test(expected = IllegalArgumentException.class)
+    @Test
     public void testSerdeFromNotNull() {
         try (Serde<Long> serde = Serdes.Long()) {
-            Serdes.serdeFrom(null, serde.deserializer());
+            assertThrows(IllegalArgumentException.class, () -> Serdes.serdeFrom(null, serde.deserializer()));
         }
     }
 
@@ -107,25 +108,25 @@ public class SerializationTest {
         }
     }
 
-    @Test(expected = SerializationException.class)
+    @Test
     public void floatDeserializerShouldThrowSerializationExceptionOnZeroBytes() {
         try (Serde<Float> serde = Serdes.Float()) {
-            serde.deserializer().deserialize(topic, new byte[0]);
+            assertThrows(SerializationException.class, () -> serde.deserializer().deserialize(topic, new byte[0]));
         }
     }
 
-    @Test(expected = SerializationException.class)
+    @Test
     public void floatDeserializerShouldThrowSerializationExceptionOnTooFewBytes() {
         try (Serde<Float> serde = Serdes.Float()) {
-            serde.deserializer().deserialize(topic, new byte[3]);
+            assertThrows(SerializationException.class, () -> serde.deserializer().deserialize(topic, new byte[3]));
         }
     }
 
 
-    @Test(expected = SerializationException.class)
+    @Test
     public void floatDeserializerShouldThrowSerializationExceptionOnTooManyBytes() {
         try (Serde<Float> serde = Serdes.Float()) {
-            serde.deserializer().deserialize(topic, new byte[5]);
+            assertThrows(SerializationException.class, () -> serde.deserializer().deserialize(topic, new byte[5]));
         }
     }
 
@@ -161,10 +162,10 @@ public class SerializationTest {
         }
     }
 
-    @Test(expected = IllegalArgumentException.class)
+    @Test
     public void voidDeserializerShouldThrowOnNotNullValues() {
         try (Serde<Void> serde = Serdes.Void()) {
-            serde.deserializer().deserialize(topic, new byte[5]);
+            assertThrows(IllegalArgumentException.class, () -> serde.deserializer().deserialize(topic, new byte[5]));
         }
     }
 

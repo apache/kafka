@@ -17,6 +17,7 @@
 package org.apache.kafka.common.security.oauthbearer.internals;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 
 import org.apache.kafka.common.security.auth.SaslExtensions;
@@ -55,11 +56,11 @@ public class OAuthBearerClientInitialResponseTest {
         assertEquals(serverMessage, message);
     }
 
-    @Test(expected = SaslException.class)
+    @Test
     public void testThrowsSaslExceptionOnInvalidExtensionKey() throws Exception {
         Map<String, String> extensions = new HashMap<>();
         extensions.put("19", "42"); // keys can only be a-z
-        new OAuthBearerClientInitialResponse("123.345.567", new SaslExtensions(extensions));
+        assertThrows(SaslException.class, () -> new OAuthBearerClientInitialResponse("123.345.567", new SaslExtensions(extensions)));
     }
 
     @Test

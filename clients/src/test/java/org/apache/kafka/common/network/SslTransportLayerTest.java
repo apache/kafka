@@ -987,14 +987,14 @@ public class SslTransportLayerTest {
      * Verifies that inter-broker listener with validation of truststore against keystore
      * fails if certs from keystore are not trusted.
      */
-    @Test(expected = KafkaException.class)
+    @Test
     public void testInterBrokerSslConfigValidationFailure() {
         SecurityProtocol securityProtocol = SecurityProtocol.SSL;
         sslServerConfigs.put(BrokerSecurityConfigs.SSL_CLIENT_AUTH_CONFIG, "required");
         TestSecurityConfig config = new TestSecurityConfig(sslServerConfigs);
         ListenerName listenerName = ListenerName.forSecurityProtocol(securityProtocol);
-        ChannelBuilders.serverChannelBuilder(listenerName, true, securityProtocol, config,
-                null, null, time, new LogContext());
+        assertThrows(KafkaException.class, () -> ChannelBuilders.serverChannelBuilder(listenerName, true, securityProtocol, config,
+                null, null, time, new LogContext()));
     }
 
     /**
@@ -1205,10 +1205,10 @@ public class SslTransportLayerTest {
     /**
      * Tests invalid ssl.engine.factory plugin class
      */
-    @Test(expected = KafkaException.class)
+    @Test
     public void testInvalidSslEngineFactory() {
         sslClientConfigs.put(SslConfigs.SSL_ENGINE_FACTORY_CLASS_CONFIG, String.class);
-        createSelector(sslClientConfigs);
+        assertThrows(KafkaException.class, () -> createSelector(sslClientConfigs));
     }
 
     private void verifyInvalidReconfigure(ListenerReconfigurable reconfigurable,

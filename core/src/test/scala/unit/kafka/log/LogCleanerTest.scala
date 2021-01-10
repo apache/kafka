@@ -33,7 +33,6 @@ import org.apache.kafka.common.record._
 import org.apache.kafka.common.utils.Utils
 import org.junit.Assert._
 import org.junit.{After, Test}
-import org.scalatest.Assertions.{assertThrows, fail, intercept}
 
 import scala.collection._
 import scala.jdk.CollectionConverters._
@@ -742,9 +741,9 @@ class LogCleanerTest {
     file.close()
 
     val cleaner = makeCleaner(Int.MaxValue, maxMessageSize=1024)
-    intercept[CorruptRecordException] {
+    assertThrows(classOf[CorruptRecordException], () =>
       cleaner.cleanSegments(log, Seq(log.logSegments.head), offsetMap, 0L, new CleanerStats, new CleanedTransactionMetadata)
-    }
+    )
   }
 
   /**
@@ -759,9 +758,9 @@ class LogCleanerTest {
     file.close()
 
     val cleaner = makeCleaner(Int.MaxValue, maxMessageSize=1024)
-    intercept[CorruptRecordException] {
+    assertThrows(classOf[CorruptRecordException], () =>
       cleaner.cleanSegments(log, Seq(log.logSegments.head), offsetMap, 0L, new CleanerStats, new CleanedTransactionMetadata)
-    }
+    )
   }
 
   def createLogWithMessagesLargerThanMaxSize(largeMessageSize: Int): (Log, FakeOffsetMap) = {
@@ -1091,10 +1090,10 @@ class LogCleanerTest {
     val keys = LogTest.keysInLog(log)
     val map = new FakeOffsetMap(Int.MaxValue)
     keys.foreach(k => map.put(key(k), Long.MaxValue))
-    intercept[LogCleaningAbortedException] {
+    assertThrows(classOf[LogCleaningAbortedException], () =>
       cleaner.cleanSegments(log, log.logSegments.take(3).toSeq, map, 0L, new CleanerStats(),
         new CleanedTransactionMetadata)
-    }
+    )
   }
 
   /**
@@ -1286,7 +1285,7 @@ class LogCleanerTest {
 
     val log = makeLog(config = config, recoveryPoint = Long.MaxValue)
     val segmentWithOverflow = LogTest.firstOverflowSegment(log).getOrElse {
-      fail("Failed to create log with a segment which has overflowed offsets")
+      throw new AssertionError("Failed to create log with a segment which has overflowed offsets")
     }
 
     val numSegmentsInitial = log.logSegments.size
@@ -1301,10 +1300,10 @@ class LogCleanerTest {
     }
 
     // Try to clean segment with offset overflow. This will trigger log split and the cleaning itself must abort.
-    assertThrows[LogCleaningAbortedException] {
-      cleaner.cleanSegments(log, List(segmentWithOverflow), offsetMap, 0L, new CleanerStats(),
+    assertThrows(classOf[LogCleaningAbortedException], () =>
+      cleaner.cleanSegments(log, Seq(segmentWithOverflow), offsetMap, 0L, new CleanerStats(),
         new CleanedTransactionMetadata)
-    }
+    )
     assertEquals(numSegmentsInitial + 1, log.logSegments.size)
     assertEquals(allKeys, LogTest.keysInLog(log))
     assertFalse(LogTest.hasOffsetOverflow(log))

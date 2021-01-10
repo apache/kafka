@@ -32,6 +32,7 @@ import java.util.Map;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertSame;
+import static org.junit.Assert.assertThrows;
 
 public class InsertFieldTest {
     private InsertField<SourceRecord> xformKey = new InsertField.Key<>();
@@ -42,10 +43,11 @@ public class InsertFieldTest {
         xformValue.close();
     }
 
-    @Test(expected = DataException.class)
+    @Test
     public void topLevelStructRequired() {
         xformValue.configure(Collections.singletonMap("topic.field", "topic_field"));
-        xformValue.apply(new SourceRecord(null, null, "", 0, Schema.INT32_SCHEMA, 42));
+        assertThrows(DataException.class,
+            () -> xformValue.apply(new SourceRecord(null, null, "", 0, Schema.INT32_SCHEMA, 42)));
     }
 
     @Test
