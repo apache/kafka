@@ -16,16 +16,15 @@
   */
 package kafka.server
 
-import java.util
-
 import kafka.api.{KafkaSasl, SaslSetup}
 import kafka.utils.{JaasTestUtils, TestUtils}
 import org.apache.kafka.clients.admin.{Admin, AdminClientConfig}
 import org.apache.kafka.common.errors.DelegationTokenDisabledException
 import org.apache.kafka.common.security.auth.SecurityProtocol
+import org.junit.Assert.assertThrows
 import org.junit.{After, Before, Test}
-import org.scalatest.Assertions.intercept
 
+import java.util
 import scala.concurrent.ExecutionException
 
 class DelegationTokenRequestsWithDisableTokenFeatureTest extends BaseRequestTest with SaslSetup {
@@ -58,16 +57,19 @@ class DelegationTokenRequestsWithDisableTokenFeatureTest extends BaseRequestTest
     adminClient = Admin.create(createAdminConfig)
 
     val createResult = adminClient.createDelegationToken()
-    intercept[ExecutionException](createResult.delegationToken().get()).getCause.isInstanceOf[DelegationTokenDisabledException]
+    assertThrows(classOf[ExecutionException], () => createResult.delegationToken().get()).getCause.isInstanceOf[DelegationTokenDisabledException]
 
     val describeResult = adminClient.describeDelegationToken()
-    intercept[ExecutionException](describeResult.delegationTokens().get()).getCause.isInstanceOf[DelegationTokenDisabledException]
+    assertThrows(classOf[ExecutionException],
+      () => describeResult.delegationTokens().get()).getCause.isInstanceOf[DelegationTokenDisabledException]
 
     val renewResult = adminClient.renewDelegationToken("".getBytes())
-    intercept[ExecutionException](renewResult.expiryTimestamp().get()).getCause.isInstanceOf[DelegationTokenDisabledException]
+    assertThrows(classOf[ExecutionException],
+      () => renewResult.expiryTimestamp().get()).getCause.isInstanceOf[DelegationTokenDisabledException]
 
     val expireResult = adminClient.expireDelegationToken("".getBytes())
-    intercept[ExecutionException](expireResult.expiryTimestamp().get()).getCause.isInstanceOf[DelegationTokenDisabledException]
+    assertThrows(classOf[ExecutionException],
+      () => expireResult.expiryTimestamp().get()).getCause.isInstanceOf[DelegationTokenDisabledException]
   }
 
   @After

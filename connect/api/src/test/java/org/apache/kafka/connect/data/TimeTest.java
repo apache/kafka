@@ -24,6 +24,7 @@ import java.util.GregorianCalendar;
 import java.util.TimeZone;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertThrows;
 
 public class TimeTest {
     private static final GregorianCalendar EPOCH;
@@ -56,14 +57,16 @@ public class TimeTest {
         assertEquals(10000, Time.fromLogical(Time.SCHEMA, EPOCH_PLUS_TEN_THOUSAND_MILLIS.getTime()));
     }
 
-    @Test(expected = DataException.class)
+    @Test
     public void testFromLogicalInvalidSchema() {
-        Time.fromLogical(Time.builder().name("invalid").build(), EPOCH.getTime());
+        assertThrows(DataException.class,
+            () -> Time.fromLogical(Time.builder().name("invalid").build(), EPOCH.getTime()));
     }
 
-    @Test(expected = DataException.class)
+    @Test
     public void testFromLogicalInvalidHasDateComponents() {
-        Time.fromLogical(Time.SCHEMA, EPOCH_PLUS_DATE_COMPONENT.getTime());
+        assertThrows(DataException.class,
+            () -> Time.fromLogical(Time.SCHEMA, EPOCH_PLUS_DATE_COMPONENT.getTime()));
     }
 
     @Test
@@ -72,8 +75,9 @@ public class TimeTest {
         assertEquals(EPOCH_PLUS_TEN_THOUSAND_MILLIS.getTime(), Time.toLogical(Time.SCHEMA, 10000));
     }
 
-    @Test(expected = DataException.class)
+    @Test
     public void testToLogicalInvalidSchema() {
-        Time.toLogical(Time.builder().name("invalid").build(), 0);
+        assertThrows(DataException.class,
+            () -> Time.toLogical(Time.builder().name("invalid").build(), 0));
     }
 }

@@ -66,33 +66,33 @@ public class DistributedConfigTest {
         assertEquals(512 / 8, keyGenerator.generateKey().getEncoded().length);
     }
 
-    @Test(expected = ConfigException.class)
+    @Test
     public void shouldFailWithEmptyListOfVerificationAlgorithms() {
         Map<String, String> configs = configs();
         configs.put(DistributedConfig.INTER_WORKER_VERIFICATION_ALGORITHMS_CONFIG, "");
-        new DistributedConfig(configs);
+        assertThrows(ConfigException.class, () -> new DistributedConfig(configs));
     }
 
-    @Test(expected = ConfigException.class)
+    @Test
     public void shouldFailIfKeyAlgorithmNotInVerificationAlgorithmsList() {
         Map<String, String> configs = configs();
         configs.put(DistributedConfig.INTER_WORKER_KEY_GENERATION_ALGORITHM_CONFIG, "HmacSHA1");
         configs.put(DistributedConfig.INTER_WORKER_VERIFICATION_ALGORITHMS_CONFIG, "HmacSHA256");
-        new DistributedConfig(configs);
+        assertThrows(ConfigException.class, () -> new DistributedConfig(configs));
     }
 
-    @Test(expected = ConfigException.class)
+    @Test
     public void shouldFailWithInvalidKeyAlgorithm() {
         Map<String, String> configs = configs();
         configs.put(DistributedConfig.INTER_WORKER_KEY_GENERATION_ALGORITHM_CONFIG, "not-actually-a-key-algorithm");
-        new DistributedConfig(configs);
+        assertThrows(ConfigException.class, () -> new DistributedConfig(configs));
     }
 
-    @Test(expected = ConfigException.class)
+    @Test
     public void shouldFailWithInvalidKeySize() {
         Map<String, String> configs = configs();
         configs.put(DistributedConfig.INTER_WORKER_KEY_SIZE_CONFIG, "0");
-        new DistributedConfig(configs);
+        assertThrows(ConfigException.class, () -> new DistributedConfig(configs));
     }
 
     @Test

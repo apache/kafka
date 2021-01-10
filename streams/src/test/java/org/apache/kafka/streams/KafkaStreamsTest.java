@@ -721,22 +721,22 @@ public class KafkaStreamsTest {
         }
     }
 
-    @Test(expected = IllegalStateException.class)
+    @Test
     public void shouldNotGetAllTasksWhenNotRunning() {
         final KafkaStreams streams = new KafkaStreams(getBuilderWithSource().build(), props, supplier, time);
-        streams.allMetadata();
+        assertThrows(IllegalStateException.class, streams::allMetadata);
     }
 
-    @Test(expected = IllegalStateException.class)
+    @Test
     public void shouldNotGetAllTasksWithStoreWhenNotRunning() {
         final KafkaStreams streams = new KafkaStreams(getBuilderWithSource().build(), props, supplier, time);
-        streams.allMetadataForStore("store");
+        assertThrows(IllegalStateException.class, () -> streams.allMetadataForStore("store"));
     }
 
-    @Test(expected = IllegalStateException.class)
+    @Test
     public void shouldNotGetQueryMetadataWithSerializerWhenNotRunningOrRebalancing() {
         final KafkaStreams streams = new KafkaStreams(getBuilderWithSource().build(), props, supplier, time);
-        streams.queryMetadataForKey("store", "key", Serdes.String().serializer());
+        assertThrows(IllegalStateException.class, () -> streams.queryMetadataForKey("store", "key", Serdes.String().serializer()));
     }
 
     @Test
@@ -746,10 +746,10 @@ public class KafkaStreamsTest {
         assertEquals(KeyQueryMetadata.NOT_AVAILABLE, streams.queryMetadataForKey("store", "key", Serdes.String().serializer()));
     }
 
-    @Test(expected = IllegalStateException.class)
+    @Test
     public void shouldNotGetQueryMetadataWithPartitionerWhenNotRunningOrRebalancing() {
         final KafkaStreams streams = new KafkaStreams(getBuilderWithSource().build(), props, supplier, time);
-        streams.queryMetadataForKey("store", "key", (topic, key, value, numPartitions) -> 0);
+        assertThrows(IllegalStateException.class, () -> streams.queryMetadataForKey("store", "key", (topic, key, value, numPartitions) -> 0));
     }
 
     @Test
@@ -781,10 +781,10 @@ public class KafkaStreamsTest {
         }
     }
 
-    @Test(expected = IllegalArgumentException.class)
+    @Test
     public void shouldThrowOnNegativeTimeoutForClose() {
         try (final KafkaStreams streams = new KafkaStreams(getBuilderWithSource().build(), props, supplier, time)) {
-            streams.close(Duration.ofMillis(-1L));
+            assertThrows(IllegalArgumentException.class, () -> streams.close(Duration.ofMillis(-1L)));
         }
     }
 

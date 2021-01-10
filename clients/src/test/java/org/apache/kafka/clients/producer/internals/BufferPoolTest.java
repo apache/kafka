@@ -91,13 +91,13 @@ public class BufferPoolTest {
     /**
      * Test that we cannot try to allocate more memory then we have in the whole pool
      */
-    @Test(expected = IllegalArgumentException.class)
+    @Test
     public void testCantAllocateMoreMemoryThanWeHave() throws Exception {
         BufferPool pool = new BufferPool(1024, 512, metrics, time, metricGroup);
         ByteBuffer buffer = pool.allocate(1024, maxBlockTimeMs);
         assertEquals(1024, buffer.limit());
         pool.deallocate(buffer);
-        pool.allocate(1025, maxBlockTimeMs);
+        assertThrows(IllegalArgumentException.class, () -> pool.allocate(1025, maxBlockTimeMs));
     }
 
     /**
@@ -155,11 +155,11 @@ public class BufferPoolTest {
      * Test if BufferExhausted exception is thrown when there is not enough memory to allocate and the elapsed
      * time is greater than the max specified block time.
      */
-    @Test(expected = BufferExhaustedException.class)
+    @Test
     public void testBufferExhaustedExceptionIsThrown() throws Exception {
         BufferPool pool = new BufferPool(2, 1, metrics, time, metricGroup);
         pool.allocate(1, maxBlockTimeMs);
-        pool.allocate(2, maxBlockTimeMs);
+        assertThrows(BufferExhaustedException.class, () -> pool.allocate(2, maxBlockTimeMs));
     }
 
     /**

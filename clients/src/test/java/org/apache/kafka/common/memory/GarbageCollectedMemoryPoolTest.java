@@ -20,72 +20,87 @@ import java.nio.ByteBuffer;
 import java.util.concurrent.TimeUnit;
 
 import org.apache.kafka.common.utils.Utils;
+
+import org.junit.After;
 import org.junit.Assert;
 import org.junit.Test;
+
+import static org.junit.Assert.assertThrows;
 
 
 public class GarbageCollectedMemoryPoolTest {
 
-    @Test(expected = IllegalArgumentException.class)
-    public void testZeroSize() throws Exception {
-        new GarbageCollectedMemoryPool(0, 7, true, null);
-    }
+    private GarbageCollectedMemoryPool pool;
 
-    @Test(expected = IllegalArgumentException.class)
-    public void testNegativeSize() throws Exception {
-        new GarbageCollectedMemoryPool(-1, 7, false, null);
-    }
-
-    @Test(expected = IllegalArgumentException.class)
-    public void testZeroMaxAllocation() throws Exception {
-        new GarbageCollectedMemoryPool(100, 0, true, null);
-    }
-
-    @Test(expected = IllegalArgumentException.class)
-    public void testNegativeMaxAllocation() throws Exception {
-        new GarbageCollectedMemoryPool(100, -1, false, null);
-    }
-
-    @Test(expected = IllegalArgumentException.class)
-    public void testMaxAllocationLargerThanSize() throws Exception {
-        new GarbageCollectedMemoryPool(100, 101, true, null);
-    }
-
-    @Test(expected = IllegalArgumentException.class)
-    public void testAllocationOverMaxAllocation() throws Exception {
-        GarbageCollectedMemoryPool pool = new GarbageCollectedMemoryPool(1000, 10, false, null);
-        pool.tryAllocate(11);
-    }
-
-    @Test(expected = IllegalArgumentException.class)
-    public void testAllocationZero() throws Exception {
-        GarbageCollectedMemoryPool pool = new GarbageCollectedMemoryPool(1000, 10, true, null);
-        pool.tryAllocate(0);
-    }
-
-    @Test(expected = IllegalArgumentException.class)
-    public void testAllocationNegative() throws Exception {
-        GarbageCollectedMemoryPool pool = new GarbageCollectedMemoryPool(1000, 10, false, null);
-        pool.tryAllocate(-1);
-    }
-
-    @Test(expected = IllegalArgumentException.class)
-    public void testReleaseNull() throws Exception {
-        GarbageCollectedMemoryPool pool = new GarbageCollectedMemoryPool(1000, 10, true, null);
-        pool.release(null);
-    }
-
-    @Test(expected = IllegalArgumentException.class)
-    public void testReleaseForeignBuffer() throws Exception {
-        GarbageCollectedMemoryPool pool = new GarbageCollectedMemoryPool(1000, 10, true, null);
-        ByteBuffer fellOffATruck = ByteBuffer.allocate(1);
-        pool.release(fellOffATruck);
-        pool.close();
+    @After
+    public void releasePool() {
+        if (pool != null) pool.close();
     }
 
     @Test
-    public void testDoubleFree() throws Exception {
-        GarbageCollectedMemoryPool pool = new GarbageCollectedMemoryPool(1000, 10, false, null);
+    public void testZeroSize() {
+        assertThrows(IllegalArgumentException.class,
+            () -> new GarbageCollectedMemoryPool(0, 7, true, null));
+    }
+
+    @Test
+    public void testNegativeSize() {
+        assertThrows(IllegalArgumentException.class,
+            () -> new GarbageCollectedMemoryPool(-1, 7, false, null));
+    }
+
+    @Test
+    public void testZeroMaxAllocation() {
+        assertThrows(IllegalArgumentException.class,
+            () -> new GarbageCollectedMemoryPool(100, 0, true, null));
+    }
+
+    @Test
+    public void testNegativeMaxAllocation() {
+        assertThrows(IllegalArgumentException.class,
+            () -> new GarbageCollectedMemoryPool(100, -1, false, null));
+    }
+
+    @Test
+    public void testMaxAllocationLargerThanSize() {
+        assertThrows(IllegalArgumentException.class,
+            () -> new GarbageCollectedMemoryPool(100, 101, true, null));
+    }
+
+    @Test
+    public void testAllocationOverMaxAllocation() {
+        pool = new GarbageCollectedMemoryPool(1000, 10, false, null);
+        assertThrows(IllegalArgumentException.class, () -> pool.tryAllocate(11));
+    }
+
+    @Test
+    public void testAllocationZero() {
+        pool = new GarbageCollectedMemoryPool(1000, 10, true, null);
+        assertThrows(IllegalArgumentException.class, () -> pool.tryAllocate(0));
+    }
+
+    @Test
+    public void testAllocationNegative() {
+        pool = new GarbageCollectedMemoryPool(1000, 10, false, null);
+        assertThrows(IllegalArgumentException.class, () -> pool.tryAllocate(-1));
+    }
+
+    @Test
+    public void testReleaseNull() {
+        pool = new GarbageCollectedMemoryPool(1000, 10, true, null);
+        assertThrows(IllegalArgumentException.class, () -> pool.release(null));
+    }
+
+    @Test
+    public void testReleaseForeignBuffer() {
+        pool = new GarbageCollectedMemoryPool(1000, 10, true, null);
+        ByteBuffer fellOffATruck = ByteBuffer.allocate(1);
+        assertThrows(IllegalArgumentException.class, () -> pool.release(fellOffATruck));
+    }
+
+    @Test
+    public void testDoubleFree() {
+        pool = new GarbageCollectedMemoryPool(1000, 10, false, null);
         ByteBuffer buffer = pool.tryAllocate(5);
         Assert.assertNotNull(buffer);
         pool.release(buffer); //so far so good
@@ -100,8 +115,8 @@ public class GarbageCollectedMemoryPoolTest {
     }
 
     @Test
-    public void testAllocationBound() throws Exception {
-        GarbageCollectedMemoryPool pool = new GarbageCollectedMemoryPool(21, 10, false, null);
+    public void testAllocationBound() {
+        pool = new GarbageCollectedMemoryPool(21, 10, false, null);
         ByteBuffer buf1 = pool.tryAllocate(10);
         Assert.assertNotNull(buf1);
         Assert.assertEquals(10, buf1.capacity());
@@ -130,7 +145,7 @@ public class GarbageCollectedMemoryPoolTest {
         long maxPool = maxHeap / 2;
         long maxSingleAllocation = maxPool / 10;
         Assert.assertTrue(maxSingleAllocation < Integer.MAX_VALUE / 2); //test JVM running with too much memory for this test logic (?)
-        GarbageCollectedMemoryPool pool = new GarbageCollectedMemoryPool(maxPool, (int) maxSingleAllocation, false, null);
+        pool = new GarbageCollectedMemoryPool(maxPool, (int) maxSingleAllocation, false, null);
 
         //we will allocate 30 buffers from this pool, which is sized such that at-most
         //11 should coexist and 30 do not fit in the JVM memory, proving that:

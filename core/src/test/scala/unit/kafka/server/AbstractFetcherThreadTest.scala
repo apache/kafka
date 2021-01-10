@@ -45,7 +45,6 @@ import org.junit.{Before, Test}
 import scala.jdk.CollectionConverters._
 import scala.collection.{Map, Set, mutable}
 import scala.util.Random
-import org.scalatest.Assertions.assertThrows
 
 import scala.collection.mutable.ArrayBuffer
 import scala.compat.java8.OptionConverters._
@@ -747,9 +746,7 @@ class AbstractFetcherThreadTest {
     fetcher.setLeaderState(partition, MockFetcherThread.PartitionState(leaderEpoch = 0))
 
     // first round of truncation should throw an exception
-    assertThrows[IllegalStateException] {
-      fetcher.doWork()
-    }
+    assertThrows(classOf[IllegalStateException], () => fetcher.doWork())
   }
 
   @Test

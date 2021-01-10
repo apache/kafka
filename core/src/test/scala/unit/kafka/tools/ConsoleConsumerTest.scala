@@ -151,7 +151,7 @@ class ConsoleConsumerTest {
 
   }
 
-  @Test(expected = classOf[IllegalArgumentException])
+  @Test
   def shouldExitOnUnrecognizedNewConsumerOption(): Unit = {
     Exit.setExitProcedure((_, message) => throw new IllegalArgumentException(message.orNull))
 
@@ -162,12 +162,8 @@ class ConsoleConsumerTest {
       "--topic", "test",
       "--from-beginning")
 
-    //When
-    try {
-      new ConsoleConsumer.ConsumerConfig(args)
-    } finally {
-      Exit.resetExitProcedure()
-    }
+    try assertThrows(classOf[IllegalArgumentException], () => new ConsoleConsumer.ConsumerConfig(args))
+    finally Exit.resetExitProcedure()
   }
 
   @Test
@@ -268,7 +264,7 @@ class ConsoleConsumerTest {
     assertEquals("latest", consumerProperties.getProperty(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG))
   }
 
-  @Test(expected = classOf[IllegalArgumentException])
+  @Test
   def shouldExitOnInvalidConfigWithAutoOffsetResetAndConflictingFromBeginning(): Unit = {
     Exit.setExitProcedure((_, message) => throw new IllegalArgumentException(message.orNull))
 
@@ -278,13 +274,11 @@ class ConsoleConsumerTest {
       "--topic", "test",
       "--consumer-property", "auto.offset.reset=latest",
       "--from-beginning")
-
     try {
       val config = new ConsoleConsumer.ConsumerConfig(args)
-      ConsoleConsumer.consumerProps(config)
-    } finally {
-      Exit.resetExitProcedure()
+      assertThrows(classOf[IllegalArgumentException], () => ConsoleConsumer.consumerProps(config))
     }
+    finally Exit.resetExitProcedure()
   }
 
   @Test
@@ -462,7 +456,7 @@ class ConsoleConsumerTest {
     assertEquals(false, config.fromBeginning)
   }
 
-  @Test(expected = classOf[IllegalArgumentException])
+  @Test
   def shouldExitOnGroupIdAndPartitionGivenTogether(): Unit = {
     Exit.setExitProcedure((_, message) => throw new IllegalArgumentException(message.orNull))
     //Given
@@ -472,15 +466,11 @@ class ConsoleConsumerTest {
       "--group", "test-group",
       "--partition", "0")
 
-    //When
-    try {
-      new ConsoleConsumer.ConsumerConfig(args)
-    } finally {
-      Exit.resetExitProcedure()
-    }
+    try assertThrows(classOf[IllegalArgumentException], () => new ConsoleConsumer.ConsumerConfig(args))
+    finally Exit.resetExitProcedure()
   }
 
-  @Test(expected = classOf[IllegalArgumentException])
+  @Test
   def shouldExitOnOffsetWithoutPartition(): Unit = {
     Exit.setExitProcedure((_, message) => throw new IllegalArgumentException(message.orNull))
     //Given
@@ -489,12 +479,8 @@ class ConsoleConsumerTest {
       "--topic", "test",
       "--offset", "10")
 
-    //When
-    try {
-      new ConsoleConsumer.ConsumerConfig(args)
-    } finally {
-      Exit.resetExitProcedure()
-    }
+    try assertThrows(classOf[IllegalArgumentException], () => new ConsoleConsumer.ConsumerConfig(args))
+    finally Exit.resetExitProcedure()
   }
 
   @Test

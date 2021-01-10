@@ -1512,10 +1512,10 @@ public class StreamTaskTest {
         assertThat(task.processorContext().currentNode(), nullValue());
     }
 
-    @Test(expected = IllegalStateException.class)
+    @Test
     public void shouldThrowIllegalStateExceptionOnScheduleIfCurrentNodeIsNull() {
         task = createStatelessTask(createConfig("100"), StreamsConfig.METRICS_LATEST);
-        task.schedule(1, PunctuationType.STREAM_TIME, timestamp -> { });
+        assertThrows(IllegalStateException.class, () -> task.schedule(1, PunctuationType.STREAM_TIME, timestamp -> { }));
     }
 
     @Test

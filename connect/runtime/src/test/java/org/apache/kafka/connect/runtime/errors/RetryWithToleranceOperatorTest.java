@@ -68,6 +68,7 @@ import static org.easymock.EasyMock.replay;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 
 @RunWith(PowerMockRunner.class)
@@ -116,14 +117,14 @@ public class RetryWithToleranceOperatorTest {
             SinkTask.class, consumerRecord, new Throwable());
     }
 
-    @Test(expected = ConnectException.class)
+    @Test
     public void testExecuteFailedNoTolerance() {
         RetryWithToleranceOperator retryWithToleranceOperator = new RetryWithToleranceOperator(0,
             ERRORS_RETRY_MAX_DELAY_DEFAULT, NONE, SYSTEM);
         retryWithToleranceOperator.metrics(errorHandlingMetrics);
 
-        retryWithToleranceOperator.executeFailed(Stage.TASK_PUT,
-            SinkTask.class, consumerRecord, new Throwable());
+        assertThrows(ConnectException.class, () -> retryWithToleranceOperator.executeFailed(Stage.TASK_PUT,
+            SinkTask.class, consumerRecord, new Throwable()));
     }
 
     @Test
@@ -156,24 +157,24 @@ public class RetryWithToleranceOperatorTest {
         testHandleExceptionInStage(Stage.TASK_POLL, new org.apache.kafka.connect.errors.RetriableException("Test"));
     }
 
-    @Test(expected = ConnectException.class)
+    @Test
     public void testThrowExceptionInTaskPut() {
-        testHandleExceptionInStage(Stage.TASK_PUT, new Exception());
+        assertThrows(ConnectException.class, () -> testHandleExceptionInStage(Stage.TASK_PUT, new Exception()));
     }
 
-    @Test(expected = ConnectException.class)
+    @Test
     public void testThrowExceptionInTaskPoll() {
-        testHandleExceptionInStage(Stage.TASK_POLL, new Exception());
+        assertThrows(ConnectException.class, () -> testHandleExceptionInStage(Stage.TASK_POLL, new Exception()));
     }
 
-    @Test(expected = ConnectException.class)
+    @Test
     public void testThrowExceptionInKafkaConsume() {
-        testHandleExceptionInStage(Stage.KAFKA_CONSUME, new Exception());
+        assertThrows(ConnectException.class, () -> testHandleExceptionInStage(Stage.KAFKA_CONSUME, new Exception()));
     }
 
-    @Test(expected = ConnectException.class)
+    @Test
     public void testThrowExceptionInKafkaProduce() {
-        testHandleExceptionInStage(Stage.KAFKA_PRODUCE, new Exception());
+        assertThrows(ConnectException.class, () -> testHandleExceptionInStage(Stage.KAFKA_PRODUCE, new Exception()));
     }
 
     private void testHandleExceptionInStage(Stage type, Exception ex) {

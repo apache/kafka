@@ -513,16 +513,16 @@ public class StreamsBuilderTest {
             equalTo(Collections.singleton("appId-store-changelog")));
     }
 
-    @Test(expected = TopologyException.class)
+    @Test
     public void shouldThrowExceptionWhenNoTopicPresent() {
         builder.stream(Collections.emptyList());
-        builder.build();
+        assertThrows(TopologyException.class, builder::build);
     }
 
-    @Test(expected = NullPointerException.class)
+    @Test
     public void shouldThrowExceptionWhenTopicNamesAreNull() {
         builder.stream(Arrays.asList(null, null));
-        builder.build();
+        assertThrows(NullPointerException.class, builder::build);
     }
 
     @Test

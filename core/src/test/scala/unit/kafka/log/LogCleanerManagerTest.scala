@@ -27,7 +27,6 @@ import org.apache.kafka.common.record._
 import org.apache.kafka.common.utils.Utils
 import org.junit.Assert._
 import org.junit.{After, Test}
-import org.scalatest.Assertions.intercept
 
 import scala.collection.mutable
 
@@ -118,9 +117,7 @@ class LogCleanerManagerTest extends Logging {
     val cleanerManager = createCleanerManagerMock(logsPool)
     cleanerCheckpoints.put(tp, 1)
 
-    val thrownException = intercept[LogCleaningException] {
-      cleanerManager.grabFilthiestCompactedLog(time).get
-    }
+    val thrownException = assertThrows(classOf[LogCleaningException], () => cleanerManager.grabFilthiestCompactedLog(time).get)
     assertEquals(log, thrownException.log)
     assertTrue(thrownException.getCause.isInstanceOf[IllegalStateException])
   }
@@ -657,10 +654,10 @@ class LogCleanerManagerTest extends Logging {
 
     val cleanerManager: LogCleanerManager = createCleanerManager(log)
 
-    intercept[IllegalStateException](cleanerManager.doneCleaning(topicPartition, log.dir, 1))
+    assertThrows(classOf[IllegalStateException], () => cleanerManager.doneCleaning(topicPartition, log.dir, 1))
 
     cleanerManager.setCleaningState(topicPartition, LogCleaningPaused(1))
-    intercept[IllegalStateException](cleanerManager.doneCleaning(topicPartition, log.dir, 1))
+    assertThrows(classOf[IllegalStateException], () => cleanerManager.doneCleaning(topicPartition, log.dir, 1))
 
     cleanerManager.setCleaningState(topicPartition, LogCleaningInProgress)
     cleanerManager.doneCleaning(topicPartition, log.dir, 1)
@@ -680,10 +677,10 @@ class LogCleanerManagerTest extends Logging {
     val cleanerManager: LogCleanerManager = createCleanerManager(log)
     val tp = new TopicPartition("log", 0)
 
-    intercept[IllegalStateException](cleanerManager.doneDeleting(Seq(tp)))
+    assertThrows(classOf[IllegalStateException], () => cleanerManager.doneDeleting(Seq(tp)))
 
     cleanerManager.setCleaningState(tp, LogCleaningPaused(1))
-    intercept[IllegalStateException](cleanerManager.doneDeleting(Seq(tp)))
+    assertThrows(classOf[IllegalStateException], () => cleanerManager.doneDeleting(Seq(tp)))
 
     cleanerManager.setCleaningState(tp, LogCleaningInProgress)
     cleanerManager.doneDeleting(Seq(tp))

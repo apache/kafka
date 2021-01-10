@@ -1055,7 +1055,7 @@ class ReplicaManagerTest {
     assertEquals(fetchOffset, followerResult.assertFired.highWatermark)
   }
 
-  @Test(expected = classOf[ClassNotFoundException])
+  @Test
   def testUnknownReplicaSelector(): Unit = {
     val topicPartition = 0
     val followerBrokerId = 0
@@ -1066,9 +1066,9 @@ class ReplicaManagerTest {
 
     val props = new Properties()
     props.put(KafkaConfig.ReplicaSelectorClassProp, "non-a-class")
-    prepareReplicaManagerAndLogManager(new MockTimer(time),
+    assertThrows(classOf[ClassNotFoundException], () => prepareReplicaManagerAndLogManager(new MockTimer(time),
       topicPartition, leaderEpoch + leaderEpochIncrement, followerBrokerId,
-      leaderBrokerId, countDownLatch, expectTruncation = true, extraProps = props)
+      leaderBrokerId, countDownLatch, expectTruncation = true, extraProps = props))
   }
 
   @Test
