@@ -23,6 +23,8 @@ import org.junit.Test;
 import java.nio.ByteBuffer;
 import java.util.Arrays;
 
+import static org.hamcrest.CoreMatchers.containsString;
+import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotEquals;
@@ -414,7 +416,7 @@ public class ProtocolSerializationTest {
         oldFormat.writeTo(buffer);
         buffer.flip();
         SchemaException e = assertThrows(SchemaException.class, () -> newSchema.read(buffer));
-        e.getMessage().contains("Error reading field 'field2': java.nio.BufferUnderflowException");
+        assertThat(e.getMessage(), containsString("Error reading field 'field2':"));
     }
 
     @Test
@@ -430,6 +432,6 @@ public class ProtocolSerializationTest {
         oldFormat.writeTo(buffer);
         buffer.flip();
         SchemaException e = assertThrows(SchemaException.class, () -> newSchema.read(buffer));
-        e.getMessage().contains("Missing value for field 'field2' which has no default value");
+        assertThat(e.getMessage(), containsString("Missing value for field 'field2' which has no default value"));
     }
 }
