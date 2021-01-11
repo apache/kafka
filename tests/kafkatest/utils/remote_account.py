@@ -50,9 +50,14 @@ def parse_version_str(line):
     # Parse java version string. Examples:
     #`openjdk version "11.0.5" 2019-10-15` will return 11.
     #`java version "1.5.0"` will return 5.
+    #`openjdk version "15" 2020-09-15` will return 15.
     line = line[line.find('version \"') + 9:]
-    dot_pos = line.find(".")
-    if line[:dot_pos] == "1":
-        return int(line[dot_pos+1:line.find(".", dot_pos+1)])
+    version_string = line[:line.find('\"')]
+    dot_pos = version_string.find(".")
+    if dot_pos != -1:
+        if version_string[:dot_pos] == "1":
+            return int(version_string[dot_pos+1:version_string.find(".", dot_pos+1)])
+        else:
+            return int(version_string[:dot_pos])
     else:
-        return int(line[:dot_pos])
+        return int(version_string)
