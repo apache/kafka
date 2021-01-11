@@ -18,7 +18,7 @@ package kafka.api
 
 import java.util
 import java.util.Properties
-import java.util.concurrent.{ExecutionException, TimeUnit}
+import java.util.concurrent.ExecutionException
 import kafka.security.authorizer.AclEntry
 import kafka.server.KafkaConfig
 import kafka.utils.Logging
@@ -42,7 +42,7 @@ import scala.compat.java8.OptionConverters._
  * time to the build. However, if an admin API involves differing interactions with
  * authentication/authorization layers, we may add the test case here.
  */
-@Timeout(value = 120000, unit = TimeUnit.MILLISECONDS)
+@Timeout(120)
 abstract class BaseAdminIntegrationTest extends IntegrationTestHarness with Logging {
   def brokerCount = 3
   override def logDirCount = 2

@@ -136,7 +136,7 @@ class SchedulerTest {
    *   a) Thread1 executes a task which attempts to acquire LockA
    *   b) Thread2 holding LockA attempts to schedule a new task
    */
-  @Timeout(value = 15000, unit = TimeUnit.MILLISECONDS)
+  @Timeout(15)
   @Test
   def testMockSchedulerLocking(): Unit = {
     val initLatch = new CountDownLatch(1)

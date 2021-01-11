@@ -35,11 +35,10 @@ import org.apache.kafka.common.{TopicPartition, TopicPartitionReplica}
 import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertTrue}
 import org.junit.jupiter.api.{AfterEach, Test, Timeout}
 
-import java.util.concurrent.TimeUnit
 import scala.collection.{Map, Seq, mutable}
 import scala.jdk.CollectionConverters._
 
-@Timeout(value = 300000, unit = TimeUnit.MILLISECONDS)
+@Timeout(300)
 class ReassignPartitionsIntegrationTest extends ZooKeeperTestHarness {
 
   var cluster: ReassignPartitionsTestCluster = null

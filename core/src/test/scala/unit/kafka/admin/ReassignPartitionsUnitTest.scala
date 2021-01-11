@@ -17,7 +17,7 @@
 
 package kafka.admin
 
-import java.util.concurrent.{ExecutionException, TimeUnit}
+import java.util.concurrent.ExecutionException
 import java.util.{Arrays, Collections}
 import kafka.admin.ReassignPartitionsCommand._
 import kafka.common.AdminCommandFailedException
@@ -32,7 +32,7 @@ import org.junit.jupiter.api.{AfterEach, BeforeEach, Test, Timeout}
 import scala.collection.mutable
 import scala.jdk.CollectionConverters._
 
-@Timeout(value = 60000, unit = TimeUnit.MILLISECONDS)
+@Timeout(60)
 class ReassignPartitionsUnitTest {
 
   @BeforeEach

@@ -24,9 +24,7 @@ import org.apache.kafka.test.TestUtils
 import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertTrue}
 import org.junit.jupiter.api.{Test, Timeout}
 
-import java.util.concurrent.TimeUnit
-
-@Timeout(value = 120000, unit = TimeUnit.MILLISECONDS)
+@Timeout(120)
 class LinuxIoMetricsCollectorTest extends Logging {
 
   class TestDirectory() {

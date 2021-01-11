@@ -29,9 +29,7 @@ import org.apache.kafka.common.utils.Utils
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{Test, Timeout}
 
-import java.util.concurrent.TimeUnit
-
-@Timeout(value = 120000, unit = TimeUnit.MILLISECONDS)
+@Timeout(120)
 class FetchSessionTest {
 
   @Test

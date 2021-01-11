@@ -22,7 +22,6 @@ import org.apache.kafka.common.errors.{GroupAuthorizationException, TopicAuthori
 import org.junit.jupiter.api.{BeforeEach, Test, Timeout}
 import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue, fail}
 
-import java.util.concurrent.TimeUnit
 import scala.collection.immutable.List
 import scala.jdk.CollectionConverters._
 
@@ -52,7 +51,7 @@ abstract class SaslEndToEndAuthorizationTest extends EndToEndAuthorizationTest {
     * The first consumer succeeds because it is allowed by the ACL, 
     * the second one connects ok, but fails to consume messages due to the ACL.
     */
-  @Timeout(value = 15000, unit = TimeUnit.MILLISECONDS)
+  @Timeout(15)
   @Test
   def testTwoConsumersWithDifferentSaslCredentials(): Unit = {
     setAclsAndProduce(tp)

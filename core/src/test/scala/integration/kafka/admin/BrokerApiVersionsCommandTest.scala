@@ -29,14 +29,13 @@ import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertNotNul
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.Timeout
 
-import java.util.concurrent.TimeUnit
 import scala.jdk.CollectionConverters._
 
 class BrokerApiVersionsCommandTest extends KafkaServerTestHarness {
 
   def generateConfigs: Seq[KafkaConfig] = TestUtils.createBrokerConfigs(1, zkConnect).map(KafkaConfig.fromProps)
 
-  @Timeout(value = 120000, unit = TimeUnit.MILLISECONDS)
+  @Timeout(120)
   @Test
   def checkBrokerApiVersionCommandOutput(): Unit = {
     val byteArrayOutputStream = new ByteArrayOutputStream

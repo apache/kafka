@@ -15,7 +15,7 @@ package kafka.api
 
 import java.util
 import java.util.Properties
-import java.util.concurrent.{ExecutionException, TimeUnit}
+import java.util.concurrent.ExecutionException
 import kafka.integration.KafkaServerTestHarness
 import kafka.log.LogConfig
 import kafka.server.{Defaults, KafkaConfig}
@@ -34,7 +34,7 @@ import scala.jdk.CollectionConverters._
 /**
   * Tests AdminClient calls when the broker is configured with policies like AlterConfigPolicy, CreateTopicPolicy, etc.
   */
-@Timeout(value = 120000, unit = TimeUnit.MILLISECONDS)
+@Timeout(120)
 class AdminClientWithPoliciesIntegrationTest extends KafkaServerTestHarness with Logging {
 
   import AdminClientWithPoliciesIntegrationTest._

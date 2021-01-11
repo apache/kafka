@@ -20,9 +20,7 @@ import kafka.utils.Exit
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test, Timeout}
 
-import java.util.concurrent.TimeUnit
-
-@Timeout(value = 60000, unit = TimeUnit.MILLISECONDS)
+@Timeout(60)
 class ReassignPartitionsCommandArgsTest {
 
   @BeforeEach
