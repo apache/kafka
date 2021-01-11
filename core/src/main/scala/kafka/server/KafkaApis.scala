@@ -143,7 +143,7 @@ class KafkaApis(val requestChannel: RequestChannel,
     }
 
     if (!request.isForwarded && !controller.isActive && isForwardingEnabled(request)) {
-      forwardingManager.forwardRequest(request, responseCallback)
+      forwardingManager.forwardRequest(request, responseCallback, closeConnection)
     } else {
       // When the KIP-500 mode is off or the principal serde is undefined, forwarding is not supported,
       // therefore requests are handled directly.

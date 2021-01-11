@@ -33,7 +33,8 @@ import scala.concurrent.TimeoutException
 trait ForwardingManager {
   def forwardRequest(
     request: RequestChannel.Request,
-    responseCallback: AbstractResponse => Unit
+    responseCallback: AbstractResponse => Unit,
+    closeConnection: (RequestChannel.Request, java.util.Map[Errors, Integer]) => Unit
   ): Unit
 
   def controllerApiVersions(): Option[NodeApiVersions]
@@ -79,7 +80,8 @@ class ForwardingManagerImpl(
 
   override def forwardRequest(
     request: RequestChannel.Request,
-    responseCallback: AbstractResponse => Unit
+    responseCallback: AbstractResponse => Unit,
+    closeConnection: (RequestChannel.Request, java.util.Map[Errors, Integer]) => Unit,
   ): Unit = {
     val principalSerde = request.context.principalSerde.asScala.getOrElse(
       throw new IllegalArgumentException(s"Cannot deserialize principal from request $request " +
@@ -111,7 +113,14 @@ class ForwardingManagerImpl(
         } else {
           parseResponse(envelopeResponse.responseData, requestBody, request.header)
         }
-        responseCallback(response)
+
+        // Unsupported version indicates an incompatibility between controller and client API versions. The
+        // forwarding broker should close the connection with the client and let it reinitialize the connection
+        // and refresh the controller API versions.
+        if (response.errorCounts().containsKey(Errors.UNSUPPORTED_VERSION)) {
+          closeConnection(request, response.errorCounts())
+        } else
+          responseCallback(response)
       }
 
       override def onTimeout(): Unit = {
