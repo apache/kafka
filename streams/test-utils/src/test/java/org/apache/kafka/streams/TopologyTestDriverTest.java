@@ -96,7 +96,7 @@ import static org.junit.jupiter.api.Assertions.fail;
 public class TopologyTestDriverTest {
 
     private enum EosMode {
-        ENABLED, DISABLED
+        EOS_ENABLED, EOS_DISABLED
     }
 
     private final static String SOURCE_TOPIC_1 = "source-topic-1";
@@ -138,7 +138,7 @@ public class TopologyTestDriverTest {
             mkEntry(StreamsConfig.APPLICATION_ID_CONFIG, "test-TopologyTestDriver"),
             mkEntry(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory().getAbsolutePath())
         ));
-        if (mode == EosMode.ENABLED) {
+        if (mode == EosMode.EOS_ENABLED) {
             config.setProperty(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, StreamsConfig.EXACTLY_ONCE);
         }
     }
