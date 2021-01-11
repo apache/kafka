@@ -1030,31 +1030,64 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
             return ValidatedFetchOffsetAndEpoch.valid(new OffsetAndEpoch(fetchOffset, lastFetchedEpoch));
         }
 
-        if (fetchOffset < log.startOffset() || fetchOffset == log.startOffset()) {
-            // Snapshot must be present if start offset is non zero.
-            OffsetAndEpoch latestSnapshotId = log.latestSnapshotId().orElseThrow(() -> {
+
+        Optional<OffsetAndEpoch> endOffsetAndEpochOpt = log
+            .endOffsetForEpoch(lastFetchedEpoch)
+            .flatMap(endOffsetAndEpoch -> {
+                if (endOffsetAndEpoch.epoch == lastFetchedEpoch && endOffsetAndEpoch.offset == log.startOffset()) {
+                    // This means that either:
+                    // 1. The lastFetchedEpoch is smaller than any known epoch
+                    // 2. The current leader epoch is lastFetchedEpoch and the log is empty.
+                    // Assume that there is not diverging information
+                    return Optional.empty();
+                } else {
+                    return Optional.of(endOffsetAndEpoch);
+                }
+            });
+        if (endOffsetAndEpochOpt.isPresent()) {
+            OffsetAndEpoch endOffsetAndEpoch = endOffsetAndEpochOpt.get();
+            if (endOffsetAndEpoch.epoch != lastFetchedEpoch || endOffsetAndEpoch.offset < fetchOffset) {
+                return ValidatedFetchOffsetAndEpoch.diverging(endOffsetAndEpoch);
+            } else {
+                return ValidatedFetchOffsetAndEpoch.valid(new OffsetAndEpoch(fetchOffset, lastFetchedEpoch));
+            }
+        } else if (log.startOffset() > 0) {
+            OffsetAndEpoch startSnapshotId = log.startSnapshotId().orElseThrow(() -> {
                 return new IllegalStateException(
                     String.format(
-                        "The log start offset (%s) was greater than zero but no snapshot was found",
+                        "The log start offset (%s) was greater than zero but start snapshot was not found",
                         log.startOffset()
                     )
                 );
             });
 
-            if (fetchOffset < log.startOffset() || lastFetchedEpoch != latestSnapshotId.epoch) {
+            if (fetchOffset == log.startOffset() && lastFetchedEpoch == startSnapshotId.epoch) {
+                return ValidatedFetchOffsetAndEpoch.valid(new OffsetAndEpoch(fetchOffset, lastFetchedEpoch));
+            } else {
+                OffsetAndEpoch latestSnapshotId = log.latestSnapshotId().orElseThrow(() -> {
+                    return new IllegalStateException(
+                        String.format(
+                            "The log start offset (%s) was greater than zero but latest snapshot was not found",
+                            log.startOffset()
+                        )
+                    );
+                });
+
                 return ValidatedFetchOffsetAndEpoch.snapshot(latestSnapshotId);
             }
+        } else {
+            logger.warn(
+                "Replica sent a last fetched epoch ({}) greater than any known epoch ({}). This should not be possible. " +
+                "Log start offset is {} and start snapshot is {}. Ask the replica to truncate to offset 0.",
+                lastFetchedEpoch,
+                quorum.epoch(),
+                log.startOffset(),
+                log.startSnapshotId()
+            );
+
+            return ValidatedFetchOffsetAndEpoch.diverging(new OffsetAndEpoch(0, 0));
         }
 
-        OffsetAndEpoch endOffsetAndEpoch = log.endOffsetForEpoch(lastFetchedEpoch)
-            .orElse(new OffsetAndEpoch(-1L, -1));
-        if (endOffsetAndEpoch.epoch != lastFetchedEpoch || endOffsetAndEpoch.offset < fetchOffset) {
-            // TODO: Investiage this. Can the diverging offset be less than log start offset? If so, then we might as well
-            // avoid a round trip and return the snapshot id instead.
-            return ValidatedFetchOffsetAndEpoch.diverging(endOffsetAndEpoch);
-        }
-
-        return ValidatedFetchOffsetAndEpoch.valid(new OffsetAndEpoch(fetchOffset, lastFetchedEpoch));
     }
 
     private final static class ValidatedFetchOffsetAndEpoch {
@@ -2108,7 +2141,7 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
     }
 
     private long pollCurrentState(long currentTimeMs) throws IOException {
-        maybeUpdateLogStartOffset();
+        maybeUpdateLogStart();
 
         if (quorum.isLeader()) {
             return pollLeader(currentTimeMs);
@@ -2172,8 +2205,8 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
         return false;
     }
 
-    private void maybeUpdateLogStartOffset() {
-        log.latestSnapshotId().ifPresent(snapshotId -> log.updateLogStartOffset(snapshotId.offset));
+    private void maybeUpdateLogStart() {
+        log.latestSnapshotId().ifPresent(snapshotId -> log.updateLogStart(snapshotId));
     }
 
     private void wakeup() {

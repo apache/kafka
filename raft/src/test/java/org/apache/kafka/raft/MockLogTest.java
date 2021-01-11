@@ -447,7 +447,7 @@ public class MockLogTest {
             snapshot.freeze();
         }
 
-        assertTrue(log.updateLogStartOffset(snapshotId.offset));
+        assertTrue(log.updateLogStart(snapshotId));
         assertEquals(offset, log.startOffset());
         assertEquals(epoch, log.lastFetchedEpoch());
         assertEquals(offset, log.endOffset().offset);
@@ -457,7 +457,7 @@ public class MockLogTest {
         log.updateHighWatermark(new LogOffsetMetadata(offset + newRecords));
 
         // Start offset should not change since a new snapshot was not generated
-        assertFalse(log.updateLogStartOffset(offset + newRecords));
+        assertFalse(log.updateLogStart(new OffsetAndEpoch(offset + newRecords, epoch)));
         assertEquals(offset, log.startOffset());
 
         assertEquals(epoch + 1, log.lastFetchedEpoch());
@@ -473,7 +473,7 @@ public class MockLogTest {
         appendBatch(offset, epoch);
         log.updateHighWatermark(new LogOffsetMetadata(offset));
 
-        assertFalse(log.updateLogStartOffset(1));
+        assertFalse(log.updateLogStart(new OffsetAndEpoch(1, epoch)));
         assertEquals(0, log.startOffset());
         assertEquals(epoch, log.lastFetchedEpoch());
         assertEquals(offset, log.endOffset().offset);
@@ -495,7 +495,7 @@ public class MockLogTest {
 
         assertThrows(
             OffsetOutOfRangeException.class,
-            () -> log.updateLogStartOffset(snapshotId.offset)
+            () -> log.updateLogStart(snapshotId)
         );
     }
 

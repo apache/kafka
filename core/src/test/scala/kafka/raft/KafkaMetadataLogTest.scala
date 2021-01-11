@@ -95,15 +95,16 @@ final class KafkaMetadataLogTest {
     val log = buildMetadataLog(tempDir, mockTime, topicPartition)
     val offset = 10
     val epoch = 0
+    val snapshotId = new OffsetAndEpoch(offset, epoch)
 
     append(log, offset, epoch)
     log.updateHighWatermark(new LogOffsetMetadata(offset))
 
-    TestUtils.resource(log.createSnapshot(new OffsetAndEpoch(offset, epoch))) { snapshot =>
+    TestUtils.resource(log.createSnapshot(snapshotId)) { snapshot =>
       snapshot.freeze()
     }
 
-    assertTrue(log.updateLogStartOffset(offset))
+    assertTrue(log.updateLogStart(snapshotId))
     assertEquals(offset, log.startOffset)
     assertEquals(epoch, log.lastFetchedEpoch)
     assertEquals(offset, log.endOffset().offset)
@@ -113,7 +114,7 @@ final class KafkaMetadataLogTest {
     append(log, newRecords, epoch + 1)
 
     // Start offset should not change since a new snapshot was not generated
-    assertFalse(log.updateLogStartOffset(offset + newRecords))
+    assertFalse(log.updateLogStart(new OffsetAndEpoch(offset + newRecords, epoch)))
     assertEquals(offset, log.startOffset)
 
     assertEquals(epoch + 1, log.lastFetchedEpoch)
@@ -131,7 +132,7 @@ final class KafkaMetadataLogTest {
     append(log, offset, epoch)
     log.updateHighWatermark(new LogOffsetMetadata(offset))
 
-    assertFalse(log.updateLogStartOffset(1))
+    assertFalse(log.updateLogStart(new OffsetAndEpoch(1L, epoch)))
     assertEquals(0, log.startOffset)
     assertEquals(epoch, log.lastFetchedEpoch)
     assertEquals(offset, log.endOffset().offset)
@@ -155,7 +156,7 @@ final class KafkaMetadataLogTest {
 
     assertThrows(
       classOf[OffsetOutOfRangeException],
-      () => log.updateLogStartOffset(snapshotId.offset)
+      () => log.updateLogStart(snapshotId)
     )
   }
 

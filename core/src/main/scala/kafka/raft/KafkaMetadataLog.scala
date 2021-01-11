@@ -43,6 +43,11 @@ final class KafkaMetadataLog private (
   maxFetchSizeInBytes: Int
 ) extends ReplicatedLog {
 
+  private[this] var startSnapshotId = snapshotIds
+    .stream()
+    .filter(_.offset == startOffset)
+    .findAny()
+
   override def read(startOffset: Long, readIsolation: Isolation): LogFetchInfo = {
     val isolation = readIsolation match {
       case Isolation.COMMITTED => FetchHighWatermark
@@ -146,7 +151,9 @@ final class KafkaMetadataLog private (
     latestSnapshotId.ifPresent { snapshotId =>
       if (snapshotId.epoch > log.latestEpoch.getOrElse(0) ||
         (snapshotId.epoch == log.latestEpoch.getOrElse(0) && snapshotId.offset > endOffset().offset)) {
+
         log.truncateFullyAndStartAt(snapshotId.offset)
+        startSnapshotId = latestSnapshotId
         truncated = true
       }
     }
@@ -193,8 +200,8 @@ final class KafkaMetadataLog private (
 
   override def createSnapshot(snapshotId: raft.OffsetAndEpoch): RawSnapshotWriter = {
     // TODO: Talk to Jason about truncation past the high-watermark since it can lead to truncation past snapshots.
-    // This can result in the leader having a snapshot that is less that the follower's snapshot. I think that the Raft Client
-    // checks against this and aborts. If so, then this check and exception is okay.
+    // This can result in the leader having a snapshot that is less that the follower's snapshot. I think that the Raft
+    // Client checks against this and aborts. If so, then this check and exception is okay.
 
     // Do let the state machine create snapshots older than the latest snapshot
     latestSnapshotId().ifPresent { latest =>
@@ -218,7 +225,6 @@ final class KafkaMetadataLog private (
       }
     } catch {
       case e: NoSuchFileException =>
-        snapshotIds.remove(snapshotId)
         Optional.empty()
     }
   }
@@ -232,17 +238,23 @@ final class KafkaMetadataLog private (
     }
   }
 
+  override def startSnapshotId(): Optional[raft.OffsetAndEpoch] = {
+    startSnapshotId;
+  }
+
   override def snapshotFrozen(snapshotId: raft.OffsetAndEpoch): Unit = {
     snapshotIds.add(snapshotId)
   }
 
-  override def updateLogStartOffset(logStartOffset: Long): Boolean = {
+  override def updateLogStart(logStartSnapshotId: raft.OffsetAndEpoch): Boolean = {
     var updated = false
     latestSnapshotId.ifPresent { snapshotId =>
-      if (startOffset < logStartOffset &&
-          logStartOffset <= snapshotId.offset &&
-          log.maybeIncrementLogStartOffset(logStartOffset, SnapshotGenerated)) {
+      if (startOffset < logStartSnapshotId.offset &&
+          logStartSnapshotId.offset <= snapshotId.offset &&
+          log.maybeIncrementLogStartOffset(logStartSnapshotId.offset, SnapshotGenerated)) {
+
         log.deleteOldSegments()
+        startSnapshotId = Optional.of(logStartSnapshotId)
         updated = true
       }
     }

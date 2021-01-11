@@ -126,7 +126,7 @@ public interface ReplicatedLog extends Closeable {
      * The replicated log's start offset can be increased when there is a snapshot greater than the
      * current log start offset.
      */
-    boolean updateLogStartOffset(long logStartOffset);
+    boolean updateLogStart(OffsetAndEpoch logStartSnapshotId);
 
     /**
      * Flush the current log to disk.
@@ -204,6 +204,16 @@ public interface ReplicatedLog extends Closeable {
      * empty Optional
      */
     Optional<OffsetAndEpoch> latestSnapshotId();
+
+    /**
+     * Returns the snapshot id at the log start offset.
+     *
+     * If the log start offset is nonzero then it is expected that there is a snapshot with an end offset equal to
+     * the start offset.
+     *
+     * @return an Optional snapshot id at the log start offset if nonzero, otherwise returns an empty Optional
+     */
+    Optional<OffsetAndEpoch> startSnapshotId();
 
     /**
      * Notifies the replicted log when a new snapshot is available.
