@@ -104,7 +104,7 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
     private final RocksDBMetricsRecorder metricsRecorder;
 
     // visible for testing
-    volatile BatchingStateRestoreCallback batchingStateRestoreCallback = null;
+    private volatile BatchingStateRestoreCallback batchingStateRestoreCallback = null;
 
     protected volatile boolean open = false;
 
