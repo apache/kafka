@@ -26,4 +26,9 @@ public class PrincipalDeserializationException extends ApiException {
     public PrincipalDeserializationException(String message) {
         super(message);
     }
+
+    public PrincipalDeserializationException(String message, Throwable cause) {
+        super(message, cause);
+    }
+
 }

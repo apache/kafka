@@ -3231,23 +3231,11 @@ class KafkaApis(val requestChannel: RequestChannel,
     }
 
     try {
-      val forwardedPrincipal = parseForwardedPrincipal(request).getOrElse {
-        throw new PrincipalDeserializationException("Failed to parse client principal from envelope")
-      }
-
-      val forwardedClientAddress = parseForwardedClientAddress(envelope.clientAddress).getOrElse {
-        throw new InvalidRequestException("Failed to parse client address from envelope")
-      }
-
-      // Note that any failure to parse the embedded request or its header is treated as
-      // an UNSUPPORTED_VERSION error rather than INVALID_REQUEST. The purpose
-      // is to disambiguate structural errors in the envelope request itself, such
-      // as an invalid client address.
+      val forwardedPrincipal = parseForwardedPrincipal(request)
+      val forwardedClientAddress = parseForwardedClientAddress(envelope.clientAddress)
 
       val forwardedRequestBuffer = envelope.requestData.duplicate()
-      val forwardedRequestHeader = parseForwardedRequestHeader(forwardedRequestBuffer).getOrElse {
-        throw new UnsupportedVersionException("Failed to parse request header from envelope")
-      }
+      val forwardedRequestHeader = parseForwardedRequestHeader(forwardedRequestBuffer)
 
       val forwardedApi = forwardedRequestHeader.apiKey
       if (!forwardedApi.forwardable || !forwardedApi.isEnabled) {
@@ -3265,10 +3253,7 @@ class KafkaApis(val requestChannel: RequestChannel,
         request.context.fromPrivilegedListener
       )
 
-      val forwardedRequest = parseForwardedRequest(request, forwardedContext, forwardedRequestBuffer).getOrElse {
-        throw new UnsupportedVersionException(s"Failed to parse forwarded request with header $forwardedRequestHeader")
-      }
-
+      val forwardedRequest = parseForwardedRequest(request, forwardedContext, forwardedRequestBuffer)
       handle(forwardedRequest)
     } catch {
       case e: KafkaException =>
@@ -3279,12 +3264,12 @@ class KafkaApis(val requestChannel: RequestChannel,
 
   private def parseForwardedClientAddress(
     address: Array[Byte]
-  ): Option[InetAddress] = {
+  ): InetAddress = {
     try {
-      Some(InetAddress.getByAddress(address))
+      InetAddress.getByAddress(address)
     } catch {
       case e: UnknownHostException =>
-        None
+        throw new InvalidRequestException("Failed to parse client address from envelope", e)
     }
   }
 
@@ -3292,9 +3277,9 @@ class KafkaApis(val requestChannel: RequestChannel,
     envelope: RequestChannel.Request,
     forwardedContext: RequestContext,
     buffer: ByteBuffer
-  ): Option[RequestChannel.Request] = {
+  ): RequestChannel.Request = {
     try {
-      Some(new RequestChannel.Request(
+      new RequestChannel.Request(
         processor = envelope.processor,
         context = forwardedContext,
         startTimeNanos = envelope.startTimeNanos,
@@ -3302,37 +3287,47 @@ class KafkaApis(val requestChannel: RequestChannel,
         buffer,
         requestChannel.metrics,
         Some(envelope)
-      ))
+      )
     } catch {
       case e: InvalidRequestException =>
-        None
+        // We use UNSUPPORTED_VERSION if the embedded request cannot be parsed.
+        // The purpose is to disambiguate structural errors in the envelope request
+        // itself, such as an invalid client address.
+        throw new UnsupportedVersionException(s"Failed to parse forwarded request " +
+          s"with header ${forwardedContext.header}")
     }
   }
 
   private def parseForwardedRequestHeader(
     buffer: ByteBuffer
-  ): Option[RequestHeader] = {
+  ): RequestHeader = {
     try {
-      Some(RequestHeader.parse(buffer))
+      RequestHeader.parse(buffer)
     } catch {
       case e: InvalidRequestException =>
-        None
+        // We use UNSUPPORTED_VERSION if the embedded request cannot be parsed.
+        // The purpose is to disambiguate structural errors in the envelope request
+        // itself, such as an invalid client address.
+        throw new UnsupportedVersionException("Failed to parse request header from envelope", e)
     }
   }
 
   private def parseForwardedPrincipal(
     envelopeRequest: RequestChannel.Request
-  ): Option[KafkaPrincipal] = {
+  ): KafkaPrincipal = {
     val envelope = envelopeRequest.body[EnvelopeRequest]
-    try {
-      val principalSerde = envelopeRequest.context.principalSerde.asScala
-      principalSerde.map { serde =>
-        serde.deserialize(envelope.requestPrincipal)
-      }
-    } catch {
-      case e: Exception =>
-        warn(s"Failed to deserialize principal from envelope request $envelope", e)
-        None
+    envelopeRequest.context.principalSerde.asScala match {
+      case Some(serde) =>
+        try {
+          serde.deserialize(envelope.requestPrincipal)
+        } catch {
+          case e: Exception =>
+            throw new PrincipalDeserializationException("Failed to deserialize client principal from envelope", e)
+        }
+
+      case None =>
+        throw new PrincipalDeserializationException("Could not deserialize principal since " +
+          "no `KafkaPrincipalSerde` has been defined")
     }
   }
 
