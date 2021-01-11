@@ -30,5 +30,8 @@ public enum MessageSpecType {
     HEADER,
 
     @JsonProperty("data")
-    DATA;
+    DATA,
+
+    @JsonProperty("metadata")
+    METADATA;
 }

@@ -159,6 +159,11 @@ public final class JsonConverterGenerator implements MessageClassGenerator {
             buffer.printf("%s;%n", target.assignmentStatement(
                 String.format("MessageUtil.jsonNodeToShort(%s, \"%s\")",
                     target.sourceVariable(), target.humanReadableName())));
+        } else if (target.field().type() instanceof FieldType.Uint16FieldType) {
+            headerGenerator.addImport(MessageGenerator.MESSAGE_UTIL_CLASS);
+            buffer.printf("%s;%n", target.assignmentStatement(
+                String.format("MessageUtil.jsonNodeToUnsignedShort(%s, \"%s\")",
+                    target.sourceVariable(), target.humanReadableName())));
         } else if (target.field().type() instanceof FieldType.Int32FieldType) {
             headerGenerator.addImport(MessageGenerator.MESSAGE_UTIL_CLASS);
             buffer.printf("%s;%n", target.assignmentStatement(
@@ -332,11 +337,12 @@ public final class JsonConverterGenerator implements MessageClassGenerator {
             buffer.printf("%s;%n", target.assignmentStatement(
                 String.format("BooleanNode.valueOf(%s)", target.sourceVariable())));
         } else if ((target.field().type() instanceof FieldType.Int8FieldType) ||
-            (target.field().type() instanceof FieldType.Int16FieldType)) {
+                (target.field().type() instanceof FieldType.Int16FieldType)) {
             headerGenerator.addImport(MessageGenerator.SHORT_NODE_CLASS);
             buffer.printf("%s;%n", target.assignmentStatement(
                 String.format("new ShortNode(%s)", target.sourceVariable())));
-        } else if (target.field().type() instanceof FieldType.Int32FieldType) {
+        } else if ((target.field().type() instanceof FieldType.Int32FieldType) ||
+                (target.field().type() instanceof FieldType.Uint16FieldType)) {
             headerGenerator.addImport(MessageGenerator.INT_NODE_CLASS);
             buffer.printf("%s;%n", target.assignmentStatement(
                 String.format("new IntNode(%s)", target.sourceVariable())));

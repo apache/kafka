@@ -87,6 +87,15 @@ public final class MessageUtil {
         return (short) value;
     }
 
+    public static int jsonNodeToUnsignedShort(JsonNode node, String about) {
+        int value = jsonNodeToInt(node, about);
+        if (value < 0 || value > 65535) {
+            throw new RuntimeException(about + ": value " + value +
+                " does not fit in a 16-bit unsigned integer.");
+        }
+        return value;
+    }
+
     public static int jsonNodeToInt(JsonNode node, String about) {
         if (node.isInt()) {
             return node.asInt();
