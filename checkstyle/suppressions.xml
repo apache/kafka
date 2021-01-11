@@ -16,7 +16,7 @@
     <suppress checks="JavaNCSS"
               files="(ApiMessageType|FieldSpec|MessageDataGenerator).java"/>
     <suppress checks="MethodLength"
-              files="MessageDataGenerator.java"/>
+              files="(FieldSpec|MessageDataGenerator).java"/>
     <suppress id="dontUseSystemExit"
               files="MessageGenerator.java"/>
 

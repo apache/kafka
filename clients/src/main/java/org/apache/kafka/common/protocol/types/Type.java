@@ -220,6 +220,44 @@ public abstract class Type {
         }
     };
 
+    public static final DocumentedType UINT16 = new DocumentedType() {
+        @Override
+        public void write(ByteBuffer buffer, Object o) {
+            Integer value = (Integer) o;
+            buffer.putShort((short) value.intValue());
+        }
+
+        @Override
+        public Object read(ByteBuffer buffer) {
+            short value = buffer.getShort();
+            return Integer.valueOf(Short.toUnsignedInt(value));
+        }
+
+        @Override
+        public int sizeOf(Object o) {
+            return 2;
+        }
+
+        @Override
+        public String typeName() {
+            return "UINT16";
+        }
+
+        @Override
+        public Integer validate(Object item) {
+            if (item instanceof Integer)
+                return (Integer) item;
+            else
+                throw new SchemaException(item + " is not an unsigned short.");
+        }
+
+        @Override
+        public String documentation() {
+            return "Represents an integer between 0 and 65535 inclusive. " +
+                    "The values are encoded using two bytes in network byte order (big-endian).";
+        }
+    };
+
     public static final DocumentedType INT32 = new DocumentedType() {
         @Override
         public void write(ByteBuffer buffer, Object o) {

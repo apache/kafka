@@ -51,7 +51,8 @@
         { "name": "structId", "type": "string", "versions": "2+", "about": "String field in struct"}
     ]},
     { "name":  "myCommonStruct", "type": "TestCommonStruct", "versions": "0+"},
-    { "name":  "myOtherCommonStruct", "type": "TestCommonStruct", "versions": "0+"}
+    { "name":  "myOtherCommonStruct", "type": "TestCommonStruct", "versions": "0+"},
+    { "name":  "myUint16", "type": "uint16", "versions": "1+", "default":  "33000" }
   ],
   "commonStructs": [
     { "name": "TestCommonStruct", "versions": "0+", "fields": [
