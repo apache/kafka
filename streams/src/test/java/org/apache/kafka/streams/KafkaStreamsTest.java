@@ -39,6 +39,7 @@ import org.apache.kafka.streams.errors.TopologyException;
 import org.apache.kafka.streams.internals.metrics.ClientMetrics;
 import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.processor.StateRestoreListener;
+import org.apache.kafka.streams.processor.ThreadMetadata;
 import org.apache.kafka.streams.processor.api.Processor;
 import org.apache.kafka.streams.processor.api.ProcessorContext;
 import org.apache.kafka.streams.processor.api.Record;
@@ -80,6 +81,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Properties;
+import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
@@ -131,6 +133,8 @@ public class KafkaStreamsTest {
     private GlobalStreamThread globalStreamThread;
     @Mock
     private Metrics metrics;
+    @Mock
+    private ThreadMetadata threadMetadata;
 
     private StateListenerStub streamsStateListener;
     private Capture<List<MetricsReporter>> metricsReportersCapture;
@@ -296,6 +300,8 @@ public class KafkaStreamsTest {
         thread.setStateListener(capture(threadStatelistenerCapture));
         EasyMock.expectLastCall().anyTimes();
 
+        EasyMock.expect(thread.getStateLock()).andReturn(new Object()).anyTimes();
+
         thread.start();
         EasyMock.expectLastCall().andAnswer(() -> {
             state.set(StreamThread.State.STARTING);
@@ -313,6 +319,10 @@ public class KafkaStreamsTest {
                 StreamThread.State.PARTITIONS_ASSIGNED);
             return null;
         }).anyTimes();
+        EasyMock.expect(thread.threadMetadata()).andStubReturn(threadMetadata);
+        thread.waitOnThreadState(StreamThread.State.DEAD);
+        EasyMock.expectLastCall().anyTimes();
+        EasyMock.expect(thread.isAlive()).andReturn(true).times(0, 1);
         thread.resizeCache(EasyMock.anyLong());
         EasyMock.expectLastCall().anyTimes();
         EasyMock.expect(thread.getName()).andStubReturn("newThread");
@@ -631,6 +641,35 @@ public class KafkaStreamsTest {
         assertThat(streams.threads.size(), equalTo(oldSize));
     }
 
+    @Test
+    public void shouldNotReturnDeadThreads() {
+        final KafkaStreams streams = new KafkaStreams(getBuilderWithSource().build(), props, supplier, time);
+        streams.start();
+        streamThreadOne.shutdown();
+        final Set<ThreadMetadata> threads = streams.localThreadsMetadata();
+        assertThat(threads.size(), equalTo(1));
+        assertThat(threads, hasItem(streamThreadTwo.threadMetadata()));
+    }
+
+    @Test
+    public void shouldRemoveThread() throws InterruptedException {
+        props.put(StreamsConfig.NUM_STREAM_THREADS_CONFIG, 2);
+        final KafkaStreams streams = new KafkaStreams(getBuilderWithSource().build(), props, supplier, time);
+        streams.start();
+        final int oldSize = streams.threads.size();
+        TestUtils.waitForCondition(() -> streams.state() == KafkaStreams.State.RUNNING, 15L,
+            "Kafka Streams client did not reach state RUNNING");
+        assertThat(streams.removeStreamThread(), equalTo(Optional.of("newThread")));
+        assertThat(streams.threads.size(), equalTo(oldSize - 1));
+    }
+
+    @Test
+    public void shouldNotRemoveThreadWhenNotRunning() {
+        props.put(StreamsConfig.NUM_STREAM_THREADS_CONFIG, 1);
+        final KafkaStreams streams = new KafkaStreams(getBuilderWithSource().build(), props, supplier, time);
+        assertThat(streams.removeStreamThread(), equalTo(Optional.empty()));
+        assertThat(streams.threads.size(), equalTo(1));
+    }
 
     @Test
     public void testCannotStartOnceClosed() {

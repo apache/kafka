@@ -230,6 +230,7 @@ public class StreamThread extends Thread {
             } else {
                 updateThreadMetadata(Collections.emptyMap(), Collections.emptyMap());
             }
+            stateLock.notifyAll();
         }
 
         if (stateListener != null) {
@@ -248,7 +249,7 @@ public class StreamThread extends Thread {
     private final Time time;
     private final Logger log;
     private final String logPrefix;
-    private final Object stateLock;
+    public final Object stateLock;
     private final Duration pollTime;
     private final long commitTimeMs;
     private final int maxPollTimeMs;
@@ -595,6 +596,18 @@ public class StreamThread extends Thread {
      */
     public void setStreamsUncaughtExceptionHandler(final java.util.function.Consumer<Throwable> streamsUncaughtExceptionHandler) {
         this.streamsUncaughtExceptionHandler = streamsUncaughtExceptionHandler;
+    }
+
+    public void waitOnThreadState(final StreamThread.State targetState) {
+        synchronized (stateLock) {
+            while (state != targetState) {
+                try {
+                    stateLock.wait();
+                } catch (final InterruptedException e) {
+                    // it is ok: just move on to the next iteration
+                }
+            }
+        }
     }
 
     public void shutdownToError() {
@@ -1112,6 +1125,10 @@ public class StreamThread extends Thread {
 
     public Map<MetricName, Metric> adminClientMetrics() {
         return ClientUtils.adminClientMetrics(adminClient);
+    }
+
+    public Object getStateLock() {
+        return stateLock;
     }
 
     // the following are for testing only
