@@ -241,7 +241,7 @@ subprojects {
     }
   }
 
-  def shouldUseJUnit5 = ["tools", "raft", "log4j-appender", "examples"].contains(it.project.name)
+  def shouldUseJUnit5 = ["test-utils", "tools", "raft", "log4j-appender", "examples"].contains(it.project.name)
   def testLoggingEvents = ["passed", "skipped", "failed"]
   def testShowStandardStreams = false
   def testExceptionFormat = 'full'
@@ -1490,8 +1490,7 @@ project(':streams:test-utils') {
     compile project(':clients')
 
     testCompile project(':clients').sourceSets.test.output
-    testCompile libs.junitJupiterApi
-    testCompile libs.junitVintageEngine
+    testCompile libs.junitJupiter
     testCompile libs.easymock
     testCompile libs.hamcrest
 
