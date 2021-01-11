@@ -1843,10 +1843,7 @@ public class KafkaRaftClientTest {
         assertEquals((double) 4L, getMetric(context.metrics, "log-end-offset").metricValue());
         assertEquals((double) epoch, getMetric(context.metrics, "log-end-epoch").metricValue());
 
-        CompletableFuture<Void> shutdownFuture = context.client.shutdown(100);
-        context.client.poll();
-        assertTrue(shutdownFuture.isDone());
-        assertNull(shutdownFuture.get());
+        context.client.close();
 
         // should only have total-metrics-count left
         assertEquals(1, context.metrics.metrics().size());

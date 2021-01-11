@@ -165,6 +165,7 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
         ReplicatedLog log,
         QuorumState quorum,
         Time time,
+        Metrics metrics,
         ExpirationService expirationService,
         LogContext logContext
     ) {
@@ -175,7 +176,7 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
             quorum,
             new BatchMemoryPool(5, MAX_BATCH_SIZE),
             time,
-            new Metrics(time),
+            metrics,
             expirationService,
             raftConfig.quorumVoterConnections(),
             raftConfig.electionBackoffMaxMs(),
@@ -2160,7 +2161,8 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
         );
     }
 
-    private void close() {
+    @Override
+    public void close() {
         kafkaRaftMetrics.close();
     }
 
@@ -2195,14 +2197,12 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
         }
 
         public void failWithTimeout() {
-            close();
             logger.warn("Graceful shutdown timed out after {}ms", finishTimer.timeoutMs());
             completeFuture.completeExceptionally(
                 new TimeoutException("Timeout expired before graceful shutdown completed"));
         }
 
         public void complete() {
-            close();
             logger.info("Graceful shutdown completed");
             completeFuture.complete(null);
         }

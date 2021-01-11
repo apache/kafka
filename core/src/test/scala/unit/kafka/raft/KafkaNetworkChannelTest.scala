@@ -65,6 +65,34 @@ class KafkaNetworkChannelTest {
   }
 
   @Test
+  def testWakeupClientOnSend(): Unit = {
+    val destinationId = 2
+    val destinationNode = new Node(destinationId, "127.0.0.1", 9092)
+    channel.updateEndpoint(destinationId, new InetSocketAddress(destinationNode.host, destinationNode.port))
+
+    client.enableBlockingUntilWakeup(1)
+
+    val ioThread = new Thread() {
+      override def run(): Unit = {
+        // Block in poll until we get the expected wakeup
+        channel.pollOnce()
+
+        // Poll a second time to send request and receive response
+        channel.pollOnce()
+      }
+    }
+
+    val response = buildResponse(buildTestErrorResponse(ApiKeys.FETCH, Errors.INVALID_REQUEST))
+    client.prepareResponseFrom(response, destinationNode, false)
+
+    ioThread.start()
+    val request = sendTestRequest(ApiKeys.FETCH, destinationId)
+
+    ioThread.join()
+    assertResponseCompleted(request, Errors.INVALID_REQUEST)
+  }
+
+  @Test
   def testSendAndDisconnect(): Unit = {
     val destinationId = 2
     val destinationNode = new Node(destinationId, "127.0.0.1", 9092)
@@ -112,24 +140,39 @@ class KafkaNetworkChannelTest {
     }
   }
 
-  private def sendAndAssertErrorResponse(apiKey: ApiKeys,
-                                         destinationId: Int,
-                                         error: Errors): Unit = {
+  private def sendTestRequest(
+    apiKey: ApiKeys,
+    destinationId: Int,
+  ): RaftRequest.Outbound = {
     val correlationId = channel.newCorrelationId()
     val createdTimeMs = time.milliseconds()
     val apiRequest = buildTestRequest(apiKey)
     val request = new RaftRequest.Outbound(correlationId, apiRequest, destinationId, createdTimeMs)
-
     channel.send(request)
-    channel.pollOnce()
+    request
+  }
 
+  private def assertResponseCompleted(
+    request: RaftRequest.Outbound,
+    expectedError: Errors
+  ): Unit = {
     assertTrue(request.completion.isDone)
 
     val response = request.completion.get()
-    assertEquals(destinationId, response.sourceId)
-    assertEquals(correlationId, response.correlationId)
-    assertEquals(apiKey, ApiKeys.forId(response.data.apiKey))
-    assertEquals(error, extractError(response.data))
+    assertEquals(request.destinationId, response.sourceId)
+    assertEquals(request.correlationId, response.correlationId)
+    assertEquals(request.data.apiKey, response.data.apiKey)
+    assertEquals(expectedError, extractError(response.data))
+  }
+
+  private def sendAndAssertErrorResponse(
+    apiKey: ApiKeys,
+    destinationId: Int,
+    error: Errors
+  ): Unit = {
+    val request = sendTestRequest(apiKey, destinationId)
+    channel.pollOnce()
+    assertResponseCompleted(request, error)
   }
 
   private def buildTestRequest(key: ApiKeys): ApiMessage = {
