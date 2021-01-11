@@ -3212,13 +3212,10 @@ class KafkaApis(val requestChannel: RequestChannel,
   def handleEnvelope(request: RequestChannel.Request): Unit = {
     val envelope = request.body[EnvelopeRequest]
 
-    if (!config.metadataQuorumEnabled) {
-      // If forwarding is not yet enabled, we treat the request as unparsable and close the connection
+    if (!config.metadataQuorumEnabled || !request.context.fromPrivilegedListener) {
+      // If forwarding is not yet enabled or this request has been received on an invalid endpoint,
+      // then we treat the request as unparsable and close the connection.
       closeConnection(request, Collections.emptyMap())
-      return
-    } else if (!request.context.fromPrivilegedListener) {
-      sendErrorResponseMaybeThrottle(request, new ClusterAuthorizationException(
-        s"Invalid envelope request on unprivileged listener ${request.context.listenerName}"))
       return
     } else if (!authorize(request.context, CLUSTER_ACTION, CLUSTER, CLUSTER_NAME)) {
       sendErrorResponseMaybeThrottle(request, new ClusterAuthorizationException(
