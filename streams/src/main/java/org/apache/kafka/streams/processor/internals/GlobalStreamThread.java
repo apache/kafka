@@ -343,6 +343,10 @@ public class GlobalStreamThread extends Thread {
         this.streamsUncaughtExceptionHandler = streamsUncaughtExceptionHandler;
     }
 
+    public void resize(final long cacheSize) {
+        cache.resize(cacheSize);
+    }
+
     private StateConsumer initialize() {
         try {
             final GlobalStateManager stateMgr = new GlobalStateManagerImpl(
