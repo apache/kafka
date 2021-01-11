@@ -43,7 +43,7 @@ class LogCleanerLagIntegrationTest extends AbstractLogCleanerIntegrationTest wit
   val topicPartitions = Array(new TopicPartition("log", 0), new TopicPartition("log", 1), new TopicPartition("log", 2))
 
   @ParameterizedTest
-  @MethodSource(value = Array("parameters"))
+  @MethodSource(Array("parameters"))
   def cleanerTest(codec: CompressionType): Unit = {
     cleaner = makeCleaner(partitions = topicPartitions,
       backOffMs = cleanerBackOffMs,

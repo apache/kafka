@@ -37,7 +37,7 @@ class DefaultMessageFormatterTest {
 
 
   @ParameterizedTest
-  @MethodSource(value = Array("parameters"))
+  @MethodSource(Array("parameters"))
   def testWriteRecord(name: String, record: ConsumerRecord[Array[Byte], Array[Byte]], properties: Map[String, String], expected: String): Unit = {
     withResource(new ByteArrayOutputStream()) { baos =>
       withResource(new PrintStream(baos)) { ps =>

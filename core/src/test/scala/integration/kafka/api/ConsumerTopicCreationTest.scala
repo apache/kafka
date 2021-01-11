@@ -66,7 +66,7 @@ class ConsumerTopicCreationTest extends IntegrationTestHarness {
   }
 
   @ParameterizedTest
-  @MethodSource(value = Array("parameters"))
+  @MethodSource(Array("parameters"))
   def testAutoTopicCreation(brokerAutoTopicCreationEnable: JBoolean, consumerAllowAutoCreateTopics: JBoolean): Unit = {
     this.setup(brokerAutoTopicCreationEnable, consumerAllowAutoCreateTopics)
     val consumer = createConsumer()

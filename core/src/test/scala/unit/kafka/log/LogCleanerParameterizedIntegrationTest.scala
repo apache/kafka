@@ -43,7 +43,7 @@ class LogCleanerParameterizedIntegrationTest extends AbstractLogCleanerIntegrati
   val topicPartitions = Array(new TopicPartition("log", 0), new TopicPartition("log", 1), new TopicPartition("log", 2))
 
   @ParameterizedTest
-  @MethodSource(value = Array("parameters"))
+  @MethodSource(Array("parameters"))
   def cleanerTest(codec: CompressionType): Unit = {
     val largeMessageKey = 20
     val (largeMessageValue, largeMessageSet) = createLargeSingleMessageSet(largeMessageKey, RecordBatch.CURRENT_MAGIC_VALUE, codec)
@@ -84,7 +84,7 @@ class LogCleanerParameterizedIntegrationTest extends AbstractLogCleanerIntegrati
   }
 
   @ParameterizedTest
-  @MethodSource(value = Array("parameters"))
+  @MethodSource(Array("parameters"))
   def testCleansCombinedCompactAndDeleteTopic(codec: CompressionType): Unit = {
     val logProps  = new Properties()
     val retentionMs: Integer = 100000
@@ -128,7 +128,7 @@ class LogCleanerParameterizedIntegrationTest extends AbstractLogCleanerIntegrati
   }
 
   @ParameterizedTest
-  @MethodSource(value = Array("parameters"))
+  @MethodSource(Array("parameters"))
   def testCleanerWithMessageFormatV0(codec: CompressionType): Unit = {
     // zstd compression is not supported with older message formats
     if (codec == CompressionType.ZSTD)
@@ -183,7 +183,7 @@ class LogCleanerParameterizedIntegrationTest extends AbstractLogCleanerIntegrati
   }
 
   @ParameterizedTest
-  @MethodSource(value = Array("parameters"))
+  @MethodSource(Array("parameters"))
   def testCleaningNestedMessagesWithMultipleVersions(codec: CompressionType): Unit = {
     // zstd compression is not supported with older message formats
     if (codec == CompressionType.ZSTD)
@@ -225,7 +225,7 @@ class LogCleanerParameterizedIntegrationTest extends AbstractLogCleanerIntegrati
   }
 
   @ParameterizedTest
-  @MethodSource(value = Array("parameters"))
+  @MethodSource(Array("parameters"))
   def cleanerConfigUpdateTest(codec: CompressionType): Unit = {
     val largeMessageKey = 20
     val (largeMessageValue, largeMessageSet) = createLargeSingleMessageSet(largeMessageKey, RecordBatch.CURRENT_MAGIC_VALUE, codec)

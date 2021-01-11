@@ -82,7 +82,7 @@ object AssignmentStateTest extends AbstractPartitionTest {
 class AssignmentStateTest extends AbstractPartitionTest {
 
   @ParameterizedTest
-  @MethodSource(value = Array("parameters"))
+  @MethodSource(Array("parameters"))
   def testPartitionAssignmentStatus(isr: List[Integer], replicas: List[Integer],
                                     adding: List[Integer], removing: List[Integer],
                                     original: Seq[Int], isUnderReplicated: Boolean): Unit = {

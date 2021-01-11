@@ -58,7 +58,7 @@ class ProducerCompressionTest extends ZooKeeperTestHarness {
    * Compressed messages should be able to sent and consumed correctly
    */
   @ParameterizedTest
-  @MethodSource(value = Array("parameters"))
+  @MethodSource(Array("parameters"))
   def testCompression(compression: String): Unit = {
 
     val producerProps = new Properties()

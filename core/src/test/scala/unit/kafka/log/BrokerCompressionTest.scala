@@ -46,7 +46,7 @@ class BrokerCompressionTest {
    * Test broker-side compression configuration
    */
   @ParameterizedTest
-  @MethodSource(value = Array("parameters"))
+  @MethodSource(Array("parameters"))
   def testBrokerSideCompression(messageCompression: String, brokerCompression: String): Unit = {
     val messageCompressionCode = CompressionCodec.getCompressionCodec(messageCompression)
     val logProps = new Properties()
