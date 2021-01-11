@@ -16,9 +16,9 @@
  */
 package org.apache.kafka.streams.processor.internals.assignment;
 
+import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.streams.errors.TopologyException;
-import org.apache.kafka.streams.processor.internals.ClusterMetadata;
 import org.apache.kafka.streams.processor.internals.InternalTopicConfig;
 import org.slf4j.Logger;
 
@@ -43,7 +43,7 @@ public class CopartitionedTopicsEnforcer {
 
     public void enforce(final Set<String> copartitionGroup,
                         final Map<String, InternalTopicConfig> allRepartitionTopicsNumPartitions,
-                        final ClusterMetadata clusterMetadata) {
+                        final Cluster clusterMetadata) {
         if (copartitionGroup.isEmpty()) {
             return;
         }

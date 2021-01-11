@@ -63,7 +63,7 @@ public class CopartitionedTopicsEnforcerTest {
         validator.enforce(
             Collections.singleton("topic"),
             Collections.emptyMap(),
-            ClusterMetadata.fromMetadataFetchResponse(cluster)
+            cluster
         );
     }
 
@@ -73,7 +73,7 @@ public class CopartitionedTopicsEnforcerTest {
         validator.enforce(
             Utils.mkSet("first", "second"),
             Collections.emptyMap(),
-            ClusterMetadata.fromMetadataFetchResponse(cluster.withPartitions(partitions))
+            cluster.withPartitions(partitions)
         );
     }
 
@@ -85,7 +85,7 @@ public class CopartitionedTopicsEnforcerTest {
         validator.enforce(
             Utils.mkSet("first", "second", config.name()),
             Collections.singletonMap(config.name(), config),
-            ClusterMetadata.fromMetadataFetchResponse(cluster.withPartitions(partitions))
+            cluster.withPartitions(partitions)
         );
 
         assertThat(config.numberOfPartitions(), equalTo(Optional.of(2)));
@@ -106,7 +106,7 @@ public class CopartitionedTopicsEnforcerTest {
         validator.enforce(
             Utils.mkSet(one.name(), two.name(), three.name()),
             repartitionTopicConfig,
-            ClusterMetadata.fromMetadataFetchResponse(cluster)
+            cluster
         );
 
         assertThat(one.numberOfPartitions(), equalTo(Optional.of(15)));
@@ -124,7 +124,7 @@ public class CopartitionedTopicsEnforcerTest {
             () -> validator.enforce(
                 Utils.mkSet(topic1.name(), topic2.name()),
                 Utils.mkMap(Utils.mkEntry(topic1.name(), topic1), Utils.mkEntry(topic2.name(), topic2)),
-                ClusterMetadata.fromMetadataFetchResponse(cluster.withPartitions(partitions))
+                cluster.withPartitions(partitions)
             )
         );
 
@@ -146,7 +146,7 @@ public class CopartitionedTopicsEnforcerTest {
         validator.enforce(
             Utils.mkSet(topic1.name(), topic2.name()),
             Utils.mkMap(Utils.mkEntry(topic1.name(), topic1), Utils.mkEntry(topic2.name(), topic2)),
-            ClusterMetadata.fromMetadataFetchResponse(cluster.withPartitions(partitions))
+            cluster.withPartitions(partitions)
         );
 
         assertThat(topic1.numberOfPartitions(), equalTo(Optional.of(10)));
@@ -162,7 +162,7 @@ public class CopartitionedTopicsEnforcerTest {
             () -> validator.enforce(
                 Utils.mkSet(topic1.name(), "second"),
                 Utils.mkMap(Utils.mkEntry(topic1.name(), topic1)),
-                ClusterMetadata.fromMetadataFetchResponse(cluster.withPartitions(partitions))
+                cluster.withPartitions(partitions)
             )
         );
 
@@ -179,7 +179,7 @@ public class CopartitionedTopicsEnforcerTest {
         validator.enforce(
             Utils.mkSet(topic1.name(), "second"),
             Utils.mkMap(Utils.mkEntry(topic1.name(), topic1)),
-            ClusterMetadata.fromMetadataFetchResponse(cluster.withPartitions(partitions))
+            cluster.withPartitions(partitions)
         );
 
         assertThat(topic1.numberOfPartitions(), equalTo(Optional.of(2)));
@@ -198,7 +198,7 @@ public class CopartitionedTopicsEnforcerTest {
                 Utils.mkEntry(topic2.name(), topic2),
                 Utils.mkEntry(topic3.name(), topic3)
             ),
-            ClusterMetadata.fromMetadataFetchResponse(cluster.withPartitions(partitions))
+            cluster.withPartitions(partitions)
         );
 
         assertEquals(topic1.numberOfPartitions(), topic2.numberOfPartitions());

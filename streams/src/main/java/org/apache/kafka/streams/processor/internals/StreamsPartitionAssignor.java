@@ -477,7 +477,7 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
         final RepartitionTopics repartitionTopics = new RepartitionTopics(
             taskManager.builder(),
             internalTopicManager,
-            ClusterMetadata.fromMetadataFetchResponse(metadata),
+            metadata,
             logPrefix
         );
         repartitionTopics.setup();

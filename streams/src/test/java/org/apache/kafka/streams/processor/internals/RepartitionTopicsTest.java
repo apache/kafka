@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
+import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
@@ -24,6 +25,9 @@ import org.apache.kafka.streams.errors.TaskAssignmentException;
 import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder.TopicsInfo;
 import org.junit.Before;
 import org.junit.Test;
+import org.junit.runner.RunWith;
+import org.powermock.core.classloader.annotations.PrepareForTest;
+import org.powermock.modules.junit4.PowerMockRunner;
 
 import java.util.Arrays;
 import java.util.Collections;
@@ -43,6 +47,8 @@ import static org.hamcrest.CoreMatchers.nullValue;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.Assert.assertThrows;
 
+@RunWith(PowerMockRunner.class)
+@PrepareForTest({Cluster.class})
 public class RepartitionTopicsTest {
 
     private static final String SOURCE_TOPIC_NAME1 = "source1";
@@ -78,7 +84,7 @@ public class RepartitionTopicsTest {
 
     final InternalTopologyBuilder internalTopologyBuilder = mock(InternalTopologyBuilder.class);
     final InternalTopicManager internalTopicManager = mock(InternalTopicManager.class);
-    final ClusterMetadata clusterMetadata = niceMock(ClusterMetadata.class);
+    final Cluster clusterMetadata = niceMock(Cluster.class);
 
     @Before
     public void setUp() {
