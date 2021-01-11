@@ -19,11 +19,9 @@
 package kafka.tools
 
 import javax.management.remote.{JMXConnector, JMXConnectorFactory, JMXServiceURL}
-import javax.management.{Attribute, MBeanServerConnection, ObjectName}
+import javax.management.{MBeanServerConnection, ObjectName}
 import joptsimple.OptionParser
 import kafka.utils.{CommandLineUtils, Exit}
-
-import scala.collection.JavaConverters.asScalaBufferConverter
 
 /**
  * A program for dynamically alter log4j levels at runtime.
