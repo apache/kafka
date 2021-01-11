@@ -108,7 +108,7 @@ final public class SnapshotWriter<T> implements Closeable {
         if (snapshot.isFrozen()) {
             String message = String.format(
                 "Append not supported. Snapshot is already frozen: id = {%s}.",
-                snapshot.snapshotId()
+                snapshot.snapshotId().toString()
             );
 
             throw new IllegalStateException(message);
