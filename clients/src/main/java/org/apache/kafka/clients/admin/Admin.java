@@ -29,6 +29,7 @@ import java.util.concurrent.TimeUnit;
 
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.common.ElectionType;
+import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.Metric;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.TopicPartition;
@@ -46,6 +47,10 @@ import org.apache.kafka.common.requests.LeaveGroupResponse;
  * The administrative client for Kafka, which supports managing and inspecting topics, brokers, configurations and ACLs.
  * <p>
  * Instances returned from the {@code create} methods of this interface are guaranteed to be thread safe.
+ * However, the {@link KafkaFuture KafkaFutures} returned from request methods are executed
+ * by a single thread so it is important that any code which executes on that thread when they complete
+ * (using {@link KafkaFuture#thenApply(KafkaFuture.Function)}, for example) doesn't block
+ * for too long. If necessary, processing of results should be passed to another thread.
  * <p>
  * The operations exposed by Admin follow a consistent pattern:
  * <ul>
@@ -57,11 +62,11 @@ import org.apache.kafka.common.requests.LeaveGroupResponse;
  *     preferred over multiple calls to the same method.
  *     <li>The operation methods execute asynchronously.
  *     <li>Each {@code xxx} operation method returns an {@code XxxResult} class with methods which expose
- *     {@link org.apache.kafka.common.KafkaFuture} for accessing the result(s) of the operation.
+ *     {@link KafkaFuture} for accessing the result(s) of the operation.
  *     <li>Typically an {@code all()} method is provided for getting the overall success/failure of the batch and a
  *     {@code values()} method provided access to each item in a request batch.
  *     Other methods may also be provided.
- *     <li>For synchronous behaviour use {@link org.apache.kafka.common.KafkaFuture#get()}
+ *     <li>For synchronous behaviour use {@link KafkaFuture#get()}
  * </ul>
  * <p>
  * Here is a simple example of using an Admin client instance to create a new topic:
