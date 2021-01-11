@@ -34,7 +34,6 @@ import org.junit.{Before, Test}
 import org.mockito.ArgumentMatchers.{any, anyString}
 import org.mockito.{ArgumentMatchers, Mockito}
 
-
 class AlterIsrManagerTest {
 
   val topic = "test-topic"
@@ -97,28 +96,37 @@ class AlterIsrManagerTest {
   @Test
   def testSingleBatch(): Unit = {
     val capture = EasyMock.newCapture[AbstractRequest.Builder[AlterIsrRequest]]()
+    val callbackCapture = EasyMock.newCapture[ControllerRequestCompletionHandler]()
+
     EasyMock.expect(brokerToController.start())
-    EasyMock.expect(brokerToController.sendRequest(EasyMock.capture(capture), EasyMock.anyObject())).once()
+    EasyMock.expect(brokerToController.sendRequest(EasyMock.capture(capture), EasyMock.capture(callbackCapture))).times(2)
     EasyMock.replay(brokerToController)
 
     val scheduler = new MockScheduler(time)
     val alterIsrManager = new DefaultAlterIsrManager(brokerToController, scheduler, time, brokerId, () => 2)
     alterIsrManager.start()
 
-    for (i <- 0 to 9) {
+    // First request will send batch of one
+    alterIsrManager.submit(AlterIsrItem(new TopicPartition(topic, 0),
+      new LeaderAndIsr(1, 1, List(1,2,3), 10), _ => {}, 0))
+
+    // Other submissions will queue up until a response
+    for (i <- 1 to 9) {
       alterIsrManager.submit(AlterIsrItem(new TopicPartition(topic, i),
         new LeaderAndIsr(1, 1, List(1,2,3), 10), _ => {}, 0))
     }
 
-    time.sleep(1)
-    scheduler.tick()
+    // Simulate response, omitting partition 0 will allow it to stay in unsent queue
+    val alterIsrResp = new AlterIsrResponse(new AlterIsrResponseData())
+    val resp = new ClientResponse(null, null, "", 0L, 0L,
+      false, null, null, alterIsrResp)
 
-    // This should not be included in the batch
-    alterIsrManager.submit(AlterIsrItem(new TopicPartition(topic, 10),
-      new LeaderAndIsr(1, 1, List(1,2,3), 10), _ => {}, 0))
+    // On the callback, we check for unsent items and send another request
+    callbackCapture.getValue.onComplete(resp)
 
     EasyMock.verify(brokerToController)
 
+    // Verify the last request sent had all 10 items
     val request = capture.getValue.build()
     assertEquals(request.data().topics().size(), 1)
     assertEquals(request.data().topics().get(0).partitions().size(), 10)
@@ -178,7 +186,7 @@ class AlterIsrManagerTest {
     errors.foreach(error => {
       val alterIsrManager = testPartitionError(tp0, error)
       // Any partition-level error should clear the item from the pending queue allowing for future updates
-      assertTrue(alterIsrManager.submit(AlterIsrItem(tp0, null, _ => { }, 0)))
+      assertTrue(alterIsrManager.submit(AlterIsrItem(tp0, new LeaderAndIsr(1, 1, List(1,2,3), 10), _ => { }, 0)))
     })
   }
 
@@ -203,10 +211,8 @@ class AlterIsrManagerTest {
 
     alterIsrManager.submit(AlterIsrItem(tp, new LeaderAndIsr(1, 1, List(1,2,3), 10), callback, 0))
 
-    time.sleep(100)
-    scheduler.tick()
-
     EasyMock.verify(brokerToController)
+    EasyMock.reset(brokerToController)
 
     val alterIsrResp = new AlterIsrResponse(new AlterIsrResponseData()
       .setTopics(Collections.singletonList(
@@ -235,36 +241,24 @@ class AlterIsrManagerTest {
     val scheduler = new MockScheduler(time)
     val alterIsrManager = new DefaultAlterIsrManager(brokerToController, scheduler, time, brokerId, () => 2)
     alterIsrManager.start()
+
+    // First submit will send the request
     alterIsrManager.submit(AlterIsrItem(tp0, new LeaderAndIsr(1, 1, List(1,2,3), 10), _ => {}, 0))
 
-    time.sleep(1)
-    scheduler.tick() // Triggers a request
-
-    // Enqueue more updates
+    // These will become pending unsent items
     alterIsrManager.submit(AlterIsrItem(tp1, new LeaderAndIsr(1, 1, List(1,2,3), 10), _ => {}, 0))
     alterIsrManager.submit(AlterIsrItem(tp2, new LeaderAndIsr(1, 1, List(1,2,3), 10), _ => {}, 0))
 
-    time.sleep(1)
-    scheduler.tick() // Trigger the schedule again, but no request this time
-
     EasyMock.verify(brokerToController)
 
-    // Even an empty response will clear the in-flight
+    // Once the callback runs, another request will be sent
+    EasyMock.reset(brokerToController)
+    EasyMock.expect(brokerToController.sendRequest(EasyMock.anyObject(), EasyMock.capture(callbackCapture))).once()
+    EasyMock.replay(brokerToController)
     val alterIsrResp = new AlterIsrResponse(new AlterIsrResponseData())
     val resp = new ClientResponse(null, null, "", 0L, 0L,
       false, null, null, alterIsrResp)
     callbackCapture.getValue.onComplete(resp)
-
-    EasyMock.reset(brokerToController)
-    EasyMock.expect(brokerToController.sendRequest(EasyMock.anyObject(), EasyMock.capture(callbackCapture))).once()
-    EasyMock.replay(brokerToController)
-
-    // Need to re-enqueue again to trigger the thread to be scheduled
-    alterIsrManager.clearPending(tp2)
-    alterIsrManager.submit(AlterIsrItem(tp2, new LeaderAndIsr(1, 1, List(1,2,3), 10), _ => {}, 0))
-
-    time.sleep(100)
-    scheduler.tick()
     EasyMock.verify(brokerToController)
   }
 
