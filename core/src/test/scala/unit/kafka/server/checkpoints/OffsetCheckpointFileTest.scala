@@ -23,7 +23,6 @@ import org.apache.kafka.common.errors.KafkaStorageException
 import org.junit.Assert._
 import org.junit.Test
 import org.mockito.Mockito
-import org.scalatest.Assertions.assertThrows
 
 import scala.collection.Map
 
@@ -90,14 +89,14 @@ class OffsetCheckpointFileTest extends Logging {
     assertEquals(Map(), checkpoint.read())
   }
 
-  @Test(expected = classOf[KafkaStorageException])
+  @Test
   def shouldThrowIfVersionIsNotRecognised(): Unit = {
     val file = TestUtils.tempFile()
     val logDirFailureChannel = new LogDirFailureChannel(10)
     val checkpointFile = new CheckpointFile(file, OffsetCheckpointFile.CurrentVersion + 1,
       OffsetCheckpointFile.Formatter, logDirFailureChannel, file.getParent)
     checkpointFile.write(Seq(new TopicPartition("foo", 5) -> 10L))
-    new OffsetCheckpointFile(checkpointFile.file, logDirFailureChannel).read()
+    assertThrows(classOf[KafkaStorageException], () => new OffsetCheckpointFile(checkpointFile.file, logDirFailureChannel).read())
   }
 
   @Test
@@ -129,9 +128,8 @@ class OffsetCheckpointFileTest extends Logging {
     val logDir = "/tmp/kafka-logs"
     val mockCheckpointFile = Mockito.mock(classOf[OffsetCheckpointFile])
     val lazyCheckpoints = new LazyOffsetCheckpoints(Map(logDir -> mockCheckpointFile))
-    assertThrows[IllegalArgumentException] {
-      lazyCheckpoints.fetch("/invalid/kafka-logs", new TopicPartition("foo", 0))
-    }
+    assertThrows(classOf[IllegalArgumentException],
+      () => lazyCheckpoints.fetch("/invalid/kafka-logs", new TopicPartition("foo", 0)))
   }
 
 }

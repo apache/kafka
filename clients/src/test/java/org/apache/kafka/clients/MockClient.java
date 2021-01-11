@@ -263,8 +263,11 @@ public class MockClient implements KafkaClient {
             if (remainingBlockingWakeups <= 0)
                 return;
 
-            while (numBlockingWakeups == remainingBlockingWakeups)
-                wait();
+            TestUtils.waitForCondition(() -> {
+                if (numBlockingWakeups == remainingBlockingWakeups)
+                    MockClient.this.wait(500);
+                return numBlockingWakeups < remainingBlockingWakeups;
+            }, 5000, "Failed to receive expected wakeup");
         } catch (InterruptedException e) {
             throw new InterruptException(e);
         }

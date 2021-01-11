@@ -25,18 +25,19 @@ import java.util.Set;
 
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class ApiKeysTest {
 
-    @Test(expected = IllegalArgumentException.class)
+    @Test
     public void testForIdWithInvalidIdLow() {
-        ApiKeys.forId(-1);
+        assertThrows(IllegalArgumentException.class, () -> ApiKeys.forId(-1));
     }
 
-    @Test(expected = IllegalArgumentException.class)
+    @Test
     public void testForIdWithInvalidIdHigh() {
-        ApiKeys.forId(10000);
+        assertThrows(IllegalArgumentException.class, () -> ApiKeys.forId(10000));
     }
 
     @Test

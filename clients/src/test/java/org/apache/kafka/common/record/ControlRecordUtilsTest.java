@@ -18,17 +18,20 @@ package org.apache.kafka.common.record;
 
 import org.apache.kafka.common.message.LeaderChangeMessage;
 import org.apache.kafka.common.message.LeaderChangeMessage.Voter;
+
 import org.junit.Assert;
 import org.junit.Test;
 
 import java.nio.ByteBuffer;
 import java.util.Collections;
 
+import static org.junit.Assert.assertThrows;
+
 public class ControlRecordUtilsTest {
 
     @Test
     public void testInvalidControlRecordType() {
-        IllegalArgumentException thrown = Assert.assertThrows(
+        IllegalArgumentException thrown = assertThrows(
             IllegalArgumentException.class, () -> testDeserializeRecord(ControlRecordType.COMMIT));
         Assert.assertEquals("Expected LEADER_CHANGE control record type(3), but found COMMIT", thrown.getMessage());
     }

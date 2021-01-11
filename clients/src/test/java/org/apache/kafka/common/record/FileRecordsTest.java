@@ -48,6 +48,7 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 import static org.mockito.ArgumentMatchers.anyLong;
@@ -73,28 +74,29 @@ public class FileRecordsTest {
         this.time = new MockTime();
     }
 
-    @Test(expected = IllegalArgumentException.class)
+    @Test
     public void testAppendProtectsFromOverflow() throws Exception {
         File fileMock = mock(File.class);
         FileChannel fileChannelMock = mock(FileChannel.class);
         when(fileChannelMock.size()).thenReturn((long) Integer.MAX_VALUE);
 
         FileRecords records = new FileRecords(fileMock, fileChannelMock, 0, Integer.MAX_VALUE, false);
-        append(records, values);
+        assertThrows(IllegalArgumentException.class, () -> append(records, values));
     }
 
-    @Test(expected = KafkaException.class)
+    @Test
     public void testOpenOversizeFile() throws Exception {
         File fileMock = mock(File.class);
         FileChannel fileChannelMock = mock(FileChannel.class);
         when(fileChannelMock.size()).thenReturn(Integer.MAX_VALUE + 5L);
 
-        new FileRecords(fileMock, fileChannelMock, 0, Integer.MAX_VALUE, false);
+        assertThrows(KafkaException.class, () -> new FileRecords(fileMock, fileChannelMock, 0, Integer.MAX_VALUE, false));
     }
 
-    @Test(expected = IllegalArgumentException.class)
-    public void testOutOfRangeSlice() throws Exception {
-        this.fileRecords.slice(fileRecords.sizeInBytes() + 1, 15).sizeInBytes();
+    @Test
+    public void testOutOfRangeSlice() {
+        assertThrows(IllegalArgumentException.class,
+            () -> this.fileRecords.slice(fileRecords.sizeInBytes() + 1, 15).sizeInBytes());
     }
 
     /**

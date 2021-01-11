@@ -28,6 +28,7 @@ import java.util.Arrays;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.fail;
 
 public class JoinGroupRequestTest {
@@ -68,15 +69,15 @@ public class JoinGroupRequestTest {
         }
     }
 
-    @Test(expected = UnsupportedVersionException.class)
+    @Test
     public void testRequestVersionCompatibilityFailBuild() {
-        new JoinGroupRequest.Builder(
-                new JoinGroupRequestData()
-                        .setGroupId("groupId")
-                        .setMemberId("consumerId")
-                        .setGroupInstanceId("groupInstanceId")
-                        .setProtocolType("consumer")
-        ).build((short) 4);
+        assertThrows(UnsupportedVersionException.class, () -> new JoinGroupRequest.Builder(
+            new JoinGroupRequestData()
+                .setGroupId("groupId")
+                .setMemberId("consumerId")
+                .setGroupInstanceId("groupInstanceId")
+                .setProtocolType("consumer")
+        ).build((short) 4));
     }
 
     @Test

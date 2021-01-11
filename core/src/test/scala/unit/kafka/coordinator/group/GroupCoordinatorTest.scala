@@ -42,7 +42,6 @@ import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.message.LeaveGroupRequestData.MemberIdentity
 import org.junit.Assert._
 import org.junit.{After, Assert, Before, Test}
-import org.scalatest.Assertions.intercept
 
 import scala.jdk.CollectionConverters._
 import scala.collection.{Seq, mutable}
@@ -1323,9 +1322,8 @@ class GroupCoordinatorTest {
     EasyMock.reset(replicaManager)
 
     // Illegal state exception shall trigger since follower id resides in pending member bucket.
-    val expectedException = intercept[IllegalStateException] {
-      staticJoinGroup(groupId, rebalanceResult.followerId, followerInstanceId, protocolType, protocolSuperset, clockAdvance = 1)
-    }
+    val expectedException = assertThrows(classOf[IllegalStateException],
+      () => staticJoinGroup(groupId, rebalanceResult.followerId, followerInstanceId, protocolType, protocolSuperset, clockAdvance = 1))
 
     val message = expectedException.getMessage
     assertTrue(message.contains(rebalanceResult.followerId))
@@ -1341,9 +1339,8 @@ class GroupCoordinatorTest {
     EasyMock.reset(replicaManager)
 
     // Illegal state exception shall trigger since follower id resides in pending member bucket.
-    val expectedException = intercept[IllegalStateException] {
-      singleLeaveGroup(groupId, rebalanceResult.followerId, followerInstanceId)
-    }
+    val expectedException = assertThrows(classOf[IllegalStateException],
+      () => singleLeaveGroup(groupId, rebalanceResult.followerId, followerInstanceId))
 
     val message = expectedException.getMessage
     assertTrue(message.contains(rebalanceResult.followerId))
@@ -1360,9 +1357,8 @@ class GroupCoordinatorTest {
     EasyMock.reset(replicaManager)
 
     // Illegal state exception shall trigger since follower id resides in pending member bucket.
-    val expectedException = intercept[IllegalStateException] {
-      staticJoinGroup(groupId, JoinGroupRequest.UNKNOWN_MEMBER_ID, followerInstanceId, protocolType, protocolSuperset, clockAdvance = 1)
-    }
+    val expectedException = assertThrows(classOf[IllegalStateException],
+      () => staticJoinGroup(groupId, JoinGroupRequest.UNKNOWN_MEMBER_ID, followerInstanceId, protocolType, protocolSuperset, clockAdvance = 1))
 
     val message = expectedException.getMessage
     assertTrue(message.contains(group.groupId))
@@ -1378,9 +1374,8 @@ class GroupCoordinatorTest {
     EasyMock.reset(replicaManager)
 
     // Illegal state exception shall trigger since follower corresponding id is not defined in member list.
-    val expectedException = intercept[IllegalArgumentException] {
-      staticJoinGroup(groupId, JoinGroupRequest.UNKNOWN_MEMBER_ID, followerInstanceId, protocolType, protocolSuperset, clockAdvance = 1)
-    }
+    val expectedException = assertThrows(classOf[IllegalArgumentException],
+      () => staticJoinGroup(groupId, JoinGroupRequest.UNKNOWN_MEMBER_ID, followerInstanceId, protocolType, protocolSuperset, clockAdvance = 1))
 
     val message = expectedException.getMessage
     assertTrue(message.contains(invalidMemberId))
@@ -1393,7 +1388,7 @@ class GroupCoordinatorTest {
     timer.advanceClock(DefaultRebalanceTimeout + 1)
     // The static leader should already session timeout, moving group towards Empty
     assertEquals(Set.empty, getGroup(groupId).allMembers)
-    assertEquals(null, getGroup(groupId).leaderOrNull)
+    assertNull(getGroup(groupId).leaderOrNull)
     assertEquals(3, getGroup(groupId).generationId)
     assertGroupState(groupState = Empty)
   }
@@ -3251,10 +3246,9 @@ class GroupCoordinatorTest {
     val instanceId = "instanceId"
     val pendingMemberId = pendingMember.memberId
     getGroup(groupId).addStaticMember(Option(instanceId), pendingMemberId)
-    val expectedException = intercept[IllegalStateException] {
-      batchLeaveGroup(groupId, List(new MemberIdentity().setGroupInstanceId("unknown-instance"),
-        new MemberIdentity().setGroupInstanceId(instanceId).setMemberId(pendingMemberId)))
-    }
+    val expectedException = assertThrows(classOf[IllegalStateException],
+      () => batchLeaveGroup(groupId, List(new MemberIdentity().setGroupInstanceId("unknown-instance"),
+        new MemberIdentity().setGroupInstanceId(instanceId).setMemberId(pendingMemberId))))
 
     val message = expectedException.getMessage
     assertTrue(message.contains(instanceId))

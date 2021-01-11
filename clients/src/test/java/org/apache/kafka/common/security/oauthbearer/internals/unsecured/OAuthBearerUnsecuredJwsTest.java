@@ -17,6 +17,7 @@
 package org.apache.kafka.common.security.oauthbearer.internals.unsecured;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 
 import java.nio.charset.StandardCharsets;
@@ -81,24 +82,26 @@ public class OAuthBearerUnsecuredJwsTest {
         assertEquals("", jws.splits().get(2));
     }
 
-    @Test(expected = OAuthBearerIllegalTokenException.class)
+    @Test
     public void missingPrincipal() {
         String subject = null;
         long issuedAt = 100;
         Long expirationTime = null;
         List<String> scope = Arrays.asList("scopeValue1", "scopeValue2");
         String validCompactSerialization = compactSerialization(subject, issuedAt, expirationTime, scope);
-        new OAuthBearerUnsecuredJws(validCompactSerialization, "sub", "scope");
+        assertThrows(OAuthBearerIllegalTokenException.class,
+            () -> new OAuthBearerUnsecuredJws(validCompactSerialization, "sub", "scope"));
     }
 
-    @Test(expected = OAuthBearerIllegalTokenException.class)
+    @Test
     public void blankPrincipalName() {
         String subject = "   ";
         long issuedAt = 100;
         long expirationTime = issuedAt + 60 * 60;
         List<String> scope = Arrays.asList("scopeValue1", "scopeValue2");
         String validCompactSerialization = compactSerialization(subject, issuedAt, expirationTime, scope);
-        new OAuthBearerUnsecuredJws(validCompactSerialization, "sub", "scope");
+        assertThrows(OAuthBearerIllegalTokenException.class,
+            () -> new OAuthBearerUnsecuredJws(validCompactSerialization, "sub", "scope"));
     }
 
     private static String compactSerialization(String subject, Long issuedAt, Long expirationTime, List<String> scope) {

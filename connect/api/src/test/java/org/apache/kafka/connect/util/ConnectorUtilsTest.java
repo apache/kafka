@@ -23,6 +23,7 @@ import java.util.Collections;
 import java.util.List;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertThrows;
 
 public class ConnectorUtilsTest {
 
@@ -59,8 +60,9 @@ public class ConnectorUtilsTest {
                 Collections.emptyList()), grouped);
     }
 
-    @Test(expected = IllegalArgumentException.class)
+    @Test
     public void testGroupPartitionsInvalidCount() {
-        ConnectorUtils.groupPartitions(FIVE_ELEMENTS, 0);
+        assertThrows(IllegalArgumentException.class,
+            () -> ConnectorUtils.groupPartitions(FIVE_ELEMENTS, 0));
     }
 }

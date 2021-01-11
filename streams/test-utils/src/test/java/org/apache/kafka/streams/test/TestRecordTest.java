@@ -33,6 +33,7 @@ import static org.hamcrest.Matchers.allOf;
 import static org.hamcrest.Matchers.hasProperty;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotEquals;
+import static org.junit.Assert.assertThrows;
 
 public class TestRecordTest {
     private final String key = "testKey";
@@ -132,9 +133,10 @@ public class TestRecordTest {
         assertThat(record4, equalTo(new TestRecord<>(key, value, null, recordMs)));
     }
 
-    @Test(expected = IllegalArgumentException.class)
+    @Test
     public void testInvalidRecords() {
-        new TestRecord<>(key, value, headers,  -1L);
+        assertThrows(IllegalArgumentException.class,
+            () -> new TestRecord<>(key, value, headers,  -1L));
     }
 
     @Test

@@ -1948,12 +1948,12 @@ public class FetcherTest {
         assertEquals(initialUpdateResponse.topicMetadata().size(), allTopics.size());
     }
 
-    @Test(expected = TimeoutException.class)
+    @Test
     public void testGetAllTopicsTimeout() {
         // since no response is prepared, the request should timeout
         buildFetcher();
         assignFromUser(singleton(tp0));
-        fetcher.getAllTopicMetadata(time.timer(50L));
+        assertThrows(TimeoutException.class, () -> fetcher.getAllTopicMetadata(time.timer(50L)));
     }
 
     @Test
@@ -1969,13 +1969,13 @@ public class FetcherTest {
         }
     }
 
-    @Test(expected = InvalidTopicException.class)
+    @Test
     public void testGetTopicMetadataInvalidTopic() {
         buildFetcher();
         assignFromUser(singleton(tp0));
         client.prepareResponse(newMetadataResponse(topicName, Errors.INVALID_TOPIC_EXCEPTION));
-        fetcher.getTopicMetadata(
-                new MetadataRequest.Builder(Collections.singletonList(topicName), true), time.timer(5000L));
+        assertThrows(InvalidTopicException.class, () -> fetcher.getTopicMetadata(
+                new MetadataRequest.Builder(Collections.singletonList(topicName), true), time.timer(5000L)));
     }
 
     @Test
@@ -2728,7 +2728,7 @@ public class FetcherTest {
         Assert.assertNotNull(metadata.fetch().partitionCountForTopic(anotherTopic));
     }
 
-    @Test(expected = TimeoutException.class)
+    @Test
     public void testBatchedListOffsetsMetadataErrors() {
         buildFetcher();
 
@@ -2753,7 +2753,7 @@ public class FetcherTest {
         offsetsToSearch.put(tp0, ListOffsetsRequest.EARLIEST_TIMESTAMP);
         offsetsToSearch.put(tp1, ListOffsetsRequest.EARLIEST_TIMESTAMP);
 
-        fetcher.offsetsForTimes(offsetsToSearch, time.timer(0));
+        assertThrows(TimeoutException.class, () -> fetcher.offsetsForTimes(offsetsToSearch, time.timer(0)));
     }
 
     @Test

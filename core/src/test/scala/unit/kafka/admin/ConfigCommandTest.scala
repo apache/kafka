@@ -39,7 +39,6 @@ import org.apache.kafka.test.TestUtils
 import org.easymock.EasyMock
 import org.junit.Assert._
 import org.junit.Test
-import org.scalatest.Assertions.intercept
 
 import scala.collection.{Seq, mutable}
 import scala.jdk.CollectionConverters._
@@ -250,7 +249,7 @@ class ConfigCommandTest extends ZooKeeperTestHarness with Logging {
     assertTrue(addedProps2.getProperty("f").isEmpty)
   }
 
-  @Test(expected = classOf[IllegalArgumentException])
+  @Test
   def shouldFailIfAddAndAddFile(): Unit = {
     // Should not parse correctly
     val createOpts = new ConfigCommandOptions(Array("--bootstrap-server", "localhost:9092",
@@ -260,7 +259,7 @@ class ConfigCommandTest extends ZooKeeperTestHarness with Logging {
       "--add-config", "a=b,c=d",
       "--add-config-file", "/tmp/new.properties"
     ))
-    createOpts.checkArgs()
+    assertThrows(classOf[IllegalArgumentException], () => createOpts.checkArgs())
   }
 
   @Test
@@ -336,88 +335,88 @@ class ConfigCommandTest extends ZooKeeperTestHarness with Logging {
     doTestOptionEntityTypeNames(zkConfig = false)
   }
 
-  @Test(expected = classOf[IllegalArgumentException])
+  @Test
   def shouldFailIfUnrecognisedEntityTypeUsingZookeeper(): Unit = {
     val createOpts = new ConfigCommandOptions(Array("--zookeeper", zkConnect,
       "--entity-name", "client", "--entity-type", "not-recognised", "--alter", "--add-config", "a=b,c=d"))
-    ConfigCommand.alterConfigWithZk(null, createOpts, new DummyAdminZkClient(zkClient))
+    assertThrows(classOf[IllegalArgumentException], () => ConfigCommand.alterConfigWithZk(null, createOpts, new DummyAdminZkClient(zkClient)))
   }
 
-  @Test(expected = classOf[IllegalArgumentException])
+  @Test
   def shouldFailIfUnrecognisedEntityType(): Unit = {
     val createOpts = new ConfigCommandOptions(Array("--bootstrap-server", "localhost:9092",
       "--entity-name", "client", "--entity-type", "not-recognised", "--alter", "--add-config", "a=b,c=d"))
-    ConfigCommand.alterConfig(new DummyAdminClient(new Node(1, "localhost", 9092)), createOpts)
+    assertThrows(classOf[IllegalArgumentException], () => ConfigCommand.alterConfig(new DummyAdminClient(new Node(1, "localhost", 9092)), createOpts))
   }
 
-  @Test(expected = classOf[IllegalArgumentException])
+  @Test
   def shouldFailIfBrokerEntityTypeIsNotAnIntegerUsingZookeeper(): Unit = {
     val createOpts = new ConfigCommandOptions(Array("--zookeeper", zkConnect,
       "--entity-name", "A", "--entity-type", "brokers", "--alter", "--add-config", "a=b,c=d"))
-    ConfigCommand.alterConfigWithZk(null, createOpts, new DummyAdminZkClient(zkClient))
+    assertThrows(classOf[IllegalArgumentException], () => ConfigCommand.alterConfigWithZk(null, createOpts, new DummyAdminZkClient(zkClient)))
   }
 
-  @Test(expected = classOf[IllegalArgumentException])
+  @Test
   def shouldFailIfBrokerEntityTypeIsNotAnInteger(): Unit = {
     val createOpts = new ConfigCommandOptions(Array("--bootstrap-server", "localhost:9092",
       "--entity-name", "A", "--entity-type", "brokers", "--alter", "--add-config", "a=b,c=d"))
-    ConfigCommand.alterConfig(new DummyAdminClient(new Node(1, "localhost", 9092)), createOpts)
+    assertThrows(classOf[IllegalArgumentException], () => ConfigCommand.alterConfig(new DummyAdminClient(new Node(1, "localhost", 9092)), createOpts))
   }
 
-  @Test(expected = classOf[IllegalArgumentException])
+  @Test
   def shouldFailIfShortBrokerEntityTypeIsNotAnIntegerUsingZookeeper(): Unit = {
     val createOpts = new ConfigCommandOptions(Array("--zookeeper", zkConnect,
       "--broker", "A", "--alter", "--add-config", "a=b,c=d"))
-    ConfigCommand.alterConfigWithZk(null, createOpts, new DummyAdminZkClient(zkClient))
+    assertThrows(classOf[IllegalArgumentException], () => ConfigCommand.alterConfigWithZk(null, createOpts, new DummyAdminZkClient(zkClient)))
   }
 
-  @Test(expected = classOf[IllegalArgumentException])
+  @Test
   def shouldFailIfShortBrokerEntityTypeIsNotAnInteger(): Unit = {
     val createOpts = new ConfigCommandOptions(Array("--bootstrap-server", "localhost:9092",
       "--broker", "A", "--alter", "--add-config", "a=b,c=d"))
-    ConfigCommand.alterConfig(new DummyAdminClient(new Node(1, "localhost", 9092)), createOpts)
+    assertThrows(classOf[IllegalArgumentException], () => ConfigCommand.alterConfig(new DummyAdminClient(new Node(1, "localhost", 9092)), createOpts))
   }
 
-  @Test(expected = classOf[IllegalArgumentException])
+  @Test
   def shouldFailIfMixedEntityTypeFlagsUsingZookeeper(): Unit = {
     val createOpts = new ConfigCommandOptions(Array("--zookeeper", zkConnect,
       "--entity-name", "A", "--entity-type", "users", "--client", "B", "--describe"))
-    createOpts.checkArgs()
+    assertThrows(classOf[IllegalArgumentException], () => createOpts.checkArgs())
   }
 
-  @Test(expected = classOf[IllegalArgumentException])
+  @Test
   def shouldFailIfMixedEntityTypeFlags(): Unit = {
     val createOpts = new ConfigCommandOptions(Array("--bootstrap-server", "localhost:9092",
       "--entity-name", "A", "--entity-type", "users", "--client", "B", "--describe"))
-    createOpts.checkArgs()
+    assertThrows(classOf[IllegalArgumentException], () => createOpts.checkArgs())
   }
 
-  @Test(expected = classOf[IllegalArgumentException])
+  @Test
   def shouldFailIfInvalidHost(): Unit = {
     val createOpts = new ConfigCommandOptions(Array("--bootstrap-server", "localhost:9092",
       "--entity-name", "A,B", "--entity-type", "ips", "--describe"))
-    createOpts.checkArgs()
+    assertThrows(classOf[IllegalArgumentException], () => createOpts.checkArgs())
   }
 
-  @Test(expected = classOf[IllegalArgumentException])
+  @Test
   def shouldFailIfInvalidHostUsingZookeeper(): Unit = {
     val createOpts = new ConfigCommandOptions(Array("--zookeeper", zkConnect,
       "--entity-name", "A,B", "--entity-type", "ips", "--describe"))
-    createOpts.checkArgs()
+    assertThrows(classOf[IllegalArgumentException], () => createOpts.checkArgs())
   }
 
-  @Test(expected = classOf[IllegalArgumentException])
+  @Test
   def shouldFailIfUnresolvableHost(): Unit = {
     val createOpts = new ConfigCommandOptions(Array("--bootstrap-server", "localhost:9092",
       "--entity-name", "admin", "--entity-type", "ips", "--describe"))
-    createOpts.checkArgs()
+    assertThrows(classOf[IllegalArgumentException], () => createOpts.checkArgs())
   }
 
-  @Test(expected = classOf[IllegalArgumentException])
+  @Test
   def shouldFailIfUnresolvableHostUsingZookeeper(): Unit = {
     val createOpts = new ConfigCommandOptions(Array("--zookeeper", zkConnect,
       "--entity-name", "admin", "--entity-type", "ips", "--describe"))
-    createOpts.checkArgs()
+    assertThrows(classOf[IllegalArgumentException], () => createOpts.checkArgs())
   }
 
   @Test
@@ -477,9 +476,7 @@ class ConfigCommandTest extends ZooKeeperTestHarness with Logging {
     val mockAdminClient: Admin = EasyMock.createStrictMock(classOf[Admin])
     val opts = new ConfigCommandOptions(Array("--bootstrap-server", "localhost:9092",
       "--alter") ++ alterOpts)
-    val e = intercept[IllegalArgumentException] {
-      ConfigCommand.alterConfig(mockAdminClient, opts)
-    }
+    val e = assertThrows(classOf[IllegalArgumentException], () => ConfigCommand.alterConfig(mockAdminClient, opts))
     assertTrue(s"Unexpected exception: $e", e.getMessage.contains(expectedErrorMessage))
   }
 
@@ -916,7 +913,7 @@ class ConfigCommandTest extends ZooKeeperTestHarness with Logging {
     new ConfigCommandOptions(optsList.toArray).checkArgs()
   }
 
-  @Test(expected = classOf[IllegalArgumentException])
+  @Test
   def testDescribeAllBrokerConfigBootstrapServerRequired(): Unit = {
     val optsList = List("--zookeeper", zkConnect,
       "--entity-type", ConfigType.Broker,
@@ -924,10 +921,10 @@ class ConfigCommandTest extends ZooKeeperTestHarness with Logging {
       "--describe",
       "--all")
 
-    new ConfigCommandOptions(optsList.toArray).checkArgs()
+    assertThrows(classOf[IllegalArgumentException], () => new ConfigCommandOptions(optsList.toArray).checkArgs())
   }
 
-  @Test(expected = classOf[IllegalArgumentException])
+  @Test
   def testEntityDefaultOptionWithDescribeBrokerLoggerIsNotAllowed(): Unit = {
     val optsList = List("--bootstrap-server", "localhost:9092",
       "--entity-type", ConfigCommand.BrokerLoggerConfigType,
@@ -935,10 +932,10 @@ class ConfigCommandTest extends ZooKeeperTestHarness with Logging {
       "--describe"
     )
 
-    new ConfigCommandOptions(optsList.toArray).checkArgs()
+    assertThrows(classOf[IllegalArgumentException], () => new ConfigCommandOptions(optsList.toArray).checkArgs())
   }
 
-  @Test(expected = classOf[IllegalArgumentException])
+  @Test
   def testEntityDefaultOptionWithAlterBrokerLoggerIsNotAllowed(): Unit = {
     val optsList = List("--bootstrap-server", "localhost:9092",
       "--entity-type", ConfigCommand.BrokerLoggerConfigType,
@@ -947,17 +944,17 @@ class ConfigCommandTest extends ZooKeeperTestHarness with Logging {
       "--add-config", "kafka.log.LogCleaner=DEBUG"
     )
 
-    new ConfigCommandOptions(optsList.toArray).checkArgs()
+    assertThrows(classOf[IllegalArgumentException], () => new ConfigCommandOptions(optsList.toArray).checkArgs())
   }
 
-  @Test(expected = classOf[InvalidConfigurationException])
+  @Test
   def shouldRaiseInvalidConfigurationExceptionWhenAddingInvalidBrokerLoggerConfig(): Unit = {
     val node = new Node(1, "localhost", 9092)
     // verifyAlterBrokerLoggerConfig tries to alter kafka.log.LogCleaner, kafka.server.ReplicaManager and kafka.server.KafkaApi
     // yet, we make it so DescribeConfigs returns only one logger, implying that kafka.server.ReplicaManager and kafka.log.LogCleaner are invalid
-    verifyAlterBrokerLoggerConfig(node, "1", "1", List(
+    assertThrows(classOf[InvalidConfigurationException], () => verifyAlterBrokerLoggerConfig(node, "1", "1", List(
       new ConfigEntry("kafka.server.KafkaApi", "INFO")
-    ))
+    )))
   }
 
   @Test
@@ -1195,14 +1192,14 @@ class ConfigCommandTest extends ZooKeeperTestHarness with Logging {
 
     // Listener configs: should work only with listener name
     alterAndVerifyConfig(Map("listener.name.external.ssl.keystore.location" -> "/tmp/test.jks"), Some(brokerId))
-    intercept[ConfigException](alterConfigWithZk(Map("ssl.keystore.location" -> "/tmp/test.jks"), Some(brokerId)))
+    assertThrows(classOf[ConfigException], () => alterConfigWithZk(Map("ssl.keystore.location" -> "/tmp/test.jks"), Some(brokerId)))
 
     // Per-broker config configured at default cluster-level should fail
-    intercept[ConfigException](alterConfigWithZk(Map("listener.name.external.ssl.keystore.location" -> "/tmp/test.jks"), None))
+    assertThrows(classOf[ConfigException], () => alterConfigWithZk(Map("listener.name.external.ssl.keystore.location" -> "/tmp/test.jks"), None))
     deleteAndVerifyConfig(Set("listener.name.external.ssl.keystore.location"), Some(brokerId))
 
     // Password config update without encoder secret should fail
-    intercept[IllegalArgumentException](alterConfigWithZk(Map("listener.name.external.ssl.keystore.password" -> "secret"), Some(brokerId)))
+    assertThrows(classOf[IllegalArgumentException], () => alterConfigWithZk(Map("listener.name.external.ssl.keystore.password" -> "secret"), Some(brokerId)))
 
     // Password config update with encoder secret should succeed and encoded password must be stored in ZK
     val configs = Map("listener.name.external.ssl.keystore.password" -> "secret", "log.cleaner.threads" -> "2")
@@ -1231,12 +1228,12 @@ class ConfigCommandTest extends ZooKeeperTestHarness with Logging {
 
 
     // Password config update at default cluster-level should fail
-    intercept[ConfigException](alterConfigWithZk(configs, None, encoderConfigs))
+    assertThrows(classOf[ConfigException], () => alterConfigWithZk(configs, None, encoderConfigs))
 
     // Dynamic config updates using ZK should fail if broker is running.
     registerBrokerInZk(brokerId.toInt)
-    intercept[IllegalArgumentException](alterConfigWithZk(Map("message.max.size" -> "210000"), Some(brokerId)))
-    intercept[IllegalArgumentException](alterConfigWithZk(Map("message.max.size" -> "220000"), None))
+    assertThrows(classOf[IllegalArgumentException], () => alterConfigWithZk(Map("message.max.size" -> "210000"), Some(brokerId)))
+    assertThrows(classOf[IllegalArgumentException], () => alterConfigWithZk(Map("message.max.size" -> "220000"), None))
 
     // Dynamic config updates using ZK should for a different broker that is not running should succeed
     alterAndVerifyConfig(Map("message.max.size" -> "230000"), Some("2"))

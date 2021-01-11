@@ -63,6 +63,7 @@ import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 
 public class NetworkClientTest {
@@ -119,13 +120,12 @@ public class NetworkClientTest {
         selector.reset();
     }
 
-    @Test(expected = IllegalStateException.class)
+    @Test
     public void testSendToUnreadyNode() {
         MetadataRequest.Builder builder = new MetadataRequest.Builder(Collections.singletonList("test"), true);
         long now = time.milliseconds();
         ClientRequest request = client.newClientRequest("5", builder, now, false);
-        client.send(request, now);
-        client.poll(1, time.milliseconds());
+        assertThrows(IllegalStateException.class, () -> client.send(request, now));
     }
 
     @Test

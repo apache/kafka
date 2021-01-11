@@ -41,6 +41,7 @@ import static java.util.Arrays.asList;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
@@ -84,9 +85,9 @@ public class ConfigDefTest {
         assertEquals(Password.HIDDEN, vals.get("j").toString());
     }
 
-    @Test(expected = ConfigException.class)
+    @Test
     public void testInvalidDefault() {
-        new ConfigDef().define("a", Type.INT, "hello", Importance.HIGH, "docs");
+        assertThrows(ConfigException.class, () -> new ConfigDef().define("a", Type.INT, "hello", Importance.HIGH, "docs"));
     }
 
     @Test
@@ -94,12 +95,12 @@ public class ConfigDefTest {
         ConfigDef def = new ConfigDef().define("a", Type.INT, null, null, null, "docs");
         Map<String, Object> vals = def.parse(new Properties());
 
-        assertEquals(null, vals.get("a"));
+        assertNull(vals.get("a"));
     }
 
-    @Test(expected = ConfigException.class)
+    @Test
     public void testMissingRequired() {
-        new ConfigDef().define("a", Type.INT, Importance.HIGH, "docs").parse(new HashMap<String, Object>());
+        assertThrows(ConfigException.class, () -> new ConfigDef().define("a", Type.INT, Importance.HIGH, "docs").parse(new HashMap<String, Object>()));
     }
 
     @Test
@@ -108,9 +109,10 @@ public class ConfigDefTest {
                 .parse(new HashMap<String, Object>());
     }
 
-    @Test(expected = ConfigException.class)
+    @Test
     public void testDefinedTwice() {
-        new ConfigDef().define("a", Type.STRING, Importance.HIGH, "docs").define("a", Type.INT, Importance.HIGH, "docs");
+        assertThrows(ConfigException.class, () -> new ConfigDef().define("a", Type.STRING,
+            Importance.HIGH, "docs").define("a", Type.INT, Importance.HIGH, "docs"));
     }
 
     @Test
@@ -138,14 +140,16 @@ public class ConfigDefTest {
         }
     }
 
-    @Test(expected = ConfigException.class)
+    @Test
     public void testInvalidDefaultRange() {
-        new ConfigDef().define("name", Type.INT, -1, Range.between(0, 10), Importance.HIGH, "docs");
+        assertThrows(ConfigException.class, () -> new ConfigDef().define("name", Type.INT, -1,
+            Range.between(0, 10), Importance.HIGH, "docs"));
     }
 
-    @Test(expected = ConfigException.class)
+    @Test
     public void testInvalidDefaultString() {
-        new ConfigDef().define("name", Type.STRING, "bad", ValidString.in("valid", "values"), Importance.HIGH, "docs");
+        assertThrows(ConfigException.class, () -> new ConfigDef().define("name", Type.STRING, "bad",
+            ValidString.in("valid", "values"), Importance.HIGH, "docs"));
     }
 
     @Test
@@ -414,12 +418,12 @@ public class ConfigDefTest {
         }
     }
 
-    @Test(expected = ConfigException.class)
+    @Test
     public void testMissingDependentConfigs() {
         // Should not be possible to parse a config if a dependent config has not been defined
         final ConfigDef configDef = new ConfigDef()
                 .define("parent", Type.STRING, Importance.HIGH, "parent docs", "group", 1, Width.LONG, "Parent", Collections.singletonList("child"));
-        configDef.parse(Collections.emptyMap());
+        assertThrows(ConfigException.class, () -> configDef.parse(Collections.emptyMap()));
     }
 
     @Test

@@ -306,13 +306,13 @@ public class ConsumerCoordinatorTest {
         assertTrue(future.succeeded());
     }
 
-    @Test(expected = GroupAuthorizationException.class)
+    @Test
     public void testGroupDescribeUnauthorized() {
         client.prepareResponse(groupCoordinatorResponse(node, Errors.GROUP_AUTHORIZATION_FAILED));
-        coordinator.ensureCoordinatorReady(time.timer(Long.MAX_VALUE));
+        assertThrows(GroupAuthorizationException.class, () -> coordinator.ensureCoordinatorReady(time.timer(Long.MAX_VALUE)));
     }
 
-    @Test(expected = GroupAuthorizationException.class)
+    @Test
     public void testGroupReadUnauthorized() {
         subscriptions.subscribe(singleton(topic1), rebalanceListener);
 
@@ -321,7 +321,7 @@ public class ConsumerCoordinatorTest {
 
         client.prepareResponse(joinGroupLeaderResponse(0, "memberId", Collections.emptyMap(),
                 Errors.GROUP_AUTHORIZATION_FAILED));
-        coordinator.poll(time.timer(Long.MAX_VALUE));
+        assertThrows(GroupAuthorizationException.class, () -> coordinator.poll(time.timer(Long.MAX_VALUE)));
     }
 
     @Test
@@ -671,7 +671,7 @@ public class ConsumerCoordinatorTest {
         assertTrue(coordinator.coordinatorUnknown());
     }
 
-    @Test(expected = ApiException.class)
+    @Test
     public void testJoinGroupInvalidGroupId() {
         final String consumerId = "leader";
 
@@ -685,7 +685,7 @@ public class ConsumerCoordinatorTest {
 
         client.prepareResponse(joinGroupLeaderResponse(0, consumerId, Collections.emptyMap(),
                 Errors.INVALID_GROUP_ID));
-        coordinator.poll(time.timer(Long.MAX_VALUE));
+        assertThrows(ApiException.class, () -> coordinator.poll(time.timer(Long.MAX_VALUE)));
     }
 
     @Test
@@ -1274,7 +1274,7 @@ public class ConsumerCoordinatorTest {
         assertTrue(received.get());
     }
 
-    @Test(expected = KafkaException.class)
+    @Test
     public void testUnexpectedErrorOnSyncGroup() {
         subscriptions.subscribe(singleton(topic1), rebalanceListener);
 
@@ -1284,7 +1284,7 @@ public class ConsumerCoordinatorTest {
         // join initially, but let coordinator rebalance on sync
         client.prepareResponse(joinGroupFollowerResponse(1, consumerId, "leader", Errors.NONE));
         client.prepareResponse(syncGroupResponse(Collections.emptyList(), Errors.UNKNOWN_SERVER_ERROR));
-        coordinator.joinGroupIfNeeded(time.timer(Long.MAX_VALUE));
+        assertThrows(KafkaException.class, () -> coordinator.joinGroupIfNeeded(time.timer(Long.MAX_VALUE)));
     }
 
     @Test
@@ -1661,7 +1661,7 @@ public class ConsumerCoordinatorTest {
         assertEquals(getAdded(owned, assigned), rebalanceListener.assigned);
     }
 
-    @Test(expected = ApiException.class)
+    @Test
     public void testInvalidSessionTimeout() {
         subscriptions.subscribe(singleton(topic1), rebalanceListener);
 
@@ -1670,7 +1670,7 @@ public class ConsumerCoordinatorTest {
 
         // coordinator doesn't like the session timeout
         client.prepareResponse(joinGroupFollowerResponse(0, consumerId, "", Errors.INVALID_SESSION_TIMEOUT));
-        coordinator.joinGroupIfNeeded(time.timer(Long.MAX_VALUE));
+        assertThrows(ApiException.class, () -> coordinator.joinGroupIfNeeded(time.timer(Long.MAX_VALUE)));
     }
 
     @Test
@@ -2066,37 +2066,37 @@ public class ConsumerCoordinatorTest {
                 new OffsetAndMetadata(100L, "metadata")), time.timer(10000)));
     }
 
-    @Test(expected = OffsetMetadataTooLarge.class)
+    @Test
     public void testCommitOffsetMetadataTooLarge() {
         // since offset metadata is provided by the user, we have to propagate the exception so they can handle it
         client.prepareResponse(groupCoordinatorResponse(node, Errors.NONE));
         coordinator.ensureCoordinatorReady(time.timer(Long.MAX_VALUE));
 
         prepareOffsetCommitRequest(singletonMap(t1p, 100L), Errors.OFFSET_METADATA_TOO_LARGE);
-        coordinator.commitOffsetsSync(singletonMap(t1p,
-                new OffsetAndMetadata(100L, "metadata")), time.timer(Long.MAX_VALUE));
+        assertThrows(OffsetMetadataTooLarge.class, () -> coordinator.commitOffsetsSync(singletonMap(t1p,
+                new OffsetAndMetadata(100L, "metadata")), time.timer(Long.MAX_VALUE)));
     }
 
-    @Test(expected = CommitFailedException.class)
+    @Test
     public void testCommitOffsetIllegalGeneration() {
         // we cannot retry if a rebalance occurs before the commit completed
         client.prepareResponse(groupCoordinatorResponse(node, Errors.NONE));
         coordinator.ensureCoordinatorReady(time.timer(Long.MAX_VALUE));
 
         prepareOffsetCommitRequest(singletonMap(t1p, 100L), Errors.ILLEGAL_GENERATION);
-        coordinator.commitOffsetsSync(singletonMap(t1p,
-                new OffsetAndMetadata(100L, "metadata")), time.timer(Long.MAX_VALUE));
+        assertThrows(CommitFailedException.class, () -> coordinator.commitOffsetsSync(singletonMap(t1p,
+                new OffsetAndMetadata(100L, "metadata")), time.timer(Long.MAX_VALUE)));
     }
 
-    @Test(expected = CommitFailedException.class)
+    @Test
     public void testCommitOffsetUnknownMemberId() {
         // we cannot retry if a rebalance occurs before the commit completed
         client.prepareResponse(groupCoordinatorResponse(node, Errors.NONE));
         coordinator.ensureCoordinatorReady(time.timer(Long.MAX_VALUE));
 
         prepareOffsetCommitRequest(singletonMap(t1p, 100L), Errors.UNKNOWN_MEMBER_ID);
-        coordinator.commitOffsetsSync(singletonMap(t1p,
-                new OffsetAndMetadata(100L, "metadata")), time.timer(Long.MAX_VALUE));
+        assertThrows(CommitFailedException.class, () -> coordinator.commitOffsetsSync(singletonMap(t1p,
+                new OffsetAndMetadata(100L, "metadata")), time.timer(Long.MAX_VALUE)));
     }
 
     @Test
@@ -2317,14 +2317,15 @@ public class ConsumerCoordinatorTest {
         assertEquals(expectedGeneration, coordinator.generationIfStable());
     }
 
-    @Test(expected = KafkaException.class)
+    @Test
     public void testCommitOffsetSyncCallbackWithNonRetriableException() {
         client.prepareResponse(groupCoordinatorResponse(node, Errors.NONE));
         coordinator.ensureCoordinatorReady(time.timer(Long.MAX_VALUE));
 
         // sync commit with invalid partitions should throw if we have no callback
         prepareOffsetCommitRequest(singletonMap(t1p, 100L), Errors.UNKNOWN_SERVER_ERROR);
-        coordinator.commitOffsetsSync(singletonMap(t1p, new OffsetAndMetadata(100L)), time.timer(Long.MAX_VALUE));
+        assertThrows(KafkaException.class, () -> coordinator.commitOffsetsSync(singletonMap(t1p,
+            new OffsetAndMetadata(100L)), time.timer(Long.MAX_VALUE)));
     }
 
     @Test
@@ -2454,14 +2455,14 @@ public class ConsumerCoordinatorTest {
         assertEquals(100L, subscriptions.position(t1p).offset);
     }
 
-    @Test(expected = KafkaException.class)
+    @Test
     public void testRefreshOffsetUnknownTopicOrPartition() {
         client.prepareResponse(groupCoordinatorResponse(node, Errors.NONE));
         coordinator.ensureCoordinatorReady(time.timer(Long.MAX_VALUE));
 
         subscriptions.assignFromUser(singleton(t1p));
         client.prepareResponse(offsetFetchResponse(t1p, Errors.UNKNOWN_TOPIC_OR_PARTITION, "", 100L));
-        coordinator.refreshCommittedOffsetsIfNeeded(time.timer(Long.MAX_VALUE));
+        assertThrows(KafkaException.class, () -> coordinator.refreshCommittedOffsetsIfNeeded(time.timer(Long.MAX_VALUE)));
     }
 
     @Test
@@ -2710,19 +2711,20 @@ public class ConsumerCoordinatorTest {
         }
     }
 
-    @Test(expected = FencedInstanceIdException.class)
+    @Test
     public void testCommitOffsetRequestSyncWithFencedInstanceIdException() {
         client.prepareResponse(groupCoordinatorResponse(node, Errors.NONE));
         coordinator.ensureCoordinatorReady(time.timer(Long.MAX_VALUE));
 
         // sync commit with invalid partitions should throw if we have no callback
         prepareOffsetCommitRequest(singletonMap(t1p, 100L), Errors.FENCED_INSTANCE_ID);
-        coordinator.commitOffsetsSync(singletonMap(t1p, new OffsetAndMetadata(100L)), time.timer(Long.MAX_VALUE));
+        assertThrows(FencedInstanceIdException.class, () -> coordinator.commitOffsetsSync(singletonMap(t1p,
+            new OffsetAndMetadata(100L)), time.timer(Long.MAX_VALUE)));
     }
 
-    @Test(expected = FencedInstanceIdException.class)
+    @Test
     public void testCommitOffsetRequestAsyncWithFencedInstanceIdException() {
-        receiveFencedInstanceIdException();
+        assertThrows(FencedInstanceIdException.class, this::receiveFencedInstanceIdException);
     }
 
     @Test

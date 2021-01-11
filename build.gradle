@@ -241,7 +241,7 @@ subprojects {
     }
   }
 
-  def shouldUseJUnit5 = ["tools", "raft"].contains(it.project.name)
+  def shouldUseJUnit5 = ["tools", "raft", "log4j-appender"].contains(it.project.name)
   def testLoggingEvents = ["passed", "skipped", "failed"]
   def testShowStandardStreams = false
   def testExceptionFormat = 'full'
@@ -1157,6 +1157,7 @@ project(':clients') {
     include "**/org/apache/kafka/common/header/*"
     include "**/org/apache/kafka/common/metrics/*"
     include "**/org/apache/kafka/common/metrics/stats/*"
+    include "**/org/apache/kafka/common/quota/*"
     include "**/org/apache/kafka/common/resource/*"
     include "**/org/apache/kafka/common/serialization/*"
     include "**/org/apache/kafka/common/config/*"
@@ -1782,8 +1783,8 @@ project(':log4j-appender') {
     compile libs.slf4jlog4j
 
     testCompile project(':clients').sourceSets.test.output
-    testCompile libs.junitJupiterApi
-    testCompile libs.junitVintageEngine
+    testCompile libs.junitJupiter
+    testCompile libs.hamcrest
     testCompile libs.easymock
   }
 

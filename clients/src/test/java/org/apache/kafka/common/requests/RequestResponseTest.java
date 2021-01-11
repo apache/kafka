@@ -617,13 +617,13 @@ public class RequestResponseTest {
         }
     }
 
-    @Test(expected = UnsupportedVersionException.class)
+    @Test
     public void cannotUseFindCoordinatorV0ToFindTransactionCoordinator() {
         FindCoordinatorRequest.Builder builder = new FindCoordinatorRequest.Builder(
                 new FindCoordinatorRequestData()
                     .setKeyType(CoordinatorType.TRANSACTION.id)
                     .setKey("foobar"));
-        builder.build((short) 0);
+        assertThrows(UnsupportedVersionException.class, () -> builder.build((short) 0));
     }
 
     @Test
@@ -782,9 +782,10 @@ public class RequestResponseTest {
         assertEquals(response.data().remainingPartitions(), deserialized.data().remainingPartitions());
     }
 
-    @Test(expected = UnsupportedVersionException.class)
+    @Test
     public void testCreateTopicRequestV0FailsIfValidateOnly() {
-        createCreateTopicRequest(0, true);
+        assertThrows(UnsupportedVersionException.class,
+            () -> createCreateTopicRequest(0, true));
     }
 
     @Test
@@ -908,11 +909,11 @@ public class RequestResponseTest {
         assertTrue(request.isValid());
     }
 
-    @Test(expected = UnsupportedVersionException.class)
+    @Test
     public void testListGroupRequestV3FailsWithStates() {
         ListGroupsRequestData data = new ListGroupsRequestData()
                 .setStatesFilter(asList(ConsumerGroupState.STABLE.name()));
-        new ListGroupsRequest.Builder(data).build((short) 3);
+        assertThrows(UnsupportedVersionException.class, () -> new ListGroupsRequest.Builder(data).build((short) 3));
     }
 
     @Test

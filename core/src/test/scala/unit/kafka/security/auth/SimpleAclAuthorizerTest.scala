@@ -87,9 +87,9 @@ class SimpleAclAuthorizerTest extends ZooKeeperTestHarness {
     super.tearDown()
   }
 
-  @Test(expected = classOf[IllegalArgumentException])
+  @Test
   def testAuthorizeThrowsOnNonLiteralResource(): Unit = {
-    simpleAclAuthorizer.authorize(session, Read, Resource(Topic, "something", PREFIXED))
+    assertThrows(classOf[IllegalArgumentException], () => simpleAclAuthorizer.authorize(session, Read, Resource(Topic, "something", PREFIXED)))
   }
 
   @Test
@@ -100,9 +100,9 @@ class SimpleAclAuthorizerTest extends ZooKeeperTestHarness {
   }
 
   // Authorizing the empty resource is not supported because we create a znode with the resource name.
-  @Test(expected = classOf[IllegalArgumentException])
+  @Test
   def testEmptyAclThrowsException(): Unit = {
-    simpleAclAuthorizer.addAcls(Set[Acl](allowReadAcl), Resource(Group, "", LITERAL))
+    assertThrows(classOf[IllegalArgumentException], () => simpleAclAuthorizer.addAcls(Set[Acl](allowReadAcl), Resource(Group, "", LITERAL)))
   }
 
   @Test
@@ -629,10 +629,10 @@ class SimpleAclAuthorizerTest extends ZooKeeperTestHarness {
       0, simpleAclAuthorizer.getAcls(principal).size)
   }
 
-  @Test(expected = classOf[UnsupportedVersionException])
+  @Test
   def testThrowsOnAddPrefixedAclIfInterBrokerProtocolVersionTooLow(): Unit = {
     givenAuthorizerWithProtocolVersion(Option(KAFKA_2_0_IV0))
-    simpleAclAuthorizer.addAcls(Set[Acl](denyReadAcl), Resource(Topic, "z_other", PREFIXED))
+    assertThrows(classOf[UnsupportedVersionException], () => simpleAclAuthorizer.addAcls(Set[Acl](denyReadAcl), Resource(Topic, "z_other", PREFIXED)))
   }
 
   @Test
