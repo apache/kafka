@@ -730,8 +730,6 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
             processorContext.setCurrentNode(null);
         }
 
-        // clear the metadata so that future decisions about processability will have to get fresh metadata
-        partitionGroup.clearFetchedMetadata();
         return true;
     }
 

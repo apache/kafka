@@ -106,14 +106,25 @@ public class PartitionGroup {
     }
 
     public void addFetchedMetadata(final TopicPartition partition, final ConsumerRecords.Metadata metadata) {
-        fetchedLags.put(partition, metadata.lag());
-    }
-
-    public void clearFetchedMetadata() {
-        fetchedLags.clear();
+        final Long lag = metadata.lag();
+        if (lag != null) {
+            LOG.debug("[{}] added fetched lag {}: {}", id, partition, lag);
+            fetchedLags.put(partition, lag);
+        }
     }
 
     public boolean readyToProcess(final long wallClockTime) {
+        if (LOG.isTraceEnabled()) {
+            for (final Map.Entry<TopicPartition, RecordQueue> entry : partitionQueues.entrySet()) {
+                LOG.trace(
+                    "[{}] buffered/lag {}: {}/{}",
+                    id,
+                    entry.getKey(),
+                    entry.getValue().size(),
+                    fetchedLags.get(entry.getKey())
+                );
+            }
+        }
         // Log-level strategy:
         //  TRACE for messages that don't wait for fetches, since these may be logged at extremely high frequency
         //  DEBUG when we waited for a fetch and decided to wait some more, as configured
@@ -149,7 +160,7 @@ public class PartitionGroup {
             final TopicPartition partition = entry.getKey();
             final RecordQueue queue = entry.getValue();
 
-            final Long nullableFetchedLag = fetchedLags.remove(partition);
+            final Long nullableFetchedLag = fetchedLags.get(partition);
 
             if (!queue.isEmpty()) {
                 // this partition is ready for processing
@@ -200,6 +211,10 @@ public class PartitionGroup {
         }
         if (enforced == null) {
             LOG.debug("[{}] All partitions were buffered locally, so this task is ready for processing.", id);
+            return true;
+        } else if (queued.isEmpty()) {
+            LOG.debug("[{}] No partitions were buffered locally, so this task is not ready for processing.", id);
+            return false;
         } else {
             enforcedProcessingSensor.record(1.0d, wallClockTime);
             LOG.info("[{}] Continuing to process although some partition timestamps were not buffered locally." +
@@ -213,8 +228,8 @@ public class PartitionGroup {
                      enforced,
                      maxTaskIdleMs,
                      wallClockTime);
+            return true;
         }
-        return true;
     }
 
     // visible for testing

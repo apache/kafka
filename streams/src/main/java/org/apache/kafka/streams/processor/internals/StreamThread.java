@@ -888,7 +888,7 @@ public class StreamThread extends Thread {
 
         pollSensor.record(pollLatency, now);
 
-        if (!records.isEmpty()) {
+        if (!records.isEmpty() || !records.metadata().isEmpty()) {
             pollRecordsSensor.record(numRecords, now);
             taskManager.addRecordsToTasks(records);
         }

@@ -728,7 +728,8 @@ public class IntegrationTestUtils {
                 return finalAccumData.equals(finalExpected);
 
             };
-            final String conditionDetails = "Did not receive all " + expectedRecords + " records from topic " + topic;
+            final String conditionDetails = "Did not receive all " + expectedRecords + " records from topic " +
+                topic + " (got " + accumData + ")";
             TestUtils.waitForCondition(valuesRead, waitTime, conditionDetails);
         }
         return accumData;

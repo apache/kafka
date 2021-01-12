@@ -417,10 +417,12 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
 
             return new GroupAssignment(assignment);
         } catch (final MissingSourceTopicException e) {
+            log.error("Caught an error in the task assignment. Returning an error assignment.", e);
             return new GroupAssignment(
                 errorAssignment(clientMetadataMap, AssignorError.INCOMPLETE_SOURCE_TOPIC_METADATA.code())
             );
         } catch (final TaskAssignmentException e) {
+            log.error("Caught an error in the task assignment. Returning an error assignment.", e);
             return new GroupAssignment(
                 errorAssignment(clientMetadataMap, AssignorError.ASSIGNMENT_ERROR.code())
             );

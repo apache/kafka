@@ -229,7 +229,6 @@ public class TopologyTestDriver implements Closeable {
     private final Map<String, TopicPartition> partitionsByInputTopic = new HashMap<>();
     private final Map<String, TopicPartition> globalPartitionsByInputTopic = new HashMap<>();
     private final Map<TopicPartition, AtomicLong> offsetsByTopicOrPatternPartition = new HashMap<>();
-    private final Map<TopicPartition, ConsumerRecords.Metadata> metadataByPartition = new HashMap<>();
 
     private final Map<String, Queue<ProducerRecord<byte[], byte[]>>> outputRecordsByTopic = new HashMap<>();
     private final StreamThread.ProcessingMode processingMode;
@@ -426,10 +425,6 @@ public class TopologyTestDriver implements Closeable {
             final TopicPartition tp = new TopicPartition(topic, PARTITION_ID);
             partitionsByInputTopic.put(topic, tp);
             offsetsByTopicOrPatternPartition.put(tp, new AtomicLong());
-            metadataByPartition.put(
-                tp,
-                new ConsumerRecords.Metadata(mockWallClockTime.milliseconds(), 0L, 0L)
-            );
         }
 
         final boolean createStateDirectory = processorTopology.hasPersistentLocalStore() ||
@@ -536,6 +531,17 @@ public class TopologyTestDriver implements Closeable {
             task.initializeIfNeeded();
             task.completeRestoration();
             task.processorContext().setRecordContext(null);
+
+            // initialize the task metadata so that all topics have zero lag
+            for (final Map.Entry<TopicPartition, Long> entry : startOffsets.entrySet()) {
+                final ConsumerRecords.Metadata metadata = new ConsumerRecords.Metadata(
+                    mockWallClockTime.milliseconds(),
+                    0L,
+                    0L,
+                    0L
+                );
+                task.addFetchedMetadata(entry.getKey(), metadata);
+            }
         } else {
             task = null;
         }
@@ -616,7 +622,7 @@ public class TopologyTestDriver implements Closeable {
             offset,
             offset
         );
-        metadataByPartition.put(topicOrPatternPartition, metadata);
+        task.addFetchedMetadata(topicOrPatternPartition, metadata);
     }
 
     private void completeAllProcessableWork() {
@@ -631,7 +637,6 @@ public class TopologyTestDriver implements Closeable {
         // For this method, it just means there's nothing to do.
         if (task != null) {
             while (task.hasRecordsQueued() && task.isProcessable(mockWallClockTime.milliseconds())) {
-                refreshTaskMetadata(); // isProcessable consumes the metadata, so we need to refresh again
                 // Process the record ...
                 task.process(mockWallClockTime.milliseconds());
                 task.maybePunctuateStreamTime();
@@ -738,21 +743,6 @@ public class TopologyTestDriver implements Closeable {
                     record.headers()
                 );
             }
-        }
-
-        refreshTaskMetadata();
-    }
-
-    /**
-     * We're not modelling any async poll dynamics, so we call this method before each
-     * {@link StreamTask#isProcessable(long)} and {@link StreamTask#process(long)} so
-     * that the task will have full metadata for each partition. In particular, we want
-     * it to know that its lag is zero on all inputs, so it doesn't think it needs to wait
-     * for more polls.
-     */
-    private void refreshTaskMetadata() {
-        for (final Map.Entry<TopicPartition, ConsumerRecords.Metadata> entry : metadataByPartition.entrySet()) {
-            task.addFetchedMetadata(entry.getKey(), entry.getValue());
         }
     }
 
