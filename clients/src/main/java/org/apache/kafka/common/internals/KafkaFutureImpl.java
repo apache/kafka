@@ -16,9 +16,9 @@
  */
 package org.apache.kafka.common.internals;
 
-import java.util.ArrayList;
-import java.util.List;
 import java.util.concurrent.CancellationException;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionException;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
@@ -27,113 +27,32 @@ import org.apache.kafka.common.KafkaFuture;
 
 /**
  * A flexible future which supports call chaining and other asynchronous programming patterns.
- * This will eventually become a thin shim on top of Java 8's CompletableFuture.
  */
+// CF#completeExceptionally() does not treat Cancellation or CompletionException specially
+// On the other hand, when the callback methods of dependent futures fail, the dependant future is failed via a different code path which
+// will wrap anything that's not already a CompletionException in a CompletionException (as required by the contract of CompletionStage).
+// KF on dependants doesn't treat CompletionException specially, which creates a problem for implementing KF using CF.
+// We would need to wrap in an additional CompletionException.
+
+// For consumers of results there are som other wrinkles:
+// CF#get() does not wrap CancellationException in EE (nor does KF)
+// CF#get() always wraps the _cause_ of a CompletionException in EE (which KF does not)
+// The semantics for KafkaFuture are that all exceptional completions of the future (via #completeExceptionally() or exceptions from dependants)
+// manifest as ExecutionException, as observed via both get() and getNow().
+
 public class KafkaFutureImpl<T> extends KafkaFuture<T> {
-    /**
-     * A convenience method that throws the current exception, wrapping it if needed.
-     *
-     * In general, KafkaFuture throws CancellationException and InterruptedException directly, and
-     * wraps all other exceptions in an ExecutionException.
-     */
-    private static void wrapAndThrow(Throwable t) throws InterruptedException, ExecutionException {
-        if (t instanceof CancellationException) {
-            throw (CancellationException) t;
-        } else if (t instanceof InterruptedException) {
-            throw (InterruptedException) t;
-        } else {
-            throw new ExecutionException(t);
-        }
+
+    private final CompletableFuture<T> completableFuture;
+    private final boolean isDependant;
+
+    public KafkaFutureImpl() {
+        this(false, new CompletableFuture<>());
     }
 
-    private static class Applicant<A, B> implements BiConsumer<A, Throwable> {
-        private final BaseFunction<A, B> function;
-        private final KafkaFutureImpl<B> future;
-
-        Applicant(BaseFunction<A, B> function, KafkaFutureImpl<B> future) {
-            this.function = function;
-            this.future = future;
-        }
-
-        @Override
-        public void accept(A a, Throwable exception) {
-            if (exception != null) {
-                future.completeExceptionally(exception);
-            } else {
-                try {
-                    B b = function.apply(a);
-                    future.complete(b);
-                } catch (Throwable t) {
-                    future.completeExceptionally(t);
-                }
-            }
-        }
+    private KafkaFutureImpl(boolean isDependant, CompletableFuture<T> completableFuture) {
+        this.isDependant = isDependant;
+        this.completableFuture = completableFuture;
     }
-
-    private static class SingleWaiter<R> implements BiConsumer<R, Throwable> {
-        private R value = null;
-        private Throwable exception = null;
-        private boolean done = false;
-
-        @Override
-        public synchronized void accept(R newValue, Throwable newException) {
-            this.value = newValue;
-            this.exception = newException;
-            this.done = true;
-            this.notifyAll();
-        }
-
-        synchronized R await() throws InterruptedException, ExecutionException {
-            while (true) {
-                if (exception != null)
-                    wrapAndThrow(exception);
-                if (done)
-                    return value;
-                this.wait();
-            }
-        }
-
-        R await(long timeout, TimeUnit unit)
-                throws InterruptedException, ExecutionException, TimeoutException {
-            long startMs = System.currentTimeMillis();
-            long waitTimeMs = unit.toMillis(timeout);
-            long delta = 0;
-            synchronized (this) {
-                while (true) {
-                    if (exception != null)
-                        wrapAndThrow(exception);
-                    if (done)
-                        return value;
-                    if (delta >= waitTimeMs) {
-                        throw new TimeoutException();
-                    }
-                    this.wait(waitTimeMs - delta);
-                    delta = System.currentTimeMillis() - startMs;
-                }
-            }
-        }
-    }
-
-    /**
-     * True if this future is done.
-     */
-    private boolean done = false;
-
-    /**
-     * The value of this future, or null.  Protected by the object monitor.
-     */
-    private T value = null;
-
-    /**
-     * The exception associated with this future, or null.  Protected by the object monitor.
-     */
-    private Throwable exception = null;
-
-    /**
-     * A list of objects waiting for this future to complete (either successfully or
-     * exceptionally).  Protected by the object monitor.
-     */
-    private List<BiConsumer<? super T, ? super Throwable>> waiters = new ArrayList<>();
 
     /**
      * Returns a new KafkaFuture that, when this future completes normally, is executed with this
@@ -141,14 +60,17 @@ public class KafkaFutureImpl<T> extends KafkaFuture<T> {
      */
     @Override
     public <R> KafkaFuture<R> thenApply(BaseFunction<T, R> function) {
-        KafkaFutureImpl<R> future = new KafkaFutureImpl<>();
-        addWaiter(new Applicant<>(function, future));
-        return future;
-    }
-
-    public <R> void copyWith(KafkaFuture<R> future, BaseFunction<R, T> function) {
-        KafkaFutureImpl<R> futureImpl = (KafkaFutureImpl<R>) future;
-        futureImpl.addWaiter(new Applicant<>(function, this));
+        return new KafkaFutureImpl<>(true, completableFuture.thenApply(value ->  {
+            try {
+                return function.apply(value);
+            } catch (Throwable t) {
+                if (t instanceof CompletionException) {
+                    throw new CompletionException(t);
+                } else {
+                    throw t;
+                }
+            }
+        }));
     }
 
     /**
@@ -159,85 +81,32 @@ public class KafkaFutureImpl<T> extends KafkaFuture<T> {
         return thenApply((BaseFunction<T, R>) function);
     }
 
-    private static class WhenCompleteBiConsumer<T> implements BiConsumer<T, Throwable> {
-        private final KafkaFutureImpl<T> future;
-        private final BiConsumer<? super T, ? super Throwable> biConsumer;
-
-        WhenCompleteBiConsumer(KafkaFutureImpl<T> future, BiConsumer<? super T, ? super Throwable> biConsumer) {
-            this.future = future;
-            this.biConsumer = biConsumer;
-        }
-
-        @Override
-        public void accept(T val, Throwable exception) {
-            try {
-                if (exception != null) {
-                    biConsumer.accept(null, exception);
-                } else {
-                    biConsumer.accept(val, null);
-                }
-            } catch (Throwable e) {
-                if (exception == null) {
-                    exception = e;
-                }
-            }
-            if (exception != null) {
-                future.completeExceptionally(exception);
-            } else {
-                future.complete(val);
-            }
-        }
-    }
-
     @Override
     public KafkaFuture<T> whenComplete(final BiConsumer<? super T, ? super Throwable> biConsumer) {
-        final KafkaFutureImpl<T> future = new KafkaFutureImpl<>();
-        addWaiter(new WhenCompleteBiConsumer<>(future, biConsumer));
-        return future;
-    }
-
-    protected synchronized void addWaiter(BiConsumer<? super T, ? super Throwable> action) {
-        if (exception != null) {
-            action.accept(null, exception);
-        } else if (done) {
-            action.accept(value, null);
-        } else {
-            waiters.add(action);
-        }
+        return new KafkaFutureImpl<>(true, completableFuture.whenComplete((a, b) -> {
+            try {
+                biConsumer.accept(a, b);
+            } catch (Throwable t) {
+                if (t instanceof CompletionException) {
+                    throw new CompletionException(t);
+                } else {
+                    throw t;
+                }
+            }
+        }));
     }
 
     @Override
     public synchronized boolean complete(T newValue) {
-        List<BiConsumer<? super T, ? super Throwable>> oldWaiters;
-        synchronized (this) {
-            if (done)
-                return false;
-            value = newValue;
-            done = true;
-            oldWaiters = waiters;
-            waiters = null;
-        }
-        for (BiConsumer<? super T, ? super Throwable> waiter : oldWaiters) {
-            waiter.accept(newValue, null);
-        }
-        return true;
+        return completableFuture.complete(newValue);
     }
 
     @Override
     public boolean completeExceptionally(Throwable newException) {
-        List<BiConsumer<? super T, ? super Throwable>> oldWaiters;
-        synchronized (this) {
-            if (done)
-                return false;
-            exception = newException;
-            done = true;
-            oldWaiters = waiters;
-            waiters = null;
-        }
-        for (BiConsumer<? super T, ? super Throwable> waiter : oldWaiters) {
-            waiter.accept(null, newException);
-        }
-        return true;
+        // CF#get() always wraps the _cause_ of a CompletionException in EE (which KF does not)
+        // so wrap CompletionException in an extra one to avoid losing the first CompletionException
+        // in the exception chain.
+        return completableFuture.completeExceptionally(newException instanceof CompletionException ? new CompletionException(newException) : newException);
     }
 
     /**
@@ -247,7 +116,7 @@ public class KafkaFutureImpl<T> extends KafkaFuture<T> {
      */
     @Override
     public synchronized boolean cancel(boolean mayInterruptIfRunning) {
-        return completeExceptionally(new CancellationException()) || exception instanceof CancellationException;
+        return completableFuture.cancel(mayInterruptIfRunning);
     }
 
     /**
@@ -255,9 +124,12 @@ public class KafkaFutureImpl<T> extends KafkaFuture<T> {
      */
     @Override
     public T get() throws InterruptedException, ExecutionException {
-        SingleWaiter<T> waiter = new SingleWaiter<>();
-        addWaiter(waiter);
-        return waiter.await();
+        try {
+            return completableFuture.get();
+        } catch (ExecutionException e) {
+            maybeRewrapAndThrow(e.getCause());
+            throw e;
+        }
     }
 
     /**
@@ -267,9 +139,12 @@ public class KafkaFutureImpl<T> extends KafkaFuture<T> {
     @Override
     public T get(long timeout, TimeUnit unit) throws InterruptedException, ExecutionException,
             TimeoutException {
-        SingleWaiter<T> waiter = new SingleWaiter<>();
-        addWaiter(waiter);
-        return waiter.await(timeout, unit);
+        try {
+            return completableFuture.get(timeout, unit);
+        } catch (ExecutionException e) {
+            maybeRewrapAndThrow(e.getCause());
+            throw e;
+        }
     }
 
     /**
@@ -278,11 +153,20 @@ public class KafkaFutureImpl<T> extends KafkaFuture<T> {
      */
     @Override
     public synchronized T getNow(T valueIfAbsent) throws InterruptedException, ExecutionException {
-        if (exception != null)
-            wrapAndThrow(exception);
-        if (done)
-            return value;
-        return valueIfAbsent;
+        try {
+            return completableFuture.getNow(valueIfAbsent);
+        } catch (CompletionException e) {
+            maybeRewrapAndThrow(e.getCause());
+            // Note, unlike CF#get() which throws ExecutionException, CF#getNow() throws CompletionException
+            // thus needs rewrapping to conform to KafkaFuture API, where KF#getNow() throws ExecutionException.
+            throw new ExecutionException(e.getCause());
+        }
+    }
+
+    private void maybeRewrapAndThrow(Throwable cause) {
+        if (cause instanceof CancellationException) {
+            throw (CancellationException) cause;
+        }
     }
 
     /**
@@ -290,7 +174,19 @@ public class KafkaFutureImpl<T> extends KafkaFuture<T> {
      */
     @Override
     public synchronized boolean isCancelled() {
-        return exception instanceof CancellationException;
+        if (isDependant) {
+            Throwable exception;
+            try {
+                completableFuture.getNow(null);
+                return false;
+            } catch (Exception e) {
+                exception = e;
+            }
+            return exception instanceof CompletionException
+                    && exception.getCause() instanceof CancellationException;
+        } else {
+            return completableFuture.isCancelled();
+        }
     }
 
     /**
@@ -298,7 +194,7 @@ public class KafkaFutureImpl<T> extends KafkaFuture<T> {
      */
     @Override
     public synchronized boolean isCompletedExceptionally() {
-        return exception != null;
+        return completableFuture.isCompletedExceptionally();
     }
 
     /**
@@ -306,11 +202,20 @@ public class KafkaFutureImpl<T> extends KafkaFuture<T> {
      */
     @Override
     public synchronized boolean isDone() {
-        return done;
+        return completableFuture.isDone();
     }
 
     @Override
     public String toString() {
-        return String.format("KafkaFuture{value=%s,exception=%s,done=%b}", value, exception, done);
+        T value = null;
+        Throwable ex = null;
+        try {
+            value = completableFuture.getNow(null);
+        } catch (CompletionException e) {
+            ex = e.getCause();
+        } catch (Exception e) {
+            ex = e;
+        }
+        return String.format("KafkaFuture{value=%s,exception=%s,done=%b}", value, ex, ex != null || value != null);
     }
 }

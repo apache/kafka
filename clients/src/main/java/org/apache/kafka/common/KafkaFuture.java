@@ -101,7 +101,7 @@ public abstract class KafkaFuture<T> implements Future<T> {
         KafkaFuture<Void> allOfFuture = new KafkaFutureImpl<>();
         AllOfAdapter<Object> allOfWaiter = new AllOfAdapter<>(futures.length, allOfFuture);
         for (KafkaFuture<?> future : futures) {
-            future.addWaiter(allOfWaiter);
+            future.whenComplete(allOfWaiter);
         }
         return allOfFuture;
     }
@@ -145,7 +145,6 @@ public abstract class KafkaFuture<T> implements Future<T> {
      */
     public abstract KafkaFuture<T> whenComplete(BiConsumer<? super T, ? super Throwable> action);
 
-    protected abstract void addWaiter(BiConsumer<? super T, ? super Throwable> action);
     /**
      * If not already completed, sets the value returned by get() and related methods to the given
      * value.
