@@ -238,6 +238,15 @@ public interface Headers extends Iterable<Header> {
     Headers addTimestamp(String key, java.util.Date value);
 
     /**
+     * Add to this collection a {@link Header} with the given key and {@link org.apache.kafka.connect.data.TimestampMicros} value.
+     *
+     * @param key   the header's key; may not be null
+     * @param value the header's {@link org.apache.kafka.connect.data.TimestampMicros} value; may be null
+     * @return this object to facilitate chaining multiple methods; never null
+     */
+    Headers addTimestampMicros(String key, java.time.Instant value);
+
+    /**
      * Removes all {@link Header} objects whose {@link Header#key() key} matches the specified key.
      *
      * @param key the key; may not be null

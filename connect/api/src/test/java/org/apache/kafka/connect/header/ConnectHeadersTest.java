@@ -25,6 +25,7 @@ import org.apache.kafka.connect.data.SchemaBuilder;
 import org.apache.kafka.connect.data.Struct;
 import org.apache.kafka.connect.data.Time;
 import org.apache.kafka.connect.data.Timestamp;
+import org.apache.kafka.connect.data.TimestampMicros;
 import org.apache.kafka.connect.data.Values;
 import org.apache.kafka.connect.errors.DataException;
 import org.apache.kafka.connect.header.Headers.HeaderTransform;
@@ -33,6 +34,7 @@ import org.junit.Test;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Calendar;
@@ -403,6 +405,7 @@ public class ConnectHeadersTest {
         assertSchemaMatches(Time.SCHEMA, new java.util.Date());
         assertSchemaMatches(Date.SCHEMA, new java.util.Date());
         assertSchemaMatches(Timestamp.SCHEMA, new java.util.Date());
+        assertSchemaMatches(TimestampMicros.SCHEMA, Instant.now());
     }
 
     @Test
@@ -480,6 +483,21 @@ public class ConnectHeadersTest {
         header = headers.lastWithName(other);
         assertEquals(millis, (long) Values.convertToLong(header.schema(), header.value()));
         assertEquals(dateObj, Values.convertToTimestamp(header.schema(), header.value()));
+    }
+
+    @Test
+    public void shouldAddTimestampMicros() {
+        java.time.Instant dateObj = EPOCH_PLUS_TEN_THOUSAND_MILLIS.getTime().toInstant();
+        long micros = TimestampMicros.fromLogical(TimestampMicros.SCHEMA, dateObj);
+        headers.addTimestampMicros(key, dateObj);
+        Header header = headers.lastWithName(key);
+        assertEquals(micros, (long) Values.convertToLong(header.schema(), header.value()));
+        assertSame(dateObj, Values.convertToTimestampMicros(header.schema(), header.value()));
+
+        headers.addLong(other, micros);
+        header = headers.lastWithName(other);
+        assertEquals(micros, (long) Values.convertToLong(header.schema(), header.value()));
+        assertEquals(dateObj, Values.convertToTimestampMicros(header.schema(), header.value()));
     }
 
     @Test

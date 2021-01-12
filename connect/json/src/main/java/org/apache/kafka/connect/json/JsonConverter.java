@@ -33,6 +33,7 @@ import org.apache.kafka.connect.data.Field;
 import org.apache.kafka.connect.data.ConnectSchema;
 import org.apache.kafka.connect.data.SchemaAndValue;
 import org.apache.kafka.connect.data.Timestamp;
+import org.apache.kafka.connect.data.TimestampMicros;
 import org.apache.kafka.connect.data.Time;
 import org.apache.kafka.connect.data.Decimal;
 import org.apache.kafka.connect.data.Date;
@@ -45,6 +46,7 @@ import org.apache.kafka.connect.storage.StringConverterConfig;
 import java.io.IOException;
 import java.math.BigDecimal;
 import java.nio.ByteBuffer;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.EnumMap;
@@ -272,6 +274,23 @@ public class JsonConverter implements Converter, HeaderConverter {
                 if (!(value.isIntegralNumber()))
                     throw new DataException("Invalid type for Timestamp, underlying representation should be integral but was " + value.getNodeType());
                 return Timestamp.toLogical(schema, value.longValue());
+            }
+        });
+
+
+        LOGICAL_CONVERTERS.put(TimestampMicros.LOGICAL_NAME, new LogicalTypeConverter() {
+            @Override
+            public JsonNode toJson(final Schema schema, final Object value, final JsonConverterConfig config) {
+                if (!(value instanceof Instant))
+                    throw new DataException("Invalid type for TimestampMicros, expected Instant but was " + value.getClass());
+                return JSON_NODE_FACTORY.numberNode(TimestampMicros.fromLogical(schema, (Instant) value));
+            }
+
+            @Override
+            public Object toConnect(final Schema schema, final JsonNode value) {
+                if (!(value.isIntegralNumber()))
+                    throw new DataException("Invalid type for TimestampMicros, underlying representation should be integral but was " + value.getNodeType());
+                return TimestampMicros.toLogical(schema, value.longValue());
             }
         });
     }
