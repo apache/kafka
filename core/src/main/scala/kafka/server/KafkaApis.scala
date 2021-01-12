@@ -30,7 +30,7 @@ import kafka.admin.{AdminUtils, RackAwareMode}
 import kafka.api.ElectLeadersRequestOps
 import kafka.api.{ApiVersion, KAFKA_0_11_0_IV0, KAFKA_2_3_IV0}
 import kafka.cluster.Partition
-import kafka.common.{KafkaException, OffsetAndMetadata}
+import kafka.common.OffsetAndMetadata
 import kafka.controller.{KafkaController, ReplicaAssignment}
 import kafka.coordinator.group.{GroupCoordinator, JoinGroupResult, LeaveGroupResult, SyncGroupResult}
 import kafka.coordinator.transaction.{InitProducerIdResult, TransactionCoordinator}
@@ -3212,9 +3212,17 @@ class KafkaApis(val requestChannel: RequestChannel,
   def handleEnvelope(request: RequestChannel.Request): Unit = {
     val envelope = request.body[EnvelopeRequest]
 
-    if (!config.metadataQuorumEnabled || !request.context.fromPrivilegedListener) {
-      // If forwarding is not yet enabled or this request has been received on an invalid endpoint,
-      // then we treat the request as unparsable and close the connection.
+    // If forwarding is not yet enabled or this request has been received on an invalid endpoint,
+    // then we treat the request as unparsable and close the connection.
+    if (!config.metadataQuorumEnabled) {
+      info(s"Closing connection ${request.context.connectionId} because it sent an `Envelope` " +
+        s"request, which is not accepted without enabling the internal config ${KafkaConfig.EnableMetadataQuorumProp}")
+      closeConnection(request, Collections.emptyMap())
+      return
+    } else if (!request.context.fromPrivilegedListener) {
+      info(s"Closing connection ${request.context.connectionId} from listener ${request.context.listenerName} " +
+        s"because it sent an `Envelope` request, which is only accepted on the inter-broker listener " +
+        s"${config.interBrokerListenerName}.")
       closeConnection(request, Collections.emptyMap())
       return
     } else if (!authorize(request.context, CLUSTER_ACTION, CLUSTER, CLUSTER_NAME)) {
@@ -3227,36 +3235,30 @@ class KafkaApis(val requestChannel: RequestChannel,
       return
     }
 
-    try {
-      val forwardedPrincipal = parseForwardedPrincipal(request)
-      val forwardedClientAddress = parseForwardedClientAddress(envelope.clientAddress)
+    val forwardedPrincipal = parseForwardedPrincipal(request.context, envelope.requestPrincipal)
+    val forwardedClientAddress = parseForwardedClientAddress(envelope.clientAddress)
 
-      val forwardedRequestBuffer = envelope.requestData.duplicate()
-      val forwardedRequestHeader = parseForwardedRequestHeader(forwardedRequestBuffer)
+    val forwardedRequestBuffer = envelope.requestData.duplicate()
+    val forwardedRequestHeader = parseForwardedRequestHeader(forwardedRequestBuffer)
 
-      val forwardedApi = forwardedRequestHeader.apiKey
-      if (!forwardedApi.forwardable || !forwardedApi.isEnabled) {
-        throw new InvalidRequestException(s"API $forwardedApi is not enabled or is not eligible for forwarding")
-      }
-
-      val forwardedContext = new RequestContext(
-        forwardedRequestHeader,
-        request.context.connectionId,
-        forwardedClientAddress,
-        forwardedPrincipal,
-        request.context.listenerName,
-        request.context.securityProtocol,
-        ClientInformation.EMPTY,
-        request.context.fromPrivilegedListener
-      )
-
-      val forwardedRequest = parseForwardedRequest(request, forwardedContext, forwardedRequestBuffer)
-      handle(forwardedRequest)
-    } catch {
-      case e: KafkaException =>
-        debug(s"Failed to handle envelope request $request", e)
-        sendErrorResponseMaybeThrottle(request, e)
+    val forwardedApi = forwardedRequestHeader.apiKey
+    if (!forwardedApi.forwardable || !forwardedApi.isEnabled) {
+      throw new InvalidRequestException(s"API $forwardedApi is not enabled or is not eligible for forwarding")
     }
+
+    val forwardedContext = new RequestContext(
+      forwardedRequestHeader,
+      request.context.connectionId,
+      forwardedClientAddress,
+      forwardedPrincipal,
+      request.context.listenerName,
+      request.context.securityProtocol,
+      ClientInformation.EMPTY,
+      request.context.fromPrivilegedListener
+    )
+
+    val forwardedRequest = parseForwardedRequest(request, forwardedContext, forwardedRequestBuffer)
+    handle(forwardedRequest)
   }
 
   private def parseForwardedClientAddress(
@@ -3291,7 +3293,7 @@ class KafkaApis(val requestChannel: RequestChannel,
         // The purpose is to disambiguate structural errors in the envelope request
         // itself, such as an invalid client address.
         throw new UnsupportedVersionException(s"Failed to parse forwarded request " +
-          s"with header ${forwardedContext.header}")
+          s"with header ${forwardedContext.header}", e)
     }
   }
 
@@ -3310,13 +3312,13 @@ class KafkaApis(val requestChannel: RequestChannel,
   }
 
   private def parseForwardedPrincipal(
-    envelopeRequest: RequestChannel.Request
+    envelopeContext: RequestContext,
+    principalBytes: Array[Byte]
   ): KafkaPrincipal = {
-    val envelope = envelopeRequest.body[EnvelopeRequest]
-    envelopeRequest.context.principalSerde.asScala match {
+    envelopeContext.principalSerde.asScala match {
       case Some(serde) =>
         try {
-          serde.deserialize(envelope.requestPrincipal)
+          serde.deserialize(principalBytes)
         } catch {
           case e: Exception =>
             throw new PrincipalDeserializationException("Failed to deserialize client principal from envelope", e)
