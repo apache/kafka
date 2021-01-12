@@ -160,5 +160,23 @@ pipeline {
         }
       }
     }
+    stage("Arm Build") {
+      agent { label 'arm4' }
+      options {
+        timeout(time: 8, unit: 'HOURS')
+        timestamps()
+      }
+      environment {
+        SCALA_VERSION=2.12
+      }
+      steps {
+        catchError(buildResult: 'SUCCESS', stageResult: 'FAILURE') {
+          setupGradle()
+          doValidation()
+          doTest()
+          tryStreamsArchetype()
+        }
+      }
+    }
   }
 }
