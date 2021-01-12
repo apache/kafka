@@ -23,6 +23,7 @@ import org.apache.kafka.connect.rest.ConnectRestExtensionContext;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import javax.security.auth.login.Configuration;
 import java.io.IOException;
 import java.util.Map;
 
@@ -61,10 +62,14 @@ public class BasicAuthSecurityRestExtension implements ConnectRestExtension {
 
     private static final Logger log = LoggerFactory.getLogger(BasicAuthSecurityRestExtension.class);
 
+    // Capture the JVM's global JAAS configuration as soon as possible, as it may be altered later
+    // by connectors, converters, other REST extensions, etc.
+    private static final Configuration CONFIGURATION = Configuration.getConfiguration();
+
     @Override
     public void register(ConnectRestExtensionContext restPluginContext) {
         log.trace("Registering JAAS basic auth filter");
-        restPluginContext.configurable().register(JaasBasicAuthFilter.class);
+        restPluginContext.configurable().register(new JaasBasicAuthFilter(CONFIGURATION));
         log.trace("Finished registering JAAS basic auth filter");
     }
 
