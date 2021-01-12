@@ -26,8 +26,9 @@ import org.apache.kafka.common.protocol.types.Struct;
 import org.apache.kafka.common.record.RecordBatch;
 import org.apache.kafka.common.requests.OffsetFetchResponse.PartitionData;
 import org.apache.kafka.common.utils.Utils;
-import org.junit.Before;
-import org.junit.Test;
+import org.junit.jupiter.api.Assertions;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 
 import java.util.Collections;
 import java.util.HashMap;
@@ -35,9 +36,9 @@ import java.util.Map;
 import java.util.Optional;
 
 import static org.apache.kafka.common.requests.AbstractResponse.DEFAULT_THROTTLE_TIME;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class OffsetFetchResponseTest {
 
@@ -56,7 +57,7 @@ public class OffsetFetchResponseTest {
 
     private Map<TopicPartition, PartitionData> partitionDataMap;
 
-    @Before
+    @BeforeEach
     public void setUp() {
         partitionDataMap = new HashMap<>();
         partitionDataMap.put(new TopicPartition(topicOne, partitionOne), new PartitionData(
@@ -88,7 +89,7 @@ public class OffsetFetchResponseTest {
         Map<TopicPartition, PartitionData> responseData = response.responseData();
         assertEquals(partitionDataMap, responseData);
         responseData.forEach(
-            (tp, data) -> assertTrue(data.hasError())
+            (tp, data) -> Assertions.assertTrue(data.hasError())
         );
     }
 
@@ -149,7 +150,7 @@ public class OffsetFetchResponseTest {
             Map<TopicPartition, PartitionData> responseData = oldResponse.responseData();
             assertEquals(expectedDataMap, responseData);
 
-            responseData.forEach((tp, data) -> assertTrue(data.hasError()));
+            responseData.forEach((tp, data) -> Assertions.assertTrue(data.hasError()));
         }
     }
 

@@ -16,9 +16,9 @@
  */
 package org.apache.kafka.common.security.oauthbearer.internals.unsecured;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import java.io.IOException;
 import java.util.Arrays;
@@ -36,7 +36,7 @@ import org.apache.kafka.common.security.authenticator.TestJaasConfig;
 import org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginModule;
 import org.apache.kafka.common.security.oauthbearer.OAuthBearerTokenCallback;
 import org.apache.kafka.common.utils.MockTime;
-import org.junit.Test;
+import org.junit.jupiter.api.Test;
 
 public class OAuthBearerUnsecuredLoginCallbackHandlerTest {
 
@@ -82,7 +82,7 @@ public class OAuthBearerUnsecuredLoginCallbackHandlerTest {
         OAuthBearerTokenCallback callback = new OAuthBearerTokenCallback();
         callbackHandler.handle(new Callback[] {callback});
         OAuthBearerUnsecuredJws jws = (OAuthBearerUnsecuredJws) callback.token();
-        assertNotNull("create token failed", jws);
+        assertNotNull(jws, "create token failed");
         long startMs = mockTime.milliseconds();
         confirmCorrectValues(jws, user, startMs, 1000 * 60 * 60);
         assertEquals(new HashSet<>(Arrays.asList("sub", "iat", "exp")), jws.claims().keySet());
@@ -118,7 +118,7 @@ public class OAuthBearerUnsecuredLoginCallbackHandlerTest {
             OAuthBearerTokenCallback callback = new OAuthBearerTokenCallback();
             callbackHandler.handle(new Callback[] {callback});
             OAuthBearerUnsecuredJws jws = (OAuthBearerUnsecuredJws) callback.token();
-            assertNotNull("create token failed", jws);
+            assertNotNull(jws, "create token failed");
             long startMs = mockTime.milliseconds();
             confirmCorrectValues(jws, user, startMs, lifetmeSeconds * 1000);
             Map<String, Object> claims = jws.claims();

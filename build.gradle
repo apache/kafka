@@ -241,7 +241,8 @@ subprojects {
     }
   }
 
-  def shouldUseJUnit5 = ["tools", "raft", "log4j-appender", "examples"].contains(it.project.name)
+  def shouldUseJUnit5 = ["clients", "examples", "log4j-appender", "raft", "tools"].contains(it.project.name)
+
   def testLoggingEvents = ["passed", "skipped", "failed"]
   def testShowStandardStreams = false
   def testExceptionFormat = 'full'
@@ -1067,8 +1068,7 @@ project(':clients') {
     jacksonDatabindConfig libs.jacksonDatabind // to publish as provided scope dependency.
 
     testCompile libs.bcpkix
-    testCompile libs.junitJupiterApi
-    testCompile libs.junitVintageEngine
+    testCompile libs.junitJupiter
     testCompile libs.mockitoCore
 
     testRuntime libs.slf4jlog4j
