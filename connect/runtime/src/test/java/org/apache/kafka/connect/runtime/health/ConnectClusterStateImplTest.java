@@ -63,12 +63,9 @@ public class ConnectClusterStateImplTest {
     public void connectors() {
         Capture<Callback<Collection<String>>> callback = EasyMock.newCapture();
         herder.connectors(EasyMock.capture(callback));
-        EasyMock.expectLastCall().andAnswer(new IAnswer<Void>() {
-            @Override
-            public Void answer() {
-                callback.getValue().onCompletion(null, expectedConnectors);
-                return null;
-            }
+        EasyMock.expectLastCall().andAnswer(() -> {
+            callback.getValue().onCompletion(null, expectedConnectors);
+            return null;
         });
         EasyMock.replay(herder);
         assertEquals(expectedConnectors, connectClusterState.connectors());
@@ -80,12 +77,9 @@ public class ConnectClusterStateImplTest {
         final Map<String, String> expectedConfig = Collections.singletonMap("key", "value");
         Capture<Callback<Map<String, String>>> callback = EasyMock.newCapture();
         herder.connectorConfig(EasyMock.eq(connName), EasyMock.capture(callback));
-        EasyMock.expectLastCall().andAnswer(new IAnswer<Void>() {
-            @Override
-            public Void answer() {
-                callback.getValue().onCompletion(null, expectedConfig);
-                return null;
-            }
+        EasyMock.expectLastCall().andAnswer(() -> {
+            callback.getValue().onCompletion(null, expectedConfig);
+            return null;
         });
         EasyMock.replay(herder);
         Map<String, String> actualConfig = connectClusterState.connectorConfig(connName);
@@ -106,13 +100,10 @@ public class ConnectClusterStateImplTest {
     public void connectorsFailure() {
         Capture<Callback<Collection<String>>> callback = EasyMock.newCapture();
         herder.connectors(EasyMock.capture(callback));
-        EasyMock.expectLastCall().andAnswer(new IAnswer<Void>() {
-            @Override
-            public Void answer() {
-                Throwable timeout = new TimeoutException();
-                callback.getValue().onCompletion(timeout, null);
-                return null;
-            }
+        EasyMock.expectLastCall().andAnswer(() -> {
+            Throwable timeout = new TimeoutException();
+            callback.getValue().onCompletion(timeout, null);
+            return null;
         });
         EasyMock.replay(herder);
         assertThrows(ConnectException.class, connectClusterState::connectors);

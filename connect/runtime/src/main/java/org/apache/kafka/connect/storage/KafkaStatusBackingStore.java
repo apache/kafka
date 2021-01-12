@@ -180,12 +180,7 @@ public class KafkaStatusBackingStore implements StatusBackingStore {
                 .replicationFactor(config.getShort(DistributedConfig.STATUS_STORAGE_REPLICATION_FACTOR_CONFIG))
                 .build();
 
-        Callback<ConsumerRecord<String, byte[]>> readCallback = new Callback<ConsumerRecord<String, byte[]>>() {
-            @Override
-            public void onCompletion(Throwable error, ConsumerRecord<String, byte[]> record) {
-                read(record);
-            }
-        };
+        Callback<ConsumerRecord<String, byte[]>> readCallback = (error, record) -> read(record);
         this.kafkaLog = createKafkaBasedLog(statusTopic, producerProps, consumerProps, readCallback, topicDescription, adminProps);
     }
 

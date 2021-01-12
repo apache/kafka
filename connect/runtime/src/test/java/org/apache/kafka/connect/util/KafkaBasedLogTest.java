@@ -189,7 +189,7 @@ public class KafkaBasedLogTest {
             consumer.schedulePollTask(() ->
                 consumer.addRecord(new ConsumerRecord<>(TOPIC, 1, 0, 0L, TimestampType.CREATE_TIME, 0L, 0, 0, TP1_KEY, TP1_VALUE))
             );
-            consumer.schedulePollTask(() -> finishedLatch.countDown());
+            consumer.schedulePollTask(finishedLatch::countDown);
         });
         store.start();
         assertTrue(finishedLatch.await(10000, TimeUnit.MILLISECONDS));
@@ -306,9 +306,8 @@ public class KafkaBasedLogTest {
                 consumer.addRecord(new ConsumerRecord<>(TOPIC, 1, 0, 0L, TimestampType.CREATE_TIME, 0L, 0, 0, TP1_KEY, TP1_VALUE));
             });
 
-            consumer.schedulePollTask(() -> {
-                consumer.addRecord(new ConsumerRecord<>(TOPIC, 1, 1, 0L, TimestampType.CREATE_TIME, 0L, 0, 0, TP1_KEY, TP1_VALUE_NEW));
-            });
+            consumer.schedulePollTask(() ->
+                consumer.addRecord(new ConsumerRecord<>(TOPIC, 1, 1, 0L, TimestampType.CREATE_TIME, 0L, 0, 0, TP1_KEY, TP1_VALUE_NEW)));
 
             // Already have FutureCallback that should be invoked/awaited, so no need for follow up finishedLatch
         });
@@ -346,9 +345,8 @@ public class KafkaBasedLogTest {
         consumer.updateEndOffsets(endOffsets);
         consumer.schedulePollTask(() -> {
             // Trigger exception
-            consumer.schedulePollTask(() -> {
-                consumer.setPollException(Errors.COORDINATOR_NOT_AVAILABLE.exception());
-            });
+            consumer.schedulePollTask(() ->
+                consumer.setPollException(Errors.COORDINATOR_NOT_AVAILABLE.exception()));
 
             // Should keep polling until it reaches current log end offset for all partitions
             consumer.scheduleNopPollTask();
@@ -358,7 +356,7 @@ public class KafkaBasedLogTest {
                 consumer.addRecord(new ConsumerRecord<>(TOPIC, 1, 0, 0L, TimestampType.CREATE_TIME, 0L, 0, 0, TP0_KEY, TP0_VALUE_NEW));
             });
 
-            consumer.schedulePollTask(() -> finishedLatch.countDown());
+            consumer.schedulePollTask(finishedLatch::countDown);
         });
         store.start();
         assertTrue(finishedLatch.await(10000, TimeUnit.MILLISECONDS));
@@ -412,7 +410,7 @@ public class KafkaBasedLogTest {
                 consumer.addRecord(new ConsumerRecord<>(TOPIC, 1, 0, 0L, TimestampType.CREATE_TIME, 0L, 0, 0, TP0_KEY, TP0_VALUE_NEW));
             });
 
-            consumer.schedulePollTask(() -> finishedLatch.countDown());
+            consumer.schedulePollTask(finishedLatch::countDown);
         });
         readEndFutureCallback.get(10000, TimeUnit.MILLISECONDS);
         assertTrue(getInvoked.get());

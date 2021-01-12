@@ -252,7 +252,7 @@ public class AbstractHerderTest {
         statusStore.putSafe(EasyMock.capture(statusCapture));
         EasyMock.expectLastCall();
 
-        EasyMock.expect(statusStore.get(taskId)).andAnswer(() -> statusCapture.getValue());
+        EasyMock.expect(statusStore.get(taskId)).andAnswer(statusCapture::getValue);
 
         replayAll();
 

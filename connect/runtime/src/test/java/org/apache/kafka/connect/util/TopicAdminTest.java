@@ -360,9 +360,7 @@ public class TopicAdminTest {
             assertEquals(1, result.size());
             Config config = result.get("myTopic");
             assertNotNull(config);
-            config.entries().forEach(entry -> {
-                assertEquals(newTopic.configs().get(entry.name()), entry.value());
-            });
+            config.entries().forEach(entry -> assertEquals(newTopic.configs().get(entry.name()), entry.value()));
         }
     }
 
@@ -425,9 +423,7 @@ public class TopicAdminTest {
             TopicPartitionInfo topicPartitionInfo = new TopicPartitionInfo(0, cluster.nodeById(0), cluster.nodes(), Collections.<Node>emptyList());
             mockAdminClient.addTopic(false, topicName, Collections.singletonList(topicPartitionInfo), topicConfigs);
             TopicAdmin admin = new TopicAdmin(null, mockAdminClient);
-            ConfigException e = assertThrows(ConfigException.class, () -> {
-                admin.verifyTopicCleanupPolicyOnlyCompact("myTopic", "worker.topic", "purpose");
-            });
+            ConfigException e = assertThrows(ConfigException.class, () -> admin.verifyTopicCleanupPolicyOnlyCompact("myTopic", "worker.topic", "purpose"));
             assertTrue(e.getMessage().contains("to guarantee consistency and durability"));
         }
     }
@@ -441,9 +437,7 @@ public class TopicAdminTest {
             TopicPartitionInfo topicPartitionInfo = new TopicPartitionInfo(0, cluster.nodeById(0), cluster.nodes(), Collections.<Node>emptyList());
             mockAdminClient.addTopic(false, topicName, Collections.singletonList(topicPartitionInfo), topicConfigs);
             TopicAdmin admin = new TopicAdmin(null, mockAdminClient);
-            ConfigException e = assertThrows(ConfigException.class, () -> {
-                admin.verifyTopicCleanupPolicyOnlyCompact("myTopic", "worker.topic", "purpose");
-            });
+            ConfigException e = assertThrows(ConfigException.class, () -> admin.verifyTopicCleanupPolicyOnlyCompact("myTopic", "worker.topic", "purpose"));
             assertTrue(e.getMessage().contains("to guarantee consistency and durability"));
         }
     }

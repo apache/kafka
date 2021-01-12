@@ -908,13 +908,10 @@ public class KafkaConfigBackingStoreTest {
     private void expectStart(final List<ConsumerRecord<String, byte[]>> preexistingRecords,
                              final Map<byte[], Struct> deserializations) {
         storeLog.start();
-        PowerMock.expectLastCall().andAnswer(new IAnswer<Object>() {
-            @Override
-            public Object answer() {
-                for (ConsumerRecord<String, byte[]> rec : preexistingRecords)
-                    capturedConsumedCallback.getValue().onCompletion(null, rec);
-                return null;
-            }
+        PowerMock.expectLastCall().andAnswer(() -> {
+            for (ConsumerRecord<String, byte[]> rec : preexistingRecords)
+                capturedConsumedCallback.getValue().onCompletion(null, rec);
+            return null;
         });
         for (Map.Entry<byte[], Struct> deserializationEntry : deserializations.entrySet()) {
             // Note null schema because default settings for internal serialization are schema-less
@@ -956,29 +953,23 @@ public class KafkaConfigBackingStoreTest {
         storeLog.send(EasyMock.eq(configKey), EasyMock.aryEq(serialized));
         PowerMock.expectLastCall();
         EasyMock.expect(converter.toConnectData(EasyMock.eq(TOPIC), EasyMock.aryEq(serialized)))
-                .andAnswer(new IAnswer<SchemaAndValue>() {
-                    @Override
-                    public SchemaAndValue answer() throws Throwable {
-                        if (dataFieldName != null)
-                            assertEquals(dataFieldValue, capturedRecord.getValue().get(dataFieldName));
-                        // Note null schema because default settings for internal serialization are schema-less
-                        return new SchemaAndValue(null, serialized == null ? null : structToMap(capturedRecord.getValue()));
-                    }
+                .andAnswer(() -> {
+                    if (dataFieldName != null)
+                        assertEquals(dataFieldValue, capturedRecord.getValue().get(dataFieldName));
+                    // Note null schema because default settings for internal serialization are schema-less
+                    return new SchemaAndValue(null, serialized == null ? null : structToMap(capturedRecord.getValue()));
                 });
     }
 
     // This map needs to maintain ordering
     private void expectReadToEnd(final LinkedHashMap<String, byte[]> serializedConfigs) {
         EasyMock.expect(storeLog.readToEnd())
-                .andAnswer(new IAnswer<Future<Void>>() {
-                    @Override
-                    public Future<Void> answer() {
-                        TestFuture<Void> future = new TestFuture<Void>();
-                        for (Map.Entry<String, byte[]> entry : serializedConfigs.entrySet())
-                            capturedConsumedCallback.getValue().onCompletion(null, new ConsumerRecord<>(TOPIC, 0, logOffset++, 0L, TimestampType.CREATE_TIME, 0L, 0, 0, entry.getKey(), entry.getValue()));
-                        future.resolveOnGet((Void) null);
-                        return future;
-                    }
+                .andAnswer(() -> {
+                    TestFuture<Void> future = new TestFuture<Void>();
+                    for (Map.Entry<String, byte[]> entry : serializedConfigs.entrySet())
+                        capturedConsumedCallback.getValue().onCompletion(null, new ConsumerRecord<>(TOPIC, 0, logOffset++, 0L, TimestampType.CREATE_TIME, 0L, 0, 0, entry.getKey(), entry.getValue()));
+                    future.resolveOnGet((Void) null);
+                    return future;
                 });
     }
 

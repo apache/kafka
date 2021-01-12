@@ -1771,12 +1771,8 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
             rebalanceTime.add(metricGroup.metricName(registry.rebalanceTimeMax), new Max());
             rebalanceTime.add(metricGroup.metricName(registry.rebalanceTimeAvg), new Avg());
 
-            metricGroup.addValueMetric(registry.rebalanceTimeSinceLast, new LiteralSupplier<Double>() {
-                @Override
-                public Double metricValue(long now) {
-                    return lastRebalanceCompletedAtMillis == Long.MIN_VALUE ? Double.POSITIVE_INFINITY : (double) (now - lastRebalanceCompletedAtMillis);
-                }
-            });
+            metricGroup.addValueMetric(registry.rebalanceTimeSinceLast, now ->
+                lastRebalanceCompletedAtMillis == Long.MIN_VALUE ? Double.POSITIVE_INFINITY : (double) (now - lastRebalanceCompletedAtMillis));
         }
 
         void close() {

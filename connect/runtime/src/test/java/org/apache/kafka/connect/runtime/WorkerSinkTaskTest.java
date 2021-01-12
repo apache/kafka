@@ -528,14 +528,11 @@ public class WorkerSinkTaskTest {
         EasyMock.expectLastCall();
 
         EasyMock.expect(consumer.poll(Duration.ofMillis(EasyMock.anyLong()))).andAnswer(
-                new IAnswer<ConsumerRecords<byte[], byte[]>>() {
-                    @Override
-                    public ConsumerRecords<byte[], byte[]> answer() throws Throwable {
-                        rebalanceListener.getValue().onPartitionsRevoked(partitions);
-                        rebalanceListener.getValue().onPartitionsAssigned(partitions);
-                        return ConsumerRecords.empty();
-                    }
-                });
+            () -> {
+                rebalanceListener.getValue().onPartitionsRevoked(partitions);
+                rebalanceListener.getValue().onPartitionsAssigned(partitions);
+                return ConsumerRecords.empty();
+            });
 
         EasyMock.expect(consumer.assignment()).andReturn(new HashSet<>(partitions));
 
@@ -655,12 +652,9 @@ public class WorkerSinkTaskTest {
 
         final Capture<OffsetCommitCallback> callback = EasyMock.newCapture();
         consumer.commitAsync(EasyMock.eq(offsets), EasyMock.capture(callback));
-        EasyMock.expectLastCall().andAnswer(new IAnswer<Void>() {
-            @Override
-            public Void answer() throws Throwable {
-                callback.getValue().onComplete(offsets, null);
-                return null;
-            }
+        EasyMock.expectLastCall().andAnswer(() -> {
+            callback.getValue().onComplete(offsets, null);
+            return null;
         });
 
         expectConsumerPoll(0);
@@ -1552,13 +1546,10 @@ public class WorkerSinkTaskTest {
         EasyMock.expectLastCall().andReturn(Collections.emptyMap());
 
         EasyMock.expect(consumer.poll(Duration.ofMillis(EasyMock.anyLong()))).andAnswer(
-                new IAnswer<ConsumerRecords<byte[], byte[]>>() {
-                    @Override
-                    public ConsumerRecords<byte[], byte[]> answer() throws Throwable {
-                        rebalanceListener.getValue().onPartitionsRevoked(partitions);
-                        return ConsumerRecords.empty();
-                    }
-                });
+            () -> {
+                rebalanceListener.getValue().onPartitionsRevoked(partitions);
+                return ConsumerRecords.empty();
+            });
     }
 
     private void expectRebalanceAssignmentError(RuntimeException e) {
@@ -1577,14 +1568,11 @@ public class WorkerSinkTaskTest {
         EasyMock.expectLastCall().andThrow(e);
 
         EasyMock.expect(consumer.poll(Duration.ofMillis(EasyMock.anyLong()))).andAnswer(
-                new IAnswer<ConsumerRecords<byte[], byte[]>>() {
-                    @Override
-                    public ConsumerRecords<byte[], byte[]> answer() throws Throwable {
-                        rebalanceListener.getValue().onPartitionsRevoked(partitions);
-                        rebalanceListener.getValue().onPartitionsAssigned(partitions);
-                        return ConsumerRecords.empty();
-                    }
-                });
+            () -> {
+                rebalanceListener.getValue().onPartitionsRevoked(partitions);
+                rebalanceListener.getValue().onPartitionsAssigned(partitions);
+                return ConsumerRecords.empty();
+            });
     }
 
     private void expectPollInitialAssignment() {
@@ -1593,12 +1581,9 @@ public class WorkerSinkTaskTest {
         sinkTask.open(partitions);
         EasyMock.expectLastCall();
 
-        EasyMock.expect(consumer.poll(Duration.ofMillis(EasyMock.anyLong()))).andAnswer(new IAnswer<ConsumerRecords<byte[], byte[]>>() {
-            @Override
-            public ConsumerRecords<byte[], byte[]> answer() throws Throwable {
-                rebalanceListener.getValue().onPartitionsAssigned(partitions);
-                return ConsumerRecords.empty();
-            }
+        EasyMock.expect(consumer.poll(Duration.ofMillis(EasyMock.anyLong()))).andAnswer(() -> {
+            rebalanceListener.getValue().onPartitionsAssigned(partitions);
+            return ConsumerRecords.empty();
         });
         EasyMock.expect(consumer.position(TOPIC_PARTITION)).andReturn(FIRST_OFFSET);
         EasyMock.expect(consumer.position(TOPIC_PARTITION2)).andReturn(FIRST_OFFSET);
@@ -1627,34 +1612,26 @@ public class WorkerSinkTaskTest {
 
     private void expectConsumerPoll(final int numMessages, final long timestamp, final TimestampType timestampType, Headers headers) {
         EasyMock.expect(consumer.poll(Duration.ofMillis(EasyMock.anyLong()))).andAnswer(
-                new IAnswer<ConsumerRecords<byte[], byte[]>>() {
-                    @Override
-                    public ConsumerRecords<byte[], byte[]> answer() throws Throwable {
-                        List<ConsumerRecord<byte[], byte[]>> records = new ArrayList<>();
-                        for (int i = 0; i < numMessages; i++)
-                            records.add(new ConsumerRecord<>(TOPIC, PARTITION, FIRST_OFFSET + recordsReturnedTp1 + i, timestamp, timestampType, 0L, 0, 0, RAW_KEY, RAW_VALUE, headers));
-                        recordsReturnedTp1 += numMessages;
-                        return new ConsumerRecords<>(
-                                numMessages > 0 ?
-                                        Collections.singletonMap(new TopicPartition(TOPIC, PARTITION), records) :
-                                        Collections.<TopicPartition, List<ConsumerRecord<byte[], byte[]>>>emptyMap()
-                        );
-                    }
-                });
+            () -> {
+                List<ConsumerRecord<byte[], byte[]>> records = new ArrayList<>();
+                for (int i = 0; i < numMessages; i++)
+                    records.add(new ConsumerRecord<>(TOPIC, PARTITION, FIRST_OFFSET + recordsReturnedTp1 + i, timestamp, timestampType, 0L, 0, 0, RAW_KEY, RAW_VALUE, headers));
+                recordsReturnedTp1 += numMessages;
+                return new ConsumerRecords<>(
+                        numMessages > 0 ?
+                                Collections.singletonMap(new TopicPartition(TOPIC, PARTITION), records) :
+                                Collections.<TopicPartition, List<ConsumerRecord<byte[], byte[]>>>emptyMap()
+                );
+            });
     }
 
     private void expectConsumerPoll(List<ConsumerRecord<byte[], byte[]>> records) {
         EasyMock.expect(consumer.poll(Duration.ofMillis(EasyMock.anyLong()))).andAnswer(
-            new IAnswer<ConsumerRecords<byte[], byte[]>>() {
-                @Override
-                public ConsumerRecords<byte[], byte[]> answer() throws Throwable {
-                    return new ConsumerRecords<>(
-                        records.isEmpty() ?
-                            Collections.<TopicPartition, List<ConsumerRecord<byte[], byte[]>>>emptyMap() :
-                            Collections.singletonMap(new TopicPartition(TOPIC, PARTITION), records)
-                    );
-                }
-            });
+            () -> new ConsumerRecords<>(
+                records.isEmpty() ?
+                    Collections.<TopicPartition, List<ConsumerRecord<byte[], byte[]>>>emptyMap() :
+                    Collections.singletonMap(new TopicPartition(TOPIC, PARTITION), records)
+            ));
     }
 
     private void expectConversionAndTransformation(final int numMessages) {
@@ -1679,23 +1656,20 @@ public class WorkerSinkTaskTest {
     private void expectTransformation(final int numMessages, final String topicPrefix) {
         final Capture<SinkRecord> recordCapture = EasyMock.newCapture();
         EasyMock.expect(transformationChain.apply(EasyMock.capture(recordCapture)))
-                .andAnswer(new IAnswer<SinkRecord>() {
-                    @Override
-                    public SinkRecord answer() {
-                        SinkRecord origRecord = recordCapture.getValue();
-                        return topicPrefix != null && !topicPrefix.isEmpty()
-                               ? origRecord.newRecord(
-                                       topicPrefix + origRecord.topic(),
-                                       origRecord.kafkaPartition(),
-                                       origRecord.keySchema(),
-                                       origRecord.key(),
-                                       origRecord.valueSchema(),
-                                       origRecord.value(),
-                                       origRecord.timestamp(),
-                                       origRecord.headers()
-                               )
-                               : origRecord;
-                    }
+                .andAnswer(() -> {
+                    SinkRecord origRecord = recordCapture.getValue();
+                    return topicPrefix != null && !topicPrefix.isEmpty()
+                           ? origRecord.newRecord(
+                                   topicPrefix + origRecord.topic(),
+                                   origRecord.kafkaPartition(),
+                                   origRecord.keySchema(),
+                                   origRecord.key(),
+                                   origRecord.valueSchema(),
+                                   origRecord.value(),
+                                   origRecord.timestamp(),
+                                   origRecord.headers()
+                           )
+                           : origRecord;
                 }).times(numMessages);
     }
 
