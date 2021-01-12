@@ -16,21 +16,16 @@
  */
 package org.apache.kafka.clients.consumer.internals;
 
-import org.apache.kafka.clients.ApiVersion;
 import org.apache.kafka.clients.ApiVersions;
 import org.apache.kafka.clients.ClientResponse;
 import org.apache.kafka.clients.FetchSessionHandler;
 import org.apache.kafka.clients.Metadata;
-import org.apache.kafka.clients.NodeApiVersions;
 import org.apache.kafka.clients.StaleMetadataException;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
-import org.apache.kafka.clients.consumer.LogTruncationException;
-import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.consumer.OffsetAndTimestamp;
 import org.apache.kafka.clients.consumer.OffsetOutOfRangeException;
 import org.apache.kafka.clients.consumer.OffsetResetStrategy;
-import org.apache.kafka.clients.consumer.internals.OffsetsForLeaderEpochClient.OffsetForEpochResult;
 import org.apache.kafka.clients.consumer.internals.SubscriptionState.FetchPosition;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.IsolationLevel;
@@ -60,7 +55,6 @@ import org.apache.kafka.common.metrics.stats.Meter;
 import org.apache.kafka.common.metrics.stats.Min;
 import org.apache.kafka.common.metrics.stats.Value;
 import org.apache.kafka.common.metrics.stats.WindowedCount;
-import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.record.BufferSupplier;
 import org.apache.kafka.common.record.ControlRecordType;
@@ -74,13 +68,13 @@ import org.apache.kafka.common.requests.ListOffsetsRequest;
 import org.apache.kafka.common.requests.ListOffsetsResponse;
 import org.apache.kafka.common.requests.MetadataRequest;
 import org.apache.kafka.common.requests.MetadataResponse;
-import org.apache.kafka.common.requests.OffsetsForLeaderEpochRequest;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.utils.CloseableIterator;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Timer;
 import org.apache.kafka.common.utils.Utils;
+
 import org.slf4j.Logger;
 import org.slf4j.helpers.MessageFormatter;
 
@@ -154,13 +148,10 @@ public class Fetcher<K, V> implements Closeable {
     private final IsolationLevel isolationLevel;
     private final Map<Integer, FetchSessionHandler> sessionHandlers;
     private final AtomicReference<RuntimeException> cachedListOffsetsException = new AtomicReference<>();
-    private final AtomicReference<RuntimeException> cachedOffsetForLeaderException = new AtomicReference<>();
-    private final OffsetsForLeaderEpochClient offsetsForLeaderEpochClient;
     private final Set<Integer> nodesWithPendingFetchRequests;
     private final ApiVersions apiVersions;
     private final AtomicInteger metadataUpdateVersion = new AtomicInteger(-1);
-
-
+    private final DivergingOffsetDetector divergingOffsetDetector;
     private CompletedFetch nextInLineFetch = null;
 
     public Fetcher(LogContext logContext,
@@ -205,8 +196,9 @@ public class Fetcher<K, V> implements Closeable {
         this.isolationLevel = isolationLevel;
         this.apiVersions = apiVersions;
         this.sessionHandlers = new HashMap<>();
-        this.offsetsForLeaderEpochClient = new OffsetsForLeaderEpochClient(client, logContext);
         this.nodesWithPendingFetchRequests = new HashSet<>();
+        this.divergingOffsetDetector = new DivergingOffsetDetector(logContext, time, requestTimeoutMs, retryBackoffMs,
+                subscriptions, metadata, client, apiVersions);
     }
 
     /**
@@ -322,6 +314,7 @@ public class Fetcher<K, V> implements Closeable {
                                             metricAggregator, batches, fetchOffset, responseVersion));
                                 }
                             }
+                            divergingOffsetDetector.validateDivergingEpoch(response.responseData());
 
                             sensors.fetchLatency.record(resp.requestLatencyMs());
                         } finally {
@@ -486,22 +479,15 @@ public class Fetcher<K, V> implements Closeable {
      * Validate offsets for all assigned partitions for which a leader change has been detected.
      */
     public void validateOffsetsIfNeeded() {
-        RuntimeException exception = cachedOffsetForLeaderException.getAndSet(null);
-        if (exception != null)
-            throw exception;
+        divergingOffsetDetector.pollException().ifPresent(e -> {
+            throw e;
+        });
 
         // Validate each partition against the current leader and epoch
         // If we see a new metadata version, check all partitions
         validatePositionsOnMetadataChange();
 
-        // Collect positions needing validation, with backoff
-        Map<TopicPartition, FetchPosition> partitionsToValidate = subscriptions
-                .partitionsNeedingValidation(time.milliseconds())
-                .stream()
-                .filter(tp -> subscriptions.position(tp) != null)
-                .collect(Collectors.toMap(Function.identity(), subscriptions::position));
-
-        validateOffsetsAsync(partitionsToValidate);
+        divergingOffsetDetector.validateOffsetsAsync();
     }
 
     public Map<TopicPartition, OffsetAndTimestamp> offsetsForTimes(Map<TopicPartition, Long> timestampsToSearch,
@@ -766,110 +752,6 @@ public class Fetcher<K, V> implements Closeable {
                         log.error("Discarding error in ListOffsetResponse because another error is pending", e);
                 }
             });
-        }
-    }
-
-    static boolean hasUsableOffsetForLeaderEpochVersion(NodeApiVersions nodeApiVersions) {
-        ApiVersion apiVersion = nodeApiVersions.apiVersion(ApiKeys.OFFSET_FOR_LEADER_EPOCH);
-        if (apiVersion == null)
-            return false;
-
-        return OffsetsForLeaderEpochRequest.supportsTopicPermission(apiVersion.maxVersion);
-    }
-
-    /**
-     * For each partition which needs validation, make an asynchronous request to get the end-offsets for the partition
-     * with the epoch less than or equal to the epoch the partition last saw.
-     *
-     * Requests are grouped by Node for efficiency.
-     */
-    private void validateOffsetsAsync(Map<TopicPartition, FetchPosition> partitionsToValidate) {
-        final Map<Node, Map<TopicPartition, FetchPosition>> regrouped =
-            regroupFetchPositionsByLeader(partitionsToValidate);
-
-        long nextResetTimeMs = time.milliseconds() + requestTimeoutMs;
-        regrouped.forEach((node, fetchPositions) -> {
-            if (node.isEmpty()) {
-                metadata.requestUpdate();
-                return;
-            }
-
-            NodeApiVersions nodeApiVersions = apiVersions.get(node.idString());
-            if (nodeApiVersions == null) {
-                client.tryConnect(node);
-                return;
-            }
-
-            if (!hasUsableOffsetForLeaderEpochVersion(nodeApiVersions)) {
-                log.debug("Skipping validation of fetch offsets for partitions {} since the broker does not " +
-                              "support the required protocol version (introduced in Kafka 2.3)",
-                    fetchPositions.keySet());
-                for (TopicPartition partition : fetchPositions.keySet()) {
-                    subscriptions.completeValidation(partition);
-                }
-                return;
-            }
-
-            subscriptions.setNextAllowedRetry(fetchPositions.keySet(), nextResetTimeMs);
-
-            RequestFuture<OffsetForEpochResult> future =
-                offsetsForLeaderEpochClient.sendAsyncRequest(node, fetchPositions);
-
-            future.addListener(new RequestFutureListener<OffsetForEpochResult>() {
-                @Override
-                public void onSuccess(OffsetForEpochResult offsetsResult) {
-                    List<SubscriptionState.LogTruncation> truncations = new ArrayList<>();
-                    if (!offsetsResult.partitionsToRetry().isEmpty()) {
-                        subscriptions.setNextAllowedRetry(offsetsResult.partitionsToRetry(), time.milliseconds() + retryBackoffMs);
-                        metadata.requestUpdate();
-                    }
-
-                    // For each OffsetsForLeader response, check if the end-offset is lower than our current offset
-                    // for the partition. If so, it means we have experienced log truncation and need to reposition
-                    // that partition's offset.
-                    //
-                    // In addition, check whether the returned offset and epoch are valid. If not, then we should reset
-                    // its offset if reset policy is configured, or throw out of range exception.
-                    offsetsResult.endOffsets().forEach((topicPartition, respEndOffset) -> {
-                        FetchPosition requestPosition = fetchPositions.get(topicPartition);
-                        Optional<SubscriptionState.LogTruncation> truncationOpt =
-                            subscriptions.maybeCompleteValidation(topicPartition, requestPosition, respEndOffset);
-                        truncationOpt.ifPresent(truncations::add);
-                    });
-
-                    if (!truncations.isEmpty()) {
-                        maybeSetOffsetForLeaderException(buildLogTruncationException(truncations));
-                    }
-                }
-
-                @Override
-                public void onFailure(RuntimeException e) {
-                    subscriptions.requestFailed(fetchPositions.keySet(), time.milliseconds() + retryBackoffMs);
-                    metadata.requestUpdate();
-
-                    if (!(e instanceof RetriableException)) {
-                        maybeSetOffsetForLeaderException(e);
-                    }
-                }
-            });
-        });
-    }
-
-    private LogTruncationException buildLogTruncationException(List<SubscriptionState.LogTruncation> truncations) {
-        Map<TopicPartition, OffsetAndMetadata> divergentOffsets = new HashMap<>();
-        Map<TopicPartition, Long> truncatedFetchOffsets = new HashMap<>();
-        for (SubscriptionState.LogTruncation truncation : truncations) {
-            truncation.divergentOffsetOpt.ifPresent(divergentOffset ->
-                divergentOffsets.put(truncation.topicPartition, divergentOffset));
-            truncatedFetchOffsets.put(truncation.topicPartition, truncation.fetchPosition.offset);
-        }
-        return new LogTruncationException("Detected truncated partitions: " + truncations,
-            truncatedFetchOffsets, divergentOffsets);
-    }
-
-    private void maybeSetOffsetForLeaderException(RuntimeException e) {
-        if (!cachedOffsetForLeaderException.compareAndSet(null, e)) {
-            log.error("Discarding error in OffsetsForLeaderEpoch because another error is pending", e);
         }
     }
 
@@ -1206,15 +1088,6 @@ public class Fetcher<K, V> implements Closeable {
             reqs.put(entry.getKey(), entry.getValue().build());
         }
         return reqs;
-    }
-
-    private Map<Node, Map<TopicPartition, FetchPosition>> regroupFetchPositionsByLeader(
-            Map<TopicPartition, FetchPosition> partitionMap) {
-        return partitionMap.entrySet()
-                .stream()
-                .filter(entry -> entry.getValue().currentLeader.leader.isPresent())
-                .collect(Collectors.groupingBy(entry -> entry.getValue().currentLeader.leader.get(),
-                        Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue)));
     }
 
     private <T> Map<Node, Map<TopicPartition, T>> regroupPartitionMapByNode(Map<TopicPartition, T> partitionMap) {
@@ -1740,7 +1613,7 @@ public class Fetcher<K, V> implements Closeable {
 
     private static class FetchManagerMetrics {
         private final Metrics metrics;
-        private FetcherMetricsRegistry metricsRegistry;
+        private final FetcherMetricsRegistry metricsRegistry;
         private final Sensor bytesFetched;
         private final Sensor recordsFetched;
         private final Sensor fetchLatency;

@@ -123,12 +123,4 @@ public class OffsetsForLeaderEpochRequest extends AbstractRequest {
 
         return new OffsetsForLeaderEpochResponse(responseData);
     }
-
-    /**
-     * Check whether a broker allows Topic-level permissions in order to use the
-     * OffsetForLeaderEpoch API. Old versions require Cluster permission.
-     */
-    public static boolean supportsTopicPermission(short latestUsableVersion) {
-        return latestUsableVersion >= 3;
-    }
 }
