@@ -35,7 +35,6 @@ import org.apache.kafka.connect.util.KafkaBasedLog;
 import org.easymock.Capture;
 import org.easymock.EasyMock;
 import org.easymock.EasyMockSupport;
-import org.easymock.IAnswer;
 import org.easymock.Mock;
 import org.junit.Before;
 import org.junit.Test;

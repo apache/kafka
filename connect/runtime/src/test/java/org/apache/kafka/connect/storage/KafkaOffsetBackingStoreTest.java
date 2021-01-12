@@ -29,7 +29,6 @@ import org.apache.kafka.connect.util.ConnectUtils;
 import org.apache.kafka.connect.util.KafkaBasedLog;
 import org.easymock.Capture;
 import org.easymock.EasyMock;
-import org.easymock.IAnswer;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;

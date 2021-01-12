@@ -45,7 +45,6 @@ import org.apache.kafka.connect.util.ThreadedTest;
 import org.easymock.Capture;
 import org.easymock.CaptureType;
 import org.easymock.EasyMock;
-import org.easymock.IAnswer;
 import org.easymock.IExpectationSetters;
 import org.junit.After;
 import org.junit.Test;
