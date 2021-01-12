@@ -23,10 +23,13 @@ import org.junit.Test;
 import java.nio.ByteBuffer;
 import java.util.Arrays;
 
+import static org.hamcrest.CoreMatchers.containsString;
+import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.fail;
 
@@ -397,7 +400,7 @@ public class ProtocolSerializationTest {
         Struct newFormat = newSchema.read(buffer);
         assertEquals(value, newFormat.get("field1"));
         assertEquals("default", newFormat.get("field2"));
-        assertEquals(null, newFormat.get("field3"));
+        assertNull(newFormat.get("field3"));
         assertEquals(ByteBuffer.allocate(0), newFormat.get("field4"));
         assertEquals(Long.MAX_VALUE, newFormat.get("field5"));
     }
@@ -414,7 +417,7 @@ public class ProtocolSerializationTest {
         oldFormat.writeTo(buffer);
         buffer.flip();
         SchemaException e = assertThrows(SchemaException.class, () -> newSchema.read(buffer));
-        e.getMessage().contains("Error reading field 'field2': java.nio.BufferUnderflowException");
+        assertThat(e.getMessage(), containsString("Error reading field 'field2':"));
     }
 
     @Test
@@ -430,6 +433,6 @@ public class ProtocolSerializationTest {
         oldFormat.writeTo(buffer);
         buffer.flip();
         SchemaException e = assertThrows(SchemaException.class, () -> newSchema.read(buffer));
-        e.getMessage().contains("Missing value for field 'field2' which has no default value");
+        assertThat(e.getMessage(), containsString("Missing value for field 'field2' which has no default value"));
     }
 }

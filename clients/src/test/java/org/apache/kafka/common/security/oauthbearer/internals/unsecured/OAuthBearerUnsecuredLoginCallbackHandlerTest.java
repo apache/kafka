@@ -18,6 +18,7 @@ package org.apache.kafka.common.security.oauthbearer.internals.unsecured;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertThrows;
 
 import java.io.IOException;
 import java.util.Arrays;
@@ -51,24 +52,24 @@ public class OAuthBearerUnsecuredLoginCallbackHandlerTest {
         assertEquals("1", callback.extensions().map().get("testId"));
     }
 
-    @Test(expected = IOException.class)
-    public void throwsErrorOnInvalidExtensionName() throws IOException, UnsupportedCallbackException {
+    @Test
+    public void throwsErrorOnInvalidExtensionName() {
         Map<String, String> options = new HashMap<>();
         options.put("unsecuredLoginExtension_test.Id", "1");
         OAuthBearerUnsecuredLoginCallbackHandler callbackHandler = createCallbackHandler(options, new MockTime());
         SaslExtensionsCallback callback = new SaslExtensionsCallback();
 
-        callbackHandler.handle(new Callback[] {callback});
+        assertThrows(IOException.class, () -> callbackHandler.handle(new Callback[] {callback}));
     }
 
-    @Test(expected = IOException.class)
-    public void throwsErrorOnInvalidExtensionValue() throws IOException, UnsupportedCallbackException {
+    @Test
+    public void throwsErrorOnInvalidExtensionValue() {
         Map<String, String> options = new HashMap<>();
         options.put("unsecuredLoginExtension_testId", "Çalifornia");
         OAuthBearerUnsecuredLoginCallbackHandler callbackHandler = createCallbackHandler(options, new MockTime());
         SaslExtensionsCallback callback = new SaslExtensionsCallback();
 
-        callbackHandler.handle(new Callback[] {callback});
+        assertThrows(IOException.class, () -> callbackHandler.handle(new Callback[] {callback}));
     }
 
     @Test

@@ -34,6 +34,7 @@ import java.util.List;
 import java.util.stream.Collectors;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertThrows;
 
 public class CreateAclsRequestTest {
     private static final short V0 = 0;
@@ -51,14 +52,14 @@ public class CreateAclsRequestTest {
     private static final AclBinding UNKNOWN_ACL1 = new AclBinding(new ResourcePattern(ResourceType.UNKNOWN, "unknown", PatternType.LITERAL),
         new AccessControlEntry("User:*", "127.0.0.1", AclOperation.CREATE, AclPermissionType.ALLOW));
 
-    @Test(expected = UnsupportedVersionException.class)
+    @Test
     public void shouldThrowOnV0IfNotLiteral() {
-        new CreateAclsRequest(data(PREFIXED_ACL1), V0);
+        assertThrows(UnsupportedVersionException.class, () -> new CreateAclsRequest(data(PREFIXED_ACL1), V0));
     }
 
-    @Test(expected = IllegalArgumentException.class)
+    @Test
     public void shouldThrowOnIfUnknown() {
-        new CreateAclsRequest(data(UNKNOWN_ACL1), V0);
+        assertThrows(IllegalArgumentException.class, () -> new CreateAclsRequest(data(UNKNOWN_ACL1), V0));
     }
 
     @Test

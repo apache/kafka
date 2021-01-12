@@ -26,18 +26,18 @@ import org.junit.Test
 class CommandLineUtilsTest {
 
 
-  @Test(expected = classOf[java.lang.IllegalArgumentException])
+  @Test
   def testParseEmptyArg(): Unit = {
     val argArray = Array("my.empty.property=")
 
-    CommandLineUtils.parseKeyValueArgs(argArray, acceptMissingValue = false)
+    assertThrows(classOf[java.lang.IllegalArgumentException], () => CommandLineUtils.parseKeyValueArgs(argArray, acceptMissingValue = false))
   }
 
-  @Test(expected = classOf[java.lang.IllegalArgumentException])
+  @Test
   def testParseEmptyArgWithNoDelimiter(): Unit = {
     val argArray = Array("my.empty.property")
 
-    CommandLineUtils.parseKeyValueArgs(argArray, acceptMissingValue = false)
+    assertThrows(classOf[java.lang.IllegalArgumentException], () => CommandLineUtils.parseKeyValueArgs(argArray, acceptMissingValue = false))
   }
 
   @Test

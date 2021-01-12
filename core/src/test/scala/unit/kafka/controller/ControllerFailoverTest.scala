@@ -29,7 +29,6 @@ import org.apache.kafka.common.metrics.Metrics
 import org.apache.log4j.Logger
 import org.junit.{After, Test}
 import org.junit.Assert._
-import org.scalatest.Assertions.fail
 
 class ControllerFailoverTest extends KafkaServerTestHarness with Logging {
   val log = Logger.getLogger(classOf[ControllerFailoverTest])
@@ -57,7 +56,7 @@ class ControllerFailoverTest extends KafkaServerTestHarness with Logging {
   @Test
   def testHandleIllegalStateException(): Unit = {
     val initialController = servers.find(_.kafkaController.isActive).map(_.kafkaController).getOrElse {
-      fail("Could not find controller")
+      throw new AssertionError("Could not find controller")
     }
     val initialEpoch = initialController.epoch
     // Create topic with one partition

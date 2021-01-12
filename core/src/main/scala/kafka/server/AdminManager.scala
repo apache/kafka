@@ -506,7 +506,7 @@ class AdminManager(val config: KafkaConfig,
     adminZkClient.validateTopicConfig(topic, configProps)
     validateConfigPolicy(resource, configEntriesMap)
     if (!validateOnly) {
-      info(s"Updating topic $topic with new configuration $config")
+      info(s"Updating topic $topic with new configuration : ${toLoggableProps(resource, configProps).mkString(",")}")
       adminZkClient.changeTopicConfig(topic, configProps)
     }
 
@@ -522,6 +522,12 @@ class AdminManager(val config: KafkaConfig,
     if (!validateOnly) {
       if (perBrokerConfig)
         this.config.dynamicConfig.reloadUpdatedFilesWithoutConfigChange(configProps)
+
+      if (perBrokerConfig)
+        info(s"Updating broker ${brokerId.get} with new configuration : ${toLoggableProps(resource, configProps).mkString(",")}")
+      else
+        info(s"Updating brokers with new configuration : ${toLoggableProps(resource, configProps).mkString(",")}")
+
       adminZkClient.changeBrokerConfig(brokerId,
         this.config.dynamicConfig.toPersistentProps(configProps, perBrokerConfig))
     }
@@ -529,13 +535,23 @@ class AdminManager(val config: KafkaConfig,
     resource -> ApiError.NONE
   }
 
+  private def toLoggableProps(resource: ConfigResource, configProps: Properties): Map[String, String] = {
+    configProps.asScala.map {
+      case (key, value) => (key, KafkaConfig.loggableValue(resource.`type`, key, value))
+    }
+  }
+
   private def alterLogLevelConfigs(alterConfigOps: Seq[AlterConfigOp]): Unit = {
     alterConfigOps.foreach { alterConfigOp =>
       val loggerName = alterConfigOp.configEntry().name()
       val logLevel = alterConfigOp.configEntry().value()
       alterConfigOp.opType() match {
-        case OpType.SET => Log4jController.logLevel(loggerName, logLevel)
-        case OpType.DELETE => Log4jController.unsetLogLevel(loggerName)
+        case OpType.SET =>
+          info(s"Updating the log level of $loggerName to $logLevel")
+          Log4jController.logLevel(loggerName, logLevel)
+        case OpType.DELETE =>
+          info(s"Unset the log level of $loggerName")
+          Log4jController.unsetLogLevel(loggerName)
         case _ => throw new IllegalArgumentException(
           s"Log level cannot be changed for OpType: ${alterConfigOp.opType()}")
       }

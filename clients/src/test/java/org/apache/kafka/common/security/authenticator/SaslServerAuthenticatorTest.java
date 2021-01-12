@@ -46,6 +46,7 @@ import org.mockito.Answers;
 
 import static org.apache.kafka.common.security.scram.internals.ScramMechanism.SCRAM_SHA_256;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.fail;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
@@ -55,7 +56,7 @@ import static org.mockito.Mockito.when;
 
 public class SaslServerAuthenticatorTest {
 
-    @Test(expected = InvalidReceiveException.class)
+    @Test
     public void testOversizeRequest() throws IOException {
         TransportLayer transportLayer = mock(TransportLayer.class);
         Map<String, ?> configs = Collections.singletonMap(BrokerSecurityConfigs.SASL_ENABLED_MECHANISMS_CONFIG,
@@ -67,7 +68,7 @@ public class SaslServerAuthenticatorTest {
             invocation.<ByteBuffer>getArgument(0).putInt(SaslServerAuthenticator.MAX_RECEIVE_SIZE + 1);
             return 4;
         });
-        authenticator.authenticate();
+        assertThrows(InvalidReceiveException.class, authenticator::authenticate);
         verify(transportLayer).read(any(ByteBuffer.class));
     }
 

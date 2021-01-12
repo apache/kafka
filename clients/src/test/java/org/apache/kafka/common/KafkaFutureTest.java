@@ -28,6 +28,8 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 
+import static org.junit.Assert.assertThrows;
+import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertEquals;
@@ -80,7 +82,7 @@ public class KafkaFutureTest {
         assertFalse(future.isCompletedExceptionally());
         assertFalse(future.isCancelled());
         myThread.join();
-        assertEquals(null, myThread.testException);
+        assertNull(myThread.testException);
     }
 
     @Test
@@ -182,8 +184,8 @@ public class KafkaFutureTest {
         for (int i = 0; i < numThreads; i++) {
             completerThreads.get(i).join();
             waiterThreads.get(i).join();
-            assertEquals(null, completerThreads.get(i).testException);
-            assertEquals(null, waiterThreads.get(i).testException);
+            assertNull(completerThreads.get(i).testException);
+            assertNull(waiterThreads.get(i).testException);
         }
     }
 
@@ -196,10 +198,10 @@ public class KafkaFutureTest {
         allFuture.get();
     }
 
-    @Test(expected = TimeoutException.class)
-    public void testFutureTimeoutWithZeroWait() throws Exception {
+    @Test
+    public void testFutureTimeoutWithZeroWait() {
         final KafkaFutureImpl<String> future = new KafkaFutureImpl<>();
-        future.get(0, TimeUnit.MILLISECONDS);
+        assertThrows(TimeoutException.class, () -> future.get(0, TimeUnit.MILLISECONDS));
     }
 
 }

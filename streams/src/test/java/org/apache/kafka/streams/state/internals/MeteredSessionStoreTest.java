@@ -462,44 +462,44 @@ public class MeteredSessionStoreTest {
         assertNull(store.fetchSession("a", 0, Long.MAX_VALUE));
     }
 
-    @Test(expected = NullPointerException.class)
+    @Test
     public void shouldThrowNullPointerOnPutIfKeyIsNull() {
-        store.put(null, "a");
+        assertThrows(NullPointerException.class, () -> store.put(null, "a"));
     }
 
-    @Test(expected = NullPointerException.class)
+    @Test
     public void shouldThrowNullPointerOnRemoveIfKeyIsNull() {
-        store.remove(null);
+        assertThrows(NullPointerException.class, () -> store.remove(null));
     }
 
-    @Test(expected = NullPointerException.class)
+    @Test
     public void shouldThrowNullPointerOnFetchIfKeyIsNull() {
-        store.fetch(null);
+        assertThrows(NullPointerException.class, () -> store.fetch(null));
     }
 
-    @Test(expected = NullPointerException.class)
+    @Test
     public void shouldThrowNullPointerOnFetchRangeIfFromIsNull() {
-        store.fetch(null, "to");
+        assertThrows(NullPointerException.class, () -> store.fetch(null, "to"));
     }
 
-    @Test(expected = NullPointerException.class)
+    @Test
     public void shouldThrowNullPointerOnFetchRangeIfToIsNull() {
-        store.fetch("from", null);
+        assertThrows(NullPointerException.class, () -> store.fetch("from", null));
     }
 
-    @Test(expected = NullPointerException.class)
+    @Test
     public void shouldThrowNullPointerOnFindSessionsIfKeyIsNull() {
-        store.findSessions(null, 0, 0);
+        assertThrows(NullPointerException.class, () -> store.findSessions(null, 0, 0));
     }
 
-    @Test(expected = NullPointerException.class)
+    @Test
     public void shouldThrowNullPointerOnFindSessionsRangeIfFromIsNull() {
-        store.findSessions(null, "a", 0, 0);
+        assertThrows(NullPointerException.class, () -> store.findSessions(null, "a", 0, 0));
     }
 
-    @Test(expected = NullPointerException.class)
+    @Test
     public void shouldThrowNullPointerOnFindSessionsRangeIfToIsNull() {
-        store.findSessions("a", null, 0, 0);
+        assertThrows(NullPointerException.class, () -> store.findSessions("a", null, 0, 0));
     }
 
     private interface CachedSessionStore extends SessionStore<Bytes, byte[]>, CachedStateStore<byte[], byte[]> { }

@@ -29,6 +29,8 @@ import org.junit.Test
 import java.util
 import java.util.concurrent.{ExecutionException, TimeUnit}
 
+import kafka.utils.TestUtils
+
 import scala.jdk.CollectionConverters._
 
 class ClientQuotasRequestTest extends BaseRequestTest {
@@ -212,7 +214,12 @@ class ClientQuotasRequestTest extends BaseRequestTest {
           InetAddress.getByName(unknownHost)
         else
           InetAddress.getByName(entityName)
-        assertEquals(expectedMatches(entity), servers.head.socketServer.connectionQuotas.connectionRateForIp(entityIp), 0.01)
+        var currentServerQuota = 0
+        TestUtils.waitUntilTrue(
+          () => {
+            currentServerQuota = servers.head.socketServer.connectionQuotas.connectionRateForIp(entityIp)
+            Math.abs(expectedMatches(entity) - currentServerQuota) < 0.01
+          }, s"Connection quota of $entity is not ${expectedMatches(entity)} but $currentServerQuota")
       }
     }
 
@@ -243,40 +250,40 @@ class ClientQuotasRequestTest extends BaseRequestTest {
     verifyIpQuotas(allIpEntityFilter, Map.empty)
   }
 
-  @Test(expected = classOf[InvalidRequestException])
+  @Test
   def testAlterClientQuotasBadUser(): Unit = {
     val entity = new ClientQuotaEntity(Map((ClientQuotaEntity.USER -> "")).asJava)
-    alterEntityQuotas(entity, Map((RequestPercentageProp -> Some(12.34))), validateOnly = true)
+    assertThrows(classOf[InvalidRequestException], () => alterEntityQuotas(entity, Map(RequestPercentageProp -> Some(12.34)), validateOnly = true))
   }
 
-  @Test(expected = classOf[InvalidRequestException])
+  @Test
   def testAlterClientQuotasBadClientId(): Unit = {
     val entity = new ClientQuotaEntity(Map((ClientQuotaEntity.CLIENT_ID -> "")).asJava)
-    alterEntityQuotas(entity, Map((RequestPercentageProp -> Some(12.34))), validateOnly = true)
+    assertThrows(classOf[InvalidRequestException], () => alterEntityQuotas(entity, Map(RequestPercentageProp -> Some(12.34)), validateOnly = true))
   }
 
-  @Test(expected = classOf[InvalidRequestException])
+  @Test
   def testAlterClientQuotasBadEntityType(): Unit = {
     val entity = new ClientQuotaEntity(Map(("" -> "name")).asJava)
-    alterEntityQuotas(entity, Map((RequestPercentageProp -> Some(12.34))), validateOnly = true)
+    assertThrows(classOf[InvalidRequestException], () => alterEntityQuotas(entity, Map(RequestPercentageProp -> Some(12.34)), validateOnly = true))
   }
 
-  @Test(expected = classOf[InvalidRequestException])
+  @Test
   def testAlterClientQuotasEmptyEntity(): Unit = {
     val entity = new ClientQuotaEntity(Map.empty.asJava)
-    alterEntityQuotas(entity, Map((ProducerByteRateProp -> Some(10000.5))), validateOnly = true)
+    assertThrows(classOf[InvalidRequestException], () => alterEntityQuotas(entity, Map(ProducerByteRateProp -> Some(10000.5)), validateOnly = true))
   }
 
-  @Test(expected = classOf[InvalidRequestException])
+  @Test
   def testAlterClientQuotasBadConfigKey(): Unit = {
-    val entity = new ClientQuotaEntity(Map((ClientQuotaEntity.USER -> "user")).asJava)
-    alterEntityQuotas(entity, Map(("bad" -> Some(1.0))), validateOnly = true)
+    val entity = new ClientQuotaEntity(Map(ClientQuotaEntity.USER -> "user").asJava)
+    assertThrows(classOf[InvalidRequestException], () => alterEntityQuotas(entity, Map("bad" -> Some(1.0)), validateOnly = true))
   }
 
-  @Test(expected = classOf[InvalidRequestException])
+  @Test
   def testAlterClientQuotasBadConfigValue(): Unit = {
-    val entity = new ClientQuotaEntity(Map((ClientQuotaEntity.USER -> "user")).asJava)
-    alterEntityQuotas(entity, Map((ProducerByteRateProp -> Some(10000.5))), validateOnly = true)
+    val entity = new ClientQuotaEntity(Map(ClientQuotaEntity.USER -> "user").asJava)
+    assertThrows(classOf[InvalidRequestException], () => alterEntityQuotas(entity, Map(ProducerByteRateProp -> Some(10000.5)), validateOnly = true))
   }
 
   private def expectInvalidRequestWithMessage(runnable: => Unit, expectedMessage: String): Unit = {

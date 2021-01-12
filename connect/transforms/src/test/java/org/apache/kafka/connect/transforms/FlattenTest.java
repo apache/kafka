@@ -34,6 +34,7 @@ import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 
 public class FlattenTest {
@@ -46,16 +47,18 @@ public class FlattenTest {
         xformValue.close();
     }
 
-    @Test(expected = DataException.class)
+    @Test
     public void topLevelStructRequired() {
         xformValue.configure(Collections.<String, String>emptyMap());
-        xformValue.apply(new SourceRecord(null, null, "topic", 0, Schema.INT32_SCHEMA, 42));
+        assertThrows(DataException.class, () -> xformValue.apply(new SourceRecord(null, null,
+                "topic", 0, Schema.INT32_SCHEMA, 42)));
     }
 
-    @Test(expected = DataException.class)
+    @Test
     public void topLevelMapRequired() {
         xformValue.configure(Collections.<String, String>emptyMap());
-        xformValue.apply(new SourceRecord(null, null, "topic", 0, null, 42));
+        assertThrows(DataException.class, () -> xformValue.apply(new SourceRecord(null, null,
+                "topic", 0, null, 42)));
     }
 
     @Test
@@ -258,11 +261,12 @@ public class FlattenTest {
         assertEquals(12, transformedMap.get("A.B"));
     }
 
-    @Test(expected = DataException.class)
+    @Test
     public void testUnsupportedTypeInMap() {
         xformValue.configure(Collections.<String, String>emptyMap());
         Object value = Collections.singletonMap("foo", Arrays.asList("bar", "baz"));
-        xformValue.apply(new SourceRecord(null, null, "topic", 0, null, value));
+        assertThrows(DataException.class, () -> xformValue.apply(new SourceRecord(null, null,
+                "topic", 0, null, value)));
     }
 
     @Test
@@ -306,8 +310,8 @@ public class FlattenTest {
                 null, null);
         final SourceRecord transformedRecord = xformValue.apply(record);
 
-        assertEquals(null, transformedRecord.value());
-        assertEquals(null, transformedRecord.valueSchema());
+        assertNull(transformedRecord.value());
+        assertNull(transformedRecord.valueSchema());
     }
 
     @Test
@@ -319,7 +323,7 @@ public class FlattenTest {
                 simpleStructSchema, null);
         final SourceRecord transformedRecord = xformValue.apply(record);
 
-        assertEquals(null, transformedRecord.value());
+        assertNull(transformedRecord.value());
         assertEquals(simpleStructSchema, transformedRecord.valueSchema());
     }
 }

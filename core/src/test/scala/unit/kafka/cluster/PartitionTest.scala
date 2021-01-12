@@ -16,9 +16,6 @@
  */
 package kafka.cluster
 
-import java.nio.ByteBuffer
-import java.util.Optional
-import java.util.concurrent.{CountDownLatch, Semaphore}
 import com.yammer.metrics.core.Metric
 import kafka.api.{ApiVersion, KAFKA_2_6_IV0}
 import kafka.common.UnexpectedAppendOffsetException
@@ -44,8 +41,10 @@ import org.mockito.ArgumentMatchers
 import org.mockito.ArgumentMatchers.{any, anyString}
 import org.mockito.Mockito._
 import org.mockito.invocation.InvocationOnMock
-import org.scalatest.Assertions.assertThrows
 
+import java.nio.ByteBuffer
+import java.util.Optional
+import java.util.concurrent.{CountDownLatch, Semaphore}
 import scala.jdk.CollectionConverters._
 
 class PartitionTest extends AbstractPartitionTest {
@@ -114,9 +113,7 @@ class PartitionTest extends AbstractPartitionTest {
     assertNoDivergence(read(lastFetchedEpoch = 10, fetchOffset = 17))
 
     // Reads from epochs larger than we know about should cause an out of range error
-    assertThrows[OffsetOutOfRangeException] {
-      read(lastFetchedEpoch = 11, fetchOffset = 5)
-    }
+    assertThrows(classOf[OffsetOutOfRangeException], () => read(lastFetchedEpoch = 11, fetchOffset = 5))
 
     // Move log start offset to the middle of epoch 3
     log.updateHighWatermark(log.logEndOffset)
@@ -126,9 +123,7 @@ class PartitionTest extends AbstractPartitionTest {
     assertNoDivergence(read(lastFetchedEpoch = 0, fetchOffset = 5))
     assertNoDivergence(read(lastFetchedEpoch = 3, fetchOffset = 5))
 
-    assertThrows[OffsetOutOfRangeException] {
-      read(lastFetchedEpoch = 0, fetchOffset = 0)
-    }
+    assertThrows(classOf[OffsetOutOfRangeException], () => read(lastFetchedEpoch = 0, fetchOffset = 0))
   }
 
   @Test
@@ -768,10 +763,10 @@ class PartitionTest extends AbstractPartitionTest {
                  initialLogStartOffset, log.logStartOffset)
 
     // verify that we cannot append records that do not contain log start offset even if the log is empty
-    assertThrows[UnexpectedAppendOffsetException] {
+    assertThrows(classOf[UnexpectedAppendOffsetException], () =>
       // append one record with offset = 3
       partition.appendRecordsToFollowerOrFutureReplica(createRecords(List(new SimpleRecord("k1".getBytes, "v1".getBytes)), baseOffset = 3L), isFuture = false)
-    }
+    )
     assertEquals(s"Log end offset should not change after failure to append", initialLogStartOffset, log.logEndOffset)
 
     // verify that we can append records that contain log start offset, even when first
@@ -791,12 +786,12 @@ class PartitionTest extends AbstractPartitionTest {
     assertEquals(s"Log start offset not expected to change:", newLogStartOffset, log.logStartOffset)
 
     // but we cannot append to offset < log start if the log is not empty
-    assertThrows[UnexpectedAppendOffsetException] {
+    assertThrows(classOf[UnexpectedAppendOffsetException], () => {
       val records2 = createRecords(List(new SimpleRecord("k1".getBytes, "v1".getBytes),
-                                        new SimpleRecord("k2".getBytes, "v2".getBytes)),
-                                   baseOffset = 3L)
+        new SimpleRecord("k2".getBytes, "v2".getBytes)),
+        baseOffset = 3L)
       partition.appendRecordsToFollowerOrFutureReplica(records2, isFuture = false)
-    }
+    })
     assertEquals(s"Log end offset should not change after failure to append", 8L, log.logEndOffset)
 
     // we still can append to next offset
@@ -868,17 +863,17 @@ class PartitionTest extends AbstractPartitionTest {
   @Test
   def testGetReplica(): Unit = {
     assertEquals(None, partition.log)
-    assertThrows[NotLeaderOrFollowerException] {
+    assertThrows(classOf[NotLeaderOrFollowerException], () =>
       partition.localLogOrException
-    }
+    )
   }
 
   @Test
   def testAppendRecordsToFollowerWithNoReplicaThrowsException(): Unit = {
-    assertThrows[NotLeaderOrFollowerException] {
+    assertThrows(classOf[NotLeaderOrFollowerException], () =>
       partition.appendRecordsToFollowerOrFutureReplica(
            createRecords(List(new SimpleRecord("k1".getBytes, "v1".getBytes)), baseOffset = 0L), isFuture = false)
-    }
+    )
   }
 
   @Test

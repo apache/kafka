@@ -29,7 +29,6 @@ import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.common.security.authenticator.TestJaasConfig
 import org.junit.{After, Before, Test}
 import org.junit.Assert._
-import org.scalatest.Assertions.fail
 
 import scala.jdk.CollectionConverters._
 
@@ -289,7 +288,7 @@ class MetricsTest extends IntegrationTestHarness with SaslSetup {
       .getOrElse(fail(s"Unable to find broker metric $name: allMetrics: ${allMetrics.keySet.map(_.getMBeanName)}"))
     metric match {
       case m: Histogram => m
-      case m => fail(s"Unexpected broker metric of class ${m.getClass}")
+      case m => throw new AssertionError(s"Unexpected broker metric of class ${m.getClass}")
     }
   }
 

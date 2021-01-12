@@ -32,6 +32,7 @@ import javax.security.auth.login.Configuration;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.fail;
 
 import org.apache.kafka.common.config.SaslConfigs;
@@ -217,11 +218,11 @@ public class JaasContextTest {
             Collections.emptyMap());
     }
 
-    @Test(expected = IllegalArgumentException.class)
+    @Test
     public void testLoadForServerWithWrongListenerName() throws IOException {
         writeConfiguration("Server", "test.LoginModule required;");
-        JaasContext.loadServerContext(new ListenerName("plaintext"), "SOME-MECHANISM",
-            Collections.emptyMap());
+        assertThrows(IllegalArgumentException.class, () -> JaasContext.loadServerContext(new ListenerName("plaintext"),
+                "SOME-MECHANISM", Collections.emptyMap()));
     }
 
     private AppConfigurationEntry configurationEntry(JaasContext.Type contextType, String jaasConfigProp) {

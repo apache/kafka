@@ -30,7 +30,6 @@ import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.record.{DefaultRecord, DefaultRecordBatch}
 import org.junit.Assert._
 import org.junit.{After, Before, Test}
-import org.scalatest.Assertions.intercept
 
 class ProducerFailureHandlingTest extends KafkaServerTestHarness {
   private val producerBufferSize = 30000
@@ -109,9 +108,7 @@ class ProducerFailureHandlingTest extends KafkaServerTestHarness {
 
     // send a too-large record
     val record = new ProducerRecord(topic1, null, "key".getBytes, new Array[Byte](serverMessageMaxBytes + 1))
-    intercept[ExecutionException] {
-      producer2.send(record).get
-    }
+    assertThrows(classOf[ExecutionException], () => producer2.send(record).get)
   }
 
   private def checkTooLargeRecordForReplicationWithAckAll(maxFetchSize: Int): Unit = {
@@ -151,9 +148,7 @@ class ProducerFailureHandlingTest extends KafkaServerTestHarness {
   def testNonExistentTopic(): Unit = {
     // send a record with non-exist topic
     val record = new ProducerRecord(topic2, null, "key".getBytes, "value".getBytes)
-    intercept[ExecutionException] {
-      producer1.send(record).get
-    }
+    assertThrows(classOf[ExecutionException], () => producer1.send(record).get)
   }
 
   /**
@@ -176,9 +171,7 @@ class ProducerFailureHandlingTest extends KafkaServerTestHarness {
 
     // send a record with incorrect broker list
     val record = new ProducerRecord(topic1, null, "key".getBytes, "value".getBytes)
-    intercept[ExecutionException] {
-      producer4.send(record).get
-    }
+    assertThrows(classOf[ExecutionException], () => producer4.send(record).get)
   }
 
   /**
@@ -192,9 +185,7 @@ class ProducerFailureHandlingTest extends KafkaServerTestHarness {
 
     // create a record with incorrect partition id (higher than the number of partitions), send should fail
     val higherRecord = new ProducerRecord(topic1, 1, "key".getBytes, "value".getBytes)
-    intercept[ExecutionException] {
-      producer1.send(higherRecord).get
-    }.getCause match {
+    assertThrows(classOf[ExecutionException], () => producer1.send(higherRecord).get).getCause match {
       case _: TimeoutException => // this is ok
       case ex => throw new Exception("Sending to a partition not present in the metadata should result in a TimeoutException", ex)
     }
@@ -215,26 +206,25 @@ class ProducerFailureHandlingTest extends KafkaServerTestHarness {
     producer2.send(record).get
     producer3.send(record).get
 
-    intercept[IllegalStateException] {
+    assertThrows(classOf[IllegalStateException], () => {
       producer1.close()
       producer1.send(record)
-    }
-    intercept[IllegalStateException] {
+    })
+    assertThrows(classOf[IllegalStateException], () => {
       producer2.close()
       producer2.send(record)
-    }
-    intercept[IllegalStateException] {
+    })
+    assertThrows(classOf[IllegalStateException], () =>  {
       producer3.close()
       producer3.send(record)
-    }
+    })
   }
 
   @Test
   def testCannotSendToInternalTopic(): Unit = {
     TestUtils.createOffsetsTopic(zkClient, servers)
-    val thrown = intercept[ExecutionException] {
-      producer2.send(new ProducerRecord(Topic.GROUP_METADATA_TOPIC_NAME, "test".getBytes, "test".getBytes)).get
-    }
+    val thrown = assertThrows(classOf[ExecutionException],
+      () => producer2.send(new ProducerRecord(Topic.GROUP_METADATA_TOPIC_NAME, "test".getBytes, "test".getBytes)).get)
     assertTrue("Unexpected exception while sending to an invalid topic " + thrown.getCause, thrown.getCause.isInstanceOf[InvalidTopicException])
   }
 

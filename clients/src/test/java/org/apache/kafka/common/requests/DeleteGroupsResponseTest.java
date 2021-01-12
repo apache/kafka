@@ -27,6 +27,7 @@ import java.util.HashMap;
 import java.util.Map;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertThrows;
 
 public class DeleteGroupsResponseTest {
 
@@ -67,9 +68,9 @@ public class DeleteGroupsResponseTest {
         assertEquals(expectedErrorCounts, deleteGroupsResponse.errorCounts());
     }
 
-    @Test(expected = IllegalArgumentException.class)
+    @Test
     public void testGetErrorWithInvalidGroupId() {
-        deleteGroupsResponse.get("invalid-group-id");
+        assertThrows(IllegalArgumentException.class, () -> deleteGroupsResponse.get("invalid-group-id"));
     }
 
     @Test

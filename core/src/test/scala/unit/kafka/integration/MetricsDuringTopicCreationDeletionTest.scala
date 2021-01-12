@@ -23,7 +23,6 @@ import kafka.server.KafkaConfig
 import kafka.utils.{Logging, TestUtils}
 
 import scala.jdk.CollectionConverters._
-import org.scalatest.Assertions.fail
 import org.junit.{Before, Test}
 import com.yammer.metrics.core.Gauge
 import kafka.metrics.KafkaYammerMetrics
@@ -124,10 +123,9 @@ class MetricsDuringTopicCreationDeletionTest extends KafkaServerTestHarness with
 
   private def getGauge(metricName: String) = {
     KafkaYammerMetrics.defaultRegistry.allMetrics.asScala
-                      .filter { case (k, _) => k.getName.endsWith(metricName) }
-                      .headOption
-                      .getOrElse { fail( "Unable to find metric " + metricName ) }
-                      ._2.asInstanceOf[Gauge[Int]]
+      .find { case (k, _) => k.getName.endsWith(metricName) }
+      .getOrElse(throw new AssertionError( "Unable to find metric " + metricName))
+      ._2.asInstanceOf[Gauge[Int]]
   }
 
   private def createDeleteTopics(): Unit = {

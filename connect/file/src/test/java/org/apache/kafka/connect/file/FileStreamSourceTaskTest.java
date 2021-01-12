@@ -37,6 +37,7 @@ import java.util.List;
 import java.util.Map;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNull;
 
 public class FileStreamSourceTaskTest extends EasyMockSupport {
 
@@ -84,10 +85,10 @@ public class FileStreamSourceTaskTest extends EasyMockSupport {
         task.start(config);
 
         OutputStream os = Files.newOutputStream(tempFile.toPath());
-        assertEquals(null, task.poll());
+        assertNull(task.poll());
         os.write("partial line".getBytes());
         os.flush();
-        assertEquals(null, task.poll());
+        assertNull(task.poll());
         os.write(" finished\n".getBytes());
         os.flush();
         List<SourceRecord> records = task.poll();
@@ -96,7 +97,7 @@ public class FileStreamSourceTaskTest extends EasyMockSupport {
         assertEquals("partial line finished", records.get(0).value());
         assertEquals(Collections.singletonMap(FileStreamSourceTask.FILENAME_FIELD, tempFile.getAbsolutePath()), records.get(0).sourcePartition());
         assertEquals(Collections.singletonMap(FileStreamSourceTask.POSITION_FIELD, 22L), records.get(0).sourceOffset());
-        assertEquals(null, task.poll());
+        assertNull(task.poll());
 
         // Different line endings, and make sure the final \r doesn't result in a line until we can
         // read the subsequent byte.
@@ -224,7 +225,7 @@ public class FileStreamSourceTaskTest extends EasyMockSupport {
         task.start(config);
         // Currently the task retries indefinitely if the file isn't found, but shouldn't return any data.
         for (int i = 0; i < 100; i++)
-            assertEquals(null, task.poll());
+            assertNull(task.poll());
     }
 
 

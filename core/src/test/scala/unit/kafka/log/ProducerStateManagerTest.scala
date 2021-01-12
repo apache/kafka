@@ -34,7 +34,6 @@ import org.apache.kafka.common.utils.{MockTime, Utils}
 import org.easymock.EasyMock
 import org.junit.Assert._
 import org.junit.{After, Before, Test}
-import org.scalatest.Assertions.{assertThrows, fail}
 
 class ProducerStateManagerTest {
   var logDir: File = null
@@ -66,22 +65,16 @@ class ProducerStateManagerTest {
     append(stateManager, producerId, epoch, 1, 0L, 1L)
 
     // Duplicates are checked separately and should result in OutOfOrderSequence if appended
-    assertThrows[OutOfOrderSequenceException] {
-      append(stateManager, producerId, epoch, 1, 0L, 1L)
-    }
+    assertThrows(classOf[OutOfOrderSequenceException], () => append(stateManager, producerId, epoch, 1, 0L, 1L))
 
     // Invalid sequence number (greater than next expected sequence number)
-    assertThrows[OutOfOrderSequenceException] {
-      append(stateManager, producerId, epoch, 5, 0L, 2L)
-    }
+    assertThrows(classOf[OutOfOrderSequenceException], () => append(stateManager, producerId, epoch, 5, 0L, 2L))
 
     // Change epoch
     append(stateManager, producerId, (epoch + 1).toShort, 0, 0L, 3L)
 
     // Incorrect epoch
-    assertThrows[InvalidProducerEpochException] {
-      append(stateManager, producerId, epoch, 0, 0L, 4L)
-    }
+    assertThrows(classOf[InvalidProducerEpochException], () => append(stateManager, producerId, epoch, 0, 0L, 4L))
   }
 
   @Test
@@ -89,25 +82,21 @@ class ProducerStateManagerTest {
     val producerEpoch = 2.toShort
     appendEndTxnMarker(stateManager, producerId, producerEpoch, ControlRecordType.COMMIT, offset = 27L)
 
-    val firstEntry = stateManager.lastEntry(producerId).getOrElse(fail("Expected last entry to be defined"))
+    val firstEntry = stateManager.lastEntry(producerId).getOrElse(throw new RuntimeException("Expected last entry to be defined"))
     assertEquals(producerEpoch, firstEntry.producerEpoch)
     assertEquals(producerId, firstEntry.producerId)
     assertEquals(RecordBatch.NO_SEQUENCE, firstEntry.lastSeq)
 
     // Fencing should continue to work even if the marker is the only thing left
-    assertThrows[InvalidProducerEpochException] {
-      append(stateManager, producerId, 0.toShort, 0, 0L, 4L)
-    }
+    assertThrows(classOf[InvalidProducerEpochException], () => append(stateManager, producerId, 0.toShort, 0, 0L, 4L))
 
     // If the transaction marker is the only thing left in the log, then an attempt to write using a
     // non-zero sequence number should cause an OutOfOrderSequenceException, so that the producer can reset its state
-    assertThrows[OutOfOrderSequenceException] {
-      append(stateManager, producerId, producerEpoch, 17, 0L, 4L)
-    }
+    assertThrows(classOf[OutOfOrderSequenceException], () => append(stateManager, producerId, producerEpoch, 17, 0L, 4L))
 
     // The broker should accept the request if the sequence number is reset to 0
     append(stateManager, producerId, producerEpoch, 0, 39L, 4L)
-    val secondEntry = stateManager.lastEntry(producerId).getOrElse(fail("Expected last entry to be defined"))
+    val secondEntry = stateManager.lastEntry(producerId).getOrElse(throw new RuntimeException("Expected last entry to be defined"))
     assertEquals(producerEpoch, secondEntry.producerEpoch)
     assertEquals(producerId, secondEntry.producerId)
     assertEquals(0, secondEntry.lastSeq)
@@ -151,13 +140,13 @@ class ProducerStateManagerTest {
     assertEquals(2020L, lastEntry.lastDataOffset)
   }
 
-  @Test(expected = classOf[OutOfOrderSequenceException])
+  @Test
   def testProducerSequenceInvalidWrapAround(): Unit = {
     val epoch = 15.toShort
     val sequence = Int.MaxValue
     val offset = 735L
     append(stateManager, producerId, epoch, sequence, offset, origin = AppendOrigin.Replication)
-    append(stateManager, producerId, epoch, 1, offset + 500)
+    assertThrows(classOf[OutOfOrderSequenceException], () => append(stateManager, producerId, epoch, 1, offset + 500))
   }
 
   @Test
@@ -418,13 +407,11 @@ class ProducerStateManagerTest {
     appendEndTxnMarker(stateManager, producerId, bumpedEpoch, ControlRecordType.ABORT, 1L)
 
     // next append is invalid since we expect the sequence to be reset
-    assertThrows[OutOfOrderSequenceException] {
-      append(stateManager, producerId, bumpedEpoch, 2, 2L, isTransactional = true)
-    }
+    assertThrows(classOf[OutOfOrderSequenceException],
+      () => append(stateManager, producerId, bumpedEpoch, 2, 2L, isTransactional = true))
 
-    assertThrows[OutOfOrderSequenceException] {
-      append(stateManager, producerId, (bumpedEpoch + 1).toShort, 2, 2L, isTransactional = true)
-    }
+    assertThrows(classOf[OutOfOrderSequenceException],
+      () => append(stateManager, producerId, (bumpedEpoch + 1).toShort, 2, 2L, isTransactional = true))
 
     // Append with the bumped epoch should be fine if starting from sequence 0
     append(stateManager, producerId, bumpedEpoch, 0, 0L, isTransactional = true)
@@ -432,11 +419,11 @@ class ProducerStateManagerTest {
     assertEquals(0, stateManager.lastEntry(producerId).get.lastSeq)
   }
 
-  @Test(expected = classOf[InvalidTxnStateException])
+  @Test
   def testNonTransactionalAppendWithOngoingTransaction(): Unit = {
     val epoch = 0.toShort
     append(stateManager, producerId, epoch, 0, 0L, isTransactional = true)
-    append(stateManager, producerId, epoch, 1, 1L, isTransactional = false)
+    assertThrows(classOf[InvalidTxnStateException], () => append(stateManager, producerId, epoch, 1, 1L, isTransactional = false))
   }
 
   @Test
@@ -635,7 +622,7 @@ class ProducerStateManagerTest {
   }
 
   @Test
-  def testTruncate(): Unit = {
+  def testTruncateFullyAndStartAt(): Unit = {
     val epoch = 0.toShort
 
     append(stateManager, producerId, epoch, 0, 0L)
@@ -649,7 +636,7 @@ class ProducerStateManagerTest {
     assertEquals(2, logDir.listFiles().length)
     assertEquals(Set(2, 3), currentSnapshotOffsets)
 
-    stateManager.truncate()
+    stateManager.truncateFullyAndStartAt(0L)
 
     assertEquals(0, logDir.listFiles().length)
     assertEquals(Set(), currentSnapshotOffsets)
@@ -799,7 +786,7 @@ class ProducerStateManagerTest {
       isTransactional = true, origin = AppendOrigin.Coordinator)
   }
 
-  @Test(expected = classOf[InvalidProducerEpochException])
+  @Test
   def testOldEpochForControlRecord(): Unit = {
     val epoch = 5.toShort
     val sequence = 0
@@ -807,7 +794,8 @@ class ProducerStateManagerTest {
     assertEquals(None, stateManager.firstUndecidedOffset)
 
     append(stateManager, producerId, epoch, sequence, offset = 99, isTransactional = true)
-    appendEndTxnMarker(stateManager, producerId, 3.toShort, ControlRecordType.COMMIT, offset=100)
+    assertThrows(classOf[InvalidProducerEpochException], () => appendEndTxnMarker(stateManager, producerId, 3.toShort,
+      ControlRecordType.COMMIT, offset=100))
   }
 
   @Test
@@ -836,7 +824,7 @@ class ProducerStateManagerTest {
     }
   }
 
-  @Test(expected = classOf[TransactionCoordinatorFencedException])
+  @Test
   def testCoordinatorFencedAfterReload(): Unit = {
     val producerEpoch = 0.toShort
     append(stateManager, producerId, producerEpoch, 0, offset = 99, isTransactional = true)
@@ -847,7 +835,8 @@ class ProducerStateManagerTest {
     recoveredMapping.truncateAndReload(0L, 2L, 70000)
 
     // append from old coordinator should be rejected
-    appendEndTxnMarker(stateManager, producerId, producerEpoch, ControlRecordType.COMMIT, offset = 100, coordinatorEpoch = 0)
+    assertThrows(classOf[TransactionCoordinatorFencedException], () => appendEndTxnMarker(stateManager, producerId,
+      producerEpoch, ControlRecordType.COMMIT, offset = 100, coordinatorEpoch = 0))
   }
 
   @Test
