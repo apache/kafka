@@ -1045,6 +1045,21 @@ public class QuorumStateTest {
         assertTrue(state.isUnattached());
     }
 
+    @Test
+    public void testObserverInitializationFailsIfElectionStateHasVotedCandidate() {
+        Set<Integer> voters = Utils.mkSet(0, 1);
+        int epoch = 5;
+        int votedId = 1;
+
+        store.writeElectionState(ElectionState.withVotedCandidate(epoch, votedId, voters));
+
+        QuorumState state1 = buildQuorumState(OptionalInt.of(2), voters);
+        assertThrows(IllegalStateException.class, () -> state1.initialize(new OffsetAndEpoch(0, 0)));
+
+        QuorumState state2 = buildQuorumState(OptionalInt.empty(), voters);
+        assertThrows(IllegalStateException.class, () -> state2.initialize(new OffsetAndEpoch(0, 0)));
+    }
+
     private QuorumState initializeEmptyState(Set<Integer> voters) throws IOException {
         QuorumState state = buildQuorumState(voters);
         store.writeElectionState(ElectionState.withUnknownLeader(0, voters));
