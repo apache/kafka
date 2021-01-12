@@ -78,7 +78,7 @@ object RequestChannel extends Logging {
   class Request(val processor: Int,
                 val context: RequestContext,
                 val startTimeNanos: Long,
-                memoryPool: MemoryPool,
+                val memoryPool: MemoryPool,
                 @volatile var buffer: ByteBuffer,
                 metrics: RequestChannel.Metrics,
                 val envelope: Option[RequestChannel.Request] = None) extends BaseRequest {
