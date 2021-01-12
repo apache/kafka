@@ -20,7 +20,6 @@ import java.util
 import java.util.concurrent.{ConcurrentHashMap, TimeUnit}
 import kafka.api.LeaderAndIsr
 import kafka.metrics.KafkaMetricsGroup
-import kafka.utils.CoreUtils.inLock
 import kafka.utils.{KafkaScheduler, Logging, Scheduler}
 import kafka.zk.KafkaZkClient
 import org.apache.kafka.clients.ClientResponse
@@ -31,7 +30,7 @@ import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests.{AlterIsrRequest, AlterIsrResponse}
 import org.apache.kafka.common.utils.Time
 
-import java.util.concurrent.locks.ReentrantLock
+import java.util.concurrent.atomic.AtomicBoolean
 import scala.collection.mutable
 import scala.collection.mutable.ListBuffer
 import scala.jdk.CollectionConverters._
@@ -116,12 +115,7 @@ class DefaultAlterIsrManager(
   private val unsentIsrUpdates: util.Map[TopicPartition, AlterIsrItem] = new ConcurrentHashMap[TopicPartition, AlterIsrItem]()
 
   // Used to allow only one in-flight request at a time
-  @volatile
-  private var inflightRequest: Boolean = false
-
-  // Protect updates of the inflight flag and prevent additional pending items from being submitted while we are
-  // preparing a request
-  private val inflightLock: ReentrantLock = new ReentrantLock()
+  private val inflightRequest: AtomicBoolean = new AtomicBoolean(false)
 
   override def start(): Unit = {
     controllerChannelManager.start()
@@ -132,36 +126,29 @@ class DefaultAlterIsrManager(
   }
 
   override def submit(alterIsrItem: AlterIsrItem): Boolean = {
-    inLock(inflightLock) {
-      if (unsentIsrUpdates.putIfAbsent(alterIsrItem.topicPartition, alterIsrItem) == null) {
-        maybePropagateIsrChanges()
-        true
-      } else {
-        false
-      }
-    }
+    val enqueued = unsentIsrUpdates.putIfAbsent(alterIsrItem.topicPartition, alterIsrItem) == null
+    maybePropagateIsrChanges()
+    enqueued
   }
 
   override def clearPending(topicPartition: TopicPartition): Unit = {
     unsentIsrUpdates.remove(topicPartition)
   }
 
-  private[server] def maybePropagateIsrChanges(): Unit = inLock(inflightLock) {
+  private[server] def maybePropagateIsrChanges(): Unit = {
     // Send all pending items if there is not already a request in-flight.
-    if (!inflightRequest && !unsentIsrUpdates.isEmpty) {
+    if (!unsentIsrUpdates.isEmpty && inflightRequest.compareAndSet(false, true)) {
       // Copy current unsent ISRs but don't remove from the map, they get cleared in the response handler
       val inflightAlterIsrItems = new ListBuffer[AlterIsrItem]()
       unsentIsrUpdates.values().forEach(item => inflightAlterIsrItems.append(item))
       sendRequest(inflightAlterIsrItems.toSeq)
-      inflightRequest = true
     }
   }
 
-  private[server] def clearInFlightRequest(): Unit = inLock(inflightLock) {
-    if (!inflightRequest) {
+  private[server] def clearInFlightRequest(): Unit = {
+    if(!inflightRequest.compareAndSet(true, false)) {
       warn("Attempting to clear AlterIsr in-flight flag when no apparent request is in-flight")
     }
-    inflightRequest = false
   }
 
   private def sendRequest(inflightAlterIsrItems: Seq[AlterIsrItem]): Unit = {
@@ -176,16 +163,22 @@ class DefaultAlterIsrManager(
         override def onComplete(response: ClientResponse): Unit = {
           debug(s"Received AlterIsr response $response")
           val body = response.responseBody().asInstanceOf[AlterIsrResponse]
-          handleAlterIsrResponse(body, message.brokerEpoch, inflightAlterIsrItems) match {
-            case Errors.NONE =>
-              // In the normal case, check for pending updates to send immediately
-              clearInFlightRequest()
-              maybePropagateIsrChanges()
-            case _ =>
-              // If we received a top-level error from the controller, retry the request in the near future
-              clearInFlightRequest()
-              scheduler.schedule("send-alter-isr", () => maybePropagateIsrChanges(), 50, -1, TimeUnit.MILLISECONDS)
+          val error = try {
+            handleAlterIsrResponse(body, message.brokerEpoch, inflightAlterIsrItems)
+          } finally {
+            // clear the flag so future requests can proceed
+            clearInFlightRequest()
           }
+
+          // check if we need to send another request right away
+          error match {
+              case Errors.NONE =>
+                // In the normal case, check for pending updates to send immediately
+                maybePropagateIsrChanges()
+              case _ =>
+                // If we received a top-level error from the controller, retry the request in the near future
+                scheduler.schedule("send-alter-isr", () => maybePropagateIsrChanges(), 50, -1, TimeUnit.MILLISECONDS)
+            }
         }
 
         override def onTimeout(): Unit = {
