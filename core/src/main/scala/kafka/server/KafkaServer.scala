@@ -534,7 +534,10 @@ class KafkaServer(val config: KafkaConfig, time: Time = Time.SYSTEM, threadNameP
    */
   private def controlledShutdown(): Unit = {
 
-    def node(broker: Broker): Node = broker.node(config.interBrokerListenerName)
+    val brokerToControllerListenerName = config.controlPlaneListenerName.getOrElse(config.interBrokerListenerName)
+    val brokerToControllerSecurityProtocol = config.controlPlaneSecurityProtocol.getOrElse(config.interBrokerSecurityProtocol)
+
+    def node(broker: Broker): Node = broker.node(brokerToControllerListenerName)
 
     val socketTimeoutMs = config.controllerSocketTimeoutMs
 
@@ -542,10 +545,10 @@ class KafkaServer(val config: KafkaConfig, time: Time = Time.SYSTEM, threadNameP
       val metadataUpdater = new ManualMetadataUpdater()
       val networkClient = {
         val channelBuilder = ChannelBuilders.clientChannelBuilder(
-          config.interBrokerSecurityProtocol,
+          brokerToControllerSecurityProtocol,
           JaasContext.Type.SERVER,
           config,
-          config.interBrokerListenerName,
+          brokerToControllerListenerName,
           config.saslMechanismInterBrokerProtocol,
           time,
           config.saslInterBrokerHandshakeRequestEnable,

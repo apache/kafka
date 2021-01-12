@@ -260,7 +260,7 @@ class SocketServer(val config: KafkaConfig,
       connectionQuotas.addListener(config, endpoint.listenerName)
       val controlPlaneAcceptor = createAcceptor(endpoint, ControlPlaneMetricPrefix)
       val controlPlaneProcessor = newProcessor(nextProcessorId, controlPlaneRequestChannelOpt.get,
-        connectionQuotas, endpoint.listenerName, endpoint.securityProtocol, memoryPool, isPrivilegedListener = true)
+        connectionQuotas, endpoint.listenerName, endpoint.securityProtocol, memoryPool, isPrivilegedListener = true, isControlPlane = true)
       controlPlaneAcceptorOpt = Some(controlPlaneAcceptor)
       controlPlaneProcessorOpt = Some(controlPlaneProcessor)
       val listenerProcessors = new ArrayBuffer[Processor]()
@@ -287,7 +287,7 @@ class SocketServer(val config: KafkaConfig,
 
     for (_ <- 0 until newProcessorsPerListener) {
       val processor = newProcessor(nextProcessorId, dataPlaneRequestChannel, connectionQuotas,
-        listenerName, securityProtocol, memoryPool, isPrivilegedListener)
+        listenerName, securityProtocol, memoryPool, isPrivilegedListener, false)
       listenerProcessors += processor
       dataPlaneRequestChannel.addProcessor(processor)
       nextProcessorId += 1
@@ -413,7 +413,7 @@ class SocketServer(val config: KafkaConfig,
 
   // `protected` for test usage
   protected[network] def newProcessor(id: Int, requestChannel: RequestChannel, connectionQuotas: ConnectionQuotas, listenerName: ListenerName,
-                                      securityProtocol: SecurityProtocol, memoryPool: MemoryPool, isPrivilegedListener: Boolean): Processor = {
+                                      securityProtocol: SecurityProtocol, memoryPool: MemoryPool, isPrivilegedListener: Boolean, isControlPlane: Boolean): Processor = {
     new Processor(id,
       time,
       config.socketRequestMaxBytes,
@@ -429,7 +429,8 @@ class SocketServer(val config: KafkaConfig,
       memoryPool,
       logContext,
       isPrivilegedListener = isPrivilegedListener,
-      allowDisabledApis = allowDisabledApis
+      allowDisabledApis = allowDisabledApis,
+      isControlPlane = isControlPlane
     )
   }
 
@@ -790,7 +791,8 @@ private[kafka] class Processor(val id: Int,
                                logContext: LogContext,
                                connectionQueueSize: Int = ConnectionQueueSize,
                                isPrivilegedListener: Boolean = false,
-                               allowDisabledApis: Boolean = false) extends AbstractServerThread(connectionQuotas) with KafkaMetricsGroup {
+                               allowDisabledApis: Boolean = false,
+                               isControlPlane: Boolean = false) extends AbstractServerThread(connectionQuotas) with KafkaMetricsGroup {
 
   private object ConnectionId {
     def fromString(s: String): Option[ConnectionId] = s.split("-") match {
@@ -810,6 +812,7 @@ private[kafka] class Processor(val id: Int,
   private val newConnections = new ArrayBlockingQueue[SocketChannel](connectionQueueSize)
   private val inflightResponses = mutable.Map[String, RequestChannel.Response]()
   private val responseQueue = new LinkedBlockingDeque[RequestChannel.Response]()
+  private val forceControllerRequests = config.controlPlaneForceControllerRequestsEnable
 
   private[kafka] val metricTags = mutable.LinkedHashMap(
     ListenerMetricTag -> listenerName.value,
@@ -988,60 +991,72 @@ private[kafka] class Processor(val id: Int,
     }
   }
 
+  private def isControlRequest(header: RequestHeader): Boolean = {
+    header.apiKey() match {
+      case ApiKeys.LEADER_AND_ISR | ApiKeys.STOP_REPLICA | ApiKeys.UPDATE_METADATA | ApiKeys.CONTROLLED_SHUTDOWN => true
+      case _ => false
+    }
+  }
+
   private def processCompletedReceives(): Unit = {
     selector.completedReceives.forEach { receive =>
       try {
         openOrClosingChannel(receive.source) match {
           case Some(channel) =>
             val header = parseRequestHeader(receive.payload)
-            if (header.apiKey == ApiKeys.SASL_HANDSHAKE && channel.maybeBeginServerReauthentication(receive,
-              () => time.nanoseconds()))
-              trace(s"Begin re-authentication: $channel")
-            else {
-              val nowNanos = time.nanoseconds()
-              if (channel.serverAuthenticationSessionExpired(nowNanos)) {
-                // be sure to decrease connection count and drop any in-flight responses
-                debug(s"Disconnecting expired channel: $channel : $header")
-                close(channel.id)
-                expiredConnectionsKilledCount.record(null, 1, 0)
-              } else {
-                val connectionId = receive.source
-                val context = new RequestContext(header, connectionId, channel.socketAddress,
-                  channel.principal, listenerName, securityProtocol,
-                  channel.channelMetadataRegistry.clientInformation, isPrivilegedListener, channel.principalSerde)
+            if (isControlPlane && forceControllerRequests && !isControlRequest(header)) {
+              info(s"Current plane is control plane, disconnecting non controller channel: $channel : $header")
+              close(channel.id)
+            } else {
+              if (header.apiKey == ApiKeys.SASL_HANDSHAKE && channel.maybeBeginServerReauthentication(receive,
+                () => time.nanoseconds()))
+                trace(s"Begin re-authentication: $channel")
+              else {
+                val nowNanos = time.nanoseconds()
+                if (channel.serverAuthenticationSessionExpired(nowNanos)) {
+                  // be sure to decrease connection count and drop any in-flight responses
+                  debug(s"Disconnecting expired channel: $channel : $header")
+                  close(channel.id)
+                  expiredConnectionsKilledCount.record(null, 1, 0)
+                } else {
+                  val connectionId = receive.source
+                  val context = new RequestContext(header, connectionId, channel.socketAddress,
+                    channel.principal, listenerName, securityProtocol,
+                    channel.channelMetadataRegistry.clientInformation, isPrivilegedListener, channel.principalSerde)
 
-                var req = new RequestChannel.Request(processor = id, context = context,
-                  startTimeNanos = nowNanos, memoryPool, receive.payload, requestChannel.metrics, None)
+                  var req = new RequestChannel.Request(processor = id, context = context,
+                    startTimeNanos = nowNanos, memoryPool, receive.payload, requestChannel.metrics, None)
 
-                if (req.header.apiKey == ApiKeys.ENVELOPE) {
-                  // Override the request context with the forwarded request context.
-                  // The envelope's context will be preserved in the forwarded context
+                  if (req.header.apiKey == ApiKeys.ENVELOPE) {
+                    // Override the request context with the forwarded request context.
+                    // The envelope's context will be preserved in the forwarded context
 
-                  req = parseForwardedPrincipal(req, channel.principalSerde.asScala) match {
-                    case Some(forwardedPrincipal) =>
-                      buildForwardedRequestContext(req, forwardedPrincipal)
+                    req = parseForwardedPrincipal(req, channel.principalSerde.asScala) match {
+                      case Some(forwardedPrincipal) =>
+                        buildForwardedRequestContext(req, forwardedPrincipal)
 
-                    case None =>
-                      val envelopeResponse = new EnvelopeResponse(Errors.PRINCIPAL_DESERIALIZATION_FAILURE)
-                      sendEnvelopeResponse(req, envelopeResponse)
-                      null
-                  }
-                }
-
-                if (req != null) {
-                  // KIP-511: ApiVersionsRequest is intercepted here to catch the client software name
-                  // and version. It is done here to avoid wiring things up to the api layer.
-                  if (header.apiKey == ApiKeys.API_VERSIONS) {
-                    val apiVersionsRequest = req.body[ApiVersionsRequest]
-                    if (apiVersionsRequest.isValid) {
-                      channel.channelMetadataRegistry.registerClientInformation(new ClientInformation(
-                        apiVersionsRequest.data.clientSoftwareName,
-                        apiVersionsRequest.data.clientSoftwareVersion))
+                      case None =>
+                        val envelopeResponse = new EnvelopeResponse(Errors.PRINCIPAL_DESERIALIZATION_FAILURE)
+                        sendEnvelopeResponse(req, envelopeResponse)
+                        null
                     }
                   }
-                  requestChannel.sendRequest(req)
-                  selector.mute(connectionId)
-                  handleChannelMuteEvent(connectionId, ChannelMuteEvent.REQUEST_RECEIVED)
+
+                  if (req != null) {
+                    // KIP-511: ApiVersionsRequest is intercepted here to catch the client software name
+                    // and version. It is done here to avoid wiring things up to the api layer.
+                    if (header.apiKey == ApiKeys.API_VERSIONS) {
+                      val apiVersionsRequest = req.body[ApiVersionsRequest]
+                      if (apiVersionsRequest.isValid) {
+                        channel.channelMetadataRegistry.registerClientInformation(new ClientInformation(
+                          apiVersionsRequest.data.clientSoftwareName,
+                          apiVersionsRequest.data.clientSoftwareVersion))
+                      }
+                    }
+                    requestChannel.sendRequest(req)
+                    selector.mute(connectionId)
+                    handleChannelMuteEvent(connectionId, ChannelMuteEvent.REQUEST_RECEIVED)
+                  }
                 }
               }
             }
