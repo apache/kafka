@@ -295,6 +295,8 @@ object KafkaMetadataLog {
       }
 
     val replicatedLog = new KafkaMetadataLog(log, snapshotIds, topicPartition, maxFetchSizeInBytes)
+    // When recovering, truncate fully if the latest snapshot is after the log end offset. This can happen to a follower
+    // when the follower crashes after downloading a snapshot from the leader but before it could truncate fully the log.
     replicatedLog.truncateFullyToLatestSnapshot()
 
     replicatedLog
