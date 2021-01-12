@@ -69,7 +69,8 @@ public class ConnectSchemaTest {
 
     @Test
     public void testFieldsOnlyValidForStructs() {
-        assertThrows(DataException.class, Schema.INT8_SCHEMA::fields);
+        assertThrows(DataException.class,
+            Schema.INT8_SCHEMA::fields);
     }
 
     @Test

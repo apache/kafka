@@ -1000,9 +1000,9 @@ public class WorkerSourceTaskTest extends ThreadedTest {
         final Capture<SourceRecord> recordCapture = EasyMock.newCapture();
         IExpectationSetters<SourceRecord> convertKeyExpect = EasyMock.expect(transformationChain.apply(EasyMock.capture(recordCapture)));
         if (anyTimes)
-            convertKeyExpect.andStubAnswer(() -> recordCapture.getValue());
+            convertKeyExpect.andStubAnswer(recordCapture::getValue);
         else
-            convertKeyExpect.andAnswer(() -> recordCapture.getValue());
+            convertKeyExpect.andAnswer(recordCapture::getValue);
     }
 
     private void expectTaskCommitRecordWithOffset(boolean anyTimes, boolean succeed) throws InterruptedException {
