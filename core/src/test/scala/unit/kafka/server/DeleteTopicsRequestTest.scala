@@ -17,19 +17,36 @@
 
 package kafka.server
 
-import java.util.{Arrays, Collections}
+import java.util
+import java.util.{Arrays, Properties}
 
 import kafka.network.SocketServer
+import kafka.security.authorizer.AclAuthorizer
 import kafka.utils._
 import org.apache.kafka.common.message.DeleteTopicsRequestData
-import org.apache.kafka.common.protocol.Errors
+import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.requests.{DeleteTopicsRequest, DeleteTopicsResponse, MetadataRequest, MetadataResponse}
+import org.apache.kafka.common.security.auth.{AuthenticationContext, KafkaPrincipal, KafkaPrincipalBuilder}
+import org.apache.kafka.server.authorizer.{Action, AuthorizableRequestContext, AuthorizationResult}
 import org.junit.Assert._
-import org.junit.Test
+import org.junit.rules.TestName
+import org.junit.{Rule, Test}
 
 import scala.jdk.CollectionConverters._
 
 class DeleteTopicsRequestTest extends BaseRequestTest {
+  override def brokerPropertyOverrides(properties: Properties): Unit = {
+    properties.put(KafkaConfig.AuthorizerClassNameProp, classOf[DeleteTopicsTest.TestAuthorizer].getName)
+    properties.put(KafkaConfig.PrincipalBuilderClassProp,
+      if (testName.getMethodName.contains("NotAuthorized")) {
+        classOf[DeleteTopicsTest.TestPrincipalBuilderReturningUnauthorized].getName
+      } else {
+        classOf[DeleteTopicsTest.TestPrincipalBuilderReturningAuthorized].getName
+      })
+  }
+
+  private val _testName = new TestName
+  @Rule def testName = _testName
 
   @Test
   def testValidDeleteTopicRequests(): Unit = {
@@ -113,14 +130,52 @@ class DeleteTopicsRequestTest extends BaseRequestTest {
 
   @Test
   def testNotController(): Unit = {
+    val topicExistsTopicName = "topic-exists"
+    val topicNotExistsTopicName = "topic-not-exists"
+    createTopic(topicExistsTopicName, 1, 1)
     val request = new DeleteTopicsRequest.Builder(
         new DeleteTopicsRequestData()
-          .setTopicNames(Collections.singletonList("not-controller"))
+          .setTopicNames(List(topicExistsTopicName, topicNotExistsTopicName).asJava)
           .setTimeoutMs(1000)).build()
     val response = sendDeleteTopicsRequest(request, notControllerSocketServer)
 
-    val error = response.data.responses().find("not-controller").errorCode()
-    assertEquals("Expected controller error when routed incorrectly",  Errors.NOT_CONTROLLER.code, error)
+    val errorExists = response.data.responses().find(topicExistsTopicName).errorCode()
+    assertEquals("Expected controller error for existing topic when routed incorrectly",
+      Errors.NOT_CONTROLLER.code, errorExists)
+    val errorNotExists = response.data.responses().find(topicNotExistsTopicName).errorCode()
+    assertEquals("Expected not-exists error for unknown topic when routed incorrectly",
+      Errors.UNKNOWN_TOPIC_OR_PARTITION.code, errorNotExists)
+  }
+
+  @Test
+  def testNotControllerAndNotAuthorized(): Unit = {  // "NotAuthorized" in method name signals authorizer to reject requests
+    val topicExistsAndNotAuthorizedTopicName = "topic-exists"
+    val topicExistsAndAuthorizedTopicName = DeleteTopicsTest.alwaysAuthorizedTopic1
+    createTopic(topicExistsAndNotAuthorizedTopicName, 1, 1)
+    createTopic(topicExistsAndAuthorizedTopicName, 1, 1)
+    val topicNotExistsAndNotAuthorizedTopicName = "topic-not-exists"
+    val topicNotExistsAndAuthorizedTopicName = DeleteTopicsTest.alwaysAuthorizedTopic2
+    // make sure we get the authorization error rather than the not-controller error when not authorized
+    // and the not-controller error only when authorized
+    val request = new DeleteTopicsRequest.Builder(
+      new DeleteTopicsRequestData()
+        .setTopicNames(List(topicExistsAndNotAuthorizedTopicName, topicExistsAndAuthorizedTopicName,
+          topicNotExistsAndNotAuthorizedTopicName, topicNotExistsAndAuthorizedTopicName).asJava)
+        .setTimeoutMs(1000)).build()
+    val response = sendDeleteTopicsRequest(request, notControllerSocketServer)
+
+    val errorTopicExistsAndNotAuthorizedTopicName = response.data.responses().find(topicExistsAndNotAuthorizedTopicName).errorCode()
+    assertEquals("Expected authorization error for existing, unauthorized topic when routed incorrectly",
+      Errors.TOPIC_AUTHORIZATION_FAILED.code, errorTopicExistsAndNotAuthorizedTopicName)
+    val errorTopicExistsAndAuthorizedTopicName = response.data.responses().find(topicExistsAndAuthorizedTopicName).errorCode()
+    assertEquals("Expected not-controller error for existing, authorized topic when routed incorrectly",
+      Errors.NOT_CONTROLLER.code, errorTopicExistsAndAuthorizedTopicName)
+    val errorTopicNotExistsAndNotAuthorizedTopicName = response.data.responses().find(topicNotExistsAndNotAuthorizedTopicName).errorCode()
+    assertEquals("Expected authorization error for non-existing, unauthorized topic when routed incorrectly",
+      Errors.TOPIC_AUTHORIZATION_FAILED.code, errorTopicNotExistsAndNotAuthorizedTopicName)
+    val errorTopicNotExistsAndAuthorizedTopicName = response.data.responses().find(topicNotExistsAndAuthorizedTopicName).errorCode()
+    assertEquals("Expected unknown topic error for non-existing, authorized topic when routed incorrectly",
+      Errors.UNKNOWN_TOPIC_OR_PARTITION.code, errorTopicNotExistsAndAuthorizedTopicName)
   }
 
   private def validateTopicIsDeleted(topic: String): Unit = {
@@ -134,4 +189,36 @@ class DeleteTopicsRequestTest extends BaseRequestTest {
     connectAndReceive[DeleteTopicsResponse](request, destination = socketServer)
   }
 
+}
+
+object DeleteTopicsTest {
+  val UnauthorizedPrincipal = new KafkaPrincipal(KafkaPrincipal.USER_TYPE, "Unauthorized")
+  val AuthorizedPrincipal = KafkaPrincipal.ANONYMOUS
+  val alwaysAuthorizedTopic1 = "always_authorized_topic1"
+  val alwaysAuthorizedTopic2 = "always_authorized_topic2"
+
+  class TestAuthorizer extends AclAuthorizer {
+    override def authorize(requestContext: AuthorizableRequestContext, actions: util.List[Action]): util.List[AuthorizationResult] = {
+      actions.asScala.map { action =>
+        if (requestContext.requestType == ApiKeys.DELETE_TOPICS.id && requestContext.principal == UnauthorizedPrincipal
+          && action.resourcePattern().name() != alwaysAuthorizedTopic1
+          && action.resourcePattern().name() != alwaysAuthorizedTopic2) {
+          AuthorizationResult.DENIED
+        } else
+          AuthorizationResult.ALLOWED
+      }.asJava
+    }
+  }
+
+  class TestPrincipalBuilderReturningAuthorized extends KafkaPrincipalBuilder {
+    override def build(context: AuthenticationContext): KafkaPrincipal = {
+      AuthorizedPrincipal
+    }
+  }
+
+  class TestPrincipalBuilderReturningUnauthorized extends KafkaPrincipalBuilder {
+    override def build(context: AuthenticationContext): KafkaPrincipal = {
+      UnauthorizedPrincipal
+    }
+  }
 }

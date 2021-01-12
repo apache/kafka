@@ -1823,45 +1823,47 @@ class KafkaApis(val requestChannel: RequestChannel,
       sendResponseMaybeThrottleWithControllerQuota(controllerMutationQuota, request, createResponse)
     }
 
+    // be sure to check authorization first, before checking if this is the controller, to avoid leaking
+    // information about the system (i.e. who is the controller) to principals unauthorized for that information
+
     val createTopicsRequest = request.body[CreateTopicsRequest]
     val results = new CreatableTopicResultCollection(createTopicsRequest.data.topics.size)
+    createTopicsRequest.data.topics.forEach { topic =>
+      results.add(new CreatableTopicResult().setName(topic.name))
+    }
+    val hasClusterAuthorization = authorize(request.context, CREATE, CLUSTER, CLUSTER_NAME,
+      logIfDenied = false)
+    val topics = createTopicsRequest.data.topics.asScala.map(_.name)
+    val authorizedTopics =
+      if (hasClusterAuthorization) topics.toSet
+      else filterByAuthorized(request.context, CREATE, TOPIC, topics)(identity)
+    val authorizedForDescribeConfigs = filterByAuthorized(request.context, DESCRIBE_CONFIGS, TOPIC,
+      topics, logIfDenied = false)(identity).map(name => name -> results.find(name)).toMap
+
+    results.forEach { topic =>
+      if (results.findAll(topic.name).size > 1) {
+        topic.setErrorCode(Errors.INVALID_REQUEST.code)
+        topic.setErrorMessage("Found multiple entries for this topic.")
+      } else if (!authorizedTopics.contains(topic.name)) {
+        topic.setErrorCode(Errors.TOPIC_AUTHORIZATION_FAILED.code)
+        topic.setErrorMessage("Authorization failed.")
+      }
+      if (!authorizedForDescribeConfigs.contains(topic.name)) {
+        topic.setTopicConfigErrorCode(Errors.TOPIC_AUTHORIZATION_FAILED.code)
+      }
+    }
     if (!controller.isActive) {
-      createTopicsRequest.data.topics.forEach { topic =>
-        results.add(new CreatableTopicResult().setName(topic.name)
-          .setErrorCode(Errors.NOT_CONTROLLER.code))
+      // Don't provide the information that this node is not the controller unless they were authorized
+      // to perform at least one of their requests.  So only set NOT_CONTROLLER error for anything that so far has a
+      // success/NONE error code.  Keep the existing error codes that we've determined rather than overwriting them
+      // with NOT_CONTROLLER because that is potentially useful information for the client.
+      results.forEach { topic =>
+        if(topic.errorCode() == Errors.NONE.code()) {
+          topic.setErrorCode(Errors.NOT_CONTROLLER.code)
+        }
       }
       sendResponseCallback(results)
     } else {
-      createTopicsRequest.data.topics.forEach { topic =>
-        results.add(new CreatableTopicResult().setName(topic.name))
-      }
-      val hasClusterAuthorization = authorize(request.context, CREATE, CLUSTER, CLUSTER_NAME,
-        logIfDenied = false)
-      val topics = createTopicsRequest.data.topics.asScala.map(_.name)
-      val authorizedTopics =
-        if (hasClusterAuthorization) topics.toSet
-        else filterByAuthorized(request.context, CREATE, TOPIC, topics)(identity)
-      val authorizedForDescribeConfigs = filterByAuthorized(request.context, DESCRIBE_CONFIGS, TOPIC,
-        topics, logIfDenied = false)(identity).map(name => name -> results.find(name)).toMap
-
-      results.forEach { topic =>
-        if (results.findAll(topic.name).size > 1) {
-          topic.setErrorCode(Errors.INVALID_REQUEST.code)
-          topic.setErrorMessage("Found multiple entries for this topic.")
-        } else if (!authorizedTopics.contains(topic.name)) {
-          topic.setErrorCode(Errors.TOPIC_AUTHORIZATION_FAILED.code)
-          topic.setErrorMessage("Authorization failed.")
-        }
-        if (!authorizedForDescribeConfigs.contains(topic.name)) {
-          topic.setTopicConfigErrorCode(Errors.TOPIC_AUTHORIZATION_FAILED.code)
-        }
-      }
-      val toCreate = mutable.Map[String, CreatableTopic]()
-      createTopicsRequest.data.topics.forEach { topic =>
-        if (results.find(topic.name).errorCode == Errors.NONE.code) {
-          toCreate += topic.name -> topic
-        }
-      }
       def handleCreateTopicsResults(errors: Map[String, ApiError]): Unit = {
         errors.foreach { case (topicName, error) =>
           val result = results.find(topicName)
@@ -1876,6 +1878,12 @@ class KafkaApis(val requestChannel: RequestChannel,
           }
         }
         sendResponseCallback(results)
+      }
+      val toCreate = mutable.Map[String, CreatableTopic]()
+      createTopicsRequest.data.topics.forEach { topic =>
+        if (results.find(topic.name).errorCode == Errors.NONE.code) {
+          toCreate += topic.name -> topic
+        }
       }
       adminManager.createTopics(
         createTopicsRequest.data.timeoutMs,
@@ -1909,29 +1917,34 @@ class KafkaApis(val requestChannel: RequestChannel,
       sendResponseMaybeThrottleWithControllerQuota(controllerMutationQuota, request, createResponse)
     }
 
+    // be sure to check authorization first, before checking if this is the controller, to avoid leaking
+    // information about the system (i.e. who is the controller) to principals unauthorized for that information
+
+    // Special handling to add duplicate topics to the response
+    val topics = createPartitionsRequest.data.topics.asScala.toSeq
+    val dupes = topics.groupBy(_.name)
+      .filter { _._2.size > 1 }
+      .keySet
+    val notDuped = topics.filterNot(topic => dupes.contains(topic.name))
+    val (authorized, unauthorized) = partitionSeqByAuthorized(request.context, ALTER, TOPIC,
+      notDuped)(_.name)
+
+    val (queuedForDeletion, valid) = authorized.partition { topic =>
+      controller.topicDeletionManager.isTopicQueuedUpForDeletion(topic.name)
+    }
+
+    val errors = dupes.map(_ -> new ApiError(Errors.INVALID_REQUEST, "Duplicate topic in request.")) ++
+      unauthorized.map(_.name -> new ApiError(Errors.TOPIC_AUTHORIZATION_FAILED, "The topic authorization is failed.")) ++
+      queuedForDeletion.map(_.name -> new ApiError(Errors.INVALID_TOPIC_EXCEPTION, "The topic is queued for deletion."))
+
     if (!controller.isActive) {
-      val result = createPartitionsRequest.data.topics.asScala.map { topic =>
-        (topic.name, new ApiError(Errors.NOT_CONTROLLER, null))
-      }.toMap
-      sendResponseCallback(result)
+      // Don't provide the information that this node is not the controller unless they were authorized
+      // to perform at least one of their requests.  So only set NOT_CONTROLLER error for anything that so far has a
+      // success/NONE error code.  Keep the existing error codes that we've determined rather than overwriting them
+      // with NOT_CONTROLLER because that is potentially useful information for the client.
+      val validMappedToNotControllerError = valid.map(_.name -> new ApiError(Errors.NOT_CONTROLLER, null))
+      sendResponseCallback((errors ++ validMappedToNotControllerError).toMap)
     } else {
-      // Special handling to add duplicate topics to the response
-      val topics = createPartitionsRequest.data.topics.asScala.toSeq
-      val dupes = topics.groupBy(_.name)
-        .filter { _._2.size > 1 }
-        .keySet
-      val notDuped = topics.filterNot(topic => dupes.contains(topic.name))
-      val (authorized, unauthorized) = partitionSeqByAuthorized(request.context, ALTER, TOPIC,
-        notDuped)(_.name)
-
-      val (queuedForDeletion, valid) = authorized.partition { topic =>
-        controller.topicDeletionManager.isTopicQueuedUpForDeletion(topic.name)
-      }
-
-      val errors = dupes.map(_ -> new ApiError(Errors.INVALID_REQUEST, "Duplicate topic in request.")) ++
-        unauthorized.map(_.name -> new ApiError(Errors.TOPIC_AUTHORIZATION_FAILED, "The topic authorization is failed.")) ++
-        queuedForDeletion.map(_.name -> new ApiError(Errors.INVALID_TOPIC_EXCEPTION, "The topic is queued for deletion."))
-
       adminManager.createPartitions(
         createPartitionsRequest.data.timeoutMs,
         valid,
@@ -1956,17 +1969,13 @@ class KafkaApis(val requestChannel: RequestChannel,
       sendResponseMaybeThrottleWithControllerQuota(controllerMutationQuota, request, createResponse)
     }
 
+    // be sure to check authorization first, before checking if this is the controller, to avoid leaking
+    // information about the system (i.e. who is the controller) to principals unauthorized for that information
+
     val deleteTopicRequest = request.body[DeleteTopicsRequest]
     val results = new DeletableTopicResultCollection(deleteTopicRequest.data.topicNames.size)
     val toDelete = mutable.Set[String]()
-    if (!controller.isActive) {
-      deleteTopicRequest.data.topicNames.forEach { topic =>
-        results.add(new DeletableTopicResult()
-          .setName(topic)
-          .setErrorCode(Errors.NOT_CONTROLLER.code))
-      }
-      sendResponseCallback(results)
-    } else if (!config.deleteTopicEnable) {
+    if (!config.deleteTopicEnable) {
       val error = if (request.context.apiVersion < 3) Errors.INVALID_REQUEST else Errors.TOPIC_DELETION_DISABLED
       deleteTopicRequest.data.topicNames.forEach { topic =>
         results.add(new DeletableTopicResult()
@@ -1989,25 +1998,38 @@ class KafkaApis(val requestChannel: RequestChannel,
          else
            toDelete += topic.name
       }
-      // If no authorized topics return immediately
-      if (toDelete.isEmpty)
-        sendResponseCallback(results)
-      else {
-        def handleDeleteTopicsResults(errors: Map[String, Errors]): Unit = {
-          errors.foreach {
-            case (topicName, error) =>
-              results.find(topicName)
-                .setErrorCode(error.code)
+      if (!controller.isActive) {
+        // Don't provide the information that this node is not the controller unless they were authorized
+        // to perform at least one of their requests.  So only set NOT_CONTROLLER error for anything that so far has a
+        // success/NONE error code.  Keep the existing error codes that we've determined rather than overwriting them
+        // with NOT_CONTROLLER because that is potentially useful information for the client.
+        results.forEach { topic =>
+          if(topic.errorCode() == Errors.NONE.code()) {
+            topic.setErrorCode(Errors.NOT_CONTROLLER.code)
           }
-          sendResponseCallback(results)
         }
+        sendResponseCallback(results)
+      } else {
+        // If no authorized topics return immediately
+        if(toDelete.isEmpty)
+          sendResponseCallback(results)
+        else {
+          def handleDeleteTopicsResults(errors: Map[String, Errors]): Unit = {
+            errors.foreach {
+              case (topicName, error) =>
+                results.find(topicName)
+                  .setErrorCode(error.code)
+            }
+            sendResponseCallback(results)
+          }
 
-        adminManager.deleteTopics(
-          deleteTopicRequest.data.timeoutMs,
-          toDelete,
-          controllerMutationQuota,
-          handleDeleteTopicsResults
-        )
+          adminManager.deleteTopics(
+            deleteTopicRequest.data.timeoutMs,
+            toDelete,
+            controllerMutationQuota,
+            handleDeleteTopicsResults
+          )
+        }
       }
     }
   }
@@ -3183,15 +3205,22 @@ class KafkaApis(val requestChannel: RequestChannel,
   def handleAlterUserScramCredentialsRequest(request: RequestChannel.Request): Unit = {
     val alterUserScramCredentialsRequest = request.body[AlterUserScramCredentialsRequest]
 
-    if (!controller.isActive) {
-      sendResponseMaybeThrottle(request, requestThrottleMs =>
-        alterUserScramCredentialsRequest.getErrorResponse(requestThrottleMs, Errors.NOT_CONTROLLER.exception))
-    } else if (authorize(request.context, ALTER, CLUSTER, CLUSTER_NAME)) {
-      val result = adminManager.alterUserScramCredentials(
-        alterUserScramCredentialsRequest.data.upsertions().asScala, alterUserScramCredentialsRequest.data.deletions().asScala)
-      sendResponseMaybeThrottle(request, requestThrottleMs =>
-        new AlterUserScramCredentialsResponse(result.setThrottleTimeMs(requestThrottleMs)))
+    // be sure to check authorization first, before checking if this is the controller, to avoid leaking
+    // information about the system (i.e. who is the controller) to principals unauthorized for that information
+    if (authorize(request.context, ALTER, CLUSTER, CLUSTER_NAME)) {
+      // now check if we are the controller since they are authorized for that information
+      if (!controller.isActive) {
+        sendResponseMaybeThrottle(request, requestThrottleMs =>
+          alterUserScramCredentialsRequest.getErrorResponse(requestThrottleMs, Errors.NOT_CONTROLLER.exception))
+      } else {
+        val result = adminManager.alterUserScramCredentials(
+          alterUserScramCredentialsRequest.data.upsertions().asScala, alterUserScramCredentialsRequest.data.deletions().asScala)
+        sendResponseMaybeThrottle(request, requestThrottleMs =>
+          new AlterUserScramCredentialsResponse(result.setThrottleTimeMs(requestThrottleMs)))
+      }
     } else {
+      // not authorized; send that back regardless of whether this is the controller or not
+      // because we don't want to leak the information (that this is not the controller) when they weren't authorized
       sendResponseMaybeThrottle(request, requestThrottleMs =>
         alterUserScramCredentialsRequest.getErrorResponse(requestThrottleMs, Errors.CLUSTER_AUTHORIZATION_FAILED.exception))
     }
