@@ -62,9 +62,6 @@ class AlterIsrManagerTest {
     val alterIsrManager = new DefaultAlterIsrManager(brokerToController, scheduler, time, brokerId, () => 2)
     alterIsrManager.start()
     alterIsrManager.submit(AlterIsrItem(tp0, new LeaderAndIsr(1, 1, List(1,2,3), 10), _ => {}, 0))
-    time.sleep(50)
-    scheduler.tick()
-
     EasyMock.verify(brokerToController)
   }
 
@@ -82,10 +79,6 @@ class AlterIsrManagerTest {
     // Only send one ISR update for a given topic+partition
     assertTrue(alterIsrManager.submit(AlterIsrItem(tp0, new LeaderAndIsr(1, 1, List(1,2,3), 10), _ => {}, 0)))
     assertFalse(alterIsrManager.submit(AlterIsrItem(tp0, new LeaderAndIsr(1, 1, List(1,2), 10), _ => {}, 0)))
-
-    time.sleep(50)
-    scheduler.tick()
-
     EasyMock.verify(brokerToController)
 
     val request = capture.getValue.build()
@@ -148,17 +141,12 @@ class AlterIsrManagerTest {
   }
 
   private def checkTopLevelError(error: Errors): Unit = {
-    val isrs = Seq(AlterIsrItem(tp0, new LeaderAndIsr(1, 1, List(1,2,3), 10), _ => { }, 0))
-    val alterIsrManager = testTopLevelError(isrs, error)
-    // Any top-level error, we want to retry, so we don't clear items from the pending map
-    assertFalse(alterIsrManager.submit(AlterIsrItem(tp0, null, _ => { }, 0)))
-  }
-
-  private def testTopLevelError(isrs: Seq[AlterIsrItem], error: Errors): AlterIsrManager = {
+    val leaderAndIsr = new LeaderAndIsr(1, 1, List(1,2,3), 10)
+    val isrs = Seq(AlterIsrItem(tp0, leaderAndIsr, _ => { }, 0))
     val callbackCapture = EasyMock.newCapture[ControllerRequestCompletionHandler]()
 
     EasyMock.expect(brokerToController.start())
-    EasyMock.expect(brokerToController.sendRequest(EasyMock.anyObject(), EasyMock.capture(callbackCapture))).once()
+    EasyMock.expect(brokerToController.sendRequest(EasyMock.anyObject(), EasyMock.capture(callbackCapture))).times(1)
     EasyMock.replay(brokerToController)
 
     val scheduler = new MockScheduler(time)
@@ -166,16 +154,33 @@ class AlterIsrManagerTest {
     alterIsrManager.start()
     isrs.foreach(alterIsrManager.submit)
 
-    time.sleep(1)
+    EasyMock.verify(brokerToController)
+
+    var alterIsrResp = new AlterIsrResponse(new AlterIsrResponseData().setErrorCode(error.code))
+    var resp = new ClientResponse(null, null, "", 0L, 0L,
+      false, null, null, alterIsrResp)
+    callbackCapture.getValue.onComplete(resp)
+
+    // Any top-level error, we want to retry, so we don't clear items from the pending map
+    assertTrue(alterIsrManager.unsentIsrUpdates.containsKey(tp0))
+
+    EasyMock.reset(brokerToController)
+    EasyMock.expect(brokerToController.sendRequest(EasyMock.anyObject(), EasyMock.capture(callbackCapture))).times(1)
+    EasyMock.replay(brokerToController)
+
+    // After some time, we will retry failed requests
+    time.sleep(100)
     scheduler.tick()
+
+    // After a successful response, we can submit another AlterIsrItem
+    alterIsrResp = partitionResponse(tp0, Errors.NONE)
+    resp = new ClientResponse(null, null, "", 0L, 0L,
+      false, null, null, alterIsrResp)
+    callbackCapture.getValue.onComplete(resp)
 
     EasyMock.verify(brokerToController)
 
-    val alterIsrResp = new AlterIsrResponse(new AlterIsrResponseData().setErrorCode(error.code))
-    val resp = new ClientResponse(null, null, "", 0L, 0L,
-      false, null, null, alterIsrResp)
-    callbackCapture.getValue.onComplete(resp)
-    alterIsrManager
+    assertFalse(alterIsrManager.unsentIsrUpdates.containsKey(tp0))
   }
 
   @Test
@@ -223,14 +228,7 @@ class AlterIsrManagerTest {
     EasyMock.verify(brokerToController)
     EasyMock.reset(brokerToController)
 
-    val alterIsrResp = new AlterIsrResponse(new AlterIsrResponseData()
-      .setTopics(Collections.singletonList(
-        new AlterIsrResponseData.TopicData()
-          .setName(tp.topic())
-          .setPartitions(Collections.singletonList(
-            new AlterIsrResponseData.PartitionData()
-              .setPartitionIndex(tp.partition())
-              .setErrorCode(error.code))))))
+    val alterIsrResp = partitionResponse(tp, error)
     val resp = new ClientResponse(null, null, "", 0L, 0L,
       false, null, null, alterIsrResp)
     callbackCapture.getValue.onComplete(resp)
@@ -292,21 +290,10 @@ class AlterIsrManagerTest {
     alterIsrManager.submit(AlterIsrItem(tp1, new LeaderAndIsr(1, 1, List(1,2,3), 10), callback, 0))
     alterIsrManager.submit(AlterIsrItem(tp2, new LeaderAndIsr(1, 1, List(1,2,3), 10), callback, 0))
 
-
-    time.sleep(100)
-    scheduler.tick()
-
     EasyMock.verify(brokerToController)
 
     // Three partitions were sent, but only one returned
-    val alterIsrResp = new AlterIsrResponse(new AlterIsrResponseData()
-      .setTopics(Collections.singletonList(
-        new AlterIsrResponseData.TopicData()
-          .setName(tp0.topic())
-          .setPartitions(Collections.singletonList(
-            new AlterIsrResponseData.PartitionData()
-              .setPartitionIndex(tp0.partition())
-              .setErrorCode(Errors.UNKNOWN_SERVER_ERROR.code()))))))
+    val alterIsrResp = partitionResponse(tp0, Errors.UNKNOWN_SERVER_ERROR)
     val resp = new ClientResponse(null, null, "", 0L, 0L,
       false, null, null, alterIsrResp)
     callbackCapture.getValue.onComplete(resp)
@@ -341,5 +328,16 @@ class AlterIsrManagerTest {
     // Wrong ZK version
     assertTrue(zkIsrManager.submit(AlterIsrItem(tp0, new LeaderAndIsr(1, 1, List(1,2,3), 3),
       expectMatch(Left(Errors.INVALID_UPDATE_VERSION)), 0)))
+  }
+
+  private def partitionResponse(tp: TopicPartition, error: Errors): AlterIsrResponse = {
+    new AlterIsrResponse(new AlterIsrResponseData()
+      .setTopics(Collections.singletonList(
+        new AlterIsrResponseData.TopicData()
+          .setName(tp.topic())
+          .setPartitions(Collections.singletonList(
+            new AlterIsrResponseData.PartitionData()
+              .setPartitionIndex(tp.partition())
+              .setErrorCode(error.code))))))
   }
 }

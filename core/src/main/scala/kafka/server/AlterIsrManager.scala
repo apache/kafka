@@ -111,8 +111,8 @@ class DefaultAlterIsrManager(
   val brokerEpochSupplier: () => Long
 ) extends AlterIsrManager with Logging with KafkaMetricsGroup {
 
-  // Used to allow only one pending ISR update per partition
-  private val unsentIsrUpdates: util.Map[TopicPartition, AlterIsrItem] = new ConcurrentHashMap[TopicPartition, AlterIsrItem]()
+  // Used to allow only one pending ISR update per partition (visible for testing)
+  private[server] val unsentIsrUpdates: util.Map[TopicPartition, AlterIsrItem] = new ConcurrentHashMap[TopicPartition, AlterIsrItem]()
 
   // Used to allow only one in-flight request at a time
   private val inflightRequest: AtomicBoolean = new AtomicBoolean(false)
