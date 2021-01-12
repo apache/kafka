@@ -1504,12 +1504,30 @@ class KafkaZkClient private[zk] (zooKeeperClient: ZooKeeperClient, isSecure: Boo
     zooKeeperClient.unregisterStateChangeHandler(name)
   }
 
+  private def close(timeoutMs: Option[Int]): Boolean = {
+    removeMetric("ZooKeeperRequestLatencyMs")
+    timeoutMs match {
+      case Some(timeout) => zooKeeperClient.closeAndWait(timeout)
+      case None => {
+        zooKeeperClient.close()
+        false
+      }
+    }
+  }
+
   /**
    * Close the underlying ZooKeeperClient.
    */
   def close(): Unit = {
-    removeMetric("ZooKeeperRequestLatencyMs")
-    zooKeeperClient.close()
+    close(None)
+  }
+
+  /**
+   * Wait up to the provided timeoutMs this KafkaZKClient to close.
+   * Supplying a timeoutMs of 0 means to wait forever.
+   */
+  def closeAndWait(timeoutMs: Int): Boolean = {
+    close(Some(timeoutMs))
   }
 
   /**

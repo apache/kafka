@@ -348,7 +348,7 @@ class ZooKeeperClient(connectString: String,
     stateChangeHandlers.remove(name)
   }
 
-  def close(): Unit = {
+  private def close(timeoutMs: Option[Int]): Boolean = {
     info("Closing.")
 
     // Shutdown scheduler outside of lock to avoid deadlock if scheduler
@@ -357,13 +357,33 @@ class ZooKeeperClient(connectString: String,
     reinitializeScheduler.shutdown()
 
     inWriteLock(initializationLock) {
+      var zkClosed = false
       zNodeChangeHandlers.clear()
       zNodeChildChangeHandlers.clear()
       stateChangeHandlers.clear()
-      zooKeeper.close()
+      timeoutMs match {
+        case Some(timeout) => {
+          zooKeeper.close(timeout)
+          zkClosed = true
+        }
+        case None => zooKeeper.close()
+      }
       metricNames.foreach(removeMetric(_))
+      info("Closed.")
+      zkClosed
     }
-    info("Closed.")
+  }
+
+  def close(): Unit = {
+    close(None)
+  }
+
+  /**
+   * Wait up to the provided timeoutMs this ZooKeeperClient to close.
+   * Supplying a timeoutMs of 0 means to wait forever.
+   */
+  def closeAndWait(timeoutMs: Int): Boolean = {
+    close(Some(timeoutMs))
   }
 
   def sessionId: Long = inReadLock(initializationLock) {
