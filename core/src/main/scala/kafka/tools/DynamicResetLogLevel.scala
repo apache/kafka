@@ -82,12 +82,14 @@ object DynamicResetLogLevel {
         System.err.println(s"Could not connect to JMX url: $url. Exception ${e.getMessage}.")
     }
 
-    val logLevelBeforeChanged = mbsc.invoke(mbeanNameObject, "getLogLevel", Array[AnyRef](logName), Array[String]("java.lang.String"))
-    println(s"The logLevel of LogName ${logName}  is ${logLevelBeforeChanged} before changing. ")
-    val logReSetResult = mbsc.invoke(mbeanNameObject, "setLogLevel", Array[AnyRef](logName, logLevel), Array[String]("java.lang.String", "java.lang.String"))
-    println(s"The result of the setLogLevel is ${logReSetResult}")
-    val logLevelAfterChanged = mbsc.invoke(mbeanNameObject, "getLogLevel", Array[AnyRef](logName), Array[String]("java.lang.String"))
-    println(s"The logLevel of LogName ${logName}  is ${logLevelAfterChanged} after changing. ")
+    try {
+      val logReSetResult = mbsc.invoke(mbeanNameObject, "setLogLevel", Array[AnyRef](logName, logLevel), Array[String]("java.lang.String", "java.lang.String"))
+      val logLevelAfterChanged = mbsc.invoke(mbeanNameObject, "getLogLevel", Array[AnyRef](logName), Array[String]("java.lang.String"))
+      println(s"The result of the setLogLevel is ${logReSetResult}, the logLevel of LogName ${logName}  is ${logLevelAfterChanged} after changing. ")
+    } catch {
+      case e: Throwable =>
+        println("The invoke throw exception,", e)
+    }
   }
 
 }
