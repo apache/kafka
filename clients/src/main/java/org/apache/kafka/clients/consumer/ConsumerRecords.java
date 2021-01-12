@@ -74,14 +74,15 @@ public class ConsumerRecords<K, V> implements Iterable<ConsumerRecord<K, V>> {
         }
 
         /**
-         * @return The lag between the next position to fetch and the current end of the partition
+         * @return The lag between the next position to fetch and the current end of the partition, or
+         * null if the end offset is not known or there is no position.
          */
         public Long lag() {
             return endOffset == null || position == null ? null : endOffset - position;
         }
 
         /**
-         * @return The current first offset in the partition.
+         * @return The current first offset in the partition, or if the beginning offset is not known.
          */
         public Long beginningOffset() {
             return beginningOffset;
@@ -91,7 +92,8 @@ public class ConsumerRecords<K, V> implements Iterable<ConsumerRecord<K, V>> {
          * @return The current last offset in the partition. The determination of the "last" offset
          * depends on the Consumer's isolation level. Under "read_uncommitted," this is the last successfully
          * replicated offset plus one. Under "read_committed," this is the minimum of the last successfully
-         * replicated offset plus one or the smallest offset of any open transaction.
+         * replicated offset plus one or the smallest offset of any open transaction. Null if the end offset
+         * is not known.
          */
         public Long endOffset() {
             return endOffset;
@@ -227,7 +229,7 @@ public class ConsumerRecords<K, V> implements Iterable<ConsumerRecord<K, V>> {
     }
 
     public boolean isEmpty() {
-        return records.isEmpty() && metadata.isEmpty();
+        return records.isEmpty();
     }
 
     @SuppressWarnings("unchecked")
