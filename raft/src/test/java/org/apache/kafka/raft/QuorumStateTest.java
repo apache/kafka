@@ -46,6 +46,13 @@ public class QuorumStateTest {
     private final Random random = Mockito.spy(new Random(1));
 
     private QuorumState buildQuorumState(Set<Integer> voters) {
+        return buildQuorumState(OptionalInt.of(localId), voters);
+    }
+
+    private QuorumState buildQuorumState(
+        OptionalInt localId,
+        Set<Integer> voters
+    ) {
         return new QuorumState(
             localId,
             voters,
@@ -1017,6 +1024,25 @@ public class QuorumStateTest {
 
         state.transitionToLeader(10L);
         assertEquals(Optional.empty(), state.highWatermark());
+    }
+
+    @Test
+    public void testInitializeWithEmptyLocalId() throws IOException {
+        QuorumState state = buildQuorumState(OptionalInt.empty(), Utils.mkSet(0, 1));
+        state.initialize(new OffsetAndEpoch(0L, 0));
+
+        assertTrue(state.isObserver());
+        assertFalse(state.isVoter());
+
+        assertThrows(IllegalStateException.class, state::transitionToCandidate);
+        assertThrows(IllegalStateException.class, () -> state.transitionToVoted(1, 1));
+        assertThrows(IllegalStateException.class, () -> state.transitionToLeader(0L));
+
+        state.transitionToFollower(1, 1);
+        assertTrue(state.isFollower());
+
+        state.transitionToUnattached(2);
+        assertTrue(state.isUnattached());
     }
 
     private QuorumState initializeEmptyState(Set<Integer> voters) throws IOException {

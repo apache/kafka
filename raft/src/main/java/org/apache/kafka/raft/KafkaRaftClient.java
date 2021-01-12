@@ -141,7 +141,7 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
     private final LogContext logContext;
     private final Time time;
     private final int fetchMaxWaitMs;
-    private final int nodeId;
+    private final OptionalInt nodeId;
     private final NetworkChannel channel;
     private final ReplicatedLog log;
     private final Random random;
@@ -171,7 +171,7 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
         Metrics metrics,
         ExpirationService expirationService,
         LogContext logContext,
-        int nodeId
+        OptionalInt nodeId
     ) {
         this(serde,
             channel,
@@ -199,7 +199,7 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
         Metrics metrics,
         ExpirationService expirationService,
         int fetchMaxWaitMs,
-        int nodeId,
+        OptionalInt nodeId,
         LogContext logContext,
         Random random
     ) {
@@ -823,7 +823,7 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
         // election backoff time based on strict exponential mechanism so that the most up-to-date
         // voter has a higher chance to be elected. If the node's priority is highest, become
         // candidate immediately instead of waiting for next poll.
-        int position = preferredSuccessors.indexOf(quorum.localId);
+        int position = preferredSuccessors.indexOf(quorum.localIdOrThrow());
         if (position <= 0) {
             return 0;
         } else {
@@ -1357,7 +1357,7 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
     private boolean hasConsistentLeader(int epoch, OptionalInt leaderId) {
         // Only elected leaders are sent in the request/response header, so if we have an elected
         // leaderId, it should be consistent with what is in the message.
-        if (leaderId.isPresent() && leaderId.getAsInt() == quorum.localId) {
+        if (leaderId.isPresent() && leaderId.getAsInt() == quorum.localIdOrNil()) {
             // The response indicates that we should be the leader, so we verify that is the case
             return quorum.isLeader();
         } else {
@@ -1670,7 +1670,7 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
         return EndQuorumEpochRequest.singletonRequest(
             log.topicPartition(),
             quorum.epoch(),
-            quorum.localId,
+            quorum.localIdOrThrow(),
             state.preferredSuccessors()
         );
     }
@@ -1694,7 +1694,7 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
         return BeginQuorumEpochRequest.singletonRequest(
             log.topicPartition(),
             quorum.epoch(),
-            quorum.localId
+            quorum.localIdOrThrow()
         );
     }
 
@@ -1703,7 +1703,7 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
         return VoteRequest.singletonRequest(
             log.topicPartition(),
             quorum.epoch(),
-            quorum.localId,
+            quorum.localIdOrThrow(),
             endOffset.epoch,
             endOffset.offset
         );
@@ -1718,7 +1718,7 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
         });
         return request
             .setMaxWaitMs(fetchMaxWaitMs)
-            .setReplicaId(quorum.localId);
+            .setReplicaId(quorum.localIdOrNil());
     }
 
     private long maybeSendAnyVoterFetch(long currentTimeMs) {
@@ -1749,7 +1749,7 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
             }
         );
 
-        return request.setReplicaId(quorum.localId);
+        return request.setReplicaId(quorum.localIdOrNil());
     }
 
     private FetchSnapshotResponseData.PartitionSnapshot addQuorumLeader(
