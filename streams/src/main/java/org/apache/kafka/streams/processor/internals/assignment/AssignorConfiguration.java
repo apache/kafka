@@ -197,7 +197,7 @@ public final class AssignorConfiguration {
     public CopartitionedTopicsEnforcer copartitionedTopicsEnforcer() {
         return new CopartitionedTopicsEnforcer(logPrefix);
     }
-    
+
     public AssignmentConfigs assignmentConfigs() {
         return new AssignmentConfigs(streamsConfig);
     }
