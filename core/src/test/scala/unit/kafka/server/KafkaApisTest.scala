@@ -23,6 +23,7 @@ import java.util
 import java.util.Arrays.asList
 import java.util.concurrent.TimeUnit
 import java.util.{Collections, Optional, Properties, Random}
+
 import kafka.api.{ApiVersion, KAFKA_0_10_2_IV0, KAFKA_2_2_IV1, LeaderAndIsr}
 import kafka.cluster.{Broker, Partition}
 import kafka.controller.KafkaController
@@ -63,7 +64,7 @@ import org.apache.kafka.common.requests.WriteTxnMarkersRequest.TxnMarkerEntry
 import org.apache.kafka.common.requests.{FetchMetadata => JFetchMetadata, _}
 import org.apache.kafka.common.resource.{PatternType, Resource, ResourcePattern, ResourceType}
 import org.apache.kafka.common.security.auth.{KafkaPrincipal, KafkaPrincipalSerde, SecurityProtocol}
-import org.apache.kafka.common.utils.ProducerIdAndEpoch
+import org.apache.kafka.common.utils.{ProducerIdAndEpoch, SecurityUtils, Utils}
 import org.apache.kafka.common.{IsolationLevel, Node, TopicPartition, Uuid}
 import org.apache.kafka.server.authorizer.{Action, AuthorizationResult, Authorizer}
 import org.easymock.EasyMock._
@@ -74,7 +75,6 @@ import org.mockito.{ArgumentMatchers, Mockito}
 
 import scala.annotation.nowarn
 import scala.collection.{Map, Seq, mutable}
-import scala.compat.java8.OptionConverters._
 import scala.jdk.CollectionConverters._
 
 class KafkaApisTest {
@@ -88,10 +88,10 @@ class KafkaApisTest {
   private val controller: KafkaController = EasyMock.createNiceMock(classOf[KafkaController])
   private val forwardingManager: ForwardingManager = EasyMock.createNiceMock(classOf[ForwardingManager])
   private val hostAddress: Array[Byte] = InetAddress.getByName("192.168.1.1").getAddress
-  private val kafkaPrincipalSerde: Option[KafkaPrincipalSerde] = Option(new KafkaPrincipalSerde {
-    override def serialize(principal: KafkaPrincipal): Array[Byte] = null
-    override def deserialize(bytes: Array[Byte]): KafkaPrincipal = null
-  })
+  private val kafkaPrincipalSerde = new KafkaPrincipalSerde {
+    override def serialize(principal: KafkaPrincipal): Array[Byte] = Utils.utf8(principal.toString)
+    override def deserialize(bytes: Array[Byte]): KafkaPrincipal = SecurityUtils.parseKafkaPrincipal(Utils.utf8(bytes))
+  }
   private val zkClient: KafkaZkClient = EasyMock.createNiceMock(classOf[KafkaZkClient])
   private val metrics = new Metrics()
   private val brokerId = 1
@@ -343,7 +343,7 @@ class KafkaApisTest {
 
     createKafkaApis(authorizer = Some(authorizer), enableForwarding = true).handle(request)
 
-    val envelopeRequest = request.envelope.get.body[EnvelopeRequest]
+    val envelopeRequest = request.body[EnvelopeRequest]
     val response = readResponse(envelopeRequest, capturedResponse)
       .asInstanceOf[EnvelopeResponse]
 
@@ -364,33 +364,6 @@ class KafkaApisTest {
   }
 
   @Test
-  def testInvalidEnvelopeRequestAsPrimary(): Unit = {
-    val configResource = new ConfigResource(ConfigResource.Type.TOPIC, "name")
-    val requestHeader = new RequestHeader(ApiKeys.ALTER_CONFIGS, ApiKeys.ALTER_CONFIGS.latestVersion,
-      clientId, 0)
-
-    val configs = Map(
-      configResource -> new AlterConfigsRequest.Config(
-        Seq(new AlterConfigsRequest.ConfigEntry("foo", "bar")).asJava))
-    val alterConfigsRequest = new AlterConfigsRequest.Builder(configs.asJava, false).build(requestHeader.apiVersion)
-    val serializedRequestData = RequestTestUtils.serializeRequestWithHeader(requestHeader, alterConfigsRequest)
-
-    val capturedResponse = expectNoThrottling()
-
-    EasyMock.replay(replicaManager, clientRequestQuotaManager, requestChannel, controller)
-
-    val envelopeRequest = new EnvelopeRequest.Builder(serializedRequestData, new Array[Byte](0), hostAddress)
-      .build(ApiKeys.ENVELOPE.latestVersion)
-    val request = buildRequest(envelopeRequest, fromPrivilegedListener = true)
-
-    createKafkaApis(enableForwarding = true).handle(request)
-
-    val response = readResponse(envelopeRequest, capturedResponse)
-      .asInstanceOf[EnvelopeResponse]
-    assertEquals(Errors.UNKNOWN_SERVER_ERROR, response.error())
-  }
-
-  @Test
   def testInvalidEnvelopeRequestWithNonForwardableAPI(): Unit = {
     val requestHeader = new RequestHeader(ApiKeys.LEAVE_GROUP, ApiKeys.LEAVE_GROUP.latestVersion,
       clientId, 0)
@@ -399,6 +372,8 @@ class KafkaApisTest {
     val serializedRequestData = RequestTestUtils.serializeRequestWithHeader(requestHeader, leaveGroupRequest)
 
     resetToStrict(requestChannel)
+
+    EasyMock.expect(controller.isActive).andReturn(true)
 
     EasyMock.expect(requestChannel.updateErrorMetrics(ApiKeys.ENVELOPE, Map(Errors.INVALID_REQUEST -> 1)))
     val capturedResponse = expectNoThrottling()
@@ -421,7 +396,8 @@ class KafkaApisTest {
 
   @Test
   def testEnvelopeRequestWithNotFromPrivilegedListener(): Unit = {
-    testInvalidEnvelopeRequest(Errors.NONE, fromPrivilegedListener = false, shouldCloseConnection = true)
+    testInvalidEnvelopeRequest(Errors.NONE, fromPrivilegedListener = false,
+      shouldCloseConnection = true)
   }
 
   @Test
@@ -473,7 +449,7 @@ class KafkaApisTest {
     if (shouldCloseConnection) {
       assertTrue(capturedResponse.getValue.isInstanceOf[CloseConnectionResponse])
     } else {
-      val envelopeRequest = request.envelope.get.body[EnvelopeRequest]
+      val envelopeRequest = request.body[EnvelopeRequest]
       val response = readResponse(envelopeRequest, capturedResponse)
         .asInstanceOf[EnvelopeResponse]
 
@@ -2911,45 +2887,31 @@ class KafkaApisTest {
   private def buildRequestWithEnvelope(
     request: AbstractRequest,
     fromPrivilegedListener: Boolean,
-    principalSerde: Option[KafkaPrincipalSerde] = kafkaPrincipalSerde
+    principalSerde: KafkaPrincipalSerde = kafkaPrincipalSerde
   ): RequestChannel.Request = {
     val listenerName = ListenerName.forSecurityProtocol(SecurityProtocol.PLAINTEXT)
 
     val requestHeader = new RequestHeader(request.apiKey, request.version, clientId, 0)
     val requestBuffer = RequestTestUtils.serializeRequestWithHeader(requestHeader, request)
-    val requestContext = new RequestContext(requestHeader, "1", InetAddress.getLocalHost,
-      KafkaPrincipal.ANONYMOUS, listenerName, SecurityProtocol.PLAINTEXT, ClientInformation.EMPTY,
-      fromPrivilegedListener)
 
     val envelopeHeader = new RequestHeader(ApiKeys.ENVELOPE, ApiKeys.ENVELOPE.latestVersion(), clientId, 0)
     val envelopeBuffer = RequestTestUtils.serializeRequestWithHeader(envelopeHeader, new EnvelopeRequest.Builder(
       requestBuffer,
-      new Array[Byte](0),
+      principalSerde.serialize(KafkaPrincipal.ANONYMOUS),
       InetAddress.getLocalHost.getAddress
     ).build())
     val envelopeContext = new RequestContext(envelopeHeader, "1", InetAddress.getLocalHost,
       KafkaPrincipal.ANONYMOUS, listenerName, SecurityProtocol.PLAINTEXT, ClientInformation.EMPTY,
-      fromPrivilegedListener, principalSerde.asJava)
+      fromPrivilegedListener, Optional.of(principalSerde))
 
     RequestHeader.parse(envelopeBuffer)
-    val envelopeRequest = Some(new RequestChannel.Request(
+    new RequestChannel.Request(
       processor = 1,
       context = envelopeContext,
       startTimeNanos = time.nanoseconds(),
       memoryPool = MemoryPool.NONE,
       buffer = envelopeBuffer,
       metrics = requestChannelMetrics
-    ))
-
-    RequestHeader.parse(requestBuffer)
-    new RequestChannel.Request(
-      processor = 1,
-      context = requestContext,
-      startTimeNanos = time.nanoseconds(),
-      memoryPool = MemoryPool.NONE,
-      buffer = requestBuffer,
-      metrics = requestChannelMetrics,
-      envelope = envelopeRequest
     )
   }
 
@@ -2964,7 +2926,7 @@ class KafkaApisTest {
     val header = RequestHeader.parse(buffer)
     val context = new RequestContext(header, "1", InetAddress.getLocalHost, KafkaPrincipal.ANONYMOUS,
       listenerName, SecurityProtocol.PLAINTEXT, ClientInformation.EMPTY, fromPrivilegedListener,
-      kafkaPrincipalSerde.asJava)
+      Optional.of(kafkaPrincipalSerde))
     new RequestChannel.Request(processor = 1, context = context, startTimeNanos = 0, MemoryPool.NONE, buffer,
       requestChannelMetrics, envelope = None)
   }

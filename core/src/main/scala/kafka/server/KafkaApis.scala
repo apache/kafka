@@ -19,11 +19,13 @@ package kafka.server
 
 import java.lang.{Byte => JByte}
 import java.lang.{Long => JLong}
+import java.net.{InetAddress, UnknownHostException}
 import java.nio.ByteBuffer
 import java.util
 import java.util.{Collections, Optional}
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicInteger
+
 import kafka.admin.{AdminUtils, RackAwareMode}
 import kafka.api.ElectLeadersRequestOps
 import kafka.api.{ApiVersion, KAFKA_0_11_0_IV0, KAFKA_2_3_IV0}
@@ -66,7 +68,7 @@ import org.apache.kafka.common.message.OffsetForLeaderEpochRequestData.OffsetFor
 import org.apache.kafka.common.message.OffsetForLeaderEpochResponseData
 import org.apache.kafka.common.message.OffsetForLeaderEpochResponseData.{EpochEndOffset, OffsetForLeaderTopicResult, OffsetForLeaderTopicResultCollection}
 import org.apache.kafka.common.metrics.Metrics
-import org.apache.kafka.common.network.{ListenerName, Send}
+import org.apache.kafka.common.network.{ClientInformation, ListenerName, Send}
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.record._
 import org.apache.kafka.common.replica.ClientMetadata
@@ -129,39 +131,11 @@ class KafkaApis(val requestChannel: RequestChannel,
     info("Shutdown complete.")
   }
 
-  private def maybeHandleInvalidEnvelope(
-    envelope: RequestChannel.Request,
-    forwardedApiKey: ApiKeys
-  ): Boolean = {
-    def sendEnvelopeError(error: Errors): Unit = {
-      sendErrorResponseMaybeThrottle(envelope, error.exception)
-    }
-
-    if (!config.metadataQuorumEnabled || !envelope.context.fromPrivilegedListener) {
-      // If the designated forwarding request is not coming from a privileged listener, or
-      // forwarding is not enabled yet, we would not handle the request.
-      closeConnection(envelope, Collections.emptyMap())
-      true
-    } else if (!authorize(envelope.context, CLUSTER_ACTION, CLUSTER, CLUSTER_NAME)) {
-      // Forwarding request must have CLUSTER_ACTION authorization to reduce the risk of impersonation.
-      sendEnvelopeError(Errors.CLUSTER_AUTHORIZATION_FAILED)
-      true
-    } else if (!forwardedApiKey.forwardable) {
-      sendEnvelopeError(Errors.INVALID_REQUEST)
-      true
-    } else if (!controller.isActive) {
-      sendEnvelopeError(Errors.NOT_CONTROLLER)
-      true
-    } else {
-      false
-    }
-  }
-
   private def isForwardingEnabled(request: RequestChannel.Request): Boolean = {
     config.metadataQuorumEnabled && request.context.principalSerde.isPresent
   }
 
-  private def maybeForward(
+  private def maybeForwardToController(
     request: RequestChannel.Request,
     handler: RequestChannel.Request => Unit
   ): Unit = {
@@ -186,77 +160,70 @@ class KafkaApis(val requestChannel: RequestChannel,
       trace(s"Handling request:${request.requestDesc(true)} from connection ${request.context.connectionId};" +
         s"securityProtocol:${request.context.securityProtocol},principal:${request.context.principal}")
 
-      val handled = request.envelope.exists { envelope =>
-        maybeHandleInvalidEnvelope(envelope, request.header.apiKey)
-      }
+      request.header.apiKey match {
+        case ApiKeys.PRODUCE => handleProduceRequest(request)
+        case ApiKeys.FETCH => handleFetchRequest(request)
+        case ApiKeys.LIST_OFFSETS => handleListOffsetRequest(request)
+        case ApiKeys.METADATA => handleTopicMetadataRequest(request)
+        case ApiKeys.LEADER_AND_ISR => handleLeaderAndIsrRequest(request)
+        case ApiKeys.STOP_REPLICA => handleStopReplicaRequest(request)
+        case ApiKeys.UPDATE_METADATA => handleUpdateMetadataRequest(request)
+        case ApiKeys.CONTROLLED_SHUTDOWN => handleControlledShutdownRequest(request)
+        case ApiKeys.OFFSET_COMMIT => handleOffsetCommitRequest(request)
+        case ApiKeys.OFFSET_FETCH => handleOffsetFetchRequest(request)
+        case ApiKeys.FIND_COORDINATOR => handleFindCoordinatorRequest(request)
+        case ApiKeys.JOIN_GROUP => handleJoinGroupRequest(request)
+        case ApiKeys.HEARTBEAT => handleHeartbeatRequest(request)
+        case ApiKeys.LEAVE_GROUP => handleLeaveGroupRequest(request)
+        case ApiKeys.SYNC_GROUP => handleSyncGroupRequest(request)
+        case ApiKeys.DESCRIBE_GROUPS => handleDescribeGroupRequest(request)
+        case ApiKeys.LIST_GROUPS => handleListGroupsRequest(request)
+        case ApiKeys.SASL_HANDSHAKE => handleSaslHandshakeRequest(request)
+        case ApiKeys.API_VERSIONS => handleApiVersionsRequest(request)
+        case ApiKeys.CREATE_TOPICS => maybeForwardToController(request, handleCreateTopicsRequest)
+        case ApiKeys.DELETE_TOPICS => maybeForwardToController(request, handleDeleteTopicsRequest)
+        case ApiKeys.DELETE_RECORDS => handleDeleteRecordsRequest(request)
+        case ApiKeys.INIT_PRODUCER_ID => handleInitProducerIdRequest(request)
+        case ApiKeys.OFFSET_FOR_LEADER_EPOCH => handleOffsetForLeaderEpochRequest(request)
+        case ApiKeys.ADD_PARTITIONS_TO_TXN => handleAddPartitionToTxnRequest(request)
+        case ApiKeys.ADD_OFFSETS_TO_TXN => handleAddOffsetsToTxnRequest(request)
+        case ApiKeys.END_TXN => handleEndTxnRequest(request)
+        case ApiKeys.WRITE_TXN_MARKERS => handleWriteTxnMarkersRequest(request)
+        case ApiKeys.TXN_OFFSET_COMMIT => handleTxnOffsetCommitRequest(request)
+        case ApiKeys.DESCRIBE_ACLS => handleDescribeAcls(request)
+        case ApiKeys.CREATE_ACLS => maybeForwardToController(request, handleCreateAcls)
+        case ApiKeys.DELETE_ACLS => maybeForwardToController(request, handleDeleteAcls)
+        case ApiKeys.ALTER_CONFIGS => maybeForwardToController(request, handleAlterConfigsRequest)
+        case ApiKeys.DESCRIBE_CONFIGS => handleDescribeConfigsRequest(request)
+        case ApiKeys.ALTER_REPLICA_LOG_DIRS => handleAlterReplicaLogDirsRequest(request)
+        case ApiKeys.DESCRIBE_LOG_DIRS => handleDescribeLogDirsRequest(request)
+        case ApiKeys.SASL_AUTHENTICATE => handleSaslAuthenticateRequest(request)
+        case ApiKeys.CREATE_PARTITIONS => maybeForwardToController(request, handleCreatePartitionsRequest)
+        case ApiKeys.CREATE_DELEGATION_TOKEN => maybeForwardToController(request, handleCreateTokenRequest)
+        case ApiKeys.RENEW_DELEGATION_TOKEN => maybeForwardToController(request, handleRenewTokenRequest)
+        case ApiKeys.EXPIRE_DELEGATION_TOKEN => maybeForwardToController(request, handleExpireTokenRequest)
+        case ApiKeys.DESCRIBE_DELEGATION_TOKEN => handleDescribeTokensRequest(request)
+        case ApiKeys.DELETE_GROUPS => handleDeleteGroupsRequest(request)
+        case ApiKeys.ELECT_LEADERS => handleElectReplicaLeader(request)
+        case ApiKeys.INCREMENTAL_ALTER_CONFIGS => maybeForwardToController(request, handleIncrementalAlterConfigsRequest)
+        case ApiKeys.ALTER_PARTITION_REASSIGNMENTS => maybeForwardToController(request, handleAlterPartitionReassignmentsRequest)
+        case ApiKeys.LIST_PARTITION_REASSIGNMENTS => handleListPartitionReassignmentsRequest(request)
+        case ApiKeys.OFFSET_DELETE => handleOffsetDeleteRequest(request)
+        case ApiKeys.DESCRIBE_CLIENT_QUOTAS => handleDescribeClientQuotasRequest(request)
+        case ApiKeys.ALTER_CLIENT_QUOTAS => maybeForwardToController(request, handleAlterClientQuotasRequest)
+        case ApiKeys.DESCRIBE_USER_SCRAM_CREDENTIALS => handleDescribeUserScramCredentialsRequest(request)
+        case ApiKeys.ALTER_USER_SCRAM_CREDENTIALS => maybeForwardToController(request, handleAlterUserScramCredentialsRequest)
+        case ApiKeys.ALTER_ISR => handleAlterIsrRequest(request)
+        case ApiKeys.UPDATE_FEATURES => maybeForwardToController(request, handleUpdateFeatures)
+        case ApiKeys.ENVELOPE => handleEnvelope(request)
 
-      if (!handled) {
-        request.header.apiKey match {
-          case ApiKeys.PRODUCE => handleProduceRequest(request)
-          case ApiKeys.FETCH => handleFetchRequest(request)
-          case ApiKeys.LIST_OFFSETS => handleListOffsetRequest(request)
-          case ApiKeys.METADATA => handleTopicMetadataRequest(request)
-          case ApiKeys.LEADER_AND_ISR => handleLeaderAndIsrRequest(request)
-          case ApiKeys.STOP_REPLICA => handleStopReplicaRequest(request)
-          case ApiKeys.UPDATE_METADATA => handleUpdateMetadataRequest(request)
-          case ApiKeys.CONTROLLED_SHUTDOWN => handleControlledShutdownRequest(request)
-          case ApiKeys.OFFSET_COMMIT => handleOffsetCommitRequest(request)
-          case ApiKeys.OFFSET_FETCH => handleOffsetFetchRequest(request)
-          case ApiKeys.FIND_COORDINATOR => handleFindCoordinatorRequest(request)
-          case ApiKeys.JOIN_GROUP => handleJoinGroupRequest(request)
-          case ApiKeys.HEARTBEAT => handleHeartbeatRequest(request)
-          case ApiKeys.LEAVE_GROUP => handleLeaveGroupRequest(request)
-          case ApiKeys.SYNC_GROUP => handleSyncGroupRequest(request)
-          case ApiKeys.DESCRIBE_GROUPS => handleDescribeGroupRequest(request)
-          case ApiKeys.LIST_GROUPS => handleListGroupsRequest(request)
-          case ApiKeys.SASL_HANDSHAKE => handleSaslHandshakeRequest(request)
-          case ApiKeys.API_VERSIONS => handleApiVersionsRequest(request)
-          case ApiKeys.CREATE_TOPICS => maybeForward(request, handleCreateTopicsRequest)
-          case ApiKeys.DELETE_TOPICS => maybeForward(request, handleDeleteTopicsRequest)
-          case ApiKeys.DELETE_RECORDS => handleDeleteRecordsRequest(request)
-          case ApiKeys.INIT_PRODUCER_ID => handleInitProducerIdRequest(request)
-          case ApiKeys.OFFSET_FOR_LEADER_EPOCH => handleOffsetForLeaderEpochRequest(request)
-          case ApiKeys.ADD_PARTITIONS_TO_TXN => handleAddPartitionToTxnRequest(request)
-          case ApiKeys.ADD_OFFSETS_TO_TXN => handleAddOffsetsToTxnRequest(request)
-          case ApiKeys.END_TXN => handleEndTxnRequest(request)
-          case ApiKeys.WRITE_TXN_MARKERS => handleWriteTxnMarkersRequest(request)
-          case ApiKeys.TXN_OFFSET_COMMIT => handleTxnOffsetCommitRequest(request)
-          case ApiKeys.DESCRIBE_ACLS => handleDescribeAcls(request)
-          case ApiKeys.CREATE_ACLS => maybeForward(request, handleCreateAcls)
-          case ApiKeys.DELETE_ACLS => maybeForward(request, handleDeleteAcls)
-          case ApiKeys.ALTER_CONFIGS => maybeForward(request, handleAlterConfigsRequest)
-          case ApiKeys.DESCRIBE_CONFIGS => handleDescribeConfigsRequest(request)
-          case ApiKeys.ALTER_REPLICA_LOG_DIRS => handleAlterReplicaLogDirsRequest(request)
-          case ApiKeys.DESCRIBE_LOG_DIRS => handleDescribeLogDirsRequest(request)
-          case ApiKeys.SASL_AUTHENTICATE => handleSaslAuthenticateRequest(request)
-          case ApiKeys.CREATE_PARTITIONS => maybeForward(request, handleCreatePartitionsRequest)
-          case ApiKeys.CREATE_DELEGATION_TOKEN => maybeForward(request, handleCreateTokenRequest)
-          case ApiKeys.RENEW_DELEGATION_TOKEN => maybeForward(request, handleRenewTokenRequest)
-          case ApiKeys.EXPIRE_DELEGATION_TOKEN => maybeForward(request, handleExpireTokenRequest)
-          case ApiKeys.DESCRIBE_DELEGATION_TOKEN => handleDescribeTokensRequest(request)
-          case ApiKeys.DELETE_GROUPS => handleDeleteGroupsRequest(request)
-          case ApiKeys.ELECT_LEADERS => handleElectReplicaLeader(request)
-          case ApiKeys.INCREMENTAL_ALTER_CONFIGS => maybeForward(request, handleIncrementalAlterConfigsRequest)
-          case ApiKeys.ALTER_PARTITION_REASSIGNMENTS => maybeForward(request, handleAlterPartitionReassignmentsRequest)
-          case ApiKeys.LIST_PARTITION_REASSIGNMENTS => handleListPartitionReassignmentsRequest(request)
-          case ApiKeys.OFFSET_DELETE => handleOffsetDeleteRequest(request)
-          case ApiKeys.DESCRIBE_CLIENT_QUOTAS => handleDescribeClientQuotasRequest(request)
-          case ApiKeys.ALTER_CLIENT_QUOTAS => maybeForward(request, handleAlterClientQuotasRequest)
-          case ApiKeys.DESCRIBE_USER_SCRAM_CREDENTIALS => handleDescribeUserScramCredentialsRequest(request)
-          case ApiKeys.ALTER_USER_SCRAM_CREDENTIALS => maybeForward(request, handleAlterUserScramCredentialsRequest)
-          case ApiKeys.ALTER_ISR => handleAlterIsrRequest(request)
-          case ApiKeys.UPDATE_FEATURES => maybeForward(request, handleUpdateFeatures)
-          case ApiKeys.ENVELOPE => throw new IllegalStateException(
-            "Envelope request should not be handled directly in top level API")
-
-          // Until we are ready to integrate the Raft layer, these APIs are treated as
-          // unexpected and we just close the connection.
-          case ApiKeys.VOTE => closeConnection(request, util.Collections.emptyMap())
-          case ApiKeys.BEGIN_QUORUM_EPOCH => closeConnection(request, util.Collections.emptyMap())
-          case ApiKeys.END_QUORUM_EPOCH => closeConnection(request, util.Collections.emptyMap())
-          case ApiKeys.DESCRIBE_QUORUM => closeConnection(request, util.Collections.emptyMap())
-          case ApiKeys.FETCH_SNAPSHOT => closeConnection(request, util.Collections.emptyMap())
-        }
+        // Until we are ready to integrate the Raft layer, these APIs are treated as
+        // unexpected and we just close the connection.
+        case ApiKeys.VOTE => closeConnection(request, util.Collections.emptyMap())
+        case ApiKeys.BEGIN_QUORUM_EPOCH => closeConnection(request, util.Collections.emptyMap())
+        case ApiKeys.END_QUORUM_EPOCH => closeConnection(request, util.Collections.emptyMap())
+        case ApiKeys.DESCRIBE_QUORUM => closeConnection(request, util.Collections.emptyMap())
+        case ApiKeys.FETCH_SNAPSHOT => closeConnection(request, util.Collections.emptyMap())
       }
     } catch {
       case e: FatalExitError => throw e
@@ -3239,6 +3206,127 @@ class KafkaApis(val requestChannel: RequestChannel,
       sendResponseCallback(Left(new ApiError(Errors.INVALID_REQUEST, "Feature versioning system is disabled.")))
     } else {
       controller.updateFeatures(updateFeaturesRequest, sendResponseCallback)
+    }
+  }
+
+  def handleEnvelope(request: RequestChannel.Request): Unit = {
+    val envelope = request.body[EnvelopeRequest]
+
+    // If forwarding is not yet enabled or this request has been received on an invalid endpoint,
+    // then we treat the request as unparsable and close the connection.
+    if (!config.metadataQuorumEnabled) {
+      info(s"Closing connection ${request.context.connectionId} because it sent an `Envelope` " +
+        s"request, which is not accepted without enabling the internal config ${KafkaConfig.EnableMetadataQuorumProp}")
+      closeConnection(request, Collections.emptyMap())
+      return
+    } else if (!request.context.fromPrivilegedListener) {
+      info(s"Closing connection ${request.context.connectionId} from listener ${request.context.listenerName} " +
+        s"because it sent an `Envelope` request, which is only accepted on the inter-broker listener " +
+        s"${config.interBrokerListenerName}.")
+      closeConnection(request, Collections.emptyMap())
+      return
+    } else if (!authorize(request.context, CLUSTER_ACTION, CLUSTER, CLUSTER_NAME)) {
+      sendErrorResponseMaybeThrottle(request, new ClusterAuthorizationException(
+        s"Principal ${request.context.principal} does not have required CLUSTER_ACTION for envelope"))
+      return
+    } else if (!controller.isActive) {
+      sendErrorResponseMaybeThrottle(request, new NotControllerException(
+        s"Broker $brokerId is not the active controller"))
+      return
+    }
+
+    val forwardedPrincipal = parseForwardedPrincipal(request.context, envelope.requestPrincipal)
+    val forwardedClientAddress = parseForwardedClientAddress(envelope.clientAddress)
+
+    val forwardedRequestBuffer = envelope.requestData.duplicate()
+    val forwardedRequestHeader = parseForwardedRequestHeader(forwardedRequestBuffer)
+
+    val forwardedApi = forwardedRequestHeader.apiKey
+    if (!forwardedApi.forwardable || !forwardedApi.isEnabled) {
+      throw new InvalidRequestException(s"API $forwardedApi is not enabled or is not eligible for forwarding")
+    }
+
+    val forwardedContext = new RequestContext(
+      forwardedRequestHeader,
+      request.context.connectionId,
+      forwardedClientAddress,
+      forwardedPrincipal,
+      request.context.listenerName,
+      request.context.securityProtocol,
+      ClientInformation.EMPTY,
+      request.context.fromPrivilegedListener
+    )
+
+    val forwardedRequest = parseForwardedRequest(request, forwardedContext, forwardedRequestBuffer)
+    handle(forwardedRequest)
+  }
+
+  private def parseForwardedClientAddress(
+    address: Array[Byte]
+  ): InetAddress = {
+    try {
+      InetAddress.getByAddress(address)
+    } catch {
+      case e: UnknownHostException =>
+        throw new InvalidRequestException("Failed to parse client address from envelope", e)
+    }
+  }
+
+  private def parseForwardedRequest(
+    envelope: RequestChannel.Request,
+    forwardedContext: RequestContext,
+    buffer: ByteBuffer
+  ): RequestChannel.Request = {
+    try {
+      new RequestChannel.Request(
+        processor = envelope.processor,
+        context = forwardedContext,
+        startTimeNanos = envelope.startTimeNanos,
+        envelope.memoryPool,
+        buffer,
+        requestChannel.metrics,
+        Some(envelope)
+      )
+    } catch {
+      case e: InvalidRequestException =>
+        // We use UNSUPPORTED_VERSION if the embedded request cannot be parsed.
+        // The purpose is to disambiguate structural errors in the envelope request
+        // itself, such as an invalid client address.
+        throw new UnsupportedVersionException(s"Failed to parse forwarded request " +
+          s"with header ${forwardedContext.header}", e)
+    }
+  }
+
+  private def parseForwardedRequestHeader(
+    buffer: ByteBuffer
+  ): RequestHeader = {
+    try {
+      RequestHeader.parse(buffer)
+    } catch {
+      case e: InvalidRequestException =>
+        // We use UNSUPPORTED_VERSION if the embedded request cannot be parsed.
+        // The purpose is to disambiguate structural errors in the envelope request
+        // itself, such as an invalid client address.
+        throw new UnsupportedVersionException("Failed to parse request header from envelope", e)
+    }
+  }
+
+  private def parseForwardedPrincipal(
+    envelopeContext: RequestContext,
+    principalBytes: Array[Byte]
+  ): KafkaPrincipal = {
+    envelopeContext.principalSerde.asScala match {
+      case Some(serde) =>
+        try {
+          serde.deserialize(principalBytes)
+        } catch {
+          case e: Exception =>
+            throw new PrincipalDeserializationException("Failed to deserialize client principal from envelope", e)
+        }
+
+      case None =>
+        throw new PrincipalDeserializationException("Could not deserialize principal since " +
+          "no `KafkaPrincipalSerde` has been defined")
     }
   }
 
