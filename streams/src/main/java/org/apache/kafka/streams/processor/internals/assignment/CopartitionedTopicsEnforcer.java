@@ -43,7 +43,7 @@ public class CopartitionedTopicsEnforcer {
 
     public void enforce(final Set<String> copartitionGroup,
                         final Map<String, InternalTopicConfig> allRepartitionTopicsNumPartitions,
-                        final Cluster clusterMetadata) {
+                        final Cluster metadata) {
         if (copartitionGroup.isEmpty()) {
             return;
         }
@@ -56,7 +56,7 @@ public class CopartitionedTopicsEnforcer {
         final Map<String, Integer> nonRepartitionTopicPartitions =
             copartitionGroup.stream().filter(topic -> !allRepartitionTopicsNumPartitions.containsKey(topic))
                             .collect(Collectors.toMap(topic -> topic, topic -> {
-                                final Integer partitions = clusterMetadata.partitionCountForTopic(topic);
+                                final Integer partitions = metadata.partitionCountForTopic(topic);
                                 if (partitions == null) {
                                     final String str = String.format("%sTopic not found: %s", logPrefix, topic);
                                     log.error(str);

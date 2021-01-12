@@ -63,8 +63,7 @@ public class CopartitionedTopicsEnforcerTest {
         validator.enforce(
             Collections.singleton("topic"),
             Collections.emptyMap(),
-            cluster
-        );
+            cluster);
     }
 
     @Test(expected = TopologyException.class)
@@ -73,8 +72,7 @@ public class CopartitionedTopicsEnforcerTest {
         validator.enforce(
             Utils.mkSet("first", "second"),
             Collections.emptyMap(),
-            cluster.withPartitions(partitions)
-        );
+            cluster.withPartitions(partitions));
     }
 
 
@@ -85,8 +83,7 @@ public class CopartitionedTopicsEnforcerTest {
         validator.enforce(
             Utils.mkSet("first", "second", config.name()),
             Collections.singletonMap(config.name(), config),
-            cluster.withPartitions(partitions)
-        );
+            cluster.withPartitions(partitions));
 
         assertThat(config.numberOfPartitions(), equalTo(Optional.of(2)));
     }
@@ -106,8 +103,7 @@ public class CopartitionedTopicsEnforcerTest {
         validator.enforce(
             Utils.mkSet(one.name(), two.name(), three.name()),
             repartitionTopicConfig,
-            cluster
-        );
+            cluster);
 
         assertThat(one.numberOfPartitions(), equalTo(Optional.of(15)));
         assertThat(two.numberOfPartitions(), equalTo(Optional.of(15)));
@@ -124,8 +120,7 @@ public class CopartitionedTopicsEnforcerTest {
             () -> validator.enforce(
                 Utils.mkSet(topic1.name(), topic2.name()),
                 Utils.mkMap(Utils.mkEntry(topic1.name(), topic1), Utils.mkEntry(topic2.name(), topic2)),
-                cluster.withPartitions(partitions)
-            )
+                cluster.withPartitions(partitions))
         );
 
         final TreeMap<String, Integer> sorted = new TreeMap<>(
@@ -146,8 +141,7 @@ public class CopartitionedTopicsEnforcerTest {
         validator.enforce(
             Utils.mkSet(topic1.name(), topic2.name()),
             Utils.mkMap(Utils.mkEntry(topic1.name(), topic1), Utils.mkEntry(topic2.name(), topic2)),
-            cluster.withPartitions(partitions)
-        );
+            cluster.withPartitions(partitions));
 
         assertThat(topic1.numberOfPartitions(), equalTo(Optional.of(10)));
         assertThat(topic2.numberOfPartitions(), equalTo(Optional.of(10)));
@@ -162,8 +156,7 @@ public class CopartitionedTopicsEnforcerTest {
             () -> validator.enforce(
                 Utils.mkSet(topic1.name(), "second"),
                 Utils.mkMap(Utils.mkEntry(topic1.name(), topic1)),
-                cluster.withPartitions(partitions)
-            )
+                cluster.withPartitions(partitions))
         );
 
         assertEquals(String.format("Invalid topology: thread Number of partitions [%s] " +
@@ -179,8 +172,7 @@ public class CopartitionedTopicsEnforcerTest {
         validator.enforce(
             Utils.mkSet(topic1.name(), "second"),
             Utils.mkMap(Utils.mkEntry(topic1.name(), topic1)),
-            cluster.withPartitions(partitions)
-        );
+            cluster.withPartitions(partitions));
 
         assertThat(topic1.numberOfPartitions(), equalTo(Optional.of(2)));
     }
@@ -196,10 +188,8 @@ public class CopartitionedTopicsEnforcerTest {
             Utils.mkMap(
                 Utils.mkEntry(topic1.name(), topic1),
                 Utils.mkEntry(topic2.name(), topic2),
-                Utils.mkEntry(topic3.name(), topic3)
-            ),
-            cluster.withPartitions(partitions)
-        );
+                Utils.mkEntry(topic3.name(), topic3)),
+            cluster.withPartitions(partitions));
 
         assertEquals(topic1.numberOfPartitions(), topic2.numberOfPartitions());
         assertEquals(topic2.numberOfPartitions(), topic3.numberOfPartitions());

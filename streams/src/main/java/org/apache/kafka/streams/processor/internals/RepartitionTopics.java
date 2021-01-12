@@ -47,12 +47,13 @@ public class RepartitionTopics {
 
     public RepartitionTopics(final InternalTopologyBuilder internalTopologyBuilder,
                              final InternalTopicManager internalTopicManager,
+                             final CopartitionedTopicsEnforcer copartitionedTopicsEnforcer,
                              final Cluster clusterMetadata,
                              final String logPrefix) {
         this.internalTopologyBuilder = internalTopologyBuilder;
         this.internalTopicManager = internalTopicManager;
         this.clusterMetadata = clusterMetadata;
-        this.copartitionedTopicsEnforcer = new CopartitionedTopicsEnforcer(logPrefix);
+        this.copartitionedTopicsEnforcer = copartitionedTopicsEnforcer;
         final LogContext logContext = new LogContext(logPrefix);
         log = logContext.logger(getClass());
     }
@@ -92,15 +93,15 @@ public class RepartitionTopics {
     private Map<String, InternalTopicConfig> computeRepartitionTopicConfig(final Map<Integer, TopicsInfo> topicGroups,
                                                                            final Cluster clusterMetadata) {
 
-        final Map<String, InternalTopicConfig> repartitionTopicsMetadata = new HashMap<>();
+        final Map<String, InternalTopicConfig> repartitionTopicConfigs = new HashMap<>();
         for (final TopicsInfo topicsInfo : topicGroups.values()) {
             checkIfExternalSourceTopicsExist(topicsInfo, clusterMetadata);
-            repartitionTopicsMetadata.putAll(topicsInfo.repartitionSourceTopics.values().stream()
+            repartitionTopicConfigs.putAll(topicsInfo.repartitionSourceTopics.values().stream()
                 .collect(Collectors.toMap(InternalTopicConfig::name, topicConfig -> topicConfig)));
         }
-        setRepartitionSourceTopicPartitionCount(repartitionTopicsMetadata, topicGroups, clusterMetadata);
+        setRepartitionSourceTopicPartitionCount(repartitionTopicConfigs, topicGroups, clusterMetadata);
 
-        return repartitionTopicsMetadata;
+        return repartitionTopicConfigs;
     }
 
     private void ensureCopartitioning(final Collection<Set<String>> copartitionGroups,

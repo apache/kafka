@@ -43,6 +43,7 @@ import org.apache.kafka.streams.processor.internals.assignment.AssignorConfigura
 import org.apache.kafka.streams.processor.internals.assignment.AssignorConfiguration.AssignmentListener;
 import org.apache.kafka.streams.processor.internals.assignment.AssignorError;
 import org.apache.kafka.streams.processor.internals.assignment.ClientState;
+import org.apache.kafka.streams.processor.internals.assignment.CopartitionedTopicsEnforcer;
 import org.apache.kafka.streams.processor.internals.assignment.FallbackPriorTaskAssignor;
 import org.apache.kafka.streams.processor.internals.assignment.ReferenceContainer;
 import org.apache.kafka.streams.processor.internals.assignment.StickyTaskAssignor;
@@ -181,6 +182,7 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
     protected int usedSubscriptionMetadataVersion = LATEST_SUPPORTED_VERSION;
 
     private InternalTopicManager internalTopicManager;
+    private CopartitionedTopicsEnforcer copartitionedTopicsEnforcer;
     private RebalanceProtocol rebalanceProtocol;
     private AssignmentListener assignmentListener;
 
@@ -214,6 +216,7 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
         partitionGrouper = assignorConfiguration.partitionGrouper();
         userEndPoint = assignorConfiguration.userEndPoint();
         internalTopicManager = assignorConfiguration.internalTopicManager();
+        copartitionedTopicsEnforcer = assignorConfiguration.copartitionedTopicsEnforcer();
         rebalanceProtocol = assignorConfiguration.rebalanceProtocol();
         taskAssignorSupplier = assignorConfiguration::taskAssignor;
         assignmentListener = assignorConfiguration.assignmentListener();
@@ -477,6 +480,7 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
         final RepartitionTopics repartitionTopics = new RepartitionTopics(
             taskManager.builder(),
             internalTopicManager,
+            copartitionedTopicsEnforcer,
             metadata,
             logPrefix
         );
