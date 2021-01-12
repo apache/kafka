@@ -88,8 +88,7 @@ object DynamicResetLogLevel {
       println(s"The result of the setLogLevel is ${logReSetResult}, the logLevel of LogName ${logName}  is ${logLevelAfterChanged} after changing. ")
     } catch {
       case e: Throwable =>
-        println("The invoke throw exception,", e)
+        println(s"The invoke throw exception ${e.getMessage}")
     }
   }
-
 }
