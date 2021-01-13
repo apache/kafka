@@ -45,8 +45,9 @@ public class StreamsRebalanceListenerTest {
     private final TaskManager taskManager = mock(TaskManager.class);
     private final StreamThread streamThread = mock(StreamThread.class);
     private final AtomicInteger assignmentErrorCode = new AtomicInteger();
+    private final MockTime time = new MockTime();
     private final StreamsRebalanceListener streamsRebalanceListener = new StreamsRebalanceListener(
-        new MockTime(),
+        time,
         taskManager,
         streamThread,
         LoggerFactory.getLogger(StreamsRebalanceListenerTest.class),
@@ -78,6 +79,7 @@ public class StreamsRebalanceListenerTest {
     @Test
     public void shouldSwallowVersionProbingError() {
         expect(streamThread.setState(State.PARTITIONS_ASSIGNED)).andStubReturn(State.PARTITIONS_REVOKED);
+        streamThread.setPartitionAssignedTime(time.milliseconds());
         taskManager.handleRebalanceComplete();
         replay(taskManager, streamThread);
         assignmentErrorCode.set(AssignorError.VERSION_PROBING.code());
@@ -129,6 +131,8 @@ public class StreamsRebalanceListenerTest {
     public void shouldHandleAssignedPartitions() {
         taskManager.handleRebalanceComplete();
         expect(streamThread.setState(State.PARTITIONS_ASSIGNED)).andReturn(State.RUNNING);
+        streamThread.setPartitionAssignedTime(time.milliseconds());
+
         replay(taskManager, streamThread);
         assignmentErrorCode.set(AssignorError.NONE.code());
 

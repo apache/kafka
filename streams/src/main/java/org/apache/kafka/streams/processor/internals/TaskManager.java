@@ -505,7 +505,7 @@ public class TaskManager {
                         task.maybeInitTaskTimeoutOrThrow(now, timeoutException);
                         log.debug(
                             String.format(
-                                "Could not complete restoration for %s due to the follosing exception; will retry",
+                                "Could not complete restoration for %s due to the following exception; will retry",
                                 task.id()),
                             timeoutException
                         );

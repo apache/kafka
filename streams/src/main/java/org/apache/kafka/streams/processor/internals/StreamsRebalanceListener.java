@@ -73,6 +73,7 @@ public class StreamsRebalanceListener implements ConsumerRebalanceListener {
         }
 
         streamThread.setState(State.PARTITIONS_ASSIGNED);
+        streamThread.setPartitionAssignedTime(time.milliseconds());
         taskManager.handleRebalanceComplete();
     }
 
