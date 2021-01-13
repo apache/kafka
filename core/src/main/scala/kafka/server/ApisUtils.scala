@@ -35,7 +35,7 @@ import org.apache.kafka.common.requests.{AbstractRequest, AbstractResponse, Requ
 import org.apache.kafka.common.resource.Resource.CLUSTER_NAME
 import org.apache.kafka.common.resource.ResourceType.CLUSTER
 import org.apache.kafka.common.resource.{PatternType, Resource, ResourcePattern, ResourceType}
-import org.apache.kafka.common.utils.{Time, Utils}
+import org.apache.kafka.common.utils.{LogContext, Time, Utils}
 import org.apache.kafka.server.authorizer.{Action, AuthorizationResult, Authorizer}
 
 import scala.jdk.CollectionConverters._
@@ -45,14 +45,6 @@ import scala.jdk.CollectionConverters._
  * authorizations, and error handling
  */
 object ApisUtils {
-  def authHelper(requestChannel: RequestChannel, authorizer: Option[Authorizer]): AuthHelper = {
-    new AuthHelper(requestChannel, authorizer)
-  }
-
-  def channelHelper(requestChannel: RequestChannel, quotaManagers: QuotaManagers, time: Time): ChannelHelper = {
-    new ChannelHelper(requestChannel, quotaManagers, time)
-  }
-
   def onLeadershipChange(groupCoordinator: GroupCoordinator,
                          txnCoordinator: TransactionCoordinator,
                          updatedLeaders: Iterable[Partition],
@@ -116,7 +108,11 @@ class AuthHelper(val requestChannel: RequestChannel,
 
 class ChannelHelper(val requestChannel: RequestChannel,
                     val quotas: QuotaManagers,
-                    val time: Time) extends Logging {
+                    val time: Time,
+                    val logPrefix: String) extends Logging {
+
+  this.logIdent = logPrefix
+
   def handleError(request: RequestChannel.Request, e: Throwable): Unit = {
     val mayThrottle = e.isInstanceOf[ClusterAuthorizationException] || !request.header.apiKey.clusterAction
     error("Error when handling request: " +

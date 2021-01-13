@@ -123,8 +123,8 @@ class KafkaApis(val requestChannel: RequestChannel,
   val adminZkClient = new AdminZkClient(zkClient)
   private val alterAclsPurgatory = new DelayedFuturePurgatory(purgatoryName = "AlterAcls", brokerId = config.brokerId)
 
-  val authHelper = ApisUtils.authHelper(requestChannel, authorizer)
-  val channelHelper = ApisUtils.channelHelper(requestChannel, quotas, time)
+  val authHelper = new AuthHelper(requestChannel, authorizer)
+  val channelHelper = new ChannelHelper(requestChannel, quotas, time, logIdent)
 
   def close(): Unit = {
     alterAclsPurgatory.shutdown()
