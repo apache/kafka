@@ -1309,7 +1309,7 @@ public class SslTransportLayerTest {
         NetworkTestUtils.checkClientConnection(selector, node, 100, 10);
     }
 
-    public void verifySslConfigsWithHandshakeFailure(Args args) throws Exception {
+    private void verifySslConfigsWithHandshakeFailure(Args args) throws Exception {
         server = createEchoServer(args, SecurityProtocol.SSL);
         createSelector(args.sslClientConfigs);
         InetSocketAddress addr = new InetSocketAddress("localhost", server.port());
