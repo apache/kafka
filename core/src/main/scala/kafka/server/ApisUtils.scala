@@ -94,10 +94,8 @@ class ApisUtils(val requestChannel: RequestChannel,
       sendErrorResponseExemptThrottle(request, e)
   }
 
-  def sendForwardedResponse(
-    request: RequestChannel.Request,
-    response: AbstractResponse
-  ): Unit = {
+  def sendForwardedResponse(request: RequestChannel.Request,
+                            response: AbstractResponse): Unit = {
     // For forwarded requests, we take the throttle time from the broker that
     // the request was forwarded to
     val throttleTimeMs = response.throttleTimeMs()
@@ -108,7 +106,7 @@ class ApisUtils(val requestChannel: RequestChannel,
   // Throttle the channel if the request quota is enabled but has been violated. Regardless of throttling, send the
   // response immediately.
   def sendResponseMaybeThrottle(request: RequestChannel.Request,
-                                createResponse: Int => AbstractResponse): Unit = {
+                                        createResponse: Int => AbstractResponse): Unit = {
     val throttleTimeMs = maybeRecordAndGetThrottleTimeMs(request)
     // Only throttle non-forwarded requests
     if (!request.isForwarded)
@@ -124,7 +122,7 @@ class ApisUtils(val requestChannel: RequestChannel,
     requestChannel.sendErrorOrCloseConnection(request, error, throttleTimeMs)
   }
 
-  private def maybeRecordAndGetThrottleTimeMs(request: RequestChannel.Request): Int = {
+  def maybeRecordAndGetThrottleTimeMs(request: RequestChannel.Request): Int = {
     val throttleTimeMs = quotas.request.maybeRecordAndGetThrottleTimeMs(request, time.milliseconds())
     request.apiThrottleTimeMs = throttleTimeMs
     throttleTimeMs
