@@ -622,7 +622,8 @@ public class UtilsTest {
         }
     }
 
-    @Test @Timeout(120)
+    @Timeout(120)
+    @Test
     public void testRecursiveDelete() throws IOException {
         Utils.delete(null); // delete of null does nothing.
 
