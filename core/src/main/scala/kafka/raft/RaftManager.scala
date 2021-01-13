@@ -18,7 +18,7 @@ package kafka.raft
 
 import kafka.log.{Log, LogConfig, LogManager}
 import kafka.raft.KafkaRaftManager.RaftIoThread
-import kafka.server.{BrokerTopicStats, KafkaConfig, KafkaServer, LogDirFailureChannel}
+import kafka.server.{BrokerTopicStats, KafkaConfig, LogDirFailureChannel}
 import kafka.utils.timer.SystemTimer
 import kafka.utils.{KafkaScheduler, Logging, ShutdownableThread}
 import org.apache.kafka.clients.{ApiVersions, ClientDnsLookup, ManualMetadataUpdater, NetworkClient}
@@ -93,8 +93,6 @@ trait RaftManager[T] {
 }
 
 class KafkaRaftManager[T](
-  nodeId: Int,
-  baseLogDir: String,
   recordSerde: RecordSerde[T],
   topicPartition: TopicPartition,
   config: KafkaConfig,
@@ -102,6 +100,8 @@ class KafkaRaftManager[T](
   metrics: Metrics
 ) extends RaftManager[T] with Logging {
 
+  private val nodeId = config.brokerId
+  private val baseLogDir = config.logDirs.head
   private val raftConfig = new RaftConfig(config.originals)
   private val logContext = new LogContext(s"[RaftManager $nodeId] ")
   this.logIdent = logContext.logPrefix()
@@ -194,7 +194,7 @@ class KafkaRaftManager[T](
   }
 
   private def buildMetadataLog(): KafkaMetadataLog = {
-    val defaultProps = KafkaServer.copyKafkaConfigToLog(config)
+    val defaultProps = LogConfig.extractLogConfigMap(config)
     LogConfig.validateValues(defaultProps)
     val defaultLogConfig = LogConfig(defaultProps)
 

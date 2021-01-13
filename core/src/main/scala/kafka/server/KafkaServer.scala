@@ -29,7 +29,7 @@ import kafka.common.{GenerateBrokerIdException, InconsistentBrokerIdException, I
 import kafka.controller.KafkaController
 import kafka.coordinator.group.GroupCoordinator
 import kafka.coordinator.transaction.TransactionCoordinator
-import kafka.log.{LogConfig, LogManager}
+import kafka.log.LogManager
 import kafka.metrics.{KafkaMetricsGroup, KafkaMetricsReporter, KafkaYammerMetrics, LinuxIoMetricsCollector}
 import kafka.network.SocketServer
 import kafka.security.CredentialProvider
@@ -38,7 +38,7 @@ import kafka.zk.{BrokerInfo, KafkaZkClient}
 import org.apache.kafka.clients.{ApiVersions, ClientDnsLookup, CommonClientConfigs, ManualMetadataUpdater, NetworkClient, NetworkClientUtils}
 import org.apache.kafka.common.internals.ClusterResourceListeners
 import org.apache.kafka.common.message.ControlledShutdownRequestData
-import org.apache.kafka.common.metrics.{JmxReporter, Metrics, MetricsReporter, _}
+import org.apache.kafka.common.metrics.{Metrics, MetricsReporter, _}
 import org.apache.kafka.common.network._
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests.{ControlledShutdownRequest, ControlledShutdownResponse}
@@ -54,43 +54,6 @@ import scala.collection.{Map, Seq, mutable}
 import scala.jdk.CollectionConverters._
 
 object KafkaServer {
-  // Copy the subset of properties that are relevant to Logs
-  // I'm listing out individual properties here since the names are slightly different in each Config class...
-  private[kafka] def copyKafkaConfigToLog(kafkaConfig: KafkaConfig): java.util.Map[String, Object] = {
-    val logProps = new util.HashMap[String, Object]()
-    logProps.put(LogConfig.SegmentBytesProp, kafkaConfig.logSegmentBytes)
-    logProps.put(LogConfig.SegmentMsProp, kafkaConfig.logRollTimeMillis)
-    logProps.put(LogConfig.SegmentJitterMsProp, kafkaConfig.logRollTimeJitterMillis)
-    logProps.put(LogConfig.SegmentIndexBytesProp, kafkaConfig.logIndexSizeMaxBytes)
-    logProps.put(LogConfig.FlushMessagesProp, kafkaConfig.logFlushIntervalMessages)
-    logProps.put(LogConfig.FlushMsProp, kafkaConfig.logFlushIntervalMs)
-    logProps.put(LogConfig.RetentionBytesProp, kafkaConfig.logRetentionBytes)
-    logProps.put(LogConfig.RetentionMsProp, kafkaConfig.logRetentionTimeMillis: java.lang.Long)
-    logProps.put(LogConfig.MaxMessageBytesProp, kafkaConfig.messageMaxBytes)
-    logProps.put(LogConfig.IndexIntervalBytesProp, kafkaConfig.logIndexIntervalBytes)
-    logProps.put(LogConfig.DeleteRetentionMsProp, kafkaConfig.logCleanerDeleteRetentionMs)
-    logProps.put(LogConfig.MinCompactionLagMsProp, kafkaConfig.logCleanerMinCompactionLagMs)
-    logProps.put(LogConfig.MaxCompactionLagMsProp, kafkaConfig.logCleanerMaxCompactionLagMs)
-    logProps.put(LogConfig.FileDeleteDelayMsProp, kafkaConfig.logDeleteDelayMs)
-    logProps.put(LogConfig.MinCleanableDirtyRatioProp, kafkaConfig.logCleanerMinCleanRatio)
-    logProps.put(LogConfig.CleanupPolicyProp, kafkaConfig.logCleanupPolicy)
-    logProps.put(LogConfig.MinInSyncReplicasProp, kafkaConfig.minInSyncReplicas)
-    logProps.put(LogConfig.CompressionTypeProp, kafkaConfig.compressionType)
-    logProps.put(LogConfig.UncleanLeaderElectionEnableProp, kafkaConfig.uncleanLeaderElectionEnable)
-    logProps.put(LogConfig.PreAllocateEnableProp, kafkaConfig.logPreAllocateEnable)
-    logProps.put(LogConfig.MessageFormatVersionProp, kafkaConfig.logMessageFormatVersion.version)
-    logProps.put(LogConfig.MessageTimestampTypeProp, kafkaConfig.logMessageTimestampType.name)
-    logProps.put(LogConfig.MessageTimestampDifferenceMaxMsProp, kafkaConfig.logMessageTimestampDifferenceMaxMs: java.lang.Long)
-    logProps.put(LogConfig.MessageDownConversionEnableProp, kafkaConfig.logMessageDownConversionEnable: java.lang.Boolean)
-    logProps
-  }
-
-  private[server] def metricConfig(kafkaConfig: KafkaConfig): MetricConfig = {
-    new MetricConfig()
-      .samples(kafkaConfig.metricNumSamples)
-      .recordLevel(Sensor.RecordingLevel.forName(kafkaConfig.metricRecordingLevel))
-      .timeWindow(kafkaConfig.metricSampleWindowMs, TimeUnit.MILLISECONDS)
-  }
 
   def zkClientConfigFromKafkaConfig(config: KafkaConfig, forceZkSslClientEnable: Boolean = false) =
     if (!config.zkSslClientEnable && !forceZkSslClientEnable)
@@ -121,8 +84,13 @@ object KafkaServer {
  * Represents the lifecycle of a single Kafka broker. Handles all functionality required
  * to start up and shutdown a single Kafka node.
  */
-class KafkaServer(val config: KafkaConfig, time: Time = Time.SYSTEM, threadNamePrefix: Option[String] = None,
-                  kafkaMetricsReporters: Seq[KafkaMetricsReporter] = List()) extends Logging with KafkaMetricsGroup {
+class KafkaServer(
+  val config: KafkaConfig,
+  time: Time = Time.SYSTEM,
+  threadNamePrefix: Option[String] = None,
+  kafkaMetricsReporters: Seq[KafkaMetricsReporter] = List()
+) extends Server with Logging with KafkaMetricsGroup {
+
   private val startupComplete = new AtomicBoolean(false)
   private val isShuttingDown = new AtomicBoolean(false)
   private val isStartingUp = new AtomicBoolean(false)
@@ -217,7 +185,7 @@ class KafkaServer(val config: KafkaConfig, time: Time = Time.SYSTEM, threadNameP
    * Start up API for bringing up a single instance of the Kafka server.
    * Instantiates the LogManager, the SocketServer and the request handlers - KafkaRequestHandlers
    */
-  def startup(): Unit = {
+  override def startup(): Unit = {
     try {
       info("starting")
 
@@ -269,16 +237,7 @@ class KafkaServer(val config: KafkaConfig, time: Time = Time.SYSTEM, threadNameP
         /* create and configure metrics */
         kafkaYammerMetrics = KafkaYammerMetrics.INSTANCE
         kafkaYammerMetrics.configure(config.originals)
-
-        val jmxReporter = new JmxReporter()
-        jmxReporter.configure(config.originals)
-
-        val reporters = new util.ArrayList[MetricsReporter]
-        reporters.add(jmxReporter)
-
-        val metricConfig = KafkaServer.metricConfig(config)
-        val metricsContext = createKafkaMetricsContext()
-        metrics = new Metrics(metricConfig, reporters, time, true, metricsContext)
+        metrics = Server.initializeMetrics(config, time, clusterId)
 
         /* register broker metrics */
         _brokerTopicStats = new BrokerTopicStats
@@ -691,7 +650,7 @@ class KafkaServer(val config: KafkaConfig, time: Time = Time.SYSTEM, threadNameP
    * Shutdown API for shutting down a single instance of the Kafka server.
    * Shuts down the LogManager, the SocketServer and the log cleaner scheduler thread
    */
-  def shutdown(): Unit = {
+  override def shutdown(): Unit = {
     try {
       info("shutting down")
 
@@ -792,7 +751,7 @@ class KafkaServer(val config: KafkaConfig, time: Time = Time.SYSTEM, threadNameP
   /**
    * After calling shutdown(), use this API to wait until the shutdown is complete
    */
-  def awaitShutdown(): Unit = shutdownLatch.await()
+  override def awaitShutdown(): Unit = shutdownLatch.await()
 
   def getLogManager: LogManager = logManager
 

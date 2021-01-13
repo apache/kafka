@@ -27,6 +27,7 @@ import kafka.coordinator.transaction.{TransactionLog, TransactionStateManager}
 import kafka.log.LogConfig
 import kafka.message.{BrokerCompressionCodec, CompressionCodec, ZStdCompressionCodec}
 import kafka.security.authorizer.AuthorizerUtils
+import kafka.server.KafkaRaftServer.{BrokerRole, ControllerRole, ProcessRole}
 import kafka.utils.CoreUtils
 import kafka.utils.Implicits._
 import org.apache.kafka.clients.CommonClientConfigs
@@ -352,7 +353,8 @@ object KafkaConfig {
   val RequestTimeoutMsProp = CommonClientConfigs.REQUEST_TIMEOUT_MS_CONFIG
   val ConnectionSetupTimeoutMsProp = CommonClientConfigs.SOCKET_CONNECTION_SETUP_TIMEOUT_MS_CONFIG
   val ConnectionSetupTimeoutMaxMsProp = CommonClientConfigs.SOCKET_CONNECTION_SETUP_TIMEOUT_MAX_MS_CONFIG
-  val EnableMetadataQuorumProp = "enable.metadata.quorum"
+  val EnableMetadataQuorumProp = "enable.metadata.quorum" // TODO: Let's remove this
+  val ProcessRolesProp = "process.roles"
 
   /************* Authorizer Configuration ***********/
   val AuthorizerClassNameProp = "authorizer.class.name"
@@ -1032,6 +1034,7 @@ object KafkaConfig {
 
       // Experimental flag to turn on APIs required for the internal metadata quorum (KIP-500)
       .defineInternal(EnableMetadataQuorumProp, BOOLEAN, false, LOW)
+      .defineInternal(ProcessRolesProp, LIST, Collections.emptyList(), ValidList.in("broker", "controller"), HIGH)
 
       /************* Authorizer Configuration ***********/
       .define(AuthorizerClassNameProp, STRING, Defaults.AuthorizerClassName, LOW, AuthorizerClassNameDoc)
@@ -1453,6 +1456,21 @@ class KafkaConfig(val props: java.util.Map[_, _], doLog: Boolean, dynamicConfigO
   val brokerIdGenerationEnable: Boolean = getBoolean(KafkaConfig.BrokerIdGenerationEnableProp)
   val maxReservedBrokerId: Int = getInt(KafkaConfig.MaxReservedBrokerIdProp)
   var brokerId: Int = getInt(KafkaConfig.BrokerIdProp)
+  val processRoles = parseProcessRoles()
+
+  private def parseProcessRoles(): Set[ProcessRole] = {
+    val roles = getList(KafkaConfig.ProcessRolesProp).asScala.map {
+      case "broker" => BrokerRole
+      case "controller" => ControllerRole
+      case role => throw new ConfigException(s"Unknown process role $role")
+    }
+
+    if (roles.distinct.length != roles.size) {
+      throw new ConfigException(s"Duplicate role names found in `${KafkaConfig.ProcessRolesProp}`: $roles")
+    }
+
+    roles.toSet
+  }
 
   def numNetworkThreads = getInt(KafkaConfig.NumNetworkThreadsProp)
   def backgroundThreads = getInt(KafkaConfig.BackgroundThreadsProp)

@@ -584,7 +584,7 @@ class DynamicBrokerReconfigurationTest extends ZooKeeperTestHarness with SaslSet
     }
 
     // Verify that configs of existing logs have been updated
-    val newLogConfig = LogConfig(KafkaServer.copyKafkaConfigToLog(servers.head.config))
+    val newLogConfig = LogConfig(LogConfig.extractLogConfigMap(servers.head.config))
     TestUtils.waitUntilTrue(() => servers.head.logManager.currentDefaultConfig == newLogConfig,
       "Config not updated in LogManager")
 
