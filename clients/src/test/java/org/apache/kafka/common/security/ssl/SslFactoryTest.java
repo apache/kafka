@@ -21,9 +21,7 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.security.GeneralSecurityException;
 import java.security.KeyStore;
-import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.List;
 import java.util.Map;
 
 import javax.net.ssl.SSLContext;
@@ -42,13 +40,10 @@ import org.apache.kafka.common.security.ssl.DefaultSslEngineFactory.SecurityStor
 import org.apache.kafka.common.security.ssl.mock.TestKeyManagerFactory;
 import org.apache.kafka.common.security.ssl.mock.TestProviderCreator;
 import org.apache.kafka.common.security.ssl.mock.TestTrustManagerFactory;
-import org.apache.kafka.common.utils.Java;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.test.TestSslUtils;
 import org.apache.kafka.common.network.Mode;
-import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.Arguments;
-import org.junit.jupiter.params.provider.MethodSource;
+import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -61,21 +56,16 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
 import java.security.Security;
 import java.util.Properties;
-import java.util.stream.Stream;
 
-public class SslFactoryTest {
+public abstract class SslFactoryTest {
+    private final String tlsProtocol;
 
-    private static Stream<Arguments> parameters() {
-        List<Arguments> arguments = new ArrayList<>();
-        arguments.add(Arguments.of("TLSv1.2"));
-        if (Java.IS_JAVA11_COMPATIBLE)
-            arguments.add(Arguments.of("TLSv1.3"));
-        return arguments.stream();
+    public SslFactoryTest(String tlsProtocol) {
+        this.tlsProtocol = tlsProtocol;
     }
 
-    @ParameterizedTest
-    @MethodSource("parameters")
-    public void testSslFactoryConfiguration(String tlsProtocol) throws Exception {
+    @Test
+    public void testSslFactoryConfiguration() throws Exception {
         File trustStoreFile = File.createTempFile("truststore", ".jks");
         Map<String, Object> serverSslConfig = sslConfigsBuilder(Mode.SERVER, tlsProtocol)
                 .createNewTrustStore(trustStoreFile)
@@ -89,9 +79,8 @@ public class SslFactoryTest {
         assertEquals(false, engine.getUseClientMode());
     }
 
-    @ParameterizedTest
-    @MethodSource("parameters")
-    public void testSslFactoryWithCustomKeyManagerConfiguration(String tlsProtocol) {
+    @Test
+    public void testSslFactoryWithCustomKeyManagerConfiguration() {
         TestProviderCreator testProviderCreator = new TestProviderCreator();
         Map<String, Object> serverSslConfig = TestSslUtils.createSslConfig(
                 TestKeyManagerFactory.ALGORITHM,
@@ -105,9 +94,8 @@ public class SslFactoryTest {
         Security.removeProvider(testProviderCreator.getProvider().getName());
     }
 
-    @ParameterizedTest
-    @MethodSource("parameters")
-    public void testSslFactoryWithoutProviderClassConfiguration(String tlsProtocol) {
+    @Test
+    public void testSslFactoryWithoutProviderClassConfiguration() {
         // An exception is thrown as the algorithm is not registered through a provider
         Map<String, Object> serverSslConfig = TestSslUtils.createSslConfig(
                 TestKeyManagerFactory.ALGORITHM,
@@ -118,9 +106,8 @@ public class SslFactoryTest {
         assertThrows(KafkaException.class, () -> sslFactory.configure(serverSslConfig));
     }
 
-    @ParameterizedTest
-    @MethodSource("parameters")
-    public void testSslFactoryWithIncorrectProviderClassConfiguration(String tlsProtocol) {
+    @Test
+    public void testSslFactoryWithIncorrectProviderClassConfiguration() {
         // An exception is thrown as the algorithm is not registered through a provider
         Map<String, Object> serverSslConfig = TestSslUtils.createSslConfig(
                 TestKeyManagerFactory.ALGORITHM,
@@ -133,9 +120,8 @@ public class SslFactoryTest {
         assertThrows(KafkaException.class, () -> sslFactory.configure(serverSslConfig));
     }
 
-    @ParameterizedTest
-    @MethodSource("parameters")
-    public void testSslFactoryWithoutPasswordConfiguration(String tlsProtocol) throws Exception {
+    @Test
+    public void testSslFactoryWithoutPasswordConfiguration() throws Exception {
         File trustStoreFile = File.createTempFile("truststore", ".jks");
         Map<String, Object> serverSslConfig = sslConfigsBuilder(Mode.SERVER, tlsProtocol)
                 .createNewTrustStore(trustStoreFile)
@@ -150,9 +136,8 @@ public class SslFactoryTest {
         }
     }
 
-    @ParameterizedTest
-    @MethodSource("parameters")
-    public void testClientMode(String tlsProtocol) throws Exception {
+    @Test
+    public void testClientMode() throws Exception {
         File trustStoreFile = File.createTempFile("truststore", ".jks");
         Map<String, Object> clientSslConfig = sslConfigsBuilder(Mode.CLIENT, tlsProtocol)
                 .createNewTrustStore(trustStoreFile)
@@ -165,9 +150,8 @@ public class SslFactoryTest {
         assertTrue(engine.getUseClientMode());
     }
 
-    @ParameterizedTest
-    @MethodSource("parameters")
-    public void staleSslEngineFactoryShouldBeClosed(String tlsProtocol) throws IOException, GeneralSecurityException {
+    @Test
+    public void staleSslEngineFactoryShouldBeClosed() throws IOException, GeneralSecurityException {
         File trustStoreFile = File.createTempFile("truststore", ".jks");
         Map<String, Object> clientSslConfig = sslConfigsBuilder(Mode.SERVER, tlsProtocol)
                 .createNewTrustStore(trustStoreFile)
@@ -192,9 +176,8 @@ public class SslFactoryTest {
         assertTrue(sslEngineFactory.closed);
     }
 
-    @ParameterizedTest
-    @MethodSource("parameters")
-    public void testReconfiguration(String tlsProtocol) throws Exception {
+    @Test
+    public void testReconfiguration() throws Exception {
         File trustStoreFile = File.createTempFile("truststore", ".jks");
         Map<String, Object> sslConfig = sslConfigsBuilder(Mode.SERVER, tlsProtocol)
                 .createNewTrustStore(trustStoreFile)
@@ -251,9 +234,8 @@ public class SslFactoryTest {
                 sslFactory.sslEngineFactory(), "SslEngineFactory recreated unnecessarily");
     }
 
-    @ParameterizedTest
-    @MethodSource("parameters")
-    public void testReconfigurationWithoutTruststore(String tlsProtocol) throws Exception {
+    @Test
+    public void testReconfigurationWithoutTruststore() throws Exception {
         File trustStoreFile = File.createTempFile("truststore", ".jks");
         Map<String, Object> sslConfig = sslConfigsBuilder(Mode.SERVER, tlsProtocol)
                 .createNewTrustStore(trustStoreFile)
@@ -280,9 +262,8 @@ public class SslFactoryTest {
         }
     }
 
-    @ParameterizedTest
-    @MethodSource("parameters")
-    public void testReconfigurationWithoutKeystore(String tlsProtocol) throws Exception {
+    @Test
+    public void testReconfigurationWithoutKeystore() throws Exception {
         File trustStoreFile = File.createTempFile("truststore", ".jks");
         Map<String, Object> sslConfig = sslConfigsBuilder(Mode.SERVER, tlsProtocol)
                 .createNewTrustStore(trustStoreFile)
@@ -320,9 +301,8 @@ public class SslFactoryTest {
         }
     }
 
-    @ParameterizedTest
-    @MethodSource("parameters")
-    public void testPemReconfiguration(String tlsProtocol) throws Exception {
+    @Test
+    public void testPemReconfiguration() throws Exception {
         Properties props = new Properties();
         props.putAll(sslConfigsBuilder(Mode.SERVER, tlsProtocol)
                 .createNewTrustStore(null)
@@ -362,9 +342,8 @@ public class SslFactoryTest {
         sslEngineFactory = sslFactory.sslEngineFactory();
     }
 
-    @ParameterizedTest
-    @MethodSource("parameters")
-    public void testKeyStoreTrustStoreValidation(String tlsProtocol) throws Exception {
+    @Test
+    public void testKeyStoreTrustStoreValidation() throws Exception {
         File trustStoreFile = File.createTempFile("truststore", ".jks");
         Map<String, Object> serverSslConfig = sslConfigsBuilder(Mode.SERVER, tlsProtocol)
                 .createNewTrustStore(trustStoreFile)
@@ -374,9 +353,8 @@ public class SslFactoryTest {
         assertNotNull(sslFactory.sslEngineFactory(), "SslEngineFactory not created");
     }
 
-    @ParameterizedTest
-    @MethodSource("parameters")
-    public void testUntrustedKeyStoreValidationFails(String tlsProtocol) throws Exception {
+    @Test
+    public void testUntrustedKeyStoreValidationFails() throws Exception {
         File trustStoreFile1 = File.createTempFile("truststore1", ".jks");
         File trustStoreFile2 = File.createTempFile("truststore2", ".jks");
         Map<String, Object> sslConfig1 = sslConfigsBuilder(Mode.SERVER, tlsProtocol)
@@ -400,15 +378,13 @@ public class SslFactoryTest {
         }
     }
 
-    @ParameterizedTest
-    @MethodSource("parameters")
-    public void testKeystoreVerifiableUsingTruststore(String tlsProtocol) throws Exception {
+    @Test
+    public void testKeystoreVerifiableUsingTruststore() throws Exception {
         verifyKeystoreVerifiableUsingTruststore(false, tlsProtocol);
     }
 
-    @ParameterizedTest
-    @MethodSource("parameters")
-    public void testPemKeystoreVerifiableUsingTruststore(String tlsProtocol) throws Exception {
+    @Test
+    public void testPemKeystoreVerifiableUsingTruststore() throws Exception {
         verifyKeystoreVerifiableUsingTruststore(true, tlsProtocol);
     }
 
@@ -438,15 +414,13 @@ public class SslFactoryTest {
         }
     }
 
-    @ParameterizedTest
-    @MethodSource("parameters")
-    public void testCertificateEntriesValidation(String tlsProtocol) throws Exception {
+    @Test
+    public void testCertificateEntriesValidation() throws Exception {
         verifyCertificateEntriesValidation(false, tlsProtocol);
     }
 
-    @ParameterizedTest
-    @MethodSource("parameters")
-    public void testPemCertificateEntriesValidation(String tlsProtocol) throws Exception {
+    @Test
+    public void testPemCertificateEntriesValidation() throws Exception {
         verifyCertificateEntriesValidation(true, tlsProtocol);
     }
 
@@ -477,9 +451,8 @@ public class SslFactoryTest {
     /**
      * Tests client side ssl.engine.factory configuration is used when specified
      */
-    @ParameterizedTest
-    @MethodSource("parameters")
-    public void testClientSpecifiedSslEngineFactoryUsed(String tlsProtocol) throws Exception {
+    @Test
+    public void testClientSpecifiedSslEngineFactoryUsed() throws Exception {
         File trustStoreFile = File.createTempFile("truststore", ".jks");
         Map<String, Object> clientSslConfig = sslConfigsBuilder(Mode.CLIENT, tlsProtocol)
                 .createNewTrustStore(trustStoreFile)
@@ -492,9 +465,8 @@ public class SslFactoryTest {
             "SslEngineFactory must be of expected type");
     }
 
-    @ParameterizedTest
-    @MethodSource("parameters")
-    public void testEngineFactoryClosed(String tlsProtocol) throws Exception {
+    @Test
+    public void testEngineFactoryClosed() throws Exception {
         File trustStoreFile = File.createTempFile("truststore", ".jks");
         Map<String, Object> clientSslConfig = sslConfigsBuilder(Mode.CLIENT, tlsProtocol)
                 .createNewTrustStore(trustStoreFile)
@@ -512,9 +484,8 @@ public class SslFactoryTest {
     /**
      * Tests server side ssl.engine.factory configuration is used when specified
      */
-    @ParameterizedTest
-    @MethodSource("parameters")
-    public void testServerSpecifiedSslEngineFactoryUsed(String tlsProtocol) throws Exception {
+    @Test
+    public void testServerSpecifiedSslEngineFactoryUsed() throws Exception {
         File trustStoreFile = File.createTempFile("truststore", ".jks");
         Map<String, Object> serverSslConfig = sslConfigsBuilder(Mode.SERVER, tlsProtocol)
                 .createNewTrustStore(trustStoreFile)
@@ -530,9 +501,8 @@ public class SslFactoryTest {
     /**
      * Tests invalid ssl.engine.factory configuration
      */
-    @ParameterizedTest
-    @MethodSource("parameters")
-    public void testInvalidSslEngineFactory(String tlsProtocol) throws Exception {
+    @Test
+    public void testInvalidSslEngineFactory() throws Exception {
         File trustStoreFile = File.createTempFile("truststore", ".jks");
         Map<String, Object> clientSslConfig = sslConfigsBuilder(Mode.CLIENT, tlsProtocol)
                 .createNewTrustStore(trustStoreFile)
@@ -543,9 +513,8 @@ public class SslFactoryTest {
         assertThrows(ClassCastException.class, () -> sslFactory.configure(clientSslConfig));
     }
 
-    @ParameterizedTest
-    @MethodSource("parameters")
-    public void testUsedConfigs(String tlsProtocol) throws IOException, GeneralSecurityException {
+    @Test
+    public void testUsedConfigs() throws IOException, GeneralSecurityException {
         Map<String, Object> serverSslConfig = sslConfigsBuilder(Mode.SERVER, tlsProtocol)
                 .createNewTrustStore(File.createTempFile("truststore", ".jks"))
                 .useClientCert(false)
