@@ -114,7 +114,7 @@ public class EosBetaUpgradeIntegrationTest {
     private static final List<KeyValue<KafkaStreams.State, KafkaStreams.State>> CRASH =
         Collections.unmodifiableList(
             Collections.singletonList(
-                KeyValue.pair(KafkaStreams.State.RUNNING, State.PENDING_ERROR)
+                KeyValue.pair(State.PENDING_ERROR, State.ERROR)
             )
         );
 
@@ -134,7 +134,6 @@ public class EosBetaUpgradeIntegrationTest {
     private final static String UNEXPECTED_EXCEPTION_MSG = "Fail the test since we got an unexpected exception, or " +
         "there are too many exceptions thrown, please check standard error log for more info.";
     private final String storeName = "store";
-
 
     private final StableAssignmentListener assignmentListener = new StableAssignmentListener();
 
@@ -983,12 +982,12 @@ public class EosBetaUpgradeIntegrationTest {
         waitForCondition(
             () -> observed.equals(expected),
             MAX_WAIT_TIME_MS,
-            () -> "Client did not have the expected state transition on time. Observers transitions: " + observed
+            () -> "Client did not startup on time. Observers transitions: " + observed
         );
     }
 
     private void waitForStateTransitionContains(final List<KeyValue<KafkaStreams.State, KafkaStreams.State>> observed,
-                                                final List<KeyValue<KafkaStreams.State, KafkaStreams.State>> expected)
+                                        final List<KeyValue<KafkaStreams.State, KafkaStreams.State>> expected)
             throws Exception {
 
         waitForCondition(
