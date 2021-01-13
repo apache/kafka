@@ -875,10 +875,8 @@ public abstract class TopologyTestDriverTest {
         assertThat(record, equalTo(expectedResult));
     }
 
-    
     @Test
     public void shouldForwardRecordsFromSubtopologyToSubtopology() {
-        
         testDriver = new TopologyTestDriver(setupTopologyWithTwoSubtopologies());
 
         pipeRecord(SOURCE_TOPIC_1, testRecord1);
@@ -1554,10 +1552,8 @@ public abstract class TopologyTestDriverTest {
 
 
         try (final TopologyTestDriver testDriver = new TopologyTestDriver(topology, config)) {
-            assertNull(
-                testDriver.getKeyValueStore("storeProcessorStore").get("a"),
-                "Closing the prior test driver should have cleaned up this store and value."
-            );
+            assertNull(testDriver.getKeyValueStore("storeProcessorStore").get("a"),
+                    "Closing the prior test driver should have cleaned up this store and value.");
         }
 
     }
@@ -1601,6 +1597,7 @@ public abstract class TopologyTestDriverTest {
 
     @Test
     public void shouldProcessFromSourcesThatMatchMultiplePattern() {
+
         final  Pattern pattern2Source1 = Pattern.compile("source-topic-\\d");
         final  Pattern pattern2Source2 = Pattern.compile("source-topic-[A-Z]");
         final  String consumerTopic2 = "source-topic-Z";
