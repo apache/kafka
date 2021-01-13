@@ -747,11 +747,12 @@ public class KafkaStreamsTest {
         assertThrows(IllegalStateException.class, () -> streams.queryMetadataForKey("store", "key", (topic, key, value, numPartitions) -> 0));
     }
 
-    @Test(expected = UnknownStateStoreException.class)
-    public void shouldThrowUnknownStateStoreExceptionWhenStoreNotExist() throws Exception {
-        final KafkaStreams streams = new KafkaStreams(getBuilderWithSource().build(), props, supplier, time);
-        streams.start();
-        streams.store(StoreQueryParameters.fromNameAndType("unknown-store", keyValueStore()));
+    @Test
+    public void shouldThrowUnknownStateStoreExceptionWhenStoreNotExist() {
+        try (final KafkaStreams streams = new KafkaStreams(getBuilderWithSource().build(), props, supplier, time)) {
+            streams.start();
+            assertThrows(UnknownStateStoreException.class, () -> streams.store(StoreQueryParameters.fromNameAndType("unknown-store", keyValueStore())));
+        }
     }
 
     @Test
