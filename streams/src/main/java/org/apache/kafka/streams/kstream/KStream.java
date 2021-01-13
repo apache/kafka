@@ -756,7 +756,7 @@ public interface KStream<K, V> {
      *
      * @param predicates the ordered list of {@link Predicate} instances
      * @return multiple distinct substreams of this {@code KStream}
-     * @deprecated since 2.7. Use {@link #split()} instead.
+     * @deprecated since 2.8. Use {@link #split()} instead.
      */
     @Deprecated
     @SuppressWarnings("unchecked")
