@@ -279,6 +279,7 @@ public class SslSelectorTest extends SelectorTest {
     }
 
     @Override
+    @Test
     public void testMuteOnOOM() throws Exception {
         //clean up default selector, replace it with one that uses a finite mem pool
         selector.close();
