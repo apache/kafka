@@ -54,8 +54,7 @@ import org.apache.kafka.streams.state.internals.KeyValueStoreBuilder;
 import org.apache.kafka.streams.test.TestRecord;
 import org.apache.kafka.test.TestUtils;
 import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.EnumSource;
+import org.junit.jupiter.api.Test;
 
 import java.io.File;
 import java.time.Duration;
@@ -93,10 +92,14 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
 
-public class TopologyTestDriverTest {
+public abstract class TopologyTestDriverTest {
 
-    private enum EosMode {
-        EOS_ENABLED, EOS_DISABLED
+    TopologyTestDriverTest(final Map<String, String> overrides) {
+        config = mkProperties(mkMap(
+                mkEntry(StreamsConfig.APPLICATION_ID_CONFIG, "test-TopologyTestDriver"),
+                mkEntry(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory().getAbsolutePath())
+        ));
+        config.putAll(overrides);
     }
 
     private final static String SOURCE_TOPIC_1 = "source-topic-1";
@@ -127,21 +130,11 @@ public class TopologyTestDriverTest {
         consumerRecordFactory.create(SOURCE_TOPIC_2, key2, value2, timestamp2);
 
     private TopologyTestDriver testDriver;
-    private Properties config;
+    private final Properties config;
     private KeyValueStore<String, Long> store;
 
     private final StringDeserializer stringDeserializer = new StringDeserializer();
     private final LongDeserializer longDeserializer = new LongDeserializer();
-
-    private void setProperties(final EosMode mode) {
-        config = mkProperties(mkMap(
-            mkEntry(StreamsConfig.APPLICATION_ID_CONFIG, "test-TopologyTestDriver"),
-            mkEntry(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory().getAbsolutePath())
-        ));
-        if (mode == EosMode.EOS_ENABLED) {
-            config.setProperty(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, StreamsConfig.EXACTLY_ONCE);
-        }
-    }
 
     private final static class TTDTestRecord {
         private final Object key;
@@ -441,37 +434,28 @@ public class TopologyTestDriverTest {
         return builder.build(config);
     }
 
-    @ParameterizedTest(name = "{displayName} - {arguments}")
-    @EnumSource(EosMode.class)
-    public void shouldNotRequireParameters(final EosMode eosMode) {
-        setProperties(eosMode);
+    @Test
+    public void shouldNotRequireParameters() {
         new TopologyTestDriver(setupSingleProcessorTopology(), new Properties());
     }
 
-    @ParameterizedTest(name = "{displayName} - {arguments}")
-    @EnumSource(EosMode.class)
-    public void shouldInitProcessor(final EosMode eosMode) {
-        setProperties(eosMode);
+    @Test
+    public void shouldInitProcessor() {
         testDriver = new TopologyTestDriver(setupSingleProcessorTopology(), config);
         assertTrue(mockProcessors.get(0).initialized);
     }
 
-    @ParameterizedTest(name = "{displayName} - {arguments}")
-    @EnumSource(EosMode.class)
-    public void shouldCloseProcessor(final EosMode eosMode) {
-        setProperties(eosMode);
+    @Test
+    public void shouldCloseProcessor() {
         testDriver = new TopologyTestDriver(setupSingleProcessorTopology(), config);
-
         testDriver.close();
         assertTrue(mockProcessors.get(0).closed);
         // As testDriver is already closed, bypassing @AfterEach tearDown testDriver.close().
         testDriver = null;
     }
 
-    @ParameterizedTest(name = "{displayName} - {arguments}")
-    @EnumSource(EosMode.class)
-    public void shouldThrowForUnknownTopic(final EosMode eosMode) {
-        setProperties(eosMode);
+    @Test
+    public void shouldThrowForUnknownTopic() {
         testDriver = new TopologyTestDriver(new Topology());
         assertThrows(
             IllegalArgumentException.class,
@@ -484,10 +468,8 @@ public class TopologyTestDriverTest {
         );
     }
 
-    @ParameterizedTest(name = "{displayName} - {arguments}")
-    @EnumSource(EosMode.class)
-    public void shouldThrowForMissingTime(final EosMode eosMode) {
-        setProperties(eosMode);
+    @Test
+    public void shouldThrowForMissingTime() {
         testDriver = new TopologyTestDriver(new Topology());
         assertThrows(
             IllegalStateException.class,
@@ -500,10 +482,8 @@ public class TopologyTestDriverTest {
     }
 
     @Deprecated
-    @ParameterizedTest(name = "{displayName} - {arguments}")
-    @EnumSource(EosMode.class)
-    public void shouldThrowForUnknownTopicDeprecated(final EosMode eosMode) {
-        setProperties(eosMode);
+    @Test
+    public void shouldThrowForUnknownTopicDeprecated() {
         final String unknownTopic = "unknownTopic";
         final org.apache.kafka.streams.test.ConsumerRecordFactory<byte[], byte[]> consumerRecordFactory =
             new org.apache.kafka.streams.test.ConsumerRecordFactory<>(
@@ -520,10 +500,8 @@ public class TopologyTestDriverTest {
         }
     }
 
-    @ParameterizedTest(name = "{displayName} - {arguments}")
-    @EnumSource(EosMode.class)
-    public void shouldThrowNoSuchElementExceptionForUnusedOutputTopicWithDynamicRouting(final EosMode eosMode) {
-        setProperties(eosMode);
+    @Test
+    public void shouldThrowNoSuchElementExceptionForUnusedOutputTopicWithDynamicRouting() {
         testDriver = new TopologyTestDriver(setupSourceSinkTopology());
         final TestOutputTopic<String, String> outputTopic = new TestOutputTopic<>(
             testDriver,
@@ -536,10 +514,8 @@ public class TopologyTestDriverTest {
         assertThrows(NoSuchElementException.class, outputTopic::readRecord);
     }
 
-    @ParameterizedTest(name = "{displayName} - {arguments}")
-    @EnumSource(EosMode.class)
-    public void shouldCaptureSinkTopicNamesIfWrittenInto(final EosMode eosMode) {
-        setProperties(eosMode);
+    @Test
+    public void shouldCaptureSinkTopicNamesIfWrittenInto() {
         testDriver = new TopologyTestDriver(setupSourceSinkTopology());
 
         assertThat(testDriver.producedTopicNames(), is(Collections.emptySet()));
@@ -548,10 +524,8 @@ public class TopologyTestDriverTest {
         assertThat(testDriver.producedTopicNames(), hasItem(SINK_TOPIC_1));
     }
 
-    @ParameterizedTest(name = "{displayName} - {arguments}")
-    @EnumSource(EosMode.class)
-    public void shouldCaptureInternalTopicNamesIfWrittenInto(final EosMode eosMode) {
-        setProperties(eosMode);
+    @Test
+    public void shouldCaptureInternalTopicNamesIfWrittenInto() {
         testDriver = new TopologyTestDriver(
             setupTopologyWithInternalTopic("table1", "table2", "join"),
             config
@@ -582,10 +556,8 @@ public class TopologyTestDriverTest {
         );
     }
 
-    @ParameterizedTest(name = "{displayName} - {arguments}")
-    @EnumSource(EosMode.class)
-    public void shouldCaptureGlobalTopicNameIfWrittenInto(final EosMode eosMode) {
-        setProperties(eosMode);
+    @Test
+    public void shouldCaptureGlobalTopicNameIfWrittenInto() {
         final StreamsBuilder builder = new StreamsBuilder();
         builder.globalTable(SOURCE_TOPIC_1, Materialized.as("globalTable"));
         builder.stream(SOURCE_TOPIC_2).to(SOURCE_TOPIC_1);
@@ -601,10 +573,8 @@ public class TopologyTestDriverTest {
         );
     }
 
-    @ParameterizedTest(name = "{displayName} - {arguments}")
-    @EnumSource(EosMode.class)
-    public void shouldProcessRecordForTopic(final EosMode eosMode) {
-        setProperties(eosMode);
+    @Test
+    public void shouldProcessRecordForTopic() {
         testDriver = new TopologyTestDriver(setupSourceSinkTopology());
 
         pipeRecord(SOURCE_TOPIC_1, testRecord1);
@@ -615,10 +585,8 @@ public class TopologyTestDriverTest {
         assertEquals(SINK_TOPIC_1, outputRecord.topic());
     }
 
-    @ParameterizedTest(name = "{displayName} - {arguments}")
-    @EnumSource(EosMode.class)
-    public void shouldSetRecordMetadata(final EosMode eosMode) {
-        setProperties(eosMode);
+    @Test
+    public void shouldSetRecordMetadata() {
         testDriver = new TopologyTestDriver(setupSingleProcessorTopology());
 
         pipeRecord(SOURCE_TOPIC_1, testRecord1);
@@ -639,10 +607,8 @@ public class TopologyTestDriverTest {
 
     @Deprecated
     //Test not migrated to non-deprecated methods, topic handling not based on record any more
-    @ParameterizedTest(name = "{displayName} - {arguments}")
-    @EnumSource(EosMode.class)
-    public void shouldSendRecordViaCorrectSourceTopicDeprecated(final EosMode eosMode) {
-        setProperties(eosMode);
+    @Test
+    public void shouldSendRecordViaCorrectSourceTopicDeprecated() {
         testDriver = new TopologyTestDriver(setupMultipleSourceTopology(SOURCE_TOPIC_1, SOURCE_TOPIC_2));
 
         final List<TTDTestRecord> processedRecords1 = mockProcessors.get(0).processedRecords;
@@ -668,10 +634,8 @@ public class TopologyTestDriverTest {
     }
 
     @Deprecated
-    @ParameterizedTest(name = "{displayName} - {arguments}")
-    @EnumSource(EosMode.class)
-    public void shouldUseSourceSpecificDeserializersDeprecated(final EosMode eosMode) {
-        setProperties(eosMode);
+    @Test
+    public void shouldUseSourceSpecificDeserializersDeprecated() {
         final Topology topology = new Topology();
 
         final String sourceName1 = "source-1";
@@ -732,10 +696,8 @@ public class TopologyTestDriverTest {
         assertThat(record2.value(), equalTo(source2Value));
     }
 
-    @ParameterizedTest(name = "{displayName} - {arguments}")
-    @EnumSource(EosMode.class)
-    public void shouldUseSourceSpecificDeserializers(final EosMode eosMode) {
-        setProperties(eosMode);
+    @Test
+    public void shouldUseSourceSpecificDeserializers() {
         final Topology topology = new Topology();
 
         final String sourceName1 = "source-1";
@@ -793,10 +755,8 @@ public class TopologyTestDriverTest {
         assertThat(result2.getValue(), equalTo(source2Value));
     }
 
-    @ParameterizedTest(name = "{displayName} - {arguments}")
-    @EnumSource(EosMode.class)
-    public void shouldPassRecordHeadersIntoSerializersAndDeserializers(final EosMode eosMode) {
-        setProperties(eosMode);
+    @Test
+    public void shouldPassRecordHeadersIntoSerializersAndDeserializers() {
         testDriver = new TopologyTestDriver(setupSourceSinkTopology());
 
         final AtomicBoolean passedHeadersToKeySerializer = new AtomicBoolean(false);
@@ -845,10 +805,8 @@ public class TopologyTestDriverTest {
         assertThat(passedHeadersToValueDeserializer.get(), equalTo(true));
     }
 
-    @ParameterizedTest(name = "{displayName} - {arguments}")
-    @EnumSource(EosMode.class)
-    public void shouldUseSinkSpecificSerializers(final EosMode eosMode) {
-        setProperties(eosMode);
+    @Test
+    public void shouldUseSinkSpecificSerializers() {
         final Topology topology = new Topology();
 
         final String sourceName1 = "source-1";
@@ -892,10 +850,8 @@ public class TopologyTestDriverTest {
 
     @Deprecated
     //Test not migrated to non-deprecated methods, List processing now in TestInputTopic
-    @ParameterizedTest(name = "{displayName} - {arguments}")
-    @EnumSource(EosMode.class)
-    public void shouldProcessConsumerRecordList(final EosMode eosMode) {
-        setProperties(eosMode);
+    @Test
+    public void shouldProcessConsumerRecordList() {
         testDriver = new TopologyTestDriver(setupMultipleSourceTopology(SOURCE_TOPIC_1, SOURCE_TOPIC_2));
 
         final List<TTDTestRecord> processedRecords1 = mockProcessors.get(0).processedRecords;
@@ -919,10 +875,10 @@ public class TopologyTestDriverTest {
         assertThat(record, equalTo(expectedResult));
     }
 
-    @ParameterizedTest(name = "{displayName} - {arguments}")
-    @EnumSource(EosMode.class)
-    public void shouldForwardRecordsFromSubtopologyToSubtopology(final EosMode eosMode) {
-        setProperties(eosMode);
+    
+    @Test
+    public void shouldForwardRecordsFromSubtopologyToSubtopology() {
+        
         testDriver = new TopologyTestDriver(setupTopologyWithTwoSubtopologies());
 
         pipeRecord(SOURCE_TOPIC_1, testRecord1);
@@ -938,10 +894,8 @@ public class TopologyTestDriverTest {
         assertEquals(SINK_TOPIC_2, outputRecord.topic());
     }
 
-    @ParameterizedTest(name = "{displayName} - {arguments}")
-    @EnumSource(EosMode.class)
-    public void shouldPopulateGlobalStore(final EosMode eosMode) {
-        setProperties(eosMode);
+    @Test
+    public void shouldPopulateGlobalStore() {
         testDriver = new TopologyTestDriver(setupGlobalStoreTopology(SOURCE_TOPIC_1));
 
         final KeyValueStore<byte[], byte[]> globalStore = testDriver.getKeyValueStore(SOURCE_TOPIC_1 + "-globalStore");
@@ -953,10 +907,8 @@ public class TopologyTestDriverTest {
         assertThat(globalStore.get(testRecord1.key()), is(testRecord1.value()));
     }
 
-    @ParameterizedTest(name = "{displayName} - {arguments}")
-    @EnumSource(EosMode.class)
-    public void shouldPunctuateOnStreamsTime(final EosMode eosMode) {
-        setProperties(eosMode);
+    @Test
+    public void shouldPunctuateOnStreamsTime() {
         final MockPunctuator mockPunctuator = new MockPunctuator();
         testDriver = new TopologyTestDriver(
             setupSingleProcessorTopology(10L, PunctuationType.STREAM_TIME, mockPunctuator)
@@ -1006,10 +958,8 @@ public class TopologyTestDriverTest {
 
     @SuppressWarnings("deprecation")
     //Testing already deprecatd methods until methods removed
-    @ParameterizedTest(name = "{displayName} - {arguments}")
-    @EnumSource(EosMode.class)
-    public void shouldPunctuateOnWallClockTimeDeprecated(final EosMode eosMode) {
-        setProperties(eosMode);
+    @Test
+    public void shouldPunctuateOnWallClockTimeDeprecated() {
         final MockPunctuator mockPunctuator = new MockPunctuator();
         testDriver = new TopologyTestDriver(
             setupSingleProcessorTopology(10L, PunctuationType.WALL_CLOCK_TIME, mockPunctuator),
@@ -1037,10 +987,8 @@ public class TopologyTestDriverTest {
         assertThat(mockPunctuator.punctuatedAt, equalTo(expectedPunctuations));
     }
 
-    @ParameterizedTest(name = "{displayName} - {arguments}")
-    @EnumSource(EosMode.class)
-    public void shouldPunctuateOnWallClockTime(final EosMode eosMode) {
-        setProperties(eosMode);
+    @Test
+    public void shouldPunctuateOnWallClockTime() {
         final MockPunctuator mockPunctuator = new MockPunctuator();
         testDriver = new TopologyTestDriver(
             setupSingleProcessorTopology(10L, PunctuationType.WALL_CLOCK_TIME, mockPunctuator),
@@ -1067,10 +1015,8 @@ public class TopologyTestDriverTest {
         assertThat(mockPunctuator.punctuatedAt, equalTo(expectedPunctuations));
     }
 
-    @ParameterizedTest(name = "{displayName} - {arguments}")
-    @EnumSource(EosMode.class)
-    public void shouldReturnAllStores(final EosMode eosMode) {
-        setProperties(eosMode);
+    @Test
+    public void shouldReturnAllStores() {
         final Topology topology = setupSourceSinkTopology();
         topology.addProcessor("processor", new MockProcessorSupplier(), "source");
         topology.addStateStore(
@@ -1105,17 +1051,13 @@ public class TopologyTestDriverTest {
         }
     }
 
-    @ParameterizedTest(name = "{displayName} - {arguments}")
-    @EnumSource(EosMode.class)
-    public void shouldReturnCorrectPersistentStoreTypeOnly(final EosMode eosMode) {
-        setProperties(eosMode);
+    @Test
+    public void shouldReturnCorrectPersistentStoreTypeOnly() {
         shouldReturnCorrectStoreTypeOnly(true);
     }
 
-    @ParameterizedTest(name = "{displayName} - {arguments}")
-    @EnumSource(EosMode.class)
-    public void shouldReturnCorrectInMemoryStoreTypeOnly(final EosMode eosMode) {
-        setProperties(eosMode);
+    @Test
+    public void shouldReturnCorrectInMemoryStoreTypeOnly() {
         shouldReturnCorrectStoreTypeOnly(false);
     }
 
@@ -1188,17 +1130,13 @@ public class TopologyTestDriverTest {
         assertNull(testDriver.getSessionStore(globalTimestampedKeyValueStoreName));
     }
 
-    @ParameterizedTest(name = "{displayName} - {arguments}")
-    @EnumSource(EosMode.class)
-    public void shouldThrowIfInMemoryBuiltInStoreIsAccessedWithUntypedMethod(final EosMode eosMode) {
-        setProperties(eosMode);
+    @Test
+    public void shouldThrowIfInMemoryBuiltInStoreIsAccessedWithUntypedMethod() {
         shouldThrowIfBuiltInStoreIsAccessedWithUntypedMethod(false);
     }
 
-    @ParameterizedTest(name = "{displayName} - {arguments}")
-    @EnumSource(EosMode.class)
-    public void shouldThrowIfPersistentBuiltInStoreIsAccessedWithUntypedMethod(final EosMode eosMode) {
-        setProperties(eosMode);
+    @Test
+    public void shouldThrowIfPersistentBuiltInStoreIsAccessedWithUntypedMethod() {
         shouldThrowIfBuiltInStoreIsAccessedWithUntypedMethod(true);
     }
 
@@ -1394,10 +1332,8 @@ public class TopologyTestDriverTest {
             voidProcessorSupplier);
     }
 
-    @ParameterizedTest(name = "{displayName} - {arguments}")
-    @EnumSource(EosMode.class)
-    public void shouldReturnAllStoresNames(final EosMode eosMode) {
-        setProperties(eosMode);
+    @Test
+    public void shouldReturnAllStoresNames() {
         final Topology topology = setupSourceSinkTopology();
         topology.addStateStore(
             new KeyValueStoreBuilder<>(
@@ -1459,20 +1395,16 @@ public class TopologyTestDriverTest {
         assertThat(record.getValue(), equalTo(value));
     }
 
-    @ParameterizedTest(name = "{displayName} - {arguments}")
-    @EnumSource(EosMode.class)
-    public void shouldFlushStoreForFirstInput(final EosMode eosMode) {
-        setProperties(eosMode);
+    @Test
+    public void shouldFlushStoreForFirstInput() {
         setup();
         pipeInput("input-topic", "a", 1L, 9999L);
         compareKeyValue(testDriver.readRecord("result-topic", stringDeserializer, longDeserializer), "a", 21L);
         assertTrue(testDriver.isEmpty("result-topic"));
     }
 
-    @ParameterizedTest(name = "{displayName} - {arguments}")
-    @EnumSource(EosMode.class)
-    public void shouldNotUpdateStoreForSmallerValue(final EosMode eosMode) {
-        setProperties(eosMode);
+    @Test
+    public void shouldNotUpdateStoreForSmallerValue() {
         setup();
         pipeInput("input-topic", "a", 1L, 9999L);
         assertThat(store.get("a"), equalTo(21L));
@@ -1480,10 +1412,8 @@ public class TopologyTestDriverTest {
         assertTrue(testDriver.isEmpty("result-topic"));
     }
 
-    @ParameterizedTest(name = "{displayName} - {arguments}")
-    @EnumSource(EosMode.class)
-    public void shouldNotUpdateStoreForLargerValue(final EosMode eosMode) {
-        setProperties(eosMode);
+    @Test
+    public void shouldNotUpdateStoreForLargerValue() {
         setup();
         pipeInput("input-topic", "a", 42L, 9999L);
         assertThat(store.get("a"), equalTo(42L));
@@ -1491,10 +1421,8 @@ public class TopologyTestDriverTest {
         assertTrue(testDriver.isEmpty("result-topic"));
     }
 
-    @ParameterizedTest(name = "{displayName} - {arguments}")
-    @EnumSource(EosMode.class)
-    public void shouldUpdateStoreForNewKey(final EosMode eosMode) {
-        setProperties(eosMode);
+    @Test
+    public void shouldUpdateStoreForNewKey() {
         setup();
         pipeInput("input-topic", "b", 21L, 9999L);
         assertThat(store.get("b"), equalTo(21L));
@@ -1503,10 +1431,8 @@ public class TopologyTestDriverTest {
         assertTrue(testDriver.isEmpty("result-topic"));
     }
 
-    @ParameterizedTest(name = "{displayName} - {arguments}")
-    @EnumSource(EosMode.class)
-    public void shouldPunctuateIfEvenTimeAdvances(final EosMode eosMode) {
-        setProperties(eosMode);
+    @Test
+    public void shouldPunctuateIfEvenTimeAdvances() {
         setup();
         pipeInput("input-topic", "a", 1L, 9999L);
         compareKeyValue(testDriver.readRecord("result-topic", stringDeserializer, longDeserializer), "a", 21L);
@@ -1519,10 +1445,8 @@ public class TopologyTestDriverTest {
         assertTrue(testDriver.isEmpty("result-topic"));
     }
 
-    @ParameterizedTest(name = "{displayName} - {arguments}")
-    @EnumSource(EosMode.class)
-    public void shouldPunctuateIfWallClockTimeAdvances(final EosMode eosMode) {
-        setProperties(eosMode);
+    @Test
+    public void shouldPunctuateIfWallClockTimeAdvances() {
         setup();
         testDriver.advanceWallClockTime(Duration.ofMillis(60000));
         compareKeyValue(testDriver.readRecord("result-topic", stringDeserializer, longDeserializer), "a", 21L);
@@ -1567,10 +1491,8 @@ public class TopologyTestDriverTest {
         }
     }
 
-    @ParameterizedTest(name = "{displayName} - {arguments}")
-    @EnumSource(EosMode.class)
-    public void shouldAllowPrePopulatingStatesStoresWithCachingEnabled(final EosMode eosMode) {
-        setProperties(eosMode);
+    @Test
+    public void shouldAllowPrePopulatingStatesStoresWithCachingEnabled() {
         final Topology topology = new Topology();
         topology.addSource("sourceProcessor", "input-topic");
         topology.addProcessor("aggregator", new CustomMaxAggregatorSupplier(), "sourceProcessor");
@@ -1586,10 +1508,8 @@ public class TopologyTestDriverTest {
         store.put("a", 21L);
     }
 
-    @ParameterizedTest(name = "{displayName} - {arguments}")
-    @EnumSource(EosMode.class)
-    public void shouldCleanUpPersistentStateStoresOnClose(final EosMode eosMode) {
-        setProperties(eosMode);
+    @Test
+    public void shouldCleanUpPersistentStateStoresOnClose() {
         final Topology topology = new Topology();
         topology.addSource("sourceProcessor", "input-topic");
         topology.addProcessor(
@@ -1642,10 +1562,8 @@ public class TopologyTestDriverTest {
 
     }
 
-    @ParameterizedTest(name = "{displayName} - {arguments}")
-    @EnumSource(EosMode.class)
-    public void shouldFeedStoreFromGlobalKTable(final EosMode eosMode) {
-        setProperties(eosMode);
+    @Test
+    public void shouldFeedStoreFromGlobalKTable() {
         final StreamsBuilder builder = new StreamsBuilder();
         builder.globalTable("topic",
             Consumed.with(Serdes.String(), Serdes.String()),
@@ -1681,11 +1599,8 @@ public class TopologyTestDriverTest {
         return topology;
     }
 
-    @ParameterizedTest(name = "{displayName} - {arguments}")
-    @EnumSource(EosMode.class)
-    public void shouldProcessFromSourcesThatMatchMultiplePattern(final EosMode eosMode) {
-        setProperties(eosMode);
-
+    @Test
+    public void shouldProcessFromSourcesThatMatchMultiplePattern() {
         final  Pattern pattern2Source1 = Pattern.compile("source-topic-\\d");
         final  Pattern pattern2Source2 = Pattern.compile("source-topic-[A-Z]");
         final  String consumerTopic2 = "source-topic-Z";
@@ -1716,10 +1631,8 @@ public class TopologyTestDriverTest {
         assertThat(record2, equalTo(expectedResult2));
     }
 
-    @ParameterizedTest(name = "{displayName} - {arguments}")
-    @EnumSource(EosMode.class)
-    public void shouldProcessFromSourceThatMatchPattern(final EosMode eosMode) {
-        setProperties(eosMode);
+    @Test
+    public void shouldProcessFromSourceThatMatchPattern() {
         final String sourceName = "source";
         final Pattern pattern2Source1 = Pattern.compile("source-topic-\\d");
 
@@ -1737,10 +1650,8 @@ public class TopologyTestDriverTest {
         assertEquals(SINK_TOPIC_1, outputRecord.topic());
     }
 
-    @ParameterizedTest(name = "{displayName} - {arguments}")
-    @EnumSource(EosMode.class)
-    public void shouldThrowPatternNotValidForTopicNameException(final EosMode eosMode) {
-        setProperties(eosMode);
+    @Test
+    public void shouldThrowPatternNotValidForTopicNameException() {
         final String sourceName = "source";
         final String pattern2Source1 = "source-topic-\\d";
 
@@ -1763,20 +1674,16 @@ public class TopologyTestDriverTest {
         }
     }
 
-    @ParameterizedTest(name = "{displayName} - {arguments}")
-    @EnumSource(EosMode.class)
-    public void shouldNotCreateStateDirectoryForStatelessTopology(final EosMode eosMode) {
-        setProperties(eosMode);
+    @Test
+    public void shouldNotCreateStateDirectoryForStatelessTopology() {
         setup();
         final String stateDir = config.getProperty(StreamsConfig.STATE_DIR_CONFIG);
         final File appDir = new File(stateDir, config.getProperty(StreamsConfig.APPLICATION_ID_CONFIG));
         assertFalse(appDir.exists());
     }
 
-    @ParameterizedTest(name = "{displayName} - {arguments}")
-    @EnumSource(EosMode.class)
-    public void shouldCreateStateDirectoryForStatefulTopology(final EosMode eosMode) {
-        setProperties(eosMode);
+    @Test
+    public void shouldCreateStateDirectoryForStatefulTopology() {
         setup(Stores.persistentKeyValueStore("aggStore"));
         final String stateDir = config.getProperty(StreamsConfig.STATE_DIR_CONFIG);
         final File appDir = new File(stateDir, config.getProperty(StreamsConfig.APPLICATION_ID_CONFIG));
@@ -1788,10 +1695,8 @@ public class TopologyTestDriverTest {
         assertTrue(new File(appDir, taskId.toString()).exists());
     }
 
-    @ParameterizedTest(name = "{displayName} - {arguments}")
-    @EnumSource(EosMode.class)
-    public void shouldEnqueueLaterOutputsAfterEarlierOnes(final EosMode eosMode) {
-        setProperties(eosMode);
+    @Test
+    public void shouldEnqueueLaterOutputsAfterEarlierOnes() {
         final Topology topology = new Topology();
         topology.addSource("source", new StringDeserializer(), new StringDeserializer(), "input");
         topology.addProcessor(
@@ -1838,10 +1743,8 @@ public class TopologyTestDriverTest {
         }
     }
 
-    @ParameterizedTest(name = "{displayName} - {arguments}")
-    @EnumSource(EosMode.class)
-    public void shouldApplyGlobalUpdatesCorrectlyInRecursiveTopologies(final EosMode eosMode) {
-        setProperties(eosMode);
+    @Test
+    public void shouldApplyGlobalUpdatesCorrectlyInRecursiveTopologies() {
         final Topology topology = new Topology();
         topology.addSource("source", new StringDeserializer(), new StringDeserializer(), "input");
         topology.addGlobalStore(
@@ -1915,10 +1818,8 @@ public class TopologyTestDriverTest {
         }
     }
 
-    @ParameterizedTest(name = "{displayName} - {arguments}")
-    @EnumSource(EosMode.class)
-    public void shouldRespectTaskIdling(final EosMode eosMode) {
-        setProperties(eosMode);
+    @Test
+    public void shouldRespectTaskIdling() {
         final Properties properties = new Properties();
         // This is the key to this test. Wall-clock time doesn't advance automatically in TopologyTestDriver,
         // so with an idle time specified, TTD can't just expect all enqueued records to be processable.
