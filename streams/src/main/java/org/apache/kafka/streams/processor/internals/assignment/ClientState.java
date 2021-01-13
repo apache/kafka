@@ -178,11 +178,12 @@ public class ClientState {
     public Map<String, Set<TaskId>> prevOwnedStandbyByConsumer() {
         // standbys are just those stateful tasks minus active tasks
         final Map<String, Set<TaskId>> consumerToPreviousStandbyTaskIds = new TreeMap<>();
+
         for (final Map.Entry<String, Set<TaskId>> entry: consumerToPreviousStatefulTaskIds.entrySet()) {
             final Set<TaskId> standbyTaskIds = new HashSet<>(entry.getValue());
             final Map<ConsumerActiveByState, Set<TaskId>> activeByStateSetMap = consumerToActiveTaskIds.get(entry.getKey());
             if (activeByStateSetMap != null) {
-                final Set<TaskId> consumerToPreviousActiveTaskIds = activeByStateSetMap.get(ConsumerActiveByState.ASSIGNED_ACTIVE);
+                final Set<TaskId> consumerToPreviousActiveTaskIds = activeByStateSetMap.get(ConsumerActiveByState.PREVIOUS_ACTIVE);
                 if (consumerToPreviousActiveTaskIds != null && !consumerToPreviousActiveTaskIds.isEmpty()) {
                     standbyTaskIds.removeAll(consumerToPreviousActiveTaskIds);
                 }
