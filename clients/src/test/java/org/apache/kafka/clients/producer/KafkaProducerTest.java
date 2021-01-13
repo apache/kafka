@@ -341,8 +341,7 @@ public class KafkaProducerTest {
             TestUtils.waitForCondition(() -> closeException.get() != null,
                     "InterruptException did not occur within timeout.");
 
-            assertTrue(
-                    closeException.get() instanceof InterruptException, "Expected exception not thrown " + closeException);
+            assertTrue(closeException.get() instanceof InterruptException, "Expected exception not thrown " + closeException);
         } finally {
             executor.shutdownNow();
         }

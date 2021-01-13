@@ -95,10 +95,9 @@ public class CooperativeStickyAssignorTest extends AbstractStickyAssignorTest {
 
         Set<TopicPartition> intersection = new HashSet<>(allAddedPartitions);
         intersection.retainAll(allRevokedPartitions);
-        assertTrue(
-                intersection.isEmpty(), "Error: Some partitions were assigned to a new consumer during the same rebalance they are being "
-                    + "revoked from their previous owner."
-                    + "Partitions: " + intersection.toString());
+        assertTrue(intersection.isEmpty(),
+            "Error: Some partitions were assigned to a new consumer during the same rebalance they are being " +
+            "revoked from their previous owner. Partitions: " + intersection);
 
         return !allRevokedPartitions.isEmpty();
     }

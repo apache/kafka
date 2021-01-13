@@ -163,8 +163,8 @@ public class NetworkClientTest {
                 .setTimeoutMs(1000));
         ClientRequest request = client.newClientRequest(node.idString(), builder, time.milliseconds(), true);
         client.send(request, time.milliseconds());
-        assertEquals(1,
-                client.inFlightRequestCount(node.idString()), "There should be 1 in-flight request after send");
+        assertEquals(1, client.inFlightRequestCount(node.idString()),
+            "There should be 1 in-flight request after send");
         assertTrue(client.hasInFlightRequests(node.idString()));
         assertTrue(client.hasInFlightRequests());
 
@@ -207,8 +207,8 @@ public class NetworkClientTest {
         assertEquals(1, responses.size());
         assertTrue(handler.executed, "The handler should have executed.");
         assertTrue(handler.response.hasResponse(), "Should have a response body.");
-        assertEquals(
-                request.correlationId(), handler.response.requestHeader().correlationId(), "Should be correlated to the original request");
+        assertEquals(request.correlationId(), handler.response.requestHeader().correlationId(),
+            "Should be correlated to the original request");
     }
 
     private void delayedApiVersionsResponse(int correlationId, short version, ApiVersionsResponse response) {
@@ -478,15 +478,13 @@ public class NetworkClientTest {
         selector.serverConnectionBlocked(node1.idString());
 
         client.poll(0, time.milliseconds());
-        assertFalse(
-                client.connectionFailed(node),
-                "The connections should not fail before the socket connection setup timeout elapsed");
+        assertFalse(client.connectionFailed(node),
+            "The connections should not fail before the socket connection setup timeout elapsed");
 
         time.sleep((long) (connectionSetupTimeoutMsTest * 1.2) + 1);
         client.poll(0, time.milliseconds());
-        assertTrue(
-                client.connectionFailed(node),
-                "Expected the connections to fail due to the socket connection setup timeout");
+        assertTrue(client.connectionFailed(node),
+            "Expected the connections to fail due to the socket connection setup timeout");
     }
 
     @Test
@@ -839,8 +837,8 @@ public class NetworkClientTest {
     public void testDisconnectWithMultipleInFlights() {
         NetworkClient client = this.clientWithNoVersionDiscovery;
         awaitReady(client, node);
-        assertTrue(
-                client.isReady(node, time.milliseconds()), "Expected NetworkClient to be ready to send to node " + node.idString());
+        assertTrue(client.isReady(node, time.milliseconds()),
+            "Expected NetworkClient to be ready to send to node " + node.idString());
 
         MetadataRequest.Builder builder = new MetadataRequest.Builder(Collections.emptyList(), true);
         long now = time.milliseconds();
@@ -882,15 +880,15 @@ public class NetworkClientTest {
     @Test
     public void testCallDisconnect() throws Exception {
         awaitReady(client, node);
-        assertTrue(
-                client.isReady(node, time.milliseconds()), "Expected NetworkClient to be ready to send to node " + node.idString());
-        assertFalse(
-                client.connectionFailed(node), "Did not expect connection to node " + node.idString() + " to be failed");
+        assertTrue(client.isReady(node, time.milliseconds()),
+            "Expected NetworkClient to be ready to send to node " + node.idString());
+        assertFalse(client.connectionFailed(node),
+            "Did not expect connection to node " + node.idString() + " to be failed");
         client.disconnect(node.idString());
-        assertFalse(
-                client.isReady(node, time.milliseconds()), "Expected node " + node.idString() + " to be disconnected.");
-        assertTrue(
-                client.connectionFailed(node), "Expected connection to node " + node.idString() + " to be failed after disconnect");
+        assertFalse(client.isReady(node, time.milliseconds()),
+            "Expected node " + node.idString() + " to be disconnected.");
+        assertTrue(client.connectionFailed(node),
+            "Expected connection to node " + node.idString() + " to be failed after disconnect");
         assertFalse(client.canConnect(node, time.milliseconds()));
 
         // ensure disconnect does not reset backoff period if already disconnected

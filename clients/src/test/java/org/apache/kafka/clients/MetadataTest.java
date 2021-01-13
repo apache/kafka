@@ -292,8 +292,8 @@ public class MetadataTest {
 
         String hostName = "www.example.com";
         metadata.bootstrap(Collections.singletonList(new InetSocketAddress(hostName, 9002)));
-        assertFalse(
-                MockClusterResourceListener.IS_ON_UPDATE_CALLED.get(), "ClusterResourceListener should not called when metadata is updated with bootstrap Cluster");
+        assertFalse(MockClusterResourceListener.IS_ON_UPDATE_CALLED.get(),
+            "ClusterResourceListener should not called when metadata is updated with bootstrap Cluster");
 
         Map<String, Integer> partitionCounts = new HashMap<>();
         partitionCounts.put("topic", 1);
@@ -301,10 +301,10 @@ public class MetadataTest {
         MetadataResponse metadataResponse = RequestTestUtils.metadataUpdateWith("dummy", 1, partitionCounts);
         metadata.updateWithCurrentRequestVersion(metadataResponse, false, 100);
 
-        assertEquals(
-                "dummy", mockClusterListener.clusterResource().clusterId(), "MockClusterResourceListener did not get cluster metadata correctly");
-        assertTrue(
-                MockClusterResourceListener.IS_ON_UPDATE_CALLED.get(), "MockClusterResourceListener should be called when metadata is updated with non-bootstrap Cluster");
+        assertEquals("dummy", mockClusterListener.clusterResource().clusterId(),
+            "MockClusterResourceListener did not get cluster metadata correctly");
+        assertTrue(MockClusterResourceListener.IS_ON_UPDATE_CALLED.get(),
+            "MockClusterResourceListener should be called when metadata is updated with non-bootstrap Cluster");
     }
 
 
