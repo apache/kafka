@@ -151,6 +151,9 @@ public class TaskManager {
         rebalanceInProgress = false;
     }
 
+    /**
+     * @throws TaskMigratedException
+     */
     void handleCorruption(final Map<TaskId, Collection<TopicPartition>> tasksWithChangelogs) {
         final Map<Task, Collection<TopicPartition>> corruptedStandbyTasks = new HashMap<>();
         final Map<Task, Collection<TopicPartition>> corruptedActiveTasks = new HashMap<>();
