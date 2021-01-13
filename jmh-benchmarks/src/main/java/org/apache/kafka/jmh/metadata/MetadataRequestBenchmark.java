@@ -172,7 +172,6 @@ public class MetadataRequestBenchmark {
         kafkaProps.put(KafkaConfig$.MODULE$.BrokerIdProp(), brokerId + "");
         BrokerFeatures brokerFeatures = BrokerFeatures.createDefault();
         return new KafkaApis(requestChannel,
-            new ApisUtils(requestChannel, Option.empty(), quotaManagers, time),
             replicaManager,
             adminManager,
             groupCoordinator,

@@ -17,15 +17,19 @@
 
 package kafka.server
 
+import kafka.cluster.Partition
+import kafka.coordinator.group.GroupCoordinator
+import kafka.coordinator.transaction.TransactionCoordinator
+
 import java.lang.{Byte => JByte}
 import java.util.Collections
-
 import kafka.network.RequestChannel
 import kafka.security.authorizer.AclEntry
 import kafka.server.QuotaFactory.QuotaManagers
 import kafka.utils.Logging
 import org.apache.kafka.common.acl.AclOperation
 import org.apache.kafka.common.errors.ClusterAuthorizationException
+import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.network.Send
 import org.apache.kafka.common.requests.{AbstractRequest, AbstractResponse, RequestContext}
 import org.apache.kafka.common.resource.Resource.CLUSTER_NAME
@@ -37,14 +41,43 @@ import org.apache.kafka.server.authorizer.{Action, AuthorizationResult, Authoriz
 import scala.jdk.CollectionConverters._
 
 /**
- * Helper class for request handlers. Provides common functionality around throttling, authorizations, and error handling
+ * Helper methods and helper class factories for request handlers. Provides common functionality around throttling,
+ * authorizations, and error handling
  */
-class ApisUtils(val requestChannel: RequestChannel,
-                val authorizer: Option[Authorizer],
-                val quotas: QuotaManagers,
-                val time: Time) extends Logging {
+object ApisUtils {
+  def authHelper(requestChannel: RequestChannel, authorizer: Option[Authorizer]): AuthHelper = {
+    new AuthHelper(requestChannel, authorizer)
+  }
 
-  // private package for testing
+  def channelHelper(requestChannel: RequestChannel, quotaManagers: QuotaManagers, time: Time): ChannelHelper = {
+    new ChannelHelper(requestChannel, quotaManagers, time)
+  }
+
+  def onLeadershipChange(groupCoordinator: GroupCoordinator,
+                         txnCoordinator: TransactionCoordinator,
+                         updatedLeaders: Iterable[Partition],
+                         updatedFollowers: Iterable[Partition]): Unit = {
+    // for each new leader or follower, call coordinator to handle consumer group migration.
+    // this callback is invoked under the replica state change lock to ensure proper order of
+    // leadership changes
+    updatedLeaders.foreach { partition =>
+      if (partition.topic == Topic.GROUP_METADATA_TOPIC_NAME)
+        groupCoordinator.onElection(partition.partitionId)
+      else if (partition.topic == Topic.TRANSACTION_STATE_TOPIC_NAME)
+        txnCoordinator.onElection(partition.partitionId, partition.getLeaderEpoch)
+    }
+
+    updatedFollowers.foreach { partition =>
+      if (partition.topic == Topic.GROUP_METADATA_TOPIC_NAME)
+        groupCoordinator.onResignation(partition.partitionId)
+      else if (partition.topic == Topic.TRANSACTION_STATE_TOPIC_NAME)
+        txnCoordinator.onResignation(partition.partitionId, Some(partition.getLeaderEpoch))
+    }
+  }
+}
+
+class AuthHelper(val requestChannel: RequestChannel,
+                 val authorizer: Option[Authorizer]) {
   def authorize(requestContext: RequestContext,
                 operation: AclOperation,
                 resourceType: ResourceType,
@@ -79,7 +112,11 @@ class ApisUtils(val requestChannel: RequestChannel,
     }
     Utils.to32BitField(authorizedOps.map(operation => operation.code.asInstanceOf[JByte]).asJava)
   }
+}
 
+class ChannelHelper(val requestChannel: RequestChannel,
+                    val quotas: QuotaManagers,
+                    val time: Time) extends Logging {
   def handleError(request: RequestChannel.Request, e: Throwable): Unit = {
     val mayThrottle = e.isInstanceOf[ClusterAuthorizationException] || !request.header.apiKey.clusterAction
     error("Error when handling request: " +
@@ -106,7 +143,7 @@ class ApisUtils(val requestChannel: RequestChannel,
   // Throttle the channel if the request quota is enabled but has been violated. Regardless of throttling, send the
   // response immediately.
   def sendResponseMaybeThrottle(request: RequestChannel.Request,
-                                        createResponse: Int => AbstractResponse): Unit = {
+                                createResponse: Int => AbstractResponse): Unit = {
     val throttleTimeMs = maybeRecordAndGetThrottleTimeMs(request)
     // Only throttle non-forwarded requests
     if (!request.isForwarded)
