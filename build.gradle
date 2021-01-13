@@ -241,7 +241,7 @@ subprojects {
     }
   }
 
-  def shouldUseJUnit5 = ["tools", "raft", "log4j-appender"].contains(it.project.name)
+  def shouldUseJUnit5 = ["tools", "raft", "log4j-appender", "examples"].contains(it.project.name)
   def testLoggingEvents = ["passed", "skipped", "failed"]
   def testShowStandardStreams = false
   def testExceptionFormat = 'full'
@@ -1527,8 +1527,8 @@ project(':streams:examples') {
 
     testCompile project(':streams:test-utils')
     testCompile project(':clients').sourceSets.test.output // for org.apache.kafka.test.IntegrationTest
-    testCompile libs.junitJupiterApi
-    testCompile libs.junitVintageEngine
+    testCompile libs.junitJupiter
+    testCompile libs.hamcrest
   }
 
   javadoc {
