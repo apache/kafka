@@ -43,7 +43,7 @@ class LogCleanerParameterizedIntegrationTest extends AbstractLogCleanerIntegrati
   val topicPartitions = Array(new TopicPartition("log", 0), new TopicPartition("log", 1), new TopicPartition("log", 2))
 
   @ParameterizedTest
-  @MethodSource(Array("parameters"))
+  @MethodSource(Array("all"))
   def cleanerTest(codec: CompressionType): Unit = {
     val largeMessageKey = 20
     val (largeMessageValue, largeMessageSet) = createLargeSingleMessageSet(largeMessageKey, RecordBatch.CURRENT_MAGIC_VALUE, codec)
@@ -84,7 +84,7 @@ class LogCleanerParameterizedIntegrationTest extends AbstractLogCleanerIntegrati
   }
 
   @ParameterizedTest
-  @MethodSource(Array("parameters"))
+  @MethodSource(Array("all"))
   def testCleansCombinedCompactAndDeleteTopic(codec: CompressionType): Unit = {
     val logProps  = new Properties()
     val retentionMs: Integer = 100000
@@ -128,12 +128,8 @@ class LogCleanerParameterizedIntegrationTest extends AbstractLogCleanerIntegrati
   }
 
   @ParameterizedTest
-  @MethodSource(Array("parameters"))
+  @MethodSource(Array("excludeZstd")) // zstd compression is not supported with older message formats
   def testCleanerWithMessageFormatV0(codec: CompressionType): Unit = {
-    // zstd compression is not supported with older message formats
-    if (codec == CompressionType.ZSTD)
-      return
-
     val largeMessageKey = 20
     val (largeMessageValue, largeMessageSet) = createLargeSingleMessageSet(largeMessageKey, RecordBatch.MAGIC_VALUE_V0, codec)
     val maxMessageSize = codec match {
@@ -183,12 +179,8 @@ class LogCleanerParameterizedIntegrationTest extends AbstractLogCleanerIntegrati
   }
 
   @ParameterizedTest
-  @MethodSource(Array("parameters"))
+  @MethodSource(Array("excludeZstd")) // zstd compression is not supported with older message formats
   def testCleaningNestedMessagesWithMultipleVersions(codec: CompressionType): Unit = {
-    // zstd compression is not supported with older message formats
-    if (codec == CompressionType.ZSTD)
-      return
-
     val maxMessageSize = 192
     cleaner = makeCleaner(partitions = topicPartitions, maxMessageSize = maxMessageSize, segmentSize = 256)
 
@@ -225,7 +217,7 @@ class LogCleanerParameterizedIntegrationTest extends AbstractLogCleanerIntegrati
   }
 
   @ParameterizedTest
-  @MethodSource(Array("parameters"))
+  @MethodSource(Array("all"))
   def cleanerConfigUpdateTest(codec: CompressionType): Unit = {
     val largeMessageKey = 20
     val (largeMessageValue, largeMessageSet) = createLargeSingleMessageSet(largeMessageKey, RecordBatch.CURRENT_MAGIC_VALUE, codec)
@@ -323,6 +315,9 @@ class LogCleanerParameterizedIntegrationTest extends AbstractLogCleanerIntegrati
 }
 
 object LogCleanerParameterizedIntegrationTest {
-  def parameters: java.util.stream.Stream[Arguments] =
+  def all: java.util.stream.Stream[Arguments] =
     java.util.Arrays.stream(CompressionType.values.map(codec => Arguments.of(codec)))
+
+  def excludeZstd: java.util.stream.Stream[Arguments] =
+    java.util.Arrays.stream(CompressionType.values.filter(_ != CompressionType.ZSTD).map(codec => Arguments.of(codec)))
 }
