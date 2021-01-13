@@ -33,8 +33,7 @@ import scala.concurrent.TimeoutException
 trait ForwardingManager {
   def forwardRequest(
     request: RequestChannel.Request,
-    responseCallback: AbstractResponse => Unit,
-    closeConnection: (RequestChannel.Request, java.util.Map[Errors, Integer]) => Unit
+    responseCallback: Either[AbstractResponse, Errors] => Unit
   ): Unit
 
   def controllerApiVersions(): Option[NodeApiVersions]
@@ -80,8 +79,7 @@ class ForwardingManagerImpl(
 
   override def forwardRequest(
     request: RequestChannel.Request,
-    responseCallback: AbstractResponse => Unit,
-    closeConnection: (RequestChannel.Request, java.util.Map[Errors, Integer]) => Unit,
+    responseCallback: Either[AbstractResponse, Errors] => Unit
   ): Unit = {
     val principalSerde = request.context.principalSerde.asScala.getOrElse(
       throw new IllegalArgumentException(s"Cannot deserialize principal from request $request " +
@@ -102,31 +100,31 @@ class ForwardingManagerImpl(
         val envelopeError = envelopeResponse.error()
         val requestBody = request.body[AbstractRequest]
 
-        val response = if (envelopeError != Errors.NONE) {
-          // An envelope error indicates broker misconfiguration (e.g. the principal serde
-          // might not be defined on the receiving broker). In this case, we do not return
-          // the error directly to the client since it would not be expected. Instead we
-          // return `UNKNOWN_SERVER_ERROR` so that the user knows that there is a problem
-          // on the broker.
-          debug(s"Forwarded request $request failed with an error in the envelope response $envelopeError")
-          requestBody.getErrorResponse(Errors.UNKNOWN_SERVER_ERROR.exception)
-        } else {
-          parseResponse(envelopeResponse.responseData, requestBody, request.header)
-        }
-
         // Unsupported version indicates an incompatibility between controller and client API versions. The
         // forwarding broker should close the connection with the client and let it reinitialize the connection
         // and refresh the controller API versions.
-        if (response.errorCounts().containsKey(Errors.UNSUPPORTED_VERSION)) {
-          closeConnection(request, response.errorCounts())
-        } else
-          responseCallback(response)
+        if (envelopeError == Errors.UNSUPPORTED_VERSION) {
+          responseCallback(Right(Errors.UNSUPPORTED_VERSION))
+        } else {
+          val response = if (envelopeError != Errors.NONE) {
+            // A general envelope error indicates broker misconfiguration (e.g. the principal serde
+            // might not be defined on the receiving broker). In this case, we do not return
+            // the error directly to the client since it would not be expected. Instead we
+            // return `UNKNOWN_SERVER_ERROR` so that the user knows that there is a problem
+            // on the broker.
+            debug(s"Forwarded request $request failed with an error in the envelope response $envelopeError")
+            requestBody.getErrorResponse(Errors.UNKNOWN_SERVER_ERROR.exception)
+          } else {
+            parseResponse(envelopeResponse.responseData, requestBody, request.header)
+          }
+          responseCallback(Left(response))
+        }
       }
 
       override def onTimeout(): Unit = {
         debug(s"Forwarding of the request $request failed due to timeout exception")
         val response = request.body[AbstractRequest].getErrorResponse(new TimeoutException)
-        responseCallback(response)
+        responseCallback(Left(response))
       }
     }
 

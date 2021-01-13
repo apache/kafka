@@ -169,7 +169,7 @@ object ApiVersion {
                           controllerApiVersions: Option[NodeApiVersions]): ApiVersionsResponse = {
     val apiKeys = controllerApiVersions match {
       case None => ApiVersionsResponse.defaultApiKeys(maxMagic)
-      case Some(controllerApiVersion) => ApiVersionsResponse.commonApiVersionWithActiveController(
+      case Some(controllerApiVersion) => ApiVersionsResponse.commonApiVersionsWithActiveController(
         maxMagic, controllerApiVersion.fullApiVersions())
     }
 

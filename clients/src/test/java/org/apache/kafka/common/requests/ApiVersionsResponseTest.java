@@ -89,7 +89,7 @@ public class ApiVersionsResponseTest {
             Utils.mkEntry(nonForwardableAPIKey, new ApiVersion(nonForwardableAPIKey.id, minVersion, maxVersion))
         );
 
-        ApiVersionsResponseKeyCollection commonResponse = ApiVersionsResponse.commonApiVersionWithActiveController(
+        ApiVersionsResponseKeyCollection commonResponse = ApiVersionsResponse.commonApiVersionsWithActiveController(
             RecordBatch.CURRENT_MAGIC_VALUE,
             activeControllerApiVersions);
 

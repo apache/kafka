@@ -18,7 +18,7 @@ package kafka.server
 
 import java.net.InetAddress
 import java.nio.ByteBuffer
-import java.util.{Collections, Optional}
+import java.util.Optional
 import java.util.concurrent.atomic.AtomicBoolean
 
 import kafka.network
@@ -74,7 +74,7 @@ class ForwardingManagerTest {
     })
 
     var response: AbstractResponse = null
-    forwardingManager.forwardRequest(request, res => response = res, (_, _) => {})
+    forwardingManager.forwardRequest(request, result => response = result.swap.getOrElse(null))
 
     assertNotNull(response)
     assertEquals(Map(Errors.UNKNOWN_SERVER_ERROR -> 1).asJava, response.errorCounts())
@@ -94,10 +94,7 @@ class ForwardingManagerTest {
     val (requestHeader, requestBuffer) = buildRequest(requestBody, requestCorrelationId)
     val request = buildRequest(requestHeader, requestBuffer, clientPrincipal)
 
-    val responseBody = new AlterConfigsResponse(new AlterConfigsResponseData()
-      .setResponses(Collections.singletonList(
-      new AlterConfigsResponseData.AlterConfigsResourceResponse()
-        .setErrorCode(Errors.UNSUPPORTED_VERSION.code()))))
+    val responseBody = new AlterConfigsResponse(new AlterConfigsResponseData())
 
     val responseBuffer = RequestTestUtils.serializeResponseWithHeader(responseBody,
       requestHeader.apiVersion, requestCorrelationId)
@@ -107,16 +104,19 @@ class ForwardingManagerTest {
       any(classOf[ControllerRequestCompletionHandler])
     )).thenAnswer(invocation => {
       val completionHandler = invocation.getArgument[RequestCompletionHandler](1)
-      val response = buildEnvelopeResponse(responseBuffer, 30, completionHandler)
+      val response = buildEnvelopeResponse(responseBuffer, 30,
+        completionHandler, Errors.UNSUPPORTED_VERSION)
       response.onComplete()
     })
 
     var response: AbstractResponse = null
     val connectionClosed = new AtomicBoolean(false)
-    forwardingManager.forwardRequest(request, res => response = res, (_, errorCounts) => {
-      assertEquals(Map(Errors.UNSUPPORTED_VERSION -> 1).asJava, errorCounts)
+    forwardingManager.forwardRequest(request, result => result.fold(
+      res => response = res,
+      error => {
+      assertEquals(Errors.UNSUPPORTED_VERSION, error)
       connectionClosed.set(true)
-    })
+    }))
 
     assertTrue(connectionClosed.get())
     assertNull(response)
@@ -125,7 +125,8 @@ class ForwardingManagerTest {
   private def buildEnvelopeResponse(
     responseBuffer: ByteBuffer,
     correlationId: Int,
-    completionHandler: RequestCompletionHandler
+    completionHandler: RequestCompletionHandler,
+    error: Errors = Errors.NONE
   ): ClientResponse = {
     val envelopeRequestHeader = new RequestHeader(
       ApiKeys.ENVELOPE,
@@ -135,7 +136,7 @@ class ForwardingManagerTest {
     )
     val envelopeResponse = new EnvelopeResponse(
       responseBuffer,
-      Errors.NONE
+      error
     )
 
     new ClientResponse(

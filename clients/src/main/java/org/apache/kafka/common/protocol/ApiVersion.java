@@ -16,8 +16,9 @@
  */
 package org.apache.kafka.common.protocol;
 
-import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.message.ApiVersionsResponseData.ApiVersionsResponseKey;
+
+import java.util.Optional;
 
 /**
  * Represents the min version and max version of an api key.
@@ -54,17 +55,13 @@ public class ApiVersion {
             ")";
     }
 
-    public static ApiVersion versionsInCommon(ApiKeys apiKey, ApiVersion supportedVersions,
-                                              short minAllowedVersion, short maxAllowedVersion) {
-        if (supportedVersions == null)
-            throw new UnsupportedVersionException("The broker does not support " + apiKey);
-
-        short minVersion = (short) Math.max(minAllowedVersion, supportedVersions.minVersion);
-        short maxVersion = (short) Math.min(maxAllowedVersion, supportedVersions.maxVersion);
-        if (minVersion > maxVersion)
-            throw new UnsupportedVersionException("The broker does not support " + apiKey +
-                                                      " with version in range [" + minAllowedVersion + "," + maxAllowedVersion + "]. The supported" +
-                                                      " range is [" + supportedVersions.minVersion + "," + supportedVersions.maxVersion + "].");
-        return new ApiVersion(apiKey.id, minVersion, maxVersion);
+    public Optional<ApiVersion> intersect(ApiVersion other) {
+        if (other == null) {
+            return Optional.empty();
+        }
+        short minVersion = (short) Math.max(this.minVersion, other.minVersion);
+        short maxVersion = (short) Math.min(this.maxVersion, other.maxVersion);
+        return minVersion > maxVersion ? Optional.empty() :
+            Optional.of(new ApiVersion(apiKey, minVersion, maxVersion));
     }
 }

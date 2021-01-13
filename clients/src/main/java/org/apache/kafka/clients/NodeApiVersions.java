@@ -19,6 +19,7 @@ package org.apache.kafka.clients;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.LinkedList;
+import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.message.ApiVersionsResponseData.ApiVersionsResponseKey;
 import org.apache.kafka.common.message.ApiVersionsResponseData.ApiVersionsResponseKeyCollection;
 import org.apache.kafka.common.protocol.ApiKeys;
@@ -29,6 +30,7 @@ import java.util.ArrayList;
 import java.util.EnumMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.TreeMap;
 
 /**
@@ -130,8 +132,18 @@ public class NodeApiVersions {
                                       ApiVersion supportedVersions,
                                       short minAllowedVersion,
                                       short maxAllowedVersion) {
-        return ApiVersion.versionsInCommon(apiKey, supportedVersions,
-            minAllowedVersion, maxAllowedVersion).maxVersion;
+        if (supportedVersions == null)
+            throw new UnsupportedVersionException("The broker does not support " + apiKey);
+
+        Optional<ApiVersion> intersectVersion = supportedVersions.intersect(
+            new ApiVersion(apiKey.id, minAllowedVersion, maxAllowedVersion));
+
+        if (intersectVersion.isPresent())
+            return intersectVersion.get().maxVersion;
+        else
+            throw new UnsupportedVersionException("The broker does not support " + apiKey +
+                " with version in range [" + minAllowedVersion + "," + maxAllowedVersion + "]. The supported" +
+                " range is [" + supportedVersions.minVersion + "," + supportedVersions.maxVersion + "].");
     }
 
     /**

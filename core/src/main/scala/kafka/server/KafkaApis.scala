@@ -143,7 +143,7 @@ class KafkaApis(val requestChannel: RequestChannel,
     }
 
     if (!request.isForwarded && !controller.isActive && isForwardingEnabled(request)) {
-      forwardingManager.forwardRequest(request, responseCallback, closeConnection)
+      forwardingManager.forwardRequest(request, responseCallback)
     } else {
       // When the KIP-500 mode is off or the principal serde is undefined, forwarding is not supported,
       // therefore requests are handled directly.
@@ -1757,37 +1757,31 @@ class KafkaApis(val requestChannel: RequestChannel,
         } else
           None
 
-        if (isForwardingEnabled(request) && controllerApiVersions.isEmpty) {
-          // If the controller api version is missing and we already enabled feature support,
-          // we need to let ApiVersion request retry by sending unsupported version.
-          apiVersionRequest.getErrorResponse(requestThrottleMs, Errors.UNSUPPORTED_VERSION.exception)
-        } else {
-          val apiVersionsResponse =
-            finalizedFeaturesOpt match {
-              case Some(finalizedFeatures) => ApiVersion.apiVersionsResponse(
-                requestThrottleMs,
-                config.interBrokerProtocolVersion.recordVersion.value,
-                supportedFeatures,
-                finalizedFeatures.features,
-                finalizedFeatures.epoch,
-                controllerApiVersions)
-              case None => ApiVersion.apiVersionsResponse(
-                requestThrottleMs,
-                config.interBrokerProtocolVersion.recordVersion.value,
-                supportedFeatures,
-                controllerApiVersions)
+        val apiVersionsResponse =
+          finalizedFeaturesOpt match {
+            case Some(finalizedFeatures) => ApiVersion.apiVersionsResponse(
+              requestThrottleMs,
+              config.interBrokerProtocolVersion.recordVersion.value,
+              supportedFeatures,
+              finalizedFeatures.features,
+              finalizedFeatures.epoch,
+              controllerApiVersions)
+            case None => ApiVersion.apiVersionsResponse(
+              requestThrottleMs,
+              config.interBrokerProtocolVersion.recordVersion.value,
+              supportedFeatures,
+              controllerApiVersions)
 
-            }
-          if (request.context.fromPrivilegedListener) {
-            apiVersionsResponse.data.apiKeys().add(
-              new ApiVersionsResponseData.ApiVersionsResponseKey()
-                .setApiKey(ApiKeys.ENVELOPE.id)
-                .setMinVersion(ApiKeys.ENVELOPE.oldestVersion())
-                .setMaxVersion(ApiKeys.ENVELOPE.latestVersion())
-            )
           }
-          apiVersionsResponse
+        if (request.context.fromPrivilegedListener) {
+          apiVersionsResponse.data.apiKeys().add(
+            new ApiVersionsResponseData.ApiVersionsResponseKey()
+              .setApiKey(ApiKeys.ENVELOPE.id)
+              .setMinVersion(ApiKeys.ENVELOPE.oldestVersion())
+              .setMaxVersion(ApiKeys.ENVELOPE.latestVersion())
+          )
         }
+        apiVersionsResponse
       }
     }
     requestHelper.sendResponseMaybeThrottle(request, createResponseCallback)

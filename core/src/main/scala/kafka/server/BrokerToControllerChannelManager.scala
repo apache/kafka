@@ -18,10 +18,10 @@
 package kafka.server
 
 import java.util.concurrent.LinkedBlockingDeque
-import java.util.concurrent.locks.ReentrantReadWriteLock
+import java.util.concurrent.atomic.AtomicReference
 
 import kafka.common.{InterBrokerSendThread, RequestAndCompletionHandler}
-import kafka.utils.{CoreUtils, Logging}
+import kafka.utils.Logging
 import org.apache.kafka.clients._
 import org.apache.kafka.common.Node
 import org.apache.kafka.common.metrics.Metrics
@@ -182,25 +182,19 @@ class BrokerToControllerRequestThread(
 ) extends InterBrokerSendThread(threadName, networkClient, config.controllerSocketTimeoutMs, time, isInterruptible = false) {
 
   private val requestQueue = new LinkedBlockingDeque[BrokerToControllerQueueItem]()
-  private var activeController: Option[Node] = None
-
-  private val lock = new ReentrantReadWriteLock
+  private val activeController = new AtomicReference[Option[Node]](None)
 
   def activeControllerAddress(): Option[Node] = {
-    CoreUtils.inReadLock(lock) {
-      activeController.orElse(None)
-    }
+    activeController.get()
   }
 
-  private def updateActiveControllerAddress(newActiveController: Option[Node]): Unit = {
-    CoreUtils.inWriteLock(lock) {
-      activeController = newActiveController
-    }
+  private def updateControllerAddress(newActiveController: Option[Node]): Unit = {
+    activeController.set(newActiveController)
   }
 
   def enqueue(request: BrokerToControllerQueueItem): Unit = {
     requestQueue.add(request)
-    if (activeController.isDefined) {
+    if (activeControllerAddress().isDefined) {
       wakeup()
     }
   }
@@ -217,7 +211,7 @@ class BrokerToControllerRequestThread(
       if (currentTimeMs - request.createdTimeMs >= retryTimeoutMs) {
         requestIter.remove()
         request.callback.onTimeout()
-      } else if (activeController.isDefined) {
+      } else if (activeControllerAddress().isDefined) {
         requestIter.remove()
         return Some(RequestAndCompletionHandler(
           time.milliseconds(),
@@ -232,12 +226,12 @@ class BrokerToControllerRequestThread(
 
   private[server] def handleResponse(request: BrokerToControllerQueueItem)(response: ClientResponse): Unit = {
     if (response.wasDisconnected()) {
-      updateActiveControllerAddress(None)
+      updateControllerAddress(None)
       requestQueue.putFirst(request)
     } else if (response.responseBody().errorCounts().containsKey(Errors.NOT_CONTROLLER)) {
       // just close the controller connection and wait for metadata cache update in doWork
-      networkClient.disconnect(activeController.get.idString)
-      updateActiveControllerAddress(None)
+      networkClient.disconnect(activeControllerAddress().get.idString)
+      updateControllerAddress(None)
       requestQueue.putFirst(request)
     } else {
       request.callback.onComplete(response)
@@ -254,13 +248,12 @@ class BrokerToControllerRequestThread(
         case Some(controller) =>
           info(s"Recorded new controller, from now on will use broker $controller")
           val controllerNode = controller.node(listenerName)
-          updateActiveControllerAddress(Option(controllerNode))
+          updateControllerAddress(Option(controllerNode))
           metadataUpdater.setNodes(Seq(controllerNode).asJava)
         case None =>
           // need to backoff to avoid tight loops
           debug("No controller defined in metadata cache, retrying after backoff")
           super.pollOnce(maxTimeoutMs = 100)
-
       }
     }
   }

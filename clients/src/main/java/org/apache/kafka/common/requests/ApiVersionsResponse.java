@@ -34,6 +34,7 @@ import org.apache.kafka.common.record.RecordBatch;
 
 import java.nio.ByteBuffer;
 import java.util.Map;
+import java.util.Optional;
 
 /**
  * Possible error codes:
@@ -130,27 +131,29 @@ public class ApiVersionsResponse extends AbstractResponse {
         return apiKeys;
     }
 
-    public static ApiVersionsResponseKeyCollection commonApiVersionWithActiveController(final byte minMagic,
-                                                                                        final Map<ApiKeys, ApiVersion> activeControllerApiVersions) {
+    public static ApiVersionsResponseKeyCollection commonApiVersionsWithActiveController(final byte minMagic,
+                                                                                         final Map<ApiKeys, ApiVersion> activeControllerApiVersions) {
         ApiVersionsResponseKeyCollection apiKeys = new ApiVersionsResponseKeyCollection();
         for (ApiKeys apiKey : ApiKeys.enabledApis()) {
             if (apiKey.minRequiredInterBrokerMagic <= minMagic) {
+                ApiVersion brokerApiVersion = new ApiVersion(
+                    apiKey.id,
+                    apiKey.oldestVersion(),
+                    apiKey.latestVersion()
+                );
+
                 final ApiVersion finalApiVersion;
-                if (apiKey.forwardable) {
-                    if (!activeControllerApiVersions.containsKey(apiKey)) {
-                        // Controller doesn't support this API key.
-                        continue;
-                    } else {
-                        finalApiVersion = ApiVersion.versionsInCommon(apiKey,
-                            activeControllerApiVersions.get(apiKey),
-                            apiKey.oldestVersion(),
-                            apiKey.latestVersion());
-                    }
+                if (!apiKey.forwardable) {
+                    finalApiVersion = brokerApiVersion;
                 } else {
-                    finalApiVersion = new ApiVersion(
-                        apiKey.id,
-                        apiKey.oldestVersion(),
-                        apiKey.latestVersion());
+                    Optional<ApiVersion> intersectVersion = brokerApiVersion.intersect(
+                        activeControllerApiVersions.getOrDefault(apiKey, null));
+                    if (intersectVersion.isPresent()) {
+                        finalApiVersion = intersectVersion.get();
+                    } else {
+                        // Controller doesn't support this API key, or there is no intersection.
+                        continue;
+                    }
                 }
 
                 apiKeys.add(new ApiVersionsResponseKey()
