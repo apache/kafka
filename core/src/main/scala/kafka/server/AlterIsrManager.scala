@@ -146,7 +146,7 @@ class DefaultAlterIsrManager(
   }
 
   private[server] def clearInFlightRequest(): Unit = {
-    if(!inflightRequest.compareAndSet(true, false)) {
+    if (!inflightRequest.compareAndSet(true, false)) {
       warn("Attempting to clear AlterIsr in-flight flag when no apparent request is in-flight")
     }
   }
