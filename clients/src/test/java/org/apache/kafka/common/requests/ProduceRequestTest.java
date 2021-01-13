@@ -302,8 +302,8 @@ public class ProduceRequestTest {
             builder.build(version).serialize();
             fail("Builder did not raise " + InvalidRecordException.class.getName() + " as expected");
         } catch (RuntimeException e) {
-            assertTrue(
-                    InvalidRecordException.class.isAssignableFrom(e.getClass()), "Unexpected exception type " + e.getClass().getName());
+            assertTrue(InvalidRecordException.class.isAssignableFrom(e.getClass()),
+                "Unexpected exception type " + e.getClass().getName());
         }
     }
 

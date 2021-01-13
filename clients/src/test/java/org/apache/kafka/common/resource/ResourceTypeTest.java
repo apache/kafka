@@ -48,8 +48,8 @@ public class ResourceTypeTest {
     @Test
     public void testIsUnknown() {
         for (AclResourceTypeTestInfo info : INFOS) {
-            assertEquals(
-                    info.unknown, info.resourceType.isUnknown(), info.resourceType + " was supposed to have unknown == " + info.unknown);
+            assertEquals(info.unknown, info.resourceType.isUnknown(),
+                info.resourceType + " was supposed to have unknown == " + info.unknown);
         }
     }
 
@@ -57,8 +57,8 @@ public class ResourceTypeTest {
     public void testCode() {
         assertEquals(ResourceType.values().length, INFOS.length);
         for (AclResourceTypeTestInfo info : INFOS) {
-            assertEquals(
-                    info.code, info.resourceType.code(), info.resourceType + " was supposed to have code == " + info.code);
+            assertEquals(info.code, info.resourceType.code(),
+                info.resourceType + " was supposed to have code == " + info.code);
             assertEquals(info.resourceType, ResourceType.fromCode((byte) info.code), "AclResourceType.fromCode(" + info.code + ") was supposed to be " +
                 info.resourceType);
         }

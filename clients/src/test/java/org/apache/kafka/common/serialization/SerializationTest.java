@@ -58,9 +58,8 @@ public class SerializationTest {
         for (Map.Entry<Class<?>, List<Object>> test : testData.entrySet()) {
             try (Serde<Object> serde = Serdes.serdeFrom((Class<Object>) test.getKey())) {
                 for (Object value : test.getValue()) {
-                    assertEquals(value,
-                            serde.deserializer().deserialize(topic, serde.serializer().serialize(topic, value)), "Should get the original " + test.getKey().getSimpleName() +
-                                            " after serialization and deserialization");
+                    assertEquals(value, serde.deserializer().deserialize(topic, serde.serializer().serialize(topic, value)),
+                        "Should get the original " + test.getKey().getSimpleName() + " after serialization and deserialization");
                 }
             }
         }
@@ -100,8 +99,8 @@ public class SerializationTest {
 
                 Serializer<String> serializer = serDeser.serializer();
                 Deserializer<String> deserializer = serDeser.deserializer();
-                assertEquals(
-                        str, deserializer.deserialize(topic, serializer.serialize(topic, str)), "Should get the original string after serialization and deserialization with encoding " + encoding);
+                assertEquals(str, deserializer.deserialize(topic, serializer.serialize(topic, str)),
+                    "Should get the original string after serialization and deserialization with encoding " + encoding);
             }
         }
     }

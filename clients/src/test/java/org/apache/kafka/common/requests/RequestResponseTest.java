@@ -541,25 +541,25 @@ public class RequestResponseTest {
                 DescribeConfigsResourceResult actualEntry = actualEntries.get(i);
                 DescribeConfigsResourceResult expectedEntry = expectedEntries.get(i);
                 assertEquals(expectedEntry.name(), actualEntry.name());
-                assertEquals(
-                        expectedEntry.value(), actualEntry.value(), "Non-matching values for " + actualEntry.name() + " in version " + version);
-                assertEquals(
-                        expectedEntry.readOnly(), actualEntry.readOnly(), "Non-matching readonly for " + actualEntry.name() + " in version " + version);
-                assertEquals(
-                        expectedEntry.isSensitive(), actualEntry.isSensitive(), "Non-matching isSensitive for " + actualEntry.name() + " in version " + version);
+                assertEquals(expectedEntry.value(), actualEntry.value(),
+                    "Non-matching values for " + actualEntry.name() + " in version " + version);
+                assertEquals(expectedEntry.readOnly(), actualEntry.readOnly(),
+                    "Non-matching readonly for " + actualEntry.name() + " in version " + version);
+                assertEquals(expectedEntry.isSensitive(), actualEntry.isSensitive(),
+                    "Non-matching isSensitive for " + actualEntry.name() + " in version " + version);
                 if (version < 3) {
-                    assertEquals(
-                            ConfigType.UNKNOWN.id(), actualEntry.configType(), "Non-matching configType for " + actualEntry.name() + " in version " + version);
+                    assertEquals(ConfigType.UNKNOWN.id(), actualEntry.configType(),
+                        "Non-matching configType for " + actualEntry.name() + " in version " + version);
                 } else {
-                    assertEquals(
-                            expectedEntry.configType(), actualEntry.configType(), "Non-matching configType for " + actualEntry.name() + " in version " + version);
+                    assertEquals(expectedEntry.configType(), actualEntry.configType(),
+                        "Non-matching configType for " + actualEntry.name() + " in version " + version);
                 }
                 if (version == 0) {
-                    assertEquals(
-                            DescribeConfigsResponse.ConfigSource.STATIC_BROKER_CONFIG.id(), actualEntry.configSource(), "Non matching configSource for " + actualEntry.name() + " in version " + version);
+                    assertEquals(DescribeConfigsResponse.ConfigSource.STATIC_BROKER_CONFIG.id(), actualEntry.configSource(),
+                        "Non matching configSource for " + actualEntry.name() + " in version " + version);
                 } else {
-                    assertEquals(
-                            expectedEntry.configSource(), actualEntry.configSource(), "Non-matching configSource for " + actualEntry.name() + " in version " + version);
+                    assertEquals(expectedEntry.configSource(), actualEntry.configSource(),
+                        "Non-matching configSource for " + actualEntry.name() + " in version " + version);
                 }
             }
         }
@@ -580,8 +580,8 @@ public class RequestResponseTest {
         checkResponse(response, req.version(), checkEqualityAndHashCode);
         if (e instanceof UnknownServerException) {
             String responseStr = response.toString();
-            assertFalse(
-                    responseStr.contains(e.getMessage()), String.format("Unknown message included in response for %s: %s ", req.apiKey(), responseStr));
+            assertFalse(responseStr.contains(e.getMessage()),
+                String.format("Unknown message included in response for %s: %s ", req.apiKey(), responseStr));
         }
     }
 

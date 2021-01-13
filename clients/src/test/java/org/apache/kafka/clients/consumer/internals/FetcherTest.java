@@ -1745,7 +1745,8 @@ public class FetcherTest {
         assertEquals(237L, subscriptions.position(tp0).offset);
     }
 
-    @Test @Timeout(10)
+    @Timeout(10)
+    @Test
     public void testEarlierOffsetResetArrivesLate() throws InterruptedException {
         LogContext lc = new LogContext();
         buildFetcher(spy(new SubscriptionState(lc, OffsetResetStrategy.EARLIEST)), lc);
