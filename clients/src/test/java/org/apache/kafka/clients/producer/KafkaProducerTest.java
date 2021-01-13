@@ -100,6 +100,7 @@ import static java.util.Collections.emptyMap;
 import static java.util.Collections.singletonMap;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
@@ -731,9 +732,9 @@ public class KafkaProducerTest {
                 Future<RecordMetadata> response = producer.send(new ProducerRecord<>("topic", "value" + i));
                 futureResponses.add(response);
             }
-            futureResponses.forEach(res -> Assertions.assertFalse(res.isDone()));
+            futureResponses.forEach(res -> assertFalse(res.isDone()));
             producer.flush();
-            futureResponses.forEach(res -> Assertions.assertTrue(res.isDone()));
+            futureResponses.forEach(res -> assertTrue(res.isDone()));
         }
     }
 
@@ -1289,7 +1290,7 @@ public class KafkaProducerTest {
         assertNotNull(producer.getClientId());
         assertNotEquals(0, producer.getClientId().length());
         assertEquals(4, CLIENT_IDS.size());
-        CLIENT_IDS.forEach(id -> Assertions.assertEquals(id, producer.getClientId()));
+        CLIENT_IDS.forEach(id -> assertEquals(id, producer.getClientId()));
         producer.close();
     }
 

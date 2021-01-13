@@ -348,28 +348,28 @@ public class MetadataTest {
         // Metadata with newer epoch is handled
         metadataResponse = RequestTestUtils.metadataUpdateWith("dummy", 1, Collections.emptyMap(), Collections.singletonMap("topic-1", 1), _tp -> 10);
         metadata.updateWithCurrentRequestVersion(metadataResponse, false, 1L);
-        assertOptional(metadata.lastSeenLeaderEpoch(tp), leaderAndEpoch -> Assertions.assertEquals(leaderAndEpoch.intValue(), 10));
+        assertOptional(metadata.lastSeenLeaderEpoch(tp), leaderAndEpoch -> assertEquals(leaderAndEpoch.intValue(), 10));
 
         // Don't update to an older one
         assertFalse(metadata.updateLastSeenEpochIfNewer(tp, 1));
-        assertOptional(metadata.lastSeenLeaderEpoch(tp), leaderAndEpoch -> Assertions.assertEquals(leaderAndEpoch.intValue(), 10));
+        assertOptional(metadata.lastSeenLeaderEpoch(tp), leaderAndEpoch -> assertEquals(leaderAndEpoch.intValue(), 10));
 
         // Don't cause update if it's the same one
         assertFalse(metadata.updateLastSeenEpochIfNewer(tp, 10));
-        assertOptional(metadata.lastSeenLeaderEpoch(tp), leaderAndEpoch -> Assertions.assertEquals(leaderAndEpoch.intValue(), 10));
+        assertOptional(metadata.lastSeenLeaderEpoch(tp), leaderAndEpoch -> assertEquals(leaderAndEpoch.intValue(), 10));
 
         // Update if we see newer epoch
         assertTrue(metadata.updateLastSeenEpochIfNewer(tp, 12));
-        assertOptional(metadata.lastSeenLeaderEpoch(tp), leaderAndEpoch -> Assertions.assertEquals(leaderAndEpoch.intValue(), 12));
+        assertOptional(metadata.lastSeenLeaderEpoch(tp), leaderAndEpoch -> assertEquals(leaderAndEpoch.intValue(), 12));
 
         metadataResponse = RequestTestUtils.metadataUpdateWith("dummy", 1, Collections.emptyMap(), Collections.singletonMap("topic-1", 1), _tp -> 12);
         metadata.updateWithCurrentRequestVersion(metadataResponse, false, 2L);
-        assertOptional(metadata.lastSeenLeaderEpoch(tp), leaderAndEpoch -> Assertions.assertEquals(leaderAndEpoch.intValue(), 12));
+        assertOptional(metadata.lastSeenLeaderEpoch(tp), leaderAndEpoch -> assertEquals(leaderAndEpoch.intValue(), 12));
 
         // Don't overwrite metadata with older epoch
         metadataResponse = RequestTestUtils.metadataUpdateWith("dummy", 1, Collections.emptyMap(), Collections.singletonMap("topic-1", 1), _tp -> 11);
         metadata.updateWithCurrentRequestVersion(metadataResponse, false, 3L);
-        assertOptional(metadata.lastSeenLeaderEpoch(tp), leaderAndEpoch -> Assertions.assertEquals(leaderAndEpoch.intValue(), 12));
+        assertOptional(metadata.lastSeenLeaderEpoch(tp), leaderAndEpoch -> assertEquals(leaderAndEpoch.intValue(), 12));
     }
 
     @Test
@@ -719,7 +719,7 @@ public class MetadataTest {
 
         TopicPartition tp = new TopicPartition("topic-1", 0);
 
-        assertOptional(metadata.fetch().nodeIfOnline(tp, 0), node -> Assertions.assertEquals(node.id(), 0));
+        assertOptional(metadata.fetch().nodeIfOnline(tp, 0), node -> assertEquals(node.id(), 0));
         assertFalse(metadata.fetch().nodeIfOnline(tp, 1).isPresent());
         assertEquals(metadata.fetch().nodeById(0).id(), 0);
         assertEquals(metadata.fetch().nodeById(1).id(), 1);

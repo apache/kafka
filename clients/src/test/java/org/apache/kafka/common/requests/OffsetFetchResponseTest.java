@@ -89,7 +89,7 @@ public class OffsetFetchResponseTest {
         Map<TopicPartition, PartitionData> responseData = response.responseData();
         assertEquals(partitionDataMap, responseData);
         responseData.forEach(
-            (tp, data) -> Assertions.assertTrue(data.hasError())
+            (tp, data) -> assertTrue(data.hasError())
         );
     }
 
@@ -150,7 +150,7 @@ public class OffsetFetchResponseTest {
             Map<TopicPartition, PartitionData> responseData = oldResponse.responseData();
             assertEquals(expectedDataMap, responseData);
 
-            responseData.forEach((tp, data) -> Assertions.assertTrue(data.hasError()));
+            responseData.forEach((tp, data) -> assertTrue(data.hasError()));
         }
     }
 

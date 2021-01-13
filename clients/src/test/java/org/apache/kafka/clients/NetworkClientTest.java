@@ -907,7 +907,7 @@ public class NetworkClientTest {
             .mapToObj(i -> client.nextCorrelationId())
             .collect(Collectors.toSet());
         assertEquals(count, ids.size());
-        ids.forEach(id -> Assertions.assertTrue(id < SaslClientAuthenticator.MIN_RESERVED_CORRELATION_ID));
+        ids.forEach(id -> assertTrue(id < SaslClientAuthenticator.MIN_RESERVED_CORRELATION_ID));
     }
 
     private RequestHeader parseHeader(ByteBuffer buffer) {

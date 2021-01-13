@@ -63,7 +63,7 @@ public class ClientUtilsTest {
                 .collect(Collectors.toList());
         List<String> expectedHostNames = Arrays.asList("93.184.216.34", "2606:2800:220:1:248:1893:25c8:1946");
         assertTrue(expectedHostNames.containsAll(validatedHostNames), "Unexpected addresses " + validatedHostNames);
-        validatedAddresses.forEach(address -> Assertions.assertEquals(10000, address.getPort()));
+        validatedAddresses.forEach(address -> assertEquals(10000, address.getPort()));
     }
 
     @Test

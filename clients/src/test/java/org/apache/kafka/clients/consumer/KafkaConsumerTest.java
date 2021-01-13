@@ -2596,7 +2596,7 @@ public class KafkaConsumerTest {
         assertNotNull(consumer.getClientId());
         assertNotEquals(0, consumer.getClientId().length());
         assertEquals(3, CLIENT_IDS.size());
-        CLIENT_IDS.forEach(id -> Assertions.assertEquals(id, consumer.getClientId()));
+        CLIENT_IDS.forEach(id -> assertEquals(id, consumer.getClientId()));
         consumer.close();
     }
 
