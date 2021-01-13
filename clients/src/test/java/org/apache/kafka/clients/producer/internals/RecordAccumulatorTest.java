@@ -787,10 +787,9 @@ public class RecordAccumulatorTest {
             assertFalse(drained.isEmpty());
             assertFalse(drained.get(node1.id()).isEmpty());
         }
-        assertTrue(
-                accum.ready(cluster, time.milliseconds()).readyNodes.isEmpty(), "All the batches should have been drained.");
-        assertEquals(
-                bufferCapacity, accum.bufferPoolAvailableMemory(), "The split batches should be allocated off the accumulator");
+        assertTrue(accum.ready(cluster, time.milliseconds()).readyNodes.isEmpty(), "All the batches should have been drained.");
+        assertEquals(bufferCapacity, accum.bufferPoolAvailableMemory(),
+            "The split batches should be allocated off the accumulator");
     }
 
     @Test
