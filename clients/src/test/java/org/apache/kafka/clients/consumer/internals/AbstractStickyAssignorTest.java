@@ -737,8 +737,8 @@ public abstract class AbstractStickyAssignorTest {
             List<TopicPartition> partitions = assignments.get(consumer);
             for (TopicPartition partition: partitions)
                 assertTrue(subscriptions.get(consumer).topics().contains(partition.topic()),
-                    "Error: Partition " + partition + "is assigned to c" + i + ", but it is not subscribed to Topic t" + partition.topic()
-                                + "\nSubscriptions: " + subscriptions.toString() + "\nAssignments: " + assignments.toString());
+                    "Error: Partition " + partition + "is assigned to c" + i + ", but it is not subscribed to Topic t" +
+                    partition.topic() + "\nSubscriptions: " + subscriptions + "\nAssignments: " + assignments);
 
             if (i == size - 1)
                 continue;
@@ -750,8 +750,8 @@ public abstract class AbstractStickyAssignorTest {
                 Set<TopicPartition> intersection = new HashSet<>(partitions);
                 intersection.retainAll(otherPartitions);
                 assertTrue(intersection.isEmpty(),
-                    "Error: Consumers c" + i + " and c" + j + " have common partitions assigned to them: " + intersection.toString()
-                                + "\nSubscriptions: " + subscriptions.toString() + "\nAssignments: " + assignments.toString());
+                    "Error: Consumers c" + i + " and c" + j + " have common partitions assigned to them: " + intersection +
+                    "\nSubscriptions: " + subscriptions + "\nAssignments: " + assignments);
 
                 int len = partitions.size();
                 int otherLen = otherPartitions.size();
@@ -768,11 +768,10 @@ public abstract class AbstractStickyAssignorTest {
                 // If there's any overlap in the subscribed topics, we should have been able to balance partitions
                 for (String topic: map.keySet()) {
                     assertFalse(otherMap.containsKey(topic),
-                        "Error: Some partitions can be moved from c" + moreLoaded + " to c" + lessLoaded
-                                        + " to achieve a better balance"
-                                        + "\nc" + i + " has " + len + " partitions, and c" + j + " has " + otherLen
-                                        + " partitions."
-                                        + "\nSubscriptions: " + subscriptions.toString() + "\nAssignments: " + assignments);
+                        "Error: Some partitions can be moved from c" + moreLoaded + " to c" + lessLoaded + " to achieve a better balance" +
+                        "\nc" + i + " has " + len + " partitions, and c" + j + " has " + otherLen + " partitions." +
+                        "\nSubscriptions: " + subscriptions +
+                        "\nAssignments: " + assignments);
                 }
             }
         }
