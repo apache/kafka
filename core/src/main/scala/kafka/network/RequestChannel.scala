@@ -412,8 +412,8 @@ class RequestChannel(val queueSize: Int,
   }
 
   def sendResponse(request: RequestChannel.Request,
-                           responseOpt: Option[AbstractResponse],
-                           onComplete: Option[Send => Unit]): Unit = {
+                   responseOpt: Option[AbstractResponse],
+                   onComplete: Option[Send => Unit]): Unit = {
     // Update error metrics for each error code in the response including Errors.NONE
     responseOpt.foreach(response => updateErrorMetrics(request.header.apiKey, response.errorCounts.asScala))
 
