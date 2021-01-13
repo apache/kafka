@@ -29,6 +29,7 @@ import java.util.HashMap;
 import java.util.Map;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertSame;
 
 public class SetSchemaMetadataTest {
@@ -133,7 +134,7 @@ public class SetSchemaMetadataTest {
     @Test
     public void updateSchemaOfNull() {
         Object updatedValue = SetSchemaMetadata.updateSchemaIn(null, Schema.INT32_SCHEMA);
-        assertEquals(null, updatedValue);
+        assertNull(updatedValue);
     }
 
     protected void assertMatchingSchema(Struct value, Schema schema) {

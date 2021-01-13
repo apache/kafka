@@ -37,6 +37,7 @@ import static org.apache.kafka.streams.processor.internals.assignment.Assignment
 import static org.apache.kafka.streams.processor.internals.assignment.StreamsAssignmentProtocolVersions.LATEST_SUPPORTED_VERSION;
 import static org.apache.kafka.streams.processor.internals.assignment.StreamsAssignmentProtocolVersions.UNKNOWN;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertThrows;
 
 public class AssignmentInfoTest {
     private final List<TaskId> activeTasks = Arrays.asList(
@@ -76,14 +77,16 @@ public class AssignmentInfoTest {
         assertEquals(LATEST_SUPPORTED_VERSION, info.version());
     }
 
-    @Test(expected = IllegalArgumentException.class)
+    @Test
     public void shouldThrowForUnknownVersion1() {
-        new AssignmentInfo(0, activeTasks, standbyTasks, activeAssignment, Collections.emptyMap(), 0);
+        assertThrows(IllegalArgumentException.class, () -> new AssignmentInfo(0, activeTasks, standbyTasks,
+            activeAssignment, Collections.emptyMap(), 0));
     }
 
-    @Test(expected = IllegalArgumentException.class)
+    @Test
     public void shouldThrowForUnknownVersion2() {
-        new AssignmentInfo(LATEST_SUPPORTED_VERSION + 1, activeTasks, standbyTasks, activeAssignment, Collections.emptyMap(), 0);
+        assertThrows(IllegalArgumentException.class, () -> new AssignmentInfo(LATEST_SUPPORTED_VERSION + 1,
+            activeTasks, standbyTasks, activeAssignment, Collections.emptyMap(), 0));
     }
 
     @Test

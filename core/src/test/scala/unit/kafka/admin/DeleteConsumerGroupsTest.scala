@@ -25,11 +25,11 @@ import org.junit.Test
 
 class DeleteConsumerGroupsTest extends ConsumerGroupCommandTest {
 
-  @Test(expected = classOf[OptionException])
+  @Test
   def testDeleteWithTopicOption(): Unit = {
     TestUtils.createOffsetsTopic(zkClient, servers)
     val cgcArgs = Array("--bootstrap-server", brokerList, "--delete", "--group", group, "--topic")
-    getConsumerGroupService(cgcArgs)
+    assertThrows(classOf[OptionException], () => getConsumerGroupService(cgcArgs))
   }
 
   @Test
@@ -240,9 +240,9 @@ class DeleteConsumerGroupsTest extends ConsumerGroupCommandTest {
   }
 
 
-  @Test(expected = classOf[OptionException])
+  @Test
   def testDeleteWithUnrecognizedNewConsumerOption(): Unit = {
     val cgcArgs = Array("--new-consumer", "--bootstrap-server", brokerList, "--delete", "--group", group)
-    getConsumerGroupService(cgcArgs)
+    assertThrows(classOf[OptionException], () => getConsumerGroupService(cgcArgs))
   }
 }

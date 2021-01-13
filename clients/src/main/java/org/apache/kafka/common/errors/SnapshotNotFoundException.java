@@ -14,20 +14,18 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.common.network;
+package org.apache.kafka.common.errors;
 
-import java.nio.channels.GatheringByteChannel;
+public class SnapshotNotFoundException extends ApiException {
 
-public final class TransportLayers {
+    private static final long serialVersionUID = 1;
 
-    private TransportLayers() {}
-
-    // This is temporary workaround as Send and Receive interfaces are used by BlockingChannel.
-    // Once BlockingChannel is removed we can make Send and Receive work with TransportLayer rather than
-    // GatheringByteChannel or ScatteringByteChannel.
-    public static boolean hasPendingWrites(GatheringByteChannel channel) {
-        if (channel instanceof TransportLayer)
-            return ((TransportLayer) channel).hasPendingWrites();
-        return false;
+    public SnapshotNotFoundException(String s) {
+        super(s);
     }
+
+    public SnapshotNotFoundException(String message, Throwable cause) {
+        super(message, cause);
+    }
+
 }

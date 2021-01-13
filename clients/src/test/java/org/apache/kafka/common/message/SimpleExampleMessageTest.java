@@ -231,6 +231,18 @@ public class SimpleExampleMessageTest {
     }
 
     @Test
+    public void testMyUint16() {
+        // Verify that the uint16 field reads as 33000 when not set.
+        testRoundTrip(new SimpleExampleMessageData(),
+            message -> assertEquals(33000, message.myUint16()));
+
+        testRoundTrip(new SimpleExampleMessageData().setMyUint16(123),
+            message -> assertEquals(123, message.myUint16()));
+        testRoundTrip(new SimpleExampleMessageData().setMyUint16(60000),
+            message -> assertEquals(60000, message.myUint16()));
+    }
+
+    @Test
     public void testMyString() {
         // Verify that the tagged field reads as empty when not set.
         testRoundTrip(new SimpleExampleMessageData(),
@@ -242,6 +254,11 @@ public class SimpleExampleMessageTest {
 
     @Test
     public void testMyBytes() {
+        assertThrows(RuntimeException.class,
+            () -> new SimpleExampleMessageData().setMyUint16(-1));
+        assertThrows(RuntimeException.class,
+            () -> new SimpleExampleMessageData().setMyUint16(65536));
+
         // Verify that the tagged field reads as empty when not set.
         testRoundTrip(new SimpleExampleMessageData(),
             message -> assertArrayEquals(new byte[0], message.myBytes()));
@@ -294,12 +311,13 @@ public class SimpleExampleMessageTest {
             message -> assertEquals(myStruct, message.myStruct()), (short) 2);
     }
 
-    @Test(expected = UnsupportedVersionException.class)
+    @Test
     public void testMyStructUnsupportedVersion() {
         SimpleExampleMessageData.MyStruct myStruct =
                 new SimpleExampleMessageData.MyStruct().setStructId(10);
         // Check serialization throws exception for unsupported version
-        testRoundTrip(new SimpleExampleMessageData().setMyStruct(myStruct), (short) 1);
+        assertThrows(UnsupportedVersionException.class,
+            () -> testRoundTrip(new SimpleExampleMessageData().setMyStruct(myStruct), (short) 1));
     }
 
     /**

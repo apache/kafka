@@ -31,7 +31,9 @@ import java.util.HashMap;
 import java.util.Map;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertSame;
+import static org.junit.Assert.assertThrows;
 
 public class InsertFieldTest {
     private InsertField<SourceRecord> xformKey = new InsertField.Key<>();
@@ -42,10 +44,11 @@ public class InsertFieldTest {
         xformValue.close();
     }
 
-    @Test(expected = DataException.class)
+    @Test
     public void topLevelStructRequired() {
         xformValue.configure(Collections.singletonMap("topic.field", "topic_field"));
-        xformValue.apply(new SourceRecord(null, null, "", 0, Schema.INT32_SCHEMA, 42));
+        assertThrows(DataException.class,
+            () -> xformValue.apply(new SourceRecord(null, null, "", 0, Schema.INT32_SCHEMA, 42)));
     }
 
     @Test
@@ -129,8 +132,8 @@ public class InsertFieldTest {
 
         final SourceRecord transformedRecord = xformValue.apply(record);
 
-        assertEquals(null, transformedRecord.value());
-        assertEquals(null, transformedRecord.valueSchema());
+        assertNull(transformedRecord.value());
+        assertNull(transformedRecord.valueSchema());
     }
 
     @Test
@@ -151,7 +154,7 @@ public class InsertFieldTest {
 
         final SourceRecord transformedRecord = xformValue.apply(record);
 
-        assertEquals(null, transformedRecord.value());
+        assertNull(transformedRecord.value());
         assertEquals(simpleStructSchema, transformedRecord.valueSchema());
     }
 
@@ -174,9 +177,9 @@ public class InsertFieldTest {
         assertEquals(42L, ((Map<?, ?>) transformedRecord.key()).get("magic"));
         assertEquals("test", ((Map<?, ?>) transformedRecord.key()).get("topic_field"));
         assertEquals(0, ((Map<?, ?>) transformedRecord.key()).get("partition_field"));
-        assertEquals(null, ((Map<?, ?>) transformedRecord.key()).get("timestamp_field"));
+        assertNull(((Map<?, ?>) transformedRecord.key()).get("timestamp_field"));
         assertEquals("my-instance-id", ((Map<?, ?>) transformedRecord.key()).get("instance_id"));
-        assertEquals(null, transformedRecord.value());
+        assertNull(transformedRecord.value());
     }
 
     @Test

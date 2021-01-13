@@ -31,7 +31,6 @@ import org.apache.kafka.common.record.Records
 import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.junit.Assert._
 import org.junit.Test
-import org.scalatest.Assertions.intercept
 
 class KafkaConfigTest {
 
@@ -117,9 +116,7 @@ class KafkaConfigTest {
 
     props5.put("log.retention.ms", "0")
 
-    intercept[IllegalArgumentException] {
-      KafkaConfig.fromProps(props5)
-    }
+    assertThrows(classOf[IllegalArgumentException], () => KafkaConfig.fromProps(props5))
   }
 
   @Test
@@ -132,15 +129,9 @@ class KafkaConfigTest {
     props2.put("log.retention.minutes", "0")
     props3.put("log.retention.hours", "0")
 
-    intercept[IllegalArgumentException] {
-      KafkaConfig.fromProps(props1)
-    }
-    intercept[IllegalArgumentException] {
-      KafkaConfig.fromProps(props2)
-    }
-    intercept[IllegalArgumentException] {
-      KafkaConfig.fromProps(props3)
-    }
+    assertThrows(classOf[IllegalArgumentException], () => KafkaConfig.fromProps(props1))
+    assertThrows(classOf[IllegalArgumentException], () => KafkaConfig.fromProps(props2))
+    assertThrows(classOf[IllegalArgumentException], () => KafkaConfig.fromProps(props3))
 
   }
 
@@ -219,12 +210,12 @@ class KafkaConfigTest {
 
     // listeners with duplicate port
     props.put(KafkaConfig.ListenersProp, "PLAINTEXT://localhost:9091,SSL://localhost:9091")
-    var caught = intercept[IllegalArgumentException] { KafkaConfig.fromProps(props) }
+    var caught = assertThrows(classOf[IllegalArgumentException], () => KafkaConfig.fromProps(props))
     assertTrue(caught.getMessage.contains("Each listener must have a different port"))
 
     // listeners with duplicate name
     props.put(KafkaConfig.ListenersProp, "PLAINTEXT://localhost:9091,PLAINTEXT://localhost:9092")
-    caught = intercept[IllegalArgumentException] { KafkaConfig.fromProps(props) }
+    caught = assertThrows(classOf[IllegalArgumentException], () => KafkaConfig.fromProps(props))
     assertTrue(caught.getMessage.contains("Each listener must have a different name"))
 
     // advertised listeners can have duplicate ports
@@ -236,7 +227,7 @@ class KafkaConfigTest {
 
     // but not duplicate names
     props.put(KafkaConfig.AdvertisedListenersProp, "HOST://localhost:9091,HOST://localhost:9091")
-    caught = intercept[IllegalArgumentException] { KafkaConfig.fromProps(props) }
+    caught = assertThrows(classOf[IllegalArgumentException], () => KafkaConfig.fromProps(props))
     assertTrue(caught.getMessage.contains("Each listener must have a different name"))
   }
 
@@ -398,7 +389,7 @@ class KafkaConfigTest {
     val conf2 = KafkaConfig.fromProps(props)
     assertEquals(listenerListToEndPoints("PLAINTEXT://:1111"), conf2.listeners)
     assertEquals(listenerListToEndPoints("PLAINTEXT://:1111"), conf2.advertisedListeners)
-    assertEquals(null, conf2.listeners.find(_.securityProtocol == SecurityProtocol.PLAINTEXT).get.host)
+    assertNull(conf2.listeners.find(_.securityProtocol == SecurityProtocol.PLAINTEXT).get.host)
 
     // configuration with advertised host and port, and no advertised listeners
     props.put(KafkaConfig.AdvertisedHostNameProp, "otherhost")
@@ -473,9 +464,7 @@ class KafkaConfigTest {
     val props = TestUtils.createBrokerConfig(0, TestUtils.MockZkConnect, port = 8181)
     props.put(KafkaConfig.UncleanLeaderElectionEnableProp, "invalid")
 
-    intercept[ConfigException] {
-      KafkaConfig.fromProps(props)
-    }
+    assertThrows(classOf[ConfigException], () => KafkaConfig.fromProps(props))
   }
 
   @Test
@@ -526,9 +515,7 @@ class KafkaConfigTest {
   def testInvalidCompressionType(): Unit = {
     val props = TestUtils.createBrokerConfig(0, TestUtils.MockZkConnect, port = 8181)
     props.put(KafkaConfig.CompressionTypeProp, "abc")
-    intercept[IllegalArgumentException] {
-      KafkaConfig.fromProps(props)
-    }
+    assertThrows(classOf[IllegalArgumentException], () => KafkaConfig.fromProps(props))
   }
 
   @Test
@@ -536,9 +523,7 @@ class KafkaConfigTest {
     val props = TestUtils.createBrokerConfig(0, TestUtils.MockZkConnect, port = 8181)
     props.put(KafkaConfig.ListenersProp, "SSL://localhost:0")
     props.put(KafkaConfig.InterBrokerSecurityProtocolProp, SecurityProtocol.PLAINTEXT.toString)
-    intercept[IllegalArgumentException] {
-      KafkaConfig.fromProps(props)
-    }
+    assertThrows(classOf[IllegalArgumentException], () => KafkaConfig.fromProps(props))
   }
 
   @Test
@@ -554,11 +539,11 @@ class KafkaConfigTest {
     val props = TestUtils.createBrokerConfig(0, TestUtils.MockZkConnect, port = 8181)
     props.put(KafkaConfig.ListenersProp, "TRACE://localhost:9091,SSL://localhost:9093")
     props.put(KafkaConfig.AdvertisedListenersProp, "PLAINTEXT://localhost:9092")
-    var caught = intercept[IllegalArgumentException] { KafkaConfig.fromProps(props) }
+    var caught = assertThrows(classOf[IllegalArgumentException], () => KafkaConfig.fromProps(props))
     assertTrue(caught.getMessage.contains("No security protocol defined for listener TRACE"))
 
     props.put(KafkaConfig.ListenerSecurityProtocolMapProp, "PLAINTEXT:PLAINTEXT,TRACE:PLAINTEXT,SSL:SSL")
-    caught = intercept[IllegalArgumentException] { KafkaConfig.fromProps(props) }
+    caught = assertThrows(classOf[IllegalArgumentException], () => KafkaConfig.fromProps(props))
     assertTrue(caught.getMessage.contains("advertised.listeners listener names must be equal to or a subset of the ones defined in listeners"))
   }
 
@@ -578,9 +563,7 @@ class KafkaConfigTest {
           assertEquals(messageFormatVersion, config.logMessageFormatVersion)
           assertEquals(interBrokerVersion, config.interBrokerProtocolVersion)
         } else {
-          intercept[IllegalArgumentException] {
-            buildConfig(interBrokerVersion, messageFormatVersion)
-          }
+          assertThrows(classOf[IllegalArgumentException], () => buildConfig(interBrokerVersion, messageFormatVersion))
         }
       }
     }
@@ -954,9 +937,7 @@ class KafkaConfigTest {
     values.foreach((value) => {
       val props = validRequiredProps
       props.setProperty(name, value.toString)
-      intercept[Exception] {
-        KafkaConfig.fromProps(props)
-      }
+      assertThrows(classOf[Exception], () => KafkaConfig.fromProps(props))
     })
   }
 

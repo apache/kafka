@@ -193,6 +193,10 @@ public class StreamThread extends Thread {
         return state;
     }
 
+    void setPartitionAssignedTime(final long lastPartitionAssignedMs) {
+        this.lastPartitionAssignedMs = lastPartitionAssignedMs;
+    }
+
     /**
      * Sets the state
      *
@@ -230,6 +234,7 @@ public class StreamThread extends Thread {
             } else {
                 updateThreadMetadata(Collections.emptyMap(), Collections.emptyMap());
             }
+            stateLock.notifyAll();
         }
 
         if (stateListener != null) {
@@ -248,7 +253,7 @@ public class StreamThread extends Thread {
     private final Time time;
     private final Logger log;
     private final String logPrefix;
-    private final Object stateLock;
+    public final Object stateLock;
     private final Duration pollTime;
     private final long commitTimeMs;
     private final int maxPollTimeMs;
@@ -273,6 +278,7 @@ public class StreamThread extends Thread {
     private long now;
     private long lastPollMs;
     private long lastCommitMs;
+    private long lastPartitionAssignedMs = -1L;
     private int numIterations;
     private volatile State state = State.CREATED;
     private volatile ThreadMetadata threadMetadata;
@@ -597,6 +603,18 @@ public class StreamThread extends Thread {
         this.streamsUncaughtExceptionHandler = streamsUncaughtExceptionHandler;
     }
 
+    public void waitOnThreadState(final StreamThread.State targetState) {
+        synchronized (stateLock) {
+            while (state != targetState) {
+                try {
+                    stateLock.wait();
+                } catch (final InterruptedException e) {
+                    // it is ok: just move on to the next iteration
+                }
+            }
+        }
+    }
+
     public void shutdownToError() {
         shutdownErrorHook.run();
     }
@@ -777,7 +795,8 @@ public class StreamThread extends Thread {
 
             if (taskManager.tryToCompleteRestoration(now)) {
                 changelogReader.transitToUpdateStandby();
-
+                log.info("Restoration took {} ms for all tasks {}", time.milliseconds() - lastPartitionAssignedMs,
+                    taskManager.tasks().keySet());
                 setState(State.RUNNING);
             }
 
@@ -1112,6 +1131,10 @@ public class StreamThread extends Thread {
 
     public Map<MetricName, Metric> adminClientMetrics() {
         return ClientUtils.adminClientMetrics(adminClient);
+    }
+
+    public Object getStateLock() {
+        return stateLock;
     }
 
     // the following are for testing only

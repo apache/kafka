@@ -22,30 +22,34 @@ import org.junit.Test;
 import java.nio.ByteBuffer;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertThrows;
 
 public class EndTransactionMarkerTest {
 
-    @Test(expected = IllegalArgumentException.class)
+    @Test
     public void testUnknownControlTypeNotAllowed() {
-        new EndTransactionMarker(ControlRecordType.UNKNOWN, 24);
+        assertThrows(IllegalArgumentException.class,
+            () -> new EndTransactionMarker(ControlRecordType.UNKNOWN, 24));
     }
 
-    @Test(expected = IllegalArgumentException.class)
+    @Test
     public void testCannotDeserializeUnknownControlType() {
-        EndTransactionMarker.deserializeValue(ControlRecordType.UNKNOWN, ByteBuffer.wrap(new byte[0]));
+        assertThrows(IllegalArgumentException.class,
+            () -> EndTransactionMarker.deserializeValue(ControlRecordType.UNKNOWN, ByteBuffer.wrap(new byte[0])));
     }
 
-    @Test(expected = InvalidRecordException.class)
+    @Test
     public void testIllegalNegativeVersion() {
         ByteBuffer buffer = ByteBuffer.allocate(2);
         buffer.putShort((short) -1);
         buffer.flip();
-        EndTransactionMarker.deserializeValue(ControlRecordType.ABORT, buffer);
+        assertThrows(InvalidRecordException.class, () -> EndTransactionMarker.deserializeValue(ControlRecordType.ABORT, buffer));
     }
 
-    @Test(expected = InvalidRecordException.class)
+    @Test
     public void testNotEnoughBytes() {
-        EndTransactionMarker.deserializeValue(ControlRecordType.COMMIT, ByteBuffer.wrap(new byte[0]));
+        assertThrows(InvalidRecordException.class,
+            () -> EndTransactionMarker.deserializeValue(ControlRecordType.COMMIT, ByteBuffer.wrap(new byte[0])));
     }
 
     @Test

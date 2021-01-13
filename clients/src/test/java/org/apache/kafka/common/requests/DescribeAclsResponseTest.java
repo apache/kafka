@@ -39,6 +39,7 @@ import java.util.List;
 import java.util.Set;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertThrows;
 
 public class DescribeAclsResponseTest {
     private static final short V0 = 0;
@@ -80,21 +81,23 @@ public class DescribeAclsResponseTest {
             PatternType.LITERAL,
             Collections.singletonList(DENY_READ_ACL));
 
-    @Test(expected = UnsupportedVersionException.class)
+    @Test
     public void shouldThrowOnV0IfNotLiteral() {
-        buildResponse(10, Errors.NONE, Collections.singletonList(PREFIXED_ACL1)).serializeBody(V0);
+        assertThrows(UnsupportedVersionException.class,
+            () -> buildResponse(10, Errors.NONE, Collections.singletonList(PREFIXED_ACL1)).serialize(V0));
     }
 
-    @Test(expected = IllegalArgumentException.class)
+    @Test
     public void shouldThrowIfUnknown() {
-        buildResponse(10, Errors.NONE, Collections.singletonList(UNKNOWN_ACL)).serializeBody(V0);
+        assertThrows(IllegalArgumentException.class,
+            () -> buildResponse(10, Errors.NONE, Collections.singletonList(UNKNOWN_ACL)).serialize(V0));
     }
 
     @Test
     public void shouldRoundTripV0() {
         List<DescribeAclsResource> resources = Arrays.asList(LITERAL_ACL1, LITERAL_ACL2);
         final DescribeAclsResponse original = buildResponse(10, Errors.NONE, resources);
-        final ByteBuffer buffer = original.serializeBody(V0);
+        final ByteBuffer buffer = original.serialize(V0);
 
         final DescribeAclsResponse result = DescribeAclsResponse.parse(buffer, V0);
         assertResponseEquals(original, result);
@@ -108,7 +111,7 @@ public class DescribeAclsResponseTest {
     public void shouldRoundTripV1() {
         List<DescribeAclsResource> resources = Arrays.asList(LITERAL_ACL1, PREFIXED_ACL1);
         final DescribeAclsResponse original = buildResponse(100, Errors.NONE, resources);
-        final ByteBuffer buffer = original.serializeBody(V1);
+        final ByteBuffer buffer = original.serialize(V1);
 
         final DescribeAclsResponse result = DescribeAclsResponse.parse(buffer, V1);
         assertResponseEquals(original, result);

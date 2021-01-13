@@ -72,6 +72,7 @@ class BatchAccumulatorTest {
             maxBatchSize
         );
 
+        assertTrue(acc.isEmpty());
         assertFalse(acc.needsDrain(time.milliseconds()));
         assertEquals(Long.MAX_VALUE - time.milliseconds(), acc.timeUntilDrain(time.milliseconds()));
     }
@@ -96,13 +97,16 @@ class BatchAccumulatorTest {
         time.sleep(15);
         assertEquals(baseOffset, acc.append(leaderEpoch, singletonList("a")));
         assertEquals(lingerMs, acc.timeUntilDrain(time.milliseconds()));
+        assertFalse(acc.isEmpty());
 
         time.sleep(lingerMs / 2);
         assertEquals(lingerMs / 2, acc.timeUntilDrain(time.milliseconds()));
+        assertFalse(acc.isEmpty());
 
         time.sleep(lingerMs / 2);
         assertEquals(0, acc.timeUntilDrain(time.milliseconds()));
         assertTrue(acc.needsDrain(time.milliseconds()));
+        assertFalse(acc.isEmpty());
     }
 
     @Test
@@ -211,12 +215,13 @@ class BatchAccumulatorTest {
             maxBatchSize
         );
 
-        while (acc.count() < 3) {
+        // Append entries until we have 4 batches to drain (3 completed, 1 building)
+        while (acc.numCompletedBatches() < 3) {
             acc.append(leaderEpoch, singletonList("foo"));
         }
 
         List<BatchAccumulator.CompletedBatch<String>> batches = acc.drain();
-        assertEquals(3, batches.size());
+        assertEquals(4, batches.size());
         assertTrue(batches.stream().allMatch(batch -> batch.data.sizeInBytes() <= maxBatchSize));
     }
 

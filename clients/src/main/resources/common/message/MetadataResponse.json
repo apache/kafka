@@ -36,7 +36,8 @@
   // Starting in version 8, brokers can send authorized operations for topic and cluster.
   //
   // Version 9 is the first flexible version.
-  "validVersions": "0-9",
+  // Version 10 add topicId
+  "validVersions": "0-10",
   "flexibleVersions": "9+",
   "fields": [
     { "name": "ThrottleTimeMs", "type": "int32", "versions": "3+", "ignorable": true,
@@ -62,6 +63,7 @@
         "about": "The topic error, or 0 if there was no error." },
       { "name": "Name", "type": "string", "versions": "0+", "mapKey": true, "entityType": "topicName",
         "about": "The topic name." },
+      { "name": "TopicId", "type": "uuid", "versions": "10+", "ignorable": true, "about": "The topic id." },
       { "name": "IsInternal", "type": "bool", "versions": "1+", "default": "false", "ignorable": true,
         "about": "True if the topic is internal." },
       { "name": "Partitions", "type": "[]MetadataResponsePartition", "versions": "0+",

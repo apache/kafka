@@ -50,7 +50,7 @@ public class HeartbeatRequest extends AbstractRequest {
         }
     }
 
-    public final HeartbeatRequestData data;
+    private final HeartbeatRequestData data;
 
     private HeartbeatRequest(HeartbeatRequestData data, short version) {
         super(ApiKeys.HEARTBEAT, version);
@@ -72,7 +72,7 @@ public class HeartbeatRequest extends AbstractRequest {
     }
 
     @Override
-    protected HeartbeatRequestData data() {
+    public HeartbeatRequestData data() {
         return data;
     }
 }

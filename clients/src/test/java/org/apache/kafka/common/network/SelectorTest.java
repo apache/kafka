@@ -177,18 +177,18 @@ public class SelectorTest {
     /**
      * Sending a request to a node without an existing connection should result in an exception
      */
-    @Test(expected = IllegalStateException.class)
-    public void testCantSendWithoutConnecting() throws Exception {
-        selector.send(createSend("0", "test"));
-        selector.poll(1000L);
+    @Test
+    public void testSendWithoutConnecting() {
+        assertThrows(IllegalStateException.class, () -> selector.send(createSend("0", "test")));
     }
 
     /**
      * Sending a request to a node with a bad hostname should result in an exception during connect
      */
-    @Test(expected = IOException.class)
-    public void testNoRouteToHost() throws Exception {
-        selector.connect("0", new InetSocketAddress("some.invalid.hostname.foo.bar.local", server.port), BUFFER_SIZE, BUFFER_SIZE);
+    @Test
+    public void testNoRouteToHost() {
+        assertThrows(IOException.class,
+            () -> selector.connect("0", new InetSocketAddress("some.invalid.hostname.foo.bar.local", server.port), BUFFER_SIZE, BUFFER_SIZE));
     }
 
     /**
@@ -253,8 +253,8 @@ public class SelectorTest {
             }
 
             // prepare new sends for the next round
-            for (Send send : selector.completedSends()) {
-                String dest = send.destination();
+            for (NetworkSend send : selector.completedSends()) {
+                String dest = send.destinationId();
                 if (requests.containsKey(dest))
                     requests.put(dest, requests.get(dest) + 1);
                 else
@@ -298,9 +298,10 @@ public class SelectorTest {
         String payload = TestUtils.randomString(payloadSize);
         String nodeId = "0";
         blockingConnect(nodeId);
-        NetworkSend send = createSend(nodeId, payload);
+        ByteBufferSend send = ByteBufferSend.sizePrefixed(ByteBuffer.wrap(payload.getBytes()));
+        NetworkSend networkSend = new NetworkSend(nodeId, send);
 
-        selector.send(send);
+        selector.send(networkSend);
         KafkaChannel channel = selector.channel(nodeId);
 
         KafkaMetric outgoingByteTotal = findUntaggedMetricByName("outgoing-byte-total");
@@ -374,10 +375,10 @@ public class SelectorTest {
         }
     }
 
-    @Test(expected = IllegalStateException.class)
+    @Test
     public void testExistingConnectionId() throws IOException {
         blockingConnect("0");
-        blockingConnect("0");
+        assertThrows(IllegalStateException.class, () -> blockingConnect("0"));
     }
 
     @Test
@@ -958,7 +959,7 @@ public class SelectorTest {
         KafkaChannel channel = mock(KafkaChannel.class);
         when(channel.id()).thenReturn("1");
         when(channel.write()).thenReturn(0L);
-        ByteBufferSend send = new ByteBufferSend("destination", ByteBuffer.allocate(0));
+        NetworkSend send = new NetworkSend("destination", new ByteBufferSend(ByteBuffer.allocate(0)));
         when(channel.maybeCompleteSend()).thenReturn(send);
         selector.write(channel);
         assertEquals(asList(send), selector.completedSends());
@@ -1046,8 +1047,8 @@ public class SelectorTest {
             selector.poll(10000L);
     }
 
-    protected NetworkSend createSend(String node, String payload) {
-        return new NetworkSend(node, ByteBuffer.wrap(payload.getBytes()));
+    protected final NetworkSend createSend(String node, String payload) {
+        return new NetworkSend(node, ByteBufferSend.sizePrefixed(ByteBuffer.wrap(payload.getBytes())));
     }
 
     protected String asString(NetworkReceive receive) {

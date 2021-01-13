@@ -47,7 +47,7 @@ public class VoteRequest extends AbstractRequest {
         }
     }
 
-    public final VoteRequestData data;
+    private final VoteRequestData data;
 
     private VoteRequest(VoteRequestData data, short version) {
         super(ApiKeys.VOTE, version);
@@ -55,7 +55,7 @@ public class VoteRequest extends AbstractRequest {
     }
 
     @Override
-    protected VoteRequestData data() {
+    public VoteRequestData data() {
         return data;
     }
 

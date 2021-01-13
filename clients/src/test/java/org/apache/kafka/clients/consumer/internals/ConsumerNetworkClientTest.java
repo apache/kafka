@@ -36,6 +36,7 @@ import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.HeartbeatRequest;
 import org.apache.kafka.common.requests.HeartbeatResponse;
 import org.apache.kafka.common.requests.MetadataResponse;
+import org.apache.kafka.common.requests.RequestTestUtils;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.test.TestUtils;
@@ -48,6 +49,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 import static org.mockito.ArgumentMatchers.anyLong;
@@ -245,20 +247,20 @@ public class ConsumerNetworkClientTest {
         }
     }
 
-    @Test(expected = InvalidTopicException.class)
+    @Test
     public void testInvalidTopicExceptionPropagatedFromMetadata() {
-        MetadataResponse metadataResponse = TestUtils.metadataUpdateWith("clusterId", 1,
+        MetadataResponse metadataResponse = RequestTestUtils.metadataUpdateWith("clusterId", 1,
                 Collections.singletonMap("topic", Errors.INVALID_TOPIC_EXCEPTION), Collections.emptyMap());
         metadata.updateWithCurrentRequestVersion(metadataResponse, false, time.milliseconds());
-        consumerClient.poll(time.timer(Duration.ZERO));
+        assertThrows(InvalidTopicException.class, () -> consumerClient.poll(time.timer(Duration.ZERO)));
     }
 
-    @Test(expected = TopicAuthorizationException.class)
+    @Test
     public void testTopicAuthorizationExceptionPropagatedFromMetadata() {
-        MetadataResponse metadataResponse = TestUtils.metadataUpdateWith("clusterId", 1,
+        MetadataResponse metadataResponse = RequestTestUtils.metadataUpdateWith("clusterId", 1,
                 Collections.singletonMap("topic", Errors.TOPIC_AUTHORIZATION_FAILED), Collections.emptyMap());
         metadata.updateWithCurrentRequestVersion(metadataResponse, false, time.milliseconds());
-        consumerClient.poll(time.timer(Duration.ZERO));
+        assertThrows(TopicAuthorizationException.class, () -> consumerClient.poll(time.timer(Duration.ZERO)));
     }
 
     @Test

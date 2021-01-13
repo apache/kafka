@@ -29,6 +29,7 @@ import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertArrayEquals;
+import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 
 
@@ -62,21 +63,21 @@ public class ScramCredentialUtilsTest {
         assertNotEquals(ScramCredentialUtils.credentialToString(credential1), ScramCredentialUtils.credentialToString(credential2));
     }
 
-    @Test(expected = IllegalArgumentException.class)
+    @Test
     public void invalidCredential() {
-        ScramCredentialUtils.credentialFromString("abc");
+        assertThrows(IllegalArgumentException.class, () -> ScramCredentialUtils.credentialFromString("abc"));
     }
 
-    @Test(expected = IllegalArgumentException.class)
+    @Test
     public void missingFields() {
         String cred = ScramCredentialUtils.credentialToString(formatter.generateCredential("password", 2048));
-        ScramCredentialUtils.credentialFromString(cred.substring(cred.indexOf(',')));
+        assertThrows(IllegalArgumentException.class, () -> ScramCredentialUtils.credentialFromString(cred.substring(cred.indexOf(','))));
     }
 
-    @Test(expected = IllegalArgumentException.class)
+    @Test
     public void extraneousFields() {
         String cred = ScramCredentialUtils.credentialToString(formatter.generateCredential("password", 2048));
-        ScramCredentialUtils.credentialFromString(cred + ",a=test");
+        assertThrows(IllegalArgumentException.class, () -> ScramCredentialUtils.credentialFromString(cred + ",a=test"));
     }
 
     @Test

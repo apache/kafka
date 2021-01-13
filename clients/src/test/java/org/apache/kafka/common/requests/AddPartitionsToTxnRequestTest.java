@@ -46,9 +46,9 @@ public class AddPartitionsToTxnRequestTest {
         for (short version = 0; version <= ApiKeys.ADD_PARTITIONS_TO_TXN.latestVersion(); version++) {
             AddPartitionsToTxnRequest request = builder.build(version);
 
-            assertEquals(transactionalId, request.data.transactionalId());
-            assertEquals(producerId, request.data.producerId());
-            assertEquals(producerEpoch, request.data.producerEpoch());
+            assertEquals(transactionalId, request.data().transactionalId());
+            assertEquals(producerId, request.data().producerId());
+            assertEquals(producerEpoch, request.data().producerEpoch());
             assertEquals(partitions, request.partitions());
 
             AddPartitionsToTxnResponse response = request.getErrorResponse(throttleTimeMs, Errors.UNKNOWN_TOPIC_OR_PARTITION.exception());

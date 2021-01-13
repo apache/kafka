@@ -21,7 +21,6 @@ import kafka.utils.TestUtils
 import org.apache.kafka.common.metrics.Sensor
 import org.junit.Assert._
 import org.junit.Test
-import org.scalatest.Assertions.intercept
 
 class ServerMetricsTest {
 
@@ -39,11 +38,11 @@ class ServerMetricsTest {
     }
 
     for (illegalName <- illegalNames) {
-      intercept[IllegalArgumentException] {
+      assertThrows(classOf[IllegalArgumentException], () => {
         props.put(KafkaConfig.MetricRecordingLevelProp, illegalName)
         val config = KafkaConfig.fromProps(props)
         KafkaServer.metricConfig(config)
-      }
+      })
     }
 
   }

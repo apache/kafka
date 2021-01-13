@@ -46,7 +46,7 @@ public class DeleteGroupsRequest extends AbstractRequest {
         }
     }
 
-    public final DeleteGroupsRequestData data;
+    private final DeleteGroupsRequestData data;
 
     public DeleteGroupsRequest(DeleteGroupsRequestData data, short version) {
         super(ApiKeys.DELETE_GROUPS, version);
@@ -75,7 +75,7 @@ public class DeleteGroupsRequest extends AbstractRequest {
     }
 
     @Override
-    protected DeleteGroupsRequestData data() {
+    public DeleteGroupsRequestData data() {
         return data;
     }
 }

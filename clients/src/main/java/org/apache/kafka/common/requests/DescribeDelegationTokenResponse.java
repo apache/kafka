@@ -80,7 +80,7 @@ public class DescribeDelegationTokenResponse extends AbstractResponse {
     }
 
     @Override
-    protected DescribeDelegationTokenResponseData data() {
+    public DescribeDelegationTokenResponseData data() {
         return data;
     }
 

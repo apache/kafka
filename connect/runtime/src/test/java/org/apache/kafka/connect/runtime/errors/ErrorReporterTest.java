@@ -61,6 +61,7 @@ import static org.apache.kafka.connect.runtime.errors.DeadLetterQueueReporter.ER
 import static org.easymock.EasyMock.replay;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 
 @RunWith(PowerMockRunner.class)
@@ -96,9 +97,9 @@ public class ErrorReporterTest {
         }
     }
 
-    @Test(expected = NullPointerException.class)
+    @Test
     public void initializeDLQWithNullMetrics() {
-        new DeadLetterQueueReporter(producer, config(emptyMap()), TASK_ID, null);
+        assertThrows(NullPointerException.class, () -> new DeadLetterQueueReporter(producer, config(emptyMap()), TASK_ID, null));
     }
 
     @Test

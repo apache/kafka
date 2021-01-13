@@ -30,7 +30,6 @@ import kafka.zk.ZooKeeperTestHarness
 
 import org.junit.Assert._
 import org.junit.{After, Before, Test}
-import org.scalatest.Assertions.assertThrows
 import org.apache.kafka.test.TestUtils.isValidClusterId
 
 
@@ -175,9 +174,7 @@ class ServerGenerateClusterIdTest extends ZooKeeperTestHarness {
     val server = new KafkaServer(config1, threadNamePrefix = Option(this.getClass.getName))
 
     // Startup fails
-    assertThrows[InconsistentClusterIdException] {
-      server.startup()
-    }
+    assertThrows(classOf[InconsistentClusterIdException], () => server.startup())
 
     server.shutdown()
 
@@ -201,9 +198,7 @@ class ServerGenerateClusterIdTest extends ZooKeeperTestHarness {
     val server = new KafkaServer(config, threadNamePrefix = Option(this.getClass.getName))
 
     // Startup fails
-    assertThrows[InconsistentBrokerMetadataException] {
-      server.startup()
-    }
+    assertThrows(classOf[InconsistentBrokerMetadataException], () => server.startup())
 
     server.shutdown()
 

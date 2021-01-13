@@ -426,6 +426,10 @@ public class QuorumState {
     }
 
     private void transitionTo(EpochState state) throws IOException {
+        if (this.state != null) {
+            this.state.close();
+        }
+
         this.store.writeElectionState(state.election());
         this.state = state;
         log.info("Completed transition to {}", state);

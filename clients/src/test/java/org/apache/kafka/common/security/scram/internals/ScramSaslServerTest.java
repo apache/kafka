@@ -27,6 +27,8 @@ import org.apache.kafka.common.security.token.delegation.internals.DelegationTok
 
 import org.junit.Before;
 import org.junit.Test;
+
+import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 
 public class ScramSaslServerTest {
@@ -61,9 +63,9 @@ public class ScramSaslServerTest {
         assertTrue("Next challenge is empty", nextChallenge.length > 0);
     }
 
-    @Test(expected = SaslAuthenticationException.class)
-    public void authorizatonIdNotEqualsAuthenticationId() throws Exception {
-        saslServer.evaluateResponse(clientFirstMessage(USER_A, USER_B));
+    @Test
+    public void authorizatonIdNotEqualsAuthenticationId() {
+        assertThrows(SaslAuthenticationException.class, () -> saslServer.evaluateResponse(clientFirstMessage(USER_A, USER_B)));
     }
 
     private byte[] clientFirstMessage(String userName, String authorizationId) {

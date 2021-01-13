@@ -31,7 +31,6 @@ import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.test.{MockConsumerInterceptor, MockProducerInterceptor}
 import org.junit.Assert._
 import org.junit.Test
-import org.scalatest.Assertions.intercept
 
 import scala.jdk.CollectionConverters._
 import scala.collection.mutable.Buffer
@@ -558,10 +557,10 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     assertFalse(partitions.isEmpty)
   }
 
-  @Test(expected = classOf[InvalidTopicException])
+  @Test
   def testPartitionsForInvalidTopic(): Unit = {
     val consumer = createConsumer()
-    consumer.partitionsFor(";3# ads,{234")
+    assertThrows(classOf[InvalidTopicException], () => consumer.partitionsFor(";3# ads,{234"))
   }
 
   @Test
@@ -628,9 +627,7 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     assertNull(consumer.committed(Set(topicPartition).asJava).get(topicPartition))
 
     // position() on a partition that we aren't subscribed to throws an exception
-    intercept[IllegalStateException] {
-      consumer.position(topicPartition)
-    }
+    assertThrows(classOf[IllegalStateException], () => consumer.position(topicPartition))
 
     consumer.assign(List(tp).asJava)
 
@@ -680,16 +677,12 @@ class PlaintextConsumerTest extends BaseConsumerTest {
 
     // poll should fail because there is no offset reset strategy set.
     // we fail only when resetting positions after coordinator is known, so using a long timeout.
-    intercept[NoOffsetForPartitionException] {
-      consumer.poll(Duration.ofMillis(15000))
-    }
+    assertThrows(classOf[NoOffsetForPartitionException], () => consumer.poll(Duration.ofMillis(15000)))
 
     // seek to out of range position
     val outOfRangePos = totalRecords + 1
     consumer.seek(tp, outOfRangePos)
-    val e = intercept[OffsetOutOfRangeException] {
-      consumer.poll(Duration.ofMillis(20000))
-    }
+    val e = assertThrows(classOf[OffsetOutOfRangeException], () => consumer.poll(Duration.ofMillis(20000)))
     val outOfRangePartitions = e.offsetOutOfRangePartitions()
     assertNotNull(outOfRangePartitions)
     assertEquals(1, outOfRangePartitions.size)
@@ -1201,8 +1194,8 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     val consumer = createConsumer()
 
     // Test negative target time
-    intercept[IllegalArgumentException](
-      consumer.offsetsForTimes(Collections.singletonMap(new TopicPartition(topic1, 0), -1)))
+    assertThrows(classOf[IllegalArgumentException],
+      () => consumer.offsetsForTimes(Collections.singletonMap(new TopicPartition(topic1, 0), -1)))
 
     val producer = createProducer()
     val timestampsToSearch = new util.HashMap[TopicPartition, java.lang.Long]()
@@ -1245,7 +1238,7 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     assertEquals(80, timestampTopic3P0.timestamp)
     assertEquals(Optional.of(0), timestampTopic3P0.leaderEpoch)
 
-    assertEquals(null, timestampOffsets.get(new TopicPartition(topic3, 1)))
+    assertNull(timestampOffsets.get(new TopicPartition(topic3, 1)))
   }
 
   @Test
