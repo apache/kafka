@@ -16,16 +16,6 @@
  */
 package org.apache.kafka.streams.processor.internals.assignment;
 
-import org.apache.kafka.common.utils.Utils;
-import org.apache.kafka.streams.processor.TaskId;
-import org.apache.kafka.streams.processor.internals.Task;
-import org.apache.kafka.streams.processor.internals.assignment.ClientState.ConsumerState;
-import org.junit.Test;
-
-import java.util.Collections;
-import java.util.Map;
-import java.util.Set;
-
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.common.utils.Utils.mkSet;
@@ -49,6 +39,15 @@ import static org.hamcrest.Matchers.is;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
+
+import java.util.Collections;
+import java.util.Map;
+import java.util.Set;
+
+import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.streams.processor.TaskId;
+import org.apache.kafka.streams.processor.internals.Task;
+import org.junit.Test;
 
 public class ClientStateTest {
     private final ClientState client = new ClientState(1);
@@ -349,19 +348,18 @@ public class ClientStateTest {
 
         assertThat(client.prevOwnedStatefulTasksByConsumer("c1"), equalTo(mkSet(TASK_0_1, TASK_0_0)));
         assertThat(client.prevOwnedStatefulTasksByConsumer("c2"), equalTo(mkSet(TASK_0_2)));
-        assertThat(client.assignedTasksConsumerStateByConsumer(), equalTo(
+        assertThat(client.prevOwnedActiveTasksByConsumer(), equalTo(
                 mkMap(
-                        mkEntry("c1",
-                                mkMap(
-                                        mkEntry(TASK_0_0, mkSet(ConsumerState.PREVIOUS_STANDBY)),
-                                        mkEntry(TASK_0_1, mkSet(ConsumerState.PREVIOUS_ACTIVE))
-                                )),
-                        mkEntry("c2",
-                                mkMap(
-                                        mkEntry(TASK_0_2, mkSet(ConsumerState.PREVIOUS_ACTIVE))
-                                )
-                        ))
-        ));
+                        mkEntry("c1", Collections.singleton(TASK_0_1)),
+                        mkEntry("c2", Collections.singleton(TASK_0_2))
+                ))
+        );
+        assertThat(client.prevOwnedStandbyByConsumer(), equalTo(
+                mkMap(
+                        mkEntry("c1", Collections.singleton(TASK_0_0)),
+                        mkEntry("c2", Collections.emptySet())
+                ))
+        );
     }
 
     @Test
@@ -381,24 +379,15 @@ public class ClientStateTest {
         // calling it multiple tasks should be idempotent
         client.revokeActiveFromConsumer(TASK_0_1, "c1");
 
-        assertThat(client.assignedTasksConsumerStateByConsumer(), equalTo(
-            mkMap(
-                mkEntry("c1",
-                    mkMap(
-                        mkEntry(TASK_0_0, mkSet(ConsumerState.ASSIGNED_ACTIVE)),
-                        mkEntry(TASK_0_1, mkSet(ConsumerState.ASSIGNED_ACTIVE,
-                                                ConsumerState.REVOKING_ACTIVE)),
-                        mkEntry(TASK_0_2, mkSet(ConsumerState.ASSIGNED_STANDBY))
-                    )
-                ),
-                mkEntry("c2",
-                    mkMap(
-                        mkEntry(TASK_0_0, mkSet(ConsumerState.ASSIGNED_STANDBY)),
-                        mkEntry(TASK_0_2, mkSet(ConsumerState.ASSIGNED_ACTIVE))
-                    )
-                )
-            ))
-        );
+        assertThat(client.assignedActiveTasksByConsumer(), equalTo(mkMap(
+                mkEntry("c1", mkSet(TASK_0_0, TASK_0_1)),
+                mkEntry("c2", mkSet(TASK_0_2))
+        )));
+        assertThat(client.assignedStandbyTasksByConsumer(), equalTo(mkMap(
+                mkEntry("c1", mkSet(TASK_0_2)),
+                mkEntry("c2", mkSet(TASK_0_0))
+        )));
+        assertThat(client.revokingActiveTasksByConsumer(), equalTo(Collections.singletonMap("c1", mkSet(TASK_0_1))));
     }
 
     @Test
