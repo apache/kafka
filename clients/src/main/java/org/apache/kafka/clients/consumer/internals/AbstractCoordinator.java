@@ -252,8 +252,10 @@ public abstract class AbstractCoordinator implements Closeable {
                 if (future.isRetriable()) {
                     log.debug("Coordinator discovery failed, refreshing metadata", future.exception());
                     client.awaitMetadataUpdate(timer);
-                } else
-                    throw future.exception();
+                } else {
+                    findCoordinatorException = null;
+                    handleFailure(future, timer);
+                }
             } else if (coordinator != null && client.isUnavailable(coordinator)) {
                 // we found the coordinator, but the connection has failed, so mark
                 // it dead and backoff before retrying discovery
@@ -478,14 +480,31 @@ public abstract class AbstractCoordinator implements Closeable {
                     exception instanceof IllegalGenerationException ||
                     exception instanceof MemberIdRequiredException)
                     continue;
-                else if (!future.isRetriable())
-                    throw exception;
+                else
+                    handleFailure(future, timer);
 
                 resetStateAndRejoin();
-                timer.sleep(rebalanceConfig.retryBackoffMs);
             }
         }
         return true;
+    }
+
+    /**
+     * Handles failure in a request:
+     *   Case 1) Retriable failure: We backoff and return so that the request can be retried.
+     *           Retry backoff avoids tight loop of retries.
+     *   Case 2) Non-retriable failure that is not GroupAuthorizationException: We propagate
+     *           the exception immediately so that caller can take appropriate action.
+     *   Case 3) GroupAuthorizationException: We apply retry backoff to avoid a tight loop of
+     *           FindCoordinator requests on subsequent poll() invocations that fail with
+     *           GroupAuthorizationException if user doesn't have access to the group. We
+     *           propagate the exception after backoff since this is not a retriable failure.
+     */
+    protected void handleFailure(RequestFuture<?> future, Timer timer) {
+        if (future.isRetriable() || future.exception() instanceof GroupAuthorizationException)
+            timer.sleep(rebalanceConfig.retryBackoffMs);
+        if (!future.isRetriable())
+            throw future.exception();
     }
 
     private synchronized void resetJoinGroupFuture() {
