@@ -33,6 +33,7 @@ import java.util.Set;
 import java.util.TreeMap;
 import java.util.TreeSet;
 import java.util.UUID;
+import java.util.function.Function;
 import java.util.stream.Collectors;
 
 import org.apache.kafka.common.TopicPartition;
@@ -155,17 +156,23 @@ public class ClientState {
         return consumerToAssignedStandbyTaskIds;
     }
 
-    private Map<String, Set<TaskId>> activeConsumerByActiveState(ConsumerActiveByState state) {
+    private Map<String, Set<TaskId>> activeConsumerByActiveState(final ConsumerActiveByState state) {
+        final Function<Entry<String, Map<ConsumerActiveByState, Set<TaskId>>>, Set<TaskId>> valueMapper =
+            entry -> entry.getValue().entrySet()
+                          .stream()
+                          .filter(stateEntry -> stateEntry.getKey() == state)
+                          .flatMap(stateEntry -> stateEntry.getValue().stream())
+                          .collect(Collectors.toSet());
+
         return consumerToActiveTaskIds
                 .entrySet()
                 .stream()
-                .collect(Collectors.toMap(Entry::getKey,
-                                          e -> e.getValue().entrySet()
-                                                .stream()
-                                                .filter(stateEntry -> stateEntry.getKey() == state)
-                                                .filter(stateEntry -> stateEntry.getValue() != null)
-                                                .flatMap(stateEntry -> stateEntry.getValue().stream())
-                                                .collect(Collectors.toSet())));
+                .filter(e -> e.getValue() != null)
+                .filter(e -> {
+                    final Set<TaskId> taskIds = e.getValue().get(state);
+                    return taskIds != null && !taskIds.isEmpty();
+                })
+                .collect(Collectors.toMap(Entry::getKey, valueMapper));
     }
 
     public Map<String, Set<TaskId>> prevOwnedStandbyByConsumer() {
@@ -174,9 +181,9 @@ public class ClientState {
         for (final Map.Entry<String, Set<TaskId>> entry: consumerToPreviousStatefulTaskIds.entrySet()) {
             final Set<TaskId> standbyTaskIds = new HashSet<>(entry.getValue());
             final Map<ConsumerActiveByState, Set<TaskId>> activeByStateSetMap = consumerToActiveTaskIds.get(entry.getKey());
-            if(activeByStateSetMap != null) {
+            if (activeByStateSetMap != null) {
                 final Set<TaskId> consumerToPreviousActiveTaskIds = activeByStateSetMap.get(ConsumerActiveByState.ASSIGNED_ACTIVE);
-                if(consumerToPreviousActiveTaskIds != null && !consumerToPreviousActiveTaskIds.isEmpty()) {
+                if (consumerToPreviousActiveTaskIds != null && !consumerToPreviousActiveTaskIds.isEmpty()) {
                     standbyTaskIds.removeAll(consumerToPreviousActiveTaskIds);
                 }
             }
