@@ -17,6 +17,7 @@
 package org.apache.kafka.raft;
 
 import org.apache.kafka.common.KafkaException;
+import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.ClusterAuthorizationException;
 import org.apache.kafka.common.errors.NotLeaderOrFollowerException;
@@ -24,16 +25,16 @@ import org.apache.kafka.common.memory.MemoryPool;
 import org.apache.kafka.common.message.BeginQuorumEpochRequestData;
 import org.apache.kafka.common.message.BeginQuorumEpochResponseData;
 import org.apache.kafka.common.message.DescribeQuorumRequestData;
-import org.apache.kafka.common.message.DescribeQuorumResponseData.ReplicaState;
 import org.apache.kafka.common.message.DescribeQuorumResponseData;
+import org.apache.kafka.common.message.DescribeQuorumResponseData.ReplicaState;
 import org.apache.kafka.common.message.EndQuorumEpochRequestData;
 import org.apache.kafka.common.message.EndQuorumEpochResponseData;
 import org.apache.kafka.common.message.FetchRequestData;
 import org.apache.kafka.common.message.FetchResponseData;
 import org.apache.kafka.common.message.FetchSnapshotRequestData;
 import org.apache.kafka.common.message.FetchSnapshotResponseData;
-import org.apache.kafka.common.message.LeaderChangeMessage.Voter;
 import org.apache.kafka.common.message.LeaderChangeMessage;
+import org.apache.kafka.common.message.LeaderChangeMessage.Voter;
 import org.apache.kafka.common.message.VoteRequestData;
 import org.apache.kafka.common.message.VoteResponseData;
 import org.apache.kafka.common.metrics.Metrics;
@@ -95,6 +96,7 @@ import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
 import static java.util.concurrent.CompletableFuture.completedFuture;
+import static org.apache.kafka.raft.RaftConfig.quorumVoterStringsToNodes;
 import static org.apache.kafka.raft.RaftUtil.hasValidTopicPartition;
 
 /**
@@ -133,57 +135,69 @@ import static org.apache.kafka.raft.RaftUtil.hasValidTopicPartition;
  */
 public class KafkaRaftClient<T> implements RaftClient<T> {
     private static final int RETRY_BACKOFF_BASE_MS = 100;
+    private static final int FETCH_MAX_WAIT_MS = 1000;
     static final int MAX_BATCH_SIZE = 1024 * 1024;
 
     private final AtomicReference<GracefulShutdown> shutdown = new AtomicReference<>();
     private final Logger logger;
+    private final LogContext logContext;
     private final Time time;
     private final int electionBackoffMaxMs;
+    private final int electionTimeoutMs;
     private final int fetchMaxWaitMs;
+    private final int fetchTimeoutMs;
     private final int appendLingerMs;
-    private final KafkaRaftMetrics kafkaRaftMetrics;
+    private final int retryBackoffMs;
+    private final int requestTimeoutMs;
+    private final int nodeId;
     private final NetworkChannel channel;
     private final ReplicatedLog log;
-    private final QuorumState quorum;
     private final Random random;
-    private final RequestManager requestManager;
     private final FuturePurgatory<Long> appendPurgatory;
     private final FuturePurgatory<Long> fetchPurgatory;
     private final RecordSerde<T> serde;
     private final MemoryPool memoryPool;
     private final RaftMessageQueue messageQueue;
+    private final QuorumStateStore quorumStateStore;
+    private final Metrics metrics;
 
     private final List<ListenerContext> listenerContexts = new ArrayList<>();
     private final ConcurrentLinkedQueue<Listener<T>> pendingListeners = new ConcurrentLinkedQueue<>();
 
     private volatile BatchAccumulator<T> accumulator;
+    private RequestManager requestManager;
+    private QuorumState quorum;
+    private KafkaRaftMetrics kafkaRaftMetrics;
 
     public KafkaRaftClient(
         RaftConfig raftConfig,
         RecordSerde<T> serde,
         NetworkChannel channel,
         ReplicatedLog log,
-        QuorumState quorum,
+        QuorumStateStore quorumStateStore,
         Time time,
         Metrics metrics,
         ExpirationService expirationService,
-        LogContext logContext
+        LogContext logContext,
+        int nodeId
     ) {
         this(serde,
             channel,
             new BlockingMessageQueue(),
             log,
-            quorum,
+            quorumStateStore,
             new BatchMemoryPool(5, MAX_BATCH_SIZE),
             time,
             metrics,
             expirationService,
-            raftConfig.quorumVoterConnections(),
+            raftConfig.electionTimeoutMs(),
+            raftConfig.fetchTimeoutMs(),
             raftConfig.electionBackoffMaxMs(),
             raftConfig.retryBackoffMs(),
             raftConfig.requestTimeoutMs(),
-            1000,
+            FETCH_MAX_WAIT_MS,
             raftConfig.appendLingerMs(),
+            nodeId,
             logContext,
             new Random());
     }
@@ -193,17 +207,19 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
         NetworkChannel channel,
         RaftMessageQueue messageQueue,
         ReplicatedLog log,
-        QuorumState quorum,
+        QuorumStateStore quorumStateStore,
         MemoryPool memoryPool,
         Time time,
         Metrics metrics,
         ExpirationService expirationService,
-        Map<Integer, InetSocketAddress> voterAddresses,
+        int electionTimeoutMs,
+        int fetchTimeoutMs,
         int electionBackoffMaxMs,
         int retryBackoffMs,
         int requestTimeoutMs,
         int fetchMaxWaitMs,
         int appendLingerMs,
+        int nodeId,
         LogContext logContext,
         Random random
     ) {
@@ -211,23 +227,23 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
         this.channel = channel;
         this.messageQueue = messageQueue;
         this.log = log;
-        this.quorum = quorum;
+        this.quorumStateStore = quorumStateStore;
         this.memoryPool = memoryPool;
         this.fetchPurgatory = new ThresholdPurgatory<>(expirationService);
         this.appendPurgatory = new ThresholdPurgatory<>(expirationService);
         this.time = time;
+        this.electionTimeoutMs = electionTimeoutMs;
+        this.fetchTimeoutMs = fetchTimeoutMs;
+        this.retryBackoffMs = retryBackoffMs;
+        this.requestTimeoutMs = requestTimeoutMs;
+        this.nodeId = nodeId;
+        this.metrics = metrics;
         this.electionBackoffMaxMs = electionBackoffMaxMs;
         this.fetchMaxWaitMs = fetchMaxWaitMs;
         this.appendLingerMs = appendLingerMs;
+        this.logContext = logContext;
         this.logger = logContext.logger(KafkaRaftClient.class);
         this.random = random;
-        this.requestManager = new RequestManager(voterAddresses.keySet(), retryBackoffMs, requestTimeoutMs, random);
-        this.kafkaRaftMetrics = new KafkaRaftMetrics(metrics, "raft", quorum);
-        kafkaRaftMetrics.updateNumUnknownVoterConnections(quorum.remoteVoters().size());
-
-        for (Map.Entry<Integer, InetSocketAddress> voterAddressEntry : voterAddresses.entrySet()) {
-            channel.updateEndpoint(voterAddressEntry.getKey(), voterAddressEntry.getValue());
-        }
     }
 
     private void updateFollowerHighWatermark(
@@ -325,8 +341,30 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
     }
 
     @Override
-    public void initialize() throws IOException {
-        quorum.initialize(new OffsetAndEpoch(log.endOffset().offset, log.lastFetchedEpoch()));
+    public void initialize(String quorumVoterStrings) throws IOException {
+        List<Node> quorumVoterNodes = quorumVoterStringsToNodes(quorumVoterStrings);
+        Set<Integer> quorumVoterIds = quorumVoterNodes.stream().map(Node::id).collect(Collectors.toSet());
+        this.requestManager = new RequestManager(quorumVoterIds, retryBackoffMs, requestTimeoutMs, random);
+
+        Map<Integer, InetSocketAddress> voterAddresses = quorumVoterNodes.stream()
+                .collect(Collectors.toMap(Node::id, node -> new InetSocketAddress(node.host(), node.port())));
+        for (Map.Entry<Integer, InetSocketAddress> voterAddressEntry : voterAddresses.entrySet()) {
+            channel.updateEndpoint(voterAddressEntry.getKey(), voterAddressEntry.getValue());
+        }
+
+        QuorumState quorumState = new QuorumState(
+                nodeId,
+                quorumVoterIds,
+                electionTimeoutMs,
+                fetchTimeoutMs,
+                quorumStateStore,
+                time,
+                logContext,
+                random);
+        quorumState.initialize(new OffsetAndEpoch(log.endOffset().offset, log.lastFetchedEpoch()));
+        this.quorum = quorumState;
+        this.kafkaRaftMetrics = new KafkaRaftMetrics(metrics, "raft", quorum);
+        kafkaRaftMetrics.updateNumUnknownVoterConnections(quorum.remoteVoters().size());
 
         long currentTimeMs = time.milliseconds();
         if (quorum.isLeader()) {
@@ -2164,6 +2202,10 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
     @Override
     public void close() {
         kafkaRaftMetrics.close();
+    }
+
+    public QuorumState quorum() {
+        return quorum;
     }
 
     public OptionalLong highWatermark() {

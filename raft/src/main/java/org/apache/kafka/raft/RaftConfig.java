@@ -17,17 +17,20 @@
 package org.apache.kafka.raft;
 
 import org.apache.kafka.clients.CommonClientConfigs;
+import org.apache.kafka.common.Node;
 import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.utils.Utils;
 
 import java.net.InetSocketAddress;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 import static org.apache.kafka.clients.CommonClientConfigs.REQUEST_TIMEOUT_MS_DOC;
 import static org.apache.kafka.common.config.ConfigDef.Range.atLeast;
@@ -147,6 +150,15 @@ public class RaftConfig extends AbstractConfig {
 
     public static ConfigDef configDef() {
         return new ConfigDef(CONFIG);
+    }
+
+    public static List<Node> quorumVoterStringsToNodes(String quorumVotersString) {
+        return parseVoterConnections(Arrays.stream(quorumVotersString.split(","))
+                .filter(part -> !part.isEmpty())
+                .collect(Collectors.toList())).entrySet().stream()
+                .map(voterEntry -> new Node(voterEntry.getKey(), voterEntry.getValue().getHostName(),
+                        voterEntry.getValue().getPort()))
+                .collect(Collectors.toList());
     }
 
     public static void main(String[] args) {

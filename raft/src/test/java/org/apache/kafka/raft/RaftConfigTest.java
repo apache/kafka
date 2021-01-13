@@ -24,6 +24,7 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.Properties;
 
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
@@ -74,4 +75,30 @@ public class RaftConfigTest {
         assertThrows(ConfigException.class, () -> new RaftConfig(properties));
     }
 
+    @Test
+    public void testInvalidQuorumVotersAsNodes() {
+        assertInvalidQuorumVotersAsNodes("1");
+        assertInvalidQuorumVotersAsNodes("1@");
+        assertInvalidQuorumVotersAsNodes("1:");
+        assertInvalidQuorumVotersAsNodes("blah@");
+        assertInvalidQuorumVotersAsNodes("1@kafka1");
+        assertInvalidQuorumVotersAsNodes("1@kafka1:9092,2");
+        assertInvalidQuorumVotersAsNodes("1@kafka1:9092,2@");
+        assertInvalidQuorumVotersAsNodes("1@kafka1:9092,2@blah");
+        assertInvalidQuorumVotersAsNodes("1@kafka1:9092,2@blah,");
+    }
+
+    private void assertInvalidQuorumVotersAsNodes(String value) {
+        assertThrows(ConfigException.class, () -> RaftConfig.quorumVoterStringsToNodes(value));
+    }
+
+    @Test
+    public void testValidQuorumVotersAsNodes() {
+        assertValidQuorumVotersAsNodes("1@kafka1:9092");
+        assertValidQuorumVotersAsNodes("1@kafka1:9092,2@blah:9090");
+    }
+
+    private void assertValidQuorumVotersAsNodes(String value) {
+        assertDoesNotThrow(() -> RaftConfig.quorumVoterStringsToNodes(value));
+    }
 }
