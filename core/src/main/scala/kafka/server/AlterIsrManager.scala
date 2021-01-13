@@ -17,9 +17,7 @@
 package kafka.server
 
 import java.util
-import java.util.concurrent.atomic.{AtomicBoolean, AtomicLong}
 import java.util.concurrent.{ConcurrentHashMap, TimeUnit}
-
 import kafka.api.LeaderAndIsr
 import kafka.metrics.KafkaMetricsGroup
 import kafka.utils.{KafkaScheduler, Logging, Scheduler}
@@ -32,6 +30,7 @@ import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests.{AlterIsrRequest, AlterIsrResponse}
 import org.apache.kafka.common.utils.Time
 
+import java.util.concurrent.atomic.AtomicBoolean
 import scala.collection.mutable
 import scala.collection.mutable.ListBuffer
 import scala.jdk.CollectionConverters._
@@ -112,17 +111,14 @@ class DefaultAlterIsrManager(
   val brokerEpochSupplier: () => Long
 ) extends AlterIsrManager with Logging with KafkaMetricsGroup {
 
-  // Used to allow only one pending ISR update per partition
-  private val unsentIsrUpdates: util.Map[TopicPartition, AlterIsrItem] = new ConcurrentHashMap[TopicPartition, AlterIsrItem]()
+  // Used to allow only one pending ISR update per partition (visible for testing)
+  private[server] val unsentIsrUpdates: util.Map[TopicPartition, AlterIsrItem] = new ConcurrentHashMap[TopicPartition, AlterIsrItem]()
 
   // Used to allow only one in-flight request at a time
   private val inflightRequest: AtomicBoolean = new AtomicBoolean(false)
 
-  private val lastIsrPropagationMs = new AtomicLong(0)
-
   override def start(): Unit = {
     controllerChannelManager.start()
-    scheduler.schedule("send-alter-isr", propagateIsrChanges, 50, 50, TimeUnit.MILLISECONDS)
   }
 
   override def shutdown(): Unit = {
@@ -130,50 +126,59 @@ class DefaultAlterIsrManager(
   }
 
   override def submit(alterIsrItem: AlterIsrItem): Boolean = {
-    unsentIsrUpdates.putIfAbsent(alterIsrItem.topicPartition, alterIsrItem) == null
+    val enqueued = unsentIsrUpdates.putIfAbsent(alterIsrItem.topicPartition, alterIsrItem) == null
+    maybePropagateIsrChanges()
+    enqueued
   }
 
   override def clearPending(topicPartition: TopicPartition): Unit = {
     unsentIsrUpdates.remove(topicPartition)
   }
 
-  private def propagateIsrChanges(): Unit = {
+  private[server] def maybePropagateIsrChanges(): Unit = {
+    // Send all pending items if there is not already a request in-flight.
     if (!unsentIsrUpdates.isEmpty && inflightRequest.compareAndSet(false, true)) {
-      // Copy current unsent ISRs but don't remove from the map
+      // Copy current unsent ISRs but don't remove from the map, they get cleared in the response handler
       val inflightAlterIsrItems = new ListBuffer[AlterIsrItem]()
       unsentIsrUpdates.values().forEach(item => inflightAlterIsrItems.append(item))
-
-      val now = time.milliseconds()
-      lastIsrPropagationMs.set(now)
       sendRequest(inflightAlterIsrItems.toSeq)
+    }
+  }
+
+  private[server] def clearInFlightRequest(): Unit = {
+    if (!inflightRequest.compareAndSet(true, false)) {
+      warn("Attempting to clear AlterIsr in-flight flag when no apparent request is in-flight")
     }
   }
 
   private def sendRequest(inflightAlterIsrItems: Seq[AlterIsrItem]): Unit = {
     val message = buildRequest(inflightAlterIsrItems)
-
-    def clearInflightRequests(): Unit = {
-      // Be sure to clear the in-flight flag to allow future AlterIsr requests
-      if (!inflightRequest.compareAndSet(true, false)) {
-        throw new IllegalStateException("AlterIsr response callback called when no requests were in flight")
-      }
-    }
-
     debug(s"Sending AlterIsr to controller $message")
 
     // We will not timeout AlterISR request, instead letting it retry indefinitely
     // until a response is received, or a new LeaderAndIsr overwrites the existing isrState
-    // which causes the inflight requests to be ignored.
+    // which causes the response for those partitions to be ignored.
     controllerChannelManager.sendRequest(new AlterIsrRequest.Builder(message),
       new ControllerRequestCompletionHandler {
         override def onComplete(response: ClientResponse): Unit = {
-          try {
-            debug(s"Received AlterIsr response $response")
-            val body = response.responseBody().asInstanceOf[AlterIsrResponse]
+          debug(s"Received AlterIsr response $response")
+          val body = response.responseBody().asInstanceOf[AlterIsrResponse]
+          val error = try {
             handleAlterIsrResponse(body, message.brokerEpoch, inflightAlterIsrItems)
           } finally {
-            clearInflightRequests()
+            // clear the flag so future requests can proceed
+            clearInFlightRequest()
           }
+
+          // check if we need to send another request right away
+          error match {
+              case Errors.NONE =>
+                // In the normal case, check for pending updates to send immediately
+                maybePropagateIsrChanges()
+              case _ =>
+                // If we received a top-level error from the controller, retry the request in the near future
+                scheduler.schedule("send-alter-isr", () => maybePropagateIsrChanges(), 50, -1, TimeUnit.MILLISECONDS)
+            }
         }
 
         override def onTimeout(): Unit = {
@@ -207,7 +212,7 @@ class DefaultAlterIsrManager(
 
   def handleAlterIsrResponse(alterIsrResponse: AlterIsrResponse,
                              sentBrokerEpoch: Long,
-                             inflightAlterIsrItems: Seq[AlterIsrItem]): Unit = {
+                             inflightAlterIsrItems: Seq[AlterIsrItem]): Errors = {
     val data: AlterIsrResponseData = alterIsrResponse.data
 
     Errors.forCode(data.errorCode) match {
@@ -254,5 +259,7 @@ class DefaultAlterIsrManager(
       case e: Errors =>
         warn(s"Controller returned an unexpected top-level error when handling AlterIsr request: $e")
     }
+
+    Errors.forCode(data.errorCode)
   }
 }
