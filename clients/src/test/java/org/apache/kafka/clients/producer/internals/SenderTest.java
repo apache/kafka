@@ -2419,7 +2419,8 @@ public class SenderTest {
         }
     }
 
-    @Test @Timeout(10L)
+    @Timeout(10L)
+    @Test
     public void testForceShutdownWithIncompleteTransaction() {
         // create a sender with retries = 1
         int maxRetries = 1;

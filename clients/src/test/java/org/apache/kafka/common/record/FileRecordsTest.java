@@ -227,8 +227,7 @@ public class FileRecordsTest {
         RecordBatch second = items.get(1);
         read = fileRecords.slice(first.sizeInBytes(), second.sizeInBytes());
         assertEquals(second.sizeInBytes(), read.sizeInBytes());
-        assertEquals(
-                Collections.singletonList(second), batches(read), "Read a single message starting from the second message");
+        assertEquals(Collections.singletonList(second), batches(read), "Read a single message starting from the second message");
     }
 
     /**
@@ -244,27 +243,27 @@ public class FileRecordsTest {
         int position = 0;
 
         int message1Size = batches.get(0).sizeInBytes();
-        assertEquals(
-                new FileRecords.LogOffsetPosition(0L, position, message1Size),
-                fileRecords.searchForOffsetWithSize(0, 0), "Should be able to find the first message by its offset");
+        assertEquals(new FileRecords.LogOffsetPosition(0L, position, message1Size),
+            fileRecords.searchForOffsetWithSize(0, 0),
+            "Should be able to find the first message by its offset");
         position += message1Size;
 
         int message2Size = batches.get(1).sizeInBytes();
-        assertEquals(
-                new FileRecords.LogOffsetPosition(1L, position, message2Size),
-                fileRecords.searchForOffsetWithSize(1, 0), "Should be able to find second message when starting from 0");
-        assertEquals(
-                new FileRecords.LogOffsetPosition(1L, position, message2Size),
-                fileRecords.searchForOffsetWithSize(1, position), "Should be able to find second message starting from its offset");
+        assertEquals(new FileRecords.LogOffsetPosition(1L, position, message2Size),
+            fileRecords.searchForOffsetWithSize(1, 0),
+            "Should be able to find second message when starting from 0");
+        assertEquals(new FileRecords.LogOffsetPosition(1L, position, message2Size),
+            fileRecords.searchForOffsetWithSize(1, position),
+            "Should be able to find second message starting from its offset");
         position += message2Size + batches.get(2).sizeInBytes();
 
         int message4Size = batches.get(3).sizeInBytes();
-        assertEquals(
-                new FileRecords.LogOffsetPosition(50L, position, message4Size),
-                fileRecords.searchForOffsetWithSize(3, position), "Should be able to find fourth message from a non-existent offset");
-        assertEquals(
-                new FileRecords.LogOffsetPosition(50L, position, message4Size),
-                fileRecords.searchForOffsetWithSize(50,  position), "Should be able to find fourth message by correct offset");
+        assertEquals(new FileRecords.LogOffsetPosition(50L, position, message4Size),
+            fileRecords.searchForOffsetWithSize(3, position),
+            "Should be able to find fourth message from a non-existent offset");
+        assertEquals(new FileRecords.LogOffsetPosition(50L, position, message4Size),
+            fileRecords.searchForOffsetWithSize(50,  position),
+            "Should be able to find fourth message by correct offset");
     }
 
     /**
@@ -418,7 +417,7 @@ public class FileRecordsTest {
         TopicPartition tp = new TopicPartition("topic-1", 0);
         LazyDownConversionRecords lazyRecords = new LazyDownConversionRecords(tp, slice, RecordBatch.MAGIC_VALUE_V0, 0, Time.SYSTEM);
         Iterator<ConvertedRecords<?>> it = lazyRecords.iterator(16 * 1024L);
-        assertTrue(!it.hasNext(), "No messages should be returned");
+        assertFalse(it.hasNext(), "No messages should be returned");
     }
 
     @Test

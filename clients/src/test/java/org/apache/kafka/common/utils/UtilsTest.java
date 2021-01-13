@@ -363,7 +363,8 @@ public class UtilsTest {
      * Test to read content of named pipe as string. As reading/writing to a pipe can block,
      * timeout test after a minute (test finishes within 100 ms normally).
      */
-    @Test @Timeout(60)
+    @Timeout(60)
+    @Test
     public void testFileAsStringNamedPipe() throws Exception {
 
         // Create a temporary name for named pipe
