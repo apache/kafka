@@ -787,16 +787,21 @@ class PlaintextConsumerTest extends BaseConsumerTest {
       (0 until partitionCount).map(new TopicPartition(topic, _))
     }
 
+    val producer = createProducer()
+    // it'll send 30 records to each topic partition (3 topics and 30 partitions each topic), so it will take some time
+    val producerRecords = partitions.flatMap(sendRecords(producer, numRecords = partitionCount, _))
+
     assertEquals(0, consumer.assignment().size)
 
     consumer.subscribe(List(topic1, topic2, topic3).asJava)
 
     awaitAssignment(consumer, partitions.toSet)
 
-    val producer = createProducer()
-    val producerRecords = partitions.flatMap(sendRecords(producer, numRecords = 15, _))
+    // make sure we consume records right after awaitAssignment, so that it won't cause the consumer left due to
+    // it exceeds the max.poll.interval.ms (we set to 6000 ms)
     val consumerRecords = consumeRecords(consumer, producerRecords.size)
 
+    // the expected records should be 30 records * 3 topics * 30 partitions = 2700
     val expected = producerRecords.map { record =>
       (record.topic, record.partition, new String(record.key), new String(record.value), record.timestamp)
     }.toSet
