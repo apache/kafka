@@ -62,7 +62,7 @@ public class ConfigTest {
         assertEquals(config, config);
         assertEquals(config, new Config(config.entries()));
         assertNotEquals(new Config(asList(E1)), config);
-        assertNotEquals("this", config);
+        assertNotEquals(config, "this");
     }
 
     @Test
