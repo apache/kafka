@@ -93,7 +93,6 @@ import org.apache.kafka.test.MockMetricsReporter;
 import org.apache.kafka.test.TestUtils;
 import org.apache.kafka.common.metrics.stats.Avg;
 
-import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 
 import javax.management.MBeanServer;
