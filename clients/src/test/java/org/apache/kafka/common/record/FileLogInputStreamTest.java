@@ -19,6 +19,7 @@ package org.apache.kafka.common.record;
 import org.apache.kafka.common.record.FileLogInputStream.FileChannelRecordBatch;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.test.TestUtils;
+import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtensionContext;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
@@ -252,18 +253,16 @@ public class FileLogInputStreamTest {
         }
     }
 
-    @ParameterizedTest
-    @ArgumentsSource(FileLogInputStreamArgumentsProvider.class)
-    public void testNextBatchSelectionWithMaxedParams(Args args) throws IOException {
+    @Test
+    public void testNextBatchSelectionWithMaxedParams() throws IOException {
         try (FileRecords fileRecords = FileRecords.open(tempFile())) {
             FileLogInputStream logInputStream = new FileLogInputStream(fileRecords, Integer.MAX_VALUE, Integer.MAX_VALUE);
             assertNull(logInputStream.nextBatch());
         }
     }
 
-    @ParameterizedTest
-    @ArgumentsSource(FileLogInputStreamArgumentsProvider.class)
-    public void testNextBatchSelectionWithZeroedParams(Args args) throws IOException {
+    @Test
+    public void testNextBatchSelectionWithZeroedParams() throws IOException {
         try (FileRecords fileRecords = FileRecords.open(tempFile())) {
             FileLogInputStream logInputStream = new FileLogInputStream(fileRecords, 0, 0);
             assertNull(logInputStream.nextBatch());
