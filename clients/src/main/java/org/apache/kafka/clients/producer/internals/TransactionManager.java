@@ -119,10 +119,6 @@ public class TransactionManager {
             return topicPartitions.containsKey(topicPartition);
         }
 
-        private Set<TopicPartition> partitions() {
-            return topicPartitions.keySet();
-        }
-
         private void reset() {
             topicPartitions.clear();
         }
@@ -150,12 +146,16 @@ public class TransactionManager {
                 inFlightBatch.resetProducerState(newProducerIdAndEpoch, sequence.value, inFlightBatch.isTransactional());
                 sequence.value += inFlightBatch.recordCount;
             });
+            topicPartitionEntry.producerIdAndEpoch = newProducerIdAndEpoch;
             topicPartitionEntry.nextSequence = sequence.value;
             topicPartitionEntry.lastAckedSequence = NO_LAST_ACKED_SEQUENCE_NUMBER;
         }
     }
 
     private static class TopicPartitionEntry {
+
+        // The producer id/epoch being used for a given partition.
+        private ProducerIdAndEpoch producerIdAndEpoch;
 
         // The base sequence of the next batch bound for a given partition.
         private int nextSequence;
@@ -175,6 +175,7 @@ public class TransactionManager {
         private long lastAckedOffset;
 
         TopicPartitionEntry() {
+            this.producerIdAndEpoch = ProducerIdAndEpoch.NONE;
             this.nextSequence = 0;
             this.lastAckedSequence = NO_LAST_ACKED_SEQUENCE_NUMBER;
             this.lastAckedOffset = ProduceResponse.INVALID_OFFSET;
@@ -517,8 +518,23 @@ public class TransactionManager {
     }
 
     boolean producerIdOrEpochNotMatch(ProducerBatch batch) {
-        ProducerIdAndEpoch idAndEpoch = this.producerIdAndEpoch;
+        // Verifies that the producer id/epoch of the batch matches the current one
+        // of the partition.
+        ProducerIdAndEpoch idAndEpoch = topicPartitionBookkeeper.getPartition(batch.topicPartition).producerIdAndEpoch;
         return idAndEpoch.producerId != batch.producerId() || idAndEpoch.epoch != batch.producerEpoch();
+    }
+
+    synchronized public void maybeUpdateProducerIdAndEpoch(TopicPartition topicPartition) {
+        if (!isTransactional())
+            topicPartitionBookkeeper.addPartition(topicPartition);
+
+        if (hasStaleProducerIdAndEpoch(topicPartition) && !hasInflightBatches(topicPartition)) {
+            // If the batch was on a different ID and/or epoch (due to an epoch bump) and all its in-flight batches
+            // have completed, reset the partition sequence so that the next batch (with the new epoch) starts from 0
+            topicPartitionBookkeeper.startSequencesAtBeginning(topicPartition, this.producerIdAndEpoch);
+            log.debug("ProducerId of partition {} set to {} with epoch {}. Reinitialize sequence at beginning.",
+                      topicPartition, producerIdAndEpoch.producerId, producerIdAndEpoch.epoch);
+        }
     }
 
     /**
@@ -573,16 +589,6 @@ public class TransactionManager {
         }
         this.partitionsToRewriteSequences.clear();
 
-        // When the epoch is bumped, reset the sequences for the partitions(s) that do not
-        // have in-flight batches. Sequences of the in-flight batches that did not triggered
-        // the epoch bump are treated when their last in-flight batch is completed.
-        for (TopicPartition topicPartition : this.topicPartitionBookkeeper.partitions()) {
-            TopicPartitionEntry topicPartitionEntry = this.topicPartitionBookkeeper.getPartition(topicPartition);
-            if (topicPartitionEntry.inflightBatchesBySequence.isEmpty()) {
-                this.topicPartitionBookkeeper.startSequencesAtBeginning(topicPartition, this.producerIdAndEpoch);
-            }
-        }
-
         epochBumpRequired = false;
     }
 
@@ -610,6 +616,16 @@ public class TransactionManager {
             topicPartitionBookkeeper.addPartition(topicPartition);
 
         return topicPartitionBookkeeper.getPartition(topicPartition).nextSequence;
+    }
+
+    /**
+     * Returns the current producer id/epoch of the given TopicPartition.
+     */
+    synchronized ProducerIdAndEpoch producerIdAndEpoch(TopicPartition topicPartition) {
+        if (!isTransactional())
+            topicPartitionBookkeeper.addPartition(topicPartition);
+
+        return topicPartitionBookkeeper.getPartition(topicPartition).producerIdAndEpoch;
     }
 
     synchronized void incrementSequenceNumber(TopicPartition topicPartition, int increment) {
@@ -699,12 +715,6 @@ public class TransactionManager {
 
         updateLastAckedOffset(response, batch);
         removeInFlightBatch(batch);
-
-        if (producerIdOrEpochNotMatch(batch) && !hasInflightBatches(batch.topicPartition)) {
-            // If the batch was on a different ID and/or epoch (due to an epoch bump) and all its in-flight batches
-            // have completed, reset the partition sequence so that the next batch (with the new epoch) starts from 0
-            topicPartitionBookkeeper.startSequencesAtBeginning(batch.topicPartition, this.producerIdAndEpoch);
-        }
     }
 
     private void maybeTransitionToErrorState(RuntimeException exception) {
@@ -800,6 +810,13 @@ public class TransactionManager {
     synchronized boolean hasInflightBatches(TopicPartition topicPartition) {
         return topicPartitionBookkeeper.contains(topicPartition)
                 && !topicPartitionBookkeeper.getPartition(topicPartition).inflightBatchesBySequence.isEmpty();
+    }
+
+    synchronized boolean hasStaleProducerIdAndEpoch(TopicPartition topicPartition) {
+        if (topicPartitionBookkeeper.contains(topicPartition)) {
+            return !producerIdAndEpoch.equals(topicPartitionBookkeeper.getPartition(topicPartition).producerIdAndEpoch);
+        }
+        return false;
     }
 
     synchronized boolean hasUnresolvedSequences() {
@@ -1012,7 +1029,7 @@ public class TransactionManager {
                 return true;
             } else if (lastAckedOffset(batch.topicPartition).orElse(NO_LAST_ACKED_SEQUENCE_NUMBER) < response.logStartOffset) {
                 // The head of the log has been removed, probably due to the retention time elapsing. In this case,
-                // we expect to lose the producer state. For the transactional procducer, reset the sequences of all
+                // we expect to lose the producer state. For the transactional producer, reset the sequences of all
                 // inflight batches to be from the beginning and retry them, so that the transaction does not need to
                 // be aborted. For the idempotent producer, bump the epoch to avoid reusing (sequence, epoch) pairs
                 if (isTransactional()) {
