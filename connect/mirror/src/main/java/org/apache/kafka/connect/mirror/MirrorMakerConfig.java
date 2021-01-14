@@ -140,7 +140,7 @@ public class MirrorMakerConfig extends AbstractConfig {
     }
 
     // loads worker configs based on properties of the form x.y.z and cluster.x.y.z 
-    Map<String, String> workerConfig(SourceAndTarget sourceAndTarget) {
+    public Map<String, String> workerConfig(SourceAndTarget sourceAndTarget) {
         Map<String, String> props = new HashMap<>();
         props.putAll(clusterProps(sourceAndTarget.target()));
       
@@ -176,7 +176,7 @@ public class MirrorMakerConfig extends AbstractConfig {
     }
 
     // loads properties of the form cluster.x.y.z and source->target.x.y.z
-    Map<String, String> connectorBaseConfig(SourceAndTarget sourceAndTarget, Class<?> connectorClass) {
+    public Map<String, String> connectorBaseConfig(SourceAndTarget sourceAndTarget, Class<?> connectorClass) {
         Map<String, String> props = new HashMap<>();
 
         props.putAll(originalsStrings());
