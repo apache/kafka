@@ -20,30 +20,18 @@ package kafka.server
 import kafka.cluster.Partition
 import kafka.coordinator.group.GroupCoordinator
 import kafka.coordinator.transaction.TransactionCoordinator
-
-import java.lang.{Byte => JByte}
-import java.util.Collections
 import kafka.network.RequestChannel
-import kafka.security.authorizer.AclEntry
 import kafka.server.QuotaFactory.QuotaManagers
 import kafka.utils.Logging
-import org.apache.kafka.common.acl.AclOperation
 import org.apache.kafka.common.errors.ClusterAuthorizationException
 import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.network.Send
-import org.apache.kafka.common.requests.{AbstractRequest, AbstractResponse, RequestContext}
-import org.apache.kafka.common.resource.Resource.CLUSTER_NAME
-import org.apache.kafka.common.resource.ResourceType.CLUSTER
-import org.apache.kafka.common.resource.{PatternType, Resource, ResourcePattern, ResourceType}
-import org.apache.kafka.common.utils.{Time, Utils}
-import org.apache.kafka.server.authorizer.{Action, AuthorizationResult, Authorizer}
+import org.apache.kafka.common.requests.{AbstractRequest, AbstractResponse}
+import org.apache.kafka.common.utils.Time
 
-import scala.jdk.CollectionConverters._
 
-/**
- * Helper methods for request handlers
- */
-object RequestHandlerUtils {
+object RequestHandlerHelper {
+
   def onLeadershipChange(groupCoordinator: GroupCoordinator,
                          txnCoordinator: TransactionCoordinator,
                          updatedLeaders: Iterable[Partition],
@@ -67,48 +55,12 @@ object RequestHandlerUtils {
   }
 }
 
-class AuthHelper(val requestChannel: RequestChannel,
-                 val authorizer: Option[Authorizer]) {
-  def authorize(requestContext: RequestContext,
-                operation: AclOperation,
-                resourceType: ResourceType,
-                resourceName: String,
-                logIfAllowed: Boolean = true,
-                logIfDenied: Boolean = true,
-                refCount: Int = 1): Boolean = {
-    authorizer.forall { authZ =>
-      val resource = new ResourcePattern(resourceType, resourceName, PatternType.LITERAL)
-      val actions = Collections.singletonList(new Action(operation, resource, refCount, logIfAllowed, logIfDenied))
-      authZ.authorize(requestContext, actions).get(0) == AuthorizationResult.ALLOWED
-    }
-  }
 
-  def authorizeClusterOperation(request: RequestChannel.Request, operation: AclOperation): Unit = {
-    if (!authorize(request.context, operation, CLUSTER, CLUSTER_NAME))
-      throw new ClusterAuthorizationException(s"Request $request is not authorized.")
-  }
 
-  def authorizedOperations(request: RequestChannel.Request, resource: Resource): Int = {
-    val supportedOps = AclEntry.supportedOperations(resource.resourceType).toList
-    val authorizedOps = authorizer match {
-      case Some(authZ) =>
-        val resourcePattern = new ResourcePattern(resource.resourceType, resource.name, PatternType.LITERAL)
-        val actions = supportedOps.map { op => new Action(op, resourcePattern, 1, false, false) }
-        authZ.authorize(request.context, actions.asJava).asScala
-          .zip(supportedOps)
-          .filter(_._1 == AuthorizationResult.ALLOWED)
-          .map(_._2).toSet
-      case None =>
-        supportedOps.toSet
-    }
-    Utils.to32BitField(authorizedOps.map(operation => operation.code.asInstanceOf[JByte]).asJava)
-  }
-}
-
-class ChannelHelper(val requestChannel: RequestChannel,
-                    val quotas: QuotaManagers,
-                    val time: Time,
-                    val logPrefix: String) extends Logging {
+class RequestHandlerHelper(val requestChannel: RequestChannel,
+                           val quotas: QuotaManagers,
+                           val time: Time,
+                           val logPrefix: String) extends Logging {
 
   this.logIdent = logPrefix
 
