@@ -242,8 +242,9 @@ subprojects {
   }
 
   // Remove the relevant project name once it's converted to JUnit 5
-  def shouldUseJUnit5 = !["api", "basic-auth-extension", "connect", "core", "file", "generator", "json", "mirror",
-      "mirorr-client", "runtime", "transform", "examples", "streams-scala", "streams"].contains(it.project.name)
+  def shouldUseJUnit5 = !(["api", "basic-auth-extension", "connect", "core", "file", "generator",
+    "json", "mirror", "mirorr-client", "runtime", "transform", "examples", "streams-scala",
+     "streams"].contains(it.project.name) || it.project.name.startsWith("upgrade-system-tests-"))
 
   def testLoggingEvents = ["passed", "skipped", "failed"]
   def testShowStandardStreams = false
