@@ -1068,13 +1068,14 @@ class KafkaApis(val requestChannel: RequestChannel,
             response
           } catch {
             // NOTE: These exceptions are special cases since these error messages are typically transient or the client
-            // would have received a clear exception and there is no value in logging the entire stack trace for the same
+            // would have received a clear exception.
             case e @ (_ : UnknownTopicOrPartitionException |
-                      _ : NotLeaderForPartitionException |
+                      _ : NotLeaderOrFollowerException |
                       _ : UnknownLeaderEpochException |
                       _ : FencedLeaderEpochException |
                       _ : KafkaStorageException |
                       _ : UnsupportedForMessageFormatException) =>
+              // print the stack trace for debugging
               e.printStackTrace()
               debug(s"Offset request with correlation id $correlationId from client $clientId on " +
                   s"partition $topicPartition failed due to ${e.getMessage}")
