@@ -48,12 +48,15 @@ public final class RequestUtils {
      * @return true if there is any matched flag in the produce request. Otherwise, false
      */
     static boolean flag(ProduceRequest request, Predicate<RecordBatch> predicate) {
-        return request.data().topicData().stream().flatMap(tpd -> tpd.partitionData().stream())
-                .map(ProduceRequestData.PartitionProduceData::records)
-                .filter(records -> records instanceof Records)
-                .map(r -> ((Records) r).batches().iterator())
-                .filter(Iterator::hasNext)
-                .anyMatch(iter -> predicate.test(iter.next()));
+        for (ProduceRequestData.TopicProduceData tp : request.data().topicData()) {
+            for (ProduceRequestData.PartitionProduceData p : tp.partitionData()) {
+                if (p.records() instanceof Records) {
+                    Iterator<? extends RecordBatch> iter = (((Records) p.records())).batchIterator();
+                    if (iter.hasNext() && predicate.test(iter.next())) return true;
+                }
+            }
+        }
+        return false;
     }
 
     public static ByteBuffer serialize(
