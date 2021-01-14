@@ -26,13 +26,15 @@ import java.util.function.Function;
 import java.util.stream.Collectors;
 
 public class RaftTestUtil {
-    public static RaftConfig buildRaftConfig(int requestTimeoutMs,
-                                             int retryBackoffMs,
-                                             int electionTimeoutMs,
-                                             int electionBackoffMs,
-                                             int fetchTimeoutMs,
-                                             int appendLingerMs,
-                                             List<Node> voterNodes) {
+    public static RaftConfig buildRaftConfig(
+            int requestTimeoutMs,
+            int retryBackoffMs,
+            int electionTimeoutMs,
+            int electionBackoffMs,
+            int fetchTimeoutMs,
+            int appendLingerMs,
+            List<Node> voterNodes
+    ) {
         Properties properties = new Properties();
         properties.put(RaftConfig.QUORUM_REQUEST_TIMEOUT_MS_CONFIG, requestTimeoutMs);
         properties.put(RaftConfig.QUORUM_RETRY_BACKOFF_MS_CONFIG, retryBackoffMs);

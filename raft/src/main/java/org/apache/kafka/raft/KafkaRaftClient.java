@@ -17,7 +17,6 @@
 package org.apache.kafka.raft;
 
 import org.apache.kafka.common.KafkaException;
-import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.ClusterAuthorizationException;
 import org.apache.kafka.common.errors.NotLeaderOrFollowerException;

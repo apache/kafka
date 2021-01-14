@@ -17,7 +17,6 @@
 package org.apache.kafka.raft;
 
 import org.apache.kafka.clients.CommonClientConfigs;
-import org.apache.kafka.common.Node;
 import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigException;
@@ -29,7 +28,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Properties;
 import java.util.Set;
-import java.util.stream.Collectors;
 
 import static org.apache.kafka.clients.CommonClientConfigs.REQUEST_TIMEOUT_MS_DOC;
 import static org.apache.kafka.common.config.ConfigDef.Range.atLeast;
@@ -140,24 +138,8 @@ public class RaftConfig extends AbstractConfig {
     private final int fetchTimeoutMs;
     private final int appendLingerMs;
 
-    public RaftConfig(Properties props) {
-        super(CONFIG, props);
-        requestTimeoutMs = getInt(QUORUM_REQUEST_TIMEOUT_MS_CONFIG);
-        retryBackoffMs = getInt(QUORUM_RETRY_BACKOFF_MS_CONFIG);
-        electionTimeoutMs = getInt(QUORUM_ELECTION_TIMEOUT_MS_CONFIG);
-        electionBackoffMaxMs = getInt(QUORUM_ELECTION_BACKOFF_MAX_MS_CONFIG);
-        fetchTimeoutMs = getInt(QUORUM_FETCH_TIMEOUT_MS_CONFIG);
-        appendLingerMs = getInt(QUORUM_LINGER_MS_CONFIG);
-    }
-
     public RaftConfig(Map<?, ?> props) {
-        super(CONFIG, props);
-        requestTimeoutMs = getInt(QUORUM_REQUEST_TIMEOUT_MS_CONFIG);
-        retryBackoffMs = getInt(QUORUM_RETRY_BACKOFF_MS_CONFIG);
-        electionTimeoutMs = getInt(QUORUM_ELECTION_TIMEOUT_MS_CONFIG);
-        electionBackoffMaxMs = getInt(QUORUM_ELECTION_BACKOFF_MAX_MS_CONFIG);
-        fetchTimeoutMs = getInt(QUORUM_FETCH_TIMEOUT_MS_CONFIG);
-        appendLingerMs = getInt(QUORUM_LINGER_MS_CONFIG);
+        this(props, true);
     }
 
     protected RaftConfig(Map<?, ?> props, boolean doLog) {
