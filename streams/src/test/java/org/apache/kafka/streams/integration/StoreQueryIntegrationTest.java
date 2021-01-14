@@ -208,20 +208,16 @@ public class StoreQueryIntegrationTest {
                 assertThat(store1, is(nullValue()));
             }
 
-            // Assert that only active for a specific requested partition serves key if stale stores and not enabled
-            assertThat(kafkaStreams1IsActive ? store1.get(key) : store2.get(key), is(notNullValue()));
-
             final StoreQueryParameters<ReadOnlyKeyValueStore<Integer, Integer>> storeQueryParam2 =
                 StoreQueryParameters.<ReadOnlyKeyValueStore<Integer, Integer>>fromNameAndType(TABLE_NAME, keyValueStore())
                 .withPartition(keyDontBelongPartition);
-
-
 
             try {
                 // Assert that key is not served when wrong specific partition is requested
                 // If kafkaStreams1 is active for keyPartition, kafkaStreams2 would be active for keyDontBelongPartition
                 // So, in that case, store3 would be null and the store4 would not return the value for key as wrong partition was requested
                 if (kafkaStreams1IsActive) {
+                    assertThat(store1.get(key), is(notNullValue()));
                     assertThat(getStore(kafkaStreams2, storeQueryParam2).get(key), is(nullValue()));
                     final InvalidStateStoreException exception =
                         assertThrows(InvalidStateStoreException.class, () -> getStore(kafkaStreams1, storeQueryParam2).get(key));
@@ -230,6 +226,7 @@ public class StoreQueryIntegrationTest {
                         containsString("The specified partition 1 for store source-table does not exist.")
                     );
                 } else {
+                    assertThat(store2.get(key), is(notNullValue()));
                     assertThat(getStore(kafkaStreams1, storeQueryParam2).get(key), is(nullValue()));
                     final InvalidStateStoreException exception =
                         assertThrows(InvalidStateStoreException.class, () -> getStore(kafkaStreams2, storeQueryParam2).get(key));

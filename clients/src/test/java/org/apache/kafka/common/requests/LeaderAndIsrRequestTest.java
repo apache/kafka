@@ -27,7 +27,7 @@ import org.apache.kafka.common.message.LeaderAndIsrRequestData.LeaderAndIsrParti
 import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.test.TestUtils;
-import org.junit.Test;
+import org.junit.jupiter.api.Test;
 
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
@@ -43,9 +43,9 @@ import java.util.stream.StreamSupport;
 import static java.util.Arrays.asList;
 import static java.util.Collections.emptyList;
 import static org.apache.kafka.common.protocol.ApiKeys.LEADER_AND_ISR;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertThrows;
-import static org.junit.Assert.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class LeaderAndIsrRequestTest {
 
@@ -192,7 +192,7 @@ public class LeaderAndIsrRequestTest {
 
         LeaderAndIsrRequest v2 = builder.build((short) 2);
         LeaderAndIsrRequest v1 = builder.build((short) 1);
-        assertTrue("Expected v2 < v1: v2=" + v2.sizeInBytes() + ", v1=" + v1.sizeInBytes(), v2.sizeInBytes() < v1.sizeInBytes());
+        assertTrue(v2.sizeInBytes() < v1.sizeInBytes(), "Expected v2 < v1: v2=" + v2.sizeInBytes() + ", v1=" + v1.sizeInBytes());
     }
 
     private <T> Set<T> iterableToSet(Iterable<T> iterable) {

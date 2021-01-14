@@ -22,22 +22,23 @@ import java.util.Arrays;
 import org.apache.kafka.common.security.authenticator.CredentialCache;
 import org.apache.kafka.common.security.scram.ScramCredential;
 
-import org.junit.Before;
-import org.junit.Test;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNotEquals;
-import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.assertNull;
-import static org.junit.Assert.assertArrayEquals;
-import static org.junit.Assert.assertThrows;
-import static org.junit.Assert.assertTrue;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 
 public class ScramCredentialUtilsTest {
 
     private ScramFormatter formatter;
 
-    @Before
+    @BeforeEach
     public void setUp() throws NoSuchAlgorithmException {
         formatter = new ScramFormatter(ScramMechanism.SCRAM_SHA_256);
     }
@@ -45,9 +46,9 @@ public class ScramCredentialUtilsTest {
     @Test
     public void stringConversion() {
         ScramCredential credential = formatter.generateCredential("password", 1024);
-        assertTrue("Salt must not be empty", credential.salt().length > 0);
-        assertTrue("Stored key must not be empty", credential.storedKey().length > 0);
-        assertTrue("Server key must not be empty", credential.serverKey().length > 0);
+        assertTrue(credential.salt().length > 0, "Salt must not be empty");
+        assertTrue(credential.storedKey().length > 0, "Stored key must not be empty");
+        assertTrue(credential.serverKey().length > 0, "Server key must not be empty");
         ScramCredential credential2 = ScramCredentialUtils.credentialFromString(ScramCredentialUtils.credentialToString(credential));
         assertArrayEquals(credential.salt(), credential2.salt());
         assertArrayEquals(credential.storedKey(), credential2.storedKey());
@@ -84,14 +85,14 @@ public class ScramCredentialUtilsTest {
     public void scramCredentialCache() throws Exception {
         CredentialCache cache = new CredentialCache();
         ScramCredentialUtils.createCache(cache, Arrays.asList("SCRAM-SHA-512", "PLAIN"));
-        assertNotNull("Cache not created for enabled mechanism", cache.cache(ScramMechanism.SCRAM_SHA_512.mechanismName(), ScramCredential.class));
-        assertNull("Cache created for disabled mechanism", cache.cache(ScramMechanism.SCRAM_SHA_256.mechanismName(), ScramCredential.class));
+        assertNotNull(cache.cache(ScramMechanism.SCRAM_SHA_512.mechanismName(), ScramCredential.class), "Cache not created for enabled mechanism");
+        assertNull(cache.cache(ScramMechanism.SCRAM_SHA_256.mechanismName(), ScramCredential.class), "Cache created for disabled mechanism");
 
         CredentialCache.Cache<ScramCredential> sha512Cache = cache.cache(ScramMechanism.SCRAM_SHA_512.mechanismName(), ScramCredential.class);
         ScramFormatter formatter = new ScramFormatter(ScramMechanism.SCRAM_SHA_512);
         ScramCredential credentialA = formatter.generateCredential("password", 4096);
         sha512Cache.put("userA", credentialA);
         assertEquals(credentialA, sha512Cache.get("userA"));
-        assertNull("Invalid user credential", sha512Cache.get("userB"));
+        assertNull(sha512Cache.get("userB"), "Invalid user credential");
     }
 }
