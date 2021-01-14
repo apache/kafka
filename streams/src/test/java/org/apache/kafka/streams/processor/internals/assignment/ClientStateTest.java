@@ -16,6 +16,15 @@
  */
 package org.apache.kafka.streams.processor.internals.assignment;
 
+import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.streams.processor.TaskId;
+import org.apache.kafka.streams.processor.internals.Task;
+import org.junit.Test;
+
+import java.util.Collections;
+import java.util.Map;
+import java.util.Set;
+
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.common.utils.Utils.mkSet;
@@ -39,15 +48,6 @@ import static org.hamcrest.Matchers.is;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
-
-import java.util.Collections;
-import java.util.Map;
-import java.util.Set;
-
-import org.apache.kafka.common.utils.Utils;
-import org.apache.kafka.streams.processor.TaskId;
-import org.apache.kafka.streams.processor.internals.Task;
-import org.junit.Test;
 
 public class ClientStateTest {
     private final ClientState client = new ClientState(1);
