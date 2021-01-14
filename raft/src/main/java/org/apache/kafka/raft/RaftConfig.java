@@ -136,6 +136,7 @@ public class RaftConfig extends AbstractConfig {
     private final int electionBackoffMaxMs;
     private final int fetchTimeoutMs;
     private final int appendLingerMs;
+    private final Map<Integer, InetSocketAddress> voterConnections;
 
     public RaftConfig(Map<?, ?> props) {
         this(props, true);
@@ -149,6 +150,7 @@ public class RaftConfig extends AbstractConfig {
         electionBackoffMaxMs = getInt(QUORUM_ELECTION_BACKOFF_MAX_MS_CONFIG);
         fetchTimeoutMs = getInt(QUORUM_FETCH_TIMEOUT_MS_CONFIG);
         appendLingerMs = getInt(QUORUM_LINGER_MS_CONFIG);
+        voterConnections = parseVoterConnections(getList(QUORUM_VOTERS_CONFIG));
     }
 
     public static Set<String> configNames() {
@@ -192,7 +194,7 @@ public class RaftConfig extends AbstractConfig {
     }
 
     public Map<Integer, InetSocketAddress> quorumVoterConnections() {
-        return parseVoterConnections(getList(QUORUM_VOTERS_CONFIG));
+        return voterConnections;
     }
 
     private static Integer parseVoterId(String idString) {
@@ -232,7 +234,6 @@ public class RaftConfig extends AbstractConfig {
         }
 
         return voterMap;
-
     }
 
 }
