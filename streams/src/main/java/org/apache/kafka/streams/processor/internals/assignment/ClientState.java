@@ -357,16 +357,16 @@ public class ClientState {
     }
 
     public String currentAssignment() {
-        return "[activeTasks: (" + assignedActiveTasks +
-               ") standbyTasks: (" + assignedStandbyTasks + ")]";
+        return "[activeTasks: (" + assignedActiveTasks.taskIds() +
+               ") standbyTasks: (" + assignedStandbyTasks.taskIds() + ")]";
     }
 
     @Override
     public String toString() {
-        return "[activeTasks: (" + assignedActiveTasks +
-               ") standbyTasks: (" + assignedStandbyTasks +
-               ") prevActiveTasks: (" + previousActiveTasks +
-               ") prevStandbyTasks: (" + previousStandbyTasks +
+        return "[activeTasks: (" + assignedActiveTasks.taskIds() +
+               ") standbyTasks: (" + assignedStandbyTasks.taskIds() +
+               ") prevActiveTasks: (" + previousActiveTasks.taskIds() +
+               ") prevStandbyTasks: (" + previousStandbyTasks.taskIds() +
                ") changelogOffsetTotalsByTask: (" + taskOffsetSums.entrySet() +
                ") taskLagTotals: (" + taskLagTotals.entrySet() +
                ") capacity: " + capacity +
