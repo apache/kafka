@@ -206,13 +206,6 @@ public class RaftConfig extends AbstractConfig {
         return appendLingerMs;
     }
 
-    public List<Node> quorumVoterNodes() {
-        return quorumVoterConnections().entrySet().stream()
-                .map(voterEntry -> new Node(voterEntry.getKey(), voterEntry.getValue().getHostName(),
-                        voterEntry.getValue().getPort()))
-                .collect(Collectors.toList());
-    }
-
     public Set<Integer> quorumVoterIds() {
         return quorumVoterConnections().keySet();
     }

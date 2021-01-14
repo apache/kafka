@@ -74,17 +74,4 @@ public class RaftConfigTest {
         properties.put(RaftConfig.QUORUM_VOTERS_CONFIG, value);
         assertThrows(ConfigException.class, () -> new RaftConfig(properties));
     }
-
-    @Test
-    public void testValidQuorumVotersAsNodes() {
-        assertValidQuorumVotersAsNodes("1@kafka1:9092");
-        assertValidQuorumVotersAsNodes("1@kafka1:9092,2@blah:9090");
-    }
-
-    private void assertValidQuorumVotersAsNodes(String value) {
-        Properties properties = new Properties();
-        properties.put(RaftConfig.QUORUM_VOTERS_CONFIG, value);
-        RaftConfig raftConfig = new RaftConfig(properties);
-        assertDoesNotThrow(raftConfig::quorumVoterNodes);
-    }
 }

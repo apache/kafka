@@ -318,13 +318,11 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
     @Override
     public void initialize(RaftConfig raftConfig) throws IOException {
         this.raftConfig = raftConfig;
-        List<Node> quorumVoterNodes = raftConfig.quorumVoterNodes();
         Set<Integer> quorumVoterIds = raftConfig.quorumVoterIds();
         this.requestManager = new RequestManager(quorumVoterIds, raftConfig.retryBackoffMs(),
                 raftConfig.requestTimeoutMs(), random);
 
-        Map<Integer, InetSocketAddress> voterAddresses = quorumVoterNodes.stream()
-                .collect(Collectors.toMap(Node::id, node -> new InetSocketAddress(node.host(), node.port())));
+        Map<Integer, InetSocketAddress> voterAddresses = raftConfig.quorumVoterConnections();
         for (Map.Entry<Integer, InetSocketAddress> voterAddressEntry : voterAddresses.entrySet()) {
             channel.updateEndpoint(voterAddressEntry.getKey(), voterAddressEntry.getValue());
         }
