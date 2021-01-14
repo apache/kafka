@@ -19,7 +19,6 @@ package kafka.server
 
 import java.io.{File, IOException}
 import java.net.{InetAddress, SocketTimeoutException}
-import java.util
 import java.util.concurrent._
 import java.util.concurrent.atomic.{AtomicBoolean, AtomicInteger}
 
@@ -35,10 +34,10 @@ import kafka.network.SocketServer
 import kafka.security.CredentialProvider
 import kafka.utils._
 import kafka.zk.{BrokerInfo, KafkaZkClient}
-import org.apache.kafka.clients.{ApiVersions, ClientDnsLookup, CommonClientConfigs, ManualMetadataUpdater, NetworkClient, NetworkClientUtils}
+import org.apache.kafka.clients.{ApiVersions, ClientDnsLookup, ManualMetadataUpdater, NetworkClient, NetworkClientUtils}
 import org.apache.kafka.common.internals.ClusterResourceListeners
 import org.apache.kafka.common.message.ControlledShutdownRequestData
-import org.apache.kafka.common.metrics.{Metrics, MetricsReporter, _}
+import org.apache.kafka.common.metrics.{Metrics, MetricsReporter}
 import org.apache.kafka.common.network._
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests.{ControlledShutdownRequest, ControlledShutdownResponse}
@@ -88,7 +87,6 @@ class KafkaServer(
   val config: KafkaConfig,
   time: Time = Time.SYSTEM,
   threadNamePrefix: Option[String] = None,
-  kafkaMetricsReporters: Seq[KafkaMetricsReporter] = List()
 ) extends Server with Logging with KafkaMetricsGroup {
 
   private val startupComplete = new AtomicBoolean(false)
@@ -96,15 +94,10 @@ class KafkaServer(
   private val isStartingUp = new AtomicBoolean(false)
 
   private var shutdownLatch = new CountDownLatch(1)
-
-  //properties for MetricsContext
-  private val metricsPrefix: String = "kafka.server"
-  private val KAFKA_CLUSTER_ID: String = "kafka.cluster.id"
-  private val KAFKA_BROKER_ID: String = "kafka.broker.id"
-
-
   private var logContext: LogContext = null
 
+  private val kafkaMetricsReporters: Seq[KafkaMetricsReporter] =
+    KafkaMetricsReporter.startReporters(VerifiableProperties(config.originals))
   var kafkaYammerMetrics: KafkaYammerMetrics = null
   var metrics: Metrics = null
 
@@ -380,7 +373,7 @@ class KafkaServer(
         shutdownLatch = new CountDownLatch(1)
         startupComplete.set(true)
         isStartingUp.set(false)
-        AppInfoParser.registerAppInfo(metricsPrefix, config.brokerId.toString, metrics, time.milliseconds())
+        AppInfoParser.registerAppInfo(Server.MetricsPrefix, config.brokerId.toString, metrics, time.milliseconds())
         info("started")
       }
     }
@@ -400,20 +393,11 @@ class KafkaServer(
   }
 
   private[server] def notifyMetricsReporters(metricsReporters: Seq[AnyRef]): Unit = {
-    val metricsContext = createKafkaMetricsContext()
+    val metricsContext = Server.createKafkaMetricsContext(clusterId, config)
     metricsReporters.foreach {
       case x: MetricsReporter => x.contextChange(metricsContext)
       case _ => //do nothing
     }
-  }
-
-  private[server] def createKafkaMetricsContext() : KafkaMetricsContext = {
-    val contextLabels = new util.HashMap[String, Object]
-    contextLabels.put(KAFKA_CLUSTER_ID, clusterId)
-    contextLabels.put(KAFKA_BROKER_ID, config.brokerId.toString)
-    contextLabels.putAll(config.originalsWithPrefix(CommonClientConfigs.METRICS_CONTEXT_PREFIX))
-    val metricsContext = new KafkaMetricsContext(metricsPrefix, contextLabels)
-    metricsContext
   }
 
   protected def createReplicaManager(isShuttingDown: AtomicBoolean): ReplicaManager = {
@@ -735,7 +719,7 @@ class KafkaServer(
 
         startupComplete.set(false)
         isShuttingDown.set(false)
-        CoreUtils.swallow(AppInfoParser.unregisterAppInfo(metricsPrefix, config.brokerId.toString, metrics), this)
+        CoreUtils.swallow(AppInfoParser.unregisterAppInfo(Server.MetricsPrefix, config.brokerId.toString, metrics), this)
         shutdownLatch.countDown()
         info("shut down completed")
       }

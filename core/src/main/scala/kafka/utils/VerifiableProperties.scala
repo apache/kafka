@@ -23,6 +23,13 @@ import scala.collection._
 import kafka.message.{CompressionCodec, NoCompressionCodec}
 import scala.jdk.CollectionConverters._
 
+object VerifiableProperties {
+  def apply(map: java.util.Map[_, _]): VerifiableProperties = {
+    val props = new Properties()
+    props.putAll(map)
+    new VerifiableProperties(props)
+  }
+}
 
 class VerifiableProperties(val props: Properties) extends Logging {
   private val referenceSet = mutable.HashSet[String]()

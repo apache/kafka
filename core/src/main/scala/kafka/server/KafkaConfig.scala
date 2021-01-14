@@ -1465,7 +1465,7 @@ class KafkaConfig(val props: java.util.Map[_, _], doLog: Boolean, dynamicConfigO
       case role => throw new ConfigException(s"Unknown process role $role")
     }
 
-    val distinctRoles = roles.toSet
+    val distinctRoles: Set[ProcessRole] = roles.toSet
 
     if (distinctRoles.size != roles.size) {
       throw new ConfigException(s"Duplicate role names found in `${KafkaConfig.ProcessRolesProp}`: $roles")

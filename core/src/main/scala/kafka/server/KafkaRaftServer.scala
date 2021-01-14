@@ -19,9 +19,9 @@ package kafka.server
 import kafka.metrics.{KafkaMetricsReporter, KafkaYammerMetrics}
 import kafka.raft.KafkaRaftManager
 import kafka.server.KafkaRaftServer.{BrokerRole, ControllerRole}
-import kafka.utils.Mx4jLoader
+import kafka.utils.{CoreUtils, Logging, Mx4jLoader, VerifiableProperties}
 import org.apache.kafka.common.TopicPartition
-import org.apache.kafka.common.utils.Time
+import org.apache.kafka.common.utils.{AppInfoParser, Time}
 import org.apache.kafka.raft.internals.StringSerde
 
 /**
@@ -32,10 +32,10 @@ import org.apache.kafka.raft.internals.StringSerde
 class KafkaRaftServer(
   config: KafkaConfig,
   time: Time,
-  threadNamePrefix: Option[String],
-  kafkaMetricsReporters: collection.Seq[KafkaMetricsReporter]
-) extends Server {
+  threadNamePrefix: Option[String]
+) extends Server with Logging {
 
+  KafkaMetricsReporter.startReporters(VerifiableProperties(config.originals))
   KafkaYammerMetrics.INSTANCE.configure(config.originals)
 
   private val metrics = Server.initializeMetrics(
@@ -70,12 +70,15 @@ class KafkaRaftServer(
     raftManager.startup()
     controller.foreach(_.startup())
     broker.foreach(_.startup())
+    AppInfoParser.registerAppInfo(Server.MetricsPrefix, config.brokerId.toString, metrics, time.milliseconds())
   }
 
   override def shutdown(): Unit = {
     broker.foreach(_.shutdown())
     raftManager.shutdown()
     controller.foreach(_.shutdown())
+    CoreUtils.swallow(AppInfoParser.unregisterAppInfo(Server.MetricsPrefix, config.brokerId.toString, metrics), this)
+
   }
 
   override def awaitShutdown(): Unit = {

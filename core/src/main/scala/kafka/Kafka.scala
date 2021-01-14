@@ -20,10 +20,9 @@ package kafka
 import java.util.Properties
 
 import joptsimple.OptionParser
-import kafka.metrics.KafkaMetricsReporter
 import kafka.server.{KafkaConfig, KafkaRaftServer, KafkaServer, Server}
 import kafka.utils.Implicits._
-import kafka.utils.{CommandLineUtils, Exit, Logging, VerifiableProperties}
+import kafka.utils.{CommandLineUtils, Exit, Logging}
 import org.apache.kafka.common.utils.{Java, LoggingSignalHandler, OperatingSystem, Time, Utils}
 
 import scala.jdk.CollectionConverters._
@@ -65,23 +64,18 @@ object Kafka extends Logging {
   }
 
   private def buildServer(props: Properties): Server = {
-    val time = Time.SYSTEM
     val config = KafkaConfig.fromProps(props, false)
-    val reporters = KafkaMetricsReporter.startReporters(new VerifiableProperties(props))
-
     if (config.processRoles.isEmpty) {
       new KafkaServer(
         config,
-        time,
-        threadNamePrefix = None,
-        reporters
+        Time.SYSTEM,
+        threadNamePrefix = None
       )
     } else {
       new KafkaRaftServer(
         config,
-        time,
-        threadNamePrefix = None,
-        reporters
+        Time.SYSTEM,
+        threadNamePrefix = None
       )
     }
   }
