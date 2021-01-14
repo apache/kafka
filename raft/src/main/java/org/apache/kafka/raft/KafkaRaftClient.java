@@ -1048,7 +1048,7 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
                 return ValidatedFetchOffsetAndEpoch.valid(new OffsetAndEpoch(fetchOffset, lastFetchedEpoch));
             }
         } else if (log.startOffset() > 0) {
-            OffsetAndEpoch startSnapshotId = log.startSnapshotId().orElseThrow(() -> {
+            OffsetAndEpoch oldestSnapshotId = log.oldestSnapshotId().orElseThrow(() -> {
                 return new IllegalStateException(
                     String.format(
                         "The log start offset (%s) was greater than zero but start snapshot was not found",
@@ -1057,7 +1057,7 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
                 );
             });
 
-            if (fetchOffset == log.startOffset() && lastFetchedEpoch == startSnapshotId.epoch) {
+            if (fetchOffset == log.startOffset() && lastFetchedEpoch == oldestSnapshotId.epoch) {
                 return ValidatedFetchOffsetAndEpoch.valid(new OffsetAndEpoch(fetchOffset, lastFetchedEpoch));
             } else {
                 OffsetAndEpoch latestSnapshotId = log.latestSnapshotId().orElseThrow(() -> {
@@ -1078,7 +1078,7 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
                 lastFetchedEpoch,
                 quorum.epoch(),
                 log.startOffset(),
-                log.startSnapshotId()
+                log.oldestSnapshotId()
             );
 
             return ValidatedFetchOffsetAndEpoch.diverging(new OffsetAndEpoch(0, 0));
@@ -1419,7 +1419,7 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
             state.setFetchingSnapshot(Optional.empty());
 
             if (log.truncateFullyToLatestSnapshot()) {
-                updateFollowerHighWatermark(state, OptionalLong.of(log.highWatermark()));
+                updateFollowerHighWatermark(state, OptionalLong.of(log.highWatermark().offset));
             } else {
                 throw new IllegalStateException(
                     String.format(

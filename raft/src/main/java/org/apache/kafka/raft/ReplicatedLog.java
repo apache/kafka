@@ -76,7 +76,7 @@ public interface ReplicatedLog extends Closeable {
     /**
      * Get the high watermark.
      */
-    long highWatermark();
+    LogOffsetMetadata highWatermark();
 
     /**
      * Get the current log start offset. This is the offset of the first written
@@ -213,7 +213,7 @@ public interface ReplicatedLog extends Closeable {
      *
      * @return an Optional snapshot id at the log start offset if nonzero, otherwise returns an empty Optional
      */
-    Optional<OffsetAndEpoch> startSnapshotId();
+    Optional<OffsetAndEpoch> oldestSnapshotId();
 
     /**
      * Notifies the replicted log when a new snapshot is available.

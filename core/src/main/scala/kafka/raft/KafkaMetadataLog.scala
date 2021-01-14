@@ -27,7 +27,7 @@ import kafka.server.{FetchHighWatermark, FetchLogEnd}
 import org.apache.kafka.common.record.{MemoryRecords, Records}
 import org.apache.kafka.common.{KafkaException, TopicPartition}
 import org.apache.kafka.raft
-import org.apache.kafka.raft.{LogAppendInfo, LogFetchInfo, LogOffsetMetadata, Isolation, ReplicatedLog}
+import org.apache.kafka.raft.{LogAppendInfo, LogFetchInfo, LogOffsetMetadata, Isolation, OffsetMetadata, ReplicatedLog}
 import org.apache.kafka.snapshot.FileRawSnapshotReader
 import org.apache.kafka.snapshot.FileRawSnapshotWriter
 import org.apache.kafka.snapshot.RawSnapshotReader
@@ -46,7 +46,7 @@ final class KafkaMetadataLog private (
   maxFetchSizeInBytes: Int
 ) extends ReplicatedLog {
 
-  private[this] var startSnapshotId = snapshotIds
+  private[this] var oldestSnapshotId = snapshotIds
     .stream()
     .filter(_.offset == startOffset)
     .findAny()
@@ -119,15 +119,17 @@ final class KafkaMetadataLog private (
     log.latestEpoch.getOrElse {
       latestSnapshotId.map { snapshotId =>
         val logEndOffset = endOffset().offset
-        if (snapshotId.offset == logEndOffset) {
+        if (snapshotId.offset == startOffset && snapshotId.offset == logEndOffset) {
+          // Return the epoch of the snapshot when the log is empty
           snapshotId.epoch
         } else {
           throw new KafkaException(
             s"Log doesn't have a last fetch epoch and there is a snapshot ($snapshotId). " +
-            s"Expected the snapshot's end offset to match the logs end offset ($logEndOffset)"
+            s"Expected the snapshot's end offset to match the logs end offset ($logEndOffset) " +
+            s"and the log start offset ($startOffset)"
           )
         }
-      } orElse(0)
+      }.orElse(0)
     }
   }
 
@@ -157,19 +159,19 @@ final class KafkaMetadataLog private (
   }
 
   override def truncateFullyToLatestSnapshot(): Boolean = {
-    // Truncate the log fully if the latest snapshot is greater than the log end offset
-    var truncated = false
-    latestSnapshotId.ifPresent { snapshotId =>
-      if (snapshotId.epoch > log.latestEpoch.getOrElse(0) ||
-        (snapshotId.epoch == log.latestEpoch.getOrElse(0) && snapshotId.offset > endOffset().offset)) {
+    val latestEpoch = log.latestEpoch.getOrElse(0)
+    latestSnapshotId.asScala match {
+      case Some(snapshotId) if (snapshotId.epoch > latestEpoch ||
+        (snapshotId.epoch == latestEpoch && snapshotId.offset > endOffset().offset)) =>
+        // Truncate the log fully if the latest snapshot is greater than the log end offset
 
         log.truncateFullyAndStartAt(snapshotId.offset)
-        startSnapshotId = latestSnapshotId
-        truncated = true
-      }
-    }
+        oldestSnapshotId = latestSnapshotId
 
-    truncated
+        true
+
+      case _ => false
+    }
   }
 
   override def initializeLeaderEpoch(epoch: Int): Unit = {
@@ -190,8 +192,17 @@ final class KafkaMetadataLog private (
     }
   }
 
-  override def highWatermark: Long = {
-    log.highWatermark
+  override def highWatermark: LogOffsetMetadata = {
+    val hwm = log.highWatermarkMetadata
+    val segmentPosition: Optional[OffsetMetadata] = if (hwm.segmentBaseOffset != Log.UnknownOffset &&
+      hwm.relativePositionInSegment != kafka.server.LogOffsetMetadata.UnknownFilePosition) {
+
+      Optional.of(SegmentPosition(hwm.segmentBaseOffset, hwm.relativePositionInSegment))
+    } else {
+      Optional.empty()
+    }
+
+    new LogOffsetMetadata(hwm.messageOffset, segmentPosition)
   }
 
   override def flush(): Unit = {
@@ -210,11 +221,7 @@ final class KafkaMetadataLog private (
   }
 
   override def createSnapshot(snapshotId: raft.OffsetAndEpoch): RawSnapshotWriter = {
-    // TODO: Talk to Jason about truncation past the high-watermark since it can lead to truncation past snapshots.
-    // This can result in the leader having a snapshot that is less that the follower's snapshot. I think that the Raft
-    // Client checks against this and aborts. If so, then this check and exception is okay.
-
-    // Do let the state machine create snapshots older than the latest snapshot
+    // Do not let the state machine create snapshots older than the latest snapshot
     latestSnapshotId().ifPresent { latest =>
       if (latest.epoch > snapshotId.epoch || latest.offset > snapshotId.offset) {
         // Since snapshots are less than the high-watermark absolute offset comparison is okay.
@@ -249,8 +256,8 @@ final class KafkaMetadataLog private (
     }
   }
 
-  override def startSnapshotId(): Optional[raft.OffsetAndEpoch] = {
-    startSnapshotId;
+  override def oldestSnapshotId(): Optional[raft.OffsetAndEpoch] = {
+    oldestSnapshotId
   }
 
   override def onSnapshotFrozen(snapshotId: raft.OffsetAndEpoch): Unit = {
@@ -258,19 +265,19 @@ final class KafkaMetadataLog private (
   }
 
   override def updateLogStart(logStartSnapshotId: raft.OffsetAndEpoch): Boolean = {
-    var updated = false
-    latestSnapshotId.ifPresent { snapshotId =>
-      if (startOffset < logStartSnapshotId.offset &&
-          logStartSnapshotId.offset <= snapshotId.offset &&
-          log.maybeIncrementLogStartOffset(logStartSnapshotId.offset, SnapshotGenerated)) {
+    latestSnapshotId.asScala match {
+      case Some(snapshotId) if (snapshotIds.contains(logStartSnapshotId) &&
+        startOffset < logStartSnapshotId.offset &&
+        logStartSnapshotId.offset <= snapshotId.offset &&
+        log.maybeIncrementLogStartOffset(logStartSnapshotId.offset, SnapshotGenerated)) =>
 
         log.deleteOldSegments()
-        startSnapshotId = Optional.of(logStartSnapshotId)
-        updated = true
-      }
-    }
+        oldestSnapshotId = Optional.of(logStartSnapshotId)
 
-    updated
+        true
+
+      case _ => false
+    }
   }
 
   override def close(): Unit = {

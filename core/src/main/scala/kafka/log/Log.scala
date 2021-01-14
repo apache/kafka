@@ -297,7 +297,7 @@ class Log(@volatile private var _dir: File,
    * equals the log end offset (which may never happen for a partition under consistent load). This is needed to
    * prevent the log start offset (which is exposed in fetch responses) from getting ahead of the high watermark.
    */
-  @volatile private var highWatermarkMetadata: LogOffsetMetadata = LogOffsetMetadata(logStartOffset)
+  @volatile private var _highWatermarkMetadata: LogOffsetMetadata = LogOffsetMetadata(logStartOffset)
 
   /* the actual segments of the log */
   private val segments: ConcurrentNavigableMap[java.lang.Long, LogSegment] = new ConcurrentSkipListMap[java.lang.Long, LogSegment]
@@ -375,7 +375,9 @@ class Log(@volatile private var _dir: File,
       throw new KafkaStorageException(s"The memory mapped buffer for log of $topicPartition is already closed")
   }
 
-  def highWatermark: Long = highWatermarkMetadata.messageOffset
+  def highWatermark: Long = _highWatermarkMetadata.messageOffset
+
+  def highWatermarkMetadata: LogOffsetMetadata = _highWatermarkMetadata
 
   /**
    * Update the high watermark to a new offset. The new high watermark will be lower
@@ -395,17 +397,17 @@ class Log(@volatile private var _dir: File,
    * Update high watermark with offset metadata. The new high watermark will be lower
    * bounded by the log start offset and upper bounded by the log end offset.
    *
-   * @param highWatermarkMetadata the suggested high watermark with offset metadata
+   * @param _highWatermarkMetadata the suggested high watermark with offset metadata
    * @return the updated high watermark offset
    */
-  def updateHighWatermark(highWatermarkMetadata: LogOffsetMetadata): Long = {
+  def updateHighWatermark(_highWatermarkMetadata: LogOffsetMetadata): Long = {
     val endOffsetMetadata = logEndOffsetMetadata
-    val newHighWatermarkMetadata = if (highWatermarkMetadata.messageOffset < logStartOffset) {
+    val newHighWatermarkMetadata = if (_highWatermarkMetadata.messageOffset < logStartOffset) {
       LogOffsetMetadata(logStartOffset)
-    } else if (highWatermarkMetadata.messageOffset >= endOffsetMetadata.messageOffset) {
+    } else if (_highWatermarkMetadata.messageOffset >= endOffsetMetadata.messageOffset) {
       endOffsetMetadata
     } else {
-      highWatermarkMetadata
+      _highWatermarkMetadata
     }
 
     updateHighWatermarkMetadata(newHighWatermarkMetadata)
@@ -448,7 +450,7 @@ class Log(@volatile private var _dir: File,
   private def fetchHighWatermarkMetadata: LogOffsetMetadata = {
     checkIfMemoryMappedBufferClosed()
 
-    val offsetMetadata = highWatermarkMetadata
+    val offsetMetadata = _highWatermarkMetadata
     if (offsetMetadata.messageOffsetOnly) {
       lock.synchronized {
         val fullOffset = convertToOffsetMetadataOrThrow(highWatermark)
@@ -469,7 +471,7 @@ class Log(@volatile private var _dir: File,
         warn(s"Non-monotonic update of high watermark from $highWatermarkMetadata to $newHighWatermark")
       }
 
-      highWatermarkMetadata = newHighWatermark
+      _highWatermarkMetadata = newHighWatermark
       producerStateManager.onHighWatermarkUpdated(newHighWatermark.messageOffset)
       maybeIncrementFirstUnstableOffset()
     }
@@ -488,10 +490,10 @@ class Log(@volatile private var _dir: File,
     checkIfMemoryMappedBufferClosed()
 
     // cache the current high watermark to avoid a concurrent update invalidating the range check
-    val highWatermarkMetadata = fetchHighWatermarkMetadata
+    val _highWatermarkMetadata = fetchHighWatermarkMetadata
 
     firstUnstableOffsetMetadata match {
-      case Some(offsetMetadata) if offsetMetadata.messageOffset < highWatermarkMetadata.messageOffset =>
+      case Some(offsetMetadata) if offsetMetadata.messageOffset < _highWatermarkMetadata.messageOffset =>
         if (offsetMetadata.messageOffsetOnly) {
           lock synchronized {
             val fullOffset = convertToOffsetMetadataOrThrow(offsetMetadata.messageOffset)
@@ -502,7 +504,7 @@ class Log(@volatile private var _dir: File,
         } else {
           offsetMetadata
         }
-      case _ => highWatermarkMetadata
+      case _ => _highWatermarkMetadata
     }
   }
 

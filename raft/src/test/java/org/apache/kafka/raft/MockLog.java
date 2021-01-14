@@ -61,7 +61,7 @@ public class MockLog implements ReplicatedLog {
     private long nextId = ID_GENERATOR.getAndIncrement();
     private LogOffsetMetadata highWatermark = new LogOffsetMetadata(0, Optional.empty());
     private long lastFlushedOffset = 0;
-    private Optional<OffsetAndEpoch> startSnapshotId = Optional.empty();
+    private Optional<OffsetAndEpoch> oldestSnapshotId = Optional.empty();
 
     public MockLog(TopicPartition topicPartition) {
         this.topicPartition = topicPartition;
@@ -88,7 +88,7 @@ public class MockLog implements ReplicatedLog {
 
                 batches.clear();
                 epochStartOffsets.clear();
-                startSnapshotId = Optional.of(snapshotId);
+                oldestSnapshotId = Optional.of(snapshotId);
                 updateHighWatermark(new LogOffsetMetadata(snapshotId.offset));
                 flush();
 
@@ -117,8 +117,8 @@ public class MockLog implements ReplicatedLog {
     }
 
     @Override
-    public long highWatermark() {
-        return highWatermark.offset;
+    public LogOffsetMetadata highWatermark() {
+        return highWatermark;
     }
 
     @Override
@@ -221,7 +221,7 @@ public class MockLog implements ReplicatedLog {
     }
 
     private long logStartOffset() {
-        return startSnapshotId.map(id -> id.offset).orElse(0L);
+        return oldestSnapshotId.map(id -> id.offset).orElse(0L);
     }
 
     private List<LogEntry> buildEntries(RecordBatch batch, Function<Record, Long> offsetSupplier) {
@@ -426,8 +426,8 @@ public class MockLog implements ReplicatedLog {
     }
 
     @Override
-    public Optional<OffsetAndEpoch> startSnapshotId() {
-        return startSnapshotId;
+    public Optional<OffsetAndEpoch> oldestSnapshotId() {
+        return oldestSnapshotId;
     }
 
     @Override
@@ -454,7 +454,7 @@ public class MockLog implements ReplicatedLog {
                 highWatermark.offset >= logStartSnapshotId.offset &&
                 snapshotId.offset >= logStartSnapshotId.offset) {
 
-                startSnapshotId = Optional.of(logStartSnapshotId);
+                oldestSnapshotId = Optional.of(logStartSnapshotId);
 
                 batches.removeIf(entry -> entry.lastOffset() < logStartSnapshotId.offset);
 
