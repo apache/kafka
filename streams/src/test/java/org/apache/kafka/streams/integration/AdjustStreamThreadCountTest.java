@@ -40,7 +40,10 @@ import java.util.Collections;
 import java.util.Optional;
 import java.util.Properties;
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicReference;
 
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
@@ -51,6 +54,8 @@ import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.wa
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.CoreMatchers.not;
 import static org.hamcrest.MatcherAssert.assertThat;
+import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertTrue;
 
 @Category(IntegrationTest.class)
 public class AdjustStreamThreadCountTest {
@@ -119,6 +124,7 @@ public class AdjustStreamThreadCountTest {
                     .sorted().toArray(),
                 equalTo(new String[] {"1", "2", "3"})
             );
+            waitForApplicationState(Collections.singletonList(kafkaStreams), KafkaStreams.State.REBALANCING, DEFAULT_DURATION);
             waitForApplicationState(Collections.singletonList(kafkaStreams), KafkaStreams.State.RUNNING, DEFAULT_DURATION);
         }
     }
@@ -130,6 +136,7 @@ public class AdjustStreamThreadCountTest {
             final int oldThreadCount = kafkaStreams.localThreadsMetadata().size();
             assertThat(kafkaStreams.removeStreamThread().get().split("-")[0], equalTo(appId));
             assertThat(kafkaStreams.localThreadsMetadata().size(), equalTo(oldThreadCount - 1));
+            waitForApplicationState(Collections.singletonList(kafkaStreams), KafkaStreams.State.REBALANCING, DEFAULT_DURATION);
             waitForApplicationState(Collections.singletonList(kafkaStreams), KafkaStreams.State.RUNNING, DEFAULT_DURATION);
         }
     }
@@ -146,6 +153,7 @@ public class AdjustStreamThreadCountTest {
             one.start();
             latch.await(30, TimeUnit.SECONDS);
             assertThat(kafkaStreams.localThreadsMetadata().size(), equalTo(oldThreadCount));
+            waitForApplicationState(Collections.singletonList(kafkaStreams), KafkaStreams.State.REBALANCING, DEFAULT_DURATION);
             waitForApplicationState(Collections.singletonList(kafkaStreams), KafkaStreams.State.RUNNING, DEFAULT_DURATION);
         }
     }
@@ -223,7 +231,37 @@ public class AdjustStreamThreadCountTest {
                 equalTo(new String[] {"1", "2", "3"})
             );
             assertThat("the new thread should have received the old threads name", name2.equals(removedThread));
+            waitForApplicationState(Collections.singletonList(kafkaStreams), KafkaStreams.State.REBALANCING, DEFAULT_DURATION);
             waitForApplicationState(Collections.singletonList(kafkaStreams), KafkaStreams.State.RUNNING, DEFAULT_DURATION);
+        }
+    }
+
+    @Test
+    public void testConcurrentlyAccessThreads() throws InterruptedException {
+        try (final KafkaStreams kafkaStreams = new KafkaStreams(builder.build(), properties)) {
+            StreamsTestUtils.startKafkaStreamsAndWaitForRunningState(kafkaStreams);
+            final int oldThreadCount = kafkaStreams.localThreadsMetadata().size();
+            final int threadCount = 5;
+            final int loop = 3;
+            final AtomicReference<Throwable> lastException = new AtomicReference<>();
+            final ExecutorService executor = Executors.newFixedThreadPool(threadCount);
+            for (int threadIndex = 0; threadIndex < threadCount; ++threadIndex) {
+                executor.execute(() -> {
+                    try {
+                        for (int i = 0; i < loop + 1; i++) {
+                            kafkaStreams.addStreamThread();
+                            kafkaStreams.localThreadsMetadata();
+                            kafkaStreams.removeStreamThread();
+                        }
+                    } catch (final Exception e) {
+                        lastException.set(e);
+                    }
+                });
+            }
+            executor.shutdown();
+            assertTrue(executor.awaitTermination(60, TimeUnit.SECONDS));
+            assertNull(lastException.get());
+            assertThat(kafkaStreams.localThreadsMetadata().size(), equalTo(oldThreadCount));
         }
     }
 }

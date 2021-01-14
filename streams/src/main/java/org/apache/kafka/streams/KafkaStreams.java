@@ -1463,26 +1463,28 @@ public class KafkaStreams implements AutoCloseable {
     }
 
     /**
-     * handle each stream thread in lock.
-     * noted: iteration over SynchronizedList is not thread safe so it must be manually synchronized.
+     * handle each stream thread in a snapshot of threads.
+     * noted: iteration over SynchronizedList is not thread safe so it must be manually synchronized. However, we may
+     * require other locks when looping threads and it could cause deadlock. Hence, we create a copy to avoid holding
+     * threads lock when looping threads.
      * @param consumer handler
      */
     private void processStreamThread(final Consumer<StreamThread> consumer) {
-        synchronized (threads) {
-            for (final StreamThread thread : threads) consumer.accept(thread);
-        }
+        final List<StreamThread> copy = new ArrayList<>(threads);
+        for (final StreamThread thread : copy) consumer.accept(thread);
     }
 
     /**
-     * count the thread in synchronization.
-     * noted: stream over SynchronizedList is not thread safe so it must be manually synchronized.
+     * count the snapshot of threads.
+     * noted: iteration over SynchronizedList is not thread safe so it must be manually synchronized. However, we may
+     * require other locks when looping threads and it could cause deadlock. Hence, we create a copy to avoid holding
+     * threads lock when looping threads.
      * @param predicate predicate
      * @return number of matched threads
      */
     private long countStreamThread(final Predicate<StreamThread> predicate) {
-        synchronized (threads) {
-            return threads.stream().filter(predicate).count();
-        }
+        final List<StreamThread> copy = new ArrayList<>(threads);
+        return copy.stream().filter(predicate).count();
     }
 
     /**
