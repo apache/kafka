@@ -53,11 +53,8 @@ import org.apache.kafka.streams.state.Stores;
 import org.apache.kafka.streams.state.internals.KeyValueStoreBuilder;
 import org.apache.kafka.streams.test.TestRecord;
 import org.apache.kafka.test.TestUtils;
-import org.junit.After;
-import org.junit.Assert;
-import org.junit.Test;
-import org.junit.runner.RunWith;
-import org.junit.runners.Parameterized;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.Test;
 
 import java.io.File;
 import java.time.Duration;
@@ -87,16 +84,24 @@ import static org.hamcrest.CoreMatchers.hasItem;
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.CoreMatchers.notNullValue;
 import static org.hamcrest.MatcherAssert.assertThat;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.assertNull;
-import static org.junit.Assert.assertThrows;
-import static org.junit.Assert.assertTrue;
-import static org.junit.Assert.fail;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.fail;
 
-@RunWith(value = Parameterized.class)
-public class TopologyTestDriverTest {
+public abstract class TopologyTestDriverTest {
+
+    TopologyTestDriverTest(final Map<String, String> overrides) {
+        config = mkProperties(mkMap(
+                mkEntry(StreamsConfig.APPLICATION_ID_CONFIG, "test-TopologyTestDriver"),
+                mkEntry(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory().getAbsolutePath())
+        ));
+        config.putAll(overrides);
+    }
+
     private final static String SOURCE_TOPIC_1 = "source-topic-1";
     private final static String SOURCE_TOPIC_2 = "source-topic-2";
     private final static String SINK_TOPIC_1 = "sink-topic-1";
@@ -130,25 +135,6 @@ public class TopologyTestDriverTest {
 
     private final StringDeserializer stringDeserializer = new StringDeserializer();
     private final LongDeserializer longDeserializer = new LongDeserializer();
-
-    @Parameterized.Parameters(name = "Eos enabled = {0}")
-    public static Collection<Object[]> data() {
-        final List<Object[]> values = new ArrayList<>();
-        for (final boolean eosEnabled : Arrays.asList(true, false)) {
-            values.add(new Object[] {eosEnabled});
-        }
-        return values;
-    }
-
-    public TopologyTestDriverTest(final boolean eosEnabled) {
-        config = mkProperties(mkMap(
-            mkEntry(StreamsConfig.APPLICATION_ID_CONFIG, "test-TopologyTestDriver"),
-            mkEntry(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory().getAbsolutePath())
-        ));
-        if (eosEnabled) {
-            config.setProperty(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, StreamsConfig.EXACTLY_ONCE);
-        }
-    }
 
     private final static class TTDTestRecord {
         private final Object key;
@@ -319,7 +305,7 @@ public class TopologyTestDriverTest {
         }
     }
 
-    @After
+    @AfterEach
     public void tearDown() {
         if (testDriver != null) {
             testDriver.close();
@@ -462,10 +448,9 @@ public class TopologyTestDriverTest {
     @Test
     public void shouldCloseProcessor() {
         testDriver = new TopologyTestDriver(setupSingleProcessorTopology(), config);
-
         testDriver.close();
         assertTrue(mockProcessors.get(0).closed);
-        // As testDriver is already closed, bypassing @After tearDown testDriver.close().
+        // As testDriver is already closed, bypassing @AfterEach tearDown testDriver.close().
         testDriver = null;
     }
 
@@ -912,8 +897,8 @@ public class TopologyTestDriverTest {
         testDriver = new TopologyTestDriver(setupGlobalStoreTopology(SOURCE_TOPIC_1));
 
         final KeyValueStore<byte[], byte[]> globalStore = testDriver.getKeyValueStore(SOURCE_TOPIC_1 + "-globalStore");
-        Assert.assertNotNull(globalStore);
-        Assert.assertNotNull(testDriver.getAllStateStores().get(SOURCE_TOPIC_1 + "-globalStore"));
+        assertNotNull(globalStore);
+        assertNotNull(testDriver.getAllStateStores().get(SOURCE_TOPIC_1 + "-globalStore"));
 
         pipeRecord(SOURCE_TOPIC_1, testRecord1);
 
@@ -1562,15 +1547,13 @@ public class TopologyTestDriverTest {
             assertNull(testDriver.getKeyValueStore("storeProcessorStore").get("a"));
             testDriver.pipeRecord("input-topic", new TestRecord<>("a", 1L),
                     new StringSerializer(), new LongSerializer(), Instant.now());
-            Assert.assertEquals(1L, testDriver.getKeyValueStore("storeProcessorStore").get("a"));
+            assertEquals(1L, testDriver.getKeyValueStore("storeProcessorStore").get("a"));
         }
 
 
         try (final TopologyTestDriver testDriver = new TopologyTestDriver(topology, config)) {
-            assertNull(
-                "Closing the prior test driver should have cleaned up this store and value.",
-                testDriver.getKeyValueStore("storeProcessorStore").get("a")
-            );
+            assertNull(testDriver.getKeyValueStore("storeProcessorStore").get("a"),
+                    "Closing the prior test driver should have cleaned up this store and value.");
         }
 
     }
@@ -1583,8 +1566,8 @@ public class TopologyTestDriverTest {
             Materialized.as("globalStore"));
         try (final TopologyTestDriver testDriver = new TopologyTestDriver(builder.build(), config)) {
             final KeyValueStore<String, String> globalStore = testDriver.getKeyValueStore("globalStore");
-            Assert.assertNotNull(globalStore);
-            Assert.assertNotNull(testDriver.getAllStateStores().get("globalStore"));
+            assertNotNull(globalStore);
+            assertNotNull(testDriver.getAllStateStores().get("globalStore"));
             testDriver.pipeRecord(
                 "topic",
                 new TestRecord<>("k1", "value1"),
@@ -1592,7 +1575,7 @@ public class TopologyTestDriverTest {
                 new StringSerializer(),
                 Instant.now());
             // we expect to have both in the global store, the one from pipeInput and the one from the producer
-            Assert.assertEquals("value1", globalStore.get("k1"));
+            assertEquals("value1", globalStore.get("k1"));
         }
     }
 
