@@ -54,6 +54,7 @@ import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.wa
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.CoreMatchers.not;
 import static org.hamcrest.MatcherAssert.assertThat;
+import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 
@@ -249,9 +250,11 @@ public class AdjustStreamThreadCountTest {
                 executor.execute(() -> {
                     try {
                         for (int i = 0; i < loop + 1; i++) {
-                            kafkaStreams.addStreamThread();
+                            if (!kafkaStreams.addStreamThread().isPresent())
+                                throw new RuntimeException("failed to create stream thread");
                             kafkaStreams.localThreadsMetadata();
-                            kafkaStreams.removeStreamThread();
+                            if (!kafkaStreams.removeStreamThread().isPresent())
+                                throw new RuntimeException("failed to delete a stream thread");
                         }
                     } catch (final Exception e) {
                         lastException.set(e);
@@ -261,7 +264,7 @@ public class AdjustStreamThreadCountTest {
             executor.shutdown();
             assertTrue(executor.awaitTermination(60, TimeUnit.SECONDS));
             assertNull(lastException.get());
-            assertThat(kafkaStreams.localThreadsMetadata().size(), equalTo(oldThreadCount));
+            assertEquals(oldThreadCount, kafkaStreams.localThreadsMetadata().size());
         }
     }
 }
