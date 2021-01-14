@@ -57,10 +57,10 @@ object RequestHandlerHelper {
 
 
 
-class RequestHandlerHelper(val requestChannel: RequestChannel,
-                           val quotas: QuotaManagers,
-                           val time: Time,
-                           val logPrefix: String) extends Logging {
+class RequestHandlerHelper(requestChannel: RequestChannel,
+                           quotas: QuotaManagers,
+                           time: Time,
+                           logPrefix: String) extends Logging {
 
   this.logIdent = logPrefix
 

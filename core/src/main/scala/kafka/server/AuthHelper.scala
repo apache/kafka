@@ -34,8 +34,7 @@ import org.apache.kafka.server.authorizer.{Action, AuthorizationResult, Authoriz
 import scala.jdk.CollectionConverters._
 
 
-class AuthHelper(val requestChannel: RequestChannel,
-                 val authorizer: Option[Authorizer]) {
+class AuthHelper(authorizer: Option[Authorizer]) {
 
   def authorize(requestContext: RequestContext,
                 operation: AclOperation,
