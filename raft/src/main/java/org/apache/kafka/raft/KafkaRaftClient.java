@@ -2181,7 +2181,7 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
         }
     }
 
-    public QuorumState quorum() {
+    QuorumState quorum() {
         return quorum;
     }
 
