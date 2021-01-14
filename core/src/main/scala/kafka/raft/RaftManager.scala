@@ -117,7 +117,7 @@ class KafkaRaftManager[T](
 
   def startup(): Unit = {
     netChannel.start()
-    raftClient.initialize(config.getString(RaftConfig.QUORUM_VOTERS_CONFIG))
+    raftClient.initialize(raftConfig)
     raftIoThread.start()
   }
 
@@ -171,7 +171,6 @@ class KafkaRaftManager[T](
     val expirationService = new TimingWheelExpirationService(expirationTimer)
 
     new KafkaRaftClient(
-      raftConfig,
       recordSerde,
       netChannel,
       metadataLog,

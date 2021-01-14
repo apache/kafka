@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.raft;
 
+import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.memory.MemoryPool;
 import org.apache.kafka.common.metrics.Metrics;
@@ -51,6 +52,8 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
 
+import static org.apache.kafka.raft.RaftTestUtil.buildRaftConfig;
+import static org.apache.kafka.raft.RaftTestUtil.voterNodesFromIds;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
@@ -738,7 +741,7 @@ public class RaftEventSimulationTest {
                 start(voterId);
         }
 
-        private InetSocketAddress nodeAddress(int id) {
+        private static InetSocketAddress nodeAddress(int id) {
             return new InetSocketAddress("localhost", 9990 + id);
         }
 
@@ -747,17 +750,10 @@ public class RaftEventSimulationTest {
             PersistentState persistentState = nodes.get(nodeId);
             MockNetworkChannel channel = new MockNetworkChannel(correlationIdCounter);
             MockMessageQueue messageQueue = new MockMessageQueue();
-            QuorumState quorum = new QuorumState(nodeId, voters(), ELECTION_TIMEOUT_MS,
-                FETCH_TIMEOUT_MS, persistentState.store, time, logContext, random);
+            List<Node> voterNodes = voterNodesFromIds(voters, Cluster::nodeAddress);
+            RaftConfig raftConfig = buildRaftConfig(REQUEST_TIMEOUT_MS, RETRY_BACKOFF_MS, ELECTION_TIMEOUT_MS,
+                    ELECTION_JITTER_MS, FETCH_TIMEOUT_MS, LINGER_MS, voterNodes);
             Metrics metrics = new Metrics(time);
-
-            StringBuilder votersString = new StringBuilder();
-            String prefix = "";
-            for (Integer voter : voters) {
-                votersString.append(prefix);
-                votersString.append(voter).append('@').append(nodeAddress(voter).toString());
-                prefix = ",";
-            }
 
             persistentState.log.reopen();
 
@@ -774,20 +770,13 @@ public class RaftEventSimulationTest {
                 time,
                 metrics,
                 new MockExpirationService(time),
-                ELECTION_TIMEOUT_MS,
-                FETCH_TIMEOUT_MS,
-                ELECTION_JITTER_MS,
-                RETRY_BACKOFF_MS,
-                REQUEST_TIMEOUT_MS,
                 FETCH_MAX_WAIT_MS,
-                LINGER_MS,
                 nodeId,
                 logContext,
                 random
             );
             RaftNode node = new RaftNode(
                 nodeId,
-                votersString.toString(),
                 client,
                 persistentState.log,
                 channel,
@@ -795,7 +784,8 @@ public class RaftEventSimulationTest {
                 persistentState.store,
                 logContext,
                 time,
-                random
+                random,
+                raftConfig
             );
             node.initialize();
             running.put(nodeId, node);
@@ -804,7 +794,6 @@ public class RaftEventSimulationTest {
 
     private static class RaftNode {
         final int nodeId;
-        final String votersString;
         final KafkaRaftClient<Integer> client;
         final MockLog log;
         final MockNetworkChannel channel;
@@ -814,10 +803,10 @@ public class RaftEventSimulationTest {
         final ReplicatedCounter counter;
         final Time time;
         final Random random;
+        final RaftConfig raftConfig;
 
         private RaftNode(
             int nodeId,
-            String votersString,
             KafkaRaftClient<Integer> client,
             MockLog log,
             MockNetworkChannel channel,
@@ -825,10 +814,10 @@ public class RaftEventSimulationTest {
             MockQuorumStateStore store,
             LogContext logContext,
             Time time,
-            Random random
+            Random random,
+            RaftConfig raftConfig
         ) {
             this.nodeId = nodeId;
-            this.votersString = votersString;
             this.client = client;
             this.log = log;
             this.channel = channel;
@@ -838,12 +827,13 @@ public class RaftEventSimulationTest {
             this.time = time;
             this.random = random;
             this.counter = new ReplicatedCounter(nodeId, client, logContext);
+            this.raftConfig = raftConfig;
         }
 
         void initialize() {
             try {
                 client.register(this.counter);
-                client.initialize(votersString);
+                client.initialize(raftConfig);
             } catch (IOException e) {
                 throw new RuntimeException(e);
             }

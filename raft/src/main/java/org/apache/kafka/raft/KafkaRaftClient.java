@@ -96,7 +96,6 @@ import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
 import static java.util.concurrent.CompletableFuture.completedFuture;
-import static org.apache.kafka.raft.RaftConfig.quorumVoterStringsToNodes;
 import static org.apache.kafka.raft.RaftUtil.hasValidTopicPartition;
 
 /**
@@ -142,13 +141,7 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
     private final Logger logger;
     private final LogContext logContext;
     private final Time time;
-    private final int electionBackoffMaxMs;
-    private final int electionTimeoutMs;
     private final int fetchMaxWaitMs;
-    private final int fetchTimeoutMs;
-    private final int appendLingerMs;
-    private final int retryBackoffMs;
-    private final int requestTimeoutMs;
     private final int nodeId;
     private final NetworkChannel channel;
     private final ReplicatedLog log;
@@ -168,9 +161,9 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
     private RequestManager requestManager;
     private QuorumState quorum;
     private KafkaRaftMetrics kafkaRaftMetrics;
+    private RaftConfig raftConfig;
 
     public KafkaRaftClient(
-        RaftConfig raftConfig,
         RecordSerde<T> serde,
         NetworkChannel channel,
         ReplicatedLog log,
@@ -190,13 +183,7 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
             time,
             metrics,
             expirationService,
-            raftConfig.electionTimeoutMs(),
-            raftConfig.fetchTimeoutMs(),
-            raftConfig.electionBackoffMaxMs(),
-            raftConfig.retryBackoffMs(),
-            raftConfig.requestTimeoutMs(),
             FETCH_MAX_WAIT_MS,
-            raftConfig.appendLingerMs(),
             nodeId,
             logContext,
             new Random());
@@ -212,13 +199,7 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
         Time time,
         Metrics metrics,
         ExpirationService expirationService,
-        int electionTimeoutMs,
-        int fetchTimeoutMs,
-        int electionBackoffMaxMs,
-        int retryBackoffMs,
-        int requestTimeoutMs,
         int fetchMaxWaitMs,
-        int appendLingerMs,
         int nodeId,
         LogContext logContext,
         Random random
@@ -232,15 +213,9 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
         this.fetchPurgatory = new ThresholdPurgatory<>(expirationService);
         this.appendPurgatory = new ThresholdPurgatory<>(expirationService);
         this.time = time;
-        this.electionTimeoutMs = electionTimeoutMs;
-        this.fetchTimeoutMs = fetchTimeoutMs;
-        this.retryBackoffMs = retryBackoffMs;
-        this.requestTimeoutMs = requestTimeoutMs;
         this.nodeId = nodeId;
         this.metrics = metrics;
-        this.electionBackoffMaxMs = electionBackoffMaxMs;
         this.fetchMaxWaitMs = fetchMaxWaitMs;
-        this.appendLingerMs = appendLingerMs;
         this.logContext = logContext;
         this.logger = logContext.logger(KafkaRaftClient.class);
         this.random = random;
@@ -341,10 +316,12 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
     }
 
     @Override
-    public void initialize(String quorumVoterStrings) throws IOException {
-        List<Node> quorumVoterNodes = quorumVoterStringsToNodes(quorumVoterStrings);
-        Set<Integer> quorumVoterIds = quorumVoterNodes.stream().map(Node::id).collect(Collectors.toSet());
-        this.requestManager = new RequestManager(quorumVoterIds, retryBackoffMs, requestTimeoutMs, random);
+    public void initialize(RaftConfig raftConfig) throws IOException {
+        this.raftConfig = raftConfig;
+        List<Node> quorumVoterNodes = raftConfig.quorumVoterNodes();
+        Set<Integer> quorumVoterIds = raftConfig.quorumVoterIds();
+        this.requestManager = new RequestManager(quorumVoterIds, raftConfig.retryBackoffMs(),
+                raftConfig.requestTimeoutMs(), random);
 
         Map<Integer, InetSocketAddress> voterAddresses = quorumVoterNodes.stream()
                 .collect(Collectors.toMap(Node::id, node -> new InetSocketAddress(node.host(), node.port())));
@@ -355,8 +332,8 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
         QuorumState quorumState = new QuorumState(
                 nodeId,
                 quorumVoterIds,
-                electionTimeoutMs,
-                fetchTimeoutMs,
+                raftConfig.electionTimeoutMs(),
+                raftConfig.fetchTimeoutMs(),
                 quorumStateStore,
                 time,
                 logContext,
@@ -416,7 +393,7 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
         accumulator = new BatchAccumulator<>(
             quorum.epoch(),
             log.endOffset().offset,
-            appendLingerMs,
+            raftConfig.appendLingerMs(),
             MAX_BATCH_SIZE,
             memoryPool,
             time,
@@ -693,7 +670,8 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
             throw new IllegalArgumentException("Retries " + retries + " should be larger than zero");
         }
         // upper limit exponential co-efficients at 20 to avoid overflow
-        return Math.min(RETRY_BACKOFF_BASE_MS * random.nextInt(2 << Math.min(20, retries - 1)), electionBackoffMaxMs);
+        return Math.min(RETRY_BACKOFF_BASE_MS * random.nextInt(2 << Math.min(20, retries - 1)),
+                raftConfig.electionBackoffMaxMs());
     }
 
     private int strictExponentialElectionBackoffMs(int positionInSuccessors, int totalNumSuccessors) {
@@ -702,8 +680,8 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
                     " and smaller than total number of successors " + totalNumSuccessors);
         }
 
-        int retryBackOffBaseMs = electionBackoffMaxMs >> (totalNumSuccessors - 1);
-        return Math.min(electionBackoffMaxMs, retryBackOffBaseMs << (positionInSuccessors - 1));
+        int retryBackOffBaseMs = raftConfig.electionBackoffMaxMs() >> (totalNumSuccessors - 1);
+        return Math.min(raftConfig.electionBackoffMaxMs(), retryBackOffBaseMs << (positionInSuccessors - 1));
     }
 
     private BeginQuorumEpochResponseData buildBeginQuorumEpochResponse(Errors partitionLevelError) {
@@ -2201,7 +2179,9 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
 
     @Override
     public void close() {
-        kafkaRaftMetrics.close();
+        if (kafkaRaftMetrics != null) {
+            kafkaRaftMetrics.close();
+        }
     }
 
     public QuorumState quorum() {

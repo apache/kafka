@@ -76,29 +76,15 @@ public class RaftConfigTest {
     }
 
     @Test
-    public void testInvalidQuorumVotersAsNodes() {
-        assertInvalidQuorumVotersAsNodes("1");
-        assertInvalidQuorumVotersAsNodes("1@");
-        assertInvalidQuorumVotersAsNodes("1:");
-        assertInvalidQuorumVotersAsNodes("blah@");
-        assertInvalidQuorumVotersAsNodes("1@kafka1");
-        assertInvalidQuorumVotersAsNodes("1@kafka1:9092,2");
-        assertInvalidQuorumVotersAsNodes("1@kafka1:9092,2@");
-        assertInvalidQuorumVotersAsNodes("1@kafka1:9092,2@blah");
-        assertInvalidQuorumVotersAsNodes("1@kafka1:9092,2@blah,");
-    }
-
-    private void assertInvalidQuorumVotersAsNodes(String value) {
-        assertThrows(ConfigException.class, () -> RaftConfig.quorumVoterStringsToNodes(value));
-    }
-
-    @Test
     public void testValidQuorumVotersAsNodes() {
         assertValidQuorumVotersAsNodes("1@kafka1:9092");
         assertValidQuorumVotersAsNodes("1@kafka1:9092,2@blah:9090");
     }
 
     private void assertValidQuorumVotersAsNodes(String value) {
-        assertDoesNotThrow(() -> RaftConfig.quorumVoterStringsToNodes(value));
+        Properties properties = new Properties();
+        properties.put(RaftConfig.QUORUM_VOTERS_CONFIG, value);
+        RaftConfig raftConfig = new RaftConfig(properties);
+        assertDoesNotThrow(raftConfig::quorumVoterNodes);
     }
 }

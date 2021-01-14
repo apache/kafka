@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.raft;
 
+import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.memory.MemoryPool;
 import org.apache.kafka.common.message.BeginQuorumEpochRequestData;
@@ -77,6 +78,8 @@ import java.util.Set;
 import java.util.function.Consumer;
 import java.util.stream.Collectors;
 
+import static org.apache.kafka.raft.RaftTestUtil.buildRaftConfig;
+import static org.apache.kafka.raft.RaftTestUtil.voterNodesFromIds;
 import static org.apache.kafka.raft.RaftUtil.hasValidTopicPartition;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -187,14 +190,9 @@ public final class RaftClientTestContext {
             MockNetworkChannel channel = new MockNetworkChannel();
             LogContext logContext = new LogContext();
             MockListener listener = new MockListener();
-
-            StringBuilder votersString = new StringBuilder();
-            String prefix = "";
-            for (Integer voter : voters) {
-                votersString.append(prefix);
-                votersString.append(voter).append('@').append(mockAddress(voter).toString());
-                prefix = ",";
-            }
+            List<Node> voterNodes = voterNodesFromIds(voters, RaftClientTestContext::mockAddress);
+            RaftConfig raftConfig = buildRaftConfig(requestTimeoutMs, RETRY_BACKOFF_MS, electionTimeoutMs,
+                    ELECTION_BACKOFF_MAX_MS, FETCH_TIMEOUT_MS, appendLingerMs, voterNodes);
 
             KafkaRaftClient<String> client = new KafkaRaftClient<>(
                 STRING_SERDE,
@@ -206,20 +204,14 @@ public final class RaftClientTestContext {
                 time,
                 metrics,
                 new MockExpirationService(time),
-                electionTimeoutMs,
-                FETCH_TIMEOUT_MS,
-                ELECTION_BACKOFF_MAX_MS,
-                RETRY_BACKOFF_MS,
-                requestTimeoutMs,
                 FETCH_MAX_WAIT_MS,
-                appendLingerMs,
                 localId,
                 logContext,
                 random
             );
 
             client.register(listener);
-            client.initialize(votersString.toString());
+            client.initialize(raftConfig);
 
             return new RaftClientTestContext(
                 localId,

@@ -62,12 +62,13 @@ public interface RaftClient<T> extends Closeable {
     }
 
     /**
-     * Initialize the client with the given voter string config.
+     * Initialize the client with the given Raft configuration.
      * This should only be called once on startup.
      *
+     * @param raftConfig the Raft quorum configuration
      * @throws IOException For any IO errors during initialization
      */
-    void initialize(String quorumVoterStrings) throws IOException;
+    void initialize(RaftConfig raftConfig) throws IOException;
 
     /**
      * Register a listener to get commit/leader notifications.
