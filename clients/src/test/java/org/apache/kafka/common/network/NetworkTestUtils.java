@@ -21,8 +21,8 @@ import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.util.Map;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.metrics.Metrics;
@@ -74,7 +74,7 @@ public class NetworkTestUtils {
         requests++;
         while (responses < messageCount) {
             selector.poll(0L);
-            assertEquals("No disconnects should have occurred ." + selector.disconnected(),  0, selector.disconnected().size());
+            assertEquals(0, selector.disconnected().size(), "No disconnects should have occurred ." + selector.disconnected());
 
             for (NetworkReceive receive : selector.completedReceives()) {
                 assertEquals(prefix + "-" + responses, new String(Utils.toArray(receive.payload()), StandardCharsets.UTF_8));
@@ -106,7 +106,7 @@ public class NetworkTestUtils {
                 break;
             }
         }
-        assertTrue("Channel was not closed by timeout", closed);
+        assertTrue(closed, "Channel was not closed by timeout");
         ChannelState finalState = selector.disconnected().get(node);
         assertEquals(channelState, finalState.state());
         return finalState;

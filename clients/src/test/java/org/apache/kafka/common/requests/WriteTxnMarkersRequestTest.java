@@ -19,13 +19,13 @@ package org.apache.kafka.common.requests;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
-import org.junit.Before;
-import org.junit.Test;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 
 import java.util.Collections;
 import java.util.List;
 
-import static org.junit.Assert.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 
 public class WriteTxnMarkersRequestTest {
 
@@ -39,7 +39,7 @@ public class WriteTxnMarkersRequestTest {
 
     private static List<WriteTxnMarkersRequest.TxnMarkerEntry> markers;
 
-    @Before
+    @BeforeEach
     public void setUp() {
         markers = Collections.singletonList(
              new WriteTxnMarkersRequest.TxnMarkerEntry(

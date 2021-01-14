@@ -25,15 +25,15 @@ import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
-import org.junit.After;
-import org.junit.Before;
-import org.junit.Test;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 
 import java.util.Arrays;
 import java.util.Collections;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 public class FrequenciesTest {
 
@@ -42,14 +42,14 @@ public class FrequenciesTest {
     private Time time;
     private Metrics metrics;
 
-    @Before
+    @BeforeEach
     public void setup() {
         config = new MetricConfig().eventWindow(50).samples(2);
         time = new MockTime();
         metrics = new Metrics(config, Arrays.asList(new JmxReporter()), time, true);
     }
 
-    @After
+    @AfterEach
     public void tearDown() {
         metrics.close();
     }

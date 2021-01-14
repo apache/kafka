@@ -17,8 +17,8 @@
 package org.apache.kafka.common.config.provider;
 
 import org.apache.kafka.common.config.ConfigData;
-import org.junit.Before;
-import org.junit.Test;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
 import java.io.Reader;
@@ -27,15 +27,15 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNull;
-import static org.junit.Assert.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class FileConfigProviderTest {
 
     private FileConfigProvider configProvider;
 
-    @Before
+    @BeforeEach
     public void setup() {
         configProvider = new TestFileConfigProvider();
     }

@@ -40,18 +40,18 @@ import org.apache.kafka.common.requests.RequestTestUtils;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.test.TestUtils;
-import org.junit.Test;
+import org.junit.jupiter.api.Test;
 
 import java.time.Duration;
 import java.util.Collections;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertThrows;
-import static org.junit.Assert.assertTrue;
-import static org.junit.Assert.fail;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.fail;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
@@ -94,7 +94,7 @@ public class ConsumerNetworkClientTest {
         final RequestFuture<ClientResponse> future = consumerClient.send(node, heartbeat());
         consumerClient.poll(future);
         assertTrue(future.failed());
-        assertTrue("Expected only an authentication error.", future.exception() instanceof AuthenticationException);
+        assertTrue(future.exception() instanceof AuthenticationException, "Expected only an authentication error.");
 
         time.sleep(30); // wait less than the backoff period
         assertTrue(client.connectionFailed(node));
@@ -102,7 +102,7 @@ public class ConsumerNetworkClientTest {
         final RequestFuture<ClientResponse> future2 = consumerClient.send(node, heartbeat());
         consumerClient.poll(future2);
         assertTrue(future2.failed());
-        assertTrue("Expected only an authentication error.", future2.exception() instanceof AuthenticationException);
+        assertTrue(future2.exception() instanceof AuthenticationException, "Expected only an authentication error.");
     }
 
     @Test

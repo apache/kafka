@@ -24,11 +24,12 @@ import java.util.Collections;
 import java.util.List;
 import java.util.stream.Collectors;
 import org.apache.kafka.common.config.ConfigException;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertThrows;
-import static org.junit.Assert.assertTrue;
-import org.junit.Test;
+import org.junit.jupiter.api.Test;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class ClientUtilsTest {
 
@@ -56,11 +57,11 @@ public class ClientUtilsTest {
         // With lookup of example.com, either one or two addresses are expected depending on
         // whether ipv4 and ipv6 are enabled
         List<InetSocketAddress> validatedAddresses = checkWithLookup(Arrays.asList("example.com:10000"));
-        assertTrue("Unexpected addresses " + validatedAddresses, validatedAddresses.size() >= 1);
+        assertTrue(validatedAddresses.size() >= 1, "Unexpected addresses " + validatedAddresses);
         List<String> validatedHostNames = validatedAddresses.stream().map(InetSocketAddress::getHostName)
                 .collect(Collectors.toList());
         List<String> expectedHostNames = Arrays.asList("93.184.216.34", "2606:2800:220:1:248:1893:25c8:1946");
-        assertTrue("Unexpected addresses " + validatedHostNames, expectedHostNames.containsAll(validatedHostNames));
+        assertTrue(expectedHostNames.containsAll(validatedHostNames), "Unexpected addresses " + validatedHostNames);
         validatedAddresses.forEach(address -> assertEquals(10000, address.getPort()));
     }
 

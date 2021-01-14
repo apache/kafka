@@ -17,9 +17,9 @@
 package org.apache.kafka.clients.consumer.internals;
 
 import static org.apache.kafka.clients.consumer.internals.PartitionAssignorAdapter.getAssignorInstances;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertThrows;
-import static org.junit.Assert.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -41,7 +41,7 @@ import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.serialization.StringDeserializer;
-import org.junit.Test;
+import org.junit.jupiter.api.Test;
 
 public class PartitionAssignorAdapterTest {
 

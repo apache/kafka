@@ -21,8 +21,8 @@ import org.apache.kafka.common.message.LeaveGroupResponseData.MemberResponse;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.MessageUtil;
-import org.junit.Before;
-import org.junit.Test;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 
 import java.nio.ByteBuffer;
 import java.util.Arrays;
@@ -32,9 +32,9 @@ import java.util.List;
 import java.util.Map;
 
 import static org.apache.kafka.common.requests.AbstractResponse.DEFAULT_THROTTLE_TIME;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class LeaveGroupResponseTest {
 
@@ -47,7 +47,7 @@ public class LeaveGroupResponseTest {
 
     private List<MemberResponse> memberResponses;
 
-    @Before
+    @BeforeEach
     public void setUp() {
         memberResponses = Arrays.asList(new MemberResponse()
                                             .setMemberId(memberIdOne)

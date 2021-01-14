@@ -29,7 +29,7 @@ import org.apache.kafka.common.record.MemoryRecordsBuilder;
 import org.apache.kafka.common.record.Record;
 import org.apache.kafka.common.record.RecordBatch;
 import org.apache.kafka.common.record.TimestampType;
-import org.junit.Test;
+import org.junit.jupiter.api.Test;
 
 import java.nio.ByteBuffer;
 import java.util.Arrays;
@@ -39,12 +39,12 @@ import java.util.concurrent.ExecutionException;
 import static org.apache.kafka.common.record.RecordBatch.MAGIC_VALUE_V0;
 import static org.apache.kafka.common.record.RecordBatch.MAGIC_VALUE_V1;
 import static org.apache.kafka.common.record.RecordBatch.MAGIC_VALUE_V2;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.assertNull;
-import static org.junit.Assert.assertTrue;
-import static org.junit.Assert.fail;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.fail;
 
 public class ProducerBatchTest {
 
@@ -176,14 +176,14 @@ public class ProducerBatchTest {
                 }
             }
             Deque<ProducerBatch> batches = batch.split(200);
-            assertTrue("This batch should be split to multiple small batches.", batches.size() >= 2);
+            assertTrue(batches.size() >= 2, "This batch should be split to multiple small batches.");
 
             for (ProducerBatch splitProducerBatch : batches) {
                 for (RecordBatch splitBatch : splitProducerBatch.records().batches()) {
                     for (Record record : splitBatch) {
-                        assertTrue("Header size should be 1.", record.headers().length == 1);
-                        assertTrue("Header key should be 'header-key'.", record.headers()[0].key().equals("header-key"));
-                        assertTrue("Header value should be 'header-value'.", new String(record.headers()[0].value()).equals("header-value"));
+                        assertTrue(record.headers().length == 1, "Header size should be 1.");
+                        assertTrue(record.headers()[0].key().equals("header-key"), "Header key should be 'header-key'.");
+                        assertTrue(new String(record.headers()[0].value()).equals("header-value"), "Header value should be 'header-value'.");
                     }
                 }
             }

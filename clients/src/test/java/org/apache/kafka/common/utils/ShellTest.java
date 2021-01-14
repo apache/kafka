@@ -16,20 +16,19 @@
  */
 package org.apache.kafka.common.utils;
 
-import org.junit.Rule;
-import org.junit.Test;
-import org.junit.rules.Timeout;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.Timeout;
 
 import java.io.IOException;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertTrue;
-import static org.junit.Assert.fail;
-import static org.junit.Assume.assumeTrue;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.fail;
+import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
+@Timeout(180)
 public class ShellTest {
-    @Rule
-    public final Timeout globalTimeout = Timeout.seconds(180);
 
     @Test
     public void testEchoHello() throws Exception {
@@ -60,15 +59,12 @@ public class ShellTest {
     }
 
     @Test
-    public void testRunProgramWithErrorReturn() throws Exception {
+    public void testRunProgramWithErrorReturn() {
         assumeTrue(!OperatingSystem.IS_WINDOWS);
-        try {
-            Shell.execCommand("head", "-c", "0", NONEXISTENT_PATH);
-            fail("Expected to get an exception when trying to head a nonexistent file");
-        } catch (Shell.ExitCodeException e) {
-            String message = e.getMessage();
-            assertTrue("Unexpected error message '" + message + "'",
-                    message.contains("No such file") || message.contains("illegal byte count"));
-        }
+        Shell.ExitCodeException e = assertThrows(Shell.ExitCodeException.class,
+            () -> Shell.execCommand("head", "-c", "0", NONEXISTENT_PATH));
+        String message = e.getMessage();
+        assertTrue(message.contains("No such file") || message.contains("illegal byte count"),
+            "Unexpected error message '" + message + "'");
     }
 }

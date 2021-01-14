@@ -22,8 +22,8 @@ import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.test.TestUtils;
-import org.junit.After;
-import org.junit.Test;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.Test;
 
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
@@ -38,11 +38,11 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.locks.Condition;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNotEquals;
-import static org.junit.Assert.assertThrows;
-import static org.junit.Assert.assertTrue;
-import static org.junit.Assert.fail;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.fail;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.spy;
@@ -54,7 +54,7 @@ public class BufferPoolTest {
     private final long maxBlockTimeMs = 10;
     private final String metricGroup = "TestMetrics";
 
-    @After
+    @AfterEach
     public void teardown() {
         this.metrics.close();
     }
@@ -68,24 +68,24 @@ public class BufferPoolTest {
         int size = 1024;
         BufferPool pool = new BufferPool(totalMemory, size, metrics, time, metricGroup);
         ByteBuffer buffer = pool.allocate(size, maxBlockTimeMs);
-        assertEquals("Buffer size should equal requested size.", size, buffer.limit());
-        assertEquals("Unallocated memory should have shrunk", totalMemory - size, pool.unallocatedMemory());
-        assertEquals("Available memory should have shrunk", totalMemory - size, pool.availableMemory());
+        assertEquals(size, buffer.limit(), "Buffer size should equal requested size.");
+        assertEquals(totalMemory - size, pool.unallocatedMemory(), "Unallocated memory should have shrunk");
+        assertEquals(totalMemory - size, pool.availableMemory(), "Available memory should have shrunk");
         buffer.putInt(1);
         buffer.flip();
         pool.deallocate(buffer);
-        assertEquals("All memory should be available", totalMemory, pool.availableMemory());
-        assertEquals("But now some is on the free list", totalMemory - size, pool.unallocatedMemory());
+        assertEquals(totalMemory, pool.availableMemory(), "All memory should be available");
+        assertEquals(totalMemory - size, pool.unallocatedMemory(), "But now some is on the free list");
         buffer = pool.allocate(size, maxBlockTimeMs);
-        assertEquals("Recycled buffer should be cleared.", 0, buffer.position());
-        assertEquals("Recycled buffer should be cleared.", buffer.capacity(), buffer.limit());
+        assertEquals(0, buffer.position(), "Recycled buffer should be cleared.");
+        assertEquals(buffer.capacity(), buffer.limit(), "Recycled buffer should be cleared.");
         pool.deallocate(buffer);
-        assertEquals("All memory should be available", totalMemory, pool.availableMemory());
-        assertEquals("Still a single buffer on the free list", totalMemory - size, pool.unallocatedMemory());
+        assertEquals(totalMemory, pool.availableMemory(), "All memory should be available");
+        assertEquals(totalMemory - size, pool.unallocatedMemory(), "Still a single buffer on the free list");
         buffer = pool.allocate(2 * size, maxBlockTimeMs);
         pool.deallocate(buffer);
-        assertEquals("All memory should be available", totalMemory, pool.availableMemory());
-        assertEquals("Non-standard size didn't go to the free list.", totalMemory - size, pool.unallocatedMemory());
+        assertEquals(totalMemory, pool.availableMemory(), "All memory should be available");
+        assertEquals(totalMemory - size, pool.unallocatedMemory(), "Non-standard size didn't go to the free list.");
     }
 
     /**
@@ -109,9 +109,9 @@ public class BufferPoolTest {
         ByteBuffer buffer = pool.allocate(1024, maxBlockTimeMs);
         CountDownLatch doDealloc = asyncDeallocate(pool, buffer);
         CountDownLatch allocation = asyncAllocate(pool, 5 * 1024);
-        assertEquals("Allocation shouldn't have happened yet, waiting on memory.", 1L, allocation.getCount());
+        assertEquals(1L, allocation.getCount(), "Allocation shouldn't have happened yet, waiting on memory.");
         doDealloc.countDown(); // return the memory
-        assertTrue("Allocation should succeed soon after de-allocation", allocation.await(1, TimeUnit.SECONDS));
+        assertTrue(allocation.await(1, TimeUnit.SECONDS), "Allocation should succeed soon after de-allocation");
     }
 
     private CountDownLatch asyncDeallocate(final BufferPool pool, final ByteBuffer buffer) {
@@ -185,10 +185,10 @@ public class BufferPoolTest {
             // this is good
         }
         // Thread scheduling sometimes means that deallocation varies by this point
-        assertTrue("available memory " + pool.availableMemory(), pool.availableMemory() >= 7 && pool.availableMemory() <= 10);
+        assertTrue(pool.availableMemory() >= 7 && pool.availableMemory() <= 10, "available memory " + pool.availableMemory());
         long durationMs = Time.SYSTEM.milliseconds() - beginTimeMs;
-        assertTrue("BufferExhaustedException should not throw before maxBlockTimeMs", durationMs >= maxBlockTimeMs);
-        assertTrue("BufferExhaustedException should throw soon after maxBlockTimeMs", durationMs < maxBlockTimeMs + 1000);
+        assertTrue(durationMs >= maxBlockTimeMs, "BufferExhaustedException should not throw before maxBlockTimeMs");
+        assertTrue(durationMs < maxBlockTimeMs + 1000, "BufferExhaustedException should throw soon after maxBlockTimeMs");
     }
 
     /**
@@ -302,7 +302,7 @@ public class BufferPoolTest {
         for (StressTestThread thread : threads)
             thread.join();
         for (StressTestThread thread : threads)
-            assertTrue("Thread should have completed all iterations successfully.", thread.success.get());
+            assertTrue(thread.success.get(), "Thread should have completed all iterations successfully.");
         assertEquals(totalMemory, pool.availableMemory());
     }
 

@@ -17,12 +17,12 @@
 package org.apache.kafka.common.record;
 
 import org.apache.kafka.common.InvalidRecordException;
-import org.junit.Test;
+import org.junit.jupiter.api.Test;
 
 import java.nio.ByteBuffer;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 public class EndTransactionMarkerTest {
 

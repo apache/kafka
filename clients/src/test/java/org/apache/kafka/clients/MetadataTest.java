@@ -38,7 +38,7 @@ import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.test.MockClusterResourceListener;
-import org.junit.Test;
+import org.junit.jupiter.api.Test;
 
 import java.net.InetSocketAddress;
 import java.nio.ByteBuffer;
@@ -54,12 +54,12 @@ import java.util.Set;
 import java.util.concurrent.atomic.AtomicReference;
 
 import static org.apache.kafka.test.TestUtils.assertOptional;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.assertNull;
-import static org.junit.Assert.assertThrows;
-import static org.junit.Assert.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class MetadataTest {
 
@@ -291,8 +291,8 @@ public class MetadataTest {
 
         String hostName = "www.example.com";
         metadata.bootstrap(Collections.singletonList(new InetSocketAddress(hostName, 9002)));
-        assertFalse("ClusterResourceListener should not called when metadata is updated with bootstrap Cluster",
-                MockClusterResourceListener.IS_ON_UPDATE_CALLED.get());
+        assertFalse(MockClusterResourceListener.IS_ON_UPDATE_CALLED.get(),
+            "ClusterResourceListener should not called when metadata is updated with bootstrap Cluster");
 
         Map<String, Integer> partitionCounts = new HashMap<>();
         partitionCounts.put("topic", 1);
@@ -300,10 +300,10 @@ public class MetadataTest {
         MetadataResponse metadataResponse = RequestTestUtils.metadataUpdateWith("dummy", 1, partitionCounts);
         metadata.updateWithCurrentRequestVersion(metadataResponse, false, 100);
 
-        assertEquals("MockClusterResourceListener did not get cluster metadata correctly",
-                "dummy", mockClusterListener.clusterResource().clusterId());
-        assertTrue("MockClusterResourceListener should be called when metadata is updated with non-bootstrap Cluster",
-                MockClusterResourceListener.IS_ON_UPDATE_CALLED.get());
+        assertEquals("dummy", mockClusterListener.clusterResource().clusterId(),
+            "MockClusterResourceListener did not get cluster metadata correctly");
+        assertTrue(MockClusterResourceListener.IS_ON_UPDATE_CALLED.get(),
+            "MockClusterResourceListener should be called when metadata is updated with non-bootstrap Cluster");
     }
 
 
@@ -322,9 +322,9 @@ public class MetadataTest {
         for (int i = 0; i < epochs.length; i++) {
             metadata.updateLastSeenEpochIfNewer(tp, epochs[i]);
             if (updateResult[i]) {
-                assertTrue("Expected metadata update to be requested [" + i + "]", metadata.updateRequested());
+                assertTrue(metadata.updateRequested(), "Expected metadata update to be requested [" + i + "]");
             } else {
-                assertFalse("Did not expect metadata update to be requested [" + i + "]", metadata.updateRequested());
+                assertFalse(metadata.updateRequested(), "Did not expect metadata update to be requested [" + i + "]");
             }
             metadata.updateWithCurrentRequestVersion(emptyMetadataResponse(), false, 0L);
             assertFalse(metadata.updateRequested());

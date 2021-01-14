@@ -30,14 +30,15 @@ import org.apache.kafka.clients.consumer.ConsumerPartitionAssignor.Subscription;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.utils.CollectionUtils;
 import org.apache.kafka.common.utils.Utils;
-import org.junit.Before;
-import org.junit.Test;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.Timeout;
 
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public abstract class AbstractStickyAssignorTest {
     protected AbstractStickyAssignor assignor;
@@ -49,7 +50,7 @@ public abstract class AbstractStickyAssignorTest {
 
     protected abstract Subscription buildSubscription(List<String> topics, List<TopicPartition> partitions);
 
-    @Before
+    @BeforeEach
     public void setUp() {
         assignor = createAssignor();
 
@@ -422,7 +423,8 @@ public abstract class AbstractStickyAssignorTest {
         verifyValidityAndBalance(subscriptions, assignment, partitionsPerTopic);
     }
 
-    @Test(timeout = 30 * 1000)
+    @Timeout(30)
+    @Test
     public void testLargeAssignmentAndGroupWithUniformSubscription() {
         // 1 million partitions!
         int topicCount = 500;
@@ -552,7 +554,7 @@ public abstract class AbstractStickyAssignorTest {
             String consumer = entry.getKey();
             List<TopicPartition> topicPartitions = entry.getValue();
             int size = topicPartitions.size();
-            assertTrue("Consumer " + consumer + " is assigned more topic partitions than expected.", size <= 1);
+            assertTrue(size <= 1, "Consumer " + consumer + " is assigned more topic partitions than expected.");
             if (size == 1)
                 partitionsAssigned.put(consumer, topicPartitions.get(0));
         }
@@ -574,9 +576,9 @@ public abstract class AbstractStickyAssignorTest {
         for (Map.Entry<String, List<TopicPartition>> entry: assignments) {
             String consumer = entry.getKey();
             List<TopicPartition> topicPartitions = entry.getValue();
-            assertEquals("Consumer " + consumer + " is assigned more topic partitions than expected.", 1, topicPartitions.size());
-            assertTrue("Stickiness was not honored for consumer " + consumer,
-                (!partitionsAssigned.containsKey(consumer)) || (assignment.get(consumer).contains(partitionsAssigned.get(consumer))));
+            assertEquals(1, topicPartitions.size(), "Consumer " + consumer + " is assigned more topic partitions than expected.");
+            assertTrue((!partitionsAssigned.containsKey(consumer)) || (assignment.get(consumer).contains(partitionsAssigned.get(consumer))),
+                "Stickiness was not honored for consumer " + consumer);
         }
     }
 
@@ -588,7 +590,7 @@ public abstract class AbstractStickyAssignorTest {
         subscriptions = Collections.singletonMap(consumerId, new Subscription(topics("topic01", "topic02", "topic03")));
 
         Map<String, List<TopicPartition>> assignment = assignor.assign(partitionsPerTopic, subscriptions);
-        assertEquals(assignment.values().stream().mapToInt(topicPartitions -> topicPartitions.size()).sum(), 1 + 100);
+        assertEquals(assignment.values().stream().mapToInt(List::size).sum(), 1 + 100);
         assertEquals(Collections.singleton(consumerId), assignment.keySet());
         assertTrue(isFullyBalanced(assignment));
     }
@@ -734,9 +736,9 @@ public abstract class AbstractStickyAssignorTest {
             String consumer = consumers.get(i);
             List<TopicPartition> partitions = assignments.get(consumer);
             for (TopicPartition partition: partitions)
-                assertTrue("Error: Partition " + partition + "is assigned to c" + i + ", but it is not subscribed to Topic t" + partition.topic()
-                        + "\nSubscriptions: " + subscriptions.toString() + "\nAssignments: " + assignments.toString(),
-                    subscriptions.get(consumer).topics().contains(partition.topic()));
+                assertTrue(subscriptions.get(consumer).topics().contains(partition.topic()),
+                    "Error: Partition " + partition + "is assigned to c" + i + ", but it is not subscribed to Topic t" +
+                    partition.topic() + "\nSubscriptions: " + subscriptions + "\nAssignments: " + assignments);
 
             if (i == size - 1)
                 continue;
@@ -747,9 +749,9 @@ public abstract class AbstractStickyAssignorTest {
 
                 Set<TopicPartition> intersection = new HashSet<>(partitions);
                 intersection.retainAll(otherPartitions);
-                assertTrue("Error: Consumers c" + i + " and c" + j + " have common partitions assigned to them: " + intersection.toString()
-                        + "\nSubscriptions: " + subscriptions.toString() + "\nAssignments: " + assignments.toString(),
-                    intersection.isEmpty());
+                assertTrue(intersection.isEmpty(),
+                    "Error: Consumers c" + i + " and c" + j + " have common partitions assigned to them: " + intersection +
+                    "\nSubscriptions: " + subscriptions + "\nAssignments: " + assignments);
 
                 int len = partitions.size();
                 int otherLen = otherPartitions.size();
@@ -765,13 +767,11 @@ public abstract class AbstractStickyAssignorTest {
 
                 // If there's any overlap in the subscribed topics, we should have been able to balance partitions
                 for (String topic: map.keySet()) {
-                    assertFalse("Error: Some partitions can be moved from c" + moreLoaded + " to c" + lessLoaded
-                            + " to achieve a better balance"
-                            + "\nc" + i + " has " + len + " partitions, and c" + j + " has " + otherLen
-                            + " partitions."
-                            + "\nSubscriptions: " + subscriptions.toString() + "\nAssignments: " + assignments
-                            .toString(),
-                        otherMap.containsKey(topic));
+                    assertFalse(otherMap.containsKey(topic),
+                        "Error: Some partitions can be moved from c" + moreLoaded + " to c" + lessLoaded + " to achieve a better balance" +
+                        "\nc" + i + " has " + len + " partitions, and c" + j + " has " + otherLen + " partitions." +
+                        "\nSubscriptions: " + subscriptions +
+                        "\nAssignments: " + assignments);
                 }
             }
         }

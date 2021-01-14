@@ -16,8 +16,8 @@
  */
 package org.apache.kafka.common.requests;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.Arrays;
 import java.util.Collections;
@@ -36,7 +36,7 @@ import org.apache.kafka.common.message.ListOffsetsResponseData.ListOffsetsTopicR
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.MessageUtil;
-import org.junit.Test;
+import org.junit.jupiter.api.Test;
 
 public class ListOffsetsRequestTest {
 

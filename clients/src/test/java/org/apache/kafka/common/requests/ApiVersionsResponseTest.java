@@ -19,16 +19,16 @@ package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.message.ApiVersionsResponseData.ApiVersionsResponseKey;
 import org.apache.kafka.common.protocol.ApiKeys;
-import org.junit.Test;
+import org.junit.jupiter.api.Test;
 
 import java.util.Collection;
 import java.util.HashSet;
 import java.util.Set;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.assertNull;
-import static org.junit.Assert.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class ApiVersionsResponseTest {
 
@@ -43,28 +43,28 @@ public class ApiVersionsResponseTest {
     @Test
     public void shouldHaveCorrectDefaultApiVersionsResponse() {
         Collection<ApiVersionsResponseKey> apiVersions = ApiVersionsResponse.DEFAULT_API_VERSIONS_RESPONSE.data().apiKeys();
-        assertEquals("API versions for all API keys must be maintained.", apiVersions.size(), ApiKeys.enabledApis().size());
+        assertEquals(apiVersions.size(), ApiKeys.enabledApis().size(), "API versions for all API keys must be maintained.");
 
         for (ApiKeys key : ApiKeys.enabledApis()) {
             ApiVersionsResponseKey version = ApiVersionsResponse.DEFAULT_API_VERSIONS_RESPONSE.apiVersion(key.id);
-            assertNotNull("Could not find ApiVersion for API " + key.name, version);
-            assertEquals("Incorrect min version for Api " + key.name, version.minVersion(), key.oldestVersion());
-            assertEquals("Incorrect max version for Api " + key.name, version.maxVersion(), key.latestVersion());
+            assertNotNull(version, "Could not find ApiVersion for API " + key.name);
+            assertEquals(version.minVersion(), key.oldestVersion(), "Incorrect min version for Api " + key.name);
+            assertEquals(version.maxVersion(), key.latestVersion(), "Incorrect max version for Api " + key.name);
 
             // Check if versions less than min version are indeed set as null, i.e., deprecated.
             for (int i = 0; i < version.minVersion(); ++i) {
-                assertNull("Request version " + i + " for API " + version.apiKey() + " must be null",
-                    key.messageType.requestSchemas()[i]);
-                assertNull("Response version " + i + " for API " + version.apiKey() + " must be null",
-                    key.messageType.responseSchemas()[i]);
+                assertNull(key.messageType.requestSchemas()[i],
+                    "Request version " + i + " for API " + version.apiKey() + " must be null");
+                assertNull(key.messageType.responseSchemas()[i],
+                    "Response version " + i + " for API " + version.apiKey() + " must be null");
             }
 
             // Check if versions between min and max versions are non null, i.e., valid.
             for (int i = version.minVersion(); i <= version.maxVersion(); ++i) {
-                assertNotNull("Request version " + i + " for API " + version.apiKey() + " must not be null",
-                    key.messageType.requestSchemas()[i]);
-                assertNotNull("Response version " + i + " for API " + version.apiKey() + " must not be null",
-                    key.messageType.responseSchemas()[i]);
+                assertNotNull(key.messageType.requestSchemas()[i],
+                    "Request version " + i + " for API " + version.apiKey() + " must not be null");
+                assertNotNull(key.messageType.responseSchemas()[i],
+                    "Response version " + i + " for API " + version.apiKey() + " must not be null");
             }
         }
 

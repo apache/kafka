@@ -33,9 +33,9 @@ import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.test.TestSslUtils;
 import org.apache.kafka.test.TestUtils;
-import org.junit.After;
-import org.junit.Before;
-import org.junit.Test;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 
 import java.io.File;
 import java.io.IOException;
@@ -53,10 +53,10 @@ import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Consumer;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * A set of tests for the selector. These use a test harness that runs a simple socket server that echos back responses.
@@ -65,7 +65,7 @@ public class SslSelectorTest extends SelectorTest {
 
     private Map<String, Object> sslClientConfigs;
 
-    @Before
+    @BeforeEach
     public void setUp() throws Exception {
         File trustStoreFile = File.createTempFile("truststore", ".jks");
 
@@ -81,7 +81,7 @@ public class SslSelectorTest extends SelectorTest {
         this.selector = new Selector(5000, metrics, time, "MetricGroup", channelBuilder, logContext);
     }
 
-    @After
+    @AfterEach
     public void tearDown() throws Exception {
         this.selector.close();
         this.server.close();
@@ -274,11 +274,12 @@ public class SslSelectorTest extends SelectorTest {
             selector.poll(10);
             disconnected.addAll(selector.disconnected().keySet());
         }
-        assertTrue("Renegotiation should cause disconnection", disconnected.contains(node));
+        assertTrue(disconnected.contains(node), "Renegotiation should cause disconnection");
 
     }
 
     @Override
+    @Test
     public void testMuteOnOOM() throws Exception {
         //clean up default selector, replace it with one that uses a finite mem pool
         selector.close();
@@ -324,13 +325,13 @@ public class SslSelectorTest extends SelectorTest {
                 Collection<NetworkReceive> completed = selector.completedReceives();
                 if (firstReceive == null) {
                     if (!completed.isEmpty()) {
-                        assertEquals("expecting a single request", 1, completed.size());
+                        assertEquals(1, completed.size(), "expecting a single request");
                         firstReceive = completed.iterator().next();
                         assertTrue(selector.isMadeReadProgressLastPoll());
                         assertEquals(0, pool.availableMemory());
                     }
                 } else {
-                    assertTrue("only expecting single request", completed.isEmpty());
+                    assertTrue(completed.isEmpty(), "only expecting single request");
                 }
 
                 handshaked = sender1.waitForHandshake(1) && sender2.waitForHandshake(1);
@@ -338,13 +339,13 @@ public class SslSelectorTest extends SelectorTest {
                 if (handshaked && firstReceive != null && selector.isOutOfMemory())
                     break;
             }
-            assertTrue("could not initiate connections within timeout", handshaked);
+            assertTrue(handshaked, "could not initiate connections within timeout");
 
             selector.poll(10);
             assertTrue(selector.completedReceives().isEmpty());
             assertEquals(0, pool.availableMemory());
-            assertNotNull("First receive not complete", firstReceive);
-            assertTrue("Selector not out of memory", selector.isOutOfMemory());
+            assertNotNull(firstReceive, "First receive not complete");
+            assertTrue(selector.isOutOfMemory(), "Selector not out of memory");
 
             firstReceive.close();
             assertEquals(900, pool.availableMemory()); //memory has been released back to pool
@@ -355,7 +356,7 @@ public class SslSelectorTest extends SelectorTest {
                 selector.poll(1000);
                 completed = selector.completedReceives();
             }
-            assertEquals("could not read remaining request within timeout", 1, completed.size());
+            assertEquals(1, completed.size(), "could not read remaining request within timeout");
             assertEquals(0, pool.availableMemory());
             assertFalse(selector.isOutOfMemory());
         }

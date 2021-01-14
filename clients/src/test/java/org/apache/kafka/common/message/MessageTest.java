@@ -52,9 +52,8 @@ import org.apache.kafka.common.protocol.types.RawTaggedField;
 import org.apache.kafka.common.protocol.types.SchemaException;
 import org.apache.kafka.common.protocol.types.Struct;
 import org.apache.kafka.common.protocol.types.Type;
-import org.junit.Rule;
-import org.junit.Test;
-import org.junit.rules.Timeout;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.Timeout;
 
 import java.lang.reflect.Method;
 import java.nio.ByteBuffer;
@@ -65,19 +64,17 @@ import java.util.List;
 import java.util.function.Supplier;
 
 import static java.util.Collections.singletonList;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNotEquals;
-import static org.junit.Assert.assertThrows;
-import static org.junit.Assert.assertTrue;
-import static org.junit.Assert.fail;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.fail;
 
+@Timeout(120)
 public final class MessageTest {
 
     private final String memberId = "memberId";
     private final String instanceId = "instanceId";
-
-    @Rule
-    final public Timeout globalTimeout = Timeout.millis(120000);
 
     @Test
     public void testAddOffsetsToTxnVersions() throws Exception {
@@ -803,15 +800,15 @@ public final class MessageTest {
         ByteBuffer buf = ByteBuffer.allocate(size);
         ByteBufferAccessor byteBufferAccessor = new ByteBufferAccessor(buf);
         message.write(byteBufferAccessor, cache, version);
-        assertEquals("The result of the size function does not match the number of bytes " +
-            "written for version " + version, size, buf.position());
+        assertEquals(size, buf.position(), "The result of the size function does not match the number of bytes " +
+            "written for version " + version);
         Message message2 = message.getClass().getConstructor().newInstance();
         buf.flip();
         message2.read(byteBufferAccessor, version);
-        assertEquals("The result of the size function does not match the number of bytes " +
-            "read back in for version " + version, size, buf.position());
-        assertEquals("The message object created after a round trip did not match for " +
-            "version " + version, expected, message2);
+        assertEquals(size, buf.position(), "The result of the size function does not match the number of bytes " +
+            "read back in for version " + version);
+        assertEquals(expected, message2, "The message object created after a round trip did not match for " +
+            "version " + version);
         assertEquals(expected.hashCode(), message2.hashCode());
         assertEquals(expected.toString(), message2.toString());
     }
@@ -861,17 +858,17 @@ public final class MessageTest {
             } catch (UnsupportedVersionException e) {
                 fail("No request message spec found for API " + apiKey);
             }
-            assertTrue("Request message spec for " + apiKey + " only " +
-                    "supports versions up to " + message.highestSupportedVersion(),
-                apiKey.latestVersion() <= message.highestSupportedVersion());
+            assertTrue(apiKey.latestVersion() <= message.highestSupportedVersion(),
+                "Request message spec for " + apiKey + " only " + "supports versions up to " +
+                message.highestSupportedVersion());
             try {
                 message = ApiMessageType.fromApiKey(apiKey.id).newResponse();
             } catch (UnsupportedVersionException e) {
                 fail("No response message spec found for API " + apiKey);
             }
-            assertTrue("Response message spec for " + apiKey + " only " +
-                    "supports versions up to " + message.highestSupportedVersion(),
-                apiKey.latestVersion() <= message.highestSupportedVersion());
+            assertTrue(apiKey.latestVersion() <= message.highestSupportedVersion(),
+                "Response message spec for " + apiKey + " only " + "supports versions up to " +
+                message.highestSupportedVersion());
         }
     }
 
@@ -975,9 +972,8 @@ public final class MessageTest {
                 ByteBufferAccessor byteBufferAccessor = new ByteBufferAccessor(buf);
                 message.write(byteBufferAccessor, cache, version);
             });
-        assertTrue("Expected to get an error message about " + problemText +
-                ", but got: " + e.getMessage(),
-                e.getMessage().contains(problemText));
+        assertTrue(e.getMessage().contains(problemText), "Expected to get an error message about " + problemText +
+            ", but got: " + e.getMessage());
     }
 
     private void verifyWriteSucceeds(short version, Message message) {
@@ -992,8 +988,7 @@ public final class MessageTest {
         while (alt.hasRemaining()) {
             bld.append(String.format(" %02x", alt.get()));
         }
-        assertEquals("Expected the serialized size to be " + size +
-            ", but it was " + buf.position(), size, buf.position());
+        assertEquals(size, buf.position(), "Expected the serialized size to be " + size + ", but it was " + buf.position());
     }
 
     @Test

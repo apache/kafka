@@ -17,6 +17,7 @@
 package org.apache.kafka.common.utils;
 
 import java.nio.BufferUnderflowException;
+import java.util.AbstractMap;
 import java.util.EnumSet;
 import java.util.SortedSet;
 import java.util.TreeSet;
@@ -753,22 +754,7 @@ public final class Utils {
      * @return An entry
      */
     public static <K, V> Map.Entry<K, V> mkEntry(final K k, final V v) {
-        return new Map.Entry<K, V>() {
-            @Override
-            public K getKey() {
-                return k;
-            }
-
-            @Override
-            public V getValue() {
-                return v;
-            }
-
-            @Override
-            public V setValue(final V value) {
-                throw new UnsupportedOperationException();
-            }
-        };
+        return new AbstractMap.SimpleEntry<>(k, v);
     }
 
     /**

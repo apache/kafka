@@ -93,8 +93,7 @@ import org.apache.kafka.test.MockMetricsReporter;
 import org.apache.kafka.test.TestUtils;
 import org.apache.kafka.common.metrics.stats.Avg;
 
-import org.junit.Assert;
-import org.junit.Test;
+import org.junit.jupiter.api.Test;
 
 import javax.management.MBeanServer;
 import javax.management.ObjectName;
@@ -133,15 +132,15 @@ import static java.util.Collections.singleton;
 import static java.util.Collections.singletonList;
 import static java.util.Collections.singletonMap;
 import static org.apache.kafka.common.requests.FetchMetadata.INVALID_SESSION_ID;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertNotEquals;
-import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.assertNotSame;
-import static org.junit.Assert.assertNull;
-import static org.junit.Assert.assertThrows;
-import static org.junit.Assert.assertTrue;
-import static org.junit.Assert.fail;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNotSame;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.fail;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.doCallRealMethod;
@@ -187,7 +186,7 @@ public class KafkaConsumerTest {
 
         MockMetricsReporter mockMetricsReporter = (MockMetricsReporter) consumer.metrics.reporters().get(0);
 
-        Assert.assertEquals(consumer.getClientId(), mockMetricsReporter.clientId);
+        assertEquals(consumer.getClientId(), mockMetricsReporter.clientId);
         consumer.close();
     }
 
@@ -202,7 +201,7 @@ public class KafkaConsumerTest {
         final int oldCloseCount = MockMetricsReporter.CLOSE_COUNT.get();
         try {
             new KafkaConsumer<>(props, new ByteArrayDeserializer(), new ByteArrayDeserializer());
-            Assert.fail("should have caught an exception and returned");
+            fail("should have caught an exception and returned");
         } catch (KafkaException e) {
             assertEquals(oldInitCount + 1, MockMetricsReporter.INIT_COUNT.get());
             assertEquals(oldCloseCount + 1, MockMetricsReporter.CLOSE_COUNT.get());
@@ -378,7 +377,7 @@ public class KafkaConsumerTest {
             assertEquals(1, MockConsumerInterceptor.INIT_COUNT.get());
             assertEquals(1, MockConsumerInterceptor.CLOSE_COUNT.get());
             // Cluster metadata will only be updated on calling poll.
-            Assert.assertNull(MockConsumerInterceptor.CLUSTER_META.get());
+            assertNull(MockConsumerInterceptor.CLUSTER_META.get());
 
         } finally {
             // cleanup since we are using mutable static variables in MockConsumerInterceptor
@@ -419,7 +418,7 @@ public class KafkaConsumerTest {
         MetricName testMetricName = consumer.metrics.metricName("test-metric",
                 "grp1", "test metric");
         consumer.metrics.addMetric(testMetricName, new Avg());
-        Assert.assertNotNull(server.getObjectInstance(new ObjectName("kafka.consumer:type=grp1,client-id=client-1")));
+        assertNotNull(server.getObjectInstance(new ObjectName("kafka.consumer:type=grp1,client-id=client-1")));
         consumer.close();
     }
 
@@ -536,7 +535,7 @@ public class KafkaConsumerTest {
         consumer.poll(Duration.ZERO);
 
         final Queue<ClientRequest> requests = client.requests();
-        Assert.assertEquals(0, requests.stream().filter(request -> request.apiKey().equals(ApiKeys.FETCH)).count());
+        assertEquals(0, requests.stream().filter(request -> request.apiKey().equals(ApiKeys.FETCH)).count());
     }
 
     @SuppressWarnings("deprecation")
@@ -560,9 +559,9 @@ public class KafkaConsumerTest {
 
         // The underlying client SHOULD get a fetch request
         final Queue<ClientRequest> requests = client.requests();
-        Assert.assertEquals(1, requests.size());
+        assertEquals(1, requests.size());
         final Class<? extends AbstractRequest.Builder> aClass = requests.peek().requestBuilder().getClass();
-        Assert.assertEquals(FetchRequest.Builder.class, aClass);
+        assertEquals(FetchRequest.Builder.class, aClass);
     }
 
     @Test
@@ -1747,15 +1746,15 @@ public class KafkaConsumerTest {
             if (waitMs > 0)
                 time.sleep(waitMs);
             if (interrupt) {
-                assertTrue("Close terminated prematurely", future.cancel(true));
+                assertTrue(future.cancel(true), "Close terminated prematurely");
 
                 TestUtils.waitForCondition(
                     () -> closeException.get() != null, "InterruptException did not occur within timeout.");
 
-                assertTrue("Expected exception not thrown " + closeException, closeException.get() instanceof InterruptException);
+                assertTrue(closeException.get() instanceof InterruptException, "Expected exception not thrown " + closeException);
             } else {
                 future.get(500, TimeUnit.MILLISECONDS); // Should succeed without TimeoutException or ExecutionException
-                assertNull("Unexpected exception during close", closeException.get());
+                assertNull(closeException.get(), "Unexpected exception during close");
             }
         } finally {
             executor.shutdownNow();

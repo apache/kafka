@@ -27,8 +27,8 @@ import org.apache.kafka.common.errors.ProducerFencedException;
 import org.apache.kafka.common.serialization.IntegerSerializer;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.test.MockSerializer;
-import org.junit.After;
-import org.junit.Test;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.Test;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -40,13 +40,11 @@ import java.util.concurrent.Future;
 
 import static java.util.Arrays.asList;
 import static java.util.Collections.singletonList;
-import static org.hamcrest.CoreMatchers.equalTo;
-import static org.hamcrest.MatcherAssert.assertThat;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertThrows;
-import static org.junit.Assert.assertTrue;
-import static org.junit.Assert.fail;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.fail;
 
 public class MockProducerTest {
 
@@ -60,7 +58,7 @@ public class MockProducerTest {
         this.producer = new MockProducer<>(autoComplete, new MockSerializer(), new MockSerializer());
     }
 
-    @After
+    @AfterEach
     public void cleanup() {
         if (this.producer != null && !this.producer.closed())
             this.producer.close();
@@ -70,13 +68,13 @@ public class MockProducerTest {
     public void testAutoCompleteMock() throws Exception {
         buildMockProducer(true);
         Future<RecordMetadata> metadata = producer.send(record1);
-        assertTrue("Send should be immediately complete", metadata.isDone());
-        assertFalse("Send should be successful", isError(metadata));
-        assertEquals("Offset should be 0", 0L, metadata.get().offset());
+        assertTrue(metadata.isDone(), "Send should be immediately complete");
+        assertFalse(isError(metadata), "Send should be successful");
+        assertEquals(0L, metadata.get().offset(), "Offset should be 0");
         assertEquals(topic, metadata.get().topic());
-        assertEquals("We should have the record in our history", singletonList(record1), producer.history());
+        assertEquals(singletonList(record1), producer.history(), "We should have the record in our history");
         producer.clear();
-        assertEquals("Clear should erase our history", 0, producer.history().size());
+        assertEquals(0, producer.history().size(), "Clear should erase our history");
     }
 
     @Test
@@ -88,9 +86,9 @@ public class MockProducerTest {
         MockProducer<String, String> producer = new MockProducer<>(cluster, true, new DefaultPartitioner(), new StringSerializer(), new StringSerializer());
         ProducerRecord<String, String> record = new ProducerRecord<>(topic, "key", "value");
         Future<RecordMetadata> metadata = producer.send(record);
-        assertEquals("Partition should be correct", 1, metadata.get().partition());
+        assertEquals(1, metadata.get().partition(), "Partition should be correct");
         producer.clear();
-        assertEquals("Clear should erase our history", 0, producer.history().size());
+        assertEquals(0, producer.history().size(), "Clear should erase our history");
         producer.close();
     }
 
@@ -98,27 +96,27 @@ public class MockProducerTest {
     public void testManualCompletion() throws Exception {
         buildMockProducer(false);
         Future<RecordMetadata> md1 = producer.send(record1);
-        assertFalse("Send shouldn't have completed", md1.isDone());
+        assertFalse(md1.isDone(), "Send shouldn't have completed");
         Future<RecordMetadata> md2 = producer.send(record2);
-        assertFalse("Send shouldn't have completed", md2.isDone());
-        assertTrue("Complete the first request", producer.completeNext());
-        assertFalse("Requst should be successful", isError(md1));
-        assertFalse("Second request still incomplete", md2.isDone());
+        assertFalse(md2.isDone(), "Send shouldn't have completed");
+        assertTrue(producer.completeNext(), "Complete the first request");
+        assertFalse(isError(md1), "Requst should be successful");
+        assertFalse(md2.isDone(), "Second request still incomplete");
         IllegalArgumentException e = new IllegalArgumentException("blah");
-        assertTrue("Complete the second request with an error", producer.errorNext(e));
+        assertTrue(producer.errorNext(e), "Complete the second request with an error");
         try {
             md2.get();
             fail("Expected error to be thrown");
         } catch (ExecutionException err) {
             assertEquals(e, err.getCause());
         }
-        assertFalse("No more requests to complete", producer.completeNext());
+        assertFalse(producer.completeNext(), "No more requests to complete");
 
         Future<RecordMetadata> md3 = producer.send(record1);
         Future<RecordMetadata> md4 = producer.send(record2);
-        assertTrue("Requests should not be completed.", !md3.isDone() && !md4.isDone());
+        assertTrue(!md3.isDone() && !md4.isDone(), "Requests should not be completed.");
         producer.flush();
-        assertTrue("Requests should be completed.", md3.isDone() && md4.isDone());
+        assertTrue(md3.isDone() && md4.isDone(), "Requests should be completed.");
     }
 
     @Test
@@ -200,9 +198,9 @@ public class MockProducerTest {
         producer.initTransactions();
         producer.beginTransaction();
 
-        assertThat(producer.commitCount(), equalTo(0L));
+        assertEquals(0L, producer.commitCount());
         producer.commitTransaction();
-        assertThat(producer.commitCount(), equalTo(1L));
+        assertEquals(1L, producer.commitCount());
     }
 
     @Test
@@ -215,7 +213,7 @@ public class MockProducerTest {
 
         producer.beginTransaction();
         producer.commitTransaction();
-        assertThat(producer.commitCount(), equalTo(1L));
+        assertEquals(1L, producer.commitCount());
     }
 
     @Test
@@ -262,7 +260,7 @@ public class MockProducerTest {
         producer.initTransactions();
         producer.fenceProducer();
         Throwable e = assertThrows(KafkaException.class, () -> producer.send(null));
-        assertTrue("The root cause of the exception should be ProducerFenced", e.getCause() instanceof ProducerFencedException);
+        assertTrue(e.getCause() instanceof ProducerFencedException, "The root cause of the exception should be ProducerFenced");
     }
 
     @Test
@@ -314,7 +312,7 @@ public class MockProducerTest {
         expectedResult.add(record1);
         expectedResult.add(record2);
 
-        assertThat(producer.history(), equalTo(expectedResult));
+        assertEquals(expectedResult, producer.history());
     }
 
     @Test
@@ -381,7 +379,7 @@ public class MockProducerTest {
         expectedResult.add(record1);
         expectedResult.add(record2);
 
-        assertThat(producer.history(), equalTo(expectedResult));
+        assertEquals(expectedResult, producer.history());
     }
 
     @Test
@@ -414,7 +412,7 @@ public class MockProducerTest {
         expectedResult.put(group2, group2Commit);
 
         producer.commitTransaction();
-        assertThat(producer.consumerGroupOffsetsHistory(), equalTo(Collections.singletonList(expectedResult)));
+        assertEquals(Collections.singletonList(expectedResult), producer.consumerGroupOffsetsHistory());
     }
 
     @Test
@@ -547,7 +545,7 @@ public class MockProducerTest {
         });
 
         producer.commitTransaction();
-        assertThat(producer.consumerGroupOffsetsHistory(), equalTo(Collections.singletonList(expectedResult)));
+        assertEquals(Collections.singletonList(expectedResult), producer.consumerGroupOffsetsHistory());
     }
 
     @Test
@@ -601,7 +599,7 @@ public class MockProducerTest {
         Map<String, Map<TopicPartition, OffsetAndMetadata>> expectedResult = new HashMap<>();
         expectedResult.put(group, groupCommit);
 
-        assertThat(producer.consumerGroupOffsetsHistory(), equalTo(Collections.singletonList(expectedResult)));
+        assertEquals(Collections.singletonList(expectedResult), producer.consumerGroupOffsetsHistory());
     }
 
     @Test
@@ -635,7 +633,7 @@ public class MockProducerTest {
         Map<String, Map<TopicPartition, OffsetAndMetadata>> expectedResult = new HashMap<>();
         expectedResult.put(group, groupCommit);
 
-        assertThat(producer.consumerGroupOffsetsHistory(), equalTo(Collections.singletonList(expectedResult)));
+        assertEquals(Collections.singletonList(expectedResult), producer.consumerGroupOffsetsHistory());
     }
 
     @Test

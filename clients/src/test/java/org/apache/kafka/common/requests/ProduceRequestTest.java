@@ -27,16 +27,16 @@ import org.apache.kafka.common.record.RecordBatch;
 import org.apache.kafka.common.record.RecordVersion;
 import org.apache.kafka.common.record.SimpleRecord;
 import org.apache.kafka.common.record.TimestampType;
-import org.junit.Test;
+import org.junit.jupiter.api.Test;
 
 import java.nio.ByteBuffer;
 import java.util.Arrays;
 import java.util.Collections;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertTrue;
-import static org.junit.Assert.fail;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.fail;
 
 public class ProduceRequestTest {
 
@@ -302,8 +302,8 @@ public class ProduceRequestTest {
             builder.build(version).serialize();
             fail("Builder did not raise " + InvalidRecordException.class.getName() + " as expected");
         } catch (RuntimeException e) {
-            assertTrue("Unexpected exception type " + e.getClass().getName(),
-                    InvalidRecordException.class.isAssignableFrom(e.getClass()));
+            assertTrue(InvalidRecordException.class.isAssignableFrom(e.getClass()),
+                "Unexpected exception type " + e.getClass().getName());
         }
     }
 

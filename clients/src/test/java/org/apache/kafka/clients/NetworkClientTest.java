@@ -44,8 +44,8 @@ import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.test.DelayedReceive;
 import org.apache.kafka.test.MockSelector;
 import org.apache.kafka.test.TestUtils;
-import org.junit.Before;
-import org.junit.Test;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
@@ -58,13 +58,13 @@ import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
 import static org.apache.kafka.common.protocol.ApiKeys.PRODUCE;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertNotEquals;
-import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.assertNull;
-import static org.junit.Assert.assertThrows;
-import static org.junit.Assert.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class NetworkClientTest {
 
@@ -115,7 +115,7 @@ public class NetworkClientTest {
                 connectionSetupTimeoutMsTest, connectionSetupTimeoutMaxMsTest, ClientDnsLookup.DEFAULT, time, false, new ApiVersions(), new LogContext());
     }
 
-    @Before
+    @BeforeEach
     public void setup() {
         selector.reset();
     }
@@ -154,7 +154,7 @@ public class NetworkClientTest {
         client.ready(node, time.milliseconds());
         awaitReady(client, node);
         client.poll(1, time.milliseconds());
-        assertTrue("The client should be ready", client.isReady(node, time.milliseconds()));
+        assertTrue(client.isReady(node, time.milliseconds()), "The client should be ready");
 
         ProduceRequest.Builder builder = ProduceRequest.forCurrentMagic(new ProduceRequestData()
                 .setTopicData(new ProduceRequestData.TopicProduceDataCollection())
@@ -162,16 +162,16 @@ public class NetworkClientTest {
                 .setTimeoutMs(1000));
         ClientRequest request = client.newClientRequest(node.idString(), builder, time.milliseconds(), true);
         client.send(request, time.milliseconds());
-        assertEquals("There should be 1 in-flight request after send", 1,
-                client.inFlightRequestCount(node.idString()));
+        assertEquals(1, client.inFlightRequestCount(node.idString()),
+            "There should be 1 in-flight request after send");
         assertTrue(client.hasInFlightRequests(node.idString()));
         assertTrue(client.hasInFlightRequests());
 
         client.close(node.idString());
-        assertEquals("There should be no in-flight request after close", 0, client.inFlightRequestCount(node.idString()));
+        assertEquals(0, client.inFlightRequestCount(node.idString()), "There should be no in-flight request after close");
         assertFalse(client.hasInFlightRequests(node.idString()));
         assertFalse(client.hasInFlightRequests());
-        assertFalse("Connection should not be ready after close", client.isReady(node, 0));
+        assertFalse(client.isReady(node, 0), "Connection should not be ready after close");
     }
 
     @Test
@@ -204,10 +204,10 @@ public class NetworkClientTest {
         selector.completeReceive(new NetworkReceive(node.idString(), buffer));
         List<ClientResponse> responses = networkClient.poll(1, time.milliseconds());
         assertEquals(1, responses.size());
-        assertTrue("The handler should have executed.", handler.executed);
-        assertTrue("Should have a response body.", handler.response.hasResponse());
-        assertEquals("Should be correlated to the original request",
-                request.correlationId(), handler.response.requestHeader().correlationId());
+        assertTrue(handler.executed, "The handler should have executed.");
+        assertTrue(handler.response.hasResponse(), "Should have a response body.");
+        assertEquals(request.correlationId(), handler.response.requestHeader().correlationId(),
+            "Should be correlated to the original request");
     }
 
     private void delayedApiVersionsResponse(int correlationId, short version, ApiVersionsResponse response) {
@@ -459,7 +459,7 @@ public class NetworkClientTest {
         assertEquals(1, responses.size());
         ClientResponse clientResponse = responses.get(0);
         assertEquals(node.idString(), clientResponse.destination());
-        assertTrue("Expected response to fail due to disconnection", clientResponse.wasDisconnected());
+        assertTrue(clientResponse.wasDisconnected(), "Expected response to fail due to disconnection");
     }
 
     @Test
@@ -477,17 +477,13 @@ public class NetworkClientTest {
         selector.serverConnectionBlocked(node1.idString());
 
         client.poll(0, time.milliseconds());
-        assertFalse(
-                "The connections should not fail before the socket connection setup timeout elapsed",
-                client.connectionFailed(node)
-        );
+        assertFalse(client.connectionFailed(node),
+            "The connections should not fail before the socket connection setup timeout elapsed");
 
         time.sleep((long) (connectionSetupTimeoutMsTest * 1.2) + 1);
         client.poll(0, time.milliseconds());
-        assertTrue(
-                "Expected the connections to fail due to the socket connection setup timeout",
-                client.connectionFailed(node)
-        );
+        assertTrue(client.connectionFailed(node),
+            "Expected the connections to fail due to the socket connection setup timeout");
     }
 
     @Test
@@ -605,11 +601,11 @@ public class NetworkClientTest {
 
         awaitReady(client, node);
         client.poll(1, time.milliseconds());
-        assertTrue("The client should be ready", client.isReady(node, time.milliseconds()));
+        assertTrue(client.isReady(node, time.milliseconds()), "The client should be ready");
 
         // leastloadednode should be our single node
         Node leastNode = client.leastLoadedNode(time.milliseconds());
-        assertEquals("There should be one leastloadednode", leastNode.id(), node.id());
+        assertEquals(leastNode.id(), node.id(), "There should be one leastloadednode");
 
         // sleep for longer than reconnect backoff
         time.sleep(reconnectBackoffMsTest);
@@ -618,9 +614,9 @@ public class NetworkClientTest {
         selector.serverDisconnect(node.idString());
 
         client.poll(1, time.milliseconds());
-        assertFalse("After we forced the disconnection the client is no longer ready.", client.ready(node, time.milliseconds()));
+        assertFalse(client.ready(node, time.milliseconds()), "After we forced the disconnection the client is no longer ready.");
         leastNode = client.leastLoadedNode(time.milliseconds());
-        assertNull("There should be NO leastloadednode", leastNode);
+        assertNull(leastNode, "There should be NO leastloadednode");
     }
 
     @Test
@@ -631,7 +627,7 @@ public class NetworkClientTest {
         Set<Node> providedNodeIds = new HashSet<>();
         for (int i = 0; i < nodeNumber * 10; i++) {
             Node node = client.leastLoadedNode(time.milliseconds());
-            assertNotNull("Should provide a node", node);
+            assertNotNull(node, "Should provide a node");
             providedNodeIds.add(node);
             client.ready(node, time.milliseconds());
             client.disconnect(node.idString());
@@ -640,7 +636,7 @@ public class NetworkClientTest {
             // Define a round as nodeNumber of nodes have been provided
             // In each round every node should be provided exactly once
             if ((i + 1) % nodeNumber == 0) {
-                assertEquals("All the nodes should be provided", nodeNumber, providedNodeIds.size());
+                assertEquals(nodeNumber, providedNodeIds.size(), "All the nodes should be provided");
                 providedNodeIds.clear();
             }
         }
@@ -694,7 +690,7 @@ public class NetworkClientTest {
         client.ready(node, time.milliseconds());
         awaitReady(client, node);
         client.poll(1, time.milliseconds());
-        assertTrue("The client should be ready", client.isReady(node, time.milliseconds()));
+        assertTrue(client.isReady(node, time.milliseconds()), "The client should be ready");
 
         int correlationId = sendEmptyProduceRequest();
         client.poll(1, time.milliseconds());
@@ -840,14 +836,14 @@ public class NetworkClientTest {
     public void testDisconnectWithMultipleInFlights() {
         NetworkClient client = this.clientWithNoVersionDiscovery;
         awaitReady(client, node);
-        assertTrue("Expected NetworkClient to be ready to send to node " + node.idString(),
-                client.isReady(node, time.milliseconds()));
+        assertTrue(client.isReady(node, time.milliseconds()),
+            "Expected NetworkClient to be ready to send to node " + node.idString());
 
         MetadataRequest.Builder builder = new MetadataRequest.Builder(Collections.emptyList(), true);
         long now = time.milliseconds();
 
         final List<ClientResponse> callbackResponses = new ArrayList<>();
-        RequestCompletionHandler callback = response -> callbackResponses.add(response);
+        RequestCompletionHandler callback = callbackResponses::add;
 
         ClientRequest request1 = client.newClientRequest(node.idString(), builder, now, true, defaultRequestTimeoutMs, callback);
         client.send(request1, now);
@@ -883,15 +879,15 @@ public class NetworkClientTest {
     @Test
     public void testCallDisconnect() throws Exception {
         awaitReady(client, node);
-        assertTrue("Expected NetworkClient to be ready to send to node " + node.idString(),
-            client.isReady(node, time.milliseconds()));
-        assertFalse("Did not expect connection to node " + node.idString() + " to be failed",
-            client.connectionFailed(node));
+        assertTrue(client.isReady(node, time.milliseconds()),
+            "Expected NetworkClient to be ready to send to node " + node.idString());
+        assertFalse(client.connectionFailed(node),
+            "Did not expect connection to node " + node.idString() + " to be failed");
         client.disconnect(node.idString());
-        assertFalse("Expected node " + node.idString() + " to be disconnected.",
-            client.isReady(node, time.milliseconds()));
-        assertTrue("Expected connection to node " + node.idString() + " to be failed after disconnect",
-            client.connectionFailed(node));
+        assertFalse(client.isReady(node, time.milliseconds()),
+            "Expected node " + node.idString() + " to be disconnected.");
+        assertTrue(client.connectionFailed(node),
+            "Expected connection to node " + node.idString() + " to be failed after disconnect");
         assertFalse(client.canConnect(node, time.milliseconds()));
 
         // ensure disconnect does not reset backoff period if already disconnected

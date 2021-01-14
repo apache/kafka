@@ -23,13 +23,13 @@ import org.apache.kafka.common.message.AddPartitionsToTxnResponseData.AddPartiti
 import org.apache.kafka.common.message.AddPartitionsToTxnResponseData.AddPartitionsToTxnTopicResultCollection;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
-import org.junit.Before;
-import org.junit.Test;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 
 import java.util.HashMap;
 import java.util.Map;
 
-import static org.junit.Assert.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 
 public class AddPartitionsToTxnResponseTest {
 
@@ -47,7 +47,7 @@ public class AddPartitionsToTxnResponseTest {
     protected Map<Errors, Integer> expectedErrorCounts;
     protected Map<TopicPartition, Errors> errorsMap;
 
-    @Before
+    @BeforeEach
     public void setUp() {
         expectedErrorCounts = new HashMap<>();
         expectedErrorCounts.put(errorOne, 1);
