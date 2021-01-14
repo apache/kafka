@@ -92,7 +92,7 @@ public final class FileRawSnapshotWriter implements RawSnapshotWriter {
         Path destination = Snapshots.moveRename(tempSnapshotPath, snapshotId);
         Utils.atomicMoveWithFallback(tempSnapshotPath, destination);
 
-        replicatedLog.ifPresent(log -> log.snapshotFrozen(snapshotId));
+        replicatedLog.ifPresent(log -> log.onSnapshotFrozen(snapshotId));
     }
 
     @Override

@@ -51,11 +51,11 @@ import scala.collection.{Seq, Set, mutable}
 
 object LogAppendInfo {
   val UnknownLogAppendInfo = LogAppendInfo(None, -1, None, RecordBatch.NO_TIMESTAMP, -1L, RecordBatch.NO_TIMESTAMP, -1L,
-    RecordConversionStats.EMPTY, false, NoCompressionCodec, NoCompressionCodec, -1, -1, offsetsMonotonic = false, -1L)
+    RecordConversionStats.EMPTY, NoCompressionCodec, NoCompressionCodec, -1, -1, offsetsMonotonic = false, -1L)
 
   def unknownLogAppendInfoWithLogStartOffset(logStartOffset: Long): LogAppendInfo =
     LogAppendInfo(None, -1, None, RecordBatch.NO_TIMESTAMP, -1L, RecordBatch.NO_TIMESTAMP, logStartOffset,
-      RecordConversionStats.EMPTY, false, NoCompressionCodec, NoCompressionCodec, -1, -1,
+      RecordConversionStats.EMPTY, NoCompressionCodec, NoCompressionCodec, -1, -1,
       offsetsMonotonic = false, -1L)
 
   /**
@@ -65,7 +65,7 @@ object LogAppendInfo {
    */
   def unknownLogAppendInfoWithAdditionalInfo(logStartOffset: Long, recordErrors: Seq[RecordError], errorMessage: String): LogAppendInfo =
     LogAppendInfo(None, -1, None, RecordBatch.NO_TIMESTAMP, -1L, RecordBatch.NO_TIMESTAMP, logStartOffset,
-      RecordConversionStats.EMPTY, false, NoCompressionCodec, NoCompressionCodec, -1, -1,
+      RecordConversionStats.EMPTY, NoCompressionCodec, NoCompressionCodec, -1, -1,
       offsetsMonotonic = false, -1L, recordErrors, errorMessage)
 }
 
@@ -80,7 +80,8 @@ object LeaderHwChange {
  * Struct to hold various quantities we compute about each message set before appending to the log
  *
  * @param firstOffset The first offset in the message set unless the message format is less than V2 and we are appending
- *                    to the follower.
+ *                    to the follower. If the message is a duplicate message the segment base offset and relative position
+ *                    in segment will be unknown.
  * @param lastOffset The last offset in the message set
  * @param lastLeaderEpoch The partition leader epoch corresponding to the last offset, if available.
  * @param maxTimestamp The maximum timestamp of the message set.
@@ -98,7 +99,7 @@ object LeaderHwChange {
  *                       Same if high watermark is not changed. None is the default value and it means append failed
  *
  */
-case class LogAppendInfo(var firstOffset: Option[Long],
+case class LogAppendInfo(var firstOffset: Option[LogOffsetMetadata],
                          var lastOffset: Long,
                          var lastLeaderEpoch: Option[Int],
                          var maxTimestamp: Long,
@@ -106,7 +107,6 @@ case class LogAppendInfo(var firstOffset: Option[Long],
                          var logAppendTime: Long,
                          var logStartOffset: Long,
                          var recordConversionStats: RecordConversionStats,
-                         var rolled: Boolean,
                          sourceCodec: CompressionCodec,
                          targetCodec: CompressionCodec,
                          shallowCount: Int,
@@ -122,7 +122,7 @@ case class LogAppendInfo(var firstOffset: Option[Long],
    * older than 2, we use the last offset of the first batch as an approximation of the first
    * offset to avoid decompressing the data.
    */
-  def firstOrLastOffsetOfFirstBatch: Long = firstOffset.getOrElse(lastOffsetOfFirstBatch)
+  def firstOrLastOffsetOfFirstBatch: Long = firstOffset.map(_.messageOffset).getOrElse(lastOffsetOfFirstBatch)
 
   /**
    * Get the (maximum) number of messages described by LogAppendInfo
@@ -130,7 +130,8 @@ case class LogAppendInfo(var firstOffset: Option[Long],
    */
   def numMessages: Long = {
     firstOffset match {
-      case Some(firstOffsetVal) if (firstOffsetVal >= 0 && lastOffset >= 0) => (lastOffset - firstOffsetVal + 1)
+      case Some(firstOffsetVal) if (firstOffsetVal.messageOffset >= 0 && lastOffset >= 0) =>
+        (lastOffset - firstOffsetVal.messageOffset + 1)
       case _ => 0
     }
   }
@@ -1122,7 +1123,7 @@ class Log(@volatile private var _dir: File,
           if (assignOffsets) {
             // assign offsets to the message set
             val offset = new LongRef(nextOffsetMetadata.messageOffset)
-            appendInfo.firstOffset = Some(offset.value)
+            appendInfo.firstOffset = Some(LogOffsetMetadata(offset.value))
             val now = time.milliseconds
             val validateAndOffsetAssignResult = try {
               LogValidator.validateMessagesAndAssignOffsets(validRecords,
@@ -1177,7 +1178,7 @@ class Log(@volatile private var _dir: File,
               // one example: fetching from log start offset on the leader which is not batch aligned,
               // which may happen as a result of AdminClient#deleteRecords()
               val firstOffset = appendInfo.firstOffset match {
-                case Some(offset) => offset
+                case Some(offsetMetadata) => offsetMetadata.messageOffset
                 case None => records.batches.asScala.head.baseOffset()
               }
 
@@ -1227,11 +1228,16 @@ class Log(@volatile private var _dir: File,
 
           maybeDuplicate match {
             case Some(duplicate) =>
-              appendInfo.firstOffset = Some(duplicate.firstOffset)
+              appendInfo.firstOffset = Some(LogOffsetMetadata(duplicate.firstOffset))
               appendInfo.lastOffset = duplicate.lastOffset
               appendInfo.logAppendTime = duplicate.timestamp
               appendInfo.logStartOffset = logStartOffset
             case None =>
+              // Before appending update the first offset metadata to include segment information
+              appendInfo.firstOffset = appendInfo.firstOffset.map { offsetMetadata =>
+                offsetMetadata.copy(segmentBaseOffset = segment.baseOffset, relativePositionInSegment = segment.size)
+              }
+
               segment.append(largestOffset = appendInfo.lastOffset,
                 largestTimestamp = appendInfo.maxTimestamp,
                 shallowOffsetOfMaxTimestamp = appendInfo.offsetOfMaxTimestamp,
@@ -1319,14 +1325,9 @@ class Log(@volatile private var _dir: File,
   /**
    * Increment the log start offset if the provided offset is larger.
    *
-   * If the log start offset changed, then this method:
-   *
-   * 1. Records the new log start offset.
-   * 2. Updates the high watermark if it is less than the new log start offset
-   * 3. Remove any leader epoch with an end offset less than the log start offset
-   * 4. Update the oldest leader epoch such that the start offset is equal to the log start offset
-   * 5. Notify the producer state manager of new log start offset
-   * 6. Update the first stable offset if it is less than the new log start offset
+   * If the log start offset changed, then this method also update a few key offset such that
+   * `logStartOffset <= logStableOffset <= highWatermark`. The leader epoch cache is also updated
+   * such that all of offsets referenced in that component point to valid offset in this log.
    *
    * @throws OffsetOutOfRangeException if the log start offset is greater than the high watermark
    * @return true if the log start offset was updated; otherwise false
@@ -1367,11 +1368,11 @@ class Log(@volatile private var _dir: File,
 
     records.batches.forEach { batch =>
       if (batch.hasProducerId) {
-        val maybeLastEntry = producerStateManager.lastEntry(batch.producerId)
-
         // if this is a client produce request, there will be up to 5 batches which could have been duplicated.
         // If we find a duplicate, we return the metadata of the appended batch to the client.
         if (origin == AppendOrigin.Client) {
+          val maybeLastEntry = producerStateManager.lastEntry(batch.producerId)
+
           maybeLastEntry.flatMap(_.findDuplicateBatch(batch)).foreach { duplicate =>
             return (updatedProducers, completedTxns.toList, Some(duplicate))
           }
@@ -1416,7 +1417,7 @@ class Log(@volatile private var _dir: File,
                                         ignoreRecordSize: Boolean): LogAppendInfo = {
     var shallowMessageCount = 0
     var validBytesCount = 0
-    var firstOffset: Option[Long] = None
+    var firstOffset: Option[LogOffsetMetadata] = None
     var lastOffset = -1L
     var lastLeaderEpoch = RecordBatch.NO_PARTITION_LEADER_EPOCH
     var sourceCodec: CompressionCodec = NoCompressionCodec
@@ -1440,7 +1441,7 @@ class Log(@volatile private var _dir: File,
       // Also indicate whether we have the accurate first offset or not
       if (!readFirstMessage) {
         if (batch.magic >= RecordBatch.MAGIC_VALUE_V2)
-          firstOffset = Some(batch.baseOffset)
+          firstOffset = Some(LogOffsetMetadata(batch.baseOffset))
         lastOffsetOfFirstBatch = batch.lastOffset
         readFirstMessage = true
       }
@@ -1488,7 +1489,7 @@ class Log(@volatile private var _dir: File,
     else
       None
     LogAppendInfo(firstOffset, lastOffset, lastLeaderEpochOpt, maxTimestamp, offsetOfMaxTimestamp, RecordBatch.NO_TIMESTAMP, logStartOffset,
-      RecordConversionStats.EMPTY, false, sourceCodec, targetCodec, shallowMessageCount, validBytesCount, monotonic, lastOffsetOfFirstBatch)
+      RecordConversionStats.EMPTY, sourceCodec, targetCodec, shallowMessageCount, validBytesCount, monotonic, lastOffsetOfFirstBatch)
   }
 
   /**
@@ -1917,8 +1918,6 @@ class Log(@volatile private var _dir: File,
         s"time_index_size = ${segment.timeIndex.entries}/${segment.timeIndex.maxEntries}, " +
         s"inactive_time_ms = ${segment.timeWaitedForRoll(now, maxTimestampInMessages)}/${config.segmentMs - segment.rollJitterMs}).")
 
-      appendInfo.rolled = true
-
       /*
         maxOffsetInMessages - Integer.MAX_VALUE is a heuristic value for the first offset in the set of messages.
         Since the offset in messages will not differ by more than Integer.MAX_VALUE, this is guaranteed <= the real
@@ -1932,7 +1931,7 @@ class Log(@volatile private var _dir: File,
         in the header.
       */
       appendInfo.firstOffset match {
-        case Some(firstOffset) => roll(Some(firstOffset))
+        case Some(firstOffset) => roll(Some(firstOffset.messageOffset))
         case None => roll(Some(maxOffsetInMessages - Integer.MAX_VALUE))
       }
     } else {

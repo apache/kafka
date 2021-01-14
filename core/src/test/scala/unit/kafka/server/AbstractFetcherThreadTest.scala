@@ -944,7 +944,7 @@ class AbstractFetcherThreadTest {
       state.logStartOffset = partitionData.logStartOffset
       state.highWatermark = partitionData.highWatermark
 
-      Some(LogAppendInfo(firstOffset = Some(fetchOffset),
+      Some(LogAppendInfo(firstOffset = Some(LogOffsetMetadata(fetchOffset)),
         lastOffset = lastOffset,
         lastLeaderEpoch = lastEpoch,
         maxTimestamp = maxTimestamp,
@@ -952,7 +952,6 @@ class AbstractFetcherThreadTest {
         logAppendTime = Time.SYSTEM.milliseconds(),
         logStartOffset = state.logStartOffset,
         recordConversionStats = RecordConversionStats.EMPTY,
-        rolled = false,
         sourceCodec = NoCompressionCodec,
         targetCodec = NoCompressionCodec,
         shallowCount = batches.size,

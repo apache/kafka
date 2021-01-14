@@ -38,6 +38,9 @@ import scala.compat.java8.OptionConverters._
 
 final class KafkaMetadataLog private (
   log: Log,
+  // This object needs to be thread-safe because the polling thread in the KafkaRaftClient implementation
+  // and other threads will access this object. This object is used to efficiently notify the polling thread
+  // when snapshots are created.
   snapshotIds: ConcurrentSkipListSet[raft.OffsetAndEpoch],
   topicPartition: TopicPartition,
   maxFetchSizeInBytes: Int
@@ -80,13 +83,17 @@ final class KafkaMetadataLog private (
       leaderEpoch = epoch,
       origin = AppendOrigin.Coordinator)
 
-    if (appendInfo.rolled) {
+    if (appendInfo.firstOffset.exists(_.relativePositionInSegment == 0)) {
+      // Assume that a new segment was created if the relative position is 0
       log.deleteOldSegments()
     }
 
-    new LogAppendInfo(appendInfo.firstOffset.getOrElse {
-      throw new KafkaException("Append failed unexpectedly")
-    }, appendInfo.lastOffset)
+    new LogAppendInfo(
+      appendInfo.firstOffset.map(_.messageOffset).getOrElse {
+        throw new KafkaException("Append failed unexpectedly")
+      },
+      appendInfo.lastOffset
+    )
   }
 
   override def appendAsFollower(records: Records): LogAppendInfo = {
@@ -95,13 +102,17 @@ final class KafkaMetadataLog private (
 
     val appendInfo = log.appendAsFollower(records.asInstanceOf[MemoryRecords])
 
-    if (appendInfo.rolled) {
+    if (appendInfo.firstOffset.exists(_.relativePositionInSegment == 0)) {
+      // Assume that a new segment was created if the relative position is 0
       log.deleteOldSegments()
     }
 
-    new LogAppendInfo(appendInfo.firstOffset.getOrElse {
-      throw new KafkaException("Append failed unexpectedly")
-    }, appendInfo.lastOffset)
+    new LogAppendInfo(
+      appendInfo.firstOffset.map(_.messageOffset).getOrElse {
+        throw new KafkaException("Append failed unexpectedly")
+      },
+      appendInfo.lastOffset
+    )
   }
 
   override def lastFetchedEpoch: Int = {
@@ -224,7 +235,7 @@ final class KafkaMetadataLog private (
         Optional.empty()
       }
     } catch {
-      case e: NoSuchFileException =>
+      case _: NoSuchFileException =>
         Optional.empty()
     }
   }
@@ -242,7 +253,7 @@ final class KafkaMetadataLog private (
     startSnapshotId;
   }
 
-  override def snapshotFrozen(snapshotId: raft.OffsetAndEpoch): Unit = {
+  override def onSnapshotFrozen(snapshotId: raft.OffsetAndEpoch): Unit = {
     snapshotIds.add(snapshotId)
   }
 
@@ -296,7 +307,7 @@ object KafkaMetadataLog {
 
     val replicatedLog = new KafkaMetadataLog(log, snapshotIds, topicPartition, maxFetchSizeInBytes)
     // When recovering, truncate fully if the latest snapshot is after the log end offset. This can happen to a follower
-    // when the follower crashes after downloading a snapshot from the leader but before it could truncate fully the log.
+    // when the follower crashes after downloading a snapshot from the leader but before it could truncate the log fully.
     replicatedLog.truncateFullyToLatestSnapshot()
 
     replicatedLog

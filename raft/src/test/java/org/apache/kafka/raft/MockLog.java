@@ -431,7 +431,7 @@ public class MockLog implements ReplicatedLog {
     }
 
     @Override
-    public void snapshotFrozen(OffsetAndEpoch snapshotId) {}
+    public void onSnapshotFrozen(OffsetAndEpoch snapshotId) {}
 
     @Override
     public boolean updateLogStart(OffsetAndEpoch logStartSnapshotId) {
