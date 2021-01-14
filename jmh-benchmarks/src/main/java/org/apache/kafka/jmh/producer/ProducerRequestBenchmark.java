@@ -22,9 +22,11 @@ import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.record.CompressionType;
 import org.apache.kafka.common.record.MemoryRecords;
 import org.apache.kafka.common.record.RecordBatch;
+import org.apache.kafka.common.record.Records;
 import org.apache.kafka.common.record.SimpleRecord;
 import org.apache.kafka.common.requests.ProduceRequest;
 import org.apache.kafka.common.requests.ProduceResponse;
+import org.apache.kafka.common.requests.RequestUtils;
 import org.openjdk.jmh.annotations.Benchmark;
 import org.openjdk.jmh.annotations.BenchmarkMode;
 import org.openjdk.jmh.annotations.Fork;
@@ -37,6 +39,7 @@ import org.openjdk.jmh.annotations.Warmup;
 
 import java.nio.charset.StandardCharsets;
 import java.util.Collections;
+import java.util.Iterator;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
@@ -50,7 +53,7 @@ import java.util.stream.IntStream;
 @OutputTimeUnit(TimeUnit.NANOSECONDS)
 public class ProducerRequestBenchmark {
     private static final int NUMBER_OF_PARTITIONS = 3;
-    private static final int NUMBER_OF_RECORDS = 3;
+    private static final int NUMBER_OF_RECORDS = 100;
     private static final List<ProduceRequestData.TopicProduceData> TOPIC_PRODUCE_DATA = Collections.singletonList(new ProduceRequestData.TopicProduceData()
             .setName("tp")
             .setPartitionData(IntStream.range(0, NUMBER_OF_PARTITIONS).mapToObj(partitionIndex -> new ProduceRequestData.PartitionProduceData()
@@ -84,4 +87,23 @@ public class ProducerRequestBenchmark {
         return REQUEST.getErrorResponse(0, Errors.INVALID_REQUEST.exception());
     }
 
+    @Benchmark
+    @OutputTimeUnit(TimeUnit.NANOSECONDS)
+    public boolean findFlagByForLoop() {
+        for (ProduceRequestData.TopicProduceData tp : REQUEST.data().topicData()) {
+            for (ProduceRequestData.PartitionProduceData p : tp.partitionData()) {
+                if (p.records() instanceof Records) {
+                    Iterator<? extends RecordBatch> iter = (((Records) p.records())).batchIterator();
+                    if (iter.hasNext() && iter.next().isTransactional()) return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    @Benchmark
+    @OutputTimeUnit(TimeUnit.NANOSECONDS)
+    public boolean findFlagByStream() {
+        return RequestUtils.hasTransactionalRecords(REQUEST);
+    }
 }
