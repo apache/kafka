@@ -38,7 +38,7 @@ import static org.apache.kafka.common.metrics.internals.MetricsUtils.convert;
  * The current sampled rate based quota does not cope well with bursty workloads. The issue is
  * that a unique and large sample can hold the average above the quota until it is discarded.
  * Practically, when this happens, one must wait until the sample is expired to bring the rate
- * below the quota even though less time would be theoretically required. As an examples, let's
+ * below the quota even though less time would be theoretically required. As an example, let's
  * imagine that we have:
  * - Quota (Q)   = 5
  * - Samples (S) = 100
