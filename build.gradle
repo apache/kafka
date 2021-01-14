@@ -242,8 +242,8 @@ subprojects {
   }
 
   // Remove the relevant project name once it's converted to JUnit 5
-  def shouldUseJUnit5 = !(["api", "basic-auth-extension", "connect", "core", "file", "generator",
-    "json", "mirror", "mirror-client", "runtime", "transform", "examples", "streams-scala",
+  def shouldUseJUnit5 = !(["api", "connect", "core", "file", "generator",
+    "json", "mirror", "mirror-client", "runtime", "transform", "streams-scala",
      "streams"].contains(it.project.name) || it.project.name.startsWith("upgrade-system-tests-"))
 
   def testLoggingEvents = ["passed", "skipped", "failed"]
@@ -2118,10 +2118,7 @@ project(':connect:basic-auth-extension') {
 
     testCompile libs.bcpkix
     testCompile libs.easymock
-    testCompile libs.junitJupiterApi
-    testCompile libs.junitVintageEngine
-    testCompile libs.powermockJunit4
-    testCompile libs.powermockEasymock
+    testCompile libs.junitJupiter
     testCompile project(':clients').sourceSets.test.output
 
     testRuntime libs.slf4jlog4j

@@ -20,31 +20,31 @@ package org.apache.kafka.connect.rest.basic.auth.extension;
 import org.apache.kafka.connect.rest.ConnectRestExtensionContext;
 import org.easymock.Capture;
 import org.easymock.EasyMock;
-import org.junit.After;
-import org.junit.Before;
-import org.junit.Test;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 
 import javax.security.auth.login.Configuration;
 import javax.ws.rs.core.Configurable;
 
-import static org.junit.Assert.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 
 public class BasicAuthSecurityRestExtensionTest {
 
     Configuration priorConfiguration;
 
-    @Before
+    @BeforeEach
     public void setup() {
         priorConfiguration = Configuration.getConfiguration();
     }
 
-    @After
+    @AfterEach
     public void tearDown() {
         Configuration.setConfiguration(priorConfiguration);
     }
-  
-    @Test
+
     @SuppressWarnings("unchecked")
+    @Test
     public void testJaasConfigurationNotOverwritten() {
         Capture<JaasBasicAuthFilter> jaasFilter = EasyMock.newCapture();
         Configurable<? extends Configurable<?>> configurable = EasyMock.mock(Configurable.class);
@@ -52,7 +52,7 @@ public class BasicAuthSecurityRestExtensionTest {
   
         ConnectRestExtensionContext context = EasyMock.mock(ConnectRestExtensionContext.class);
         EasyMock.expect(context.configurable()).andReturn((Configurable) configurable);
-  
+
         EasyMock.replay(configurable, context);
   
         BasicAuthSecurityRestExtension extension = new BasicAuthSecurityRestExtension();
@@ -60,10 +60,7 @@ public class BasicAuthSecurityRestExtensionTest {
         Configuration.setConfiguration(overwrittenConfiguration);
         extension.register(context);
   
-        assertNotEquals(
-            "Overwritten JAAS configuration should not be used by basic auth REST extension",
-            overwrittenConfiguration,
-            jaasFilter.getValue().configuration
-        );
+        assertNotEquals(overwrittenConfiguration, jaasFilter.getValue().configuration,
+            "Overwritten JAAS configuration should not be used by basic auth REST extension");
     }
 }
