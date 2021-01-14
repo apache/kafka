@@ -1492,8 +1492,7 @@ project(':streams:test-utils') {
     compile project(':clients')
 
     testCompile project(':clients').sourceSets.test.output
-    testCompile libs.junitJupiterApi
-    testCompile libs.junitVintageEngine
+    testCompile libs.junitJupiter
     testCompile libs.easymock
     testCompile libs.hamcrest
 
