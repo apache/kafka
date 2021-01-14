@@ -1465,11 +1465,13 @@ class KafkaConfig(val props: java.util.Map[_, _], doLog: Boolean, dynamicConfigO
       case role => throw new ConfigException(s"Unknown process role $role")
     }
 
-    if (roles.distinct.length != roles.size) {
+    val distinctRoles = roles.toSet
+
+    if (distinctRoles.size != roles.size) {
       throw new ConfigException(s"Duplicate role names found in `${KafkaConfig.ProcessRolesProp}`: $roles")
     }
 
-    roles.toSet
+    distinctRoles
   }
 
   def numNetworkThreads = getInt(KafkaConfig.NumNetworkThreadsProp)

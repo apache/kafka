@@ -16,6 +16,10 @@
  */
 package kafka.server
 
+/**
+ * Stubbed implementation of the KIP-500 controller which is responsible
+ * for managing the `@metadata` topic which is replicated through Raft.
+ */
 class KafkaRaftController {
   def startup(): Unit = ???
   def shutdown(): Unit = ???

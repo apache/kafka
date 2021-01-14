@@ -24,6 +24,11 @@ import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.utils.Time
 import org.apache.kafka.raft.internals.StringSerde
 
+/**
+ * Partially stubbed implementation of the KIP-500 server which relies on a self-managed
+ * Raft quorum for replication of the `@metadata` topic, which stores all of
+ * the cluster metadata.
+ */
 class KafkaRaftServer(
   config: KafkaConfig,
   time: Time,
@@ -36,13 +41,14 @@ class KafkaRaftServer(
   private val metrics = Server.initializeMetrics(
     config,
     time,
-    clusterId = "FIXME" // We will get this from `meta.properties`
+    clusterId = "FIXME"
   )
 
   private val raftManager = new KafkaRaftManager(
+    config,
+    config.logDirs.head,
     new StringSerde,
     KafkaRaftServer.MetadataPartition,
-    config,
     time,
     metrics
   )

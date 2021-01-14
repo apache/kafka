@@ -93,15 +93,15 @@ trait RaftManager[T] {
 }
 
 class KafkaRaftManager[T](
+  config: KafkaConfig,
+  baseLogDir: String,
   recordSerde: RecordSerde[T],
   topicPartition: TopicPartition,
-  config: KafkaConfig,
   time: Time,
   metrics: Metrics
 ) extends RaftManager[T] with Logging {
 
   private val nodeId = config.brokerId
-  private val baseLogDir = config.logDirs.head
   private val raftConfig = new RaftConfig(config.originals)
   private val logContext = new LogContext(s"[RaftManager $nodeId] ")
   this.logIdent = logContext.logPrefix()

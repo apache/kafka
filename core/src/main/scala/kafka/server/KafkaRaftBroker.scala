@@ -16,6 +16,10 @@
  */
 package kafka.server
 
+/**
+ * Stubbed implementation of the KIP-500 broker which processes state
+ * from the `@metadata` topic which is replicated through Raft.
+ */
 class KafkaRaftBroker {
   def startup(): Unit = ???
   def shutdown(): Unit = ???
