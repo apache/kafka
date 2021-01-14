@@ -267,7 +267,7 @@ class LeaderEpochFileCacheTest {
     cache.assign(epoch = 2, startOffset = 6); logEndOffset = 7
 
     //When we update an epoch in the past with a different offset, the log has already reached
-    //an inconsistent state. Our options are either to raise an error, Disabled the new append,
+    //an inconsistent state. Our options are either to raise an error, ignore the new append,
     //or truncate the cached epochs to the point of conflict. We take this latter approach in
     //order to guarantee that epochs and offsets in the cache increase monotonically, which makes
     //the search logic simpler to reason about.
