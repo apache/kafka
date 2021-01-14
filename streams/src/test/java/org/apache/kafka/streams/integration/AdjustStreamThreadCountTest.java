@@ -119,7 +119,6 @@ public class AdjustStreamThreadCountTest {
                     .sorted().toArray(),
                 equalTo(new String[] {"1", "2", "3"})
             );
-            waitForApplicationState(Collections.singletonList(kafkaStreams), KafkaStreams.State.REBALANCING, DEFAULT_DURATION);
             waitForApplicationState(Collections.singletonList(kafkaStreams), KafkaStreams.State.RUNNING, DEFAULT_DURATION);
         }
     }
@@ -131,7 +130,6 @@ public class AdjustStreamThreadCountTest {
             final int oldThreadCount = kafkaStreams.localThreadsMetadata().size();
             assertThat(kafkaStreams.removeStreamThread().get().split("-")[0], equalTo(appId));
             assertThat(kafkaStreams.localThreadsMetadata().size(), equalTo(oldThreadCount - 1));
-            waitForApplicationState(Collections.singletonList(kafkaStreams), KafkaStreams.State.REBALANCING, DEFAULT_DURATION);
             waitForApplicationState(Collections.singletonList(kafkaStreams), KafkaStreams.State.RUNNING, DEFAULT_DURATION);
         }
     }
@@ -148,7 +146,6 @@ public class AdjustStreamThreadCountTest {
             one.start();
             latch.await(30, TimeUnit.SECONDS);
             assertThat(kafkaStreams.localThreadsMetadata().size(), equalTo(oldThreadCount));
-            waitForApplicationState(Collections.singletonList(kafkaStreams), KafkaStreams.State.REBALANCING, DEFAULT_DURATION);
             waitForApplicationState(Collections.singletonList(kafkaStreams), KafkaStreams.State.RUNNING, DEFAULT_DURATION);
         }
     }
@@ -226,7 +223,6 @@ public class AdjustStreamThreadCountTest {
                 equalTo(new String[] {"1", "2", "3"})
             );
             assertThat("the new thread should have received the old threads name", name2.equals(removedThread));
-            waitForApplicationState(Collections.singletonList(kafkaStreams), KafkaStreams.State.REBALANCING, DEFAULT_DURATION);
             waitForApplicationState(Collections.singletonList(kafkaStreams), KafkaStreams.State.RUNNING, DEFAULT_DURATION);
         }
     }
