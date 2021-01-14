@@ -35,16 +35,15 @@ import org.apache.kafka.common.requests.{AbstractRequest, AbstractResponse, Requ
 import org.apache.kafka.common.resource.Resource.CLUSTER_NAME
 import org.apache.kafka.common.resource.ResourceType.CLUSTER
 import org.apache.kafka.common.resource.{PatternType, Resource, ResourcePattern, ResourceType}
-import org.apache.kafka.common.utils.{LogContext, Time, Utils}
+import org.apache.kafka.common.utils.{Time, Utils}
 import org.apache.kafka.server.authorizer.{Action, AuthorizationResult, Authorizer}
 
 import scala.jdk.CollectionConverters._
 
 /**
- * Helper methods and helper class factories for request handlers. Provides common functionality around throttling,
- * authorizations, and error handling
+ * Helper methods for request handlers
  */
-object ApisUtils {
+object RequestHandlerUtils {
   def onLeadershipChange(groupCoordinator: GroupCoordinator,
                          txnCoordinator: TransactionCoordinator,
                          updatedLeaders: Iterable[Partition],
