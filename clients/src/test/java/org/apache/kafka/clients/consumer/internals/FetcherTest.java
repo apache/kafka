@@ -99,10 +99,10 @@ import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.test.DelayedReceive;
 import org.apache.kafka.test.MockSelector;
 import org.apache.kafka.test.TestUtils;
-import org.junit.After;
-import org.junit.Assert;
-import org.junit.Before;
-import org.junit.Test;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.Timeout;
 
 import java.io.DataOutputStream;
 import java.lang.reflect.Field;
@@ -139,15 +139,15 @@ import static org.apache.kafka.common.requests.OffsetsForLeaderEpochResponse.UND
 import static org.apache.kafka.common.requests.OffsetsForLeaderEpochResponse.UNDEFINED_EPOCH_OFFSET;
 import static org.apache.kafka.common.requests.FetchMetadata.INVALID_SESSION_ID;
 import static org.apache.kafka.test.TestUtils.assertOptional;
-import static org.junit.Assert.assertArrayEquals;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertNotEquals;
-import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.assertNull;
-import static org.junit.Assert.assertThrows;
-import static org.junit.Assert.assertTrue;
-import static org.junit.Assert.fail;
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.fail;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.spy;
 
@@ -188,7 +188,7 @@ public class FetcherTest {
     private MemoryRecords partialRecords;
     private ExecutorService executorService;
 
-    @Before
+    @BeforeEach
     public void setup() {
         records = buildRecords(1L, 3, 1);
         nextRecords = buildRecords(4L, 2, 4);
@@ -207,7 +207,7 @@ public class FetcherTest {
             tp -> validLeaderEpoch), false, 0L);
     }
 
-    @After
+    @AfterEach
     public void teardown() throws Exception {
         if (metrics != null)
             this.metrics.close();
@@ -958,26 +958,26 @@ public class FetcherTest {
         consumerClient.poll(time.timer(0));
 
         Map<TopicPartition, List<ConsumerRecord<byte[], byte[]>>> fetchedRecords = fetchedRecords();
-        assertEquals("Should not return any records when partition is paused", 0, fetchedRecords.size());
-        assertTrue("Should still contain completed fetches", fetcher.hasCompletedFetches());
-        assertFalse("Should not have any available (non-paused) completed fetches", fetcher.hasAvailableFetches());
+        assertEquals(0, fetchedRecords.size(), "Should not return any records when partition is paused");
+        assertTrue(fetcher.hasCompletedFetches(), "Should still contain completed fetches");
+        assertFalse(fetcher.hasAvailableFetches(), "Should not have any available (non-paused) completed fetches");
         assertNull(fetchedRecords.get(tp0));
         assertEquals(0, fetcher.sendFetches());
 
         subscriptions.resume(tp0);
 
-        assertTrue("Should have available (non-paused) completed fetches", fetcher.hasAvailableFetches());
+        assertTrue(fetcher.hasAvailableFetches(), "Should have available (non-paused) completed fetches");
 
         consumerClient.poll(time.timer(0));
         fetchedRecords = fetchedRecords();
-        assertEquals("Should return records when partition is resumed", 1, fetchedRecords.size());
+        assertEquals(1, fetchedRecords.size(), "Should return records when partition is resumed");
         assertNotNull(fetchedRecords.get(tp0));
         assertEquals(3, fetchedRecords.get(tp0).size());
 
         consumerClient.poll(time.timer(0));
         fetchedRecords = fetchedRecords();
-        assertEquals("Should not return records after previously paused partitions are fetched", 0, fetchedRecords.size());
-        assertFalse("Should no longer contain completed fetches", fetcher.hasCompletedFetches());
+        assertEquals(0, fetchedRecords.size(), "Should not return records after previously paused partitions are fetched");
+        assertFalse(fetcher.hasCompletedFetches(), "Should no longer contain completed fetches");
     }
 
     @Test
@@ -1005,14 +1005,14 @@ public class FetcherTest {
         consumerClient.poll(time.timer(0));
 
         fetchedRecords = fetchedRecords();
-        assertEquals("Should return completed fetch for unpaused partitions", 1, fetchedRecords.size());
-        assertTrue("Should still contain completed fetches", fetcher.hasCompletedFetches());
+        assertEquals(1, fetchedRecords.size(), "Should return completed fetch for unpaused partitions");
+        assertTrue(fetcher.hasCompletedFetches(), "Should still contain completed fetches");
         assertNotNull(fetchedRecords.get(tp1));
         assertNull(fetchedRecords.get(tp0));
 
         fetchedRecords = fetchedRecords();
-        assertEquals("Should return no records for remaining paused partition", 0, fetchedRecords.size());
-        assertTrue("Should still contain completed fetches", fetcher.hasCompletedFetches());
+        assertEquals(0, fetchedRecords.size(), "Should return no records for remaining paused partition");
+        assertTrue(fetcher.hasCompletedFetches(), "Should still contain completed fetches");
     }
 
     @Test
@@ -1042,9 +1042,9 @@ public class FetcherTest {
         consumerClient.poll(time.timer(0));
 
         fetchedRecords = fetchedRecords();
-        assertEquals("Should return no records for all paused partitions", 0, fetchedRecords.size());
-        assertTrue("Should still contain completed fetches", fetcher.hasCompletedFetches());
-        assertFalse("Should not have any available (non-paused) completed fetches", fetcher.hasAvailableFetches());
+        assertEquals(0, fetchedRecords.size(), "Should return no records for all paused partitions");
+        assertTrue(fetcher.hasCompletedFetches(), "Should still contain completed fetches");
+        assertFalse(fetcher.hasAvailableFetches(), "Should not have any available (non-paused) completed fetches");
     }
 
     @Test
@@ -1065,17 +1065,17 @@ public class FetcherTest {
 
         fetchedRecords = fetchedRecords();
 
-        assertEquals("Should return 2 records from fetch with 3 records", 2, fetchedRecords.get(tp0).size());
-        assertFalse("Should have no completed fetches", fetcher.hasCompletedFetches());
+        assertEquals(2, fetchedRecords.get(tp0).size(), "Should return 2 records from fetch with 3 records");
+        assertFalse(fetcher.hasCompletedFetches(), "Should have no completed fetches");
 
         subscriptions.pause(tp0);
         consumerClient.poll(time.timer(0));
 
         fetchedRecords = fetchedRecords();
 
-        assertEquals("Should return no records for paused partitions", 0, fetchedRecords.size());
-        assertTrue("Should have 1 entry in completed fetches", fetcher.hasCompletedFetches());
-        assertFalse("Should not have any available (non-paused) completed fetches", fetcher.hasAvailableFetches());
+        assertEquals(0, fetchedRecords.size(), "Should return no records for paused partitions");
+        assertTrue(fetcher.hasCompletedFetches(), "Should have 1 entry in completed fetches");
+        assertFalse(fetcher.hasAvailableFetches(), "Should not have any available (non-paused) completed fetches");
 
         subscriptions.resume(tp0);
 
@@ -1083,8 +1083,8 @@ public class FetcherTest {
 
         fetchedRecords = fetchedRecords();
 
-        assertEquals("Should return last remaining record", 1, fetchedRecords.get(tp0).size());
-        assertFalse("Should have no completed fetches", fetcher.hasCompletedFetches());
+        assertEquals(1, fetchedRecords.get(tp0).size(), "Should return last remaining record");
+        assertFalse(fetcher.hasCompletedFetches(), "Should have no completed fetches");
     }
 
     @Test
@@ -1101,11 +1101,11 @@ public class FetcherTest {
         subscriptions.resume(tp0);
         consumerClient.poll(time.timer(0));
 
-        assertTrue("Should have 1 entry in completed fetches", fetcher.hasCompletedFetches());
+        assertTrue(fetcher.hasCompletedFetches(), "Should have 1 entry in completed fetches");
         Map<TopicPartition, List<ConsumerRecord<byte[], byte[]>>> fetchedRecords = fetchedRecords();
-        assertEquals("Should not return any records because we seeked to a new offset", 0, fetchedRecords.size());
+        assertEquals(0, fetchedRecords.size(), "Should not return any records because we seeked to a new offset");
         assertNull(fetchedRecords.get(tp0));
-        assertFalse("Should have no completed fetches", fetcher.hasCompletedFetches());
+        assertFalse(fetcher.hasCompletedFetches(), "Should have no completed fetches");
     }
 
     @Test
@@ -1144,8 +1144,8 @@ public class FetcherTest {
         client.prepareResponse(fullFetchResponse(tp0, this.records, Errors.FENCED_LEADER_EPOCH, 100L, 0));
         consumerClient.poll(time.timer(0));
 
-        assertEquals("Should not return any records", 0, fetcher.fetchedRecords().size());
-        assertEquals("Should have requested metadata update", 0L, metadata.timeToNextUpdate(time.milliseconds()));
+        assertEquals(0, fetcher.fetchedRecords().size(), "Should not return any records");
+        assertEquals(0L, metadata.timeToNextUpdate(time.milliseconds()), "Should have requested metadata update");
     }
 
     @Test
@@ -1158,8 +1158,8 @@ public class FetcherTest {
         client.prepareResponse(fullFetchResponse(tp0, this.records, Errors.UNKNOWN_LEADER_EPOCH, 100L, 0));
         consumerClient.poll(time.timer(0));
 
-        assertEquals("Should not return any records", 0, fetcher.fetchedRecords().size());
-        assertNotEquals("Should not have requested metadata update", 0L, metadata.timeToNextUpdate(time.milliseconds()));
+        assertEquals(0, fetcher.fetchedRecords().size(), "Should not return any records");
+        assertNotEquals(0L, metadata.timeToNextUpdate(time.milliseconds()), "Should not have requested metadata update");
     }
 
     @Test
@@ -1178,8 +1178,8 @@ public class FetcherTest {
             if (body instanceof FetchRequest) {
                 FetchRequest fetchRequest = (FetchRequest) body;
                 fetchRequest.fetchData().values().forEach(partitionData -> {
-                    assertTrue("Expected Fetcher to set leader epoch in request", partitionData.currentLeaderEpoch.isPresent());
-                    assertEquals("Expected leader epoch to match epoch from metadata update", 99, partitionData.currentLeaderEpoch.get().longValue());
+                    assertTrue(partitionData.currentLeaderEpoch.isPresent(), "Expected Fetcher to set leader epoch in request");
+                    assertEquals(99, partitionData.currentLeaderEpoch.get().longValue(), "Expected leader epoch to match epoch from metadata update");
                 });
                 return true;
             } else {
@@ -1745,7 +1745,8 @@ public class FetcherTest {
         assertEquals(237L, subscriptions.position(tp0).offset);
     }
 
-    @Test(timeout = 10000)
+    @Timeout(10)
+    @Test
     public void testEarlierOffsetResetArrivesLate() throws InterruptedException {
         LogContext lc = new LogContext();
         buildFetcher(spy(new SubscriptionState(lc, OffsetResetStrategy.EARLIEST)), lc);
@@ -2044,10 +2045,10 @@ public class FetcherTest {
             fetcher.getTopicMetadata(new MetadataRequest.Builder(Collections.singletonList(topicName), false),
                     time.timer(5000L));
 
-        Assert.assertNotNull(topicMetadata);
-        Assert.assertNotNull(topicMetadata.get(topicName));
+        assertNotNull(topicMetadata);
+        assertNotNull(topicMetadata.get(topicName));
         //noinspection ConstantConditions
-        Assert.assertEquals(metadata.fetch().partitionCountForTopic(topicName).longValue(), topicMetadata.get(topicName).size());
+        assertEquals(metadata.fetch().partitionCountForTopic(topicName).longValue(), topicMetadata.get(topicName).size());
     }
 
     /*
@@ -2635,8 +2636,8 @@ public class FetcherTest {
             if (body instanceof ListOffsetsRequest) {
                 ListOffsetsRequest offsetRequest = (ListOffsetsRequest) body;
                 int epoch = offsetRequest.topics().get(0).partitions().get(0).currentLeaderEpoch();
-                assertTrue("Expected Fetcher to set leader epoch in request", epoch != ListOffsetsResponse.UNKNOWN_EPOCH);
-                assertEquals("Expected leader epoch to match epoch from metadata update", epoch, 99);
+                assertTrue(epoch != ListOffsetsResponse.UNKNOWN_EPOCH, "Expected Fetcher to set leader epoch in request");
+                assertEquals(epoch, 99, "Expected leader epoch to match epoch from metadata update");
                 return true;
             } else {
                 fail("Should have seen ListOffsetRequest");
@@ -2685,12 +2686,9 @@ public class FetcherTest {
         Map<TopicPartition, OffsetAndTimestamp> offsetAndTimestampMap =
             fetcher.offsetsForTimes(timestampToSearch, time.timer(Long.MAX_VALUE));
 
-        assertNotNull("Expect Fetcher.offsetsForTimes() to return non-null result for " + tp0,
-                      offsetAndTimestampMap.get(tp0));
-        assertNotNull("Expect Fetcher.offsetsForTimes() to return non-null result for " + tp1,
-                      offsetAndTimestampMap.get(tp1));
-        assertNotNull("Expect Fetcher.offsetsForTimes() to return non-null result for " + t2p0,
-                      offsetAndTimestampMap.get(t2p0));
+        assertNotNull(offsetAndTimestampMap.get(tp0), "Expect Fetcher.offsetsForTimes() to return non-null result for " + tp0);
+        assertNotNull(offsetAndTimestampMap.get(tp1), "Expect Fetcher.offsetsForTimes() to return non-null result for " + tp1);
+        assertNotNull(offsetAndTimestampMap.get(t2p0), "Expect Fetcher.offsetsForTimes() to return non-null result for " + t2p0);
         assertEquals(11L, offsetAndTimestampMap.get(tp0).offset());
         assertEquals(32L, offsetAndTimestampMap.get(tp1).offset());
         assertEquals(54L, offsetAndTimestampMap.get(t2p0).offset());
@@ -2722,10 +2720,9 @@ public class FetcherTest {
         timestampToSearch.put(tp0, ListOffsetsRequest.LATEST_TIMESTAMP);
         Map<TopicPartition, OffsetAndTimestamp> offsetAndTimestampMap = fetcher.offsetsForTimes(timestampToSearch, time.timer(Long.MAX_VALUE));
 
-        assertNotNull("Expect Fetcher.offsetsForTimes() to return non-null result for " + tp0,
-                     offsetAndTimestampMap.get(tp0));
+        assertNotNull(offsetAndTimestampMap.get(tp0), "Expect Fetcher.offsetsForTimes() to return non-null result for " + tp0);
         assertEquals(11L, offsetAndTimestampMap.get(tp0).offset());
-        Assert.assertNotNull(metadata.fetch().partitionCountForTopic(anotherTopic));
+        assertNotNull(metadata.fetch().partitionCountForTopic(anotherTopic));
     }
 
     @Test
@@ -3419,7 +3416,8 @@ public class FetcherTest {
                         ClientRequest request = client.requests().peek();
                         FetchRequest fetchRequest = (FetchRequest) request.requestBuilder().build();
                         int epoch = fetchRequest.metadata().epoch();
-                        assertTrue(String.format("Unexpected epoch expected %d got %d", nextEpoch, epoch), epoch == 0 || epoch == nextEpoch);
+                        assertTrue(epoch == 0 || epoch == nextEpoch,
+                            String.format("Unexpected epoch expected %d got %d", nextEpoch, epoch));
                         nextEpoch++;
                         LinkedHashMap<TopicPartition, FetchResponse.PartitionData<MemoryRecords>> responseMap = new LinkedHashMap<>();
                         responseMap.put(tp0, new FetchResponse.PartitionData<>(Errors.NONE, nextOffset + 2L, nextOffset + 2,
@@ -4054,13 +4052,13 @@ public class FetcherTest {
         // Prepare offset list response from async validation with epoch=2
         client.prepareResponse(prepareOffsetsForLeaderEpochResponse(tp0, Errors.NONE, epochTwo, 10L));
         consumerClient.pollNoWakeup();
-        assertTrue("Expected validation to fail since leader epoch changed", subscriptions.awaitingValidation(tp0));
+        assertTrue(subscriptions.awaitingValidation(tp0), "Expected validation to fail since leader epoch changed");
 
         // Next round of validation, should succeed in validating the position
         fetcher.validateOffsetsIfNeeded();
         client.prepareResponse(prepareOffsetsForLeaderEpochResponse(tp0, Errors.NONE, epochThree, 10L));
         consumerClient.pollNoWakeup();
-        assertFalse("Expected validation to succeed with latest epoch", subscriptions.awaitingValidation(tp0));
+        assertFalse(subscriptions.awaitingValidation(tp0), "Expected validation to succeed with latest epoch");
     }
 
     @Test
