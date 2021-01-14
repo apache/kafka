@@ -51,7 +51,7 @@ public final class RequestUtils {
         return request.data().topicData().stream().flatMap(tpd -> tpd.partitionData().stream())
                 .map(ProduceRequestData.PartitionProduceData::records)
                 .filter(records -> records instanceof Records)
-                .map(r -> ((Records) r).batchIterator())
+                .map(r -> ((Records) r).batches().iterator())
                 .filter(Iterator::hasNext)
                 .anyMatch(iter -> predicate.test(iter.next()));
     }
