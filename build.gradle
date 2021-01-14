@@ -241,7 +241,10 @@ subprojects {
     }
   }
 
-  def shouldUseJUnit5 = ["clients", "examples", "log4j-appender", "raft", "tools"].contains(it.project.name)
+  // Remove the relevant project name once it's converted to JUnit 5
+  def shouldUseJUnit5 = !(["api", "basic-auth-extension", "connect", "core", "file", "generator",
+    "json", "mirror", "mirror-client", "runtime", "transform", "examples", "streams-scala",
+     "streams"].contains(it.project.name) || it.project.name.startsWith("upgrade-system-tests-"))
 
   def testLoggingEvents = ["passed", "skipped", "failed"]
   def testShowStandardStreams = false
@@ -1490,8 +1493,7 @@ project(':streams:test-utils') {
     compile project(':clients')
 
     testCompile project(':clients').sourceSets.test.output
-    testCompile libs.junitJupiterApi
-    testCompile libs.junitVintageEngine
+    testCompile libs.junitJupiter
     testCompile libs.easymock
     testCompile libs.hamcrest
 
@@ -2122,6 +2124,7 @@ project(':connect:mirror') {
 
     testRuntime project(':connect:runtime')
     testRuntime libs.slf4jlog4j
+    testRuntime libs.bcpkix
   }
 
   javadoc {
