@@ -241,7 +241,7 @@ subprojects {
     }
   }
 
-  def shouldUseJUnit5 = ["clients", "examples", "log4j-appender", "raft", "test-utils", "tools"].contains(it.project.name)
+  def shouldUseJUnit5 = ["clients", "examples", "log4j-appender", "raft", "test-utils", "tools", "mirror-client"].contains(it.project.name)
 
   def testLoggingEvents = ["passed", "skipped", "failed"]
   def testShowStandardStreams = false
@@ -2152,8 +2152,7 @@ project(':connect:mirror-client') {
     compile project(':clients')
     compile libs.slf4jApi
 
-    testCompile libs.junitJupiterApi
-    testCompile libs.junitVintageEngine
+    testCompile libs.junitJupiter
     testCompile project(':clients').sourceSets.test.output
 
     testRuntime libs.slf4jlog4j
