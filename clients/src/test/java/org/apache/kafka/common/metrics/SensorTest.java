@@ -26,7 +26,7 @@ import org.apache.kafka.common.metrics.stats.WindowedSum;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.SystemTime;
 import org.apache.kafka.common.utils.Time;
-import org.junit.Test;
+import org.junit.jupiter.api.Test;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -42,14 +42,12 @@ import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import org.mockito.Mockito;
 
-import static org.hamcrest.CoreMatchers.is;
-import static org.hamcrest.MatcherAssert.assertThat;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertNull;
-import static org.junit.Assert.assertThrows;
-import static org.junit.Assert.assertTrue;
-import static org.junit.Assert.fail;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.fail;
 
 public class SensorTest {
 
@@ -220,8 +218,8 @@ public class SensorTest {
             assertTrue(service.awaitTermination(10, TimeUnit.SECONDS));
             needShutdown = false;
             for (Future<Throwable> callable : workers) {
-                assertTrue("If this failure happen frequently, we can try to increase the wait time", callable.isDone());
-                assertNull("Sensor#checkQuotas SHOULD be thread-safe!", callable.get());
+                assertTrue(callable.isDone(), "If this failure happen frequently, we can try to increase the wait time");
+                assertNull(callable.get(), "Sensor#checkQuotas SHOULD be thread-safe!");
             }
         } finally {
             if (needShutdown) {
@@ -235,21 +233,21 @@ public class SensorTest {
         final Metrics metrics = new Metrics();
         final Sensor sensor = metrics.sensor("sensor");
 
-        assertThat(sensor.hasMetrics(), is(false));
+        assertFalse(sensor.hasMetrics());
 
         sensor.add(
             new MetricName("name1", "group1", "description1", Collections.emptyMap()),
             new WindowedSum()
         );
 
-        assertThat(sensor.hasMetrics(), is(true));
+        assertTrue(sensor.hasMetrics());
 
         sensor.add(
             new MetricName("name2", "group2", "description2", Collections.emptyMap()),
             new CumulativeCount()
         );
 
-        assertThat(sensor.hasMetrics(), is(true));
+        assertTrue(sensor.hasMetrics());
     }
 
     @Test

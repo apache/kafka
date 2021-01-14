@@ -193,6 +193,10 @@ public class StreamThread extends Thread {
         return state;
     }
 
+    void setPartitionAssignedTime(final long lastPartitionAssignedMs) {
+        this.lastPartitionAssignedMs = lastPartitionAssignedMs;
+    }
+
     /**
      * Sets the state
      *
@@ -274,6 +278,7 @@ public class StreamThread extends Thread {
     private long now;
     private long lastPollMs;
     private long lastCommitMs;
+    private long lastPartitionAssignedMs = -1L;
     private int numIterations;
     private volatile State state = State.CREATED;
     private volatile ThreadMetadata threadMetadata;
@@ -762,9 +767,11 @@ public class StreamThread extends Thread {
             // multiple iterations with reasonably large max.num.records and hence is less vulnerable to outliers
             taskManager.recordTaskProcessRatio(totalProcessLatency, now);
 
-            log.info("Processed {} total records, ran {} punctuators, and committed {} total tasks " +
-                        "for active tasks {} and standby tasks {}",
-                     totalProcessed, totalPunctuated, totalCommitted, taskManager.activeTaskIds(), taskManager.standbyTaskIds());
+            // Don't log summary if no new records were processed to avoid spamming logs for low-traffic topics
+            if (totalProcessed > 0 || totalPunctuated > 0 || totalCommitted > 0) {
+                log.info("Processed {} total records, ran {} punctuators, and committed {} total tasks",
+                         totalProcessed, totalPunctuated, totalCommitted);
+            }
         }
 
         now = time.milliseconds();
@@ -790,7 +797,8 @@ public class StreamThread extends Thread {
 
             if (taskManager.tryToCompleteRestoration(now)) {
                 changelogReader.transitToUpdateStandby();
-
+                log.info("Restoration took {} ms for all tasks {}", time.milliseconds() - lastPartitionAssignedMs,
+                    taskManager.tasks().keySet());
                 setState(State.RUNNING);
             }
 
@@ -837,7 +845,9 @@ public class StreamThread extends Thread {
         final long pollLatency = advanceNowAndComputeLatency();
 
         final int numRecords = records.count();
-        log.info("Main Consumer poll completed in {} ms and fetched {} records", pollLatency, numRecords);
+        if (numRecords > 0) {
+            log.info("Main Consumer poll completed in {} ms and fetched {} records", pollLatency, numRecords);
+        }
 
         pollSensor.record(pollLatency, now);
 

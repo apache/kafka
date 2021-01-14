@@ -19,11 +19,11 @@ package org.apache.kafka.common.requests;
 import org.apache.kafka.common.errors.UnknownServerException;
 import org.apache.kafka.common.message.UpdateFeaturesRequestData;
 import org.apache.kafka.common.protocol.Errors;
-import org.junit.Test;
+import org.junit.jupiter.api.Test;
 
 import java.util.Collections;
 
-import static org.junit.Assert.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 
 public class UpdateFeaturesRequestTest {
 
