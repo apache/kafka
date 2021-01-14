@@ -53,14 +53,14 @@ class KafkaRaftServer(
     metrics
   )
 
-  private val broker: Option[KafkaRaftBroker] = if (config.processRoles.contains(BrokerRole)) {
-    Some(new KafkaRaftBroker())
+  private val broker: Option[BrokerServer] = if (config.processRoles.contains(BrokerRole)) {
+    Some(new BrokerServer())
   } else {
     None
   }
 
-  private val controller: Option[KafkaRaftController] = if (config.processRoles.contains(ControllerRole)) {
-    Some(new KafkaRaftController())
+  private val controller: Option[ControllerServer] = if (config.processRoles.contains(ControllerRole)) {
+    Some(new ControllerServer())
   } else {
     None
   }

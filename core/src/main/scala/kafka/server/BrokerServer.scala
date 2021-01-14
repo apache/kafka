@@ -17,10 +17,10 @@
 package kafka.server
 
 /**
- * Stubbed implementation of the KIP-500 controller which is responsible
- * for managing the `@metadata` topic which is replicated through Raft.
+ * Stubbed implementation of the KIP-500 broker which processes state
+ * from the `@metadata` topic which is replicated through Raft.
  */
-class KafkaRaftController {
+class BrokerServer {
   def startup(): Unit = ???
   def shutdown(): Unit = ???
   def awaitShutdown(): Unit = ???
