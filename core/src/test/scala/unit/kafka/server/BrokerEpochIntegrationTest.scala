@@ -198,7 +198,7 @@ class BrokerEpochIntegrationTest extends ZooKeeperTestHarness {
         val requestBuilder = new UpdateMetadataRequest.Builder(
           ApiKeys.UPDATE_METADATA.latestVersion, controllerId, controllerEpoch,
           epochInRequest,
-          partitionStates.asJava, liveBrokers.asJava, Collections.emptyMap())
+          partitionStates.asJava, liveBrokers.asJava, topicIds)
 
         if (epochInRequestDiffFromCurrentEpoch < 0) {
           // stale broker epoch in UPDATE_METADATA
@@ -218,6 +218,7 @@ class BrokerEpochIntegrationTest extends ZooKeeperTestHarness {
         val topicStates = Seq(
           new StopReplicaTopicState()
             .setTopicName(tp.topic())
+            .setTopicId(topicIds.getOrDefault(tp.topic(), Uuid.ZERO_UUID))
             .setPartitionStates(Seq(new StopReplicaPartitionState()
               .setPartitionIndex(tp.partition())
               .setLeaderEpoch(LeaderAndIsr.initialLeaderEpoch + 2)

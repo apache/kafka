@@ -24,7 +24,8 @@
   // Version 2 is the first flexible version.
   //
   // Version 3 adds the leader epoch per partition (KIP-570).
-  "validVersions": "0-3",
+  // Version 4 remove topic name and add topic id.
+  "validVersions": "0-4",
   "flexibleVersions": "2+",
   "fields": [
     { "name": "ControllerId", "type": "int32", "versions": "0+", "entityType": "brokerId",
@@ -51,8 +52,9 @@
     ]},
     { "name": "TopicStates", "type": "[]StopReplicaTopicState", "versions": "3+",
       "about": "Each topic.", "fields": [
-      { "name": "TopicName", "type": "string", "versions": "3+", "entityType": "topicName",
+      { "name": "TopicName", "type": "string", "versions": "3", "entityType": "topicName",
         "about": "The topic name." },
+      { "name": "TopicId", "type": "uuid", "versions": "4+", "about": "The topic id." },
       { "name": "PartitionStates", "type": "[]StopReplicaPartitionState", "versions": "3+",
         "about": "The state of each partition", "fields": [
         { "name": "PartitionIndex", "type": "int32", "versions": "3+",

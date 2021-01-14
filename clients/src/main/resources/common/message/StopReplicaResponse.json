@@ -22,15 +22,17 @@
   // Version 2 is the first flexible version.
   //
   // Version 3 returns FENCED_LEADER_EPOCH if the epoch of the leader is stale (KIP-570).
-  "validVersions": "0-3",
+  // Version 4 remove topic name and add topic id.
+  "validVersions": "0-4",
   "flexibleVersions": "2+",
   "fields": [
     { "name": "ErrorCode", "type": "int16", "versions": "0+",
       "about": "The top-level error code, or 0 if there was no top-level error." },
     { "name": "PartitionErrors", "type": "[]StopReplicaPartitionError", "versions": "0+",
       "about": "The responses for each partition.", "fields": [
-      { "name": "TopicName", "type": "string", "versions": "0+", "entityType": "topicName",
+      { "name": "TopicName", "type": "string", "versions": "0-3", "entityType": "topicName",
         "about": "The topic name." },
+      { "name": "TopicId", "type": "uuid", "versions": "4+", "about": "The topic id." },
       { "name": "PartitionIndex", "type": "int32", "versions": "0+",
         "about": "The partition index." },
       { "name": "ErrorCode", "type": "int16", "versions": "0+",

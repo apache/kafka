@@ -185,7 +185,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
       resp.topics.asScala.find(t => topicNames(t.topicId) == tp.topic).get.partitionErrors.asScala.find(
         p => p.partitionIndex == tp.partition).get.errorCode)),
     ApiKeys.STOP_REPLICA -> ((resp: requests.StopReplicaResponse) => Errors.forCode(
-      resp.partitionErrors.asScala.find(pe => pe.topicName == tp.topic && pe.partitionIndex == tp.partition).get.errorCode)),
+      resp.partitionErrors.asScala.find(pe => topicNames(pe.topicId) == tp.topic && pe.partitionIndex == tp.partition).get.errorCode)),
     ApiKeys.CONTROLLED_SHUTDOWN -> ((resp: requests.ControlledShutdownResponse) => resp.error),
     ApiKeys.CREATE_TOPICS -> ((resp: CreateTopicsResponse) => Errors.forCode(resp.data.topics.find(topic).errorCode)),
     ApiKeys.DELETE_TOPICS -> ((resp: requests.DeleteTopicsResponse) => Errors.forCode(resp.data.responses.find(topic).errorCode)),
@@ -506,10 +506,11 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
       Set(new Node(brokerId, "localhost", 0)).asJava).build()
   }
 
-  private def stopReplicaRequest: StopReplicaRequest = {
+  private def stopReplicaRequest(id: Uuid = getTopicIds()(topic)): StopReplicaRequest = {
     val topicStates = Seq(
       new StopReplicaTopicState()
         .setTopicName(tp.topic)
+        .setTopicId(id)
         .setPartitionStates(Seq(new StopReplicaPartitionState()
           .setPartitionIndex(tp.partition)
           .setLeaderEpoch(LeaderAndIsr.initialLeaderEpoch + 2)
@@ -734,7 +735,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
       // Inter-broker APIs use an invalid broker epoch, so does not affect the test case
       ApiKeys.UPDATE_METADATA -> createUpdateMetadataRequest,
       ApiKeys.LEADER_AND_ISR -> leaderAndIsrRequest,
-      ApiKeys.STOP_REPLICA -> stopReplicaRequest,
+      ApiKeys.STOP_REPLICA -> stopReplicaRequest(),
       ApiKeys.CONTROLLED_SHUTDOWN -> controlledShutdownRequest,
 
       // Delete the topic last

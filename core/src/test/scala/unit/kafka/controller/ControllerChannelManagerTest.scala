@@ -18,26 +18,27 @@ package kafka.controller
 
 import java.util.Properties
 
-import kafka.api.{ApiVersion, KAFKA_0_10_0_IV1, KAFKA_0_10_2_IV0, KAFKA_0_9_0, KAFKA_1_0_IV0, KAFKA_2_2_IV0, KAFKA_2_4_IV0, KAFKA_2_4_IV1, KAFKA_2_6_IV0, KAFKA_2_8_IV1, LeaderAndIsr}
+import kafka.api.{ApiVersion, KAFKA_0_10_0_IV1, KAFKA_0_10_2_IV0, KAFKA_0_9_0, KAFKA_1_0_IV0, KAFKA_2_2_IV0, KAFKA_2_4_IV0, KAFKA_2_4_IV1, KAFKA_2_6_IV0, KAFKA_2_8_IV1, KAFKA_2_8_IV2, LeaderAndIsr}
 import kafka.cluster.{Broker, EndPoint}
 import kafka.server.KafkaConfig
 import kafka.utils.TestUtils
-import org.apache.kafka.common.{TopicPartition, Uuid}
-import org.apache.kafka.common.message.{LeaderAndIsrResponseData, StopReplicaResponseData, UpdateMetadataResponseData}
-import org.apache.kafka.common.message.LeaderAndIsrResponseData.LeaderAndIsrPartitionError
+import org.apache.kafka.common.message.LeaderAndIsrResponseData.{LeaderAndIsrPartitionError, LeaderAndIsrTopicError}
 import org.apache.kafka.common.message.StopReplicaRequestData.StopReplicaPartitionState
 import org.apache.kafka.common.message.StopReplicaResponseData.StopReplicaPartitionError
+import org.apache.kafka.common.message.{LeaderAndIsrResponseData, StopReplicaResponseData, UpdateMetadataResponseData}
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.requests.{AbstractControlRequest, AbstractResponse, LeaderAndIsrRequest, LeaderAndIsrResponse, StopReplicaRequest, StopReplicaResponse, UpdateMetadataRequest, UpdateMetadataResponse}
-import org.apache.kafka.common.message.LeaderAndIsrResponseData.LeaderAndIsrTopicError
 import org.apache.kafka.common.security.auth.SecurityProtocol
+import org.apache.kafka.common.{TopicPartition, Uuid}
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.Test
+import org.mockito.Mockito.times
+import org.mockito.{ArgumentCaptor, ArgumentMatchers, Mockito}
 
-import scala.jdk.CollectionConverters._
 import scala.collection.mutable
 import scala.collection.mutable.ListBuffer
+import scala.jdk.CollectionConverters._
 
 class ControllerChannelManagerTest {
   private val controllerId = 1
@@ -92,7 +93,7 @@ class ControllerChannelManagerTest {
       leaderAndIsrResponse.topics.asScala.flatMap(t => t.partitionErrors.asScala.map(p =>
         new TopicPartition(topicNames(t.topicId), p.partitionIndex))).toSet)
     leaderAndIsrResponse.topics.forEach(topic =>
-      assertEquals(topicIds.get(topicNames.get(topic.topicId).get), topic.topicId))
+      assertEquals(topicIds.get(topicNames(topic.topicId)), topic.topicId))
   }
 
   @Test
@@ -398,7 +399,9 @@ class ControllerChannelManagerTest {
 
   @Test
   def testStopReplicaRequestSent(): Unit = {
-    val context = initContext(Seq(1, 2, 3), 2, 3, Set("foo", "bar"))
+    val topicIds = Map("foo" -> Uuid.randomUuid(), "bar" -> Uuid.randomUuid())
+    val topicNames = topicIds.map{case(topicName, topicId) => (topicId, topicName)}
+    val context = initContext(Seq(1, 2, 3), 2, 3, topicIds)
     val batch = new MockControllerBrokerRequestBatch(context)
 
     val partitions = Map(
@@ -425,7 +428,7 @@ class ControllerChannelManagerTest {
     assertEquals(1, sentStopReplicaRequests.size)
 
     val stopReplicaRequest = sentStopReplicaRequests.head
-    assertEquals(partitionStates(partitions), stopReplicaRequest.partitionStates().asScala)
+    assertEquals(partitionStates(partitions), stopReplicaRequest.partitionStates(topicNames.asJava).asScala)
 
     applyStopReplicaResponseCallbacks(Errors.NONE, batch.sentRequests(2).toList)
     assertEquals(0, batch.sentEvents.size)
@@ -433,7 +436,9 @@ class ControllerChannelManagerTest {
 
   @Test
   def testStopReplicaRequestWithAlreadyDefinedDeletedPartition(): Unit = {
-    val context = initContext(Seq(1, 2, 3), 2, 3, Set("foo", "bar"))
+    val topicIds = Map("foo" -> Uuid.randomUuid(), "bar" -> Uuid.randomUuid())
+    val topicNames = topicIds.map{case(topicName, topicId) => (topicId, topicName)}
+    val context = initContext(Seq(1, 2, 3), 2, 3, topicIds)
     val batch = new MockControllerBrokerRequestBatch(context)
 
     val partition = new TopicPartition("foo", 0)
@@ -450,7 +455,7 @@ class ControllerChannelManagerTest {
 
     val stopReplicaRequest = sentStopReplicaRequests.head
     assertEquals(partitionStates(Map(partition -> LeaderAndDelete(leaderAndIsr, true))),
-      stopReplicaRequest.partitionStates().asScala)
+      stopReplicaRequest.partitionStates(topicNames.asJava).asScala)
   }
 
   @Test
@@ -461,7 +466,9 @@ class ControllerChannelManagerTest {
   }
 
   private def testStopReplicaRequestsWhileTopicQueuedForDeletion(interBrokerProtocolVersion: ApiVersion): Unit = {
-    val context = initContext(Seq(1, 2, 3), 2, 3, Set("foo", "bar"))
+    val topicIds = Map("foo" -> Uuid.randomUuid(), "bar" -> Uuid.randomUuid())
+    val topicNames = topicIds.map{case(topicName, topicId) => (topicId, topicName)}
+    val context = initContext(Seq(1, 2, 3), 2, 3, topicIds)
     val config = createConfig(interBrokerProtocolVersion)
     val batch = new MockControllerBrokerRequestBatch(context, config)
 
@@ -493,7 +500,7 @@ class ControllerChannelManagerTest {
 
     val stopReplicaRequest = sentStopReplicaRequests.head
     assertEquals(partitionStates(partitions, context.topicsQueuedForDeletion, stopReplicaRequest.version),
-      stopReplicaRequest.partitionStates().asScala)
+      stopReplicaRequest.partitionStates(topicNames.asJava).asScala)
 
     // No events will be sent after the response returns
     applyStopReplicaResponseCallbacks(Errors.NONE, batch.sentRequests(2).toList)
@@ -502,13 +509,16 @@ class ControllerChannelManagerTest {
 
   @Test
   def testStopReplicaRequestsWhileTopicDeletionStarted(): Unit = {
-    for (apiVersion <- ApiVersion.allVersions) {
+    /*for (apiVersion <- ApiVersion.allVersions) {
       testStopReplicaRequestsWhileTopicDeletionStarted(apiVersion)
-    }
+    }*/
+    testStopReplicaRequestsWhileTopicDeletionStarted(KAFKA_2_8_IV2)
   }
 
   private def testStopReplicaRequestsWhileTopicDeletionStarted(interBrokerProtocolVersion: ApiVersion): Unit = {
-    val context = initContext(Seq(1, 2, 3), 2, 3, Set("foo", "bar"))
+    val topicIds = Map("foo" -> Uuid.randomUuid(), "bar" -> Uuid.randomUuid())
+    val topicNames = topicIds.map{case(topicName, topicId) => (topicId, topicName)}
+    val context = initContext(Seq(1, 2, 3), 2, 3, topicIds)
     val config = createConfig(interBrokerProtocolVersion)
     val batch = new MockControllerBrokerRequestBatch(context, config)
 
@@ -540,7 +550,7 @@ class ControllerChannelManagerTest {
 
     val stopReplicaRequest = sentStopReplicaRequests.head
     assertEquals(partitionStates(partitions, context.topicsQueuedForDeletion, stopReplicaRequest.version),
-      stopReplicaRequest.partitionStates().asScala)
+      stopReplicaRequest.partitionStates(topicNames.asJava).asScala)
 
     // When the topic is being deleted, we should provide a callback which sends
     // the received event for the StopReplica response
@@ -556,6 +566,53 @@ class ControllerChannelManagerTest {
   }
 
   @Test
+  def testRetryStopReplicaOnUnsupportedVersionError(): Unit = {
+    // Init controller info
+    val topicIds = Map("foo" -> Uuid.randomUuid(), "bar" -> Uuid.randomUuid())
+    val topicNames = topicIds.map{case(topicName, topicId) => (topicId, topicName)}
+    val context = initContext(Seq(1, 2, 3), 2, 3, topicIds)
+    val config = createConfig(KAFKA_2_8_IV2)
+    val batchAdaptive = new MockControllerBrokerRequestBatch(context, config)
+
+    // Spy on the real MockControllerBrokerRequestBatch
+    val batch = Mockito.spy(batchAdaptive)
+
+    // Send StopReplica from newer-version controller to older-version broker
+    val partitions = Map(
+      new TopicPartition("foo", 0) -> LeaderAndDelete(1, false),
+      new TopicPartition("foo", 1) -> LeaderAndDelete(2, false),
+      new TopicPartition("bar", 1) -> LeaderAndDelete(3, false)
+    )
+    batch.newBatch()
+    partitions.foreach { case (partition, LeaderAndDelete(leaderAndIsr, deletePartition)) =>
+      context.putPartitionLeadershipInfo(partition, LeaderIsrAndControllerEpoch(leaderAndIsr, controllerEpoch))
+      batch.addStopReplicaRequestForBrokers(Seq(2), partition, deletePartition)
+    }
+    batch.sendRequestsToBrokers(controllerEpoch)
+
+    val sentRequests = batch.sentRequests(2)
+    assertEquals(1, sentRequests.size)
+
+    // We will get UNSUPPORTED_VERSION from old version broker, apply callback on receive response
+    applyStopReplicaResponseCallbacks(Errors.UNSUPPORTED_VERSION, sentRequests.toList)
+
+    val captureReq: ArgumentCaptor[ControlRequest] = ArgumentCaptor.forClass(classOf[ControlRequest])
+
+    // Expect 2 invoke, first use topic id and second use topic name
+    Mockito.verify(batch, times(2)).sendRequest(
+      ArgumentMatchers.eq(2),
+      captureReq.capture(),
+      ArgumentMatchers.any()
+    )
+
+    captureReq.getAllValues.asScala.foreach{ builder =>
+      val request = builder.build().asInstanceOf[StopReplicaRequest]
+      assertEquals(partitionStates(partitions, context.topicsQueuedForDeletion, request.version),
+        request.partitionStates(topicNames.asJava).asScala)
+    }
+  }
+
+  @Test
   def testStopReplicaRequestWithoutDeletePartitionWhileTopicDeletionStarted(): Unit = {
     for (apiVersion <- ApiVersion.allVersions) {
       testStopReplicaRequestWithoutDeletePartitionWhileTopicDeletionStarted(apiVersion)
@@ -563,7 +620,9 @@ class ControllerChannelManagerTest {
   }
 
   private def testStopReplicaRequestWithoutDeletePartitionWhileTopicDeletionStarted(interBrokerProtocolVersion: ApiVersion): Unit = {
-    val context = initContext(Seq(1, 2, 3), 2, 3, Set("foo", "bar"))
+    val topicIds = Map("foo" -> Uuid.randomUuid(), "bar" -> Uuid.randomUuid())
+    val topicNames = topicIds.map{case(topicName, topicId) => (topicId, topicName)}
+    val context = initContext(Seq(1, 2, 3), 2, 3, topicIds)
     val config = createConfig(interBrokerProtocolVersion)
     val batch = new MockControllerBrokerRequestBatch(context, config)
 
@@ -595,7 +654,7 @@ class ControllerChannelManagerTest {
 
     val stopReplicaRequest = sentStopReplicaRequests.head
     assertEquals(partitionStates(partitions, context.topicsQueuedForDeletion, stopReplicaRequest.version),
-      stopReplicaRequest.partitionStates().asScala)
+      stopReplicaRequest.partitionStates(topicNames.asJava).asScala)
 
     // No events should be fired
     applyStopReplicaResponseCallbacks(Errors.NONE, batch.sentRequests(2).toList)
@@ -621,7 +680,9 @@ class ControllerChannelManagerTest {
 
   private def testMixedDeleteAndNotDeleteStopReplicaRequests(interBrokerProtocolVersion: ApiVersion,
                                                              expectedStopReplicaRequestVersion: Short): Unit = {
-    val context = initContext(Seq(1, 2, 3), 2, 3, Set("foo", "bar"))
+    val topicIds = Map("foo" -> Uuid.randomUuid(), "bar" -> Uuid.randomUuid())
+    val topicNames = topicIds.map{case(topicName, topicId) => (topicId, topicName)}
+    val context = initContext(Seq(1, 2, 3), 2, 3, topicIds)
     val config = createConfig(interBrokerProtocolVersion)
     val batch = new MockControllerBrokerRequestBatch(context, config)
 
@@ -660,7 +721,7 @@ class ControllerChannelManagerTest {
 
       val stopReplicaRequest = sentStopReplicaRequests.head
       assertEquals(partitionStates(deletePartitions ++ nonDeletePartitions, version = stopReplicaRequest.version),
-        stopReplicaRequest.partitionStates().asScala)
+        stopReplicaRequest.partitionStates(topicNames.asJava).asScala)
     } else {
       val sentRequests = batch.sentRequests(2)
       assertEquals(2, sentRequests.size)
@@ -669,18 +730,20 @@ class ControllerChannelManagerTest {
       assertEquals(2, sentStopReplicaRequests.size)
 
       // StopReplicaRequest (deletePartitions = true) is sent first
-      val stopReplicaRequestWithDelete = sentStopReplicaRequests(0)
+      val stopReplicaRequestWithDelete = sentStopReplicaRequests.head
       assertEquals(partitionStates(deletePartitions, version = stopReplicaRequestWithDelete.version),
-        stopReplicaRequestWithDelete.partitionStates().asScala)
+        stopReplicaRequestWithDelete.partitionStates(topicNames.asJava).asScala)
       val stopReplicaRequestWithoutDelete = sentStopReplicaRequests(1)
       assertEquals(partitionStates(nonDeletePartitions, version = stopReplicaRequestWithoutDelete.version),
-        stopReplicaRequestWithoutDelete.partitionStates().asScala)
+        stopReplicaRequestWithoutDelete.partitionStates(topicNames.asJava).asScala)
     }
   }
 
   @Test
   def testStopReplicaGroupsByBroker(): Unit = {
-    val context = initContext(Seq(1, 2, 3), 2, 3, Set("foo", "bar"))
+    val topicIds = Map("foo" -> Uuid.randomUuid(), "bar" -> Uuid.randomUuid())
+    val topicNames = topicIds.map{case(topicName, topicId) => (topicId, topicName)}
+    val context = initContext(Seq(1, 2, 3), 2, 3, topicIds)
     val batch = new MockControllerBrokerRequestBatch(context)
 
     val partitions = Map(
@@ -709,7 +772,7 @@ class ControllerChannelManagerTest {
       assertEquals(1, sentStopReplicaRequests.size)
 
       val stopReplicaRequest = sentStopReplicaRequests.head
-      assertEquals(partitionStates(partitions), stopReplicaRequest.partitionStates().asScala)
+      assertEquals(partitionStates(partitions), stopReplicaRequest.partitionStates(topicNames.asJava).asScala)
 
       applyStopReplicaResponseCallbacks(Errors.NONE, batch.sentRequests(2).toList)
       assertEquals(0, batch.sentEvents.size)
@@ -718,7 +781,9 @@ class ControllerChannelManagerTest {
 
   @Test
   def testStopReplicaSentOnlyToLiveAndShuttingDownBrokers(): Unit = {
-    val context = initContext(Seq(1, 2, 3), 2, 3, Set("foo", "bar"))
+    val topicIds = Map("foo" -> Uuid.randomUuid(), "bar" -> Uuid.randomUuid())
+    val topicNames = topicIds.map{case(topicName, topicId) => (topicId, topicName)}
+    val context = initContext(Seq(1, 2, 3), 2, 3, topicIds)
     val batch = new MockControllerBrokerRequestBatch(context)
 
     // 2 is shutting down, 3 is dead
@@ -749,7 +814,7 @@ class ControllerChannelManagerTest {
     assertEquals(1, sentStopReplicaRequests.size)
 
     val stopReplicaRequest = sentStopReplicaRequests.head
-    assertEquals(partitionStates(partitions), stopReplicaRequest.partitionStates().asScala)
+    assertEquals(partitionStates(partitions), stopReplicaRequest.partitionStates(topicNames.asJava).asScala)
   }
 
   @Test
@@ -763,8 +828,10 @@ class ControllerChannelManagerTest {
         testStopReplicaFollowsInterBrokerProtocolVersion(apiVersion, 1.toShort)
       else if (apiVersion < KAFKA_2_6_IV0)
         testStopReplicaFollowsInterBrokerProtocolVersion(apiVersion, 2.toShort)
-      else
+      else if (apiVersion < KAFKA_2_8_IV2)
         testStopReplicaFollowsInterBrokerProtocolVersion(apiVersion, 3.toShort)
+      else
+        testStopReplicaFollowsInterBrokerProtocolVersion(apiVersion, 4.toShort)
     }
   }
 
@@ -830,6 +897,7 @@ class ControllerChannelManagerTest {
           val partitionErrors = stopReplicaRequest.topicStates.asScala.flatMap { topic =>
             topic.partitionStates.asScala.map { partition =>
               new StopReplicaPartitionError()
+                .setTopicId(topic.topicId())
                 .setTopicName(topic.topicName)
                 .setPartitionIndex(partition.partitionIndex)
                 .setErrorCode(error.code)

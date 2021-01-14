@@ -247,7 +247,7 @@ public class RequestResponseTest {
     private final UnknownServerException unknownServerException = new UnknownServerException("secret");
 
     @Test
-    public void testSerialization() throws Exception {
+    public void testSerialization() {
         checkRequest(createFindCoordinatorRequest(0), true);
         checkRequest(createFindCoordinatorRequest(1), true);
         checkErrorResponse(createFindCoordinatorRequest(0), unknownServerException, true);
@@ -341,7 +341,7 @@ public class RequestResponseTest {
             checkRequest(createStopReplicaRequest(version, false), true);
             checkErrorResponse(createStopReplicaRequest(version, true), unknownServerException, true);
             checkErrorResponse(createStopReplicaRequest(version, false), unknownServerException, true);
-            checkResponse(createStopReplicaResponse(), version, true);
+            checkResponse(createStopReplicaResponse(version), version, true);
         }
 
         for (short version : LEADER_AND_ISR.allVersions()) {
@@ -1607,12 +1607,17 @@ public class RequestResponseTest {
             deletePartitions, topicStates).build((short) version);
     }
 
-    private StopReplicaResponse createStopReplicaResponse() {
+    private StopReplicaResponse createStopReplicaResponse(int version) {
         List<StopReplicaResponseData.StopReplicaPartitionError> partitions = new ArrayList<>();
-        partitions.add(new StopReplicaResponseData.StopReplicaPartitionError()
-            .setTopicName("test")
+        StopReplicaResponseData.StopReplicaPartitionError error = new StopReplicaResponseData.StopReplicaPartitionError()
             .setPartitionIndex(0)
-            .setErrorCode(Errors.NONE.code()));
+            .setErrorCode(Errors.NONE.code());
+        if (version < 4) {
+            error.setTopicName("test");
+        } else {
+            error.setTopicId(Uuid.randomUuid());
+        }
+        partitions.add(error);
         return new StopReplicaResponse(new StopReplicaResponseData()
             .setErrorCode(Errors.NONE.code())
             .setPartitionErrors(partitions));
@@ -2800,7 +2805,7 @@ public class RequestResponseTest {
         assertEquals(Integer.valueOf(1), createRenewTokenResponse().errorCounts().get(Errors.NONE));
         assertEquals(Integer.valueOf(1), createSaslAuthenticateResponse().errorCounts().get(Errors.NONE));
         assertEquals(Integer.valueOf(1), createSaslHandshakeResponse().errorCounts().get(Errors.NONE));
-        assertEquals(Integer.valueOf(2), createStopReplicaResponse().errorCounts().get(Errors.NONE));
+        assertEquals(Integer.valueOf(2), createStopReplicaResponse(STOP_REPLICA.latestVersion()).errorCounts().get(Errors.NONE));
         assertEquals(Integer.valueOf(1), createSyncGroupResponse(SYNC_GROUP.latestVersion()).errorCounts().get(Errors.NONE));
         assertEquals(Integer.valueOf(1), createTxnOffsetCommitResponse().errorCounts().get(Errors.NONE));
         assertEquals(Integer.valueOf(1), createUpdateMetadataResponse().errorCounts().get(Errors.NONE));

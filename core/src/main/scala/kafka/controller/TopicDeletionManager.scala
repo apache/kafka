@@ -82,7 +82,6 @@ class ControllerDeletionClient(controller: KafkaController, zkClient: KafkaZkCli
  *    as well as from zookeeper. This is the only time the /brokers/topics/<topic> path gets deleted. On the other hand,
  *    if no replica is in TopicDeletionStarted state and at least one replica is in TopicDeletionFailed state, then
  *    it marks the topic for deletion retry.
- * @param controller
  */
 class TopicDeletionManager(config: KafkaConfig,
                            controllerContext: ControllerContext,
