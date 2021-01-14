@@ -16,10 +16,10 @@
  */
 package org.apache.kafka.common.protocol;
 
-import org.junit.Test;
+import org.junit.jupiter.api.Test;
 
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class ProtoUtilsTest {
     @Test
@@ -35,16 +35,14 @@ public class ProtoUtilsTest {
                 case RENEW_DELEGATION_TOKEN:
                 case ALTER_USER_SCRAM_CREDENTIALS:
                 case ENVELOPE:
-                    assertTrue(key + " should require delayed allocation", key.requiresDelayedAllocation);
+                    assertTrue(key.requiresDelayedAllocation, key + " should require delayed allocation");
                     break;
                 default:
-                    if (key.forwardable) {
-                        assertTrue(key + " should require delayed allocation since it is forwardable",
-                            key.requiresDelayedAllocation);
-                    } else {
-                        assertFalse(key + " should not require delayed allocation",
-                            key.requiresDelayedAllocation);
-                    }
+                    if (key.forwardable)
+                        assertTrue(key.requiresDelayedAllocation,
+                            key + " should require delayed allocation since it is forwardable");
+                    else
+                        assertFalse(key.requiresDelayedAllocation, key + " should not require delayed allocation");
                     break;
             }
         }

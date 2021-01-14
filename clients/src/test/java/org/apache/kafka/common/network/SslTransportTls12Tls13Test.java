@@ -28,11 +28,11 @@ import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.apache.kafka.common.utils.Java;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
-import org.junit.After;
-import org.junit.Before;
-import org.junit.Test;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 
-import static org.junit.Assume.assumeTrue;
+import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 public class SslTransportTls12Tls13Test {
     private static final int BUFFER_SIZE = 4 * 1024;
@@ -43,7 +43,7 @@ public class SslTransportTls12Tls13Test {
     private Map<String, Object> sslClientConfigs;
     private Map<String, Object> sslServerConfigs;
 
-    @Before
+    @BeforeEach
     public void setup() throws Exception {
         // Create certificates for use by client and server. Add server cert to client truststore and vice versa.
         CertStores serverCertStores = new CertStores(true, "server", "localhost");
@@ -57,7 +57,7 @@ public class SslTransportTls12Tls13Test {
         this.selector = new Selector(5000, new Metrics(), TIME, "MetricGroup", channelBuilder, logContext);
     }
 
-    @After
+    @AfterEach
     public void teardown() throws Exception {
         if (selector != null)
             this.selector.close();

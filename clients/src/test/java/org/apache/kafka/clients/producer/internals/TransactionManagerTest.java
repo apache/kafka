@@ -75,8 +75,8 @@ import org.apache.kafka.common.requests.TxnOffsetCommitResponse;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.test.TestUtils;
-import org.junit.Before;
-import org.junit.Test;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 
 import java.nio.ByteBuffer;
 import java.util.Arrays;
@@ -98,17 +98,14 @@ import java.util.function.Supplier;
 import static java.util.Collections.singleton;
 import static java.util.Collections.singletonList;
 import static java.util.Collections.singletonMap;
-import static org.hamcrest.CoreMatchers.instanceOf;
-import static org.hamcrest.CoreMatchers.is;
-import static org.hamcrest.MatcherAssert.assertThat;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertNotEquals;
-import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.assertNull;
-import static org.junit.Assert.assertThrows;
-import static org.junit.Assert.assertTrue;
-import static org.junit.Assert.fail;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.fail;
 
 public class TransactionManagerTest {
     private static final int MAX_REQUEST_SIZE = 1024 * 1024;
@@ -143,7 +140,7 @@ public class TransactionManagerTest {
     private TransactionManager transactionManager = null;
     private Node brokerNode = null;
 
-    @Before
+    @BeforeEach
     public void setup() {
         this.metadata.add("test", time.milliseconds());
         this.client.updateMetadata(RequestTestUtils.metadataUpdateWith(1, singletonMap("test", 2)));
@@ -2092,7 +2089,7 @@ public class TransactionManagerTest {
             offsets, new ConsumerGroupMetadata(consumerGroupId));
         prepareAddOffsetsToTxnResponse(Errors.NONE, consumerGroupId, producerId, epoch);
         runUntil(() -> !client.hasPendingResponses());
-        assertThat(addOffsetsResult.isCompleted(), is(false));  // The request should complete only after the TxnOffsetCommit completes.
+        assertFalse(addOffsetsResult.isCompleted());  // The request should complete only after the TxnOffsetCommit completes.
 
         Map<TopicPartition, Errors> txnOffsetCommitResponse = new HashMap<>();
         txnOffsetCommitResponse.put(tp0, Errors.NONE);
@@ -2102,8 +2099,8 @@ public class TransactionManagerTest {
         prepareTxnOffsetCommitResponse(consumerGroupId, producerId, epoch, txnOffsetCommitResponse);
 
         runUntil(addOffsetsResult::isCompleted);
-        assertThat(addOffsetsResult.isSuccessful(), is(false));
-        assertThat(addOffsetsResult.error(), instanceOf(error.exception().getClass()));
+        assertFalse(addOffsetsResult.isSuccessful());
+        assertEquals(error.exception().getClass(), addOffsetsResult.error().getClass());
     }
 
     @Test
