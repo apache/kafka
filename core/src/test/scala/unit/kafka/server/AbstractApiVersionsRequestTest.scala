@@ -16,6 +16,8 @@
  */
 package kafka.server
 
+import java.util.Properties
+
 import org.apache.kafka.common.message.ApiVersionsResponseData.ApiVersionsResponseKey
 import org.apache.kafka.common.protocol.ApiKeys
 import org.apache.kafka.common.requests.{ApiVersionsRequest, ApiVersionsResponse}
@@ -24,6 +26,15 @@ import org.junit.Assert._
 import scala.jdk.CollectionConverters._
 
 abstract class AbstractApiVersionsRequestTest extends BaseRequestTest {
+
+  // Configure control plane listener to make sure we have separate listeners from client,
+  // in order to avoid returning Envelope API version.
+  override def brokerPropertyOverrides(properties: Properties): Unit = {
+    properties.setProperty(KafkaConfig.ControlPlaneListenerNameProp, "CONTROLLER")
+    properties.setProperty(KafkaConfig.ListenerSecurityProtocolMapProp, "CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT")
+    properties.setProperty("listeners", "PLAINTEXT://localhost:0,CONTROLLER://localhost:0")
+    properties.setProperty(KafkaConfig.AdvertisedListenersProp, "PLAINTEXT://localhost:0,CONTROLLER://localhost:0")
+  }
 
   def sendUnsupportedApiVersionRequest(request: ApiVersionsRequest): ApiVersionsResponse = {
     val overrideHeader = nextRequestHeader(ApiKeys.API_VERSIONS, Short.MaxValue)
