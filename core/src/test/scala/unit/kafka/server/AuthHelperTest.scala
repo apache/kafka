@@ -17,8 +17,6 @@
 
 package kafka.server
 
-import kafka.utils.TestUtils
-
 import java.net.InetAddress
 import java.util
 import org.apache.kafka.common.acl.AclOperation
@@ -29,7 +27,7 @@ import org.apache.kafka.common.resource.{PatternType, ResourcePattern, ResourceT
 import org.apache.kafka.common.security.auth.{KafkaPrincipal, SecurityProtocol}
 import org.apache.kafka.server.authorizer.{Action, AuthorizationResult, Authorizer}
 import org.easymock.EasyMock._
-import org.easymock.EasyMock
+import org.easymock.{EasyMock, IArgumentMatcher}
 import org.junit.Assert._
 import org.junit.Test
 
@@ -37,6 +35,7 @@ import scala.collection.Seq
 import scala.jdk.CollectionConverters._
 
 class AuthHelperTest {
+  import AuthHelperTest._
 
   private val clientId = ""
 
@@ -96,7 +95,7 @@ class AuthHelperTest {
     )
 
     EasyMock.expect(authorizer.authorize(
-      EasyMock.eq(requestContext), TestUtils.matchSameElements(expectedActions).asJava
+      EasyMock.eq(requestContext), matchSameElements(expectedActions.asJava)
     )).andAnswer { () =>
       val actions = EasyMock.getCurrentArguments.apply(1).asInstanceOf[util.List[Action]].asScala
       actions.map { action =>
@@ -120,6 +119,24 @@ class AuthHelperTest {
     verify(authorizer)
 
     assertEquals(Set(resourceName1, resourceName3), result)
+  }
+
+}
+
+object AuthHelperTest {
+
+  /**
+    * Similar to `EasyMock.eq`, but matches if both lists have the same elements irrespective of ordering.
+    */
+  def matchSameElements[T](list: java.util.List[T]): java.util.List[T] = {
+    EasyMock.reportMatcher(new IArgumentMatcher {
+      def matches(argument: Any): Boolean = argument match {
+        case l: java.util.List[_] => list.asScala.toSet == l.asScala.toSet
+        case _ => false
+      }
+      def appendTo(buffer: StringBuffer): Unit = buffer.append(s"list($list)")
+    })
+    null
   }
 
 }

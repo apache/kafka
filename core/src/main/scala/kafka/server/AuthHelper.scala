@@ -109,11 +109,11 @@ class AuthHelper(authorizer: Option[Authorizer]) {
   }
 
   def filterByAuthorized[T](requestContext: RequestContext,
-                                            operation: AclOperation,
-                                            resourceType: ResourceType,
-                                            resources: Iterable[T],
-                                            logIfAllowed: Boolean = true,
-                                            logIfDenied: Boolean = true)(resourceName: T => String): Set[String] = {
+                            operation: AclOperation,
+                            resourceType: ResourceType,
+                            resources: Iterable[T],
+                            logIfAllowed: Boolean = true,
+                            logIfDenied: Boolean = true)(resourceName: T => String): Set[String] = {
     authorizer match {
       case Some(authZ) =>
         val resourceNameToCount = CoreUtils.groupMapReduce(resources)(resourceName)(_ => 1)(_ + _)

@@ -698,7 +698,7 @@ class KafkaApisTest {
         1, logIfAllowed, logIfDenied))
 
     EasyMock.expect(authorizer.authorize(
-      anyObject[RequestContext], TestUtils.matchSameElements(expectedAuthorizedActions).asJava
+      anyObject[RequestContext], AuthHelperTest.matchSameElements(expectedAuthorizedActions.asJava)
     )).andAnswer { () =>
       val actions = EasyMock.getCurrentArguments.apply(1).asInstanceOf[util.List[Action]].asScala
       actions.map { action =>
