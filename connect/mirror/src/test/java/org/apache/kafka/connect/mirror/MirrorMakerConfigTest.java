@@ -52,12 +52,12 @@ public class MirrorMakerConfigTest {
             "replication.factor", "4"));
         Map<String, String> connectorProps = mirrorConfig.connectorBaseConfig(new SourceAndTarget("a", "b"),
             MirrorSourceConnector.class);
-        assertEquals("servers-one",
-            connectorProps.get("source.cluster.bootstrap.servers"), "source.cluster.bootstrap.servers is set");
-        assertEquals("servers-two",
-            connectorProps.get("target.cluster.bootstrap.servers"), "target.cluster.bootstrap.servers is set");
-        assertEquals("SASL",
-            connectorProps.get("security.protocol"), "top-level security.protocol is passed through to connector config");
+        assertEquals("servers-one", connectorProps.get("source.cluster.bootstrap.servers"),
+            "source.cluster.bootstrap.servers is set");
+        assertEquals("servers-two", connectorProps.get("target.cluster.bootstrap.servers"),
+            "target.cluster.bootstrap.servers is set");
+        assertEquals("SASL", connectorProps.get("security.protocol"),
+            "top-level security.protocol is passed through to connector config");
     }
 
     @Test
@@ -67,8 +67,7 @@ public class MirrorMakerConfigTest {
             "a->b.tasks.max", "123"));
         Map<String, String> connectorProps = mirrorConfig.connectorBaseConfig(new SourceAndTarget("a", "b"),
             MirrorSourceConnector.class);
-        assertEquals("123",
-            connectorProps.get("tasks.max"), "connector props should include tasks.max");
+        assertEquals("123", connectorProps.get("tasks.max"), "connector props should include tasks.max");
     }
 
     @Test
@@ -143,10 +142,10 @@ public class MirrorMakerConfigTest {
             "Groups include should be passed through to underlying Connectors.");
         assertEquals(Arrays.asList("property-3"), connectorConfig.getList("config.properties.exclude"),
             "Config properties exclude should be passed through to underlying Connectors.");
-        assertEquals(Arrays.asList("FakeMetricsReporter"),
-            connectorConfig.getList("metric.reporters"), "Metrics reporters should be passed through to underlying Connectors.");
-        assertEquals("DefaultTopicFilter",
-            connectorConfig.getClass("topic.filter.class").getSimpleName(), "Filters should be passed through to underlying Connectors.");
+        assertEquals(Arrays.asList("FakeMetricsReporter"), connectorConfig.getList("metric.reporters"),
+            "Metrics reporters should be passed through to underlying Connectors.");
+        assertEquals("DefaultTopicFilter", connectorConfig.getClass("topic.filter.class").getSimpleName(),
+            "Filters should be passed through to underlying Connectors.");
         assertEquals("__", connectorConfig.getString("replication.policy.separator"),
             "replication policy separator should be passed through to underlying Connectors.");
         assertFalse(connectorConfig.originals().containsKey("xxx"),

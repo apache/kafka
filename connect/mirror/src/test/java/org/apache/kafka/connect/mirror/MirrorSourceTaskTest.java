@@ -58,26 +58,16 @@ public class MirrorSourceTaskTest {
     public void testOffsetSync() {
         MirrorSourceTask.PartitionState partitionState = new MirrorSourceTask.PartitionState(50);
 
-        assertTrue(partitionState.update(0, 100),
-            "always emit offset sync on first update");
-        assertTrue(partitionState.update(2, 102),
-            "upstream offset skipped -> resync");
-        assertFalse(partitionState.update(3, 152),
-            "no sync");
-        assertFalse(partitionState.update(4, 153),
-            "no sync");
-        assertFalse(partitionState.update(5, 154),
-            "no sync");
-        assertTrue(partitionState.update(6, 205),
-            "one past target offset");
-        assertTrue(partitionState.update(2, 206),
-            "upstream reset");
-        assertFalse(partitionState.update(3, 207),
-            "no sync");
-        assertTrue(partitionState.update(4, 3),
-                "downstream reset");
-        assertFalse(partitionState.update(5, 4),
-            "no sync");
+        assertTrue(partitionState.update(0, 100), "always emit offset sync on first update");
+        assertTrue(partitionState.update(2, 102), "upstream offset skipped -> resync");
+        assertFalse(partitionState.update(3, 152), "no sync");
+        assertFalse(partitionState.update(4, 153), "no sync");
+        assertFalse(partitionState.update(5, 154), "no sync");
+        assertTrue(partitionState.update(6, 205), "one past target offset");
+        assertTrue(partitionState.update(2, 206), "upstream reset");
+        assertFalse(partitionState.update(3, 207), "no sync");
+        assertTrue(partitionState.update(4, 3), "downstream reset");
+        assertFalse(partitionState.update(5, 4), "no sync");
     }
 
     @Test
