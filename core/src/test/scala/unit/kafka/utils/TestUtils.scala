@@ -63,6 +63,7 @@ import org.apache.kafka.test.{TestSslUtils, TestUtils => JTestUtils}
 import org.apache.zookeeper.KeeperException.SessionExpiredException
 import org.apache.zookeeper.ZooDefs._
 import org.apache.zookeeper.data.ACL
+import org.easymock.{EasyMock, IArgumentMatcher}
 import org.junit.Assert._
 
 import scala.jdk.CollectionConverters._
@@ -130,6 +131,19 @@ object TestUtils extends Logging {
     f
   }
 
+  /**
+   * Returns true if the elements in both lists are the same irrespective of ordering.
+   */
+  def matchSameElements[T](seq: Seq[T]): Seq[T] = {
+    EasyMock.reportMatcher(new IArgumentMatcher {
+      def matches(argument: Any): Boolean = argument match {
+        case s: Seq[_] => s.toSet == seq.toSet
+        case _ => false
+      }
+      def appendTo(buffer: StringBuffer): Unit = buffer.append(s"seq($seq)")
+    })
+    null
+  }
 
   /**
    * Create a temporary file
