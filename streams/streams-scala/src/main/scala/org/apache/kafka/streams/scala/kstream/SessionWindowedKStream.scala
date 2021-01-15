@@ -57,7 +57,10 @@ class SessionWindowedKStream[K, V](val inner: SessionWindowedKStreamJ[K, V]) {
     implicit materialized: Materialized[K, VR, ByteArraySessionStore]
   ): KTable[Windowed[K], VR] =
     new KTable(
-      inner.aggregate(((key: K) => initializer(key)).asInitializer, aggregator.asAggregator, merger.asMerger, materialized)
+      inner.aggregate(((key: K) => initializer(key)).asInitializer,
+                      aggregator.asAggregator,
+                      merger.asMerger,
+                      materialized)
     )
 
   /**

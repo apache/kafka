@@ -84,6 +84,9 @@ class KGroupedTable[K, V](inner: KGroupedTableJ[K, V]) {
     implicit materialized: Materialized[K, VR, ByteArrayKeyValueStore]
   ): KTable[K, VR] =
     new KTable(
-      inner.aggregate(((key: K) => initializer(key)).asInitializer, adder.asAggregator, subtractor.asAggregator, materialized)
+      inner.aggregate(((key: K) => initializer(key)).asInitializer,
+                      adder.asAggregator,
+                      subtractor.asAggregator,
+                      materialized)
     )
 }
