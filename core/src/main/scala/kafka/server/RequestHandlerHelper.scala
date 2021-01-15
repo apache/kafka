@@ -32,7 +32,6 @@ import org.apache.kafka.common.utils.Time
 
 import scala.jdk.CollectionConverters._
 
-
 object RequestHandlerHelper {
 
   def onLeadershipChange(groupCoordinator: GroupCoordinator,
@@ -58,16 +57,68 @@ object RequestHandlerHelper {
   }
 }
 
-
-
-class RequestHandlerHelper(requestChannel: RequestChannel,
-                           quotas: QuotaManagers,
-                           time: Time,
-                           logPrefix: String) extends Logging {
-
+class UnthrottledRequestHandlerHelper(
+  requestChannel: RequestChannel,
+  logPrefix: String
+) extends Logging {
   this.logIdent = logPrefix
 
   def handleError(request: RequestChannel.Request, e: Throwable): Unit = {
+    error("Error when handling request: " +
+      s"clientId=${request.header.clientId}, " +
+      s"correlationId=${request.header.correlationId}, " +
+      s"api=${request.header.apiKey}, " +
+      s"version=${request.header.apiVersion}, " +
+      s"body=${request.body[AbstractRequest]}", e)
+    sendErrorOrCloseConnection(request, e, 0)
+  }
+
+  def sendErrorOrCloseConnection(request: RequestChannel.Request, error: Throwable, throttleMs: Int): Unit = {
+    val requestBody = request.body[AbstractRequest]
+    val response = requestBody.getErrorResponse(throttleMs, error)
+    if (response == null)
+      closeConnection(request, requestBody.errorCounts(error))
+    else
+      sendResponse(request, Some(response), None)
+  }
+
+  def closeConnection(request: RequestChannel.Request, errorCounts: java.util.Map[Errors, Integer]): Unit = {
+    // This case is used when the request handler has encountered an error, but the client
+    // does not expect a response (e.g. when produce request has acks set to 0)
+    requestChannel.updateErrorMetrics(request.header.apiKey, errorCounts.asScala)
+    requestChannel.sendResponse(new RequestChannel.CloseConnectionResponse(request))
+  }
+
+  def sendResponse(request: RequestChannel.Request,
+                   responseOpt: Option[AbstractResponse],
+                   onComplete: Option[Send => Unit]): Unit = {
+    // Update error metrics for each error code in the response including Errors.NONE
+    responseOpt.foreach(response => requestChannel.updateErrorMetrics(request.header.apiKey, response.errorCounts.asScala))
+
+    val response = responseOpt match {
+      case Some(response) =>
+        new RequestChannel.SendResponse(
+          request,
+          request.buildResponseSend(response),
+          request.responseNode(response),
+          onComplete
+        )
+      case None =>
+        new RequestChannel.NoOpResponse(request)
+    }
+
+    requestChannel.sendResponse(response)
+  }
+}
+
+class RequestHandlerHelper(
+  requestChannel: RequestChannel,
+  quotas: QuotaManagers,
+  time: Time,
+  logPrefix: String
+) extends UnthrottledRequestHandlerHelper(requestChannel, logPrefix) {
+
+  override def handleError(request: RequestChannel.Request, e: Throwable): Unit = {
     val mayThrottle = e.isInstanceOf[ClusterAuthorizationException] || !request.header.apiKey.clusterAction
     error("Error when handling request: " +
       s"clientId=${request.header.clientId}, " +
@@ -146,15 +197,6 @@ class RequestHandlerHelper(requestChannel: RequestChannel,
     sendResponse(request, Some(response), onComplete)
   }
 
-  def sendErrorOrCloseConnection(request: RequestChannel.Request, error: Throwable, throttleMs: Int): Unit = {
-    val requestBody = request.body[AbstractRequest]
-    val response = requestBody.getErrorResponse(throttleMs, error)
-    if (response == null)
-      closeConnection(request, requestBody.errorCounts(error))
-    else
-      sendResponse(request, Some(response), None)
-  }
-
   def sendErrorResponseExemptThrottle(request: RequestChannel.Request, error: Throwable): Unit = {
     quotas.request.maybeRecordExempt(request)
     sendErrorOrCloseConnection(request, error, 0)
@@ -165,31 +207,4 @@ class RequestHandlerHelper(requestChannel: RequestChannel,
     sendResponse(request, None, None)
   }
 
-  def closeConnection(request: RequestChannel.Request, errorCounts: java.util.Map[Errors, Integer]): Unit = {
-    // This case is used when the request handler has encountered an error, but the client
-    // does not expect a response (e.g. when produce request has acks set to 0)
-    requestChannel.updateErrorMetrics(request.header.apiKey, errorCounts.asScala)
-    requestChannel.sendResponse(new RequestChannel.CloseConnectionResponse(request))
-  }
-
-  def sendResponse(request: RequestChannel.Request,
-                   responseOpt: Option[AbstractResponse],
-                   onComplete: Option[Send => Unit]): Unit = {
-    // Update error metrics for each error code in the response including Errors.NONE
-    responseOpt.foreach(response => requestChannel.updateErrorMetrics(request.header.apiKey, response.errorCounts.asScala))
-
-    val response = responseOpt match {
-      case Some(response) =>
-        new RequestChannel.SendResponse(
-          request,
-          request.buildResponseSend(response),
-          request.responseNode(response),
-          onComplete
-        )
-      case None =>
-        new RequestChannel.NoOpResponse(request)
-    }
-
-    requestChannel.sendResponse(response)
-  }
 }
