@@ -31,9 +31,9 @@ abstract class AbstractApiVersionsRequestTest extends BaseRequestTest {
   // in order to avoid returning Envelope API version.
   override def brokerPropertyOverrides(properties: Properties): Unit = {
     properties.setProperty(KafkaConfig.ControlPlaneListenerNameProp, "CONTROLLER")
-    properties.setProperty(KafkaConfig.ListenerSecurityProtocolMapProp, "CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT")
-    properties.setProperty("listeners", "PLAINTEXT://localhost:0,CONTROLLER://localhost:0")
-    properties.setProperty(KafkaConfig.AdvertisedListenersProp, "PLAINTEXT://localhost:0,CONTROLLER://localhost:0")
+    properties.setProperty(KafkaConfig.ListenerSecurityProtocolMapProp, s"CONTROLLER:$securityProtocol,$securityProtocol:$securityProtocol")
+    properties.setProperty("listeners", s"$securityProtocol://localhost:0,CONTROLLER://localhost:0")
+    properties.setProperty(KafkaConfig.AdvertisedListenersProp, s"$securityProtocol://localhost:0,CONTROLLER://localhost:0")
   }
 
   def sendUnsupportedApiVersionRequest(request: ApiVersionsRequest): ApiVersionsResponse = {
