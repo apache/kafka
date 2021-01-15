@@ -30,6 +30,7 @@ import kafka.utils.{Logging, Pool}
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.utils.Time
 import org.apache.kafka.common.errors.KafkaStorageException
+import org.apache.kafka.common.record.RecordBatch
 
 import scala.collection.{Iterable, Seq, mutable}
 
@@ -169,11 +170,11 @@ private[log] class LogCleanerManager(val logDirs: Seq[File],
       val now = time.milliseconds
       this.timeOfLastRun = now
       val lastClean = allCleanerCheckpoints
+
       val dirtyLogs = logs.filter {
-        case (_, log) => log.config.compact  // match logs that are marked as compacted
+        case (_, log) => log.config.compact
       }.filterNot {
         case (topicPartition, log) =>
-          // skip any logs already in-progress and uncleanable partitions
           inProgress.contains(topicPartition) || isUncleanablePartition(log, topicPartition)
       }.map {
         case (topicPartition, log) => // create a LogToClean instance for each
@@ -198,8 +199,23 @@ private[log] class LogCleanerManager(val logDirs: Seq[File],
       val cleanableLogs = dirtyLogs.filter { ltc =>
         (ltc.needCompactionNow && ltc.cleanableBytes > 0) || ltc.cleanableRatio > ltc.log.config.minCleanableRatio
       }
+
       if(cleanableLogs.isEmpty) {
-        None
+        val logsWithTombstonesExpired = dirtyLogs.filter {
+          case ltc => 
+            // in this case, we are probably in a low throughput situation
+            // therefore, we should take advantage of this fact and remove tombstones if we can
+            // under the condition that the log's latest delete horizon is less than the current time
+            // tracked
+            ltc.log.latestDeleteHorizon != RecordBatch.NO_TIMESTAMP && ltc.log.latestDeleteHorizon <= time.milliseconds()
+        }
+        if (!logsWithTombstonesExpired.isEmpty) {
+          val filthiest = logsWithTombstonesExpired.max
+          inProgress.put(filthiest.topicPartition, LogCleaningInProgress)
+          Some(filthiest)
+        } else {
+          None
+        }
       } else {
         preCleanStats.recordCleanablePartitions(cleanableLogs.size)
         val filthiest = cleanableLogs.max

@@ -217,6 +217,16 @@ public abstract class AbstractLegacyRecordBatch extends AbstractRecordBatch impl
         return false;
     }
 
+    @Override
+    public long deleteHorizonMs() {
+        return RecordBatch.NO_TIMESTAMP;
+    }
+
+    @Override
+    public boolean hasDeleteHorizonMs() {
+        return false;
+    }
+
     /**
      * Get an iterator for the nested entries contained within this batch. Note that
      * if the batch is not compressed, then this method will return an iterator over the
@@ -469,6 +479,16 @@ public abstract class AbstractLegacyRecordBatch extends AbstractRecordBatch impl
         }
 
         @Override
+        public long deleteHorizonMs() {
+            return RecordBatch.NO_TIMESTAMP;
+        }
+
+        @Override
+        public boolean hasDeleteHorizonMs() {
+            return false;
+        }
+
+        @Override
         public LegacyRecord outerRecord() {
             return record;
         }
@@ -555,6 +575,16 @@ public abstract class AbstractLegacyRecordBatch extends AbstractRecordBatch impl
         @Override
         public long baseOffset() {
             return loadFullBatch().baseOffset();
+        }
+
+        @Override
+        public long deleteHorizonMs() {
+            return RecordBatch.NO_TIMESTAMP;
+        }
+
+        @Override
+        public boolean hasDeleteHorizonMs() {
+            return false;
         }
 
         @Override

@@ -249,7 +249,8 @@ class Log(@volatile private var _dir: File,
           val topicPartition: TopicPartition,
           val producerStateManager: ProducerStateManager,
           logDirFailureChannel: LogDirFailureChannel,
-          private val hadCleanShutdown: Boolean = true) extends Logging with KafkaMetricsGroup {
+          private val hadCleanShutdown: Boolean = true,
+          @volatile var latestDeleteHorizon: Long = RecordBatch.NO_TIMESTAMP) extends Logging with KafkaMetricsGroup {
 
   import kafka.log.Log._
 

@@ -508,14 +508,15 @@ private[log] class Cleaner(val id: Int,
         case None => 0L
         case Some(seg) => seg.lastModified - cleanable.log.config.deleteRetentionMs
     }
-
-    doClean(cleanable, deleteHorizonMs)
+    doClean(cleanable, time.milliseconds(), legacyDeleteHorizonMs = deleteHorizonMs)
   }
 
-  private[log] def doClean(cleanable: LogToClean, deleteHorizonMs: Long): (Long, CleanerStats) = {
+  private[log] def doClean(cleanable: LogToClean, currentTime: Long, legacyDeleteHorizonMs: Long = -1L): (Long, CleanerStats) = {
     info("Beginning cleaning of log %s.".format(cleanable.log.name))
 
     val log = cleanable.log
+    log.latestDeleteHorizon = RecordBatch.NO_TIMESTAMP
+
     val stats = new CleanerStats()
 
     // build the offset map
@@ -530,13 +531,13 @@ private[log] class Cleaner(val id: Int,
     val cleanableHorizonMs = log.logSegments(0, cleanable.firstUncleanableOffset).lastOption.map(_.lastModified).getOrElse(0L)
 
     // group the segments and clean the groups
-    info("Cleaning log %s (cleaning prior to %s, discarding tombstones prior to %s)...".format(log.name, new Date(cleanableHorizonMs), new Date(deleteHorizonMs)))
+    info("Cleaning log %s (cleaning prior to %s, discarding legacy tombstones prior to %s)...".format(log.name, new Date(cleanableHorizonMs), new Date(legacyDeleteHorizonMs)))
     val transactionMetadata = new CleanedTransactionMetadata
 
     val groupedSegments = groupSegmentsBySize(log.logSegments(0, endOffset), log.config.segmentSize,
       log.config.maxIndexSize, cleanable.firstUncleanableOffset)
     for (group <- groupedSegments)
-      cleanSegments(log, group, offsetMap, deleteHorizonMs, stats, transactionMetadata)
+      cleanSegments(log, group, offsetMap, currentTime, stats, transactionMetadata, legacyDeleteHorizonMs = legacyDeleteHorizonMs)
 
     // record buffer utilization
     stats.bufferUtilization = offsetMap.utilization
@@ -552,17 +553,19 @@ private[log] class Cleaner(val id: Int,
    * @param log The log being cleaned
    * @param segments The group of segments being cleaned
    * @param map The offset map to use for cleaning segments
-   * @param deleteHorizonMs The time to retain delete tombstones
+   * @param currentTime The current time in milliseconds
    * @param stats Collector for cleaning statistics
    * @param transactionMetadata State of ongoing transactions which is carried between the cleaning
    *                            of the grouped segments
+   * @param legacyDeleteHorizonMs The delete horizon used for tombstones whose version is less than 2
    */
   private[log] def cleanSegments(log: Log,
                                  segments: Seq[LogSegment],
                                  map: OffsetMap,
-                                 deleteHorizonMs: Long,
+                                 currentTime: Long,
                                  stats: CleanerStats,
-                                 transactionMetadata: CleanedTransactionMetadata): Unit = {
+                                 transactionMetadata: CleanedTransactionMetadata,
+                                 legacyDeleteHorizonMs: Long = -1L): Unit = {
     // create a new segment with a suffix appended to the name of the log and indexes
     val cleaned = LogCleaner.createNewCleanedSegment(log, segments.head.baseOffset)
     transactionMetadata.cleanedIndex = Some(cleaned.txnIndex)
@@ -582,14 +585,17 @@ private[log] class Cleaner(val id: Int,
         val abortedTransactions = log.collectAbortedTransactions(startOffset, upperBoundOffset)
         transactionMetadata.addAbortedTransactions(abortedTransactions)
 
-        val retainDeletesAndTxnMarkers = currentSegment.lastModified > deleteHorizonMs
+        val retainLegacyDeletesAndTxnMarkers = currentSegment.lastModified > legacyDeleteHorizonMs
         info(s"Cleaning $currentSegment in log ${log.name} into ${cleaned.baseOffset} " +
-          s"with deletion horizon $deleteHorizonMs, " +
-          s"${if(retainDeletesAndTxnMarkers) "retaining" else "discarding"} deletes.")
+          s"with legacy deletion horizon $legacyDeleteHorizonMs, " +
+          s"${if(retainLegacyDeletesAndTxnMarkers) "retaining" else "discarding"} deletes.")
 
         try {
-          cleanInto(log.topicPartition, currentSegment.log, cleaned, map, retainDeletesAndTxnMarkers, log.config.maxMessageSize,
-            transactionMetadata, lastOffsetOfActiveProducers, stats)
+          val latestDeleteHorizon: Long = cleanInto(log.topicPartition, currentSegment.log, cleaned, map, retainLegacyDeletesAndTxnMarkers, log.config.deleteRetentionMs,
+                    log.config.maxMessageSize, transactionMetadata, lastOffsetOfActiveProducers, stats, currentTime = currentTime)
+          if (log.latestDeleteHorizon < latestDeleteHorizon) {
+            log.latestDeleteHorizon = latestDeleteHorizon
+          }
         } catch {
           case e: LogSegmentOffsetOverflowException =>
             // Split the current segment. It's also safest to abort the current cleaning process, so that we retry from
@@ -630,26 +636,43 @@ private[log] class Cleaner(val id: Int,
    * @param sourceRecords The dirty log segment
    * @param dest The cleaned log segment
    * @param map The key=>offset mapping
-   * @param retainDeletesAndTxnMarkers Should tombstones and markers be retained while cleaning this segment
+   * @param retainLegacyDeletesAndTxnMarkers Should tombstones (lower than version 2) and markers be retained while cleaning this segment
+   * @param deleteRetentionMs Defines how long a tombstone should be kept as defined by log configuration
    * @param maxLogMessageSize The maximum message size of the corresponding topic
    * @param stats Collector for cleaning statistics
+   * @param currentTime The time at which the clean was initiated
    */
   private[log] def cleanInto(topicPartition: TopicPartition,
                              sourceRecords: FileRecords,
                              dest: LogSegment,
                              map: OffsetMap,
-                             retainDeletesAndTxnMarkers: Boolean,
+                             retainLegacyDeletesAndTxnMarkers: Boolean,
+                             deleteRetentionMs: Long,
                              maxLogMessageSize: Int,
                              transactionMetadata: CleanedTransactionMetadata,
                              lastRecordsOfActiveProducers: Map[Long, LastRecord],
-                             stats: CleanerStats): Unit = {
-    val logCleanerFilter: RecordFilter = new RecordFilter {
+                             stats: CleanerStats,
+                             currentTime: Long): Long = {
+    var latestDeleteHorizon: Long = RecordBatch.NO_TIMESTAMP
+
+    val logCleanerFilter: RecordFilter = new RecordFilter(currentTime, deleteRetentionMs) {
       var discardBatchRecords: Boolean = _
 
-      override def checkBatchRetention(batch: RecordBatch): BatchRetention = {
+      override def checkBatchRetention(batch: RecordBatch): RecordFilter.BatchRetentionResult = {
         // we piggy-back on the tombstone retention logic to delay deletion of transaction markers.
         // note that we will never delete a marker until all the records from that transaction are removed.
-        discardBatchRecords = shouldDiscardBatch(batch, transactionMetadata, retainTxnMarkers = retainDeletesAndTxnMarkers)
+        val canDiscardBatch = shouldDiscardBatch(batch, transactionMetadata)
+
+        if (batch.isControlBatch) {
+          if (batch.magic() < 2) {
+            discardBatchRecords = canDiscardBatch && !retainLegacyDeletesAndTxnMarkers
+          } else {
+            discardBatchRecords = canDiscardBatch && 
+              batch.hasDeleteHorizonMs() && batch.deleteHorizonMs() <= currentTime
+          }
+        } else {
+          discardBatchRecords = canDiscardBatch
+        }
 
         def isBatchLastRecordOfProducer: Boolean = {
           // We retain the batch in order to preserve the state of active producers. There are three cases:
@@ -666,20 +689,24 @@ private[log] class Cleaner(val id: Int,
           }
         }
 
-        if (batch.hasProducerId && isBatchLastRecordOfProducer)
-          BatchRetention.RETAIN_EMPTY
-        else if (discardBatchRecords)
-          BatchRetention.DELETE
-        else
-          BatchRetention.DELETE_EMPTY
+        val batchRetention: BatchRetention =
+          if (batch.hasProducerId && isBatchLastRecordOfProducer)
+            BatchRetention.RETAIN_EMPTY
+          else if (discardBatchRecords)
+            BatchRetention.DELETE
+          else
+            BatchRetention.DELETE_EMPTY
+        new RecordFilter.BatchRetentionResult(batchRetention, canDiscardBatch)
       }
 
       override def shouldRetainRecord(batch: RecordBatch, record: Record): Boolean = {
+        var isRecordRetained: Boolean = true
         if (discardBatchRecords)
           // The batch is only retained to preserve producer sequence information; the records can be removed
-          false
+          isRecordRetained = false
         else
-          Cleaner.this.shouldRetainRecord(map, retainDeletesAndTxnMarkers, batch, record, stats)
+          isRecordRetained = Cleaner.this.shouldRetainRecord(map, retainLegacyDeletesAndTxnMarkers, batch, record, stats, currentTime = currentTime)
+        isRecordRetained
       }
     }
 
@@ -694,6 +721,10 @@ private[log] class Cleaner(val id: Int,
       val records = MemoryRecords.readableRecords(readBuffer)
       throttler.maybeThrottle(records.sizeInBytes)
       val result = records.filterTo(topicPartition, logCleanerFilter, writeBuffer, maxLogMessageSize, decompressionBufferSupplier)
+      if (result.latestDeleteHorizon() > latestDeleteHorizon) {
+        latestDeleteHorizon = result.latestDeleteHorizon();
+      }
+
       stats.readMessages(result.messagesRead, result.bytesRead)
       stats.recopyMessages(result.messagesRetained, result.bytesRetained)
 
@@ -719,6 +750,7 @@ private[log] class Cleaner(val id: Int,
         growBuffersOrFail(sourceRecords, position, maxLogMessageSize, records)
     }
     restoreBuffers()
+    latestDeleteHorizon
   }
 
 
@@ -755,22 +787,19 @@ private[log] class Cleaner(val id: Int,
   }
 
   private def shouldDiscardBatch(batch: RecordBatch,
-                                 transactionMetadata: CleanedTransactionMetadata,
-                                 retainTxnMarkers: Boolean): Boolean = {
-    if (batch.isControlBatch) {
-      val canDiscardControlBatch = transactionMetadata.onControlBatchRead(batch)
-      canDiscardControlBatch && !retainTxnMarkers
-    } else {
-      val canDiscardBatch = transactionMetadata.onBatchRead(batch)
-      canDiscardBatch
-    }
+                                 transactionMetadata: CleanedTransactionMetadata): Boolean = {
+    if (batch.isControlBatch)
+      transactionMetadata.onControlBatchRead(batch)
+    else
+      transactionMetadata.onBatchRead(batch)
   }
 
   private def shouldRetainRecord(map: kafka.log.OffsetMap,
-                                 retainDeletes: Boolean,
+                                 retainDeletesForLegacyRecords: Boolean,
                                  batch: RecordBatch,
                                  record: Record,
-                                 stats: CleanerStats): Boolean = {
+                                 stats: CleanerStats,
+                                 currentTime: Long): Boolean = {
     val pastLatestOffset = record.offset > map.latestOffset
     if (pastLatestOffset)
       return true
@@ -784,7 +813,13 @@ private[log] class Cleaner(val id: Int,
        *   2) The message doesn't has value but it can't be deleted now.
        */
       val latestOffsetForKey = record.offset() >= foundOffset
-      val isRetainedValue = record.hasValue || retainDeletes
+      val supportDeleteHorizon = batch.magic() >= RecordBatch.MAGIC_VALUE_V2
+      val shouldRetainDeletes =
+        if (supportDeleteHorizon)
+          !batch.hasDeleteHorizonMs() || currentTime < batch.deleteHorizonMs()
+        else
+          retainDeletesForLegacyRecords
+      val isRetainedValue = record.hasValue || shouldRetainDeletes
       latestOffsetForKey && isRetainedValue
     } else {
       stats.invalidMessage()
