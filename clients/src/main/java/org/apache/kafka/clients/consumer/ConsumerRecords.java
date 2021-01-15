@@ -46,16 +46,13 @@ public class ConsumerRecords<K, V> implements Iterable<ConsumerRecord<K, V>> {
 
         private final long receivedTimestamp;
         private final Long position;
-        private final Long beginningOffset;
         private final Long endOffset;
 
         public Metadata(final long receivedTimestamp,
                         final Long position,
-                        final Long beginningOffset,
                         final Long endOffset) {
             this.receivedTimestamp = receivedTimestamp;
             this.position = position;
-            this.beginningOffset = beginningOffset;
             this.endOffset = endOffset;
         }
 
@@ -82,13 +79,6 @@ public class ConsumerRecords<K, V> implements Iterable<ConsumerRecord<K, V>> {
         }
 
         /**
-         * @return The current first offset in the partition, or if the beginning offset is not known.
-         */
-        public Long beginningOffset() {
-            return beginningOffset;
-        }
-
-        /**
          * @return The current last offset in the partition. The determination of the "last" offset
          * depends on the Consumer's isolation level. Under "read_uncommitted," this is the last successfully
          * replicated offset plus one. Under "read_committed," this is the minimum of the last successfully
@@ -104,7 +94,6 @@ public class ConsumerRecords<K, V> implements Iterable<ConsumerRecord<K, V>> {
             return "Metadata{" +
                 "receivedTimestamp=" + receivedTimestamp +
                 ", position=" + position +
-                ", beginningOffset=" + beginningOffset +
                 ", endOffset=" + endOffset +
                 '}';
         }
@@ -118,7 +107,6 @@ public class ConsumerRecords<K, V> implements Iterable<ConsumerRecord<K, V>> {
                 new Metadata(
                     entry.getValue().receivedTimestamp(),
                     entry.getValue().position() == null ? null : entry.getValue().position().offset,
-                    entry.getValue().beginningOffset(),
                     entry.getValue().endOffset()
                 )
             );

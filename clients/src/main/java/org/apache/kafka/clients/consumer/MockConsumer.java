@@ -224,11 +224,10 @@ public class MockConsumer<K, V> implements Consumer<K, V> {
             if (subscriptions.hasValidPosition(partition) && beginningOffsets.containsKey(partition) && endOffsets.containsKey(partition)) {
                 final SubscriptionState.FetchPosition position = subscriptions.position(partition);
                 final long offset = position.offset;
-                final long beginningOffset = beginningOffsets.get(partition);
                 final long endOffset = endOffsets.get(partition);
                 metadata.put(
                     partition,
-                    new ConsumerRecords.Metadata(System.currentTimeMillis(), offset, beginningOffset, endOffset)
+                    new ConsumerRecords.Metadata(System.currentTimeMillis(), offset, endOffset)
                 );
             }
         }
