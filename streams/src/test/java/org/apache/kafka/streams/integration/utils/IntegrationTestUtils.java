@@ -1270,22 +1270,13 @@ public class IntegrationTestUtils {
 
     public static class StableAssignmentListener implements AssignmentListener {
         final AtomicInteger numStableAssignments = new AtomicInteger(0);
-        final AtomicInteger totalAssignments = new AtomicInteger(0);
         int nextExpectedNumStableAssignments;
 
         @Override
         public void onAssignmentComplete(final boolean stable) {
-            totalAssignments.incrementAndGet();
             if (stable) {
                 numStableAssignments.incrementAndGet();
             }
-        }
-
-        /**
-         * get the total number of assignments (unstable + stable)
-         */
-        public int numTotalAssignments() {
-            return totalAssignments.get();
         }
 
         public int numStableAssignments() {
@@ -1296,12 +1287,9 @@ public class IntegrationTestUtils {
          * Saves the current number of stable rebalances so that we can tell when the next stable assignment has been
          * reached. This should be called once for every invocation of {@link #waitForNextStableAssignment(long)},
          * before the rebalance-triggering event.
-         *
-         * @return the total number of assignments so far
          */
-        public int prepareForRebalance() {
+        public void prepareForRebalance() {
             nextExpectedNumStableAssignments = numStableAssignments.get() + 1;
-            return totalAssignments.get();
         }
 
         /**

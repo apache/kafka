@@ -123,8 +123,6 @@ public class EosBetaUpgradeIntegrationTest {
                 KeyValue.pair(KafkaStreams.State.PENDING_SHUTDOWN, KafkaStreams.State.NOT_RUNNING)
             )
         );
-    private static final KeyValue<KafkaStreams.State, KafkaStreams.State> REBALANCED_RUNNING =
-        KeyValue.pair(State.REBALANCING, State.RUNNING);
 
     @ClassRule
     public static final EmbeddedKafkaCluster CLUSTER = new EmbeddedKafkaCluster(
@@ -161,8 +159,6 @@ public class EosBetaUpgradeIntegrationTest {
             put(APP_DIR_2, 0);
         }
     };
-    private int prevNumAssignments = 0;
-    private int expectedNumAssignments = 0;
 
     private volatile boolean hasUnexpectedError = false;
 
@@ -267,13 +263,12 @@ public class EosBetaUpgradeIntegrationTest {
             );
             stateTransitions1.clear();
 
-            prevNumAssignments = assignmentListener.prepareForRebalance();
+            assignmentListener.prepareForRebalance();
             streams2Alpha.cleanUp();
             streams2Alpha.start();
             assignmentListener.waitForNextStableAssignment(MAX_WAIT_TIME_MS);
-            expectedNumAssignments = assignmentListener.numTotalAssignments() - prevNumAssignments;
-            waitForNumRebalancingToRunning(stateTransitions2, expectedNumAssignments);
             waitForRunning(stateTransitions1);
+            waitForRunning(stateTransitions2);
 
             // in all phases, we write comments that assume that p-0/p-1 are assigned to the first client
             // and p-2/p-3 are assigned to the second client (in reality the assignment might be different though)
@@ -430,11 +425,10 @@ public class EosBetaUpgradeIntegrationTest {
             stateTransitions2.clear();
             streams1Beta = getKafkaStreams(APP_DIR_1, StreamsConfig.EXACTLY_ONCE_BETA);
             streams1Beta.setStateListener((newState, oldState) -> stateTransitions1.add(KeyValue.pair(oldState, newState)));
-            prevNumAssignments = assignmentListener.prepareForRebalance();
+            assignmentListener.prepareForRebalance();
             streams1Beta.start();
             assignmentListener.waitForNextStableAssignment(MAX_WAIT_TIME_MS);
-            expectedNumAssignments = assignmentListener.numTotalAssignments() - prevNumAssignments;
-            waitForNumRebalancingToRunning(stateTransitions1, expectedNumAssignments);
+            waitForRunning(stateTransitions1);
             waitForRunning(stateTransitions2);
 
             final Set<Long> newlyCommittedKeys;
@@ -578,12 +572,11 @@ public class EosBetaUpgradeIntegrationTest {
                 streams2AlphaTwo.setStateListener(
                     (newState, oldState) -> stateTransitions2.add(KeyValue.pair(oldState, newState))
                 );
-                prevNumAssignments = assignmentListener.prepareForRebalance();
+                assignmentListener.prepareForRebalance();
                 streams2AlphaTwo.start();
                 assignmentListener.waitForNextStableAssignment(MAX_WAIT_TIME_MS);
-                expectedNumAssignments = assignmentListener.numTotalAssignments() - prevNumAssignments;
-                waitForNumRebalancingToRunning(stateTransitions2, expectedNumAssignments);
                 waitForRunning(stateTransitions1);
+                waitForRunning(stateTransitions2);
 
                 // 7b. write third batch of input data
                 final Set<Long> keysFirstClientBeta = keysFromInstance(streams1Beta);
@@ -649,11 +642,10 @@ public class EosBetaUpgradeIntegrationTest {
                 stateTransitions2.clear();
                 streams1BetaTwo = getKafkaStreams(APP_DIR_1, StreamsConfig.EXACTLY_ONCE_BETA);
                 streams1BetaTwo.setStateListener((newState, oldState) -> stateTransitions1.add(KeyValue.pair(oldState, newState)));
-                prevNumAssignments = assignmentListener.prepareForRebalance();
+                assignmentListener.prepareForRebalance();
                 streams1BetaTwo.start();
                 assignmentListener.waitForNextStableAssignment(MAX_WAIT_TIME_MS);
-                expectedNumAssignments = assignmentListener.numTotalAssignments() - prevNumAssignments;
-                waitForNumRebalancingToRunning(stateTransitions1, expectedNumAssignments);
+                waitForRunning(stateTransitions1);
                 waitForRunning(stateTransitions2);
             }
 
@@ -786,12 +778,11 @@ public class EosBetaUpgradeIntegrationTest {
             streams2Beta.setStateListener(
                 (newState, oldState) -> stateTransitions2.add(KeyValue.pair(oldState, newState))
             );
-            prevNumAssignments = assignmentListener.prepareForRebalance();
+            assignmentListener.prepareForRebalance();
             streams2Beta.start();
             assignmentListener.waitForNextStableAssignment(MAX_WAIT_TIME_MS);
-            expectedNumAssignments = assignmentListener.numTotalAssignments() - prevNumAssignments;
-            waitForNumRebalancingToRunning(stateTransitions2, expectedNumAssignments);
             waitForRunning(stateTransitions1);
+            waitForRunning(stateTransitions2);
 
             newlyCommittedKeys.clear();
             if (!injectError) {
@@ -988,17 +979,6 @@ public class EosBetaUpgradeIntegrationTest {
             () -> !observed.isEmpty() && observed.get(observed.size() - 1).value.equals(State.RUNNING),
             MAX_WAIT_TIME_MS,
             () -> "Client did not startup on time. Observers transitions: " + observed
-        );
-    }
-
-    // Wait for the numRebalancing of <REBALANCING -> RUNNING> state transition because when new stream joined,
-    // we'll do multiple rebalancing. So, if we only wait for Running, it might enter rebalancing soon
-    private void waitForNumRebalancingToRunning(final List<KeyValue<KafkaStreams.State, KafkaStreams.State>> observed,
-                                                final int numRebalancing) throws Exception {
-        waitForCondition(() -> !observed.isEmpty() &&
-                    observed.stream().filter(kv -> kv.equals(REBALANCED_RUNNING)).count() == numRebalancing,
-            MAX_WAIT_TIME_MS,
-            () -> "Client did not run " + numRebalancing + " of Rebalancing to Running on time. Observers transitions: " + observed
         );
     }
 
