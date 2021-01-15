@@ -25,9 +25,14 @@ import org.apache.kafka.common.utils.{AppInfoParser, Time}
 import org.apache.kafka.raft.internals.StringSerde
 
 /**
- * Partially stubbed implementation of the KIP-500 server which relies on a self-managed
- * Raft quorum for replication of the `@metadata` topic, which stores all of
- * the cluster metadata.
+ * This class implements the KIP-500 server which relies on a self-managed
+ * Raft quorum for maintaining cluster metadata. It is responsible for
+ * constructing the controller and/or broker based on the `process.roles`
+ * configuration and for managing their basic lifecycle (startup and shutdown).
+ *
+ * Note that this server is a work in progress and relies on stubbed
+ * implementations of the controller [[ControllerServer]] and broker
+ * [[BrokerServer]].
  */
 class KafkaRaftServer(
   config: KafkaConfig,
