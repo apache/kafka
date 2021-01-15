@@ -66,7 +66,7 @@ class TestRaftServer(
     tokenCache = new DelegationTokenCache(ScramMechanism.mechanismNames)
     credentialProvider = new CredentialProvider(ScramMechanism.mechanismNames, tokenCache)
 
-    socketServer = new SocketServer(config, metrics, time, credentialProvider, allowDisabledApis = true)
+    socketServer = new SocketServer(config, metrics, time, credentialProvider, allowControllerOnlyApis = true)
     socketServer.startup(startProcessingRequests = false)
 
     raftManager = new KafkaRaftManager[Array[Byte]](

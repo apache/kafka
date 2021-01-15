@@ -101,7 +101,7 @@ class KafkaApis(val requestChannel: RequestChannel,
                 val groupCoordinator: GroupCoordinator,
                 val txnCoordinator: TransactionCoordinator,
                 val controller: KafkaController,
-                val forwardingManager: ForwardingManager,
+                val forwardingManager: Option[ForwardingManager],
                 val zkClient: KafkaZkClient,
                 val brokerId: Int,
                 val config: KafkaConfig,
@@ -131,7 +131,7 @@ class KafkaApis(val requestChannel: RequestChannel,
   }
 
   private def isForwardingEnabled(request: RequestChannel.Request): Boolean = {
-    config.metadataQuorumEnabled && request.context.principalSerde.isPresent
+    forwardingManager.isDefined && request.context.principalSerde.isPresent
   }
 
   private def maybeForwardToController(
@@ -149,12 +149,12 @@ class KafkaApis(val requestChannel: RequestChannel,
       }
     }
 
-    if (!request.isForwarded && !controller.isActive && isForwardingEnabled(request)) {
-      forwardingManager.forwardRequest(request, responseCallback)
-    } else {
-      // When the KIP-500 mode is off or the principal serde is undefined, forwarding is not supported,
-      // therefore requests are handled directly.
-      handler(request)
+    forwardingManager match {
+      case Some(mgr) if !request.isForwarded && !controller.isActive =>
+        mgr.forwardRequest(request, responseCallback)
+
+      case _ =>
+        handler(request)
     }
   }
 
@@ -1742,11 +1742,7 @@ class KafkaApis(val requestChannel: RequestChannel,
       else {
         val supportedFeatures = brokerFeatures.supportedFeatures
         val finalizedFeaturesOpt = finalizedFeatureCache.get
-        val controllerApiVersions = if (isForwardingEnabled(request)) {
-          forwardingManager.controllerApiVersions()
-        } else {
-          None
-        }
+        val controllerApiVersions = forwardingManager.flatMap(_.controllerApiVersions)
 
         val apiVersionsResponse =
           finalizedFeaturesOpt match {
@@ -3251,9 +3247,9 @@ class KafkaApis(val requestChannel: RequestChannel,
 
     // If forwarding is not yet enabled or this request has been received on an invalid endpoint,
     // then we treat the request as unparsable and close the connection.
-    if (!config.metadataQuorumEnabled) {
+    if (!isForwardingEnabled(request)) {
       info(s"Closing connection ${request.context.connectionId} because it sent an `Envelope` " +
-        s"request, which is not accepted without enabling the internal config ${KafkaConfig.EnableMetadataQuorumProp}")
+        "request even though forwarding has not been enabled")
       requestHelper.closeConnection(request, Collections.emptyMap())
       return
     } else if (!request.context.fromPrivilegedListener) {
@@ -3279,7 +3275,7 @@ class KafkaApis(val requestChannel: RequestChannel,
     val forwardedRequestHeader = parseForwardedRequestHeader(forwardedRequestBuffer)
 
     val forwardedApi = forwardedRequestHeader.apiKey
-    if (!forwardedApi.forwardable || !forwardedApi.isEnabled) {
+    if (!forwardedApi.forwardable) {
       throw new InvalidRequestException(s"API $forwardedApi is not enabled or is not eligible for forwarding")
     }
 

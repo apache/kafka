@@ -36,7 +36,7 @@ trait ForwardingManager {
     responseCallback: Option[AbstractResponse] => Unit
   ): Unit
 
-  def controllerApiVersions(): Option[NodeApiVersions]
+  def controllerApiVersions: Option[NodeApiVersions]
 
   def start(): Unit = {}
 
@@ -140,7 +140,7 @@ class ForwardingManagerImpl(
     channelManager.sendRequest(envelopeRequest, new ForwardingResponseHandler)
   }
 
-  override def controllerApiVersions(): Option[NodeApiVersions] =
+  override def controllerApiVersions: Option[NodeApiVersions] =
     channelManager.controllerApiVersions()
 
   private def parseResponse(
