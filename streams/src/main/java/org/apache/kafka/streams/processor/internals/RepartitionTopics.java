@@ -114,13 +114,13 @@ public class RepartitionTopics {
 
     private void checkIfExternalSourceTopicsExist(final TopicsInfo topicsInfo,
                                                   final Cluster clusterMetadata) {
-        final Set<String> externalSourceTopics = new HashSet<>(topicsInfo.sourceTopics);
-        externalSourceTopics.removeAll(topicsInfo.repartitionSourceTopics.keySet());
-        externalSourceTopics.removeAll(clusterMetadata.topics());
-        if (!externalSourceTopics.isEmpty()) {
+        final Set<String> missingExternalSourceTopics = new HashSet<>(topicsInfo.sourceTopics);
+        missingExternalSourceTopics.removeAll(topicsInfo.repartitionSourceTopics.keySet());
+        missingExternalSourceTopics.removeAll(clusterMetadata.topics());
+        if (!missingExternalSourceTopics.isEmpty()) {
             log.error("The following source topics are missing/unknown: {}. Please make sure all source topics " +
                     "have been pre-created before starting the Streams application. ",
-                externalSourceTopics);
+                missingExternalSourceTopics);
             throw new MissingSourceTopicException("Missing source topics.");
         }
     }
@@ -172,13 +172,13 @@ public class RepartitionTopics {
                                           final String repartitionSourceTopic) {
         Integer partitionCount = null;
         // try set the number of partitions for this repartition topic if it is not set yet
-        for (final TopicsInfo upstreamTopicsInfo : topicGroups.values()) {
-            final Set<String> upstreamSinkTopics = upstreamTopicsInfo.sinkTopics;
+        for (final TopicsInfo topicsInfo : topicGroups.values()) {
+            final Set<String> sinkTopics = topicsInfo.sinkTopics;
 
-            if (upstreamSinkTopics.contains(repartitionSourceTopic)) {
+            if (sinkTopics.contains(repartitionSourceTopic)) {
                 // if this topic is one of the sink topics of this topology,
                 // use the maximum of all its source topic partitions as the number of partitions
-                for (final String upstreamSourceTopic : upstreamTopicsInfo.sourceTopics) {
+                for (final String upstreamSourceTopic : topicsInfo.sourceTopics) {
                     Integer numPartitionsCandidate = null;
                     // It is possible the sourceTopic is another internal topic, i.e,
                     // map().join().join(map())
