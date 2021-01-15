@@ -388,7 +388,7 @@ class ZkAdminManager(val config: KafkaConfig,
     }
   }
 
-    def alterConfigs(configs: Map[ConfigResource, AlterConfigsRequest.Config], validateOnly: Boolean): Map[ConfigResource, ApiError] = {
+  def alterConfigs(configs: Map[ConfigResource, AlterConfigsRequest.Config], validateOnly: Boolean): Map[ConfigResource, ApiError] = {
     configs.map { case (resource, config) =>
 
       try {
@@ -429,6 +429,9 @@ class ZkAdminManager(val config: KafkaConfig,
   private def alterTopicConfigs(resource: ConfigResource, validateOnly: Boolean,
                                 configProps: Properties, configEntriesMap: Map[String, String]): (ConfigResource, ApiError) = {
     val topic = resource.name
+    if (topic.isEmpty) {
+      throw new UnknownTopicOrPartitionException("Default configs are not supported for topic entities.")
+    }
     if (!metadataCache.contains(topic))
       throw new UnknownTopicOrPartitionException(s"The topic '$topic' does not exist.")
 
@@ -526,6 +529,9 @@ class ZkAdminManager(val config: KafkaConfig,
 
         resource.`type` match {
           case ConfigResource.Type.TOPIC =>
+            if (resource.name.isEmpty) {
+              throw new InvalidRequestException("Default configs are not supported for topic entities.")
+            }
             val configProps = adminZkClient.fetchEntityConfig(ConfigType.Topic, resource.name)
             prepareIncrementalConfigs(alterConfigOps, configProps, LogConfig.configKeys)
             alterTopicConfigs(resource, validateOnly, configProps, configEntriesMap)
