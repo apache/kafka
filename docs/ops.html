@@ -2032,9 +2032,11 @@ dropped-records-rate and dropped-records-total which have a recording level of <
  </table>
 
   <h5 class="anchor-heading"><a id="kafka_streams_rocksdb_monitoring" class="anchor-link"></a><a href="#kafka_streams_rocksdb_monitoring">RocksDB Metrics</a></h5>
-  RocksDB Metrics are grouped into statistics-based metrics and properties-based metrics.
+  RocksDB metrics are grouped into statistics-based metrics and properties-based metrics.
   The former are recorded from statistics that a RocksDB state store collects whereas the latter are recorded from
   properties that RocksDB exposes.
+  Statistics collected by RocksDB provide cumulative measurements over time, e.g. bytes written to the state store.
+  Properties exposed by RocksDB provide current measurements, e.g., the amount of memory currently used.
   Note that the <code>store-scope</code> for built-in RocksDB state stores are currently the following:
   <ul>
     <li><code>rocksdb-state</code> (for RocksDB backed key-value store)</li>
@@ -2042,7 +2044,6 @@ dropped-records-rate and dropped-records-total which have a recording level of <
     <li><code>rocksdb-session-state</code> (for RocksDB backed session store)</li>
   </ul>
 
-  <!-- h6 class="anchor-heading"><a id="kafka_streams_rocksdb_statistics_based_monitoring" class="anchor-link"></a><a href="#kafka_streams_rocksdb_statistics_based_monitoring">RocksDB Statistics-based Metrics</a></h6-->
   <strong>RocksDB Statistics-based Metrics:</strong>
   All of the following statistics-based metrics have a recording level of <code>debug</code> because collecting
   statistics in <a href="https://github.com/facebook/rocksdb/wiki/Statistics#stats-level-and-performance-costs">RocksDB
@@ -2141,7 +2142,6 @@ dropped-records-rate and dropped-records-total which have a recording level of <
     </tbody>
   </table>
 
-  <!-- h6 class="anchor-heading"><a id="kafka_streams_rocksdb_properties_based_monitoring" class="anchor-link"></a><a href="#kafka_streams_rocksdb_properties_based_monitoring">RocksDB Properties-based Metrics</a></h6-->
   <strong>RocksDB Properties-based Metrics:</strong>
   All of the following properties-based metrics have a recording level of <code>info</code> and are recorded when the
   metrics are accessed.
