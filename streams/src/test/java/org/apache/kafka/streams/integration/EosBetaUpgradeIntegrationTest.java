@@ -137,7 +137,7 @@ public class EosBetaUpgradeIntegrationTest {
     private final static String MULTI_PARTITION_OUTPUT_TOPIC = "multiPartitionOutputTopic";
     private final static String APP_DIR_1 = "appDir1";
     private final static String APP_DIR_2 = "appDir2";
-    private final static String UNEXPECTED_EXCEPTION_MSG = "Fail the test since we got an unexpected exception or " +
+    private final static String UNEXPECTED_EXCEPTION_MSG = "Fail the test since we got an unexpected exception, or " +
         "there are too many exceptions thrown, please check standard error log for more info.";
     private final String storeName = "store";
 
