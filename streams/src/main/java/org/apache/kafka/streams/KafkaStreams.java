@@ -78,7 +78,6 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
-import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.LinkedList;
 import java.util.List;
@@ -990,7 +989,7 @@ public class KafkaStreams implements AutoCloseable {
         if (isRunningOrRebalancing()) {
             synchronized (changeThreadCount) {
                 // make a copy of threads to avoid holding lock
-                for (StreamThread streamThread : new ArrayList<>(threads)) {
+                for (final StreamThread streamThread : new ArrayList<>(threads)) {
                     if (streamThread.isAlive() && (!streamThread.getName().equals(Thread.currentThread().getName())
                             || threads.size() == 1)) {
                         streamThread.shutdown();
