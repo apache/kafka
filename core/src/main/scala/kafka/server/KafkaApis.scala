@@ -538,11 +538,7 @@ class KafkaApis(val requestChannel: RequestChannel,
     val produceRequest = request.body[ProduceRequest]
     val requestSize = request.sizeInBytes
 
-    val (hasIdempotentRecords, hasTransactionalRecords) = {
-      val flags = RequestUtils.flags(produceRequest)
-      (flags.getKey, flags.getValue)
-    }
-    if (hasTransactionalRecords) {
+    if (RequestUtils.hasTransactionalRecords(produceRequest)) {
       val isAuthorizedTransactional = produceRequest.transactionalId != null &&
         authorize(request.context, WRITE, TRANSACTIONAL_ID, produceRequest.transactionalId)
       if (!isAuthorizedTransactional) {

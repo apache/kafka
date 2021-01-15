@@ -36,6 +36,10 @@ import java.util.function.Function;
 
 public class RequestTestUtils {
 
+    public static boolean hasIdempotentRecords(ProduceRequest request) {
+        return RequestUtils.flag(request, RecordBatch::hasProducerId);
+    }
+
     public static ByteBuffer serializeRequestHeader(RequestHeader header) {
         ObjectSerializationCache serializationCache = new ObjectSerializationCache();
         ByteBuffer buffer = ByteBuffer.allocate(header.size(serializationCache));

@@ -30,7 +30,6 @@ import org.apache.kafka.common.message.ProduceRequestData;
 import org.apache.kafka.common.requests.FindCoordinatorRequest.CoordinatorType;
 import org.apache.kafka.common.requests.MetadataRequest;
 import org.apache.kafka.common.requests.RequestTestUtils;
-import org.apache.kafka.common.requests.RequestUtils;
 import org.apache.kafka.common.utils.ProducerIdAndEpoch;
 import org.apache.kafka.clients.producer.RecordMetadata;
 import org.apache.kafka.common.Cluster;
@@ -666,7 +665,7 @@ public class SenderTest {
 
         client.respond(body -> {
             ProduceRequest request = (ProduceRequest) body;
-            assertFalse(RequestUtils.hasIdempotentRecords(request));
+            assertFalse(RequestTestUtils.hasIdempotentRecords(request));
             return true;
         }, produceResponse(tp0, -1L, Errors.TOPIC_AUTHORIZATION_FAILED, 0));
         sender.runOnce();
@@ -1824,7 +1823,7 @@ public class SenderTest {
     void sendIdempotentProducerResponse(final int expectedSequence, TopicPartition tp, Errors responseError, long responseOffset, long logStartOffset) {
         client.respond(body -> {
             ProduceRequest produceRequest = (ProduceRequest) body;
-            assertTrue(RequestUtils.hasIdempotentRecords(produceRequest));
+            assertTrue(RequestTestUtils.hasIdempotentRecords(produceRequest));
 
             MemoryRecords records = partitionRecords(produceRequest).get(tp0);
             Iterator<MutableRecordBatch> batchIterator = records.batches().iterator();
@@ -1847,7 +1846,7 @@ public class SenderTest {
         // cluster authorization is a fatal error for the producer
         Future<RecordMetadata> future = appendToAccumulator(tp0);
         client.prepareResponse(
-            body -> body instanceof ProduceRequest && RequestUtils.hasIdempotentRecords((ProduceRequest) body),
+            body -> body instanceof ProduceRequest && RequestTestUtils.hasIdempotentRecords((ProduceRequest) body),
             produceResponse(tp0, -1, Errors.CLUSTER_AUTHORIZATION_FAILED, 0));
 
         sender.runOnce();
@@ -1875,7 +1874,7 @@ public class SenderTest {
         sender.runOnce();
 
         client.respond(
-            body -> body instanceof ProduceRequest && RequestUtils.hasIdempotentRecords((ProduceRequest) body),
+            body -> body instanceof ProduceRequest && RequestTestUtils.hasIdempotentRecords((ProduceRequest) body),
             produceResponse(tp0, -1, Errors.CLUSTER_AUTHORIZATION_FAILED, 0));
 
         sender.runOnce();
@@ -1887,7 +1886,7 @@ public class SenderTest {
 
         // Should be fine if the second response eventually returns
         client.respond(
-            body -> body instanceof ProduceRequest && RequestUtils.hasIdempotentRecords((ProduceRequest) body),
+            body -> body instanceof ProduceRequest && RequestTestUtils.hasIdempotentRecords((ProduceRequest) body),
             produceResponse(tp1, 0, Errors.NONE, 0));
         sender.runOnce();
     }
@@ -1903,7 +1902,7 @@ public class SenderTest {
 
         Future<RecordMetadata> future = appendToAccumulator(tp0);
         client.prepareResponse(
-            body -> body instanceof ProduceRequest && RequestUtils.hasIdempotentRecords((ProduceRequest) body),
+            body -> body instanceof ProduceRequest && RequestTestUtils.hasIdempotentRecords((ProduceRequest) body),
             produceResponse(tp0, -1, Errors.UNSUPPORTED_FOR_MESSAGE_FORMAT, 0));
 
         sender.runOnce();
@@ -1924,7 +1923,7 @@ public class SenderTest {
 
         Future<RecordMetadata> future = appendToAccumulator(tp0);
         client.prepareUnsupportedVersionResponse(
-            body -> body instanceof ProduceRequest && RequestUtils.hasIdempotentRecords((ProduceRequest) body));
+            body -> body instanceof ProduceRequest && RequestTestUtils.hasIdempotentRecords((ProduceRequest) body));
 
         sender.runOnce();
         assertFutureFailure(future, UnsupportedVersionException.class);
