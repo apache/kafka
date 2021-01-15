@@ -60,11 +60,8 @@ private[log] class LogCleaningException(val log: Log,
   */
 private[log] class LogCleanerManager(val logDirs: Seq[File],
                                      val logs: Pool[TopicPartition, Log],
-                                     val logDirFailureChannel: LogDirFailureChannel) extends Logging with KafkaMetricsGroup {
+                                     val logDirFailureChannel: LogDirFailureChannel) extends KafkaMetricsGroup {
   import LogCleanerManager._
-
-
-  protected override def loggerName = classOf[LogCleaner].getName
 
   // package-private for testing
   private[log] val offsetCheckpointFile = "cleaner-offset-checkpoint"
@@ -528,6 +525,8 @@ private case class OffsetsToClean(firstDirtyOffset: Long,
 }
 
 private[log] object LogCleanerManager extends Logging {
+
+  override protected def loggerName = classOf[LogCleaner].getName
 
   def isCompactAndDelete(log: Log): Boolean = {
     log.config.compact && log.config.delete

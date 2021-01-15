@@ -21,7 +21,7 @@ import java.nio.ByteBuffer
 import java.nio.channels.FileChannel
 import java.nio.file.{Files, StandardOpenOption}
 
-import kafka.utils.{Logging, nonthreadsafe}
+import kafka.utils.{nonthreadsafe}
 import org.apache.kafka.common.KafkaException
 import org.apache.kafka.common.requests.FetchResponse.AbortedTransaction
 import org.apache.kafka.common.utils.Utils
@@ -42,7 +42,7 @@ private[log] case class TxnIndexSearchResult(abortedTransactions: List[AbortedTx
  * order to find the start of the transactions.
  */
 @nonthreadsafe
-class TransactionIndex(val startOffset: Long, @volatile private var _file: File) extends Logging {
+class TransactionIndex(val startOffset: Long, @volatile private var _file: File) {
 
   // note that the file is not created until we need it
   @volatile private var maybeChannel: Option[FileChannel] = None

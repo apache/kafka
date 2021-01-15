@@ -57,6 +57,8 @@ import scala.jdk.CollectionConverters._
 
 class RequestQuotaTest extends BaseRequestTest {
 
+  import kafka.api.IntegrationTestHarness._
+
   override def brokerCount: Int = 1
 
   private val topic = "topic-1"

@@ -18,8 +18,7 @@ package kafka.common
 
 import java.util.Map.Entry
 import java.util.{ArrayDeque, ArrayList, Collection, Collections, HashMap, Iterator}
-
-import kafka.utils.ShutdownableThread
+import kafka.utils.{Logging, ShutdownableThread}
 import org.apache.kafka.clients.{ClientRequest, ClientResponse, KafkaClient, RequestCompletionHandler}
 import org.apache.kafka.common.Node
 import org.apache.kafka.common.errors.AuthenticationException
@@ -28,6 +27,10 @@ import org.apache.kafka.common.requests.AbstractRequest
 import org.apache.kafka.common.utils.Time
 
 import scala.jdk.CollectionConverters._
+
+object InterBrokerSendThread extends Logging {
+
+}
 
 /**
  *  Class for inter-broker send thread that utilize a non-blocking network client.
@@ -39,6 +42,8 @@ abstract class InterBrokerSendThread(
   time: Time,
   isInterruptible: Boolean = true
 ) extends ShutdownableThread(name, isInterruptible) {
+
+  import InterBrokerSendThread._
 
   private val unsentRequests = new UnsentRequests
 

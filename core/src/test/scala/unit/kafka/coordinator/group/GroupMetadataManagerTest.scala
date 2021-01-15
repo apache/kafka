@@ -21,8 +21,8 @@ import java.lang.management.ManagementFactory
 import java.nio.ByteBuffer
 import java.util.concurrent.locks.ReentrantLock
 import java.util.{Collections, Optional}
-
 import com.yammer.metrics.core.Gauge
+
 import javax.management.ObjectName
 import kafka.api._
 import kafka.cluster.Partition
@@ -30,7 +30,7 @@ import kafka.common.OffsetAndMetadata
 import kafka.log.{AppendOrigin, Log, LogAppendInfo}
 import kafka.metrics.KafkaYammerMetrics
 import kafka.server.{FetchDataInfo, FetchLogEnd, HostedPartition, KafkaConfig, LogOffsetMetadata, ReplicaManager}
-import kafka.utils.{KafkaScheduler, MockTime, TestUtils}
+import kafka.utils.{KafkaScheduler, LogIdent, MockTime, TestUtils}
 import kafka.zk.KafkaZkClient
 import org.apache.kafka.clients.consumer.ConsumerPartitionAssignor
 import org.apache.kafka.clients.consumer.ConsumerPartitionAssignor.Subscription
@@ -44,7 +44,7 @@ import org.apache.kafka.common.requests.OffsetFetchResponse
 import org.apache.kafka.common.requests.ProduceResponse.PartitionResponse
 import org.apache.kafka.common.utils.Utils
 import org.easymock.{Capture, EasyMock, IAnswer}
-import org.junit.Assert.{assertEquals, assertFalse, assertNull, assertTrue, assertThrows}
+import org.junit.Assert.{assertEquals, assertFalse, assertNull, assertThrows, assertTrue}
 import org.junit.{Before, Test}
 
 import scala.jdk.CollectionConverters._
@@ -110,7 +110,7 @@ class GroupMetadataManagerTest {
       override def cleanupGroupMetadata(groups: Iterable[GroupMetadata],
                                         selector: GroupMetadata => Map[TopicPartition, OffsetAndMetadata]): Int = expiredOffsets
 
-      override def info(msg: => String): Unit = infoCount += 1
+      override def info(msg: => String, e: => Throwable = null)(implicit logIndent : Option[LogIdent] = None) = infoCount += 1
     }
 
     // if there are no offsets to expire, we skip to log

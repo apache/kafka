@@ -256,10 +256,15 @@ private case class TopicPartitionReplica(topic: String, partitionId: Int, replic
 
 private case class MessageInfo(replicaId: Int, offset: Long, nextOffset: Long, checksum: Long)
 
+private object ReplicaBuffer extends Logging {
+
+}
+
 private class ReplicaBuffer(expectedReplicasPerTopicPartition: collection.Map[TopicPartition, Int],
                             initialOffsets: collection.Map[TopicPartition, Long],
                             expectedNumFetchers: Int,
-                            reportInterval: Long) extends Logging {
+                            reportInterval: Long) {
+  import ReplicaBuffer._
   private val fetchOffsetMap = new Pool[TopicPartition, Long]
   private val recordsCache = new Pool[TopicPartition, Pool[Int, FetchResponse.PartitionData[MemoryRecords]]]
   private val fetcherBarrier = new AtomicReference(new CountDownLatch(expectedNumFetchers))
@@ -385,6 +390,7 @@ private class ReplicaFetcher(name: String, sourceBroker: Node, topicPartitions: 
                              fetcherId: Int)
   extends ShutdownableThread(name) {
 
+  import ShutdownableThread._
   private val fetchEndpoint = new ReplicaFetcherBlockingSend(sourceBroker, new ConsumerConfig(consumerConfig), new Metrics(), Time.SYSTEM, fetcherId,
     s"broker-${Request.DebuggingConsumerId}-fetcher-$fetcherId")
 

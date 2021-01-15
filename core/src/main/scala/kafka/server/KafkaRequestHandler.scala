@@ -34,6 +34,10 @@ trait ApiRequestHandler {
   def handle(request: RequestChannel.Request): Unit
 }
 
+object KafkaRequestHandler extends Logging {
+
+}
+
 /**
  * A thread that answers kafka requests.
  */
@@ -43,8 +47,10 @@ class KafkaRequestHandler(id: Int,
                           val totalHandlerThreads: AtomicInteger,
                           val requestChannel: RequestChannel,
                           apis: ApiRequestHandler,
-                          time: Time) extends Runnable with Logging {
-  this.logIdent = "[Kafka Request Handler " + id + " on Broker " + brokerId + "], "
+                          time: Time) extends Runnable {
+  import KafkaRequestHandler._
+
+  protected implicit val logIdent = Some(LogIdent("[Kafka Request Handler " + id + " on Broker " + brokerId + "], "))
   private val shutdownComplete = new CountDownLatch(1)
   @volatile private var stopped = false
 
@@ -97,19 +103,23 @@ class KafkaRequestHandler(id: Int,
 
 }
 
+object KafkaRequestHandlerPool extends Logging {
+
+}
 class KafkaRequestHandlerPool(val brokerId: Int,
                               val requestChannel: RequestChannel,
                               val apis: ApiRequestHandler,
                               time: Time,
                               numThreads: Int,
                               requestHandlerAvgIdleMetricName: String,
-                              logAndThreadNamePrefix : String) extends Logging with KafkaMetricsGroup {
+                              logAndThreadNamePrefix : String) extends KafkaMetricsGroup {
 
+  import KafkaRequestHandlerPool._
   private val threadPoolSize: AtomicInteger = new AtomicInteger(numThreads)
   /* a meter to track the average free capacity of the request handlers */
   private val aggregateIdleMeter = newMeter(requestHandlerAvgIdleMetricName, "percent", TimeUnit.NANOSECONDS)
 
-  this.logIdent = "[" + logAndThreadNamePrefix + " Kafka Request Handler on Broker " + brokerId + "], "
+  protected implicit val logIdent = Some(LogIdent("[" + logAndThreadNamePrefix + " Kafka Request Handler on Broker " + brokerId + "], "))
   val runnables = new mutable.ArrayBuffer[KafkaRequestHandler](numThreads)
   for (i <- 0 until numThreads) {
     createHandler(i)
@@ -261,7 +271,7 @@ class BrokerTopicMetrics(name: Option[String]) extends KafkaMetricsGroup {
   def close(): Unit = metricTypeMap.values.foreach(_.close())
 }
 
-object BrokerTopicStats {
+object BrokerTopicStats extends Logging {
   val MessagesInPerSec = "MessagesInPerSec"
   val BytesInPerSec = "BytesInPerSec"
   val BytesOutPerSec = "BytesOutPerSec"
@@ -286,7 +296,7 @@ object BrokerTopicStats {
   private val valueFactory = (k: String) => new BrokerTopicMetrics(Some(k))
 }
 
-class BrokerTopicStats extends Logging {
+class BrokerTopicStats {
   import BrokerTopicStats._
 
   private val stats = new Pool[String, BrokerTopicMetrics](Some(valueFactory))

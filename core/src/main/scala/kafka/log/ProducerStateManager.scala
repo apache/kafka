@@ -21,10 +21,9 @@ import java.nio.ByteBuffer
 import java.nio.channels.FileChannel
 import java.nio.file.{Files, StandardOpenOption}
 import java.util.concurrent.ConcurrentSkipListMap
-
 import kafka.log.Log.offsetFromFile
 import kafka.server.LogOffsetMetadata
-import kafka.utils.{Logging, nonthreadsafe, threadsafe}
+import kafka.utils.{LogIdent, Logging, nonthreadsafe, threadsafe}
 import org.apache.kafka.common.{KafkaException, TopicPartition}
 import org.apache.kafka.common.errors._
 import org.apache.kafka.common.protocol.types._
@@ -163,6 +162,10 @@ private[log] class ProducerStateEntry(val producerId: Long,
   }
 }
 
+object ProducerAppendInfo extends Logging {
+
+}
+
 /**
  * This class is used to validate the records appended by a given producer before they are written to the log.
  * It is initialized with the producer's state after the last successful append, and transitively validates the
@@ -182,8 +185,9 @@ private[log] class ProducerStateEntry(val producerId: Long,
 private[log] class ProducerAppendInfo(val topicPartition: TopicPartition,
                                       val producerId: Long,
                                       val currentEntry: ProducerStateEntry,
-                                      val origin: AppendOrigin) extends Logging {
+                                      val origin: AppendOrigin) {
 
+  import ProducerAppendInfo._
   private val transactions = ListBuffer.empty[TxnMetadata]
   private val updatedEntry = ProducerStateEntry.empty(producerId)
 
@@ -346,7 +350,7 @@ private[log] class ProducerAppendInfo(val topicPartition: TopicPartition,
   }
 }
 
-object ProducerStateManager {
+object ProducerStateManager extends Logging {
   private val ProducerSnapshotVersion: Short = 1
   private val VersionField = "version"
   private val CrcField = "crc"
@@ -484,11 +488,11 @@ object ProducerStateManager {
 @nonthreadsafe
 class ProducerStateManager(val topicPartition: TopicPartition,
                            @volatile var _logDir: File,
-                           val maxProducerIdExpirationMs: Int = 60 * 60 * 1000) extends Logging {
+                           val maxProducerIdExpirationMs: Int = 60 * 60 * 1000) {
   import ProducerStateManager._
   import java.util
 
-  this.logIdent = s"[ProducerStateManager partition=$topicPartition] "
+ protected implicit val logIdent = Some(LogIdent(s"[ProducerStateManager partition=$topicPartition] "))
 
   private var snapshots: ConcurrentSkipListMap[java.lang.Long, SnapshotFile] = locally {
     loadSnapshots()

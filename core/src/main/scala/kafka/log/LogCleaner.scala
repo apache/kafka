@@ -93,8 +93,10 @@ class LogCleaner(initialConfig: CleanerConfig,
                  val logDirs: Seq[File],
                  val logs: Pool[TopicPartition, Log],
                  val logDirFailureChannel: LogDirFailureChannel,
-                 time: Time = Time.SYSTEM) extends Logging with KafkaMetricsGroup with BrokerReconfigurable
+                 time: Time = Time.SYSTEM) extends KafkaMetricsGroup with BrokerReconfigurable
 {
+
+  import LogCleaner._
 
   /* Log cleaner configuration which may be dynamically updated */
   @volatile private var config = initialConfig
@@ -283,14 +285,18 @@ class LogCleaner(initialConfig: CleanerConfig,
   // Only for testing
   private[log] def cleanerCount: Int = cleaners.size
 
+  private[log] object CleanerThread extends Logging {
+    protected override def loggerName = classOf[LogCleaner].getName
+  }
+
   /**
    * The cleaner threads do the actual log cleaning. Each thread processes does its cleaning repeatedly by
    * choosing the dirtiest log, cleaning it, and then swapping in the cleaned segments.
    */
   private[log] class CleanerThread(threadId: Int)
-    extends ShutdownableThread(name = s"kafka-log-cleaner-thread-$threadId", isInterruptible = false) {
+    extends ShutdownableThread(name = s"kafka-log-cleaner-thread-$threadId", isInterruptible = false)  {
 
-    protected override def loggerName = classOf[LogCleaner].getName
+    import CleanerThread._
 
     if (config.dedupeBufferSize / config.numThreads > Int.MaxValue)
       warn("Cannot use more than 2G of cleaner buffer space per cleaner thread, ignoring excess buffer space...")
@@ -428,7 +434,7 @@ class LogCleaner(initialConfig: CleanerConfig,
   }
 }
 
-object LogCleaner {
+object LogCleaner extends Logging {
   val ReconfigurableConfigs = Set(
     KafkaConfig.LogCleanerThreadsProp,
     KafkaConfig.LogCleanerDedupeBufferSizeProp,
@@ -459,6 +465,10 @@ object LogCleaner {
 
 }
 
+private[log] object Cleaner extends Logging {
+  protected override def loggerName = classOf[LogCleaner].getName
+}
+
 /**
  * This class holds the actual logic for cleaning a log
  * @param id An identifier used for logging
@@ -477,11 +487,11 @@ private[log] class Cleaner(val id: Int,
                            dupBufferLoadFactor: Double,
                            throttler: Throttler,
                            time: Time,
-                           checkDone: TopicPartition => Unit) extends Logging {
+                           checkDone: TopicPartition => Unit) {
 
-  protected override def loggerName = classOf[LogCleaner].getName
+  import Cleaner._
 
-  this.logIdent = s"Cleaner $id: "
+  protected implicit val logIdent = Some(LogIdent(s"Cleaner $id: "))
 
   /* buffer used for read i/o */
   private var readBuffer = ByteBuffer.allocate(ioBufferSize)

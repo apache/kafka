@@ -20,14 +20,13 @@ package kafka.server
 import java.util
 import java.util.Collections
 import java.util.concurrent.locks.ReentrantReadWriteLock
-
 import scala.collection.{Seq, Set, mutable}
 import scala.jdk.CollectionConverters._
 import kafka.cluster.{Broker, EndPoint}
 import kafka.api._
 import kafka.controller.StateChangeLogger
 import kafka.utils.CoreUtils._
-import kafka.utils.Logging
+import kafka.utils.{LogIdent, Logging}
 import kafka.utils.Implicits._
 import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.message.UpdateMetadataRequestData.UpdateMetadataPartitionState
@@ -39,11 +38,16 @@ import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests.{MetadataResponse, UpdateMetadataRequest}
 import org.apache.kafka.common.security.auth.SecurityProtocol
 
+object MetadataCache extends Logging {
+
+}
+
 /**
  *  A cache for the state (e.g., current leader) of each partition. This cache is updated through
  *  UpdateMetadataRequest from the controller. Every broker maintains the same cache, asynchronously.
  */
-class MetadataCache(brokerId: Int) extends Logging {
+class MetadataCache(brokerId: Int) {
+  import MetadataCache._
 
   private val partitionMetadataLock = new ReentrantReadWriteLock()
   //this is the cache state. every MetadataSnapshot instance is immutable, and updates (performed under a lock)
@@ -53,7 +57,7 @@ class MetadataCache(brokerId: Int) extends Logging {
   @volatile private var metadataSnapshot: MetadataSnapshot = MetadataSnapshot(partitionStates = mutable.AnyRefMap.empty,
     topicIds = Map.empty, controllerId = None, aliveBrokers = mutable.LongMap.empty, aliveNodes = mutable.LongMap.empty)
 
-  this.logIdent = s"[MetadataCache brokerId=$brokerId] "
+  protected implicit val logIdent = Some(LogIdent(s"[MetadataCache brokerId=$brokerId] "))
   private val stateChangeLogger = new StateChangeLogger(brokerId, inControllerContext = false, None)
 
   // This method is the main hotspot when it comes to the performance of metadata requests,

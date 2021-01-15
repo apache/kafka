@@ -22,10 +22,9 @@ import java.nio.charset.StandardCharsets
 import java.time.Duration
 import java.util.concurrent.TimeUnit
 import java.util.{Optional, Properties}
-
 import kafka.integration.KafkaServerTestHarness
 import kafka.server.KafkaConfig
-import kafka.utils.TestUtils
+import kafka.utils.{Logging, TestUtils}
 import kafka.utils.TestUtils.consumeRecords
 import org.apache.kafka.clients.consumer.{ConsumerConfig, KafkaConsumer, OffsetAndMetadata}
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerRecord}
@@ -39,7 +38,13 @@ import scala.collection.Seq
 import scala.collection.mutable.Buffer
 import scala.concurrent.ExecutionException
 
+object TransactionsTest extends Logging {
+
+}
+
 class TransactionsTest extends KafkaServerTestHarness {
+  import TransactionsTest._
+
   val numServers = 3
   val transactionalProducerCount = 2
   val transactionalConsumerCount = 1

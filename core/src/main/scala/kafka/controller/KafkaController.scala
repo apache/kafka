@@ -78,9 +78,11 @@ class KafkaController(val config: KafkaConfig,
                       brokerFeatures: BrokerFeatures,
                       featureCache: FinalizedFeatureCache,
                       threadNamePrefix: Option[String] = None)
-  extends ControllerEventProcessor with Logging with KafkaMetricsGroup {
+  extends ControllerEventProcessor with KafkaMetricsGroup {
 
-  this.logIdent = s"[Controller id=${config.brokerId}] "
+  import KafkaController._
+
+  protected implicit val logIdent = Some(LogIdent(s"[Controller id=${config.brokerId}] "))
 
   @volatile private var brokerInfo = initialBrokerInfo
   @volatile private var _brokerEpoch = initialBrokerEpoch

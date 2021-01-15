@@ -25,6 +25,9 @@ import kafka.network.RequestChannel.Response
 import kafka.utils.Logging
 import org.apache.kafka.common.utils.Time
 
+object ThrottledChannel extends Logging {
+
+}
 
 /**
   * Represents a request whose response has been delayed.
@@ -35,8 +38,9 @@ import org.apache.kafka.common.utils.Time
   */
 class ThrottledChannel(val request: RequestChannel.Request, val time: Time, val throttleTimeMs: Int,
                        channelThrottlingCallback: Response => Unit)
-  extends Delayed with Logging {
+  extends Delayed {
 
+  import ThrottledChannel._
   private val endTimeNanos = time.nanoseconds() + TimeUnit.MILLISECONDS.toNanos(throttleTimeMs)
 
   // Notify the socket server that throttling has started for this channel.

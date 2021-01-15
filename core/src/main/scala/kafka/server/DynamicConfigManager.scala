@@ -46,6 +46,10 @@ object ConfigEntityName {
   val Default = "<default>"
 }
 
+object DynamicConfigManager extends Logging {
+
+}
+
 /**
  * This class initiates and carries out config changes for all entities defined in ConfigType.
  *
@@ -87,7 +91,8 @@ object ConfigEntityName {
 class DynamicConfigManager(private val zkClient: KafkaZkClient,
                            private val configHandlers: Map[String, ConfigHandler],
                            private val changeExpirationMs: Long = 15*60*1000,
-                           private val time: Time = Time.SYSTEM) extends Logging {
+                           private val time: Time = Time.SYSTEM) {
+  import DynamicConfigManager._
   val adminZkClient = new AdminZkClient(zkClient)
 
   object ConfigChangedNotificationHandler extends NotificationHandler {

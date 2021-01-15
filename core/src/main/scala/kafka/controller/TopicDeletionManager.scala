@@ -17,7 +17,7 @@
 package kafka.controller
 
 import kafka.server.KafkaConfig
-import kafka.utils.Logging
+import kafka.utils.{LogIdent, Logging}
 import kafka.zk.KafkaZkClient
 import org.apache.kafka.common.TopicPartition
 
@@ -49,6 +49,10 @@ class ControllerDeletionClient(controller: KafkaController, zkClient: KafkaZkCli
   override def sendMetadataUpdate(partitions: Set[TopicPartition]): Unit = {
     controller.sendUpdateMetadataRequest(controller.controllerContext.liveOrShuttingDownBrokerIds.toSeq, partitions)
   }
+}
+
+object TopicDeletionManager extends Logging {
+
 }
 
 /**
@@ -88,8 +92,10 @@ class TopicDeletionManager(config: KafkaConfig,
                            controllerContext: ControllerContext,
                            replicaStateMachine: ReplicaStateMachine,
                            partitionStateMachine: PartitionStateMachine,
-                           client: DeletionClient) extends Logging {
-  this.logIdent = s"[Topic Deletion Manager ${config.brokerId}] "
+                           client: DeletionClient) {
+  import TopicDeletionManager._
+
+  protected implicit val logIndent = Some(LogIdent(s"[Topic Deletion Manager ${config.brokerId}] "))
   val isDeleteTopicEnabled: Boolean = config.deleteTopicEnable
 
   def init(initialTopicsToBeDeleted: Set[String], initialTopicsIneligibleForDeletion: Set[String]): Unit = {

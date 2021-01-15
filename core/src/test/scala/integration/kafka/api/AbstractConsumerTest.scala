@@ -19,12 +19,11 @@ package kafka.api
 import java.time.Duration
 import java.util
 import java.util.Properties
-
 import org.apache.kafka.clients.consumer._
 import org.apache.kafka.clients.producer.{ProducerConfig, ProducerRecord}
 import org.apache.kafka.common.record.TimestampType
 import org.apache.kafka.common.TopicPartition
-import kafka.utils.{ShutdownableThread, TestUtils}
+import kafka.utils.{Logging, ShutdownableThread, TestUtils}
 import kafka.server.{BaseRequestTest, KafkaConfig}
 import org.junit.Assert._
 import org.junit.Before
@@ -36,10 +35,16 @@ import org.apache.kafka.common.errors.WakeupException
 
 import scala.collection.mutable
 
+object AbstractConsumerTest extends Logging {
+
+}
+
 /**
  * Extension point for consumer integration tests.
  */
 abstract class AbstractConsumerTest extends BaseRequestTest {
+
+  import AbstractConsumerTest._
 
   val epsilon = 0.1
   override def brokerCount: Int = 3

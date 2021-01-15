@@ -84,7 +84,7 @@ private[transaction] case object Dead extends TransactionState { val byte: Byte 
 
 private[transaction] case object PrepareEpochFence extends TransactionState { val byte: Byte = 7}
 
-private[transaction] object TransactionMetadata {
+private[transaction] object TransactionMetadata extends Logging {
   def apply(transactionalId: String, producerId: Long, producerEpoch: Short, txnTimeoutMs: Int, timestamp: Long) =
     new TransactionMetadata(transactionalId, producerId, RecordBatch.NO_PRODUCER_ID, producerEpoch,
       RecordBatch.NO_PRODUCER_EPOCH, txnTimeoutMs, Empty, collection.mutable.Set.empty[TopicPartition], timestamp, timestamp)
@@ -176,7 +176,8 @@ private[transaction] class TransactionMetadata(val transactionalId: String,
                                                var state: TransactionState,
                                                val topicPartitions: mutable.Set[TopicPartition],
                                                @volatile var txnStartTimestamp: Long = -1,
-                                               @volatile var txnLastUpdateTimestamp: Long) extends Logging {
+                                               @volatile var txnLastUpdateTimestamp: Long) {
+  import TransactionMetadata._
 
   // pending state is used to indicate the state that this transaction is going to
   // transit to, and for blocking future attempts to transit it again if it is not legal;

@@ -21,10 +21,9 @@ import java.util.ArrayList
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.{CountDownLatch, LinkedBlockingQueue, TimeUnit}
 import java.util.concurrent.locks.ReentrantLock
-
 import kafka.metrics.{KafkaMetricsGroup, KafkaTimer}
 import kafka.utils.CoreUtils.inLock
-import kafka.utils.ShutdownableThread
+import kafka.utils.{LogIdent, Logging, ShutdownableThread}
 import org.apache.kafka.common.utils.Time
 
 import scala.collection._
@@ -114,8 +113,13 @@ class ControllerEventManager(controllerId: Int,
 
   def isEmpty: Boolean = queue.isEmpty
 
+  object ControllerEventThread extends Logging {
+
+  }
+
   class ControllerEventThread(name: String) extends ShutdownableThread(name = name, isInterruptible = false) {
-    logIdent = s"[ControllerEventThread controllerId=$controllerId] "
+    import ControllerEventThread._
+    override protected implicit val logIdent = Some(LogIdent(s"[ControllerEventThread controllerId=$controllerId] "))
 
     override def doWork(): Unit = {
       val dequeued = pollFromEventQueue()

@@ -162,7 +162,8 @@ object ZkSecurityMigrator extends Logging {
   }
 }
 
-class ZkSecurityMigrator(zkClient: KafkaZkClient) extends Logging {
+class ZkSecurityMigrator(zkClient: KafkaZkClient) {
+  import ZkSecurityMigrator._
   private val zkSecurityMigratorUtils = new ZkSecurityMigratorUtils(zkClient)
   private val futures = new Queue[Future[String]]
 

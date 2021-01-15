@@ -35,6 +35,9 @@ trait NotificationHandler {
   def processNotification(notificationMessage: Array[Byte]): Unit
 }
 
+object ZkNodeChangeNotificationListener extends Logging {
+
+}
 /**
  * A listener that subscribes to seqNodeRoot for any child changes where all children are assumed to be sequence node
  * with seqNodePrefix. When a child is added under seqNodeRoot this class gets notified, it looks at lastExecutedChange
@@ -54,7 +57,9 @@ class ZkNodeChangeNotificationListener(private val zkClient: KafkaZkClient,
                                        private val seqNodePrefix: String,
                                        private val notificationHandler: NotificationHandler,
                                        private val changeExpirationMs: Long = 15 * 60 * 1000,
-                                       private val time: Time = Time.SYSTEM) extends Logging {
+                                       private val time: Time = Time.SYSTEM) {
+  import ZkNodeChangeNotificationListener._
+
   private var lastExecutedChange = -1L
   private val queue = new LinkedBlockingQueue[ChangeNotification]
   private val thread = new ChangeEventProcessThread(s"$seqNodeRoot-event-process-thread")

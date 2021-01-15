@@ -57,12 +57,18 @@ import org.apache.kafka.common.utils.Sanitizer
 import scala.collection.{Map, mutable, _}
 import scala.jdk.CollectionConverters._
 
+object AdminManager extends Logging {
+
+}
+
 class AdminManager(val config: KafkaConfig,
                    val metrics: Metrics,
                    val metadataCache: MetadataCache,
-                   val zkClient: KafkaZkClient) extends Logging with KafkaMetricsGroup {
+                   val zkClient: KafkaZkClient) extends KafkaMetricsGroup {
 
-  this.logIdent = "[Admin Manager on Broker " + config.brokerId + "]: "
+  import AdminManager._
+
+  protected implicit val logIdent = Some(LogIdent("[Admin Manager on Broker " + config.brokerId + "]: "))
 
   private val topicPurgatory = DelayedOperationPurgatory[DelayedOperation]("topic", config.brokerId)
   private val adminZkClient = new AdminZkClient(zkClient)
@@ -708,8 +714,8 @@ class AdminManager(val config: KafkaConfig,
 
   def shutdown(): Unit = {
     topicPurgatory.shutdown()
-    CoreUtils.swallow(createTopicPolicy.foreach(_.close()), this)
-    CoreUtils.swallow(alterConfigPolicy.foreach(_.close()), this)
+    CoreUtils.swallow(createTopicPolicy.foreach(_.close()), AdminManager)
+    CoreUtils.swallow(alterConfigPolicy.foreach(_.close()), AdminManager)
   }
 
   private def resourceNameToBrokerId(resourceName: String): Int = {

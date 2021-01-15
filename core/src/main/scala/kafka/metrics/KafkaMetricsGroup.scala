@@ -20,10 +20,10 @@ package kafka.metrics
 import java.util.concurrent.TimeUnit
 
 import com.yammer.metrics.core.{Gauge, MetricName, Meter, Histogram, Timer}
-import kafka.utils.Logging
 import org.apache.kafka.common.utils.Sanitizer
 
-trait KafkaMetricsGroup extends Logging {
+// Please think about performance before adding inheriting from Logging
+trait KafkaMetricsGroup {
 
   /**
    * Creates a new MetricName object for gauges, meters, etc. created for this

@@ -29,7 +29,7 @@ import org.apache.kafka.common.utils.Utils
 
 
 
-object PartitionMetadataFile {
+object PartitionMetadataFile extends Logging {
   private val PartitionMetadataFilename = "partition.metadata"
   private val WhiteSpacesPattern = Pattern.compile(":\\s+")
   private val CurrentVersion = 0
@@ -43,9 +43,13 @@ object PartitionMetadataFile {
 
   }
 
+  object PartitionMetadataReadBuffer extends Logging {
+
+  }
+
   class PartitionMetadataReadBuffer[T](location: String,
                                        reader: BufferedReader,
-                                       version: Int) extends Logging {
+                                       version: Int) {
     def read(): PartitionMetadata = {
       def malformedLineException(line: String) =
         new IOException(s"Malformed line in checkpoint file ($location): '$line'")
@@ -81,9 +85,8 @@ object PartitionMetadataFile {
 
 class PartitionMetadata(val version: Int, val topicId: Uuid)
 
-
 class PartitionMetadataFile(val file: File,
-                            logDirFailureChannel: LogDirFailureChannel) extends Logging {
+                            logDirFailureChannel: LogDirFailureChannel) {
   import kafka.server.PartitionMetadataFile.{CurrentVersion, PartitionMetadataFileFormatter, PartitionMetadataReadBuffer}
 
   private val path = file.toPath.toAbsolutePath

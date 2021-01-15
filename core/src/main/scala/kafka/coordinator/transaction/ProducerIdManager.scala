@@ -17,8 +17,7 @@
 package kafka.coordinator.transaction
 
 import java.nio.charset.StandardCharsets
-
-import kafka.utils.{Json, Logging}
+import kafka.utils.{Json, LogIdent, Logging}
 import kafka.zk.{KafkaZkClient, ProducerIdBlockZNode}
 import org.apache.kafka.common.KafkaException
 
@@ -70,9 +69,9 @@ case class ProducerIdBlock(brokerId: Int, blockStartId: Long, blockEndId: Long) 
   }
 }
 
-class ProducerIdManager(val brokerId: Int, val zkClient: KafkaZkClient) extends Logging {
-
-  this.logIdent = "[ProducerId Manager " + brokerId + "]: "
+class ProducerIdManager(val brokerId: Int, val zkClient: KafkaZkClient) {
+  import ProducerIdManager._
+  protected implicit val logIndent  = Some(LogIdent("[ProducerId Manager " + brokerId + "]: "))
 
   private var currentProducerIdBlock: ProducerIdBlock = null
   private var nextProducerId: Long = -1L

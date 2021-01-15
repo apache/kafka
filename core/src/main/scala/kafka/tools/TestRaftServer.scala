@@ -47,7 +47,7 @@ class TestRaftServer(
   val config: KafkaConfig,
   val throughput: Int,
   val recordSize: Int
-) extends Logging {
+)  {
   import kafka.tools.TestRaftServer._
 
   private val partition = new TopicPartition("__cluster_metadata", 0)
@@ -109,15 +109,15 @@ class TestRaftServer(
 
   def shutdown(): Unit = {
     if (raftManager != null)
-      CoreUtils.swallow(raftManager.shutdown(), this)
+      CoreUtils.swallow(raftManager.shutdown(), kafka.tools.TestRaftServer)
     if (workloadGenerator != null)
-      CoreUtils.swallow(workloadGenerator.shutdown(), this)
+      CoreUtils.swallow(workloadGenerator.shutdown(), TestRaftServer)
     if (dataPlaneRequestHandlerPool != null)
-      CoreUtils.swallow(dataPlaneRequestHandlerPool.shutdown(), this)
+      CoreUtils.swallow(dataPlaneRequestHandlerPool.shutdown(), TestRaftServer)
     if (socketServer != null)
-      CoreUtils.swallow(socketServer.shutdown(), this)
+      CoreUtils.swallow(socketServer.shutdown(), kafka.tools.TestRaftServer)
     if (metrics != null)
-      CoreUtils.swallow(metrics.close(), this)
+      CoreUtils.swallow(metrics.close(), kafka.tools.TestRaftServer)
     shutdownLatch.countDown()
   }
 
@@ -251,7 +251,6 @@ class TestRaftServer(
 }
 
 object TestRaftServer extends Logging {
-
   case class PendingAppend(
     offset: Long,
     appendTimeMs: Long

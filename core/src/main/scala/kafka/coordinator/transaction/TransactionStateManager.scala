@@ -21,12 +21,11 @@ import java.util.Properties
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.locks.ReentrantReadWriteLock
-
 import kafka.log.{AppendOrigin, LogConfig}
 import kafka.message.UncompressedCodec
 import kafka.server.{Defaults, FetchLogEnd, ReplicaManager}
 import kafka.utils.CoreUtils.{inReadLock, inWriteLock}
-import kafka.utils.{Logging, Pool, Scheduler}
+import kafka.utils.{LogIdent, Logging, Pool, Scheduler}
 import kafka.utils.Implicits._
 import kafka.zk.KafkaZkClient
 import org.apache.kafka.common.internals.Topic
@@ -43,7 +42,7 @@ import scala.jdk.CollectionConverters._
 import scala.collection.mutable
 
 
-object TransactionStateManager {
+object TransactionStateManager extends Logging {
   // default transaction management config values
   val DefaultTransactionsMaxTimeoutMs: Int = TimeUnit.MINUTES.toMillis(15).toInt
   val DefaultTransactionalIdExpirationMs: Int = TimeUnit.DAYS.toMillis(7).toInt
@@ -77,9 +76,11 @@ class TransactionStateManager(brokerId: Int,
                               replicaManager: ReplicaManager,
                               config: TransactionConfig,
                               time: Time,
-                              metrics: Metrics) extends Logging {
+                              metrics: Metrics) {
 
-  this.logIdent = "[Transaction State Manager " + brokerId + "]: "
+  import TransactionStateManager._
+
+  protected implicit val logIdent = Some(LogIdent("[Transaction State Manager " + brokerId + "]: "))
 
   type SendTxnMarkersCallback = (Int, TransactionResult, TransactionMetadata, TxnTransitMetadata) => Unit
 

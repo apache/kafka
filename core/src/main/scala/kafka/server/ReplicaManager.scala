@@ -166,7 +166,7 @@ object HostedPartition {
   final object Offline extends HostedPartition
 }
 
-object ReplicaManager {
+object ReplicaManager extends Logging {
   val HighWatermarkFilename = "replication-offset-checkpoint"
 }
 
@@ -186,7 +186,7 @@ class ReplicaManager(val config: KafkaConfig,
                      val delayedDeleteRecordsPurgatory: DelayedOperationPurgatory[DelayedDeleteRecords],
                      val delayedElectLeaderPurgatory: DelayedOperationPurgatory[DelayedElectLeader],
                      threadNamePrefix: Option[String],
-                     val alterIsrManager: AlterIsrManager) extends Logging with KafkaMetricsGroup {
+                     val alterIsrManager: AlterIsrManager) extends KafkaMetricsGroup {
 
   def this(config: KafkaConfig,
            metrics: Metrics,
@@ -217,9 +217,12 @@ class ReplicaManager(val config: KafkaConfig,
       threadNamePrefix, alterIsrManager)
   }
 
+  import ReplicaManager._
+
   /* epoch of the controller that last changed the leader */
   @volatile var controllerEpoch: Int = KafkaController.InitialControllerEpoch
   private val localBrokerId = config.brokerId
+  protected implicit val logIdent = Some(LogIdent(s"[ReplicaManager broker=$localBrokerId] "))
   private val allPartitions = new Pool[TopicPartition, HostedPartition](
     valueFactory = Some(tp => HostedPartition.Online(Partition(tp, time, this)))
   )
@@ -230,7 +233,7 @@ class ReplicaManager(val config: KafkaConfig,
   @volatile var highWatermarkCheckpoints: Map[String, OffsetCheckpointFile] = logManager.liveLogDirs.map(dir =>
     (dir.getAbsolutePath, new OffsetCheckpointFile(new File(dir, ReplicaManager.HighWatermarkFilename), logDirFailureChannel))).toMap
 
-  this.logIdent = s"[ReplicaManager broker=$localBrokerId] "
+
   private val stateChangeLogger = new StateChangeLogger(localBrokerId, inControllerContext = false, None)
 
   private var logDirFailureHandler: LogDirFailureHandler = null

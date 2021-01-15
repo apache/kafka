@@ -59,7 +59,7 @@ class GroupMetadataManager(brokerId: Int,
                            val replicaManager: ReplicaManager,
                            zkClient: KafkaZkClient,
                            time: Time,
-                           metrics: Metrics) extends Logging with KafkaMetricsGroup {
+                           metrics: Metrics) extends KafkaMetricsGroup with Logging {
 
   private val compressionType: CompressionType = CompressionType.forId(config.offsetsTopicCompressionCodec.codec)
 
@@ -118,7 +118,7 @@ class GroupMetadataManager(brokerId: Int,
       "group-coordinator-metrics",
       "The total number of expired offsets")))
 
-  this.logIdent = s"[GroupMetadataManager brokerId=$brokerId] "
+  protected implicit val logIdent = Some(LogIdent(s"[GroupMetadataManager brokerId=$brokerId] "))
 
   private def recreateGauge[T](name: String, gauge: Gauge[T]): Gauge[T] = {
     removeMetric(name)

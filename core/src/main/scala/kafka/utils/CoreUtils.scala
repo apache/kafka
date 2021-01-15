@@ -64,16 +64,16 @@ object CoreUtils {
     * @param logging The logging instance to use for logging the thrown exception.
     * @param logLevel The log level to use for logging.
     */
-  def swallow(action: => Unit, logging: Logging, logLevel: Level = Level.WARN): Unit = {
+  def swallow(action: => Unit, logging: Logging, logLevel: Level = Level.WARN)(implicit logIndent : Option[LogIdent] = None): Unit = {
     try {
       action
     } catch {
       case e: Throwable => logLevel match {
-        case Level.ERROR => logger.error(e.getMessage, e)
-        case Level.WARN => logger.warn(e.getMessage, e)
-        case Level.INFO => logger.info(e.getMessage, e)
-        case Level.DEBUG => logger.debug(e.getMessage, e)
-        case Level.TRACE => logger.trace(e.getMessage, e)
+        case Level.ERROR => logging.error(e.getMessage, e)
+        case Level.WARN => logging.warn(e.getMessage, e)
+        case Level.INFO => logging.info(e.getMessage, e)
+        case Level.DEBUG => logging.debug(e.getMessage, e)
+        case Level.TRACE => logging.trace(e.getMessage, e)
       }
     }
   }

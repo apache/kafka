@@ -35,8 +35,9 @@ import org.apache.kafka.clients.admin.AdminClientUnitTestEnv
 import org.apache.kafka.common.utils.Time
 import org.apache.zookeeper.{WatchedEvent, Watcher, ZooKeeper}
 
+
 @Category(Array(classOf[IntegrationTest]))
-abstract class ZooKeeperTestHarness extends Logging {
+abstract class ZooKeeperTestHarness {
 
   val zkConnectionTimeout = 10000
   val zkSessionTimeout = 15000 // Allows us to avoid ZK session expiration due to GC up to 2/3 * 15000ms = 10 secs
@@ -65,7 +66,7 @@ abstract class ZooKeeperTestHarness extends Logging {
     if (zkClient != null)
      zkClient.close()
     if (zookeeper != null)
-      CoreUtils.swallow(zookeeper.shutdown(), this)
+      CoreUtils.swallow(zookeeper.shutdown(), ZooKeeperTestHarness)
     Configuration.setConfiguration(null)
   }
 
@@ -82,7 +83,7 @@ abstract class ZooKeeperTestHarness extends Logging {
   }
 }
 
-object ZooKeeperTestHarness {
+object ZooKeeperTestHarness extends Logging {
   val ZkClientEventThreadSuffix = "-EventThread"
 
   // Threads which may cause transient failures in subsequent tests if not shutdown.

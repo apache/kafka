@@ -83,7 +83,7 @@ class SocketServer(val config: KafkaConfig,
   private val maxQueuedRequests = config.queuedMaxRequests
 
   private val logContext = new LogContext(s"[SocketServer brokerId=${config.brokerId}] ")
-  this.logIdent = logContext.logPrefix
+  private implicit val logIdent = Some(LogIdent(logContext.logPrefix))
 
   private val memoryPoolSensor = metrics.sensor("MemoryPoolUtilization")
   private val memoryPoolDepletedPercentMetricName = metrics.metricName("MemoryPoolAvgDepletedPercent", MetricsGroup)

@@ -32,6 +32,8 @@ import scala.jdk.CollectionConverters._
 import scala.collection.mutable
 
 class TransactionsBounceTest extends IntegrationTestHarness {
+  import IntegrationTestHarness._
+
   private val producerBufferSize =  65536
   private val serverMessageMaxBytes =  producerBufferSize/2
   private val numPartitions = 3

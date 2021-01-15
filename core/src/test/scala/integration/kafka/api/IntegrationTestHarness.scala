@@ -18,12 +18,11 @@
 package kafka.api
 
 import java.time.Duration
-
 import org.apache.kafka.clients.consumer.{ConsumerConfig, KafkaConsumer}
-import kafka.utils.TestUtils
+import kafka.utils.{Logging, TestUtils}
 import kafka.utils.Implicits._
-import java.util.Properties
 
+import java.util.Properties
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerConfig}
 import kafka.server.KafkaConfig
 import kafka.integration.KafkaServerTestHarness
@@ -34,6 +33,10 @@ import org.junit.{After, Before}
 
 import scala.collection.mutable
 import scala.collection.Seq
+
+object IntegrationTestHarness extends Logging {
+
+}
 
 /**
  * A helper class for writing integration tests that involve producers, consumers, and servers

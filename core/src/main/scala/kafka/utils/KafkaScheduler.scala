@@ -56,6 +56,10 @@ trait Scheduler {
   def schedule(name: String, fun: ()=>Unit, delay: Long = 0, period: Long = -1, unit: TimeUnit = TimeUnit.MILLISECONDS) : ScheduledFuture[_]
 }
 
+object KafkaScheduler extends Logging {
+
+}
+
 /**
  * A scheduler based on java.util.concurrent.ScheduledThreadPoolExecutor
  * 
@@ -68,7 +72,8 @@ trait Scheduler {
 @threadsafe
 class KafkaScheduler(val threads: Int, 
                      val threadNamePrefix: String = "kafka-scheduler-", 
-                     daemon: Boolean = true) extends Scheduler with Logging {
+                     daemon: Boolean = true) extends Scheduler {
+  import KafkaScheduler._
   private var executor: ScheduledThreadPoolExecutor = null
   private val schedulerThreadId = new AtomicInteger(0)
 

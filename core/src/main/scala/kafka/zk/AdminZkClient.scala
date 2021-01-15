@@ -32,14 +32,18 @@ import org.apache.zookeeper.KeeperException.NodeExistsException
 
 import scala.collection.{Map, Seq}
 
+object AdminZkClient extends Logging {
+
+}
+
 /**
  * Provides admin related methods for interacting with ZooKeeper.
  *
  * This is an internal class and no compatibility guarantees are provided,
  * see org.apache.kafka.clients.admin.AdminClient for publicly supported APIs.
  */
-class AdminZkClient(zkClient: KafkaZkClient) extends Logging {
-
+class AdminZkClient(zkClient: KafkaZkClient) {
+  import AdminZkClient._
   /**
    * Creates the topic with given configuration
    * @param topic topic name to create

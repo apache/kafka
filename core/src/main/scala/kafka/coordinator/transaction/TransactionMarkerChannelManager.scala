@@ -19,13 +19,12 @@ package kafka.coordinator.transaction
 
 import java.util
 import java.util.concurrent.{BlockingQueue, ConcurrentHashMap, LinkedBlockingQueue}
-
 import kafka.api.KAFKA_2_8_IV0
 import kafka.common.{InterBrokerSendThread, RequestAndCompletionHandler}
 import kafka.metrics.KafkaMetricsGroup
 import kafka.server.{KafkaConfig, MetadataCache}
 import kafka.utils.Implicits._
-import kafka.utils.{CoreUtils, Logging}
+import kafka.utils.{CoreUtils, LogIdent, Logging}
 import org.apache.kafka.clients._
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.network._
@@ -39,7 +38,7 @@ import org.apache.kafka.common.{Node, Reconfigurable, TopicPartition}
 import scala.collection.{concurrent, immutable}
 import scala.jdk.CollectionConverters._
 
-object TransactionMarkerChannelManager {
+object TransactionMarkerChannelManager extends Logging {
   def apply(config: KafkaConfig,
             metrics: Metrics,
             metadataCache: MetadataCache,
@@ -134,9 +133,10 @@ class TransactionMarkerChannelManager(
   txnStateManager: TransactionStateManager,
   time: Time
 ) extends InterBrokerSendThread("TxnMarkerSenderThread-" + config.brokerId, networkClient, config.requestTimeoutMs, time)
-  with Logging with KafkaMetricsGroup {
+  with KafkaMetricsGroup {
+  import TransactionMarkerChannelManager._
 
-  this.logIdent = "[Transaction Marker Channel Manager " + config.brokerId + "]: "
+  protected implicit val logIndent = Some(LogIdent("[Transaction Marker Channel Manager " + config.brokerId + "]: "))
 
   private val interBrokerListenerName: ListenerName = config.interBrokerListenerName
 

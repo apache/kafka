@@ -64,6 +64,8 @@ import scala.jdk.CollectionConverters._
   * would end up with ZooKeeperTestHarness twice.
   */
 abstract class EndToEndAuthorizationTest extends IntegrationTestHarness with SaslSetup {
+  import IntegrationTestHarness._
+
   override val brokerCount = 3
 
   override def configureSecurityBeforeServersStart(): Unit = {

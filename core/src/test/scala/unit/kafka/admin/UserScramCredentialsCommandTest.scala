@@ -25,6 +25,8 @@ import org.junit.Assert._
 import org.junit.Test
 
 class UserScramCredentialsCommandTest extends BaseRequestTest {
+  import kafka.api.IntegrationTestHarness._
+
   override def brokerCount = 1
   var exitStatus: Option[Int] = None
   var exitMessage: Option[String] = None

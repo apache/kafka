@@ -23,8 +23,12 @@ import scala.collection._
 import kafka.message.{CompressionCodec, NoCompressionCodec}
 import scala.jdk.CollectionConverters._
 
+object VerifiableProperties extends Logging {
 
-class VerifiableProperties(val props: Properties) extends Logging {
+}
+
+class VerifiableProperties(val props: Properties) {
+  import VerifiableProperties._
   private val referenceSet = mutable.HashSet[String]()
 
   def this() = this(new Properties)

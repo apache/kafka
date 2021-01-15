@@ -22,7 +22,13 @@ import kafka.server.LogOffsetMetadata
 import kafka.utils.Logging
 import org.apache.kafka.common.TopicPartition
 
-class Replica(val brokerId: Int, val topicPartition: TopicPartition) extends Logging {
+object Replica extends Logging {
+
+}
+
+class Replica(val brokerId: Int, val topicPartition: TopicPartition) {
+  import Replica._
+
   // the log end offset value, kept in all replicas;
   // for local replica it is the log's end offset, for remote replicas its value is only updated by follower fetch
   @volatile private[this] var _logEndOffsetMetadata = LogOffsetMetadata.UnknownOffsetMetadata

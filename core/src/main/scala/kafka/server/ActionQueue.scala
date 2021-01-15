@@ -21,12 +21,18 @@ import java.util.concurrent.ConcurrentLinkedQueue
 
 import kafka.utils.Logging
 
+object ActionQueue extends Logging {
+
+}
+
 /**
  * This queue is used to collect actions which need to be executed later. One use case is that ReplicaManager#appendRecords
  * produces record changes so we need to check and complete delayed requests. In order to avoid conflicting locking,
  * we add those actions to this queue and then complete them at the end of KafkaApis.handle() or DelayedJoin.onExpiration.
  */
-class ActionQueue extends Logging {
+class ActionQueue {
+  import ActionQueue._
+
   private val queue = new ConcurrentLinkedQueue[() => Unit]()
 
   /**

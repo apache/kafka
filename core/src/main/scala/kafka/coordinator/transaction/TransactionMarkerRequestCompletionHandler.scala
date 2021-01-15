@@ -17,7 +17,7 @@
 
 package kafka.coordinator.transaction
 
-import kafka.utils.Logging
+import kafka.utils.{LogIdent, Logging}
 import org.apache.kafka.clients.{ClientResponse, RequestCompletionHandler}
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.protocol.Errors
@@ -26,12 +26,17 @@ import org.apache.kafka.common.requests.WriteTxnMarkersResponse
 import scala.collection.mutable
 import scala.jdk.CollectionConverters._
 
+object TransactionMarkerRequestCompletionHandler extends Logging {
+
+}
+
 class TransactionMarkerRequestCompletionHandler(brokerId: Int,
                                                 txnStateManager: TransactionStateManager,
                                                 txnMarkerChannelManager: TransactionMarkerChannelManager,
-                                                txnIdAndMarkerEntries: java.util.List[TxnIdAndMarkerEntry]) extends RequestCompletionHandler with Logging {
+                                                txnIdAndMarkerEntries: java.util.List[TxnIdAndMarkerEntry]) extends RequestCompletionHandler {
 
-  this.logIdent = "[Transaction Marker Request Completion Handler " + brokerId + "]: "
+  import TransactionMarkerRequestCompletionHandler._
+  protected implicit val logIndent = Some(LogIdent("[Transaction Marker Request Completion Handler " + brokerId + "]: "))
 
   override def onComplete(response: ClientResponse): Unit = {
     val requestHeader = response.requestHeader

@@ -32,6 +32,11 @@ import org.apache.kafka.common.utils.{LogContext, Time}
 
 import scala.jdk.CollectionConverters._
 
+
+object BrokerToControllerChannelManager extends Logging {
+
+}
+
 /**
  * This class manages the connection between a broker and the controller. It runs a single
  * [[BrokerToControllerRequestThread]] which uses the broker's metadata cache as its own metadata to find
@@ -47,7 +52,9 @@ class BrokerToControllerChannelManager(
   channelName: String,
   threadNamePrefix: Option[String],
   retryTimeoutMs: Long
-) extends Logging {
+)  {
+  import BrokerToControllerChannelManager._
+
   private val logContext = new LogContext(s"[broker-${config.brokerId}-to-controller] ")
   private val manualMetadataUpdater = new ManualMetadataUpdater()
   private val requestThread = newRequestThread
@@ -167,6 +174,8 @@ class BrokerToControllerRequestThread(
   threadName: String,
   retryTimeoutMs: Long
 ) extends InterBrokerSendThread(threadName, networkClient, config.controllerSocketTimeoutMs, time, isInterruptible = false) {
+
+  import InterBrokerSendThread._
 
   private val requestQueue = new LinkedBlockingDeque[BrokerToControllerQueueItem]()
   private var activeController: Option[Node] = None

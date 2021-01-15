@@ -59,7 +59,7 @@ class PasswordEncoder(secret: Password,
                       keyFactoryAlgorithm: Option[String],
                       cipherAlgorithm: String,
                       keyLength: Int,
-                      iterations: Int) extends Logging {
+                      iterations: Int) {
 
   private val secureRandom = new SecureRandom
   private val cipherParamsEncoder = cipherParamsInstance(cipherAlgorithm)

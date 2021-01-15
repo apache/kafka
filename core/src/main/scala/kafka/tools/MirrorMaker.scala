@@ -42,6 +42,7 @@ import scala.collection.mutable.HashMap
 import scala.util.control.ControlThrowable
 import scala.util.{Failure, Success, Try}
 
+
 /**
  * The mirror maker has the following architecture:
  * - There are N mirror maker thread, each of which is equipped with a separate KafkaConsumer instance.
@@ -182,12 +183,13 @@ object MirrorMaker extends Logging with KafkaMetricsGroup {
   }
 
   class MirrorMakerThread(consumerWrapper: ConsumerWrapper,
-                          val threadId: Int) extends Thread with Logging with KafkaMetricsGroup {
+                          val threadId: Int) extends Thread with KafkaMetricsGroup {
+
     private val threadName = "mirrormaker-thread-" + threadId
     private val shutdownLatch: CountDownLatch = new CountDownLatch(1)
     private var lastOffsetCommitMs = System.currentTimeMillis()
     @volatile private var shuttingDown: Boolean = false
-    this.logIdent = "[%s] ".format(threadName)
+    protected implicit val logIdent = Some(LogIdent("[%s] ".format(threadName)))
 
     setName(threadName)
 
@@ -243,11 +245,11 @@ object MirrorMaker extends Logging with KafkaMetricsGroup {
           // note that this commit is skipped if flush() fails which ensures that we don't lose messages
           info("Committing consumer offsets.")
           commitOffsets(consumerWrapper)
-        }, this)
+        }, MirrorMaker)
 
         info("Shutting down consumer connectors.")
-        CoreUtils.swallow(consumerWrapper.wakeup(), this)
-        CoreUtils.swallow(consumerWrapper.close(), this)
+        CoreUtils.swallow(consumerWrapper.wakeup(), MirrorMaker)
+        CoreUtils.swallow(consumerWrapper.close(), MirrorMaker)
         shutdownLatch.countDown()
         info("Mirror maker thread stopped")
         // if it exits accidentally, stop the entire mirror maker
