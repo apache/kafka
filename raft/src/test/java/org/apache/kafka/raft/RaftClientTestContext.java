@@ -16,19 +16,20 @@
  */
 package org.apache.kafka.raft;
 
+import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.memory.MemoryPool;
 import org.apache.kafka.common.message.BeginQuorumEpochRequestData;
 import org.apache.kafka.common.message.BeginQuorumEpochResponseData;
-import org.apache.kafka.common.message.DescribeQuorumResponseData.ReplicaState;
 import org.apache.kafka.common.message.DescribeQuorumResponseData;
+import org.apache.kafka.common.message.DescribeQuorumResponseData.ReplicaState;
 import org.apache.kafka.common.message.EndQuorumEpochRequestData;
 import org.apache.kafka.common.message.EndQuorumEpochResponseData;
 import org.apache.kafka.common.message.FetchRequestData;
 import org.apache.kafka.common.message.FetchResponseData;
 import org.apache.kafka.common.message.FetchSnapshotResponseData;
-import org.apache.kafka.common.message.LeaderChangeMessage.Voter;
 import org.apache.kafka.common.message.LeaderChangeMessage;
+import org.apache.kafka.common.message.LeaderChangeMessage.Voter;
 import org.apache.kafka.common.message.VoteRequestData;
 import org.apache.kafka.common.message.VoteResponseData;
 import org.apache.kafka.common.metrics.Metrics;
@@ -75,9 +76,10 @@ import java.util.OptionalLong;
 import java.util.Random;
 import java.util.Set;
 import java.util.function.Consumer;
-import java.util.function.Function;
 import java.util.stream.Collectors;
 
+import static org.apache.kafka.raft.RaftTestUtil.buildRaftConfig;
+import static org.apache.kafka.raft.RaftTestUtil.voterNodesFromIds;
 import static org.apache.kafka.raft.RaftUtil.hasValidTopicPartition;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -95,7 +97,6 @@ public final class RaftClientTestContext {
     final int requestTimeoutMs;
 
     private final QuorumStateStore quorumStateStore;
-    private final QuorumState quorum;
     final int localId;
     public final KafkaRaftClient<String> client;
     final Metrics metrics;
@@ -188,39 +189,29 @@ public final class RaftClientTestContext {
             Metrics metrics = new Metrics(time);
             MockNetworkChannel channel = new MockNetworkChannel();
             LogContext logContext = new LogContext();
-            QuorumState quorum = new QuorumState(localId, voters, electionTimeoutMs, FETCH_TIMEOUT_MS,
-                    quorumStateStore, time, logContext, random);
             MockListener listener = new MockListener();
-
-            Map<Integer, InetSocketAddress> voterAddresses = voters
-                .stream()
-                .collect(Collectors.toMap(
-                    Function.identity(),
-                    RaftClientTestContext::mockAddress
-                ));
+            List<Node> voterNodes = voterNodesFromIds(voters, RaftClientTestContext::mockAddress);
+            RaftConfig raftConfig = buildRaftConfig(requestTimeoutMs, RETRY_BACKOFF_MS, electionTimeoutMs,
+                    ELECTION_BACKOFF_MAX_MS, FETCH_TIMEOUT_MS, appendLingerMs, voterNodes);
 
             KafkaRaftClient<String> client = new KafkaRaftClient<>(
                 STRING_SERDE,
                 channel,
                 messageQueue,
                 log,
-                quorum,
+                quorumStateStore,
                 memoryPool,
                 time,
                 metrics,
                 new MockExpirationService(time),
-                voterAddresses,
-                ELECTION_BACKOFF_MAX_MS,
-                RETRY_BACKOFF_MS,
-                requestTimeoutMs,
                 FETCH_MAX_WAIT_MS,
-                appendLingerMs,
+                localId,
                 logContext,
                 random
             );
 
             client.register(listener);
-            client.initialize();
+            client.initialize(raftConfig);
 
             return new RaftClientTestContext(
                 localId,
@@ -230,7 +221,6 @@ public final class RaftClientTestContext {
                 messageQueue,
                 time,
                 quorumStateStore,
-                quorum,
                 voters,
                 metrics,
                 listener,
@@ -248,7 +238,6 @@ public final class RaftClientTestContext {
         MockMessageQueue messageQueue,
         MockTime time,
         QuorumStateStore quorumStateStore,
-        QuorumState quorum,
         Set<Integer> voters,
         Metrics metrics,
         MockListener listener,
@@ -262,7 +251,6 @@ public final class RaftClientTestContext {
         this.messageQueue = messageQueue;
         this.time = time;
         this.quorumStateStore = quorumStateStore;
-        this.quorum = quorum;
         this.voters = voters;
         this.metrics = metrics;
         this.listener = listener;
@@ -398,7 +386,7 @@ public final class RaftClientTestContext {
     }
 
     void assertResignedLeader(int epoch, int leaderId) throws IOException {
-        assertTrue(quorum.isResigned());
+        assertTrue(client.quorum().isResigned());
         assertEquals(ElectionState.withElectedLeader(epoch, leaderId, voters), quorumStateStore.readElectionState());
     }
 

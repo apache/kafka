@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.raft;
 
+import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.memory.MemoryPool;
 import org.apache.kafka.common.metrics.Metrics;
@@ -49,10 +50,10 @@ import java.util.Random;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Consumer;
-import java.util.function.Function;
 import java.util.function.Supplier;
-import java.util.stream.Collectors;
 
+import static org.apache.kafka.raft.RaftTestUtil.buildRaftConfig;
+import static org.apache.kafka.raft.RaftTestUtil.voterNodesFromIds;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
@@ -607,8 +608,8 @@ public class RaftEventSimulationTest {
         }
 
         OptionalLong leaderHighWatermark() {
-            Optional<RaftNode> leaderWithMaxEpoch = running.values().stream().filter(node -> node.quorum.isLeader())
-                    .max((node1, node2) -> Integer.compare(node2.quorum.epoch(), node1.quorum.epoch()));
+            Optional<RaftNode> leaderWithMaxEpoch = running.values().stream().filter(node -> node.client.quorum().isLeader())
+                    .max((node1, node2) -> Integer.compare(node2.client.quorum().epoch(), node1.client.quorum().epoch()));
             if (leaderWithMaxEpoch.isPresent()) {
                 return leaderWithMaxEpoch.get().client.highWatermark();
             } else {
@@ -618,12 +619,12 @@ public class RaftEventSimulationTest {
 
         boolean anyReachedHighWatermark(long offset) {
             return running.values().stream()
-                    .anyMatch(node -> node.quorum.highWatermark().map(hw -> hw.offset).orElse(0L) > offset);
+                    .anyMatch(node -> node.client.quorum().highWatermark().map(hw -> hw.offset).orElse(0L) > offset);
         }
 
         long maxHighWatermarkReached() {
             return running.values().stream()
-                .map(node -> node.quorum.highWatermark().map(hw -> hw.offset).orElse(0L))
+                .map(node -> node.client.quorum().highWatermark().map(hw -> hw.offset).orElse(0L))
                 .max(Long::compareTo)
                 .orElse(0L);
         }
@@ -631,20 +632,20 @@ public class RaftEventSimulationTest {
         long maxHighWatermarkReached(Set<Integer> nodeIds) {
             return running.values().stream()
                 .filter(node -> nodeIds.contains(node.nodeId))
-                .map(node -> node.quorum.highWatermark().map(hw -> hw.offset).orElse(0L))
+                .map(node -> node.client.quorum().highWatermark().map(hw -> hw.offset).orElse(0L))
                 .max(Long::compareTo)
                 .orElse(0L);
         }
 
         boolean allReachedHighWatermark(long offset, Set<Integer> nodeIds) {
             return nodeIds.stream()
-                .allMatch(nodeId -> running.get(nodeId).quorum.highWatermark().map(hw -> hw.offset)
+                .allMatch(nodeId -> running.get(nodeId).client.quorum().highWatermark().map(hw -> hw.offset)
                     .orElse(0L) > offset);
         }
 
         boolean allReachedHighWatermark(long offset) {
             return running.values().stream()
-                .allMatch(node -> node.quorum.highWatermark().map(hw -> hw.offset).orElse(0L) > offset);
+                .allMatch(node -> node.client.quorum().highWatermark().map(hw -> hw.offset).orElse(0L) > offset);
         }
 
         OptionalInt latestLeader() {
@@ -652,11 +653,11 @@ public class RaftEventSimulationTest {
             int latestEpoch = 0;
 
             for (RaftNode node : running.values()) {
-                if (node.quorum.epoch() > latestEpoch) {
-                    latestLeader = node.quorum.leaderId();
-                    latestEpoch = node.quorum.epoch();
-                } else if (node.quorum.epoch() == latestEpoch && node.quorum.leaderId().isPresent()) {
-                    latestLeader = node.quorum.leaderId();
+                if (node.client.quorum().epoch() > latestEpoch) {
+                    latestLeader = node.client.quorum().leaderId();
+                    latestEpoch = node.client.quorum().epoch();
+                } else if (node.client.quorum().epoch() == latestEpoch && node.client.quorum().leaderId().isPresent()) {
+                    latestLeader = node.client.quorum().leaderId();
                 }
             }
             return latestLeader;
@@ -723,7 +724,7 @@ public class RaftEventSimulationTest {
 
         void withCurrentLeader(Consumer<RaftNode> action) {
             for (RaftNode node : running.values()) {
-                if (node.quorum.isLeader()) {
+                if (node.client.quorum().isLeader()) {
                     action.accept(node);
                 }
             }
@@ -740,7 +741,7 @@ public class RaftEventSimulationTest {
                 start(voterId);
         }
 
-        private InetSocketAddress nodeAddress(int id) {
+        private static InetSocketAddress nodeAddress(int id) {
             return new InetSocketAddress("localhost", 9990 + id);
         }
 
@@ -749,15 +750,10 @@ public class RaftEventSimulationTest {
             PersistentState persistentState = nodes.get(nodeId);
             MockNetworkChannel channel = new MockNetworkChannel(correlationIdCounter);
             MockMessageQueue messageQueue = new MockMessageQueue();
-            QuorumState quorum = new QuorumState(nodeId, voters(), ELECTION_TIMEOUT_MS,
-                FETCH_TIMEOUT_MS, persistentState.store, time, logContext, random);
+            List<Node> voterNodes = voterNodesFromIds(voters, Cluster::nodeAddress);
+            RaftConfig raftConfig = buildRaftConfig(REQUEST_TIMEOUT_MS, RETRY_BACKOFF_MS, ELECTION_TIMEOUT_MS,
+                    ELECTION_JITTER_MS, FETCH_TIMEOUT_MS, LINGER_MS, voterNodes);
             Metrics metrics = new Metrics(time);
-
-            Map<Integer, InetSocketAddress> voterConnectionMap = voters.stream()
-                .collect(Collectors.toMap(
-                    Function.identity(),
-                    this::nodeAddress
-                ));
 
             persistentState.log.reopen();
 
@@ -769,17 +765,13 @@ public class RaftEventSimulationTest {
                 channel,
                 messageQueue,
                 persistentState.log,
-                quorum,
+                persistentState.store,
                 memoryPool,
                 time,
                 metrics,
                 new MockExpirationService(time),
-                voterConnectionMap,
-                ELECTION_JITTER_MS,
-                RETRY_BACKOFF_MS,
-                REQUEST_TIMEOUT_MS,
                 FETCH_MAX_WAIT_MS,
-                LINGER_MS,
+                nodeId,
                 logContext,
                 random
             );
@@ -790,8 +782,10 @@ public class RaftEventSimulationTest {
                 channel,
                 messageQueue,
                 persistentState.store,
-                quorum,
-                logContext
+                logContext,
+                time,
+                random,
+                raftConfig
             );
             node.initialize();
             running.put(nodeId, node);
@@ -805,9 +799,11 @@ public class RaftEventSimulationTest {
         final MockNetworkChannel channel;
         final MockMessageQueue messageQueue;
         final MockQuorumStateStore store;
-        final QuorumState quorum;
         final LogContext logContext;
         final ReplicatedCounter counter;
+        final Time time;
+        final Random random;
+        final RaftConfig raftConfig;
 
         private RaftNode(
             int nodeId,
@@ -816,8 +812,10 @@ public class RaftEventSimulationTest {
             MockNetworkChannel channel,
             MockMessageQueue messageQueue,
             MockQuorumStateStore store,
-            QuorumState quorum,
-            LogContext logContext
+            LogContext logContext,
+            Time time,
+            Random random,
+            RaftConfig raftConfig
         ) {
             this.nodeId = nodeId;
             this.client = client;
@@ -825,15 +823,17 @@ public class RaftEventSimulationTest {
             this.channel = channel;
             this.messageQueue = messageQueue;
             this.store = store;
-            this.quorum = quorum;
             this.logContext = logContext;
+            this.time = time;
+            this.random = random;
             this.counter = new ReplicatedCounter(nodeId, client, logContext);
+            this.raftConfig = raftConfig;
         }
 
         void initialize() {
             try {
                 client.register(this.counter);
-                client.initialize();
+                client.initialize(raftConfig);
             } catch (IOException e) {
                 throw new RuntimeException(e);
             }
@@ -941,7 +941,7 @@ public class RaftEventSimulationTest {
                             oldEpoch + " -> " + newEpoch);
                 }
                 cluster.ifRunning(nodeId, nodeState -> {
-                    assertEquals(newEpoch.intValue(), nodeState.quorum.epoch());
+                    assertEquals(newEpoch.intValue(), nodeState.client.quorum().epoch());
                 });
                 nodeEpochs.put(nodeId, newEpoch);
             }
