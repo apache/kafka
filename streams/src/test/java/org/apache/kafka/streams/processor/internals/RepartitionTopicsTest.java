@@ -94,10 +94,6 @@ public class RepartitionTopicsTest {
     final CopartitionedTopicsEnforcer copartitionedTopicsEnforcer = mock(CopartitionedTopicsEnforcer.class);
     final Cluster clusterMetadata = niceMock(Cluster.class);
 
-    @Before
-    public void setUp() {
-    }
-
     @Test
     public void shouldSetupRepartitionTopics() {
         expect(internalTopologyBuilder.topicGroups())
