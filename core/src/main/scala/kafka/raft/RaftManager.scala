@@ -16,11 +16,6 @@
  */
 package kafka.raft
 
-import java.io.File
-import java.nio.file.Files
-import java.util.Random
-import java.util.concurrent.CompletableFuture
-
 import kafka.log.{Log, LogConfig, LogManager}
 import kafka.raft.KafkaRaftManager.RaftIoThread
 import kafka.server.{BrokerTopicStats, KafkaConfig, KafkaServer, LogDirFailureChannel}
@@ -34,8 +29,11 @@ import org.apache.kafka.common.protocol.ApiMessage
 import org.apache.kafka.common.requests.RequestHeader
 import org.apache.kafka.common.security.JaasContext
 import org.apache.kafka.common.utils.{LogContext, Time}
-import org.apache.kafka.raft.{FileBasedStateStore, KafkaRaftClient, QuorumState, RaftClient, RaftConfig, RaftRequest, RecordSerde}
+import org.apache.kafka.raft.{FileBasedStateStore, KafkaRaftClient, RaftClient, RaftConfig, RaftRequest, RecordSerde}
 
+import java.io.File
+import java.nio.file.Files
+import java.util.concurrent.CompletableFuture
 import scala.jdk.CollectionConverters._
 
 object KafkaRaftManager {
@@ -119,7 +117,7 @@ class KafkaRaftManager[T](
 
   def startup(): Unit = {
     netChannel.start()
-    raftClient.initialize()
+    raftClient.initialize(raftConfig)
     raftIoThread.start()
   }
 
@@ -168,30 +166,20 @@ class KafkaRaftManager[T](
   }
 
   private def buildRaftClient(): KafkaRaftClient[T] = {
-    val quorumState = new QuorumState(
-      nodeId,
-      raftConfig.quorumVoterIds,
-      raftConfig.electionTimeoutMs,
-      raftConfig.fetchTimeoutMs,
-      new FileBasedStateStore(new File(dataDir, "quorum-state")),
-      time,
-      logContext,
-      new Random()
-    )
 
     val expirationTimer = new SystemTimer("raft-expiration-executor")
     val expirationService = new TimingWheelExpirationService(expirationTimer)
 
     new KafkaRaftClient(
-      raftConfig,
       recordSerde,
       netChannel,
       metadataLog,
-      quorumState,
+      new FileBasedStateStore(new File(dataDir, "quorum-state")),
       time,
       metrics,
       expirationService,
-      logContext
+      logContext,
+      nodeId
     )
   }
 
