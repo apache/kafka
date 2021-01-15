@@ -123,7 +123,7 @@ object DumpLogSegments {
     val fileRecords = FileRecords.open(logFile, false)
     val index = new OffsetIndex(file, baseOffset = startOffset, writable = false)
 
-    if (fileRecords.sizeInBytes() == 0) {
+    if (index.entries == 0) {
       println(s"$file is empty.")
       return
     }
