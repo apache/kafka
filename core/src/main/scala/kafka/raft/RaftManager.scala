@@ -16,6 +16,12 @@
  */
 package kafka.raft
 
+import java.util.OptionalInt
+
+import java.io.File
+import java.nio.file.Files
+import java.util.concurrent.CompletableFuture
+
 import kafka.log.{Log, LogConfig, LogManager}
 import kafka.raft.KafkaRaftManager.RaftIoThread
 import kafka.server.{BrokerTopicStats, KafkaConfig, KafkaServer, LogDirFailureChannel}
@@ -31,9 +37,6 @@ import org.apache.kafka.common.security.JaasContext
 import org.apache.kafka.common.utils.{LogContext, Time}
 import org.apache.kafka.raft.{FileBasedStateStore, KafkaRaftClient, RaftClient, RaftConfig, RaftRequest, RecordSerde}
 
-import java.io.File
-import java.nio.file.Files
-import java.util.concurrent.CompletableFuture
 import scala.jdk.CollectionConverters._
 
 object KafkaRaftManager {
@@ -166,20 +169,20 @@ class KafkaRaftManager[T](
   }
 
   private def buildRaftClient(): KafkaRaftClient[T] = {
-
     val expirationTimer = new SystemTimer("raft-expiration-executor")
     val expirationService = new TimingWheelExpirationService(expirationTimer)
+    val quorumStateStore = new FileBasedStateStore(new File(dataDir, "quorum-state"))
 
     new KafkaRaftClient(
       recordSerde,
       netChannel,
       metadataLog,
-      new FileBasedStateStore(new File(dataDir, "quorum-state")),
+      quorumStateStore,
       time,
       metrics,
       expirationService,
       logContext,
-      nodeId
+      OptionalInt.of(nodeId)
     )
   }
 
