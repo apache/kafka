@@ -26,10 +26,7 @@ import javax.ws.rs.core.UriInfo;
 import org.apache.kafka.common.security.authenticator.TestJaasConfig;
 import org.apache.kafka.connect.errors.ConnectException;
 import org.easymock.EasyMock;
-import org.junit.Test;
-import org.junit.runner.RunWith;
-import org.powermock.core.classloader.annotations.PowerMockIgnore;
-import org.powermock.modules.junit4.PowerMockRunner;
+import org.junit.jupiter.api.Test;
 
 import java.io.File;
 import java.io.IOException;
@@ -44,11 +41,9 @@ import java.util.Map;
 import javax.ws.rs.container.ContainerRequestContext;
 import javax.ws.rs.core.Response;
 
-import static org.junit.Assert.assertThrows;
 import static org.easymock.EasyMock.replay;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
-@RunWith(PowerMockRunner.class)
-@PowerMockIgnore("javax.*")
 public class JaasBasicAuthFilterTest {
 
     private static final String LOGIN_MODULE =
