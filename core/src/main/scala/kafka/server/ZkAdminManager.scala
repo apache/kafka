@@ -57,7 +57,7 @@ import org.apache.kafka.common.utils.Sanitizer
 import scala.collection.{Map, mutable, _}
 import scala.jdk.CollectionConverters._
 
-class AdminManager(val config: KafkaConfig,
+class ZkAdminManager(val config: KafkaConfig,
                    val metrics: Metrics,
                    val metadataCache: MetadataCache,
                    val zkClient: KafkaZkClient) extends Logging with KafkaMetricsGroup {

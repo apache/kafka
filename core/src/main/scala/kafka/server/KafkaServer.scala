@@ -154,7 +154,7 @@ class KafkaServer(val config: KafkaConfig, time: Time = Time.SYSTEM, threadNameP
   var logManager: LogManager = null
 
   var replicaManager: ReplicaManager = null
-  var adminManager: AdminManager = null
+  var adminManager: ZkAdminManager = null
   var tokenManager: DelegationTokenManager = null
 
   var dynamicConfigHandlers: Map[String, ConfigHandler] = null
@@ -352,7 +352,7 @@ class KafkaServer(val config: KafkaConfig, time: Time = Time.SYSTEM, threadNameP
           forwardingManager.start()
         }
 
-        adminManager = new AdminManager(config, metrics, metadataCache, zkClient)
+        adminManager = new ZkAdminManager(config, metrics, metadataCache, zkClient)
 
         /* start group coordinator */
         // Hardcode Time.SYSTEM for now as some Streams tests fail otherwise, it would be good to fix the underlying issue
