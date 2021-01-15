@@ -49,9 +49,9 @@ import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.pu
 import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.safeUniqueTestName;
 import static org.apache.kafka.test.TestUtils.waitForCondition;
 import static org.hamcrest.CoreMatchers.equalTo;
+import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.CoreMatchers.not;
 import static org.hamcrest.MatcherAssert.assertThat;
-import static org.junit.Assert.assertTrue;
 
 @Category(IntegrationTest.class)
 public class AdjustStreamThreadCountTest {
@@ -93,7 +93,7 @@ public class AdjustStreamThreadCountTest {
 
     private void startStreamsAndWaitForRunning(final KafkaStreams kafkaStreams) throws InterruptedException {
         kafkaStreams.start();
-        waitForStateTransition(KafkaStreams.State.RUNNING);
+        waitForRunning();
     }
 
     @After
@@ -109,26 +109,23 @@ public class AdjustStreamThreadCountTest {
         );
     }
 
-    private void waitForStateTransition(final KafkaStreams.State expected) throws InterruptedException {
+    private void waitForRunning() throws InterruptedException {
         waitForCondition(
-            () -> !stateTransitionHistory.isEmpty() && stateTransitionHistory.contains(expected),
+            () -> !stateTransitionHistory.isEmpty() &&
+                stateTransitionHistory.get(stateTransitionHistory.size() - 1).equals(KafkaStreams.State.RUNNING),
             DEFAULT_DURATION.toMillis(),
-            () -> String.format("Client did not change to the %s state in time. Observed new state transitions: %s",
-                expected, stateTransitionHistory)
+            () -> String.format("Client did not transit to state %s in %d seconds",
+                KafkaStreams.State.RUNNING, DEFAULT_DURATION.toMillis() / 1000)
         );
     }
 
-    // verify if there's the state change from "before" state into "after" state
+    // verify if state change from "before" state into "after" state
     private boolean hasStateTransition(final KafkaStreams.State before, final KafkaStreams.State after) {
+        final int historySize = stateTransitionHistory.size();
         // should have at least 2 states in history
-        if (stateTransitionHistory.size() < 2) {
-            return false;
-        }
-
-        for (int i = 0; i < stateTransitionHistory.size() - 1; i++) {
-            if (stateTransitionHistory.get(i).equals(before) && stateTransitionHistory.get(i + 1).equals(after)) {
-                return true;
-            }
+        if (historySize >= 2 && stateTransitionHistory.get(historySize - 2).equals(before) &&
+            stateTransitionHistory.get(historySize - 1).equals(after)) {
+            return true;
         }
         return false;
     }
@@ -161,8 +158,8 @@ public class AdjustStreamThreadCountTest {
                 equalTo(new String[] {"1", "2", "3"})
             );
 
-            waitForStateTransition(KafkaStreams.State.RUNNING);
-            assertTrue(hasStateTransition(KafkaStreams.State.REBALANCING, KafkaStreams.State.RUNNING));
+            waitForRunning();
+            assertThat(hasStateTransition(KafkaStreams.State.REBALANCING, KafkaStreams.State.RUNNING), is(true));
         }
     }
 
@@ -177,8 +174,8 @@ public class AdjustStreamThreadCountTest {
             assertThat(kafkaStreams.removeStreamThread().get().split("-")[0], equalTo(appId));
             assertThat(kafkaStreams.localThreadsMetadata().size(), equalTo(oldThreadCount - 1));
 
-            waitForStateTransition(KafkaStreams.State.RUNNING);
-            assertTrue(hasStateTransition(KafkaStreams.State.REBALANCING, KafkaStreams.State.RUNNING));
+            waitForRunning();
+            assertThat(hasStateTransition(KafkaStreams.State.REBALANCING, KafkaStreams.State.RUNNING), is(true));
         }
     }
 
@@ -199,8 +196,8 @@ public class AdjustStreamThreadCountTest {
             latch.await(30, TimeUnit.SECONDS);
             assertThat(kafkaStreams.localThreadsMetadata().size(), equalTo(oldThreadCount));
 
-            waitForStateTransition(KafkaStreams.State.RUNNING);
-            assertTrue(hasStateTransition(KafkaStreams.State.REBALANCING, KafkaStreams.State.RUNNING));
+            waitForRunning();
+            assertThat(hasStateTransition(KafkaStreams.State.REBALANCING, KafkaStreams.State.RUNNING), is(true));
         }
     }
 
@@ -254,8 +251,8 @@ public class AdjustStreamThreadCountTest {
                     .toArray(),
                 equalTo(new String[] {"1", "2", "3"})
             );
-            waitForStateTransition(KafkaStreams.State.RUNNING);
-            assertTrue(hasStateTransition(KafkaStreams.State.REBALANCING, KafkaStreams.State.RUNNING));
+            waitForRunning();
+            assertThat(hasStateTransition(KafkaStreams.State.REBALANCING, KafkaStreams.State.RUNNING), is(true));
 
             oldThreadCount = kafkaStreams.localThreadsMetadata().size();
             stateTransitionHistory.clear();
@@ -265,8 +262,8 @@ public class AdjustStreamThreadCountTest {
 
             assertThat(removedThread, not(Optional.empty()));
             assertThat(kafkaStreams.localThreadsMetadata().size(), equalTo(oldThreadCount - 1));
-            waitForStateTransition(KafkaStreams.State.RUNNING);
-            assertTrue(hasStateTransition(KafkaStreams.State.REBALANCING, KafkaStreams.State.RUNNING));
+            waitForRunning();
+            assertThat(hasStateTransition(KafkaStreams.State.REBALANCING, KafkaStreams.State.RUNNING), is(true));
 
             stateTransitionHistory.clear();
 
@@ -291,8 +288,8 @@ public class AdjustStreamThreadCountTest {
             );
 
             assertThat("the new thread should have received the old threads name", name2.equals(removedThread));
-            waitForStateTransition(KafkaStreams.State.RUNNING);
-            assertTrue(hasStateTransition(KafkaStreams.State.REBALANCING, KafkaStreams.State.RUNNING));
+            waitForRunning();
+            assertThat(hasStateTransition(KafkaStreams.State.REBALANCING, KafkaStreams.State.RUNNING), is(true));
         }
     }
 }
