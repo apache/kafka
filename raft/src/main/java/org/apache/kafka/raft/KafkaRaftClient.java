@@ -162,6 +162,12 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
     private KafkaRaftMetrics kafkaRaftMetrics;
     private RaftConfig raftConfig;
 
+    /**
+     * Create a new instance.
+     *
+     * Note that if the node ID is empty, then the the client will behave as a
+     * non-participating observer.
+     */
     public KafkaRaftClient(
         RecordSerde<T> serde,
         NetworkChannel channel,
@@ -188,7 +194,7 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
             new Random());
     }
 
-    public KafkaRaftClient(
+    KafkaRaftClient(
         RecordSerde<T> serde,
         NetworkChannel channel,
         RaftMessageQueue messageQueue,
