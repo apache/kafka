@@ -404,7 +404,7 @@ final public class KafkaRaftClientSnapshotTest {
         context.pollUntilRequest();
 
         context.assertSentVoteRequest(epoch + 1, 0, 0L, 1);
-        context.assertVotedCandidate(epoch + 1, context.localId);
+        context.assertVotedCandidate(epoch + 1, localId);
     }
 
     @Test
@@ -955,7 +955,7 @@ final public class KafkaRaftClientSnapshotTest {
         context.pollUntilRequest();
 
         context.assertSentVoteRequest(epoch + 1, 0, 0L, 1);
-        context.assertVotedCandidate(epoch + 1, context.localId);
+        context.assertVotedCandidate(epoch + 1, localId);
 
         // Send the response late
         context.deliverResponse(
@@ -981,7 +981,7 @@ final public class KafkaRaftClientSnapshotTest {
 
         // Assert that the response is ignored and the replicas stays as a candidate
         context.client.poll();
-        context.assertVotedCandidate(epoch + 1, context.localId);
+        context.assertVotedCandidate(epoch + 1, localId);
     }
 
     private static FetchSnapshotRequestData fetchSnapshotRequest(

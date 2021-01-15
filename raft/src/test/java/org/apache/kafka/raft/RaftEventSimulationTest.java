@@ -771,7 +771,7 @@ public class RaftEventSimulationTest {
                 metrics,
                 new MockExpirationService(time),
                 FETCH_MAX_WAIT_MS,
-                nodeId,
+                OptionalInt.of(nodeId),
                 logContext,
                 random
             );

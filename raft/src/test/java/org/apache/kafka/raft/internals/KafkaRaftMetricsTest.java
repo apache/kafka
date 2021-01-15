@@ -32,6 +32,7 @@ import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
 import java.util.Collections;
+import java.util.OptionalInt;
 import java.util.OptionalLong;
 import java.util.Random;
 import java.util.Set;
@@ -59,7 +60,7 @@ public class KafkaRaftMetricsTest {
 
     private QuorumState buildQuorumState(Set<Integer> voters) {
         return new QuorumState(
-            localId,
+            OptionalInt.of(localId),
             voters,
             electionTimeoutMs,
             fetchTimeoutMs,

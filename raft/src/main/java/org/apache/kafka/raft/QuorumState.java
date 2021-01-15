@@ -73,7 +73,7 @@ import java.util.stream.Collectors;
  *
  */
 public class QuorumState {
-    public final int localId;
+    private final OptionalInt localId;
     private final Time time;
     private final Logger log;
     private final QuorumStateStore store;
@@ -84,7 +84,7 @@ public class QuorumState {
 
     private volatile EpochState state;
 
-    public QuorumState(int localId,
+    public QuorumState(OptionalInt localId,
                        Set<Integer> voters,
                        int electionTimeoutMs,
                        int fetchTimeoutMs,
@@ -125,9 +125,16 @@ public class QuorumState {
         final EpochState initialState;
         if (!election.voters().isEmpty() && !voters.equals(election.voters())) {
             throw new IllegalStateException("Configured voter set: " + voters
-                + " is different from the voter set read from the state file: " + election.voters() +
-                ". Check if the quorum configuration is up to date, " +
-                "or wipe out the local state file if necessary");
+                + " is different from the voter set read from the state file: " + election.voters()
+                + ". Check if the quorum configuration is up to date, "
+                + "or wipe out the local state file if necessary");
+        } else if (election.hasVoted() && !isVoter()) {
+            String localIdDescription = localId.isPresent() ?
+                localId.getAsInt() + " is not a voter" :
+                "is undefined";
+            throw new IllegalStateException("Initialized quorum state " + election
+                + " with a voted candidate, which indicates this node was previously "
+                + " a voter, but the local id " + localIdDescription);
         } else if (election.epoch < logEndOffsetAndEpoch.epoch) {
             log.warn("Epoch from quorum-state file is {}, which is " +
                 "smaller than last written epoch {} in the log",
@@ -139,7 +146,7 @@ public class QuorumState {
                 Optional.empty(),
                 randomElectionTimeoutMs()
             );
-        } else if (election.isLeader(localId)) {
+        } else if (localId.isPresent() && election.isLeader(localId.getAsInt())) {
             // If we were previously a leader, then we will start out as resigned
             // in the same epoch. This serves two purposes:
             // 1. It ensures that we cannot vote for another leader in the same epoch.
@@ -148,16 +155,16 @@ public class QuorumState {
             //    is lost after restarting.
             initialState = new ResignedState(
                 time,
-                localId,
+                localId.getAsInt(),
                 election.epoch,
                 voters,
                 randomElectionTimeoutMs(),
                 Collections.emptyList()
             );
-        } else if (election.isVotedCandidate(localId)) {
+        } else if (localId.isPresent() && election.isVotedCandidate(localId.getAsInt())) {
             initialState = new CandidateState(
                 time,
-                localId,
+                localId.getAsInt(),
                 election.epoch,
                 voters,
                 Optional.empty(),
@@ -196,14 +203,22 @@ public class QuorumState {
     }
 
     public Set<Integer> remoteVoters() {
-        return voters.stream().filter(voterId -> voterId != localId).collect(Collectors.toSet());
+        return voters.stream().filter(voterId -> voterId != localIdOrSentinel()).collect(Collectors.toSet());
+    }
+
+    public int localIdOrSentinel() {
+        return localId.orElse(-1);
+    }
+
+    public int localIdOrThrow() {
+        return localId.orElseThrow(() -> new IllegalStateException("Required local id is not present"));
     }
 
     public int epoch() {
         return state.epoch();
     }
 
-    public int leaderIdOrNil() {
+    public int leaderIdOrSentinel() {
         return leaderId().orElse(-1);
     }
 
@@ -212,6 +227,7 @@ public class QuorumState {
     }
 
     public OptionalInt leaderId() {
+
         ElectionState election = state.election();
         if (election.hasLeader())
             return OptionalInt.of(state.election().leaderId());
@@ -224,11 +240,11 @@ public class QuorumState {
     }
 
     public boolean hasRemoteLeader() {
-        return hasLeader() && leaderIdOrNil() != localId;
+        return hasLeader() && leaderIdOrSentinel() != localIdOrSentinel();
     }
 
     public boolean isVoter() {
-        return voters.contains(localId);
+        return localId.isPresent() && voters.contains(localId.getAsInt());
     }
 
     public boolean isVoter(int nodeId) {
@@ -249,7 +265,7 @@ public class QuorumState {
         int epoch = state.epoch();
         this.state = new ResignedState(
             time,
-            localId,
+            localIdOrThrow(),
             epoch,
             voters,
             randomElectionTimeoutMs(),
@@ -301,7 +317,7 @@ public class QuorumState {
         int epoch,
         int candidateId
     ) throws IOException {
-        if (candidateId == localId) {
+        if (localId.isPresent() && candidateId == localId.getAsInt()) {
             throw new IllegalStateException("Cannot transition to Voted with votedId=" + candidateId +
                 " and epoch=" + epoch + " since it matches the local broker.id");
         } else if (isObserver()) {
@@ -341,7 +357,7 @@ public class QuorumState {
         int epoch,
         int leaderId
     ) throws IOException {
-        if (leaderId == localId) {
+        if (localId.isPresent() && leaderId == localId.getAsInt()) {
             throw new IllegalStateException("Cannot transition to Follower with leaderId=" + leaderId +
                 " and epoch=" + epoch + " since it matches the local broker.id=" + localId);
         } else if (!isVoter(leaderId)) {
@@ -384,7 +400,7 @@ public class QuorumState {
 
         transitionTo(new CandidateState(
             time,
-            localId,
+            localIdOrThrow(),
             newEpoch,
             voters,
             state.highWatermark(),
@@ -417,7 +433,7 @@ public class QuorumState {
         // we typically expect the state machine to be caught up anyway.
 
         transitionTo(new LeaderState(
-            localId,
+            localIdOrThrow(),
             epoch(),
             epochStartOffset,
             voters,
