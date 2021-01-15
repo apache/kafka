@@ -203,10 +203,10 @@ public class QuorumState {
     }
 
     public Set<Integer> remoteVoters() {
-        return voters.stream().filter(voterId -> voterId != localIdOrNil()).collect(Collectors.toSet());
+        return voters.stream().filter(voterId -> voterId != localIdOrSentinel()).collect(Collectors.toSet());
     }
 
-    public int localIdOrNil() {
+    public int localIdOrSentinel() {
         return localId.orElse(-1);
     }
 
@@ -218,7 +218,7 @@ public class QuorumState {
         return state.epoch();
     }
 
-    public int leaderIdOrNil() {
+    public int leaderIdOrSentinel() {
         return leaderId().orElse(-1);
     }
 
@@ -227,6 +227,7 @@ public class QuorumState {
     }
 
     public OptionalInt leaderId() {
+
         ElectionState election = state.election();
         if (election.hasLeader())
             return OptionalInt.of(state.election().leaderId());
@@ -239,7 +240,7 @@ public class QuorumState {
     }
 
     public boolean hasRemoteLeader() {
-        return hasLeader() && leaderIdOrNil() != localIdOrNil();
+        return hasLeader() && leaderIdOrSentinel() != localIdOrSentinel();
     }
 
     public boolean isVoter() {

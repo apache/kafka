@@ -521,7 +521,7 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
             log.topicPartition(),
             partitionLevelError,
             quorum.epoch(),
-            quorum.leaderIdOrNil(),
+            quorum.leaderIdOrSentinel(),
             voteGranted);
     }
 
@@ -693,7 +693,7 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
             log.topicPartition(),
             partitionLevelError,
             quorum.epoch(),
-            quorum.leaderIdOrNil());
+            quorum.leaderIdOrSentinel());
     }
 
     /**
@@ -776,7 +776,7 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
             log.topicPartition(),
             partitionLevelError,
             quorum.epoch(),
-            quorum.leaderIdOrNil());
+            quorum.leaderIdOrSentinel());
     }
 
     /**
@@ -888,7 +888,7 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
 
             partitionData.currentLeader()
                 .setLeaderEpoch(quorum.epoch())
-                .setLeaderId(quorum.leaderIdOrNil());
+                .setLeaderId(quorum.leaderIdOrSentinel());
 
             divergingEpoch.ifPresent(partitionData::setDivergingEpoch);
         });
@@ -1079,7 +1079,7 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
 
                 log.truncateToEndOffset(divergingOffsetAndEpoch).ifPresent(truncationOffset -> {
                     logger.info("Truncated to offset {} from Fetch response from leader {}",
-                        truncationOffset, quorum.leaderIdOrNil());
+                        truncationOffset, quorum.leaderIdOrSentinel());
                 });
             } else if (partitionResponse.snapshotId().epoch() >= 0 ||
                        partitionResponse.snapshotId().endOffset() >= 0) {
@@ -1363,7 +1363,7 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
     private boolean hasConsistentLeader(int epoch, OptionalInt leaderId) {
         // Only elected leaders are sent in the request/response header, so if we have an elected
         // leaderId, it should be consistent with what is in the message.
-        if (leaderId.isPresent() && leaderId.getAsInt() == quorum.localIdOrNil()) {
+        if (leaderId.isPresent() && leaderId.getAsInt() == quorum.localIdOrSentinel()) {
             // The response indicates that we should be the leader, so we verify that is the case
             return quorum.isLeader();
         } else {
@@ -1724,7 +1724,7 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
         });
         return request
             .setMaxWaitMs(fetchMaxWaitMs)
-            .setReplicaId(quorum.localIdOrNil());
+            .setReplicaId(quorum.localIdOrSentinel());
     }
 
     private long maybeSendAnyVoterFetch(long currentTimeMs) {
@@ -1755,7 +1755,7 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
             }
         );
 
-        return request.setReplicaId(quorum.localIdOrNil());
+        return request.setReplicaId(quorum.localIdOrSentinel());
     }
 
     private FetchSnapshotResponseData.PartitionSnapshot addQuorumLeader(
@@ -1763,7 +1763,7 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
     ) {
         partitionSnapshot.currentLeader()
             .setLeaderEpoch(quorum.epoch())
-            .setLeaderId(quorum.leaderIdOrNil());
+            .setLeaderId(quorum.leaderIdOrSentinel());
 
         return partitionSnapshot;
     }
