@@ -145,14 +145,12 @@ class BrokerToControllerChannelManager(
   }
 
   def controllerApiVersions(): Option[NodeApiVersions] =
-    requestThread.activeControllerAddress() match {
-      case Some(activeController) =>
-        if (activeController.id() == config.brokerId)
-          Some(currentNodeApiVersions)
-        else
-          Option(apiVersions.get(activeController.idString()))
-      case None => None
-  }
+    requestThread.activeControllerAddress().flatMap(
+      activeController => if (activeController.id() == config.brokerId)
+        Some(currentNodeApiVersions)
+      else
+        Option(apiVersions.get(activeController.idString()))
+  )
 }
 
 abstract class ControllerRequestCompletionHandler extends RequestCompletionHandler {
@@ -182,13 +180,13 @@ class BrokerToControllerRequestThread(
 ) extends InterBrokerSendThread(threadName, networkClient, config.controllerSocketTimeoutMs, time, isInterruptible = false) {
 
   private val requestQueue = new LinkedBlockingDeque[BrokerToControllerQueueItem]()
-  private val activeController = new AtomicReference[Option[Node]](None)
+  private val activeController = new AtomicReference[Node](null)
 
   def activeControllerAddress(): Option[Node] = {
-    activeController.get()
+    Option(activeController.get())
   }
 
-  private def updateControllerAddress(newActiveController: Option[Node]): Unit = {
+  private def updateControllerAddress(newActiveController: Node): Unit = {
     activeController.set(newActiveController)
   }
 
@@ -211,14 +209,17 @@ class BrokerToControllerRequestThread(
       if (currentTimeMs - request.createdTimeMs >= retryTimeoutMs) {
         requestIter.remove()
         request.callback.onTimeout()
-      } else if (activeControllerAddress().isDefined) {
-        requestIter.remove()
-        return Some(RequestAndCompletionHandler(
-          time.milliseconds(),
-          activeControllerAddress().get,
-          request.request,
-          handleResponse(request)
-        ))
+      } else {
+        val controllerAddress = activeControllerAddress()
+        if (controllerAddress.isDefined) {
+          requestIter.remove()
+          return Some(RequestAndCompletionHandler(
+            time.milliseconds(),
+            controllerAddress.get,
+            request.request,
+            handleResponse(request)
+          ))
+        }
       }
     }
     None
@@ -226,12 +227,15 @@ class BrokerToControllerRequestThread(
 
   private[server] def handleResponse(request: BrokerToControllerQueueItem)(response: ClientResponse): Unit = {
     if (response.wasDisconnected()) {
-      updateControllerAddress(None)
+      updateControllerAddress(null)
       requestQueue.putFirst(request)
     } else if (response.responseBody().errorCounts().containsKey(Errors.NOT_CONTROLLER)) {
       // just close the controller connection and wait for metadata cache update in doWork
-      networkClient.disconnect(activeControllerAddress().get.idString)
-      updateControllerAddress(None)
+      activeControllerAddress().foreach(controllerAddress => {
+        networkClient.disconnect(controllerAddress.idString)
+        updateControllerAddress(null)
+      })
+
       requestQueue.putFirst(request)
     } else {
       request.callback.onComplete(response)
@@ -248,7 +252,7 @@ class BrokerToControllerRequestThread(
         case Some(controller) =>
           info(s"Recorded new controller, from now on will use broker $controller")
           val controllerNode = controller.node(listenerName)
-          updateControllerAddress(Option(controllerNode))
+          updateControllerAddress(controllerNode)
           metadataUpdater.setNodes(Seq(controllerNode).asJava)
         case None =>
           // need to backoff to avoid tight loops

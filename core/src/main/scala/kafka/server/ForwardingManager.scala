@@ -100,9 +100,10 @@ class ForwardingManagerImpl(
         val envelopeError = envelopeResponse.error()
         val requestBody = request.body[AbstractRequest]
 
-        // Unsupported version indicates an incompatibility between controller and client API versions. The
-        // forwarding broker should close the connection with the client and let it reinitialize the connection
-        // and refresh the controller API versions.
+        // Unsupported version indicates an incompatibility between controller and client API versions. This
+        // could happen when the controller changed after the connection was established. The forwarding broker
+        // should close the connection with the client and let it reinitialize the connection and refresh
+        // the controller API versions.
         if (envelopeError == Errors.UNSUPPORTED_VERSION) {
           responseCallback(Right(Errors.UNSUPPORTED_VERSION))
         } else {

@@ -118,32 +118,29 @@ public class NodeApiVersions {
      * Return the most recent version supported by both the node and the local software.
      */
     public short latestUsableVersion(ApiKeys apiKey) {
-        return latestUsableVersion(apiKey, apiKey.oldestVersion(), apiKey.latestVersion());
+        return getSupportedVersion(apiKey).maxVersion;
     }
 
     /**
      * Get the latest version supported by the broker within an allowed range of versions
      */
     public short latestUsableVersion(ApiKeys apiKey, short oldestAllowedVersion, short latestAllowedVersion) {
-        return latestUsableVersion(apiKey, supportedVersions.get(apiKey), oldestAllowedVersion, latestAllowedVersion);
-    }
-
-    private short latestUsableVersion(ApiKeys apiKey,
-                                      ApiVersion supportedVersions,
-                                      short minAllowedVersion,
-                                      short maxAllowedVersion) {
-        if (supportedVersions == null)
-            throw new UnsupportedVersionException("The broker does not support " + apiKey);
-
-        Optional<ApiVersion> intersectVersion = supportedVersions.intersect(
-            new ApiVersion(apiKey.id, minAllowedVersion, maxAllowedVersion));
+        ApiVersion supportedVersion = getSupportedVersion(apiKey);
+        Optional<ApiVersion> intersectVersion = supportedVersion.intersect(
+            new ApiVersion(apiKey.id, oldestAllowedVersion, latestAllowedVersion));
 
         if (intersectVersion.isPresent())
             return intersectVersion.get().maxVersion;
         else
             throw new UnsupportedVersionException("The broker does not support " + apiKey +
-                " with version in range [" + minAllowedVersion + "," + maxAllowedVersion + "]. The supported" +
-                " range is [" + supportedVersions.minVersion + "," + supportedVersions.maxVersion + "].");
+                " with version in range [" + oldestAllowedVersion + "," + latestAllowedVersion + "]. The supported" +
+                " range is [" + supportedVersion.minVersion + "," + supportedVersion.maxVersion + "].");
+    }
+
+    private ApiVersion getSupportedVersion(ApiKeys apiKey) {
+        if (!supportedVersions.containsKey(apiKey))
+            throw new UnsupportedVersionException("The broker does not support " + apiKey);
+        return supportedVersions.get(apiKey);
     }
 
     /**

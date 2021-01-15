@@ -131,8 +131,8 @@ public class ApiVersionsResponse extends AbstractResponse {
         return apiKeys;
     }
 
-    public static ApiVersionsResponseKeyCollection commonApiVersionsWithActiveController(final byte minMagic,
-                                                                                         final Map<ApiKeys, ApiVersion> activeControllerApiVersions) {
+    public static ApiVersionsResponseKeyCollection intersectControllerApiVersions(final byte minMagic,
+                                                                                  final Map<ApiKeys, ApiVersion> activeControllerApiVersions) {
         ApiVersionsResponseKeyCollection apiKeys = new ApiVersionsResponseKeyCollection();
         for (ApiKeys apiKey : ApiKeys.enabledApis()) {
             if (apiKey.minRequiredInterBrokerMagic <= minMagic) {

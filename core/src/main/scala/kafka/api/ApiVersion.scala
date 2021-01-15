@@ -169,12 +169,12 @@ object ApiVersion {
                           controllerApiVersions: Option[NodeApiVersions]): ApiVersionsResponse = {
     val apiKeys = controllerApiVersions match {
       case None => ApiVersionsResponse.defaultApiKeys(maxMagic)
-      case Some(controllerApiVersion) => ApiVersionsResponse.commonApiVersionsWithActiveController(
+      case Some(controllerApiVersion) => ApiVersionsResponse.intersectControllerApiVersions(
         maxMagic, controllerApiVersion.fullApiVersions())
     }
 
     if (maxMagic == RecordBatch.CURRENT_MAGIC_VALUE &&
-      throttleTimeMs == AbstractResponse.DEFAULT_THROTTLE_TIME)
+      throttleTimeMs == AbstractResponse.DEFAULT_THROTTLE_TIME) {
       new ApiVersionsResponse(
         ApiVersionsResponse.createApiVersionsResponseData(
           DEFAULT_API_VERSIONS_RESPONSE.throttleTimeMs,
@@ -183,7 +183,7 @@ object ApiVersion {
           latestSupportedFeatures,
           finalizedFeatures,
           finalizedFeaturesEpoch))
-    else
+    } else {
       new ApiVersionsResponse(
         ApiVersionsResponse.createApiVersionsResponseData(
           throttleTimeMs,
@@ -191,8 +191,8 @@ object ApiVersion {
           apiKeys,
           latestSupportedFeatures,
           finalizedFeatures,
-          finalizedFeaturesEpoch)
-    )
+          finalizedFeaturesEpoch))
+    }
   }
 }
 

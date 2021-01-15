@@ -1754,8 +1754,9 @@ class KafkaApis(val requestChannel: RequestChannel,
         val finalizedFeaturesOpt = finalizedFeatureCache.get
         val controllerApiVersions = if (isForwardingEnabled(request)) {
           forwardingManager.controllerApiVersions()
-        } else
+        } else {
           None
+        }
 
         val apiVersionsResponse =
           finalizedFeaturesOpt match {
@@ -1771,7 +1772,6 @@ class KafkaApis(val requestChannel: RequestChannel,
               config.interBrokerProtocolVersion.recordVersion.value,
               supportedFeatures,
               controllerApiVersions)
-
           }
         if (request.context.fromPrivilegedListener) {
           apiVersionsResponse.data.apiKeys().add(
