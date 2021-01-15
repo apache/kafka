@@ -67,7 +67,7 @@ public class StreamsOptimizedTest {
 
 
         final Pattern repartitionTopicPattern = Pattern.compile("Sink: .*-repartition");
-        final Initializer<Integer> initializer = () -> 0;
+        final Initializer<String, Integer> initializer = (String key) -> 0;
         final Aggregator<String, String, Integer> aggregator = (k, v, agg) -> agg + v.length();
 
         final Reducer<String> reducer = (v1, v2) -> Integer.toString(Integer.parseInt(v1) + Integer.parseInt(v2));

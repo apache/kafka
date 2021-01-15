@@ -114,7 +114,7 @@ public class KStreamAggregationIntegrationTest {
     private String outputTopic;
     private KGroupedStream<String, String> groupedStream;
     private Reducer<String> reducer;
-    private Initializer<Integer> initializer;
+    private Initializer<String, Integer> initializer;
     private Aggregator<String, String, Integer> aggregator;
     private KStream<Integer, String> stream;
 
@@ -141,7 +141,7 @@ public class KStreamAggregationIntegrationTest {
         groupedStream = stream.groupBy(mapper, Grouped.with(Serdes.String(), Serdes.String()));
 
         reducer = (value1, value2) -> value1 + ":" + value2;
-        initializer = () -> 0;
+        initializer = (String key) -> 0;
         aggregator = (aggKey, value, aggregate) -> aggregate + value.length();
     }
 

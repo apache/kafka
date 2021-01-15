@@ -61,26 +61,26 @@ public class SessionWindowedCogroupedKStreamImpl<K, V> extends
     }
 
     @Override
-    public KTable<Windowed<K>, V> aggregate(final Initializer<V> initializer,
+    public KTable<Windowed<K>, V> aggregate(final Initializer<K, V> initializer,
                                             final Merger<? super K, V> sessionMerger) {
         return aggregate(initializer, sessionMerger, Materialized.with(null, null));
     }
 
     @Override
-    public KTable<Windowed<K>, V> aggregate(final Initializer<V> initializer,
+    public KTable<Windowed<K>, V> aggregate(final Initializer<K, V> initializer,
                                             final Merger<? super K, V> sessionMerger,
                                             final Materialized<K, V, SessionStore<Bytes, byte[]>> materialized) {
         return aggregate(initializer, sessionMerger, NamedInternal.empty(), materialized);
     }
 
     @Override
-    public KTable<Windowed<K>, V> aggregate(final Initializer<V> initializer,
+    public KTable<Windowed<K>, V> aggregate(final Initializer<K, V> initializer,
                                             final Merger<? super K, V> sessionMerger, final Named named) {
         return aggregate(initializer, sessionMerger, named, Materialized.with(null, null));
     }
 
     @Override
-    public KTable<Windowed<K>, V> aggregate(final Initializer<V> initializer,
+    public KTable<Windowed<K>, V> aggregate(final Initializer<K, V> initializer,
                                             final Merger<? super K, V> sessionMerger, final Named named,
                                             final Materialized<K, V, SessionStore<Bytes, byte[]>> materialized) {
         Objects.requireNonNull(initializer, "initializer can't be null");

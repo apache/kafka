@@ -119,7 +119,7 @@ public class EosTestClient extends SmokeTestUtil {
         // min
         groupedData
             .aggregate(
-                () -> Integer.MAX_VALUE,
+                (String key) -> Integer.MAX_VALUE,
                 (aggKey, value, aggregate) -> (value < aggregate) ? value : aggregate,
                 Materialized.with(null, intSerde))
             .toStream()
@@ -127,7 +127,7 @@ public class EosTestClient extends SmokeTestUtil {
 
         // sum
         groupedData.aggregate(
-            () -> 0L,
+            (String key) -> 0L,
             (aggKey, value, aggregate) -> (long) value + aggregate,
             Materialized.with(null, longSerde))
             .toStream()
@@ -143,7 +143,7 @@ public class EosTestClient extends SmokeTestUtil {
             // max
             groupedDataAfterRepartitioning
                 .aggregate(
-                    () -> Integer.MIN_VALUE,
+                    (String key) -> Integer.MIN_VALUE,
                     (aggKey, value, aggregate) -> (value > aggregate) ? value : aggregate,
                     Materialized.with(null, intSerde))
                 .toStream()

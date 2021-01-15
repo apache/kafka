@@ -104,8 +104,8 @@ public class SmokeTestUtil {
             return (key, value) -> new KeyValue<>(value == null ? null : Long.toString(value), 1L);
         }
 
-        public Initializer<Long> init() {
-            return () -> 0L;
+        public Initializer<String, Long> init() {
+            return (String key) -> 0L;
         }
 
         Aggregator<String, Long, Long> adder() {

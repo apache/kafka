@@ -2037,7 +2037,7 @@ public class StreamsPartitionAssignorTest {
             )
             .windowedBy(TimeWindows.of(Duration.ofMinutes(10)))
             .aggregate(
-                () -> "",
+                (String key) -> "",
                 (k, v, a) -> a + k)
             .leftJoin(
                 inputTable,

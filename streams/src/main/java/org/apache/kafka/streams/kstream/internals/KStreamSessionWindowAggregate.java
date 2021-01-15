@@ -46,7 +46,7 @@ public class KStreamSessionWindowAggregate<K, V, Agg> implements KStreamAggProce
 
     private final String storeName;
     private final SessionWindows windows;
-    private final Initializer<Agg> initializer;
+    private final Initializer<K, Agg> initializer;
     private final Aggregator<? super K, ? super V, Agg> aggregator;
     private final Merger<? super K, Agg> sessionMerger;
 
@@ -54,7 +54,7 @@ public class KStreamSessionWindowAggregate<K, V, Agg> implements KStreamAggProce
 
     public KStreamSessionWindowAggregate(final SessionWindows windows,
                                          final String storeName,
-                                         final Initializer<Agg> initializer,
+                                         final Initializer<K, Agg> initializer,
                                          final Aggregator<? super K, ? super V, Agg> aggregator,
                                          final Merger<? super K, Agg> sessionMerger) {
         this.windows = windows;
@@ -126,7 +126,7 @@ public class KStreamSessionWindowAggregate<K, V, Agg> implements KStreamAggProce
             final List<KeyValue<Windowed<K>, Agg>> merged = new ArrayList<>();
             final SessionWindow newSessionWindow = new SessionWindow(timestamp, timestamp);
             SessionWindow mergedWindow = newSessionWindow;
-            Agg agg = initializer.apply();
+            Agg agg = initializer.apply(key);
 
             try (
                 final KeyValueIterator<Windowed<K>, Agg> iterator = store.findSessions(

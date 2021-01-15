@@ -50,7 +50,7 @@ public class KGroupedTableImpl<K, V> extends AbstractStream<K, V> implements KGr
 
     private final String userProvidedRepartitionTopicName;
 
-    private final Initializer<Long> countInitializer = () -> 0L;
+    private final Initializer<K, Long> countInitializer = (K key) -> 0L;
 
     private final Aggregator<K, V, Long> countAdder = (aggKey, value, aggregate) -> aggregate + 1L;
 
@@ -196,7 +196,7 @@ public class KGroupedTableImpl<K, V> extends AbstractStream<K, V> implements KGr
     }
 
     @Override
-    public <VR> KTable<K, VR> aggregate(final Initializer<VR> initializer,
+    public <VR> KTable<K, VR> aggregate(final Initializer<K, VR> initializer,
                                         final Aggregator<? super K, ? super V, VR> adder,
                                         final Aggregator<? super K, ? super V, VR> subtractor,
                                         final Materialized<K, VR, KeyValueStore<Bytes, byte[]>> materialized) {
@@ -204,7 +204,7 @@ public class KGroupedTableImpl<K, V> extends AbstractStream<K, V> implements KGr
     }
 
     @Override
-    public <VR> KTable<K, VR> aggregate(final Initializer<VR> initializer,
+    public <VR> KTable<K, VR> aggregate(final Initializer<K, VR> initializer,
                                         final Aggregator<? super K, ? super V, VR> adder,
                                         final Aggregator<? super K, ? super V, VR> subtractor,
                                         final Named named,
@@ -230,7 +230,7 @@ public class KGroupedTableImpl<K, V> extends AbstractStream<K, V> implements KGr
     }
 
     @Override
-    public <T> KTable<K, T> aggregate(final Initializer<T> initializer,
+    public <T> KTable<K, T> aggregate(final Initializer<K, T> initializer,
                                       final Aggregator<? super K, ? super V, T> adder,
                                       final Aggregator<? super K, ? super V, T> subtractor,
                                       final Named named) {
@@ -238,7 +238,7 @@ public class KGroupedTableImpl<K, V> extends AbstractStream<K, V> implements KGr
     }
 
     @Override
-    public <T> KTable<K, T> aggregate(final Initializer<T> initializer,
+    public <T> KTable<K, T> aggregate(final Initializer<K, T> initializer,
                                       final Aggregator<? super K, ? super V, T> adder,
                                       final Aggregator<? super K, ? super V, T> subtractor) {
         return aggregate(initializer, adder, subtractor, Materialized.with(keySerde, null));

@@ -466,7 +466,7 @@ public interface KGroupedTable<K, V> {
      * @return a {@link KTable} that contains "update" records with unmodified keys, and values that represent the
      * latest (rolling) aggregate for each key
      */
-    <VR> KTable<K, VR> aggregate(final Initializer<VR> initializer,
+    <VR> KTable<K, VR> aggregate(final Initializer<K, VR> initializer,
                                  final Aggregator<? super K, ? super V, VR> adder,
                                  final Aggregator<? super K, ? super V, VR> subtractor,
                                  final Materialized<K, VR, KeyValueStore<Bytes, byte[]>> materialized);
@@ -551,7 +551,7 @@ public interface KGroupedTable<K, V> {
      * @return a {@link KTable} that contains "update" records with unmodified keys, and values that represent the
      * latest (rolling) aggregate for each key
      */
-    <VR> KTable<K, VR> aggregate(final Initializer<VR> initializer,
+    <VR> KTable<K, VR> aggregate(final Initializer<K, VR> initializer,
                                  final Aggregator<? super K, ? super V, VR> adder,
                                  final Aggregator<? super K, ? super V, VR> subtractor,
                                  final Named named,
@@ -622,7 +622,7 @@ public interface KGroupedTable<K, V> {
      * @return a {@link KTable} that contains "update" records with unmodified keys, and values that represent the
      * latest (rolling) aggregate for each key
      */
-    <VR> KTable<K, VR> aggregate(final Initializer<VR> initializer,
+    <VR> KTable<K, VR> aggregate(final Initializer<K, VR> initializer,
                                  final Aggregator<? super K, ? super V, VR> adder,
                                  final Aggregator<? super K, ? super V, VR> subtractor);
 
@@ -693,7 +693,7 @@ public interface KGroupedTable<K, V> {
      * @return a {@link KTable} that contains "update" records with unmodified keys, and values that represent the
      * latest (rolling) aggregate for each key
      */
-    <VR> KTable<K, VR> aggregate(final Initializer<VR> initializer,
+    <VR> KTable<K, VR> aggregate(final Initializer<K, VR> initializer,
                                  final Aggregator<? super K, ? super V, VR> adder,
                                  final Aggregator<? super K, ? super V, VR> subtractor,
                                  final Named named);

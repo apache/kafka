@@ -167,14 +167,14 @@ public class SessionWindowedKStreamImpl<K, V> extends AbstractStream<K, V> imple
     }
 
     @Override
-    public <T> KTable<Windowed<K>, T> aggregate(final Initializer<T> initializer,
+    public <T> KTable<Windowed<K>, T> aggregate(final Initializer<K, T> initializer,
                                                 final Aggregator<? super K, ? super V, T> aggregator,
                                                 final Merger<? super K, T> sessionMerger) {
         return aggregate(initializer, aggregator, sessionMerger, NamedInternal.empty());
     }
 
     @Override
-    public <T> KTable<Windowed<K>, T> aggregate(final Initializer<T> initializer,
+    public <T> KTable<Windowed<K>, T> aggregate(final Initializer<K, T> initializer,
                                                 final Aggregator<? super K, ? super V, T> aggregator,
                                                 final Merger<? super K, T> sessionMerger,
                                                 final Named named) {
@@ -182,7 +182,7 @@ public class SessionWindowedKStreamImpl<K, V> extends AbstractStream<K, V> imple
     }
 
     @Override
-    public <VR> KTable<Windowed<K>, VR> aggregate(final Initializer<VR> initializer,
+    public <VR> KTable<Windowed<K>, VR> aggregate(final Initializer<K, VR> initializer,
                                                   final Aggregator<? super K, ? super V, VR> aggregator,
                                                   final Merger<? super K, VR> sessionMerger,
                                                   final Materialized<K, VR, SessionStore<Bytes, byte[]>> materialized) {
@@ -190,7 +190,7 @@ public class SessionWindowedKStreamImpl<K, V> extends AbstractStream<K, V> imple
     }
 
     @Override
-    public <VR> KTable<Windowed<K>, VR> aggregate(final Initializer<VR> initializer,
+    public <VR> KTable<Windowed<K>, VR> aggregate(final Initializer<K, VR> initializer,
                                                   final Aggregator<? super K, ? super V, VR> aggregator,
                                                   final Merger<? super K, VR> sessionMerger,
                                                   final Named named,

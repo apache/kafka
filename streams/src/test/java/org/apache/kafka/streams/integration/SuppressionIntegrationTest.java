@@ -118,7 +118,7 @@ public class SuppressionIntegrationTest {
 
         final KTable<String, String> valueCounts = inputStream
             .groupByKey()
-            .aggregate(() -> "()", (key, value, aggregate) -> aggregate + ",(" + key + ": " + value + ")");
+            .aggregate((String key) -> "()", (key, value, aggregate) -> aggregate + ",(" + key + ": " + value + ")");
 
         valueCounts
             .suppress(untilTimeLimit(ofMillis(MAX_VALUE), maxRecords(1L).emitEarlyWhenFull()))
@@ -336,7 +336,7 @@ public class SuppressionIntegrationTest {
 
         final KTable<String, String> valueCounts = inputStream
             .groupByKey()
-            .aggregate(() -> "()", (key, value, aggregate) -> aggregate + ",(" + key + ": " + value + ")");
+            .aggregate((String key) -> "()", (key, value, aggregate) -> aggregate + ",(" + key + ": " + value + ")");
 
         valueCounts
             .suppress(untilTimeLimit(ofMillis(MAX_VALUE), maxRecords(1L)
@@ -395,7 +395,7 @@ public class SuppressionIntegrationTest {
 
         final KTable<String, String> valueCounts = inputStream
             .groupByKey()
-            .aggregate(() -> "()", (key, value, aggregate) -> aggregate + ",(" + key + ": " + value + ")");
+            .aggregate((String key) -> "()", (key, value, aggregate) -> aggregate + ",(" + key + ": " + value + ")");
 
         valueCounts
             .suppress(untilTimeLimit(ofMillis(MAX_VALUE), maxRecords(1L)
@@ -450,7 +450,7 @@ public class SuppressionIntegrationTest {
 
         final KTable<String, String> valueCounts = inputStream
             .groupByKey()
-            .aggregate(() -> "()", (key, value, aggregate) -> aggregate + ",(" + key + ": " + value + ")");
+            .aggregate((String key) -> "()", (key, value, aggregate) -> aggregate + ",(" + key + ": " + value + ")");
 
         valueCounts
             .suppress(untilTimeLimit(ofMillis(MAX_VALUE), maxRecords(1L)

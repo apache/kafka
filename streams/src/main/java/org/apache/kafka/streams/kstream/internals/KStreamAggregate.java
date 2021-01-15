@@ -34,13 +34,13 @@ import static org.apache.kafka.streams.state.ValueAndTimestamp.getValueOrNull;
 public class KStreamAggregate<K, V, T> implements KStreamAggProcessorSupplier<K, K, V, T> {
     private static final Logger LOG = LoggerFactory.getLogger(KStreamAggregate.class);
     private final String storeName;
-    private final Initializer<T> initializer;
+    private final Initializer<K, T> initializer;
     private final Aggregator<? super K, ? super V, T> aggregator;
 
     private boolean sendOldValues = false;
 
     KStreamAggregate(final String storeName,
-                     final Initializer<T> initializer,
+                     final Initializer<K, T> initializer,
                      final Aggregator<? super K, ? super V, T> aggregator) {
         this.storeName = storeName;
         this.initializer = initializer;
@@ -98,7 +98,7 @@ public class KStreamAggregate<K, V, T> implements KStreamAggProcessorSupplier<K,
             final long newTimestamp;
 
             if (oldAgg == null) {
-                oldAgg = initializer.apply();
+                oldAgg = initializer.apply(key);
                 newTimestamp = context().timestamp();
             } else {
                 oldAgg = oldAggAndTimestamp.value();

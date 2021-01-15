@@ -69,7 +69,7 @@ public class CogroupedKStreamImplTest {
     private static final Aggregator<String, String, String> STRING_AGGREGATOR =
         (key, value, aggregate) -> aggregate + value;
 
-    private static final Initializer<String> STRING_INITIALIZER = () -> "";
+    private static final Initializer<String, String> STRING_INITIALIZER = (String key) -> "";
 
     private static final Aggregator<String, String, Integer> STRING_SUM_AGGREGATOR =
         (key, value, aggregate) -> aggregate + Integer.parseInt(value);
@@ -77,7 +77,7 @@ public class CogroupedKStreamImplTest {
     private static final Aggregator<? super String, ? super Integer, Integer> SUM_AGGREGATOR =
         (key, value, aggregate) -> aggregate + value;
 
-    private static final Initializer<Integer> SUM_INITIALIZER = () -> 0;
+    private static final Initializer<String, Integer> SUM_INITIALIZER = (String key) -> 0;
 
 
     @Before

@@ -91,7 +91,7 @@ public interface TimeWindowedCogroupedKStream<K, V> {
      * @return a windowed {@link KTable} that contains "update" records with unmodified keys, and values that represent
      * the latest (rolling) aggregate for each key within a window
      */
-    KTable<Windowed<K>, V> aggregate(final Initializer<V> initializer);
+    KTable<Windowed<K>, V> aggregate(final Initializer<K, V> initializer);
 
     /**
      * Aggregate the values of records in this stream by the grouped key and defined windows.
@@ -132,7 +132,7 @@ public interface TimeWindowedCogroupedKStream<K, V> {
      * @return a windowed {@link KTable} that contains "update" records with unmodified keys, and values that represent
      * the latest (rolling) aggregate for each key within a window
      */
-    KTable<Windowed<K>, V> aggregate(final Initializer<V> initializer,
+    KTable<Windowed<K>, V> aggregate(final Initializer<K, V> initializer,
                                      final Named named);
 
     /**
@@ -189,7 +189,7 @@ public interface TimeWindowedCogroupedKStream<K, V> {
      * @return a windowed {@link KTable} that contains "update" records with unmodified keys, and values that represent
      * the latest (rolling) aggregate for each key within a window
      */
-    KTable<Windowed<K>, V> aggregate(final Initializer<V> initializer,
+    KTable<Windowed<K>, V> aggregate(final Initializer<K, V> initializer,
                                      final Materialized<K, V, WindowStore<Bytes, byte[]>> materialized);
 
     /**
@@ -247,7 +247,7 @@ public interface TimeWindowedCogroupedKStream<K, V> {
      * @return a windowed {@link KTable} that contains "update" records with unmodified keys, and values that represent
      * the latest (rolling) aggregate for each key within a window
      */
-    KTable<Windowed<K>, V> aggregate(final Initializer<V> initializer,
+    KTable<Windowed<K>, V> aggregate(final Initializer<K, V> initializer,
                                      final Named named,
                                      final Materialized<K, V, WindowStore<Bytes, byte[]>> materialized);
 }

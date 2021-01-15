@@ -83,8 +83,8 @@ private[scala] object FunctionsCompatConversions {
     def asReducer: Reducer[V] = (value1: V, value2: V) => f(value1, value2)
   }
 
-  implicit class InitializerFromFunction[VA](val f: () => VA) extends AnyVal {
-    def asInitializer: Initializer[VA] = () => f()
+  implicit class InitializerFromFunction[K, VA](val f: K => VA) extends AnyVal {
+    def asInitializer: Initializer[K, VA] = (key: K) => f(key)
   }
 
   implicit class TransformerSupplierFromFunction[K, V, VO](val f: () => Transformer[K, V, VO]) extends AnyVal {

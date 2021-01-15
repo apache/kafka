@@ -44,14 +44,14 @@ public class KStreamWindowAggregate<K, V, Agg, W extends Window> implements KStr
 
     private final String storeName;
     private final Windows<W> windows;
-    private final Initializer<Agg> initializer;
+    private final Initializer<K, Agg> initializer;
     private final Aggregator<? super K, ? super V, Agg> aggregator;
 
     private boolean sendOldValues = false;
 
     public KStreamWindowAggregate(final Windows<W> windows,
                                   final String storeName,
-                                  final Initializer<Agg> initializer,
+                                  final Initializer<K, Agg> initializer,
                                   final Aggregator<? super K, ? super V, Agg> aggregator) {
         this.windows = windows;
         this.storeName = storeName;
@@ -135,7 +135,7 @@ public class KStreamWindowAggregate<K, V, Agg, W extends Window> implements KStr
                     final long newTimestamp;
 
                     if (oldAgg == null) {
-                        oldAgg = initializer.apply();
+                        oldAgg = initializer.apply(key);
                         newTimestamp = context().timestamp();
                     } else {
                         newTimestamp = Math.max(context().timestamp(), oldAggAndTimestamp.timestamp());

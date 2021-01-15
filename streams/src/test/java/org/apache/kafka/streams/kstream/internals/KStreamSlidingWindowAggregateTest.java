@@ -802,7 +802,7 @@ public class KStreamSlidingWindowAggregateTest {
             // The aggregator needs to sort the strings so the window value is the same for the final windows even when
             // records are processed in a different order. Here, we sort alphabetically.
             .aggregate(
-                () -> "",
+                (String key) -> "",
                 (key, value, aggregate) -> {
                     aggregate += value;
                     final char[] ch = aggregate.toCharArray();

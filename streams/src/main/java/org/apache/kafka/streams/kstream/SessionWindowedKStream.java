@@ -252,7 +252,7 @@ public interface SessionWindowedKStream<K, V> {
      * @return a windowed {@link KTable} that contains "update" records with unmodified keys, and values that represent
      * the latest (rolling) aggregate for each key per session
      */
-    <VR> KTable<Windowed<K>, VR> aggregate(final Initializer<VR> initializer,
+    <VR> KTable<Windowed<K>, VR> aggregate(final Initializer<K, VR> initializer,
                                            final Aggregator<? super K, ? super V, VR> aggregator,
                                            final Merger<? super K, VR> sessionMerger);
 
@@ -302,7 +302,7 @@ public interface SessionWindowedKStream<K, V> {
      * @return a windowed {@link KTable} that contains "update" records with unmodified keys, and values that represent
      * the latest (rolling) aggregate for each key per session
      */
-    <VR> KTable<Windowed<K>, VR> aggregate(final Initializer<VR> initializer,
+    <VR> KTable<Windowed<K>, VR> aggregate(final Initializer<K, VR> initializer,
                                            final Aggregator<? super K, ? super V, VR> aggregator,
                                            final Merger<? super K, VR> sessionMerger,
                                            final Named named);
@@ -363,7 +363,7 @@ public interface SessionWindowedKStream<K, V> {
      * @return a windowed {@link KTable} that contains "update" records with unmodified keys, and values that represent
      * the latest (rolling) aggregate for each key per session
      */
-    <VR> KTable<Windowed<K>, VR> aggregate(final Initializer<VR> initializer,
+    <VR> KTable<Windowed<K>, VR> aggregate(final Initializer<K, VR> initializer,
                                            final Aggregator<? super K, ? super V, VR> aggregator,
                                            final Merger<? super K, VR> sessionMerger,
                                            final Materialized<K, VR, SessionStore<Bytes, byte[]>> materialized);
@@ -425,7 +425,7 @@ public interface SessionWindowedKStream<K, V> {
      * @return a windowed {@link KTable} that contains "update" records with unmodified keys, and values that represent
      * the latest (rolling) aggregate for each key per session
      */
-    <VR> KTable<Windowed<K>, VR> aggregate(final Initializer<VR> initializer,
+    <VR> KTable<Windowed<K>, VR> aggregate(final Initializer<K, VR> initializer,
                                            final Aggregator<? super K, ? super V, VR> aggregator,
                                            final Merger<? super K, VR> sessionMerger,
                                            final Named named,

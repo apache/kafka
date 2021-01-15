@@ -88,7 +88,7 @@ public class RepartitionOptimizingTest {
     private Properties streamsConfiguration;
     private TopologyTestDriver topologyTestDriver;
 
-    private final Initializer<Integer> initializer = () -> 0;
+    private final Initializer<String, Integer> initializer = (String key) -> 0;
     private final Aggregator<String, String, Integer> aggregator = (k, v, agg) -> agg + v.length();
     private final Reducer<String> reducer = (v1, v2) -> v1 + ":" + v2;
 

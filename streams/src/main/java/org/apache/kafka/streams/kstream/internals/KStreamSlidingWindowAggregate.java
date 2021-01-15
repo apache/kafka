@@ -46,14 +46,14 @@ public class KStreamSlidingWindowAggregate<K, V, Agg> implements KStreamAggProce
 
     private final String storeName;
     private final SlidingWindows windows;
-    private final Initializer<Agg> initializer;
+    private final Initializer<K, Agg> initializer;
     private final Aggregator<? super K, ? super V, Agg> aggregator;
 
     private boolean sendOldValues = false;
 
     public KStreamSlidingWindowAggregate(final SlidingWindows windows,
                                          final String storeName,
-                                         final Initializer<Agg> initializer,
+                                         final Initializer<K, Agg> initializer,
                                          final Aggregator<? super K, ? super V, Agg> aggregator) {
         this.windows = windows;
         this.storeName = storeName;
@@ -365,7 +365,7 @@ public class KStreamSlidingWindowAggregate<K, V, Agg> implements KStreamAggProce
 
             if (combinedWindow == null) {
                 final TimeWindow window = new TimeWindow(0, windows.timeDifferenceMs());
-                final ValueAndTimestamp<Agg> valueAndTime = ValueAndTimestamp.make(initializer.apply(), inputRecordTimestamp);
+                final ValueAndTimestamp<Agg> valueAndTime = ValueAndTimestamp.make(initializer.apply(key), inputRecordTimestamp);
                 updateWindowAndForward(window, valueAndTime, key, value, closeTime, inputRecordTimestamp);
 
             } else {
@@ -399,7 +399,7 @@ public class KStreamSlidingWindowAggregate<K, V, Agg> implements KStreamAggProce
                 if (leftWindowNotEmpty(previousRecordTimestamp, inputRecordTimestamp)) {
                     valueAndTime = ValueAndTimestamp.make(leftWinAgg.value(), inputRecordTimestamp);
                 } else {
-                    valueAndTime = ValueAndTimestamp.make(initializer.apply(), inputRecordTimestamp);
+                    valueAndTime = ValueAndTimestamp.make(initializer.apply(key), inputRecordTimestamp);
                 }
                 final TimeWindow window = new TimeWindow(inputRecordTimestamp - windows.timeDifferenceMs(), inputRecordTimestamp);
                 updateWindowAndForward(window, valueAndTime, key, value, closeTime, inputRecordTimestamp);
@@ -432,7 +432,7 @@ public class KStreamSlidingWindowAggregate<K, V, Agg> implements KStreamAggProce
                                                      final V value,
                                                      final long closeTime) {
             final TimeWindow window = new TimeWindow(windowStart, windowStart + windows.timeDifferenceMs());
-            final ValueAndTimestamp<Agg> valueAndTime = ValueAndTimestamp.make(initializer.apply(), inputRecordTimestamp);
+            final ValueAndTimestamp<Agg> valueAndTime = ValueAndTimestamp.make(initializer.apply(key), inputRecordTimestamp);
             updateWindowAndForward(window, valueAndTime, key, value, closeTime, inputRecordTimestamp);
         }
 

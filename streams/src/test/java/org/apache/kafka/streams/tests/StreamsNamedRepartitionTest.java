@@ -58,7 +58,7 @@ public class StreamsNamedRepartitionTest {
         final boolean addOperators = Boolean.valueOf(Objects.requireNonNull((String) streamsProperties.remove("add.operations")));
 
 
-        final Initializer<Integer> initializer = () -> 0;
+        final Initializer<String, Integer> initializer = (String key) -> 0;
         final Aggregator<String, String, Integer> aggregator = (k, v, agg) -> agg + Integer.parseInt(v);
 
         final Function<String, String> keyFunction = s -> Integer.toString(Integer.parseInt(s) % 9);
