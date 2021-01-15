@@ -170,7 +170,7 @@ object ApiVersion {
     val apiKeys = controllerApiVersions match {
       case None => ApiVersionsResponse.defaultApiKeys(maxMagic)
       case Some(controllerApiVersion) => ApiVersionsResponse.intersectControllerApiVersions(
-        maxMagic, controllerApiVersion.fullApiVersions())
+        maxMagic, controllerApiVersion.allSupportedApiVersions())
     }
 
     if (maxMagic == RecordBatch.CURRENT_MAGIC_VALUE &&

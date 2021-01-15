@@ -33,7 +33,7 @@ import scala.concurrent.TimeoutException
 trait ForwardingManager {
   def forwardRequest(
     request: RequestChannel.Request,
-    responseCallback: Either[AbstractResponse, Errors] => Unit
+    responseCallback: Option[AbstractResponse] => Unit
   ): Unit
 
   def controllerApiVersions(): Option[NodeApiVersions]
@@ -77,9 +77,17 @@ class ForwardingManagerImpl(
     channelManager.shutdown()
   }
 
+  /**
+   * Forward given request to the active controller.
+   *
+   * @param request request to be forwarded
+   * @param responseCallback callback which takes in an `Option[AbstractResponse]`, where
+   *                         None is indicating that controller doesn't support the request
+   *                         version.
+   */
   override def forwardRequest(
     request: RequestChannel.Request,
-    responseCallback: Either[AbstractResponse, Errors] => Unit
+    responseCallback: Option[AbstractResponse] => Unit
   ): Unit = {
     val principalSerde = request.context.principalSerde.asScala.getOrElse(
       throw new IllegalArgumentException(s"Cannot deserialize principal from request $request " +
@@ -105,7 +113,7 @@ class ForwardingManagerImpl(
         // should close the connection with the client and let it reinitialize the connection and refresh
         // the controller API versions.
         if (envelopeError == Errors.UNSUPPORTED_VERSION) {
-          responseCallback(Right(Errors.UNSUPPORTED_VERSION))
+          responseCallback(None)
         } else {
           val response = if (envelopeError != Errors.NONE) {
             // A general envelope error indicates broker misconfiguration (e.g. the principal serde
@@ -118,14 +126,14 @@ class ForwardingManagerImpl(
           } else {
             parseResponse(envelopeResponse.responseData, requestBody, request.header)
           }
-          responseCallback(Left(response))
+          responseCallback(Option(response))
         }
       }
 
       override def onTimeout(): Unit = {
         debug(s"Forwarding of the request $request failed due to timeout exception")
         val response = request.body[AbstractRequest].getErrorResponse(new TimeoutException)
-        responseCallback(Left(response))
+        responseCallback(Option(response))
       }
     }
 

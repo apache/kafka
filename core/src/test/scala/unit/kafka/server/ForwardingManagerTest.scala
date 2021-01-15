@@ -74,7 +74,7 @@ class ForwardingManagerTest {
     })
 
     var response: AbstractResponse = null
-    forwardingManager.forwardRequest(request, result => response = result.swap.getOrElse(null))
+    forwardingManager.forwardRequest(request, result => response = result.orNull)
 
     assertNotNull(response)
     assertEquals(Map(Errors.UNKNOWN_SERVER_ERROR -> 1).asJava, response.errorCounts())
@@ -111,12 +111,10 @@ class ForwardingManagerTest {
 
     var response: AbstractResponse = null
     val connectionClosed = new AtomicBoolean(false)
-    forwardingManager.forwardRequest(request, result => result.fold(
-      res => response = res,
-      error => {
-      assertEquals(Errors.UNSUPPORTED_VERSION, error)
+    forwardingManager.forwardRequest(request, res => {
+      response = res.orNull
       connectionClosed.set(true)
-    }))
+    })
 
     assertTrue(connectionClosed.get())
     assertNull(response)

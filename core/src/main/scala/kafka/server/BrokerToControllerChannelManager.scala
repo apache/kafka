@@ -231,10 +231,10 @@ class BrokerToControllerRequestThread(
       requestQueue.putFirst(request)
     } else if (response.responseBody().errorCounts().containsKey(Errors.NOT_CONTROLLER)) {
       // just close the controller connection and wait for metadata cache update in doWork
-      activeControllerAddress().foreach(controllerAddress => {
+      activeControllerAddress().foreach { controllerAddress => {
         networkClient.disconnect(controllerAddress.idString)
         updateControllerAddress(null)
-      })
+      }}
 
       requestQueue.putFirst(request)
     } else {

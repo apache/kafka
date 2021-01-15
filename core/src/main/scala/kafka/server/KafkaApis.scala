@@ -138,8 +138,15 @@ class KafkaApis(val requestChannel: RequestChannel,
     request: RequestChannel.Request,
     handler: RequestChannel.Request => Unit
   ): Unit = {
-    def responseCallback(response: AbstractResponse): Unit = {
-      requestHelper.sendForwardedResponse(request, response)
+    def responseCallback(responseOpt: Option[AbstractResponse]): Unit = {
+      responseOpt match {
+        case Some(response) => requestHelper.sendForwardedResponse(request, response)
+        case None =>
+          info(s"The client connection will be closed due to controller responded " +
+            s"unsupported version exception during $request forwarding. " +
+            s"This could happen when the controller changed after the connection was established.")
+          requestHelper.closeConnection(request, Collections.emptyMap())
+      }
     }
 
     if (!request.isForwarded && !controller.isActive && isForwardingEnabled(request)) {

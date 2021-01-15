@@ -520,7 +520,7 @@ class KafkaApisTest {
 
     EasyMock.expect(forwardingManager.forwardRequest(
       EasyMock.eq(request),
-      anyObject[Either[AbstractResponse, Errors] => Unit]()
+      anyObject[Option[AbstractResponse] => Unit]()
     )).once()
 
     EasyMock.replay(replicaManager, clientRequestQuotaManager, requestChannel, controller, forwardingManager)

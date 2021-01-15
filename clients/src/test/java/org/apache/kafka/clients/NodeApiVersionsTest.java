@@ -127,6 +127,13 @@ public class NodeApiVersionsTest {
     }
 
     @Test
+    public void testLatestUsableVersionOutOfRange() {
+        NodeApiVersions apiVersions = NodeApiVersions.create(ApiKeys.PRODUCE.id, (short) 300, (short) 300);
+        assertThrows(UnsupportedVersionException.class,
+            () -> apiVersions.latestUsableVersion(ApiKeys.PRODUCE));
+    }
+
+    @Test
     public void testUsableVersionLatestVersions() {
         List<ApiVersion> versionList = new LinkedList<>();
         for (ApiVersionsResponseKey apiVersion: ApiVersionsResponse.DEFAULT_API_VERSIONS_RESPONSE.data().apiKeys()) {

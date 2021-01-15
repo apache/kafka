@@ -131,6 +131,13 @@ public class ApiVersionsResponse extends AbstractResponse {
         return apiKeys;
     }
 
+    /**
+     * Find the commonly agreed ApiVersions between local software and the controller.
+     *
+     * @param minMagic min inter broker magic
+     * @param activeControllerApiVersions controller ApiVersions
+     * @return commonly agreed ApiVersion collection
+     */
     public static ApiVersionsResponseKeyCollection intersectControllerApiVersions(final byte minMagic,
                                                                                   final Map<ApiKeys, ApiVersion> activeControllerApiVersions) {
         ApiVersionsResponseKeyCollection apiKeys = new ApiVersionsResponseKeyCollection();

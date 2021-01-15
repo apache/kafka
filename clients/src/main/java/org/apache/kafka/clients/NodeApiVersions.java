@@ -115,17 +115,19 @@ public class NodeApiVersions {
     }
 
     /**
-     * Return the most recent version supported by the local software.
+     * Return the most recent version supported by both the node and the local software.
      */
     public short latestUsableVersion(ApiKeys apiKey) {
-        return getSupportedVersion(apiKey).maxVersion;
+        return latestUsableVersion(apiKey, apiKey.oldestVersion(), apiKey.latestVersion());
     }
 
     /**
      * Get the latest version supported by the broker within an allowed range of versions
      */
     public short latestUsableVersion(ApiKeys apiKey, short oldestAllowedVersion, short latestAllowedVersion) {
-        ApiVersion supportedVersion = getSupportedVersion(apiKey);
+        if (!supportedVersions.containsKey(apiKey))
+            throw new UnsupportedVersionException("The broker does not support " + apiKey);
+        ApiVersion supportedVersion = supportedVersions.get(apiKey);
         Optional<ApiVersion> intersectVersion = supportedVersion.intersect(
             new ApiVersion(apiKey.id, oldestAllowedVersion, latestAllowedVersion));
 
@@ -135,12 +137,6 @@ public class NodeApiVersions {
             throw new UnsupportedVersionException("The broker does not support " + apiKey +
                 " with version in range [" + oldestAllowedVersion + "," + latestAllowedVersion + "]. The supported" +
                 " range is [" + supportedVersion.minVersion + "," + supportedVersion.maxVersion + "].");
-    }
-
-    private ApiVersion getSupportedVersion(ApiKeys apiKey) {
-        if (!supportedVersions.containsKey(apiKey))
-            throw new UnsupportedVersionException("The broker does not support " + apiKey);
-        return supportedVersions.get(apiKey);
     }
 
     /**
@@ -230,7 +226,7 @@ public class NodeApiVersions {
         return supportedVersions.get(apiKey);
     }
 
-    public Map<ApiKeys, ApiVersion> fullApiVersions() {
+    public Map<ApiKeys, ApiVersion> allSupportedApiVersions() {
         return supportedVersions;
     }
 }
