@@ -778,6 +778,15 @@ class KafkaConfigTest {
         case KafkaConfig.KafkaMetricsReporterClassesProp => // ignore
         case KafkaConfig.KafkaMetricsPollingIntervalSecondsProp => //ignore
 
+        // Raft Quorum Configs
+        case KafkaConfig.QuorumVotersProp => // ignore string
+        case KafkaConfig.QuorumElectionTimeoutMsProp => assertPropertyInvalid(baseProperties, name, "not_a_number")
+        case KafkaConfig.QuorumFetchTimeoutMsProp => assertPropertyInvalid(baseProperties, name, "not_a_number")
+        case KafkaConfig.QuorumElectionBackoffMsProp => assertPropertyInvalid(baseProperties, name, "not_a_number")
+        case KafkaConfig.QuorumLingerMsProp => assertPropertyInvalid(baseProperties, name, "not_a_number")
+        case KafkaConfig.QuorumRequestTimeoutMsProp => assertPropertyInvalid(baseProperties, name, "not_a_number")
+        case KafkaConfig.QuorumRetryBackoffMsProp => assertPropertyInvalid(baseProperties, name, "not_a_number")
+
         case _ => assertPropertyInvalid(baseProperties, name, "not_a_number", "-1")
       }
     }

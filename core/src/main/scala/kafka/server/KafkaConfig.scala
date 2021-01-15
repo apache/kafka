@@ -19,7 +19,6 @@ package kafka.server
 
 import java.util
 import java.util.{Collections, Locale, Properties}
-
 import kafka.api.{ApiVersion, ApiVersionValidator, KAFKA_0_10_0_IV1, KAFKA_2_1_IV0, KAFKA_2_7_IV0}
 import kafka.cluster.EndPoint
 import kafka.coordinator.group.OffsetConfig
@@ -40,6 +39,7 @@ import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.record.{LegacyRecord, Records, TimestampType}
 import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.common.utils.Utils
+import org.apache.kafka.raft.RaftConfig
 import org.apache.kafka.server.authorizer.Authorizer
 import org.apache.zookeeper.client.ZKClientConfig
 
@@ -264,6 +264,15 @@ object Defaults {
   val PasswordEncoderCipherAlgorithm = "AES/CBC/PKCS5Padding"
   val PasswordEncoderKeyLength = 128
   val PasswordEncoderIterations = 4096
+
+  /** ********* Raft Quorum Configuration *********/
+  val QuorumVoters = RaftConfig.QUORUM_VOTERS_DEFAULT
+  val QuorumElectionTimeoutMs = RaftConfig.QUORUM_ELECTION_TIMEOUT_MS_DEFAULT
+  val QuorumFetchTimeoutMs = RaftConfig.QUORUM_FETCH_TIMEOUT_MS_DEFAULT
+  val QuorumElectionBackoffMs = RaftConfig.QUORUM_ELECTION_BACKOFF_MAX_MS_DEFAULT
+  val QuorumLingerMs = RaftConfig.QUORUM_LINGER_MS_DEFAULT
+  val QuorumRequestTimeoutMs = RaftConfig.QUORUM_REQUEST_TIMEOUT_MS_DEFAULT
+  val QuorumRetryBackoffMs = RaftConfig.QUORUM_RETRY_BACKOFF_MS_DEFAULT
 }
 
 object KafkaConfig {
@@ -571,6 +580,15 @@ object KafkaConfig {
   val PasswordEncoderCipherAlgorithmProp = "password.encoder.cipher.algorithm"
   val PasswordEncoderKeyLengthProp =  "password.encoder.key.length"
   val PasswordEncoderIterationsProp =  "password.encoder.iterations"
+
+  /** ********* Raft Quorum Configuration *********/
+  val QuorumVotersProp = RaftConfig.QUORUM_VOTERS_CONFIG
+  val QuorumElectionTimeoutMsProp = RaftConfig.QUORUM_ELECTION_TIMEOUT_MS_CONFIG
+  val QuorumFetchTimeoutMsProp = RaftConfig.QUORUM_FETCH_TIMEOUT_MS_CONFIG
+  val QuorumElectionBackoffMsProp = RaftConfig.QUORUM_ELECTION_BACKOFF_MAX_MS_CONFIG
+  val QuorumLingerMsProp = RaftConfig.QUORUM_LINGER_MS_CONFIG
+  val QuorumRequestTimeoutMsProp = RaftConfig.QUORUM_REQUEST_TIMEOUT_MS_CONFIG
+  val QuorumRetryBackoffMsProp = RaftConfig.QUORUM_RETRY_BACKOFF_MS_CONFIG
 
   /* Documentation */
   /** ********* Zookeeper Configuration ***********/
@@ -985,6 +1003,15 @@ object KafkaConfig {
   val PasswordEncoderKeyLengthDoc =  "The key length used for encoding dynamically configured passwords."
   val PasswordEncoderIterationsDoc =  "The iteration count used for encoding dynamically configured passwords."
 
+  /** ********* Raft Quorum Configuration *********/
+  val QuorumVotersDoc = RaftConfig.QUORUM_VOTERS_DOC
+  val QuorumElectionTimeoutMsDoc = RaftConfig.QUORUM_ELECTION_TIMEOUT_MS_DOC
+  val QuorumFetchTimeoutMsDoc = RaftConfig.QUORUM_FETCH_TIMEOUT_MS_DOC
+  val QuorumElectionBackoffMsDoc = RaftConfig.QUORUM_ELECTION_BACKOFF_MAX_MS_DOC
+  val QuorumLingerMsDoc = RaftConfig.QUORUM_LINGER_MS_DOC
+  val QuorumRequestTimeoutMsDoc = RaftConfig.QUORUM_REQUEST_TIMEOUT_MS_DOC
+  val QuorumRetryBackoffMsDoc = RaftConfig.QUORUM_RETRY_BACKOFF_MS_DOC
+
   private val configDef = {
     import ConfigDef.Importance._
     import ConfigDef.Range._
@@ -1255,6 +1282,15 @@ object KafkaConfig {
       .define(PasswordEncoderCipherAlgorithmProp, STRING, Defaults.PasswordEncoderCipherAlgorithm, LOW, PasswordEncoderCipherAlgorithmDoc)
       .define(PasswordEncoderKeyLengthProp, INT, Defaults.PasswordEncoderKeyLength, atLeast(8), LOW, PasswordEncoderKeyLengthDoc)
       .define(PasswordEncoderIterationsProp, INT, Defaults.PasswordEncoderIterations, atLeast(1024), LOW, PasswordEncoderIterationsDoc)
+
+      /** ********* Raft Quorum Configuration *********/
+      .define(QuorumVotersProp, LIST, Defaults.QuorumVoters, HIGH, QuorumVotersDoc)
+      .define(QuorumElectionTimeoutMsProp, INT, Defaults.QuorumElectionTimeoutMs, HIGH, QuorumElectionTimeoutMsDoc)
+      .define(QuorumFetchTimeoutMsProp, INT, Defaults.QuorumFetchTimeoutMs, HIGH, QuorumFetchTimeoutMsDoc)
+      .define(QuorumElectionBackoffMsProp, INT, Defaults.QuorumElectionBackoffMs, HIGH, QuorumElectionBackoffMsDoc)
+      .define(QuorumLingerMsProp, INT, Defaults.QuorumLingerMs, MEDIUM, QuorumLingerMsDoc)
+      .define(QuorumRequestTimeoutMsProp, INT, Defaults.QuorumRequestTimeoutMs, MEDIUM, QuorumRequestTimeoutMsDoc)
+      .define(QuorumRetryBackoffMsProp, INT, Defaults.QuorumRetryBackoffMs, LOW, QuorumRetryBackoffMsDoc)
   }
 
   def configNames: Seq[String] = configDef.names.asScala.toBuffer.sorted

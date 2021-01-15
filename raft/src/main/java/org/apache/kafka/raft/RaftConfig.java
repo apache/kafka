@@ -28,7 +28,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
-import static org.apache.kafka.clients.CommonClientConfigs.REQUEST_TIMEOUT_MS_DOC;
 import static org.apache.kafka.common.config.ConfigDef.Range.atLeast;
 
 public class RaftConfig extends AbstractConfig {
@@ -37,49 +36,56 @@ public class RaftConfig extends AbstractConfig {
     private static final String QUORUM_PREFIX = "quorum.";
 
     public static final String QUORUM_VOTERS_CONFIG = QUORUM_PREFIX + "voters";
-    private static final String QUORUM_VOTERS_DOC = "Map of id/endpoint information for " +
+    public static final String QUORUM_VOTERS_DOC = "Map of id/endpoint information for " +
         "the set of voters in a comma-separated list of `{id}@{host}:{port}` entries. " +
         "For example: `1@localhost:9092,2@localhost:9093,3@localhost:9094`";
+    public static final String QUORUM_VOTERS_DEFAULT = "";
 
     public static final String QUORUM_ELECTION_TIMEOUT_MS_CONFIG = QUORUM_PREFIX + "election.timeout.ms";
-    private static final String QUORUM_ELECTION_TIMEOUT_MS_DOC = "Maximum time in milliseconds to wait " +
+    public static final String QUORUM_ELECTION_TIMEOUT_MS_DOC = "Maximum time in milliseconds to wait " +
         "without being able to fetch from the leader before triggering a new election";
+    public static final int QUORUM_ELECTION_TIMEOUT_MS_DEFAULT = 5_000;
 
     public static final String QUORUM_FETCH_TIMEOUT_MS_CONFIG = QUORUM_PREFIX + "fetch.timeout.ms";
-    private static final String QUORUM_FETCH_TIMEOUT_MS_DOC = "Maximum time without a successful fetch from " +
+    public static final String QUORUM_FETCH_TIMEOUT_MS_DOC = "Maximum time without a successful fetch from " +
         "the current leader before becoming a candidate and triggering a election for voters; Maximum time without " +
         "receiving fetch from a majority of the quorum before asking around to see if there's a new epoch for leader";
+    public static final int QUORUM_FETCH_TIMEOUT_MS_DEFAULT = 15_000;
 
     public static final String QUORUM_ELECTION_BACKOFF_MAX_MS_CONFIG = QUORUM_PREFIX + "election.backoff.max.ms";
-    private static final String QUORUM_ELECTION_BACKOFF_MAX_MS_DOC = "Maximum time in milliseconds before starting new elections. " +
+    public static final String QUORUM_ELECTION_BACKOFF_MAX_MS_DOC = "Maximum time in milliseconds before starting new elections. " +
         "This is used in the binary exponential backoff mechanism that helps prevent gridlocked elections";
+    public static final int QUORUM_ELECTION_BACKOFF_MAX_MS_DEFAULT = 5_000;
 
     public static final String QUORUM_LINGER_MS_CONFIG = QUORUM_PREFIX + "append.linger.ms";
-    private static final String QUORUM_LINGER_MS_DOC = "The duration in milliseconds that the leader will " +
+    public static final String QUORUM_LINGER_MS_DOC = "The duration in milliseconds that the leader will " +
         "wait for writes to accumulate before flushing them to disk.";
+    public static final int QUORUM_LINGER_MS_DEFAULT = 25;
 
-    // Package-private for testing
-    static final String QUORUM_REQUEST_TIMEOUT_MS_CONFIG = QUORUM_PREFIX +
+    public static final String QUORUM_REQUEST_TIMEOUT_MS_CONFIG = QUORUM_PREFIX +
         CommonClientConfigs.REQUEST_TIMEOUT_MS_CONFIG;
+    public static final String QUORUM_REQUEST_TIMEOUT_MS_DOC = CommonClientConfigs.REQUEST_TIMEOUT_MS_DOC;
+    public static final int QUORUM_REQUEST_TIMEOUT_MS_DEFAULT = 20_000;
 
-    // Package-private for testing
-    static final String QUORUM_RETRY_BACKOFF_MS_CONFIG = QUORUM_PREFIX +
+    public static final String QUORUM_RETRY_BACKOFF_MS_CONFIG = QUORUM_PREFIX +
         CommonClientConfigs.RETRY_BACKOFF_MS_CONFIG;
+    public static final String QUORUM_RETRY_BACKOFF_MS_DOC = CommonClientConfigs.RETRY_BACKOFF_MS_DOC;
+    public static final int QUORUM_RETRY_BACKOFF_MS_DEFAULT = 100;
 
     static {
         CONFIG = new ConfigDef()
             .define(QUORUM_REQUEST_TIMEOUT_MS_CONFIG,
                 ConfigDef.Type.INT,
-                20000,
+                QUORUM_REQUEST_TIMEOUT_MS_DEFAULT,
                 atLeast(0),
                 ConfigDef.Importance.MEDIUM,
-                REQUEST_TIMEOUT_MS_DOC)
+                QUORUM_REQUEST_TIMEOUT_MS_DOC)
             .define(QUORUM_RETRY_BACKOFF_MS_CONFIG,
                 ConfigDef.Type.INT,
-                100,
+                QUORUM_RETRY_BACKOFF_MS_DEFAULT,
                 atLeast(0L),
                 ConfigDef.Importance.LOW,
-                CommonClientConfigs.RETRY_BACKOFF_MS_DOC)
+                QUORUM_RETRY_BACKOFF_MS_DOC)
             .define(QUORUM_VOTERS_CONFIG,
                 ConfigDef.Type.LIST,
                 ConfigDef.NO_DEFAULT_VALUE,
@@ -106,25 +112,25 @@ public class RaftConfig extends AbstractConfig {
                 QUORUM_VOTERS_DOC)
             .define(QUORUM_ELECTION_TIMEOUT_MS_CONFIG,
                 ConfigDef.Type.INT,
-                5000,
+                QUORUM_ELECTION_TIMEOUT_MS_DEFAULT,
                 atLeast(0L),
                 ConfigDef.Importance.HIGH,
                 QUORUM_ELECTION_TIMEOUT_MS_DOC)
             .define(QUORUM_ELECTION_BACKOFF_MAX_MS_CONFIG,
                 ConfigDef.Type.INT,
-                5000,
+                QUORUM_ELECTION_BACKOFF_MAX_MS_DEFAULT,
                 atLeast(0),
                 ConfigDef.Importance.HIGH,
                 QUORUM_ELECTION_BACKOFF_MAX_MS_DOC)
             .define(QUORUM_FETCH_TIMEOUT_MS_CONFIG,
                 ConfigDef.Type.INT,
-                15000,
+                QUORUM_FETCH_TIMEOUT_MS_DEFAULT,
                 atLeast(0),
                 ConfigDef.Importance.HIGH,
                 QUORUM_FETCH_TIMEOUT_MS_DOC)
             .define(QUORUM_LINGER_MS_CONFIG,
                 ConfigDef.Type.INT,
-                25,
+                QUORUM_LINGER_MS_DEFAULT,
                 atLeast(0),
                 ConfigDef.Importance.MEDIUM,
                 QUORUM_LINGER_MS_DOC);
