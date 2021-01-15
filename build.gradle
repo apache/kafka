@@ -242,9 +242,9 @@ subprojects {
   }
 
   // Remove the relevant project name once it's converted to JUnit 5
-  def shouldUseJUnit5 = !(["api", "connect", "core", "file", "generator",
-    "json", "mirror", "mirror-client", "runtime", "transform", "streams-scala",
-     "streams"].contains(it.project.name) || it.project.name.startsWith("upgrade-system-tests-"))
+  def shouldUseJUnit5 = !(["api", "connect", "core", "file", "generator", "json", "mirror",
+    "runtime", "transform", "examples", "streams-scala", "streams"].contains(it.project.name) ||
+    it.project.name.startsWith("upgrade-system-tests-"))
 
   def testLoggingEvents = ["passed", "skipped", "failed"]
   def testShowStandardStreams = false
@@ -2200,8 +2200,7 @@ project(':connect:mirror-client') {
     compile project(':clients')
     compile libs.slf4jApi
 
-    testCompile libs.junitJupiterApi
-    testCompile libs.junitVintageEngine
+    testCompile libs.junitJupiter
     testCompile project(':clients').sourceSets.test.output
 
     testRuntime libs.slf4jlog4j
