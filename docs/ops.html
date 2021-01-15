@@ -2048,7 +2048,7 @@ dropped-records-rate and dropped-records-total which have a recording level of <
   statistics in <a href="https://github.com/facebook/rocksdb/wiki/Statistics#stats-level-and-performance-costs">RocksDB
   may have an impact on performance</a>.
   Statistics-based metrics are collected every minute from the RocksDB state stores.
-  If a state store consists of multiple RocksDB instances as it is the case for aggregations over time and session windows,
+  If a state store consists of multiple RocksDB instances, as is the case for aggregations over time and session windows,
   each metric reports an aggregation over the RocksDB instances of the state store.
 
   <table class="data-table">
@@ -2145,8 +2145,8 @@ dropped-records-rate and dropped-records-total which have a recording level of <
   <strong>RocksDB Properties-based Metrics:</strong>
   All of the following properties-based metrics have a recording level of <code>info</code> and are recorded when the
   metrics are accessed.
-  If a state store consists of multiple RocksDB instances as it is the case for aggregations over time and session windows,
-  each metric reports the sum over the RocksDB instances of the state store, except for the block cache metrics
+  If a state store consists of multiple RocksDB instances, as is the case for aggregations over time and session windows,
+  each metric reports the sum over all the RocksDB instances of the state store, except for the block cache metrics
   <code>block-cache-*</code>. The block cache metrics report the sum over all RocksDB instances if each instance uses its
   own block cache, and they report the recorded value from only one instance if a single block cache is shared
   among all instances.
@@ -2221,7 +2221,7 @@ dropped-records-rate and dropped-records-total which have a recording level of <
     <tr>
       <td>estimate-pending-compaction-bytes</td>
       <td>The estimated total number of bytes a compaction needs to rewrite on disk to get all levels down to under
-        target size (only valid for level compaction.</td>
+        target size (only valid for level compaction).</td>
       <td>kafka.streams:type=stream-state-metrics,thread-id=([-.\w]+),task-id=([-.\w]+),[store-scope]-id=([-.\w]+)</td>
     </tr>
     <tr>
