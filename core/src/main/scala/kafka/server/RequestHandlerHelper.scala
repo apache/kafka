@@ -26,8 +26,11 @@ import kafka.utils.Logging
 import org.apache.kafka.common.errors.ClusterAuthorizationException
 import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.network.Send
+import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests.{AbstractRequest, AbstractResponse}
 import org.apache.kafka.common.utils.Time
+
+import scala.jdk.CollectionConverters._
 
 
 object RequestHandlerHelper {
@@ -84,7 +87,7 @@ class RequestHandlerHelper(requestChannel: RequestChannel,
     // the request was forwarded to
     val throttleTimeMs = response.throttleTimeMs()
     quotas.request.throttle(request, throttleTimeMs, requestChannel.sendResponse)
-    requestChannel.sendResponse(request, Some(response), None)
+    sendResponse(request, Some(response), None)
   }
 
   // Throttle the channel if the request quota is enabled but has been violated. Regardless of throttling, send the
@@ -95,7 +98,7 @@ class RequestHandlerHelper(requestChannel: RequestChannel,
     // Only throttle non-forwarded requests
     if (!request.isForwarded)
       quotas.request.throttle(request, throttleTimeMs, requestChannel.sendResponse)
-    requestChannel.sendResponse(request, Some(createResponse(throttleTimeMs)), None)
+    sendResponse(request, Some(createResponse(throttleTimeMs)), None)
   }
 
   def sendErrorResponseMaybeThrottle(request: RequestChannel.Request, error: Throwable): Unit = {
@@ -103,7 +106,7 @@ class RequestHandlerHelper(requestChannel: RequestChannel,
     // Only throttle non-forwarded requests or cluster authorization failures
     if (error.isInstanceOf[ClusterAuthorizationException] || !request.isForwarded)
       quotas.request.throttle(request, throttleTimeMs, requestChannel.sendResponse)
-    requestChannel.sendErrorOrCloseConnection(request, error, throttleTimeMs)
+    sendErrorOrCloseConnection(request, error, throttleTimeMs)
   }
 
   def maybeRecordAndGetThrottleTimeMs(request: RequestChannel.Request): Int = {
@@ -133,23 +136,60 @@ class RequestHandlerHelper(requestChannel: RequestChannel,
       }
     }
 
-    requestChannel.sendResponse(request, Some(createResponse(maxThrottleTimeMs)), None)
+    sendResponse(request, Some(createResponse(maxThrottleTimeMs)), None)
   }
 
   def sendResponseExemptThrottle(request: RequestChannel.Request,
                                  response: AbstractResponse,
                                  onComplete: Option[Send => Unit] = None): Unit = {
     quotas.request.maybeRecordExempt(request)
-    requestChannel.sendResponse(request, Some(response), onComplete)
+    sendResponse(request, Some(response), onComplete)
+  }
+
+  def sendErrorOrCloseConnection(request: RequestChannel.Request, error: Throwable, throttleMs: Int): Unit = {
+    val requestBody = request.body[AbstractRequest]
+    val response = requestBody.getErrorResponse(throttleMs, error)
+    if (response == null)
+      closeConnection(request, requestBody.errorCounts(error))
+    else
+      sendResponse(request, Some(response), None)
   }
 
   def sendErrorResponseExemptThrottle(request: RequestChannel.Request, error: Throwable): Unit = {
     quotas.request.maybeRecordExempt(request)
-    requestChannel.sendErrorOrCloseConnection(request, error, 0)
+    sendErrorOrCloseConnection(request, error, 0)
   }
 
   def sendNoOpResponseExemptThrottle(request: RequestChannel.Request): Unit = {
     quotas.request.maybeRecordExempt(request)
-    requestChannel.sendResponse(request, None, None)
+    sendResponse(request, None, None)
+  }
+
+  def closeConnection(request: RequestChannel.Request, errorCounts: java.util.Map[Errors, Integer]): Unit = {
+    // This case is used when the request handler has encountered an error, but the client
+    // does not expect a response (e.g. when produce request has acks set to 0)
+    requestChannel.updateErrorMetrics(request.header.apiKey, errorCounts.asScala)
+    requestChannel.sendResponse(new RequestChannel.CloseConnectionResponse(request))
+  }
+
+  def sendResponse(request: RequestChannel.Request,
+                   responseOpt: Option[AbstractResponse],
+                   onComplete: Option[Send => Unit]): Unit = {
+    // Update error metrics for each error code in the response including Errors.NONE
+    responseOpt.foreach(response => requestChannel.updateErrorMetrics(request.header.apiKey, response.errorCounts.asScala))
+
+    val response = responseOpt match {
+      case Some(response) =>
+        new RequestChannel.SendResponse(
+          request,
+          request.buildResponseSend(response),
+          request.responseNode(response),
+          onComplete
+        )
+      case None =>
+        new RequestChannel.NoOpResponse(request)
+    }
+
+    requestChannel.sendResponse(response)
   }
 }

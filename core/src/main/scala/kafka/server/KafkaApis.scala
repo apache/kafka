@@ -219,11 +219,11 @@ class KafkaApis(val requestChannel: RequestChannel,
 
         // Until we are ready to integrate the Raft layer, these APIs are treated as
         // unexpected and we just close the connection.
-        case ApiKeys.VOTE => requestChannel.closeConnection(request, util.Collections.emptyMap())
-        case ApiKeys.BEGIN_QUORUM_EPOCH => requestChannel.closeConnection(request, util.Collections.emptyMap())
-        case ApiKeys.END_QUORUM_EPOCH => requestChannel.closeConnection(request, util.Collections.emptyMap())
-        case ApiKeys.DESCRIBE_QUORUM => requestChannel.closeConnection(request, util.Collections.emptyMap())
-        case ApiKeys.FETCH_SNAPSHOT => requestChannel.closeConnection(request, util.Collections.emptyMap())
+        case ApiKeys.VOTE => requestHelper.closeConnection(request, util.Collections.emptyMap())
+        case ApiKeys.BEGIN_QUORUM_EPOCH => requestHelper.closeConnection(request, util.Collections.emptyMap())
+        case ApiKeys.END_QUORUM_EPOCH => requestHelper.closeConnection(request, util.Collections.emptyMap())
+        case ApiKeys.DESCRIBE_QUORUM => requestHelper.closeConnection(request, util.Collections.emptyMap())
+        case ApiKeys.FETCH_SNAPSHOT => requestHelper.closeConnection(request, util.Collections.emptyMap())
 
       }
     } catch {
@@ -632,14 +632,14 @@ class KafkaApis(val requestChannel: RequestChannel,
               s"from client id ${request.header.clientId} with ack=0\n" +
               s"Topic and partition to exceptions: $exceptionsSummary"
           )
-          requestChannel.closeConnection(request, new ProduceResponse(mergedResponseStatus.asJava).errorCounts)
+          requestHelper.closeConnection(request, new ProduceResponse(mergedResponseStatus.asJava).errorCounts)
         } else {
           // Note that although request throttling is exempt for acks == 0, the channel may be throttled due to
           // bandwidth quota violation.
           requestHelper.sendNoOpResponseExemptThrottle(request)
         }
       } else {
-        requestChannel.sendResponse(request, Some(new ProduceResponse(mergedResponseStatus.asJava, maxThrottleTimeMs)), None)
+        requestHelper.sendResponse(request, Some(new ProduceResponse(mergedResponseStatus.asJava, maxThrottleTimeMs)), None)
       }
     }
 
@@ -904,7 +904,7 @@ class KafkaApis(val requestChannel: RequestChannel,
         }
 
         // Send the response immediately.
-        requestChannel.sendResponse(request, Some(createResponse(maxThrottleTimeMs)), Some(updateConversionStats))
+        requestHelper.sendResponse(request, Some(createResponse(maxThrottleTimeMs)), Some(updateConversionStats))
       }
     }
 
@@ -3218,13 +3218,13 @@ class KafkaApis(val requestChannel: RequestChannel,
     if (!config.metadataQuorumEnabled) {
       info(s"Closing connection ${request.context.connectionId} because it sent an `Envelope` " +
         s"request, which is not accepted without enabling the internal config ${KafkaConfig.EnableMetadataQuorumProp}")
-      requestChannel.closeConnection(request, Collections.emptyMap())
+      requestHelper.closeConnection(request, Collections.emptyMap())
       return
     } else if (!request.context.fromPrivilegedListener) {
       info(s"Closing connection ${request.context.connectionId} from listener ${request.context.listenerName} " +
         s"because it sent an `Envelope` request, which is only accepted on the inter-broker listener " +
         s"${config.interBrokerListenerName}.")
-      requestChannel.closeConnection(request, Collections.emptyMap())
+      requestHelper.closeConnection(request, Collections.emptyMap())
       return
     } else if (!authorize(request.context, CLUSTER_ACTION, CLUSTER, CLUSTER_NAME)) {
       requestHelper.sendErrorResponseMaybeThrottle(request, new ClusterAuthorizationException(
