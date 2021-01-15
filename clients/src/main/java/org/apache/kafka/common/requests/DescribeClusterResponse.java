@@ -24,7 +24,6 @@ import java.util.stream.Collectors;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.message.DescribeClusterResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
-import org.apache.kafka.common.protocol.ApiMessage;
 import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
 
@@ -54,7 +53,7 @@ public class DescribeClusterResponse extends AbstractResponse {
     }
 
     @Override
-    public ApiMessage data() {
+    public DescribeClusterResponseData data() {
         return data;
     }
 

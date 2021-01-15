@@ -21,7 +21,6 @@ import java.nio.ByteBuffer;
 import org.apache.kafka.common.message.DescribeClusterRequestData;
 import org.apache.kafka.common.message.DescribeClusterResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
-import org.apache.kafka.common.protocol.ApiMessage;
 import org.apache.kafka.common.protocol.ByteBufferAccessor;
 
 public class DescribeClusterRequest extends AbstractRequest {
@@ -54,7 +53,7 @@ public class DescribeClusterRequest extends AbstractRequest {
     }
 
     @Override
-    public ApiMessage data() {
+    public DescribeClusterRequestData data() {
         return data;
     }
 
