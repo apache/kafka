@@ -17,7 +17,6 @@
 package kafka.raft
 
 import kafka.log.{Log, LogConfig, LogManager}
-import kafka.raft.KafkaRaftManager.RaftIoThread
 import kafka.server.{BrokerTopicStats, KafkaConfig, KafkaServer, LogDirFailureChannel}
 import kafka.utils.timer.SystemTimer
 import kafka.utils.{KafkaScheduler, Logging, LogIdent, ShutdownableThread}
@@ -44,7 +43,6 @@ object KafkaRaftManager extends Logging {
     isInterruptible = false
   ) {
 
-    import ShutdownableThread._
     override def doWork(): Unit = {
       client.poll()
     }
@@ -53,9 +51,9 @@ object KafkaRaftManager extends Logging {
       if (super.initiateShutdown()) {
         client.shutdown(5000).whenComplete { (_, exception) =>
           if (exception != null) {
-            error("Graceful shutdown of RaftClient failed", exception)
+            ShutdownableThread.error("Graceful shutdown of RaftClient failed", exception)
           } else {
-            info("Completed graceful shutdown of RaftClient")
+            ShutdownableThread.info("Completed graceful shutdown of RaftClient")
           }
         }
         true
@@ -108,7 +106,7 @@ class KafkaRaftManager[T](
 
   private val raftConfig = new RaftConfig(config.originals)
   private val logContext = new LogContext(s"[RaftManager $nodeId] ")
-  private implicit val logIdent  = Some(LogIdent(logContext.logPrefix()))
+  protected implicit val logIdent  = Some(LogIdent(logContext.logPrefix()))
 
   private val scheduler = new KafkaScheduler(threads = 1)
   scheduler.startup()
@@ -123,6 +121,7 @@ class KafkaRaftManager[T](
     netChannel.start()
     raftClient.initialize(raftConfig)
     raftIoThread.start()
+    debug("RaftManager started")
   }
 
   def shutdown(): Unit = {
