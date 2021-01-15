@@ -989,20 +989,18 @@ public class KafkaStreams implements AutoCloseable {
     public Optional<String> removeStreamThread() {
         if (isRunningOrRebalancing()) {
             synchronized (changeThreadCount) {
-                synchronized (threads) {
-                    final Iterator<StreamThread> iter = threads.iterator();
-                    while (iter.hasNext()) {
-                        final StreamThread streamThread = iter.next();
-                        if (streamThread.isAlive() && (!streamThread.getName().equals(Thread.currentThread().getName()) || threads.size() == 1)) {
-                            streamThread.shutdown();
-                            if (!streamThread.getName().equals(Thread.currentThread().getName())) {
-                                streamThread.waitOnThreadState(StreamThread.State.DEAD);
-                            }
-                            iter.remove();
-                            final long cacheSizePerThread = getCacheSizePerThread(threads.size());
-                            resizeThreadCache(cacheSizePerThread);
-                            return Optional.of(streamThread.getName());
+                // make a copy of threads to avoid holding lock
+                for (StreamThread streamThread : new ArrayList<>(threads)) {
+                    if (streamThread.isAlive() && (!streamThread.getName().equals(Thread.currentThread().getName())
+                            || threads.size() == 1)) {
+                        streamThread.shutdown();
+                        if (!streamThread.getName().equals(Thread.currentThread().getName())) {
+                            streamThread.waitOnThreadState(StreamThread.State.DEAD);
                         }
+                        threads.remove(streamThread);
+                        final long cacheSizePerThread = getCacheSizePerThread(threads.size());
+                        resizeThreadCache(cacheSizePerThread);
+                        return Optional.of(streamThread.getName());
                     }
                 }
             }
