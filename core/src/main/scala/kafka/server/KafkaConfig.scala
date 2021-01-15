@@ -353,7 +353,7 @@ object KafkaConfig {
   val RequestTimeoutMsProp = CommonClientConfigs.REQUEST_TIMEOUT_MS_CONFIG
   val ConnectionSetupTimeoutMsProp = CommonClientConfigs.SOCKET_CONNECTION_SETUP_TIMEOUT_MS_CONFIG
   val ConnectionSetupTimeoutMaxMsProp = CommonClientConfigs.SOCKET_CONNECTION_SETUP_TIMEOUT_MAX_MS_CONFIG
-  val EnableMetadataQuorumProp = "enable.metadata.quorum" // TODO: Let's remove this
+  val EnableMetadataQuorumProp = "enable.metadata.quorum"
   val ProcessRolesProp = "process.roles"
 
   /************* Authorizer Configuration ***********/
@@ -1462,7 +1462,8 @@ class KafkaConfig(val props: java.util.Map[_, _], doLog: Boolean, dynamicConfigO
     val roles = getList(KafkaConfig.ProcessRolesProp).asScala.map {
       case "broker" => BrokerRole
       case "controller" => ControllerRole
-      case role => throw new ConfigException(s"Unknown process role $role")
+      case role => throw new ConfigException(s"Unknown process role '$role'" +
+        " (only 'broker' and 'controller' are allowed roles)")
     }
 
     val distinctRoles: Set[ProcessRole] = roles.toSet
