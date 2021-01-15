@@ -161,6 +161,11 @@ public class EmbeddedKafkaCluster extends ExternalResource {
         producerProps.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers());
         producerProps.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.ByteArraySerializer");
         producerProps.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.ByteArraySerializer");
+        if (sslEnabled()) {
+            producerProps.put(SslConfigs.SSL_TRUSTSTORE_LOCATION_CONFIG, brokerConfig.get(SslConfigs.SSL_TRUSTSTORE_LOCATION_CONFIG));
+            producerProps.put(SslConfigs.SSL_TRUSTSTORE_PASSWORD_CONFIG, brokerConfig.get(SslConfigs.SSL_TRUSTSTORE_PASSWORD_CONFIG));
+            producerProps.put(CommonClientConfigs.SECURITY_PROTOCOL_CONFIG, "SSL");
+        }
         producer = new KafkaProducer<>(producerProps);
     }
 
@@ -277,6 +282,11 @@ public class EmbeddedKafkaCluster extends ExternalResource {
             // Broker failed to respond.
             return false;
         }
+    }
+    
+    public boolean sslEnabled() {
+        final String listeners = brokerConfig.getProperty(KafkaConfig$.MODULE$.ListenersProp());
+        return listeners != null && listeners.contains("SSL");
     }
 
     /**
@@ -444,7 +454,11 @@ public class EmbeddedKafkaCluster extends ExternalResource {
         putIfAbsent(props, AUTO_OFFSET_RESET_CONFIG, "earliest");
         putIfAbsent(props, KEY_DESERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.ByteArrayDeserializer");
         putIfAbsent(props, VALUE_DESERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.ByteArrayDeserializer");
-
+        if (sslEnabled()) {
+            putIfAbsent(props, SslConfigs.SSL_TRUSTSTORE_LOCATION_CONFIG, brokerConfig.get(SslConfigs.SSL_TRUSTSTORE_LOCATION_CONFIG));
+            putIfAbsent(props, SslConfigs.SSL_TRUSTSTORE_PASSWORD_CONFIG, brokerConfig.get(SslConfigs.SSL_TRUSTSTORE_PASSWORD_CONFIG));
+            putIfAbsent(props, CommonClientConfigs.SECURITY_PROTOCOL_CONFIG, "SSL");
+        }
         KafkaConsumer<byte[], byte[]> consumer;
         try {
             consumer = new KafkaConsumer<>(props);
