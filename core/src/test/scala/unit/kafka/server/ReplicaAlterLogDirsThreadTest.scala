@@ -342,8 +342,7 @@ class ReplicaAlterLogDirsThreadTest {
         .setEndOffset(leoT1p1)
     )
 
-    assertEquals(expected,
-                 result, "results from leader epoch request should have offset from local replica")
+    assertEquals(expected, result, "results from leader epoch request should have offset from local replica")
   }
 
   @Test

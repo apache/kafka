@@ -583,15 +583,7 @@ class ProducerStateManagerTest {
     val outOfOrderSequence = 3
 
     // First we ensure that we raise an OutOfOrderSequenceException is raised when the append comes from a client.
-    try {
-      append(stateManager, producerId, epoch, outOfOrderSequence, 1L, 1, origin = AppendOrigin.Client)
-      fail("Expected an OutOfOrderSequenceException to be raised.")
-    } catch {
-      case _ : OutOfOrderSequenceException =>
-      // Good!
-      case _ : Exception =>
-        fail("Expected an OutOfOrderSequenceException to be raised.")
-    }
+    assertThrows(classOf[OutOfOrderSequenceException], () => append(stateManager, producerId, epoch, outOfOrderSequence, 1L, 1, origin = AppendOrigin.Client))
 
     assertEquals(0L, stateManager.activeProducers(producerId).lastSeq)
     append(stateManager, producerId, epoch, outOfOrderSequence, 1L, 1, origin = AppendOrigin.Replication)
@@ -816,12 +808,7 @@ class ProducerStateManagerTest {
     appendEndTxnMarker(stateManager, producerId, epoch, ControlRecordType.COMMIT, offset = 102, coordinatorEpoch = 2)
 
     // old epochs are not allowed
-    try {
-      appendEndTxnMarker(stateManager, producerId, epoch, ControlRecordType.COMMIT, offset = 103, coordinatorEpoch = 1)
-      fail("Expected coordinator to be fenced")
-    } catch {
-      case e: TransactionCoordinatorFencedException =>
-    }
+    assertThrows(classOf[TransactionCoordinatorFencedException], () => appendEndTxnMarker(stateManager, producerId, epoch, ControlRecordType.COMMIT, offset = 103, coordinatorEpoch = 1))
   }
 
   @Test

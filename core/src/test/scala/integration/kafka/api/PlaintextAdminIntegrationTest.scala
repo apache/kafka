@@ -2139,10 +2139,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
     val validLoggerName = "kafka.server.KafkaRequestHandler"
     val expectedValidLoggerLogLevel = describeBrokerLoggers().get(validLoggerName)
     def assertLogLevelDidNotChange(): Unit = {
-      assertEquals(
-        expectedValidLoggerLogLevel,
-        describeBrokerLoggers().get(validLoggerName)
-      )
+      assertEquals(expectedValidLoggerLogLevel, describeBrokerLoggers().get(validLoggerName))
     }
 
     val appendLogLevelEntries = Seq(

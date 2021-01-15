@@ -31,7 +31,7 @@ import org.apache.kafka.common.requests.{AlterUserScramCredentialsRequest, Alter
 import org.apache.kafka.common.security.auth.{AuthenticationContext, KafkaPrincipal, KafkaPrincipalBuilder}
 import org.apache.kafka.server.authorizer.{Action, AuthorizableRequestContext, AuthorizationResult}
 import org.junit.jupiter.api.Assertions._
-import org.junit.jupiter.api.{BeforeEach, Test, TestInfo}
+import org.junit.jupiter.api.Test
 
 import scala.jdk.CollectionConverters._
 
@@ -41,25 +41,10 @@ import scala.jdk.CollectionConverters._
  * Also tests the Alter and Describe APIs for the case where credentials are successfully altered/described.
  */
 class AlterUserScramCredentialsRequestTest extends BaseRequestTest {
-
-  private[this] var className = classOf[AlterCredentialsTest.TestPrincipalBuilderReturningAuthorized].getName
-
-  override def setUp(): Unit = {
-    // do nothing as we will setup cluster by 'before'
-  }
-
-  @BeforeEach
-  def before(info: TestInfo): Unit = {
-    if (info.getDisplayName.contains("NotAuthorized"))
-      className = classOf[AlterCredentialsTest.TestPrincipalBuilderReturningUnauthorized].getName
-
-    super.setUp()
-  }
-
   override def brokerPropertyOverrides(properties: Properties): Unit = {
     properties.put(KafkaConfig.ControlledShutdownEnableProp, "false")
     properties.put(KafkaConfig.AuthorizerClassNameProp, classOf[AlterCredentialsTest.TestAuthorizer].getName)
-    properties.put(KafkaConfig.PrincipalBuilderClassProp, className)
+    properties.put(KafkaConfig.PrincipalBuilderClassProp, classOf[AlterCredentialsTest.TestPrincipalBuilderReturningAuthorized].getName)
   }
 
   private val saltedPasswordBytes = "saltedPassword".getBytes(StandardCharsets.UTF_8)
@@ -78,32 +63,6 @@ class AlterUserScramCredentialsRequestTest extends BaseRequestTest {
 
     val results = response.data.results
     assertEquals(0, results.size)
-  }
-
-  @Test
-  def testAlterNothingNotAuthorized(): Unit = {
-    val request = new AlterUserScramCredentialsRequest.Builder(
-      new AlterUserScramCredentialsRequestData()
-        .setDeletions(new util.ArrayList[AlterUserScramCredentialsRequestData.ScramCredentialDeletion])
-        .setUpsertions(new util.ArrayList[AlterUserScramCredentialsRequestData.ScramCredentialUpsertion])).build()
-    val response = sendAlterUserScramCredentialsRequest(request)
-
-    val results = response.data.results
-    assertEquals(0, results.size)
-  }
-
-  @Test
-  def testAlterSomethingNotAuthorized(): Unit = {
-
-    val request = new AlterUserScramCredentialsRequest.Builder(
-      new AlterUserScramCredentialsRequestData()
-        .setDeletions(util.Arrays.asList(new AlterUserScramCredentialsRequestData.ScramCredentialDeletion().setName(user1).setMechanism(ScramMechanism.SCRAM_SHA_256.`type`)))
-        .setUpsertions(util.Arrays.asList(new AlterUserScramCredentialsRequestData.ScramCredentialUpsertion().setName(user2).setMechanism(ScramMechanism.SCRAM_SHA_512.`type`)))).build()
-    val response = sendAlterUserScramCredentialsRequest(request)
-
-    val results = response.data.results
-    assertEquals(2, results.size)
-    checkAllErrorsAlteringCredentials(results, Errors.CLUSTER_AUTHORIZATION_FAILED, "when not authorized")
   }
 
   @Test

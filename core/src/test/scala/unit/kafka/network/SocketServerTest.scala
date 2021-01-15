@@ -932,12 +932,7 @@ class SocketServerTest {
     val largeChunkOfBytes = new Array[Byte](1000000)
     // doing a subsequent send should throw an exception as the connection should be closed.
     // send a large chunk of bytes to trigger a socket flush
-    try {
-      sendRequest(connection, largeChunkOfBytes, Some(0))
-      fail("expected exception when writing to closed plain socket")
-    } catch {
-      case _: IOException => // expected
-    }
+    assertThrows(classOf[IOException], () => sendRequest(connection, largeChunkOfBytes, Some(0)))
   }
 
   @Test

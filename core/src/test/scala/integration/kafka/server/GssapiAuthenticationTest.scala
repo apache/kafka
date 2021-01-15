@@ -155,12 +155,7 @@ class GssapiAuthenticationTest extends IntegrationTestHarness with SaslSetup {
     consumer.assign(List(tp).asJava)
 
     val startMs = System.currentTimeMillis()
-    try {
-      consumer.poll(Duration.ofMillis(50))
-      fail()
-    } catch {
-      case _: SaslAuthenticationException =>
-    }
+    assertThrows(classOf[SaslAuthenticationException], () => consumer.poll(Duration.ofMillis(50)))
     val endMs = System.currentTimeMillis()
     require(endMs - startMs < failedAuthenticationDelayMs, "Failed authentication must not be delayed on the client")
     consumer.close()

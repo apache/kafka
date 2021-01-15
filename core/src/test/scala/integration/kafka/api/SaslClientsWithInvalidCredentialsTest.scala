@@ -92,12 +92,7 @@ class SaslClientsWithInvalidCredentialsTest extends IntegrationTestHarness with 
     verifyAuthenticationException(txProducer.initTransactions())
 
     createClientCredential()
-    try {
-      txProducer.initTransactions()
-      fail("Transaction initialization should fail after authentication failure")
-    } catch {
-      case _: KafkaException => // expected exception
-    }
+    assertThrows(classOf[KafkaException], () => txProducer.initTransactions())
   }
 
   @Test

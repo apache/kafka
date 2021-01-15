@@ -17,7 +17,7 @@
 package kafka.security.auth
 
 import kafka.common.KafkaException
-import org.junit.jupiter.api.Assertions.{assertEquals, fail}
+import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.Test
 import org.apache.kafka.common.resource.{ResourceType => JResourceType}
 
@@ -28,13 +28,7 @@ class ResourceTypeTest {
   def testFromString(): Unit = {
     val resourceType = ResourceType.fromString("Topic")
     assertEquals(Topic, resourceType)
-
-    try {
-      ResourceType.fromString("badName")
-      fail("Expected exception on invalid ResourceType name.")
-    } catch {
-      case _: KafkaException => // expected
-    }
+    assertThrows(classOf[KafkaException], () => ResourceType.fromString("badName"))
   }
 
   /**

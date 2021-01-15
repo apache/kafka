@@ -172,8 +172,7 @@ class AdminZkClientTest extends ZooKeeperTestHarness with Logging with RackAware
       val (_, partitionAssignment) = zkClient.getPartitionAssignmentForTopics(Set(topic)).head
       assertEquals(3, partitionAssignment.size)
       partitionAssignment.foreach { case (partition, partitionReplicaAssignment) =>
-        assertEquals(1,
-          partitionReplicaAssignment.replicas.size, s"Unexpected replication factor for $partition")
+        assertEquals(1, partitionReplicaAssignment.replicas.size, s"Unexpected replication factor for $partition")
       }
       val savedProps = zkClient.getEntityConfigs(ConfigType.Topic, topic)
       assertEquals(props, savedProps)

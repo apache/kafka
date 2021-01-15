@@ -1273,12 +1273,7 @@ class DynamicBrokerReconfigurationTest extends ZooKeeperTestHarness with SaslSet
   }
 
   private def verifyAuthenticationFailure(producer: KafkaProducer[_, _]): Unit = {
-    try {
-      producer.partitionsFor(topic)
-      fail("Producer connection did not fail with invalid keystore")
-    } catch {
-      case _:AuthenticationException => // expected exception
-    }
+    assertThrows(classOf[AuthenticationException], () => producer.partitionsFor(topic))
   }
 
   private def waitForAuthenticationFailure(producerBuilder: ProducerBuilder): Unit = {
@@ -1575,12 +1570,7 @@ class DynamicBrokerReconfigurationTest extends ZooKeeperTestHarness with SaslSet
   }
 
   private def verifyTimeout(future: Future[_]): Unit = {
-    try {
-      future.get(100, TimeUnit.MILLISECONDS)
-      fail("Operation should not have completed")
-    } catch {
-      case _: TimeoutException => // expected exception
-    }
+    assertThrows(classOf[TimeoutException], () => future.get(100, TimeUnit.MILLISECONDS))
   }
 
   private def configValueAsString(value: Any): String = {

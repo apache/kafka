@@ -136,15 +136,9 @@ class PreferredReplicaLeaderElectionCommandTest extends ZooKeeperTestHarness wit
   /** Test the case when an invalid broker is given for --bootstrap-broker */
   @Test
   def testInvalidBrokerGiven(): Unit = {
-    try {
-      PreferredReplicaLeaderElectionCommand.run(Array(
-        "--bootstrap-server", "example.com:1234"),
-        timeout = 1000)
-      fail()
-    } catch {
-      case e: AdminCommandFailedException =>
-        assertTrue(e.getCause.isInstanceOf[TimeoutException])
-    }
+    val e = assertThrows(classOf[AdminCommandFailedException], () => PreferredReplicaLeaderElectionCommand.run(Array(
+      "--bootstrap-server", "example.com:1234"), timeout = 1000))
+    assertTrue(e.getCause.isInstanceOf[TimeoutException])
   }
 
   /** Test the case where no partitions are given (=> elect all partitions) */

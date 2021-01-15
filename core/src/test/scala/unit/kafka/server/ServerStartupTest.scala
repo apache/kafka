@@ -60,12 +60,7 @@ class ServerStartupTest extends ZooKeeperTestHarness {
     // Create a second broker with same port
     val brokerId2 = 1
     val props2 = TestUtils.createBrokerConfig(brokerId2, zkConnect, port = port)
-    try {
-      TestUtils.createServer(KafkaConfig.fromProps(props2))
-      fail("Starting a broker with the same port should fail")
-    } catch {
-      case _: KafkaException => // expected
-    }
+    assertThrows(classOf[KafkaException], () => TestUtils.createServer(KafkaConfig.fromProps(props2)))
   }
 
   @Test
@@ -79,13 +74,7 @@ class ServerStartupTest extends ZooKeeperTestHarness {
     val brokerRegistration = zkClient.getBroker(brokerId).getOrElse(fail("broker doesn't exists"))
 
     val props2 = TestUtils.createBrokerConfig(brokerId, zkConnect)
-    try {
-      TestUtils.createServer(KafkaConfig.fromProps(props2))
-      fail("Registering a broker with a conflicting id should fail")
-    } catch {
-      case _: NodeExistsException =>
-      // this is expected
-    }
+    assertThrows(classOf[NodeExistsException], () => TestUtils.createServer(KafkaConfig.fromProps(props2)))
 
     // broker registration shouldn't change
     assertEquals(brokerRegistration, zkClient.getBroker(brokerId).getOrElse(fail("broker doesn't exists")))

@@ -36,6 +36,8 @@ import scala.jdk.CollectionConverters._
   */
 class LogCleanerIntegrationTest extends AbstractLogCleanerIntegrationTest with KafkaMetricsGroup {
 
+  val codec: CompressionType = CompressionType.LZ4
+
   val time = new MockTime()
   val topicPartitions = Array(new TopicPartition("log", 0), new TopicPartition("log", 1), new TopicPartition("log", 2))
 
@@ -48,20 +50,20 @@ class LogCleanerIntegrationTest extends AbstractLogCleanerIntegrationTest with K
   @Test
   def testMarksPartitionsAsOfflineAndPopulatesUncleanableMetrics(): Unit = {
     val largeMessageKey = 20
-    val (_, largeMessageSet) = createLargeSingleMessageSet(largeMessageKey, RecordBatch.CURRENT_MAGIC_VALUE, CompressionType.LZ4)
+    val (_, largeMessageSet) = createLargeSingleMessageSet(largeMessageKey, RecordBatch.CURRENT_MAGIC_VALUE, codec)
     val maxMessageSize = largeMessageSet.sizeInBytes
     cleaner = makeCleaner(partitions = topicPartitions, maxMessageSize = maxMessageSize, backOffMs = 100)
 
     def breakPartitionLog(tp: TopicPartition): Unit = {
       val log = cleaner.logs.get(tp)
-      writeDups(numKeys = 20, numDups = 3, log = log, codec = CompressionType.LZ4)
+      writeDups(numKeys = 20, numDups = 3, log = log, codec = codec)
 
       val partitionFile = log.logSegments.last.log.file()
       val writer = new PrintWriter(partitionFile)
       writer.write("jogeajgoea")
       writer.close()
 
-      writeDups(numKeys = 20, numDups = 3, log = log, codec = CompressionType.LZ4)
+      writeDups(numKeys = 20, numDups = 3, log = log, codec = codec)
     }
 
     breakPartitionLog(topicPartitions(0))

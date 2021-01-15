@@ -1223,10 +1223,8 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     assertEquals(20, timestampTopic1P1.timestamp)
     assertEquals(Optional.of(0), timestampTopic1P1.leaderEpoch)
 
-    assertEquals(null, timestampOffsets.get(new TopicPartition(topic2, 0)),
-      "null should be returned when message format is 0.9.0")
-    assertEquals(null, timestampOffsets.get(new TopicPartition(topic2, 1)),
-      "null should be returned when message format is 0.9.0")
+    assertNull(timestampOffsets.get(new TopicPartition(topic2, 0)), "null should be returned when message format is 0.9.0")
+    assertNull(timestampOffsets.get(new TopicPartition(topic2, 1)), "null should be returned when message format is 0.9.0")
 
     val timestampTopic3P0 = timestampOffsets.get(new TopicPartition(topic3, 0))
     assertEquals(80, timestampTopic3P0.offset)
@@ -1467,7 +1465,7 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     val fetchLead = consumer.metrics.get(new MetricName("records-lead", "consumer-fetch-manager-metrics", "", tags))
     assertNotNull(fetchLead)
 
-    assertEquals(fetchLead.metricValue().asInstanceOf[Double], records.count.asInstanceOf[Double], s"The lead should be ${records.count}")
+    assertEquals(records.count.toDouble, fetchLead.metricValue(), s"The lead should be ${records.count}")
 
     consumer.assign(List(tp2).asJava)
     awaitNonEmptyRecords(consumer ,tp2)
@@ -1790,20 +1788,8 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     consumer3.seek(tp, 1)
 
     val numRecords1 = consumer1.poll(Duration.ofMillis(5000)).count()
-
-    try {
-      consumer1.commitSync()
-      fail("Expected offset commit to fail due to null group id")
-    } catch {
-      case e: InvalidGroupIdException => // OK
-    }
-
-    try {
-      consumer2.committed(Set(tp).asJava)
-      fail("Expected committed offset fetch to fail due to null group id")
-    } catch {
-      case e: InvalidGroupIdException => // OK
-    }
+    assertThrows(classOf[InvalidGroupIdException], () => consumer1.commitSync())
+    assertThrows(classOf[InvalidGroupIdException], () => consumer2.committed(Set(tp).asJava))
 
     val numRecords2 = consumer2.poll(Duration.ofMillis(5000)).count()
     val numRecords3 = consumer3.poll(Duration.ofMillis(5000)).count()

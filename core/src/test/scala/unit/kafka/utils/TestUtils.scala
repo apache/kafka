@@ -1191,12 +1191,7 @@ object TestUtils extends Logging {
     assertTrue(logDir.isFile)
 
     if (failureType == Roll) {
-      try {
-        leaderServer.replicaManager.getLog(partition).get.roll()
-        fail("Log rolling should fail with KafkaStorageException")
-      } catch {
-        case e: KafkaStorageException => // This is expected
-      }
+      assertThrows(classOf[KafkaStorageException], () => leaderServer.replicaManager.getLog(partition).get.roll())
     } else if (failureType == Checkpoint) {
       leaderServer.replicaManager.checkpointHighWatermarks()
     }
@@ -1666,17 +1661,11 @@ object TestUtils extends Logging {
 
   def assertFutureExceptionTypeEquals(future: KafkaFuture[_], clazz: Class[_ <: Throwable],
                                       expectedErrorMessage: Option[String] = None): Unit = {
-    try {
-      future.get()
-      fail("Expected CompletableFuture.get to return an exception")
-    } catch {
-      case e: ExecutionException =>
-        val cause = e.getCause
-        assertTrue(clazz.isInstance(cause), "Expected an exception of type " + clazz.getName + "; got type " +
-            cause.getClass.getName)
-        expectedErrorMessage.foreach(message => assertTrue(cause.getMessage.contains(message), s"Received error message : ${cause.getMessage}" +
-          s" does not contain expected error message : $message"))
-    }
+    val cause = assertThrows(classOf[ExecutionException], () => future.get()).getCause
+    assertTrue(clazz.isInstance(cause), "Expected an exception of type " + clazz.getName + "; got type " +
+      cause.getClass.getName)
+    expectedErrorMessage.foreach(message => assertTrue(cause.getMessage.contains(message), s"Received error message : ${cause.getMessage}" +
+      s" does not contain expected error message : $message"))
   }
 
   def totalMetricValue(server: KafkaServer, metricName: String): Long = {

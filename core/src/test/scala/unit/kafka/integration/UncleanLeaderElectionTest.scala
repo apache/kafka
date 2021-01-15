@@ -240,12 +240,8 @@ class UncleanLeaderElectionTest extends ZooKeeperTestHarness {
     assertEquals(0, followerServer.kafkaController.controllerContext.stats.uncleanLeaderElectionRate.count())
 
     // message production and consumption should both fail while leader is down
-    try {
-      produceMessage(servers, topic, "third", deliveryTimeoutMs = 1000, requestTimeoutMs = 1000)
-      fail("Message produced while leader is down should fail, but it succeeded")
-    } catch {
-      case e: ExecutionException if e.getCause.isInstanceOf[TimeoutException] => // expected
-    }
+    val e = assertThrows(classOf[ExecutionException], () => produceMessage(servers, topic, "third", deliveryTimeoutMs = 1000, requestTimeoutMs = 1000))
+    assertEquals(classOf[TimeoutException], e.getCause.getClass)
 
     assertEquals(List.empty[String], consumeAllMessages(topic, 0))
 
@@ -323,12 +319,8 @@ class UncleanLeaderElectionTest extends ZooKeeperTestHarness {
     assertEquals(0, followerServer.kafkaController.controllerContext.stats.uncleanLeaderElectionRate.count())
 
     // message production and consumption should both fail while leader is down
-    try {
-      produceMessage(servers, topic, "third", deliveryTimeoutMs = 1000, requestTimeoutMs = 1000)
-      fail("Message produced while leader is down should fail, but it succeeded")
-    } catch {
-      case e: ExecutionException if e.getCause.isInstanceOf[TimeoutException] => // expected
-    }
+    val e = assertThrows(classOf[ExecutionException], () => produceMessage(servers, topic, "third", deliveryTimeoutMs = 1000, requestTimeoutMs = 1000))
+    assertEquals(classOf[TimeoutException], e.getCause.getClass)
 
     assertEquals(List.empty[String], consumeAllMessages(topic, 0))
 

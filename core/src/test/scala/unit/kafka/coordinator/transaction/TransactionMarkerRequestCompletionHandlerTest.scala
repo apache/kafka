@@ -86,13 +86,8 @@ class TransactionMarkerRequestCompletionHandlerTest {
 
     val response = new WriteTxnMarkersResponse(new java.util.HashMap[java.lang.Long, java.util.Map[TopicPartition, Errors]]())
 
-    try {
-      handler.onComplete(new ClientResponse(new RequestHeader(ApiKeys.PRODUCE, 0, "client", 1),
-        null, null, 0, 0, false, null, null, response))
-      fail("should have thrown illegal argument exception")
-    } catch {
-      case _: IllegalStateException => // ok
-    }
+    assertThrows(classOf[IllegalStateException], () => handler.onComplete(new ClientResponse(new RequestHeader(ApiKeys.PRODUCE, 0, "client", 1),
+    null, null, 0, 0, false, null, null, response)))
   }
 
   @Test
@@ -221,13 +216,8 @@ class TransactionMarkerRequestCompletionHandlerTest {
     mockCache()
 
     val response = new WriteTxnMarkersResponse(createProducerIdErrorMap(error))
-    try {
-      handler.onComplete(new ClientResponse(new RequestHeader(ApiKeys.PRODUCE, 0, "client", 1),
-        null, null, 0, 0, false, null, null, response))
-      fail("should have thrown illegal state exception")
-    } catch {
-      case _: IllegalStateException => // ok
-    }
+    assertThrows(classOf[IllegalStateException], () => handler.onComplete(new ClientResponse(new RequestHeader(ApiKeys.PRODUCE, 0, "client", 1),
+      null, null, 0, 0, false, null, null, response)))
   }
 
   private def verifyCompleteDelayedOperationOnError(error: Errors): Unit = {

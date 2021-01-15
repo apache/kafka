@@ -137,12 +137,7 @@ class GroupMetadataTest {
     group.transitionTo(PreparingRebalance)
     group.transitionTo(CompletingRebalance)
     group.transitionTo(Stable)
-    try {
-      group.transitionTo(Stable)
-      fail("should have failed due to illegal transition")
-    } catch {
-      case e: IllegalStateException => // ok
-    }
+    assertThrows(classOf[IllegalStateException], () => group.transitionTo(Stable))
   }
 
   @Test

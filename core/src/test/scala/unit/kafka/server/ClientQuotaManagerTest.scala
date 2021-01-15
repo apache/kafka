@@ -337,8 +337,8 @@ class ClientQuotaManagerTest extends BaseClientQuotaManagerTest {
         time.sleep(1000)
       }
 
-      assertEquals(0,
-                   maybeRecord(clientQuotaManager, "ANONYMOUS", "unknown", 0), "Should be unthrottled since bursty sample has rolled over")
+      assertEquals(0, maybeRecord(clientQuotaManager, "ANONYMOUS", "unknown", 0),
+      "Should be unthrottled since bursty sample has rolled over")
     } finally {
       clientQuotaManager.shutdown()
     }

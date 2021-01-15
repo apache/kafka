@@ -277,12 +277,7 @@ class LogManagerTest {
     // and a producer snapshot file per segment, and the leader epoch checkpoint and partition metadata file.
     assertEquals(log.numberOfSegments * 4 + 2, log.dir.list.length, "Files should have been deleted")
     assertEquals(0, readLog(log, offset + 1).records.sizeInBytes, "Should get empty fetch off new log.")
-    try {
-      readLog(log, 0)
-      fail("Should get exception from fetching earlier.")
-    } catch {
-      case _: OffsetOutOfRangeException => // This is good.
-    }
+    assertThrows(classOf[OffsetOutOfRangeException], () => readLog(log, 0))
     // log should still be appendable
     log.appendAsLeader(TestUtils.singletonRecords("test".getBytes()), leaderEpoch = 0)
   }
@@ -373,12 +368,7 @@ class LogManagerTest {
    */
   @Test
   def testTwoLogManagersUsingSameDirFails(): Unit = {
-    try {
-      createLogManager()
-      fail("Should not be able to create a second log manager instance with the same data directory")
-    } catch {
-      case _: KafkaException => // this is good
-    }
+    assertThrows(classOf[KafkaException], () => createLogManager())
   }
 
   /**

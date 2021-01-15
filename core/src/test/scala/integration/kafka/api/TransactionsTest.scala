@@ -324,15 +324,7 @@ class TransactionsTest extends KafkaServerTestHarness {
     producer2.send(TestUtils.producerRecordWithExpectedTransactionStatus(topic1, null, "2", "4", willBeCommitted = true))
     producer2.send(TestUtils.producerRecordWithExpectedTransactionStatus(topic2, null, "2", "4", willBeCommitted = true))
 
-    try {
-      producer1.commitTransaction()
-      fail("Should not be able to commit transactions from a fenced producer.")
-    } catch {
-      case _: ProducerFencedException =>
-        // good!
-      case e: Exception =>
-        throw new AssertionError("Got an unexpected exception from a fenced producer.", e)
-    }
+    assertThrows(classOf[ProducerFencedException], () => producer1.commitTransaction())
 
     producer2.commitTransaction()  // ok
 
@@ -362,16 +354,8 @@ class TransactionsTest extends KafkaServerTestHarness {
     producer2.send(TestUtils.producerRecordWithExpectedTransactionStatus(topic1, null, "2", "4", willBeCommitted = true))
     producer2.send(TestUtils.producerRecordWithExpectedTransactionStatus(topic2, null, "2", "4", willBeCommitted = true))
 
-    try {
-      producer1.sendOffsetsToTransaction(Map(new TopicPartition("foobartopic", 0) -> new OffsetAndMetadata(110L)).asJava,
-        "foobarGroup")
-      fail("Should not be able to send offsets from a fenced producer.")
-    } catch {
-      case _: ProducerFencedException =>
-        // good!
-      case e: Exception =>
-        throw new AssertionError("Got an unexpected exception from a fenced producer.", e)
-    }
+    assertThrows(classOf[ProducerFencedException], () => producer1.sendOffsetsToTransaction(Map(new TopicPartition("foobartopic", 0)
+      -> new OffsetAndMetadata(110L)).asJava, "foobarGroup"))
 
     producer2.commitTransaction()  // ok
 

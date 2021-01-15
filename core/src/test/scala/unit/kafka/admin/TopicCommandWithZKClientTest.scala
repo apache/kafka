@@ -38,7 +38,7 @@ class TopicCommandWithZKClientTest extends ZooKeeperTestHarness with Logging wit
   def setup(info: TestInfo): Unit = {
     topicService = ZookeeperTopicService(zkClient)
     // the method name in junit 5 ends with "()"
-    testTopicName = s"${info.getDisplayName.replaceAll("\\(\\)", "")}-${Random.alphanumeric.take(10).mkString}"
+    testTopicName = s"${info.getTestMethod.get().getName}-${Random.alphanumeric.take(10).mkString}"
   }
 
   @AfterEach
@@ -562,13 +562,8 @@ class TopicCommandWithZKClientTest extends ZooKeeperTestHarness with Logging wit
     adminZkClient.createTopic(Topic.TRANSACTION_STATE_TOPIC_NAME, 1, 1)
 
     def expectAlterInternalTopicPartitionCountFailed(topic: String): Unit = {
-      try {
-        topicService.alterTopic(new TopicCommandOptions(
-          Array("--topic", topic, "--partitions", "2")))
-        fail("Should have thrown an IllegalArgumentException")
-      } catch {
-        case _: IllegalArgumentException => // expected
-      }
+      assertThrows(classOf[IllegalArgumentException], () => topicService.alterTopic(new TopicCommandOptions(
+        Array("--topic", topic, "--partitions", "2"))))
     }
     expectAlterInternalTopicPartitionCountFailed(Topic.GROUP_METADATA_TOPIC_NAME)
     expectAlterInternalTopicPartitionCountFailed(Topic.TRANSACTION_STATE_TOPIC_NAME)

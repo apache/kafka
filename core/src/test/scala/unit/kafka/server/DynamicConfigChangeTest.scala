@@ -261,14 +261,11 @@ class DynamicConfigChangeTest extends KafkaServerTestHarness {
   @Test
   def testConfigChangeOnNonExistingTopic(): Unit = {
     val topic = TestUtils.tempTopic()
-    try {
+    assertThrows(classOf[UnknownTopicOrPartitionException], () => {
       val logProps = new Properties()
       logProps.put(FlushMessagesProp, 10000: java.lang.Integer)
       adminZkClient.changeTopicConfig(topic, logProps)
-      fail("Should fail with UnknownTopicOrPartitionException for topic doesn't exist")
-    } catch {
-      case _: UnknownTopicOrPartitionException => // expected
-    }
+    })
   }
 
   @Test
@@ -308,33 +305,21 @@ class DynamicConfigChangeTest extends KafkaServerTestHarness {
     configManager.ConfigChangedNotificationHandler.processNotification("not json".getBytes(StandardCharsets.UTF_8))
 
     // Incorrect Map. No version
-    try {
+    assertThrows(classOf[Throwable], () => {
       val jsonMap = Map("v" -> 1, "x" -> 2)
       configManager.ConfigChangedNotificationHandler.processNotification(Json.encodeAsBytes(jsonMap.asJava))
-      fail("Should have thrown an Exception while parsing incorrect notification " + jsonMap)
-    }
-    catch {
-      case _: Throwable =>
-    }
+    })
     // Version is provided. EntityType is incorrect
-    try {
+    assertThrows(classOf[Throwable], () => {
       val jsonMap = Map("version" -> 1, "entity_type" -> "garbage", "entity_name" -> "x")
       configManager.ConfigChangedNotificationHandler.processNotification(Json.encodeAsBytes(jsonMap.asJava))
-      fail("Should have thrown an Exception while parsing incorrect notification " + jsonMap)
-    }
-    catch {
-      case _: Throwable =>
-    }
+    })
 
     // EntityName isn't provided
-    try {
+    assertThrows(classOf[Throwable], () => {
       val jsonMap = Map("version" -> 1, "entity_type" -> ConfigType.Topic)
       configManager.ConfigChangedNotificationHandler.processNotification(Json.encodeAsBytes(jsonMap.asJava))
-      fail("Should have thrown an Exception while parsing incorrect notification " + jsonMap)
-    }
-    catch {
-      case _: Throwable =>
-    }
+    })
 
     // Everything is provided
     val jsonMap = Map("version" -> 1, "entity_type" -> ConfigType.Topic, "entity_name" -> "x")

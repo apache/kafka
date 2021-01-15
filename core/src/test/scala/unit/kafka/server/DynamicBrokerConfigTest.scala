@@ -222,12 +222,7 @@ class DynamicBrokerConfigTest {
       updateConfig()
       assertEquals(value, config.originals.get(name))
     } else {
-      try {
-        config.dynamicConfig.validate(props, perBrokerConfig)
-        fail("Invalid config did not fail validation")
-      } catch {
-        case e: Exception => // expected exception
-      }
+      assertThrows(classOf[Exception], () => config.dynamicConfig.validate(props, perBrokerConfig))
       updateConfig()
       assertEquals(oldValue, config.originals.get(name))
     }
@@ -243,12 +238,7 @@ class DynamicBrokerConfigTest {
 
     // DynamicBrokerConfig#validate is used by AdminClient to validate the configs provided in
     // in an AlterConfigs request. Validation should fail with an exception if any of the configs are invalid.
-    try {
-      config.dynamicConfig.validate(props, perBrokerConfig = true)
-      fail("Invalid config did not fail validation")
-    } catch {
-      case e: ConfigException => // expected exception
-    }
+    assertThrows(classOf[ConfigException], () => config.dynamicConfig.validate(props, perBrokerConfig = true))
 
     // DynamicBrokerConfig#updateBrokerConfig is used to update configs from ZooKeeper during
     // startup and when configs are updated in ZK. Update should apply valid configs and ignore
@@ -358,12 +348,8 @@ class DynamicBrokerConfigTest {
     EasyMock.expect(kafkaServer.config).andReturn(oldConfig).anyTimes()
     EasyMock.expect(kafkaServer.authorizer).andReturn(Some(authorizer)).anyTimes()
     EasyMock.replay(kafkaServer)
-    try {
-      kafkaServer.config.dynamicConfig.addReconfigurables(kafkaServer)
-    } catch {
-      case _: Throwable => // We are only testing authorizer reconfiguration, Disabled any exceptions due to incomplete mock
-    }
-
+    // We are only testing authorizer reconfiguration, ignore any exceptions due to incomplete mock
+    assertThrows(classOf[Throwable], () => kafkaServer.config.dynamicConfig.addReconfigurables(kafkaServer))
     props.put("super.users", "User:admin")
     kafkaServer.config.dynamicConfig.updateBrokerConfig(0, props)
     assertEquals("User:admin", authorizer.superUsers)

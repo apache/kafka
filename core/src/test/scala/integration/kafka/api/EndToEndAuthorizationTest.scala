@@ -393,14 +393,11 @@ abstract class EndToEndAuthorizationTest extends IntegrationTestHarness with Sas
     servers.foreach { s =>
       TestUtils.waitAndVerifyAcls(TopicDescribeAcl, s.dataPlaneRequestProcessor.authorizer.get, topicResource)
     }
-    try{
+    val e = assertThrows(classOf[TopicAuthorizationException], () => {
       val producer = createProducer()
       sendRecords(producer, numRecords, tp)
-      fail("exception expected")
-    } catch {
-      case e: TopicAuthorizationException =>
-        assertEquals(Set(topic).asJava, e.unauthorizedTopics())
-    }
+    })
+    assertEquals(Set(topic).asJava, e.unauthorizedTopics())
     confirmReauthenticationMetrics()
   }
 
@@ -460,13 +457,8 @@ abstract class EndToEndAuthorizationTest extends IntegrationTestHarness with Sas
     val consumer = createConsumer()
     consumer.assign(List(tp).asJava)
 
-    try {
-      consumeRecords(consumer)
-      fail("Topic authorization exception expected")
-    } catch {
-      case e: TopicAuthorizationException =>
-        assertEquals(Set(topic).asJava, e.unauthorizedTopics())
-    }
+    val e = assertThrows(classOf[TopicAuthorizationException], () => consumeRecords(consumer))
+    assertEquals(Set(topic).asJava, e.unauthorizedTopics())
     confirmReauthenticationMetrics()
   }
 
@@ -476,13 +468,8 @@ abstract class EndToEndAuthorizationTest extends IntegrationTestHarness with Sas
     val consumer = createConsumer()
     consumer.subscribe(List(topic).asJava)
 
-    try {
-      consumeRecords(consumer)
-      fail("Topic authorization exception expected")
-    } catch {
-      case e: TopicAuthorizationException =>
-        assertEquals(Set(topic).asJava, e.unauthorizedTopics())
-    }
+    val e = assertThrows(classOf[TopicAuthorizationException], () => consumeRecords(consumer))
+    assertEquals(Set(topic).asJava, e.unauthorizedTopics())
     confirmReauthenticationMetrics()
   }
 
@@ -512,13 +499,8 @@ abstract class EndToEndAuthorizationTest extends IntegrationTestHarness with Sas
 
     val consumer = createConsumer()
     consumer.assign(List(tp).asJava)
-    try {
-      consumeRecords(consumer)
-      fail("Topic authorization exception expected")
-    } catch {
-      case e: GroupAuthorizationException =>
-        assertEquals(group, e.groupId())
-    }
+    val e = assertThrows(classOf[GroupAuthorizationException], () => consumeRecords(consumer))
+    assertEquals(group, e.groupId())
     confirmReauthenticationMetrics()
   }
 

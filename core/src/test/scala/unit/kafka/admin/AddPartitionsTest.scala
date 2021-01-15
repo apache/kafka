@@ -60,25 +60,15 @@ class AddPartitionsTest extends BaseRequestTest {
 
   @Test
   def testWrongReplicaCount(): Unit = {
-    try {
-      adminZkClient.addPartitions(topic1, topic1Assignment, adminZkClient.getBrokerMetadatas(), 2,
-        Some(Map(0 -> Seq(0, 1), 1 -> Seq(0, 1, 2))))
-      fail("Add partitions should fail")
-    } catch {
-      case _: InvalidReplicaAssignmentException => //this is good
-    }
+    assertThrows(classOf[InvalidReplicaAssignmentException], () => adminZkClient.addPartitions(topic1, topic1Assignment, adminZkClient.getBrokerMetadatas(), 2,
+      Some(Map(0 -> Seq(0, 1), 1 -> Seq(0, 1, 2)))))
   }
 
   @Test
   def testMissingPartition0(): Unit = {
-    try {
-      adminZkClient.addPartitions(topic5, topic5Assignment, adminZkClient.getBrokerMetadatas(), 2,
-        Some(Map(1 -> Seq(0, 1), 2 -> Seq(0, 1, 2))))
-      fail("Add partitions should fail")
-    } catch {
-      case e: AdminOperationException => //this is good
-        assertTrue(e.getMessage.contains("Unexpected existing replica assignment for topic 'new-topic5', partition id 0 is missing"))
-    }
+    val e = assertThrows(classOf[AdminOperationException], () => adminZkClient.addPartitions(topic5, topic5Assignment, adminZkClient.getBrokerMetadatas(), 2,
+      Some(Map(1 -> Seq(0, 1), 2 -> Seq(0, 1, 2)))))
+    assertTrue(e.getMessage.contains("Unexpected existing replica assignment for topic 'new-topic5', partition id 0 is missing"))
   }
 
   @Test

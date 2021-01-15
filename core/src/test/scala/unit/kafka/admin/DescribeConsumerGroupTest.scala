@@ -610,12 +610,8 @@ class DescribeConsumerGroupTest extends ConsumerGroupCommandTest {
     val cgcArgs = Array("--bootstrap-server", brokerList, "--describe", "--timeout", "1", "--group", group) ++ describeType
     val service = getConsumerGroupService(cgcArgs)
 
-    try {
-      TestUtils.grabConsoleOutputAndError(service.describeGroups())
-      fail(s"The consumer group command should have failed due to low initialization timeout (describe type: ${describeType.mkString(" ")})")
-    } catch {
-      case e: ExecutionException => assertEquals(classOf[TimeoutException], e.getCause.getClass)
-    }
+    val e = assertThrows(classOf[ExecutionException], () => TestUtils.grabConsoleOutputAndError(service.describeGroups()))
+    assertEquals(classOf[TimeoutException], e.getCause.getClass)
   }
 
   @Test
@@ -630,12 +626,8 @@ class DescribeConsumerGroupTest extends ConsumerGroupCommandTest {
     val cgcArgs = Array("--bootstrap-server", brokerList, "--describe", "--group", group, "--timeout", "1")
     val service = getConsumerGroupService(cgcArgs)
 
-    try {
-      service.collectGroupOffsets(group)
-      fail("The consumer group command should fail due to low initialization timeout")
-    } catch {
-      case e: ExecutionException => assertEquals(classOf[TimeoutException], e.getCause.getClass)
-    }
+    val e = assertThrows(classOf[ExecutionException], () => service.collectGroupOffsets(group))
+    assertEquals(classOf[TimeoutException], e.getCause.getClass)
   }
 
   @Test
@@ -650,18 +642,10 @@ class DescribeConsumerGroupTest extends ConsumerGroupCommandTest {
     val cgcArgs = Array("--bootstrap-server", brokerList, "--describe", "--group", group, "--timeout", "1")
     val service = getConsumerGroupService(cgcArgs)
 
-    try {
-      service.collectGroupMembers(group, false)
-      fail("The consumer group command should fail due to low initialization timeout")
-    } catch {
-      case e: ExecutionException => assertEquals(classOf[TimeoutException], e.getCause.getClass)
-        try {
-          service.collectGroupMembers(group, true)
-          fail("The consumer group command should fail due to low initialization timeout (verbose)")
-        } catch {
-          case e: ExecutionException => assertEquals(classOf[TimeoutException], e.getCause.getClass)
-        }
-    }
+    var e = assertThrows(classOf[ExecutionException], () => service.collectGroupMembers(group, false))
+    assertEquals(classOf[TimeoutException], e.getCause.getClass)
+    e = assertThrows(classOf[ExecutionException], () => service.collectGroupMembers(group, true))
+    assertEquals(classOf[TimeoutException], e.getCause.getClass)
   }
 
   @Test
@@ -676,12 +660,8 @@ class DescribeConsumerGroupTest extends ConsumerGroupCommandTest {
     val cgcArgs = Array("--bootstrap-server", brokerList, "--describe", "--group", group, "--timeout", "1")
     val service = getConsumerGroupService(cgcArgs)
 
-    try {
-      service.collectGroupState(group)
-      fail("The consumer group command should fail due to low initialization timeout")
-    } catch {
-      case e: ExecutionException => assertEquals(classOf[TimeoutException], e.getCause.getClass)
-    }
+    val e = assertThrows(classOf[ExecutionException], () => service.collectGroupState(group))
+    assertEquals(classOf[TimeoutException], e.getCause.getClass)
   }
 
   @Test

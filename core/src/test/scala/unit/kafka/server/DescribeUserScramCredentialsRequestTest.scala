@@ -27,7 +27,7 @@ import org.apache.kafka.common.requests.{DescribeUserScramCredentialsRequest, De
 import org.apache.kafka.common.security.auth.{AuthenticationContext, KafkaPrincipal, KafkaPrincipalBuilder}
 import org.apache.kafka.server.authorizer.{Action, AuthorizableRequestContext, AuthorizationResult}
 import org.junit.jupiter.api.Assertions._
-import org.junit.jupiter.api.{BeforeEach, Test, TestInfo}
+import org.junit.jupiter.api.Test
 
 import scala.jdk.CollectionConverters._
 
@@ -38,24 +38,10 @@ import scala.jdk.CollectionConverters._
  */
 class DescribeUserScramCredentialsRequestTest extends BaseRequestTest {
 
-  private[this] var className = classOf[DescribeCredentialsTest.TestPrincipalBuilderReturningAuthorized].getName
-
-  override def setUp(): Unit = {
-    // do nothing as we will setup cluster by 'before'
-  }
-
-  @BeforeEach
-  def before(info: TestInfo): Unit = {
-    if (info.getDisplayName.contains("NotAuthorized"))
-      className = classOf[DescribeCredentialsTest.TestPrincipalBuilderReturningUnauthorized].getName
-
-    super.setUp()
-  }
-
   override def brokerPropertyOverrides(properties: Properties): Unit = {
     properties.put(KafkaConfig.ControlledShutdownEnableProp, "false")
     properties.put(KafkaConfig.AuthorizerClassNameProp, classOf[DescribeCredentialsTest.TestAuthorizer].getName)
-    properties.put(KafkaConfig.PrincipalBuilderClassProp, className)
+    properties.put(KafkaConfig.PrincipalBuilderClassProp, classOf[DescribeCredentialsTest.TestPrincipalBuilderReturningAuthorized].getName)
   }
 
   @Test
@@ -88,16 +74,6 @@ class DescribeUserScramCredentialsRequestTest extends BaseRequestTest {
 
     val error = response.data.errorCode
     assertEquals(Errors.NONE.code, error, "Did not expect controller error when routed to non-controller")
-  }
-
-  @Test
-  def testDescribeNotAuthorized(): Unit = {
-    val request = new DescribeUserScramCredentialsRequest.Builder(
-      new DescribeUserScramCredentialsRequestData()).build()
-    val response = sendDescribeUserScramCredentialsRequest(request)
-
-    val error = response.data.errorCode
-    assertEquals(Errors.CLUSTER_AUTHORIZATION_FAILED.code, error, "Expected not authorized error")
   }
 
   @Test

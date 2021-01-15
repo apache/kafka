@@ -237,14 +237,9 @@ class ProducerFailureHandlingTest extends KafkaServerTestHarness {
     createTopic(topicName, replicationFactor = numServers, topicConfig = topicProps)
 
     val record = new ProducerRecord(topicName, null, "key".getBytes, "value".getBytes)
-    try {
-      producer3.send(record).get
-      fail("Expected exception when producing to topic with fewer brokers than min.insync.replicas")
-    } catch {
-      case e: ExecutionException =>
-        if (!e.getCause.isInstanceOf[NotEnoughReplicasException]) {
-          fail("Expected NotEnoughReplicasException when producing to topic with fewer brokers than min.insync.replicas")
-        }
+    val e = assertThrows(classOf[ExecutionException], () => producer3.send(record).get)
+    if (!e.getCause.isInstanceOf[NotEnoughReplicasException]) {
+      fail("Expected NotEnoughReplicasException when producing to topic with fewer brokers than min.insync.replicas")
     }
   }
 
@@ -263,17 +258,11 @@ class ProducerFailureHandlingTest extends KafkaServerTestHarness {
     // shut down one broker
     servers.head.shutdown()
     servers.head.awaitShutdown()
-    try {
-      producer3.send(record).get
-      fail("Expected exception when producing to topic with fewer brokers than min.insync.replicas")
-    } catch {
-      case e: ExecutionException =>
-        if (!e.getCause.isInstanceOf[NotEnoughReplicasException]  &&
-            !e.getCause.isInstanceOf[NotEnoughReplicasAfterAppendException] &&
-            !e.getCause.isInstanceOf[TimeoutException]) {
-          fail("Expected NotEnoughReplicasException or NotEnoughReplicasAfterAppendException when producing to topic " +
-            "with fewer brokers than min.insync.replicas, but saw " + e.getCause)
-        }
+    assertThrows(classOf[ExecutionException], () => producer3.send(record).get).getCause match {
+      case _ @ (_: NotEnoughReplicasException | _: NotEnoughReplicasAfterAppendException | _: TimeoutException) => // pass
+      case e: Throwable =>
+        fail("Expected NotEnoughReplicasException or NotEnoughReplicasAfterAppendException when producing to topic " +
+          "with fewer brokers than min.insync.replicas, but saw " + e)
     }
 
     // restart the server

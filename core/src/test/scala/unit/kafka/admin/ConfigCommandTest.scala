@@ -1417,13 +1417,10 @@ class ConfigCommandTest extends ZooKeeperTestHarness with Logging {
 
     def checkInvalidEntity(entityType: String, entityName: Option[String], otherArgs: Array[String]): Unit = {
       val opts = createOpts(entityType, entityName, otherArgs)
-      try {
+      assertThrows(classOf[IllegalArgumentException], () => {
         opts.checkArgs()
         ConfigCommand.parseEntity(opts)
-        fail("Did not fail with invalid argument list")
-      } catch {
-        case _: IllegalArgumentException => // expected exception
-      }
+      })
     }
 
     val describeOpts = Array("--describe")

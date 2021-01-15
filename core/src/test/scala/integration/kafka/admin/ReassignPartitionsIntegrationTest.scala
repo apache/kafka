@@ -120,8 +120,7 @@ class ReassignPartitionsIntegrationTest extends ZooKeeperTestHarness {
 
     // Execute the assignment
     runExecuteAssignment(cluster.adminClient, false, assignment, -1L, -1L)
-    assertEquals(unthrottledBrokerConfigs,
-      describeBrokerLevelThrottles(unthrottledBrokerConfigs.keySet.toSeq))
+    assertEquals(unthrottledBrokerConfigs, describeBrokerLevelThrottles(unthrottledBrokerConfigs.keySet.toSeq))
     val finalAssignment = Map(
       new TopicPartition("foo", 0) ->
         PartitionReassignmentState(Seq(0, 1, 3), Seq(0, 1, 3), true),
@@ -248,12 +247,9 @@ class ReassignPartitionsIntegrationTest extends ZooKeeperTestHarness {
         PartitionReassignmentState(Seq(0, 1, 2), Seq(0, 3, 2), true),
       new TopicPartition("baz", 2) ->
         PartitionReassignmentState(Seq(0, 2, 1), Seq(3, 2, 1), true))
-    assertEquals(VerifyAssignmentResult(initialAssignment),
-      runVerifyAssignment(cluster.adminClient, assignment, false))
-    assertEquals(VerifyAssignmentResult(initialAssignment),
-      runVerifyAssignment(zkClient, assignment, false))
-    assertEquals(unthrottledBrokerConfigs,
-      describeBrokerLevelThrottles(unthrottledBrokerConfigs.keySet.toSeq))
+    assertEquals(VerifyAssignmentResult(initialAssignment), runVerifyAssignment(cluster.adminClient, assignment, false))
+    assertEquals(VerifyAssignmentResult(initialAssignment), runVerifyAssignment(zkClient, assignment, false))
+    assertEquals(unthrottledBrokerConfigs, describeBrokerLevelThrottles(unthrottledBrokerConfigs.keySet.toSeq))
 
     // Execute the assignment
     val interBrokerThrottle = 300000L
@@ -274,12 +270,9 @@ class ReassignPartitionsIntegrationTest extends ZooKeeperTestHarness {
         if (!result.partsOngoing) {
           true
         } else {
-          assertFalse(result.partStates.forall(_._2.done),
-            s"Expected at least one partition reassignment to be ongoing when result = $result")
-          assertEquals(Seq(0, 3, 2),
-            result.partStates(new TopicPartition("foo", 0)).targetReplicas)
-          assertEquals(Seq(3, 2, 1),
-            result.partStates(new TopicPartition("baz", 2)).targetReplicas)
+          assertFalse(result.partStates.forall(_._2.done), s"Expected at least one partition reassignment to be ongoing when result = $result")
+          assertEquals(Seq(0, 3, 2), result.partStates(new TopicPartition("foo", 0)).targetReplicas)
+          assertEquals(Seq(3, 2, 1), result.partStates(new TopicPartition("baz", 2)).targetReplicas)
           logger.info(s"Current result: ${result}")
           waitForInterBrokerThrottle(Set(0, 1, 2, 3), interBrokerThrottle)
           false
@@ -466,8 +459,7 @@ class ReassignPartitionsIntegrationTest extends ZooKeeperTestHarness {
 
     val info1 = new BrokerDirs(cluster.adminClient.describeLogDirs(0.to(4).
         map(_.asInstanceOf[Integer]).asJavaCollection), 0)
-    assertEquals(reassignment.targetDir,
-      info1.curLogDirs.getOrElse(topicPartition, ""))
+    assertEquals(reassignment.targetDir, info1.curLogDirs.getOrElse(topicPartition, ""))
   }
 
   @Test

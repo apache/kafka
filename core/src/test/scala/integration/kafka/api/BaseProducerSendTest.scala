@@ -154,14 +154,11 @@ abstract class BaseProducerSendTest extends KafkaServerTestHarness {
       assertEquals(3L, producer.send(record3, callback).get.offset, "Should have offset 3")
 
       // send a record with null topic should fail
-      try {
+      assertThrows(classOf[IllegalArgumentException], () => {
         val record4 = new ProducerRecord[Array[Byte], Array[Byte]](null, partition, "key".getBytes(StandardCharsets.UTF_8),
           "value".getBytes(StandardCharsets.UTF_8))
         producer.send(record4, callback)
-        fail("Should not allow sending a record without topic")
-      } catch {
-        case _: IllegalArgumentException => // this is ok
-      }
+      })
 
       // non-blocking send a list of records
       for (_ <- 1 to numRecords)
@@ -375,14 +372,10 @@ abstract class BaseProducerSendTest extends KafkaServerTestHarness {
 
     // Trying to send a record to a partition beyond topic's partition range before adding the partition should fail.
     val partition1 = 1
-    try {
-      producer.send(new ProducerRecord(topic, partition1, null, "value".getBytes(StandardCharsets.UTF_8))).get()
-      fail("Should not allow sending a record to a partition not present in the metadata")
-    } catch {
-      case e: ExecutionException => e.getCause match {
-        case _: TimeoutException => // this is ok
-        case ex => throw new Exception("Sending to a partition not present in the metadata should result in a TimeoutException", ex)
-      }
+    val e = assertThrows(classOf[ExecutionException], () => producer.send(new ProducerRecord(topic, partition1, null, "value".getBytes(StandardCharsets.UTF_8))).get())
+    e.getCause match {
+      case _: TimeoutException => // this is ok
+      case ex => throw new Exception("Sending to a partition not present in the metadata should result in a TimeoutException", ex)
     }
 
     val existingAssignment = zkClient.getFullReplicaAssignmentForTopics(Set(topic)).map {
@@ -456,12 +449,8 @@ abstract class BaseProducerSendTest extends KafkaServerTestHarness {
       assertTrue(responses.forall(!_.isDone()), "No request is complete.")
       producer.close(Duration.ZERO)
       responses.foreach { future =>
-        try {
-          future.get()
-          fail("No message should be sent successfully.")
-        } catch {
-          case e: ExecutionException => assertEquals(classOf[KafkaException], e.getCause.getClass)
-        }
+        val e = assertThrows(classOf[ExecutionException], () => future.get())
+        assertEquals(classOf[KafkaException], e.getCause.getClass)
       }
       assertEquals(0, consumer.poll(Duration.ofMillis(50L)).count, "Fetch response should have no message returned.")
     }

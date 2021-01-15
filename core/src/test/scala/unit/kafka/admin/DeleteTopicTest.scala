@@ -159,14 +159,9 @@ class DeleteTopicTest extends ZooKeeperTestHarness {
   private def verifyReassignmentFailsForMissing(adminClient: Admin,
                                                 partition: TopicPartition,
                                                 reassignment: NewPartitionReassignment): Unit = {
-    try {
-      adminClient.alterPartitionReassignments(Collections.singletonMap(partition,
-        Optional.of(new NewPartitionReassignment(util.Arrays.asList(1, 2, 3))))).all().get()
-      fail("expected partition reassignment to fail for [test,0]")
-    } catch {
-      case e: ExecutionException =>
-        assertEquals(classOf[UnknownTopicOrPartitionException], e.getCause.getClass)
-    }
+    val e = assertThrows(classOf[ExecutionException], () => adminClient.alterPartitionReassignments(Collections.singletonMap(partition,
+      Optional.of(new NewPartitionReassignment(util.Arrays.asList(1, 2, 3))))).all().get())
+    assertEquals(classOf[UnknownTopicOrPartitionException], e.getCause.getClass)
   }
 
   private def getController() : (KafkaServer, Int) = {
@@ -321,12 +316,7 @@ class DeleteTopicTest extends ZooKeeperTestHarness {
     val topic = topicPartition.topic
     servers = createTestTopicAndCluster(topic)
     // start topic deletion
-    try {
-      adminZkClient.deleteTopic("test2")
-      fail("Expected UnknownTopicOrPartitionException")
-    } catch {
-      case _: UnknownTopicOrPartitionException => // expected exception
-    }
+    assertThrows(classOf[UnknownTopicOrPartitionException], () => adminZkClient.deleteTopic("test2"))
     // verify delete topic path for test2 is removed from ZooKeeper
     TestUtils.verifyTopicDeletion(zkClient, "test2", 1, servers)
     // verify that topic test is untouched
@@ -374,16 +364,12 @@ class DeleteTopicTest extends ZooKeeperTestHarness {
     val topic = topicPartition.topic
     servers = createTestTopicAndCluster(topic)
 
-    try {
+    assertThrows(classOf[TopicAlreadyMarkedForDeletionException], () => {
       // start topic deletion
       adminZkClient.deleteTopic(topic)
       // try to delete topic marked as deleted
       adminZkClient.deleteTopic(topic)
-      fail("Expected TopicAlreadyMarkedForDeletionException")
-    }
-    catch {
-      case _: TopicAlreadyMarkedForDeletionException => // expected exception
-    }
+    })
 
     TestUtils.verifyTopicDeletion(zkClient, topic, 1, servers)
   }
