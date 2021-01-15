@@ -49,7 +49,7 @@ abstract class AbstractApiVersionsRequestTest extends BaseRequestTest {
 
   def validateApiVersionsResponse(apiVersionsResponse: ApiVersionsResponse, listenerName: ListenerName = interBrokerListenerName): Unit = {
     val expectedApis = ApiKeys.enabledApis()
-    if (listenerName.equals(controlPlaneListenerName) ) {
+    if (listenerName == controlPlaneListenerName) {
       expectedApis.add(ApiKeys.ENVELOPE)
     }
     assertEquals("API keys in ApiVersionsResponse must match API keys supported by broker.",
