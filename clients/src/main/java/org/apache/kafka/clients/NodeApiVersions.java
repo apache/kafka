@@ -115,7 +115,7 @@ public class NodeApiVersions {
     }
 
     /**
-     * Return the most recent version supported by both the node and the local software.
+     * Return the most recent version supported by the local software.
      */
     public short latestUsableVersion(ApiKeys apiKey) {
         return getSupportedVersion(apiKey).maxVersion;
