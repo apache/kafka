@@ -32,8 +32,8 @@ import org.apache.kafka.connect.data.Timestamp;
 import org.apache.kafka.connect.data.Values;
 import org.apache.kafka.connect.errors.DataException;
 import org.apache.kafka.connect.source.SourceRecord;
-import org.junit.After;
-import org.junit.Test;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.Test;
 
 import java.math.BigDecimal;
 import java.util.Collections;
@@ -41,10 +41,10 @@ import java.util.Date;
 import java.util.HashMap;
 import java.util.Map;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNull;
-import static org.junit.Assert.assertThrows;
-import static org.junit.Assert.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class CastTest {
     private final Cast<SourceRecord> xformKey = new Cast.Key<>();
@@ -52,7 +52,7 @@ public class CastTest {
     private static final long MILLIS_PER_HOUR = TimeUnit.HOURS.toMillis(1);
     private static final long MILLIS_PER_DAY = TimeUnit.DAYS.toMillis(1);
 
-    @After
+    @AfterEach
     public void teardown() {
         xformKey.close();
         xformValue.close();
