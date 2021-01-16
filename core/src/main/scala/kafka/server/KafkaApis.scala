@@ -49,7 +49,7 @@ import org.apache.kafka.common.internals.{FatalExitError, Topic}
 import org.apache.kafka.common.internals.Topic.{GROUP_METADATA_TOPIC_NAME, TRANSACTION_STATE_TOPIC_NAME, isInternal}
 import org.apache.kafka.common.message.CreateTopicsRequestData.CreatableTopic
 import org.apache.kafka.common.message.CreatePartitionsResponseData.CreatePartitionsTopicResult
-import org.apache.kafka.common.message.{AddOffsetsToTxnResponseData, AlterClientQuotasResponseData, AlterConfigsResponseData, AlterPartitionReassignmentsResponseData, AlterReplicaLogDirsResponseData, CreateAclsResponseData, CreatePartitionsResponseData, CreateTopicsResponseData, DeleteAclsResponseData, DeleteGroupsResponseData, DeleteRecordsResponseData, DeleteTopicsResponseData, DescribeAclsResponseData, DescribeClientQuotasResponseData, DescribeConfigsResponseData, DescribeGroupsResponseData, DescribeLogDirsResponseData, EndTxnResponseData, ExpireDelegationTokenResponseData, FindCoordinatorResponseData, HeartbeatResponseData, InitProducerIdResponseData, JoinGroupResponseData, LeaveGroupResponseData, ListGroupsResponseData, ListOffsetsResponseData, ListPartitionReassignmentsResponseData, MetadataResponseData, OffsetCommitRequestData, OffsetCommitResponseData, OffsetDeleteResponseData, RenewDelegationTokenResponseData, SaslAuthenticateResponseData, SaslHandshakeResponseData, StopReplicaResponseData, SyncGroupResponseData, UpdateMetadataResponseData}
+import org.apache.kafka.common.message.{AddOffsetsToTxnResponseData, AlterClientQuotasResponseData, AlterConfigsResponseData, AlterPartitionReassignmentsResponseData, AlterReplicaLogDirsResponseData, ApiVersionsResponseData, CreateAclsResponseData, CreatePartitionsResponseData, CreateTopicsResponseData, DeleteAclsResponseData, DeleteGroupsResponseData, DeleteRecordsResponseData, DeleteTopicsResponseData, DescribeAclsResponseData, DescribeClientQuotasResponseData, DescribeConfigsResponseData, DescribeGroupsResponseData, DescribeLogDirsResponseData, EndTxnResponseData, ExpireDelegationTokenResponseData, FindCoordinatorResponseData, HeartbeatResponseData, InitProducerIdResponseData, JoinGroupResponseData, LeaveGroupResponseData, ListGroupsResponseData, ListOffsetsResponseData, ListPartitionReassignmentsResponseData, MetadataResponseData, OffsetCommitRequestData, OffsetCommitResponseData, OffsetDeleteResponseData, OffsetForLeaderEpochResponseData, RenewDelegationTokenResponseData, SaslAuthenticateResponseData, SaslHandshakeResponseData, StopReplicaResponseData, SyncGroupResponseData, UpdateMetadataResponseData}
 import org.apache.kafka.common.message.CreateTopicsResponseData.{CreatableTopicResult, CreatableTopicResultCollection}
 import org.apache.kafka.common.message.DeleteGroupsResponseData.{DeletableGroupResult, DeletableGroupResultCollection}
 import org.apache.kafka.common.message.AlterPartitionReassignmentsResponseData.{ReassignablePartitionResponse, ReassignableTopicResponse}
@@ -62,7 +62,6 @@ import org.apache.kafka.common.message.LeaveGroupResponseData.MemberResponse
 import org.apache.kafka.common.message.ListOffsetsRequestData.ListOffsetsPartition
 import org.apache.kafka.common.message.ListOffsetsResponseData.{ListOffsetsPartitionResponse, ListOffsetsTopicResponse}
 import org.apache.kafka.common.message.OffsetForLeaderEpochRequestData.OffsetForLeaderTopic
-import org.apache.kafka.common.message.OffsetForLeaderEpochResponseData
 import org.apache.kafka.common.message.OffsetForLeaderEpochResponseData.{EpochEndOffset, OffsetForLeaderTopicResult, OffsetForLeaderTopicResultCollection}
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.network.{ClientInformation, ListenerName, Send}
@@ -139,8 +138,15 @@ class KafkaApis(val requestChannel: RequestChannel,
     request: RequestChannel.Request,
     handler: RequestChannel.Request => Unit
   ): Unit = {
-    def responseCallback(response: AbstractResponse): Unit = {
-      requestHelper.sendForwardedResponse(request, response)
+    def responseCallback(responseOpt: Option[AbstractResponse]): Unit = {
+      responseOpt match {
+        case Some(response) => requestHelper.sendForwardedResponse(request, response)
+        case None =>
+          info(s"The client connection will be closed due to controller responded " +
+            s"unsupported version exception during $request forwarding. " +
+            s"This could happen when the controller changed after the connection was established.")
+          requestHelper.closeConnection(request, Collections.emptyMap())
+      }
     }
 
     if (!request.isForwarded && !controller.isActive && isForwardingEnabled(request)) {
@@ -1753,18 +1759,36 @@ class KafkaApis(val requestChannel: RequestChannel,
       else {
         val supportedFeatures = brokerFeatures.supportedFeatures
         val finalizedFeaturesOpt = finalizedFeatureCache.get
-        finalizedFeaturesOpt match {
-          case Some(finalizedFeatures) => ApiVersion.apiVersionsResponse(
-            requestThrottleMs,
-            config.interBrokerProtocolVersion.recordVersion.value,
-            supportedFeatures,
-            finalizedFeatures.features,
-            finalizedFeatures.epoch)
-          case None => ApiVersion.apiVersionsResponse(
-            requestThrottleMs,
-            config.interBrokerProtocolVersion.recordVersion.value,
-            supportedFeatures)
+        val controllerApiVersions = if (isForwardingEnabled(request)) {
+          forwardingManager.controllerApiVersions()
+        } else {
+          None
         }
+
+        val apiVersionsResponse =
+          finalizedFeaturesOpt match {
+            case Some(finalizedFeatures) => ApiVersion.apiVersionsResponse(
+              requestThrottleMs,
+              config.interBrokerProtocolVersion.recordVersion.value,
+              supportedFeatures,
+              finalizedFeatures.features,
+              finalizedFeatures.epoch,
+              controllerApiVersions)
+            case None => ApiVersion.apiVersionsResponse(
+              requestThrottleMs,
+              config.interBrokerProtocolVersion.recordVersion.value,
+              supportedFeatures,
+              controllerApiVersions)
+          }
+        if (request.context.fromPrivilegedListener) {
+          apiVersionsResponse.data.apiKeys().add(
+            new ApiVersionsResponseData.ApiVersionsResponseKey()
+              .setApiKey(ApiKeys.ENVELOPE.id)
+              .setMinVersion(ApiKeys.ENVELOPE.oldestVersion())
+              .setMaxVersion(ApiKeys.ENVELOPE.latestVersion())
+          )
+        }
+        apiVersionsResponse
       }
     }
     requestHelper.sendResponseMaybeThrottle(request, createResponseCallback)

@@ -36,6 +36,7 @@ import kafka.network.RequestChannel.{CloseConnectionResponse, SendResponse}
 import kafka.server.QuotaFactory.QuotaManagers
 import kafka.utils.{MockTime, TestUtils}
 import kafka.zk.KafkaZkClient
+import org.apache.kafka.clients.NodeApiVersions
 import org.apache.kafka.clients.admin.AlterConfigOp.OpType
 import org.apache.kafka.clients.admin.{AlterConfigOp, ConfigEntry}
 import org.apache.kafka.common.acl.AclOperation
@@ -519,7 +520,7 @@ class KafkaApisTest {
 
     EasyMock.expect(forwardingManager.forwardRequest(
       EasyMock.eq(request),
-      anyObject[AbstractResponse => Unit]()
+      anyObject[Option[AbstractResponse] => Unit]()
     )).once()
 
     EasyMock.replay(replicaManager, clientRequestQuotaManager, requestChannel, controller, forwardingManager)
@@ -688,6 +689,78 @@ class KafkaApisTest {
           assertEquals(thrown, expected(entity).exception())
         ).isDone
     }
+  }
+
+  @Test
+  def testHandleApiVersionsWithControllerApiVersions(): Unit = {
+    val authorizer: Authorizer = EasyMock.niceMock(classOf[Authorizer])
+
+    val requestHeader = new RequestHeader(ApiKeys.API_VERSIONS, ApiKeys.API_VERSIONS.latestVersion, clientId, 0)
+
+    val permittedVersion: Short = 0
+    EasyMock.expect(forwardingManager.controllerApiVersions()).andReturn(
+      Some(NodeApiVersions.create(ApiKeys.ALTER_CONFIGS.id, permittedVersion, permittedVersion)))
+
+    val capturedResponse = expectNoThrottling()
+
+    val apiVersionsRequest = new ApiVersionsRequest.Builder()
+      .build(requestHeader.apiVersion)
+    val request = buildRequest(apiVersionsRequest,
+      fromPrivilegedListener = true, requestHeader = Option(requestHeader))
+
+    EasyMock.replay(replicaManager, clientRequestQuotaManager, forwardingManager,
+      requestChannel, authorizer, adminManager, controller)
+
+    createKafkaApis(authorizer = Some(authorizer), enableForwarding = true).handleApiVersionsRequest(request)
+
+    val expectedVersions = new ApiVersionsResponseData.ApiVersionsResponseKey()
+      .setApiKey(ApiKeys.ALTER_CONFIGS.id)
+      .setMaxVersion(permittedVersion)
+      .setMinVersion(permittedVersion)
+
+    val response = readResponse(apiVersionsRequest, capturedResponse)
+      .asInstanceOf[ApiVersionsResponse]
+    assertEquals(Errors.NONE, Errors.forCode(response.data().errorCode()))
+
+    val alterConfigVersions = response.data().apiKeys().find(ApiKeys.ALTER_CONFIGS.id)
+    assertEquals(expectedVersions, alterConfigVersions)
+
+    verify(authorizer, adminManager, forwardingManager)
+  }
+
+  @Test
+  def testGetUnsupportedVersionsWhenControllerApiVersionsNotAvailable(): Unit = {
+    val authorizer: Authorizer = EasyMock.niceMock(classOf[Authorizer])
+
+    val requestHeader = new RequestHeader(ApiKeys.API_VERSIONS, ApiKeys.API_VERSIONS.latestVersion, clientId, 0)
+
+    EasyMock.expect(forwardingManager.controllerApiVersions()).andReturn(None)
+
+    val capturedResponse = expectNoThrottling()
+
+    val apiVersionsRequest = new ApiVersionsRequest.Builder()
+      .build(requestHeader.apiVersion)
+    val request = buildRequest(apiVersionsRequest,
+      fromPrivilegedListener = true, requestHeader = Option(requestHeader))
+
+    EasyMock.replay(replicaManager, clientRequestQuotaManager, forwardingManager,
+      requestChannel, authorizer, adminManager, controller)
+
+    createKafkaApis(authorizer = Some(authorizer), enableForwarding = true).handleApiVersionsRequest(request)
+
+    val response = readResponse(apiVersionsRequest, capturedResponse)
+      .asInstanceOf[ApiVersionsResponse]
+    assertEquals(Errors.NONE, Errors.forCode(response.data().errorCode()))
+
+    val expectedVersions = new ApiVersionsResponseData.ApiVersionsResponseKey()
+      .setApiKey(ApiKeys.ALTER_CONFIGS.id)
+      .setMaxVersion(ApiKeys.ALTER_CONFIGS.latestVersion())
+      .setMinVersion(ApiKeys.ALTER_CONFIGS.oldestVersion())
+
+    val alterConfigVersions = response.data().apiKeys().find(ApiKeys.ALTER_CONFIGS.id)
+    assertEquals(expectedVersions, alterConfigVersions)
+
+    verify(authorizer, adminManager, forwardingManager)
   }
 
   @Test

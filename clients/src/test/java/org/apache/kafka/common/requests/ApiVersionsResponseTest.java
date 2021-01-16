@@ -17,12 +17,17 @@
 
 package org.apache.kafka.common.requests;
 
+import org.apache.kafka.common.protocol.ApiVersion;
 import org.apache.kafka.common.message.ApiVersionsResponseData.ApiVersionsResponseKey;
+import org.apache.kafka.common.message.ApiVersionsResponseData.ApiVersionsResponseKeyCollection;
 import org.apache.kafka.common.protocol.ApiKeys;
+import org.apache.kafka.common.record.RecordBatch;
+import org.apache.kafka.common.utils.Utils;
 import org.junit.jupiter.api.Test;
 
 import java.util.Collection;
 import java.util.HashSet;
+import java.util.Map;
 import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -71,6 +76,39 @@ public class ApiVersionsResponseTest {
         assertTrue(ApiVersionsResponse.DEFAULT_API_VERSIONS_RESPONSE.data().supportedFeatures().isEmpty());
         assertTrue(ApiVersionsResponse.DEFAULT_API_VERSIONS_RESPONSE.data().finalizedFeatures().isEmpty());
         assertEquals(ApiVersionsResponse.UNKNOWN_FINALIZED_FEATURES_EPOCH, ApiVersionsResponse.DEFAULT_API_VERSIONS_RESPONSE.data().finalizedFeaturesEpoch());
+    }
+
+    @Test
+    public void shouldHaveCommonlyAgreedApiVersionResponseWithControllerOnForwardableAPIs() {
+        final ApiKeys forwardableAPIKey = ApiKeys.CREATE_ACLS;
+        final ApiKeys nonForwardableAPIKey = ApiKeys.JOIN_GROUP;
+        final short minVersion = 0;
+        final short maxVersion = 1;
+        Map<ApiKeys, ApiVersion> activeControllerApiVersions = Utils.mkMap(
+            Utils.mkEntry(forwardableAPIKey, new ApiVersion(forwardableAPIKey.id, minVersion, maxVersion)),
+            Utils.mkEntry(nonForwardableAPIKey, new ApiVersion(nonForwardableAPIKey.id, minVersion, maxVersion))
+        );
+
+        ApiVersionsResponseKeyCollection commonResponse = ApiVersionsResponse.intersectControllerApiVersions(
+            RecordBatch.CURRENT_MAGIC_VALUE,
+            activeControllerApiVersions);
+
+        verifyVersions(forwardableAPIKey.id, minVersion, maxVersion, commonResponse);
+
+        verifyVersions(nonForwardableAPIKey.id, ApiKeys.JOIN_GROUP.oldestVersion(),
+            ApiKeys.JOIN_GROUP.latestVersion(), commonResponse);
+    }
+
+    private void verifyVersions(short forwardableAPIKey,
+                                short minVersion,
+                                short maxVersion,
+                                ApiVersionsResponseKeyCollection commonResponse) {
+        ApiVersionsResponseKey expectedVersionsForForwardableAPI =
+            new ApiVersionsResponseKey()
+                .setApiKey(forwardableAPIKey)
+                .setMinVersion(minVersion)
+                .setMaxVersion(maxVersion);
+        assertEquals(expectedVersionsForForwardableAPI, commonResponse.find(forwardableAPIKey));
     }
 
     private Set<ApiKeys> apiKeysInResponse(final ApiVersionsResponse apiVersions) {
