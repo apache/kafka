@@ -69,7 +69,7 @@ import org.apache.kafka.common.utils.{ProducerIdAndEpoch, SecurityUtils, Utils}
 import org.apache.kafka.common.{IsolationLevel, Node, TopicPartition, Uuid}
 import org.apache.kafka.server.authorizer.{Action, AuthorizationResult, Authorizer}
 import org.easymock.EasyMock._
-import org.easymock.{Capture, EasyMock, IAnswer, IArgumentMatcher}
+import org.easymock.{Capture, EasyMock, IAnswer}
 import org.junit.Assert._
 import org.junit.{After, Test}
 import org.mockito.{ArgumentMatchers, Mockito}
@@ -146,103 +146,6 @@ class KafkaApisTest {
       null,
       brokerFeatures,
       cache)
-  }
-
-  @Test
-  def testAuthorize(): Unit = {
-    val authorizer: Authorizer = EasyMock.niceMock(classOf[Authorizer])
-
-    val operation = AclOperation.WRITE
-    val resourceType = ResourceType.TOPIC
-    val resourceName = "topic-1"
-    val requestHeader = new RequestHeader(ApiKeys.PRODUCE, ApiKeys.PRODUCE.latestVersion,
-      clientId, 0)
-    val requestContext = new RequestContext(requestHeader, "1", InetAddress.getLocalHost,
-      KafkaPrincipal.ANONYMOUS, ListenerName.forSecurityProtocol(SecurityProtocol.PLAINTEXT),
-      SecurityProtocol.PLAINTEXT, ClientInformation.EMPTY, false)
-
-    val expectedActions = Seq(
-      new Action(operation, new ResourcePattern(resourceType, resourceName, PatternType.LITERAL),
-        1, true, true)
-    )
-
-    EasyMock.expect(authorizer.authorize(requestContext, expectedActions.asJava))
-      .andReturn(Seq(AuthorizationResult.ALLOWED).asJava)
-      .once()
-
-    EasyMock.replay(authorizer)
-
-    val result = createKafkaApis(authorizer = Some(authorizer)).authHelper.authorize(
-      requestContext, operation, resourceType, resourceName)
-
-    verify(authorizer)
-
-    assertEquals(true, result)
-  }
-
-  @Test
-  def testFilterByAuthorized(): Unit = {
-    val authorizer: Authorizer = EasyMock.niceMock(classOf[Authorizer])
-
-    val operation = AclOperation.WRITE
-    val resourceType = ResourceType.TOPIC
-    val resourceName1 = "topic-1"
-    val resourceName2 = "topic-2"
-    val resourceName3 = "topic-3"
-    val requestHeader = new RequestHeader(ApiKeys.PRODUCE, ApiKeys.PRODUCE.latestVersion,
-      clientId, 0)
-    val requestContext = new RequestContext(requestHeader, "1", InetAddress.getLocalHost,
-      KafkaPrincipal.ANONYMOUS, ListenerName.forSecurityProtocol(SecurityProtocol.PLAINTEXT),
-      SecurityProtocol.PLAINTEXT, ClientInformation.EMPTY, false)
-
-    val expectedActions = Seq(
-      new Action(operation, new ResourcePattern(resourceType, resourceName1, PatternType.LITERAL),
-        2, true, true),
-      new Action(operation, new ResourcePattern(resourceType, resourceName2, PatternType.LITERAL),
-        1, true, true),
-      new Action(operation, new ResourcePattern(resourceType, resourceName3, PatternType.LITERAL),
-        1, true, true),
-    )
-
-    EasyMock.expect(authorizer.authorize(
-      EasyMock.eq(requestContext), matchSameElements(expectedActions.asJava)
-    )).andAnswer { () =>
-      val actions = EasyMock.getCurrentArguments.apply(1).asInstanceOf[util.List[Action]].asScala
-      actions.map { action =>
-        if (Set(resourceName1, resourceName3).contains(action.resourcePattern.name))
-          AuthorizationResult.ALLOWED
-        else
-          AuthorizationResult.DENIED
-      }.asJava
-    }.once()
-
-    EasyMock.replay(authorizer)
-
-    val result = createKafkaApis(authorizer = Some(authorizer)).filterByAuthorized(
-      requestContext,
-      operation,
-      resourceType,
-      // Duplicate resource names should not trigger multiple calls to authorize
-      Seq(resourceName1, resourceName2, resourceName1, resourceName3)
-    )(identity)
-
-    verify(authorizer)
-
-    assertEquals(Set(resourceName1, resourceName3), result)
-  }
-
-  /**
-   * Returns true if the elements in both lists are the same irrespective of ordering.
-   */
-  private def matchSameElements[T](list: util.List[T]): util.List[T] = {
-    EasyMock.reportMatcher(new IArgumentMatcher {
-      def matches(argument: Any): Boolean = argument match {
-        case s: util.List[_] => s.asScala.toSet == list.asScala.toSet
-        case _ => false
-      }
-      def appendTo(buffer: StringBuffer): Unit = buffer.append(s"list($list)")
-    })
-    null
   }
 
   @Test
@@ -868,7 +771,7 @@ class KafkaApisTest {
         1, logIfAllowed, logIfDenied))
 
     EasyMock.expect(authorizer.authorize(
-      anyObject[RequestContext], matchSameElements(expectedAuthorizedActions.asJava)
+      anyObject[RequestContext], AuthHelperTest.matchSameElements(expectedAuthorizedActions.asJava)
     )).andAnswer { () =>
       val actions = EasyMock.getCurrentArguments.apply(1).asInstanceOf[util.List[Action]].asScala
       actions.map { action =>
