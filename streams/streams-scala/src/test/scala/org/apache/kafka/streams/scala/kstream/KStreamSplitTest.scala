@@ -71,11 +71,41 @@ class KStreamSplitTest extends FlatSpec with Matchers with TestDriver {
     val m = builder
       .stream[Integer, Integer](sourceTopic)
       .split(Named.as("_"))
-      .branch((_, v) => v % 2 == 0, Branched.withConsumer(ks => ks.to("even")))
+      .branch((_, v) => v % 2 == 0, Branched.withConsumer(ks => ks.to("even"), "consumedEvens"))
       .branch((_, v) => v % 3 == 0, Branched.withFunction(ks => ks.mapValues(x => x * x), "mapped"))
       .noDefaultBranch()
 
     m("_mapped").to("mapped")
+
+    val testDriver = createTestDriver(builder)
+    val testInput = testDriver.createInput[Integer, Integer](sourceTopic)
+    testInput.pipeValueList(
+      List(1, 2, 3, 4, 5, 9)
+        .map(Integer.valueOf)
+        .asJava
+    )
+
+    val even = testDriver.createOutput[Integer, Integer]("even")
+    val mapped = testDriver.createOutput[Integer, Integer]("mapped")
+
+    even.readValuesToList().asScala shouldBe List(2, 4)
+    mapped.readValuesToList().asScala shouldBe List(9, 81)
+
+    testDriver.close()
+  }
+
+  "split" should "route messages to anonymous consumers" in {
+    val builder = new StreamsBuilder()
+    val sourceTopic = "source"
+
+    val m = builder
+      .stream[Integer, Integer](sourceTopic)
+      .split(Named.as("_"))
+      .branch((_, v) => v % 2 == 0, Branched.withConsumer(ks => ks.to("even")))
+      .branch((_, v) => v % 3 == 0, Branched.withFunction(ks => ks.mapValues(x => x * x)))
+      .noDefaultBranch()
+
+    m("_2").to("mapped")
 
     val testDriver = createTestDriver(builder)
     val testInput = testDriver.createInput[Integer, Integer](sourceTopic)

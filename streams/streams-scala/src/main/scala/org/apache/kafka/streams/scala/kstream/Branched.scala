@@ -35,41 +35,6 @@ object Branched {
     BranchedJ.as[K, V](name)
 
   /**
-   * Create an instance of `Branched` with provided chain function.
-   *
-   * @param chain A function that will be applied to the branch. If the provided function returns
-   *              `null`, its result is ignored, otherwise it is added to the Map returned
-   *              by [[BranchedKStream.defaultBranch]] or [[BranchedKStream.noDefaultBranch]] (see
-   *              [[BranchedKStream]] description for details).
-   * @tparam K key type
-   * @tparam V value type
-   * @return a new instance of `Branched`
-   * @see `org.apache.kafka.streams.kstream.Branched#withFunction(java.util.function.Function)`
-   */
-  def withFunction[K, V](chain: KStream[K, V] => KStream[K, V]): BranchedJ[K, V] =
-    BranchedJ.withFunction({ s: KStreamJ[K, V] =>
-      chain.apply(new KStream[K, V](s)).inner
-    }.asJava)
-
-  /**
-   * Create an instance of `Branched` with provided chain consumer.
-   *
-   * @param chain A consumer to which the branch will be sent. If a consumer is provided here,
-   *              the respective branch will not be added to the resulting Map returned
-   *              by [[BranchedKStream.defaultBranch]] or [[BranchedKStream.noDefaultBranch]] (see
-   *              [[BranchedKStream]] description for details). If `null`, a no-op consumer will be used
-   *              and the branch will be added to the resulting Map.
-   * @tparam K key type
-   * @tparam V value type
-   * @return a new instance of `Branched`
-   * @see `org.apache.kafka.streams.kstream.Branched#withConsumer(java.util.function.Consumer)`
-   */
-  def withConsumer[K, V](chain: KStream[K, V] => Unit): BranchedJ[K, V] =
-    BranchedJ.withConsumer({ s: KStreamJ[K, V] =>
-      chain.apply(new KStream[K, V](s))
-    }.asJava)
-
-  /**
    * Create an instance of `Branched` with provided chain function and branch name postfix.
    *
    * @param chain A function that will be applied to the branch. If `null`, the identity
@@ -84,7 +49,7 @@ object Branched {
    * @return a new instance of `Branched`
    * @see `org.apache.kafka.streams.kstream.Branched#withFunction(java.util.function.Function, java.lang.String)`
    */
-  def withFunction[K, V](chain: KStream[K, V] => KStream[K, V], name: String): BranchedJ[K, V] =
+  def withFunction[K, V](chain: KStream[K, V] => KStream[K, V], name: String = null): BranchedJ[K, V] =
     BranchedJ.withFunction({ s: KStreamJ[K, V] =>
       chain.apply(new KStream[K, V](s)).inner
     }.asJava, name)
@@ -104,7 +69,7 @@ object Branched {
    * @return a new instance of `Branched`
    * @see `org.apache.kafka.streams.kstream.Branched#withConsumer(java.util.function.Consumer, java.lang.String)`
    */
-  def withConsumer[K, V](chain: KStream[K, V] => Unit, name: String): BranchedJ[K, V] =
+  def withConsumer[K, V](chain: KStream[K, V] => Unit, name: String = null): BranchedJ[K, V] =
     BranchedJ.withConsumer({ s: KStreamJ[K, V] =>
       chain.apply(new KStream[K, V](s))
     }.asJava, name)
