@@ -16,7 +16,7 @@
  */
 package org.apache.kafka.clients.admin;
 
-import org.apache.kafka.clients.ApiVersion;
+import org.apache.kafka.common.protocol.ApiVersion;
 import org.apache.kafka.clients.ClientDnsLookup;
 import org.apache.kafka.clients.ClientUtils;
 import org.apache.kafka.clients.MockClient;

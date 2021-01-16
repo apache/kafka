@@ -34,7 +34,16 @@ import scala.jdk.CollectionConverters._
 
 class BrokerApiVersionsCommandTest extends KafkaServerTestHarness {
 
-  def generateConfigs: Seq[KafkaConfig] = TestUtils.createBrokerConfigs(1, zkConnect).map(KafkaConfig.fromProps)
+  def generateConfigs: Seq[KafkaConfig] =
+    TestUtils.createBrokerConfigs(1, zkConnect).map(props => {
+      // Configure control plane listener to make sure we have separate listeners from client,
+      // in order to avoid returning Envelope API version.
+      props.setProperty(KafkaConfig.ControlPlaneListenerNameProp, "CONTROLLER")
+      props.setProperty(KafkaConfig.ListenerSecurityProtocolMapProp, "CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT")
+      props.setProperty("listeners", "PLAINTEXT://localhost:0,CONTROLLER://localhost:0")
+      props.setProperty(KafkaConfig.AdvertisedListenersProp, "PLAINTEXT://localhost:0,CONTROLLER://localhost:0")
+      props
+    }).map(KafkaConfig.fromProps)
 
   @Test(timeout=120000)
   def checkBrokerApiVersionCommandOutput(): Unit = {
@@ -55,13 +64,10 @@ class BrokerApiVersionsCommandTest extends KafkaServerTestHarness {
         if (apiVersion.minVersion == apiVersion.maxVersion) apiVersion.minVersion.toString
         else s"${apiVersion.minVersion} to ${apiVersion.maxVersion}"
       val usableVersion = nodeApiVersions.latestUsableVersion(apiKey)
-      // Admin client should not see ENVELOPE supported versions as its a broker-internal API.
-      val usableVersionInfo = if (apiKey == ApiKeys.ENVELOPE) "UNSUPPORTED" else
-        s"$versionRangeStr [usable: $usableVersion]"
 
       val terminator = if (apiKey == enabledApis.last) "" else ","
 
-      val line = s"\t${apiKey.name}(${apiKey.id}): $usableVersionInfo$terminator"
+      val line = s"\t${apiKey.name}(${apiKey.id}): $versionRangeStr [usable: $usableVersion]$terminator"
       assertTrue(lineIter.hasNext)
       assertEquals(line, lineIter.next())
     }

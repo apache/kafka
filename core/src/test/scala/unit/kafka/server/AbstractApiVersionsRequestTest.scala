@@ -16,7 +16,10 @@
  */
 package kafka.server
 
+import java.util.Properties
+
 import org.apache.kafka.common.message.ApiVersionsResponseData.ApiVersionsResponseKey
+import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.protocol.ApiKeys
 import org.apache.kafka.common.requests.{ApiVersionsRequest, ApiVersionsResponse}
 import org.junit.Assert._
@@ -24,6 +27,16 @@ import org.junit.Assert._
 import scala.jdk.CollectionConverters._
 
 abstract class AbstractApiVersionsRequestTest extends BaseRequestTest {
+
+  def controlPlaneListenerName = new ListenerName("CONTROLLER")
+
+  // Configure control plane listener to make sure we have separate listeners for testing.
+  override def brokerPropertyOverrides(properties: Properties): Unit = {
+    properties.setProperty(KafkaConfig.ControlPlaneListenerNameProp, controlPlaneListenerName.value())
+    properties.setProperty(KafkaConfig.ListenerSecurityProtocolMapProp, s"${controlPlaneListenerName.value()}:$securityProtocol,$securityProtocol:$securityProtocol")
+    properties.setProperty("listeners", s"$securityProtocol://localhost:0,${controlPlaneListenerName.value()}://localhost:0")
+    properties.setProperty(KafkaConfig.AdvertisedListenersProp, s"$securityProtocol://localhost:0,${controlPlaneListenerName.value()}://localhost:0")
+  }
 
   def sendUnsupportedApiVersionRequest(request: ApiVersionsRequest): ApiVersionsResponse = {
     val overrideHeader = nextRequestHeader(ApiKeys.API_VERSIONS, Short.MaxValue)
@@ -34,10 +47,13 @@ abstract class AbstractApiVersionsRequestTest extends BaseRequestTest {
     } finally socket.close()
   }
 
-  def validateApiVersionsResponse(apiVersionsResponse: ApiVersionsResponse): Unit = {
-    val enabledPublicApis = ApiKeys.enabledApis()
+  def validateApiVersionsResponse(apiVersionsResponse: ApiVersionsResponse, listenerName: ListenerName = interBrokerListenerName): Unit = {
+    val expectedApis = ApiKeys.enabledApis()
+    if (listenerName == controlPlaneListenerName) {
+      expectedApis.add(ApiKeys.ENVELOPE)
+    }
     assertEquals("API keys in ApiVersionsResponse must match API keys supported by broker.",
-      enabledPublicApis.size(), apiVersionsResponse.data.apiKeys().size())
+      expectedApis.size(), apiVersionsResponse.data.apiKeys().size())
     for (expectedApiVersion: ApiVersionsResponseKey <- ApiVersionsResponse.DEFAULT_API_VERSIONS_RESPONSE.data.apiKeys().asScala) {
       val actualApiVersion = apiVersionsResponse.apiVersion(expectedApiVersion.apiKey)
       assertNotNull(s"API key ${actualApiVersion.apiKey} is supported by broker, but not received in ApiVersionsResponse.", actualApiVersion)

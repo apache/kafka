@@ -23,6 +23,7 @@ import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.message.ApiVersionsResponseData.ApiVersionsResponseKey;
 import org.apache.kafka.common.message.ApiVersionsResponseData.ApiVersionsResponseKeyCollection;
 import org.apache.kafka.common.protocol.ApiKeys;
+import org.apache.kafka.common.protocol.ApiVersion;
 import org.apache.kafka.common.requests.ApiVersionsResponse;
 import org.junit.jupiter.api.Test;
 
