@@ -14,10 +14,14 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.connect.mirror.integration;
+package kafka.server
 
-import org.junit.jupiter.api.Tag;
-
-@Tag("integration")
-public class MirrorConnectorsIntegrationTest extends MirrorConnectorsIntegrationBaseTest {
+/**
+ * Stubbed implementation of the KIP-500 controller which is responsible
+ * for managing the `@metadata` topic which is replicated through Raft.
+ */
+class ControllerServer {
+  def startup(): Unit = ???
+  def shutdown(): Unit = ???
+  def awaitShutdown(): Unit = ???
 }

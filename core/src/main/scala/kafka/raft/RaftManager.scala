@@ -16,9 +16,15 @@
  */
 package kafka.raft
 
+import java.util.OptionalInt
+
+import java.io.File
+import java.nio.file.Files
+import java.util.concurrent.CompletableFuture
+
 import kafka.log.{Log, LogConfig, LogManager}
 import kafka.raft.KafkaRaftManager.RaftIoThread
-import kafka.server.{BrokerTopicStats, KafkaConfig, KafkaServer, LogDirFailureChannel}
+import kafka.server.{BrokerTopicStats, KafkaConfig, LogDirFailureChannel}
 import kafka.utils.timer.SystemTimer
 import kafka.utils.{KafkaScheduler, Logging, ShutdownableThread}
 import org.apache.kafka.clients.{ApiVersions, ClientDnsLookup, ManualMetadataUpdater, NetworkClient}
@@ -31,9 +37,6 @@ import org.apache.kafka.common.security.JaasContext
 import org.apache.kafka.common.utils.{LogContext, Time}
 import org.apache.kafka.raft.{FileBasedStateStore, KafkaRaftClient, RaftClient, RaftConfig, RaftRequest, RecordSerde}
 
-import java.io.File
-import java.nio.file.Files
-import java.util.concurrent.CompletableFuture
 import scala.jdk.CollectionConverters._
 
 object KafkaRaftManager {
@@ -93,15 +96,15 @@ trait RaftManager[T] {
 }
 
 class KafkaRaftManager[T](
-  nodeId: Int,
+  config: KafkaConfig,
   baseLogDir: String,
   recordSerde: RecordSerde[T],
   topicPartition: TopicPartition,
-  config: KafkaConfig,
   time: Time,
   metrics: Metrics
 ) extends RaftManager[T] with Logging {
 
+  private val nodeId = config.brokerId
   private val raftConfig = new RaftConfig(config.originals)
   private val logContext = new LogContext(s"[RaftManager $nodeId] ")
   this.logIdent = logContext.logPrefix()
@@ -166,20 +169,20 @@ class KafkaRaftManager[T](
   }
 
   private def buildRaftClient(): KafkaRaftClient[T] = {
-
     val expirationTimer = new SystemTimer("raft-expiration-executor")
     val expirationService = new TimingWheelExpirationService(expirationTimer)
+    val quorumStateStore = new FileBasedStateStore(new File(dataDir, "quorum-state"))
 
     new KafkaRaftClient(
       recordSerde,
       netChannel,
       metadataLog,
-      new FileBasedStateStore(new File(dataDir, "quorum-state")),
+      quorumStateStore,
       time,
       metrics,
       expirationService,
       logContext,
-      nodeId
+      OptionalInt.of(nodeId)
     )
   }
 
@@ -194,7 +197,7 @@ class KafkaRaftManager[T](
   }
 
   private def buildMetadataLog(): KafkaMetadataLog = {
-    val defaultProps = KafkaServer.copyKafkaConfigToLog(config)
+    val defaultProps = LogConfig.extractLogConfigMap(config)
     LogConfig.validateValues(defaultProps)
     val defaultLogConfig = LogConfig(defaultProps)
 
