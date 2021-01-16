@@ -42,9 +42,9 @@ public class Branched<K, V> implements NamedOperation<Branched<K, V>> {
     }
 
     /**
-     * Create an instance of {@code Branched} with provided branch name postfix.
+     * Create an instance of {@code Branched} with provided branch name suffix.
      *
-     * @param name the branch name postfix to be used. If {@code null}, a default branch name postfix will be generated
+     * @param name the branch name suffix to be used. If {@code null}, a default branch name suffix will be generated
      *             (see {@link BranchedKStream} description for details)
      * @param <K>  key type
      * @param <V>  value type
@@ -89,14 +89,14 @@ public class Branched<K, V> implements NamedOperation<Branched<K, V>> {
     }
 
     /**
-     * Create an instance of {@code Branched} with provided chain function and branch name postfix.
+     * Create an instance of {@code Branched} with provided chain function and branch name suffix.
      *
      * @param chain A function that will be applied to the branch. If {@code null}, the identity
      *              {@code kStream -> kStream} function will be used. If the provided function returns
      *              {@code null}, its result is ignored, otherwise it is added to the {@code Map} returned
      *              by {@link BranchedKStream#defaultBranch()} or {@link BranchedKStream#noDefaultBranch()} (see
      *              {@link BranchedKStream} description for details).
-     * @param name  the branch name postfix to be used. If {@code null}, a default branch name postfix will be generated
+     * @param name  the branch name suffix to be used. If {@code null}, a default branch name suffix will be generated
      *              (see {@link BranchedKStream} description for details)
      * @param <K>   key type
      * @param <V>   value type
@@ -109,14 +109,14 @@ public class Branched<K, V> implements NamedOperation<Branched<K, V>> {
     }
 
     /**
-     * Create an instance of {@code Branched} with provided chain function and branch name postfix.
+     * Create an instance of {@code Branched} with provided chain function and branch name suffix.
      *
      * @param chain A consumer to which the branch will be sent. If a non-null consumer is provided here,
      *              the respective branch will not be added to the resulting {@code Map} returned
      *              by {@link BranchedKStream#defaultBranch()} or {@link BranchedKStream#noDefaultBranch()} (see
      *              {@link BranchedKStream} description for details). If {@code null}, a no-op consumer will be used
      *              and the branch will be added to the resulting {@code Map}.
-     * @param name  the branch name postfix to be used. If {@code null}, a default branch name postfix will be generated
+     * @param name  the branch name suffix to be used. If {@code null}, a default branch name suffix will be generated
      *              (see {@link BranchedKStream} description for details)
      * @param <K>   key type
      * @param <V>   value type
@@ -138,9 +138,9 @@ public class Branched<K, V> implements NamedOperation<Branched<K, V>> {
     }
 
     /**
-     * Configure the instance of {@code Branched} with a branch name postfix.
+     * Configure the instance of {@code Branched} with a branch name suffix.
      *
-     * @param name the branch name postfix to be used. If {@code null} a default branch name postfix will be generated (see
+     * @param name the branch name suffix to be used. If {@code null} a default branch name suffix will be generated (see
      *             {@link BranchedKStream} description for details)
      * @return {@code this}
      */

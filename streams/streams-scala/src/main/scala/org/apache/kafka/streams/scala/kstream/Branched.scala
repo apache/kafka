@@ -23,9 +23,9 @@ import scala.jdk.FunctionConverters._
 object Branched {
 
   /**
-   * Create an instance of `Branched` with provided branch name postfix.
+   * Create an instance of `Branched` with provided branch name suffix.
    *
-   * @param name the branch name postfix to be used. If `null`, a default branch name postfix will be generated
+   * @param name the branch name suffix to be used. If `null`, a default branch name suffix will be generated
    *             (see [[BranchedKStream]] description for details)
    * @tparam K key type
    * @tparam V value type
@@ -35,14 +35,14 @@ object Branched {
     BranchedJ.as[K, V](name)
 
   /**
-   * Create an instance of `Branched` with provided chain function and branch name postfix.
+   * Create an instance of `Branched` with provided chain function and branch name suffix.
    *
    * @param chain A function that will be applied to the branch. If `null`, the identity
    *              function will be used. If the provided function returns
    *              `null`, its result is ignored, otherwise it is added to the Map returned
    *              by [[BranchedKStream.defaultBranch]] or [[BranchedKStream.noDefaultBranch]] (see
    *              [[BranchedKStream]] description for details).
-   * @param name  the branch name postfix to be used. If `null`, a default branch name postfix will be generated
+   * @param name  the branch name suffix to be used. If `null`, a default branch name suffix will be generated
    *              (see [[BranchedKStream]] description for details)
    * @tparam K key type
    * @tparam V value type
@@ -55,14 +55,14 @@ object Branched {
     }.asJava, name)
 
   /**
-   * Create an instance of `Branched` with provided chain function and branch name postfix.
+   * Create an instance of `Branched` with provided chain function and branch name suffix.
    *
    * @param chain A consumer to which the branch will be sent. If a non-null consumer is provided here,
    *              the respective branch will not be added to the resulting Map returned
    *              by [[BranchedKStream.defaultBranch]] or [[BranchedKStream.noDefaultBranch]] (see
    *              [[BranchedKStream]] description for details). If `null`, a no-op consumer will be used
    *              and the branch will be added to the resulting Map.
-   * @param name  the branch name postfix to be used. If `null`, a default branch name postfix will be generated
+   * @param name  the branch name suffix to be used. If `null`, a default branch name suffix will be generated
    *              (see [[BranchedKStream]] description for details)
    * @tparam K key type
    * @tparam V value type
