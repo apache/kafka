@@ -419,4 +419,26 @@ public class SimpleExampleMessageTest {
         assertEquals(message.hashCode(), messageFromJson.hashCode());
     }
 
+    @Test
+    public void testToString() {
+        SimpleExampleMessageData message = new SimpleExampleMessageData();
+        message.setMyUint16(65535);
+        message.setTaggedUuid(Uuid.fromString("x7D3Ck_ZRA22-dzIvu_pnQ"));
+        message.setMyFloat64(1.0);
+        assertEquals("SimpleExampleMessageData(processId=AAAAAAAAAAAAAAAAAAAAAA, " +
+                "myTaggedIntArray=[], " +
+                "myNullableString=null, " +
+                "myInt16=123, myFloat64=1.0, " +
+                "myString='', " +
+                "myBytes=[], " +
+                "taggedUuid=x7D3Ck_ZRA22-dzIvu_pnQ, " +
+                "taggedLong=914172222550880202, " +
+                "zeroCopyByteBuffer=java.nio.HeapByteBuffer[pos=0 lim=0 cap=0], " +
+                "nullableZeroCopyByteBuffer=java.nio.HeapByteBuffer[pos=0 lim=0 cap=0], " +
+                "myStruct=MyStruct(structId=0, arrayInStruct=[]), " +
+                "myTaggedStruct=TaggedStruct(structId=''), " +
+                "myCommonStruct=TestCommonStruct(foo=123, bar=123), " +
+                "myOtherCommonStruct=TestCommonStruct(foo=123, bar=123), " +
+                "myUint16=65535)", message.toString());
+    }
 }
