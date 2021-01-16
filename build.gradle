@@ -242,9 +242,8 @@ subprojects {
   }
 
   // Remove the relevant project name once it's converted to JUnit 5
-  def shouldUseJUnit5 = !(["api", "connect", "core", "file", "generator", "json",
-    "runtime", "transform", "examples", "streams-scala", "streams"].contains(it.project.name) ||
-    it.project.name.startsWith("upgrade-system-tests-"))
+  def shouldUseJUnit5 = !(["api", "connect", "core", "file", "generator", "runtime", "examples",
+    "streams-scala", "streams"].contains(it.project.name) || it.project.name.startsWith("upgrade-system-tests-"))
 
   def testLoggingEvents = ["passed", "skipped", "failed"]
   def testShowStandardStreams = false
@@ -1893,8 +1892,7 @@ project(':connect:transforms') {
     compile libs.slf4jApi
 
     testCompile libs.easymock
-    testCompile libs.junitJupiterApi
-    testCompile libs.junitVintageEngine
+    testCompile libs.junitJupiter
     testCompile libs.powermockJunit4
     testCompile libs.powermockEasymock
 
@@ -1934,8 +1932,7 @@ project(':connect:json') {
     compile libs.slf4jApi
 
     testCompile libs.easymock
-    testCompile libs.junitJupiterApi
-    testCompile libs.junitVintageEngine
+    testCompile libs.junitJupiter
     testCompile libs.powermockJunit4
     testCompile libs.powermockEasymock
 

@@ -70,11 +70,10 @@ class TestRaftServer(
     socketServer.startup(startProcessingRequests = false)
 
     raftManager = new KafkaRaftManager[Array[Byte]](
-      config.brokerId,
+      config,
       config.logDirs.head,
       new ByteArraySerde,
       partition,
-      config,
       time,
       metrics
     )

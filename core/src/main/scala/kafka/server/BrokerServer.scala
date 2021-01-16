@@ -14,30 +14,14 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.connect.transforms.util;
+package kafka.server
 
-import org.apache.kafka.common.config.ConfigException;
-import org.junit.jupiter.api.Test;
-
-import java.util.Collections;
-
-import static org.junit.jupiter.api.Assertions.assertThrows;
-
-public class NonEmptyListValidatorTest {
-
-    @Test
-    public void testNullList() {
-        assertThrows(ConfigException.class, () -> new NonEmptyListValidator().ensureValid("foo", null));
-    }
-
-    @Test
-    public void testEmptyList() {
-        assertThrows(ConfigException.class,
-            () -> new NonEmptyListValidator().ensureValid("foo", Collections.emptyList()));
-    }
-
-    @Test
-    public void testValidList() {
-        new NonEmptyListValidator().ensureValid("foo", Collections.singletonList("foo"));
-    }
+/**
+ * Stubbed implementation of the KIP-500 broker which processes state
+ * from the `@metadata` topic which is replicated through Raft.
+ */
+class BrokerServer {
+  def startup(): Unit = ???
+  def shutdown(): Unit = ???
+  def awaitShutdown(): Unit = ???
 }
