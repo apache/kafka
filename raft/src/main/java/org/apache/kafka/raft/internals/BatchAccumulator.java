@@ -179,7 +179,7 @@ public class BatchAccumulator<T> implements Closeable {
                 nextOffset,
                 time.milliseconds(),
                 false,
-                RecordBatch.NO_PARTITION_LEADER_EPOCH,
+                epoch,
                 maxBatchSize
             );
         }
