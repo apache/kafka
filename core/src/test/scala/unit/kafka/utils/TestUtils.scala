@@ -130,7 +130,6 @@ object TestUtils extends Logging {
     f
   }
 
-
   /**
    * Create a temporary file
    */
