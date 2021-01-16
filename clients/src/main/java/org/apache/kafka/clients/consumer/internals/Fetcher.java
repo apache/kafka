@@ -16,7 +16,7 @@
  */
 package org.apache.kafka.clients.consumer.internals;
 
-import org.apache.kafka.common.protocol.ApiVersion;
+import org.apache.kafka.common.message.ApiVersionsResponseData;
 import org.apache.kafka.clients.ApiVersions;
 import org.apache.kafka.clients.ClientResponse;
 import org.apache.kafka.clients.FetchSessionHandler;
@@ -770,11 +770,11 @@ public class Fetcher<K, V> implements Closeable {
     }
 
     static boolean hasUsableOffsetForLeaderEpochVersion(NodeApiVersions nodeApiVersions) {
-        ApiVersion apiVersion = nodeApiVersions.apiVersion(ApiKeys.OFFSET_FOR_LEADER_EPOCH);
+        ApiVersionsResponseData.ApiVersion apiVersion = nodeApiVersions.apiVersion(ApiKeys.OFFSET_FOR_LEADER_EPOCH);
         if (apiVersion == null)
             return false;
 
-        return OffsetsForLeaderEpochRequest.supportsTopicPermission(apiVersion.maxVersion);
+        return OffsetsForLeaderEpochRequest.supportsTopicPermission(apiVersion.maxVersion());
     }
 
     /**

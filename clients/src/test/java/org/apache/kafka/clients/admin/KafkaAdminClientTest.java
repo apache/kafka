@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.clients.admin;
 
-import org.apache.kafka.common.protocol.ApiVersion;
 import org.apache.kafka.clients.ClientDnsLookup;
 import org.apache.kafka.clients.ClientUtils;
 import org.apache.kafka.clients.MockClient;
@@ -2215,7 +2214,10 @@ public class KafkaAdminClientTest {
 
     @Test
     public void testListConsumerGroupsWithStatesOlderBrokerVersion() throws Exception {
-        ApiVersion listGroupV3 = new ApiVersion(ApiKeys.LIST_GROUPS.id, (short) 0, (short) 3);
+        ApiVersionsResponseData.ApiVersion listGroupV3 = new ApiVersionsResponseData.ApiVersion()
+                .setApiKey(ApiKeys.LIST_GROUPS.id)
+                .setMinVersion((short) 0)
+                .setMaxVersion((short) 3);
         try (AdminClientUnitTestEnv env = new AdminClientUnitTestEnv(mockCluster(1, 0))) {
             env.kafkaClient().setNodeApiVersions(NodeApiVersions.create(Collections.singletonList(listGroupV3)));
 

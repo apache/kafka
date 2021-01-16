@@ -20,10 +20,9 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.LinkedList;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
-import org.apache.kafka.common.message.ApiVersionsResponseData.ApiVersionsResponseKey;
-import org.apache.kafka.common.message.ApiVersionsResponseData.ApiVersionsResponseKeyCollection;
+import org.apache.kafka.common.message.ApiVersionsResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
-import org.apache.kafka.common.protocol.ApiVersion;
+import org.apache.kafka.common.requests.ApiVersionsResponse;
 import org.apache.kafka.common.utils.Utils;
 
 import java.util.ArrayList;
@@ -39,10 +38,10 @@ import java.util.TreeMap;
 public class NodeApiVersions {
 
     // A map of the usable versions of each API, keyed by the ApiKeys instance
-    private final Map<ApiKeys, ApiVersion> supportedVersions = new EnumMap<>(ApiKeys.class);
+    private final Map<ApiKeys, ApiVersionsResponseData.ApiVersion> supportedVersions = new EnumMap<>(ApiKeys.class);
 
     // List of APIs which the broker supports, but which are unknown to the client
-    private final List<ApiVersion> unknownApis = new ArrayList<>();
+    private final List<ApiVersionsResponseData.ApiVersion> unknownApis = new ArrayList<>();
 
     /**
      * Create a NodeApiVersions object with the current ApiVersions.
@@ -50,7 +49,7 @@ public class NodeApiVersions {
      * @return A new NodeApiVersions object.
      */
     public static NodeApiVersions create() {
-        return create(Collections.<ApiVersion>emptyList());
+        return create(Collections.emptyList());
     }
 
     /**
@@ -60,18 +59,21 @@ public class NodeApiVersions {
      *                  value.
      * @return A new NodeApiVersions object.
      */
-    public static NodeApiVersions create(Collection<ApiVersion> overrides) {
-        List<ApiVersion> apiVersions = new LinkedList<>(overrides);
+    public static NodeApiVersions create(Collection<ApiVersionsResponseData.ApiVersion> overrides) {
+        List<ApiVersionsResponseData.ApiVersion> apiVersions = new LinkedList<>(overrides);
         for (ApiKeys apiKey : ApiKeys.enabledApis()) {
             boolean exists = false;
-            for (ApiVersion apiVersion : apiVersions) {
-                if (apiVersion.apiKey == apiKey.id) {
+            for (ApiVersionsResponseData.ApiVersion apiVersion : apiVersions) {
+                if (apiVersion.apiKey() == apiKey.id) {
                     exists = true;
                     break;
                 }
             }
             if (!exists) {
-                apiVersions.add(new ApiVersion(apiKey));
+                apiVersions.add(new ApiVersionsResponseData.ApiVersion()
+                        .setApiKey(apiKey.id)
+                        .setMinVersion(apiKey.oldestVersion())
+                        .setMaxVersion(apiKey.latestVersion()));
             }
         }
         return new NodeApiVersions(apiVersions);
@@ -87,25 +89,28 @@ public class NodeApiVersions {
      * @return A new NodeApiVersions object.
      */
     public static NodeApiVersions create(short apiKey, short minVersion, short maxVersion) {
-        return create(Collections.singleton(new ApiVersion(apiKey, minVersion, maxVersion)));
+        return create(Collections.singleton(new ApiVersionsResponseData.ApiVersion()
+                .setApiKey(apiKey)
+                .setMinVersion(minVersion)
+                .setMaxVersion(maxVersion)));
     }
 
-    public NodeApiVersions(ApiVersionsResponseKeyCollection nodeApiVersions) {
-        for (ApiVersionsResponseKey nodeApiVersion : nodeApiVersions) {
+    public NodeApiVersions(ApiVersionsResponseData.ApiVersionCollection nodeApiVersions) {
+        for (ApiVersionsResponseData.ApiVersion nodeApiVersion : nodeApiVersions) {
             if (ApiKeys.hasId(nodeApiVersion.apiKey())) {
                 ApiKeys nodeApiKey = ApiKeys.forId(nodeApiVersion.apiKey());
-                supportedVersions.put(nodeApiKey, new ApiVersion(nodeApiVersion));
+                supportedVersions.put(nodeApiKey, nodeApiVersion);
             } else {
                 // Newer brokers may support ApiKeys we don't know about
-                unknownApis.add(new ApiVersion(nodeApiVersion));
+                unknownApis.add(nodeApiVersion);
             }
         }
     }
 
-    public NodeApiVersions(Collection<ApiVersion> nodeApiVersions) {
-        for (ApiVersion nodeApiVersion : nodeApiVersions) {
-            if (ApiKeys.hasId(nodeApiVersion.apiKey)) {
-                ApiKeys nodeApiKey = ApiKeys.forId(nodeApiVersion.apiKey);
+    public NodeApiVersions(Collection<ApiVersionsResponseData.ApiVersion> nodeApiVersions) {
+        for (ApiVersionsResponseData.ApiVersion nodeApiVersion : nodeApiVersions) {
+            if (ApiKeys.hasId(nodeApiVersion.apiKey())) {
+                ApiKeys nodeApiKey = ApiKeys.forId(nodeApiVersion.apiKey());
                 supportedVersions.put(nodeApiKey, nodeApiVersion);
             } else {
                 // Newer brokers may support ApiKeys we don't know about
@@ -127,16 +132,19 @@ public class NodeApiVersions {
     public short latestUsableVersion(ApiKeys apiKey, short oldestAllowedVersion, short latestAllowedVersion) {
         if (!supportedVersions.containsKey(apiKey))
             throw new UnsupportedVersionException("The broker does not support " + apiKey);
-        ApiVersion supportedVersion = supportedVersions.get(apiKey);
-        Optional<ApiVersion> intersectVersion = supportedVersion.intersect(
-            new ApiVersion(apiKey.id, oldestAllowedVersion, latestAllowedVersion));
+        ApiVersionsResponseData.ApiVersion supportedVersion = supportedVersions.get(apiKey);
+        Optional<ApiVersionsResponseData.ApiVersion> intersectVersion = ApiVersionsResponse.intersect(supportedVersion,
+            new ApiVersionsResponseData.ApiVersion()
+                .setApiKey(apiKey.id)
+                .setMinVersion(oldestAllowedVersion)
+                .setMaxVersion(latestAllowedVersion));
 
         if (intersectVersion.isPresent())
-            return intersectVersion.get().maxVersion;
+            return intersectVersion.get().maxVersion();
         else
             throw new UnsupportedVersionException("The broker does not support " + apiKey +
                 " with version in range [" + oldestAllowedVersion + "," + latestAllowedVersion + "]. The supported" +
-                " range is [" + supportedVersion.minVersion + "," + supportedVersion.maxVersion + "].");
+                " range is [" + supportedVersion.minVersion() + "," + supportedVersion.maxVersion() + "].");
     }
 
     /**
@@ -159,10 +167,10 @@ public class NodeApiVersions {
         // a TreeMap before printing it out to ensure that we always print in
         // ascending order.
         TreeMap<Short, String> apiKeysText = new TreeMap<>();
-        for (ApiVersion supportedVersion : this.supportedVersions.values())
-            apiKeysText.put(supportedVersion.apiKey, apiVersionToText(supportedVersion));
-        for (ApiVersion apiVersion : unknownApis)
-            apiKeysText.put(apiVersion.apiKey, apiVersionToText(apiVersion));
+        for (ApiVersionsResponseData.ApiVersion supportedVersion : this.supportedVersions.values())
+            apiKeysText.put(supportedVersion.apiKey(), apiVersionToText(supportedVersion));
+        for (ApiVersionsResponseData.ApiVersion apiVersion : unknownApis)
+            apiKeysText.put(apiVersion.apiKey(), apiVersionToText(apiVersion));
 
         // Also handle the case where some apiKey types are not specified at all in the given ApiVersions,
         // which may happen when the remote is too old.
@@ -186,30 +194,30 @@ public class NodeApiVersions {
         return bld.toString();
     }
 
-    private String apiVersionToText(ApiVersion apiVersion) {
+    private String apiVersionToText(ApiVersionsResponseData.ApiVersion apiVersion) {
         StringBuilder bld = new StringBuilder();
         ApiKeys apiKey = null;
-        if (ApiKeys.hasId(apiVersion.apiKey)) {
-            apiKey = ApiKeys.forId(apiVersion.apiKey);
+        if (ApiKeys.hasId(apiVersion.apiKey())) {
+            apiKey = ApiKeys.forId(apiVersion.apiKey());
             bld.append(apiKey.name).append("(").append(apiKey.id).append("): ");
         } else {
-            bld.append("UNKNOWN(").append(apiVersion.apiKey).append("): ");
+            bld.append("UNKNOWN(").append(apiVersion.apiKey()).append("): ");
         }
 
-        if (apiVersion.minVersion == apiVersion.maxVersion) {
-            bld.append(apiVersion.minVersion);
+        if (apiVersion.minVersion() == apiVersion.maxVersion()) {
+            bld.append(apiVersion.minVersion());
         } else {
-            bld.append(apiVersion.minVersion).append(" to ").append(apiVersion.maxVersion);
+            bld.append(apiVersion.minVersion()).append(" to ").append(apiVersion.maxVersion());
         }
 
         if (apiKey != null) {
-            ApiVersion supportedVersion = supportedVersions.get(apiKey);
-            if (apiKey.latestVersion() < supportedVersion.minVersion) {
+            ApiVersionsResponseData.ApiVersion supportedVersion = supportedVersions.get(apiKey);
+            if (apiKey.latestVersion() < supportedVersion.minVersion()) {
                 bld.append(" [unusable: node too new]");
-            } else if (supportedVersion.maxVersion < apiKey.oldestVersion()) {
+            } else if (supportedVersion.maxVersion() < apiKey.oldestVersion()) {
                 bld.append(" [unusable: node too old]");
             } else {
-                short latestUsableVersion = Utils.min(apiKey.latestVersion(), supportedVersion.maxVersion);
+                short latestUsableVersion = Utils.min(apiKey.latestVersion(), supportedVersion.maxVersion());
                 bld.append(" [usable: ").append(latestUsableVersion).append("]");
             }
         }
@@ -222,11 +230,11 @@ public class NodeApiVersions {
      * @param apiKey The api key to lookup
      * @return The api version information from the broker or null if it is unsupported
      */
-    public ApiVersion apiVersion(ApiKeys apiKey) {
+    public ApiVersionsResponseData.ApiVersion apiVersion(ApiKeys apiKey) {
         return supportedVersions.get(apiKey);
     }
 
-    public Map<ApiKeys, ApiVersion> allSupportedApiVersions() {
+    public Map<ApiKeys, ApiVersionsResponseData.ApiVersion> allSupportedApiVersions() {
         return supportedVersions;
     }
 }

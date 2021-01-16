@@ -18,7 +18,7 @@ package kafka.server
 
 import java.util.Properties
 
-import org.apache.kafka.common.message.ApiVersionsResponseData.ApiVersionsResponseKey
+import org.apache.kafka.common.message.ApiVersionsResponseData
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.protocol.ApiKeys
 import org.apache.kafka.common.requests.{ApiVersionsRequest, ApiVersionsResponse}
@@ -54,7 +54,7 @@ abstract class AbstractApiVersionsRequestTest extends BaseRequestTest {
     }
     assertEquals("API keys in ApiVersionsResponse must match API keys supported by broker.",
       expectedApis.size(), apiVersionsResponse.data.apiKeys().size())
-    for (expectedApiVersion: ApiVersionsResponseKey <- ApiVersionsResponse.DEFAULT_API_VERSIONS_RESPONSE.data.apiKeys().asScala) {
+    for (expectedApiVersion: ApiVersionsResponseData.ApiVersion <- ApiVersionsResponse.DEFAULT_API_VERSIONS_RESPONSE.data.apiKeys().asScala) {
       val actualApiVersion = apiVersionsResponse.apiVersion(expectedApiVersion.apiKey)
       assertNotNull(s"API key ${actualApiVersion.apiKey} is supported by broker, but not received in ApiVersionsResponse.", actualApiVersion)
       assertEquals("API key must be supported by the broker.", expectedApiVersion.apiKey, actualApiVersion.apiKey)

@@ -17,9 +17,7 @@
 
 package org.apache.kafka.common.requests;
 
-import org.apache.kafka.common.protocol.ApiVersion;
-import org.apache.kafka.common.message.ApiVersionsResponseData.ApiVersionsResponseKey;
-import org.apache.kafka.common.message.ApiVersionsResponseData.ApiVersionsResponseKeyCollection;
+import org.apache.kafka.common.message.ApiVersionsResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.record.RecordBatch;
 import org.apache.kafka.common.utils.Utils;
@@ -47,11 +45,11 @@ public class ApiVersionsResponseTest {
 
     @Test
     public void shouldHaveCorrectDefaultApiVersionsResponse() {
-        Collection<ApiVersionsResponseKey> apiVersions = ApiVersionsResponse.DEFAULT_API_VERSIONS_RESPONSE.data().apiKeys();
+        Collection<ApiVersionsResponseData.ApiVersion> apiVersions = ApiVersionsResponse.DEFAULT_API_VERSIONS_RESPONSE.data().apiKeys();
         assertEquals(apiVersions.size(), ApiKeys.enabledApis().size(), "API versions for all API keys must be maintained.");
 
         for (ApiKeys key : ApiKeys.enabledApis()) {
-            ApiVersionsResponseKey version = ApiVersionsResponse.DEFAULT_API_VERSIONS_RESPONSE.apiVersion(key.id);
+            ApiVersionsResponseData.ApiVersion version = ApiVersionsResponse.DEFAULT_API_VERSIONS_RESPONSE.apiVersion(key.id);
             assertNotNull(version, "Could not find ApiVersion for API " + key.name);
             assertEquals(version.minVersion(), key.oldestVersion(), "Incorrect min version for Api " + key.name);
             assertEquals(version.maxVersion(), key.latestVersion(), "Incorrect max version for Api " + key.name);
@@ -84,12 +82,18 @@ public class ApiVersionsResponseTest {
         final ApiKeys nonForwardableAPIKey = ApiKeys.JOIN_GROUP;
         final short minVersion = 0;
         final short maxVersion = 1;
-        Map<ApiKeys, ApiVersion> activeControllerApiVersions = Utils.mkMap(
-            Utils.mkEntry(forwardableAPIKey, new ApiVersion(forwardableAPIKey.id, minVersion, maxVersion)),
-            Utils.mkEntry(nonForwardableAPIKey, new ApiVersion(nonForwardableAPIKey.id, minVersion, maxVersion))
+        Map<ApiKeys, ApiVersionsResponseData.ApiVersion> activeControllerApiVersions = Utils.mkMap(
+            Utils.mkEntry(forwardableAPIKey, new ApiVersionsResponseData.ApiVersion()
+                    .setApiKey(forwardableAPIKey.id)
+                    .setMinVersion(minVersion)
+                    .setMaxVersion(maxVersion)),
+            Utils.mkEntry(nonForwardableAPIKey, new ApiVersionsResponseData.ApiVersion()
+                    .setApiKey(nonForwardableAPIKey.id)
+                    .setMinVersion(minVersion)
+                    .setMaxVersion(maxVersion))
         );
 
-        ApiVersionsResponseKeyCollection commonResponse = ApiVersionsResponse.intersectControllerApiVersions(
+        ApiVersionsResponseData.ApiVersionCollection commonResponse = ApiVersionsResponse.intersectControllerApiVersions(
             RecordBatch.CURRENT_MAGIC_VALUE,
             activeControllerApiVersions);
 
@@ -102,9 +106,9 @@ public class ApiVersionsResponseTest {
     private void verifyVersions(short forwardableAPIKey,
                                 short minVersion,
                                 short maxVersion,
-                                ApiVersionsResponseKeyCollection commonResponse) {
-        ApiVersionsResponseKey expectedVersionsForForwardableAPI =
-            new ApiVersionsResponseKey()
+                                ApiVersionsResponseData.ApiVersionCollection commonResponse) {
+        ApiVersionsResponseData.ApiVersion expectedVersionsForForwardableAPI =
+            new ApiVersionsResponseData.ApiVersion()
                 .setApiKey(forwardableAPIKey)
                 .setMinVersion(minVersion)
                 .setMaxVersion(maxVersion);
@@ -113,7 +117,7 @@ public class ApiVersionsResponseTest {
 
     private Set<ApiKeys> apiKeysInResponse(final ApiVersionsResponse apiVersions) {
         final Set<ApiKeys> apiKeys = new HashSet<>();
-        for (final ApiVersionsResponseKey version : apiVersions.data().apiKeys()) {
+        for (final ApiVersionsResponseData.ApiVersion version : apiVersions.data().apiKeys()) {
             apiKeys.add(ApiKeys.forId(version.apiKey()));
         }
         return apiKeys;

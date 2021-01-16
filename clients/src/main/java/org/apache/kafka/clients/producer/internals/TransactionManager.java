@@ -16,7 +16,7 @@
  */
 package org.apache.kafka.clients.producer.internals;
 
-import org.apache.kafka.common.protocol.ApiVersion;
+import org.apache.kafka.common.message.ApiVersionsResponseData;
 import org.apache.kafka.clients.ApiVersions;
 import org.apache.kafka.clients.ClientResponse;
 import org.apache.kafka.clients.NodeApiVersions;
@@ -1047,11 +1047,11 @@ public class TransactionManager {
         NodeApiVersions nodeApiVersions = transactionCoordinator != null ?
                 apiVersions.get(transactionCoordinator.idString()) :
                 null;
-        ApiVersion initProducerIdVersion = nodeApiVersions != null ?
+        ApiVersionsResponseData.ApiVersion initProducerIdVersion = nodeApiVersions != null ?
                 nodeApiVersions.apiVersion(ApiKeys.INIT_PRODUCER_ID) :
                 null;
         this.coordinatorSupportsBumpingEpoch = initProducerIdVersion != null &&
-                initProducerIdVersion.maxVersion >= 3;
+                initProducerIdVersion.maxVersion() >= 3;
     }
 
     private void transitionTo(State target) {
