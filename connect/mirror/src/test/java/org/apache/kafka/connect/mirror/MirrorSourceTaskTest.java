@@ -23,11 +23,11 @@ import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.connect.source.SourceRecord;
 
-import org.junit.Test;
+import org.junit.jupiter.api.Test;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertTrue;
-import static org.junit.Assert.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 
 public class MirrorSourceTaskTest {
 
@@ -58,26 +58,16 @@ public class MirrorSourceTaskTest {
     public void testOffsetSync() {
         MirrorSourceTask.PartitionState partitionState = new MirrorSourceTask.PartitionState(50);
 
-        assertTrue("always emit offset sync on first update",
-            partitionState.update(0, 100));
-        assertTrue("upstream offset skipped -> resync",
-            partitionState.update(2, 102));
-        assertFalse("no sync",
-            partitionState.update(3, 152));
-        assertFalse("no sync",
-            partitionState.update(4, 153));
-        assertFalse("no sync",
-            partitionState.update(5, 154));
-        assertTrue("one past target offset",
-            partitionState.update(6, 205));
-        assertTrue("upstream reset",
-            partitionState.update(2, 206));
-        assertFalse("no sync",
-            partitionState.update(3, 207));
-        assertTrue("downstream reset",
-                partitionState.update(4, 3));
-        assertFalse("no sync",
-            partitionState.update(5, 4));
+        assertTrue(partitionState.update(0, 100), "always emit offset sync on first update");
+        assertTrue(partitionState.update(2, 102), "upstream offset skipped -> resync");
+        assertFalse(partitionState.update(3, 152), "no sync");
+        assertFalse(partitionState.update(4, 153), "no sync");
+        assertFalse(partitionState.update(5, 154), "no sync");
+        assertTrue(partitionState.update(6, 205), "one past target offset");
+        assertTrue(partitionState.update(2, 206), "upstream reset");
+        assertFalse(partitionState.update(3, 207), "no sync");
+        assertTrue(partitionState.update(4, 3), "downstream reset");
+        assertFalse(partitionState.update(5, 4), "no sync");
     }
 
     @Test

@@ -24,21 +24,20 @@ import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.common.config.SslConfigs;
 import org.apache.kafka.common.config.types.Password;
 import org.apache.kafka.common.network.Mode;
-import org.apache.kafka.test.IntegrationTest;
 import org.apache.kafka.test.TestSslUtils;
 import org.apache.kafka.test.TestUtils;
 import kafka.server.KafkaConfig$;
 
-import org.junit.experimental.categories.Category;
-import org.junit.Before;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Tag;
 
 /**
  * Tests MM2 replication with SSL enabled at backup kafka cluster
  */
-@Category(IntegrationTest.class)
+@Tag("integration")
 public class MirrorConnectorsIntegrationSSLTest extends MirrorConnectorsIntegrationBaseTest {
 
-    @Before
+    @BeforeEach
     public void startClusters() throws Exception {
         Map<String, Object> sslConfig = TestSslUtils.createSslConfig(false, true, Mode.SERVER, TestUtils.tempFile(), "testCert");
         // enable SSL on backup kafka broker

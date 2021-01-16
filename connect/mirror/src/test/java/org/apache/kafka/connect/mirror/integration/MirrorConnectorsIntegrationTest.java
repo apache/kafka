@@ -16,9 +16,8 @@
  */
 package org.apache.kafka.connect.mirror.integration;
 
-import org.junit.experimental.categories.Category;
-import org.apache.kafka.test.IntegrationTest;
+import org.junit.jupiter.api.Tag;
 
-@Category(IntegrationTest.class)
+@Tag("integration")
 public class MirrorConnectorsIntegrationTest extends MirrorConnectorsIntegrationBaseTest {
 }
