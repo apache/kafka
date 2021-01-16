@@ -18,7 +18,7 @@
  */
 package org.apache.kafka.streams.scala.kstream
 
-import org.apache.kafka.streams.kstream.{Branched, Named}
+import org.apache.kafka.streams.kstream.Named
 import org.apache.kafka.streams.scala.ImplicitConversions._
 import org.apache.kafka.streams.scala.StreamsBuilder
 import org.apache.kafka.streams.scala.serialization.Serdes._
