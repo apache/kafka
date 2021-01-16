@@ -26,7 +26,7 @@ import org.apache.kafka.common.config.ConfigResource
 import org.apache.kafka.common.errors.{ClusterAuthorizationException, InvalidRequestException, TopicAuthorizationException, UnknownTopicOrPartitionException}
 import org.apache.kafka.common.resource.{PatternType, ResourcePattern, ResourcePatternFilter, ResourceType}
 import org.apache.kafka.common.security.auth.{KafkaPrincipal, SecurityProtocol}
-import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
+import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
 
 import scala.annotation.nowarn
@@ -272,11 +272,7 @@ class SaslSslAdminIntegrationTest extends BaseAdminIntegrationTest with SaslSetu
       AclOperation.DESCRIBE, AclOperation.DESCRIBE_CONFIGS)
   }
 
-  private def verifyCauseIsClusterAuth(e: Throwable): Unit = {
-    if (!e.getCause.isInstanceOf[ClusterAuthorizationException]) {
-      throw e.getCause
-    }
-  }
+  private def verifyCauseIsClusterAuth(e: Throwable): Unit = assertEquals(classOf[ClusterAuthorizationException], e.getCause.getClass)
 
   private def testAclCreateGetDelete(expectAuth: Boolean): Unit = {
     TestUtils.waitUntilTrue(() => {

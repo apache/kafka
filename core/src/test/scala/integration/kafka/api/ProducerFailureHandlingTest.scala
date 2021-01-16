@@ -185,10 +185,8 @@ class ProducerFailureHandlingTest extends KafkaServerTestHarness {
 
     // create a record with incorrect partition id (higher than the number of partitions), send should fail
     val higherRecord = new ProducerRecord(topic1, 1, "key".getBytes, "value".getBytes)
-    assertThrows(classOf[ExecutionException], () => producer1.send(higherRecord).get).getCause match {
-      case _: TimeoutException => // this is ok
-      case ex => throw new Exception("Sending to a partition not present in the metadata should result in a TimeoutException", ex)
-    }
+    val e = assertThrows(classOf[ExecutionException], () => producer1.send(higherRecord).get)
+    assertEquals(classOf[TimeoutException], e.getCause.getClass)
   }
 
   /**
@@ -238,9 +236,7 @@ class ProducerFailureHandlingTest extends KafkaServerTestHarness {
 
     val record = new ProducerRecord(topicName, null, "key".getBytes, "value".getBytes)
     val e = assertThrows(classOf[ExecutionException], () => producer3.send(record).get)
-    if (!e.getCause.isInstanceOf[NotEnoughReplicasException]) {
-      fail("Expected NotEnoughReplicasException when producing to topic with fewer brokers than min.insync.replicas")
-    }
+    assertEquals(classOf[NotEnoughReplicasException], e.getCause.getClass)
   }
 
   @Test

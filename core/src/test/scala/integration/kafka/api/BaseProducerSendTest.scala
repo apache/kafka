@@ -373,10 +373,7 @@ abstract class BaseProducerSendTest extends KafkaServerTestHarness {
     // Trying to send a record to a partition beyond topic's partition range before adding the partition should fail.
     val partition1 = 1
     val e = assertThrows(classOf[ExecutionException], () => producer.send(new ProducerRecord(topic, partition1, null, "value".getBytes(StandardCharsets.UTF_8))).get())
-    e.getCause match {
-      case _: TimeoutException => // this is ok
-      case ex => throw new Exception("Sending to a partition not present in the metadata should result in a TimeoutException", ex)
-    }
+    assertEquals(classOf[TimeoutException], e.getCause.getClass)
 
     val existingAssignment = zkClient.getFullReplicaAssignmentForTopics(Set(topic)).map {
       case (topicPartition, assignment) => topicPartition.partition -> assignment
