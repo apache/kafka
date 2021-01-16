@@ -31,12 +31,12 @@ public class InMemoryTimeOrderedKeyValueBufferTest {
 
     @Test
     public void bufferShouldAllowCacheEnablement() {
-        new InMemoryTimeOrderedKeyValueBuffer.Builder<>(null, null, null).withCachingEnabled();
+        new TimeOrderedKeyValueBufferBuilder<>(null, null, null).withCachingEnabled();
     }
 
     @Test
     public void bufferShouldAllowCacheDisablement() {
-        new InMemoryTimeOrderedKeyValueBuffer.Builder<>(null, null, null).withCachingDisabled();
+        new TimeOrderedKeyValueBufferBuilder<>(null, null, null).withCachingDisabled();
     }
 
     @Test
@@ -44,8 +44,8 @@ public class InMemoryTimeOrderedKeyValueBufferTest {
         final String expect = "3";
         final Map<String, String> logConfig = new HashMap<>();
         logConfig.put("min.insync.replicas", expect);
-        final StoreBuilder<InMemoryTimeOrderedKeyValueBuffer<Object, Object>> builder =
-            new InMemoryTimeOrderedKeyValueBuffer.Builder<>(null, null, null)
+        final StoreBuilder<TimeOrderedKeyValueBuffer<Object, Object>> builder =
+            new TimeOrderedKeyValueBufferBuilder<>(null, null, null)
                 .withLoggingEnabled(logConfig);
 
         assertThat(builder.logConfig(), is(singletonMap("min.insync.replicas", expect)));
@@ -54,8 +54,8 @@ public class InMemoryTimeOrderedKeyValueBufferTest {
 
     @Test
     public void bufferShouldAllowLoggingDisablement() {
-        final StoreBuilder<InMemoryTimeOrderedKeyValueBuffer<Object, Object>> builder
-            = new InMemoryTimeOrderedKeyValueBuffer.Builder<>(null, null, null)
+        final StoreBuilder<TimeOrderedKeyValueBuffer<Object, Object>> builder
+            = new TimeOrderedKeyValueBufferBuilder<>(null, null, null)
                 .withLoggingDisabled();
 
         assertThat(builder.logConfig(), is(emptyMap()));

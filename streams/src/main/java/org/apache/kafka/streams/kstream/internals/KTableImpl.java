@@ -66,7 +66,9 @@ import org.apache.kafka.streams.state.StoreBuilder;
 import org.apache.kafka.streams.state.Stores;
 import org.apache.kafka.streams.state.TimestampedKeyValueStore;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
-import org.apache.kafka.streams.state.internals.InMemoryTimeOrderedKeyValueBuffer;
+import org.apache.kafka.streams.state.internals.TimeOrderedKeyValueBuffer;
+import org.apache.kafka.streams.state.internals.TimeOrderedKeyValueBufferBuilder;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -526,28 +528,23 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
         final String storeName =
             suppressedInternal.name() != null ? suppressedInternal.name() + "-store" : builder.newStoreName(SUPPRESS_NAME);
 
+        final StoreBuilder<TimeOrderedKeyValueBuffer<K, V>> storeBuilder = new TimeOrderedKeyValueBufferBuilder<>(
+            storeName,
+            keySerde,
+            valueSerde);
+
+        if (suppressedInternal.bufferConfig().isLoggingEnabled()) {
+            final Map<String, String> topicConfig = suppressedInternal.bufferConfig().getLogConfig();
+            storeBuilder.withLoggingEnabled(topicConfig);
+        } else {
+            storeBuilder.withLoggingDisabled();
+        }
+
         final ProcessorSupplier<K, Change<V>> suppressionSupplier = new KTableSuppressProcessorSupplier<>(
             suppressedInternal,
             storeName,
             this
         );
-
-        final StoreBuilder<InMemoryTimeOrderedKeyValueBuffer<K, V>> storeBuilder;
-
-        if (suppressedInternal.bufferConfig().isLoggingEnabled()) {
-            final Map<String, String> topicConfig = suppressedInternal.bufferConfig().getLogConfig();
-            storeBuilder = new InMemoryTimeOrderedKeyValueBuffer.Builder<>(
-                storeName,
-                keySerde,
-                valueSerde)
-                .withLoggingEnabled(topicConfig);
-        } else {
-            storeBuilder = new InMemoryTimeOrderedKeyValueBuffer.Builder<>(
-                storeName,
-                keySerde,
-                valueSerde)
-                .withLoggingDisabled();
-        }
 
         final ProcessorGraphNode<K, Change<V>> node = new StatefulProcessorNode<>(
             name,

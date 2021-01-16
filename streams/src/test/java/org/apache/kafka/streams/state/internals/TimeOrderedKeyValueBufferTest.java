@@ -84,10 +84,10 @@ public class TimeOrderedKeyValueBufferTest<B extends TimeOrderedKeyValueBuffer<S
         return singletonList(
             new Object[] {
                 "in-memory buffer",
-                (Function<String, InMemoryTimeOrderedKeyValueBuffer<String, String>>) name ->
-                    new InMemoryTimeOrderedKeyValueBuffer
-                        .Builder<>(name, Serdes.String(), Serdes.serdeFrom(new NullRejectingStringSerializer(), new StringDeserializer()))
-                        .build()
+                (Function<String, TimeOrderedKeyValueBuffer<String, String>>) name ->
+                    new TimeOrderedKeyValueBufferBuilder<>(
+                        name, Serdes.String(), Serdes.serdeFrom(new NullRejectingStringSerializer(), new StringDeserializer())
+                    ).build()
             }
         );
     }

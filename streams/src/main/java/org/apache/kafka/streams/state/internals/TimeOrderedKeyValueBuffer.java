@@ -72,13 +72,22 @@ public interface TimeOrderedKeyValueBuffer<K, V> extends StateStore {
         }
     }
 
+    /**
+     * In the case of join operations or the other materializations, the key/value serdes used by the statestores are
+     * provided explicitly by the user (caller), through {@link org.apache.kafka.streams.kstream.Joined} or
+     * {@link org.apache.kafka.streams.kstream.Materialized}.
+     *
+     * However, suppression operation does not have those kinds of instances. For this reason, the key/value serde can be null
+     * when the suppression buffer instance is created. To make up for these shortcomings, the key/value serdes can be explicitly
+     * set by the processor via this method.
+     */
     void setSerdesIfNull(final Serde<K> keySerde, final Serde<V> valueSerde);
 
-    void evictWhile(final Supplier<Boolean> predicate, final Consumer<Eviction<K, V>> callback);
+    void put(long time, K key, Change<V> value, ProcessorRecordContext recordContext);
 
     Maybe<ValueAndTimestamp<V>> priorValueForBuffered(K key);
 
-    void put(long time, K key, Change<V> value, ProcessorRecordContext recordContext);
+    int evictWhile(final Supplier<Boolean> predicate, final Consumer<Eviction<K, V>> callback);
 
     int numRecords();
 
