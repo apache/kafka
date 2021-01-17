@@ -17,18 +17,16 @@
 
 package org.apache.kafka.message;
 
-import org.junit.Assert;
-import org.junit.Rule;
-import org.junit.Test;
-import org.junit.rules.Timeout;
+import org.junit.jupiter.api.Assertions;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.Timeout;
 
 import java.io.StringWriter;
 
-import static org.junit.Assert.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
+@Timeout(120)
 public class VersionConditionalTest {
-    @Rule
-    final public Timeout globalTimeout = Timeout.millis(120000);
 
     static void assertEquals(CodeBuffer buffer, String... lines) throws Exception {
         StringWriter stringWriter = new StringWriter();
@@ -37,7 +35,7 @@ public class VersionConditionalTest {
         for (String line : lines) {
             expectedStringBuilder.append(String.format(line));
         }
-        Assert.assertEquals(expectedStringBuilder.toString(), stringWriter.toString());
+        Assertions.assertEquals(stringWriter.toString(), expectedStringBuilder.toString());
     }
 
     @Test

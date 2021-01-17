@@ -17,20 +17,19 @@
 
 package org.apache.kafka.message;
 
-import org.junit.Test;
+import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 
 import java.io.StringWriter;
-import java.util.concurrent.TimeUnit;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+@Timeout(120)
 public class CodeBufferTest {
 
     @Test
-    @Timeout(value = 120000, unit = TimeUnit.MILLISECONDS)
     public void testWrite() throws Exception {
         CodeBuffer buffer = new CodeBuffer();
         buffer.printf("public static void main(String[] args) throws Exception {%n");
@@ -48,7 +47,6 @@ public class CodeBufferTest {
     }
 
     @Test
-    @Timeout(value = 120000, unit = TimeUnit.MILLISECONDS)
     public void testEquals() {
         CodeBuffer buffer1 = new CodeBuffer();
         CodeBuffer buffer2 = new CodeBuffer();
@@ -63,7 +61,6 @@ public class CodeBufferTest {
     }
 
     @Test
-    @Timeout(value = 120000, unit = TimeUnit.MILLISECONDS)
     public void testIndentMustBeNonNegative() {
         CodeBuffer buffer = new CodeBuffer();
         buffer.incrementIndent();

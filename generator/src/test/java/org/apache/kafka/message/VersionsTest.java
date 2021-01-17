@@ -17,17 +17,15 @@
 
 package org.apache.kafka.message;
 
-import org.junit.Rule;
-import org.junit.Test;
-import org.junit.rules.Timeout;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.Timeout;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertTrue;
-import static org.junit.Assert.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 
+@Timeout(120)
 public class VersionsTest {
-    @Rule
-    final public Timeout globalTimeout = Timeout.millis(120000);
 
     private static Versions newVersions(int lower, int higher) {
         if ((lower < Short.MIN_VALUE) || (lower > Short.MAX_VALUE)) {
@@ -41,10 +39,10 @@ public class VersionsTest {
 
     @Test
     public void testVersionsParse() {
-        assertEquals(Versions.NONE, Versions.parse(null, Versions.NONE));
-        assertEquals(Versions.ALL, Versions.parse(" ", Versions.ALL));
-        assertEquals(Versions.ALL, Versions.parse("", Versions.ALL));
-        assertEquals(newVersions(4, 5), Versions.parse(" 4-5 ", null));
+        assertEquals(Versions.parse(null, Versions.NONE), Versions.NONE);
+        assertEquals(Versions.parse(" ", Versions.ALL), Versions.ALL);
+        assertEquals(Versions.parse("", Versions.ALL), Versions.ALL);
+        assertEquals(Versions.parse(" 4-5 ", null), newVersions(4, 5));
     }
 
     @Test
@@ -57,8 +55,8 @@ public class VersionsTest {
     }
 
     private void testRoundTrip(Versions versions, String string) {
-        assertEquals(string, versions.toString());
-        assertEquals(versions, Versions.parse(versions.toString(), null));
+        assertEquals(versions.toString(), string);
+        assertEquals(Versions.parse(versions.toString(), null), versions);
     }
 
     @Test
@@ -69,11 +67,11 @@ public class VersionsTest {
         assertEquals(newVersions(3, 3),
             newVersions(0, Short.MAX_VALUE).intersect(
                 newVersions(3, 3)));
-        assertEquals(Versions.NONE,
-            newVersions(9, Short.MAX_VALUE).intersect(
-                newVersions(2, 8)));
-        assertEquals(Versions.NONE,
-            Versions.NONE.intersect(Versions.NONE));
+        assertEquals(newVersions(9, Short.MAX_VALUE).intersect(
+                newVersions(2, 8)), 
+                Versions.NONE);
+        assertEquals(Versions.NONE.intersect(Versions.NONE), 
+                     Versions.NONE);
     }
 
     @Test
@@ -92,16 +90,16 @@ public class VersionsTest {
 
     @Test
     public void testSubtract() {
-        assertEquals(Versions.NONE,
-            Versions.NONE.subtract(Versions.NONE));
+        assertEquals(Versions.NONE.subtract(Versions.NONE), 
+                     Versions.NONE);
         assertEquals(newVersions(0, 0),
             newVersions(0, 0).subtract(Versions.NONE));
         assertEquals(newVersions(1, 1),
             newVersions(1, 2).subtract(newVersions(2, 2)));
         assertEquals(newVersions(2, 2),
             newVersions(1, 2).subtract(newVersions(1, 1)));
-        assertEquals(null,
-            newVersions(0, Short.MAX_VALUE).subtract(newVersions(1, 100)));
+        assertEquals(newVersions(0, Short.MAX_VALUE).subtract(newVersions(1, 100)), 
+                     null);
         assertEquals(newVersions(10, 10),
             newVersions(1, 10).subtract(newVersions(1, 9)));
         assertEquals(newVersions(1, 1),
