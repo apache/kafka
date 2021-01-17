@@ -20,6 +20,7 @@ import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.utils.Bytes;
+import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.kstream.internals.Change;
 import org.apache.kafka.streams.kstream.internals.FullChangeSerde;
 import org.apache.kafka.streams.processor.ProcessorContext;
@@ -32,6 +33,7 @@ import org.apache.kafka.streams.processor.internals.ProcessorStateManager;
 import org.apache.kafka.streams.processor.internals.RecordBatchingStateRestoreCallback;
 import org.apache.kafka.streams.processor.internals.RecordQueue;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
+import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
 import org.apache.kafka.streams.state.internals.metrics.StateStoreMetrics;
 
@@ -46,6 +48,7 @@ public class MeteredTimeOrderedKeyValueBuffer<K, V> implements TimeOrderedKeyVal
     private final InMemoryTimeOrderedKeyValueBuffer wrapped;
 
     private Serde<K> keySerde;
+    private Serde<V> valueSerde;
     private FullChangeSerde<V> valueChangeSerde;
 
     private final String metricsScope;
@@ -66,6 +69,7 @@ public class MeteredTimeOrderedKeyValueBuffer<K, V> implements TimeOrderedKeyVal
         this.wrapped = Objects.requireNonNull(inner);
 
         this.keySerde = keySerde;
+        this.valueSerde = valueSerde;
         this.valueChangeSerde = FullChangeSerde.wrap(valueSerde);
 
         this.metricsScope = metricsScope;
@@ -220,5 +224,77 @@ public class MeteredTimeOrderedKeyValueBuffer<K, V> implements TimeOrderedKeyVal
     private void updateBufferMetrics() {
         bufferSizeSensor.record(bufferSize(), context.currentSystemTimeMs());
         bufferCountSensor.record(numRecords(), context.currentSystemTimeMs());
+    }
+
+    @Override
+    public V get(final K key) {
+        final Bytes serializedKey = Bytes.wrap(keySerde.serializer().serialize(changelogTopic, key));
+
+        final byte[] serializedValue = wrapped.get(serializedKey);
+
+        if (serializedValue != null) {
+            return valueSerde.deserializer().deserialize(changelogTopic, serializedValue);
+        } else {
+            return null;
+        }
+    }
+
+    @Override
+    public KeyValueIterator<K, V> range(final K from,
+                                        final K to) {
+        return new MeteredTimeOrderedKeyValueBuffer<K, V>.MeteredKeyValueIterator(
+            wrapped.range(Bytes.wrap(keySerde.serializer().serialize(changelogTopic, from)),
+                Bytes.wrap(keySerde.serializer().serialize(changelogTopic, to)))
+        );
+    }
+
+    @Override
+    public KeyValueIterator<K, V> reverseRange(final K from,
+                                               final K to) {
+        return new MeteredTimeOrderedKeyValueBuffer<K, V>.MeteredKeyValueIterator(
+            wrapped.reverseRange(Bytes.wrap(keySerde.serializer().serialize(changelogTopic, from)),
+                Bytes.wrap(keySerde.serializer().serialize(changelogTopic, to)))
+        );
+    }
+
+    @Override
+    public KeyValueIterator<K, V> all() {
+        return new MeteredTimeOrderedKeyValueBuffer<K, V>.MeteredKeyValueIterator(wrapped.all());
+    }
+
+    @Override
+    public KeyValueIterator<K, V> reverseAll() {
+        return new MeteredTimeOrderedKeyValueBuffer<K, V>.MeteredKeyValueIterator(wrapped.reverseAll());
+    }
+
+    private class MeteredKeyValueIterator implements KeyValueIterator<K, V> {
+        private final KeyValueIterator<Bytes, byte[]> iter;
+
+        private MeteredKeyValueIterator(final KeyValueIterator<Bytes, byte[]> iter) {
+            this.iter = iter;
+        }
+
+        @Override
+        public boolean hasNext() {
+            return iter.hasNext();
+        }
+
+        @Override
+        public KeyValue<K, V> next() {
+            final KeyValue<Bytes, byte[]> keyValue = iter.next();
+            return KeyValue.pair(
+                keySerde.deserializer().deserialize(changelogTopic, keyValue.key.get()),
+                valueSerde.deserializer().deserialize(changelogTopic, keyValue.value));
+        }
+
+        @Override
+        public void close() {
+            iter.close();
+        }
+
+        @Override
+        public K peekNextKey() {
+            return keySerde.deserializer().deserialize(changelogTopic, iter.peekNextKey().get());
+        }
     }
 }

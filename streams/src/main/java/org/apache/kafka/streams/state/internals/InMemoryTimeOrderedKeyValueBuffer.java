@@ -24,6 +24,7 @@ import org.apache.kafka.common.serialization.ByteArraySerializer;
 import org.apache.kafka.common.serialization.BytesSerializer;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.utils.Bytes;
+import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.kstream.internals.Change;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStore;
@@ -34,19 +35,22 @@ import org.apache.kafka.streams.processor.internals.ProcessorRecordContext;
 import org.apache.kafka.streams.processor.internals.ProcessorStateManager;
 import org.apache.kafka.streams.processor.internals.RecordCollector;
 import org.apache.kafka.streams.processor.internals.RecordQueue;
+import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
 import org.apache.kafka.streams.state.internals.TimeOrderedKeyValueBufferChangelogDeserializationHelper.DeserializationResult;
 
 import java.nio.ByteBuffer;
 import java.util.Arrays;
 import java.util.Collection;
-import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.Map;
+import java.util.NavigableMap;
 import java.util.NoSuchElementException;
 import java.util.Set;
+import java.util.SortedMap;
 import java.util.TreeMap;
+import java.util.TreeSet;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
 
@@ -56,7 +60,12 @@ import static org.apache.kafka.streams.state.internals.TimeOrderedKeyValueBuffer
 import static org.apache.kafka.streams.state.internals.TimeOrderedKeyValueBufferChangelogDeserializationHelper.deserializeV3;
 import static org.apache.kafka.streams.state.internals.TimeOrderedKeyValueBufferChangelogDeserializationHelper.duckTypeV2;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 public class InMemoryTimeOrderedKeyValueBuffer implements TimeOrderedKeyValueBuffer<Bytes, byte[]> {
+
+    private static final Logger LOG = LoggerFactory.getLogger(InMemoryTimeOrderedKeyValueBuffer.class);
 
     private static final BytesSerializer KEY_SERIALIZER = new BytesSerializer();
     private static final ByteArraySerializer VALUE_SERIALIZER = new ByteArraySerializer();
@@ -66,8 +75,12 @@ public class InMemoryTimeOrderedKeyValueBuffer implements TimeOrderedKeyValueBuf
     static final RecordHeaders CHANGELOG_HEADERS =
         new RecordHeaders(new Header[] {new RecordHeader("v", V_3_CHANGELOG_HEADER_VALUE)});
 
-    private final Map<Bytes, BufferKey> index = new HashMap<>();
-    private final TreeMap<BufferKey, BufferValue> sortedMap = new TreeMap<>();
+    // Map of serialized key to (serialized key, timestamp), ordered by serialized key.
+    private final NavigableMap<Bytes, BufferKey> index = new TreeMap<>();
+
+    // Map of (serialized key, timestamp) to buffer value, ordered by (timestamp, serialized key).
+    private final SortedMap<BufferKey, BufferValue> sortedMap = new TreeMap<>();
+
     private final Set<Bytes> dirtyKeys = new HashSet<>();
 
     private long memBufferSize = 0L;
@@ -415,6 +428,60 @@ public class InMemoryTimeOrderedKeyValueBuffer implements TimeOrderedKeyValueBuf
     }
 
     @Override
+    public byte[] get(final Bytes key) {
+        final BufferKey bufferKey = index.get(key);
+        if (bufferKey != null) {
+            final BufferValue bufferValue = sortedMap.get(bufferKey);
+
+            if (bufferValue != null) {
+                return bufferValue.priorValue();
+            } else {
+                return null;
+            }
+        } else {
+            return null;
+        }
+    }
+
+    @Override
+    public synchronized KeyValueIterator<Bytes, byte[]> range(final Bytes from, final Bytes to) {
+        return range(from, to, true);
+    }
+
+    @Override
+    public synchronized KeyValueIterator<Bytes, byte[]> reverseRange(final Bytes from, final Bytes to) {
+        return range(from, to, false);
+    }
+
+    private KeyValueIterator<Bytes, byte[]> range(final Bytes from, final Bytes to, final boolean forward) {
+        if (from.compareTo(to) > 0) {
+            LOG.warn("Returning empty iterator for fetch with invalid key range: from > to. " +
+                "This may be due to range arguments set in the wrong order, " +
+                "or serdes that don't preserve ordering when lexicographically comparing the serialized bytes. " +
+                "Note that the built-in numerical serdes do not follow this for negative numbers");
+            return KeyValueIterators.emptyIterator();
+        }
+
+        return new DelegatingPeekingKeyValueIterator<>(
+            storeName,
+            new InMemoryTimeOrderedKeyValueBuffer.InMemoryKeyValueIterator(index.subMap(from, true, to, true).keySet(), forward));
+    }
+
+    @Override
+    public synchronized KeyValueIterator<Bytes, byte[]> all() {
+        return new DelegatingPeekingKeyValueIterator<>(
+            storeName,
+            new InMemoryTimeOrderedKeyValueBuffer.InMemoryKeyValueIterator(index.keySet(), true));
+    }
+
+    @Override
+    public synchronized KeyValueIterator<Bytes, byte[]> reverseAll() {
+        return new DelegatingPeekingKeyValueIterator<>(
+            storeName,
+            new InMemoryTimeOrderedKeyValueBuffer.InMemoryKeyValueIterator(index.keySet(), false));
+    }
+
+    @Override
     public String toString() {
         return "InMemoryTimeOrderedKeyValueBuffer{" +
             "storeName='" + storeName + '\'' +
@@ -427,5 +494,38 @@ public class InMemoryTimeOrderedKeyValueBuffer implements TimeOrderedKeyValueBuf
             ", \n\tindex=" + index +
             ", \n\tsortedMap=" + sortedMap +
             '}';
+    }
+
+    private class InMemoryKeyValueIterator implements KeyValueIterator<Bytes, byte[]> {
+        private final Iterator<Bytes> iter;
+
+        private InMemoryKeyValueIterator(final Set<Bytes> keySet, final boolean forward) {
+            if (forward) {
+                this.iter = new TreeSet<>(keySet).iterator();
+            } else {
+                this.iter = new TreeSet<>(keySet).descendingIterator();
+            }
+        }
+
+        @Override
+        public boolean hasNext() {
+            return iter.hasNext();
+        }
+
+        @Override
+        public KeyValue<Bytes, byte[]> next() {
+            final Bytes key = iter.next();
+            return new KeyValue<>(key, get(key));
+        }
+
+        @Override
+        public void close() {
+            // do nothing
+        }
+
+        @Override
+        public Bytes peekNextKey() {
+            throw new UnsupportedOperationException("peekNextKey() not supported in " + getClass().getName());
+        }
     }
 }

@@ -20,13 +20,14 @@ import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.streams.kstream.internals.Change;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.internals.ProcessorRecordContext;
+import org.apache.kafka.streams.state.ReadOnlyKeyValueStore;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
 
 import java.util.Objects;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
 
-public interface TimeOrderedKeyValueBuffer<K, V> extends StateStore {
+public interface TimeOrderedKeyValueBuffer<K, V> extends StateStore, ReadOnlyKeyValueStore<K, V> {
 
     final class Eviction<K, V> {
         private final K key;
@@ -94,4 +95,8 @@ public interface TimeOrderedKeyValueBuffer<K, V> extends StateStore {
     long bufferSize();
 
     long minTimestamp();
+
+    default long approximateNumEntries() {
+        return numRecords();
+    }
 }
