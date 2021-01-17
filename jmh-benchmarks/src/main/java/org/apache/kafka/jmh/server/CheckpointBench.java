@@ -18,7 +18,6 @@ package org.apache.kafka.jmh.server;
 
 import java.util.Properties;
 import kafka.cluster.Partition;
-import kafka.cluster.PartitionStateStore;
 import kafka.log.CleanerConfig;
 import kafka.log.LogConfig;
 import kafka.log.LogManager;
@@ -39,7 +38,6 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
-import org.mockito.Mockito;
 import org.openjdk.jmh.annotations.Benchmark;
 import org.openjdk.jmh.annotations.Fork;
 import org.openjdk.jmh.annotations.Level;
@@ -150,8 +148,6 @@ public class CheckpointBench {
             }
         }
 
-        PartitionStateStore partitionStateStore = Mockito.mock(PartitionStateStore.class);
-        Mockito.when(partitionStateStore.fetchTopicConfig()).thenReturn(new Properties());
         OffsetCheckpoints checkpoints = (logDir, topicPartition) -> Option.apply(0L);
         for (TopicPartition topicPartition : topicPartitions) {
             final Partition partition = this.replicaManager.createPartition(topicPartition);

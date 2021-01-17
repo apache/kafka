@@ -25,14 +25,14 @@ import org.apache.kafka.common.message.DeleteAclsResponseData.DeleteAclsFilterRe
 import org.apache.kafka.common.message.DeleteAclsResponseData.DeleteAclsMatchingAcl;
 import org.apache.kafka.common.resource.PatternType;
 import org.apache.kafka.common.resource.ResourceType;
-import org.junit.Test;
+import org.junit.jupiter.api.Test;
 
 import java.nio.ByteBuffer;
 
 import static java.util.Arrays.asList;
 import static java.util.Collections.singletonList;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 public class DeleteAclsResponseTest {
     private static final short V0 = 0;
@@ -108,7 +108,7 @@ public class DeleteAclsResponseTest {
                 .setThrottleTimeMs(10)
                 .setFilterResults(singletonList(LITERAL_RESPONSE)),
             V0);
-        final ByteBuffer buffer = original.serializeBody(V0);
+        final ByteBuffer buffer = original.serialize(V0);
 
         final DeleteAclsResponse result = DeleteAclsResponse.parse(buffer, V0);
         assertEquals(original.filterResults(), result.filterResults());
@@ -121,7 +121,7 @@ public class DeleteAclsResponseTest {
                 .setThrottleTimeMs(10)
                 .setFilterResults(asList(LITERAL_RESPONSE, PREFIXED_RESPONSE)),
             V1);
-        final ByteBuffer buffer = original.serializeBody(V1);
+        final ByteBuffer buffer = original.serialize(V1);
 
         final DeleteAclsResponse result = DeleteAclsResponse.parse(buffer, V1);
         assertEquals(original.filterResults(), result.filterResults());

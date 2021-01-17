@@ -87,6 +87,7 @@ public class LeaveGroupRequest extends AbstractRequest {
         this.data = data;
     }
 
+    @Override
     public LeaveGroupRequestData data() {
         return data;
     }

@@ -17,6 +17,7 @@
 
 package kafka.server
 
+import java.net.{InetAddress, UnknownHostException}
 import java.util.Properties
 
 import kafka.log.LogConfig
@@ -141,6 +142,17 @@ object DynamicConfig {
     def names = ipConfigs.names
 
     def validate(props: Properties) = DynamicConfig.validate(ipConfigs, props, customPropsAllowed = false)
+
+    def isValidIpEntity(ip: String): Boolean = {
+      if (ip != ConfigEntityName.Default) {
+        try {
+          InetAddress.getByName(ip)
+        } catch {
+          case _: UnknownHostException => return false
+        }
+      }
+      true
+    }
   }
 
   private def validate(configDef: ConfigDef, props: Properties, customPropsAllowed: Boolean) = {

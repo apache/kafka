@@ -191,8 +191,8 @@ public class StoreChangelogReaderTest extends EasyMockSupport {
     public void shouldNotRegisterStoreWithoutMetadata() {
         EasyMock.replay(stateManager, storeMetadata);
 
-        assertThrows(IllegalStateException.class, () ->
-            changelogReader.register(new TopicPartition("ChangelogWithoutStoreMetadata", 0), stateManager));
+        assertThrows(IllegalStateException.class,
+            () -> changelogReader.register(new TopicPartition("ChangelogWithoutStoreMetadata", 0), stateManager));
     }
 
     @Test

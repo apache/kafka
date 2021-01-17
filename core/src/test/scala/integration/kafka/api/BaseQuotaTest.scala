@@ -35,7 +35,6 @@ import org.apache.kafka.common.quota.ClientQuotaEntity
 import org.apache.kafka.common.security.auth.KafkaPrincipal
 import org.junit.Assert._
 import org.junit.{Before, Test}
-import org.scalatest.Assertions.fail
 
 import scala.collection.Map
 import scala.jdk.CollectionConverters._
@@ -301,7 +300,7 @@ abstract class QuotaTestClients(topic: String,
       metric match {
         case m: Meter => m.count.toDouble
         case m: Histogram => m.max
-        case m => fail(s"Unexpected broker metric of class ${m.getClass}")
+        case m => throw new AssertionError(s"Unexpected broker metric of class ${m.getClass}")
       }
     }
 

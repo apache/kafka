@@ -77,7 +77,7 @@ public class AlterClientQuotasResponse extends AbstractResponse {
     }
 
     @Override
-    protected AlterClientQuotasResponseData data() {
+    public AlterClientQuotasResponseData data() {
         return data;
     }
 

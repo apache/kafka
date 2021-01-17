@@ -29,7 +29,9 @@ import kafka.utils.Implicits._
 import org.apache.kafka.clients.FetchSessionHandler
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.errors.KafkaStorageException
-import org.apache.kafka.common.message.ListOffsetRequestData.{ListOffsetPartition, ListOffsetTopic}
+import org.apache.kafka.common.message.ListOffsetsRequestData.{ListOffsetsPartition, ListOffsetsTopic}
+import org.apache.kafka.common.message.OffsetForLeaderEpochRequestData.OffsetForLeaderTopic
+import org.apache.kafka.common.message.OffsetForLeaderEpochRequestData.OffsetForLeaderTopicCollection
 import org.apache.kafka.common.message.OffsetForLeaderEpochResponseData.EpochEndOffset
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.protocol.Errors
@@ -227,26 +229,26 @@ class ReplicaFetcherThread(name: String,
   }
 
   override protected def fetchEarliestOffsetFromLeader(topicPartition: TopicPartition, currentLeaderEpoch: Int): Long = {
-    fetchOffsetFromLeader(topicPartition, currentLeaderEpoch, ListOffsetRequest.EARLIEST_TIMESTAMP)
+    fetchOffsetFromLeader(topicPartition, currentLeaderEpoch, ListOffsetsRequest.EARLIEST_TIMESTAMP)
   }
 
   override protected def fetchLatestOffsetFromLeader(topicPartition: TopicPartition, currentLeaderEpoch: Int): Long = {
-    fetchOffsetFromLeader(topicPartition, currentLeaderEpoch, ListOffsetRequest.LATEST_TIMESTAMP)
+    fetchOffsetFromLeader(topicPartition, currentLeaderEpoch, ListOffsetsRequest.LATEST_TIMESTAMP)
   }
 
   private def fetchOffsetFromLeader(topicPartition: TopicPartition, currentLeaderEpoch: Int, earliestOrLatest: Long): Long = {
-    val topic = new ListOffsetTopic()
+    val topic = new ListOffsetsTopic()
       .setName(topicPartition.topic)
       .setPartitions(Collections.singletonList(
-          new ListOffsetPartition()
+          new ListOffsetsPartition()
             .setPartitionIndex(topicPartition.partition)
             .setCurrentLeaderEpoch(currentLeaderEpoch)
             .setTimestamp(earliestOrLatest)))
-    val requestBuilder = ListOffsetRequest.Builder.forReplica(listOffsetRequestVersion, replicaId)
+    val requestBuilder = ListOffsetsRequest.Builder.forReplica(listOffsetRequestVersion, replicaId)
       .setTargetTimes(Collections.singletonList(topic))
 
     val clientResponse = leaderEndpoint.sendRequest(requestBuilder)
-    val response = clientResponse.responseBody.asInstanceOf[ListOffsetResponse]
+    val response = clientResponse.responseBody.asInstanceOf[ListOffsetsResponse]
     val responsePartition = response.topics.asScala.find(_.name == topicPartition.topic).get
       .partitions.asScala.find(_.partitionIndex == topicPartition.partition).get
 
@@ -335,7 +337,18 @@ class ReplicaFetcherThread(name: String,
       return Map.empty
     }
 
-    val epochRequest = OffsetsForLeaderEpochRequest.Builder.forFollower(offsetForLeaderEpochRequestVersion, partitions.asJava, brokerConfig.brokerId)
+    val topics = new OffsetForLeaderTopicCollection(partitions.size)
+    partitions.forKeyValue { (topicPartition, epochData) =>
+      var topic = topics.find(topicPartition.topic)
+      if (topic == null) {
+        topic = new OffsetForLeaderTopic().setTopic(topicPartition.topic)
+        topics.add(topic)
+      }
+      topic.partitions.add(epochData)
+    }
+
+    val epochRequest = OffsetsForLeaderEpochRequest.Builder.forFollower(
+      offsetForLeaderEpochRequestVersion, topics, brokerConfig.brokerId)
     debug(s"Sending offset for leader epoch request $epochRequest")
 
     try {
@@ -343,7 +356,7 @@ class ReplicaFetcherThread(name: String,
       val responseBody = response.responseBody.asInstanceOf[OffsetsForLeaderEpochResponse]
       debug(s"Received leaderEpoch response $response")
       responseBody.data.topics.asScala.flatMap { offsetForLeaderTopicResult =>
-        offsetForLeaderTopicResult.partitions().asScala.map { offsetForLeaderPartitionResult =>
+        offsetForLeaderTopicResult.partitions.asScala.map { offsetForLeaderPartitionResult =>
           val tp = new TopicPartition(offsetForLeaderTopicResult.topic, offsetForLeaderPartitionResult.partition)
           tp -> offsetForLeaderPartitionResult
         }

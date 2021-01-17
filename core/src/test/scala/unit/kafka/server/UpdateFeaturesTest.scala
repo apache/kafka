@@ -34,8 +34,7 @@ import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests.{UpdateFeaturesRequest, UpdateFeaturesResponse}
 import org.apache.kafka.common.utils.Utils
 import org.junit.Test
-import org.junit.Assert.{assertEquals, assertFalse, assertNotEquals, assertNotNull, assertTrue}
-import org.scalatest.Assertions.intercept
+import org.junit.Assert.{assertEquals, assertFalse, assertNotEquals, assertNotNull, assertTrue, assertThrows}
 
 import scala.jdk.CollectionConverters._
 import scala.reflect.ClassTag
@@ -132,9 +131,7 @@ class UpdateFeaturesTest extends BaseRequestTest {
                                                         (implicit tag: ClassTag[ExceptionType]): Unit = {
     featureExceptionMsgPatterns.foreach {
       case (feature, exceptionMsgPattern) =>
-        val exception = intercept[ExecutionException] {
-          result.values().get(feature).get()
-        }
+        val exception = assertThrows(classOf[ExecutionException], () => result.values().get(feature).get())
         val cause = exception.getCause
         assertNotNull(cause)
         assertEquals(cause.getClass, tag.runtimeClass)

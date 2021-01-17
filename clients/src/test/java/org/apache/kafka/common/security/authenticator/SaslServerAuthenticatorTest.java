@@ -27,14 +27,13 @@ import org.apache.kafka.common.network.ListenerName;
 import org.apache.kafka.common.network.TransportLayer;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.requests.ApiVersionsRequest;
+import org.apache.kafka.common.requests.RequestTestUtils;
 import org.apache.kafka.common.security.auth.AuthenticateCallbackHandler;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.apache.kafka.common.requests.RequestHeader;
 import org.apache.kafka.common.security.plain.PlainLoginModule;
 import org.apache.kafka.common.utils.AppInfoParser;
 import org.apache.kafka.common.utils.Time;
-import org.apache.kafka.test.TestUtils;
-import org.junit.Test;
 
 import javax.security.auth.Subject;
 import java.io.IOException;
@@ -42,11 +41,14 @@ import java.nio.ByteBuffer;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
+
+import org.junit.jupiter.api.Test;
 import org.mockito.Answers;
 
 import static org.apache.kafka.common.security.scram.internals.ScramMechanism.SCRAM_SHA_256;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.fail;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.fail;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.times;
@@ -55,7 +57,7 @@ import static org.mockito.Mockito.when;
 
 public class SaslServerAuthenticatorTest {
 
-    @Test(expected = InvalidReceiveException.class)
+    @Test
     public void testOversizeRequest() throws IOException {
         TransportLayer transportLayer = mock(TransportLayer.class);
         Map<String, ?> configs = Collections.singletonMap(BrokerSecurityConfigs.SASL_ENABLED_MECHANISMS_CONFIG,
@@ -67,7 +69,7 @@ public class SaslServerAuthenticatorTest {
             invocation.<ByteBuffer>getArgument(0).putInt(SaslServerAuthenticator.MAX_RECEIVE_SIZE + 1);
             return 4;
         });
-        authenticator.authenticate();
+        assertThrows(InvalidReceiveException.class, authenticator::authenticate);
         verify(transportLayer).read(any(ByteBuffer.class));
     }
 
@@ -80,7 +82,7 @@ public class SaslServerAuthenticatorTest {
             SCRAM_SHA_256.mechanismName(), new DefaultChannelMetadataRegistry());
 
         RequestHeader header = new RequestHeader(ApiKeys.METADATA, (short) 0, "clientId", 13243);
-        ByteBuffer headerBuffer = TestUtils.serializeRequestHeader(header);
+        ByteBuffer headerBuffer = RequestTestUtils.serializeRequestHeader(header);
 
         when(transportLayer.read(any(ByteBuffer.class))).then(invocation -> {
             invocation.<ByteBuffer>getArgument(0).putInt(headerBuffer.remaining());
@@ -123,10 +125,10 @@ public class SaslServerAuthenticatorTest {
             SCRAM_SHA_256.mechanismName(), metadataRegistry);
 
         RequestHeader header = new RequestHeader(ApiKeys.API_VERSIONS, version, "clientId", 0);
-        ByteBuffer headerBuffer = TestUtils.serializeRequestHeader(header);
+        ByteBuffer headerBuffer = RequestTestUtils.serializeRequestHeader(header);
 
         ApiVersionsRequest request = new ApiVersionsRequest.Builder().build(version);
-        ByteBuffer requestBuffer = request.serializeBody();
+        ByteBuffer requestBuffer = request.serialize();
         requestBuffer.rewind();
 
         when(transportLayer.socketChannel().socket().getInetAddress()).thenReturn(InetAddress.getLoopbackAddress());

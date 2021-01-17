@@ -23,7 +23,6 @@ import kafka.utils.TestUtils
 import org.apache.kafka.common.ConsumerGroupState
 import org.apache.kafka.clients.admin.ConsumerGroupListing
 import java.util.Optional
-import org.scalatest.Assertions.assertThrows
 
 class ListConsumerGroupTest extends ConsumerGroupCommandTest {
 
@@ -44,10 +43,10 @@ class ListConsumerGroupTest extends ConsumerGroupCommandTest {
     }, s"Expected --list to show groups $expectedGroups, but found $foundGroups.")
   }
 
-  @Test(expected = classOf[OptionException])
+  @Test
   def testListWithUnrecognizedNewConsumerOption(): Unit = {
     val cgcArgs = Array("--new-consumer", "--bootstrap-server", brokerList, "--list")
-    getConsumerGroupService(cgcArgs)
+    assertThrows(classOf[OptionException], () => getConsumerGroupService(cgcArgs))
   }
 
   @Test
@@ -90,21 +89,13 @@ class ListConsumerGroupTest extends ConsumerGroupCommandTest {
     result = ConsumerGroupCommand.consumerGroupStatesFromString("Dead,CompletingRebalance,")
     assertEquals(Set(ConsumerGroupState.DEAD, ConsumerGroupState.COMPLETING_REBALANCE), result)
 
-    assertThrows[IllegalArgumentException] {
-      ConsumerGroupCommand.consumerGroupStatesFromString("bad, wrong")
-    }
+    assertThrows(classOf[IllegalArgumentException], () => ConsumerGroupCommand.consumerGroupStatesFromString("bad, wrong"))
 
-    assertThrows[IllegalArgumentException] {
-      ConsumerGroupCommand.consumerGroupStatesFromString("stable")
-    }
+    assertThrows(classOf[IllegalArgumentException], () => ConsumerGroupCommand.consumerGroupStatesFromString("stable"))
 
-    assertThrows[IllegalArgumentException] {
-      ConsumerGroupCommand.consumerGroupStatesFromString("  bad, Stable")
-    }
+    assertThrows(classOf[IllegalArgumentException], () => ConsumerGroupCommand.consumerGroupStatesFromString("  bad, Stable"))
 
-    assertThrows[IllegalArgumentException] {
-      ConsumerGroupCommand.consumerGroupStatesFromString("   ,   ,")
-    }
+    assertThrows(classOf[IllegalArgumentException], () => ConsumerGroupCommand.consumerGroupStatesFromString("   ,   ,"))
   }
 
   @Test

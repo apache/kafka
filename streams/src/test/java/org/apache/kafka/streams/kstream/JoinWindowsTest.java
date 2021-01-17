@@ -22,6 +22,7 @@ import static java.time.Duration.ofMillis;
 import static org.apache.kafka.streams.EqualityCheck.verifyEquality;
 import static org.apache.kafka.streams.EqualityCheck.verifyInEquality;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.fail;
 
 @SuppressWarnings("deprecation")
@@ -45,9 +46,9 @@ public class JoinWindowsTest {
                    .after(ofMillis(-ANY_OTHER_SIZE));              // [ -anyOtherSize ; -anyOtherSize ]
     }
 
-    @Test(expected = IllegalArgumentException.class)
+    @Test
     public void timeDifferenceMustNotBeNegative() {
-        JoinWindows.of(ofMillis(-1));
+        assertThrows(IllegalArgumentException.class, () -> JoinWindows.of(ofMillis(-1)));
     }
 
     @Test

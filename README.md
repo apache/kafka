@@ -199,6 +199,11 @@ You can run spotbugs using:
 The spotbugs warnings will be found in `reports/spotbugs/main.html` and `reports/spotbugs/test.html` files in the subproject build
 directories.  Use -PxmlSpotBugsReport=true to generate an XML report instead of an HTML one.
 
+### JMH microbenchmarks ###
+We use [JMH](https://openjdk.java.net/projects/code-tools/jmh/) to write microbenchmarks that produce reliable results in the JVM.
+    
+See [jmh-benchmarks/README.md](https://github.com/apache/kafka/blob/trunk/jmh-benchmarks/README.md) for details on how to run the microbenchmarks.
+
 ### Common build options ###
 
 The following options should be set with a `-P` switch, for example `./gradlew -PmaxParallelForks=1 test`.

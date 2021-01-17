@@ -70,4 +70,8 @@ public interface Readable {
     default Uuid readUuid() {
         return new Uuid(readLong(), readLong());
     }
+
+    default int readUnsignedShort() {
+        return Short.toUnsignedInt(readShort());
+    }
 }

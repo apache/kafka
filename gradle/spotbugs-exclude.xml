@@ -194,6 +194,13 @@ For a detailed description of spotbugs bug categories, see https://spotbugs.read
 
     <Match>
         <!-- Uncallable anonymous methods are left behind after inlining by scalac 2.12, fixed in 2.13 -->
+        <Source name="AuthHelper.scala"/>
+        <Package name="kafka.server"/>
+        <Bug pattern="UMAC_UNCALLABLE_METHOD_OF_ANONYMOUS_CLASS"/>
+    </Match>
+
+    <Match>
+        <!-- Uncallable anonymous methods are left behind after inlining by scalac 2.12, fixed in 2.13 -->
         <Source name="KafkaApis.scala"/>
         <Package name="kafka.server"/>
         <Bug pattern="UMAC_UNCALLABLE_METHOD_OF_ANONYMOUS_CLASS"/>
@@ -237,19 +244,8 @@ For a detailed description of spotbugs bug categories, see https://spotbugs.read
     </Match>
 
     <Match>
-        <!-- Suppress some minor warnings about machine-generated code for
-             benchmarking. -->
-        <Or>
-            <Package name="org.apache.kafka.jmh.cache.generated"/>
-            <Package name="org.apache.kafka.jmh.common.generated"/>
-            <Package name="org.apache.kafka.jmh.record.generated"/>
-            <Package name="org.apache.kafka.jmh.partition.generated"/>
-            <Package name="org.apache.kafka.jmh.producer.generated"/>
-            <Package name="org.apache.kafka.jmh.fetchsession.generated"/>
-            <Package name="org.apache.kafka.jmh.fetcher.generated"/>
-            <Package name="org.apache.kafka.jmh.server.generated"/>
-            <Package name="org.apache.kafka.jmh.consumer.generated"/>
-        </Or>
+        <!-- Suppress some minor warnings about machine-generated code for benchmarking. -->
+        <Package name="~org\.apache\.kafka\.jmh\..*\.jmh_generated"/>
     </Match>
 
     <Match>

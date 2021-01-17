@@ -484,7 +484,8 @@ public class StreamsConfig extends AbstractConfig {
     /** {@code replication.factor} */
     @SuppressWarnings("WeakerAccess")
     public static final String REPLICATION_FACTOR_CONFIG = "replication.factor";
-    private static final String REPLICATION_FACTOR_DOC = "The replication factor for change log topics and repartition topics created by the stream processing application.";
+    private static final String REPLICATION_FACTOR_DOC = "The replication factor for change log topics and repartition topics created by the stream processing application." +
+        " If your broker cluster is on version 2.4 or newer, you can set -1 to use the broker default replication factor.";
 
     /** {@code request.timeout.ms} */
     @SuppressWarnings("WeakerAccess")

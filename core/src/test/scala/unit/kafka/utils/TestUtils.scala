@@ -23,13 +23,12 @@ import java.nio.charset.{Charset, StandardCharsets}
 import java.nio.file.{Files, StandardOpenOption}
 import java.security.cert.X509Certificate
 import java.time.Duration
-import java.util.concurrent.atomic.AtomicInteger
+import java.util.concurrent.atomic.{AtomicBoolean, AtomicInteger}
 import java.util.{Arrays, Collections, Properties}
 import java.util.concurrent.{Callable, ExecutionException, Executors, TimeUnit}
-
 import javax.net.ssl.X509TrustManager
 import kafka.api._
-import kafka.cluster.{Broker, EndPoint, IsrChangeListener}
+import kafka.cluster.{Broker, EndPoint, IsrChangeListener, TopicConfigFetcher}
 import kafka.log._
 import kafka.security.auth.{Acl, Resource, Authorizer => LegacyAuthorizer}
 import kafka.server._
@@ -50,6 +49,8 @@ import org.apache.kafka.common.errors.{KafkaStorageException, UnknownTopicOrPart
 import org.apache.kafka.common.header.Header
 import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.network.{ListenerName, Mode}
+import org.apache.kafka.common.protocol.Errors
+import org.apache.kafka.common.quota.{ClientQuotaAlteration, ClientQuotaEntity}
 import org.apache.kafka.common.record._
 import org.apache.kafka.common.resource.ResourcePattern
 import org.apache.kafka.common.security.auth.SecurityProtocol
@@ -63,7 +64,6 @@ import org.apache.zookeeper.KeeperException.SessionExpiredException
 import org.apache.zookeeper.ZooDefs._
 import org.apache.zookeeper.data.ACL
 import org.junit.Assert._
-import org.scalatest.Assertions.fail
 
 import scala.jdk.CollectionConverters._
 import scala.collection.mutable.{ArrayBuffer, ListBuffer}
@@ -129,7 +129,6 @@ object TestUtils extends Logging {
     f.deleteOnExit()
     f
   }
-
 
   /**
    * Create a temporary file
@@ -752,7 +751,7 @@ object TestUtils extends Logging {
         case _ =>
           s"Timing out after $timeoutMs ms since a leader was not elected for partition $topicPartition"
       }
-      fail(errorMessage)
+      throw new AssertionError(errorMessage)
     }
   }
 
@@ -883,7 +882,7 @@ object TestUtils extends Logging {
                       servers: Iterable[KafkaServer]): Int = {
     val leaderServer = servers.find(_.config.brokerId == brokerId)
     val leaderPartition = leaderServer.flatMap(_.replicaManager.nonOfflinePartition(topicPartition))
-      .getOrElse(fail(s"Failed to find expected replica on broker $brokerId"))
+      .getOrElse(throw new AssertionError(s"Failed to find expected replica on broker $brokerId"))
     leaderPartition.getLeaderEpoch
   }
 
@@ -897,7 +896,7 @@ object TestUtils extends Logging {
     }
     followerOpt
       .map(_.config.brokerId)
-      .getOrElse(fail(s"Unable to locate follower for $topicPartition"))
+      .getOrElse(throw new AssertionError(s"Unable to locate follower for $topicPartition"))
   }
 
   /**
@@ -944,7 +943,7 @@ object TestUtils extends Logging {
 
   def waitUntilControllerElected(zkClient: KafkaZkClient, timeout: Long = JTestUtils.DEFAULT_MAX_WAIT_MS): Int = {
     val (controllerId, _) = TestUtils.computeUntilTrue(zkClient.getControllerId, waitTime = timeout)(_.isDefined)
-    controllerId.getOrElse(fail(s"Controller not elected after $timeout ms"))
+    controllerId.getOrElse(throw new AssertionError(s"Controller not elected after $timeout ms"))
   }
 
   def awaitLeaderChange(servers: Seq[KafkaServer],
@@ -1066,17 +1065,38 @@ object TestUtils extends Logging {
 
   class MockAlterIsrManager extends AlterIsrManager {
     val isrUpdates: mutable.Queue[AlterIsrItem] = new mutable.Queue[AlterIsrItem]()
+    val inFlight: AtomicBoolean = new AtomicBoolean(false)
 
-    override def enqueue(alterIsrItem: AlterIsrItem): Boolean = {
-      isrUpdates += alterIsrItem
-      true
+    override def submit(alterIsrItem: AlterIsrItem): Boolean = {
+      if (inFlight.compareAndSet(false, true)) {
+        isrUpdates += alterIsrItem
+        true
+      } else {
+        false
+      }
     }
 
     override def clearPending(topicPartition: TopicPartition): Unit = {
-      isrUpdates.clear()
+      inFlight.set(false);
     }
 
-    override def start(): Unit = { }
+    def completeIsrUpdate(newZkVersion: Int): Unit = {
+      if (inFlight.compareAndSet(true, false)) {
+        val item = isrUpdates.head
+        item.callback.apply(Right(item.leaderAndIsr.withZkVersion(newZkVersion)))
+      } else {
+        fail("Expected an in-flight ISR update, but there was none")
+      }
+    }
+
+    def failIsrUpdate(error: Errors): Unit = {
+      if (inFlight.compareAndSet(true, false)) {
+        val item = isrUpdates.dequeue()
+        item.callback.apply(Left(error))
+      } else {
+        fail("Expected an in-flight ISR update, but there was none")
+      }
+    }
   }
 
   def createAlterIsrManager(): MockAlterIsrManager = {
@@ -1103,6 +1123,14 @@ object TestUtils extends Logging {
 
   def createIsrChangeListener(): MockIsrChangeListener = {
     new MockIsrChangeListener()
+  }
+
+  class MockTopicConfigFetcher(var props: Properties) extends TopicConfigFetcher {
+    override def fetch(): Properties = props
+  }
+
+  def createTopicConfigProvider(props: Properties): MockTopicConfigFetcher = {
+    new MockTopicConfigFetcher(props)
   }
 
   def produceMessages(servers: Seq[KafkaServer],
@@ -1550,6 +1578,16 @@ object TestUtils extends Logging {
       Map(new ConfigResource(ConfigResource.Type.BROKER, "") -> configEntries).asJava
     }
     adminClient.incrementalAlterConfigs(configs)
+  }
+
+  def alterClientQuotas(adminClient: Admin, request: Map[ClientQuotaEntity, Map[String, Option[Double]]]): AlterClientQuotasResult = {
+    val entries = request.map { case (entity, alter) =>
+      val ops = alter.map { case (key, value) =>
+        new ClientQuotaAlteration.Op(key, value.map(Double.box).getOrElse(null))
+      }.asJavaCollection
+      new ClientQuotaAlteration(entity, ops)
+    }.asJavaCollection
+    adminClient.alterClientQuotas(entries)
   }
 
   def assertLeader(client: Admin, topicPartition: TopicPartition, expectedLeader: Int): Unit = {

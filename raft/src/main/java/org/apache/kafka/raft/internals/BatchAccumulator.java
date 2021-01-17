@@ -19,7 +19,6 @@ package org.apache.kafka.raft.internals;
 import org.apache.kafka.common.memory.MemoryPool;
 import org.apache.kafka.common.record.CompressionType;
 import org.apache.kafka.common.record.MemoryRecords;
-import org.apache.kafka.common.record.RecordBatch;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.raft.RecordSerde;
 
@@ -141,6 +140,7 @@ public class BatchAccumulator<T> implements Closeable {
             startNewBatch();
         } else if (!currentBatch.hasRoomFor(batchSize)) {
             completeCurrentBatch();
+            startNewBatch();
         }
         return currentBatch;
     }
@@ -271,22 +271,19 @@ public class BatchAccumulator<T> implements Closeable {
         }
     }
 
+    public boolean isEmpty() {
+        // The linger timer begins running when we have pending batches.
+        // We use this to infer when the accumulator is empty to avoid the
+        // need to acquire the append lock.
+        return !lingerTimer.isRunning();
+    }
+
     /**
-     * Get the number of batches including the one that is currently being
-     * written to (if it exists).
+     * Get the number of completed batches which are ready to be drained.
+     * This does not include the batch that is currently being filled.
      */
-    public int count() {
-        appendLock.lock();
-        try {
-            int count = completed.size();
-            if (currentBatch != null) {
-                return count + 1;
-            } else {
-                return count;
-            }
-        } finally {
-            appendLock.unlock();
-        }
+    public int numCompletedBatches() {
+        return completed.size();
     }
 
     @Override

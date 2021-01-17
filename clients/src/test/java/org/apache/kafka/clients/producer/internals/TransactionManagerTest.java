@@ -16,7 +16,7 @@
  */
 package org.apache.kafka.clients.producer.internals;
 
-import org.apache.kafka.clients.ApiVersion;
+import org.apache.kafka.common.protocol.ApiVersion;
 import org.apache.kafka.clients.ApiVersions;
 import org.apache.kafka.clients.MockClient;
 import org.apache.kafka.clients.consumer.CommitFailedException;
@@ -25,6 +25,7 @@ import org.apache.kafka.clients.NodeApiVersions;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.common.errors.FencedInstanceIdException;
 import org.apache.kafka.common.requests.JoinGroupRequest;
+import org.apache.kafka.common.requests.RequestTestUtils;
 import org.apache.kafka.common.utils.ProducerIdAndEpoch;
 import org.apache.kafka.clients.producer.RecordMetadata;
 import org.apache.kafka.common.Cluster;
@@ -74,8 +75,8 @@ import org.apache.kafka.common.requests.TxnOffsetCommitResponse;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.test.TestUtils;
-import org.junit.Before;
-import org.junit.Test;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 
 import java.nio.ByteBuffer;
 import java.util.Arrays;
@@ -97,17 +98,14 @@ import java.util.function.Supplier;
 import static java.util.Collections.singleton;
 import static java.util.Collections.singletonList;
 import static java.util.Collections.singletonMap;
-import static org.hamcrest.CoreMatchers.instanceOf;
-import static org.hamcrest.CoreMatchers.is;
-import static org.hamcrest.MatcherAssert.assertThat;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertNotEquals;
-import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.assertNull;
-import static org.junit.Assert.assertThrows;
-import static org.junit.Assert.assertTrue;
-import static org.junit.Assert.fail;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.fail;
 
 public class TransactionManagerTest {
     private static final int MAX_REQUEST_SIZE = 1024 * 1024;
@@ -142,10 +140,10 @@ public class TransactionManagerTest {
     private TransactionManager transactionManager = null;
     private Node brokerNode = null;
 
-    @Before
+    @BeforeEach
     public void setup() {
         this.metadata.add("test", time.milliseconds());
-        this.client.updateMetadata(TestUtils.metadataUpdateWith(1, singletonMap("test", 2)));
+        this.client.updateMetadata(RequestTestUtils.metadataUpdateWith(1, singletonMap("test", 2)));
         this.brokerNode = new Node(0, "localhost", 2211);
 
         initializeTransactionManager(Optional.of(transactionalId), false);
@@ -212,9 +210,9 @@ public class TransactionManagerTest {
         assertTrue(transactionManager.nextRequest(false).isEndTxn());
     }
 
-    @Test(expected = IllegalStateException.class)
+    @Test
     public void testFailIfNotReadyForSendNoProducerId() {
-        transactionManager.failIfNotReadyForSend();
+        assertThrows(IllegalStateException.class, () -> transactionManager.failIfNotReadyForSend());
     }
 
     @Test
@@ -223,32 +221,32 @@ public class TransactionManagerTest {
         transactionManager.failIfNotReadyForSend();
     }
 
-    @Test(expected = KafkaException.class)
+    @Test
     public void testFailIfNotReadyForSendIdempotentProducerFatalError() {
         initializeTransactionManager(Optional.empty(), false);
         transactionManager.transitionToFatalError(new KafkaException());
-        transactionManager.failIfNotReadyForSend();
+        assertThrows(KafkaException.class, () -> transactionManager.failIfNotReadyForSend());
     }
 
-    @Test(expected = IllegalStateException.class)
+    @Test
     public void testFailIfNotReadyForSendNoOngoingTransaction() {
         doInitTransactions();
-        transactionManager.failIfNotReadyForSend();
+        assertThrows(IllegalStateException.class, () -> transactionManager.failIfNotReadyForSend());
     }
 
-    @Test(expected = KafkaException.class)
+    @Test
     public void testFailIfNotReadyForSendAfterAbortableError() {
         doInitTransactions();
         transactionManager.beginTransaction();
         transactionManager.transitionToAbortableError(new KafkaException());
-        transactionManager.failIfNotReadyForSend();
+        assertThrows(KafkaException.class, transactionManager::failIfNotReadyForSend);
     }
 
-    @Test(expected = KafkaException.class)
+    @Test
     public void testFailIfNotReadyForSendAfterFatalError() {
         doInitTransactions();
         transactionManager.transitionToFatalError(new KafkaException());
-        transactionManager.failIfNotReadyForSend();
+        assertThrows(KafkaException.class, transactionManager::failIfNotReadyForSend);
     }
 
     @Test
@@ -443,34 +441,30 @@ public class TransactionManagerTest {
         assertEquals(DEFAULT_RETRY_BACKOFF_MS, handler.retryBackoffMs());
     }
 
-    @Test(expected = IllegalStateException.class)
-    public void testMaybeAddPartitionToTransactionBeforeInitTransactions() {
-        transactionManager.failIfNotReadyForSend();
-        transactionManager.maybeAddPartitionToTransaction(new TopicPartition("foo", 0));
+    @Test
+    public void testNotReadyForSendBeforeInitTransactions() {
+        assertThrows(IllegalStateException.class, () -> transactionManager.failIfNotReadyForSend());
     }
 
-    @Test(expected = IllegalStateException.class)
-    public void testMaybeAddPartitionToTransactionBeforeBeginTransaction() {
+    @Test
+    public void testNotReadyForSendBeforeBeginTransaction() {
         doInitTransactions();
-        transactionManager.failIfNotReadyForSend();
-        transactionManager.maybeAddPartitionToTransaction(new TopicPartition("foo", 0));
+        assertThrows(IllegalStateException.class, () -> transactionManager.failIfNotReadyForSend());
     }
 
-    @Test(expected = KafkaException.class)
-    public void testMaybeAddPartitionToTransactionAfterAbortableError() {
+    @Test
+    public void testNotReadyForSendAfterAbortableError() {
         doInitTransactions();
         transactionManager.beginTransaction();
         transactionManager.transitionToAbortableError(new KafkaException());
-        transactionManager.failIfNotReadyForSend();
-        transactionManager.maybeAddPartitionToTransaction(new TopicPartition("foo", 0));
+        assertThrows(KafkaException.class, () -> transactionManager.failIfNotReadyForSend());
     }
 
-    @Test(expected = KafkaException.class)
-    public void testMaybeAddPartitionToTransactionAfterFatalError() {
+    @Test
+    public void testNotReadyForSendAfterFatalError() {
         doInitTransactions();
         transactionManager.transitionToFatalError(new KafkaException());
-        transactionManager.failIfNotReadyForSend();
-        transactionManager.maybeAddPartitionToTransaction(new TopicPartition("foo", 0));
+        assertThrows(KafkaException.class, () -> transactionManager.failIfNotReadyForSend());
     }
 
     @Test
@@ -838,8 +832,8 @@ public class TransactionManagerTest {
 
         client.prepareUnsupportedVersionResponse(body -> {
             InitProducerIdRequest initProducerIdRequest = (InitProducerIdRequest) body;
-            assertEquals(initProducerIdRequest.data.transactionalId(), transactionalId);
-            assertEquals(initProducerIdRequest.data.transactionTimeoutMs(), transactionTimeoutMs);
+            assertEquals(initProducerIdRequest.data().transactionalId(), transactionalId);
+            assertEquals(initProducerIdRequest.data().transactionTimeoutMs(), transactionTimeoutMs);
             return true;
         });
 
@@ -889,11 +883,11 @@ public class TransactionManagerTest {
 
         client.prepareResponse(request -> {
             TxnOffsetCommitRequest txnOffsetCommitRequest = (TxnOffsetCommitRequest) request;
-            assertEquals(consumerGroupId, txnOffsetCommitRequest.data.groupId());
-            assertEquals(producerId, txnOffsetCommitRequest.data.producerId());
-            assertEquals(epoch, txnOffsetCommitRequest.data.producerEpoch());
-            return txnOffsetCommitRequest.data.groupInstanceId().equals(groupInstanceId)
-                && !txnOffsetCommitRequest.data.memberId().equals(memberId);
+            assertEquals(consumerGroupId, txnOffsetCommitRequest.data().groupId());
+            assertEquals(producerId, txnOffsetCommitRequest.data().producerId());
+            assertEquals(epoch, txnOffsetCommitRequest.data().producerEpoch());
+            return txnOffsetCommitRequest.data().groupInstanceId().equals(groupInstanceId)
+                && !txnOffsetCommitRequest.data().memberId().equals(memberId);
         }, new TxnOffsetCommitResponse(0, singletonMap(tp, Errors.FENCED_INSTANCE_ID)));
 
         runUntil(transactionManager::hasError);
@@ -923,10 +917,10 @@ public class TransactionManagerTest {
 
         client.prepareResponse(request -> {
             TxnOffsetCommitRequest txnOffsetCommitRequest = (TxnOffsetCommitRequest) request;
-            assertEquals(consumerGroupId, txnOffsetCommitRequest.data.groupId());
-            assertEquals(producerId, txnOffsetCommitRequest.data.producerId());
-            assertEquals(epoch, txnOffsetCommitRequest.data.producerEpoch());
-            return !txnOffsetCommitRequest.data.memberId().equals(memberId);
+            assertEquals(consumerGroupId, txnOffsetCommitRequest.data().groupId());
+            assertEquals(producerId, txnOffsetCommitRequest.data().producerId());
+            assertEquals(epoch, txnOffsetCommitRequest.data().producerEpoch());
+            return !txnOffsetCommitRequest.data().memberId().equals(memberId);
         }, new TxnOffsetCommitResponse(0, singletonMap(tp, Errors.UNKNOWN_MEMBER_ID)));
 
         runUntil(transactionManager::hasError);
@@ -958,10 +952,10 @@ public class TransactionManagerTest {
         prepareTxnOffsetCommitResponse(consumerGroupId, producerId, epoch, singletonMap(tp, Errors.ILLEGAL_GENERATION));
         client.prepareResponse(request -> {
             TxnOffsetCommitRequest txnOffsetCommitRequest = (TxnOffsetCommitRequest) request;
-            assertEquals(consumerGroupId, txnOffsetCommitRequest.data.groupId());
-            assertEquals(producerId, txnOffsetCommitRequest.data.producerId());
-            assertEquals(epoch, txnOffsetCommitRequest.data.producerEpoch());
-            return txnOffsetCommitRequest.data.generationId() != generationId;
+            assertEquals(consumerGroupId, txnOffsetCommitRequest.data().groupId());
+            assertEquals(producerId, txnOffsetCommitRequest.data().producerId());
+            assertEquals(epoch, txnOffsetCommitRequest.data().producerEpoch());
+            return txnOffsetCommitRequest.data().generationId() != generationId;
         }, new TxnOffsetCommitResponse(0, singletonMap(tp, Errors.ILLEGAL_GENERATION)));
 
         runUntil(transactionManager::hasError);
@@ -2095,7 +2089,7 @@ public class TransactionManagerTest {
             offsets, new ConsumerGroupMetadata(consumerGroupId));
         prepareAddOffsetsToTxnResponse(Errors.NONE, consumerGroupId, producerId, epoch);
         runUntil(() -> !client.hasPendingResponses());
-        assertThat(addOffsetsResult.isCompleted(), is(false));  // The request should complete only after the TxnOffsetCommit completes.
+        assertFalse(addOffsetsResult.isCompleted());  // The request should complete only after the TxnOffsetCommit completes.
 
         Map<TopicPartition, Errors> txnOffsetCommitResponse = new HashMap<>();
         txnOffsetCommitResponse.put(tp0, Errors.NONE);
@@ -2105,8 +2099,8 @@ public class TransactionManagerTest {
         prepareTxnOffsetCommitResponse(consumerGroupId, producerId, epoch, txnOffsetCommitResponse);
 
         runUntil(addOffsetsResult::isCompleted);
-        assertThat(addOffsetsResult.isSuccessful(), is(false));
-        assertThat(addOffsetsResult.error(), instanceOf(error.exception().getClass()));
+        assertFalse(addOffsetsResult.isSuccessful());
+        assertEquals(error.exception().getClass(), addOffsetsResult.error().getClass());
     }
 
     @Test
@@ -3145,14 +3139,14 @@ public class TransactionManagerTest {
         verifyCommitOrAbortTransactionRetriable(TransactionResult.COMMIT, TransactionResult.COMMIT);
     }
 
-    @Test(expected = KafkaException.class)
-    public void testRetryAbortTransactionAfterCommitTimeout() throws InterruptedException {
-        verifyCommitOrAbortTransactionRetriable(TransactionResult.COMMIT, TransactionResult.ABORT);
+    @Test
+    public void testRetryAbortTransactionAfterCommitTimeout() {
+        assertThrows(KafkaException.class, () -> verifyCommitOrAbortTransactionRetriable(TransactionResult.COMMIT, TransactionResult.ABORT));
     }
 
-    @Test(expected = KafkaException.class)
+    @Test
     public void testRetryCommitTransactionAfterAbortTimeout() throws InterruptedException {
-        verifyCommitOrAbortTransactionRetriable(TransactionResult.ABORT, TransactionResult.COMMIT);
+        assertThrows(KafkaException.class, () -> verifyCommitOrAbortTransactionRetriable(TransactionResult.ABORT, TransactionResult.COMMIT));
     }
 
     @Test
@@ -3331,8 +3325,8 @@ public class TransactionManagerTest {
                 .setThrottleTimeMs(0);
         client.prepareResponse(body -> {
             InitProducerIdRequest initProducerIdRequest = (InitProducerIdRequest) body;
-            assertEquals(transactionalId, initProducerIdRequest.data.transactionalId());
-            assertEquals(transactionTimeoutMs, initProducerIdRequest.data.transactionTimeoutMs());
+            assertEquals(transactionalId, initProducerIdRequest.data().transactionalId());
+            assertEquals(transactionTimeoutMs, initProducerIdRequest.data().transactionTimeoutMs());
             return true;
         }, new InitProducerIdResponse(responseData), shouldDisconnect);
     }
@@ -3395,10 +3389,10 @@ public class TransactionManagerTest {
                                                                   final short epoch, final long producerId) {
         return body -> {
             AddPartitionsToTxnRequest addPartitionsToTxnRequest = (AddPartitionsToTxnRequest) body;
-            assertEquals(producerId, addPartitionsToTxnRequest.data.producerId());
-            assertEquals(epoch, addPartitionsToTxnRequest.data.producerEpoch());
+            assertEquals(producerId, addPartitionsToTxnRequest.data().producerId());
+            assertEquals(epoch, addPartitionsToTxnRequest.data().producerEpoch());
             assertEquals(singletonList(topicPartition), addPartitionsToTxnRequest.partitions());
-            assertEquals(transactionalId, addPartitionsToTxnRequest.data.transactionalId());
+            assertEquals(transactionalId, addPartitionsToTxnRequest.data().transactionalId());
             return true;
         };
     }
@@ -3429,9 +3423,9 @@ public class TransactionManagerTest {
     private MockClient.RequestMatcher endTxnMatcher(final TransactionResult result, final long producerId, final short epoch) {
         return body -> {
             EndTxnRequest endTxnRequest = (EndTxnRequest) body;
-            assertEquals(transactionalId, endTxnRequest.data.transactionalId());
-            assertEquals(producerId, endTxnRequest.data.producerId());
-            assertEquals(epoch, endTxnRequest.data.producerEpoch());
+            assertEquals(transactionalId, endTxnRequest.data().transactionalId());
+            assertEquals(producerId, endTxnRequest.data().producerId());
+            assertEquals(epoch, endTxnRequest.data().producerEpoch());
             assertEquals(result, endTxnRequest.result());
             return true;
         };
@@ -3443,10 +3437,10 @@ public class TransactionManagerTest {
                                                 final short producerEpoch) {
         client.prepareResponse(body -> {
             AddOffsetsToTxnRequest addOffsetsToTxnRequest = (AddOffsetsToTxnRequest) body;
-            assertEquals(consumerGroupId, addOffsetsToTxnRequest.data.groupId());
-            assertEquals(transactionalId, addOffsetsToTxnRequest.data.transactionalId());
-            assertEquals(producerId, addOffsetsToTxnRequest.data.producerId());
-            assertEquals(producerEpoch, addOffsetsToTxnRequest.data.producerEpoch());
+            assertEquals(consumerGroupId, addOffsetsToTxnRequest.data().groupId());
+            assertEquals(transactionalId, addOffsetsToTxnRequest.data().transactionalId());
+            assertEquals(producerId, addOffsetsToTxnRequest.data().producerId());
+            assertEquals(producerEpoch, addOffsetsToTxnRequest.data().producerEpoch());
             return true;
         }, new AddOffsetsToTxnResponse(
             new AddOffsetsToTxnResponseData()
@@ -3460,9 +3454,9 @@ public class TransactionManagerTest {
                                                 Map<TopicPartition, Errors> txnOffsetCommitResponse) {
         client.prepareResponse(request -> {
             TxnOffsetCommitRequest txnOffsetCommitRequest = (TxnOffsetCommitRequest) request;
-            assertEquals(consumerGroupId, txnOffsetCommitRequest.data.groupId());
-            assertEquals(producerId, txnOffsetCommitRequest.data.producerId());
-            assertEquals(producerEpoch, txnOffsetCommitRequest.data.producerEpoch());
+            assertEquals(consumerGroupId, txnOffsetCommitRequest.data().groupId());
+            assertEquals(producerId, txnOffsetCommitRequest.data().producerId());
+            assertEquals(producerEpoch, txnOffsetCommitRequest.data().producerEpoch());
             return true;
         }, new TxnOffsetCommitResponse(0, txnOffsetCommitResponse));
     }
@@ -3476,12 +3470,12 @@ public class TransactionManagerTest {
                                                 Map<TopicPartition, Errors> txnOffsetCommitResponse) {
         client.prepareResponse(request -> {
             TxnOffsetCommitRequest txnOffsetCommitRequest = (TxnOffsetCommitRequest) request;
-            assertEquals(consumerGroupId, txnOffsetCommitRequest.data.groupId());
-            assertEquals(producerId, txnOffsetCommitRequest.data.producerId());
-            assertEquals(producerEpoch, txnOffsetCommitRequest.data.producerEpoch());
-            assertEquals(groupInstanceId, txnOffsetCommitRequest.data.groupInstanceId());
-            assertEquals(memberId, txnOffsetCommitRequest.data.memberId());
-            assertEquals(generationId, txnOffsetCommitRequest.data.generationId());
+            assertEquals(consumerGroupId, txnOffsetCommitRequest.data().groupId());
+            assertEquals(producerId, txnOffsetCommitRequest.data().producerId());
+            assertEquals(producerEpoch, txnOffsetCommitRequest.data().producerEpoch());
+            assertEquals(groupInstanceId, txnOffsetCommitRequest.data().groupInstanceId());
+            assertEquals(memberId, txnOffsetCommitRequest.data().memberId());
+            assertEquals(generationId, txnOffsetCommitRequest.data().generationId());
             return true;
         }, new TxnOffsetCommitResponse(0, txnOffsetCommitResponse));
     }
@@ -3505,7 +3499,7 @@ public class TransactionManagerTest {
                 .setThrottleTimeMs(0);
         client.prepareResponse(body -> {
             InitProducerIdRequest initProducerIdRequest = (InitProducerIdRequest) body;
-            assertNull(initProducerIdRequest.data.transactionalId());
+            assertNull(initProducerIdRequest.data().transactionalId());
             return true;
         }, new InitProducerIdResponse(responseData), false);
 

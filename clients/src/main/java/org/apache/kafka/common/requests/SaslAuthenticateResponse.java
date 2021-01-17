@@ -68,7 +68,7 @@ public class SaslAuthenticateResponse extends AbstractResponse {
     }
 
     @Override
-    protected SaslAuthenticateResponseData data() {
+    public SaslAuthenticateResponseData data() {
         return data;
     }
 

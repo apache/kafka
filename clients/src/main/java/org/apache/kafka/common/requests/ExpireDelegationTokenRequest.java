@@ -39,7 +39,7 @@ public class ExpireDelegationTokenRequest extends AbstractRequest {
     }
 
     @Override
-    protected ExpireDelegationTokenRequestData data() {
+    public ExpireDelegationTokenRequestData data() {
         return data;
     }
 

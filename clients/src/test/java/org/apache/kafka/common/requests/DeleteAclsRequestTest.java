@@ -26,14 +26,14 @@ import org.apache.kafka.common.message.DeleteAclsRequestData;
 import org.apache.kafka.common.resource.PatternType;
 import org.apache.kafka.common.resource.ResourcePatternFilter;
 import org.apache.kafka.common.resource.ResourceType;
-import org.junit.Test;
+import org.junit.jupiter.api.Test;
 
 import java.nio.ByteBuffer;
 import java.util.stream.Collectors;
 
 import static java.util.Arrays.asList;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 public class DeleteAclsRequestTest {
     private static final short V0 = 0;
@@ -64,7 +64,7 @@ public class DeleteAclsRequestTest {
     @Test
     public void shouldRoundTripLiteralV0() {
         final DeleteAclsRequest original = new DeleteAclsRequest.Builder(requestData(LITERAL_FILTER)).build(V0);
-        final ByteBuffer buffer = original.serializeBody();
+        final ByteBuffer buffer = original.serialize();
 
         final DeleteAclsRequest result = DeleteAclsRequest.parse(buffer, V0);
 
@@ -82,7 +82,7 @@ public class DeleteAclsRequestTest {
                 ANY_FILTER.entryFilter()))
         ).build(V0);
 
-        final DeleteAclsRequest result = DeleteAclsRequest.parse(original.serializeBody(), V0);
+        final DeleteAclsRequest result = DeleteAclsRequest.parse(original.serialize(), V0);
 
         assertRequestEquals(expected, result);
     }
@@ -92,7 +92,7 @@ public class DeleteAclsRequestTest {
         final DeleteAclsRequest original = new DeleteAclsRequest.Builder(
                 requestData(LITERAL_FILTER, PREFIXED_FILTER, ANY_FILTER)
         ).build(V1);
-        final ByteBuffer buffer = original.serializeBody();
+        final ByteBuffer buffer = original.serialize();
 
         final DeleteAclsRequest result = DeleteAclsRequest.parse(buffer, V1);
 
@@ -100,7 +100,7 @@ public class DeleteAclsRequestTest {
     }
 
     private static void assertRequestEquals(final DeleteAclsRequest original, final DeleteAclsRequest actual) {
-        assertEquals("Number of filters wrong", original.filters().size(), actual.filters().size());
+        assertEquals(original.filters().size(), actual.filters().size(), "Number of filters wrong");
 
         for (int idx = 0; idx != original.filters().size(); ++idx) {
             final AclBindingFilter originalFilter = original.filters().get(idx);

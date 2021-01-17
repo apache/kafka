@@ -90,6 +90,7 @@ public class ElectLeadersRequest extends AbstractRequest {
         this.data = data;
     }
 
+    @Override
     public ElectLeadersRequestData data() {
         return data;
     }

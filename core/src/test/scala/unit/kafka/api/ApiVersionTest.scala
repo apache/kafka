@@ -111,13 +111,13 @@ class ApiVersionTest {
     assertEquals(KAFKA_2_6_IV0, ApiVersion("2.6"))
     assertEquals(KAFKA_2_6_IV0, ApiVersion("2.6-IV0"))
 
-    assertEquals(KAFKA_2_7_IV2, ApiVersion("2.7"))
     assertEquals(KAFKA_2_7_IV0, ApiVersion("2.7-IV0"))
     assertEquals(KAFKA_2_7_IV1, ApiVersion("2.7-IV1"))
     assertEquals(KAFKA_2_7_IV2, ApiVersion("2.7-IV2"))
 
-    assertEquals(KAFKA_2_8_IV0, ApiVersion("2.8"))
+    assertEquals(KAFKA_2_8_IV1, ApiVersion("2.8"))
     assertEquals(KAFKA_2_8_IV0, ApiVersion("2.8-IV0"))
+    assertEquals(KAFKA_2_8_IV1, ApiVersion("2.8-IV1"))
   }
 
   @Test
@@ -180,7 +180,8 @@ class ApiVersionTest {
     val response = ApiVersion.apiVersionsResponse(
       10,
       RecordBatch.MAGIC_VALUE_V1,
-      Features.emptySupportedFeatures
+      Features.emptySupportedFeatures,
+      None
     )
     verifyApiKeysForMagic(response, RecordBatch.MAGIC_VALUE_V1)
     assertEquals(10, response.throttleTimeMs)
@@ -198,7 +199,8 @@ class ApiVersionTest {
         Utils.mkMap(Utils.mkEntry("feature", new SupportedVersionRange(1.toShort, 4.toShort)))),
       Features.finalizedFeatures(
         Utils.mkMap(Utils.mkEntry("feature", new FinalizedVersionRange(2.toShort, 3.toShort)))),
-      10
+      10,
+      None
     )
 
     verifyApiKeysForMagic(response, RecordBatch.MAGIC_VALUE_V1)
@@ -227,7 +229,8 @@ class ApiVersionTest {
     val response = ApiVersion.apiVersionsResponse(
       AbstractResponse.DEFAULT_THROTTLE_TIME,
       RecordBatch.CURRENT_MAGIC_VALUE,
-      Features.emptySupportedFeatures
+      Features.emptySupportedFeatures,
+      None
     )
     assertEquals(new util.HashSet[ApiKeys](ApiKeys.enabledApis), apiKeysInResponse(response))
     assertEquals(AbstractResponse.DEFAULT_THROTTLE_TIME, response.throttleTimeMs)
@@ -241,7 +244,8 @@ class ApiVersionTest {
     val response = ApiVersion.apiVersionsResponse(
       AbstractResponse.DEFAULT_THROTTLE_TIME,
       RecordBatch.CURRENT_MAGIC_VALUE,
-      Features.emptySupportedFeatures
+      Features.emptySupportedFeatures,
+      None
     )
 
     // Ensure that APIs needed for the internal metadata quorum (KIP-500)

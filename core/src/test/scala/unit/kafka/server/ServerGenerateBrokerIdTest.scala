@@ -25,7 +25,6 @@ import kafka.utils.TestUtils
 import org.junit.{After, Before, Test}
 import org.junit.Assert._
 import java.io.File
-import org.scalatest.Assertions.intercept
 
 import org.apache.zookeeper.KeeperException.NodeExistsException
 
@@ -154,9 +153,7 @@ class ServerGenerateBrokerIdTest extends ZooKeeperTestHarness {
     val propsB = TestUtils.createBrokerConfig(1, zkConnect)
     val configB = KafkaConfig.fromProps(propsB)
     val serverB = new KafkaServer(configB, threadNamePrefix = Option(this.getClass.getName))
-    intercept[NodeExistsException] {
-      serverB.startup()
-    }
+    assertThrows(classOf[NodeExistsException], () => serverB.startup())
     servers = Seq(serverA)
 
     // verify no broker metadata was written

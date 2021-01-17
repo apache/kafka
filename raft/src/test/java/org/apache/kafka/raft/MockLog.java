@@ -255,6 +255,13 @@ public class MockLog implements ReplicatedLog {
         long baseOffset = endOffset().offset;
         long lastOffset = baseOffset;
         for (RecordBatch batch : records.batches()) {
+            Optional<LogEntry> lastEntry = lastEntry();
+
+            if (lastEntry.isPresent() && batch.baseOffset() != lastEntry.get().offset + 1) {
+                throw new IllegalArgumentException("Illegal append at offset " + batch.baseOffset() +
+                    " with current end offset of " + endOffset().offset);
+            }
+
             List<LogEntry> entries = buildEntries(batch, Record::offset);
             appendBatch(new LogBatch(batch.partitionLeaderEpoch(), batch.isControlBatch(), entries));
             lastOffset = entries.get(entries.size() - 1).offset;
@@ -507,6 +514,10 @@ public class MockLog implements ReplicatedLog {
 
         @Override
         public long sizeInBytes() {
+            if (frozen) {
+                throw new RuntimeException("Snapshot is already frozen " + snapshotId);
+            }
+
             return data.position();
         }
 

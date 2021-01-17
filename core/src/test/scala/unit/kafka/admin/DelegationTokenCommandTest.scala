@@ -26,7 +26,6 @@ import org.apache.kafka.clients.admin.{Admin, AdminClientConfig}
 import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.junit.Assert._
 import org.junit.{After, Before, Test}
-import org.scalatest.Assertions.intercept
 
 import scala.collection.mutable.ListBuffer
 import scala.concurrent.ExecutionException
@@ -104,7 +103,7 @@ class DelegationTokenCommandTest extends BaseRequestTest with SaslSetup {
     assertTrue(tokens.size == 0)
 
     //create token with invalid renewer principal type
-    intercept[ExecutionException](DelegationTokenCommand.createToken(adminClient, getCreateOpts(List("Group:Renewer3"))))
+    assertThrows(classOf[ExecutionException], () => DelegationTokenCommand.createToken(adminClient, getCreateOpts(List("Group:Renewer3"))))
 
     // try describing tokens for unknown owner
     assertTrue(DelegationTokenCommand.describeToken(adminClient, getDescribeOpts(List("User:Unknown"))).isEmpty)

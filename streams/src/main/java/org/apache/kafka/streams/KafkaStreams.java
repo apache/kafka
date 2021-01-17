@@ -41,7 +41,6 @@ import org.apache.kafka.streams.errors.ProcessorStateException;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.errors.StreamsUncaughtExceptionHandler;
 import org.apache.kafka.streams.errors.TopologyException;
-import org.apache.kafka.streams.internals.ApiUtils;
 import org.apache.kafka.streams.internals.metrics.ClientMetrics;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.KTable;
@@ -97,6 +96,7 @@ import java.util.function.Consumer;
 import static org.apache.kafka.streams.StreamsConfig.METRICS_RECORDING_LEVEL_CONFIG;
 import static org.apache.kafka.streams.errors.StreamsUncaughtExceptionHandler.StreamThreadExceptionResponse.SHUTDOWN_CLIENT;
 import static org.apache.kafka.streams.internals.ApiUtils.prepareMillisCheckFailMsgPrefix;
+import static org.apache.kafka.streams.internals.ApiUtils.validateMillisecondDuration;
 import static org.apache.kafka.streams.processor.internals.ClientUtils.fetchEndOffsets;
 
 /**
@@ -424,6 +424,7 @@ public class KafkaStreams implements AutoCloseable {
 
     private void defaultStreamsUncaughtExceptionHandler(final Throwable throwable) {
         if (oldHandler) {
+            threads.remove(Thread.currentThread());
             if (throwable instanceof RuntimeException) {
                 throw (RuntimeException) throwable;
             } else if (throwable instanceof Error) {
@@ -436,6 +437,26 @@ public class KafkaStreams implements AutoCloseable {
         }
     }
 
+    private void replaceStreamThread(final Throwable throwable) {
+        if (globalStreamThread != null && Thread.currentThread().getName().equals(globalStreamThread.getName())) {
+            log.warn("The global thread cannot be replaced. Reverting to shutting down the client.");
+            log.error("Encountered the following exception during processing " +
+                    " The streams client is going to shut down now. ", throwable);
+            close(Duration.ZERO);
+        }
+        final StreamThread deadThread = (StreamThread) Thread.currentThread();
+        threads.remove(deadThread);
+        addStreamThread();
+        deadThread.shutdown();
+        if (throwable instanceof RuntimeException) {
+            throw (RuntimeException) throwable;
+        } else if (throwable instanceof Error) {
+            throw (Error) throwable;
+        } else {
+            throw new RuntimeException("Unexpected checked exception caught in the uncaught exception handler", throwable);
+        }
+    }
+
     private void handleStreamsUncaughtException(final Throwable throwable,
                                                 final StreamsUncaughtExceptionHandler streamsUncaughtExceptionHandler) {
         final StreamsUncaughtExceptionHandler.StreamThreadExceptionResponse action = streamsUncaughtExceptionHandler.handle(throwable);
@@ -444,6 +465,9 @@ public class KafkaStreams implements AutoCloseable {
                     "The old handler will be ignored as long as a new handler is set.");
         }
         switch (action) {
+            case REPLACE_THREAD:
+                replaceStreamThread(throwable);
+                break;
             case SHUTDOWN_CLIENT:
                 log.error("Encountered the following exception during processing " +
                         "and the registered exception handler opted to " + action + "." +
@@ -871,7 +895,7 @@ public class KafkaStreams implements AutoCloseable {
             globalStreamThread.setStateListener(streamStateListener);
         }
         for (int i = 1; i <= numStreamThreads; i++) {
-            createStreamThread(cacheSizePerThread, i);
+            createAndAddStreamThread(cacheSizePerThread, i);
         }
 
         ClientMetrics.addNumAliveStreamThreadMetric(streamsMetrics, (metricsConfig, now) ->
@@ -885,7 +909,7 @@ public class KafkaStreams implements AutoCloseable {
         rocksDBMetricsRecordingService = maybeCreateRocksDBMetricsRecordingService(clientId, config);
     }
 
-    private StreamThread createStreamThread(final long cacheSizePerThread, final int threadIdx) {
+    private StreamThread createAndAddStreamThread(final long cacheSizePerThread, final int threadIdx) {
         final StreamThread streamThread = StreamThread.create(
             internalTopologyBuilder,
             config,
@@ -924,24 +948,63 @@ public class KafkaStreams implements AutoCloseable {
      * @return name of the added stream thread or empty if a new stream thread could not be added
      */
     public Optional<String> addStreamThread() {
-        synchronized (changeThreadCount) {
-            if (isRunningOrRebalancing()) {
-                final int threadIdx = getNextThreadIndex();
-                final long cacheSizePerThread = getCacheSizePerThread(threads.size() + 1);
+        if (isRunningOrRebalancing()) {
+            final int threadIdx;
+            final long cacheSizePerThread;
+            synchronized (changeThreadCount) {
+                threadIdx = getNextThreadIndex();
+                cacheSizePerThread = getCacheSizePerThread(threads.size() + 1);
                 resizeThreadCache(cacheSizePerThread);
-                final StreamThread streamThread = createStreamThread(cacheSizePerThread, threadIdx);
-                synchronized (stateLock) {
-                    if (isRunningOrRebalancing()) {
-                        streamThread.start();
-                        return Optional.of(streamThread.getName());
-                    } else {
+            }
+            final StreamThread streamThread = createAndAddStreamThread(cacheSizePerThread, threadIdx);
+
+            synchronized (stateLock) {
+                if (isRunningOrRebalancing()) {
+                    streamThread.start();
+                    return Optional.of(streamThread.getName());
+                } else {
+                    streamThread.shutdown();
+                    threads.remove(streamThread);
+                    resizeThreadCache(getCacheSizePerThread(threads.size()));
+                }
+            }
+        }
+        log.warn("Cannot add a stream thread when Kafka Streams client is in state  " + state());
+        return Optional.empty();
+    }
+
+    /**
+     * Removes one stream thread out of the running stream threads from this Kafka Streams client.
+     * <p>
+     * The removed stream thread is gracefully shut down. This method does not specify which stream
+     * thread is shut down.
+     * <p>
+     * Since the number of stream threads decreases, the sizes of the caches in the remaining stream
+     * threads are adapted so that the sum of the cache sizes over all stream threads equals the total
+     * cache size specified in configuration {@link StreamsConfig#CACHE_MAX_BYTES_BUFFERING_CONFIG}.
+     *
+     * @return name of the removed stream thread or empty if a stream thread could not be removed because
+     *         no stream threads are alive
+     */
+    public Optional<String> removeStreamThread() {
+        if (isRunningOrRebalancing()) {
+            synchronized (changeThreadCount) {
+                for (final StreamThread streamThread : threads) {
+                    if (streamThread.isAlive() && (!streamThread.getName().equals(Thread.currentThread().getName()) || threads.size() == 1)) {
                         streamThread.shutdown();
+                        if (!streamThread.getName().equals(Thread.currentThread().getName())) {
+                            streamThread.waitOnThreadState(StreamThread.State.DEAD);
+                        }
                         threads.remove(streamThread);
-                        resizeThreadCache(getCacheSizePerThread(threads.size()));
-                        return Optional.empty();
+                        final long cacheSizePerThread = getCacheSizePerThread(threads.size());
+                        resizeThreadCache(cacheSizePerThread);
+                        return Optional.of(streamThread.getName());
                     }
                 }
             }
+            log.warn("There are no threads eligible for removal");
+        } else {
+            log.warn("Cannot remove a stream thread when Kafka Streams client is in state  " + state());
         }
         return Optional.empty();
     }
@@ -962,12 +1025,18 @@ public class KafkaStreams implements AutoCloseable {
     }
 
     private long getCacheSizePerThread(final int numStreamThreads) {
+        if (numStreamThreads == 0) {
+            return totalCacheSize;
+        }
         return totalCacheSize / (numStreamThreads + ((globalTaskTopology != null) ? 1 : 0));
     }
 
     private void resizeThreadCache(final long cacheSizePerThread) {
         for (final StreamThread streamThread: threads) {
             streamThread.resizeCache(cacheSizePerThread);
+        }
+        if (globalStreamThread != null) {
+            globalStreamThread.resize(cacheSizePerThread);
         }
     }
 
@@ -1192,7 +1261,7 @@ public class KafkaStreams implements AutoCloseable {
      */
     public synchronized boolean close(final Duration timeout) throws IllegalArgumentException {
         final String msgPrefix = prepareMillisCheckFailMsgPrefix(timeout, "timeout");
-        final long timeoutMs = ApiUtils.validateMillisecondDuration(timeout, msgPrefix);
+        final long timeoutMs = validateMillisecondDuration(timeout, msgPrefix);
         if (timeoutMs < 0) {
             throw new IllegalArgumentException("Timeout can't be negative.");
         }
@@ -1409,7 +1478,11 @@ public class KafkaStreams implements AutoCloseable {
         validateIsRunningOrRebalancing();
         final Set<ThreadMetadata> threadMetadata = new HashSet<>();
         for (final StreamThread thread : threads) {
-            threadMetadata.add(thread.threadMetadata());
+            synchronized (thread.getStateLock()) {
+                if (thread.state() != StreamThread.State.DEAD) {
+                    threadMetadata.add(thread.threadMetadata());
+                }
+            }
         }
         return threadMetadata;
     }

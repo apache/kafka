@@ -17,7 +17,10 @@
 package org.apache.kafka.streams.test;
 
 import org.apache.kafka.clients.producer.ProducerRecord;
-import org.junit.Test;
+
+import org.junit.jupiter.api.Test;
+
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 @Deprecated
 public class OutputVerifierTest {
@@ -40,64 +43,64 @@ public class OutputVerifierTest {
         null
     );
 
-    @Test(expected = NullPointerException.class)
+    @Test
     public void shouldNotAllowNullProducerRecordForCompareValue() {
-        OutputVerifier.compareValue(null, value);
+        assertThrows(NullPointerException.class, () -> OutputVerifier.compareValue(null, value));
     }
 
-    @Test(expected = NullPointerException.class)
+    @Test
     public void shouldNotAllowNullProducerRecordWithExpectedRecordForCompareValue() {
-        OutputVerifier.compareValue((ProducerRecord<byte[], byte[]>) null, producerRecord);
+        assertThrows(NullPointerException.class, () -> OutputVerifier.compareValue((ProducerRecord<byte[], byte[]>) null, producerRecord));
     }
 
-    @Test(expected = NullPointerException.class)
+    @Test
     public void shouldNotAllowNullExpectedRecordForCompareValue() {
-        OutputVerifier.compareValue(producerRecord, (ProducerRecord<byte[], byte[]>) null);
+        assertThrows(NullPointerException.class, () -> OutputVerifier.compareValue(producerRecord, (ProducerRecord<byte[], byte[]>) null));
     }
 
-    @Test(expected = NullPointerException.class)
+    @Test
     public void shouldNotAllowNullProducerRecordForCompareKeyValue() {
-        OutputVerifier.compareKeyValue(null, key, value);
+        assertThrows(NullPointerException.class, () -> OutputVerifier.compareKeyValue(null, key, value));
     }
 
-    @Test(expected = NullPointerException.class)
+    @Test
     public void shouldNotAllowNullProducerRecordWithExpectedRecordForCompareKeyValue() {
-        OutputVerifier.compareKeyValue(null, producerRecord);
+        assertThrows(NullPointerException.class, () -> OutputVerifier.compareKeyValue(null, producerRecord));
     }
 
-    @Test(expected = NullPointerException.class)
+    @Test
     public void shouldNotAllowNullExpectedRecordForCompareKeyValue() {
-        OutputVerifier.compareKeyValue(producerRecord, null);
+        assertThrows(NullPointerException.class, () -> OutputVerifier.compareKeyValue(producerRecord, null));
     }
 
-    @Test(expected = NullPointerException.class)
+    @Test
     public void shouldNotAllowNullProducerRecordForCompareValueTimestamp() {
-        OutputVerifier.compareValueTimestamp(null, value, 0L);
+        assertThrows(NullPointerException.class, () -> OutputVerifier.compareValueTimestamp(null, value, 0L));
     }
 
-    @Test(expected = NullPointerException.class)
+    @Test
     public void shouldNotAllowNullProducerRecordWithExpectedRecordForCompareValueTimestamp() {
-        OutputVerifier.compareValueTimestamp(null, producerRecord);
+        assertThrows(NullPointerException.class, () -> OutputVerifier.compareValueTimestamp(null, producerRecord));
     }
 
-    @Test(expected = NullPointerException.class)
+    @Test
     public void shouldNotAllowNullExpectedRecordForCompareValueTimestamp() {
-        OutputVerifier.compareValueTimestamp(producerRecord, null);
+        assertThrows(NullPointerException.class, () -> OutputVerifier.compareValueTimestamp(producerRecord, null));
     }
 
-    @Test(expected = NullPointerException.class)
+    @Test
     public void shouldNotAllowNullProducerRecordForCompareKeyValueTimestamp() {
-        OutputVerifier.compareKeyValueTimestamp(null, key, value, 0L);
+        assertThrows(NullPointerException.class, () -> OutputVerifier.compareKeyValueTimestamp(null, key, value, 0L));
     }
 
-    @Test(expected = NullPointerException.class)
+    @Test
     public void shouldNotAllowNullProducerRecordWithExpectedRecordForCompareKeyValueTimestamp() {
-        OutputVerifier.compareKeyValueTimestamp(null, producerRecord);
+        assertThrows(NullPointerException.class, () -> OutputVerifier.compareKeyValueTimestamp(null, producerRecord));
     }
 
-    @Test(expected = NullPointerException.class)
+    @Test
     public void shouldNotAllowNullExpectedRecordForCompareKeyValueTimestamp() {
-        OutputVerifier.compareKeyValueTimestamp(producerRecord, null);
+        assertThrows(NullPointerException.class, () -> OutputVerifier.compareKeyValueTimestamp(producerRecord, null));
     }
 
     @Test
@@ -110,19 +113,19 @@ public class OutputVerifierTest {
         OutputVerifier.compareValue(nullKeyValueRecord, (byte[]) null);
     }
 
-    @Test(expected = AssertionError.class)
+    @Test
     public void shouldFailIfValueIsDifferentForCompareValue() {
-        OutputVerifier.compareValue(producerRecord, key);
+        assertThrows(AssertionError.class, () -> OutputVerifier.compareValue(producerRecord, key));
     }
 
-    @Test(expected = AssertionError.class)
+    @Test
     public void shouldFailIfValueIsDifferentWithNullForCompareValue() {
-        OutputVerifier.compareValue(producerRecord, (byte[]) null);
+        assertThrows(AssertionError.class, () -> OutputVerifier.compareValue(producerRecord, (byte[]) null));
     }
 
-    @Test(expected = AssertionError.class)
+    @Test
     public void shouldFailIfValueIsDifferentWithNullReverseForCompareValue() {
-        OutputVerifier.compareValue(nullKeyValueRecord, value);
+        assertThrows(AssertionError.class, () -> OutputVerifier.compareValue(nullKeyValueRecord, value));
     }
 
     @Test
@@ -147,37 +150,22 @@ public class OutputVerifierTest {
         ));
     }
 
-    @Test(expected = AssertionError.class)
+    @Test
     public void shouldFailIfValueIsDifferentForCompareValueWithProducerRecord() {
-        OutputVerifier.compareValue(producerRecord, new ProducerRecord<>(
-            "sameTopic",
-            Integer.MAX_VALUE,
-            Long.MAX_VALUE,
-            value,
-            key
-        ));
+        assertThrows(AssertionError.class, () -> OutputVerifier.compareValue(producerRecord,
+            new ProducerRecord<>("sameTopic", Integer.MAX_VALUE, Long.MAX_VALUE, value, key)));
     }
 
-    @Test(expected = AssertionError.class)
+    @Test
     public void shouldFailIfValueIsDifferentWithNullForCompareValueWithProducerRecord() {
-        OutputVerifier.compareValue(producerRecord, new ProducerRecord<byte[], byte[]>(
-            "sameTopic",
-            Integer.MAX_VALUE,
-            Long.MAX_VALUE,
-            value,
-            null
-        ));
+        assertThrows(AssertionError.class, () -> OutputVerifier.compareValue(producerRecord,
+            new ProducerRecord<byte[], byte[]>("sameTopic", Integer.MAX_VALUE, Long.MAX_VALUE, value, null)));
     }
 
-    @Test(expected = AssertionError.class)
+    @Test
     public void shouldFailIfValueIsDifferentWithNullReverseForCompareValueWithProducerRecord() {
-        OutputVerifier.compareValue(nullKeyValueRecord, new ProducerRecord<>(
-            "sameTopic",
-            Integer.MAX_VALUE,
-            Long.MAX_VALUE,
-            value,
-            value
-        ));
+        assertThrows(AssertionError.class, () -> OutputVerifier.compareValue(nullKeyValueRecord,
+            new ProducerRecord<>("sameTopic", Integer.MAX_VALUE, Long.MAX_VALUE, value, value)));
     }
 
     @Test
@@ -190,50 +178,36 @@ public class OutputVerifierTest {
         OutputVerifier.compareKeyValue(nullKeyValueRecord, null, null);
     }
 
-    @Test(expected = AssertionError.class)
+    @Test
     public void shouldFailIfKeyIsDifferentForCompareKeyValue() {
-        OutputVerifier.compareKeyValue(producerRecord, value, value);
+        assertThrows(AssertionError.class, () -> OutputVerifier.compareKeyValue(producerRecord, value, value));
     }
 
-    @Test(expected = AssertionError.class)
+    @Test
     public void shouldFailIfKeyIsDifferentWithNullForCompareKeyValue() {
-        OutputVerifier.compareKeyValue(producerRecord, null, value);
+        assertThrows(AssertionError.class, () -> OutputVerifier.compareKeyValue(producerRecord, null, value));
     }
 
-    @Test(expected = AssertionError.class)
+    @Test
     public void shouldFailIfKeyIsDifferentWithNullReversForCompareKeyValue() {
-        OutputVerifier.compareKeyValue(
-            new ProducerRecord<byte[], byte[]>(
-                "someTopic",
-                Integer.MAX_VALUE,
-                Long.MAX_VALUE,
-                null,
-                value),
-            key,
-            value);
+        assertThrows(AssertionError.class, () -> OutputVerifier.compareKeyValue(
+            new ProducerRecord<>("someTopic", Integer.MAX_VALUE, Long.MAX_VALUE, null, value), key, value));
     }
 
-    @Test(expected = AssertionError.class)
+    @Test
     public void shouldFailIfValueIsDifferentForCompareKeyValue() {
-        OutputVerifier.compareKeyValue(producerRecord, key, key);
+        assertThrows(AssertionError.class, () -> OutputVerifier.compareKeyValue(producerRecord, key, key));
     }
 
-    @Test(expected = AssertionError.class)
+    @Test
     public void shouldFailIfValueIsDifferentWithNullForCompareKeyValue() {
-        OutputVerifier.compareKeyValue(producerRecord, key, null);
+        assertThrows(AssertionError.class, () -> OutputVerifier.compareKeyValue(producerRecord, key, null));
     }
 
-    @Test(expected = AssertionError.class)
+    @Test
     public void shouldFailIfValueIsDifferentWithNullReversForCompareKeyValue() {
-        OutputVerifier.compareKeyValue(
-            new ProducerRecord<byte[], byte[]>(
-                "someTopic",
-                Integer.MAX_VALUE,
-                Long.MAX_VALUE,
-                key,
-                null),
-            key,
-            value);
+        assertThrows(AssertionError.class, () -> OutputVerifier.compareKeyValue(
+            new ProducerRecord<byte[], byte[]>("someTopic", Integer.MAX_VALUE, Long.MAX_VALUE, key, null), key, value));
     }
 
     @Test
@@ -256,68 +230,41 @@ public class OutputVerifierTest {
             null));
     }
 
-    @Test(expected = AssertionError.class)
+    @Test
     public void shouldFailIfKeyIsDifferentForCompareKeyValueWithProducerRecord() {
-        OutputVerifier.compareKeyValue(producerRecord, new ProducerRecord<>(
-            "someTopic",
-            Integer.MAX_VALUE,
-            Long.MAX_VALUE,
-            value,
-            value));
+        assertThrows(AssertionError.class, () -> OutputVerifier.compareKeyValue(producerRecord,
+            new ProducerRecord<>("someTopic", Integer.MAX_VALUE, Long.MAX_VALUE, value, value)));
     }
 
-    @Test(expected = AssertionError.class)
+    @Test
     public void shouldFailIfKeyIsDifferentWithNullForCompareKeyValueWithProducerRecord() {
-        OutputVerifier.compareKeyValue(producerRecord, new ProducerRecord<byte[], byte[]>(
-            "someTopic",
-            Integer.MAX_VALUE,
-            Long.MAX_VALUE,
-            null,
-            value));
+        assertThrows(AssertionError.class, () -> OutputVerifier.compareKeyValue(producerRecord,
+            new ProducerRecord<>("someTopic", Integer.MAX_VALUE, Long.MAX_VALUE, null, value)));
     }
 
-    @Test(expected = AssertionError.class)
+    @Test
     public void shouldFailIfKeyIsDifferentWithNullReversForCompareKeyValueWithProducerRecord() {
-        OutputVerifier.compareKeyValue(
-            new ProducerRecord<byte[], byte[]>(
-                "someTopic",
-                Integer.MAX_VALUE,
-                Long.MAX_VALUE,
-                null,
-                value),
-            producerRecord);
+        assertThrows(AssertionError.class, () -> OutputVerifier.compareKeyValue(
+            new ProducerRecord<>("someTopic", Integer.MAX_VALUE, Long.MAX_VALUE, null, value), producerRecord));
     }
 
-    @Test(expected = AssertionError.class)
+    @Test
     public void shouldFailIfValueIsDifferentForCompareKeyValueWithProducerRecord() {
-        OutputVerifier.compareKeyValue(producerRecord, new ProducerRecord<>(
-            "someTopic",
-            Integer.MAX_VALUE,
-            Long.MAX_VALUE,
-            key,
-            key));
+        assertThrows(AssertionError.class, () -> OutputVerifier.compareKeyValue(producerRecord,
+            new ProducerRecord<>("someTopic", Integer.MAX_VALUE, Long.MAX_VALUE, key, key)));
     }
 
-    @Test(expected = AssertionError.class)
+    @Test
     public void shouldFailIfValueIsDifferentWithNullForCompareKeyValueWithProducerRecord() {
-        OutputVerifier.compareKeyValue(producerRecord, new ProducerRecord<byte[], byte[]>(
-            "someTopic",
-            Integer.MAX_VALUE,
-            Long.MAX_VALUE,
-            key,
-            null));
+        assertThrows(AssertionError.class, () -> OutputVerifier.compareKeyValue(producerRecord,
+            new ProducerRecord<byte[], byte[]>("someTopic", Integer.MAX_VALUE, Long.MAX_VALUE, key, null)));
     }
 
-    @Test(expected = AssertionError.class)
+    @Test
     public void shouldFailIfValueIsDifferentWithNullReversForCompareKeyValueWithProducerRecord() {
-        OutputVerifier.compareKeyValue(
-            new ProducerRecord<byte[], byte[]>(
-                "someTopic",
-                Integer.MAX_VALUE,
-                Long.MAX_VALUE,
-                key,
-                null),
-            producerRecord);
+        assertThrows(AssertionError.class, () -> OutputVerifier.compareKeyValue(
+            new ProducerRecord<byte[], byte[]>("someTopic", Integer.MAX_VALUE, Long.MAX_VALUE, key, null),
+                producerRecord));
     }
 
     @Test
@@ -330,19 +277,22 @@ public class OutputVerifierTest {
         OutputVerifier.compareValueTimestamp(nullKeyValueRecord, null, Long.MAX_VALUE);
     }
 
-    @Test(expected = AssertionError.class)
+    @Test
     public void shouldFailIfValueIsDifferentForCompareValueTimestamp() {
-        OutputVerifier.compareValueTimestamp(producerRecord, key, Long.MAX_VALUE);
+        assertThrows(AssertionError.class,
+            () -> OutputVerifier.compareValueTimestamp(producerRecord, key, Long.MAX_VALUE));
     }
 
-    @Test(expected = AssertionError.class)
+    @Test
     public void shouldFailIfValueIsDifferentWithNullForCompareValueTimestamp() {
-        OutputVerifier.compareValueTimestamp(producerRecord, null, Long.MAX_VALUE);
+        assertThrows(AssertionError.class,
+            () -> OutputVerifier.compareValueTimestamp(producerRecord, null, Long.MAX_VALUE));
     }
 
-    @Test(expected = AssertionError.class)
+    @Test
     public void shouldFailIfValueIsDifferentWithNullReverseForCompareValueTimestamp() {
-        OutputVerifier.compareValueTimestamp(nullKeyValueRecord, value, Long.MAX_VALUE);
+        assertThrows(AssertionError.class,
+            () -> OutputVerifier.compareValueTimestamp(nullKeyValueRecord, value, Long.MAX_VALUE));
     }
 
     @Test
@@ -367,78 +317,41 @@ public class OutputVerifierTest {
         ));
     }
 
-    @Test(expected = AssertionError.class)
+    @Test
     public void shouldFailIfValueIsDifferentForCompareValueTimestampWithProducerRecord() {
-        OutputVerifier.compareValueTimestamp(producerRecord, new ProducerRecord<>(
-            "someTopic",
-            Integer.MAX_VALUE,
-            Long.MAX_VALUE,
-            key,
-            key
-        ));
+        assertThrows(AssertionError.class, () -> OutputVerifier.compareValueTimestamp(producerRecord,
+            new ProducerRecord<>("someTopic", Integer.MAX_VALUE, Long.MAX_VALUE, key, key)));
     }
 
-    @Test(expected = AssertionError.class)
+    @Test
     public void shouldFailIfValueIsDifferentWithNullForCompareValueTimestampWithProducerRecord() {
-        OutputVerifier.compareValueTimestamp(producerRecord, new ProducerRecord<byte[], byte[]>(
-            "someTopic",
-            Integer.MAX_VALUE,
-            Long.MAX_VALUE,
-            key,
-            null
-        ));
+        assertThrows(AssertionError.class, () -> OutputVerifier.compareValueTimestamp(producerRecord,
+            new ProducerRecord<byte[], byte[]>("someTopic", Integer.MAX_VALUE, Long.MAX_VALUE, key, null)));
     }
 
-    @Test(expected = AssertionError.class)
+    @Test
     public void shouldFailIfValueIsDifferentWithNullReverseForCompareValueTimestampWithProducerRecord() {
-        OutputVerifier.compareValueTimestamp(nullKeyValueRecord, new ProducerRecord<>(
-            "someTopic",
-            Integer.MAX_VALUE,
-            Long.MAX_VALUE,
-            key,
-            value
-        ));
+        assertThrows(AssertionError.class, () -> OutputVerifier.compareValueTimestamp(nullKeyValueRecord,
+            new ProducerRecord<>("someTopic", Integer.MAX_VALUE, Long.MAX_VALUE, key, value)));
     }
 
-    @Test(expected = AssertionError.class)
+    @Test
     public void shouldFailIfTimestampIsDifferentForCompareValueTimestamp() {
-        OutputVerifier.compareValueTimestamp(producerRecord, value, 0);
+        assertThrows(AssertionError.class,
+            () -> OutputVerifier.compareValueTimestamp(producerRecord, value, 0));
     }
 
-    @Test(expected = AssertionError.class)
+    @Test
     public void shouldFailIfTimestampDifferentWithNullReverseForCompareValueTimestamp() {
-        OutputVerifier.compareValueTimestamp(nullKeyValueRecord, null, 0);
+        assertThrows(AssertionError.class,
+            () -> OutputVerifier.compareValueTimestamp(nullKeyValueRecord, null, 0));
     }
 
-    @Test(expected = AssertionError.class)
+    @Test
     public void shouldFailIfTimestampIsDifferentForCompareValueTimestampWithProducerRecord() {
-        OutputVerifier.compareValueTimestamp(producerRecord, new ProducerRecord<>(
-            "someTopic",
-            Integer.MAX_VALUE,
-            0L,
-            key,
-            value
-        ));
+        assertThrows(AssertionError.class, () -> OutputVerifier.compareValueTimestamp(producerRecord,
+            new ProducerRecord<>("someTopic", Integer.MAX_VALUE, 0L, key, value)));
     }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
     @Test
     public void shouldPassIfKeyAndValueAndTimestampIsEqualForCompareKeyValueTimestamp() {
@@ -450,136 +363,90 @@ public class OutputVerifierTest {
         OutputVerifier.compareKeyValueTimestamp(nullKeyValueRecord, null, null, Long.MAX_VALUE);
     }
 
-    @Test(expected = AssertionError.class)
+    @Test
     public void shouldFailIfKeyIsDifferentForCompareKeyValueTimestamp() {
-        OutputVerifier.compareKeyValueTimestamp(producerRecord, value, value, Long.MAX_VALUE);
+        assertThrows(AssertionError.class,
+            () -> OutputVerifier.compareKeyValueTimestamp(producerRecord, value, value, Long.MAX_VALUE));
     }
 
-    @Test(expected = AssertionError.class)
+    @Test
     public void shouldFailIfKeyIsDifferentWithNullForCompareKeyValueTimestamp() {
-        OutputVerifier.compareKeyValueTimestamp(producerRecord, null, value, Long.MAX_VALUE);
+        assertThrows(AssertionError.class,
+            () -> OutputVerifier.compareKeyValueTimestamp(producerRecord, null, value, Long.MAX_VALUE));
     }
 
-    @Test(expected = AssertionError.class)
+    @Test
     public void shouldFailIfKeyIsDifferentWithNullReversForCompareKeyValueTimestamp() {
-        OutputVerifier.compareKeyValueTimestamp(
-            new ProducerRecord<byte[], byte[]>(
-                "someTopic",
-                Integer.MAX_VALUE,
-                Long.MAX_VALUE,
-                null,
-                value),
-            key,
-            value,
-            Long.MAX_VALUE);
+        assertThrows(AssertionError.class, () -> OutputVerifier.compareKeyValueTimestamp(
+            new ProducerRecord<>("someTopic", Integer.MAX_VALUE, Long.MAX_VALUE, null, value),
+                key, value, Long.MAX_VALUE));
     }
 
-    @Test(expected = AssertionError.class)
+    @Test
     public void shouldFailIfValueIsDifferentForCompareKeyValueTimestamp() {
-        OutputVerifier.compareKeyValueTimestamp(producerRecord, key, key, Long.MAX_VALUE);
+        assertThrows(AssertionError.class,
+            () -> OutputVerifier.compareKeyValueTimestamp(producerRecord, key, key, Long.MAX_VALUE));
     }
 
-    @Test(expected = AssertionError.class)
+    @Test
     public void shouldFailIfValueIsDifferentWithNullForCompareKeyValueTimestamp() {
-        OutputVerifier.compareKeyValueTimestamp(producerRecord, key, null, Long.MAX_VALUE);
+        assertThrows(AssertionError.class,
+            () -> OutputVerifier.compareKeyValueTimestamp(producerRecord, key, null, Long.MAX_VALUE));
     }
 
-    @Test(expected = AssertionError.class)
+    @Test
     public void shouldFailIfValueIsDifferentWithNullReversForCompareKeyValueTimestamp() {
-        OutputVerifier.compareKeyValueTimestamp(
-            new ProducerRecord<byte[], byte[]>(
-                "someTopic",
-                Integer.MAX_VALUE,
-                Long.MAX_VALUE,
-                key,
-                null),
-            key,
-            value,
-            Long.MAX_VALUE);
+        assertThrows(AssertionError.class, () -> OutputVerifier.compareKeyValueTimestamp(
+            new ProducerRecord<byte[], byte[]>("someTopic", Integer.MAX_VALUE, Long.MAX_VALUE, key, null),
+                key, value, Long.MAX_VALUE));
     }
 
     @Test
     public void shouldPassIfKeyAndValueAndTimestampIsEqualForCompareKeyValueTimestampWithProducerRecord() {
         OutputVerifier.compareKeyValueTimestamp(producerRecord, new ProducerRecord<>(
-            "otherTopic",
-            0,
-            Long.MAX_VALUE,
-            key,
-            value));
+            "otherTopic", 0, Long.MAX_VALUE, key, value));
     }
 
     @Test
     public void shouldPassIfKeyAndValueAndTimestampIsEqualWithNullForCompareKeyValueTimestampWithProducerRecord() {
         OutputVerifier.compareKeyValueTimestamp(nullKeyValueRecord, new ProducerRecord<byte[], byte[]>(
-            "otherTopic",
-            0,
-            Long.MAX_VALUE,
-            null,
-            null));
+            "otherTopic", 0, Long.MAX_VALUE, null, null));
     }
 
-    @Test(expected = AssertionError.class)
+    @Test
     public void shouldFailIfKeyIsDifferentForCompareKeyValueTimestampWithProducerRecord() {
-        OutputVerifier.compareKeyValueTimestamp(producerRecord, new ProducerRecord<>(
-            "someTopic",
-            Integer.MAX_VALUE,
-            Long.MAX_VALUE,
-            value,
-            value));
+        assertThrows(AssertionError.class, () -> OutputVerifier.compareKeyValueTimestamp(producerRecord,
+            new ProducerRecord<>("someTopic", Integer.MAX_VALUE, Long.MAX_VALUE, value, value)));
     }
 
-    @Test(expected = AssertionError.class)
+    @Test
     public void shouldFailIfKeyIsDifferentWithNullForCompareKeyValueTimestampWithProducerRecord() {
-        OutputVerifier.compareKeyValueTimestamp(producerRecord, new ProducerRecord<byte[], byte[]>(
-            "someTopic",
-            Integer.MAX_VALUE,
-            Long.MAX_VALUE,
-            null,
-            value));
+        assertThrows(AssertionError.class, () -> OutputVerifier.compareKeyValueTimestamp(producerRecord,
+            new ProducerRecord<>("someTopic", Integer.MAX_VALUE, Long.MAX_VALUE, null, value)));
     }
 
-    @Test(expected = AssertionError.class)
+    @Test
     public void shouldFailIfKeyIsDifferentWithNullReversForCompareKeyValueTimestampWithProducerRecord() {
-        OutputVerifier.compareKeyValueTimestamp(
-            new ProducerRecord<byte[], byte[]>(
-                "someTopic",
-                Integer.MAX_VALUE,
-                Long.MAX_VALUE,
-                null,
-                value),
-            producerRecord);
+        assertThrows(AssertionError.class, () -> OutputVerifier.compareKeyValueTimestamp(
+            new ProducerRecord<>("someTopic", Integer.MAX_VALUE, Long.MAX_VALUE, null, value), producerRecord));
     }
 
-    @Test(expected = AssertionError.class)
+    @Test
     public void shouldFailIfValueIsDifferentForCompareKeyValueTimestampWithProducerRecord() {
-        OutputVerifier.compareKeyValueTimestamp(producerRecord, new ProducerRecord<>(
-            "someTopic",
-            Integer.MAX_VALUE,
-            Long.MAX_VALUE,
-            key,
-            key));
+        assertThrows(AssertionError.class, () -> OutputVerifier.compareKeyValueTimestamp(producerRecord,
+            new ProducerRecord<>("someTopic", Integer.MAX_VALUE, Long.MAX_VALUE, key, key)));
     }
 
-    @Test(expected = AssertionError.class)
+    @Test
     public void shouldFailIfValueIsDifferentWithNullForCompareKeyValueTimestampWithProducerRecord() {
-        OutputVerifier.compareKeyValueTimestamp(producerRecord, new ProducerRecord<byte[], byte[]>(
-            "someTopic",
-            Integer.MAX_VALUE,
-            Long.MAX_VALUE,
-            key,
-            null));
+        assertThrows(AssertionError.class, () -> OutputVerifier.compareKeyValueTimestamp(producerRecord,
+            new ProducerRecord<byte[], byte[]>("someTopic", Integer.MAX_VALUE, Long.MAX_VALUE, key, null)));
     }
 
-    @Test(expected = AssertionError.class)
+    @Test
     public void shouldFailIfValueIsDifferentWithNullReversForCompareKeyValueTimestampWithProducerRecord() {
-        OutputVerifier.compareKeyValueTimestamp(
-            new ProducerRecord<byte[], byte[]>(
-                "someTopic",
-                Integer.MAX_VALUE,
-                Long.MAX_VALUE,
-                key,
-                null),
-            producerRecord);
+        assertThrows(AssertionError.class, () -> OutputVerifier.compareKeyValueTimestamp(
+            new ProducerRecord<byte[], byte[]>("someTopic", Integer.MAX_VALUE, Long.MAX_VALUE, key, null), producerRecord));
     }
 
 }

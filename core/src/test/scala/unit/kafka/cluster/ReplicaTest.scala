@@ -114,7 +114,7 @@ class ReplicaTest {
     assertEquals(0, log.activeSegment.size)
   }
 
-  @Test(expected = classOf[OffsetOutOfRangeException])
+  @Test
   def testCannotIncrementLogStartOffsetPastHighWatermark(): Unit = {
     for (i <- 0 until 100) {
       val records = TestUtils.singletonRecords(value = s"test$i".getBytes)
@@ -122,6 +122,6 @@ class ReplicaTest {
     }
 
     log.updateHighWatermark(25L)
-    log.maybeIncrementLogStartOffset(26L, ClientRecordDeletion)
+    assertThrows(classOf[OffsetOutOfRangeException], () => log.maybeIncrementLogStartOffset(26L, ClientRecordDeletion))
   }
 }

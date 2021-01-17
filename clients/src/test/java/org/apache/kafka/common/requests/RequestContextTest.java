@@ -26,13 +26,13 @@ import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.security.auth.KafkaPrincipal;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
-import org.junit.Test;
+import org.junit.jupiter.api.Test;
 
 import java.net.InetAddress;
 import java.nio.ByteBuffer;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class RequestContextTest {
 
@@ -74,8 +74,8 @@ public class RequestContextTest {
 
         ApiVersionsResponse response = (ApiVersionsResponse) AbstractResponse.parseResponse(ApiKeys.API_VERSIONS,
             responseBuffer, (short) 0);
-        assertEquals(Errors.UNSUPPORTED_VERSION.code(), response.data.errorCode());
-        assertTrue(response.data.apiKeys().isEmpty());
+        assertEquals(Errors.UNSUPPORTED_VERSION.code(), response.data().errorCode());
+        assertTrue(response.data().apiKeys().isEmpty());
     }
 
     @Test
@@ -99,6 +99,7 @@ public class RequestContextTest {
             ClientInformation.EMPTY, true);
 
         ByteBuffer buffer = context.buildResponseEnvelopePayload(new CreateTopicsResponse(expectedResponse));
+        assertEquals(buffer.capacity(), buffer.limit(), "Buffer limit and capacity should be the same");
         CreateTopicsResponse parsedResponse = (CreateTopicsResponse) AbstractResponse.parseResponse(buffer, header);
         assertEquals(expectedResponse, parsedResponse.data());
     }

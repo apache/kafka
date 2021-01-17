@@ -16,8 +16,6 @@
   */
 package kafka.admin
 
-import java.util.{Collections, Optional, Properties}
-
 import kafka.admin.TopicCommand.{AdminClientTopicService, TopicCommandOptions}
 import kafka.integration.KafkaServerTestHarness
 import kafka.server.{ConfigType, KafkaConfig}
@@ -25,29 +23,24 @@ import kafka.utils.{Logging, TestUtils}
 import kafka.zk.{ConfigEntityChangeNotificationZNode, DeleteTopicsTopicZNode}
 import org.apache.kafka.clients.CommonClientConfigs
 import org.apache.kafka.clients.admin._
-import org.apache.kafka.common.Node
-import org.apache.kafka.common.TopicPartition
-import org.apache.kafka.common.TopicPartitionInfo
+import org.apache.kafka.common.{Node, TopicPartition, TopicPartitionInfo}
 import org.apache.kafka.common.config.{ConfigException, ConfigResource, TopicConfig}
-import org.apache.kafka.common.errors.ClusterAuthorizationException
-import org.apache.kafka.common.errors.ThrottlingQuotaExceededException
-import org.apache.kafka.common.errors.TopicExistsException
+import org.apache.kafka.common.errors.{ClusterAuthorizationException, ThrottlingQuotaExceededException, TopicExistsException}
 import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.security.auth.SecurityProtocol
-import org.junit.Assert.assertThrows
-import org.junit.Assert.{assertEquals, assertFalse, assertTrue}
+import org.junit.Assert._
 import org.junit.rules.TestName
 import org.junit.{After, Before, Rule, Test}
 import org.mockito.ArgumentMatcher
 import org.mockito.ArgumentMatchers.{eq => eqThat, _}
 import org.mockito.Mockito._
-import org.scalatest.Assertions.{fail, intercept}
 
-import scala.jdk.CollectionConverters._
+import java.util.{Collections, Optional, Properties}
 import scala.collection.Seq
 import scala.concurrent.ExecutionException
+import scala.jdk.CollectionConverters._
 import scala.util.Random
 
 class TopicCommandWithAdminClientTest extends KafkaServerTestHarness with Logging with RackAwareTest {
@@ -182,9 +175,7 @@ class TopicCommandWithAdminClientTest extends KafkaServerTestHarness with Loggin
     createAndWaitTopic(createOpts)
 
     // try to re-create the topic
-    intercept[TopicExistsException] {
-      topicService.createTopic(createOpts)
-    }
+    assertThrows(classOf[TopicExistsException], () => topicService.createTopic(createOpts))
   }
 
   @Test
@@ -215,26 +206,23 @@ class TopicCommandWithAdminClientTest extends KafkaServerTestHarness with Loggin
 
   @Test
   def testCreateWithInvalidReplicationFactor(): Unit = {
-    intercept[IllegalArgumentException] {
-      topicService.createTopic(new TopicCommandOptions(
-        Array("--partitions", "2", "--replication-factor", (Short.MaxValue+1).toString, "--topic", testTopicName)))
-    }
+    assertThrows(classOf[IllegalArgumentException],
+      () => topicService.createTopic(new TopicCommandOptions(
+        Array("--partitions", "2", "--replication-factor", (Short.MaxValue+1).toString, "--topic", testTopicName))))
   }
 
   @Test
   def testCreateWithNegativeReplicationFactor(): Unit = {
-    intercept[IllegalArgumentException] {
-      topicService.createTopic(new TopicCommandOptions(
-        Array("--partitions", "2", "--replication-factor", "-1", "--topic", testTopicName)))
-    }
+    assertThrows(classOf[IllegalArgumentException],
+      () => topicService.createTopic(new TopicCommandOptions(
+        Array("--partitions", "2", "--replication-factor", "-1", "--topic", testTopicName))))
   }
 
   @Test
   def testCreateWithNegativePartitionCount(): Unit = {
-    intercept[IllegalArgumentException] {
-      topicService.createTopic(new TopicCommandOptions(
-        Array("--partitions", "-1", "--replication-factor", "1", "--topic", testTopicName)))
-    }
+    assertThrows(classOf[IllegalArgumentException],
+      () => topicService.createTopic(new TopicCommandOptions(
+        Array("--partitions", "-1", "--replication-factor", "1", "--topic", testTopicName))))
   }
 
   @Test
@@ -242,9 +230,7 @@ class TopicCommandWithAdminClientTest extends KafkaServerTestHarness with Loggin
     val createOpts = new TopicCommandOptions(
       Array("--partitions", "1", "--replication-factor", "1", "--topic", testTopicName,
         "--config", "message.timestamp.type=boom"))
-    intercept[ConfigException] {
-      topicService.createTopic(createOpts)
-    }
+    assertThrows(classOf[ConfigException], () => topicService.createTopic(createOpts))
   }
 
   @Test
@@ -329,10 +315,9 @@ class TopicCommandWithAdminClientTest extends KafkaServerTestHarness with Loggin
       List(new NewTopic(testTopicName, 2, 2.toShort)).asJavaCollection).all().get()
     waitForTopicCreated(testTopicName)
 
-    intercept[ExecutionException] {
-      topicService.alterTopic(new TopicCommandOptions(
-        Array("--topic", testTopicName, "--replica-assignment", "5:3,3:1,4:2,3:2", "--partitions", "3")))
-    }
+    assertThrows(classOf[ExecutionException],
+      () => topicService.alterTopic(new TopicCommandOptions(
+        Array("--topic", testTopicName, "--replica-assignment", "5:3,3:1,4:2,3:2", "--partitions", "3"))))
   }
 
   @Test
@@ -341,10 +326,9 @@ class TopicCommandWithAdminClientTest extends KafkaServerTestHarness with Loggin
       List(new NewTopic(testTopicName, 2, 2.toShort)).asJavaCollection).all().get()
     waitForTopicCreated(testTopicName)
 
-    intercept[ExecutionException] {
-      topicService.alterTopic(new TopicCommandOptions(
-        Array("--topic", testTopicName, "--replica-assignment", "5:3,3:1,4:2", "--partitions", "6")))
-    }
+    assertThrows(classOf[ExecutionException],
+      () => topicService.alterTopic(new TopicCommandOptions(
+        Array("--topic", testTopicName, "--replica-assignment", "5:3,3:1,4:2", "--partitions", "6"))))
   }
 
   @Test
@@ -352,10 +336,9 @@ class TopicCommandWithAdminClientTest extends KafkaServerTestHarness with Loggin
     createAndWaitTopic(new TopicCommandOptions(
       Array("--partitions", "1", "--replication-factor", "1", "--topic", testTopicName)))
 
-    intercept[ExecutionException] {
-      topicService.alterTopic(new TopicCommandOptions(
-        Array("--partitions", "-1", "--topic", testTopicName)))
-    }
+    assertThrows(classOf[ExecutionException],
+      () => topicService.alterTopic(new TopicCommandOptions(
+        Array("--partitions", "-1", "--topic", testTopicName))))
   }
 
   @Test
@@ -363,9 +346,7 @@ class TopicCommandWithAdminClientTest extends KafkaServerTestHarness with Loggin
     // alter a topic that does not exist without --if-exists
     val alterOpts = new TopicCommandOptions(Array("--topic", testTopicName, "--partitions", "1"))
     val topicService = AdminClientTopicService(adminClient)
-    intercept[IllegalArgumentException] {
-      topicService.alterTopic(alterOpts)
-    }
+    assertThrows(classOf[IllegalArgumentException], () => topicService.alterTopic(alterOpts))
   }
 
   @Test
@@ -470,9 +451,7 @@ class TopicCommandWithAdminClientTest extends KafkaServerTestHarness with Loggin
   def testDeleteWhenTopicDoesntExist(): Unit = {
     // delete a topic that does not exist
     val deleteOpts = new TopicCommandOptions(Array("--topic", testTopicName))
-    intercept[IllegalArgumentException] {
-      topicService.deleteTopic(deleteOpts)
-    }
+    assertThrows(classOf[IllegalArgumentException], () => topicService.deleteTopic(deleteOpts))
   }
 
   @Test
@@ -495,9 +474,8 @@ class TopicCommandWithAdminClientTest extends KafkaServerTestHarness with Loggin
 
   @Test
   def testDescribeWhenTopicDoesntExist(): Unit = {
-    intercept[IllegalArgumentException] {
-      topicService.describeTopic(new TopicCommandOptions(Array("--topic", testTopicName)))
-    }
+    assertThrows(classOf[IllegalArgumentException],
+      () => topicService.describeTopic(new TopicCommandOptions(Array("--topic", testTopicName))))
   }
 
   @Test
@@ -529,7 +507,7 @@ class TopicCommandWithAdminClientTest extends KafkaServerTestHarness with Loggin
                 .getTopicMetadata(Set(testTopicName), ListenerName.forSecurityProtocol(SecurityProtocol.PLAINTEXT))
               val testPartitionMetadata = topicMetadatas.find(_.name.equals(testTopicName)).get.partitions.asScala.find(_.partitionIndex == partitionOnBroker0)
               testPartitionMetadata match {
-                case None => fail(s"Partition metadata is not found in metadata cache")
+                case None => throw new AssertionError(s"Partition metadata is not found in metadata cache")
                 case Some(metadata) => result && metadata.errorCode == Errors.LEADER_NOT_AVAILABLE.code
               }
             }
