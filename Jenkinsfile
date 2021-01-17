@@ -39,7 +39,7 @@ def doTest() {
         --profile --no-daemon --continue -PtestLoggingEvents=started,passed,skipped,failed \
         -PignoreFailures=true -PmaxParallelForks=2 -PmaxTestRetries=1 -PmaxTestRetryFailures=5
   '''
-  junit '**/build/test-results/**/TEST-*.xml'
+  junit testResults: '**/build/test-results/**/TEST-*.xml', testDataPublishers: [[$class: 'JUnitFlakyTestDataPublisher']]
 }
 
 def doStreamsArchetype() {
