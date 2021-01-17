@@ -70,7 +70,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
     // visible for testing
     static final byte LATEST_MAGIC_BYTE = 1;
 
-    private Time time;
+    private final Time time;
     private final Consumer<byte[], byte[]> mainConsumer;
 
     // we want to abstract eos logic out of StreamTask, however
@@ -1121,10 +1121,6 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
     // below are visible for testing only
     int numBuffered() {
         return partitionGroup.numBuffered();
-    }
-
-    void setTime(final Time time) {
-        this.time = time;
     }
 
     private class RecordQueueCreator {
