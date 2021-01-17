@@ -58,6 +58,7 @@ class LogCleanerLagIntegrationTest(compressionCodecName: String) extends Abstrac
     // t = T0
     val T0 = time.milliseconds
     val appends0 = writeDups(numKeys = 100, numDups = 3, log, codec, timestamp = T0)
+    log.updateHighWatermark(log.logEndOffset)
     val startSizeBlock0 = log.size
     debug(s"total log size at T0: $startSizeBlock0")
 

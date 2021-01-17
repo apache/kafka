@@ -128,6 +128,7 @@ class LogCleanerIntegrationTest extends AbstractLogCleanerIntegrationTest with K
 
     val T0 = time.milliseconds
     writeKeyDups(numKeys = 100, numDups = 3, log, CompressionType.NONE, timestamp = T0, startValue = 0, step = 1)
+    log.updateHighWatermark(log.logEndOffset)
 
     val startSizeBlock0 = log.size
 
@@ -146,7 +147,7 @@ class LogCleanerIntegrationTest extends AbstractLogCleanerIntegrationTest with K
 
     // write the second block of data: all zero keys
     val appends1 = writeKeyDups(numKeys = 100, numDups = 1, log, CompressionType.NONE, timestamp = T1, startValue = 0, step = 0)
-
+    log.updateHighWatermark(log.logEndOffset)
     // roll the active segment
     log.roll()
     val activeSegAtT1 = log.activeSegment
