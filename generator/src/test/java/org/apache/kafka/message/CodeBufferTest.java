@@ -17,18 +17,20 @@
 
 package org.apache.kafka.message;
 
-import org.junit.Assert;
-import org.junit.Rule;
 import org.junit.Test;
-import org.junit.rules.Timeout;
+import org.junit.jupiter.api.Timeout;
 
 import java.io.StringWriter;
+import java.util.concurrent.TimeUnit;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class CodeBufferTest {
-    @Rule
-    final public Timeout globalTimeout = Timeout.millis(120000);
 
     @Test
+    @Timeout(value = 120000, unit = TimeUnit.MILLISECONDS)
     public void testWrite() throws Exception {
         CodeBuffer buffer = new CodeBuffer();
         buffer.printf("public static void main(String[] args) throws Exception {%n");
@@ -38,28 +40,30 @@ public class CodeBufferTest {
         buffer.printf("}%n");
         StringWriter stringWriter = new StringWriter();
         buffer.write(stringWriter);
-        Assert.assertEquals(
+        assertEquals(
+            stringWriter.toString(),
             String.format("public static void main(String[] args) throws Exception {%n") +
             String.format("    System.out.println(\"hello world\");%n") +
-            String.format("}%n"),
-            stringWriter.toString());
+            String.format("}%n"));
     }
 
     @Test
+    @Timeout(value = 120000, unit = TimeUnit.MILLISECONDS)
     public void testEquals() {
         CodeBuffer buffer1 = new CodeBuffer();
         CodeBuffer buffer2 = new CodeBuffer();
-        Assert.assertEquals(buffer1, buffer2);
+        assertEquals(buffer1, buffer2);
         buffer1.printf("hello world");
-        Assert.assertNotEquals(buffer1, buffer2);
+        assertNotEquals(buffer1, buffer2);
         buffer2.printf("hello world");
-        Assert.assertEquals(buffer1, buffer2);
+        assertEquals(buffer1, buffer2);
         buffer1.printf("foo, bar, and baz");
         buffer2.printf("foo, bar, and baz");
-        Assert.assertEquals(buffer1, buffer2);
+        assertEquals(buffer1, buffer2);
     }
 
     @Test
+    @Timeout(value = 120000, unit = TimeUnit.MILLISECONDS)
     public void testIndentMustBeNonNegative() {
         CodeBuffer buffer = new CodeBuffer();
         buffer.incrementIndent();
@@ -67,7 +71,7 @@ public class CodeBufferTest {
         try {
             buffer.decrementIndent();
         } catch (RuntimeException e) {
-            Assert.assertTrue(e.getMessage().contains("Indent < 0"));
+            assertTrue(e.getMessage().contains("Indent < 0"));
         }
     }
 }
