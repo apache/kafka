@@ -1057,8 +1057,8 @@ class Log(@volatile private var _dir: File,
                      leaderEpoch: Int,
                      origin: AppendOrigin = AppendOrigin.Client,
                      interBrokerProtocolVersion: ApiVersion = ApiVersion.latestVersion): LogAppendInfo = {
-    val assignOffsets = origin != AppendOrigin.RaftLeader
-    append(records, origin, interBrokerProtocolVersion, assignOffsets, leaderEpoch, ignoreRecordSize = false)
+    val validateAndAssignOffsets = origin != AppendOrigin.RaftLeader
+    append(records, origin, interBrokerProtocolVersion, validateAndAssignOffsets, leaderEpoch, ignoreRecordSize = false)
   }
 
   /**
