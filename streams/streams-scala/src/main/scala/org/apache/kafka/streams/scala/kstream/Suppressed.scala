@@ -63,7 +63,7 @@ object Suppressed {
    * @see [[org.apache.kafka.streams.kstream.Suppressed.untilTimeLimit]]
    */
   def untilWindowCloses[K](bufferConfig: StrictBufferConfig): SupressedJ[Windowed[K]] =
-    new FinalResultsSuppressionBuilder[Windowed[K]](null, bufferConfig)
+    new FinalResultsSuppressionBuilder[Windowed[K]](null, bufferConfig, false)
 
   /**
    * Configure the suppression to wait `timeToWaitForMoreEvents` amount of time after receiving a record
@@ -77,7 +77,7 @@ object Suppressed {
    * @see [[org.apache.kafka.streams.kstream.Suppressed.untilTimeLimit]]
    */
   def untilTimeLimit[K](timeToWaitForMoreEvents: Duration, bufferConfig: BufferConfigJ[_]): SupressedJ[K] =
-    new SuppressedInternal[K](null, timeToWaitForMoreEvents, bufferConfig, null, false)
+    new SuppressedInternal[K](null, timeToWaitForMoreEvents, bufferConfig, null, false, false)
 
   /**
    * Duplicates the static factory methods inside the Java interface

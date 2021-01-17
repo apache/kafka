@@ -39,15 +39,15 @@ class SuppressedTest extends FlatSpec with Matchers {
   "Suppressed.untilWindowCloses" should "produce the correct suppression" in {
     val bufferConfig = BufferConfig.unbounded()
     val suppression = Suppressed.untilWindowCloses[String](bufferConfig)
-    suppression shouldEqual new FinalResultsSuppressionBuilder(null, bufferConfig)
-    suppression.withName("soup") shouldEqual new FinalResultsSuppressionBuilder("soup", bufferConfig)
+    suppression shouldEqual new FinalResultsSuppressionBuilder(null, bufferConfig, false)
+    suppression.withName("soup") shouldEqual new FinalResultsSuppressionBuilder("soup", bufferConfig, false)
   }
 
   "Suppressed.untilTimeLimit" should "produce the correct suppression" in {
     val bufferConfig = BufferConfig.unbounded()
     val duration = Duration.ofMillis(1)
     Suppressed.untilTimeLimit[String](duration, bufferConfig) shouldEqual
-      new SuppressedInternal[String](null, duration, bufferConfig, null, false)
+      new SuppressedInternal[String](null, duration, bufferConfig, null, false, false)
   }
 
   "BufferConfig.maxRecords" should "produce the correct buffer config" in {

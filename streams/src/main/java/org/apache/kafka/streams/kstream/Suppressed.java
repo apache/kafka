@@ -161,7 +161,7 @@ public interface Suppressed<K> extends NamedOperation<Suppressed<K>> {
      * @return a "final results" mode suppression configuration
      */
     static Suppressed<Windowed> untilWindowCloses(final StrictBufferConfig bufferConfig) {
-        return new FinalResultsSuppressionBuilder<>(null, bufferConfig);
+        return new FinalResultsSuppressionBuilder<>(null, bufferConfig, false);
     }
 
     /**
@@ -175,8 +175,20 @@ public interface Suppressed<K> extends NamedOperation<Suppressed<K>> {
      * @return a suppression configuration
      */
     static <K> Suppressed<K> untilTimeLimit(final Duration timeToWaitForMoreEvents, final BufferConfig bufferConfig) {
-        return new SuppressedInternal<>(null, timeToWaitForMoreEvents, bufferConfig, null, false);
+        return new SuppressedInternal<>(null, timeToWaitForMoreEvents, bufferConfig, null, false, false);
     }
+
+    /**
+     * Make the suppression queryable.
+     *
+     * @return The same configuration with query enabled.
+     */
+    Suppressed<K> enableQuery();
+
+    /**
+     * @return Returns true iff the query is enabled.
+     */
+    boolean isQueryEnabled();
 
     /**
      * Use the specified name for the suppression node in the topology.

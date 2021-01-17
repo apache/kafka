@@ -25,10 +25,12 @@ import java.util.Objects;
 public class FinalResultsSuppressionBuilder<K extends Windowed> implements Suppressed<K>, NamedSuppressed<K> {
     private final String name;
     private final StrictBufferConfig bufferConfig;
+    private final boolean isQueryEnabled;
 
-    public FinalResultsSuppressionBuilder(final String name, final Suppressed.StrictBufferConfig bufferConfig) {
+    public FinalResultsSuppressionBuilder(final String name, final Suppressed.StrictBufferConfig bufferConfig, final boolean isQueryEnabled) {
         this.name = name;
         this.bufferConfig = bufferConfig;
+        this.isQueryEnabled = isQueryEnabled;
     }
 
     public SuppressedInternal<K> buildFinalResultsSuppression(final Duration gracePeriod) {
@@ -37,13 +39,28 @@ public class FinalResultsSuppressionBuilder<K extends Windowed> implements Suppr
             gracePeriod,
             bufferConfig,
             TimeDefinitions.WindowEndTimeDefinition.instance(),
-            true
+            true,
+            isQueryEnabled
         );
     }
 
     @Override
+    public Suppressed<K> enableQuery() {
+        if (name == null) {
+            throw new IllegalArgumentException("This method can't be called without the name set");
+        }
+
+        return new FinalResultsSuppressionBuilder<>(name, bufferConfig, true);
+    }
+
+    @Override
+    public boolean isQueryEnabled() {
+        return isQueryEnabled;
+    }
+
+    @Override
     public Suppressed<K> withName(final String name) {
-        return new FinalResultsSuppressionBuilder<>(name, bufferConfig);
+        return new FinalResultsSuppressionBuilder<>(name, bufferConfig, isQueryEnabled);
     }
 
     @Override
@@ -56,7 +73,8 @@ public class FinalResultsSuppressionBuilder<K extends Windowed> implements Suppr
         }
         final FinalResultsSuppressionBuilder<?> that = (FinalResultsSuppressionBuilder<?>) o;
         return Objects.equals(name, that.name) &&
-            Objects.equals(bufferConfig, that.bufferConfig);
+            Objects.equals(bufferConfig, that.bufferConfig) &&
+            Objects.equals(isQueryEnabled, that.isQueryEnabled);
     }
 
     @Override
@@ -66,7 +84,7 @@ public class FinalResultsSuppressionBuilder<K extends Windowed> implements Suppr
 
     @Override
     public int hashCode() {
-        return Objects.hash(name, bufferConfig);
+        return Objects.hash(name, bufferConfig, isQueryEnabled);
     }
 
     @Override
@@ -74,6 +92,7 @@ public class FinalResultsSuppressionBuilder<K extends Windowed> implements Suppr
         return "FinalResultsSuppressionBuilder{" +
             "name='" + name + '\'' +
             ", bufferConfig=" + bufferConfig +
+            ", isQueryEnabled=" + isQueryEnabled +
             '}';
     }
 }
