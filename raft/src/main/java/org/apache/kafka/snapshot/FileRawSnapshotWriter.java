@@ -114,4 +114,13 @@ public final class FileRawSnapshotWriter implements RawSnapshotWriter {
             snapshotId
         );
     }
+
+    @Override
+    public String toString() {
+        return "FileRawSnapshotWriter(" +
+                "tempSnapshotPath=" + tempSnapshotPath +
+                ", snapshotId=" + snapshotId +
+                ", frozen=" + frozen +
+                ')';
+    }
 }

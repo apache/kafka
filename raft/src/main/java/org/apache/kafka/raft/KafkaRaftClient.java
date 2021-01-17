@@ -1311,7 +1311,7 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
              * reseting the fetching snapshot state and sending another fetch request.
              */
             logger.trace(
-                "Leader doesn't know about snapshot id {}, returned error {} and snapshot id {}",
+                "Leader doesn't know about snapshot {}, returned error {} and snapshot id {}",
                 state.fetchingSnapshot(),
                 partitionSnapshot.errorCode(),
                 partitionSnapshot.snapshotId()

@@ -1149,5 +1149,13 @@ final public class KafkaRaftClientSnapshotTest {
         public ByteBuffer buffer() {
             return data;
         }
+
+        @Override
+        public String toString() {
+            return "MemorySnapshotWriter(" +
+                    "snapshotId=" + snapshotId +
+                    ", frozen=" + frozen +
+                    ')';
+        }
     }
 }
