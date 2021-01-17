@@ -55,13 +55,12 @@ object Branched {
     }.asJava, name)
 
   /**
-   * Create an instance of `Branched` with provided chain function and branch name suffix.
+   * Create an instance of `Branched` with provided chain consumer and branch name suffix.
    *
    * @param chain A consumer to which the branch will be sent. If a non-null consumer is provided here,
    *              the respective branch will not be added to the resulting Map returned
    *              by [[BranchedKStream.defaultBranch]] or [[BranchedKStream.noDefaultBranch]] (see
-   *              [[BranchedKStream]] description for details). If `null`, a no-op consumer will be used
-   *              and the branch will be added to the resulting Map.
+   *              [[BranchedKStream]] description for details).
    * @param name  the branch name suffix to be used. If `null`, a default branch name suffix will be generated
    *              (see [[BranchedKStream]] description for details)
    * @tparam K key type
