@@ -154,11 +154,8 @@ abstract class BaseProducerSendTest extends KafkaServerTestHarness {
       assertEquals(3L, producer.send(record3, callback).get.offset, "Should have offset 3")
 
       // send a record with null topic should fail
-      assertThrows(classOf[IllegalArgumentException], () => {
-        val record4 = new ProducerRecord[Array[Byte], Array[Byte]](null, partition, "key".getBytes(StandardCharsets.UTF_8),
-          "value".getBytes(StandardCharsets.UTF_8))
-        producer.send(record4, callback)
-      })
+      assertThrows(classOf[IllegalArgumentException], () => new ProducerRecord[Array[Byte], Array[Byte]](null, partition, "key".getBytes(StandardCharsets.UTF_8),
+        "value".getBytes(StandardCharsets.UTF_8)))
 
       // non-blocking send a list of records
       for (_ <- 1 to numRecords)

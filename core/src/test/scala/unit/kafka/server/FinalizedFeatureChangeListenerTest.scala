@@ -166,9 +166,7 @@ class FinalizedFeatureChangeListenerTest extends ZooKeeperTestHarness {
     val cache = new FinalizedFeatureCache(createBrokerFeatures())
     val listener = createListener(cache, Some(initialFinalizedFeatures))
 
-    assertThrows(
-      classOf[TimeoutException],
-      () => cache.waitUntilEpochOrThrow(initialFinalizedFeatures.epoch + 1, JTestUtils.DEFAULT_MAX_WAIT_MS))
+    assertThrows(classOf[TimeoutException], () => cache.waitUntilEpochOrThrow(initialFinalizedFeatures.epoch + 1, JTestUtils.DEFAULT_MAX_WAIT_MS))
 
     val updatedFinalizedFeaturesMap = Map[String, FinalizedVersionRange]()
     val updatedFinalizedFeatures = Features.finalizedFeatures(updatedFinalizedFeaturesMap.asJava)
@@ -178,9 +176,7 @@ class FinalizedFeatureChangeListenerTest extends ZooKeeperTestHarness {
     assertFalse(mayBeFeatureZNodeNewBytes.isEmpty)
     assertTrue(updatedVersion > initialFinalizedFeatures.epoch)
 
-    assertThrows(
-      classOf[TimeoutException],
-      () => cache.waitUntilEpochOrThrow(updatedVersion, JTestUtils.DEFAULT_MAX_WAIT_MS))
+    assertThrows(classOf[TimeoutException], () => cache.waitUntilEpochOrThrow(updatedVersion, JTestUtils.DEFAULT_MAX_WAIT_MS))
     assertTrue(cache.get.isEmpty)
     assertTrue(listener.isListenerInitiated)
   }

@@ -74,7 +74,7 @@ class DelegationTokenRequestsTest extends BaseRequestTest with SaslSetup {
 
     //test describe token
     var tokens = adminClient.describeDelegationToken().delegationTokens().get()
-    assertTrue(tokens.size() == 1)
+    assertEquals(1, tokens.size())
     var token1 = tokens.get(0)
     assertEquals(token1, tokenCreated)
 

@@ -14,7 +14,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package unit.kafka.server
+package kafka.server
 
 import kafka.network.SocketServer
 import kafka.server.{AlterCredentialsTest, BaseRequestTest, KafkaConfig}
@@ -58,7 +58,6 @@ class AlterUserScramCredentialsRequestNotAuthorizedTest extends BaseRequestTest 
 
   @Test
   def testAlterSomethingNotAuthorized(): Unit = {
-
     val request = new AlterUserScramCredentialsRequest.Builder(
       new AlterUserScramCredentialsRequestData()
         .setDeletions(util.Arrays.asList(new AlterUserScramCredentialsRequestData.ScramCredentialDeletion().setName(user1).setMechanism(ScramMechanism.SCRAM_SHA_256.`type`)))
@@ -73,7 +72,6 @@ class AlterUserScramCredentialsRequestNotAuthorizedTest extends BaseRequestTest 
   private def sendAlterUserScramCredentialsRequest(request: AlterUserScramCredentialsRequest, socketServer: SocketServer = controllerSocketServer): AlterUserScramCredentialsResponse = {
     connectAndReceive[AlterUserScramCredentialsResponse](request, destination = socketServer)
   }
-
 
   private def checkAllErrorsAlteringCredentials(resultsToCheck: util.List[AlterUserScramCredentialsResult], expectedError: Errors, contextMsg: String): Unit = {
     assertEquals(0, resultsToCheck.asScala.filterNot(_.errorCode == expectedError.code).size,

@@ -151,11 +151,9 @@ class LogDirFailureTest extends IntegrationTestHarness {
 
     // send() should fail due to either KafkaStorageException or NotLeaderOrFollowerException
     val e = assertThrows(classOf[ExecutionException], () => producer.send(record).get(6000, TimeUnit.MILLISECONDS))
-    e.getCause match {
-      case t: KafkaStorageException =>
-      case t: NotLeaderOrFollowerException => // This may happen if ProduceRequest version <= 3
-      case t: Throwable => fail(s"send() should fail with either KafkaStorageException or NotLeaderOrFollowerException instead of ${t.toString}")
-    }
+    assertTrue(e.getCause.isInstanceOf[KafkaStorageException] ||
+      // This may happen if ProduceRequest version <= 3
+      e.getCause.isInstanceOf[NotLeaderOrFollowerException])
   }
 
   def testProduceAfterLogDirFailureOnLeader(failureType: LogDirFailureType): Unit = {

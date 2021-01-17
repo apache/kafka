@@ -784,12 +784,10 @@ class PartitionTest extends AbstractPartitionTest {
     assertEquals(newLogStartOffset, log.logStartOffset, s"Log start offset not expected to change:")
 
     // but we cannot append to offset < log start if the log is not empty
-    assertThrows(classOf[UnexpectedAppendOffsetException], () => {
-      val records2 = createRecords(List(new SimpleRecord("k1".getBytes, "v1".getBytes),
-        new SimpleRecord("k2".getBytes, "v2".getBytes)),
-        baseOffset = 3L)
-      partition.appendRecordsToFollowerOrFutureReplica(records2, isFuture = false)
-    })
+    val records2 = createRecords(List(new SimpleRecord("k1".getBytes, "v1".getBytes),
+      new SimpleRecord("k2".getBytes, "v2".getBytes)),
+      baseOffset = 3L)
+    assertThrows(classOf[UnexpectedAppendOffsetException], () => partition.appendRecordsToFollowerOrFutureReplica(records2, isFuture = false))
     assertEquals(8L, log.logEndOffset, s"Log end offset should not change after failure to append")
 
     // we still can append to next offset

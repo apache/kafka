@@ -128,8 +128,7 @@ class OffsetCheckpointFileTest extends Logging {
     val logDir = "/tmp/kafka-logs"
     val mockCheckpointFile = Mockito.mock(classOf[OffsetCheckpointFile])
     val lazyCheckpoints = new LazyOffsetCheckpoints(Map(logDir -> mockCheckpointFile))
-    assertThrows(classOf[IllegalArgumentException],
-      () => lazyCheckpoints.fetch("/invalid/kafka-logs", new TopicPartition("foo", 0)))
+    assertThrows(classOf[IllegalArgumentException], () => lazyCheckpoints.fetch("/invalid/kafka-logs", new TopicPartition("foo", 0)))
   }
 
 }

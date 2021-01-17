@@ -363,13 +363,10 @@ class DeleteTopicTest extends ZooKeeperTestHarness {
     val topicPartition = new TopicPartition("test", 0)
     val topic = topicPartition.topic
     servers = createTestTopicAndCluster(topic)
-
-    assertThrows(classOf[TopicAlreadyMarkedForDeletionException], () => {
-      // start topic deletion
-      adminZkClient.deleteTopic(topic)
-      // try to delete topic marked as deleted
-      adminZkClient.deleteTopic(topic)
-    })
+    // start topic deletion
+    adminZkClient.deleteTopic(topic)
+    // try to delete topic marked as deleted
+    assertThrows(classOf[TopicAlreadyMarkedForDeletionException], () => adminZkClient.deleteTopic(topic))
 
     TestUtils.verifyTopicDeletion(zkClient, topic, 1, servers)
   }

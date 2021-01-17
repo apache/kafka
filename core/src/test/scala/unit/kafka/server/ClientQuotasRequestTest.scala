@@ -376,7 +376,7 @@ class ClientQuotasRequestTest extends BaseRequestTest {
       assertEquals(1, result.size)
       assertTrue(result.get(e) != null)
       val value = result.get(e).get(RequestPercentageProp)
-      assertTrue(value != null)
+      assertNotNull(value)
       assertEquals(value, v, 1e-6)
     }
 
@@ -554,11 +554,11 @@ class ClientQuotasRequestTest extends BaseRequestTest {
     } else {
       assertEquals(1, describe.size)
       val configs = describe.get(entity)
-      assertTrue(configs != null)
+      assertNotNull(configs)
       assertEquals(quotas.size, configs.size)
       quotas.foreach { case (k, v) =>
         val value = configs.get(k)
-        assertTrue(value != null)
+        assertNotNull(value)
         assertEquals(v, value, 1e-6)
       }
     }

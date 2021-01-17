@@ -173,17 +173,14 @@ class ReplicaFetcherThreadTest {
       assertTrue(fetcher.fetchState(tp).isDefined)
       val fetchState = fetcher.fetchState(tp).get
 
-      assertEquals(
-        shouldBeReadyForFetch,
-        fetchState.isReadyForFetch, s"Partition $tp should${if (!shouldBeReadyForFetch) " NOT" else ""} be ready for fetching")
+      assertEquals(shouldBeReadyForFetch, fetchState.isReadyForFetch,
+        s"Partition $tp should${if (!shouldBeReadyForFetch) " NOT" else ""} be ready for fetching")
 
-      assertEquals(
-        shouldBeTruncatingLog,
-        fetchState.isTruncating, s"Partition $tp should${if (!shouldBeTruncatingLog) " NOT" else ""} be truncating its log")
+      assertEquals(shouldBeTruncatingLog, fetchState.isTruncating,
+        s"Partition $tp should${if (!shouldBeTruncatingLog) " NOT" else ""} be truncating its log")
 
-      assertEquals(
-        shouldBeDelayed,
-        fetchState.isDelayed, s"Partition $tp should${if (!shouldBeDelayed) " NOT" else ""} be delayed")
+      assertEquals(shouldBeDelayed, fetchState.isDelayed,
+        s"Partition $tp should${if (!shouldBeDelayed) " NOT" else ""} be delayed")
     }
   }
 

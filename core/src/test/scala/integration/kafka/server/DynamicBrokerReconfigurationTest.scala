@@ -981,10 +981,9 @@ class DynamicBrokerReconfigurationTest extends ZooKeeperTestHarness with SaslSet
       .bootstrapServers(bootstrap)
       .build()
 
-    assertTrue(assertThrows(classOf[ExecutionException], () => {
-      val future = producer1.send(new ProducerRecord(topic, "key", "value"))
-      future.get(2, TimeUnit.SECONDS)
-    }).getCause.isInstanceOf[org.apache.kafka.common.errors.TimeoutException])
+    val future = producer1.send(new ProducerRecord(topic, "key", "value"))
+    assertTrue(assertThrows(classOf[ExecutionException], () => future.get(2, TimeUnit.SECONDS))
+      .getCause.isInstanceOf[org.apache.kafka.common.errors.TimeoutException])
 
     alterAdvertisedListener(adminClient, externalAdminClient, invalidHost, "localhost")
     servers.foreach(validateEndpointsInZooKeeper(_, endpoints => !endpoints.contains(invalidHost)))

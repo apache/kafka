@@ -101,16 +101,15 @@ class QuotaUtilsTest {
   def testThrottleTimeThrowsExceptionIfProvidedNonRateMetric(): Unit = {
     val testMetric = new KafkaMetric(new Object(), metricName, new Value(), new MetricConfig, time);
 
-    assertThrows(classOf[IllegalArgumentException],
-      () => QuotaUtils.throttleTime(new QuotaViolationException(testMetric, 10.0, 20.0), time.milliseconds))
+    assertThrows(classOf[IllegalArgumentException], () => QuotaUtils.throttleTime(new QuotaViolationException(testMetric, 10.0, 20.0), time.milliseconds))
   }
 
   @Test
   def testBoundedThrottleTimeThrowsExceptionIfProvidedNonRateMetric(): Unit = {
     val testMetric = new KafkaMetric(new Object(), metricName, new Value(), new MetricConfig, time);
 
-    assertThrows(classOf[IllegalArgumentException],
-      () => QuotaUtils.boundedThrottleTime(new QuotaViolationException(testMetric, 10.0, 20.0), maxThrottleTimeMs, time.milliseconds))
+    assertThrows(classOf[IllegalArgumentException], () => QuotaUtils.boundedThrottleTime(new QuotaViolationException(testMetric, 10.0, 20.0),
+      maxThrottleTimeMs, time.milliseconds))
   }
 
   // the `metric` passed into the returned QuotaViolationException will return windowSize = 'numSamples' - 1

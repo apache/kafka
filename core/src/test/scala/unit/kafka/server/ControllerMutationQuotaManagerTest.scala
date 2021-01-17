@@ -59,8 +59,7 @@ class StrictControllerMutationQuotaTest {
 
     // Recording a third value at T is rejected immediately because there are not
     // tokens available in the bucket.
-    assertThrows(classOf[ThrottlingQuotaExceededException],
-      () => quota.record(90))
+    assertThrows(classOf[ThrottlingQuotaExceededException], () => quota.record(90))
     assertTrue(quota.isExceeded)
     assertEquals(8000, quota.throttleTime)
 

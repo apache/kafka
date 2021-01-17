@@ -1755,15 +1755,13 @@ class LogTest {
     seq = seq + 3
 
     // Append a partial duplicate of the tail. This is not allowed.
-    assertThrows(classOf[OutOfOrderSequenceException], () => {
-      val records = TestUtils.records(
-        List(
-          new SimpleRecord(mockTime.milliseconds, s"key-$seq".getBytes, s"value-$seq".getBytes),
-          new SimpleRecord(mockTime.milliseconds, s"key-$seq".getBytes, s"value-$seq".getBytes)),
-        producerId = pid, producerEpoch = epoch, sequence = seq - 2)
-      log.appendAsLeader(records, leaderEpoch = 0)
-    }, () => "Should have received an OutOfOrderSequenceException since we attempted to append a duplicate of a records " +
-      "in the middle of the log.")
+    var records = TestUtils.records(
+      List(
+        new SimpleRecord(mockTime.milliseconds, s"key-$seq".getBytes, s"value-$seq".getBytes),
+        new SimpleRecord(mockTime.milliseconds, s"key-$seq".getBytes, s"value-$seq".getBytes)),
+      producerId = pid, producerEpoch = epoch, sequence = seq - 2)
+    assertThrows(classOf[OutOfOrderSequenceException], () => log.appendAsLeader(records, leaderEpoch = 0),
+      () => "Should have received an OutOfOrderSequenceException since we attempted to append a duplicate of a records in the middle of the log.")
 
     // Append a duplicate of the batch which is 4th from the tail. This should succeed without error since we
     // retain the batch metadata of the last 5 batches.
@@ -1772,13 +1770,11 @@ class LogTest {
     log.appendAsLeader(duplicateOfFourth, leaderEpoch = 0)
 
     // Duplicates at older entries are reported as OutOfOrderSequence errors
-    assertThrows(classOf[OutOfOrderSequenceException], () => {
-      val records = TestUtils.records(
-        List(new SimpleRecord(mockTime.milliseconds, s"key-1".getBytes, s"value-1".getBytes)),
-        producerId = pid, producerEpoch = epoch, sequence = 1)
-      log.appendAsLeader(records, leaderEpoch = 0)
-    }, () => "Should have received an OutOfOrderSequenceException since we attempted to append a duplicate of a batch " +
-      "which is older than the last 5 appended batches.")
+    records = TestUtils.records(
+      List(new SimpleRecord(mockTime.milliseconds, s"key-1".getBytes, s"value-1".getBytes)),
+      producerId = pid, producerEpoch = epoch, sequence = 1)
+    assertThrows(classOf[OutOfOrderSequenceException], () => log.appendAsLeader(records, leaderEpoch = 0),
+      () => "Should have received an OutOfOrderSequenceException since we attempted to append a duplicate of a batch which is older than the last 5 appended batches.")
 
     // Append a duplicate entry with a single records at the tail of the log. This should return the appendInfo of the original entry.
     def createRecordsWithDuplicate = TestUtils.records(List(new SimpleRecord(mockTime.milliseconds, "key".getBytes, "value".getBytes)),

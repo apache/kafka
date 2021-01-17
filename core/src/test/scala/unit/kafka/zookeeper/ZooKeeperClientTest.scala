@@ -115,9 +115,8 @@ class ZooKeeperClientTest extends ZooKeeperTestHarness {
       // For a sanity check, make sure a bad client connection socket class name generates an exception
       val badClientConfig = new ZKClientConfig()
       KafkaConfig.setZooKeeperClientProperty(badClientConfig, propKey, propVal + "BadClassName")
-      assertThrows(classOf[Exception],
-        () => new ZooKeeperClient(zkConnect, zkSessionTimeout, zkConnectionTimeout, Int.MaxValue, time, "testMetricGroup",
-            "testMetricType", None, Some(badClientConfig)))
+      assertThrows(classOf[Exception], () => new ZooKeeperClient(zkConnect, zkSessionTimeout, zkConnectionTimeout,
+        Int.MaxValue, time, "testMetricGroup", "testMetricType", None, Some(badClientConfig)))
     } finally {
       client.close()
     }

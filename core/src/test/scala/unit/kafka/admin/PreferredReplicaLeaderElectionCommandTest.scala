@@ -368,8 +368,7 @@ class PreferredReplicaLeaderElectionCommandTest extends ZooKeeperTestHarness wit
     val preferredReplicaElection = new PreferredReplicaLeaderElectionCommand(zkClient, Set(new TopicPartition(topic, partition)))
     preferredReplicaElection.moveLeaderToPreferredReplica()
     val newLeader = TestUtils.waitUntilLeaderIsElectedOrChanged(zkClient, topic, partition, oldLeaderOpt = Some(currentLeader))
-    assertEquals(preferredReplica, newLeader,
-      "Preferred replica election failed")
+    assertEquals(preferredReplica, newLeader, "Preferred replica election failed")
   }
 }
 

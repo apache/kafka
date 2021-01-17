@@ -278,10 +278,9 @@ class ReassignPartitionsUnitTest {
     try {
       addTopics(adminClient)
       assertStartsWith("Replication factor: 3 larger than available brokers: 2",
-        assertThrows(classOf[InvalidReplicationFactorException], () => {
-            generateAssignment(adminClient,
-              """{"topics":[{"topic":"foo"},{"topic":"bar"}]}""", "0,1", false)
-          }, () => "Expected generateAssignment to fail").getMessage)
+        assertThrows(classOf[InvalidReplicationFactorException],
+          () => generateAssignment(adminClient, """{"topics":[{"topic":"foo"},{"topic":"bar"}]}""", "0,1", false),
+          () => "Expected generateAssignment to fail").getMessage)
     } finally {
       adminClient.close()
     }
@@ -301,10 +300,9 @@ class ReassignPartitionsUnitTest {
     try {
       addTopics(adminClient)
       assertStartsWith("Not all brokers have rack information.",
-        assertThrows(classOf[AdminOperationException], () => {
-            generateAssignment(adminClient,
-              """{"topics":[{"topic":"foo"}]}""", "0,1,2,3", true)
-          }, () => "Expected generateAssignment to fail").getMessage)
+        assertThrows(classOf[AdminOperationException],
+          () => generateAssignment(adminClient, """{"topics":[{"topic":"foo"}]}""", "0,1,2,3", true),
+          () => "Expected generateAssignment to fail").getMessage)
       // It should succeed when --disable-rack-aware is used.
       val (_, current) = generateAssignment(adminClient,
         """{"topics":[{"topic":"foo"}]}""", "0,1,2,3", false)
@@ -333,11 +331,8 @@ class ReassignPartitionsUnitTest {
       ), current)
 
       // The proposed assignment should only span the provided brokers
-      proposed.values.foreach {
-        replicas =>
-          assertTrue(replicas.forall(goalBrokers.contains),
-            s"Proposed assignment $proposed puts replicas on brokers other than $goalBrokers")
-      }
+      proposed.values.foreach(replicas => assertTrue(replicas.forall(goalBrokers.contains),
+        s"Proposed assignment $proposed puts replicas on brokers other than $goalBrokers"))
     } finally {
       adminClient.close()
     }

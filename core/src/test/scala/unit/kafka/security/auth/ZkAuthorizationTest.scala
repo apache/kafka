@@ -70,11 +70,9 @@ class ZkAuthorizationTest extends ZooKeeperTestHarness with Logging {
     Configuration.setConfiguration(null)
     System.clearProperty(JaasUtils.JAVA_LOGIN_CONFIG_PARAM)
     assertFalse(JaasUtils.isZkSaslEnabled())
-    assertThrows(classOf[KafkaException], () => {
-      Configuration.setConfiguration(null)
-      System.setProperty(JaasUtils.JAVA_LOGIN_CONFIG_PARAM, "no-such-file-exists.conf")
-      JaasUtils.isZkSaslEnabled()
-    })
+    Configuration.setConfiguration(null)
+    System.setProperty(JaasUtils.JAVA_LOGIN_CONFIG_PARAM, "no-such-file-exists.conf")
+    assertThrows(classOf[KafkaException], () => JaasUtils.isZkSaslEnabled())
   }
 
   /**

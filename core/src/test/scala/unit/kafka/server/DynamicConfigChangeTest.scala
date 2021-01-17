@@ -92,8 +92,7 @@ class DynamicConfigChangeTest extends KafkaServerTestHarness {
   }
 
   private def testQuotaConfigChange(user: String, clientId: String, rootEntityType: String, configEntityName: String): Unit = {
-    assertTrue(this.servers.head.dynamicConfigHandlers.contains(rootEntityType) ,
-               rootEntityType + "Should contain a ConfigHandler for ")
+    assertTrue(this.servers.head.dynamicConfigHandlers.contains(rootEntityType), rootEntityType + "Should contain a ConfigHandler for ")
     val props = new Properties()
     props.put(DynamicConfig.Client.ProducerByteRateOverrideProp, "1000")
     props.put(DynamicConfig.Client.ConsumerByteRateOverrideProp, "2000")
@@ -261,11 +260,9 @@ class DynamicConfigChangeTest extends KafkaServerTestHarness {
   @Test
   def testConfigChangeOnNonExistingTopic(): Unit = {
     val topic = TestUtils.tempTopic()
-    assertThrows(classOf[UnknownTopicOrPartitionException], () => {
-      val logProps = new Properties()
-      logProps.put(FlushMessagesProp, 10000: java.lang.Integer)
-      adminZkClient.changeTopicConfig(topic, logProps)
-    })
+    val logProps = new Properties()
+    logProps.put(FlushMessagesProp, 10000: java.lang.Integer)
+    assertThrows(classOf[UnknownTopicOrPartitionException], () => adminZkClient.changeTopicConfig(topic, logProps))
   }
 
   @Test
@@ -305,24 +302,19 @@ class DynamicConfigChangeTest extends KafkaServerTestHarness {
     configManager.ConfigChangedNotificationHandler.processNotification("not json".getBytes(StandardCharsets.UTF_8))
 
     // Incorrect Map. No version
-    assertThrows(classOf[Throwable], () => {
-      val jsonMap = Map("v" -> 1, "x" -> 2)
-      configManager.ConfigChangedNotificationHandler.processNotification(Json.encodeAsBytes(jsonMap.asJava))
-    })
+    var jsonMap: Map[String, Any] = Map("v" -> 1, "x" -> 2)
+
+    assertThrows(classOf[Throwable], () => configManager.ConfigChangedNotificationHandler.processNotification(Json.encodeAsBytes(jsonMap.asJava)))
     // Version is provided. EntityType is incorrect
-    assertThrows(classOf[Throwable], () => {
-      val jsonMap = Map("version" -> 1, "entity_type" -> "garbage", "entity_name" -> "x")
-      configManager.ConfigChangedNotificationHandler.processNotification(Json.encodeAsBytes(jsonMap.asJava))
-    })
+    jsonMap = Map("version" -> 1, "entity_type" -> "garbage", "entity_name" -> "x")
+    assertThrows(classOf[Throwable], () => configManager.ConfigChangedNotificationHandler.processNotification(Json.encodeAsBytes(jsonMap.asJava)))
 
     // EntityName isn't provided
-    assertThrows(classOf[Throwable], () => {
-      val jsonMap = Map("version" -> 1, "entity_type" -> ConfigType.Topic)
-      configManager.ConfigChangedNotificationHandler.processNotification(Json.encodeAsBytes(jsonMap.asJava))
-    })
+    jsonMap = Map("version" -> 1, "entity_type" -> ConfigType.Topic)
+    assertThrows(classOf[Throwable], () => configManager.ConfigChangedNotificationHandler.processNotification(Json.encodeAsBytes(jsonMap.asJava)))
 
     // Everything is provided
-    val jsonMap = Map("version" -> 1, "entity_type" -> ConfigType.Topic, "entity_name" -> "x")
+    jsonMap = Map("version" -> 1, "entity_type" -> ConfigType.Topic, "entity_name" -> "x")
     configManager.ConfigChangedNotificationHandler.processNotification(Json.encodeAsBytes(jsonMap.asJava))
 
     // Verify that processConfigChanges was only called once

@@ -204,18 +204,12 @@ class ProducerFailureHandlingTest extends KafkaServerTestHarness {
     producer2.send(record).get
     producer3.send(record).get
 
-    assertThrows(classOf[IllegalStateException], () => {
-      producer1.close()
-      producer1.send(record)
-    })
-    assertThrows(classOf[IllegalStateException], () => {
-      producer2.close()
-      producer2.send(record)
-    })
-    assertThrows(classOf[IllegalStateException], () =>  {
-      producer3.close()
-      producer3.send(record)
-    })
+    producer1.close()
+    assertThrows(classOf[IllegalStateException], () => producer1.send(record))
+    producer2.close()
+    assertThrows(classOf[IllegalStateException], () => producer2.send(record))
+    producer3.close()
+    assertThrows(classOf[IllegalStateException], () =>  producer3.send(record))
   }
 
   @Test
@@ -254,12 +248,10 @@ class ProducerFailureHandlingTest extends KafkaServerTestHarness {
     // shut down one broker
     servers.head.shutdown()
     servers.head.awaitShutdown()
-    assertThrows(classOf[ExecutionException], () => producer3.send(record).get).getCause match {
-      case _ @ (_: NotEnoughReplicasException | _: NotEnoughReplicasAfterAppendException | _: TimeoutException) => // pass
-      case e: Throwable =>
-        fail("Expected NotEnoughReplicasException or NotEnoughReplicasAfterAppendException when producing to topic " +
-          "with fewer brokers than min.insync.replicas, but saw " + e)
-    }
+    val e = assertThrows(classOf[ExecutionException], () => producer3.send(record).get)
+    assertTrue(e.getCause.isInstanceOf[NotEnoughReplicasException] ||
+      e.getCause.isInstanceOf[NotEnoughReplicasAfterAppendException] ||
+      e.getCause.isInstanceOf[TimeoutException])
 
     // restart the server
     servers.head.startup()

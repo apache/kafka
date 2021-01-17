@@ -60,16 +60,13 @@ class DelegationTokenRequestsWithDisableTokenFeatureTest extends BaseRequestTest
     assertThrows(classOf[ExecutionException], () => createResult.delegationToken().get()).getCause.isInstanceOf[DelegationTokenDisabledException]
 
     val describeResult = adminClient.describeDelegationToken()
-    assertThrows(classOf[ExecutionException],
-      () => describeResult.delegationTokens().get()).getCause.isInstanceOf[DelegationTokenDisabledException]
+    assertThrows(classOf[ExecutionException], () => describeResult.delegationTokens().get()).getCause.isInstanceOf[DelegationTokenDisabledException]
 
     val renewResult = adminClient.renewDelegationToken("".getBytes())
-    assertThrows(classOf[ExecutionException],
-      () => renewResult.expiryTimestamp().get()).getCause.isInstanceOf[DelegationTokenDisabledException]
+    assertThrows(classOf[ExecutionException], () => renewResult.expiryTimestamp().get()).getCause.isInstanceOf[DelegationTokenDisabledException]
 
     val expireResult = adminClient.expireDelegationToken("".getBytes())
-    assertThrows(classOf[ExecutionException],
-      () => expireResult.expiryTimestamp().get()).getCause.isInstanceOf[DelegationTokenDisabledException]
+    assertThrows(classOf[ExecutionException], () => expireResult.expiryTimestamp().get()).getCause.isInstanceOf[DelegationTokenDisabledException]
   }
 
   @AfterEach

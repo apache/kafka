@@ -393,10 +393,8 @@ abstract class EndToEndAuthorizationTest extends IntegrationTestHarness with Sas
     servers.foreach { s =>
       TestUtils.waitAndVerifyAcls(TopicDescribeAcl, s.dataPlaneRequestProcessor.authorizer.get, topicResource)
     }
-    val e = assertThrows(classOf[TopicAuthorizationException], () => {
-      val producer = createProducer()
-      sendRecords(producer, numRecords, tp)
-    })
+    val producer = createProducer()
+    val e = assertThrows(classOf[TopicAuthorizationException], () => sendRecords(producer, numRecords, tp))
     assertEquals(Set(topic).asJava, e.unauthorizedTopics())
     confirmReauthenticationMetrics()
   }

@@ -38,11 +38,9 @@ class ServerMetricsTest {
     }
 
     for (illegalName <- illegalNames) {
-      assertThrows(classOf[IllegalArgumentException], () => {
-        props.put(KafkaConfig.MetricRecordingLevelProp, illegalName)
-        val config = KafkaConfig.fromProps(props)
-        Server.buildMetricsConfig(config)
-      })
+      props.put(KafkaConfig.MetricRecordingLevelProp, illegalName)
+      val config = KafkaConfig.fromProps(props)
+      assertThrows(classOf[IllegalArgumentException], () => Server.buildMetricsConfig(config))
     }
 
   }

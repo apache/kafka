@@ -151,8 +151,7 @@ class MetadataRequestTest extends BaseRequestTest {
     checkAutoCreatedTopic(topic3, response2)
 
     // V3 doesn't support a configurable allowAutoTopicCreation, so disabling auto-creation is not supported
-    assertThrows(classOf[UnsupportedVersionException],
-      () => sendMetadataRequest(new MetadataRequest(requestData(List(topic4), false), 3.toShort)))
+    assertThrows(classOf[UnsupportedVersionException], () => sendMetadataRequest(new MetadataRequest(requestData(List(topic4), false), 3.toShort)))
 
     // V4 and higher support a configurable allowAutoTopicCreation
     val response3 = sendMetadataRequest(new MetadataRequest.Builder(Seq(topic4, topic5).asJava, false, 4.toShort).build)

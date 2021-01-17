@@ -560,7 +560,6 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
     var e = assertThrows(classOf[ExecutionException], () => alterResult.values.get(topic2).get)
     assertTrue(e.getCause.isInstanceOf[InvalidPartitionsException])
     assertEquals("Topic currently has 3 partitions, which is higher than the requested 2.", e.getCause.getMessage)
-    // assert that the topic2 still has 3 partitions
     assertEquals(3, numPartitions(topic2))
 
     // finally, try to add partitions to a topic queued for deletion

@@ -381,8 +381,7 @@ class KafkaZkClientTest extends ZooKeeperTestHarness {
     zkClient.propagateIsrChanges(Set(topicPartition11))
 
     // Should throw exception if the controllerEpochZkVersion does not match
-    assertThrows(classOf[ControllerMovedException],
-      () => zkClient.deleteIsrChangeNotifications(Seq("0000000001"), controllerEpochZkVersion + 1))
+    assertThrows(classOf[ControllerMovedException], () => zkClient.deleteIsrChangeNotifications(Seq("0000000001"), controllerEpochZkVersion + 1))
     // Delete should not succeed
     assertEquals(Set("0000000000", "0000000001", "0000000002"), zkClient.getAllIsrChangeNotifications.toSet)
 
@@ -456,8 +455,7 @@ class KafkaZkClientTest extends ZooKeeperTestHarness {
     zkClient.propagateLogDirEvent(brokerId)
     zkClient.propagateLogDirEvent(anotherBrokerId)
 
-    assertThrows(classOf[ControllerMovedException],
-      () => zkClient.deleteLogDirEventNotifications(Seq("0000000000", "0000000002"), controllerEpochZkVersion + 1))
+    assertThrows(classOf[ControllerMovedException], () => zkClient.deleteLogDirEventNotifications(Seq("0000000000", "0000000002"), controllerEpochZkVersion + 1))
     assertEquals(Seq("0000000000", "0000000001", "0000000002"), zkClient.getAllLogDirEventNotifications)
 
     zkClient.deleteLogDirEventNotifications(Seq("0000000000", "0000000002"), controllerEpochZkVersion)
@@ -484,8 +482,7 @@ class KafkaZkClientTest extends ZooKeeperTestHarness {
     )
 
     // Should throw ControllerMovedException if the controller epoch zkVersion does not match
-    assertThrows(classOf[ControllerMovedException],
-      () => zkClient.setOrCreatePartitionReassignment(reassignment, controllerEpochZkVersion + 1))
+    assertThrows(classOf[ControllerMovedException], () => zkClient.setOrCreatePartitionReassignment(reassignment, controllerEpochZkVersion + 1))
 
     zkClient.setOrCreatePartitionReassignment(reassignment, controllerEpochZkVersion)
     assertEquals(reassignment, zkClient.getPartitionReassignment)
@@ -658,8 +655,7 @@ class KafkaZkClientTest extends ZooKeeperTestHarness {
     assertTrue(zkClient.isTopicMarkedForDeletion(topic1))
     assertEquals(Set(topic1, topic2), zkClient.getTopicDeletions.toSet)
 
-    assertThrows(classOf[ControllerMovedException],
-      () => zkClient.deleteTopicDeletions(Seq(topic1, topic2), controllerEpochZkVersion + 1))
+    assertThrows(classOf[ControllerMovedException], () => zkClient.deleteTopicDeletions(Seq(topic1, topic2), controllerEpochZkVersion + 1))
     assertEquals(Set(topic1, topic2), zkClient.getTopicDeletions.toSet)
 
     zkClient.deleteTopicDeletions(Seq(topic1, topic2), controllerEpochZkVersion)
@@ -1017,8 +1013,7 @@ class KafkaZkClientTest extends ZooKeeperTestHarness {
     zkClient.createRecursive(TopicZNode.path(topic1))
 
     // Mismatch controller epoch zkVersion
-    assertThrows(classOf[ControllerMovedException],
-      () => zkClient.createTopicPartitionStatesRaw(initialLeaderIsrAndControllerEpochs, controllerEpochZkVersion + 1))
+    assertThrows(classOf[ControllerMovedException], () => zkClient.createTopicPartitionStatesRaw(initialLeaderIsrAndControllerEpochs, controllerEpochZkVersion + 1))
 
     assertEquals(
       Seq(
@@ -1066,8 +1061,7 @@ class KafkaZkClientTest extends ZooKeeperTestHarness {
         eraseMetadataAndStat}.toList)
 
     // Mismatch controller epoch zkVersion
-    assertThrows(classOf[ControllerMovedException],
-      () => zkClient.setTopicPartitionStatesRaw(leaderIsrAndControllerEpochs(state = 1, zkVersion = 0), controllerEpochZkVersion + 1))
+    assertThrows(classOf[ControllerMovedException], () => zkClient.setTopicPartitionStatesRaw(leaderIsrAndControllerEpochs(state = 1, zkVersion = 0), controllerEpochZkVersion + 1))
 
     val getResponses = zkClient.getTopicPartitionStatesRaw(topicPartitions10_11)
     assertEquals(2, getResponses.size)
@@ -1216,8 +1210,7 @@ class KafkaZkClientTest extends ZooKeeperTestHarness {
     assertThrows(classOf[NodeExistsException], () => zkClient.createPreferredReplicaElection(electionPartitions))
 
     // Mismatch controller epoch zkVersion
-    assertThrows(classOf[ControllerMovedException],
-      () => zkClient.deletePreferredReplicaElection(controllerEpochZkVersion + 1))
+    assertThrows(classOf[ControllerMovedException], () => zkClient.deletePreferredReplicaElection(controllerEpochZkVersion + 1))
     assertEquals(electionPartitions, zkClient.getPreferredReplicaElection)
 
     zkClient.deletePreferredReplicaElection(controllerEpochZkVersion)

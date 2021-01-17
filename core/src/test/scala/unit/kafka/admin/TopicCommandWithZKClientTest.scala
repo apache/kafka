@@ -37,7 +37,6 @@ class TopicCommandWithZKClientTest extends ZooKeeperTestHarness with Logging wit
   @BeforeEach
   def setup(info: TestInfo): Unit = {
     topicService = ZookeeperTopicService(zkClient)
-    // the method name in junit 5 ends with "()"
     testTopicName = s"${info.getTestMethod.get().getName}-${Random.alphanumeric.take(10).mkString}"
   }
 

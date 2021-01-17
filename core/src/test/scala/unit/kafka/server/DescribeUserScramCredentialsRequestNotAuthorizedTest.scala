@@ -14,7 +14,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package unit.kafka.server
+package kafka.server
 
 import kafka.network.SocketServer
 import kafka.server.{BaseRequestTest, DescribeCredentialsTest, KafkaConfig}

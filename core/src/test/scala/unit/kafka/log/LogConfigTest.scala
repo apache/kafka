@@ -39,7 +39,7 @@ class LogConfigTest {
   @Test
   def ensureNoStaticInitializationOrderDependency(): Unit = {
     // Access any KafkaConfig val to load KafkaConfig object before LogConfig.
-    assertTrue(KafkaConfig.LogRetentionTimeMillisProp != null)
+    assertNotNull(KafkaConfig.LogRetentionTimeMillisProp)
     assertTrue(LogConfig.configNames.forall { config =>
       val serverConfigOpt = LogConfig.serverConfigName(config)
       serverConfigOpt.isDefined && (serverConfigOpt.get != null)
