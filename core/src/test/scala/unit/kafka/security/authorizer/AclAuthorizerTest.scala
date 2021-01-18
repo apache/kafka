@@ -675,10 +675,8 @@ class AclAuthorizerTest extends ZooKeeperTestHarness with BaseAuthorizerTest {
     val aclOnWildcardPrincipal = new AccessControlEntry(WildcardPrincipalString, WildcardHost, WRITE, ALLOW)
     addAcls(aclAuthorizer, Set(aclOnWildcardPrincipal), resource)
 
-    assertEquals(1,
-      getAcls(aclAuthorizer, wildcardPrincipal).size, "acl on wildcard should be returned for wildcard request")
-    assertEquals(0,
-      getAcls(aclAuthorizer, principal).size, "acl on wildcard should not be returned for specific request")
+    assertEquals(1, getAcls(aclAuthorizer, wildcardPrincipal).size, "acl on wildcard should be returned for wildcard request")
+    assertEquals(0, getAcls(aclAuthorizer, principal).size, "acl on wildcard should not be returned for specific request")
   }
 
   @Test

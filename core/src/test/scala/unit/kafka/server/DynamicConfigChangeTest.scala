@@ -92,7 +92,7 @@ class DynamicConfigChangeTest extends KafkaServerTestHarness {
   }
 
   private def testQuotaConfigChange(user: String, clientId: String, rootEntityType: String, configEntityName: String): Unit = {
-    assertTrue(this.servers.head.dynamicConfigHandlers.contains(rootEntityType), rootEntityType + "Should contain a ConfigHandler for ")
+    assertTrue(this.servers.head.dynamicConfigHandlers.contains(rootEntityType), "Should contain a ConfigHandler for " + rootEntityType)
     val props = new Properties()
     props.put(DynamicConfig.Client.ProducerByteRateOverrideProp, "1000")
     props.put(DynamicConfig.Client.ConsumerByteRateOverrideProp, "2000")

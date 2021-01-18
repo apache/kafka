@@ -2850,11 +2850,9 @@ class LogTest {
                                     magicValue = magic, codec = compression,
                                     baseOffset = firstOffset)
 
-        val exception = assertThrows(classOf[UnexpectedAppendOffsetException], () => log.appendAsFollower(records = batch))
-        assertEquals(firstOffset, exception.firstOffset,
-          s"Magic=$magic, compressionType=$compression, UnexpectedAppendOffsetException#firstOffset")
-        assertEquals(firstOffset + 2, exception.lastOffset,
-          s"Magic=$magic, compressionType=$compression, UnexpectedAppendOffsetException#lastOffset")
+      val exception = assertThrows(classOf[UnexpectedAppendOffsetException], () => log.appendAsFollower(records = batch))
+      assertEquals(firstOffset, exception.firstOffset, s"Magic=$magic, compressionType=$compression, UnexpectedAppendOffsetException#firstOffset")
+      assertEquals(firstOffset + 2, exception.lastOffset, s"Magic=$magic, compressionType=$compression, UnexpectedAppendOffsetException#lastOffset")
     }
   }
 

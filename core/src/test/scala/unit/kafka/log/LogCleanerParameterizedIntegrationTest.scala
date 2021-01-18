@@ -27,8 +27,9 @@ import kafka.utils._
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.record._
 import org.junit.jupiter.api.Assertions._
+import org.junit.jupiter.api.extension.ExtensionContext
 import org.junit.jupiter.params.ParameterizedTest
-import org.junit.jupiter.params.provider.{Arguments, MethodSource}
+import org.junit.jupiter.params.provider.{Arguments, ArgumentsProvider, ArgumentsSource}
 
 import scala.collection._
 import scala.jdk.CollectionConverters._
@@ -43,7 +44,7 @@ class LogCleanerParameterizedIntegrationTest extends AbstractLogCleanerIntegrati
   val topicPartitions = Array(new TopicPartition("log", 0), new TopicPartition("log", 1), new TopicPartition("log", 2))
 
   @ParameterizedTest
-  @MethodSource(Array("all"))
+  @ArgumentsSource(classOf[LogCleanerParameterizedIntegrationTest.AllCompressions])
   def cleanerTest(codec: CompressionType): Unit = {
     val largeMessageKey = 20
     val (largeMessageValue, largeMessageSet) = createLargeSingleMessageSet(largeMessageKey, RecordBatch.CURRENT_MAGIC_VALUE, codec)
@@ -84,7 +85,7 @@ class LogCleanerParameterizedIntegrationTest extends AbstractLogCleanerIntegrati
   }
 
   @ParameterizedTest
-  @MethodSource(Array("all"))
+  @ArgumentsSource(classOf[LogCleanerParameterizedIntegrationTest.AllCompressions])
   def testCleansCombinedCompactAndDeleteTopic(codec: CompressionType): Unit = {
     val logProps  = new Properties()
     val retentionMs: Integer = 100000
@@ -128,7 +129,7 @@ class LogCleanerParameterizedIntegrationTest extends AbstractLogCleanerIntegrati
   }
 
   @ParameterizedTest
-  @MethodSource(Array("excludeZstd")) // zstd compression is not supported with older message formats
+  @ArgumentsSource(classOf[LogCleanerParameterizedIntegrationTest.ExcludeZstd])
   def testCleanerWithMessageFormatV0(codec: CompressionType): Unit = {
     val largeMessageKey = 20
     val (largeMessageValue, largeMessageSet) = createLargeSingleMessageSet(largeMessageKey, RecordBatch.MAGIC_VALUE_V0, codec)
@@ -179,8 +180,8 @@ class LogCleanerParameterizedIntegrationTest extends AbstractLogCleanerIntegrati
   }
 
   @ParameterizedTest
-  @MethodSource(Array("excludeZstd")) // zstd compression is not supported with older message formats
-  def testCleaningNestedMessagesWithMultipleVersions(codec: CompressionType): Unit = {
+  @ArgumentsSource(classOf[LogCleanerParameterizedIntegrationTest.ExcludeZstd])
+  def testCleaningNestedMessagesWithV0AndV1(codec: CompressionType): Unit = {
     val maxMessageSize = 192
     cleaner = makeCleaner(partitions = topicPartitions, maxMessageSize = maxMessageSize, segmentSize = 256)
 
@@ -217,7 +218,7 @@ class LogCleanerParameterizedIntegrationTest extends AbstractLogCleanerIntegrati
   }
 
   @ParameterizedTest
-  @MethodSource(Array("all"))
+  @ArgumentsSource(classOf[LogCleanerParameterizedIntegrationTest.AllCompressions])
   def cleanerConfigUpdateTest(codec: CompressionType): Unit = {
     val largeMessageKey = 20
     val (largeMessageValue, largeMessageSet) = createLargeSingleMessageSet(largeMessageKey, RecordBatch.CURRENT_MAGIC_VALUE, codec)
@@ -315,9 +316,15 @@ class LogCleanerParameterizedIntegrationTest extends AbstractLogCleanerIntegrati
 }
 
 object LogCleanerParameterizedIntegrationTest {
-  def all: java.util.stream.Stream[Arguments] =
-    java.util.Arrays.stream(CompressionType.values.map(codec => Arguments.of(codec)))
 
-  def excludeZstd: java.util.stream.Stream[Arguments] =
-    java.util.Arrays.stream(CompressionType.values.filter(_ != CompressionType.ZSTD).map(codec => Arguments.of(codec)))
+  class AllCompressions extends ArgumentsProvider {
+    override def provideArguments(context: ExtensionContext): java.util.stream.Stream[_ <: Arguments] =
+      java.util.Arrays.stream(CompressionType.values.map(codec => Arguments.of(codec)))
+  }
+
+  // zstd compression is not supported with older message formats (i.e supported by V0 and V1)
+  class ExcludeZstd extends ArgumentsProvider {
+    override def provideArguments(context: ExtensionContext): java.util.stream.Stream[_ <: Arguments] =
+      java.util.Arrays.stream(CompressionType.values.filter(_ != CompressionType.ZSTD).map(codec => Arguments.of(codec)))
+  }
 }

@@ -85,7 +85,7 @@ class TopicCommandWithAdminClientTest extends KafkaServerTestHarness with Loggin
     props.put(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, brokerList)
     adminClient = Admin.create(props)
     topicService = AdminClientTopicService(adminClient)
-    testTopicName = s"${info.getDisplayName.replaceAll("\\(\\)", "")}-${Random.alphanumeric.take(10).mkString}"
+    testTopicName = s"${info.getTestMethod.get().getName}-${Random.alphanumeric.take(10).mkString}"
   }
 
   @AfterEach
