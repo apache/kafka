@@ -55,7 +55,7 @@ class SaslMultiMechanismConsumerTest extends BaseConsumerTest with SaslSetup {
     var startingOffset = 0
 
     // Test SASL/PLAIN producer and consumer
-    sendRecords(plainSaslProducer, numRecords, tp)
+    sendRecords(plainSaslProducer, numRecords, tp, needCurrentTime = false)
     plainSaslConsumer.assign(List(tp).asJava)
     plainSaslConsumer.seek(tp, 0)
     consumeAndVerifyRecords(consumer = plainSaslConsumer, numRecords = numRecords, startingOffset = startingOffset)
@@ -63,7 +63,7 @@ class SaslMultiMechanismConsumerTest extends BaseConsumerTest with SaslSetup {
     startingOffset += numRecords
 
     // Test SASL/GSSAPI producer and consumer
-    sendRecords(gssapiSaslProducer, numRecords, tp)
+    sendRecords(gssapiSaslProducer, numRecords, tp, needCurrentTime = false)
     gssapiSaslConsumer.assign(List(tp).asJava)
     gssapiSaslConsumer.seek(tp, startingOffset)
     consumeAndVerifyRecords(consumer = gssapiSaslConsumer, numRecords = numRecords, startingOffset = startingOffset)
@@ -71,14 +71,14 @@ class SaslMultiMechanismConsumerTest extends BaseConsumerTest with SaslSetup {
     startingOffset += numRecords
 
     // Test SASL/PLAIN producer and SASL/GSSAPI consumer
-    sendRecords(plainSaslProducer, numRecords, tp)
+    sendRecords(plainSaslProducer, numRecords, tp, needCurrentTime = false)
     gssapiSaslConsumer.assign(List(tp).asJava)
     gssapiSaslConsumer.seek(tp, startingOffset)
     consumeAndVerifyRecords(consumer = gssapiSaslConsumer, numRecords = numRecords, startingOffset = startingOffset)
     startingOffset += numRecords
 
     // Test SASL/GSSAPI producer and SASL/PLAIN consumer
-    sendRecords(gssapiSaslProducer, numRecords, tp)
+    sendRecords(gssapiSaslProducer, numRecords, tp, needCurrentTime = false)
     plainSaslConsumer.assign(List(tp).asJava)
     plainSaslConsumer.seek(tp, startingOffset)
     consumeAndVerifyRecords(consumer = plainSaslConsumer, numRecords = numRecords, startingOffset = startingOffset)

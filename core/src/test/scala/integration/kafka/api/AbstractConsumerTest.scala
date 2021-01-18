@@ -117,7 +117,7 @@ abstract class AbstractConsumerTest extends BaseRequestTest {
 
   protected def sendRecords(producer: KafkaProducer[Array[Byte], Array[Byte]], numRecords: Int,
                             tp: TopicPartition): Seq[ProducerRecord[Array[Byte], Array[Byte]]] = {
-    sendRecords(producer, numRecords, tp, false)
+    sendRecords(producer, numRecords, tp, true)
   }
 
   protected def consumeAndVerifyRecords(consumer: Consumer[Array[Byte], Array[Byte]],
