@@ -58,14 +58,4 @@ public class ForwardingDisabledProcessorContextTest {
     public void shouldThrowOnForwardWithChildName() {
         context.forward("key", "value", "child1");
     }
-
-    @Test(expected = UnsupportedOperationException.class)
-    public void shouldThrowOnCurrentSystemTime() {
-        context.currentSystemTimeMs();
-    }
-
-    @Test(expected = UnsupportedOperationException.class)
-    public void shouldThrowOnCurrentStreamTime() {
-        context.currentStreamTimeMs();
-    }
 }

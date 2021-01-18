@@ -74,6 +74,7 @@ public class InternalMockProcessorContext
     private Serde<?> keySerde;
     private Serde<?> valueSerde;
     private long timestamp = -1L;
+    private final Time time;
     private final Map<String, String> storeToChangelogTopic = new HashMap<>();
 
     public InternalMockProcessorContext() {
@@ -83,7 +84,8 @@ public class InternalMockProcessorContext
             new StreamsMetricsImpl(new Metrics(), "mock", StreamsConfig.METRICS_LATEST, new MockTime()),
             new StreamsConfig(StreamsTestUtils.getStreamsConfig()),
             null,
-            null
+            null,
+            Time.SYSTEM
         );
     }
 
@@ -101,7 +103,8 @@ public class InternalMockProcessorContext
             ),
             config,
             null,
-            null
+            null,
+            Time.SYSTEM
         );
     }
 
@@ -113,7 +116,8 @@ public class InternalMockProcessorContext
             streamsMetrics,
             new StreamsConfig(StreamsTestUtils.getStreamsConfig()),
             null,
-            null
+            null,
+            Time.SYSTEM
         );
     }
 
@@ -132,7 +136,8 @@ public class InternalMockProcessorContext
             ),
             config,
             () -> collector,
-            null
+            null,
+            Time.SYSTEM
         );
     }
 
@@ -147,7 +152,8 @@ public class InternalMockProcessorContext
             new StreamsMetricsImpl(new Metrics(), "mock", StreamsConfig.METRICS_LATEST, new MockTime()),
             config,
             null,
-            null
+            null,
+            Time.SYSTEM
         );
     }
 
@@ -166,7 +172,8 @@ public class InternalMockProcessorContext
             new StreamsMetricsImpl(metrics, "mock", StreamsConfig.METRICS_LATEST, new MockTime()),
             new StreamsConfig(StreamsTestUtils.getStreamsConfig()),
             () -> collector,
-            null
+            null,
+            Time.SYSTEM
         );
     }
 
@@ -182,7 +189,8 @@ public class InternalMockProcessorContext
             new StreamsMetricsImpl(new Metrics(), "mock", StreamsConfig.METRICS_LATEST, new MockTime()),
             new StreamsConfig(StreamsTestUtils.getStreamsConfig()),
             () -> collector,
-            cache
+            cache,
+            Time.SYSTEM
         );
     }
 
@@ -192,7 +200,8 @@ public class InternalMockProcessorContext
                                         final StreamsMetricsImpl metrics,
                                         final StreamsConfig config,
                                         final RecordCollector.Supplier collectorSupplier,
-                                        final ThreadCache cache) {
+                                        final ThreadCache cache,
+                                        final Time time) {
         super(
             new TaskId(0, 0),
             config,
@@ -204,6 +213,7 @@ public class InternalMockProcessorContext
         this.keySerde = keySerde;
         this.valueSerde = valueSerde;
         this.recordCollectorSupplier = collectorSupplier;
+        this.time = time;
     }
 
     @Override
@@ -372,7 +382,7 @@ public class InternalMockProcessorContext
 
     @Override
     public long currentSystemTimeMs() {
-        return Time.SYSTEM.milliseconds();
+        return time.milliseconds();
     }
 
     @Override
