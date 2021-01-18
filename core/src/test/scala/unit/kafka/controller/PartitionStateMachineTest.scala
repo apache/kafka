@@ -27,8 +27,8 @@ import org.apache.kafka.common.TopicPartition
 import org.apache.zookeeper.KeeperException.Code
 import org.apache.zookeeper.data.Stat
 import org.easymock.EasyMock
-import org.junit.Assert._
-import org.junit.{Before, Test}
+import org.junit.jupiter.api.Assertions._
+import org.junit.jupiter.api.{BeforeEach, Test}
 import org.mockito.Mockito
 
 class PartitionStateMachineTest {
@@ -43,7 +43,7 @@ class PartitionStateMachineTest {
   private val partition = new TopicPartition("t", 0)
   private val partitions = Seq(partition)
 
-  @Before
+  @BeforeEach
   def setUp(): Unit = {
     controllerContext = new ControllerContext
     controllerContext.epoch = controllerEpoch
@@ -464,10 +464,12 @@ class PartitionStateMachineTest {
 
     partitionStateMachine.handleStateChanges(partitions, NewPartition)
     partitionStateMachine.handleStateChanges(partitions, OfflinePartition)
-    assertEquals(s"There should be ${partitions.size} offline partition(s)", partitions.size, controllerContext.offlinePartitionCount)
+    assertEquals(partitions.size, controllerContext.offlinePartitionCount,
+      s"There should be ${partitions.size} offline partition(s)")
 
     partitionStateMachine.handleStateChanges(partitions, OnlinePartition, Some(OfflinePartitionLeaderElectionStrategy(false)))
-    assertEquals(s"There should be no offline partition(s)", 0, controllerContext.offlinePartitionCount)
+    assertEquals(0, controllerContext.offlinePartitionCount,
+      s"There should be no offline partition(s)")
   }
 
   /**
@@ -485,7 +487,8 @@ class PartitionStateMachineTest {
 
     partitionStateMachine.handleStateChanges(partitions, NewPartition)
     partitionStateMachine.handleStateChanges(partitions, OfflinePartition)
-    assertEquals(s"There should be no offline partition(s)", 0, controllerContext.offlinePartitionCount)
+    assertEquals(0, controllerContext.offlinePartitionCount,
+      s"There should be no offline partition(s)")
   }
 
   /**
@@ -518,9 +521,11 @@ class PartitionStateMachineTest {
       controllerContext.putReplicaState(replica, OfflineReplica)
     }
 
-    assertEquals(s"There should be ${partitions.size} offline partition(s)", partitions.size, controllerContext.offlinePartitionCount)
+    assertEquals(partitions.size, controllerContext.offlinePartitionCount,
+      s"There should be ${partitions.size} offline partition(s)")
     topicDeletionManager.enqueueTopicsForDeletion(Set(topic))
-    assertEquals(s"There should be no offline partition(s)", 0, controllerContext.offlinePartitionCount)
+    assertEquals(0, controllerContext.offlinePartitionCount,
+      s"There should be no offline partition(s)")
   }
 
   private def replicaAssignment(replicas: Seq[Int]): ReplicaAssignment = ReplicaAssignment(replicas, Seq(), Seq())

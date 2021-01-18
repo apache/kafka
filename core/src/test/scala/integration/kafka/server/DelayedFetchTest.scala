@@ -28,8 +28,8 @@ import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.record.MemoryRecords
 import org.apache.kafka.common.requests.FetchRequest
 import org.easymock.{EasyMock, EasyMockSupport}
-import org.junit.Test
-import org.junit.Assert._
+import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.Assertions._
 
 class DelayedFetchTest extends EasyMockSupport {
   private val maxBytes = 1024

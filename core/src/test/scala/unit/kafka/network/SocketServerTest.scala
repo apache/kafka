@@ -47,8 +47,8 @@ import org.apache.kafka.common.security.scram.internals.ScramMechanism
 import org.apache.kafka.common.utils.{AppInfoParser, LogContext, MockTime, Time, Utils}
 import org.apache.kafka.test.{TestSslUtils, TestUtils => JTestUtils}
 import org.apache.log4j.Level
-import org.junit.Assert._
-import org.junit._
+import org.junit.jupiter.api.Assertions._
+import org.junit.jupiter.api._
 
 import scala.collection.mutable
 import scala.collection.mutable.ArrayBuffer
@@ -80,7 +80,7 @@ class SocketServerTest {
   private val kafkaLogger = org.apache.log4j.LogManager.getLogger("kafka")
   private var logLevelToRestore: Level = _
 
-  @Before
+  @BeforeEach
   def setUp(): Unit = {
     // Run the tests with TRACE logging to exercise request logging path
     logLevelToRestore = kafkaLogger.getLevel
@@ -89,7 +89,7 @@ class SocketServerTest {
     assertTrue(server.controlPlaneRequestChannelOpt.isEmpty)
   }
 
-  @After
+  @AfterEach
   def tearDown(): Unit = {
     shutdownServerAndMetrics(server)
     sockets.foreach(_.close())
@@ -327,7 +327,7 @@ class SocketServerTest {
       val startFuture = executor.submit((() => testableServer.startProcessingRequests(futures)): Runnable)
       TestUtils.waitUntilTrue(() => controlPlaneListenerStarted(), "Control plane listener not started")
       TestUtils.waitUntilTrue(() => listenerStarted(config.interBrokerListenerName), "Inter-broker listener not started")
-      assertFalse("Socket server startup did not wait for future to complete", startFuture.isDone)
+      assertFalse(startFuture.isDone, "Socket server startup did not wait for future to complete")
 
       assertFalse(listenerStarted(externalListener))
 
@@ -410,7 +410,7 @@ class SocketServerTest {
     plainSocket.close()
     for (_ <- 0 until 10) {
       val request = receiveRequest(server.dataPlaneRequestChannel)
-      assertNotNull("receiveRequest timed out", request)
+      assertNotNull(request, "receiveRequest timed out")
       processRequestNoOpResponse(server.dataPlaneRequestChannel, request)
     }
   }
@@ -424,7 +424,7 @@ class SocketServerTest {
       sendRequest(plainSocket, serializedBytes)
     for (_ <- 0 until 3) {
       val request = receiveRequest(server.dataPlaneRequestChannel)
-      assertNotNull("receiveRequest timed out", request)
+      assertNotNull(request, "receiveRequest timed out")
       processRequestNoOpResponse(server.dataPlaneRequestChannel, request)
     }
   }
@@ -463,22 +463,22 @@ class SocketServerTest {
       sendRequest(socket0, serializedBytes)
       val request0 = receiveRequest(overrideServer.dataPlaneRequestChannel)
       processRequest(overrideServer.dataPlaneRequestChannel, request0)
-      assertTrue("Channel not open", openChannel(request0, overrideServer).nonEmpty)
+      assertTrue(openChannel(request0, overrideServer).nonEmpty, "Channel not open")
       assertEquals(openChannel(request0, overrideServer), openOrClosingChannel(request0, overrideServer))
       TestUtils.waitUntilTrue(() => !openChannel(request0, overrideServer).get.isMuted, "Failed to unmute channel")
       time.sleep(idleTimeMs + 1)
       TestUtils.waitUntilTrue(() => openOrClosingChannel(request0, overrideServer).isEmpty, "Failed to close idle channel")
-      assertTrue("Channel not removed", openChannel(request0, overrideServer).isEmpty)
+      assertTrue(openChannel(request0, overrideServer).isEmpty, "Channel not removed")
 
       // Connection with one request being processed (channel is muted), no other in-flight requests
       val socket1 = connect(overrideServer)
       sendRequest(socket1, serializedBytes)
       val request1 = receiveRequest(overrideServer.dataPlaneRequestChannel)
-      assertTrue("Channel not open", openChannel(request1, overrideServer).nonEmpty)
+      assertTrue(openChannel(request1, overrideServer).nonEmpty, "Channel not open")
       assertEquals(openChannel(request1, overrideServer), openOrClosingChannel(request1, overrideServer))
       time.sleep(idleTimeMs + 1)
       TestUtils.waitUntilTrue(() => openOrClosingChannel(request1, overrideServer).isEmpty, "Failed to close idle channel")
-      assertTrue("Channel not removed", openChannel(request1, overrideServer).isEmpty)
+      assertTrue(openChannel(request1, overrideServer).isEmpty, "Channel not removed")
       processRequest(overrideServer.dataPlaneRequestChannel, request1)
 
       // Connection with one request being processed (channel is muted), more in-flight requests
@@ -486,9 +486,9 @@ class SocketServerTest {
       val request2 = sendRequestsReceiveOne(overrideServer, socket2, serializedBytes, 3)
       time.sleep(idleTimeMs + 1)
       TestUtils.waitUntilTrue(() => openOrClosingChannel(request2, overrideServer).isEmpty, "Failed to close idle channel")
-      assertTrue("Channel not removed", openChannel(request1, overrideServer).isEmpty)
+      assertTrue(openChannel(request1, overrideServer).isEmpty, "Channel not removed")
       processRequest(overrideServer.dataPlaneRequestChannel, request2) // this triggers a failed send since channel has been closed
-      assertNull("Received request on expired channel", overrideServer.dataPlaneRequestChannel.receiveRequest(200))
+      assertNull(overrideServer.dataPlaneRequestChannel.receiveRequest(200), "Received request on expired channel")
 
     } finally {
       shutdownServerAndMetrics(overrideServer)
@@ -932,12 +932,7 @@ class SocketServerTest {
     val largeChunkOfBytes = new Array[Byte](1000000)
     // doing a subsequent send should throw an exception as the connection should be closed.
     // send a large chunk of bytes to trigger a socket flush
-    try {
-      sendRequest(connection, largeChunkOfBytes, Some(0))
-      fail("expected exception when writing to closed plain socket")
-    } catch {
-      case _: IOException => // expected
-    }
+    assertThrows(classOf[IOException], () => sendRequest(connection, largeChunkOfBytes, Some(0)))
   }
 
   @Test
@@ -1149,7 +1144,7 @@ class SocketServerTest {
       // Complete request with socket exception so that the channel is closed
       processRequest(overrideServer.dataPlaneRequestChannel, request)
       TestUtils.waitUntilTrue(() => openOrClosingChannel(request, overrideServer).isEmpty, "Channel not closed after failed send")
-      assertTrue("Unexpected completed send", selector.completedSends.isEmpty)
+      assertTrue(selector.completedSends.isEmpty, "Unexpected completed send")
     } finally {
       overrideServer.shutdown()
       serverMetrics.close()
@@ -1733,7 +1728,7 @@ class SocketServerTest {
       // 5 connections, we expect 5 iterations. Since we stop when the 5th connection is processed,
       // we can safely check that there were atleast 4 polls prior to the 5th connection.
       val pollCount = testableSelector.operationCounts(SelectorOperation.Poll)
-      assertTrue(s"Connections created too quickly: $pollCount", pollCount >= numConnections - 1)
+      assertTrue(pollCount >= numConnections - 1, s"Connections created too quickly: $pollCount")
       verifyAcceptorBlockedPercent("PLAINTEXT", expectBlocked = true)
 
       assertProcessorHealthy(testableServer, sockets)
@@ -1852,8 +1847,8 @@ class SocketServerTest {
     // Check new channel behaves as expected
     val (socket, connectionId) = connectAndProcessRequest(testableServer)
     assertArrayEquals(producerRequestBytes(), receiveResponse(socket))
-    assertNotNull("Channel should not have been closed", selector.channel(connectionId))
-    assertNull("Channel should not be closing", selector.closingChannel(connectionId))
+    assertNotNull(selector.channel(connectionId), "Channel should not have been closed")
+    assertNull(selector.closingChannel(connectionId), "Channel should not be closing")
     socket.close()
     TestUtils.waitUntilTrue(() => testableServer.connectionCount(localAddress) == 0, "Channels not removed")
   }
@@ -1871,8 +1866,8 @@ class SocketServerTest {
     val blockedPercentMetric = blockedPercentMetrics.head.asInstanceOf[Meter]
     val blockedPercent = blockedPercentMetric.meanRate
     if (expectBlocked) {
-      assertTrue(s"Acceptor blocked percent not recorded: $blockedPercent", blockedPercent > 0.0)
-      assertTrue(s"Unexpected blocked percent in acceptor: $blockedPercent", blockedPercent <= 1.0)
+      assertTrue(blockedPercent > 0.0, s"Acceptor blocked percent not recorded: $blockedPercent")
+      assertTrue(blockedPercent <= 1.0, s"Unexpected blocked percent in acceptor: $blockedPercent")
     } else {
       assertEquals(0.0, blockedPercent, 0.001)
     }
@@ -1913,18 +1908,18 @@ class SocketServerTest {
       if (locallyClosed) {
         TestUtils.waitUntilTrue(() => selector.allLocallyClosedChannels.contains(connectionId),
           s"Channel not closed: $connectionId")
-        assertTrue("Unexpected disconnect notification", testableSelector.allDisconnectedChannels.isEmpty)
+        assertTrue(testableSelector.allDisconnectedChannels.isEmpty, "Unexpected disconnect notification")
       } else {
         TestUtils.waitUntilTrue(() => selector.allDisconnectedChannels.contains(connectionId),
           s"Disconnect notification not received: $connectionId")
-        assertTrue("Channel closed locally", testableSelector.allLocallyClosedChannels.isEmpty)
+        assertTrue(testableSelector.allLocallyClosedChannels.isEmpty, "Channel closed locally")
       }
       val openCount = selector.allChannels.size - 1 // minus one for the channel just closed above
       TestUtils.waitUntilTrue(() => connectionCount(localAddress) == openCount, "Connection count not decremented")
       TestUtils.waitUntilTrue(() =>
         dataPlaneProcessor(0).inflightResponseCount == 0, "Inflight responses not cleared")
-      assertNull("Channel not removed", selector.channel(connectionId))
-      assertNull("Closing channel not removed", selector.closingChannel(connectionId))
+      assertNull(selector.channel(connectionId), "Channel not removed")
+      assertNull(selector.closingChannel(connectionId), "Closing channel not removed")
     }
   }
 

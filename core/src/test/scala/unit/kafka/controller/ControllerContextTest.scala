@@ -24,10 +24,10 @@ import kafka.controller.{ControllerContext, ReplicaAssignment}
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.security.auth.SecurityProtocol
-import org.junit.{Before, Test}
-import org.junit.Assert.assertEquals
-import org.junit.Assert.assertTrue
-import org.junit.Assert.assertFalse
+import org.junit.jupiter.api.{BeforeEach, Test}
+import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertTrue
+import org.junit.jupiter.api.Assertions.assertFalse
 
 
 class ControllerContextTest {
@@ -38,7 +38,7 @@ class ControllerContextTest {
   val tp2 = new TopicPartition("A", 1)
   val tp3 = new TopicPartition("B", 0)
 
-  @Before
+  @BeforeEach
   def setUp(): Unit = {
     context = new ControllerContext
 

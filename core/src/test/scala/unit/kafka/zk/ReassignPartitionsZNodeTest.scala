@@ -20,8 +20,8 @@ import java.nio.charset.StandardCharsets
 
 import com.fasterxml.jackson.core.JsonProcessingException
 import org.apache.kafka.common.TopicPartition
-import org.junit.Assert._
-import org.junit.Test
+import org.junit.jupiter.api.Assertions._
+import org.junit.jupiter.api.Test
 
 class ReassignPartitionsZNodeTest {
 

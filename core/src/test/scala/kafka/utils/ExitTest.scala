@@ -19,8 +19,8 @@ package kafka.utils
 
 import java.io.IOException
 
-import org.junit.Assert.{assertEquals, assertThrows}
-import org.junit.Test
+import org.junit.jupiter.api.Assertions.{assertEquals, assertThrows}
+import org.junit.jupiter.api.Test
 
 class ExitTest {
   @Test

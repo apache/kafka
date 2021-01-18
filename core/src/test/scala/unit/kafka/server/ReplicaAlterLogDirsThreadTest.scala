@@ -33,8 +33,8 @@ import org.apache.kafka.common.requests.FetchRequest
 import org.apache.kafka.common.{IsolationLevel, TopicPartition}
 import org.easymock.EasyMock._
 import org.easymock.{Capture, CaptureType, EasyMock, IExpectationSetters}
-import org.junit.Assert._
-import org.junit.Test
+import org.junit.jupiter.api.Assertions._
+import org.junit.jupiter.api.Test
 import org.mockito.Mockito.{doNothing, when}
 import org.mockito.{ArgumentCaptor, ArgumentMatchers, Mockito}
 
@@ -342,8 +342,7 @@ class ReplicaAlterLogDirsThreadTest {
         .setEndOffset(leoT1p1)
     )
 
-    assertEquals("results from leader epoch request should have offset from local replica",
-                 expected, result)
+    assertEquals(expected, result, "results from leader epoch request should have offset from local replica")
   }
 
   @Test
@@ -583,8 +582,8 @@ class ReplicaAlterLogDirsThreadTest {
     thread.doWork()
 
     //We should have truncated to the offsets in the response
-    assertTrue("Expected offset " + replicaEpochEndOffset + " in captured truncation offsets " + truncateToCapture.getValues,
-               truncateToCapture.getValues.asScala.contains(replicaEpochEndOffset))
+    assertTrue(truncateToCapture.getValues.asScala.contains(replicaEpochEndOffset),
+               "Expected offset " + replicaEpochEndOffset + " in captured truncation offsets " + truncateToCapture.getValues)
   }
 
   @Test
@@ -636,8 +635,8 @@ class ReplicaAlterLogDirsThreadTest {
     thread.doWork()
 
     //We should have truncated to initial fetch offset
-    assertEquals("Expected future replica to truncate to initial fetch offset if replica returns UNDEFINED_EPOCH_OFFSET",
-                 initialFetchOffset, truncated.getValue)
+    assertEquals(initialFetchOffset,
+                 truncated.getValue, "Expected future replica to truncate to initial fetch offset if replica returns UNDEFINED_EPOCH_OFFSET")
   }
 
   @Test
@@ -838,7 +837,7 @@ class ReplicaAlterLogDirsThreadTest {
     assertEquals(0, request.minBytes)
     val fetchInfos = request.fetchData.asScala.toSeq
     assertEquals(1, fetchInfos.length)
-    assertEquals("Expected fetch request for first partition", t1p0, fetchInfos.head._1)
+    assertEquals(t1p0, fetchInfos.head._1, "Expected fetch request for first partition")
     assertEquals(150, fetchInfos.head._2.fetchOffset)
   }
 
@@ -888,7 +887,7 @@ class ReplicaAlterLogDirsThreadTest {
     assertFalse(partitionsWithError.nonEmpty)
     val fetchInfos = fetchRequest.fetchRequest.build().fetchData.asScala.toSeq
     assertEquals(1, fetchInfos.length)
-    assertEquals("Expected fetch request for non-truncating partition", t1p0, fetchInfos.head._1)
+    assertEquals(t1p0, fetchInfos.head._1, "Expected fetch request for non-truncating partition")
     assertEquals(150, fetchInfos.head._2.fetchOffset)
 
     // one partition is ready and one is delayed
@@ -902,14 +901,14 @@ class ReplicaAlterLogDirsThreadTest {
     assertFalse(partitionsWithError2.nonEmpty)
     val fetchInfos2 = fetchRequest2.fetchRequest.build().fetchData.asScala.toSeq
     assertEquals(1, fetchInfos2.length)
-    assertEquals("Expected fetch request for non-delayed partition", t1p0, fetchInfos2.head._1)
+    assertEquals(t1p0, fetchInfos2.head._1, "Expected fetch request for non-delayed partition")
     assertEquals(140, fetchInfos2.head._2.fetchOffset)
 
     // both partitions are delayed
     val ResultWithPartitions(fetchRequest3Opt, partitionsWithError3) = thread.buildFetch(Map(
         t1p0 -> PartitionFetchState(140, None, leaderEpoch, delay = Some(new DelayedItem(5000)), state = Fetching, lastFetchedEpoch = None),
         t1p1 -> PartitionFetchState(160, None, leaderEpoch, delay = Some(new DelayedItem(5000)), state = Fetching, lastFetchedEpoch = None)))
-    assertTrue("Expected no fetch requests since all partitions are delayed", fetchRequest3Opt.isEmpty)
+    assertTrue(fetchRequest3Opt.isEmpty, "Expected no fetch requests since all partitions are delayed")
     assertFalse(partitionsWithError3.nonEmpty)
   }
 

@@ -30,10 +30,10 @@ import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.errors.TimeoutException
 import org.apache.kafka.common.serialization.{ByteArrayDeserializer, ByteArraySerializer}
 import org.apache.kafka.common.utils.Exit
-import org.junit.After
-import org.junit.Test
-import org.junit.Assert._
-import org.junit.Before
+import org.junit.jupiter.api.AfterEach
+import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.Assertions._
+import org.junit.jupiter.api.BeforeEach
 
 class MirrorMakerIntegrationTest extends KafkaServerTestHarness {
 
@@ -42,13 +42,13 @@ class MirrorMakerIntegrationTest extends KafkaServerTestHarness {
 
   val exited = new AtomicBoolean(false)
 
-  @Before
+  @BeforeEach
   override def setUp(): Unit = {
     Exit.setExitProcedure((_, _) => exited.set(true))
     super.setUp()
   }
 
-  @After
+  @AfterEach
   override def tearDown(): Unit = {
     super.tearDown()
     try {
@@ -83,7 +83,7 @@ class MirrorMakerIntegrationTest extends KafkaServerTestHarness {
     mirrorMakerConsumer.offsets.put(new TopicPartition("nonexistent-topic1", 0), 0L)
     mirrorMakerConsumer.offsets.put(new TopicPartition("nonexistent-topic2", 0), 0L)
     MirrorMaker.commitOffsets(mirrorMakerConsumer)
-    assertTrue("Offsets for non-existent topics should be removed", mirrorMakerConsumer.offsets.isEmpty)
+    assertTrue(mirrorMakerConsumer.offsets.isEmpty, "Offsets for non-existent topics should be removed")
   }
 
   @Test

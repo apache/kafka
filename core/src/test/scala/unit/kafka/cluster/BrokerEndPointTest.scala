@@ -25,8 +25,8 @@ import org.apache.kafka.common.feature.{Features, SupportedVersionRange}
 import org.apache.kafka.common.feature.Features._
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.security.auth.SecurityProtocol
-import org.junit.Assert.{assertEquals, assertNotEquals, assertNull}
-import org.junit.Test
+import org.junit.jupiter.api.Assertions.{assertEquals, assertNotEquals, assertNull}
+import org.junit.jupiter.api.Test
 
 import scala.jdk.CollectionConverters._
 

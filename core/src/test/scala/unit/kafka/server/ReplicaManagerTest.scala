@@ -52,8 +52,8 @@ import org.apache.kafka.common.utils.Time
 import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.common.{IsolationLevel, Node, TopicPartition, Uuid}
 import org.easymock.EasyMock
-import org.junit.Assert._
-import org.junit.{After, Before, Test}
+import org.junit.jupiter.api.Assertions._
+import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
 import org.mockito.Mockito
 
 import scala.collection.mutable
@@ -77,7 +77,7 @@ class ReplicaManagerTest {
   var controllerEpoch = 0
   val brokerEpoch = 0L
 
-  @Before
+  @BeforeEach
   def setUp(): Unit = {
     kafkaZkClient = EasyMock.createMock(classOf[KafkaZkClient])
     EasyMock.expect(kafkaZkClient.getEntityConfigs(EasyMock.anyString(), EasyMock.anyString())).andReturn(new Properties()).anyTimes()
@@ -89,7 +89,7 @@ class ReplicaManagerTest {
     quotaManager = QuotaFactory.instantiate(config, metrics, time, "")
   }
 
-  @After
+  @AfterEach
   def tearDown(): Unit = {
     TestUtils.clearYammerMetrics()
     Option(quotaManager).foreach(_.shutdown())
@@ -576,8 +576,8 @@ class ReplicaManagerTest {
       val followerFetchResult = fetchAsFollower(rm, new TopicPartition(topic, 0),
         new PartitionData(1, 0, 100000, Optional.empty()))
       val followerFetchData = followerFetchResult.assertFired
-      assertEquals("Should not give an exception", Errors.NONE, followerFetchData.error)
-      assertTrue("Should return some data", followerFetchData.records.batches.iterator.hasNext)
+      assertEquals(Errors.NONE, followerFetchData.error, "Should not give an exception")
+      assertTrue(followerFetchData.records.batches.iterator.hasNext, "Should return some data")
 
       // Consumers are not allowed to consume above the high watermark. However, since the
       // high watermark could be stale at the time of the request, we do not return an out of
@@ -585,8 +585,8 @@ class ReplicaManagerTest {
       val consumerFetchResult = fetchAsConsumer(rm, new TopicPartition(topic, 0),
         new PartitionData(1, 0, 100000, Optional.empty()))
       val consumerFetchData = consumerFetchResult.assertFired
-      assertEquals("Should not give an exception", Errors.NONE, consumerFetchData.error)
-      assertEquals("Should return empty response", MemoryRecords.EMPTY, consumerFetchData.records)
+      assertEquals(Errors.NONE, consumerFetchData.error, "Should not give an exception")
+      assertEquals(MemoryRecords.EMPTY, consumerFetchData.records, "Should return empty response")
     } finally {
       rm.shutdown(checkpointHW = false)
     }
@@ -783,12 +783,12 @@ class ReplicaManagerTest {
       )
       val tp0Log = replicaManager.localLog(tp0)
       assertTrue(tp0Log.isDefined)
-      assertEquals("hw should be incremented", 1, tp0Log.get.highWatermark)
+      assertEquals(1, tp0Log.get.highWatermark, "hw should be incremented")
 
       replicaManager.localLog(tp1)
       val tp1Replica = replicaManager.localLog(tp1)
       assertTrue(tp1Replica.isDefined)
-      assertEquals("hw should not be incremented", 0, tp1Replica.get.highWatermark)
+      assertEquals(0, tp1Replica.get.highWatermark, "hw should not be incremented")
 
     } finally {
       replicaManager.shutdown(checkpointHW = false)
@@ -1039,14 +1039,14 @@ class ReplicaManagerTest {
     assertTrue(followerResult.isFired)
     assertEquals(0, followerResult.assertFired.highWatermark)
 
-    assertTrue("Expected producer request to be acked", appendResult.isFired)
+    assertTrue(appendResult.isFired, "Expected producer request to be acked")
 
     // Fetch from the same offset, no new data is expected and hence the fetch request should
     // go to the purgatory
     followerResult = fetchAsFollower(replicaManager, tp0,
       new PartitionData(fetchOffset, 0, 100000, Optional.empty()),
       clientMetadata = None, minBytes = 1000)
-    assertFalse("Request completed immediately unexpectedly", followerResult.isFired)
+    assertFalse(followerResult.isFired, "Request completed immediately unexpectedly")
 
     // Complete the request in the purgatory by advancing the clock
     timer.advanceClock(1001)
@@ -1617,7 +1617,7 @@ class ReplicaManagerTest {
     private var fun: Option[T => Unit] = None
 
     def assertFired: T = {
-      assertTrue("Callback has not been fired", isFired)
+      assertTrue(isFired, "Callback has not been fired")
       value.get
     }
 

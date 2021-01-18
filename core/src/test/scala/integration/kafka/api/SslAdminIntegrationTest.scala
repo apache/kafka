@@ -16,7 +16,6 @@ import java.io.File
 import java.util
 import java.util.Collections
 import java.util.concurrent._
-
 import com.yammer.metrics.core.Gauge
 import kafka.metrics.KafkaYammerMetrics
 import kafka.security.authorizer.AclAuthorizer
@@ -33,8 +32,8 @@ import org.apache.kafka.common.resource.PatternType._
 import org.apache.kafka.common.resource.ResourceType._
 import org.apache.kafka.common.security.auth.{KafkaPrincipal, SecurityProtocol}
 import org.apache.kafka.server.authorizer._
-import org.junit.Assert.{assertEquals, assertFalse, assertNotNull, assertTrue}
-import org.junit.{Assert, Test}
+import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertNotNull, assertTrue}
+import org.junit.jupiter.api.{AfterEach, Test}
 
 import scala.jdk.CollectionConverters._
 import scala.collection.mutable
@@ -102,6 +101,7 @@ class SslAdminIntegrationTest extends SaslSslAdminIntegrationTest {
     startSasl(jaasSections(List.empty, None, ZkSasl))
   }
 
+  @AfterEach
   override def tearDown(): Unit = {
     // Ensure semaphore doesn't block shutdown even if test has failed
     val semaphore = SslAdminIntegrationTest.semaphore
@@ -138,8 +138,8 @@ class SslAdminIntegrationTest extends SaslSslAdminIntegrationTest {
     val aclFutures = mutable.Buffer[CreateAclsResult]()
     while (blockedRequestThreads.size < numRequestThreads) {
       aclFutures += createAdminClient.createAcls(List(acl2).asJava)
-      assertTrue(s"Request threads not blocked numRequestThreads=$numRequestThreads blocked=$blockedRequestThreads",
-        aclFutures.size < numRequestThreads * 10)
+      assertTrue(aclFutures.size < numRequestThreads * 10,
+        s"Request threads not blocked numRequestThreads=$numRequestThreads blocked=$blockedRequestThreads")
     }
     assertEquals(0, purgatoryMetric("NumDelayedOperations"))
     assertEquals(0, purgatoryMetric("PurgatorySize"))
@@ -206,9 +206,9 @@ class SslAdminIntegrationTest extends SaslSslAdminIntegrationTest {
       assertEquals(KafkaPrincipal.ANONYMOUS, context.principal)
       assertEquals(apiKey.id.toInt, context.requestType)
       assertEquals(apiKey.latestVersion.toInt, context.requestVersion)
-      assertTrue(s"Invalid correlation id: ${context.correlationId}", context.correlationId > 0)
-      assertTrue(s"Invalid client id: ${context.clientId}", context.clientId.startsWith("adminclient"))
-      assertTrue(s"Invalid host address: ${context.clientAddress}", context.clientAddress.isLoopbackAddress)
+      assertTrue(context.correlationId > 0, s"Invalid correlation id: ${context.correlationId}")
+      assertTrue(context.clientId.startsWith("adminclient"), s"Invalid client id: ${context.clientId}")
+      assertTrue(context.clientAddress.isLoopbackAddress, s"Invalid host address: ${context.clientAddress}")
     }
 
     val testSemaphore = new Semaphore(0)
@@ -263,7 +263,7 @@ class SslAdminIntegrationTest extends SaslSslAdminIntegrationTest {
     val metrics = allMetrics.filter { case (metricName, _) =>
       metricName.getMBeanName.contains("delayedOperation=AlterAcls") && metricName.getMBeanName.contains(s"name=$name")
     }.values.toList
-    assertTrue(s"Unable to find metric $name: allMetrics: ${allMetrics.keySet.map(_.getMBeanName)}", metrics.nonEmpty)
+    assertTrue(metrics.nonEmpty, s"Unable to find metric $name: allMetrics: ${allMetrics.keySet.map(_.getMBeanName)}")
     metrics.map(_.asInstanceOf[Gauge[Int]].value).sum
   }
 
@@ -306,7 +306,7 @@ class SslAdminIntegrationTest extends SaslSslAdminIntegrationTest {
       val clusterFilter = new AclBindingFilter(clusterResourcePattern.toFilter, AccessControlEntryFilter.ANY)
       val prevAcls = authorizer.acls(clusterFilter).asScala.map(_.entry).toSet
       val deleteFilter = new AclBindingFilter(clusterResourcePattern.toFilter, ace.toFilter)
-      Assert.assertFalse(authorizer.deleteAcls(null, Collections.singletonList(deleteFilter))
+      assertFalse(authorizer.deleteAcls(null, Collections.singletonList(deleteFilter))
         .get(0).toCompletableFuture.get.aclBindingDeleteResults().asScala.head.exception.isPresent)
       TestUtils.waitAndVerifyAcls(prevAcls -- Set(ace), authorizer, clusterResourcePattern)
     }

@@ -27,8 +27,8 @@ import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.record.RecordBatch
 import org.apache.kafka.common.requests.UpdateMetadataRequest
 import org.apache.kafka.common.security.auth.SecurityProtocol
-import org.junit.Test
-import org.junit.Assert._
+import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.Assertions._
 
 import scala.jdk.CollectionConverters._
 
@@ -129,7 +129,7 @@ class MetadataCacheTest {
 
         val topicPartitionStates = partitionStates.filter { ps => ps.topicName == topic }
         val partitionMetadatas = topicMetadata.partitions.asScala.sortBy(_.partitionIndex)
-        assertEquals(s"Unexpected partition count for topic $topic", topicPartitionStates.size, partitionMetadatas.size)
+        assertEquals(topicPartitionStates.size, partitionMetadatas.size, s"Unexpected partition count for topic $topic")
 
         partitionMetadatas.zipWithIndex.foreach { case (partitionMetadata, partitionId) =>
           assertEquals(Errors.NONE.code, partitionMetadata.errorCode)

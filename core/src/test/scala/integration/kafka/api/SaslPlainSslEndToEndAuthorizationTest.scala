@@ -31,7 +31,7 @@ import org.apache.kafka.common.config.internals.BrokerSecurityConfigs
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.security.auth._
 import org.apache.kafka.common.security.plain.PlainAuthenticateCallback
-import org.junit.Test
+import org.junit.jupiter.api.Test
 
 object SaslPlainSslEndToEndAuthorizationTest {
 

@@ -19,22 +19,19 @@ package kafka.log
 import java.io.File
 import java.nio.file.Files
 import java.util.Properties
-
 import kafka.server.{BrokerTopicStats, LogDirFailureChannel}
 import kafka.utils.{MockTime, Pool, TestUtils}
 import kafka.utils.Implicits._
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.record.{CompressionType, MemoryRecords, RecordBatch}
 import org.apache.kafka.common.utils.Utils
-import org.apache.kafka.test.IntegrationTest
-import org.junit.After
-import org.junit.experimental.categories.Category
+import org.junit.jupiter.api.{AfterEach, Tag}
 
 import scala.collection.Seq
 import scala.collection.mutable.ListBuffer
 import scala.util.Random
 
-@Category(Array(classOf[IntegrationTest]))
+@Tag("integration")
 abstract class AbstractLogCleanerIntegrationTest {
 
   var cleaner: LogCleaner = _
@@ -50,7 +47,7 @@ abstract class AbstractLogCleanerIntegrationTest {
 
   def time: MockTime
 
-  @After
+  @AfterEach
   def teardown(): Unit = {
     if (cleaner != null)
       cleaner.shutdown()
@@ -130,7 +127,6 @@ abstract class AbstractLogCleanerIntegrationTest {
       time = time)
   }
 
-  def codec: CompressionType
   private var ctr = 0
   def counter: Int = ctr
   def incCounter(): Unit = ctr += 1
@@ -146,7 +142,7 @@ abstract class AbstractLogCleanerIntegrationTest {
     }
   }
 
-  def createLargeSingleMessageSet(key: Int, messageFormatVersion: Byte): (String, MemoryRecords) = {
+  def createLargeSingleMessageSet(key: Int, messageFormatVersion: Byte, codec: CompressionType): (String, MemoryRecords) = {
     def messageValue(length: Int): String = {
       val random = new Random(0)
       new String(random.alphanumeric.take(length).toArray)

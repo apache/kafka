@@ -23,9 +23,9 @@ import java.util.concurrent.atomic.AtomicReference
 import kafka.utils.{CoreUtils, TestUtils}
 import kafka.zk.ZooKeeperTestHarness
 import org.apache.kafka.common.metrics.{KafkaMetric, MetricsContext, MetricsReporter}
-import org.junit.Assert.{assertEquals}
-import org.junit.{After, Before, Test}
-import org.junit.Assert._
+import org.junit.jupiter.api.Assertions.{assertEquals}
+import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
+import org.junit.jupiter.api.Assertions._
 
 
 object KafkaMetricsReporterTest {
@@ -63,7 +63,7 @@ class KafkaMetricsReporterTest extends ZooKeeperTestHarness {
   var server: KafkaServer = null
   var config: KafkaConfig = null
 
-  @Before
+  @BeforeEach
   override def setUp(): Unit = {
     super.setUp()
     val props = TestUtils.createBrokerConfig(1, zkConnect)
@@ -86,7 +86,7 @@ class KafkaMetricsReporterTest extends ZooKeeperTestHarness {
     TestUtils.assertNoNonDaemonThreads(this.getClass.getName)
   }
 
-  @After
+  @AfterEach
   override def tearDown(): Unit = {
     server.shutdown()
     CoreUtils.delete(config.logDirs)

@@ -31,14 +31,14 @@ import org.apache.kafka.test.MockDeserializer
 import org.mockito.Mockito._
 import org.mockito.ArgumentMatchers
 import ArgumentMatchers._
-import org.junit.Assert._
-import org.junit.{Before, Test}
+import org.junit.jupiter.api.Assertions._
+import org.junit.jupiter.api.{BeforeEach, Test}
 
 import scala.jdk.CollectionConverters._
 
 class ConsoleConsumerTest {
 
-  @Before
+  @BeforeEach
   def setup(): Unit = {
     ConsoleConsumer.messageCount = 0
   }
@@ -317,12 +317,7 @@ class ConsoleConsumerTest {
       "--consumer.config", propsFile.getAbsolutePath
     )
 
-    try {
-      new ConsoleConsumer.ConsumerConfig(args)
-      fail("Expected groups ids provided in different places to match")
-    } catch {
-      case e: IllegalArgumentException => //OK
-    }
+    assertThrows(classOf[IllegalArgumentException], () => new ConsoleConsumer.ConsumerConfig(args))
 
     // the same in all three places
     propsFile = TestUtils.tempFile()
@@ -353,12 +348,7 @@ class ConsoleConsumerTest {
       "--consumer.config", propsFile.getAbsolutePath
     )
 
-    try {
-      new ConsoleConsumer.ConsumerConfig(args)
-      fail("Expected groups ids provided in different places to match")
-    } catch {
-      case e: IllegalArgumentException => //OK
-    }
+    assertThrows(classOf[IllegalArgumentException], () => new ConsoleConsumer.ConsumerConfig(args))
 
     // different via --consumer-property and --group
     args = Array(
@@ -368,12 +358,7 @@ class ConsoleConsumerTest {
       "--consumer-property", "group.id=group-from-properties"
     )
 
-    try {
-      new ConsoleConsumer.ConsumerConfig(args)
-      fail("Expected groups ids provided in different places to match")
-    } catch {
-      case e: IllegalArgumentException => //OK
-    }
+    assertThrows(classOf[IllegalArgumentException], () => new ConsoleConsumer.ConsumerConfig(args))
 
     // different via --group and --consumer.config
     propsFile = TestUtils.tempFile()
@@ -386,13 +371,7 @@ class ConsoleConsumerTest {
       "--group", "group-from-arguments",
       "--consumer.config", propsFile.getAbsolutePath
     )
-
-    try {
-      new ConsoleConsumer.ConsumerConfig(args)
-      fail("Expected groups ids provided in different places to match")
-    } catch {
-      case e: IllegalArgumentException => //OK
-    }
+    assertThrows(classOf[IllegalArgumentException], () => new ConsoleConsumer.ConsumerConfig(args))
 
     // via --group only
     args = Array(

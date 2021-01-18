@@ -36,8 +36,8 @@ import org.apache.kafka.common.requests._
 import org.apache.kafka.common.requests.AlterConfigsRequest._
 import org.apache.kafka.common.security.auth.{KafkaPrincipal, SecurityProtocol}
 import org.easymock.EasyMock._
-import org.junit.Assert._
-import org.junit._
+import org.junit.jupiter.api.Assertions._
+import org.junit.jupiter.api._
 
 import scala.jdk.CollectionConverters._
 
@@ -55,7 +55,7 @@ class RequestChannelTest {
       val loggedConfig = loggableAlterConfigs.configs.get(resource)
       assertEquals(expectedValues, toMap(loggedConfig))
       val alterConfigsDesc = RequestConvertToJson.requestDesc(alterConfigs.header, alterConfigs.requestLog, alterConfigs.isForwarded).toString
-      assertFalse(s"Sensitive config logged $alterConfigsDesc", alterConfigsDesc.contains(sensitiveValue))
+      assertFalse(alterConfigsDesc.contains(sensitiveValue), s"Sensitive config logged $alterConfigsDesc")
     }
 
     val brokerResource = new ConfigResource(ConfigResource.Type.BROKER, "1")
@@ -119,7 +119,7 @@ class RequestChannelTest {
       val loggedConfig = loggableAlterConfigs.data.resources.find(resource.`type`.id, resource.name).configs
       assertEquals(expectedValues, toMap(loggedConfig))
       val alterConfigsDesc = RequestConvertToJson.requestDesc(alterConfigs.header, alterConfigs.requestLog, alterConfigs.isForwarded).toString
-      assertFalse(s"Sensitive config logged $alterConfigsDesc", alterConfigsDesc.contains(sensitiveValue))
+      assertFalse(alterConfigsDesc.contains(sensitiveValue), s"Sensitive config logged $alterConfigsDesc")
     }
 
     val brokerResource = new ConfigResource(ConfigResource.Type.BROKER, "1")

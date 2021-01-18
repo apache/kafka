@@ -29,8 +29,8 @@ import org.apache.kafka.clients.producer.{ProducerConfig, ProducerRecord}
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.errors.{KafkaStorageException, NotLeaderOrFollowerException}
 import org.apache.kafka.common.utils.Utils
-import org.junit.Assert.{assertEquals, assertFalse, assertTrue, fail}
-import org.junit.{Before, Test}
+import org.junit.jupiter.api.Assertions._
+import org.junit.jupiter.api.{BeforeEach, Test}
 
 import scala.jdk.CollectionConverters._
 
@@ -49,7 +49,7 @@ class LogDirFailureTest extends IntegrationTestHarness {
   this.serverConfig.setProperty(KafkaConfig.ReplicaHighWatermarkCheckpointIntervalMsProp, "60000")
   this.serverConfig.setProperty(KafkaConfig.NumReplicaFetchersProp, "1")
 
-  @Before
+  @BeforeEach
   override def setUp(): Unit = {
     super.setUp()
     createTopic(topic, partitionNum, brokerCount)
@@ -132,7 +132,7 @@ class LogDirFailureTest extends IntegrationTestHarness {
     assertEquals(brokerCount, leaderServer.replicaManager.nonOfflinePartition(new TopicPartition(topic, anotherPartitionWithTheSameLeader))
       .get.inSyncReplicaIds.size)
     followerServer.replicaManager.replicaFetcherManager.fetcherThreadMap.values.foreach { thread =>
-      assertFalse("ReplicaFetcherThread should still be working if its partition count > 0", thread.isShutdownComplete)
+      assertFalse(thread.isShutdownComplete, "ReplicaFetcherThread should still be working if its partition count > 0")
     }
   }
 
@@ -150,17 +150,10 @@ class LogDirFailureTest extends IntegrationTestHarness {
     TestUtils.causeLogDirFailure(failureType, leaderServer, partition)
 
     // send() should fail due to either KafkaStorageException or NotLeaderOrFollowerException
-    try {
-      producer.send(record).get(6000, TimeUnit.MILLISECONDS)
-      fail("send() should fail with either KafkaStorageException or NotLeaderOrFollowerException")
-    } catch {
-      case e: ExecutionException =>
-        e.getCause match {
-          case t: KafkaStorageException =>
-          case t: NotLeaderOrFollowerException => // This may happen if ProduceRequest version <= 3
-          case t: Throwable => fail(s"send() should fail with either KafkaStorageException or NotLeaderOrFollowerException instead of ${t.toString}")
-        }
-    }
+    val e = assertThrows(classOf[ExecutionException], () => producer.send(record).get(6000, TimeUnit.MILLISECONDS))
+    assertTrue(e.getCause.isInstanceOf[KafkaStorageException] ||
+      // This may happen if ProduceRequest version <= 3
+      e.getCause.isInstanceOf[NotLeaderOrFollowerException])
   }
 
   def testProduceAfterLogDirFailureOnLeader(failureType: LogDirFailureType): Unit = {

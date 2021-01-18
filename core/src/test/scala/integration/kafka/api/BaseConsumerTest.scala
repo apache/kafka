@@ -19,8 +19,8 @@ package kafka.api
 import org.apache.kafka.clients.consumer.ConsumerConfig
 import org.apache.kafka.common.PartitionInfo
 import org.apache.kafka.common.internals.Topic
-import org.junit.Test
-import org.junit.Assert._
+import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.Assertions._
 
 import scala.jdk.CollectionConverters._
 import scala.collection.Seq

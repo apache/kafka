@@ -29,8 +29,8 @@ import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests.{AbstractRequest, AlterIsrRequest, AlterIsrResponse}
 import org.easymock.EasyMock
-import org.junit.Assert._
-import org.junit.{Before, Test}
+import org.junit.jupiter.api.Assertions._
+import org.junit.jupiter.api.{BeforeEach, Test}
 import org.mockito.ArgumentMatchers.{any, anyString}
 import org.mockito.{ArgumentMatchers, Mockito}
 
@@ -47,7 +47,7 @@ class AlterIsrManagerTest {
   val tp1 = new TopicPartition(topic, 1)
   val tp2 = new TopicPartition(topic, 2)
 
-  @Before
+  @BeforeEach
   def setup(): Unit = {
     brokerToController = EasyMock.createMock(classOf[BrokerToControllerChannelManager])
   }
@@ -298,7 +298,7 @@ class AlterIsrManagerTest {
       false, null, null, alterIsrResp)
     callbackCapture.getValue.onComplete(resp)
 
-    assertEquals("Expected all callbacks to run", count.get, 3)
+    assertEquals(count.get, 3, "Expected all callbacks to run")
   }
 
   @Test

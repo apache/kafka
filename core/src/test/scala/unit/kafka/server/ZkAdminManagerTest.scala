@@ -26,11 +26,11 @@ import org.apache.kafka.common.message.DescribeConfigsRequestData
 import org.apache.kafka.common.message.DescribeConfigsResponseData
 import org.apache.kafka.common.protocol.Errors
 
-import org.junit.{After, Test}
-import org.junit.Assert.assertEquals
-import org.junit.Assert.assertFalse
-import org.junit.Assert.assertNotNull
-import org.junit.Assert.assertNotEquals
+import org.junit.jupiter.api.{AfterEach, Test}
+import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertFalse
+import org.junit.jupiter.api.Assertions.assertNotNull
+import org.junit.jupiter.api.Assertions.assertNotEquals
 import java.util.Properties
 
 class ZkAdminManagerTest {
@@ -41,7 +41,7 @@ class ZkAdminManagerTest {
   private val topic = "topic-1"
   private val metadataCache: MetadataCache = EasyMock.createNiceMock(classOf[MetadataCache])
 
-  @After
+  @AfterEach
   def tearDown(): Unit = {
     metrics.close()
   }
@@ -65,7 +65,7 @@ class ZkAdminManagerTest {
     val adminManager = createAdminManager()
     val results: List[DescribeConfigsResponseData.DescribeConfigsResult] = adminManager.describeConfigs(resources, true, true)
     assertEquals(Errors.NONE.code, results.head.errorCode())
-    assertFalse("Should return configs", results.head.configs().isEmpty)
+    assertFalse(results.head.configs().isEmpty, "Should return configs")
   }
 
   @Test
@@ -81,7 +81,7 @@ class ZkAdminManagerTest {
     val adminManager = createAdminManager()
     val results: List[DescribeConfigsResponseData.DescribeConfigsResult] = adminManager.describeConfigs(resources, true, true)
     assertEquals(Errors.NONE.code, results.head.errorCode())
-    assertFalse("Should return configs", results.head.configs().isEmpty)
+    assertFalse(results.head.configs().isEmpty, "Should return configs")
   }
 
   @Test
@@ -105,9 +105,9 @@ class ZkAdminManagerTest {
     assertEquals(2, results.size)
     results.foreach(r => {
       assertEquals(Errors.NONE.code, r.errorCode)
-      assertFalse("Should return configs", r.configs.isEmpty)
+      assertFalse(r.configs.isEmpty, "Should return configs")
       r.configs.forEach(c => {
-        assertNotNull(s"Config ${c.name} should have non null documentation", c.documentation)
+        assertNotNull(c.documentation, s"Config ${c.name} should have non null documentation")
         assertNotEquals(s"Config ${c.name} should have non blank documentation", "", c.documentation.trim)
       })
     })

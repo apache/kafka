@@ -20,8 +20,8 @@ package kafka.tools
 import kafka.tools.ConsoleProducer.LineMessageReader
 import kafka.utils.Exit
 import org.apache.kafka.clients.producer.ProducerConfig
-import org.junit.Assert.{assertEquals, assertThrows}
-import org.junit.Test
+import org.junit.jupiter.api.Assertions.{assertEquals, assertThrows}
+import org.junit.jupiter.api.Test
 
 import java.util
 

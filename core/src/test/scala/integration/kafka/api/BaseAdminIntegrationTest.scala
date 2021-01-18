@@ -19,7 +19,6 @@ package kafka.api
 import java.util
 import java.util.Properties
 import java.util.concurrent.ExecutionException
-
 import kafka.security.authorizer.AclEntry
 import kafka.server.KafkaConfig
 import kafka.utils.Logging
@@ -29,9 +28,8 @@ import org.apache.kafka.common.acl.AclOperation
 import org.apache.kafka.common.errors.{TopicExistsException, UnknownTopicOrPartitionException}
 import org.apache.kafka.common.resource.ResourceType
 import org.apache.kafka.common.utils.Utils
-import org.junit.Assert._
-import org.junit.rules.Timeout
-import org.junit.{After, Before, Rule, Test}
+import org.junit.jupiter.api.Assertions._
+import org.junit.jupiter.api.{AfterEach, BeforeEach, Test, Timeout}
 
 import scala.jdk.CollectionConverters._
 import scala.collection.Seq
@@ -44,22 +42,20 @@ import scala.compat.java8.OptionConverters._
  * time to the build. However, if an admin API involves differing interactions with
  * authentication/authorization layers, we may add the test case here.
  */
+@Timeout(120)
 abstract class BaseAdminIntegrationTest extends IntegrationTestHarness with Logging {
   def brokerCount = 3
   override def logDirCount = 2
 
   var client: Admin = _
 
-  @Rule
-  def globalTimeout: Timeout = Timeout.millis(120000)
-
-  @Before
+  @BeforeEach
   override def setUp(): Unit = {
     super.setUp()
     waitUntilBrokerMetadataIsPropagated(servers)
   }
 
-  @After
+  @AfterEach
   override def tearDown(): Unit = {
     if (client != null)
       Utils.closeQuietly(client, "AdminClient")
@@ -137,7 +133,7 @@ abstract class BaseAdminIntegrationTest extends IntegrationTestHarness with Logg
         assertTrue(replica.id >= 0)
         assertTrue(replica.id < brokerCount)
       }
-      assertEquals("No duplicate replica ids", partition.replicas.size, partition.replicas.asScala.map(_.id).distinct.size)
+      assertEquals(partition.replicas.size, partition.replicas.asScala.map(_.id).distinct.size, "No duplicate replica ids")
 
       assertEquals(3, partition.isr.size)
       assertEquals(partition.replicas, partition.isr)

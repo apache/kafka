@@ -70,8 +70,8 @@ import org.apache.kafka.common.{IsolationLevel, Node, TopicPartition, Uuid}
 import org.apache.kafka.server.authorizer.{Action, AuthorizationResult, Authorizer}
 import org.easymock.EasyMock._
 import org.easymock.{Capture, EasyMock, IAnswer}
-import org.junit.Assert._
-import org.junit.{After, Test}
+import org.junit.jupiter.api.Assertions._
+import org.junit.jupiter.api.{AfterEach, Test}
 import org.mockito.{ArgumentMatchers, Mockito}
 
 import scala.annotation.nowarn
@@ -109,7 +109,7 @@ class KafkaApisTest {
   private val time = new MockTime
   private val clientId = ""
 
-  @After
+  @AfterEach
   def tearDown(): Unit = {
     quotas.shutdown()
     TestUtils.clearYammerMetrics()
@@ -2910,7 +2910,7 @@ class KafkaApisTest {
   private def readResponse(request: AbstractRequest, capturedResponse: Capture[RequestChannel.Response]) = {
     val api = request.apiKey
     val response = capturedResponse.getValue
-    assertTrue(s"Unexpected response type: ${response.getClass}", response.isInstanceOf[SendResponse])
+    assertTrue(response.isInstanceOf[SendResponse], s"Unexpected response type: ${response.getClass}")
     val sendResponse = response.asInstanceOf[SendResponse]
     val send = sendResponse.responseSend
     val channel = new ByteBufferChannel(send.size)

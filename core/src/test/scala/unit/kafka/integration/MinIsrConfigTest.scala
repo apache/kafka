@@ -21,7 +21,7 @@ import java.util.Properties
 
 import kafka.server.KafkaConfig
 import kafka.utils.TestUtils
-import org.junit.Test
+import org.junit.jupiter.api.Test
 
 class MinIsrConfigTest extends KafkaServerTestHarness {
 

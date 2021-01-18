@@ -73,6 +73,7 @@ import org.junit.jupiter.api.Test;
 import javax.management.MBeanServer;
 import javax.management.ObjectName;
 import java.lang.management.ManagementFactory;
+import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -1306,6 +1307,13 @@ public class KafkaProducerTest {
                 null, null, null, Time.SYSTEM)) {
             assertTrue(config.unused().contains(SslConfigs.SSL_PROTOCOL_CONFIG));
         }
+    }
+
+    @Test
+    public void testNullTopicName() {
+        // send a record with null topic should fail
+        assertThrows(IllegalArgumentException.class, () -> new ProducerRecord<>(null, 1,
+            "key".getBytes(StandardCharsets.UTF_8), "value".getBytes(StandardCharsets.UTF_8)));
     }
 
     private static final List<String> CLIENT_IDS = new ArrayList<>();

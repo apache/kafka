@@ -29,8 +29,8 @@ import org.apache.kafka.common.message.ProduceRequestData
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.record._
 import org.apache.kafka.common.requests.{ProduceRequest, ProduceResponse}
-import org.junit.Assert._
-import org.junit.Test
+import org.junit.jupiter.api.Assertions._
+import org.junit.jupiter.api.Test
 
 import scala.annotation.nowarn
 import scala.jdk.CollectionConverters._

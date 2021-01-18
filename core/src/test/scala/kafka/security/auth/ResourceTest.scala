@@ -19,8 +19,8 @@ package kafka.security.auth
 
 import kafka.common.KafkaException
 import org.apache.kafka.common.resource.PatternType.{LITERAL, PREFIXED}
-import org.junit.Test
-import org.junit.Assert._
+import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.Assertions._
 
 @deprecated("Use org.apache.kafka.common.resource.ResourcePattern", "Since 2.5")
 class ResourceTest {

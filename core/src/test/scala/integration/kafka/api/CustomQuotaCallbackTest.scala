@@ -34,8 +34,8 @@ import org.apache.kafka.common.config.SaslConfigs
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.security.auth._
 import org.apache.kafka.server.quota._
-import org.junit.Assert._
-import org.junit.{After, Before, Test}
+import org.junit.jupiter.api.Assertions._
+import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
 
 import scala.collection.mutable.ArrayBuffer
 import scala.jdk.CollectionConverters._
@@ -60,7 +60,7 @@ class CustomQuotaCallbackTest extends IntegrationTestHarness with SaslSetup {
   val defaultProduceQuota = 2000 * 1000 * 1000
   val defaultConsumeQuota = 1000 * 1000 * 1000
 
-  @Before
+  @BeforeEach
   override def setUp(): Unit = {
     startSasl(jaasSections(kafkaServerSaslMechanisms, Some("SCRAM-SHA-256"), KafkaSasl, JaasTestUtils.KafkaServerContextName))
     this.serverConfig.setProperty(KafkaConfig.ProducerQuotaBytesPerSecondDefaultProp, Long.MaxValue.toString)
@@ -77,7 +77,7 @@ class CustomQuotaCallbackTest extends IntegrationTestHarness with SaslSetup {
     producerWithoutQuota = createProducer()
   }
 
-  @After
+  @AfterEach
   override def tearDown(): Unit = {
     adminClients.foreach(_.close())
     GroupedUserQuotaCallback.tearDown()
@@ -103,8 +103,8 @@ class CustomQuotaCallbackTest extends IntegrationTestHarness with SaslSetup {
     assertEquals(1, quotaLimitCalls(ClientQuotaType.PRODUCE).get)
     // ClientQuotaCallback#quotaLimit is invoked once per each unthrottled and two for each throttled request
     // since we don't know the total number of requests, we verify it was called at least twice (at least one throttled request)
-    assertTrue("quotaLimit must be called at least twice", quotaLimitCalls(ClientQuotaType.FETCH).get > 2)
-    assertTrue(s"Too many quotaLimit calls $quotaLimitCalls", quotaLimitCalls(ClientQuotaType.REQUEST).get <= 10) // sanity check
+    assertTrue(quotaLimitCalls(ClientQuotaType.FETCH).get > 2, "quotaLimit must be called at least twice")
+    assertTrue(quotaLimitCalls(ClientQuotaType.REQUEST).get <= 10, s"Too many quotaLimit calls $quotaLimitCalls") // sanity check
     // Large quota updated to small quota, should throttle
     user.configureAndWaitForQuota(9000, 3000)
     user.produceConsume(expectProduceThrottle = true, expectConsumeThrottle = true)

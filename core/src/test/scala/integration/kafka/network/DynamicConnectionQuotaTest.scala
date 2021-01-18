@@ -34,8 +34,8 @@ import org.apache.kafka.common.record.{CompressionType, MemoryRecords, SimpleRec
 import org.apache.kafka.common.requests.{ProduceRequest, ProduceResponse}
 import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.common.{KafkaException, requests}
-import org.junit.Assert._
-import org.junit.{After, Before, Test}
+import org.junit.jupiter.api.Assertions._
+import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
 
 import scala.annotation.nowarn
 import scala.jdk.CollectionConverters._
@@ -56,13 +56,13 @@ class DynamicConnectionQuotaTest extends BaseRequestTest {
     properties.put("listener.name.plaintext.max.connection.creation.rate", plaintextListenerDefaultQuota.toString)
   }
 
-  @Before
+  @BeforeEach
   override def setUp(): Unit = {
     super.setUp()
     TestUtils.createTopic(zkClient, topic, brokerCount, brokerCount, servers)
   }
 
-  @After
+  @AfterEach
   override def tearDown(): Unit = {
     try {
       if (executor != null) {
@@ -409,7 +409,7 @@ class DynamicConnectionQuotaTest extends BaseRequestTest {
     val elapsedMs = System.currentTimeMillis - startTimeMs
     val actualRate = (connCount.toDouble / elapsedMs) * 1000
     val rateCap = if (maxConnectionRate < Int.MaxValue) 1.2 * maxConnectionRate.toDouble else Int.MaxValue.toDouble
-    assertTrue(s"Listener $listener connection rate $actualRate must be below $rateCap", actualRate <= rateCap)
-    assertTrue(s"Listener $listener connection rate $actualRate must be above $minConnectionRate", actualRate >= minConnectionRate)
+    assertTrue(actualRate <= rateCap, s"Listener $listener connection rate $actualRate must be below $rateCap")
+    assertTrue(actualRate >= minConnectionRate, s"Listener $listener connection rate $actualRate must be above $minConnectionRate")
   }
 }

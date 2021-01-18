@@ -27,7 +27,7 @@ import kafka.utils.TestUtils.{MockAlterIsrManager, MockIsrChangeListener}
 import kafka.utils.{MockTime, TestUtils}
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.utils.Utils
-import org.junit.{After, Before}
+import org.junit.jupiter.api.{AfterEach, BeforeEach}
 import org.mockito.ArgumentMatchers
 import org.mockito.Mockito.{mock, when}
 
@@ -49,7 +49,7 @@ class AbstractPartitionTest {
   val offsetCheckpoints: OffsetCheckpoints = mock(classOf[OffsetCheckpoints])
   var partition: Partition = _
 
-  @Before
+  @BeforeEach
   def setup(): Unit = {
     TestUtils.clearYammerMetrics()
 
@@ -91,7 +91,7 @@ class AbstractPartitionTest {
     logProps
   }
 
-  @After
+  @AfterEach
   def tearDown(): Unit = {
     if (tmpDir.exists()) {
       logManager.shutdown()

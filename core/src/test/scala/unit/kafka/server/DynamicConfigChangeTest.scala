@@ -33,8 +33,8 @@ import org.apache.kafka.common.config.ConfigResource
 import org.apache.kafka.common.errors.UnknownTopicOrPartitionException
 import org.apache.kafka.common.metrics.Quota
 import org.easymock.EasyMock
-import org.junit.Assert._
-import org.junit.Test
+import org.junit.jupiter.api.Assertions._
+import org.junit.jupiter.api.Test
 
 import scala.collection.{Map, Seq}
 import scala.jdk.CollectionConverters._
@@ -44,8 +44,8 @@ class DynamicConfigChangeTest extends KafkaServerTestHarness {
 
   @Test
   def testConfigChange(): Unit = {
-    assertTrue("Should contain a ConfigHandler for topics",
-      this.servers.head.dynamicConfigHandlers.contains(ConfigType.Topic))
+    assertTrue(this.servers.head.dynamicConfigHandlers.contains(ConfigType.Topic),
+      "Should contain a ConfigHandler for topics")
     val oldVal: java.lang.Long = 100000L
     val newVal: java.lang.Long = 200000L
     val tp = new TopicPartition("test", 0)
@@ -88,12 +88,11 @@ class DynamicConfigChangeTest extends KafkaServerTestHarness {
 
     (1 to 50).foreach(i => TestUtils.produceMessage(servers, tp.topic, i.toString))
     // Verify that the new config is used for all segments
-    assertTrue("Log segment size change not applied", log.logSegments.forall(_.size > 1000))
+    assertTrue(log.logSegments.forall(_.size > 1000), "Log segment size change not applied")
   }
 
   private def testQuotaConfigChange(user: String, clientId: String, rootEntityType: String, configEntityName: String): Unit = {
-    assertTrue("Should contain a ConfigHandler for " + rootEntityType ,
-               this.servers.head.dynamicConfigHandlers.contains(rootEntityType))
+    assertTrue(this.servers.head.dynamicConfigHandlers.contains(rootEntityType), "Should contain a ConfigHandler for " + rootEntityType)
     val props = new Properties()
     props.put(DynamicConfig.Client.ProducerByteRateOverrideProp, "1000")
     props.put(DynamicConfig.Client.ConsumerByteRateOverrideProp, "2000")
@@ -108,10 +107,10 @@ class DynamicConfigChangeTest extends KafkaServerTestHarness {
       val overrideProducerQuota = quotaManagers.produce.quota(user, clientId)
       val overrideConsumerQuota = quotaManagers.fetch.quota(user, clientId)
 
-      assertEquals(s"User $user clientId $clientId must have overridden producer quota of 1000",
-        Quota.upperBound(1000), overrideProducerQuota)
-      assertEquals(s"User $user clientId $clientId must have overridden consumer quota of 2000",
-        Quota.upperBound(2000), overrideConsumerQuota)
+      assertEquals(Quota.upperBound(1000),
+        overrideProducerQuota, s"User $user clientId $clientId must have overridden producer quota of 1000")
+      assertEquals(Quota.upperBound(2000),
+        overrideConsumerQuota, s"User $user clientId $clientId must have overridden consumer quota of 2000")
     }
 
     val defaultProducerQuota = Long.MaxValue.asInstanceOf[Double]
@@ -126,10 +125,10 @@ class DynamicConfigChangeTest extends KafkaServerTestHarness {
       val producerQuota = quotaManagers.produce.quota(user, clientId)
       val consumerQuota = quotaManagers.fetch.quota(user, clientId)
 
-      assertEquals(s"User $user clientId $clientId must have reset producer quota to " + defaultProducerQuota,
-        Quota.upperBound(defaultProducerQuota), producerQuota)
-      assertEquals(s"User $user clientId $clientId must have reset consumer quota to " + defaultConsumerQuota,
-        Quota.upperBound(defaultConsumerQuota), consumerQuota)
+      assertEquals(Quota.upperBound(defaultProducerQuota),
+        producerQuota, s"User $user clientId $clientId must have reset producer quota to " + defaultProducerQuota)
+      assertEquals(Quota.upperBound(defaultConsumerQuota),
+        consumerQuota, s"User $user clientId $clientId must have reset consumer quota to " + defaultConsumerQuota)
     }
   }
 
@@ -243,7 +242,7 @@ class DynamicConfigChangeTest extends KafkaServerTestHarness {
     def verifyConnectionQuota(ip: InetAddress, expectedQuota: Integer) = {
       TestUtils.retry(10000) {
         val quota = connectionQuotas.connectionRateForIp(ip)
-        assertEquals(s"Unexpected quota for IP $ip", expectedQuota, quota)
+        assertEquals(expectedQuota, quota, s"Unexpected quota for IP $ip")
       }
     }
 
@@ -261,14 +260,9 @@ class DynamicConfigChangeTest extends KafkaServerTestHarness {
   @Test
   def testConfigChangeOnNonExistingTopic(): Unit = {
     val topic = TestUtils.tempTopic()
-    try {
-      val logProps = new Properties()
-      logProps.put(FlushMessagesProp, 10000: java.lang.Integer)
-      adminZkClient.changeTopicConfig(topic, logProps)
-      fail("Should fail with UnknownTopicOrPartitionException for topic doesn't exist")
-    } catch {
-      case _: UnknownTopicOrPartitionException => // expected
-    }
+    val logProps = new Properties()
+    logProps.put(FlushMessagesProp, 10000: java.lang.Integer)
+    assertThrows(classOf[UnknownTopicOrPartitionException], () => adminZkClient.changeTopicConfig(topic, logProps))
   }
 
   @Test
@@ -308,36 +302,19 @@ class DynamicConfigChangeTest extends KafkaServerTestHarness {
     configManager.ConfigChangedNotificationHandler.processNotification("not json".getBytes(StandardCharsets.UTF_8))
 
     // Incorrect Map. No version
-    try {
-      val jsonMap = Map("v" -> 1, "x" -> 2)
-      configManager.ConfigChangedNotificationHandler.processNotification(Json.encodeAsBytes(jsonMap.asJava))
-      fail("Should have thrown an Exception while parsing incorrect notification " + jsonMap)
-    }
-    catch {
-      case _: Throwable =>
-    }
+    var jsonMap: Map[String, Any] = Map("v" -> 1, "x" -> 2)
+
+    assertThrows(classOf[Throwable], () => configManager.ConfigChangedNotificationHandler.processNotification(Json.encodeAsBytes(jsonMap.asJava)))
     // Version is provided. EntityType is incorrect
-    try {
-      val jsonMap = Map("version" -> 1, "entity_type" -> "garbage", "entity_name" -> "x")
-      configManager.ConfigChangedNotificationHandler.processNotification(Json.encodeAsBytes(jsonMap.asJava))
-      fail("Should have thrown an Exception while parsing incorrect notification " + jsonMap)
-    }
-    catch {
-      case _: Throwable =>
-    }
+    jsonMap = Map("version" -> 1, "entity_type" -> "garbage", "entity_name" -> "x")
+    assertThrows(classOf[Throwable], () => configManager.ConfigChangedNotificationHandler.processNotification(Json.encodeAsBytes(jsonMap.asJava)))
 
     // EntityName isn't provided
-    try {
-      val jsonMap = Map("version" -> 1, "entity_type" -> ConfigType.Topic)
-      configManager.ConfigChangedNotificationHandler.processNotification(Json.encodeAsBytes(jsonMap.asJava))
-      fail("Should have thrown an Exception while parsing incorrect notification " + jsonMap)
-    }
-    catch {
-      case _: Throwable =>
-    }
+    jsonMap = Map("version" -> 1, "entity_type" -> ConfigType.Topic)
+    assertThrows(classOf[Throwable], () => configManager.ConfigChangedNotificationHandler.processNotification(Json.encodeAsBytes(jsonMap.asJava)))
 
     // Everything is provided
-    val jsonMap = Map("version" -> 1, "entity_type" -> ConfigType.Topic, "entity_name" -> "x")
+    jsonMap = Map("version" -> 1, "entity_type" -> ConfigType.Topic, "entity_name" -> "x")
     configManager.ConfigChangedNotificationHandler.processNotification(Json.encodeAsBytes(jsonMap.asJava))
 
     // Verify that processConfigChanges was only called once
