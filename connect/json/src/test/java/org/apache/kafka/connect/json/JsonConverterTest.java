@@ -35,7 +35,6 @@ import org.apache.kafka.connect.data.Timestamp;
 import org.apache.kafka.connect.errors.DataException;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.powermock.reflect.Whitebox;
 
 import java.io.File;
 import java.io.IOException;
@@ -484,7 +483,7 @@ public class JsonConverterTest {
 
     @Test
     public void testCacheSchemaToConnectConversion() {
-        Cache<JsonNode, Schema> cache = Whitebox.getInternalState(converter, "toConnectSchemaCache");
+        Cache<JsonNode, Schema> cache = converter.toConnectSchemaCache;
         assertEquals(0, cache.size());
 
         converter.toConnectData(TOPIC, "{ \"schema\": { \"type\": \"boolean\" }, \"payload\": true }".getBytes());
@@ -848,7 +847,7 @@ public class JsonConverterTest {
 
     @Test
     public void testCacheSchemaToJsonConversion() {
-        Cache<Schema, ObjectNode> cache = Whitebox.getInternalState(converter, "fromConnectSchemaCache");
+        Cache<Schema, ObjectNode> cache = converter.fromConnectSchemaCache;
         assertEquals(0, cache.size());
 
         // Repeated conversion of the same schema, even if the schema object is different should return the same Java

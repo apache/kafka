@@ -277,8 +277,10 @@ public class JsonConverter implements Converter, HeaderConverter {
     }
 
     private JsonConverterConfig config;
-    private Cache<Schema, ObjectNode> fromConnectSchemaCache;
-    private Cache<JsonNode, Schema> toConnectSchemaCache;
+    // visible for testing
+    Cache<Schema, ObjectNode> fromConnectSchemaCache;
+    // visible for testing
+    Cache<JsonNode, Schema> toConnectSchemaCache;
 
     private final JsonSerializer serializer;
     private final JsonDeserializer deserializer;
