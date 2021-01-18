@@ -111,6 +111,15 @@ public class TransactionManager {
             return ent;
         }
 
+        private TopicPartitionEntry getOrCreatePartition(TopicPartition topicPartition) {
+            TopicPartitionEntry ent = topicPartitions.get(topicPartition);
+            if (ent == null) {
+                ent = new TopicPartitionEntry();
+                topicPartitions.put(topicPartition, ent);
+            }
+            return ent;
+        }
+
         private void addPartition(TopicPartition topicPartition) {
             this.topicPartitions.putIfAbsent(topicPartition, new TopicPartitionEntry());
         }
@@ -517,17 +526,7 @@ public class TransactionManager {
         return producerIdAndEpoch;
     }
 
-    boolean producerIdOrEpochNotMatch(ProducerBatch batch) {
-        // Verifies that the producer id/epoch of the batch matches the current one
-        // of the partition.
-        ProducerIdAndEpoch idAndEpoch = topicPartitionBookkeeper.getPartition(batch.topicPartition).producerIdAndEpoch;
-        return idAndEpoch.producerId != batch.producerId() || idAndEpoch.epoch != batch.producerEpoch();
-    }
-
     synchronized public void maybeUpdateProducerIdAndEpoch(TopicPartition topicPartition) {
-        if (!isTransactional())
-            topicPartitionBookkeeper.addPartition(topicPartition);
-
         if (hasStaleProducerIdAndEpoch(topicPartition) && !hasInflightBatches(topicPartition)) {
             // If the batch was on a different ID and/or epoch (due to an epoch bump) and all its in-flight batches
             // have completed, reset the partition sequence so that the next batch (with the new epoch) starts from 0
@@ -612,20 +611,14 @@ public class TransactionManager {
      * Returns the next sequence number to be written to the given TopicPartition.
      */
     synchronized Integer sequenceNumber(TopicPartition topicPartition) {
-        if (!isTransactional())
-            topicPartitionBookkeeper.addPartition(topicPartition);
-
-        return topicPartitionBookkeeper.getPartition(topicPartition).nextSequence;
+        return topicPartitionBookkeeper.getOrCreatePartition(topicPartition).nextSequence;
     }
 
     /**
      * Returns the current producer id/epoch of the given TopicPartition.
      */
     synchronized ProducerIdAndEpoch producerIdAndEpoch(TopicPartition topicPartition) {
-        if (!isTransactional())
-            topicPartitionBookkeeper.addPartition(topicPartition);
-
-        return topicPartitionBookkeeper.getPartition(topicPartition).producerIdAndEpoch;
+        return topicPartitionBookkeeper.getOrCreatePartition(topicPartition).producerIdAndEpoch;
     }
 
     synchronized void incrementSequenceNumber(TopicPartition topicPartition, int increment) {
@@ -742,13 +735,6 @@ public class TransactionManager {
             return;
         }
 
-        if (producerIdOrEpochNotMatch(batch)) {
-            log.debug("Ignoring failed batch {} with producer id {}, epoch {}, and sequence number {} " +
-                            "since the producerId has been reset internally", batch, batch.producerId(),
-                    batch.producerEpoch(), batch.baseSequence(), exception);
-            return;
-        }
-
         if (exception instanceof OutOfOrderSequenceException && !isTransactional()) {
             log.error("The broker returned {} for topic-partition {} with producerId {}, epoch {}, and sequence number {}",
                     exception, batch.topicPartition, batch.producerId(), batch.producerEpoch(), batch.baseSequence());
@@ -808,15 +794,11 @@ public class TransactionManager {
     }
 
     synchronized boolean hasInflightBatches(TopicPartition topicPartition) {
-        return topicPartitionBookkeeper.contains(topicPartition)
-                && !topicPartitionBookkeeper.getPartition(topicPartition).inflightBatchesBySequence.isEmpty();
+        return !topicPartitionBookkeeper.getOrCreatePartition(topicPartition).inflightBatchesBySequence.isEmpty();
     }
 
     synchronized boolean hasStaleProducerIdAndEpoch(TopicPartition topicPartition) {
-        if (topicPartitionBookkeeper.contains(topicPartition)) {
-            return !producerIdAndEpoch.equals(topicPartitionBookkeeper.getPartition(topicPartition).producerIdAndEpoch);
-        }
-        return false;
+        return !producerIdAndEpoch.equals(topicPartitionBookkeeper.getOrCreatePartition(topicPartition).producerIdAndEpoch);
     }
 
     synchronized boolean hasUnresolvedSequences() {
