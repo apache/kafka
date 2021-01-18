@@ -1766,16 +1766,16 @@ project(':streams:upgrade-system-tests-26') {
 }
 
 project(':streams:upgrade-system-tests-27') {
-    archivesBaseName = "kafka-streams-upgrade-system-tests-27"
+  archivesBaseName = "kafka-streams-upgrade-system-tests-27"
 
-    dependencies {
-      testCompile libs.kafkaStreams_27
-      testRuntime libs.junitJupiter
-    }
+  dependencies {
+    testCompile libs.kafkaStreams_27
+    testRuntime libs.junitJupiter
+  }
 
-    systemTestLibs {
-        dependsOn testJar
-    }
+  systemTestLibs {
+    dependsOn testJar
+  }
 }
 
 project(':jmh-benchmarks') {
