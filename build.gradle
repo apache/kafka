@@ -242,7 +242,7 @@ subprojects {
   }
 
   // Remove the relevant project name once it's converted to JUnit 5
-  def shouldUseJUnit5 = !(["api", "connect", "core", "generator", "runtime", "examples",
+  def shouldUseJUnit5 = !(["connect", "core", "generator", "runtime", "examples",
     "streams-scala", "streams"].contains(it.project.name) || it.project.name.startsWith("upgrade-system-tests-"))
 
   def testLoggingEvents = ["passed", "skipped", "failed"]
@@ -1850,9 +1850,7 @@ project(':connect:api') {
     compile libs.slf4jApi
     compile libs.jaxrsApi
 
-    testCompile libs.junitJupiterApi
-    testCompile libs.junitVintageEngine
-
+    testCompile libs.junitJupiter
     testRuntime libs.slf4jlog4j
     testCompile project(':clients').sourceSets.test.output
   }
