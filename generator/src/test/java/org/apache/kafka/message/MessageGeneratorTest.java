@@ -30,15 +30,15 @@ public class MessageGeneratorTest {
 
     @Test
     public void testCapitalizeFirst() throws Exception {
-        assertEquals(MessageGenerator.capitalizeFirst(""), "");
-        assertEquals(MessageGenerator.capitalizeFirst("abC"), "AbC");
+        assertEquals("", MessageGenerator.capitalizeFirst(""));
+        assertEquals("AbC", MessageGenerator.capitalizeFirst("abC"));
     }
 
     @Test
     public void testLowerCaseFirst() throws Exception {
-        assertEquals(MessageGenerator.lowerCaseFirst(""), "");
-        assertEquals(MessageGenerator.lowerCaseFirst("FORTRAN"), "fORTRAN");
-        assertEquals(MessageGenerator.lowerCaseFirst("java"), "java");
+        assertEquals("", MessageGenerator.lowerCaseFirst(""));
+        assertEquals("fORTRAN", MessageGenerator.lowerCaseFirst("FORTRAN"));
+        assertEquals("java", MessageGenerator.lowerCaseFirst("java"));
     }
 
     @Test
@@ -50,17 +50,17 @@ public class MessageGeneratorTest {
 
     @Test
     public void testToSnakeCase() throws Exception {
-        assertEquals(MessageGenerator.toSnakeCase(""), "");
-        assertEquals(MessageGenerator.toSnakeCase("FooBarBaz"), "foo_bar_baz");
-        assertEquals(MessageGenerator.toSnakeCase("fooBarBaz"), "foo_bar_baz");
-        assertEquals(MessageGenerator.toSnakeCase("FORTRAN"), "fortran");
+        assertEquals("", MessageGenerator.toSnakeCase(""));
+        assertEquals("foo_bar_baz", MessageGenerator.toSnakeCase("FooBarBaz"));
+        assertEquals("foo_bar_baz", MessageGenerator.toSnakeCase("fooBarBaz"));
+        assertEquals("fortran", MessageGenerator.toSnakeCase("FORTRAN"));
     }
 
     @Test
     public void stripSuffixTest() throws Exception {
-        assertEquals(MessageGenerator.stripSuffix("FooBar", "r"), "FooBa");
-        assertEquals(MessageGenerator.stripSuffix("FooBar", "FooBar"), "");
-        assertEquals(MessageGenerator.stripSuffix("FooBar", "Bar"), "Foo");
+        assertEquals("FooBa", MessageGenerator.stripSuffix("FooBar", "r"));
+        assertEquals("", MessageGenerator.stripSuffix("FooBar", "FooBar"));
+        assertEquals("Foo", MessageGenerator.stripSuffix("FooBar", "Bar"));
         try {
             MessageGenerator.stripSuffix("FooBar", "Baz");
             fail("expected exception");

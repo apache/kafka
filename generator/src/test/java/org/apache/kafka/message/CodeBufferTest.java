@@ -25,6 +25,7 @@ import java.io.StringWriter;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 @Timeout(120)
 public class CodeBufferTest {
@@ -65,10 +66,7 @@ public class CodeBufferTest {
         CodeBuffer buffer = new CodeBuffer();
         buffer.incrementIndent();
         buffer.decrementIndent();
-        try {
-            buffer.decrementIndent();
-        } catch (RuntimeException e) {
-            assertTrue(e.getMessage().contains("Indent < 0"));
-        }
+        RuntimeException e = assertThrows(RuntimeException.class, buffer::decrementIndent);
+        assertTrue(e.getMessage().contains("Indent < 0"));
     }
 }
