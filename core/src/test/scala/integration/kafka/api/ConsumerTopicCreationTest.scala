@@ -17,14 +17,12 @@
 
 package kafka.api
 
-import junit.framework.TestCase
 import kafka.server.KafkaConfig
 import kafka.utils.TestUtils
 import org.apache.kafka.clients.admin.NewTopic
 import org.apache.kafka.clients.consumer.ConsumerConfig
 import org.apache.kafka.clients.producer.{ProducerConfig, ProducerRecord}
 import org.junit.jupiter.api.Assertions._
-import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.{Arguments, MethodSource}
 
@@ -41,7 +39,8 @@ class ConsumerTopicCreationTest {
   @MethodSource(Array("parameters"))
   def testAutoTopicCreation(brokerAutoTopicCreationEnable: JBoolean, consumerAllowAutoCreateTopics: JBoolean): Unit = {
     val testCase = new ConsumerTopicCreationTest.TestCase(brokerAutoTopicCreationEnable, consumerAllowAutoCreateTopics)
-    testCase.test()
+    testCase.setUp()
+    try testCase.test() finally testCase.tearDown()
   }
 }
 
