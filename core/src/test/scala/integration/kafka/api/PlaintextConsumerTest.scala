@@ -772,6 +772,9 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     // this behaves a little different than when remaining limit bytes is 0 and it's important to test it
     this.consumerConfig.setProperty(ConsumerConfig.FETCH_MAX_BYTES_CONFIG, "500")
     this.consumerConfig.setProperty(ConsumerConfig.MAX_PARTITION_FETCH_BYTES_CONFIG, "100")
+
+    // set the 'max.poll.interval.ms' larger (default is 6 seconds), to avoid the consumer got kicked out during sending records
+    this.consumerConfig.setProperty(ConsumerConfig.MAX_POLL_INTERVAL_MS_CONFIG, 20000.toString)
     val consumer = createConsumer()
 
     val topic1 = "topic1"
@@ -787,18 +790,16 @@ class PlaintextConsumerTest extends BaseConsumerTest {
       (0 until partitionCount).map(new TopicPartition(topic, _))
     }
 
-    val producer = createProducer()
-    // it'll send 30 records to each topic partition (3 topics and 30 partitions each topic), so it will take some time
-    val producerRecords = partitions.flatMap(sendRecords(producer, numRecords = partitionCount, _))
-
     assertEquals(0, consumer.assignment().size)
 
     consumer.subscribe(List(topic1, topic2, topic3).asJava)
 
     awaitAssignment(consumer, partitions.toSet)
 
-    // make sure we consume records right after awaitAssignment, so that it won't cause the consumer left due to
-    // it exceeds the max.poll.interval.ms (we set to 6000 ms)
+    val producer = createProducer()
+    // it'll send 30 records to each topic partition (3 topics and 30 partitions each topic)
+    val producerRecords = partitions.flatMap(sendRecords(producer, numRecords = partitionCount, _, needCurrentTime = true))
+
     val consumerRecords = consumeRecords(consumer, producerRecords.size)
 
     // the expected records should be 30 records * 3 topics * 30 partitions = 2700
