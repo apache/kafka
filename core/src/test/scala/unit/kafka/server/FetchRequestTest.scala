@@ -16,8 +16,6 @@
   */
 package kafka.server
 
-import java.io.DataInputStream
-import java.util.{Optional, Properties}
 import kafka.api.KAFKA_0_11_0_IV2
 import kafka.log.LogConfig
 import kafka.message.{GZIPCompressionCodec, ProducerCompressionCodec, ZStdCompressionCodec}
