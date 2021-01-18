@@ -115,22 +115,29 @@ public class StateDirectoryTest {
 
     @Test
     public void shouldHaveSecurePermissions() {
-        final Set<PosixFilePermission> expectedPermissions = EnumSet.of(
-            PosixFilePermission.OWNER_EXECUTE,
-            PosixFilePermission.GROUP_READ,
-            PosixFilePermission.OWNER_WRITE,
-            PosixFilePermission.GROUP_EXECUTE,
-            PosixFilePermission.OWNER_READ);
-
-        final Path statePath = Paths.get(stateDir.getPath());
-        final Path basePath = Paths.get(appDir.getPath());
-        try {
-            final Set<PosixFilePermission> baseFilePermissions = Files.getPosixFilePermissions(statePath);
-            final Set<PosixFilePermission> appFilePermissions = Files.getPosixFilePermissions(basePath);
-            assertThat(expectedPermissions, equalTo(baseFilePermissions));
-            assertThat(expectedPermissions, equalTo(appFilePermissions));
-        } catch (final IOException e) {
-            fail("Should create correct files and set correct permissions");
+        assertPermissions(Paths.get(stateDir.getPath()));
+        assertPermissions(Paths.get(appDir.getPath()));
+    }
+    
+    private void assertPermissions(final Path path) {
+        if (path.getFileSystem().supportedFileAttributeViews().contains("posix")) {
+            final Set<PosixFilePermission> expectedPermissions = EnumSet.of(
+                    PosixFilePermission.OWNER_EXECUTE,
+                    PosixFilePermission.GROUP_READ,
+                    PosixFilePermission.OWNER_WRITE,
+                    PosixFilePermission.GROUP_EXECUTE,
+                    PosixFilePermission.OWNER_READ);
+            try {
+                final Set<PosixFilePermission> baseFilePermissions = Files.getPosixFilePermissions(path);
+                assertThat(expectedPermissions, equalTo(baseFilePermissions));
+            } catch (final IOException e) {
+                fail("Should create correct files and set correct permissions");
+            }
+        } else {
+            final File file = path.toFile();
+            assertThat(file.canRead(), is(true));
+            assertThat(file.canWrite(), is(true));
+            assertThat(file.canExecute(), is(true));
         }
     }
 

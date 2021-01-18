@@ -109,16 +109,27 @@ public class StateDirectory {
                 log.warn("Using /tmp directory in the state.dir property can cause failures with writing the checkpoint file" +
                     " due to the fact that this directory can be cleared by the OS");
             }
-
             // change the dir permission to "rwxr-x---" to avoid world readable
-            final Path basePath = Paths.get(baseDir.getPath());
-            final Path statePath = Paths.get(stateDir.getPath());
+            configurePermissions(Paths.get(baseDir.getPath()));
+            configurePermissions(Paths.get(stateDir.getPath()));
+        }
+    }
+    
+    private void configurePermissions(final Path path) {
+        if (path.getFileSystem().supportedFileAttributeViews().contains("posix")) {
             final Set<PosixFilePermission> perms = PosixFilePermissions.fromString("rwxr-x---");
             try {
-                Files.setPosixFilePermissions(basePath, perms);
-                Files.setPosixFilePermissions(statePath, perms);
+                Files.setPosixFilePermissions(path, perms);
             } catch (final IOException e) {
-                log.error("Error changing permissions for the state or base directory {} ", stateDir.getPath(), e);
+                log.error("Error changing permissions for the directory {} ", path, e);
+            }
+        } else {
+            final File file = path.toFile();
+            boolean set = file.setReadable(true, false);
+            set &= file.setWritable(true, true);
+            set &= file.setExecutable(true, false);
+            if (!set) {
+                log.error("Failed to change permissions for the directory {}", file);
             }
         }
     }
