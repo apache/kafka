@@ -21,9 +21,9 @@ import org.apache.kafka.connect.source.SourceTaskContext;
 import org.apache.kafka.connect.storage.OffsetStorageReader;
 import org.easymock.EasyMock;
 import org.easymock.EasyMockSupport;
-import org.junit.After;
-import org.junit.Before;
-import org.junit.Test;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 
 import java.io.ByteArrayInputStream;
 import java.io.File;
@@ -36,8 +36,8 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNull;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 
 public class FileStreamSourceTaskTest extends EasyMockSupport {
 
@@ -51,7 +51,7 @@ public class FileStreamSourceTaskTest extends EasyMockSupport {
 
     private boolean verifyMocks = false;
 
-    @Before
+    @BeforeEach
     public void setup() throws IOException {
         tempFile = File.createTempFile("file-stream-source-task-test", null);
         config = new HashMap<>();
@@ -64,7 +64,7 @@ public class FileStreamSourceTaskTest extends EasyMockSupport {
         task.initialize(context);
     }
 
-    @After
+    @AfterEach
     public void teardown() {
         tempFile.delete();
 

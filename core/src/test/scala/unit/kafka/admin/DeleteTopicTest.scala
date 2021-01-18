@@ -25,8 +25,8 @@ import kafka.log.Log
 import kafka.zk.{TopicPartitionZNode, ZooKeeperTestHarness}
 import kafka.utils.TestUtils
 import kafka.server.{KafkaConfig, KafkaServer}
-import org.junit.Assert._
-import org.junit.{After, Test}
+import org.junit.jupiter.api.Assertions._
+import org.junit.jupiter.api.{AfterEach, Test}
 import kafka.common.TopicAlreadyMarkedForDeletionException
 import kafka.controller.{OfflineReplica, PartitionAndReplica, ReplicaAssignment, ReplicaDeletionSuccessful}
 import org.apache.kafka.clients.admin.{Admin, AdminClientConfig, NewPartitionReassignment, NewPartitions}
@@ -43,7 +43,7 @@ class DeleteTopicTest extends ZooKeeperTestHarness {
     k -> ReplicaAssignment(v, List(), List())
   }
 
-  @After
+  @AfterEach
   override def tearDown(): Unit = {
     TestUtils.shutdownServers(servers)
     super.tearDown()
@@ -65,7 +65,7 @@ class DeleteTopicTest extends ZooKeeperTestHarness {
     servers = createTestTopicAndCluster(topic)
     // shut down one follower replica
     val leaderIdOpt = zkClient.getLeaderForPartition(new TopicPartition(topic, 0))
-    assertTrue("Leader should exist for partition [test,0]", leaderIdOpt.isDefined)
+    assertTrue(leaderIdOpt.isDefined, "Leader should exist for partition [test,0]")
     val follower = servers.filter(s => s.config.brokerId != leaderIdOpt.get).last
     follower.shutdown()
     // start topic deletion
@@ -124,7 +124,7 @@ class DeleteTopicTest extends ZooKeeperTestHarness {
     TestUtils.waitUntilTrue(() => servers.forall(_.getLogManager.getLog(topicPartition).isDefined),
       "Replicas for topic test not created.")
     val leaderIdOpt = zkClient.getLeaderForPartition(new TopicPartition(topic, 0))
-    assertTrue("Leader should exist for partition [test,0]", leaderIdOpt.isDefined)
+    assertTrue(leaderIdOpt.isDefined, "Leader should exist for partition [test,0]")
     val follower = servers.filter(s => s.config.brokerId != leaderIdOpt.get).last
     follower.shutdown()
     // start topic deletion
@@ -159,14 +159,9 @@ class DeleteTopicTest extends ZooKeeperTestHarness {
   private def verifyReassignmentFailsForMissing(adminClient: Admin,
                                                 partition: TopicPartition,
                                                 reassignment: NewPartitionReassignment): Unit = {
-    try {
-      adminClient.alterPartitionReassignments(Collections.singletonMap(partition,
-        Optional.of(new NewPartitionReassignment(util.Arrays.asList(1, 2, 3))))).all().get()
-      fail("expected partition reassignment to fail for [test,0]")
-    } catch {
-      case e: ExecutionException =>
-        assertEquals(classOf[UnknownTopicOrPartitionException], e.getCause.getClass)
-    }
+    val e = assertThrows(classOf[ExecutionException], () => adminClient.alterPartitionReassignments(Collections.singletonMap(partition,
+      Optional.of(new NewPartitionReassignment(util.Arrays.asList(1, 2, 3))))).all().get())
+    assertEquals(classOf[UnknownTopicOrPartitionException], e.getCause.getClass)
   }
 
   private def getController() : (KafkaServer, Int) = {
@@ -209,7 +204,7 @@ class DeleteTopicTest extends ZooKeeperTestHarness {
       "Replicas for topic test not created.")
     // shutdown a broker to make sure the following topic deletion will be suspended
     val leaderIdOpt = zkClient.getLeaderForPartition(topicPartition)
-    assertTrue("Leader should exist for partition [test,0]", leaderIdOpt.isDefined)
+    assertTrue(leaderIdOpt.isDefined, "Leader should exist for partition [test,0]")
     val follower = servers.filter(s => s.config.brokerId != leaderIdOpt.get).last
     follower.shutdown()
     // start topic deletion
@@ -259,7 +254,7 @@ class DeleteTopicTest extends ZooKeeperTestHarness {
     val topic = "test"
     servers = createTestTopicAndCluster(topic)
     val leaderIdOpt = zkClient.getLeaderForPartition(new TopicPartition(topic, 0))
-    assertTrue("Leader should exist for partition [test,0]", leaderIdOpt.isDefined)
+    assertTrue(leaderIdOpt.isDefined, "Leader should exist for partition [test,0]")
     val follower = servers.filter(_.config.brokerId != leaderIdOpt.get).last
     val newPartition = new TopicPartition(topic, 1)
     // capture the brokers before we shutdown so that we don't fail validation in `addPartitions`
@@ -296,8 +291,7 @@ class DeleteTopicTest extends ZooKeeperTestHarness {
       Some(Map(1 -> Seq(0, 1, 2), 2 -> Seq(0, 1, 2))))
     TestUtils.verifyTopicDeletion(zkClient, topic, 1, servers)
     // verify that new partition doesn't exist on any broker either
-    assertTrue("Replica logs not deleted after delete topic is complete",
-      servers.forall(_.getLogManager.getLog(newPartition).isEmpty))
+    assertTrue(servers.forall(_.getLogManager.getLog(newPartition).isEmpty), "Replica logs not deleted after delete topic is complete")
   }
 
   @Test
@@ -322,19 +316,14 @@ class DeleteTopicTest extends ZooKeeperTestHarness {
     val topic = topicPartition.topic
     servers = createTestTopicAndCluster(topic)
     // start topic deletion
-    try {
-      adminZkClient.deleteTopic("test2")
-      fail("Expected UnknownTopicOrPartitionException")
-    } catch {
-      case _: UnknownTopicOrPartitionException => // expected exception
-    }
+    assertThrows(classOf[UnknownTopicOrPartitionException], () => adminZkClient.deleteTopic("test2"))
     // verify delete topic path for test2 is removed from ZooKeeper
     TestUtils.verifyTopicDeletion(zkClient, "test2", 1, servers)
     // verify that topic test is untouched
     TestUtils.waitUntilTrue(() => servers.forall(_.getLogManager.getLog(topicPartition).isDefined),
       "Replicas for topic test not created")
     // test the topic path exists
-    assertTrue("Topic test mistakenly deleted", zkClient.topicExists(topic))
+    assertTrue(zkClient.topicExists(topic), "Topic test mistakenly deleted")
     // topic test should have a leader
     TestUtils.waitUntilLeaderIsElectedOrChanged(zkClient, topic, 0, 1000)
   }
@@ -374,17 +363,10 @@ class DeleteTopicTest extends ZooKeeperTestHarness {
     val topicPartition = new TopicPartition("test", 0)
     val topic = topicPartition.topic
     servers = createTestTopicAndCluster(topic)
-
-    try {
-      // start topic deletion
-      adminZkClient.deleteTopic(topic)
-      // try to delete topic marked as deleted
-      adminZkClient.deleteTopic(topic)
-      fail("Expected TopicAlreadyMarkedForDeletionException")
-    }
-    catch {
-      case _: TopicAlreadyMarkedForDeletionException => // expected exception
-    }
+    // start topic deletion
+    adminZkClient.deleteTopic(topic)
+    // try to delete topic marked as deleted
+    assertThrows(classOf[TopicAlreadyMarkedForDeletionException], () => adminZkClient.deleteTopic(topic))
 
     TestUtils.verifyTopicDeletion(zkClient, topic, 1, servers)
   }
@@ -429,10 +411,10 @@ class DeleteTopicTest extends ZooKeeperTestHarness {
     // verify that topic test is untouched
     assertTrue(servers.forall(_.getLogManager.getLog(topicPartition).isDefined))
     // test the topic path exists
-    assertTrue("Topic path disappeared", zkClient.topicExists(topic))
+    assertTrue(zkClient.topicExists(topic), "Topic path disappeared")
     // topic test should have a leader
     val leaderIdOpt = zkClient.getLeaderForPartition(new TopicPartition(topic, 0))
-    assertTrue("Leader should exist for topic test", leaderIdOpt.isDefined)
+    assertTrue(leaderIdOpt.isDefined, "Leader should exist for topic test")
   }
 
   @Test

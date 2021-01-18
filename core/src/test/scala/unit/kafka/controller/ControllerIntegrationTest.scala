@@ -32,8 +32,8 @@ import org.apache.kafka.common.metrics.KafkaMetric
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.{ElectionType, TopicPartition, Uuid}
 import org.apache.log4j.Level
-import org.junit.Assert.{assertEquals, assertNotEquals, assertTrue}
-import org.junit.{After, Before, Test}
+import org.junit.jupiter.api.Assertions.{assertEquals, assertNotEquals, assertTrue}
+import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
 import org.mockito.Mockito.{doAnswer, spy, verify}
 import org.mockito.invocation.InvocationOnMock
 
@@ -46,13 +46,13 @@ class ControllerIntegrationTest extends ZooKeeperTestHarness {
   val firstControllerEpoch = KafkaController.InitialControllerEpoch + 1
   val firstControllerEpochZkVersion = KafkaController.InitialControllerEpochZkVersion + 1
 
-  @Before
+  @BeforeEach
   override def setUp(): Unit = {
     super.setUp()
     servers = Seq.empty[KafkaServer]
   }
 
-  @After
+  @AfterEach
   override def tearDown(): Unit = {
     TestUtils.shutdownServers(servers)
     super.tearDown()
@@ -302,7 +302,8 @@ class ControllerIntegrationTest extends ZooKeeperTestHarness {
       "failed to remove reassign partitions path after completion")
 
     val updatedTimerCount = timer(metricName).count
-    assertTrue(s"Timer count $updatedTimerCount should be greater than $timerCount", updatedTimerCount > timerCount)
+    assertTrue(updatedTimerCount > timerCount,
+      s"Timer count $updatedTimerCount should be greater than $timerCount")
   }
 
   @Test
@@ -340,7 +341,8 @@ class ControllerIntegrationTest extends ZooKeeperTestHarness {
       "failed to remove reassign partitions path after completion")
 
     val updatedTimerCount = timer(metricName).count
-    assertTrue(s"Timer count $updatedTimerCount should be greater than $timerCount", updatedTimerCount > timerCount)
+    assertTrue(updatedTimerCount > timerCount,
+      s"Timer count $updatedTimerCount should be greater than $timerCount")
   }
 
   @Test
@@ -833,7 +835,7 @@ class ControllerIntegrationTest extends ZooKeeperTestHarness {
         case Left(partitionResults: Map[TopicPartition, Either[Errors, LeaderAndIsr]]) =>
           partitionResults.get(tp) match {
             case Some(Left(error: Errors)) => throw new AssertionError(s"Should not have seen error for $tp")
-            case Some(Right(leaderAndIsr: LeaderAndIsr)) => assertEquals("ISR should remain unchanged", leaderAndIsr, newLeaderAndIsr)
+            case Some(Right(leaderAndIsr: LeaderAndIsr)) => assertEquals(leaderAndIsr, newLeaderAndIsr, "ISR should remain unchanged")
             case None => throw new AssertionError(s"Should have seen $tp in result")
           }
         case Right(_: Errors) => throw new AssertionError("Should not have had top-level error here")
@@ -896,14 +898,14 @@ class ControllerIntegrationTest extends ZooKeeperTestHarness {
       "failed to get expected partition state upon topic creation")
     val topicIdAfterCreate = zkClient.getTopicIdsForTopics(Set(tp.topic())).get(tp.topic())
     assertTrue(topicIdAfterCreate.isDefined)
-    assertEquals("correct topic ID cannot be found in the controller context",
-      topicIdAfterCreate, servers.head.kafkaController.controllerContext.topicIds.get(tp.topic))
+    assertEquals(topicIdAfterCreate, servers.head.kafkaController.controllerContext.topicIds.get(tp.topic),
+      "correct topic ID cannot be found in the controller context")
 
     adminZkClient.addPartitions(tp.topic, assignment, adminZkClient.getBrokerMetadatas(), 2)
     val topicIdAfterAddition = zkClient.getTopicIdsForTopics(Set(tp.topic())).get(tp.topic())
     assertEquals(topicIdAfterCreate, topicIdAfterAddition)
-    assertEquals("topic ID changed after partition additions",
-      topicIdAfterCreate, servers.head.kafkaController.controllerContext.topicIds.get(tp.topic))
+    assertEquals(topicIdAfterCreate, servers.head.kafkaController.controllerContext.topicIds.get(tp.topic),
+      "topic ID changed after partition additions")
 
     adminZkClient.deleteTopic(tp.topic)
     TestUtils.waitUntilTrue(() => servers.head.kafkaController.controllerContext.topicIds.get(tp.topic).isEmpty,

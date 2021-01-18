@@ -19,7 +19,7 @@ import java.io.File
 import kafka.server._
 import org.apache.kafka.common.security.auth.{KafkaPrincipal, SecurityProtocol}
 import org.apache.kafka.common.utils.Sanitizer
-import org.junit.Before
+import org.junit.jupiter.api.BeforeEach
 
 class UserClientIdQuotaTest extends BaseQuotaTest {
 
@@ -29,7 +29,7 @@ class UserClientIdQuotaTest extends BaseQuotaTest {
   override def producerClientId = "QuotasTestProducer-!@#$%^&*()"
   override def consumerClientId = "QuotasTestConsumer-!@#$%^&*()"
 
-  @Before
+  @BeforeEach
   override def setUp(): Unit = {
     this.serverConfig.setProperty(KafkaConfig.SslClientAuthProp, "required")
     this.serverConfig.setProperty(KafkaConfig.ProducerQuotaBytesPerSecondDefaultProp, Long.MaxValue.toString)

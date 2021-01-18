@@ -29,8 +29,8 @@ import org.apache.kafka.common.metrics.Sensor
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.record.Records
 import org.apache.kafka.common.security.auth.SecurityProtocol
-import org.junit.Assert._
-import org.junit.Test
+import org.junit.jupiter.api.Assertions._
+import org.junit.jupiter.api.Test
 
 class KafkaConfigTest {
 
@@ -104,15 +104,15 @@ class KafkaConfigTest {
     val cfg1 = KafkaConfig.fromProps(props1)
     val cfg2 = KafkaConfig.fromProps(props2)
     val cfg3 = KafkaConfig.fromProps(props3)
-    assertEquals("Should be -1", -1, cfg1.logRetentionTimeMillis)
-    assertEquals("Should be -1", -1, cfg2.logRetentionTimeMillis)
-    assertEquals("Should be -1", -1, cfg3.logRetentionTimeMillis)
+    assertEquals(-1, cfg1.logRetentionTimeMillis, "Should be -1")
+    assertEquals(-1, cfg2.logRetentionTimeMillis, "Should be -1")
+    assertEquals(-1, cfg3.logRetentionTimeMillis, "Should be -1")
 
     props4.put("log.retention.ms", "-1")
     props4.put("log.retention.minutes", "30")
 
     val cfg4 = KafkaConfig.fromProps(props4)
-    assertEquals("Should be -1", -1, cfg4.logRetentionTimeMillis)
+    assertEquals(-1, cfg4.logRetentionTimeMillis, "Should be -1")
 
     props5.put("log.retention.ms", "0")
 
