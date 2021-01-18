@@ -103,7 +103,6 @@ public class AdjustStreamThreadCountTest {
     }
 
     private void addStreamStateChangeListener(final KafkaStreams kafkaStreams) {
-        // we store each new state in state transition so that we won't miss any state change
         kafkaStreams.setStateListener(
             (newState, oldState) -> stateTransitionHistory.add(newState)
         );
@@ -119,12 +118,13 @@ public class AdjustStreamThreadCountTest {
         );
     }
 
-    // verify if state change from "before" state into "after" state
-    private boolean hasStateTransition(final KafkaStreams.State before, final KafkaStreams.State after) {
+    private boolean waitForTransitionFromRebalancingToRunning() throws InterruptedException {
+        waitForRunning();
+
         final int historySize = stateTransitionHistory.size();
-        // should have at least 2 states in history
-        if (historySize >= 2 && stateTransitionHistory.get(historySize - 2).equals(before) &&
-            stateTransitionHistory.get(historySize - 1).equals(after)) {
+        if (historySize >= 2 && stateTransitionHistory.get(historySize - 2).equals(KafkaStreams.State.REBALANCING) &&
+            stateTransitionHistory.get(historySize - 1).equals(KafkaStreams.State.RUNNING)) {
+
             return true;
         }
         return false;
@@ -158,8 +158,7 @@ public class AdjustStreamThreadCountTest {
                 equalTo(new String[] {"1", "2", "3"})
             );
 
-            waitForRunning();
-            assertThat(hasStateTransition(KafkaStreams.State.REBALANCING, KafkaStreams.State.RUNNING), is(true));
+            assertThat(waitForTransitionFromRebalancingToRunning(), is(true));
         }
     }
 
@@ -174,8 +173,7 @@ public class AdjustStreamThreadCountTest {
             assertThat(kafkaStreams.removeStreamThread().get().split("-")[0], equalTo(appId));
             assertThat(kafkaStreams.localThreadsMetadata().size(), equalTo(oldThreadCount - 1));
 
-            waitForRunning();
-            assertThat(hasStateTransition(KafkaStreams.State.REBALANCING, KafkaStreams.State.RUNNING), is(true));
+            assertThat(waitForTransitionFromRebalancingToRunning(), is(true));
         }
     }
 
@@ -196,8 +194,7 @@ public class AdjustStreamThreadCountTest {
             latch.await(30, TimeUnit.SECONDS);
             assertThat(kafkaStreams.localThreadsMetadata().size(), equalTo(oldThreadCount));
 
-            waitForRunning();
-            assertThat(hasStateTransition(KafkaStreams.State.REBALANCING, KafkaStreams.State.RUNNING), is(true));
+            assertThat(waitForTransitionFromRebalancingToRunning(), is(true));
         }
     }
 
@@ -251,8 +248,7 @@ public class AdjustStreamThreadCountTest {
                     .toArray(),
                 equalTo(new String[] {"1", "2", "3"})
             );
-            waitForRunning();
-            assertThat(hasStateTransition(KafkaStreams.State.REBALANCING, KafkaStreams.State.RUNNING), is(true));
+            assertThat(waitForTransitionFromRebalancingToRunning(), is(true));
 
             oldThreadCount = kafkaStreams.localThreadsMetadata().size();
             stateTransitionHistory.clear();
@@ -262,8 +258,7 @@ public class AdjustStreamThreadCountTest {
 
             assertThat(removedThread, not(Optional.empty()));
             assertThat(kafkaStreams.localThreadsMetadata().size(), equalTo(oldThreadCount - 1));
-            waitForRunning();
-            assertThat(hasStateTransition(KafkaStreams.State.REBALANCING, KafkaStreams.State.RUNNING), is(true));
+            assertThat(waitForTransitionFromRebalancingToRunning(), is(true));
 
             stateTransitionHistory.clear();
 
@@ -288,8 +283,7 @@ public class AdjustStreamThreadCountTest {
             );
 
             assertThat("the new thread should have received the old threads name", name2.equals(removedThread));
-            waitForRunning();
-            assertThat(hasStateTransition(KafkaStreams.State.REBALANCING, KafkaStreams.State.RUNNING), is(true));
+            assertThat(waitForTransitionFromRebalancingToRunning(), is(true));
         }
     }
 }
