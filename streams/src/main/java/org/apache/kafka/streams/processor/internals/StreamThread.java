@@ -612,11 +612,22 @@ public class StreamThread extends Thread {
 
     public void waitOnThreadState(final StreamThread.State targetState) {
         synchronized (stateLock) {
-            while (state != targetState) {
-                try {
-                    stateLock.wait();
-                } catch (final InterruptedException e) {
-                    // it is ok: just move on to the next iteration
+            boolean interrupted = false;
+            try {
+                while (state != targetState) {
+                    try {
+                        stateLock.wait();
+                    } catch (final InterruptedException e) {
+                        interrupted = true;
+                    }
+                }
+            } finally {
+                // Make sure to restore the interruption status before returning.
+                // We do not always own the current thread that executes this method, i.e., we do not know the
+                // interruption policy of the thread. The least we can do is restore the interruption status before
+                // the current thread exits this method.
+                if (interrupted) {
+                    Thread.currentThread().interrupt();
                 }
             }
         }
