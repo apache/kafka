@@ -1864,9 +1864,7 @@ project(':connect:api') {
     compile libs.slf4jApi
     compile libs.jaxrsApi
 
-    testCompile libs.junitJupiterApi
-    testCompile libs.junitVintageEngine
-
+    testCompile libs.junitJupiter
     testRuntime libs.slf4jlog4j
     testCompile project(':clients').sourceSets.test.output
   }
