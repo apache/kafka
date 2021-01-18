@@ -16,14 +16,14 @@ package kafka.api
 
 import kafka.server.{KafkaConfig, KafkaServer}
 import org.apache.kafka.common.security.auth.KafkaPrincipal
-import org.junit.Before
+import org.junit.jupiter.api.BeforeEach
 
 class ClientIdQuotaTest extends BaseQuotaTest {
 
   override def producerClientId = "QuotasTestProducer-!@#$%^&*()"
   override def consumerClientId = "QuotasTestConsumer-!@#$%^&*()"
 
-  @Before
+  @BeforeEach
   override def setUp(): Unit = {
     this.serverConfig.setProperty(KafkaConfig.ProducerQuotaBytesPerSecondDefaultProp, defaultProducerQuota.toString)
     this.serverConfig.setProperty(KafkaConfig.ConsumerQuotaBytesPerSecondDefaultProp, defaultConsumerQuota.toString)

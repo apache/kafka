@@ -42,8 +42,8 @@ import org.apache.kafka.common.resource.ResourceType.TOPIC
 import org.apache.kafka.common.security.auth.{KafkaPrincipal, SecurityProtocol}
 import org.apache.kafka.test.{TestUtils => JTestUtils}
 import org.apache.zookeeper.server.auth.DigestLoginModule
-import org.junit.Assert.assertEquals
-import org.junit.{After, Before, Test}
+import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
 
 import scala.jdk.CollectionConverters._
 import scala.collection.Seq
@@ -59,7 +59,7 @@ class AclAuthorizerWithZkSaslTest extends ZooKeeperTestHarness with SaslSetup {
   private val executor = Executors.newSingleThreadScheduledExecutor
   private var config: KafkaConfig = _
 
-  @Before
+  @BeforeEach
   override def setUp(): Unit = {
     // Allow failed clients to avoid server closing the connection before reporting AuthFailed.
     System.setProperty("zookeeper.allowSaslFailedClients", "true")
@@ -83,7 +83,7 @@ class AclAuthorizerWithZkSaslTest extends ZooKeeperTestHarness with SaslSetup {
     aclAuthorizer2.configure(config.originals)
   }
 
-  @After
+  @AfterEach
   override def tearDown(): Unit = {
     System.clearProperty("zookeeper.allowSaslFailedClients")
     TestableDigestLoginModule.reset()

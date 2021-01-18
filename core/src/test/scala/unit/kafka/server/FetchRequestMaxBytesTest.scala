@@ -18,7 +18,6 @@
 package kafka.server
 
 import java.util.{Optional, Properties}
-
 import kafka.log.LogConfig
 import kafka.utils.TestUtils
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerRecord}
@@ -26,7 +25,8 @@ import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.record.MemoryRecords
 import org.apache.kafka.common.requests.FetchRequest.PartitionData
 import org.apache.kafka.common.requests.{FetchRequest, FetchResponse}
-import org.junit.{Assert, Test}
+import org.junit.jupiter.api.Assertions._
+import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
 
 import scala.jdk.CollectionConverters._
 
@@ -58,11 +58,13 @@ class FetchRequestMaxBytesTest extends BaseRequestTest {
     array
   }
 
+  @BeforeEach
   override def setUp(): Unit = {
     super.setUp()
     producer = TestUtils.createProducer(TestUtils.getBrokerListStrFromServers(servers))
   }
 
+  @AfterEach
   override def tearDown(): Unit = {
     if (producer != null)
       producer.close()
@@ -116,16 +118,16 @@ class FetchRequestMaxBytesTest extends BaseRequestTest {
         Map(testTopicPartition ->
           new PartitionData(fetchOffset, 0, Integer.MAX_VALUE, Optional.empty())).asJava).build(3))
     val records = response.responseData().get(testTopicPartition).records.records()
-    Assert.assertNotNull(records)
+    assertNotNull(records)
     val recordsList = records.asScala.toList
-    Assert.assertEquals(expected.size, recordsList.size)
+    assertEquals(expected.size, recordsList.size)
     recordsList.zipWithIndex.foreach {
       case (record, i) => {
         val buffer = record.value().duplicate()
         val array = new Array[Byte](buffer.remaining())
         buffer.get(array)
-        Assert.assertArrayEquals(s"expectNextRecords unexpected element ${i}",
-          expected(i), array)
+        assertArrayEquals(expected(i),
+          array, s"expectNextRecords unexpected element ${i}")
       }
     }
   }

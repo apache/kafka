@@ -16,25 +16,24 @@
  */
 package org.apache.kafka.common.requests;
 
+import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.message.FetchSnapshotResponseData;
+import org.apache.kafka.common.protocol.ApiKeys;
+import org.apache.kafka.common.protocol.ByteBufferAccessor;
+import org.apache.kafka.common.protocol.Errors;
+
 import java.nio.ByteBuffer;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
 import java.util.function.UnaryOperator;
-import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.common.message.FetchSnapshotResponseData;
-import org.apache.kafka.common.protocol.ApiKeys;
-import org.apache.kafka.common.protocol.ApiMessage;
-import org.apache.kafka.common.protocol.ByteBufferAccessor;
-import org.apache.kafka.common.protocol.Errors;
 
 final public class FetchSnapshotResponse extends AbstractResponse {
-    public final FetchSnapshotResponseData data;
+    private final FetchSnapshotResponseData data;
 
     public FetchSnapshotResponse(FetchSnapshotResponseData data) {
         super(ApiKeys.FETCH_SNAPSHOT);
-
         this.data = data;
     }
 
@@ -63,7 +62,7 @@ final public class FetchSnapshotResponse extends AbstractResponse {
     }
 
     @Override
-    public ApiMessage data() {
+    public FetchSnapshotResponseData data() {
         return data;
     }
 

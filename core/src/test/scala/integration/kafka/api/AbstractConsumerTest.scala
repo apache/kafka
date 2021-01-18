@@ -26,8 +26,8 @@ import org.apache.kafka.common.record.TimestampType
 import org.apache.kafka.common.TopicPartition
 import kafka.utils.{ShutdownableThread, TestUtils}
 import kafka.server.{BaseRequestTest, KafkaConfig}
-import org.junit.Assert._
-import org.junit.Before
+import org.junit.jupiter.api.Assertions._
+import org.junit.jupiter.api.BeforeEach
 
 import scala.jdk.CollectionConverters._
 import scala.collection.mutable.{ArrayBuffer, Buffer}
@@ -73,7 +73,7 @@ abstract class AbstractConsumerTest extends BaseRequestTest {
     properties.setProperty(KafkaConfig.GroupInitialRebalanceDelayMsProp, "10")
   }
 
-  @Before
+  @BeforeEach
   override def setUp(): Unit = {
     super.setUp()
 
@@ -134,8 +134,8 @@ abstract class AbstractConsumerTest extends BaseRequestTest {
         val timestamp = startingTimestamp + i
         assertEquals(timestamp.toLong, record.timestamp)
       } else
-        assertTrue(s"Got unexpected timestamp ${record.timestamp}. Timestamp should be between [$startingTimestamp, $now}]",
-          record.timestamp >= startingTimestamp && record.timestamp <= now)
+        assertTrue(record.timestamp >= startingTimestamp && record.timestamp <= now,
+          s"Got unexpected timestamp ${record.timestamp}. Timestamp should be between [$startingTimestamp, $now}]")
       assertEquals(offset.toLong, record.offset)
       val keyAndValueIndex = startingKeyAndValueIndex + i
       assertEquals(s"key $keyAndValueIndex", new String(record.key))
