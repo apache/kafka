@@ -242,8 +242,7 @@ subprojects {
   }
 
   // Remove the relevant project name once it's converted to JUnit 5
-  def shouldUseJUnit5 = !(["connect", "generator", "runtime", "examples", "streams-scala",
-    "streams"].contains(it.project.name) || it.project.name.startsWith("upgrade-system-tests-"))
+  def shouldUseJUnit5 = !(["generator", "runtime", "streams-scala", "streams"].contains(it.project.name))
 
   def testLoggingEvents = ["passed", "skipped", "failed"]
   def testShowStandardStreams = false
@@ -1599,6 +1598,7 @@ project(':streams:upgrade-system-tests-0100') {
 
   dependencies {
     testCompile libs.kafkaStreams_0100
+    testRuntime libs.junitJupiter
   }
 
   systemTestLibs {
@@ -1611,6 +1611,7 @@ project(':streams:upgrade-system-tests-0101') {
 
   dependencies {
     testCompile libs.kafkaStreams_0101
+    testRuntime libs.junitJupiter
   }
 
   systemTestLibs {
@@ -1623,6 +1624,7 @@ project(':streams:upgrade-system-tests-0102') {
 
   dependencies {
     testCompile libs.kafkaStreams_0102
+    testRuntime libs.junitJupiter
   }
 
   systemTestLibs {
@@ -1635,6 +1637,7 @@ project(':streams:upgrade-system-tests-0110') {
 
   dependencies {
     testCompile libs.kafkaStreams_0110
+    testRuntime libs.junitJupiter
   }
 
   systemTestLibs {
@@ -1647,6 +1650,7 @@ project(':streams:upgrade-system-tests-10') {
 
   dependencies {
     testCompile libs.kafkaStreams_10
+    testRuntime libs.junitJupiter
   }
 
   systemTestLibs {
@@ -1659,6 +1663,7 @@ project(':streams:upgrade-system-tests-11') {
 
   dependencies {
     testCompile libs.kafkaStreams_11
+    testRuntime libs.junitJupiter
   }
 
   systemTestLibs {
@@ -1671,6 +1676,7 @@ project(':streams:upgrade-system-tests-20') {
 
   dependencies {
     testCompile libs.kafkaStreams_20
+    testRuntime libs.junitJupiter
   }
 
   systemTestLibs {
@@ -1683,6 +1689,7 @@ project(':streams:upgrade-system-tests-21') {
 
   dependencies {
     testCompile libs.kafkaStreams_21
+    testRuntime libs.junitJupiter
   }
 
   systemTestLibs {
@@ -1695,6 +1702,7 @@ project(':streams:upgrade-system-tests-22') {
 
   dependencies {
     testCompile libs.kafkaStreams_22
+    testRuntime libs.junitJupiter
   }
 
   systemTestLibs {
@@ -1707,6 +1715,7 @@ project(':streams:upgrade-system-tests-23') {
 
   dependencies {
     testCompile libs.kafkaStreams_23
+    testRuntime libs.junitJupiter
   }
 
   systemTestLibs {
@@ -1719,6 +1728,7 @@ project(':streams:upgrade-system-tests-24') {
 
   dependencies {
     testCompile libs.kafkaStreams_24
+    testRuntime libs.junitJupiter
   }
 
   systemTestLibs {
@@ -1731,6 +1741,7 @@ project(':streams:upgrade-system-tests-25') {
 
   dependencies {
     testCompile libs.kafkaStreams_25
+    testRuntime libs.junitJupiter
   }
 
   systemTestLibs {
@@ -1743,6 +1754,7 @@ project(':streams:upgrade-system-tests-26') {
 
   dependencies {
     testCompile libs.kafkaStreams_26
+    testRuntime libs.junitJupiter
   }
 
   systemTestLibs {
@@ -1751,15 +1763,16 @@ project(':streams:upgrade-system-tests-26') {
 }
 
 project(':streams:upgrade-system-tests-27') {
-    archivesBaseName = "kafka-streams-upgrade-system-tests-27"
+  archivesBaseName = "kafka-streams-upgrade-system-tests-27"
 
-    dependencies {
-        testCompile libs.kafkaStreams_27
-    }
+  dependencies {
+    testCompile libs.kafkaStreams_27
+    testRuntime libs.junitJupiter
+  }
 
-    systemTestLibs {
-        dependsOn testJar
-    }
+  systemTestLibs {
+    dependsOn testJar
+  }
 }
 
 project(':jmh-benchmarks') {
