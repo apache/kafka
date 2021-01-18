@@ -1146,10 +1146,10 @@ public class SenderTest {
         long expectedSequenceValue,
         OptionalInt expectedLastAckedSequence
     ) {
-        assertEquals("Producer Id:", expectedProducerId, transactionManager.producerIdAndEpoch(tp).producerId);
-        assertEquals("Producer Epoch:", expectedProducerEpoch, transactionManager.producerIdAndEpoch(tp).epoch);
-        assertEquals("Seq Number:", expectedSequenceValue, transactionManager.sequenceNumber(tp).longValue());
-        assertEquals("Last Acked Seq Number:", expectedLastAckedSequence, transactionManager.lastAckedSequence(tp));
+        assertEquals(expectedProducerId, transactionManager.producerIdAndEpoch(tp).producerId, "Producer Id:");
+        assertEquals(expectedProducerEpoch, transactionManager.producerIdAndEpoch(tp).epoch, "Producer Epoch:");
+        assertEquals(expectedSequenceValue, transactionManager.sequenceNumber(tp).longValue(), "Seq Number:");
+        assertEquals(expectedLastAckedSequence, transactionManager.lastAckedSequence(tp), "Last Acked Seq Number:");
     }
 
     @Test
