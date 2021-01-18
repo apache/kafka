@@ -22,14 +22,14 @@ import kafka.metrics.KafkaYammerMetrics
 import kafka.utils.TestUtils
 import org.apache.kafka.common.TopicPartition
 import org.easymock.EasyMock
-import org.junit.{Before, Test}
-import org.junit.Assert._
+import org.junit.jupiter.api.{BeforeEach, Test}
+import org.junit.jupiter.api.Assertions._
 
 import scala.jdk.CollectionConverters._
 
 class AbstractFetcherManagerTest {
 
-  @Before
+  @BeforeEach
   def cleanMetricRegistry(): Unit = {
     TestUtils.clearYammerMetrics()
   }

@@ -24,7 +24,7 @@ import kafka.server._
 import kafka.utils.TestUtils
 import kafka.zk.ZooKeeperTestHarness
 import org.apache.kafka.common.security.auth.SecurityProtocol
-import org.junit.{After, Before}
+import org.junit.jupiter.api.{AfterEach, BeforeEach}
 
 import scala.collection.Seq
 import scala.collection.mutable.{ArrayBuffer, Buffer}
@@ -86,7 +86,7 @@ abstract class KafkaServerTestHarness extends ZooKeeperTestHarness {
   protected def clientSaslProperties: Option[Properties] = None
   protected def brokerTime(brokerId: Int): Time = Time.SYSTEM
 
-  @Before
+  @BeforeEach
   override def setUp(): Unit = {
     super.setUp()
 
@@ -108,7 +108,7 @@ abstract class KafkaServerTestHarness extends ZooKeeperTestHarness {
     configureSecurityAfterServersStart()
   }
 
-  @After
+  @AfterEach
   override def tearDown(): Unit = {
     if (servers != null) {
       TestUtils.shutdownServers(servers)

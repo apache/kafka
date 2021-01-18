@@ -14,10 +14,11 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.clients;
+package org.apache.kafka.common.protocol;
 
 import org.apache.kafka.common.message.ApiVersionsResponseData.ApiVersionsResponseKey;
-import org.apache.kafka.common.protocol.ApiKeys;
+
+import java.util.Optional;
 
 /**
  * Represents the min version and max version of an api key.
@@ -52,5 +53,15 @@ public class ApiVersion {
             ", minVersion=" + minVersion +
             ", maxVersion= " + maxVersion +
             ")";
+    }
+
+    public Optional<ApiVersion> intersect(ApiVersion other) {
+        if (other == null) {
+            return Optional.empty();
+        }
+        short minVersion = (short) Math.max(this.minVersion, other.minVersion);
+        short maxVersion = (short) Math.min(this.maxVersion, other.maxVersion);
+        return minVersion > maxVersion ? Optional.empty() :
+            Optional.of(new ApiVersion(apiKey, minVersion, maxVersion));
     }
 }

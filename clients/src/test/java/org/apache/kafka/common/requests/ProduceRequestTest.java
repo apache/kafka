@@ -88,7 +88,7 @@ public class ProduceRequestTest {
                                 .setRecords(memoryRecords)))).iterator()))
                 .setAcks((short) -1)
                 .setTimeoutMs(10)).build();
-        assertTrue(RequestUtils.hasIdempotentRecords(request));
+        assertTrue(RequestTestUtils.hasIdempotentRecords(request));
     }
 
     @Test
@@ -261,7 +261,7 @@ public class ProduceRequestTest {
                         .setTimeoutMs(5000));
         final ProduceRequest request = builder.build();
         assertTrue(RequestUtils.hasTransactionalRecords(request));
-        assertTrue(RequestUtils.hasIdempotentRecords(request));
+        assertTrue(RequestTestUtils.hasIdempotentRecords(request));
     }
 
     @Test
@@ -288,7 +288,7 @@ public class ProduceRequestTest {
 
         final ProduceRequest request = builder.build();
         assertFalse(RequestUtils.hasTransactionalRecords(request));
-        assertTrue(RequestUtils.hasIdempotentRecords(request));
+        assertTrue(RequestTestUtils.hasIdempotentRecords(request));
     }
 
     private void assertThrowsInvalidRecordExceptionForAllVersions(ProduceRequest.Builder builder) {
