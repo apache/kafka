@@ -711,7 +711,7 @@ class KafkaApis(val requestChannel: RequestChannel,
       }
     }
 
-    def maybeDownConvertStorageError(error: Errors, version: Short): Errors = {
+    def maybeDownConvertStorageError(error: Errors): Errors = {
       // If consumer sends FetchRequest V5 or earlier, the client library is not guaranteed to recognize the error code
       // for KafkaStorageException. In this case the client library will translate KafkaStorageException to
       // UnknownServerException which is not retriable. We can ensure that consumer will update metadata and retry
@@ -762,16 +762,15 @@ class KafkaApis(val requestChannel: RequestChannel,
                 // as possible. With KIP-283, we have the ability to lazily down-convert in a chunked manner. The lazy, chunked
                 // down-conversion always guarantees that at least one batch of messages is down-converted and sent out to the
                 // client.
-                val error = maybeDownConvertStorageError(Errors.forCode(partitionData.errorCode), versionId)
-                  new FetchResponseData.FetchablePartitionResponse()
-                    .setPartition(tp.partition)
-                    .setErrorCode(error.code)
-                    .setHighWatermark(partitionData.highWatermark)
-                    .setLastStableOffset(partitionData.lastStableOffset)
-                    .setLogStartOffset(partitionData.logStartOffset)
-                    .setAbortedTransactions(partitionData.abortedTransactions)
-                    .setRecordSet(new LazyDownConversionRecords(tp, unconvertedRecords, magic, fetchContext.getFetchOffset(tp).get, time))
-                    .setPreferredReadReplica(partitionData.preferredReadReplica())
+                new FetchResponseData.FetchablePartitionResponse()
+                  .setPartition(tp.partition)
+                  .setErrorCode(maybeDownConvertStorageError(Errors.forCode(partitionData.errorCode)).code)
+                  .setHighWatermark(partitionData.highWatermark)
+                  .setLastStableOffset(partitionData.lastStableOffset)
+                  .setLogStartOffset(partitionData.logStartOffset)
+                  .setAbortedTransactions(partitionData.abortedTransactions)
+                  .setRecordSet(new LazyDownConversionRecords(tp, unconvertedRecords, magic, fetchContext.getFetchOffset(tp).get, time))
+                  .setPreferredReadReplica(partitionData.preferredReadReplica())
               } catch {
                 case e: UnsupportedCompressionTypeException =>
                   trace("Received unsupported compression type error during down-conversion", e)
@@ -781,7 +780,7 @@ class KafkaApis(val requestChannel: RequestChannel,
           case None =>
             new FetchResponseData.FetchablePartitionResponse()
               .setPartition(tp.partition)
-              .setErrorCode(maybeDownConvertStorageError(Errors.forCode(partitionData.errorCode), versionId).code)
+              .setErrorCode(maybeDownConvertStorageError(Errors.forCode(partitionData.errorCode)).code)
               .setHighWatermark(partitionData.highWatermark)
               .setLastStableOffset(partitionData.lastStableOffset)
               .setLogStartOffset(partitionData.logStartOffset)
@@ -800,13 +799,10 @@ class KafkaApis(val requestChannel: RequestChannel,
       responsePartitionData.foreach { case (tp, data) =>
         val abortedTransactions = data.abortedTransactions.map(_.asJava).orNull
         val lastStableOffset = data.lastStableOffset.getOrElse(FetchResponse.INVALID_LAST_STABLE_OFFSET)
-        if (data.isReassignmentFetch)
-          reassigningPartitions.add(tp)
-        val error = maybeDownConvertStorageError(data.error, versionId)
-        partitions.put(tp,
-          new FetchResponseData.FetchablePartitionResponse()
+        if (data.isReassignmentFetch) reassigningPartitions.add(tp)
+        partitions.put(tp, new FetchResponseData.FetchablePartitionResponse()
             .setPartition(tp.partition)
-            .setErrorCode(error.code)
+            .setErrorCode(maybeDownConvertStorageError(data.error).code)
             .setHighWatermark(data.highWatermark)
             .setLastStableOffset(lastStableOffset)
             .setLogStartOffset(data.logStartOffset)
