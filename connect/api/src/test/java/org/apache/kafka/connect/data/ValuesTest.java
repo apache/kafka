@@ -79,7 +79,7 @@ public class ValuesTest {
     }
 
     @Test
-    @Timeout(5000)
+    @Timeout(5)
     public void shouldNotEncounterInfiniteLoop() {
         // This byte sequence gets parsed as CharacterIterator.DONE and can cause issues if
         // comparisons to that character are done to check if the end of a string has been reached.
