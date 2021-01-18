@@ -242,8 +242,7 @@ subprojects {
   }
 
   // Remove the relevant project name once it's converted to JUnit 5
-  def shouldUseJUnit5 = !(["api", "connect", "core", "file", "runtime", "examples",
-    "streams-scala", "streams"].contains(it.project.name) || it.project.name.startsWith("upgrade-system-tests-"))
+  def shouldUseJUnit5 = !(["runtime", "streams-scala", "streams"].contains(it.project.name))
 
   def testLoggingEvents = ["passed", "skipped", "failed"]
   def testShowStandardStreams = false
