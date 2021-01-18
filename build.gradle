@@ -1889,8 +1889,6 @@ project(':connect:transforms') {
 
     testCompile libs.easymock
     testCompile libs.junitJupiter
-    testCompile libs.powermockJunit4
-    testCompile libs.powermockEasymock
 
     testRuntime libs.slf4jlog4j
     testCompile project(':clients').sourceSets.test.output
@@ -1929,8 +1927,6 @@ project(':connect:json') {
 
     testCompile libs.easymock
     testCompile libs.junitJupiter
-    testCompile libs.powermockJunit4
-    testCompile libs.powermockEasymock
 
     testRuntime libs.slf4jlog4j
     testCompile project(':clients').sourceSets.test.output
