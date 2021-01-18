@@ -136,6 +136,10 @@ public class StreamThreadStateStoreProviderTest {
                 Serdes.String(),
                 Serdes.String()),
             "the-processor");
+        topology.addStateStore(
+            new TimeOrderedKeyValueBufferBuilder<>(
+                "suppression-store", Serdes.String(), Serdes.String()),
+            "the-processor");
 
         final Properties properties = new Properties();
         final String applicationId = "applicationId";
@@ -221,6 +225,18 @@ public class StreamThreadStateStoreProviderTest {
                     "[class org.apache.kafka.streams.state.internals.MeteredKeyValueStore]."
             )
         );
+    }
+
+    @Test
+    public void shouldFindTimeOrderedKeyValueBuffers() {
+        mockThread(true);
+        final List<ReadOnlyKeyValueStore<String, String>> kvStores =
+            provider.stores(StoreQueryParameters.fromNameAndType("suppression-store", QueryableStoreTypes.keyValueStore()));
+        assertEquals(2, kvStores.size());
+        for (final ReadOnlyKeyValueStore<String, String> store: kvStores) {
+            assertThat(store, instanceOf(ReadOnlyKeyValueStore.class));
+            assertThat(store, not(instanceOf(TimestampedKeyValueStore.class)));
+        }
     }
 
     @Test

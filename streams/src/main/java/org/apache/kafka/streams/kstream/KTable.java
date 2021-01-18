@@ -715,7 +715,8 @@ public interface KTable<K, V> {
     /**
      * Suppress some updates from this changelog stream, determined by the supplied {@link Suppressed} configuration.
      *
-     * This controls what updates downstream table and stream operations will receive.
+     * This controls what updates downstream table and stream operations will receive. You can query the current (prior) values
+     * with the {@link Suppressed} instance's name iff {@link Suppressed#enableQuery()} is true.
      *
      * @param suppressed Configuration object determining what, if any, updates to suppress
      * @return A new KTable with the desired suppression characteristics.

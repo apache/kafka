@@ -515,6 +515,8 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
 
     @Override
     public KTable<K, V> suppress(final Suppressed<? super K> suppressed) {
+        Objects.requireNonNull(suppressed, "suppressed can't be null");
+
         final String name;
         if (suppressed instanceof NamedSuppressed) {
             final String givenName = ((NamedSuppressed<?>) suppressed).name();
@@ -524,6 +526,13 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
         }
 
         final SuppressedInternal<K> suppressedInternal = buildSuppress(suppressed, name);
+
+        final String queryableStoreName;
+        if (suppressed.isQueryEnabled()) {
+            queryableStoreName = suppressedInternal.name();
+        } else {
+            queryableStoreName = null;
+        }
 
         final String storeName =
             suppressedInternal.name() != null ? suppressedInternal.name() + "-store" : builder.newStoreName(SUPPRESS_NAME);
@@ -559,7 +568,7 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
             keySerde,
             valueSerde,
             Collections.singleton(this.name),
-            null,
+            queryableStoreName,
             suppressionSupplier,
             node,
             builder
