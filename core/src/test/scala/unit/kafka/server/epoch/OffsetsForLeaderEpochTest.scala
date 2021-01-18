@@ -31,8 +31,8 @@ import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.record.RecordBatch
 import org.apache.kafka.common.requests.OffsetsForLeaderEpochResponse.{UNDEFINED_EPOCH, UNDEFINED_EPOCH_OFFSET}
 import org.easymock.EasyMock._
-import org.junit.Assert._
-import org.junit.{After, Before, Test}
+import org.junit.jupiter.api.Assertions._
+import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
 
 import scala.jdk.CollectionConverters._
 
@@ -45,7 +45,7 @@ class OffsetsForLeaderEpochTest {
   private var replicaManager: ReplicaManager = _
   private var quotaManager: QuotaManagers = _
 
-  @Before
+  @BeforeEach
   def setUp(): Unit = {
     quotaManager = QuotaFactory.instantiate(config, metrics, time, "")
   }
@@ -130,7 +130,7 @@ class OffsetsForLeaderEpochTest {
       response)
   }
 
-  @After
+  @AfterEach
   def tearDown(): Unit = {
     Option(replicaManager).foreach(_.shutdown(checkpointHW = false))
     Option(quotaManager).foreach(_.shutdown())

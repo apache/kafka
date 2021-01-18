@@ -23,16 +23,14 @@ import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests.FetchMetadata.{FINAL_EPOCH, INVALID_SESSION_ID}
 import org.apache.kafka.common.requests.{FetchRequest, FetchResponse, FetchMetadata => JFetchMetadata}
 import org.apache.kafka.common.utils.Utils
-import org.junit.Assert._
-import org.junit.rules.Timeout
-import org.junit.{Rule, Test}
+import org.junit.jupiter.api.Assertions._
+import org.junit.jupiter.api.{Test, Timeout}
 
 import java.util
 import java.util.{Collections, Optional}
 
+@Timeout(120)
 class FetchSessionTest {
-  @Rule
-  def globalTimeout = Timeout.millis(120000)
 
   @Test
   def testNewSessionId(): Unit = {
@@ -47,8 +45,8 @@ class FetchSessionTest {
     var i = 0
     for (sessionId <- sessionIds) {
       i = i + 1
-      assertTrue("Missing session " + i + " out of " + sessionIds.size + "(" + sessionId + ")",
-        cache.get(sessionId).isDefined)
+      assertTrue(cache.get(sessionId).isDefined,
+        "Missing session " + i + " out of " + sessionIds.size + "(" + sessionId + ")")
     }
     assertEquals(sessionIds.size, cache.size)
   }
@@ -625,8 +623,7 @@ class FetchSessionTest {
     assertEquals(2, session3resp.dataByTopicPartition.size)
 
     assertTrue(cache.get(session1resp.sessionId()).isDefined)
-    assertFalse("session 2 should have been evicted by latest session, as session 1 was used more recently",
-      cache.get(session2resp.sessionId()).isDefined)
+    assertFalse(cache.get(session2resp.sessionId()).isDefined, "session 2 should have been evicted by latest session, as session 1 was used more recently")
     assertTrue(cache.get(session3resp.sessionId()).isDefined)
   }
 
@@ -744,8 +741,7 @@ class FetchSessionTest {
     assertTrue(cache.get(session1resp.sessionId()).isDefined)
     // even though session 2 is more recent than session 1, and has not reached expiry time, it is less
     // privileged than session 2, and thus session 3 should be entered and session 2 evicted.
-    assertFalse("session 2 should have been evicted by session 3",
-      cache.get(session2resp.sessionId()).isDefined)
+    assertFalse(cache.get(session2resp.sessionId()).isDefined, "session 2 should have been evicted by session 3")
     assertTrue(cache.get(session3resp.sessionId()).isDefined)
     assertEquals(2, cache.size)
 
@@ -783,8 +779,7 @@ class FetchSessionTest {
     assertTrue(session4resp.sessionId() != INVALID_SESSION_ID)
     assertEquals(2, session4resp.dataByTopicPartition.size)
 
-    assertFalse("session 1 should have been evicted by session 4 even though it is privileged as it has hit eviction time",
-      cache.get(session1resp.sessionId()).isDefined)
+    assertFalse(cache.get(session1resp.sessionId()).isDefined, "session 1 should have been evicted by session 4 even though it is privileged as it has hit eviction time")
     assertTrue(cache.get(session3resp.sessionId()).isDefined)
     assertTrue(cache.get(session4resp.sessionId()).isDefined)
     assertEquals(2, cache.size)

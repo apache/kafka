@@ -16,6 +16,8 @@
   */
 package kafka.server
 
+import java.io.DataInputStream
+import java.util.{Optional, Properties}
 import kafka.api.KAFKA_0_11_0_IV2
 import kafka.log.LogConfig
 import kafka.message.{GZIPCompressionCodec, ProducerCompressionCodec, ZStdCompressionCodec}
@@ -27,8 +29,8 @@ import org.apache.kafka.common.record.{Record, RecordBatch, Records}
 import org.apache.kafka.common.requests.{FetchRequest, FetchResponse, FetchMetadata => JFetchMetadata}
 import org.apache.kafka.common.serialization.{ByteArraySerializer, StringSerializer}
 import org.apache.kafka.common.{IsolationLevel, TopicPartition}
-import org.junit.Assert._
-import org.junit.Test
+import org.junit.jupiter.api.Assertions._
+import org.junit.jupiter.api.{AfterEach, Test}
 
 import java.io.DataInputStream
 import java.util
@@ -49,6 +51,7 @@ class FetchRequestTest extends BaseRequestTest {
     properties.put(KafkaConfig.FetchMaxBytes, Int.MaxValue.toString)
   }
 
+  @AfterEach
   override def tearDown(): Unit = {
     if (producer != null)
       producer.close()
@@ -136,8 +139,8 @@ class FetchRequestTest extends BaseRequestTest {
     assertEquals(Errors.NONE.code, partitionData3.errorCode)
     assertTrue(partitionData3.highWatermark > 0)
     val size3 = records(partitionData3).map(_.sizeInBytes).sum
-    assertTrue(s"Expected $size3 to be smaller than $maxResponseBytes", size3 <= maxResponseBytes)
-    assertTrue(s"Expected $size3 to be larger than $maxPartitionBytes", size3 > maxPartitionBytes)
+    assertTrue(size3 <= maxResponseBytes, s"Expected $size3 to be smaller than $maxResponseBytes")
+    assertTrue(size3 > maxPartitionBytes, s"Expected $size3 to be larger than $maxPartitionBytes")
     assertTrue(maxPartitionBytes < partitionData3.recordSet.sizeInBytes)
 
     // 4. Partition with message larger than the response limit at the start of the list
@@ -154,7 +157,7 @@ class FetchRequestTest extends BaseRequestTest {
     assertEquals(Errors.NONE.code, partitionData4.errorCode)
     assertTrue(partitionData4.highWatermark > 0)
     val size4 = records(partitionData4).map(_.sizeInBytes).sum
-    assertTrue(s"Expected $size4 to be larger than $maxResponseBytes", size4 > maxResponseBytes)
+    assertTrue(size4 > maxResponseBytes, s"Expected $size4 to be larger than $maxResponseBytes")
     assertTrue(maxResponseBytes < partitionData4.recordSet.sizeInBytes)
   }
 
@@ -379,8 +382,8 @@ class FetchRequestTest extends BaseRequestTest {
           // Check that we have received almost `maxPartitionBytes` (minus a tolerance) since in
           // the case of OOM, the size will be significantly smaller. We can't check for exactly
           // maxPartitionBytes since we use approx message sizes that include only the message value.
-          assertTrue(s"Fetch size too small $size, broker may have run out of memory",
-              size > maxPartitionBytes - batchSize)
+          assertTrue(size > maxPartitionBytes - batchSize,
+              s"Fetch size too small $size, broker may have run out of memory")
           None
         } else {
           Some(receive[FetchResponse](socket, ApiKeys.FETCH, version))
@@ -502,7 +505,7 @@ class FetchRequestTest extends BaseRequestTest {
     val req1 = createFetchRequest(List(foo0, foo1, bar0), JFetchMetadata.INITIAL, Nil)
     val resp1 = sendFetchRequest(0, req1)
     assertEquals(Errors.NONE, resp1.error())
-    assertTrue("Expected the broker to create a new incremental fetch session", resp1.sessionId() > 0)
+    assertTrue(resp1.sessionId() > 0, "Expected the broker to create a new incremental fetch session")
     debug(s"Test created an incremental fetch session ${resp1.sessionId}")
     assertTrue(resp1.dataByTopicPartition.containsKey(foo0))
     assertTrue(resp1.dataByTopicPartition.containsKey(foo1))
@@ -513,12 +516,11 @@ class FetchRequestTest extends BaseRequestTest {
     val req2 = createFetchRequest(Nil, new JFetchMetadata(resp1.sessionId(), 1), Nil)
     val resp2 = sendFetchRequest(0, req2)
     assertEquals(Errors.NONE, resp2.error())
-    assertEquals("Expected the broker to continue the incremental fetch session",
-      resp1.sessionId(), resp2.sessionId())
-    assertFalse(resp2.dataByTopicPartition.containsKey(foo0))
-    assertFalse(resp2.dataByTopicPartition.containsKey(foo1))
-    assertTrue(resp2.dataByTopicPartition.containsKey(bar0))
-    assertEquals(Errors.UNKNOWN_TOPIC_OR_PARTITION.code, resp2.dataByTopicPartition.get(bar0).errorCode)
+    assertEquals(resp1.sessionId(), resp2.sessionId(), "Expected the broker to continue the incremental fetch session")
+    assertFalse(resp2.dataByTopicPartition().containsKey(foo0))
+    assertFalse(resp2.dataByTopicPartition().containsKey(foo1))
+    assertTrue(resp2.dataByTopicPartition().containsKey(bar0))
+    assertEquals(Errors.UNKNOWN_TOPIC_OR_PARTITION.code(), resp2.dataByTopicPartition().get(bar0).errorCode())
     createTopic("bar", Map(0 -> List(0, 1)))
     val req3 = createFetchRequest(Nil, new JFetchMetadata(resp1.sessionId(), 2), Nil)
     val resp3 = sendFetchRequest(0, req3)

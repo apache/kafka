@@ -26,12 +26,12 @@ import kafka.network.RequestConvertToJson.requestHeaderNode
 import org.apache.kafka.common.memory.MemoryPool
 import org.apache.kafka.common.message._
 import org.apache.kafka.common.network.{ClientInformation, ListenerName, NetworkSend}
-import org.junit.Test
+import org.junit.jupiter.api.Test
 import org.apache.kafka.common.protocol.{ApiKeys, ByteBufferAccessor, ObjectSerializationCache}
 import org.apache.kafka.common.requests._
 import org.apache.kafka.common.security.auth.{KafkaPrincipal, SecurityProtocol}
 import org.easymock.EasyMock.createNiceMock
-import org.junit.Assert.assertEquals
+import org.junit.jupiter.api.Assertions.assertEquals
 
 import scala.collection.mutable.ArrayBuffer
 
@@ -62,7 +62,7 @@ class RequestConvertToJsonTest {
         case _ : IllegalStateException => unhandledKeys += key.toString
       }
     }}
-    assertEquals("Unhandled request keys", ArrayBuffer.empty, unhandledKeys)
+    assertEquals(ArrayBuffer.empty, unhandledKeys, "Unhandled request keys")
   }
 
   @Test
@@ -83,7 +83,7 @@ class RequestConvertToJsonTest {
         case _ : IllegalStateException => unhandledKeys += key.toString
       }
     }}
-    assertEquals("Unhandled response keys", ArrayBuffer.empty, unhandledKeys)
+    assertEquals(ArrayBuffer.empty, unhandledKeys, "Unhandled response keys")
   }
 
   @Test
