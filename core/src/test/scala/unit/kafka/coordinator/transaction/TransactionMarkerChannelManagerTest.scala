@@ -32,8 +32,8 @@ import org.apache.kafka.common.requests.{RequestHeader, TransactionResult, Write
 import org.apache.kafka.common.utils.MockTime
 import org.apache.kafka.common.{Node, TopicPartition}
 import org.easymock.{Capture, EasyMock}
-import org.junit.Assert._
-import org.junit.Test
+import org.junit.jupiter.api.Assertions._
+import org.junit.jupiter.api.Test
 
 import scala.jdk.CollectionConverters._
 import scala.collection.mutable
@@ -148,8 +148,8 @@ class TransactionMarkerChannelManagerTest {
     }
 
     assertNotNull(addMarkerFuture)
-    assertTrue("Add marker task failed with exception " + addMarkerFuture.get().get,
-      addMarkerFuture.get().isSuccess)
+    assertTrue(addMarkerFuture.get().isSuccess,
+      "Add marker task failed with exception " + addMarkerFuture.get().get)
 
     EasyMock.verify(txnStateManager)
   }

@@ -21,8 +21,8 @@ import java.util
 import kafka.utils.TestUtils
 import org.apache.kafka.clients.admin.{Admin, AdminClientConfig}
 import org.apache.kafka.common.errors.UnsupportedByAuthenticationException
-import org.junit.{After, Before, Test}
-import org.junit.Assert.assertThrows
+import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
+import org.junit.jupiter.api.Assertions.assertThrows
 
 import scala.concurrent.ExecutionException
 
@@ -31,7 +31,7 @@ class DelegationTokenRequestsOnPlainTextTest extends BaseRequestTest {
 
   override def brokerCount = 1
 
-  @Before
+  @BeforeEach
   override def setUp(): Unit = {
     super.setUp()
   }
@@ -63,7 +63,7 @@ class DelegationTokenRequestsOnPlainTextTest extends BaseRequestTest {
   }
 
 
-  @After
+  @AfterEach
   override def tearDown(): Unit = {
     if (adminClient != null)
       adminClient.close()

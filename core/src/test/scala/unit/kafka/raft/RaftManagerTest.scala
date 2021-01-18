@@ -22,7 +22,7 @@ import kafka.raft.KafkaRaftManager.RaftIoThread
 import org.apache.kafka.raft.KafkaRaftClient
 import org.junit.jupiter.api.Assertions._
 import org.mockito.Mockito._
-import org.junit.Test
+import org.junit.jupiter.api.Test
 
 class RaftManagerTest {
 

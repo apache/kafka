@@ -14,7 +14,6 @@ package kafka.api
 
 import java.util.Properties
 import java.util.concurrent.ExecutionException
-
 import kafka.api.GroupAuthorizerIntegrationTest._
 import kafka.security.auth.SimpleAclAuthorizer
 import kafka.security.authorizer.AclEntry.WildcardHost
@@ -29,8 +28,8 @@ import org.apache.kafka.common.errors.TopicAuthorizationException
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.resource.{PatternType, Resource, ResourcePattern, ResourceType}
 import org.apache.kafka.common.security.auth.{AuthenticationContext, KafkaPrincipal, KafkaPrincipalBuilder}
-import org.junit.Assert._
-import org.junit.{Before, Test}
+import org.junit.jupiter.api.Assertions._
+import org.junit.jupiter.api.{BeforeEach, Test}
 
 import scala.jdk.CollectionConverters._
 
@@ -74,7 +73,7 @@ class GroupAuthorizerIntegrationTest extends BaseRequestTest {
     properties.put(BrokerSecurityConfigs.PRINCIPAL_BUILDER_CLASS_CONFIG, classOf[GroupPrincipalBuilder].getName)
   }
 
-  @Before
+  @BeforeEach
   override def setUp(): Unit = {
     doSetup(createOffsetsTopic = false)
 

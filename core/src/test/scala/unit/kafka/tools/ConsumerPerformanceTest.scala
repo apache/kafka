@@ -21,8 +21,8 @@ import java.io.ByteArrayOutputStream
 import java.text.SimpleDateFormat
 
 import kafka.utils.Exit
-import org.junit.Assert.{assertEquals, assertThrows}
-import org.junit.Test
+import org.junit.jupiter.api.Assertions.{assertEquals, assertThrows}
+import org.junit.jupiter.api.Test
 
 class ConsumerPerformanceTest {
 

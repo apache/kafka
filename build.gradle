@@ -242,8 +242,8 @@ subprojects {
   }
 
   // Remove the relevant project name once it's converted to JUnit 5
-  def shouldUseJUnit5 = !(["connect", "core", "generator", "runtime", "examples",
-    "streams-scala", "streams"].contains(it.project.name) || it.project.name.startsWith("upgrade-system-tests-"))
+  def shouldUseJUnit5 = !(["connect", "generator", "runtime", "examples", "streams-scala",
+    "streams"].contains(it.project.name) || it.project.name.startsWith("upgrade-system-tests-"))
 
   def testLoggingEvents = ["passed", "skipped", "failed"]
   def testShowStandardStreams = false
@@ -786,9 +786,7 @@ project(':core') {
     testCompile libs.apachedsLdifPartition
     testCompile libs.apachedsMavibotPartition
     testCompile libs.apachedsJdbmPartition
-    testCompile libs.junitJupiterApi
-    testCompile libs.junitVintageEngine
-    testCompile libs.scalatest
+    testCompile libs.junitJupiter
     testCompile libs.slf4jlog4j
     testCompile libs.jfreechart
   }

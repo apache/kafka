@@ -29,8 +29,8 @@ import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.zookeeper.KeeperException.Code
 import org.apache.zookeeper.data.Stat
 import org.easymock.EasyMock
-import org.junit.Assert._
-import org.junit.{Before, Test}
+import org.junit.jupiter.api.Assertions._
+import org.junit.jupiter.api.{BeforeEach, Test}
 
 class ReplicaStateMachineTest {
   private var controllerContext: ControllerContext = null
@@ -46,7 +46,7 @@ class ReplicaStateMachineTest {
   private val replica = PartitionAndReplica(partition, brokerId)
   private val replicas = Seq(replica)
 
-  @Before
+  @BeforeEach
   def setUp(): Unit = {
     controllerContext = new ControllerContext
     controllerContext.epoch = controllerEpoch
