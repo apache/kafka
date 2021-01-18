@@ -64,18 +64,8 @@ class ApiUtilsTest {
     assertEquals(s1, ApiUtils.readShortString(bb))
 
     // One byte too big
-    val s2: String = TestUtils.randomString(Short.MaxValue + 1) 
-    try {
-      ApiUtils.shortStringLength(s2)
-      fail
-    } catch {
-      case _: KafkaException => // ok
-    }
-    try {
-      ApiUtils.writeShortString(bb, s2)
-      fail
-    } catch {
-      case _: KafkaException => // ok
-    }
+    val s2: String = TestUtils.randomString(Short.MaxValue + 1)
+    assertThrows(classOf[KafkaException], () => ApiUtils.shortStringLength(s2))
+    assertThrows(classOf[KafkaException], () => ApiUtils.writeShortString(bb, s2))
   }
 }

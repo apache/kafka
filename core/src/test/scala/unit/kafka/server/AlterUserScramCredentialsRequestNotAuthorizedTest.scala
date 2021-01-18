@@ -17,7 +17,6 @@
 package kafka.server
 
 import kafka.network.SocketServer
-import kafka.server.{AlterCredentialsTest, BaseRequestTest, KafkaConfig}
 import org.apache.kafka.clients.admin.ScramMechanism
 import org.apache.kafka.common.message.AlterUserScramCredentialsRequestData
 import org.apache.kafka.common.message.AlterUserScramCredentialsResponseData.AlterUserScramCredentialsResult

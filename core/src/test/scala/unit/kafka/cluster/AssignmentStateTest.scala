@@ -29,53 +29,53 @@ object AssignmentStateTest extends AbstractPartitionTest {
     Arguments.of(
       List[Integer](brokerId, brokerId + 1, brokerId + 2),
       List[Integer](brokerId, brokerId + 1, brokerId + 2),
-      List.empty[Integer], List.empty[Integer], Seq.empty[Int], false),
+      List.empty[Integer], List.empty[Integer], Seq.empty[Int], Boolean.box(false)),
     Arguments.of(
       List[Integer](brokerId, brokerId + 1),
       List[Integer](brokerId, brokerId + 1, brokerId + 2),
-      List.empty[Integer], List.empty[Integer], Seq.empty[Int], true),
+      List.empty[Integer], List.empty[Integer], Seq.empty[Int], Boolean.box(true)),
     Arguments.of(
       List[Integer](brokerId, brokerId + 1, brokerId + 2),
       List[Integer](brokerId, brokerId + 1, brokerId + 2),
       List[Integer](brokerId + 3, brokerId + 4),
       List[Integer](brokerId + 1),
-      Seq(brokerId, brokerId + 1, brokerId + 2), false),
+      Seq(brokerId, brokerId + 1, brokerId + 2), Boolean.box(false)),
     Arguments.of(
       List[Integer](brokerId, brokerId + 1, brokerId + 2),
       List[Integer](brokerId, brokerId + 1, brokerId + 2),
       List[Integer](brokerId + 3, brokerId + 4),
       List.empty[Integer],
-      Seq(brokerId, brokerId + 1, brokerId + 2), false),
+      Seq(brokerId, brokerId + 1, brokerId + 2), Boolean.box(false)),
     Arguments.of(
       List[Integer](brokerId, brokerId + 1, brokerId + 2),
       List[Integer](brokerId, brokerId + 1, brokerId + 2),
       List.empty[Integer],
       List[Integer](brokerId + 1),
-      Seq(brokerId, brokerId + 1, brokerId + 2), false),
+      Seq(brokerId, brokerId + 1, brokerId + 2), Boolean.box(false)),
     Arguments.of(
       List[Integer](brokerId + 1, brokerId + 2),
       List[Integer](brokerId + 1, brokerId + 2),
       List[Integer](brokerId),
       List.empty[Integer],
-      Seq(brokerId + 1, brokerId + 2), false),
+      Seq(brokerId + 1, brokerId + 2), Boolean.box(false)),
     Arguments.of(
       List[Integer](brokerId + 2, brokerId + 3, brokerId + 4),
       List[Integer](brokerId, brokerId + 1, brokerId + 2),
       List[Integer](brokerId + 3, brokerId + 4, brokerId + 5),
       List.empty[Integer],
-      Seq(brokerId, brokerId + 1, brokerId + 2), false),
+      Seq(brokerId, brokerId + 1, brokerId + 2), Boolean.box(false)),
     Arguments.of(
       List[Integer](brokerId + 2, brokerId + 3, brokerId + 4),
       List[Integer](brokerId, brokerId + 1, brokerId + 2),
       List[Integer](brokerId + 3, brokerId + 4, brokerId + 5),
       List.empty[Integer],
-      Seq(brokerId, brokerId + 1, brokerId + 2), false),
+      Seq(brokerId, brokerId + 1, brokerId + 2), Boolean.box(false)),
     Arguments.of(
       List[Integer](brokerId + 2, brokerId + 3),
       List[Integer](brokerId, brokerId + 1, brokerId + 2),
       List[Integer](brokerId + 3, brokerId + 4, brokerId + 5),
       List.empty[Integer],
-      Seq(brokerId, brokerId + 1, brokerId + 2), true)
+      Seq(brokerId, brokerId + 1, brokerId + 2), Boolean.box(true))
   ).asJava.stream()
 }
 

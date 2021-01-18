@@ -17,7 +17,6 @@
 package kafka.server
 
 import kafka.network.SocketServer
-import kafka.server.{BaseRequestTest, DescribeCredentialsTest, KafkaConfig}
 import org.apache.kafka.common.message.DescribeUserScramCredentialsRequestData
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests.{DescribeUserScramCredentialsRequest, DescribeUserScramCredentialsResponse}
