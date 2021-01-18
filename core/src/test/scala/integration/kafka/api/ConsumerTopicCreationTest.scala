@@ -23,8 +23,8 @@ import org.apache.kafka.clients.admin.NewTopic
 import org.apache.kafka.clients.consumer.ConsumerConfig
 import org.apache.kafka.clients.producer.{ProducerConfig, ProducerRecord}
 import org.junit.jupiter.api.Assertions._
-import org.junit.jupiter.params.ParameterizedTest
-import org.junit.jupiter.params.provider.{Arguments, MethodSource}
+import org.junit.jupiter.api.Test
+import org.junit.jupiter.params.provider.Arguments
 
 import java.lang.{Boolean => JBoolean}
 import java.time.Duration
@@ -35,9 +35,21 @@ import java.util.Collections
  * Tests behavior of specifying auto topic creation configuration for the consumer and broker
  */
 class ConsumerTopicCreationTest {
-  @ParameterizedTest
-  @MethodSource(Array("parameters"))
-  def testAutoTopicCreation(brokerAutoTopicCreationEnable: JBoolean, consumerAllowAutoCreateTopics: JBoolean): Unit = {
+
+
+  @Test
+  def testAutoCreationEnabled(): Unit = testAutoTopicCreation(true, true)
+
+  @Test
+  def testBrokerAutoCreationEnabled(): Unit = testAutoTopicCreation(true, false)
+
+  @Test
+  def testClientAutoCreationEnabled(): Unit = testAutoTopicCreation(false, true)
+
+  @Test
+  def testAutoCreationDisabled(): Unit = testAutoTopicCreation(false, false)
+
+  private def testAutoTopicCreation(brokerAutoTopicCreationEnable: JBoolean, consumerAllowAutoCreateTopics: JBoolean): Unit = {
     val testCase = new ConsumerTopicCreationTest.TestCase(brokerAutoTopicCreationEnable, consumerAllowAutoCreateTopics)
     testCase.setUp()
     try testCase.test() finally testCase.tearDown()
@@ -47,10 +59,10 @@ class ConsumerTopicCreationTest {
 object ConsumerTopicCreationTest {
 
   class TestCase(brokerAutoTopicCreationEnable: JBoolean, consumerAllowAutoCreateTopics: JBoolean) extends IntegrationTestHarness {
-    private[this] val topic_1 = "topic-1"
-    private[this] val topic_2 = "topic-2"
-    private[this] val producerClientId = "ConsumerTestProducer"
-    private[this] val consumerClientId = "ConsumerTestConsumer"
+    private val topic_1 = "topic-1"
+    private val topic_2 = "topic-2"
+    private val producerClientId = "ConsumerTestProducer"
+    private val consumerClientId = "ConsumerTestConsumer"
 
     // configure server properties
     this.serverConfig.setProperty(KafkaConfig.ControlledShutdownEnableProp, "false") // speed up shutdown
