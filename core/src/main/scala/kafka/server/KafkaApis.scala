@@ -818,7 +818,7 @@ class KafkaApis(val requestChannel: RequestChannel,
       def createResponse(throttleTimeMs: Int): FetchResponse = {
         // Down-convert messages for each partition if required
         val convertedData = new util.LinkedHashMap[TopicPartition, FetchResponseData.FetchablePartitionResponse]
-        unconvertedFetchResponse.dataByTopicPartition.forEach { (tp, unconvertedPartitionData) =>
+        unconvertedFetchResponse.responseData.forEach { (tp, unconvertedPartitionData) =>
           val error = Errors.forCode(unconvertedPartitionData.errorCode)
           if (error != Errors.NONE)
             debug(s"Fetch request with correlation id ${request.header.correlationId} from client $clientId " +
@@ -829,7 +829,7 @@ class KafkaApis(val requestChannel: RequestChannel,
         // Prepare fetch response from converted data
         val response = new FetchResponse(unconvertedFetchResponse.error, throttleTimeMs, unconvertedFetchResponse.sessionId, convertedData)
         // record the bytes out metrics only when the response is being sent
-        response.dataByTopicPartition.forEach { (tp, data) =>
+        response.responseData.forEach { (tp, data) =>
           brokerTopicStats.updateBytesOut(tp.topic, fetchRequest.isFromFollower, reassigningPartitions.contains(tp), data.recordSet.sizeInBytes)
         }
         response
@@ -850,7 +850,7 @@ class KafkaApis(val requestChannel: RequestChannel,
         unconvertedFetchResponse = fetchContext.updateAndGenerateResponseData(partitions)
         val responseSize = KafkaApis.sizeOfThrottledPartitions(versionId, unconvertedFetchResponse, quotas.leader)
         quotas.leader.record(responseSize)
-        trace(s"Sending Fetch response with partitions.size=${unconvertedFetchResponse.dataByTopicPartition.size}, " +
+        trace(s"Sending Fetch response with partitions.size=${unconvertedFetchResponse.responseData.size}, " +
           s"metadata=${unconvertedFetchResponse.sessionId}")
         requestHelper.sendResponseExemptThrottle(request, createResponse(0), Some(updateConversionStats))
       } else {
@@ -3369,7 +3369,7 @@ object KafkaApis {
   private[server] def sizeOfThrottledPartitions(versionId: Short,
                                                 unconvertedResponse: FetchResponse,
                                                 quota: ReplicationQuotaManager): Int = {
-    FetchResponse.sizeOf(versionId, unconvertedResponse.dataByTopicPartition.entrySet
+    FetchResponse.sizeOf(versionId, unconvertedResponse.responseData.entrySet
       .iterator.asScala.filter(element => quota.isThrottled(element.getKey)).asJava)
   }
 }

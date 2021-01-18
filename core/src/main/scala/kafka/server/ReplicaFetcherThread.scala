@@ -219,7 +219,7 @@ class ReplicaFetcherThread(name: String,
       if (!fetchSessionHandler.handleResponse(fetchResponse)) {
         Map.empty
       } else {
-        fetchResponse.dataByTopicPartition.asScala
+        fetchResponse.responseData.asScala
       }
     } catch {
       case t: Throwable =>

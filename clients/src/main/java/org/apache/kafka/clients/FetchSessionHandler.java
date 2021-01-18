@@ -321,9 +321,9 @@ public class FetchSessionHandler {
     String verifyFullFetchResponsePartitions(FetchResponse response) {
         StringBuilder bld = new StringBuilder();
         Set<TopicPartition> extra =
-            findMissing(response.dataByTopicPartition().keySet(), sessionPartitions.keySet());
+            findMissing(response.responseData().keySet(), sessionPartitions.keySet());
         Set<TopicPartition> omitted =
-            findMissing(sessionPartitions.keySet(), response.dataByTopicPartition().keySet());
+            findMissing(sessionPartitions.keySet(), response.responseData().keySet());
         if (!omitted.isEmpty()) {
             bld.append("omitted=(").append(Utils.join(omitted, ", ")).append(", ");
         }
@@ -331,7 +331,7 @@ public class FetchSessionHandler {
             bld.append("extra=(").append(Utils.join(extra, ", ")).append(", ");
         }
         if ((!omitted.isEmpty()) || (!extra.isEmpty())) {
-            bld.append("response=(").append(Utils.join(response.dataByTopicPartition().keySet(), ", ")).append(")");
+            bld.append("response=(").append(Utils.join(response.responseData().keySet(), ", ")).append(")");
             return bld.toString();
         }
         return null;
@@ -345,12 +345,12 @@ public class FetchSessionHandler {
      */
     String verifyIncrementalFetchResponsePartitions(FetchResponse response) {
         Set<TopicPartition> extra =
-            findMissing(response.dataByTopicPartition().keySet(), sessionPartitions.keySet());
+            findMissing(response.responseData().keySet(), sessionPartitions.keySet());
         if (!extra.isEmpty()) {
             StringBuilder bld = new StringBuilder();
             bld.append("extra=(").append(Utils.join(extra, ", ")).append("), ");
             bld.append("response=(").append(
-                Utils.join(response.dataByTopicPartition().keySet(), ", ")).append("), ");
+                Utils.join(response.responseData().keySet(), ", ")).append("), ");
             return bld.toString();
         }
         return null;
@@ -364,23 +364,23 @@ public class FetchSessionHandler {
      */
     private String responseDataToLogString(FetchResponse response) {
         if (!log.isTraceEnabled()) {
-            int implied = sessionPartitions.size() - response.dataByTopicPartition().size();
+            int implied = sessionPartitions.size() - response.responseData().size();
             if (implied > 0) {
                 return String.format(" with %d response partition(s), %d implied partition(s)",
-                    response.dataByTopicPartition().size(), implied);
+                    response.responseData().size(), implied);
             } else {
                 return String.format(" with %d response partition(s)",
-                    response.dataByTopicPartition().size());
+                    response.responseData().size());
             }
         }
         StringBuilder bld = new StringBuilder();
         bld.append(" with response=(").
-            append(Utils.join(response.dataByTopicPartition().keySet(), ", ")).
+            append(Utils.join(response.responseData().keySet(), ", ")).
             append(")");
         String prefix = ", implied=(";
         String suffix = "";
         for (TopicPartition partition : sessionPartitions.keySet()) {
-            if (!response.dataByTopicPartition().containsKey(partition)) {
+            if (!response.responseData().containsKey(partition)) {
                 bld.append(prefix);
                 bld.append(partition);
                 prefix = ", ";
@@ -410,7 +410,7 @@ public class FetchSessionHandler {
             return false;
         }
         if (nextMetadata.isFull()) {
-            if (response.dataByTopicPartition().isEmpty() && response.throttleTimeMs() > 0) {
+            if (response.responseData().isEmpty() && response.throttleTimeMs() > 0) {
                 // Normally, an empty full fetch response would be invalid.  However, KIP-219
                 // specifies that if the broker wants to throttle the client, it will respond
                 // to a full fetch request with an empty response and a throttleTimeMs

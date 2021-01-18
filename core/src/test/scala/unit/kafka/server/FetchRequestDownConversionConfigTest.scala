@@ -93,7 +93,7 @@ class FetchRequestDownConversionConfigTest extends BaseRequestTest {
     val fetchRequest = FetchRequest.Builder.forConsumer(Int.MaxValue, 0, createPartitionMap(1024,
       topicPartitions)).build(1)
     val fetchResponse = sendFetchRequest(topicMap.head._2, fetchRequest)
-    topicPartitions.foreach(tp => assertEquals(Errors.UNSUPPORTED_VERSION, Errors.forCode(fetchResponse.dataByTopicPartition.get(tp).errorCode)))
+    topicPartitions.foreach(tp => assertEquals(Errors.UNSUPPORTED_VERSION, Errors.forCode(fetchResponse.responseData.get(tp).errorCode)))
   }
 
   /**
@@ -107,7 +107,7 @@ class FetchRequestDownConversionConfigTest extends BaseRequestTest {
     val fetchRequest = FetchRequest.Builder.forConsumer(Int.MaxValue, 0, createPartitionMap(1024,
       topicPartitions)).build()
     val fetchResponse = sendFetchRequest(topicMap.head._2, fetchRequest)
-    topicPartitions.foreach(tp => assertEquals(Errors.NONE, Errors.forCode(fetchResponse.dataByTopicPartition.get(tp).errorCode)))
+    topicPartitions.foreach(tp => assertEquals(Errors.NONE, Errors.forCode(fetchResponse.responseData.get(tp).errorCode)))
   }
 
   /**
@@ -133,8 +133,8 @@ class FetchRequestDownConversionConfigTest extends BaseRequestTest {
       allTopics)).build(1)
     val fetchResponse = sendFetchRequest(leaderId, fetchRequest)
 
-    conversionDisabledTopicPartitions.foreach(tp => assertEquals(Errors.UNSUPPORTED_VERSION.code, fetchResponse.dataByTopicPartition.get(tp).errorCode))
-    conversionEnabledTopicPartitions.foreach(tp => assertEquals(Errors.NONE.code, fetchResponse.dataByTopicPartition.get(tp).errorCode))
+    conversionDisabledTopicPartitions.foreach(tp => assertEquals(Errors.UNSUPPORTED_VERSION.code, fetchResponse.responseData.get(tp).errorCode))
+    conversionEnabledTopicPartitions.foreach(tp => assertEquals(Errors.NONE.code, fetchResponse.responseData.get(tp).errorCode))
   }
 
   /**
@@ -159,6 +159,6 @@ class FetchRequestDownConversionConfigTest extends BaseRequestTest {
       createPartitionMap(1024, allTopicPartitions)).build()
     val fetchResponse = sendFetchRequest(leaderId, fetchRequest)
 
-    allTopicPartitions.foreach(tp => assertEquals(Errors.NONE.code, fetchResponse.dataByTopicPartition.get(tp).errorCode))
+    allTopicPartitions.foreach(tp => assertEquals(Errors.NONE.code, fetchResponse.responseData.get(tp).errorCode))
   }
 }

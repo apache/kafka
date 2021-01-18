@@ -128,12 +128,12 @@ class FetchRequestTest extends BaseRequestTest {
       random.shuffle(partitionsWithoutLargeMessages)
     val fetchRequest3 = createFetchRequest(shuffledTopicPartitions3, Map(partitionWithLargeMessage1 -> messagesPerPartition))
     val fetchResponse3 = sendFetchRequest(leaderId, fetchRequest3)
-    assertEquals(shuffledTopicPartitions3, fetchResponse3.dataByTopicPartition.keySet.asScala.toSeq)
-    val responseSize3 = fetchResponse3.dataByTopicPartition.asScala.values.map { partitionData =>
+    assertEquals(shuffledTopicPartitions3, fetchResponse3.responseData.keySet.asScala.toSeq)
+    val responseSize3 = fetchResponse3.responseData.asScala.values.map { partitionData =>
       records(partitionData).map(_.sizeInBytes).sum
     }.sum
     assertTrue(responseSize3 <= maxResponseBytes)
-    val partitionData3 = fetchResponse3.dataByTopicPartition.get(partitionWithLargeMessage1)
+    val partitionData3 = fetchResponse3.responseData.get(partitionWithLargeMessage1)
     assertEquals(Errors.NONE.code, partitionData3.errorCode)
     assertTrue(partitionData3.highWatermark > 0)
     val size3 = records(partitionData3).map(_.sizeInBytes).sum
@@ -146,12 +146,12 @@ class FetchRequestTest extends BaseRequestTest {
       random.shuffle(partitionsWithoutLargeMessages)
     val fetchRequest4 = createFetchRequest(shuffledTopicPartitions4, Map(partitionWithLargeMessage2 -> messagesPerPartition))
     val fetchResponse4 = sendFetchRequest(leaderId, fetchRequest4)
-    assertEquals(shuffledTopicPartitions4, fetchResponse4.dataByTopicPartition.keySet.asScala.toSeq)
-    val nonEmptyPartitions4 = fetchResponse4.dataByTopicPartition.asScala.toSeq.collect {
+    assertEquals(shuffledTopicPartitions4, fetchResponse4.responseData.keySet.asScala.toSeq)
+    val nonEmptyPartitions4 = fetchResponse4.responseData.asScala.toSeq.collect {
       case (tp, partitionData) if records(partitionData).map(_.sizeInBytes).sum > 0 => tp
     }
     assertEquals(Seq(partitionWithLargeMessage2), nonEmptyPartitions4)
-    val partitionData4 = fetchResponse4.dataByTopicPartition.get(partitionWithLargeMessage2)
+    val partitionData4 = fetchResponse4.responseData.get(partitionWithLargeMessage2)
     assertEquals(Errors.NONE.code, partitionData4.errorCode)
     assertTrue(partitionData4.highWatermark > 0)
     val size4 = records(partitionData4).map(_.sizeInBytes).sum
@@ -169,7 +169,7 @@ class FetchRequestTest extends BaseRequestTest {
     val fetchRequest = FetchRequest.Builder.forConsumer(Int.MaxValue, 0, createPartitionMap(maxPartitionBytes,
       Seq(topicPartition))).build(2)
     val fetchResponse = sendFetchRequest(leaderId, fetchRequest)
-    val partitionData = fetchResponse.dataByTopicPartition.get(topicPartition)
+    val partitionData = fetchResponse.responseData.get(topicPartition)
     assertEquals(Errors.NONE.code, partitionData.errorCode)
     assertTrue(partitionData.highWatermark > 0)
     assertEquals(maxPartitionBytes, partitionData.recordSet.sizeInBytes)
@@ -186,7 +186,7 @@ class FetchRequestTest extends BaseRequestTest {
     val fetchRequest = FetchRequest.Builder.forConsumer(Int.MaxValue, 0, createPartitionMap(maxPartitionBytes,
       Seq(topicPartition))).isolationLevel(IsolationLevel.READ_COMMITTED).build(4)
     val fetchResponse = sendFetchRequest(leaderId, fetchRequest)
-    val partitionData = fetchResponse.dataByTopicPartition.get(topicPartition)
+    val partitionData = fetchResponse.responseData.get(topicPartition)
     assertEquals(Errors.NONE.code, partitionData.errorCode)
     assertTrue(partitionData.lastStableOffset > 0)
     assertTrue(records(partitionData).map(_.sizeInBytes).sum > 0)
@@ -209,7 +209,7 @@ class FetchRequestTest extends BaseRequestTest {
     val fetchRequest = FetchRequest.Builder.forConsumer(Int.MaxValue, 0, createPartitionMap(1024,
       Seq(topicPartition))).build()
     val fetchResponse = sendFetchRequest(nonReplicaId, fetchRequest)
-    val partitionData = fetchResponse.dataByTopicPartition.get(topicPartition)
+    val partitionData = fetchResponse.responseData.get(topicPartition)
     assertEquals(Errors.NOT_LEADER_OR_FOLLOWER.code, partitionData.errorCode)
   }
 
@@ -243,7 +243,7 @@ class FetchRequestTest extends BaseRequestTest {
 
     // Validate the expected truncation
     val fetchResponse = sendFetchRequest(secondLeaderId, fetchRequest)
-    val partitionData = fetchResponse.dataByTopicPartition.get(topicPartition)
+    val partitionData = fetchResponse.responseData.get(topicPartition)
     assertEquals(Errors.NONE.code, partitionData.errorCode)
     assertEquals(0L, partitionData.recordSet.sizeInBytes())
     assertTrue(FetchResponse.isDivergingEpoch(partitionData))
@@ -265,7 +265,7 @@ class FetchRequestTest extends BaseRequestTest {
       partitionMap.put(topicPartition, new FetchRequest.PartitionData(0L, 0L, 1024, leaderEpoch))
       val fetchRequest = FetchRequest.Builder.forConsumer(0, 1, partitionMap).build()
       val fetchResponse = sendFetchRequest(brokerId, fetchRequest)
-      val partitionData = fetchResponse.dataByTopicPartition.get(topicPartition)
+      val partitionData = fetchResponse.responseData.get(topicPartition)
       assertEquals(error.code, partitionData.errorCode)
     }
 
@@ -329,7 +329,7 @@ class FetchRequestTest extends BaseRequestTest {
         .metadata(new JFetchMetadata(sessionId, sessionFetchEpoch))
         .build()
       val fetchResponse = sendFetchRequest(destinationBrokerId, fetchRequest)
-      val partitionData = fetchResponse.dataByTopicPartition.get(topicPartition)
+      val partitionData = fetchResponse.responseData.get(topicPartition)
       assertEquals(expectedError.code, partitionData.errorCode)
     }
 
@@ -396,7 +396,7 @@ class FetchRequestTest extends BaseRequestTest {
 
     val response = fetch(version, maxPartitionBytes = batchSize, closeAfterPartialResponse = false)
     val fetchResponse = response.getOrElse(throw new IllegalStateException("No fetch response"))
-    val partitionData = fetchResponse.dataByTopicPartition.get(topicPartition)
+    val partitionData = fetchResponse.responseData.get(topicPartition)
     assertEquals(Errors.NONE.code, partitionData.errorCode)
     val batches = partitionData.recordSet.asInstanceOf[Records].batches.asScala.toBuffer
     assertEquals(3, batches.size) // size is 3 (not 4) since maxPartitionBytes=msgValueSize*4, excluding key and headers
@@ -442,7 +442,7 @@ class FetchRequestTest extends BaseRequestTest {
         val fetchResponse = sendFetchRequest(leaderId, fetchRequest)
 
         // validate response
-        val partitionData = fetchResponse.dataByTopicPartition.get(topicPartition)
+        val partitionData = fetchResponse.responseData.get(topicPartition)
         assertEquals(Errors.NONE.code, partitionData.errorCode)
         assertTrue(partitionData.highWatermark > 0)
         val batches = partitionData.recordSet.asInstanceOf[Records].batches.asScala.toBuffer
@@ -505,34 +505,34 @@ class FetchRequestTest extends BaseRequestTest {
     assertEquals(Errors.NONE, resp1.error())
     assertTrue(resp1.sessionId() > 0, "Expected the broker to create a new incremental fetch session")
     debug(s"Test created an incremental fetch session ${resp1.sessionId}")
-    assertTrue(resp1.dataByTopicPartition.containsKey(foo0))
-    assertTrue(resp1.dataByTopicPartition.containsKey(foo1))
-    assertTrue(resp1.dataByTopicPartition.containsKey(bar0))
-    assertEquals(Errors.NONE.code, resp1.dataByTopicPartition.get(foo0).errorCode)
-    assertEquals(Errors.NONE.code, resp1.dataByTopicPartition.get(foo1).errorCode)
-    assertEquals(Errors.UNKNOWN_TOPIC_OR_PARTITION.code, resp1.dataByTopicPartition.get(bar0).errorCode)
+    assertTrue(resp1.responseData.containsKey(foo0))
+    assertTrue(resp1.responseData.containsKey(foo1))
+    assertTrue(resp1.responseData.containsKey(bar0))
+    assertEquals(Errors.NONE.code, resp1.responseData.get(foo0).errorCode)
+    assertEquals(Errors.NONE.code, resp1.responseData.get(foo1).errorCode)
+    assertEquals(Errors.UNKNOWN_TOPIC_OR_PARTITION.code, resp1.responseData.get(bar0).errorCode)
     val req2 = createFetchRequest(Nil, new JFetchMetadata(resp1.sessionId(), 1), Nil)
     val resp2 = sendFetchRequest(0, req2)
     assertEquals(Errors.NONE, resp2.error())
     assertEquals(resp1.sessionId(), resp2.sessionId(), "Expected the broker to continue the incremental fetch session")
-    assertFalse(resp2.dataByTopicPartition().containsKey(foo0))
-    assertFalse(resp2.dataByTopicPartition().containsKey(foo1))
-    assertTrue(resp2.dataByTopicPartition().containsKey(bar0))
-    assertEquals(Errors.UNKNOWN_TOPIC_OR_PARTITION.code(), resp2.dataByTopicPartition().get(bar0).errorCode())
+    assertFalse(resp2.responseData().containsKey(foo0))
+    assertFalse(resp2.responseData().containsKey(foo1))
+    assertTrue(resp2.responseData().containsKey(bar0))
+    assertEquals(Errors.UNKNOWN_TOPIC_OR_PARTITION.code(), resp2.responseData().get(bar0).errorCode())
     createTopic("bar", Map(0 -> List(0, 1)))
     val req3 = createFetchRequest(Nil, new JFetchMetadata(resp1.sessionId(), 2), Nil)
     val resp3 = sendFetchRequest(0, req3)
     assertEquals(Errors.NONE, resp3.error())
-    assertFalse(resp3.dataByTopicPartition.containsKey(foo0))
-    assertFalse(resp3.dataByTopicPartition.containsKey(foo1))
-    assertTrue(resp3.dataByTopicPartition.containsKey(bar0))
-    assertEquals(Errors.NONE.code, resp3.dataByTopicPartition.get(bar0).errorCode)
+    assertFalse(resp3.responseData.containsKey(foo0))
+    assertFalse(resp3.responseData.containsKey(foo1))
+    assertTrue(resp3.responseData.containsKey(bar0))
+    assertEquals(Errors.NONE.code, resp3.responseData.get(bar0).errorCode)
     val req4 = createFetchRequest(Nil, new JFetchMetadata(resp1.sessionId(), 3), Nil)
     val resp4 = sendFetchRequest(0, req4)
     assertEquals(Errors.NONE, resp4.error())
-    assertFalse(resp4.dataByTopicPartition.containsKey(foo0))
-    assertFalse(resp4.dataByTopicPartition.containsKey(foo1))
-    assertFalse(resp4.dataByTopicPartition.containsKey(bar0))
+    assertFalse(resp4.responseData.containsKey(foo0))
+    assertFalse(resp4.responseData.containsKey(foo1))
+    assertFalse(resp4.responseData.containsKey(bar0))
   }
 
   @Test
@@ -559,7 +559,7 @@ class FetchRequestTest extends BaseRequestTest {
       .setMaxBytes(800).build()
 
     val res0 = sendFetchRequest(leaderId, req0)
-    val data0 = res0.dataByTopicPartition.get(topicPartition)
+    val data0 = res0.responseData.get(topicPartition)
     assertEquals(Errors.UNSUPPORTED_COMPRESSION_TYPE.code, data0.errorCode)
 
     // fetch request with version 10: works fine!
@@ -567,7 +567,7 @@ class FetchRequestTest extends BaseRequestTest {
       createPartitionMap(300, Seq(topicPartition), Map.empty))
       .setMaxBytes(800).build()
     val res1 = sendFetchRequest(leaderId, req1)
-    val data1 = res1.dataByTopicPartition.get(topicPartition)
+    val data1 = res1.responseData.get(topicPartition)
     assertEquals(Errors.NONE.code, data1.errorCode)
     assertEquals(3, records(data1).size)
   }
@@ -613,7 +613,7 @@ class FetchRequestTest extends BaseRequestTest {
       .build()
 
     val res0 = sendFetchRequest(leaderId, req0)
-    val data0 = res0.dataByTopicPartition.get(topicPartition)
+    val data0 = res0.responseData.get(topicPartition)
     assertEquals(Errors.NONE.code, data0.errorCode)
     assertEquals(1, records(data0).size)
 
@@ -622,7 +622,7 @@ class FetchRequestTest extends BaseRequestTest {
       .setMaxBytes(800).build()
 
     val res1 = sendFetchRequest(leaderId, req1)
-    val data1 = res1.dataByTopicPartition.get(topicPartition)
+    val data1 = res1.responseData.get(topicPartition)
     assertEquals(Errors.UNSUPPORTED_COMPRESSION_TYPE.code, data1.errorCode)
 
     // fetch request with fetch version v3 (magic 1):
@@ -633,7 +633,7 @@ class FetchRequestTest extends BaseRequestTest {
       .setMaxBytes(800).build()
 
     val res2 = sendFetchRequest(leaderId, req2)
-    val data2 = res2.dataByTopicPartition.get(topicPartition)
+    val data2 = res2.responseData.get(topicPartition)
     assertEquals(Errors.NONE.code, data2.errorCode)
     assertEquals(1, records(data2).size)
 
@@ -642,7 +642,7 @@ class FetchRequestTest extends BaseRequestTest {
       .setMaxBytes(800).build()
 
     val res3 = sendFetchRequest(leaderId, req3)
-    val data3 = res3.dataByTopicPartition.get(topicPartition)
+    val data3 = res3.responseData.get(topicPartition)
     assertEquals(Errors.UNSUPPORTED_COMPRESSION_TYPE.code, data3.errorCode)
 
     // fetch request with version 10: works fine!
@@ -650,7 +650,7 @@ class FetchRequestTest extends BaseRequestTest {
       createPartitionMap(300, Seq(topicPartition), Map.empty))
       .setMaxBytes(800).build()
     val res4 = sendFetchRequest(leaderId, req4)
-    val data4 = res4.dataByTopicPartition.get(topicPartition)
+    val data4 = res4.responseData.get(topicPartition)
     assertEquals(Errors.NONE.code, data4.errorCode)
     assertEquals(3, records(data4).size)
   }
@@ -661,13 +661,13 @@ class FetchRequestTest extends BaseRequestTest {
 
   private def checkFetchResponse(expectedPartitions: Seq[TopicPartition], fetchResponse: FetchResponse,
                                  maxPartitionBytes: Int, maxResponseBytes: Int, numMessagesPerPartition: Int): Unit = {
-    assertEquals(expectedPartitions, fetchResponse.dataByTopicPartition.keySet.asScala.toSeq)
+    assertEquals(expectedPartitions, fetchResponse.responseData.keySet.asScala.toSeq)
     var emptyResponseSeen = false
     var responseSize = 0
     var responseBufferSize = 0
 
     expectedPartitions.foreach { tp =>
-      val partitionData = fetchResponse.dataByTopicPartition.get(tp)
+      val partitionData = fetchResponse.responseData.get(tp)
       assertEquals(Errors.NONE.code, partitionData.errorCode)
       assertTrue(partitionData.highWatermark > 0)
 

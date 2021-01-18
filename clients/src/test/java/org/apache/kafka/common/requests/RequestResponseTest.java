@@ -718,8 +718,8 @@ public class RequestResponseTest {
         FetchResponse v1Response = new FetchResponse(Errors.NONE, 10, INVALID_SESSION_ID, responseData);
         assertEquals(0, v0Response.throttleTimeMs(), "Throttle time must be zero");
         assertEquals(10, v1Response.throttleTimeMs(), "Throttle time must be 10");
-        assertEquals(responseData, v0Response.dataByTopicPartition(), "Response data does not match");
-        assertEquals(responseData, v1Response.dataByTopicPartition(), "Response data does not match");
+        assertEquals(responseData, v0Response.responseData(), "Response data does not match");
+        assertEquals(responseData, v1Response.responseData(), "Response data does not match");
     }
 
     @Test
@@ -761,7 +761,7 @@ public class RequestResponseTest {
 
         FetchResponse response = new FetchResponse(Errors.NONE, 10, INVALID_SESSION_ID, responseData);
         FetchResponse deserialized = FetchResponse.parse(response.serialize((short) 4), (short) 4);
-        assertEquals(responseData, deserialized.dataByTopicPartition());
+        assertEquals(responseData, deserialized.responseData());
     }
 
     @Test

@@ -98,7 +98,7 @@ public class FetchResponseBenchmark {
     @Benchmark
     public int testConstructFetchResponse() {
         FetchResponse fetchResponse = new FetchResponse(Errors.NONE, 0, 0, responseData);
-        return fetchResponse.dataByTopicPartition().size();
+        return fetchResponse.responseData().size();
     }
 
     @Benchmark

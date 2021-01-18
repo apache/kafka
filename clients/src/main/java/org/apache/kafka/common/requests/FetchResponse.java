@@ -62,7 +62,7 @@ public class FetchResponse extends AbstractResponse {
     public static final int INVALID_PREFERRED_REPLICA_ID = -1;
 
     private final FetchResponseData data;
-    private final LinkedHashMap<TopicPartition, FetchResponseData.FetchablePartitionResponse> dataByTopicPartition;
+    private final LinkedHashMap<TopicPartition, FetchResponseData.FetchablePartitionResponse> responseData;
 
     @Override
     public FetchResponseData data() {
@@ -86,10 +86,10 @@ public class FetchResponse extends AbstractResponse {
     public FetchResponse(FetchResponseData fetchResponseData) {
         super(ApiKeys.FETCH);
         this.data = fetchResponseData;
-        this.dataByTopicPartition = new LinkedHashMap<>();
+        this.responseData = new LinkedHashMap<>();
         fetchResponseData.responses().forEach(topicResponse ->
             topicResponse.partitionResponses().forEach(partitionResponse ->
-                dataByTopicPartition.put(new TopicPartition(topicResponse.topic(), partitionResponse.partition()), partitionResponse))
+                responseData.put(new TopicPartition(topicResponse.topic(), partitionResponse.partition()), partitionResponse))
         );
 
     }
@@ -98,8 +98,8 @@ public class FetchResponse extends AbstractResponse {
         return Errors.forCode(data.errorCode());
     }
 
-    public LinkedHashMap<TopicPartition, FetchResponseData.FetchablePartitionResponse> dataByTopicPartition() {
-        return dataByTopicPartition;
+    public LinkedHashMap<TopicPartition, FetchResponseData.FetchablePartitionResponse> responseData() {
+        return responseData;
     }
 
     @Override
@@ -115,7 +115,7 @@ public class FetchResponse extends AbstractResponse {
     public Map<Errors, Integer> errorCounts() {
         Map<Errors, Integer> errorCounts = new HashMap<>();
         updateErrorCounts(errorCounts, error());
-        dataByTopicPartition.values().forEach(response -> updateErrorCounts(errorCounts, Errors.forCode(response.errorCode())));
+        responseData.values().forEach(response -> updateErrorCounts(errorCounts, Errors.forCode(response.errorCode())));
         return errorCounts;
     }
 
