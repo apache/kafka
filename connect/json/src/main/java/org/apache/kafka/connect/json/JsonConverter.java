@@ -277,10 +277,8 @@ public class JsonConverter implements Converter, HeaderConverter {
     }
 
     private JsonConverterConfig config;
-    // visible for testing
-    Cache<Schema, ObjectNode> fromConnectSchemaCache;
-    // visible for testing
-    Cache<JsonNode, Schema> toConnectSchemaCache;
+    private Cache<Schema, ObjectNode> fromConnectSchemaCache;
+    private Cache<JsonNode, Schema> toConnectSchemaCache;
 
     private final JsonSerializer serializer;
     private final JsonDeserializer deserializer;
@@ -299,6 +297,16 @@ public class JsonConverter implements Converter, HeaderConverter {
             ),
             JSON_NODE_FACTORY
         );
+    }
+
+    // visible for testing
+    long sizeOfFromConnectSchemaCache() {
+        return fromConnectSchemaCache.size();
+    }
+
+    // visible for testing
+    long sizeOfToConnectSchemaCache() {
+        return toConnectSchemaCache.size();
     }
 
     @Override
