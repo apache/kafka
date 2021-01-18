@@ -17,6 +17,7 @@
 
 package kafka.api
 
+import junit.framework.TestCase
 import kafka.server.KafkaConfig
 import kafka.utils.TestUtils
 import org.apache.kafka.clients.admin.NewTopic
@@ -35,20 +36,23 @@ import java.util.Collections
 /**
  * Tests behavior of specifying auto topic creation configuration for the consumer and broker
  */
-class ConsumerTopicCreationTest extends IntegrationTestHarness {
-  override protected def brokerCount: Int = 1
-
-  val topic_1 = "topic-1"
-  val topic_2 = "topic-2"
-  val producerClientId = "ConsumerTestProducer"
-  val consumerClientId = "ConsumerTestConsumer"
-
-  @BeforeEach
-  override def setUp(): Unit = {
-    // junit 5 can't make parametered BeforeEach so we override setup to do nothing as we do setup cluster in test case
+class ConsumerTopicCreationTest {
+  @ParameterizedTest
+  @MethodSource(Array("parameters"))
+  def testAutoTopicCreation(brokerAutoTopicCreationEnable: JBoolean, consumerAllowAutoCreateTopics: JBoolean): Unit = {
+    val testCase = new ConsumerTopicCreationTest.TestCase(brokerAutoTopicCreationEnable, consumerAllowAutoCreateTopics)
+    testCase.test()
   }
+}
 
-  private[this] def setup(brokerAutoTopicCreationEnable: JBoolean, consumerAllowAutoCreateTopics: JBoolean): Unit = {
+object ConsumerTopicCreationTest {
+
+  class TestCase(brokerAutoTopicCreationEnable: JBoolean, consumerAllowAutoCreateTopics: JBoolean) extends IntegrationTestHarness {
+    private[this] val topic_1 = "topic-1"
+    private[this] val topic_2 = "topic-2"
+    private[this] val producerClientId = "ConsumerTestProducer"
+    private[this] val consumerClientId = "ConsumerTestConsumer"
+
     // configure server properties
     this.serverConfig.setProperty(KafkaConfig.ControlledShutdownEnableProp, "false") // speed up shutdown
     this.serverConfig.setProperty(KafkaConfig.AutoCreateTopicsEnableProp, brokerAutoTopicCreationEnable.toString)
@@ -61,41 +65,36 @@ class ConsumerTopicCreationTest extends IntegrationTestHarness {
     this.consumerConfig.setProperty(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "false")
     this.consumerConfig.setProperty(ConsumerConfig.METADATA_MAX_AGE_CONFIG, "100")
     this.consumerConfig.setProperty(ConsumerConfig.ALLOW_AUTO_CREATE_TOPICS_CONFIG, consumerAllowAutoCreateTopics.toString)
+    override protected def brokerCount: Int = 1
 
-    super.setUp()
+
+    def test(): Unit = {
+      val consumer = createConsumer()
+      val producer = createProducer()
+      val adminClient = createAdminClient()
+      val record = new ProducerRecord(topic_1, 0, "key".getBytes, "value".getBytes)
+
+      // create `topic_1` and produce a record to it
+      adminClient.createTopics(Collections.singleton(new NewTopic(topic_1, 1, 1.toShort))).all.get
+      producer.send(record).get
+
+      consumer.subscribe(util.Arrays.asList(topic_1, topic_2))
+
+      // Wait until the produced record was consumed. This guarantees that metadata request for `topic_2` was sent to the
+      // broker.
+      TestUtils.waitUntilTrue(() => {
+        consumer.poll(Duration.ofMillis(100)).count > 0
+      }, "Timed out waiting to consume")
+
+      // MetadataRequest is guaranteed to create the topic znode if creation was required
+      val topicCreated = zkClient.getAllTopicsInCluster().contains(topic_2)
+      if (brokerAutoTopicCreationEnable && consumerAllowAutoCreateTopics)
+        assertTrue(topicCreated)
+      else
+        assertFalse(topicCreated)
+    }
   }
 
-  @ParameterizedTest
-  @MethodSource(Array("parameters"))
-  def testAutoTopicCreation(brokerAutoTopicCreationEnable: JBoolean, consumerAllowAutoCreateTopics: JBoolean): Unit = {
-    this.setup(brokerAutoTopicCreationEnable, consumerAllowAutoCreateTopics)
-    val consumer = createConsumer()
-    val producer = createProducer()
-    val adminClient = createAdminClient()
-    val record = new ProducerRecord(topic_1, 0, "key".getBytes, "value".getBytes)
-
-    // create `topic_1` and produce a record to it
-    adminClient.createTopics(Collections.singleton(new NewTopic(topic_1, 1, 1.toShort))).all.get
-    producer.send(record).get
-
-    consumer.subscribe(util.Arrays.asList(topic_1, topic_2))
-
-    // Wait until the produced record was consumed. This guarantees that metadata request for `topic_2` was sent to the
-    // broker.
-    TestUtils.waitUntilTrue(() => {
-      consumer.poll(Duration.ofMillis(100)).count > 0
-    }, "Timed out waiting to consume")
-
-    // MetadataRequest is guaranteed to create the topic znode if creation was required
-    val topicCreated = zkClient.getAllTopicsInCluster().contains(topic_2)
-    if (brokerAutoTopicCreationEnable && consumerAllowAutoCreateTopics)
-      assertTrue(topicCreated)
-    else
-      assertFalse(topicCreated)
-  }
-}
-
-object ConsumerTopicCreationTest {
   def parameters: java.util.stream.Stream[Arguments] = {
     val data = new java.util.ArrayList[Arguments]()
     for (brokerAutoTopicCreationEnable <- Array(JBoolean.TRUE, JBoolean.FALSE))

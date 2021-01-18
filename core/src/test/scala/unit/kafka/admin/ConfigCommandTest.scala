@@ -1415,12 +1415,15 @@ class ConfigCommandTest extends ZooKeeperTestHarness with Logging {
       assertEquals(expectedEntityName, entity.fullSanitizedName)
     }
 
+    def checkArgs(entityType: String, entityName: Option[String], otherArgs: Array[String]): Unit = {
+      val opts = createOpts(entityType, entityName, otherArgs)
+      assertThrows(classOf[IllegalArgumentException], () => opts.checkArgs())
+    }
+
     def checkInvalidEntity(entityType: String, entityName: Option[String], otherArgs: Array[String]): Unit = {
       val opts = createOpts(entityType, entityName, otherArgs)
-      assertThrows(classOf[IllegalArgumentException], () => {
-        opts.checkArgs()
-        ConfigCommand.parseEntity(opts)
-      })
+      opts.checkArgs()
+      assertThrows(classOf[IllegalArgumentException], () => ConfigCommand.parseEntity(opts))
     }
 
     val describeOpts = Array("--describe")
@@ -1433,7 +1436,7 @@ class ConfigCommandTest extends ZooKeeperTestHarness with Logging {
       checkEntity("clients", Some(""), ConfigEntityName.Default, opts)
     }
     checkEntity("clients", None, "", describeOpts)
-    checkInvalidEntity("clients", None, alterOpts)
+    checkArgs("clients", None, alterOpts)
 
     // <user> quota
     val principal = "CN=ConfigCommandTest,O=Apache,L=<default>"
@@ -1445,7 +1448,7 @@ class ConfigCommandTest extends ZooKeeperTestHarness with Logging {
       checkEntity("users", Some(""), ConfigEntityName.Default, opts)
     }
     checkEntity("users", None, "", describeOpts)
-    checkInvalidEntity("users", None, alterOpts)
+    checkArgs("users", None, alterOpts)
 
     // <user, client-id> quota
     val userClient = sanitizedPrincipal + "/clients/" + clientId
@@ -1460,7 +1463,7 @@ class ConfigCommandTest extends ZooKeeperTestHarness with Logging {
     // Both user and client-id must be provided for alter
     checkInvalidEntity("users", Some(principal), alterOpts ++ Array("--entity-type", "clients"))
     checkInvalidEntity("users", None, alterOpts ++ clientIdOpts(clientId))
-    checkInvalidEntity("users", None, alterOpts ++ Array("--entity-type", "clients"))
+    checkArgs("users", None, alterOpts ++ Array("--entity-type", "clients"))
   }
 
   @Test
