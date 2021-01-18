@@ -106,7 +106,6 @@ versions += [
   scalaCollectionCompat: "2.3.0",
   scalafmt: "1.5.1",
   scalaJava8Compat : "0.9.1",
-  scalatest: "3.0.8",
   scoverage: "1.4.1",
   scoveragePlugin: "5.0.0",
   shadowPlugin: "6.1.0",
