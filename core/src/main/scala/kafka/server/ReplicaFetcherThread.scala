@@ -162,7 +162,7 @@ class ReplicaFetcherThread(name: String,
     val logTrace = isTraceEnabled
     val partition = replicaMgr.nonOfflinePartition(topicPartition).get
     val log = partition.localLogOrException
-    val records = toMemoryRecords(partitionData.recordSet.asInstanceOf[Records])
+    val records = toMemoryRecords(partitionData.records.asInstanceOf[Records])
 
     maybeWarnIfOversizedRecords(records, topicPartition)
 

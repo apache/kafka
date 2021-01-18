@@ -1936,7 +1936,7 @@ class KafkaApisTest {
     assertEquals(-1, partitionData.lastStableOffset)
     assertEquals(0, partitionData.logStartOffset)
     assertEquals(timestamp,
-      partitionData.recordSet.asInstanceOf[MemoryRecords].batches.iterator.next.maxTimestamp)
+      partitionData.records.asInstanceOf[MemoryRecords].batches.iterator.next.maxTimestamp)
     assertNull(partitionData.abortedTransactions)
   }
 
@@ -3019,7 +3019,7 @@ class KafkaApisTest {
             .setLastStableOffset(105)
             .setLogStartOffset(0)
             .setAbortedTransactions(null)
-            .setRecordSet(MemoryRecords.withRecords(CompressionType.NONE, new SimpleRecord(100, raw.getBytes(StandardCharsets.UTF_8))))
+            .setRecords(MemoryRecords.withRecords(CompressionType.NONE, new SimpleRecord(100, raw.getBytes(StandardCharsets.UTF_8))))
             .setPreferredReadReplica(FetchResponse.INVALID_PREFERRED_REPLICA_ID)
       }.toMap.asJava)
       new FetchResponse(Errors.NONE, 100, 100, responseData)

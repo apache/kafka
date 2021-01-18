@@ -84,7 +84,7 @@ public class FetchSessionBenchmark {
                             .setLastStableOffset(0)
                             .setLogStartOffset(0)
                             .setAbortedTransactions(null)
-                            .setRecordSet(null)
+                            .setRecords(null)
                             .setPreferredReadReplica(FetchResponse.INVALID_PREFERRED_REPLICA_ID));
         }
         builder.build();

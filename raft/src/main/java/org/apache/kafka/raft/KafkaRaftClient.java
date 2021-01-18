@@ -879,7 +879,7 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
     ) {
         return RaftUtil.singletonFetchResponse(log.topicPartition(), Errors.NONE, partitionData -> {
             partitionData
-                .setRecordSet(records)
+                .setRecords(records)
                 .setErrorCode(error.code())
                 .setLogStartOffset(log.startOffset())
                 .setHighWatermark(highWatermark
@@ -939,7 +939,7 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
             response.responses().get(0).partitionResponses().get(0);
 
         if (partitionResponse.errorCode() != Errors.NONE.code()
-            || partitionResponse.recordSet().sizeInBytes() > 0
+            || partitionResponse.records().sizeInBytes() > 0
             || request.maxWaitMs() == 0) {
             return completedFuture(response);
         }
@@ -1108,7 +1108,7 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
                     state.setFetchingSnapshot(Optional.of(log.createSnapshot(snapshotId)));
                 }
             } else {
-                Records records = (Records) partitionResponse.recordSet();
+                Records records = (Records) partitionResponse.records();
                 if (records.sizeInBytes() > 0) {
                     appendAsFollower(records);
                 }

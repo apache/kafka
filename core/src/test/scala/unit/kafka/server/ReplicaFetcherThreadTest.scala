@@ -537,7 +537,7 @@ class ReplicaFetcherThreadTest {
           .setLastStableOffset(0)
           .setLogStartOffset(0)
           .setAbortedTransactions(Collections.emptyList())
-          .setRecordSet(MemoryRecords.EMPTY)
+          .setRecords(MemoryRecords.EMPTY)
           .setPreferredReadReplica(FetchResponse.INVALID_PREFERRED_REPLICA_ID)
           .setDivergingEpoch(divergingEpoch)
     }
@@ -974,7 +974,7 @@ class ReplicaFetcherThreadTest {
         .setLastStableOffset(0)
         .setLogStartOffset(0)
         .setAbortedTransactions(Collections.emptyList())
-        .setRecordSet(records)
+        .setRecords(records)
         .setPreferredReadReplica(FetchResponse.INVALID_PREFERRED_REPLICA_ID)
     thread.processPartitionData(t1p0, 0, partitionData)
 

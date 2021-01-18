@@ -171,7 +171,7 @@ public class FetchResponse extends AbstractResponse {
                 .setLastStableOffset(FetchResponse.INVALID_LAST_STABLE_OFFSET)
                 .setLogStartOffset(FetchResponse.INVALID_LOG_START_OFFSET)
                 .setAbortedTransactions(null)
-                .setRecordSet(MemoryRecords.EMPTY)
+                .setRecords(MemoryRecords.EMPTY)
                 .setPreferredReadReplica(FetchResponse.INVALID_PREFERRED_REPLICA_ID);
     }
 }

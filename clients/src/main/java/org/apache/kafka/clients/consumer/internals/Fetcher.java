@@ -316,7 +316,7 @@ public class Fetcher<K, V> implements Closeable {
                                     log.debug("Fetch {} at offset {} for partition {} returned fetch data {}",
                                             isolationLevel, fetchOffset, partition, partitionData);
 
-                                    Records records = (Records) partitionData.recordSet();
+                                    Records records = (Records) partitionData.records();
                                     Iterator<? extends RecordBatch> batches = records.batches().iterator();
                                     short responseVersion = resp.requestHeader().apiVersion();
 
@@ -621,7 +621,7 @@ public class Fetcher<K, V> implements Closeable {
                             // in cases such as the TopicAuthorizationException, and the second condition ensures that no
                             // potential data loss due to an exception in a following record.
                             FetchResponseData.FetchablePartitionResponse partition = records.partitionData;
-                            if (fetched.isEmpty() && (partition.recordSet() == null || partition.recordSet().sizeInBytes() == 0)) {
+                            if (fetched.isEmpty() && (partition.records() == null || partition.records().sizeInBytes() == 0)) {
                                 completedFetches.poll();
                             }
                             throw e;
@@ -1251,11 +1251,11 @@ public class Fetcher<K, V> implements Closeable {
                 }
 
                 log.trace("Preparing to read {} bytes of data for partition {} with offset {}",
-                        partition.recordSet().sizeInBytes(), tp, position);
-                Iterator<? extends RecordBatch> batches = ((Records) partition.recordSet()).batches().iterator();
+                        partition.records().sizeInBytes(), tp, position);
+                Iterator<? extends RecordBatch> batches = ((Records) partition.records()).batches().iterator();
                 completedFetch = nextCompletedFetch;
 
-                if (!batches.hasNext() && partition.recordSet().sizeInBytes() > 0) {
+                if (!batches.hasNext() && partition.records().sizeInBytes() > 0) {
                     if (completedFetch.responseVersion < 3) {
                         // Implement the pre KIP-74 behavior of throwing a RecordTooLargeException.
                         Map<TopicPartition, Long> recordTooLargePartitions = Collections.singletonMap(tp, fetchOffset);

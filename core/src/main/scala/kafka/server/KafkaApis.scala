@@ -738,7 +738,7 @@ class KafkaApis(val requestChannel: RequestChannel,
         // know it must be supported. However, if the magic version is changed from a higher version back to a
         // lower version, this check will no longer be valid and we will fail to down-convert the messages
         // which were written in the new format prior to the version downgrade.
-        val unconvertedRecords = partitionData.recordSet.asInstanceOf[Records]
+        val unconvertedRecords = partitionData.records.asInstanceOf[Records]
         val downConvertMagic =
           logConfig.map(_.messageFormatVersion.recordVersion.value).flatMap { magic =>
             if (magic > RecordBatch.MAGIC_VALUE_V0 && versionId <= 1 && !unconvertedRecords.hasCompatibleMagic(RecordBatch.MAGIC_VALUE_V0))
@@ -769,7 +769,7 @@ class KafkaApis(val requestChannel: RequestChannel,
                   .setLastStableOffset(partitionData.lastStableOffset)
                   .setLogStartOffset(partitionData.logStartOffset)
                   .setAbortedTransactions(partitionData.abortedTransactions)
-                  .setRecordSet(new LazyDownConversionRecords(tp, unconvertedRecords, magic, fetchContext.getFetchOffset(tp).get, time))
+                  .setRecords(new LazyDownConversionRecords(tp, unconvertedRecords, magic, fetchContext.getFetchOffset(tp).get, time))
                   .setPreferredReadReplica(partitionData.preferredReadReplica())
               } catch {
                 case e: UnsupportedCompressionTypeException =>
@@ -785,7 +785,7 @@ class KafkaApis(val requestChannel: RequestChannel,
               .setLastStableOffset(partitionData.lastStableOffset)
               .setLogStartOffset(partitionData.logStartOffset)
               .setAbortedTransactions(partitionData.abortedTransactions)
-              .setRecordSet(unconvertedRecords)
+              .setRecords(unconvertedRecords)
               .setPreferredReadReplica(partitionData.preferredReadReplica)
               .setDivergingEpoch(partitionData.divergingEpoch)
         }
@@ -807,7 +807,7 @@ class KafkaApis(val requestChannel: RequestChannel,
             .setLastStableOffset(lastStableOffset)
             .setLogStartOffset(data.logStartOffset)
             .setAbortedTransactions(abortedTransactions)
-            .setRecordSet(data.records)
+            .setRecords(data.records)
             .setPreferredReadReplica(data.preferredReadReplica.getOrElse(FetchResponse.INVALID_PREFERRED_REPLICA_ID))
             .setDivergingEpoch(data.divergingEpoch.getOrElse(new FetchResponseData.EpochEndOffset)))
       }
@@ -830,7 +830,7 @@ class KafkaApis(val requestChannel: RequestChannel,
         val response = new FetchResponse(unconvertedFetchResponse.error, throttleTimeMs, unconvertedFetchResponse.sessionId, convertedData)
         // record the bytes out metrics only when the response is being sent
         response.responseData.forEach { (tp, data) =>
-          brokerTopicStats.updateBytesOut(tp.topic, fetchRequest.isFromFollower, reassigningPartitions.contains(tp), data.recordSet.sizeInBytes)
+          brokerTopicStats.updateBytesOut(tp.topic, fetchRequest.isFromFollower, reassigningPartitions.contains(tp), data.records.sizeInBytes)
         }
         response
       }

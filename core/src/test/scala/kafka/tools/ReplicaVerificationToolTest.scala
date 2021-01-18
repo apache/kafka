@@ -51,7 +51,7 @@ class ReplicaVerificationToolTest {
           .setLastStableOffset(20)
           .setLogStartOffset(0)
           .setAbortedTransactions(null)
-          .setRecordSet(memoryRecords)
+          .setRecords(memoryRecords)
           .setPreferredReadReplica(FetchResponse.INVALID_PREFERRED_REPLICA_ID)
 
         replicaBuffer.addFetchedData(tp, replicaId, partitionData)

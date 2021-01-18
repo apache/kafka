@@ -85,7 +85,7 @@ public class FetchResponseBenchmark {
                                 .setLastStableOffset(0)
                                 .setLogStartOffset(0)
                                 .setAbortedTransactions(Collections.emptyList())
-                                .setRecordSet(records)
+                                .setRecords(records)
                                 .setPreferredReadReplica(FetchResponse.INVALID_PREFERRED_REPLICA_ID);
                 responseData.put(new TopicPartition(topic, partitionId), partitionData);
             }

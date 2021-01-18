@@ -180,7 +180,7 @@ public class ReplicaFetcherThreadBenchmark {
                     .setLastStableOffset(0)
                     .setLogStartOffset(0)
                     .setAbortedTransactions(Collections.emptyList())
-                    .setRecordSet(fetched)
+                    .setRecords(fetched)
                     .setPreferredReadReplica(FetchResponse.INVALID_PREFERRED_REPLICA_ID));
         }
 

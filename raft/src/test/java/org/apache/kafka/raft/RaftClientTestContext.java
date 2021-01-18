@@ -587,7 +587,7 @@ public final class RaftClientTestContext {
         assertEquals(error, Errors.forCode(partitionResponse.errorCode()));
         assertEquals(epoch, partitionResponse.currentLeader().leaderEpoch());
         assertEquals(leaderId.orElse(-1), partitionResponse.currentLeader().leaderId());
-        return (MemoryRecords) partitionResponse.recordSet();
+        return (MemoryRecords) partitionResponse.records();
     }
 
     MemoryRecords assertSentFetchResponse(
@@ -598,7 +598,7 @@ public final class RaftClientTestContext {
         assertEquals(Errors.NONE, Errors.forCode(partitionResponse.errorCode()));
         assertEquals(leaderEpoch, partitionResponse.currentLeader().leaderEpoch());
         assertEquals(highWatermark, partitionResponse.highWatermark());
-        return (MemoryRecords) partitionResponse.recordSet();
+        return (MemoryRecords) partitionResponse.records();
     }
 
     RaftRequest.Outbound assertSentFetchSnapshotRequest() {
@@ -862,7 +862,7 @@ public final class RaftClientTestContext {
     ) {
         return RaftUtil.singletonFetchResponse(metadataPartition, Errors.NONE, partitionData -> {
             partitionData
-                .setRecordSet(records)
+                .setRecords(records)
                 .setErrorCode(error.code())
                 .setHighWatermark(highWatermark);
 

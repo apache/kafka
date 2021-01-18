@@ -711,7 +711,7 @@ public class RequestResponseTest {
                         .setLastStableOffset(FetchResponse.INVALID_LAST_STABLE_OFFSET)
                         .setLogStartOffset(0)
                         .setAbortedTransactions(Collections.emptyList())
-                        .setRecordSet(records)
+                        .setRecords(records)
                         .setPreferredReadReplica(FetchResponse.INVALID_PREFERRED_REPLICA_ID));
 
         FetchResponse v0Response = new FetchResponse(Errors.NONE, 0, INVALID_SESSION_ID, responseData);
@@ -738,7 +738,7 @@ public class RequestResponseTest {
                         .setLastStableOffset(FetchResponse.INVALID_LAST_STABLE_OFFSET)
                         .setLogStartOffset(FetchResponse.INVALID_LOG_START_OFFSET)
                         .setAbortedTransactions(abortedTransactions)
-                        .setRecordSet(records)
+                        .setRecords(records)
                         .setPreferredReadReplica(FetchResponse.INVALID_PREFERRED_REPLICA_ID));
         responseData.put(new TopicPartition("bar", 1),
                 new FetchResponseData.FetchablePartitionResponse()
@@ -747,7 +747,7 @@ public class RequestResponseTest {
                         .setLastStableOffset(5)
                         .setLogStartOffset(FetchResponse.INVALID_LOG_START_OFFSET)
                         .setAbortedTransactions(null)
-                        .setRecordSet(records)
+                        .setRecords(records)
                         .setPreferredReadReplica(FetchResponse.INVALID_PREFERRED_REPLICA_ID));
         responseData.put(new TopicPartition("foo", 0),
                 new FetchResponseData.FetchablePartitionResponse()
@@ -756,7 +756,7 @@ public class RequestResponseTest {
                         .setLastStableOffset(6)
                         .setLogStartOffset(FetchResponse.INVALID_LOG_START_OFFSET)
                         .setAbortedTransactions(emptyList())
-                        .setRecordSet(records)
+                        .setRecords(records)
                         .setPreferredReadReplica(FetchResponse.INVALID_PREFERRED_REPLICA_ID));
 
         FetchResponse response = new FetchResponse(Errors.NONE, 10, INVALID_SESSION_ID, responseData);
@@ -1087,7 +1087,7 @@ public class RequestResponseTest {
                         .setLastStableOffset(FetchResponse.INVALID_LAST_STABLE_OFFSET)
                         .setLogStartOffset(0)
                         .setAbortedTransactions(Collections.emptyList())
-                        .setRecordSet(records)
+                        .setRecords(records)
                         .setPreferredReadReplica(FetchResponse.INVALID_PREFERRED_REPLICA_ID));
         List<FetchResponseData.AbortedTransaction> abortedTransactions = Collections.singletonList(
             new FetchResponseData.AbortedTransaction().setProducerId(234L).setFirstOffset(999L));
@@ -1097,7 +1097,7 @@ public class RequestResponseTest {
                         .setLastStableOffset(FetchResponse.INVALID_LAST_STABLE_OFFSET)
                         .setLogStartOffset(0)
                         .setAbortedTransactions(abortedTransactions)
-                        .setRecordSet(MemoryRecords.EMPTY)
+                        .setRecords(MemoryRecords.EMPTY)
                         .setPreferredReadReplica(FetchResponse.INVALID_PREFERRED_REPLICA_ID));
         return new FetchResponse(Errors.NONE, 25, sessionId, responseData);
     }
@@ -1111,7 +1111,7 @@ public class RequestResponseTest {
                         .setLastStableOffset(FetchResponse.INVALID_LAST_STABLE_OFFSET)
                         .setLogStartOffset(0)
                         .setAbortedTransactions(Collections.emptyList())
-                        .setRecordSet(records)
+                        .setRecords(records)
                         .setPreferredReadReplica(FetchResponse.INVALID_PREFERRED_REPLICA_ID));
 
         List<FetchResponseData.AbortedTransaction> abortedTransactions = Collections.emptyList();
@@ -1125,7 +1125,7 @@ public class RequestResponseTest {
                         .setLastStableOffset(FetchResponse.INVALID_LAST_STABLE_OFFSET)
                         .setLogStartOffset(0)
                         .setAbortedTransactions(abortedTransactions)
-                        .setRecordSet(MemoryRecords.EMPTY)
+                        .setRecords(MemoryRecords.EMPTY)
                         .setPreferredReadReplica(FetchResponse.INVALID_PREFERRED_REPLICA_ID));
 
         return new FetchResponse(Errors.NONE, 25, INVALID_SESSION_ID, responseData);

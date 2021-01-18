@@ -2260,7 +2260,7 @@ public class KafkaConsumerTest {
                             .setLastStableOffset(FetchResponse.INVALID_LAST_STABLE_OFFSET)
                             .setLogStartOffset(0)
                             .setAbortedTransactions(null)
-                            .setRecordSet(records)
+                            .setRecords(records)
                             .setPreferredReadReplica(FetchResponse.INVALID_PREFERRED_REPLICA_ID));
         }
         return new FetchResponse(Errors.NONE, 0, INVALID_SESSION_ID, tpResponses);

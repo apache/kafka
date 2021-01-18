@@ -161,7 +161,7 @@ public class FetchSessionHandlerTest {
                         .setLastStableOffset(lastStableOffset)
                         .setLogStartOffset(0)
                         .setAbortedTransactions(null)
-                        .setRecordSet(null)
+                        .setRecords(null)
                         .setPreferredReadReplica(FetchResponse.INVALID_PREFERRED_REPLICA_ID);
         }
     }
