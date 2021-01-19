@@ -22,10 +22,9 @@ import scala.collection.Seq
 
 import kafka.zk.ZooKeeperTestHarness
 import kafka.utils.TestUtils
-import org.junit.{After, Before, Test}
-import org.junit.Assert._
+import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
+import org.junit.jupiter.api.Assertions._
 import java.io.File
-import org.scalatest.Assertions.intercept
 
 import org.apache.zookeeper.KeeperException.NodeExistsException
 
@@ -37,7 +36,7 @@ class ServerGenerateBrokerIdTest extends ZooKeeperTestHarness {
   val brokerMetaPropsFile = "meta.properties"
   var servers: Seq[KafkaServer] = Seq()
 
-  @Before
+  @BeforeEach
   override def setUp(): Unit = {
     super.setUp()
     props1 = TestUtils.createBrokerConfig(-1, zkConnect)
@@ -46,7 +45,7 @@ class ServerGenerateBrokerIdTest extends ZooKeeperTestHarness {
     config2 = KafkaConfig.fromProps(props2)
   }
 
-  @After
+  @AfterEach
   override def tearDown(): Unit = {
     TestUtils.shutdownServers(servers)
     super.tearDown()
@@ -154,9 +153,7 @@ class ServerGenerateBrokerIdTest extends ZooKeeperTestHarness {
     val propsB = TestUtils.createBrokerConfig(1, zkConnect)
     val configB = KafkaConfig.fromProps(propsB)
     val serverB = new KafkaServer(configB, threadNamePrefix = Option(this.getClass.getName))
-    intercept[NodeExistsException] {
-      serverB.startup()
-    }
+    assertThrows(classOf[NodeExistsException], () => serverB.startup())
     servers = Seq(serverA)
 
     // verify no broker metadata was written

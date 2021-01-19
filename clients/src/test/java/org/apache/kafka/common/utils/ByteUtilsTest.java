@@ -16,7 +16,7 @@
  */
 package org.apache.kafka.common.utils;
 
-import org.junit.Test;
+import org.junit.jupiter.api.Test;
 
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
@@ -25,8 +25,9 @@ import java.io.DataOutputStream;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 
-import static org.junit.Assert.assertArrayEquals;
-import static org.junit.Assert.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 public class ByteUtilsTest {
     private final byte x00 = 0x00;
@@ -207,18 +208,18 @@ public class ByteUtilsTest {
         assertVarlongSerde(Long.MIN_VALUE, new byte[] {xFF, xFF, xFF, xFF, xFF, xFF, xFF, xFF, xFF, x01});
     }
 
-    @Test(expected = IllegalArgumentException.class)
+    @Test
     public void testInvalidVarint() {
         // varint encoding has one overflow byte
         ByteBuffer buf = ByteBuffer.wrap(new byte[] {xFF, xFF, xFF, xFF, xFF, x01});
-        ByteUtils.readVarint(buf);
+        assertThrows(IllegalArgumentException.class, () -> ByteUtils.readVarint(buf));
     }
 
-    @Test(expected = IllegalArgumentException.class)
+    @Test
     public void testInvalidVarlong() {
         // varlong encoding has one overflow byte
         ByteBuffer buf = ByteBuffer.wrap(new byte[] {xFF, xFF, xFF, xFF, xFF, xFF, xFF, xFF, xFF, xFF, x01});
-        ByteUtils.readVarlong(buf);
+        assertThrows(IllegalArgumentException.class, () -> ByteUtils.readVarlong(buf));
     }
 
     @Test

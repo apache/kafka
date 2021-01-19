@@ -33,11 +33,12 @@ import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.test.TestSslUtils;
 import org.apache.kafka.test.TestUtils;
-import org.junit.After;
-import org.junit.Before;
-import org.junit.Test;
-import org.junit.runner.RunWith;
-import org.junit.runners.Parameterized;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.extension.ExtensionContext;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.ArgumentsProvider;
+import org.junit.jupiter.params.provider.ArgumentsSource;
 
 import java.io.ByteArrayOutputStream;
 import java.io.File;
@@ -57,78 +58,85 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.stream.Stream;
 
 import javax.net.ssl.SSLContext;
 import javax.net.ssl.SSLEngine;
 import javax.net.ssl.SSLParameters;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertThrows;
-import static org.junit.Assert.assertTrue;
-import static org.junit.Assert.fail;
-import static org.junit.Assume.assumeTrue;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 /**
  * Tests for the SSL transport layer. These use a test harness that runs a simple socket server that echos back responses.
  */
-@RunWith(value = Parameterized.class)
 public class SslTransportLayerTest {
 
     private static final int BUFFER_SIZE = 4 * 1024;
     private static Time time = Time.SYSTEM;
 
-    private final String tlsProtocol;
-    private final boolean useInlinePem;
+    private static class Args {
+        private final String tlsProtocol;
+        private final boolean useInlinePem;
+        private CertStores serverCertStores;
+        private CertStores clientCertStores;
+        private Map<String, Object> sslClientConfigs;
+        private Map<String, Object> sslServerConfigs;
+        private Map<String, Object> sslConfigOverrides;
+
+        public Args(String tlsProtocol, boolean useInlinePem) throws Exception {
+            this.tlsProtocol = tlsProtocol;
+            this.useInlinePem = useInlinePem;
+            sslConfigOverrides = new HashMap<>();
+            sslConfigOverrides.put(SslConfigs.SSL_PROTOCOL_CONFIG, tlsProtocol);
+            sslConfigOverrides.put(SslConfigs.SSL_ENABLED_PROTOCOLS_CONFIG, Collections.singletonList(tlsProtocol));
+            init();
+        }
+
+        Map<String, Object> getTrustingConfig(CertStores certStores, CertStores peerCertStores) {
+            Map<String, Object> configs = certStores.getTrustingConfig(peerCertStores);
+            configs.putAll(sslConfigOverrides);
+            return configs;
+        }
+
+        private void init() throws Exception {
+            // Create certificates for use by client and server. Add server cert to client truststore and vice versa.
+            serverCertStores = certBuilder(true, "server", useInlinePem).addHostName("localhost").build();
+            clientCertStores = certBuilder(false, "client", useInlinePem).addHostName("localhost").build();
+            sslServerConfigs = getTrustingConfig(serverCertStores, clientCertStores);
+            sslClientConfigs = getTrustingConfig(clientCertStores, serverCertStores);
+            sslServerConfigs.put(SslConfigs.SSL_ENGINE_FACTORY_CLASS_CONFIG, DefaultSslEngineFactory.class);
+            sslClientConfigs.put(SslConfigs.SSL_ENGINE_FACTORY_CLASS_CONFIG, DefaultSslEngineFactory.class);
+        }
+
+        @Override
+        public String toString() {
+            return "tlsProtocol=" + tlsProtocol +
+                    ", useInlinePem=" + useInlinePem;
+        }
+    }
+
+    private static class SslTransportLayerArgumentsProvider implements ArgumentsProvider {
+
+        @Override
+        public Stream<? extends Arguments> provideArguments(ExtensionContext context) throws Exception {
+            List<Arguments> parameters = new ArrayList<>();
+            parameters.add(Arguments.of(new Args("TLSv1.2", false)));
+            parameters.add(Arguments.of(new Args("TLSv1.2", true)));
+            if (Java.IS_JAVA11_COMPATIBLE) {
+                parameters.add(Arguments.of(new Args("TLSv1.3", false)));
+            }
+            return parameters.stream();
+        }
+    }
+
     private NioEchoServer server;
     private Selector selector;
-    private CertStores serverCertStores;
-    private CertStores clientCertStores;
-    private Map<String, Object> sslClientConfigs;
-    private Map<String, Object> sslServerConfigs;
-    private Map<String, Object> sslConfigOverrides;
 
-    @Parameterized.Parameters(name = "tlsProtocol={0}, useInlinePem={1}")
-    public static Collection<Object[]> data() {
-        List<Object[]> values = new ArrayList<>();
-        values.add(new Object[] {"TLSv1.2", false});
-        values.add(new Object[] {"TLSv1.2", true});
-        if (Java.IS_JAVA11_COMPATIBLE) {
-            values.add(new Object[] {"TLSv1.3", false});
-        }
-        return values;
-    }
-
-    public SslTransportLayerTest(String tlsProtocol, boolean useInlinePem) {
-        this.tlsProtocol = tlsProtocol;
-        this.useInlinePem = useInlinePem;
-        sslConfigOverrides = new HashMap<>();
-        sslConfigOverrides.put(SslConfigs.SSL_PROTOCOL_CONFIG, tlsProtocol);
-        sslConfigOverrides.put(SslConfigs.SSL_ENABLED_PROTOCOLS_CONFIG, Collections.singletonList(tlsProtocol));
-    }
-    private CertStores.Builder certBuilder(boolean isServer, String cn) {
-        return new CertStores.Builder(isServer)
-            .cn(cn)
-            .usePem(useInlinePem);
-    }
-
-    @Before
-    public void setup() throws Exception {
-        // Create certificates for use by client and server. Add server cert to client truststore and vice versa.
-        serverCertStores = certBuilder(true, "server").addHostName("localhost").build();
-        clientCertStores = certBuilder(false, "client").addHostName("localhost").build();
-        sslServerConfigs = getTrustingConfig(serverCertStores, clientCertStores);
-        sslClientConfigs = getTrustingConfig(clientCertStores, serverCertStores);
-        sslServerConfigs.put(SslConfigs.SSL_ENGINE_FACTORY_CLASS_CONFIG, DefaultSslEngineFactory.class);
-        sslClientConfigs.put(SslConfigs.SSL_ENGINE_FACTORY_CLASS_CONFIG, DefaultSslEngineFactory.class);
-
-        LogContext logContext = new LogContext();
-        ChannelBuilder channelBuilder = new SslChannelBuilder(Mode.CLIENT, null, false, logContext);
-        channelBuilder.configure(sslClientConfigs);
-        this.selector = new Selector(5000, new Metrics(), time, "MetricGroup", channelBuilder, logContext);
-    }
-
-    @After
+    @AfterEach
     public void teardown() throws Exception {
         if (selector != null)
             this.selector.close();
@@ -140,12 +148,14 @@ public class SslTransportLayerTest {
      * Tests that server certificate with SubjectAltName containing the valid hostname
      * is accepted by a client that connects using the hostname and validates server endpoint.
      */
-    @Test
-    public void testValidEndpointIdentificationSanDns() throws Exception {
+    @ParameterizedTest
+    @ArgumentsSource(SslTransportLayerArgumentsProvider.class)
+    public void testValidEndpointIdentificationSanDns(Args args) throws Exception {
+        createSelector(args);
         String node = "0";
-        server = createEchoServer(SecurityProtocol.SSL);
-        sslClientConfigs.put(SslConfigs.SSL_ENDPOINT_IDENTIFICATION_ALGORITHM_CONFIG, "HTTPS");
-        createSelector(sslClientConfigs);
+        server = createEchoServer(args, SecurityProtocol.SSL);
+        args.sslClientConfigs.put(SslConfigs.SSL_ENDPOINT_IDENTIFICATION_ALGORITHM_CONFIG, "HTTPS");
+        createSelector(args.sslClientConfigs);
         InetSocketAddress addr = new InetSocketAddress("localhost", server.port());
         selector.connect(node, addr, BUFFER_SIZE, BUFFER_SIZE);
 
@@ -157,16 +167,17 @@ public class SslTransportLayerTest {
      * Tests that server certificate with SubjectAltName containing valid IP address
      * is accepted by a client that connects using IP address and validates server endpoint.
      */
-    @Test
-    public void testValidEndpointIdentificationSanIp() throws Exception {
+    @ParameterizedTest
+    @ArgumentsSource(SslTransportLayerArgumentsProvider.class)
+    public void testValidEndpointIdentificationSanIp(Args args) throws Exception {
         String node = "0";
-        serverCertStores = certBuilder(true, "server").hostAddress(InetAddress.getByName("127.0.0.1")).build();
-        clientCertStores = certBuilder(false, "client").hostAddress(InetAddress.getByName("127.0.0.1")).build();
-        sslServerConfigs = getTrustingConfig(serverCertStores, clientCertStores);
-        sslClientConfigs = getTrustingConfig(clientCertStores, serverCertStores);
-        server = createEchoServer(SecurityProtocol.SSL);
-        sslClientConfigs.put(SslConfigs.SSL_ENDPOINT_IDENTIFICATION_ALGORITHM_CONFIG, "HTTPS");
-        createSelector(sslClientConfigs);
+        args.serverCertStores = certBuilder(true, "server", args.useInlinePem).hostAddress(InetAddress.getByName("127.0.0.1")).build();
+        args.clientCertStores = certBuilder(false, "client", args.useInlinePem).hostAddress(InetAddress.getByName("127.0.0.1")).build();
+        args.sslServerConfigs = args.getTrustingConfig(args.serverCertStores, args.clientCertStores);
+        args.sslClientConfigs = args.getTrustingConfig(args.clientCertStores, args.serverCertStores);
+        server = createEchoServer(args, SecurityProtocol.SSL);
+        args.sslClientConfigs.put(SslConfigs.SSL_ENDPOINT_IDENTIFICATION_ALGORITHM_CONFIG, "HTTPS");
+        createSelector(args.sslClientConfigs);
         InetSocketAddress addr = new InetSocketAddress("127.0.0.1", server.port());
         selector.connect(node, addr, BUFFER_SIZE, BUFFER_SIZE);
 
@@ -177,14 +188,15 @@ public class SslTransportLayerTest {
      * Tests that server certificate with CN containing valid hostname
      * is accepted by a client that connects using hostname and validates server endpoint.
      */
-    @Test
-    public void testValidEndpointIdentificationCN() throws Exception {
-        serverCertStores = certBuilder(true, "localhost").build();
-        clientCertStores = certBuilder(false, "localhost").build();
-        sslServerConfigs = getTrustingConfig(serverCertStores, clientCertStores);
-        sslClientConfigs = getTrustingConfig(clientCertStores, serverCertStores);
-        sslClientConfigs.put(SslConfigs.SSL_ENDPOINT_IDENTIFICATION_ALGORITHM_CONFIG, "HTTPS");
-        verifySslConfigs();
+    @ParameterizedTest
+    @ArgumentsSource(SslTransportLayerArgumentsProvider.class)
+    public void testValidEndpointIdentificationCN(Args args) throws Exception {
+        args.serverCertStores = certBuilder(true, "localhost", args.useInlinePem).build();
+        args.clientCertStores = certBuilder(false, "localhost", args.useInlinePem).build();
+        args.sslServerConfigs = args.getTrustingConfig(args.serverCertStores, args.clientCertStores);
+        args.sslClientConfigs = args.getTrustingConfig(args.clientCertStores, args.serverCertStores);
+        args.sslClientConfigs.put(SslConfigs.SSL_ENDPOINT_IDENTIFICATION_ALGORITHM_CONFIG, "HTTPS");
+        verifySslConfigs(args);
     }
 
     /**
@@ -193,12 +205,13 @@ public class SslTransportLayerTest {
      * created with hostname, client connection uses IP address. Endpoint validation
      * must fail.
      */
-    @Test
-    public void testEndpointIdentificationNoReverseLookup() throws Exception {
+    @ParameterizedTest
+    @ArgumentsSource(SslTransportLayerArgumentsProvider.class)
+    public void testEndpointIdentificationNoReverseLookup(Args args) throws Exception {
         String node = "0";
-        server = createEchoServer(SecurityProtocol.SSL);
-        sslClientConfigs.put(SslConfigs.SSL_ENDPOINT_IDENTIFICATION_ALGORITHM_CONFIG, "HTTPS");
-        createSelector(sslClientConfigs);
+        server = createEchoServer(args, SecurityProtocol.SSL);
+        args.sslClientConfigs.put(SslConfigs.SSL_ENDPOINT_IDENTIFICATION_ALGORITHM_CONFIG, "HTTPS");
+        createSelector(args.sslClientConfigs);
         InetSocketAddress addr = new InetSocketAddress("127.0.0.1", server.port());
         selector.connect(node, addr, BUFFER_SIZE, BUFFER_SIZE);
 
@@ -219,15 +232,16 @@ public class SslTransportLayerTest {
      * This test is to ensure that if client endpoint validation is added to Java in future, we can detect
      * and update Kafka SSL code to enable validation on the server-side and provide hostname if required.
      */
-    @Test
-    public void testClientEndpointNotValidated() throws Exception {
+    @ParameterizedTest
+    @ArgumentsSource(SslTransportLayerArgumentsProvider.class)
+    public void testClientEndpointNotValidated(Args args) throws Exception {
         String node = "0";
 
         // Create client certificate with an invalid hostname
-        clientCertStores = certBuilder(false, "non-existent.com").build();
-        serverCertStores = certBuilder(true, "localhost").build();
-        sslServerConfigs = getTrustingConfig(serverCertStores, clientCertStores);
-        sslClientConfigs = getTrustingConfig(clientCertStores, serverCertStores);
+        args.clientCertStores = certBuilder(false, "non-existent.com", args.useInlinePem).build();
+        args.serverCertStores = certBuilder(true, "localhost", args.useInlinePem).build();
+        args.sslServerConfigs = args.getTrustingConfig(args.serverCertStores, args.clientCertStores);
+        args.sslClientConfigs = args.getTrustingConfig(args.clientCertStores, args.serverCertStores);
 
         // Create a server with endpoint validation enabled on the server SSL engine
         SslChannelBuilder serverChannelBuilder = new TestSslChannelBuilder(Mode.SERVER) {
@@ -239,12 +253,12 @@ public class SslTransportLayerTest {
                 return super.newTransportLayer(id, key, sslEngine);
             }
         };
-        serverChannelBuilder.configure(sslServerConfigs);
+        serverChannelBuilder.configure(args.sslServerConfigs);
         server = new NioEchoServer(ListenerName.forSecurityProtocol(SecurityProtocol.SSL), SecurityProtocol.SSL,
-                new TestSecurityConfig(sslServerConfigs), "localhost", serverChannelBuilder, null, time);
+                new TestSecurityConfig(args.sslServerConfigs), "localhost", serverChannelBuilder, null, time);
         server.start();
 
-        createSelector(sslClientConfigs);
+        createSelector(args.sslClientConfigs);
         InetSocketAddress addr = new InetSocketAddress("localhost", server.port());
         selector.connect(node, addr, BUFFER_SIZE, BUFFER_SIZE);
 
@@ -256,48 +270,50 @@ public class SslTransportLayerTest {
      * a client that validates server endpoint. Server certificate uses
      * wrong hostname as common name to trigger endpoint validation failure.
      */
-    @Test
-    public void testInvalidEndpointIdentification() throws Exception {
-        serverCertStores = certBuilder(true, "server").addHostName("notahost").build();
-        clientCertStores = certBuilder(false, "client").addHostName("localhost").build();
-        sslServerConfigs = getTrustingConfig(serverCertStores, clientCertStores);
-        sslClientConfigs = getTrustingConfig(clientCertStores, serverCertStores);
-        sslClientConfigs.put(SslConfigs.SSL_ENDPOINT_IDENTIFICATION_ALGORITHM_CONFIG, "HTTPS");
-        verifySslConfigsWithHandshakeFailure();
+    @ParameterizedTest
+    @ArgumentsSource(SslTransportLayerArgumentsProvider.class)
+    public void testInvalidEndpointIdentification(Args args) throws Exception {
+        args.serverCertStores = certBuilder(true, "server", args.useInlinePem).addHostName("notahost").build();
+        args.clientCertStores = certBuilder(false, "client", args.useInlinePem).addHostName("localhost").build();
+        args.sslServerConfigs = args.getTrustingConfig(args.serverCertStores, args.clientCertStores);
+        args.sslClientConfigs = args.getTrustingConfig(args.clientCertStores, args.serverCertStores);
+        args.sslClientConfigs.put(SslConfigs.SSL_ENDPOINT_IDENTIFICATION_ALGORITHM_CONFIG, "HTTPS");
+        verifySslConfigsWithHandshakeFailure(args);
     }
 
     /**
      * Tests that server certificate with invalid host name is accepted by
      * a client that has disabled endpoint validation
      */
-    @Test
-    public void testEndpointIdentificationDisabled() throws Exception {
-        serverCertStores = certBuilder(true, "server").addHostName("notahost").build();
-        clientCertStores = certBuilder(false, "client").addHostName("localhost").build();
-        sslServerConfigs = getTrustingConfig(serverCertStores, clientCertStores);
-        sslClientConfigs = getTrustingConfig(clientCertStores, serverCertStores);
+    @ParameterizedTest
+    @ArgumentsSource(SslTransportLayerArgumentsProvider.class)
+    public void testEndpointIdentificationDisabled(Args args) throws Exception {
+        args.serverCertStores = certBuilder(true, "server", args.useInlinePem).addHostName("notahost").build();
+        args.clientCertStores = certBuilder(false, "client", args.useInlinePem).addHostName("localhost").build();
+        args.sslServerConfigs = args.getTrustingConfig(args.serverCertStores, args.clientCertStores);
+        args.sslClientConfigs = args.getTrustingConfig(args.clientCertStores, args.serverCertStores);
 
-        server = createEchoServer(SecurityProtocol.SSL);
+        server = createEchoServer(args, SecurityProtocol.SSL);
         InetSocketAddress addr = new InetSocketAddress("localhost", server.port());
 
         // Disable endpoint validation, connection should succeed
         String node = "1";
-        sslClientConfigs.put(SslConfigs.SSL_ENDPOINT_IDENTIFICATION_ALGORITHM_CONFIG, "");
-        createSelector(sslClientConfigs);
+        args.sslClientConfigs.put(SslConfigs.SSL_ENDPOINT_IDENTIFICATION_ALGORITHM_CONFIG, "");
+        createSelector(args.sslClientConfigs);
         selector.connect(node, addr, BUFFER_SIZE, BUFFER_SIZE);
         NetworkTestUtils.checkClientConnection(selector, node, 100, 10);
 
         // Disable endpoint validation using null value, connection should succeed
         String node2 = "2";
-        sslClientConfigs.put(SslConfigs.SSL_ENDPOINT_IDENTIFICATION_ALGORITHM_CONFIG, null);
-        createSelector(sslClientConfigs);
+        args.sslClientConfigs.put(SslConfigs.SSL_ENDPOINT_IDENTIFICATION_ALGORITHM_CONFIG, null);
+        createSelector(args.sslClientConfigs);
         selector.connect(node2, addr, BUFFER_SIZE, BUFFER_SIZE);
         NetworkTestUtils.checkClientConnection(selector, node2, 100, 10);
 
         // Connection should fail with endpoint validation enabled
         String node3 = "3";
-        sslClientConfigs.put(SslConfigs.SSL_ENDPOINT_IDENTIFICATION_ALGORITHM_CONFIG, "HTTPS");
-        createSelector(sslClientConfigs);
+        args.sslClientConfigs.put(SslConfigs.SSL_ENDPOINT_IDENTIFICATION_ALGORITHM_CONFIG, "HTTPS");
+        createSelector(args.sslClientConfigs);
         selector.connect(node3, addr, BUFFER_SIZE, BUFFER_SIZE);
         NetworkTestUtils.waitForChannelClose(selector, node3, ChannelState.State.AUTHENTICATION_FAILED);
         selector.close();
@@ -307,46 +323,48 @@ public class SslTransportLayerTest {
      * Tests that server accepts connections from clients with a trusted certificate
      * when client authentication is required.
      */
-    @Test
-    public void testClientAuthenticationRequiredValidProvided() throws Exception {
-        sslServerConfigs.put(BrokerSecurityConfigs.SSL_CLIENT_AUTH_CONFIG, "required");
-        verifySslConfigs();
+    @ParameterizedTest
+    @ArgumentsSource(SslTransportLayerArgumentsProvider.class)
+    public void testClientAuthenticationRequiredValidProvided(Args args) throws Exception {
+        args.sslServerConfigs.put(BrokerSecurityConfigs.SSL_CLIENT_AUTH_CONFIG, "required");
+        verifySslConfigs(args);
     }
 
     /**
      * Tests that disabling client authentication as a listener override has the desired effect.
      */
-    @Test
-    public void testListenerConfigOverride() throws Exception {
+    @ParameterizedTest
+    @ArgumentsSource(SslTransportLayerArgumentsProvider.class)
+    public void testListenerConfigOverride(Args args) throws Exception {
         String node = "0";
         ListenerName clientListenerName = new ListenerName("client");
-        sslServerConfigs.put(BrokerSecurityConfigs.SSL_CLIENT_AUTH_CONFIG, "required");
-        sslServerConfigs.put(clientListenerName.configPrefix() + BrokerSecurityConfigs.SSL_CLIENT_AUTH_CONFIG, "none");
+        args.sslServerConfigs.put(BrokerSecurityConfigs.SSL_CLIENT_AUTH_CONFIG, "required");
+        args.sslServerConfigs.put(clientListenerName.configPrefix() + BrokerSecurityConfigs.SSL_CLIENT_AUTH_CONFIG, "none");
 
         // `client` listener is not configured at this point, so client auth should be required
-        server = createEchoServer(SecurityProtocol.SSL);
+        server = createEchoServer(args, SecurityProtocol.SSL);
         InetSocketAddress addr = new InetSocketAddress("localhost", server.port());
 
         // Connect with client auth should work fine
-        createSelector(sslClientConfigs);
+        createSelector(args.sslClientConfigs);
         selector.connect(node, addr, BUFFER_SIZE, BUFFER_SIZE);
         NetworkTestUtils.checkClientConnection(selector, node, 100, 10);
         selector.close();
 
         // Remove client auth, so connection should fail
-        CertStores.KEYSTORE_PROPS.forEach(sslClientConfigs::remove);
-        createSelector(sslClientConfigs);
+        CertStores.KEYSTORE_PROPS.forEach(args.sslClientConfigs::remove);
+        createSelector(args.sslClientConfigs);
         selector.connect(node, addr, BUFFER_SIZE, BUFFER_SIZE);
         NetworkTestUtils.waitForChannelClose(selector, node, ChannelState.State.AUTHENTICATION_FAILED);
         selector.close();
         server.close();
 
         // Listener-specific config should be used and client auth should be disabled
-        server = createEchoServer(clientListenerName, SecurityProtocol.SSL);
+        server = createEchoServer(args, clientListenerName, SecurityProtocol.SSL);
         addr = new InetSocketAddress("localhost", server.port());
 
         // Connect without client auth should work fine now
-        createSelector(sslClientConfigs);
+        createSelector(args.sslClientConfigs);
         selector.connect(node, addr, BUFFER_SIZE, BUFFER_SIZE);
         NetworkTestUtils.checkClientConnection(selector, node, 100, 10);
     }
@@ -355,108 +373,117 @@ public class SslTransportLayerTest {
      * Tests that server does not accept connections from clients with an untrusted certificate
      * when client authentication is required.
      */
-    @Test
-    public void testClientAuthenticationRequiredUntrustedProvided() throws Exception {
-        sslServerConfigs = serverCertStores.getUntrustingConfig();
-        sslServerConfigs.putAll(sslConfigOverrides);
-        sslServerConfigs.put(BrokerSecurityConfigs.SSL_CLIENT_AUTH_CONFIG, "required");
-        verifySslConfigsWithHandshakeFailure();
+    @ParameterizedTest
+    @ArgumentsSource(SslTransportLayerArgumentsProvider.class)
+    public void testClientAuthenticationRequiredUntrustedProvided(Args args) throws Exception {
+        args.sslServerConfigs = args.serverCertStores.getUntrustingConfig();
+        args.sslServerConfigs.putAll(args.sslConfigOverrides);
+        args.sslServerConfigs.put(BrokerSecurityConfigs.SSL_CLIENT_AUTH_CONFIG, "required");
+        verifySslConfigsWithHandshakeFailure(args);
     }
 
     /**
      * Tests that server does not accept connections from clients which don't
      * provide a certificate when client authentication is required.
      */
-    @Test
-    public void testClientAuthenticationRequiredNotProvided() throws Exception {
-        sslServerConfigs.put(BrokerSecurityConfigs.SSL_CLIENT_AUTH_CONFIG, "required");
-        CertStores.KEYSTORE_PROPS.forEach(sslClientConfigs::remove);
-        verifySslConfigsWithHandshakeFailure();
+    @ParameterizedTest
+    @ArgumentsSource(SslTransportLayerArgumentsProvider.class)
+    public void testClientAuthenticationRequiredNotProvided(Args args) throws Exception {
+        args.sslServerConfigs.put(BrokerSecurityConfigs.SSL_CLIENT_AUTH_CONFIG, "required");
+        CertStores.KEYSTORE_PROPS.forEach(args.sslClientConfigs::remove);
+        verifySslConfigsWithHandshakeFailure(args);
     }
 
     /**
      * Tests that server accepts connections from a client configured
      * with an untrusted certificate if client authentication is disabled
      */
-    @Test
-    public void testClientAuthenticationDisabledUntrustedProvided() throws Exception {
-        sslServerConfigs = serverCertStores.getUntrustingConfig();
-        sslServerConfigs.putAll(sslConfigOverrides);
-        sslServerConfigs.put(BrokerSecurityConfigs.SSL_CLIENT_AUTH_CONFIG, "none");
-        verifySslConfigs();
+    @ParameterizedTest
+    @ArgumentsSource(SslTransportLayerArgumentsProvider.class)
+    public void testClientAuthenticationDisabledUntrustedProvided(Args args) throws Exception {
+        args.sslServerConfigs = args.serverCertStores.getUntrustingConfig();
+        args.sslServerConfigs.putAll(args.sslConfigOverrides);
+        args.sslServerConfigs.put(BrokerSecurityConfigs.SSL_CLIENT_AUTH_CONFIG, "none");
+        verifySslConfigs(args);
     }
 
     /**
      * Tests that server accepts connections from a client that does not provide
      * a certificate if client authentication is disabled
      */
-    @Test
-    public void testClientAuthenticationDisabledNotProvided() throws Exception {
-        sslServerConfigs.put(BrokerSecurityConfigs.SSL_CLIENT_AUTH_CONFIG, "none");
+    @ParameterizedTest
+    @ArgumentsSource(SslTransportLayerArgumentsProvider.class)
+    public void testClientAuthenticationDisabledNotProvided(Args args) throws Exception {
+        args.sslServerConfigs.put(BrokerSecurityConfigs.SSL_CLIENT_AUTH_CONFIG, "none");
 
-        CertStores.KEYSTORE_PROPS.forEach(sslClientConfigs::remove);
-        verifySslConfigs();
+        CertStores.KEYSTORE_PROPS.forEach(args.sslClientConfigs::remove);
+        verifySslConfigs(args);
     }
 
     /**
      * Tests that server accepts connections from a client configured
      * with a valid certificate if client authentication is requested
      */
-    @Test
-    public void testClientAuthenticationRequestedValidProvided() throws Exception {
-        sslServerConfigs.put(BrokerSecurityConfigs.SSL_CLIENT_AUTH_CONFIG, "requested");
-        verifySslConfigs();
+    @ParameterizedTest
+    @ArgumentsSource(SslTransportLayerArgumentsProvider.class)
+    public void testClientAuthenticationRequestedValidProvided(Args args) throws Exception {
+        args.sslServerConfigs.put(BrokerSecurityConfigs.SSL_CLIENT_AUTH_CONFIG, "requested");
+        verifySslConfigs(args);
     }
 
     /**
      * Tests that server accepts connections from a client that does not provide
      * a certificate if client authentication is requested but not required
      */
-    @Test
-    public void testClientAuthenticationRequestedNotProvided() throws Exception {
-        sslServerConfigs.put(BrokerSecurityConfigs.SSL_CLIENT_AUTH_CONFIG, "requested");
+    @ParameterizedTest
+    @ArgumentsSource(SslTransportLayerArgumentsProvider.class)
+    public void testClientAuthenticationRequestedNotProvided(Args args) throws Exception {
+        args.sslServerConfigs.put(BrokerSecurityConfigs.SSL_CLIENT_AUTH_CONFIG, "requested");
 
-        CertStores.KEYSTORE_PROPS.forEach(sslClientConfigs::remove);
-        verifySslConfigs();
+        CertStores.KEYSTORE_PROPS.forEach(args.sslClientConfigs::remove);
+        verifySslConfigs(args);
     }
 
     /**
      * Tests key-pair created using DSA.
      */
-    @Test
-    public void testDsaKeyPair() throws Exception {
+    @ParameterizedTest
+    @ArgumentsSource(SslTransportLayerArgumentsProvider.class)
+    public void testDsaKeyPair(Args args) throws Exception {
         // DSA algorithms are not supported for TLSv1.3.
-        assumeTrue(tlsProtocol.equals("TLSv1.2"));
-        serverCertStores = certBuilder(true, "server").keyAlgorithm("DSA").build();
-        clientCertStores = certBuilder(false, "client").keyAlgorithm("DSA").build();
-        sslServerConfigs = getTrustingConfig(serverCertStores, clientCertStores);
-        sslClientConfigs = getTrustingConfig(clientCertStores, serverCertStores);
-        sslServerConfigs.put(BrokerSecurityConfigs.SSL_CLIENT_AUTH_CONFIG, "required");
-        verifySslConfigs();
+        assumeTrue(args.tlsProtocol.equals("TLSv1.2"));
+        args.serverCertStores = certBuilder(true, "server", args.useInlinePem).keyAlgorithm("DSA").build();
+        args.clientCertStores = certBuilder(false, "client", args.useInlinePem).keyAlgorithm("DSA").build();
+        args.sslServerConfigs = args.getTrustingConfig(args.serverCertStores, args.clientCertStores);
+        args.sslClientConfigs = args.getTrustingConfig(args.clientCertStores, args.serverCertStores);
+        args.sslServerConfigs.put(BrokerSecurityConfigs.SSL_CLIENT_AUTH_CONFIG, "required");
+        verifySslConfigs(args);
     }
 
     /**
      * Tests key-pair created using EC.
      */
-    @Test
-    public void testECKeyPair() throws Exception {
-        serverCertStores = certBuilder(true, "server").keyAlgorithm("EC").build();
-        clientCertStores = certBuilder(false, "client").keyAlgorithm("EC").build();
-        sslServerConfigs = getTrustingConfig(serverCertStores, clientCertStores);
-        sslClientConfigs = getTrustingConfig(clientCertStores, serverCertStores);
-        sslServerConfigs.put(BrokerSecurityConfigs.SSL_CLIENT_AUTH_CONFIG, "required");
-        verifySslConfigs();
+    @ParameterizedTest
+    @ArgumentsSource(SslTransportLayerArgumentsProvider.class)
+    public void testECKeyPair(Args args) throws Exception {
+        args.serverCertStores = certBuilder(true, "server", args.useInlinePem).keyAlgorithm("EC").build();
+        args.clientCertStores = certBuilder(false, "client", args.useInlinePem).keyAlgorithm("EC").build();
+        args.sslServerConfigs = args.getTrustingConfig(args.serverCertStores, args.clientCertStores);
+        args.sslClientConfigs = args.getTrustingConfig(args.clientCertStores, args.serverCertStores);
+        args.sslServerConfigs.put(BrokerSecurityConfigs.SSL_CLIENT_AUTH_CONFIG, "required");
+        verifySslConfigs(args);
     }
 
     /**
      * Tests PEM key store and trust store files which don't have store passwords.
      */
-    @Test
-    public void testPemFiles() throws Exception {
-        TestSslUtils.convertToPem(sslServerConfigs, true, true);
-        TestSslUtils.convertToPem(sslClientConfigs, true, true);
-        sslServerConfigs.put(BrokerSecurityConfigs.SSL_CLIENT_AUTH_CONFIG, "required");
-        verifySslConfigs();
+    @ParameterizedTest
+    @ArgumentsSource(SslTransportLayerArgumentsProvider.class)
+    public void testPemFiles(Args args) throws Exception {
+        TestSslUtils.convertToPem(args.sslServerConfigs, true, true);
+        TestSslUtils.convertToPem(args.sslClientConfigs, true, true);
+        args.sslServerConfigs.put(BrokerSecurityConfigs.SSL_CLIENT_AUTH_CONFIG, "required");
+        verifySslConfigs(args);
     }
 
     /**
@@ -464,16 +491,18 @@ public class SslTransportLayerTest {
      * with PEM files since unprotected private key on disk is not safe. We do allow with inline
      * PEM config since key config can be encrypted or externalized similar to other password configs.
      */
-    @Test
-    public void testPemFilesWithoutClientKeyPassword() throws Exception {
-        TestSslUtils.convertToPem(sslServerConfigs, !useInlinePem, true);
-        TestSslUtils.convertToPem(sslClientConfigs, !useInlinePem, false);
-        sslServerConfigs.put(BrokerSecurityConfigs.SSL_CLIENT_AUTH_CONFIG, "required");
-        server = createEchoServer(SecurityProtocol.SSL);
+    @ParameterizedTest
+    @ArgumentsSource(SslTransportLayerArgumentsProvider.class)
+    public void testPemFilesWithoutClientKeyPassword(Args args) throws Exception {
+        boolean useInlinePem = args.useInlinePem;
+        TestSslUtils.convertToPem(args.sslServerConfigs, !useInlinePem, true);
+        TestSslUtils.convertToPem(args.sslClientConfigs, !useInlinePem, false);
+        args.sslServerConfigs.put(BrokerSecurityConfigs.SSL_CLIENT_AUTH_CONFIG, "required");
+        server = createEchoServer(args, SecurityProtocol.SSL);
         if (useInlinePem)
-            verifySslConfigs();
+            verifySslConfigs(args);
         else
-            assertThrows(KafkaException.class, () -> createSelector(sslClientConfigs));
+            assertThrows(KafkaException.class, () -> createSelector(args.sslClientConfigs));
     }
 
     /**
@@ -481,56 +510,51 @@ public class SslTransportLayerTest {
      * with PEM files since unprotected private key on disk is not safe. We do allow with inline
      * PEM config since key config can be encrypted or externalized similar to other password configs.
      */
-    @Test
-    public void testPemFilesWithoutServerKeyPassword() throws Exception {
-        TestSslUtils.convertToPem(sslServerConfigs, !useInlinePem, false);
-        TestSslUtils.convertToPem(sslClientConfigs, !useInlinePem, true);
+    @ParameterizedTest
+    @ArgumentsSource(SslTransportLayerArgumentsProvider.class)
+    public void testPemFilesWithoutServerKeyPassword(Args args) throws Exception {
+        TestSslUtils.convertToPem(args.sslServerConfigs, !args.useInlinePem, false);
+        TestSslUtils.convertToPem(args.sslClientConfigs, !args.useInlinePem, true);
 
-        if (useInlinePem)
-            verifySslConfigs();
+        if (args.useInlinePem)
+            verifySslConfigs(args);
         else
-            assertThrows(KafkaException.class, () -> createEchoServer(SecurityProtocol.SSL));
+            assertThrows(KafkaException.class, () -> createEchoServer(args, SecurityProtocol.SSL));
     }
 
     /**
      * Tests that an invalid SecureRandom implementation cannot be configured
      */
-    @Test
-    public void testInvalidSecureRandomImplementation() {
+    @ParameterizedTest
+    @ArgumentsSource(SslTransportLayerArgumentsProvider.class)
+    public void testInvalidSecureRandomImplementation(Args args) {
         try (SslChannelBuilder channelBuilder = newClientChannelBuilder()) {
-            sslClientConfigs.put(SslConfigs.SSL_SECURE_RANDOM_IMPLEMENTATION_CONFIG, "invalid");
-            channelBuilder.configure(sslClientConfigs);
-            fail("SSL channel configured with invalid SecureRandom implementation");
-        } catch (KafkaException e) {
-            // Expected exception
+            args.sslClientConfigs.put(SslConfigs.SSL_SECURE_RANDOM_IMPLEMENTATION_CONFIG, "invalid");
+            assertThrows(KafkaException.class, () -> channelBuilder.configure(args.sslClientConfigs));
         }
     }
 
     /**
      * Tests that channels cannot be created if truststore cannot be loaded
      */
-    @Test
-    public void testInvalidTruststorePassword() {
+    @ParameterizedTest
+    @ArgumentsSource(SslTransportLayerArgumentsProvider.class)
+    public void testInvalidTruststorePassword(Args args) {
         try (SslChannelBuilder channelBuilder = newClientChannelBuilder()) {
-            sslClientConfigs.put(SslConfigs.SSL_TRUSTSTORE_PASSWORD_CONFIG, "invalid");
-            channelBuilder.configure(sslClientConfigs);
-            fail("SSL channel configured with invalid truststore password");
-        } catch (KafkaException e) {
-            // Expected exception
+            args.sslClientConfigs.put(SslConfigs.SSL_TRUSTSTORE_PASSWORD_CONFIG, "invalid");
+            assertThrows(KafkaException.class, () -> channelBuilder.configure(args.sslClientConfigs));
         }
     }
 
     /**
      * Tests that channels cannot be created if keystore cannot be loaded
      */
-    @Test
-    public void testInvalidKeystorePassword() {
+    @ParameterizedTest
+    @ArgumentsSource(SslTransportLayerArgumentsProvider.class)
+    public void testInvalidKeystorePassword(Args args) {
         try (SslChannelBuilder channelBuilder = newClientChannelBuilder()) {
-            sslClientConfigs.put(SslConfigs.SSL_KEYSTORE_PASSWORD_CONFIG, "invalid");
-            channelBuilder.configure(sslClientConfigs);
-            fail("SSL channel configured with invalid keystore password");
-        } catch (KafkaException e) {
-            // Expected exception
+            args.sslClientConfigs.put(SslConfigs.SSL_KEYSTORE_PASSWORD_CONFIG, "invalid");
+            assertThrows(KafkaException.class, () -> channelBuilder.configure(args.sslClientConfigs));
         }
     }
 
@@ -538,42 +562,45 @@ public class SslTransportLayerTest {
      * Tests that client connections can be created to a server
      * if null truststore password is used
      */
-    @Test
-    public void testNullTruststorePassword() throws Exception {
-        sslClientConfigs.remove(SslConfigs.SSL_TRUSTSTORE_PASSWORD_CONFIG);
-        sslServerConfigs.remove(SslConfigs.SSL_TRUSTSTORE_PASSWORD_CONFIG);
+    @ParameterizedTest
+    @ArgumentsSource(SslTransportLayerArgumentsProvider.class)
+    public void testNullTruststorePassword(Args args) throws Exception {
+        args.sslClientConfigs.remove(SslConfigs.SSL_TRUSTSTORE_PASSWORD_CONFIG);
+        args.sslServerConfigs.remove(SslConfigs.SSL_TRUSTSTORE_PASSWORD_CONFIG);
 
-        verifySslConfigs();
+        verifySslConfigs(args);
     }
 
     /**
      * Tests that client connections cannot be created to a server
      * if key password is invalid
      */
-    @Test
-    public void testInvalidKeyPassword() throws Exception {
-        sslServerConfigs.put(SslConfigs.SSL_KEY_PASSWORD_CONFIG, new Password("invalid"));
-        if (useInlinePem) {
+    @ParameterizedTest
+    @ArgumentsSource(SslTransportLayerArgumentsProvider.class)
+    public void testInvalidKeyPassword(Args args) throws Exception {
+        args.sslServerConfigs.put(SslConfigs.SSL_KEY_PASSWORD_CONFIG, new Password("invalid"));
+        if (args.useInlinePem) {
             // We fail fast for PEM
-            assertThrows(InvalidConfigurationException.class, () -> createEchoServer(SecurityProtocol.SSL));
+            assertThrows(InvalidConfigurationException.class, () -> createEchoServer(args, SecurityProtocol.SSL));
             return;
         }
-        verifySslConfigsWithHandshakeFailure();
+        verifySslConfigsWithHandshakeFailure(args);
     }
 
     /**
      * Tests that connection success with the default TLS version.
      */
-    @Test
-    public void testTlsDefaults() throws Exception {
-        sslServerConfigs = serverCertStores.getTrustingConfig(clientCertStores);
-        sslClientConfigs = clientCertStores.getTrustingConfig(serverCertStores);
+    @ParameterizedTest
+    @ArgumentsSource(SslTransportLayerArgumentsProvider.class)
+    public void testTlsDefaults(Args args) throws Exception {
+        args.sslServerConfigs = args.serverCertStores.getTrustingConfig(args.clientCertStores);
+        args.sslClientConfigs = args.clientCertStores.getTrustingConfig(args.serverCertStores);
 
-        assertEquals(SslConfigs.DEFAULT_SSL_PROTOCOL, sslServerConfigs.get(SslConfigs.SSL_PROTOCOL_CONFIG));
-        assertEquals(SslConfigs.DEFAULT_SSL_PROTOCOL, sslClientConfigs.get(SslConfigs.SSL_PROTOCOL_CONFIG));
+        assertEquals(SslConfigs.DEFAULT_SSL_PROTOCOL, args.sslServerConfigs.get(SslConfigs.SSL_PROTOCOL_CONFIG));
+        assertEquals(SslConfigs.DEFAULT_SSL_PROTOCOL, args.sslClientConfigs.get(SslConfigs.SSL_PROTOCOL_CONFIG));
 
-        server = createEchoServer(SecurityProtocol.SSL);
-        createSelector(sslClientConfigs);
+        server = createEchoServer(args, SecurityProtocol.SSL);
+        createSelector(args.sslClientConfigs);
 
         InetSocketAddress addr = new InetSocketAddress("localhost", server.port());
         selector.connect("0", addr, BUFFER_SIZE, BUFFER_SIZE);
@@ -582,17 +609,17 @@ public class SslTransportLayerTest {
         server.verifyAuthenticationMetrics(1, 0);
         selector.close();
 
-        checkAuthenticationFailed("1", "TLSv1.1");
+        checkAuthenticationFailed(args, "1", "TLSv1.1");
         server.verifyAuthenticationMetrics(1, 1);
 
-        checkAuthenticationFailed("2", "TLSv1");
+        checkAuthenticationFailed(args, "2", "TLSv1");
         server.verifyAuthenticationMetrics(1, 2);
     }
 
     /** Checks connection failed using the specified {@code tlsVersion}. */
-    private void checkAuthenticationFailed(String node, String tlsVersion) throws IOException {
-        sslClientConfigs.put(SslConfigs.SSL_ENABLED_PROTOCOLS_CONFIG, Arrays.asList(tlsVersion));
-        createSelector(sslClientConfigs);
+    private void checkAuthenticationFailed(Args args, String node, String tlsVersion) throws IOException {
+        args.sslClientConfigs.put(SslConfigs.SSL_ENABLED_PROTOCOLS_CONFIG, Arrays.asList(tlsVersion));
+        createSelector(args.sslClientConfigs);
         InetSocketAddress addr = new InetSocketAddress("localhost", server.port());
         selector.connect(node, addr, BUFFER_SIZE, BUFFER_SIZE);
 
@@ -604,38 +631,41 @@ public class SslTransportLayerTest {
     /**
      * Tests that connections cannot be made with unsupported TLS versions
      */
-    @Test
-    public void testUnsupportedTLSVersion() throws Exception {
-        sslServerConfigs.put(SslConfigs.SSL_ENABLED_PROTOCOLS_CONFIG, Arrays.asList("TLSv1.2"));
-        server = createEchoServer(SecurityProtocol.SSL);
+    @ParameterizedTest
+    @ArgumentsSource(SslTransportLayerArgumentsProvider.class)
+    public void testUnsupportedTLSVersion(Args args) throws Exception {
+        args.sslServerConfigs.put(SslConfigs.SSL_ENABLED_PROTOCOLS_CONFIG, Arrays.asList("TLSv1.2"));
+        server = createEchoServer(args, SecurityProtocol.SSL);
 
-        checkAuthenticationFailed("0", "TLSv1.1");
+        checkAuthenticationFailed(args, "0", "TLSv1.1");
         server.verifyAuthenticationMetrics(0, 1);
     }
 
     /**
      * Tests that connections cannot be made with unsupported TLS cipher suites
      */
-    @Test
-    public void testUnsupportedCiphers() throws Exception {
-        SSLContext context = SSLContext.getInstance(tlsProtocol);
+    @ParameterizedTest
+    @ArgumentsSource(SslTransportLayerArgumentsProvider.class)
+    public void testUnsupportedCiphers(Args args) throws Exception {
+        SSLContext context = SSLContext.getInstance(args.tlsProtocol);
         context.init(null, null, null);
         String[] cipherSuites = context.getDefaultSSLParameters().getCipherSuites();
-        sslServerConfigs.put(SslConfigs.SSL_CIPHER_SUITES_CONFIG, Arrays.asList(cipherSuites[0]));
-        server = createEchoServer(SecurityProtocol.SSL);
+        args.sslServerConfigs.put(SslConfigs.SSL_CIPHER_SUITES_CONFIG, Arrays.asList(cipherSuites[0]));
+        server = createEchoServer(args, SecurityProtocol.SSL);
 
-        sslClientConfigs.put(SslConfigs.SSL_CIPHER_SUITES_CONFIG, Arrays.asList(cipherSuites[1]));
-        createSelector(sslClientConfigs);
+        args.sslClientConfigs.put(SslConfigs.SSL_CIPHER_SUITES_CONFIG, Arrays.asList(cipherSuites[1]));
+        createSelector(args.sslClientConfigs);
 
-        checkAuthenticationFailed("1", tlsProtocol);
+        checkAuthenticationFailed(args, "1", args.tlsProtocol);
         server.verifyAuthenticationMetrics(0, 1);
     }
 
-    @Test
-    public void testServerRequestMetrics() throws Exception {
+    @ParameterizedTest
+    @ArgumentsSource(SslTransportLayerArgumentsProvider.class)
+    public void testServerRequestMetrics(Args args) throws Exception {
         String node = "0";
-        server = createEchoServer(SecurityProtocol.SSL);
-        createSelector(sslClientConfigs, 16384, 16384, 16384);
+        server = createEchoServer(args, SecurityProtocol.SSL);
+        createSelector(args.sslClientConfigs, 16384, 16384, 16384);
         InetSocketAddress addr = new InetSocketAddress("localhost", server.port());
         selector.connect(node, addr, 102400, 102400);
         NetworkTestUtils.waitForChannelReady(selector, node);
@@ -655,11 +685,12 @@ public class SslTransportLayerTest {
     /**
      * selector.poll() should be able to fetch more data than netReadBuffer from the socket.
      */
-    @Test
-    public void testSelectorPollReadSize() throws Exception {
+    @ParameterizedTest
+    @ArgumentsSource(SslTransportLayerArgumentsProvider.class)
+    public void testSelectorPollReadSize(Args args) throws Exception {
         String node = "0";
-        server = createEchoServer(SecurityProtocol.SSL);
-        createSelector(sslClientConfigs, 16384, 16384, 16384);
+        server = createEchoServer(args, SecurityProtocol.SSL);
+        createSelector(args.sslClientConfigs, 16384, 16384, 16384);
         InetSocketAddress addr = new InetSocketAddress("localhost", server.port());
         selector.connect(node, addr, 102400, 102400);
         NetworkTestUtils.checkClientConnection(selector, node, 81920, 1);
@@ -694,11 +725,12 @@ public class SslTransportLayerTest {
     /**
      * Tests handling of BUFFER_UNDERFLOW during unwrap when network read buffer is smaller than SSL session packet buffer size.
      */
-    @Test
-    public void testNetReadBufferResize() throws Exception {
+    @ParameterizedTest
+    @ArgumentsSource(SslTransportLayerArgumentsProvider.class)
+    public void testNetReadBufferResize(Args args) throws Exception {
         String node = "0";
-        server = createEchoServer(SecurityProtocol.SSL);
-        createSelector(sslClientConfigs, 10, null, null);
+        server = createEchoServer(args, SecurityProtocol.SSL);
+        createSelector(args.sslClientConfigs, 10, null, null);
         InetSocketAddress addr = new InetSocketAddress("localhost", server.port());
         selector.connect(node, addr, BUFFER_SIZE, BUFFER_SIZE);
 
@@ -708,11 +740,12 @@ public class SslTransportLayerTest {
     /**
      * Tests handling of BUFFER_OVERFLOW during wrap when network write buffer is smaller than SSL session packet buffer size.
      */
-    @Test
-    public void testNetWriteBufferResize() throws Exception {
+    @ParameterizedTest
+    @ArgumentsSource(SslTransportLayerArgumentsProvider.class)
+    public void testNetWriteBufferResize(Args args) throws Exception {
         String node = "0";
-        server = createEchoServer(SecurityProtocol.SSL);
-        createSelector(sslClientConfigs, null, 10, null);
+        server = createEchoServer(args, SecurityProtocol.SSL);
+        createSelector(args.sslClientConfigs, null, 10, null);
         InetSocketAddress addr = new InetSocketAddress("localhost", server.port());
         selector.connect(node, addr, BUFFER_SIZE, BUFFER_SIZE);
 
@@ -722,11 +755,12 @@ public class SslTransportLayerTest {
     /**
      * Tests handling of BUFFER_OVERFLOW during unwrap when application read buffer is smaller than SSL session application buffer size.
      */
-    @Test
-    public void testApplicationBufferResize() throws Exception {
+    @ParameterizedTest
+    @ArgumentsSource(SslTransportLayerArgumentsProvider.class)
+    public void testApplicationBufferResize(Args args) throws Exception {
         String node = "0";
-        server = createEchoServer(SecurityProtocol.SSL);
-        createSelector(sslClientConfigs, null, null, 10);
+        server = createEchoServer(args, SecurityProtocol.SSL);
+        createSelector(args.sslClientConfigs, null, null, 10);
         InetSocketAddress addr = new InetSocketAddress("localhost", server.port());
         selector.connect(node, addr, BUFFER_SIZE, BUFFER_SIZE);
 
@@ -736,24 +770,25 @@ public class SslTransportLayerTest {
     /**
      * Tests that time spent on the network thread is accumulated on each channel
      */
-    @Test
-    public void testNetworkThreadTimeRecorded() throws Exception {
+    @ParameterizedTest
+    @ArgumentsSource(SslTransportLayerArgumentsProvider.class)
+    public void testNetworkThreadTimeRecorded(Args args) throws Exception {
         LogContext logContext = new LogContext();
         ChannelBuilder channelBuilder = new SslChannelBuilder(Mode.CLIENT, null, false, logContext);
-        channelBuilder.configure(sslClientConfigs);
+        channelBuilder.configure(args.sslClientConfigs);
         try (Selector selector = new Selector(NetworkReceive.UNLIMITED, Selector.NO_IDLE_TIMEOUT_MS, new Metrics(), Time.SYSTEM,
                 "MetricGroup", new HashMap<>(), false, true, channelBuilder, MemoryPool.NONE, logContext)) {
 
             String node = "0";
-            server = createEchoServer(SecurityProtocol.SSL);
+            server = createEchoServer(args, SecurityProtocol.SSL);
             InetSocketAddress addr = new InetSocketAddress("localhost", server.port());
             selector.connect(node, addr, BUFFER_SIZE, BUFFER_SIZE);
 
             String message = TestUtils.randomString(1024 * 1024);
             NetworkTestUtils.waitForChannelReady(selector, node);
             final KafkaChannel channel = selector.channel(node);
-            assertTrue("SSL handshake time not recorded", channel.getAndResetNetworkThreadTimeNanos() > 0);
-            assertEquals("Time not reset", 0, channel.getAndResetNetworkThreadTimeNanos());
+            assertTrue(channel.getAndResetNetworkThreadTimeNanos() > 0, "SSL handshake time not recorded");
+            assertEquals(0, channel.getAndResetNetworkThreadTimeNanos(), "Time not reset");
 
             selector.mute(node);
             selector.send(new NetworkSend(node, ByteBufferSend.sizePrefixed(ByteBuffer.wrap(message.getBytes()))));
@@ -761,9 +796,9 @@ public class SslTransportLayerTest {
                 selector.poll(100L);
             }
             long sendTimeNanos = channel.getAndResetNetworkThreadTimeNanos();
-            assertTrue("Send time not recorded: " + sendTimeNanos, sendTimeNanos > 0);
-            assertEquals("Time not reset", 0, channel.getAndResetNetworkThreadTimeNanos());
-            assertFalse("Unexpected bytes buffered", channel.hasBytesBuffered());
+            assertTrue(sendTimeNanos > 0, "Send time not recorded: " + sendTimeNanos);
+            assertEquals(0, channel.getAndResetNetworkThreadTimeNanos(), "Time not reset");
+            assertFalse(channel.hasBytesBuffered(), "Unexpected bytes buffered");
             assertEquals(0, selector.completedReceives().size());
 
             selector.unmute(node);
@@ -778,69 +813,76 @@ public class SslTransportLayerTest {
             }, "Timed out waiting for a message to receive from echo server");
 
             long receiveTimeNanos = channel.getAndResetNetworkThreadTimeNanos();
-            assertTrue("Receive time not recorded: " + receiveTimeNanos, receiveTimeNanos > 0);
+            assertTrue(receiveTimeNanos > 0, "Receive time not recorded: " + receiveTimeNanos);
         }
     }
 
     /**
      * Tests that IOExceptions from read during SSL handshake are not treated as authentication failures.
      */
-    @Test
-    public void testIOExceptionsDuringHandshakeRead() throws Exception {
-        server = createEchoServer(SecurityProtocol.SSL);
-        testIOExceptionsDuringHandshake(FailureAction.THROW_IO_EXCEPTION, FailureAction.NO_OP);
+    @ParameterizedTest
+    @ArgumentsSource(SslTransportLayerArgumentsProvider.class)
+    public void testIOExceptionsDuringHandshakeRead(Args args) throws Exception {
+        server = createEchoServer(args, SecurityProtocol.SSL);
+        testIOExceptionsDuringHandshake(args, FailureAction.THROW_IO_EXCEPTION, FailureAction.NO_OP);
     }
 
     /**
      * Tests that IOExceptions from write during SSL handshake are not treated as authentication failures.
      */
-    @Test
-    public void testIOExceptionsDuringHandshakeWrite() throws Exception {
-        server = createEchoServer(SecurityProtocol.SSL);
-        testIOExceptionsDuringHandshake(FailureAction.NO_OP, FailureAction.THROW_IO_EXCEPTION);
+    @ParameterizedTest
+    @ArgumentsSource(SslTransportLayerArgumentsProvider.class)
+    public void testIOExceptionsDuringHandshakeWrite(Args args) throws Exception {
+        server = createEchoServer(args, SecurityProtocol.SSL);
+        testIOExceptionsDuringHandshake(args, FailureAction.NO_OP, FailureAction.THROW_IO_EXCEPTION);
     }
 
     /**
      * Tests that if the remote end closes connection ungracefully  during SSL handshake while reading data,
      * the disconnection is not treated as an authentication failure.
      */
-    @Test
-    public void testUngracefulRemoteCloseDuringHandshakeRead() throws Exception {
-        server = createEchoServer(SecurityProtocol.SSL);
-        testIOExceptionsDuringHandshake(server::closeSocketChannels, FailureAction.NO_OP);
+    @ParameterizedTest
+    @ArgumentsSource(SslTransportLayerArgumentsProvider.class)
+    public void testUngracefulRemoteCloseDuringHandshakeRead(Args args) throws Exception {
+        server = createEchoServer(args, SecurityProtocol.SSL);
+        testIOExceptionsDuringHandshake(args, server::closeSocketChannels, FailureAction.NO_OP);
     }
 
     /**
      * Tests that if the remote end closes connection ungracefully during SSL handshake while writing data,
      * the disconnection is not treated as an authentication failure.
      */
-    @Test
-    public void testUngracefulRemoteCloseDuringHandshakeWrite() throws Exception {
-        server = createEchoServer(SecurityProtocol.SSL);
-        testIOExceptionsDuringHandshake(FailureAction.NO_OP, server::closeSocketChannels);
+    @ParameterizedTest
+    @ArgumentsSource(SslTransportLayerArgumentsProvider.class)
+    public void testUngracefulRemoteCloseDuringHandshakeWrite(Args args) throws Exception {
+        server = createEchoServer(args, SecurityProtocol.SSL);
+        testIOExceptionsDuringHandshake(args, FailureAction.NO_OP, server::closeSocketChannels);
     }
 
     /**
      * Tests that if the remote end closes the connection during SSL handshake while reading data,
      * the disconnection is not treated as an authentication failure.
      */
-    @Test
-    public void testGracefulRemoteCloseDuringHandshakeRead() throws Exception {
-        server = createEchoServer(SecurityProtocol.SSL);
-        testIOExceptionsDuringHandshake(FailureAction.NO_OP, server::closeKafkaChannels);
+    @ParameterizedTest
+    @ArgumentsSource(SslTransportLayerArgumentsProvider.class)
+    public void testGracefulRemoteCloseDuringHandshakeRead(Args args) throws Exception {
+        server = createEchoServer(args, SecurityProtocol.SSL);
+        testIOExceptionsDuringHandshake(args, FailureAction.NO_OP, server::closeKafkaChannels);
     }
 
     /**
      * Tests that if the remote end closes the connection during SSL handshake while writing data,
      * the disconnection is not treated as an authentication failure.
      */
-    @Test
-    public void testGracefulRemoteCloseDuringHandshakeWrite() throws Exception {
-        server = createEchoServer(SecurityProtocol.SSL);
-        testIOExceptionsDuringHandshake(server::closeKafkaChannels, FailureAction.NO_OP);
+    @ParameterizedTest
+    @ArgumentsSource(SslTransportLayerArgumentsProvider.class)
+    public void testGracefulRemoteCloseDuringHandshakeWrite(Args args) throws Exception {
+        server = createEchoServer(args, SecurityProtocol.SSL);
+        testIOExceptionsDuringHandshake(args, server::closeKafkaChannels, FailureAction.NO_OP);
     }
 
-    private void testIOExceptionsDuringHandshake(FailureAction readFailureAction,
+    private void testIOExceptionsDuringHandshake(Args args,
+                                                 FailureAction readFailureAction,
                                                  FailureAction flushFailureAction) throws Exception {
         TestSslChannelBuilder channelBuilder = new TestSslChannelBuilder(Mode.CLIENT);
         boolean done = false;
@@ -850,7 +892,7 @@ public class SslTransportLayerTest {
             channelBuilder.readFailureAction = readFailureAction;
             channelBuilder.flushFailureAction = flushFailureAction;
             channelBuilder.failureIndex = i;
-            channelBuilder.configure(sslClientConfigs);
+            channelBuilder.configure(args.sslClientConfigs);
             this.selector = new Selector(5000, new Metrics(), time, "MetricGroup", channelBuilder, new LogContext());
 
             InetSocketAddress addr = new InetSocketAddress("localhost", server.port());
@@ -864,17 +906,17 @@ public class SslTransportLayerTest {
                 }
                 if (selector.disconnected().containsKey(node)) {
                     ChannelState.State state = selector.disconnected().get(node).state();
-                    assertTrue("Unexpected channel state " + state,
-                            state == ChannelState.State.AUTHENTICATE || state == ChannelState.State.READY);
+                    assertTrue(state == ChannelState.State.AUTHENTICATE || state == ChannelState.State.READY,
+                        "Unexpected channel state " + state);
                     break;
                 }
             }
             KafkaChannel channel = selector.channel(node);
             if (channel != null)
-                assertTrue("Channel not ready or disconnected:" + channel.state().state(), channel.ready());
+                assertTrue(channel.ready(), "Channel not ready or disconnected:" + channel.state().state());
             selector.close();
         }
-        assertTrue("Too many invocations of read/write during SslTransportLayer.handshake()", done);
+        assertTrue(done, "Too many invocations of read/write during SslTransportLayer.handshake()");
     }
 
     /**
@@ -882,23 +924,24 @@ public class SslTransportLayerTest {
      * there are delays in writes to ensure that clients see an authentication exception
      * rather than a connection failure.
      */
-    @Test
-    public void testPeerNotifiedOfHandshakeFailure() throws Exception {
-        sslServerConfigs = serverCertStores.getUntrustingConfig();
-        sslServerConfigs.putAll(sslConfigOverrides);
-        sslServerConfigs.put(BrokerSecurityConfigs.SSL_CLIENT_AUTH_CONFIG, "required");
+    @ParameterizedTest
+    @ArgumentsSource(SslTransportLayerArgumentsProvider.class)
+    public void testPeerNotifiedOfHandshakeFailure(Args args) throws Exception {
+        args.sslServerConfigs = args.serverCertStores.getUntrustingConfig();
+        args.sslServerConfigs.putAll(args.sslConfigOverrides);
+        args.sslServerConfigs.put(BrokerSecurityConfigs.SSL_CLIENT_AUTH_CONFIG, "required");
 
         // Test without delay and a couple of delay counts to ensure delay applies to handshake failure
         for (int i = 0; i < 3; i++) {
             String node = "0";
             TestSslChannelBuilder serverChannelBuilder = new TestSslChannelBuilder(Mode.SERVER);
-            serverChannelBuilder.configure(sslServerConfigs);
+            serverChannelBuilder.configure(args.sslServerConfigs);
             serverChannelBuilder.flushDelayCount = i;
             server = new NioEchoServer(ListenerName.forSecurityProtocol(SecurityProtocol.SSL),
-                    SecurityProtocol.SSL, new TestSecurityConfig(sslServerConfigs),
+                    SecurityProtocol.SSL, new TestSecurityConfig(args.sslServerConfigs),
                     "localhost", serverChannelBuilder, null, time);
             server.start();
-            createSelector(sslClientConfigs);
+            createSelector(args.sslClientConfigs);
             InetSocketAddress addr = new InetSocketAddress("localhost", server.port());
             selector.connect(node, addr, BUFFER_SIZE, BUFFER_SIZE);
 
@@ -909,24 +952,26 @@ public class SslTransportLayerTest {
         }
     }
 
-    @Test
-    public void testCloseSsl() throws Exception {
-        testClose(SecurityProtocol.SSL, newClientChannelBuilder());
+    @ParameterizedTest
+    @ArgumentsSource(SslTransportLayerArgumentsProvider.class)
+    public void testCloseSsl(Args args) throws Exception {
+        testClose(args, SecurityProtocol.SSL, newClientChannelBuilder());
     }
 
-    @Test
-    public void testClosePlaintext() throws Exception {
-        testClose(SecurityProtocol.PLAINTEXT, new PlaintextChannelBuilder(null));
+    @ParameterizedTest
+    @ArgumentsSource(SslTransportLayerArgumentsProvider.class)
+    public void testClosePlaintext(Args args) throws Exception {
+        testClose(args, SecurityProtocol.PLAINTEXT, new PlaintextChannelBuilder(null));
     }
 
     private SslChannelBuilder newClientChannelBuilder() {
         return new SslChannelBuilder(Mode.CLIENT, null, false, new LogContext());
     }
 
-    private void testClose(SecurityProtocol securityProtocol, ChannelBuilder clientChannelBuilder) throws Exception {
+    private void testClose(Args args, SecurityProtocol securityProtocol, ChannelBuilder clientChannelBuilder) throws Exception {
         String node = "0";
-        server = createEchoServer(securityProtocol);
-        clientChannelBuilder.configure(sslClientConfigs);
+        server = createEchoServer(args, securityProtocol);
+        clientChannelBuilder.configure(args.sslClientConfigs);
         this.selector = new Selector(5000, new Metrics(), time, "MetricGroup", clientChannelBuilder, new LogContext());
         InetSocketAddress addr = new InetSocketAddress("localhost", server.port());
         selector.connect(node, addr, BUFFER_SIZE, BUFFER_SIZE);
@@ -960,16 +1005,17 @@ public class SslTransportLayerTest {
      * Verifies that inter-broker listener with validation of truststore against keystore works
      * with configs including mutual authentication and hostname verification.
      */
-    @Test
-    public void testInterBrokerSslConfigValidation() throws Exception {
+    @ParameterizedTest
+    @ArgumentsSource(SslTransportLayerArgumentsProvider.class)
+    public void testInterBrokerSslConfigValidation(Args args) throws Exception {
         SecurityProtocol securityProtocol = SecurityProtocol.SSL;
-        sslServerConfigs.put(BrokerSecurityConfigs.SSL_CLIENT_AUTH_CONFIG, "required");
-        sslServerConfigs.put(SslConfigs.SSL_ENDPOINT_IDENTIFICATION_ALGORITHM_CONFIG, "HTTPS");
-        sslServerConfigs.putAll(serverCertStores.keyStoreProps());
-        sslServerConfigs.putAll(serverCertStores.trustStoreProps());
-        sslClientConfigs.putAll(serverCertStores.keyStoreProps());
-        sslClientConfigs.putAll(serverCertStores.trustStoreProps());
-        TestSecurityConfig config = new TestSecurityConfig(sslServerConfigs);
+        args.sslServerConfigs.put(BrokerSecurityConfigs.SSL_CLIENT_AUTH_CONFIG, "required");
+        args.sslServerConfigs.put(SslConfigs.SSL_ENDPOINT_IDENTIFICATION_ALGORITHM_CONFIG, "HTTPS");
+        args.sslServerConfigs.putAll(args.serverCertStores.keyStoreProps());
+        args.sslServerConfigs.putAll(args.serverCertStores.trustStoreProps());
+        args.sslClientConfigs.putAll(args.serverCertStores.keyStoreProps());
+        args.sslClientConfigs.putAll(args.serverCertStores.trustStoreProps());
+        TestSecurityConfig config = new TestSecurityConfig(args.sslServerConfigs);
         ListenerName listenerName = ListenerName.forSecurityProtocol(securityProtocol);
         ChannelBuilder serverChannelBuilder = ChannelBuilders.serverChannelBuilder(listenerName,
                 true, securityProtocol, config, null, null, time, new LogContext());
@@ -977,7 +1023,7 @@ public class SslTransportLayerTest {
                 "localhost", serverChannelBuilder, null, time);
         server.start();
 
-        this.selector = createSelector(sslClientConfigs, null, null, null);
+        this.selector = createSelector(args.sslClientConfigs, null, null, null);
         InetSocketAddress addr = new InetSocketAddress("localhost", server.port());
         selector.connect("0", addr, BUFFER_SIZE, BUFFER_SIZE);
         NetworkTestUtils.checkClientConnection(selector, "0", 100, 10);
@@ -987,24 +1033,26 @@ public class SslTransportLayerTest {
      * Verifies that inter-broker listener with validation of truststore against keystore
      * fails if certs from keystore are not trusted.
      */
-    @Test(expected = KafkaException.class)
-    public void testInterBrokerSslConfigValidationFailure() {
+    @ParameterizedTest
+    @ArgumentsSource(SslTransportLayerArgumentsProvider.class)
+    public void testInterBrokerSslConfigValidationFailure(Args args) {
         SecurityProtocol securityProtocol = SecurityProtocol.SSL;
-        sslServerConfigs.put(BrokerSecurityConfigs.SSL_CLIENT_AUTH_CONFIG, "required");
-        TestSecurityConfig config = new TestSecurityConfig(sslServerConfigs);
+        args.sslServerConfigs.put(BrokerSecurityConfigs.SSL_CLIENT_AUTH_CONFIG, "required");
+        TestSecurityConfig config = new TestSecurityConfig(args.sslServerConfigs);
         ListenerName listenerName = ListenerName.forSecurityProtocol(securityProtocol);
-        ChannelBuilders.serverChannelBuilder(listenerName, true, securityProtocol, config,
-                null, null, time, new LogContext());
+        assertThrows(KafkaException.class, () -> ChannelBuilders.serverChannelBuilder(listenerName, true, securityProtocol, config,
+                null, null, time, new LogContext()));
     }
 
     /**
      * Tests reconfiguration of server keystore. Verifies that existing connections continue
      * to work with old keystore and new connections work with new keystore.
      */
-    @Test
-    public void testServerKeystoreDynamicUpdate() throws Exception {
+    @ParameterizedTest
+    @ArgumentsSource(SslTransportLayerArgumentsProvider.class)
+    public void testServerKeystoreDynamicUpdate(Args args) throws Exception {
         SecurityProtocol securityProtocol = SecurityProtocol.SSL;
-        TestSecurityConfig config = new TestSecurityConfig(sslServerConfigs);
+        TestSecurityConfig config = new TestSecurityConfig(args.sslServerConfigs);
         ListenerName listenerName = ListenerName.forSecurityProtocol(securityProtocol);
         ChannelBuilder serverChannelBuilder = ChannelBuilders.serverChannelBuilder(listenerName,
                 false, securityProtocol, config, null, null, time, new LogContext());
@@ -1015,13 +1063,13 @@ public class SslTransportLayerTest {
 
         // Verify that client with matching truststore can authenticate, send and receive
         String oldNode = "0";
-        Selector oldClientSelector = createSelector(sslClientConfigs);
+        Selector oldClientSelector = createSelector(args.sslClientConfigs);
         oldClientSelector.connect(oldNode, addr, BUFFER_SIZE, BUFFER_SIZE);
         NetworkTestUtils.checkClientConnection(selector, oldNode, 100, 10);
 
-        CertStores newServerCertStores = certBuilder(true, "server").addHostName("localhost").build();
+        CertStores newServerCertStores = certBuilder(true, "server", args.useInlinePem).addHostName("localhost").build();
         Map<String, Object> newKeystoreConfigs = newServerCertStores.keyStoreProps();
-        assertTrue("SslChannelBuilder not reconfigurable", serverChannelBuilder instanceof ListenerReconfigurable);
+        assertTrue(serverChannelBuilder instanceof ListenerReconfigurable, "SslChannelBuilder not reconfigurable");
         ListenerReconfigurable reconfigurableBuilder = (ListenerReconfigurable) serverChannelBuilder;
         assertEquals(listenerName, reconfigurableBuilder.listenerName());
         reconfigurableBuilder.validateReconfiguration(newKeystoreConfigs);
@@ -1032,16 +1080,16 @@ public class SslTransportLayerTest {
         NetworkTestUtils.waitForChannelClose(oldClientSelector, "1", ChannelState.State.AUTHENTICATION_FAILED);
 
         // Verify that new client with new truststore can authenticate, send and receive
-        sslClientConfigs = getTrustingConfig(clientCertStores, newServerCertStores);
-        Selector newClientSelector = createSelector(sslClientConfigs);
+        args.sslClientConfigs = args.getTrustingConfig(args.clientCertStores, newServerCertStores);
+        Selector newClientSelector = createSelector(args.sslClientConfigs);
         newClientSelector.connect("2", addr, BUFFER_SIZE, BUFFER_SIZE);
         NetworkTestUtils.checkClientConnection(newClientSelector, "2", 100, 10);
 
         // Verify that old client continues to work
         NetworkTestUtils.checkClientConnection(oldClientSelector, oldNode, 100, 10);
 
-        CertStores invalidCertStores = certBuilder(true, "server").addHostName("127.0.0.1").build();
-        Map<String, Object>  invalidConfigs = getTrustingConfig(invalidCertStores, clientCertStores);
+        CertStores invalidCertStores = certBuilder(true, "server", args.useInlinePem).addHostName("127.0.0.1").build();
+        Map<String, Object>  invalidConfigs = args.getTrustingConfig(invalidCertStores, args.clientCertStores);
         verifyInvalidReconfigure(reconfigurableBuilder, invalidConfigs, "keystore with different SubjectAltName");
 
         Map<String, Object>  missingStoreConfigs = new HashMap<>();
@@ -1056,10 +1104,11 @@ public class SslTransportLayerTest {
         NetworkTestUtils.checkClientConnection(newClientSelector, "3", 100, 10);
     }
 
-    @Test
-    public void testServerKeystoreDynamicUpdateWithNewSubjectAltName() throws Exception {
+    @ParameterizedTest
+    @ArgumentsSource(SslTransportLayerArgumentsProvider.class)
+    public void testServerKeystoreDynamicUpdateWithNewSubjectAltName(Args args) throws Exception {
         SecurityProtocol securityProtocol = SecurityProtocol.SSL;
-        TestSecurityConfig config = new TestSecurityConfig(sslServerConfigs);
+        TestSecurityConfig config = new TestSecurityConfig(args.sslServerConfigs);
         ListenerName listenerName = ListenerName.forSecurityProtocol(securityProtocol);
         ChannelBuilder serverChannelBuilder = ChannelBuilders.serverChannelBuilder(listenerName,
             false, securityProtocol, config, null, null, time, new LogContext());
@@ -1068,14 +1117,14 @@ public class SslTransportLayerTest {
         server.start();
         InetSocketAddress addr = new InetSocketAddress("localhost", server.port());
 
-        Selector selector = createSelector(sslClientConfigs);
+        Selector selector = createSelector(args.sslClientConfigs);
         String node1 = "1";
         selector.connect(node1, addr, BUFFER_SIZE, BUFFER_SIZE);
         NetworkTestUtils.checkClientConnection(selector, node1, 100, 10);
         selector.close();
 
         TestSslUtils.CertificateBuilder certBuilder = new TestSslUtils.CertificateBuilder().sanDnsNames("localhost", "*.example.com");
-        String truststorePath = (String) sslClientConfigs.get(SslConfigs.SSL_TRUSTSTORE_LOCATION_CONFIG);
+        String truststorePath = (String) args.sslClientConfigs.get(SslConfigs.SSL_TRUSTSTORE_LOCATION_CONFIG);
         File truststoreFile = truststorePath != null ? new File(truststorePath) : null;
         TestSslUtils.SslConfigsBuilder builder = new TestSslUtils.SslConfigsBuilder(Mode.SERVER)
                 .useClientCert(false)
@@ -1083,7 +1132,7 @@ public class SslTransportLayerTest {
                 .cn("server")
                 .certBuilder(certBuilder)
                 .createNewTrustStore(truststoreFile)
-                .usePem(useInlinePem);
+                .usePem(args.useInlinePem);
         Map<String, Object> newConfigs = builder.build();
         Map<String, Object> newKeystoreConfigs = new HashMap<>();
         for (String propName : CertStores.KEYSTORE_PROPS) {
@@ -1094,15 +1143,15 @@ public class SslTransportLayerTest {
         reconfigurableBuilder.reconfigure(newKeystoreConfigs);
 
         for (String propName : CertStores.TRUSTSTORE_PROPS) {
-            sslClientConfigs.put(propName, newConfigs.get(propName));
+            args.sslClientConfigs.put(propName, newConfigs.get(propName));
         }
-        selector = createSelector(sslClientConfigs);
+        selector = createSelector(args.sslClientConfigs);
         String node2 = "2";
         selector.connect(node2, addr, BUFFER_SIZE, BUFFER_SIZE);
         NetworkTestUtils.checkClientConnection(selector, node2, 100, 10);
 
         TestSslUtils.CertificateBuilder invalidBuilder = new TestSslUtils.CertificateBuilder().sanDnsNames("localhost");
-        if (!useInlinePem)
+        if (!args.useInlinePem)
             builder.useExistingTrustStore(truststoreFile);
         Map<String, Object> invalidConfig = builder.certBuilder(invalidBuilder).build();
         Map<String, Object> invalidKeystoreConfigs = new HashMap<>();
@@ -1119,11 +1168,12 @@ public class SslTransportLayerTest {
      * Tests reconfiguration of server truststore. Verifies that existing connections continue
      * to work with old truststore and new connections work with new truststore.
      */
-    @Test
-    public void testServerTruststoreDynamicUpdate() throws Exception {
+    @ParameterizedTest
+    @ArgumentsSource(SslTransportLayerArgumentsProvider.class)
+    public void testServerTruststoreDynamicUpdate(Args args) throws Exception {
         SecurityProtocol securityProtocol = SecurityProtocol.SSL;
-        sslServerConfigs.put(BrokerSecurityConfigs.SSL_CLIENT_AUTH_CONFIG, "required");
-        TestSecurityConfig config = new TestSecurityConfig(sslServerConfigs);
+        args.sslServerConfigs.put(BrokerSecurityConfigs.SSL_CLIENT_AUTH_CONFIG, "required");
+        TestSecurityConfig config = new TestSecurityConfig(args.sslServerConfigs);
         ListenerName listenerName = ListenerName.forSecurityProtocol(securityProtocol);
         ChannelBuilder serverChannelBuilder = ChannelBuilders.serverChannelBuilder(listenerName,
                 false, securityProtocol, config, null, null, time, new LogContext());
@@ -1134,14 +1184,14 @@ public class SslTransportLayerTest {
 
         // Verify that client with matching keystore can authenticate, send and receive
         String oldNode = "0";
-        Selector oldClientSelector = createSelector(sslClientConfigs);
+        Selector oldClientSelector = createSelector(args.sslClientConfigs);
         oldClientSelector.connect(oldNode, addr, BUFFER_SIZE, BUFFER_SIZE);
         NetworkTestUtils.checkClientConnection(selector, oldNode, 100, 10);
 
-        CertStores newClientCertStores = certBuilder(true, "client").addHostName("localhost").build();
-        sslClientConfigs = getTrustingConfig(newClientCertStores, serverCertStores);
+        CertStores newClientCertStores = certBuilder(true, "client", args.useInlinePem).addHostName("localhost").build();
+        args.sslClientConfigs = args.getTrustingConfig(newClientCertStores, args.serverCertStores);
         Map<String, Object> newTruststoreConfigs = newClientCertStores.trustStoreProps();
-        assertTrue("SslChannelBuilder not reconfigurable", serverChannelBuilder instanceof ListenerReconfigurable);
+        assertTrue(serverChannelBuilder instanceof ListenerReconfigurable, "SslChannelBuilder not reconfigurable");
         ListenerReconfigurable reconfigurableBuilder = (ListenerReconfigurable) serverChannelBuilder;
         assertEquals(listenerName, reconfigurableBuilder.listenerName());
         reconfigurableBuilder.validateReconfiguration(newTruststoreConfigs);
@@ -1152,7 +1202,7 @@ public class SslTransportLayerTest {
         NetworkTestUtils.waitForChannelClose(oldClientSelector, "1", ChannelState.State.AUTHENTICATION_FAILED);
 
         // Verify that new client with new truststore can authenticate, send and receive
-        Selector newClientSelector = createSelector(sslClientConfigs);
+        Selector newClientSelector = createSelector(args.sslClientConfigs);
         newClientSelector.connect("2", addr, BUFFER_SIZE, BUFFER_SIZE);
         NetworkTestUtils.checkClientConnection(newClientSelector, "2", 100, 10);
 
@@ -1177,54 +1227,48 @@ public class SslTransportLayerTest {
     /**
      * Tests if client can plugin customize ssl.engine.factory
      */
-    @Test
-    public void testCustomClientSslEngineFactory() throws Exception {
-        sslClientConfigs.put(SslConfigs.SSL_ENGINE_FACTORY_CLASS_CONFIG, TestSslUtils.TestSslEngineFactory.class);
-        verifySslConfigs();
+    @ParameterizedTest
+    @ArgumentsSource(SslTransportLayerArgumentsProvider.class)
+    public void testCustomClientSslEngineFactory(Args args) throws Exception {
+        args.sslClientConfigs.put(SslConfigs.SSL_ENGINE_FACTORY_CLASS_CONFIG, TestSslUtils.TestSslEngineFactory.class);
+        verifySslConfigs(args);
     }
 
     /**
      * Tests if server can plugin customize ssl.engine.factory
      */
-    @Test
-    public void testCustomServerSslEngineFactory() throws Exception {
-        sslServerConfigs.put(SslConfigs.SSL_ENGINE_FACTORY_CLASS_CONFIG, TestSslUtils.TestSslEngineFactory.class);
-        verifySslConfigs();
+    @ParameterizedTest
+    @ArgumentsSource(SslTransportLayerArgumentsProvider.class)
+    public void testCustomServerSslEngineFactory(Args args) throws Exception {
+        args.sslServerConfigs.put(SslConfigs.SSL_ENGINE_FACTORY_CLASS_CONFIG, TestSslUtils.TestSslEngineFactory.class);
+        verifySslConfigs(args);
     }
 
     /**
      * Tests if client and server both can plugin customize ssl.engine.factory and talk to each other!
      */
-    @Test
-    public void testCustomClientAndServerSslEngineFactory() throws Exception {
-        sslClientConfigs.put(SslConfigs.SSL_ENGINE_FACTORY_CLASS_CONFIG, TestSslUtils.TestSslEngineFactory.class);
-        sslServerConfigs.put(SslConfigs.SSL_ENGINE_FACTORY_CLASS_CONFIG, TestSslUtils.TestSslEngineFactory.class);
-        verifySslConfigs();
+    @ParameterizedTest
+    @ArgumentsSource(SslTransportLayerArgumentsProvider.class)
+    public void testCustomClientAndServerSslEngineFactory(Args args) throws Exception {
+        args.sslClientConfigs.put(SslConfigs.SSL_ENGINE_FACTORY_CLASS_CONFIG, TestSslUtils.TestSslEngineFactory.class);
+        args.sslServerConfigs.put(SslConfigs.SSL_ENGINE_FACTORY_CLASS_CONFIG, TestSslUtils.TestSslEngineFactory.class);
+        verifySslConfigs(args);
     }
 
     /**
      * Tests invalid ssl.engine.factory plugin class
      */
-    @Test(expected = KafkaException.class)
-    public void testInvalidSslEngineFactory() {
-        sslClientConfigs.put(SslConfigs.SSL_ENGINE_FACTORY_CLASS_CONFIG, String.class);
-        createSelector(sslClientConfigs);
+    @ParameterizedTest
+    @ArgumentsSource(SslTransportLayerArgumentsProvider.class)
+    public void testInvalidSslEngineFactory(Args args) {
+        args.sslClientConfigs.put(SslConfigs.SSL_ENGINE_FACTORY_CLASS_CONFIG, String.class);
+        assertThrows(KafkaException.class, () -> createSelector(args.sslClientConfigs));
     }
 
     private void verifyInvalidReconfigure(ListenerReconfigurable reconfigurable,
                                           Map<String, Object>  invalidConfigs, String errorMessage) {
-        try {
-            reconfigurable.validateReconfiguration(invalidConfigs);
-            fail("Should have failed validation with an exception: " + errorMessage);
-        } catch (KafkaException e) {
-            // expected exception
-        }
-        try {
-            reconfigurable.reconfigure(invalidConfigs);
-            fail("Should have failed to reconfigure: " + errorMessage);
-        } catch (KafkaException e) {
-            // expected exception
-        }
+        assertThrows(KafkaException.class, () -> reconfigurable.validateReconfiguration(invalidConfigs));
+        assertThrows(KafkaException.class, () -> reconfigurable.reconfigure(invalidConfigs));
     }
 
     private Selector createSelector(Map<String, Object> sslClientConfigs) {
@@ -1240,37 +1284,45 @@ public class SslTransportLayerTest {
         return selector;
     }
 
-    private NioEchoServer createEchoServer(ListenerName listenerName, SecurityProtocol securityProtocol) throws Exception {
-        return NetworkTestUtils.createEchoServer(listenerName, securityProtocol, new TestSecurityConfig(sslServerConfigs), null, time);
+    private NioEchoServer createEchoServer(Args args, ListenerName listenerName, SecurityProtocol securityProtocol) throws Exception {
+        return NetworkTestUtils.createEchoServer(listenerName, securityProtocol, new TestSecurityConfig(args.sslServerConfigs), null, time);
     }
 
-    private NioEchoServer createEchoServer(SecurityProtocol securityProtocol) throws Exception {
-        return createEchoServer(ListenerName.forSecurityProtocol(securityProtocol), securityProtocol);
+    private NioEchoServer createEchoServer(Args args, SecurityProtocol securityProtocol) throws Exception {
+        return createEchoServer(args, ListenerName.forSecurityProtocol(securityProtocol), securityProtocol);
     }
 
-    private Map<String, Object> getTrustingConfig(CertStores certStores, CertStores peerCertStores) {
-        Map<String, Object> configs = certStores.getTrustingConfig(peerCertStores);
-        configs.putAll(sslConfigOverrides);
-        return configs;
+    private Selector createSelector(Args args) {
+        LogContext logContext = new LogContext();
+        ChannelBuilder channelBuilder = new SslChannelBuilder(Mode.CLIENT, null, false, logContext);
+        channelBuilder.configure(args.sslClientConfigs);
+        selector = new Selector(5000, new Metrics(), time, "MetricGroup", channelBuilder, logContext);
+        return selector;
     }
 
-    private void verifySslConfigs() throws Exception {
-        server = createEchoServer(SecurityProtocol.SSL);
-        createSelector(sslClientConfigs);
+    private void verifySslConfigs(Args args) throws Exception {
+        server = createEchoServer(args, SecurityProtocol.SSL);
+        createSelector(args.sslClientConfigs);
         InetSocketAddress addr = new InetSocketAddress("localhost", server.port());
         String node = "0";
         selector.connect(node, addr, BUFFER_SIZE, BUFFER_SIZE);
         NetworkTestUtils.checkClientConnection(selector, node, 100, 10);
     }
 
-    public void verifySslConfigsWithHandshakeFailure() throws Exception {
-        server = createEchoServer(SecurityProtocol.SSL);
-        createSelector(sslClientConfigs);
+    private void verifySslConfigsWithHandshakeFailure(Args args) throws Exception {
+        server = createEchoServer(args, SecurityProtocol.SSL);
+        createSelector(args.sslClientConfigs);
         InetSocketAddress addr = new InetSocketAddress("localhost", server.port());
         String node = "0";
         selector.connect(node, addr, BUFFER_SIZE, BUFFER_SIZE);
         NetworkTestUtils.waitForChannelClose(selector, node, ChannelState.State.AUTHENTICATION_FAILED);
         server.verifyAuthenticationMetrics(0, 1);
+    }
+
+    private static CertStores.Builder certBuilder(boolean isServer, String cn, boolean useInlinePem) {
+        return new CertStores.Builder(isServer)
+                .cn(cn)
+                .usePem(useInlinePem);
     }
 
     @FunctionalInterface
@@ -1383,7 +1435,7 @@ public class SslTransportLayerTest {
 
             @Override
             protected void startHandshake() throws IOException {
-                assertTrue("SSL handshake initialized too early", socketChannel().isConnected());
+                assertTrue(socketChannel().isConnected(), "SSL handshake initialized too early");
                 super.startHandshake();
             }
 

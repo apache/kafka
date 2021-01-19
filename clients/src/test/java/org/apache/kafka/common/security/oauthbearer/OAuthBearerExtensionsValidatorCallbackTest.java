@@ -17,14 +17,15 @@
 package org.apache.kafka.common.security.oauthbearer;
 
 import org.apache.kafka.common.security.auth.SaslExtensions;
-import org.junit.Test;
+import org.junit.jupiter.api.Test;
 
 import java.util.HashMap;
 import java.util.Map;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class OAuthBearerExtensionsValidatorCallbackTest {
     private static final OAuthBearerToken TOKEN = new OAuthBearerTokenMock();
@@ -78,13 +79,13 @@ public class OAuthBearerExtensionsValidatorCallbackTest {
         assertEquals("nothing", callback.ignoredExtensions().get("nothing"));
     }
 
-    @Test(expected = IllegalArgumentException.class)
+    @Test
     public void testCannotValidateExtensionWhichWasNotGiven() {
         Map<String, String> extensions = new HashMap<>();
         extensions.put("hello", "bye");
 
         OAuthBearerExtensionsValidatorCallback callback = new OAuthBearerExtensionsValidatorCallback(TOKEN, new SaslExtensions(extensions));
 
-        callback.valid("???");
+        assertThrows(IllegalArgumentException.class, () -> callback.valid("???"));
     }
 }

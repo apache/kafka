@@ -16,10 +16,10 @@
  */
 package org.apache.kafka.common;
 
-import org.junit.Test;
+import org.junit.jupiter.api.Test;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 
 public class UuidTest {
 
@@ -77,5 +77,21 @@ public class UuidTest {
 
         assertNotEquals(randomID, Uuid.ZERO_UUID);
         assertNotEquals(randomID, reservedSentinel);
+    }
+
+    @Test
+    public void testCompareUuids() {
+        Uuid id00 = new Uuid(0L, 0L);
+        Uuid id01 = new Uuid(0L, 1L);
+        Uuid id10 = new Uuid(1L, 0L);
+        assertEquals(0, id00.compareTo(id00));
+        assertEquals(0, id01.compareTo(id01));
+        assertEquals(0, id10.compareTo(id10));
+        assertEquals(-1, id00.compareTo(id01));
+        assertEquals(-1, id00.compareTo(id10));
+        assertEquals(1, id01.compareTo(id00));
+        assertEquals(1, id10.compareTo(id00));
+        assertEquals(-1, id01.compareTo(id10));
+        assertEquals(1, id10.compareTo(id01));
     }
 }

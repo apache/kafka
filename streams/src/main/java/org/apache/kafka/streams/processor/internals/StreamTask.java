@@ -103,9 +103,10 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
     private long idleStartTimeMs;
     private boolean commitNeeded = false;
     private boolean commitRequested = false;
+    private boolean hasPendingTxCommit = false;
 
     public StreamTask(final TaskId id,
-                      final Set<TopicPartition> partitions,
+                      final Set<TopicPartition> inputPartitions,
                       final ProcessorTopology topology,
                       final Consumer<byte[], byte[]> mainConsumer,
                       final StreamsConfig config,
@@ -121,7 +122,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
             topology,
             stateDirectory,
             stateMgr,
-            partitions,
+            inputPartitions,
             config.getLong(StreamsConfig.TASK_TIMEOUT_MS_CONFIG),
             "task",
             StreamTask.class
@@ -378,6 +379,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
                     // TODO: this should be removed after we decouple caching with emitting
                     stateMgr.flushCache();
                     recordCollector.flush();
+                    hasPendingTxCommit = eosEnabled;
 
                     log.debug("Prepared {} task for committing", state());
                     return committableOffsetsAndMetadata();
@@ -476,6 +478,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
 
         commitRequested = false;
         commitNeeded = false;
+        hasPendingTxCommit = false;
     }
 
     private Map<TopicPartition, Long> extractPartitionTimes() {
@@ -502,8 +505,8 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
     }
 
     @Override
-    public void update(final Set<TopicPartition> topicPartitions, final Map<String, List<String>> allTopologyNodesToSourceTopics) {
-        super.update(topicPartitions, allTopologyNodesToSourceTopics);
+    public void updateInputPartitions(final Set<TopicPartition> topicPartitions, final Map<String, List<String>> allTopologyNodesToSourceTopics) {
+        super.updateInputPartitions(topicPartitions, allTopologyNodesToSourceTopics);
         partitionGroup.updatePartitions(topicPartitions, recordQueueCreator::createQueue);
     }
 
@@ -630,6 +633,12 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
             // would soon be updated to not return any records for this task anymore.
             log.info("Stream task {} is already in {} state, skip processing it.", id(), state());
 
+            return false;
+        }
+
+        if (hasPendingTxCommit) {
+            // if the task has a pending TX commit, we should just retry the commit but not process any records
+            // thus, the task is not processable, even if there is available data in the record queue
             return false;
         }
 

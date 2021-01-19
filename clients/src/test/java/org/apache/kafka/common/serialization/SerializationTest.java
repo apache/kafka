@@ -18,7 +18,7 @@ package org.apache.kafka.common.serialization;
 
 import org.apache.kafka.common.errors.SerializationException;
 import org.apache.kafka.common.utils.Bytes;
-import org.junit.Test;
+import org.junit.jupiter.api.Test;
 
 import java.nio.ByteBuffer;
 import java.util.Arrays;
@@ -27,10 +27,9 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
-import static org.hamcrest.CoreMatchers.equalTo;
-import static org.hamcrest.MatcherAssert.assertThat;
-import static org.hamcrest.core.IsNull.nullValue;
-import static org.junit.Assert.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 public class SerializationTest {
 
@@ -59,9 +58,8 @@ public class SerializationTest {
         for (Map.Entry<Class<?>, List<Object>> test : testData.entrySet()) {
             try (Serde<Object> serde = Serdes.serdeFrom((Class<Object>) test.getKey())) {
                 for (Object value : test.getValue()) {
-                    assertEquals("Should get the original " + test.getKey().getSimpleName() +
-                                    " after serialization and deserialization", value,
-                            serde.deserializer().deserialize(topic, serde.serializer().serialize(topic, value)));
+                    assertEquals(value, serde.deserializer().deserialize(topic, serde.serializer().serialize(topic, value)),
+                        "Should get the original " + test.getKey().getSimpleName() + " after serialization and deserialization");
                 }
             }
         }
@@ -71,23 +69,23 @@ public class SerializationTest {
     public void allSerdesShouldSupportNull() {
         for (Class<?> cls : testData.keySet()) {
             try (Serde<?> serde = Serdes.serdeFrom(cls)) {
-                assertThat("Should support null in " + cls.getSimpleName() + " serialization",
-                        serde.serializer().serialize(topic, null), nullValue());
-                assertThat("Should support null in " + cls.getSimpleName() + " deserialization",
-                        serde.deserializer().deserialize(topic, null), nullValue());
+                assertNull(serde.serializer().serialize(topic, null),
+                    "Should support null in " + cls.getSimpleName() + " serialization");
+                assertNull(serde.deserializer().deserialize(topic, null),
+                    "Should support null in " + cls.getSimpleName() + " deserialization");
             }
         }
     }
 
-    @Test(expected = IllegalArgumentException.class)
+    @Test
     public void testSerdeFromUnknown() {
-        Serdes.serdeFrom(DummyClass.class);
+        assertThrows(IllegalArgumentException.class, () -> Serdes.serdeFrom(DummyClass.class));
     }
 
-    @Test(expected = IllegalArgumentException.class)
+    @Test
     public void testSerdeFromNotNull() {
         try (Serde<Long> serde = Serdes.Long()) {
-            Serdes.serdeFrom(null, serde.deserializer());
+            assertThrows(IllegalArgumentException.class, () -> Serdes.serdeFrom(null, serde.deserializer()));
         }
     }
 
@@ -101,31 +99,31 @@ public class SerializationTest {
 
                 Serializer<String> serializer = serDeser.serializer();
                 Deserializer<String> deserializer = serDeser.deserializer();
-                assertEquals("Should get the original string after serialization and deserialization with encoding " + encoding,
-                        str, deserializer.deserialize(topic, serializer.serialize(topic, str)));
+                assertEquals(str, deserializer.deserialize(topic, serializer.serialize(topic, str)),
+                    "Should get the original string after serialization and deserialization with encoding " + encoding);
             }
         }
     }
 
-    @Test(expected = SerializationException.class)
+    @Test
     public void floatDeserializerShouldThrowSerializationExceptionOnZeroBytes() {
         try (Serde<Float> serde = Serdes.Float()) {
-            serde.deserializer().deserialize(topic, new byte[0]);
+            assertThrows(SerializationException.class, () -> serde.deserializer().deserialize(topic, new byte[0]));
         }
     }
 
-    @Test(expected = SerializationException.class)
+    @Test
     public void floatDeserializerShouldThrowSerializationExceptionOnTooFewBytes() {
         try (Serde<Float> serde = Serdes.Float()) {
-            serde.deserializer().deserialize(topic, new byte[3]);
+            assertThrows(SerializationException.class, () -> serde.deserializer().deserialize(topic, new byte[3]));
         }
     }
 
 
-    @Test(expected = SerializationException.class)
+    @Test
     public void floatDeserializerShouldThrowSerializationExceptionOnTooManyBytes() {
         try (Serde<Float> serde = Serdes.Float()) {
-            serde.deserializer().deserialize(topic, new byte[5]);
+            assertThrows(SerializationException.class, () -> serde.deserializer().deserialize(topic, new byte[5]));
         }
     }
 
@@ -140,10 +138,10 @@ public class SerializationTest {
             // Because of NaN semantics we must assert based on the raw int bits.
             Float roundtrip = serde.deserializer().deserialize(topic,
                     serde.serializer().serialize(topic, someNaN));
-            assertThat(Float.floatToRawIntBits(roundtrip), equalTo(someNaNAsIntBits));
+            assertEquals(someNaNAsIntBits, Float.floatToRawIntBits(roundtrip));
             Float otherRoundtrip = serde.deserializer().deserialize(topic,
                     serde.serializer().serialize(topic, anotherNaN));
-            assertThat(Float.floatToRawIntBits(otherRoundtrip), equalTo(anotherNaNAsIntBits));
+            assertEquals(anotherNaNAsIntBits, Float.floatToRawIntBits(otherRoundtrip));
         }
     }
 
@@ -161,10 +159,10 @@ public class SerializationTest {
         }
     }
 
-    @Test(expected = IllegalArgumentException.class)
+    @Test
     public void voidDeserializerShouldThrowOnNotNullValues() {
         try (Serde<Void> serde = Serdes.Void()) {
-            serde.deserializer().deserialize(topic, new byte[5]);
+            assertThrows(IllegalArgumentException.class, () -> serde.deserializer().deserialize(topic, new byte[5]));
         }
     }
 

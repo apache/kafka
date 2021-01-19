@@ -19,6 +19,7 @@ package kafka.server
 import java.net.InetAddress
 import java.nio.ByteBuffer
 import java.util.Optional
+import java.util.concurrent.atomic.AtomicBoolean
 
 import kafka.network
 import kafka.network.RequestChannel
@@ -32,8 +33,8 @@ import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.requests.{AbstractRequest, AbstractResponse, AlterConfigsRequest, AlterConfigsResponse, EnvelopeRequest, EnvelopeResponse, RequestContext, RequestHeader, RequestTestUtils}
 import org.apache.kafka.common.security.auth.{KafkaPrincipal, SecurityProtocol}
 import org.apache.kafka.common.security.authenticator.DefaultKafkaPrincipalBuilder
-import org.junit.Assert._
-import org.junit.Test
+import org.junit.jupiter.api.Assertions._
+import org.junit.jupiter.api.Test
 import org.mockito.ArgumentMatchers._
 import org.mockito.Mockito
 
@@ -73,16 +74,57 @@ class ForwardingManagerTest {
     })
 
     var response: AbstractResponse = null
-    forwardingManager.forwardRequest(request, res => response = res)
+    forwardingManager.forwardRequest(request, result => response = result.orNull)
 
     assertNotNull(response)
     assertEquals(Map(Errors.UNKNOWN_SERVER_ERROR -> 1).asJava, response.errorCounts())
   }
 
+  @Test
+  def testUnsupportedVersions(): Unit = {
+    val forwardingManager = new ForwardingManagerImpl(brokerToController)
+    val requestCorrelationId = 27
+    val clientPrincipal = new KafkaPrincipal(KafkaPrincipal.USER_TYPE, "client")
+
+    val configResource = new ConfigResource(ConfigResource.Type.TOPIC, "foo")
+    val configs = List(new AlterConfigsRequest.ConfigEntry(TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG, "1")).asJava
+    val requestBody = new AlterConfigsRequest.Builder(Map(
+      configResource -> new AlterConfigsRequest.Config(configs)
+    ).asJava, false).build()
+    val (requestHeader, requestBuffer) = buildRequest(requestBody, requestCorrelationId)
+    val request = buildRequest(requestHeader, requestBuffer, clientPrincipal)
+
+    val responseBody = new AlterConfigsResponse(new AlterConfigsResponseData())
+
+    val responseBuffer = RequestTestUtils.serializeResponseWithHeader(responseBody,
+      requestHeader.apiVersion, requestCorrelationId)
+
+    Mockito.when(brokerToController.sendRequest(
+      any(classOf[EnvelopeRequest.Builder]),
+      any(classOf[ControllerRequestCompletionHandler])
+    )).thenAnswer(invocation => {
+      val completionHandler = invocation.getArgument[RequestCompletionHandler](1)
+      val response = buildEnvelopeResponse(responseBuffer, 30,
+        completionHandler, Errors.UNSUPPORTED_VERSION)
+      response.onComplete()
+    })
+
+    var response: AbstractResponse = null
+    val connectionClosed = new AtomicBoolean(false)
+    forwardingManager.forwardRequest(request, res => {
+      response = res.orNull
+      connectionClosed.set(true)
+    })
+
+    assertTrue(connectionClosed.get())
+    assertNull(response)
+  }
+
   private def buildEnvelopeResponse(
     responseBuffer: ByteBuffer,
     correlationId: Int,
-    completionHandler: RequestCompletionHandler
+    completionHandler: RequestCompletionHandler,
+    error: Errors = Errors.NONE
   ): ClientResponse = {
     val envelopeRequestHeader = new RequestHeader(
       ApiKeys.ENVELOPE,
@@ -92,7 +134,7 @@ class ForwardingManagerTest {
     )
     val envelopeResponse = new EnvelopeResponse(
       responseBuffer,
-      Errors.NONE
+      error
     )
 
     new ClientResponse(

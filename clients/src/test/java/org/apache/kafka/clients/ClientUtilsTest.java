@@ -20,13 +20,16 @@ import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.net.UnknownHostException;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
 import java.util.stream.Collectors;
 import org.apache.kafka.common.config.ConfigException;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertTrue;
-import org.junit.Test;
+import org.junit.jupiter.api.Test;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class ClientUtilsTest {
 
@@ -54,27 +57,28 @@ public class ClientUtilsTest {
         // With lookup of example.com, either one or two addresses are expected depending on
         // whether ipv4 and ipv6 are enabled
         List<InetSocketAddress> validatedAddresses = checkWithLookup(Arrays.asList("example.com:10000"));
-        assertTrue("Unexpected addresses " + validatedAddresses, validatedAddresses.size() >= 1);
+        assertTrue(validatedAddresses.size() >= 1, "Unexpected addresses " + validatedAddresses);
         List<String> validatedHostNames = validatedAddresses.stream().map(InetSocketAddress::getHostName)
                 .collect(Collectors.toList());
         List<String> expectedHostNames = Arrays.asList("93.184.216.34", "2606:2800:220:1:248:1893:25c8:1946");
-        assertTrue("Unexpected addresses " + validatedHostNames, expectedHostNames.containsAll(validatedHostNames));
+        assertTrue(expectedHostNames.containsAll(validatedHostNames), "Unexpected addresses " + validatedHostNames);
         validatedAddresses.forEach(address -> assertEquals(10000, address.getPort()));
     }
 
-    @Test(expected = IllegalArgumentException.class)
+    @Test
     public void testInvalidConfig() {
-        ClientUtils.parseAndValidateAddresses(Arrays.asList("localhost:10000"), "random.value");
+        assertThrows(IllegalArgumentException.class,
+            () -> ClientUtils.parseAndValidateAddresses(Collections.singletonList("localhost:10000"), "random.value"));
     }
 
-    @Test(expected = ConfigException.class)
+    @Test
     public void testNoPort() {
-        checkWithoutLookup("127.0.0.1");
+        assertThrows(ConfigException.class, () -> checkWithoutLookup("127.0.0.1"));
     }
 
-    @Test(expected = ConfigException.class)
+    @Test
     public void testOnlyBadHostname() {
-        checkWithoutLookup("some.invalid.hostname.foo.bar.local:9999");
+        assertThrows(ConfigException.class, () -> checkWithoutLookup("some.invalid.hostname.foo.bar.local:9999"));
     }
 
     @Test
@@ -95,9 +99,10 @@ public class ClientUtilsTest {
         assertEquals(1, result.size());
     }
 
-    @Test(expected = UnknownHostException.class)
-    public void testResolveUnknownHostException() throws UnknownHostException {
-        ClientUtils.resolve("some.invalid.hostname.foo.bar.local", ClientDnsLookup.USE_ALL_DNS_IPS);
+    @Test
+    public void testResolveUnknownHostException() {
+        assertThrows(UnknownHostException.class,
+            () -> ClientUtils.resolve("some.invalid.hostname.foo.bar.local", ClientDnsLookup.USE_ALL_DNS_IPS));
     }
 
     @Test

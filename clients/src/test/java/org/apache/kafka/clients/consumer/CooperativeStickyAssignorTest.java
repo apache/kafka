@@ -16,7 +16,7 @@
  */
 package org.apache.kafka.clients.consumer;
 
-import static org.junit.Assert.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.HashSet;
 import java.util.List;
@@ -95,10 +95,9 @@ public class CooperativeStickyAssignorTest extends AbstractStickyAssignorTest {
 
         Set<TopicPartition> intersection = new HashSet<>(allAddedPartitions);
         intersection.retainAll(allRevokedPartitions);
-        assertTrue("Error: Some partitions were assigned to a new consumer during the same rebalance they are being "
-            + "revoked from their previous owner."
-            + "Partitions: " + intersection.toString(),
-            intersection.isEmpty());
+        assertTrue(intersection.isEmpty(),
+            "Error: Some partitions were assigned to a new consumer during the same rebalance they are being " +
+            "revoked from their previous owner. Partitions: " + intersection);
 
         return !allRevokedPartitions.isEmpty();
     }

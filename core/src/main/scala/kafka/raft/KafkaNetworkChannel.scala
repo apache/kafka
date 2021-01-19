@@ -87,6 +87,7 @@ private[raft] class RaftSendThread(
 
   def sendRequest(request: RequestAndCompletionHandler): Unit = {
     queue.add(request)
+    wakeup()
   }
 
 }
