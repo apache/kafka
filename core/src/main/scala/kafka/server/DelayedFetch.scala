@@ -186,16 +186,7 @@ class DelayedFetch(delayMs: Long,
       val isReassignmentFetch = fetchMetadata.isFromFollower &&
         replicaManager.isAddingReplica(tp, fetchMetadata.replicaId)
 
-      tp -> FetchPartitionData(
-        result.error,
-        result.highWatermark,
-        result.leaderLogStartOffset,
-        result.info.records,
-        result.divergingEpoch,
-        result.lastStableOffset,
-        result.info.abortedTransactions,
-        result.preferredReadReplica,
-        isReassignmentFetch)
+      tp -> result.toFetchPartitionData(isReassignmentFetch)
     }
 
     responseCallback(fetchPartitionData)
