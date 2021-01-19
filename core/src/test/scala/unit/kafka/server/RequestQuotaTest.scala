@@ -617,6 +617,9 @@ class RequestQuotaTest extends BaseRequestTest {
           new EnvelopeRequest.Builder(embedRequestData, new Array[Byte](0),
             InetAddress.getByName("192.168.1.1").getAddress)
 
+        case ApiKeys.DESCRIBE_CLUSTER =>
+          new DescribeClusterRequest.Builder(new DescribeClusterRequestData())
+
         case _ =>
           throw new IllegalArgumentException("Unsupported API key " + apiKey)
     }

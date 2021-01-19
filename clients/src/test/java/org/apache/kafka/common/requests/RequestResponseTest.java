@@ -83,6 +83,10 @@ import org.apache.kafka.common.message.DescribeAclsResponseData;
 import org.apache.kafka.common.message.DescribeAclsResponseData.AclDescription;
 import org.apache.kafka.common.message.DescribeAclsResponseData.DescribeAclsResource;
 import org.apache.kafka.common.message.DescribeClientQuotasResponseData;
+import org.apache.kafka.common.message.DescribeClusterRequestData;
+import org.apache.kafka.common.message.DescribeClusterResponseData;
+import org.apache.kafka.common.message.DescribeClusterResponseData.DescribeClusterBroker;
+import org.apache.kafka.common.message.DescribeClusterResponseData.DescribeClusterBrokerCollection;
 import org.apache.kafka.common.message.DescribeConfigsRequestData;
 import org.apache.kafka.common.message.DescribeConfigsResponseData;
 import org.apache.kafka.common.message.DescribeConfigsResponseData.DescribeConfigsResourceResult;
@@ -507,6 +511,36 @@ public class RequestResponseTest {
         checkRequest(createAlterClientQuotasRequest(), true);
         checkErrorResponse(createAlterClientQuotasRequest(), unknownServerException, true);
         checkResponse(createAlterClientQuotasResponse(), 0, true);
+    }
+
+    @Test
+    public void testDescribeClusterSerialization() throws Exception {
+        for (int v = ApiKeys.DESCRIBE_CLUSTER.oldestVersion(); v <= ApiKeys.DESCRIBE_CLUSTER.latestVersion(); v++) {
+            checkRequest(createDescribeClusterRequest(v), true);
+            checkErrorResponse(createDescribeClusterRequest(v), unknownServerException, true);
+            checkResponse(createDescribeClusterResponse(), v, true);
+        }
+    }
+
+    private DescribeClusterRequest createDescribeClusterRequest(int version) {
+        return new DescribeClusterRequest.Builder(
+            new DescribeClusterRequestData()
+                .setIncludeClusterAuthorizedOperations(true))
+            .build((short) version);
+    }
+
+    private DescribeClusterResponse createDescribeClusterResponse() {
+        return new DescribeClusterResponse(
+            new DescribeClusterResponseData()
+                .setBrokers(new DescribeClusterBrokerCollection(
+                    Collections.singletonList(new DescribeClusterBroker()
+                        .setBrokerId(1)
+                        .setHost("localhost")
+                        .setPort(9092)
+                        .setRack("rack1")).iterator()))
+                .setClusterId("clusterId")
+                .setControllerId(1)
+                .setClusterAuthorizedOperations(10));
     }
 
     @Test

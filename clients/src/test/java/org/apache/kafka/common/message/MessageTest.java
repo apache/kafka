@@ -24,6 +24,8 @@ import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.message.AddPartitionsToTxnRequestData.AddPartitionsToTxnTopic;
 import org.apache.kafka.common.message.AddPartitionsToTxnRequestData.AddPartitionsToTxnTopicCollection;
+import org.apache.kafka.common.message.DescribeClusterResponseData.DescribeClusterBroker;
+import org.apache.kafka.common.message.DescribeClusterResponseData.DescribeClusterBrokerCollection;
 import org.apache.kafka.common.message.DescribeGroupsResponseData.DescribedGroup;
 import org.apache.kafka.common.message.DescribeGroupsResponseData.DescribedGroupMember;
 import org.apache.kafka.common.message.JoinGroupResponseData.JoinGroupResponseMember;
@@ -291,6 +293,28 @@ public final class MessageTest {
 
         baseMember.setGroupInstanceId(instanceId);
         testAllMessageRoundTripsFromVersion((short) 4, baseResponse);
+    }
+
+    @Test
+    public void testDescribeClusterRequestVersions() throws Exception {
+        testAllMessageRoundTrips(new DescribeClusterRequestData()
+            .setIncludeClusterAuthorizedOperations(true));
+    }
+
+    @Test
+    public void testDescribeClusterResponseVersions() throws Exception {
+        DescribeClusterResponseData data = new DescribeClusterResponseData()
+            .setBrokers(new DescribeClusterBrokerCollection(
+                Collections.singletonList(new DescribeClusterBroker()
+                    .setBrokerId(1)
+                    .setHost("localhost")
+                    .setPort(9092)
+                    .setRack("rack1")).iterator()))
+            .setClusterId("clusterId")
+            .setControllerId(1)
+            .setClusterAuthorizedOperations(10);
+
+        testAllMessageRoundTrips(data);
     }
 
     @Test
