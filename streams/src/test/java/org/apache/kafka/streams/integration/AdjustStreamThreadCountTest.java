@@ -290,7 +290,8 @@ public class AdjustStreamThreadCountTest {
     @Test
     public void testConcurrentlyAccessThreads() throws InterruptedException {
         try (final KafkaStreams kafkaStreams = new KafkaStreams(builder.build(), properties)) {
-            StreamsTestUtils.startKafkaStreamsAndWaitForRunningState(kafkaStreams);
+            addStreamStateChangeListener(kafkaStreams);
+            startStreamsAndWaitForRunning(kafkaStreams);
             final int oldThreadCount = kafkaStreams.localThreadsMetadata().size();
             final int threadCount = 5;
             final int loop = 3;
