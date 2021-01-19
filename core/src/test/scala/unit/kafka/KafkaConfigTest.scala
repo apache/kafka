@@ -24,18 +24,18 @@ import kafka.server.KafkaConfig
 import kafka.utils.Exit
 import org.apache.kafka.common.config.types.Password
 import org.apache.kafka.common.internals.FatalExitError
-import org.junit.{After, Before, Test}
-import org.junit.Assert._
+import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
+import org.junit.jupiter.api.Assertions._
 import org.apache.kafka.common.config.internals.BrokerSecurityConfigs
 
 import scala.jdk.CollectionConverters._
 
 class KafkaTest {
 
-  @Before
+  @BeforeEach
   def setUp(): Unit = Exit.setExitProcedure((status, _) => throw new FatalExitError(status))
 
-  @After
+  @AfterEach
   def tearDown(): Unit = Exit.resetExitProcedure()
 
   @Test

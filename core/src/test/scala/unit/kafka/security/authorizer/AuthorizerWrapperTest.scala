@@ -30,8 +30,8 @@ import org.apache.kafka.common.resource.ResourcePattern
 import org.apache.kafka.common.resource.ResourceType._
 import org.apache.kafka.common.utils.Time
 import org.apache.kafka.server.authorizer._
-import org.junit.Assert._
-import org.junit.{After, Before, Test}
+import org.junit.jupiter.api.Assertions._
+import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
 
 import scala.annotation.nowarn
 
@@ -43,7 +43,7 @@ class AuthorizerWrapperTest extends ZooKeeperTestHarness with BaseAuthorizerTest
 
   override def authorizer: Authorizer = wrappedSimpleAuthorizer
 
-  @Before
+  @BeforeEach
   @nowarn("cat=deprecation")
   override def setUp(): Unit = {
     super.setUp()
@@ -63,7 +63,7 @@ class AuthorizerWrapperTest extends ZooKeeperTestHarness with BaseAuthorizerTest
       Time.SYSTEM, "kafka.test", "AuthorizerWrapperTest")
   }
 
-  @After
+  @AfterEach
   override def tearDown(): Unit = {
     val authorizers = Seq(wrappedSimpleAuthorizer, wrappedSimpleAuthorizerAllowEveryone)
     authorizers.foreach(a => {
@@ -79,28 +79,28 @@ class AuthorizerWrapperTest extends ZooKeeperTestHarness with BaseAuthorizerTest
   }
 
   private def testAuthorizeByResourceTypeEnableAllowEveryOne(authorizer: Authorizer): Unit = {
-    assertTrue("If allow.everyone.if.no.acl.found = true, " +
-      "caller should have read access to at least one topic",
-      authorizeByResourceType(wrappedSimpleAuthorizerAllowEveryone, requestContext, READ, resource.resourceType()))
+    assertTrue(authorizeByResourceType(wrappedSimpleAuthorizerAllowEveryone, requestContext, READ, resource.resourceType()),
+      "If allow.everyone.if.no.acl.found = true, " +
+      "caller should have read access to at least one topic")
     val allUser = AclEntry.WildcardPrincipalString
     val allHost = AclEntry.WildcardHost
     val denyAll = new AccessControlEntry(allUser, allHost, ALL, AclPermissionType.DENY)
     val wildcardResource = new ResourcePattern(resource.resourceType(), AclEntry.WildcardResource, LITERAL)
 
     addAcls(wrappedSimpleAuthorizerAllowEveryone, Set(denyAll), resource)
-    assertTrue("Should still allow since the deny only apply on the specific resource",
-      authorizeByResourceType(wrappedSimpleAuthorizerAllowEveryone, requestContext, READ, resource.resourceType()))
+    assertTrue(authorizeByResourceType(wrappedSimpleAuthorizerAllowEveryone, requestContext, READ, resource.resourceType()),
+      "Should still allow since the deny only apply on the specific resource")
 
     addAcls(wrappedSimpleAuthorizerAllowEveryone, Set(denyAll), wildcardResource)
-    assertFalse("When an ACL binding which can deny all users and hosts exists, " +
-      "even if allow.everyone.if.no.acl.found = true, caller shouldn't have read access any topic",
-      authorizeByResourceType(wrappedSimpleAuthorizerAllowEveryone, requestContext, READ, resource.resourceType()))
+    assertFalse(authorizeByResourceType(wrappedSimpleAuthorizerAllowEveryone, requestContext, READ, resource.resourceType()),
+      "When an ACL binding which can deny all users and hosts exists, " +
+      "even if allow.everyone.if.no.acl.found = true, caller shouldn't have read access any topic")
   }
 
   @Test
   def testAuthorizeByResourceTypeDisableAllowEveryoneOverride(): Unit = {
-    assertFalse ("If allow.everyone.if.no.acl.found = false, " +
-      "caller shouldn't have read access to any topic",
-      authorizeByResourceType(wrappedSimpleAuthorizer, requestContext, READ, resource.resourceType()))
+    assertFalse (authorizeByResourceType(wrappedSimpleAuthorizer, requestContext, READ, resource.resourceType()),
+      "If allow.everyone.if.no.acl.found = false, " +
+      "caller shouldn't have read access to any topic")
   }
 }

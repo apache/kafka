@@ -23,6 +23,7 @@ import java.util.concurrent.atomic.AtomicBoolean
 import kafka.cluster.{Broker, EndPoint}
 import kafka.utils.TestUtils
 import org.apache.kafka.clients.{ClientResponse, ManualMetadataUpdater, Metadata, MockClient}
+import org.apache.kafka.common.Node
 import org.apache.kafka.common.feature.Features
 import org.apache.kafka.common.feature.Features.emptySupportedFeatures
 import org.apache.kafka.common.message.MetadataRequestData
@@ -31,8 +32,8 @@ import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests.{AbstractRequest, MetadataRequest, MetadataResponse, RequestTestUtils}
 import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.common.utils.MockTime
-import org.junit.Assert.{assertEquals, assertFalse, assertTrue}
-import org.junit.Test
+import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertTrue}
+import org.junit.jupiter.api.Test
 import org.mockito.Mockito._
 
 class BrokerToControllerRequestThreadTest {
@@ -177,10 +178,11 @@ class BrokerToControllerRequestThreadTest {
 
     val metadataCache = mock(classOf[MetadataCache])
     val listenerName = ListenerName.forSecurityProtocol(SecurityProtocol.PLAINTEXT)
+    val port = 1234
     val oldController = new Broker(oldControllerId,
-      Seq(new EndPoint("host1", 1234, listenerName, SecurityProtocol.PLAINTEXT)), None, Features.emptySupportedFeatures)
+      Seq(new EndPoint("host1", port, listenerName, SecurityProtocol.PLAINTEXT)), None, Features.emptySupportedFeatures)
     val newController = new Broker(2,
-      Seq(new EndPoint("host2", 1234, listenerName, SecurityProtocol.PLAINTEXT)), None, Features.emptySupportedFeatures)
+      Seq(new EndPoint("host2", port, listenerName, SecurityProtocol.PLAINTEXT)), None, Features.emptySupportedFeatures)
 
     when(metadataCache.getControllerId).thenReturn(Some(oldControllerId), Some(newControllerId))
     when(metadataCache.getAliveBrokers).thenReturn(Seq(oldController, newController))
@@ -204,17 +206,25 @@ class BrokerToControllerRequestThreadTest {
     testRequestThread.enqueue(queueItem)
     // initialize to the controller
     testRequestThread.doWork()
+
+    val oldBrokerNode = new Node(oldControllerId, "host1", port)
+    assertEquals(Some(oldBrokerNode), testRequestThread.activeControllerAddress())
+
     // send and process the request
     mockClient.prepareResponse((body: AbstractRequest) => {
       body.isInstanceOf[MetadataRequest] &&
       body.asInstanceOf[MetadataRequest].allowAutoTopicCreation()
     }, responseWithNotControllerError)
     testRequestThread.doWork()
+    assertEquals(None, testRequestThread.activeControllerAddress())
     // reinitialize the controller to a different node
     testRequestThread.doWork()
     // process the request again
     mockClient.prepareResponse(expectedResponse)
     testRequestThread.doWork()
+
+    val newControllerNode = new Node(newControllerId, "host2", port)
+    assertEquals(Some(newControllerNode), testRequestThread.activeControllerAddress())
 
     assertTrue(completionHandler.completed.get())
   }

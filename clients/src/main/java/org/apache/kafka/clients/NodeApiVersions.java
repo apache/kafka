@@ -23,12 +23,14 @@ import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.message.ApiVersionsResponseData.ApiVersionsResponseKey;
 import org.apache.kafka.common.message.ApiVersionsResponseData.ApiVersionsResponseKeyCollection;
 import org.apache.kafka.common.protocol.ApiKeys;
+import org.apache.kafka.common.protocol.ApiVersion;
 import org.apache.kafka.common.utils.Utils;
 
 import java.util.ArrayList;
 import java.util.EnumMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.TreeMap;
 
 /**
@@ -123,21 +125,18 @@ public class NodeApiVersions {
      * Get the latest version supported by the broker within an allowed range of versions
      */
     public short latestUsableVersion(ApiKeys apiKey, short oldestAllowedVersion, short latestAllowedVersion) {
-        ApiVersion usableVersion = supportedVersions.get(apiKey);
-        if (usableVersion == null)
+        if (!supportedVersions.containsKey(apiKey))
             throw new UnsupportedVersionException("The broker does not support " + apiKey);
-        return latestUsableVersion(apiKey, usableVersion, oldestAllowedVersion, latestAllowedVersion);
-    }
+        ApiVersion supportedVersion = supportedVersions.get(apiKey);
+        Optional<ApiVersion> intersectVersion = supportedVersion.intersect(
+            new ApiVersion(apiKey.id, oldestAllowedVersion, latestAllowedVersion));
 
-    private short latestUsableVersion(ApiKeys apiKey, ApiVersion supportedVersions,
-                                      short minAllowedVersion, short maxAllowedVersion) {
-        short minVersion = (short) Math.max(minAllowedVersion, supportedVersions.minVersion);
-        short maxVersion = (short) Math.min(maxAllowedVersion, supportedVersions.maxVersion);
-        if (minVersion > maxVersion)
+        if (intersectVersion.isPresent())
+            return intersectVersion.get().maxVersion;
+        else
             throw new UnsupportedVersionException("The broker does not support " + apiKey +
-                    " with version in range [" + minAllowedVersion + "," + maxAllowedVersion + "]. The supported" +
-                    " range is [" + supportedVersions.minVersion + "," + supportedVersions.maxVersion + "].");
-        return maxVersion;
+                " with version in range [" + oldestAllowedVersion + "," + latestAllowedVersion + "]. The supported" +
+                " range is [" + supportedVersion.minVersion + "," + supportedVersion.maxVersion + "].");
     }
 
     /**
@@ -227,4 +226,7 @@ public class NodeApiVersions {
         return supportedVersions.get(apiKey);
     }
 
+    public Map<ApiKeys, ApiVersion> allSupportedApiVersions() {
+        return supportedVersions;
+    }
 }
