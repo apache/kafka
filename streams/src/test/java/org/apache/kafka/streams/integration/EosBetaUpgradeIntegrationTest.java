@@ -971,7 +971,7 @@ public class EosBetaUpgradeIntegrationTest {
         waitForCondition(
             () -> !observed.isEmpty() && observed.get(observed.size() - 1).value.equals(State.RUNNING),
             MAX_WAIT_TIME_MS,
-            () -> "Client did not startup on time. Observers transitions: " + observed
+            () -> "Client did not have the expected state transition on time. Observers transitions: " + observed
         );
     }
 
@@ -982,7 +982,7 @@ public class EosBetaUpgradeIntegrationTest {
         waitForCondition(
             () -> observed.equals(expected),
             MAX_WAIT_TIME_MS,
-            () -> "Client did not startup on time. Observers transitions: " + observed
+            () -> "Client did not have the expected state transition on time. Observers transitions: " + observed
         );
     }
 
