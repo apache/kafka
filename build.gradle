@@ -194,6 +194,13 @@ subprojects {
   sourceCompatibility = minJavaVersion
   targetCompatibility = minJavaVersion
 
+  java {
+    consistentResolution {
+      // resolve the compileClasspath and then "inject" the result of resolution as strict constraints into the runtimeClasspath
+      useCompileClasspathVersions()
+    }
+  }
+
   tasks.withType(JavaCompile) {
     options.encoding = 'UTF-8'
     options.compilerArgs << "-Xlint:all"
@@ -787,7 +794,9 @@ project(':core') {
     testCompile libs.apachedsJdbmPartition
     testCompile libs.junitJupiter
     testCompile libs.slf4jlog4j
-    testCompile libs.jfreechart
+    testCompile(libs.jfreechart) {
+      exclude group: 'junit', module: 'junit'
+    }
   }
 
   if (userEnableTestCoverage) {

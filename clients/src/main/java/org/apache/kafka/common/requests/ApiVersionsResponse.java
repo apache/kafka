@@ -16,13 +16,12 @@
  */
 package org.apache.kafka.common.requests;
 
-import org.apache.kafka.common.protocol.ApiVersion;
 import org.apache.kafka.common.feature.Features;
 import org.apache.kafka.common.feature.FinalizedVersionRange;
 import org.apache.kafka.common.feature.SupportedVersionRange;
 import org.apache.kafka.common.message.ApiVersionsResponseData;
-import org.apache.kafka.common.message.ApiVersionsResponseData.ApiVersionsResponseKey;
-import org.apache.kafka.common.message.ApiVersionsResponseData.ApiVersionsResponseKeyCollection;
+import org.apache.kafka.common.message.ApiVersionsResponseData.ApiVersion;
+import org.apache.kafka.common.message.ApiVersionsResponseData.ApiVersionCollection;
 import org.apache.kafka.common.message.ApiVersionsResponseData.FinalizedFeatureKey;
 import org.apache.kafka.common.message.ApiVersionsResponseData.FinalizedFeatureKeyCollection;
 import org.apache.kafka.common.message.ApiVersionsResponseData.SupportedFeatureKey;
@@ -60,7 +59,7 @@ public class ApiVersionsResponse extends AbstractResponse {
         return data;
     }
 
-    public ApiVersionsResponseKey apiVersion(short apiKey) {
+    public ApiVersion apiVersion(short apiKey) {
         return data.apiKeys().find(apiKey);
     }
 
@@ -118,14 +117,11 @@ public class ApiVersionsResponse extends AbstractResponse {
                 finalizedFeaturesEpoch));
     }
 
-    public static ApiVersionsResponseKeyCollection defaultApiKeys(final byte minMagic) {
-        ApiVersionsResponseKeyCollection apiKeys = new ApiVersionsResponseKeyCollection();
+    public static ApiVersionCollection defaultApiKeys(final byte minMagic) {
+        ApiVersionCollection apiKeys = new ApiVersionCollection();
         for (ApiKeys apiKey : ApiKeys.enabledApis()) {
             if (apiKey.minRequiredInterBrokerMagic <= minMagic) {
-                apiKeys.add(new ApiVersionsResponseKey()
-                                .setApiKey(apiKey.id)
-                                .setMinVersion(apiKey.oldestVersion())
-                                .setMaxVersion(apiKey.latestVersion()));
+                apiKeys.add(ApiVersionsResponse.toApiVersion(apiKey));
             }
         }
         return apiKeys;
@@ -138,22 +134,18 @@ public class ApiVersionsResponse extends AbstractResponse {
      * @param activeControllerApiVersions controller ApiVersions
      * @return commonly agreed ApiVersion collection
      */
-    public static ApiVersionsResponseKeyCollection intersectControllerApiVersions(final byte minMagic,
-                                                                                  final Map<ApiKeys, ApiVersion> activeControllerApiVersions) {
-        ApiVersionsResponseKeyCollection apiKeys = new ApiVersionsResponseKeyCollection();
+    public static ApiVersionCollection intersectControllerApiVersions(final byte minMagic,
+                                                                      final Map<ApiKeys, ApiVersion> activeControllerApiVersions) {
+        ApiVersionCollection apiKeys = new ApiVersionCollection();
         for (ApiKeys apiKey : ApiKeys.enabledApis()) {
             if (apiKey.minRequiredInterBrokerMagic <= minMagic) {
-                ApiVersion brokerApiVersion = new ApiVersion(
-                    apiKey.id,
-                    apiKey.oldestVersion(),
-                    apiKey.latestVersion()
-                );
+                ApiVersion brokerApiVersion = toApiVersion(apiKey);
 
                 final ApiVersion finalApiVersion;
                 if (!apiKey.forwardable) {
                     finalApiVersion = brokerApiVersion;
                 } else {
-                    Optional<ApiVersion> intersectVersion = brokerApiVersion.intersect(
+                    Optional<ApiVersion> intersectVersion = intersect(brokerApiVersion,
                         activeControllerApiVersions.getOrDefault(apiKey, null));
                     if (intersectVersion.isPresent()) {
                         finalApiVersion = intersectVersion.get();
@@ -163,10 +155,7 @@ public class ApiVersionsResponse extends AbstractResponse {
                     }
                 }
 
-                apiKeys.add(new ApiVersionsResponseKey()
-                                .setApiKey(finalApiVersion.apiKey)
-                                .setMinVersion(finalApiVersion.minVersion)
-                                .setMaxVersion(finalApiVersion.maxVersion));
+                apiKeys.add(finalApiVersion.duplicate());
             }
         }
         return apiKeys;
@@ -175,7 +164,7 @@ public class ApiVersionsResponse extends AbstractResponse {
     public static ApiVersionsResponseData createApiVersionsResponseData(
         final int throttleTimeMs,
         final Errors error,
-        final ApiVersionsResponseKeyCollection apiKeys,
+        final ApiVersionCollection apiKeys,
         final Features<SupportedVersionRange> latestSupportedFeatures,
         final Features<FinalizedVersionRange> finalizedFeatures,
         final long finalizedFeaturesEpoch
@@ -219,5 +208,28 @@ public class ApiVersionsResponse extends AbstractResponse {
         }
 
         return converted;
+    }
+
+    public static Optional<ApiVersion> intersect(ApiVersion thisVersion,
+                                                 ApiVersion other) {
+        if (thisVersion == null || other == null) return Optional.empty();
+        if (thisVersion.apiKey() != other.apiKey())
+            throw new IllegalArgumentException("thisVersion.apiKey: " + thisVersion.apiKey()
+                + " must be equal to other.apiKey: " + other.apiKey());
+        short minVersion = (short) Math.max(thisVersion.minVersion(), other.minVersion());
+        short maxVersion = (short) Math.min(thisVersion.maxVersion(), other.maxVersion());
+        return minVersion > maxVersion
+                ? Optional.empty()
+                : Optional.of(new ApiVersion()
+                    .setApiKey(thisVersion.apiKey())
+                    .setMinVersion(minVersion)
+                    .setMaxVersion(maxVersion));
+    }
+
+    public static ApiVersion toApiVersion(ApiKeys apiKey) {
+        return new ApiVersion()
+            .setApiKey(apiKey.id)
+            .setMinVersion(apiKey.oldestVersion())
+            .setMaxVersion(apiKey.latestVersion());
     }
 }
