@@ -27,8 +27,8 @@ import org.apache.kafka.common.errors.OffsetOutOfRangeException
 import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.common.{KafkaException, TopicPartition}
 import org.easymock.EasyMock
-import org.junit.Assert._
-import org.junit.{After, Before, Test}
+import org.junit.jupiter.api.Assertions._
+import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
 import org.mockito.ArgumentMatchers.any
 import org.mockito.Mockito
 import org.mockito.Mockito.{doAnswer, spy}
@@ -57,14 +57,14 @@ class LogManagerTest {
   val name = "kafka"
   val veryLargeLogFlushInterval = 10000000L
 
-  @Before
+  @BeforeEach
   def setUp(): Unit = {
     logDir = TestUtils.tempDir()
     logManager = createLogManager()
     logManager.startup()
   }
 
-  @After
+  @AfterEach
   def tearDown(): Unit = {
     if (logManager != null)
       logManager.shutdown()
@@ -186,7 +186,7 @@ class LogManagerTest {
 
     // and that exactly one log file was created,
     val containsLogFile: File => Boolean = dir => new File(dir, name + "-0").exists()
-    assertEquals("More than one log file created", 1, dirs.count(containsLogFile))
+    assertEquals(1, dirs.count(containsLogFile), "More than one log file created")
 
     // and that it wasn't created in one of the broken directories.
     assertFalse(brokenDirs.exists(containsLogFile))
@@ -198,7 +198,7 @@ class LogManagerTest {
   @Test
   def testGetNonExistentLog(): Unit = {
     val log = logManager.getLog(new TopicPartition(name, 0))
-    assertEquals("No log should be found.", None, log)
+    assertEquals(None, log, "No log should be found.")
     val logFile = new File(logDir, name + "-0")
     assertTrue(!logFile.exists)
   }
@@ -215,13 +215,13 @@ class LogManagerTest {
       val info = log.appendAsLeader(set, leaderEpoch = 0)
       offset = info.lastOffset
     }
-    assertTrue("There should be more than one segment now.", log.numberOfSegments > 1)
+    assertTrue(log.numberOfSegments > 1, "There should be more than one segment now.")
     log.updateHighWatermark(log.logEndOffset)
 
     log.logSegments.foreach(_.log.file.setLastModified(time.milliseconds))
 
     time.sleep(maxLogAgeMs + 1)
-    assertEquals("Now there should only be only one segment in the index.", 1, log.numberOfSegments)
+    assertEquals(1, log.numberOfSegments, "Now there should only be only one segment in the index.")
     time.sleep(log.config.fileDeleteDelayMs + 1)
 
     log.logSegments.foreach(s => {
@@ -230,15 +230,10 @@ class LogManagerTest {
     })
 
     // there should be a log file, two indexes, one producer snapshot, partition metadata, and the leader epoch checkpoint
-    assertEquals("Files should have been deleted", log.numberOfSegments * 4 + 2, log.dir.list.length)
-    assertEquals("Should get empty fetch off new log.", 0, readLog(log, offset + 1).records.sizeInBytes)
+    assertEquals(log.numberOfSegments * 4 + 2, log.dir.list.length, "Files should have been deleted")
+    assertEquals(0, readLog(log, offset + 1).records.sizeInBytes, "Should get empty fetch off new log.")
 
-    try {
-      readLog(log, 0)
-      fail("Should get exception from fetching earlier.")
-    } catch {
-      case _: OffsetOutOfRangeException => // This is good.
-    }
+    assertThrows(classOf[OffsetOutOfRangeException], () => readLog(log, 0), () => "Should get exception from fetching earlier.")
     // log should still be appendable
     log.appendAsLeader(TestUtils.singletonRecords("test".getBytes()), leaderEpoch = 0)
   }
@@ -271,23 +266,18 @@ class LogManagerTest {
     }
 
     log.updateHighWatermark(log.logEndOffset)
-    assertEquals("Check we have the expected number of segments.", numMessages * setSize / config.segmentSize, log.numberOfSegments)
+    assertEquals(numMessages * setSize / config.segmentSize, log.numberOfSegments, "Check we have the expected number of segments.")
 
     // this cleanup shouldn't find any expired segments but should delete some to reduce size
     time.sleep(logManager.InitialTaskDelayMs)
-    assertEquals("Now there should be exactly 6 segments", 6, log.numberOfSegments)
+    assertEquals(6, log.numberOfSegments, "Now there should be exactly 6 segments")
     time.sleep(log.config.fileDeleteDelayMs + 1)
 
     // there should be a log file, two indexes (the txn index is created lazily),
     // and a producer snapshot file per segment, and the leader epoch checkpoint and partition metadata file.
-    assertEquals("Files should have been deleted", log.numberOfSegments * 4 + 2, log.dir.list.length)
-    assertEquals("Should get empty fetch off new log.", 0, readLog(log, offset + 1).records.sizeInBytes)
-    try {
-      readLog(log, 0)
-      fail("Should get exception from fetching earlier.")
-    } catch {
-      case _: OffsetOutOfRangeException => // This is good.
-    }
+    assertEquals(log.numberOfSegments * 4 + 2, log.dir.list.length, "Files should have been deleted")
+    assertEquals(0, readLog(log, offset + 1).records.sizeInBytes, "Should get empty fetch off new log.")
+    assertThrows(classOf[OffsetOutOfRangeException], () => readLog(log, 0))
     // log should still be appendable
     log.appendAsLeader(TestUtils.singletonRecords("test".getBytes()), leaderEpoch = 0)
   }
@@ -322,12 +312,12 @@ class LogManagerTest {
     }
 
     val numSegments = log.numberOfSegments
-    assertTrue("There should be more than one segment now.", log.numberOfSegments > 1)
+    assertTrue(log.numberOfSegments > 1, "There should be more than one segment now.")
 
     log.logSegments.foreach(_.log.file.setLastModified(time.milliseconds))
 
     time.sleep(maxLogAgeMs + 1)
-    assertEquals("number of segments shouldn't have changed", numSegments, log.numberOfSegments)
+    assertEquals(numSegments, log.numberOfSegments, "number of segments shouldn't have changed")
   }
 
   /**
@@ -349,7 +339,7 @@ class LogManagerTest {
       log.appendAsLeader(set, leaderEpoch = 0)
     }
     time.sleep(logManager.InitialTaskDelayMs)
-    assertTrue("Time based flush should have been triggered", lastFlush != log.lastFlushTime)
+    assertTrue(lastFlush != log.lastFlushTime, "Time based flush should have been triggered")
   }
 
   /**
@@ -367,9 +357,9 @@ class LogManagerTest {
     // verify that logs are always assigned to the least loaded partition
     for(partition <- 0 until 20) {
       logManager.getOrCreateLog(new TopicPartition("test", partition), () => logConfig)
-      assertEquals("We should have created the right number of logs", partition + 1, logManager.allLogs.size)
+      assertEquals(partition + 1, logManager.allLogs.size, "We should have created the right number of logs")
       val counts = logManager.allLogs.groupBy(_.dir.getParent).values.map(_.size)
-      assertTrue("Load should balance evenly", counts.max <= counts.min + 1)
+      assertTrue(counts.max <= counts.min + 1, "Load should balance evenly")
     }
   }
 
@@ -378,12 +368,7 @@ class LogManagerTest {
    */
   @Test
   def testTwoLogManagersUsingSameDirFails(): Unit = {
-    try {
-      createLogManager()
-      fail("Should not be able to create a second log manager instance with the same data directory")
-    } catch {
-      case _: KafkaException => // this is good
-    }
+    assertThrows(classOf[KafkaException], () => createLogManager())
   }
 
   /**
@@ -429,7 +414,7 @@ class LogManagerTest {
     val checkpoints = new OffsetCheckpointFile(new File(logDir, LogManager.RecoveryPointCheckpointFile)).read()
 
     topicPartitions.zip(logs).foreach { case (tp, log) =>
-      assertEquals("Recovery point should equal checkpoint", checkpoints(tp), log.recoveryPoint)
+      assertEquals(checkpoints(tp), log.recoveryPoint, "Recovery point should equal checkpoint")
     }
   }
 
@@ -464,16 +449,16 @@ class LogManagerTest {
     // This will only catch cases where the index file is created eagerly instead of lazily
     indexFilesOnDiskBeforeDelete.foreach { fileBeforeDelete =>
       val fileInIndex = indexFilesAfterDelete.find(_.getName == fileBeforeDelete.getName)
-      assertEquals(s"Could not find index file ${fileBeforeDelete.getName} in indexFilesAfterDelete",
-        Some(fileBeforeDelete.getName), fileInIndex.map(_.getName))
+      assertEquals(Some(fileBeforeDelete.getName), fileInIndex.map(_.getName),
+        s"Could not find index file ${fileBeforeDelete.getName} in indexFilesAfterDelete")
       assertNotEquals("File reference was not updated in index", fileBeforeDelete.getAbsolutePath,
         fileInIndex.get.getAbsolutePath)
     }
 
     time.sleep(logManager.InitialTaskDelayMs)
-    assertTrue("Logs deleted too early", logManager.hasLogsToBeDeleted)
+    assertTrue(logManager.hasLogsToBeDeleted, "Logs deleted too early")
     time.sleep(logManager.currentDefaultConfig.fileDeleteDelayMs - logManager.InitialTaskDelayMs)
-    assertFalse("Logs not deleted", logManager.hasLogsToBeDeleted)
+    assertFalse(logManager.hasLogsToBeDeleted, "Logs not deleted")
   }
 
   @Test
@@ -504,7 +489,8 @@ class LogManagerTest {
     val checkpoints = new OffsetCheckpointFile(new File(logDir, LogManager.RecoveryPointCheckpointFile)).read()
 
     tps.zip(allLogs).foreach { case (tp, log) =>
-      assertEquals("Recovery point should equal checkpoint", checkpoints(tp), log.recoveryPoint)
+      assertEquals(checkpoints(tp), log.recoveryPoint,
+        "Recovery point should equal checkpoint")
     }
   }
 

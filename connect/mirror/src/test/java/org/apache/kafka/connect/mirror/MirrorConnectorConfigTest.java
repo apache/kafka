@@ -18,7 +18,7 @@ package org.apache.kafka.connect.mirror;
 
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.config.ConfigDef;
-import org.junit.Test;
+import org.junit.jupiter.api.Test;
 
 import java.util.Arrays;
 import java.util.Collection;
@@ -28,9 +28,9 @@ import java.util.HashMap;
 import java.util.HashSet;
 
 import static org.apache.kafka.connect.mirror.TestUtils.makeProps;
-import static org.junit.Assert.assertTrue;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 
 public class MirrorConnectorConfigTest {
 
@@ -123,15 +123,15 @@ public class MirrorConnectorConfigTest {
         // and that the task config class has been loaded and statically initialized by the JVM
         ConfigDef taskConfigDef = MirrorTaskConfig.TASK_CONFIG_DEF;
         taskSpecificProperties.forEach(taskSpecificProperty -> assertTrue(
-            taskSpecificProperty + " should be defined for task ConfigDef",
-            taskConfigDef.names().contains(taskSpecificProperty)
+            taskConfigDef.names().contains(taskSpecificProperty),
+            taskSpecificProperty + " should be defined for task ConfigDef"
         ));
 
         // Ensure that the task config class hasn't accidentally modified the connector config
         ConfigDef connectorConfigDef = MirrorConnectorConfig.CONNECTOR_CONFIG_DEF;
         taskSpecificProperties.forEach(taskSpecificProperty -> assertFalse(
-            taskSpecificProperty + " should not be defined for connector ConfigDef",
-            connectorConfigDef.names().contains(taskSpecificProperty)
+            connectorConfigDef.names().contains(taskSpecificProperty),
+            taskSpecificProperty + " should not be defined for connector ConfigDef"
         ));
     }
 

@@ -22,7 +22,7 @@ import kafka.coordinator.group.GroupCoordinator;
 import kafka.coordinator.transaction.TransactionCoordinator;
 import kafka.network.RequestChannel;
 import kafka.network.RequestConvertToJson;
-import kafka.server.AdminManager;
+import kafka.server.ZkAdminManager;
 import kafka.server.BrokerFeatures;
 import kafka.server.BrokerTopicStats;
 import kafka.server.ClientQuotaManager;
@@ -96,7 +96,7 @@ public class MetadataRequestBenchmark {
     private RequestChannel.Metrics requestChannelMetrics = Mockito.mock(RequestChannel.Metrics.class);
     private ReplicaManager replicaManager = Mockito.mock(ReplicaManager.class);
     private GroupCoordinator groupCoordinator = Mockito.mock(GroupCoordinator.class);
-    private AdminManager adminManager = Mockito.mock(AdminManager.class);
+    private ZkAdminManager adminManager = Mockito.mock(ZkAdminManager.class);
     private TransactionCoordinator transactionCoordinator = Mockito.mock(TransactionCoordinator.class);
     private KafkaController kafkaController = Mockito.mock(KafkaController.class);
     private ForwardingManager forwardingManager = Mockito.mock(ForwardingManager.class);

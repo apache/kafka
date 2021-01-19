@@ -20,11 +20,9 @@ package kafka.log
 import kafka.utils._
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.record.CompressionType
-import org.junit.Assert._
-import org.junit._
-import org.junit.runner.RunWith
-import org.junit.runners.Parameterized
-import org.junit.runners.Parameterized.Parameters
+import org.junit.jupiter.api.Assertions._
+import org.junit.jupiter.params.ParameterizedTest
+import org.junit.jupiter.params.provider.{Arguments, MethodSource}
 
 import scala.collection._
 import scala.jdk.CollectionConverters._
@@ -32,23 +30,21 @@ import scala.jdk.CollectionConverters._
 /**
   * This is an integration test that tests the fully integrated log cleaner
   */
-@RunWith(value = classOf[Parameterized])
-class LogCleanerLagIntegrationTest(compressionCodecName: String) extends AbstractLogCleanerIntegrationTest with Logging {
+class LogCleanerLagIntegrationTest extends AbstractLogCleanerIntegrationTest with Logging {
   val msPerHour = 60 * 60 * 1000
 
   val minCompactionLag = 1 * msPerHour
-  assertTrue("compactionLag must be divisible by 2 for this test", minCompactionLag % 2 == 0)
+  assertTrue(minCompactionLag % 2 == 0, "compactionLag must be divisible by 2 for this test")
 
   val time = new MockTime(1400000000000L, 1000L)  // Tue May 13 16:53:20 UTC 2014 for `currentTimeMs`
   val cleanerBackOffMs = 200L
   val segmentSize = 512
 
-  override def codec: CompressionType = CompressionType.forName(compressionCodecName)
-
   val topicPartitions = Array(new TopicPartition("log", 0), new TopicPartition("log", 1), new TopicPartition("log", 2))
 
-  @Test
-  def cleanerTest(): Unit = {
+  @ParameterizedTest
+  @MethodSource(Array("parameters"))
+  def cleanerTest(codec: CompressionType): Unit = {
     cleaner = makeCleaner(partitions = topicPartitions,
       backOffMs = cleanerBackOffMs,
       minCompactionLagMs = minCompactionLag,
@@ -72,7 +68,7 @@ class LogCleanerLagIntegrationTest(compressionCodecName: String) extends Abstrac
     // advance to a time still less than one compaction lag from start
     time.sleep(minCompactionLag/2)
     Thread.sleep(5 * cleanerBackOffMs) // give cleaning thread a chance to _not_ clean
-    assertEquals("There should be no cleaning until the compaction lag has passed", startSizeBlock0, log.size)
+    assertEquals(startSizeBlock0, log.size, "There should be no cleaning until the compaction lag has passed")
 
     // t = T1 > T0 + compactionLag
     // advance to time a bit more than one compaction lag from start
@@ -88,14 +84,13 @@ class LogCleanerLagIntegrationTest(compressionCodecName: String) extends Abstrac
 
     // check the data is the same
     val read1 = readFromLog(log)
-    assertEquals("Contents of the map shouldn't change.", appends1.toMap, read1.toMap)
+    assertEquals(appends1.toMap, read1.toMap, "Contents of the map shouldn't change.")
 
     val compactedSize = log.logSegments(0L, activeSegAtT0.baseOffset).map(_.size).sum
     debug(s"after cleaning the compacted size up to active segment at T0: $compactedSize")
     val lastCleaned = cleaner.cleanerManager.allCleanerCheckpoints(new TopicPartition("log", 0))
-    assertTrue(s"log cleaner should have processed up to offset $firstBlock1SegmentBaseOffset, but lastCleaned=$lastCleaned", lastCleaned >= firstBlock1SegmentBaseOffset)
-    assertTrue(s"log should have been compacted: size up to offset of active segment at T0=$sizeUpToActiveSegmentAtT0 compacted size=$compactedSize",
-      sizeUpToActiveSegmentAtT0 > compactedSize)
+    assertTrue(lastCleaned >= firstBlock1SegmentBaseOffset, s"log cleaner should have processed up to offset $firstBlock1SegmentBaseOffset, but lastCleaned=$lastCleaned")
+    assertTrue(sizeUpToActiveSegmentAtT0 > compactedSize, s"log should have been compacted: size up to offset of active segment at T0=$sizeUpToActiveSegmentAtT0 compacted size=$compactedSize")
   }
 
   private def readFromLog(log: Log): Iterable[(Int, Int)] = {
@@ -124,11 +119,6 @@ object LogCleanerLagIntegrationTest {
     l
   }
 
-  @Parameters
-  def parameters: java.util.Collection[Array[String]] = {
-    val list = new java.util.ArrayList[Array[String]]()
-    for (codec <- CompressionType.values)
-      list.add(Array(codec.name))
-    list
-  }
+  def parameters: java.util.stream.Stream[Arguments] =
+    java.util.Arrays.stream(CompressionType.values.map(codec => Arguments.of(codec)))
 }

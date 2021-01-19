@@ -17,12 +17,11 @@
 package org.apache.kafka.connect.transforms.util;
 
 import org.apache.kafka.common.config.ConfigException;
-
-import org.junit.Test;
+import org.junit.jupiter.api.Test;
 
 import java.util.Collections;
 
-import static org.junit.Assert.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 public class NonEmptyListValidatorTest {
 

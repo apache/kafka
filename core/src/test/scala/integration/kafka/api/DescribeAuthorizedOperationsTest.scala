@@ -27,8 +27,8 @@ import org.apache.kafka.common.resource.{PatternType, Resource, ResourcePattern,
 import org.apache.kafka.common.security.auth.{KafkaPrincipal, SecurityProtocol}
 import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.server.authorizer.Authorizer
-import org.junit.Assert.{assertEquals, assertFalse, assertNull}
-import org.junit.{After, Before, Test}
+import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertNull}
+import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
 
 import scala.jdk.CollectionConverters._
 
@@ -66,7 +66,7 @@ class DescribeAuthorizedOperationsTest extends IntegrationTestHarness with SaslS
     }
   }
 
-  @Before
+  @BeforeEach
   override def setUp(): Unit = {
     startSasl(jaasSections(Seq("GSSAPI"), Some("GSSAPI"), Both, JaasTestUtils.KafkaServerContextName))
     super.setUp()
@@ -78,7 +78,7 @@ class DescribeAuthorizedOperationsTest extends IntegrationTestHarness with SaslS
       AclEntry.WildcardHost, operation, permissionType)
   }
 
-  @After
+  @AfterEach
   override def tearDown(): Unit = {
     if (client != null)
       Utils.closeQuietly(client, "AdminClient")

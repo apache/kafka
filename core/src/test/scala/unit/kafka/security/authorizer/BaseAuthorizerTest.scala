@@ -35,8 +35,8 @@ import org.apache.kafka.common.resource.ResourceType.{CLUSTER, GROUP, TOPIC, TRA
 import org.apache.kafka.common.resource.{ResourcePattern, ResourceType}
 import org.apache.kafka.common.security.auth.{KafkaPrincipal, SecurityProtocol}
 import org.apache.kafka.server.authorizer.{AuthorizationResult, Authorizer}
-import org.junit.Assert.{assertFalse, assertTrue}
-import org.junit.Test
+import org.junit.jupiter.api.Assertions.{assertFalse, assertTrue}
+import org.junit.jupiter.api.Test
 
 import scala.jdk.CollectionConverters._
 
@@ -63,27 +63,27 @@ trait BaseAuthorizerTest {
     val u1h1Context = newRequestContext(user1, host1)
 
     for (_ <- 1 to 10) {
-      assertFalse("User1 from host1 should not have READ access to any topic when no ACL exists",
-        authorizeByResourceType(authorizer, u1h1Context, READ, ResourceType.TOPIC))
+      assertFalse(authorizeByResourceType(authorizer, u1h1Context, READ, ResourceType.TOPIC),
+        "User1 from host1 should not have READ access to any topic when no ACL exists")
 
       addAcls(authorizer, Set(allowRead), resource1)
-      assertTrue("User1 from host1 now should have READ access to at least one topic",
-        authorizeByResourceType(authorizer, u1h1Context, READ, ResourceType.TOPIC))
+      assertTrue(authorizeByResourceType(authorizer, u1h1Context, READ, ResourceType.TOPIC),
+        "User1 from host1 now should have READ access to at least one topic")
 
       for (_ <- 1 to 10) {
         addAcls(authorizer, Set(denyRead), resource1)
-        assertFalse("User1 from host1 now should not have READ access to any topic",
-          authorizeByResourceType(authorizer, u1h1Context, READ, ResourceType.TOPIC))
+        assertFalse(authorizeByResourceType(authorizer, u1h1Context, READ, ResourceType.TOPIC),
+          "User1 from host1 now should not have READ access to any topic")
 
         removeAcls(authorizer, Set(denyRead), resource1)
         addAcls(authorizer, Set(allowRead), resource1)
-        assertTrue("User1 from host1 now should have READ access to at least one topic",
-          authorizeByResourceType(authorizer, u1h1Context, READ, ResourceType.TOPIC))
+        assertTrue(authorizeByResourceType(authorizer, u1h1Context, READ, ResourceType.TOPIC),
+          "User1 from host1 now should have READ access to at least one topic")
       }
 
       removeAcls(authorizer, Set(allowRead), resource1)
-      assertFalse("User1 from host1 now should not have READ access to any topic",
-        authorizeByResourceType(authorizer, u1h1Context, READ, ResourceType.TOPIC))
+      assertFalse(authorizeByResourceType(authorizer, u1h1Context, READ, ResourceType.TOPIC),
+        "User1 from host1 now should not have READ access to any topic")
     }
   }
 
@@ -112,16 +112,16 @@ trait BaseAuthorizerTest {
     val u1h1Context = newRequestContext(user1, host1)
     val u1h2Context = newRequestContext(user1, host2)
 
-    assertFalse("User1 from host1 should not have READ access to any topic",
-      authorizeByResourceType(authorizer, u1h1Context, READ, ResourceType.TOPIC))
-    assertFalse("User1 from host2 should not have READ access to any consumer group",
-      authorizeByResourceType(authorizer, u1h1Context, READ, ResourceType.GROUP))
-    assertFalse("User1 from host2 should not have READ access to any topic",
-      authorizeByResourceType(authorizer, u1h1Context, READ, ResourceType.TRANSACTIONAL_ID))
-    assertFalse("User1 from host2 should not have READ access to any topic",
-      authorizeByResourceType(authorizer, u1h1Context, READ, ResourceType.CLUSTER))
-    assertTrue("User1 from host2 should have READ access to at least one topic",
-      authorizeByResourceType(authorizer, u1h2Context, READ, ResourceType.TOPIC))
+    assertFalse(authorizeByResourceType(authorizer, u1h1Context, READ, ResourceType.TOPIC),
+      "User1 from host1 should not have READ access to any topic")
+    assertFalse(authorizeByResourceType(authorizer, u1h1Context, READ, ResourceType.GROUP),
+      "User1 from host2 should not have READ access to any consumer group")
+    assertFalse(authorizeByResourceType(authorizer, u1h1Context, READ, ResourceType.TRANSACTIONAL_ID),
+      "User1 from host2 should not have READ access to any topic")
+    assertFalse(authorizeByResourceType(authorizer, u1h1Context, READ, ResourceType.CLUSTER),
+      "User1 from host2 should not have READ access to any topic")
+    assertTrue(authorizeByResourceType(authorizer, u1h2Context, READ, ResourceType.TOPIC),
+      "User1 from host2 should have READ access to at least one topic")
   }
 
   @Test
@@ -135,12 +135,12 @@ trait BaseAuthorizerTest {
     val acl2 = new AccessControlEntry(user1.toString, host1.getHostAddress, WRITE, DENY)
 
     addAcls(authorizer, Set(acl1), resource1)
-    assertTrue("User1 from host1 should have WRITE access to at least one topic",
-      authorizeByResourceType(authorizer, u1h1Context, WRITE, ResourceType.TOPIC))
+    assertTrue(authorizeByResourceType(authorizer, u1h1Context, WRITE, ResourceType.TOPIC),
+      "User1 from host1 should have WRITE access to at least one topic")
 
     addAcls(authorizer, Set(acl2), resource1)
-    assertFalse("User1 from host1 should not have WRITE access to any topic",
-      authorizeByResourceType(authorizer, u1h1Context, WRITE, ResourceType.TOPIC))
+    assertFalse(authorizeByResourceType(authorizer, u1h1Context, WRITE, ResourceType.TOPIC),
+      "User1 from host1 should not have WRITE access to any topic")
   }
 
   @Test
@@ -158,24 +158,24 @@ trait BaseAuthorizerTest {
     val denyAce = new AccessControlEntry(user1.toString, host1.getHostAddress, READ, DENY)
 
     addAcls(authorizer, Set(allowAce), abcde)
-    assertTrue("User1 from host1 should have READ access to at least one group",
-      authorizeByResourceType(authorizer, u1h1Context, READ, ResourceType.GROUP))
+    assertTrue(authorizeByResourceType(authorizer, u1h1Context, READ, ResourceType.GROUP),
+      "User1 from host1 should have READ access to at least one group")
 
     addAcls(authorizer, Set(denyAce), abcd)
-    assertFalse("User1 from host1 now should not have READ access to any group",
-      authorizeByResourceType(authorizer, u1h1Context, READ, ResourceType.GROUP))
+    assertFalse(authorizeByResourceType(authorizer, u1h1Context, READ, ResourceType.GROUP),
+      "User1 from host1 now should not have READ access to any group")
 
     addAcls(authorizer, Set(allowAce), abc)
-    assertTrue("User1 from host1 now should have READ access to any group",
-      authorizeByResourceType(authorizer, u1h1Context, READ, ResourceType.GROUP))
+    assertTrue(authorizeByResourceType(authorizer, u1h1Context, READ, ResourceType.GROUP),
+      "User1 from host1 now should have READ access to any group")
 
     addAcls(authorizer, Set(denyAce), a)
-    assertFalse("User1 from host1 now should not have READ access to any group",
-      authorizeByResourceType(authorizer, u1h1Context, READ, ResourceType.GROUP))
+    assertFalse(authorizeByResourceType(authorizer, u1h1Context, READ, ResourceType.GROUP),
+      "User1 from host1 now should not have READ access to any group")
 
     addAcls(authorizer, Set(allowAce), ab)
-    assertFalse("User1 from host1 still should not have READ access to any group",
-      authorizeByResourceType(authorizer, u1h1Context, READ, ResourceType.GROUP))
+    assertFalse(authorizeByResourceType(authorizer, u1h1Context, READ, ResourceType.GROUP),
+      "User1 from host1 still should not have READ access to any group")
   }
 
   @Test
@@ -191,20 +191,20 @@ trait BaseAuthorizerTest {
     val denyAce = new AccessControlEntry(user1.toString, host1.getHostAddress, WRITE, DENY)
 
     addAcls(authorizer, Set(allowAce), prefixed)
-    assertTrue("User1 from host1 should have WRITE access to at least one group",
-      authorizeByResourceType(authorizer, u1h1Context, WRITE, ResourceType.GROUP))
+    assertTrue(authorizeByResourceType(authorizer, u1h1Context, WRITE, ResourceType.GROUP),
+      "User1 from host1 should have WRITE access to at least one group")
 
     addAcls(authorizer, Set(denyAce), wildcard)
-    assertFalse("User1 from host1 now should not have WRITE access to any group",
-      authorizeByResourceType(authorizer, u1h1Context, WRITE, ResourceType.GROUP))
+    assertFalse(authorizeByResourceType(authorizer, u1h1Context, WRITE, ResourceType.GROUP),
+      "User1 from host1 now should not have WRITE access to any group")
 
     addAcls(authorizer, Set(allowAce), wildcard)
-    assertFalse("User1 from host1 still should not have WRITE access to any group",
-      authorizeByResourceType(authorizer, u1h1Context, WRITE, ResourceType.GROUP))
+    assertFalse(authorizeByResourceType(authorizer, u1h1Context, WRITE, ResourceType.GROUP),
+      "User1 from host1 still should not have WRITE access to any group")
 
     addAcls(authorizer, Set(allowAce), literal)
-    assertFalse("User1 from host1 still should not have WRITE access to any group",
-      authorizeByResourceType(authorizer, u1h1Context, WRITE, ResourceType.GROUP))
+    assertFalse(authorizeByResourceType(authorizer, u1h1Context, WRITE, ResourceType.GROUP),
+      "User1 from host1 still should not have WRITE access to any group")
   }
 
   @Test
@@ -217,16 +217,16 @@ trait BaseAuthorizerTest {
     val denyWrite = new AccessControlEntry(user1.toString, host1.getHostAddress, WRITE, DENY)
     val u1h1Context = newRequestContext(user1, host1)
 
-    assertFalse("User1 from host1 should not have READ access to any topic when no ACL exists",
-      authorizeByResourceType(authorizer, u1h1Context, READ, ResourceType.TOPIC))
+    assertFalse(authorizeByResourceType(authorizer, u1h1Context, READ, ResourceType.TOPIC),
+      "User1 from host1 should not have READ access to any topic when no ACL exists")
 
     addAcls(authorizer, Set(denyWrite, allowAll), resource1)
-    assertTrue("User1 from host1 now should have READ access to at least one topic",
-      authorizeByResourceType(authorizer, u1h1Context, READ, ResourceType.TOPIC))
+    assertTrue(authorizeByResourceType(authorizer, u1h1Context, READ, ResourceType.TOPIC),
+      "User1 from host1 now should have READ access to at least one topic")
 
     addAcls(authorizer, Set(denyAll), resource1)
-    assertFalse("User1 from host1 now should not have READ access to any topic",
-      authorizeByResourceType(authorizer, u1h1Context, READ, ResourceType.TOPIC))
+    assertFalse(authorizeByResourceType(authorizer, u1h1Context, READ, ResourceType.TOPIC),
+      "User1 from host1 now should not have READ access to any topic")
   }
 
   @Test
@@ -244,30 +244,30 @@ trait BaseAuthorizerTest {
     val u1h1Context = newRequestContext(user1, host1)
     val u1h2Context = newRequestContext(user1, host2)
 
-    assertFalse("User1 from host1 should not have READ access to any topic when no ACL exists",
-      authorizeByResourceType(authorizer, u1h1Context, READ, ResourceType.TOPIC))
+    assertFalse(authorizeByResourceType(authorizer, u1h1Context, READ, ResourceType.TOPIC),
+      "User1 from host1 should not have READ access to any topic when no ACL exists")
 
     addAcls(authorizer, Set(allowHost1), resource1)
-    assertTrue("User1 from host1 should now have READ access to at least one topic",
-      authorizeByResourceType(authorizer, u1h1Context, READ, ResourceType.TOPIC))
+    assertTrue(authorizeByResourceType(authorizer, u1h1Context, READ, ResourceType.TOPIC),
+      "User1 from host1 should now have READ access to at least one topic")
 
     addAcls(authorizer, Set(denyAllHost), resource1)
-    assertFalse("User1 from host1 now shouldn't have READ access to any topic",
-      authorizeByResourceType(authorizer, u1h1Context, READ, ResourceType.TOPIC))
+    assertFalse(authorizeByResourceType(authorizer, u1h1Context, READ, ResourceType.TOPIC),
+      "User1 from host1 now shouldn't have READ access to any topic")
 
     addAcls(authorizer, Set(denyHost1), resource2)
-    assertFalse("User1 from host1 still should not have READ access to any topic",
-      authorizeByResourceType(authorizer, u1h1Context, READ, ResourceType.TOPIC))
-    assertFalse("User1 from host2 should not have READ access to any topic",
-      authorizeByResourceType(authorizer, u1h2Context, READ, ResourceType.TOPIC))
+    assertFalse(authorizeByResourceType(authorizer, u1h1Context, READ, ResourceType.TOPIC),
+      "User1 from host1 still should not have READ access to any topic")
+    assertFalse(authorizeByResourceType(authorizer, u1h2Context, READ, ResourceType.TOPIC),
+      "User1 from host2 should not have READ access to any topic")
 
     addAcls(authorizer, Set(allowAllHost), resource2)
-    assertTrue("User1 from host2 should now have READ access to at least one topic",
-      authorizeByResourceType(authorizer, u1h2Context, READ, ResourceType.TOPIC))
+    assertTrue(authorizeByResourceType(authorizer, u1h2Context, READ, ResourceType.TOPIC),
+      "User1 from host2 should now have READ access to at least one topic")
 
     addAcls(authorizer, Set(denyAllHost), resource2)
-    assertFalse("User1 from host2 now shouldn't have READ access to any topic",
-      authorizeByResourceType(authorizer, u1h2Context, READ, ResourceType.TOPIC))
+    assertFalse(authorizeByResourceType(authorizer, u1h2Context, READ, ResourceType.TOPIC),
+      "User1 from host2 now shouldn't have READ access to any topic")
   }
 
   @Test
@@ -285,30 +285,30 @@ trait BaseAuthorizerTest {
     val u1h1Context = newRequestContext(user1, host1)
     val u2h1Context = newRequestContext(user2, host1)
 
-    assertFalse("User1 from host1 should not have READ access to any topic when no ACL exists",
-      authorizeByResourceType(authorizer, u1h1Context, READ, ResourceType.TOPIC))
+    assertFalse(authorizeByResourceType(authorizer, u1h1Context, READ, ResourceType.TOPIC),
+      "User1 from host1 should not have READ access to any topic when no ACL exists")
 
     addAcls(authorizer, Set(allowUser1), resource1)
-    assertTrue("User1 from host1 should now have READ access to at least one topic",
-      authorizeByResourceType(authorizer, u1h1Context, READ, ResourceType.TOPIC))
+    assertTrue(authorizeByResourceType(authorizer, u1h1Context, READ, ResourceType.TOPIC),
+      "User1 from host1 should now have READ access to at least one topic")
 
     addAcls(authorizer, Set(denyAllUser), resource1)
-    assertFalse("User1 from host1 now shouldn't have READ access to any topic",
-      authorizeByResourceType(authorizer, u1h1Context, READ, ResourceType.TOPIC))
+    assertFalse(authorizeByResourceType(authorizer, u1h1Context, READ, ResourceType.TOPIC),
+      "User1 from host1 now shouldn't have READ access to any topic")
 
     addAcls(authorizer, Set(denyUser1), resource2)
-    assertFalse("User1 from host1 still should not have READ access to any topic",
-      authorizeByResourceType(authorizer, u1h1Context, READ, ResourceType.TOPIC))
-    assertFalse("User2 from host1 should not have READ access to any topic",
-      authorizeByResourceType(authorizer, u2h1Context, READ, ResourceType.TOPIC))
+    assertFalse(authorizeByResourceType(authorizer, u1h1Context, READ, ResourceType.TOPIC),
+      "User1 from host1 still should not have READ access to any topic")
+    assertFalse(authorizeByResourceType(authorizer, u2h1Context, READ, ResourceType.TOPIC),
+      "User2 from host1 should not have READ access to any topic")
 
     addAcls(authorizer, Set(allowAllUser), resource2)
-    assertTrue("User2 from host1 should now have READ access to at least one topic",
-      authorizeByResourceType(authorizer, u2h1Context, READ, ResourceType.TOPIC))
+    assertTrue(authorizeByResourceType(authorizer, u2h1Context, READ, ResourceType.TOPIC),
+      "User2 from host1 should now have READ access to at least one topic")
 
     addAcls(authorizer, Set(denyAllUser), resource2)
-    assertFalse("User2 from host1 now shouldn't have READ access to any topic",
-      authorizeByResourceType(authorizer, u2h1Context, READ, ResourceType.TOPIC))
+    assertFalse(authorizeByResourceType(authorizer, u2h1Context, READ, ResourceType.TOPIC),
+      "User2 from host1 now shouldn't have READ access to any topic")
   }
 
   @Test
@@ -328,14 +328,14 @@ trait BaseAuthorizerTest {
 
     val superUserContext = newRequestContext(superUser1, host1)
 
-    assertTrue("superuser always has access, no matter what acls.",
-      authorizeByResourceType(authorizer, superUserContext, READ, ResourceType.TOPIC))
-    assertTrue("superuser always has access, no matter what acls.",
-      authorizeByResourceType(authorizer, superUserContext, READ, ResourceType.CLUSTER))
-    assertTrue("superuser always has access, no matter what acls.",
-      authorizeByResourceType(authorizer, superUserContext, READ, ResourceType.GROUP))
-    assertTrue("superuser always has access, no matter what acls.",
-      authorizeByResourceType(authorizer, superUserContext, READ, ResourceType.TRANSACTIONAL_ID))
+    assertTrue(authorizeByResourceType(authorizer, superUserContext, READ, ResourceType.TOPIC),
+      "superuser always has access, no matter what acls.")
+    assertTrue(authorizeByResourceType(authorizer, superUserContext, READ, ResourceType.CLUSTER),
+      "superuser always has access, no matter what acls.")
+    assertTrue(authorizeByResourceType(authorizer, superUserContext, READ, ResourceType.GROUP),
+      "superuser always has access, no matter what acls.")
+    assertTrue(authorizeByResourceType(authorizer, superUserContext, READ, ResourceType.TRANSACTIONAL_ID),
+      "superuser always has access, no matter what acls.")
   }
 
   def newRequestContext(principal: KafkaPrincipal, clientAddress: InetAddress, apiKey: ApiKeys = ApiKeys.PRODUCE): RequestContext = {
