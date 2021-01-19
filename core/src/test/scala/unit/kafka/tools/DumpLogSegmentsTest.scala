@@ -178,7 +178,7 @@ class DumpLogSegmentsTest {
       DumpLogSegments.dumpIndex(indexFile, indexSanityOnly = false, verifyOnly = true,
         misMatchesForIndexFilesMap = mutable.Map[String, List[(Long, Long)]](), Int.MaxValue)
     }
-    assertEquals(outContent.toString, expectOutput)
+    assertEquals(expectOutput, outContent.toString)
   }
 
   private def runDumpLogSegments(args: Array[String]): String = {
