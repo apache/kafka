@@ -15,7 +15,7 @@ package kafka.api
 import java.io.File
 
 import kafka.server.KafkaConfig
-import org.junit.{After, Before, Test}
+import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
 import kafka.utils.JaasTestUtils
 import org.apache.kafka.common.security.auth.SecurityProtocol
 
@@ -30,14 +30,14 @@ class SaslMultiMechanismConsumerTest extends BaseConsumerTest with SaslSetup {
   override protected val serverSaslProperties = Some(kafkaServerSaslProperties(kafkaServerSaslMechanisms, kafkaClientSaslMechanism))
   override protected val clientSaslProperties = Some(kafkaClientSaslProperties(kafkaClientSaslMechanism))
 
-  @Before
+  @BeforeEach
   override def setUp(): Unit = {
     startSasl(jaasSections(kafkaServerSaslMechanisms, Some(kafkaClientSaslMechanism), Both,
       JaasTestUtils.KafkaServerContextName))
     super.setUp()
   }
 
-  @After
+  @AfterEach
   override def tearDown(): Unit = {
     super.tearDown()
     closeSasl()

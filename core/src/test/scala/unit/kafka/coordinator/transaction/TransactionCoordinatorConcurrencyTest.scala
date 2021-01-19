@@ -34,8 +34,8 @@ import org.apache.kafka.common.requests._
 import org.apache.kafka.common.utils.{LogContext, MockTime, ProducerIdAndEpoch}
 import org.apache.kafka.common.{Node, TopicPartition}
 import org.easymock.{EasyMock, IAnswer}
-import org.junit.Assert._
-import org.junit.{After, Before, Test}
+import org.junit.jupiter.api.Assertions._
+import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
 
 import scala.jdk.CollectionConverters._
 import scala.collection.{Map, mutable}
@@ -62,7 +62,7 @@ class TransactionCoordinatorConcurrencyTest extends AbstractCoordinatorConcurren
   val producerId = 11
   private var bumpProducerId = false
 
-  @Before
+  @BeforeEach
   override def setUp(): Unit = {
     super.setUp()
 
@@ -108,7 +108,7 @@ class TransactionCoordinatorConcurrencyTest extends AbstractCoordinatorConcurren
     EasyMock.replay(networkClient)
   }
 
-  @After
+  @AfterEach
   override def tearDown(): Unit = {
     try {
       EasyMock.reset(zkClient, replicaManager)
@@ -418,7 +418,7 @@ class TransactionCoordinatorConcurrencyTest extends AbstractCoordinatorConcurren
       enableCompletion()
       transactionMetadata(txn)
     })(metadata => metadata.nonEmpty && metadata.forall(m => m.state == expectedState && m.pendingState.isEmpty))
-    assertTrue(s"Invalid metadata state $metadata", success)
+    assertTrue(success, s"Invalid metadata state $metadata")
   }
 
   private def transactionMetadata(txn: Transaction): Option[TransactionMetadata] = {
@@ -586,7 +586,7 @@ class TransactionCoordinatorConcurrencyTest extends AbstractCoordinatorConcurren
     override def await(): Unit = {
       allTransactions.foreach { txn =>
         if (txnStateManager.partitionFor(txn.transactionalId) == txnTopicPartitionId)
-          assertTrue("Transaction metadata not removed", transactionMetadata(txn).isEmpty)
+          assertTrue(transactionMetadata(txn).isEmpty, "Transaction metadata not removed")
       }
     }
   }
@@ -608,7 +608,7 @@ class TransactionCoordinatorConcurrencyTest extends AbstractCoordinatorConcurren
         replicaManager.tryCompleteActions()
         transactions.forall(txn => transactionMetadata(txn).isEmpty)
       })(identity)
-      assertTrue("Transaction not expired", success)
+      assertTrue(success, "Transaction not expired")
     }
   }
 }

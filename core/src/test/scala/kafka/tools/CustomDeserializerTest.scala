@@ -23,15 +23,14 @@ import kafka.utils.TestUtils
 import org.apache.kafka.clients.consumer.ConsumerRecord
 import org.apache.kafka.common.header.Headers
 import org.apache.kafka.common.serialization.Deserializer
-import org.hamcrest.CoreMatchers
-import org.hamcrest.MatcherAssert._
-import org.junit.Test
+import org.junit.jupiter.api.Assertions._
+import org.junit.jupiter.api.Test
 import org.mockito.Mockito._
 
 class CustomDeserializer extends Deserializer[String] {
 
   override def deserialize(topic: String, data: Array[Byte]): String = {
-    assertThat("topic must not be null", topic, CoreMatchers.notNullValue)
+    assertNotNull(topic, "topic must not be null")
     new String(data)
   }
 
@@ -49,7 +48,7 @@ class CustomDeserializerTest {
     formatter.valueDeserializer = Some(new CustomDeserializer)
     val output = TestUtils.grabConsoleOutput(formatter.writeTo(
       new ConsumerRecord("topic_test", 1, 1L, "key".getBytes, "value".getBytes), mock(classOf[PrintStream])))
-    assertThat("DefaultMessageFormatter should call `deserialize` method with headers.", output, CoreMatchers.containsString("WITH HEADERS"))
+    assertTrue(output.contains("WITH HEADERS"), "DefaultMessageFormatter should call `deserialize` method with headers.")
     formatter.close()
   }
 

@@ -18,7 +18,6 @@ package kafka.server
 
 import java.util
 import java.util.{Optional, Properties}
-
 import kafka.log.LogConfig
 import kafka.utils.TestUtils
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerRecord}
@@ -27,18 +26,20 @@ import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.record.MemoryRecords
 import org.apache.kafka.common.requests.{FetchRequest, FetchResponse}
 import org.apache.kafka.common.serialization.StringSerializer
-import org.junit.Assert._
-import org.junit.Test
+import org.junit.jupiter.api.Assertions._
+import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
 
 class FetchRequestDownConversionConfigTest extends BaseRequestTest {
   private var producer: KafkaProducer[String, String] = null
   override def brokerCount: Int = 1
 
+  @BeforeEach
   override def setUp(): Unit = {
     super.setUp()
     initProducer()
   }
 
+  @AfterEach
   override def tearDown(): Unit = {
     if (producer != null)
       producer.close()
