@@ -23,6 +23,7 @@ import org.junit.jupiter.api.Timeout;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
 
 @Timeout(120)
 public class VersionsTest {
@@ -55,23 +56,19 @@ public class VersionsTest {
     }
 
     private void testRoundTrip(Versions versions, String string) {
-        assertEquals(versions.toString(), string);
-        assertEquals(Versions.parse(versions.toString(), null), versions);
+        assertEquals(string, versions.toString());
+        assertEquals(versions, Versions.parse(versions.toString(), null));
     }
 
     @Test
     public void testIntersections() {
-        assertEquals(newVersions(2, 3),
-            newVersions(1, 3).intersect(
-                newVersions(2, 4)));
-        assertEquals(newVersions(3, 3),
-            newVersions(0, Short.MAX_VALUE).intersect(
-                newVersions(3, 3)));
-        assertEquals(newVersions(9, Short.MAX_VALUE).intersect(
-                newVersions(2, 8)), 
-                Versions.NONE);
-        assertEquals(Versions.NONE.intersect(Versions.NONE), 
-                     Versions.NONE);
+        assertEquals(newVersions(1, 3).intersect(
+                newVersions(2, 4)), newVersions(2, 3));
+        assertEquals(newVersions(0, Short.MAX_VALUE).intersect(
+                newVersions(3, 3)), newVersions(3, 3));
+        assertEquals(Versions.NONE, newVersions(9, Short.MAX_VALUE).intersect(
+                newVersions(2, 8)));
+        assertEquals(Versions.NONE, Versions.NONE.intersect(Versions.NONE));
     }
 
     @Test
@@ -90,16 +87,14 @@ public class VersionsTest {
 
     @Test
     public void testSubtract() {
-        assertEquals(Versions.NONE.subtract(Versions.NONE), 
-                     Versions.NONE);
+        assertEquals(Versions.NONE, Versions.NONE.subtract(Versions.NONE));
         assertEquals(newVersions(0, 0),
             newVersions(0, 0).subtract(Versions.NONE));
         assertEquals(newVersions(1, 1),
             newVersions(1, 2).subtract(newVersions(2, 2)));
         assertEquals(newVersions(2, 2),
             newVersions(1, 2).subtract(newVersions(1, 1)));
-        assertEquals(newVersions(0, Short.MAX_VALUE).subtract(newVersions(1, 100)), 
-                     null);
+        assertNull(newVersions(0, Short.MAX_VALUE).subtract(newVersions(1, 100)));
         assertEquals(newVersions(10, 10),
             newVersions(1, 10).subtract(newVersions(1, 9)));
         assertEquals(newVersions(1, 1),
