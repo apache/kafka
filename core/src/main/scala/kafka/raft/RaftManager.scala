@@ -105,7 +105,6 @@ class KafkaRaftManager[T](
 ) extends RaftManager[T] with Logging {
 
   private val nodeId = config.brokerId
-  private val raftConfig = new RaftConfig(config)
   private val logContext = new LogContext(s"[RaftManager $nodeId] ")
   this.logIdent = logContext.logPrefix()
 
