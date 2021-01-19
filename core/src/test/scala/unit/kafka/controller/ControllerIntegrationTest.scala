@@ -955,14 +955,14 @@ class ControllerIntegrationTest extends ZooKeeperTestHarness {
       "failed to get expected partition state upon topic creation")
     val topicIdAfterCreate = zkClient.getTopicIdsForTopics(Set(tp.topic())).get(tp.topic())
     assertEquals(None, topicIdAfterCreate)
-    assertEquals("incorrect topic ID can be found in the controller context",
-      topicIdAfterCreate, servers.head.kafkaController.controllerContext.topicIds.get(tp.topic))
+    assertEquals(topicIdAfterCreate, servers.head.kafkaController.controllerContext.topicIds.get(tp.topic),
+      "incorrect topic ID can be found in the controller context")
 
     adminZkClient.addPartitions(tp.topic, assignment, adminZkClient.getBrokerMetadatas(), 2)
     val topicIdAfterAddition = zkClient.getTopicIdsForTopics(Set(tp.topic())).get(tp.topic())
     assertEquals(topicIdAfterCreate, topicIdAfterAddition)
-    assertEquals("topic ID changed after partition additions",
-      topicIdAfterCreate, servers.head.kafkaController.controllerContext.topicIds.get(tp.topic))
+    assertEquals(topicIdAfterCreate, servers.head.kafkaController.controllerContext.topicIds.get(tp.topic),
+      "topic ID changed after partition additions")
 
     adminZkClient.deleteTopic(tp.topic)
     TestUtils.waitUntilTrue(() => !servers.head.kafkaController.controllerContext.allTopics.contains(tp.topic),

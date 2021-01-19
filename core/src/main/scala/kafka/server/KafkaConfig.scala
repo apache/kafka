@@ -1798,9 +1798,8 @@ class KafkaConfig(val props: java.util.Map[_, _], doLog: Boolean, dynamicConfigO
     }
   }
 
-  def usesTopicId: Boolean = {
+  def usesTopicId: Boolean =
     interBrokerProtocolVersion >= KAFKA_2_8_IV0
-  }
 
   validateValues()
 
