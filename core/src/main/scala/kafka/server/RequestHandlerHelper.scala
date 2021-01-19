@@ -22,15 +22,11 @@ import kafka.coordinator.group.GroupCoordinator
 import kafka.coordinator.transaction.TransactionCoordinator
 import kafka.network.RequestChannel
 import kafka.server.QuotaFactory.QuotaManagers
-import kafka.utils.Logging
 import org.apache.kafka.common.errors.ClusterAuthorizationException
 import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.network.Send
-import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests.{AbstractRequest, AbstractResponse}
 import org.apache.kafka.common.utils.Time
-
-import scala.jdk.CollectionConverters._
 
 object RequestHandlerHelper {
 
@@ -55,81 +51,46 @@ object RequestHandlerHelper {
         txnCoordinator.onResignation(partition.partitionId, Some(partition.getLeaderEpoch))
     }
   }
-}
 
-class UnthrottledRequestHandlerHelper(
-  requestChannel: RequestChannel,
-  logPrefix: String
-) extends Logging {
-  this.logIdent = logPrefix
-
-  def handleError(request: RequestChannel.Request, e: Throwable): Unit = {
-    error("Error when handling request: " +
-      s"clientId=${request.header.clientId}, " +
-      s"correlationId=${request.header.correlationId}, " +
-      s"api=${request.header.apiKey}, " +
-      s"version=${request.header.apiVersion}, " +
-      s"body=${request.body[AbstractRequest]}", e)
-    sendErrorOrCloseConnection(request, e, 0)
-  }
-
-  def sendErrorOrCloseConnection(request: RequestChannel.Request, error: Throwable, throttleMs: Int): Unit = {
-    val requestBody = request.body[AbstractRequest]
-    val response = requestBody.getErrorResponse(throttleMs, error)
-    if (response == null)
-      closeConnection(request, requestBody.errorCounts(error))
-    else
-      sendResponse(request, Some(response), None)
-  }
-
-  def closeConnection(request: RequestChannel.Request, errorCounts: java.util.Map[Errors, Integer]): Unit = {
-    // This case is used when the request handler has encountered an error, but the client
-    // does not expect a response (e.g. when produce request has acks set to 0)
-    requestChannel.updateErrorMetrics(request.header.apiKey, errorCounts.asScala)
-    requestChannel.sendResponse(new RequestChannel.CloseConnectionResponse(request))
-  }
-
-  def sendResponse(request: RequestChannel.Request,
-                   responseOpt: Option[AbstractResponse],
-                   onComplete: Option[Send => Unit]): Unit = {
-    // Update error metrics for each error code in the response including Errors.NONE
-    responseOpt.foreach(response => requestChannel.updateErrorMetrics(request.header.apiKey, response.errorCounts.asScala))
-
-    val response = responseOpt match {
-      case Some(response) =>
-        new RequestChannel.SendResponse(
-          request,
-          request.buildResponseSend(response),
-          request.responseNode(response),
-          onComplete
-        )
-      case None =>
-        new RequestChannel.NoOpResponse(request)
-    }
-
-    requestChannel.sendResponse(response)
-  }
 }
 
 class RequestHandlerHelper(
   requestChannel: RequestChannel,
   quotas: QuotaManagers,
-  time: Time,
-  logPrefix: String
-) extends UnthrottledRequestHandlerHelper(requestChannel, logPrefix) {
+  time: Time
+) {
 
-  override def handleError(request: RequestChannel.Request, e: Throwable): Unit = {
+  def throttle(
+    quotaManager: ClientQuotaManager,
+    request: RequestChannel.Request,
+    throttleTimeMs: Int
+  ): Unit = {
+    val callback = new ThrottleCallback {
+      override def startThrottling(): Unit = requestChannel.startThrottling(request)
+      override def endThrottling(): Unit = requestChannel.endThrottling(request)
+    }
+    quotaManager.throttle(request, callback, throttleTimeMs)
+  }
+
+  def handleError(request: RequestChannel.Request, e: Throwable): Unit = {
     val mayThrottle = e.isInstanceOf[ClusterAuthorizationException] || !request.header.apiKey.clusterAction
-    error("Error when handling request: " +
-      s"clientId=${request.header.clientId}, " +
-      s"correlationId=${request.header.correlationId}, " +
-      s"api=${request.header.apiKey}, " +
-      s"version=${request.header.apiVersion}, " +
-      s"body=${request.body[AbstractRequest]}", e)
     if (mayThrottle)
       sendErrorResponseMaybeThrottle(request, e)
     else
       sendErrorResponseExemptThrottle(request, e)
+  }
+
+  def sendErrorOrCloseConnection(
+    request: RequestChannel.Request,
+    error: Throwable,
+    throttleMs: Int
+  ): Unit = {
+    val requestBody = request.body[AbstractRequest]
+    val response = requestBody.getErrorResponse(throttleMs, error)
+    if (response == null)
+      requestChannel.closeConnection(request, requestBody.errorCounts(error))
+    else
+      requestChannel.sendResponse(request, response, None)
   }
 
   def sendForwardedResponse(request: RequestChannel.Request,
@@ -137,8 +98,8 @@ class RequestHandlerHelper(
     // For forwarded requests, we take the throttle time from the broker that
     // the request was forwarded to
     val throttleTimeMs = response.throttleTimeMs()
-    quotas.request.throttle(request, throttleTimeMs, requestChannel.sendResponse)
-    sendResponse(request, Some(response), None)
+    throttle(quotas.request, request, throttleTimeMs)
+    requestChannel.sendResponse(request, response, None)
   }
 
   // Throttle the channel if the request quota is enabled but has been violated. Regardless of throttling, send the
@@ -148,15 +109,15 @@ class RequestHandlerHelper(
     val throttleTimeMs = maybeRecordAndGetThrottleTimeMs(request)
     // Only throttle non-forwarded requests
     if (!request.isForwarded)
-      quotas.request.throttle(request, throttleTimeMs, requestChannel.sendResponse)
-    sendResponse(request, Some(createResponse(throttleTimeMs)), None)
+      throttle(quotas.request, request, throttleTimeMs)
+    requestChannel.sendResponse(request, createResponse(throttleTimeMs), None)
   }
 
   def sendErrorResponseMaybeThrottle(request: RequestChannel.Request, error: Throwable): Unit = {
     val throttleTimeMs = maybeRecordAndGetThrottleTimeMs(request)
     // Only throttle non-forwarded requests or cluster authorization failures
     if (error.isInstanceOf[ClusterAuthorizationException] || !request.isForwarded)
-      quotas.request.throttle(request, throttleTimeMs, requestChannel.sendResponse)
+      throttle(quotas.request, request, throttleTimeMs)
     sendErrorOrCloseConnection(request, error, throttleTimeMs)
   }
 
@@ -181,20 +142,20 @@ class RequestHandlerHelper(
     if (maxThrottleTimeMs > 0 && !request.isForwarded) {
       request.apiThrottleTimeMs = maxThrottleTimeMs
       if (controllerThrottleTimeMs > requestThrottleTimeMs) {
-        quotas.controllerMutation.throttle(request, controllerThrottleTimeMs, requestChannel.sendResponse)
+        throttle(quotas.controllerMutation, request, controllerThrottleTimeMs)
       } else {
-        quotas.request.throttle(request, requestThrottleTimeMs, requestChannel.sendResponse)
+        throttle(quotas.request, request, requestThrottleTimeMs)
       }
     }
 
-    sendResponse(request, Some(createResponse(maxThrottleTimeMs)), None)
+    requestChannel.sendResponse(request, createResponse(maxThrottleTimeMs), None)
   }
 
   def sendResponseExemptThrottle(request: RequestChannel.Request,
                                  response: AbstractResponse,
                                  onComplete: Option[Send => Unit] = None): Unit = {
     quotas.request.maybeRecordExempt(request)
-    sendResponse(request, Some(response), onComplete)
+    requestChannel.sendResponse(request, response, onComplete)
   }
 
   def sendErrorResponseExemptThrottle(request: RequestChannel.Request, error: Throwable): Unit = {
@@ -204,7 +165,7 @@ class RequestHandlerHelper(
 
   def sendNoOpResponseExemptThrottle(request: RequestChannel.Request): Unit = {
     quotas.request.maybeRecordExempt(request)
-    sendResponse(request, None, None)
+    requestChannel.sendNoOpResponse(request)
   }
 
 }

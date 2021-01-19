@@ -19,7 +19,7 @@ package kafka.tools
 
 import kafka.network.RequestChannel
 import kafka.raft.RaftManager
-import kafka.server.{ApiRequestHandler, UnthrottledRequestHandlerHelper}
+import kafka.server.ApiRequestHandler
 import kafka.utils.Logging
 import org.apache.kafka.common.internals.FatalExitError
 import org.apache.kafka.common.message.{BeginQuorumEpochResponseData, EndQuorumEpochResponseData, FetchResponseData, FetchSnapshotResponseData, VoteResponseData}
@@ -37,12 +37,9 @@ class TestRaftRequestHandler(
   time: Time,
 ) extends ApiRequestHandler with Logging {
 
-  val requestHelper = new UnthrottledRequestHandlerHelper(requestChannel, logIdent)
-
   override def handle(request: RequestChannel.Request): Unit = {
     try {
-      trace(s"Handling request:${request.requestDesc(true)} from connection ${request.context.connectionId};" +
-        s"securityProtocol:${request.context.securityProtocol},principal:${request.context.principal}")
+      trace(s"Handling request:${request.requestDesc(true)} with context ${request.context}")
       request.header.apiKey match {
         case ApiKeys.VOTE => handleVote(request)
         case ApiKeys.BEGIN_QUORUM_EPOCH => handleBeginQuorumEpoch(request)
@@ -53,7 +50,11 @@ class TestRaftRequestHandler(
       }
     } catch {
       case e: FatalExitError => throw e
-      case e: Throwable => requestHelper.handleError(request, e)
+      case e: Throwable =>
+        error(s"Unexpected error handling request ${request.requestDesc(true)} " +
+          s"with context ${request.context}", e)
+        val errorResponse = request.body[AbstractRequest].getErrorResponse(e)
+        requestChannel.sendResponse(request, errorResponse, None)
     } finally {
       // The local completion time may be set while processing the request. Only record it if it's unset.
       if (request.apiLocalCompleteTimeNanos < 0)
@@ -99,7 +100,7 @@ class TestRaftRequestHandler(
       } else {
         buildResponse(response)
       }
-      requestHelper.sendResponse(request, Some(res), None)
+      requestChannel.sendResponse(request, res, None)
     })
   }
 

@@ -123,7 +123,7 @@ class KafkaApis(val requestChannel: RequestChannel,
   private val alterAclsPurgatory = new DelayedFuturePurgatory(purgatoryName = "AlterAcls", brokerId = config.brokerId)
 
   val authHelper = new AuthHelper(authorizer)
-  val requestHelper = new RequestHandlerHelper(requestChannel, quotas, time, logIdent)
+  val requestHelper = new RequestHandlerHelper(requestChannel, quotas, time)
 
   def close(): Unit = {
     alterAclsPurgatory.shutdown()
@@ -226,16 +226,19 @@ class KafkaApis(val requestChannel: RequestChannel,
 
         // Until we are ready to integrate the Raft layer, these APIs are treated as
         // unexpected and we just close the connection.
-        case ApiKeys.VOTE => requestHelper.closeConnection(request, util.Collections.emptyMap())
-        case ApiKeys.BEGIN_QUORUM_EPOCH => requestHelper.closeConnection(request, util.Collections.emptyMap())
-        case ApiKeys.END_QUORUM_EPOCH => requestHelper.closeConnection(request, util.Collections.emptyMap())
-        case ApiKeys.DESCRIBE_QUORUM => requestHelper.closeConnection(request, util.Collections.emptyMap())
-        case ApiKeys.FETCH_SNAPSHOT => requestHelper.closeConnection(request, util.Collections.emptyMap())
+        case ApiKeys.VOTE => requestChannel.closeConnection(request, util.Collections.emptyMap())
+        case ApiKeys.BEGIN_QUORUM_EPOCH => requestChannel.closeConnection(request, util.Collections.emptyMap())
+        case ApiKeys.END_QUORUM_EPOCH => requestChannel.closeConnection(request, util.Collections.emptyMap())
+        case ApiKeys.DESCRIBE_QUORUM => requestChannel.closeConnection(request, util.Collections.emptyMap())
+        case ApiKeys.FETCH_SNAPSHOT => requestChannel.closeConnection(request, util.Collections.emptyMap())
 
       }
     } catch {
       case e: FatalExitError => throw e
-      case e: Throwable => requestHelper.handleError(request, e)
+      case e: Throwable =>
+        error(s"Unexpected error handling request ${request.requestDesc(true)} " +
+          s"with context ${request.context}", e)
+        requestHelper.handleError(request, e)
     } finally {
       // try to complete delayed action. In order to avoid conflicting locking, the actions to complete delayed requests
       // are kept in a queue. We add the logic to check the ReplicaManager queue at the end of KafkaApis.handle() and the
@@ -597,9 +600,9 @@ class KafkaApis(val requestChannel: RequestChannel,
       if (maxThrottleTimeMs > 0) {
         request.apiThrottleTimeMs = maxThrottleTimeMs
         if (bandwidthThrottleTimeMs > requestThrottleTimeMs) {
-          quotas.produce.throttle(request, bandwidthThrottleTimeMs, requestChannel.sendResponse)
+          requestHelper.throttle(quotas.produce, request, bandwidthThrottleTimeMs)
         } else {
-          quotas.request.throttle(request, requestThrottleTimeMs, requestChannel.sendResponse)
+          requestHelper.throttle(quotas.request, request, requestThrottleTimeMs)
         }
       }
 
@@ -617,14 +620,14 @@ class KafkaApis(val requestChannel: RequestChannel,
               s"from client id ${request.header.clientId} with ack=0\n" +
               s"Topic and partition to exceptions: $exceptionsSummary"
           )
-          requestHelper.closeConnection(request, new ProduceResponse(mergedResponseStatus.asJava).errorCounts)
+          requestChannel.closeConnection(request, new ProduceResponse(mergedResponseStatus.asJava).errorCounts)
         } else {
           // Note that although request throttling is exempt for acks == 0, the channel may be throttled due to
           // bandwidth quota violation.
           requestHelper.sendNoOpResponseExemptThrottle(request)
         }
       } else {
-        requestHelper.sendResponse(request, Some(new ProduceResponse(mergedResponseStatus.asJava, maxThrottleTimeMs)), None)
+        requestChannel.sendResponse(request, new ProduceResponse(mergedResponseStatus.asJava, maxThrottleTimeMs), None)
       }
     }
 
@@ -876,9 +879,9 @@ class KafkaApis(val requestChannel: RequestChannel,
           // from the fetch quota because we are going to return an empty response.
           quotas.fetch.unrecordQuotaSensor(request, responseSize, timeMs)
           if (bandwidthThrottleTimeMs > requestThrottleTimeMs) {
-            quotas.fetch.throttle(request, bandwidthThrottleTimeMs, requestChannel.sendResponse)
+            requestHelper.throttle(quotas.fetch, request, bandwidthThrottleTimeMs)
           } else {
-            quotas.request.throttle(request, requestThrottleTimeMs, requestChannel.sendResponse)
+            requestHelper.throttle(quotas.request, request, requestThrottleTimeMs)
           }
           // If throttling is required, return an empty response.
           unconvertedFetchResponse = fetchContext.getThrottledResponse(maxThrottleTimeMs)
@@ -889,7 +892,7 @@ class KafkaApis(val requestChannel: RequestChannel,
         }
 
         // Send the response immediately.
-        requestHelper.sendResponse(request, Some(createResponse(maxThrottleTimeMs)), Some(updateConversionStats))
+        requestChannel.sendResponse(request, createResponse(maxThrottleTimeMs), Some(updateConversionStats))
       }
     }
 
@@ -3254,13 +3257,13 @@ class KafkaApis(val requestChannel: RequestChannel,
     if (!config.metadataQuorumEnabled) {
       info(s"Closing connection ${request.context.connectionId} because it sent an `Envelope` " +
         s"request, which is not accepted without enabling the internal config ${KafkaConfig.EnableMetadataQuorumProp}")
-      requestHelper.closeConnection(request, Collections.emptyMap())
+      requestChannel.closeConnection(request, Collections.emptyMap())
       return
     } else if (!request.context.fromPrivilegedListener) {
       info(s"Closing connection ${request.context.connectionId} from listener ${request.context.listenerName} " +
         s"because it sent an `Envelope` request, which is only accepted on the inter-broker listener " +
         s"${config.interBrokerListenerName}.")
-      requestHelper.closeConnection(request, Collections.emptyMap())
+      requestChannel.closeConnection(request, Collections.emptyMap())
       return
     } else if (!authHelper.authorize(request.context, CLUSTER_ACTION, CLUSTER, CLUSTER_NAME)) {
       requestHelper.sendErrorResponseMaybeThrottle(request, new ClusterAuthorizationException(
