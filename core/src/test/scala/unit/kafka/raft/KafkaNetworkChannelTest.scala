@@ -21,9 +21,9 @@ import java.util
 import java.util.Collections
 import org.apache.kafka.clients.MockClient.MockMetadataUpdater
 import org.apache.kafka.clients.{MockClient, NodeApiVersions}
-import org.apache.kafka.common.message.{ApiVersionsResponseData, BeginQuorumEpochResponseData, EndQuorumEpochResponseData, FetchResponseData, VoteResponseData}
+import org.apache.kafka.common.message.{BeginQuorumEpochResponseData, EndQuorumEpochResponseData, FetchResponseData, VoteResponseData}
 import org.apache.kafka.common.protocol.{ApiKeys, ApiMessage, Errors}
-import org.apache.kafka.common.requests.{AbstractResponse, BeginQuorumEpochRequest, BeginQuorumEpochResponse, EndQuorumEpochRequest, EndQuorumEpochResponse, FetchResponse, VoteRequest, VoteResponse}
+import org.apache.kafka.common.requests.{AbstractResponse, ApiVersionsResponse, BeginQuorumEpochRequest, BeginQuorumEpochResponse, EndQuorumEpochRequest, EndQuorumEpochResponse, FetchResponse, VoteRequest, VoteResponse}
 import org.apache.kafka.common.utils.{MockTime, Time}
 import org.apache.kafka.common.{Node, TopicPartition}
 import org.apache.kafka.raft.{RaftRequest, RaftUtil}
@@ -44,10 +44,7 @@ class KafkaNetworkChannelTest {
 
   @BeforeEach
   def setupSupportedApis(): Unit = {
-    val supportedApis = RaftApis.map(api => new ApiVersionsResponseData.ApiVersion()
-      .setApiKey(api.id)
-      .setMinVersion(api.oldestVersion)
-      .setMaxVersion(api.latestVersion))
+    val supportedApis = RaftApis.map(ApiVersionsResponse.toApiVersion)
     client.setNodeApiVersions(NodeApiVersions.create(supportedApis.asJava))
   }
 

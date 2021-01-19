@@ -655,10 +655,7 @@ class KafkaApisTest {
       .asInstanceOf[ApiVersionsResponse]
     assertEquals(Errors.NONE, Errors.forCode(response.data().errorCode()))
 
-    val expectedVersions = new ApiVersionsResponseData.ApiVersion()
-      .setApiKey(ApiKeys.ALTER_CONFIGS.id)
-      .setMaxVersion(ApiKeys.ALTER_CONFIGS.latestVersion())
-      .setMinVersion(ApiKeys.ALTER_CONFIGS.oldestVersion())
+    val expectedVersions = ApiVersionsResponse.toApiVersion(ApiKeys.ALTER_CONFIGS)
 
     val alterConfigVersions = response.data().apiKeys().find(ApiKeys.ALTER_CONFIGS.id)
     assertEquals(expectedVersions, alterConfigVersions)

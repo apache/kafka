@@ -17,7 +17,8 @@
 
 package org.apache.kafka.common.requests;
 
-import org.apache.kafka.common.message.ApiVersionsResponseData;
+import org.apache.kafka.common.message.ApiVersionsResponseData.ApiVersion;
+import org.apache.kafka.common.message.ApiVersionsResponseData.ApiVersionCollection;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.record.RecordBatch;
 import org.apache.kafka.common.utils.Utils;
@@ -29,8 +30,10 @@ import java.util.Map;
 import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class ApiVersionsResponseTest {
@@ -45,11 +48,11 @@ public class ApiVersionsResponseTest {
 
     @Test
     public void shouldHaveCorrectDefaultApiVersionsResponse() {
-        Collection<ApiVersionsResponseData.ApiVersion> apiVersions = ApiVersionsResponse.DEFAULT_API_VERSIONS_RESPONSE.data().apiKeys();
+        Collection<ApiVersion> apiVersions = ApiVersionsResponse.DEFAULT_API_VERSIONS_RESPONSE.data().apiKeys();
         assertEquals(apiVersions.size(), ApiKeys.enabledApis().size(), "API versions for all API keys must be maintained.");
 
         for (ApiKeys key : ApiKeys.enabledApis()) {
-            ApiVersionsResponseData.ApiVersion version = ApiVersionsResponse.DEFAULT_API_VERSIONS_RESPONSE.apiVersion(key.id);
+            ApiVersion version = ApiVersionsResponse.DEFAULT_API_VERSIONS_RESPONSE.apiVersion(key.id);
             assertNotNull(version, "Could not find ApiVersion for API " + key.name);
             assertEquals(version.minVersion(), key.oldestVersion(), "Incorrect min version for Api " + key.name);
             assertEquals(version.maxVersion(), key.latestVersion(), "Incorrect max version for Api " + key.name);
@@ -82,18 +85,18 @@ public class ApiVersionsResponseTest {
         final ApiKeys nonForwardableAPIKey = ApiKeys.JOIN_GROUP;
         final short minVersion = 0;
         final short maxVersion = 1;
-        Map<ApiKeys, ApiVersionsResponseData.ApiVersion> activeControllerApiVersions = Utils.mkMap(
-            Utils.mkEntry(forwardableAPIKey, new ApiVersionsResponseData.ApiVersion()
-                    .setApiKey(forwardableAPIKey.id)
-                    .setMinVersion(minVersion)
-                    .setMaxVersion(maxVersion)),
-            Utils.mkEntry(nonForwardableAPIKey, new ApiVersionsResponseData.ApiVersion()
-                    .setApiKey(nonForwardableAPIKey.id)
-                    .setMinVersion(minVersion)
-                    .setMaxVersion(maxVersion))
+        Map<ApiKeys, ApiVersion> activeControllerApiVersions = Utils.mkMap(
+            Utils.mkEntry(forwardableAPIKey, new ApiVersion()
+                .setApiKey(forwardableAPIKey.id)
+                .setMinVersion(minVersion)
+                .setMaxVersion(maxVersion)),
+            Utils.mkEntry(nonForwardableAPIKey, new ApiVersion()
+                .setApiKey(nonForwardableAPIKey.id)
+                .setMinVersion(minVersion)
+                .setMaxVersion(maxVersion))
         );
 
-        ApiVersionsResponseData.ApiVersionCollection commonResponse = ApiVersionsResponse.intersectControllerApiVersions(
+        ApiVersionCollection commonResponse = ApiVersionsResponse.intersectControllerApiVersions(
             RecordBatch.CURRENT_MAGIC_VALUE,
             activeControllerApiVersions);
 
@@ -103,12 +106,43 @@ public class ApiVersionsResponseTest {
             ApiKeys.JOIN_GROUP.latestVersion(), commonResponse);
     }
 
+    @Test
+    public void testIntersect() {
+        assertFalse(ApiVersionsResponse.intersect(null, null).isPresent());
+        assertThrows(IllegalArgumentException.class,
+            () -> ApiVersionsResponse.intersect(new ApiVersion().setApiKey((short) 10), new ApiVersion().setApiKey((short) 3)));
+
+        short min = 0;
+        short max = 10;
+        ApiVersion thisVersion = new ApiVersion()
+                .setApiKey(ApiKeys.FETCH.id)
+                .setMinVersion(min)
+                .setMaxVersion(Short.MAX_VALUE);
+
+        ApiVersion other = new ApiVersion()
+                .setApiKey(ApiKeys.FETCH.id)
+                .setMinVersion(Short.MIN_VALUE)
+                .setMaxVersion(max);
+
+        ApiVersion expected = new ApiVersion()
+                .setApiKey(ApiKeys.FETCH.id)
+                .setMinVersion(min)
+                .setMaxVersion(max);
+
+        assertFalse(ApiVersionsResponse.intersect(thisVersion, null).isPresent());
+        assertFalse(ApiVersionsResponse.intersect(null, other).isPresent());
+
+        assertEquals(expected, ApiVersionsResponse.intersect(thisVersion, other).get());
+        // test for symmetric
+        assertEquals(expected, ApiVersionsResponse.intersect(other, thisVersion).get());
+    }
+
     private void verifyVersions(short forwardableAPIKey,
                                 short minVersion,
                                 short maxVersion,
-                                ApiVersionsResponseData.ApiVersionCollection commonResponse) {
-        ApiVersionsResponseData.ApiVersion expectedVersionsForForwardableAPI =
-            new ApiVersionsResponseData.ApiVersion()
+                                ApiVersionCollection commonResponse) {
+        ApiVersion expectedVersionsForForwardableAPI =
+            new ApiVersion()
                 .setApiKey(forwardableAPIKey)
                 .setMinVersion(minVersion)
                 .setMaxVersion(maxVersion);
@@ -117,7 +151,7 @@ public class ApiVersionsResponseTest {
 
     private Set<ApiKeys> apiKeysInResponse(final ApiVersionsResponse apiVersions) {
         final Set<ApiKeys> apiKeys = new HashSet<>();
-        for (final ApiVersionsResponseData.ApiVersion version : apiVersions.data().apiKeys()) {
+        for (final ApiVersion version : apiVersions.data().apiKeys()) {
             apiKeys.add(ApiKeys.forId(version.apiKey()));
         }
         return apiKeys;

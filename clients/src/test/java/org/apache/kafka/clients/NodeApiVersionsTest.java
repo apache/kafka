@@ -20,7 +20,8 @@ import java.util.ArrayList;
 import java.util.LinkedList;
 import java.util.List;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
-import org.apache.kafka.common.message.ApiVersionsResponseData;
+import org.apache.kafka.common.message.ApiVersionsResponseData.ApiVersion;
+import org.apache.kafka.common.message.ApiVersionsResponseData.ApiVersionCollection;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.requests.ApiVersionsResponse;
 import org.junit.jupiter.api.Test;
@@ -34,7 +35,7 @@ public class NodeApiVersionsTest {
 
     @Test
     public void testUnsupportedVersionsToString() {
-        NodeApiVersions versions = new NodeApiVersions(new ApiVersionsResponseData.ApiVersionCollection());
+        NodeApiVersions versions = new NodeApiVersions(new ApiVersionCollection());
         StringBuilder bld = new StringBuilder();
         String prefix = "(";
         for (ApiKeys apiKey : ApiKeys.enabledApis()) {
@@ -54,19 +55,14 @@ public class NodeApiVersionsTest {
 
     @Test
     public void testVersionsToString() {
-        List<ApiVersionsResponseData.ApiVersion> versionList = new ArrayList<>();
+        List<ApiVersion> versionList = new ArrayList<>();
         for (ApiKeys apiKey : ApiKeys.values()) {
             if (apiKey == ApiKeys.DELETE_TOPICS) {
-                versionList.add(new ApiVersionsResponseData.ApiVersion()
+                versionList.add(new ApiVersion()
                         .setApiKey(apiKey.id)
                         .setMinVersion((short) 10000)
                         .setMaxVersion((short) 10001));
-            } else {
-                versionList.add(new ApiVersionsResponseData.ApiVersion()
-                        .setApiKey(apiKey.id)
-                        .setMinVersion(apiKey.oldestVersion())
-                        .setMaxVersion(apiKey.latestVersion()));
-            }
+            } else versionList.add(ApiVersionsResponse.toApiVersion(apiKey));
         }
         NodeApiVersions versions = new NodeApiVersions(versionList);
         StringBuilder bld = new StringBuilder();
@@ -125,7 +121,7 @@ public class NodeApiVersionsTest {
 
     @Test
     public void testUsableVersionCalculationNoKnownVersions() {
-        NodeApiVersions versions = new NodeApiVersions(new ApiVersionsResponseData.ApiVersionCollection());
+        NodeApiVersions versions = new NodeApiVersions(new ApiVersionCollection());
         assertThrows(UnsupportedVersionException.class,
             () -> versions.latestUsableVersion(ApiKeys.FETCH));
     }
@@ -139,9 +135,9 @@ public class NodeApiVersionsTest {
 
     @Test
     public void testUsableVersionLatestVersions() {
-        List<ApiVersionsResponseData.ApiVersion> versionList = new LinkedList<>(ApiVersionsResponse.DEFAULT_API_VERSIONS_RESPONSE.data().apiKeys());
+        List<ApiVersion> versionList = new LinkedList<>(ApiVersionsResponse.DEFAULT_API_VERSIONS_RESPONSE.data().apiKeys());
         // Add an API key that we don't know about.
-        versionList.add(new ApiVersionsResponseData.ApiVersion()
+        versionList.add(new ApiVersion()
                 .setApiKey((short) 100)
                 .setMinVersion((short) 0)
                 .setMaxVersion((short) 1));
@@ -160,8 +156,8 @@ public class NodeApiVersionsTest {
         ApiVersionsResponse apiVersionsResponse = ApiVersionsResponse.DEFAULT_API_VERSIONS_RESPONSE;
         NodeApiVersions versions = new NodeApiVersions(apiVersionsResponse.data().apiKeys());
 
-        for (ApiVersionsResponseData.ApiVersion apiVersionKey : apiVersionsResponse.data().apiKeys()) {
-            ApiVersionsResponseData.ApiVersion apiVersion = versions.apiVersion(ApiKeys.forId(apiVersionKey.apiKey()));
+        for (ApiVersion apiVersionKey : apiVersionsResponse.data().apiKeys()) {
+            ApiVersion apiVersion = versions.apiVersion(ApiKeys.forId(apiVersionKey.apiKey()));
             assertEquals(apiVersionKey.apiKey(), apiVersion.apiKey());
             assertEquals(apiVersionKey.minVersion(), apiVersion.minVersion());
             assertEquals(apiVersionKey.maxVersion(), apiVersion.maxVersion());
