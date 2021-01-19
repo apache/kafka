@@ -400,10 +400,8 @@ subprojects {
         excludeTags "integration"
       }
     } else {
-      if (it.project.name != 'generator') {
-        useJUnit {
-          excludeCategories 'org.apache.kafka.test.IntegrationTest'
-        }
+      useJUnit {
+        excludeCategories 'org.apache.kafka.test.IntegrationTest'
       }
     }
 
@@ -1080,10 +1078,6 @@ project(':generator') {
     compile libs.jacksonJDK8Datatypes
     compile libs.jacksonJaxrsJsonProvider
     testCompile libs.junitJupiter
-  }
-
-  integrationTest {
-    enabled = false
   }
 
   javadoc {
