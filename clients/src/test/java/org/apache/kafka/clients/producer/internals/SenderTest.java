@@ -1005,7 +1005,7 @@ public class SenderTest {
         appendToAccumulator(tp1);
         sender.runOnce();
 
-        // Partition 1 - Epoch is bump, sequence is reset and incremented
+        // Partition 1 - Epoch is bumped, sequence is reset and incremented
         assertPartitionState(transactionManager, tp1, producerId, (short) 1, 1, OptionalInt.empty());
 
         // Partition 1 - Successful Response
