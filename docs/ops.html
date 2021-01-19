@@ -2032,16 +2032,25 @@ dropped-records-rate and dropped-records-total which have a recording level of <
  </table>
 
   <h5 class="anchor-heading"><a id="kafka_streams_rocksdb_monitoring" class="anchor-link"></a><a href="#kafka_streams_rocksdb_monitoring">RocksDB Metrics</a></h5>
-  All of the following metrics have a recording level of <code>debug</code>.
-  The metrics are collected every minute from the RocksDB state stores.
-  If a state store consists of multiple RocksDB instances as it is the case for aggregations over time and session windows,
-  each metric reports an aggregation over the RocksDB instances of the state store.
+  RocksDB metrics are grouped into statistics-based metrics and properties-based metrics.
+  The former are recorded from statistics that a RocksDB state store collects whereas the latter are recorded from
+  properties that RocksDB exposes.
+  Statistics collected by RocksDB provide cumulative measurements over time, e.g. bytes written to the state store.
+  Properties exposed by RocksDB provide current measurements, e.g., the amount of memory currently used.
   Note that the <code>store-scope</code> for built-in RocksDB state stores are currently the following:
   <ul>
     <li><code>rocksdb-state</code> (for RocksDB backed key-value store)</li>
     <li><code>rocksdb-window-state</code> (for RocksDB backed window store)</li>
     <li><code>rocksdb-session-state</code> (for RocksDB backed session store)</li>
   </ul>
+
+  <strong>RocksDB Statistics-based Metrics:</strong>
+  All of the following statistics-based metrics have a recording level of <code>debug</code> because collecting
+  statistics in <a href="https://github.com/facebook/rocksdb/wiki/Statistics#stats-level-and-performance-costs">RocksDB
+  may have an impact on performance</a>.
+  Statistics-based metrics are collected every minute from the RocksDB state stores.
+  If a state store consists of multiple RocksDB instances, as is the case for WindowStores and SessionStores,
+  each metric reports an aggregation over the RocksDB instances of the state store.
 
   <table class="data-table">
     <tbody>
@@ -2128,6 +2137,136 @@ dropped-records-rate and dropped-records-total which have a recording level of <
     <tr>
       <td>number-file-errors-total</td>
       <td>The total number of file errors occurred.</td>
+      <td>kafka.streams:type=stream-state-metrics,thread-id=([-.\w]+),task-id=([-.\w]+),[store-scope]-id=([-.\w]+)</td>
+    </tr>
+    </tbody>
+  </table>
+
+  <strong>RocksDB Properties-based Metrics:</strong>
+  All of the following properties-based metrics have a recording level of <code>info</code> and are recorded when the
+  metrics are accessed.
+  If a state store consists of multiple RocksDB instances, as is the case for WindowStores and SessionStores,
+  each metric reports the sum over all the RocksDB instances of the state store, except for the block cache metrics
+  <code>block-cache-*</code>. The block cache metrics report the sum over all RocksDB instances if each instance uses its
+  own block cache, and they report the recorded value from only one instance if a single block cache is shared
+  among all instances.
+
+  <table class="data-table">
+    <tbody>
+    <tr>
+      <th>Metric/Attribute name</th>
+      <th>Description</th>
+      <th>Mbean name</th>
+    </tr>
+    <tr>
+      <td>num-immutable-mem-table</td>
+      <td>The number of immutable memtables that have not yet been flushed.</td>
+      <td>kafka.streams:type=stream-state-metrics,thread-id=([-.\w]+),task-id=([-.\w]+),[store-scope]-id=([-.\w]+)</td>
+    </tr>
+    <tr>
+      <td>cur-size-active-mem-table</td>
+      <td>The approximate size of the active memtable in bytes.</td>
+      <td>kafka.streams:type=stream-state-metrics,thread-id=([-.\w]+),task-id=([-.\w]+),[store-scope]-id=([-.\w]+)</td>
+    </tr>
+    <tr>
+      <td>cur-size-all-mem-tables</td>
+      <td>The approximate size of active and unflushed immutable memtables in bytes.</td>
+      <td>kafka.streams:type=stream-state-metrics,thread-id=([-.\w]+),task-id=([-.\w]+),[store-scope]-id=([-.\w]+)</td>
+    </tr>
+    <tr>
+      <td>size-all-mem-tables</td>
+      <td>The approximate size of active, unflushed immutable, and pinned immutable memtables in bytes.</td>
+      <td>kafka.streams:type=stream-state-metrics,thread-id=([-.\w]+),task-id=([-.\w]+),[store-scope]-id=([-.\w]+)</td>
+    </tr>
+    <tr>
+      <td>num-entries-active-mem-table</td>
+      <td>The number of entries in the active memtable.</td>
+      <td>kafka.streams:type=stream-state-metrics,thread-id=([-.\w]+),task-id=([-.\w]+),[store-scope]-id=([-.\w]+)</td>
+    </tr>
+    <tr>
+      <td>num-entries-imm-mem-tables</td>
+      <td>The number of entries in the unflushed immutable memtables.</td>
+      <td>kafka.streams:type=stream-state-metrics,thread-id=([-.\w]+),task-id=([-.\w]+),[store-scope]-id=([-.\w]+)</td>
+    </tr>
+    <tr>
+      <td>num-deletes-active-mem-table</td>
+      <td>The number of delete entries in the active memtable.</td>
+      <td>kafka.streams:type=stream-state-metrics,thread-id=([-.\w]+),task-id=([-.\w]+),[store-scope]-id=([-.\w]+)</td>
+    </tr>
+    <tr>
+      <td>num-deletes-imm-mem-tables</td>
+      <td>The number of delete entries in the unflushed immutable memtables.</td>
+      <td>kafka.streams:type=stream-state-metrics,thread-id=([-.\w]+),task-id=([-.\w]+),[store-scope]-id=([-.\w]+)</td>
+    </tr>
+    <tr>
+      <td>mem-table-flush-pending</td>
+      <td>This metric reports 1 if a memtable flush is pending, otherwise it reports 0.</td>
+      <td>kafka.streams:type=stream-state-metrics,thread-id=([-.\w]+),task-id=([-.\w]+),[store-scope]-id=([-.\w]+)</td>
+    </tr>
+    <tr>
+      <td>num-running-flushes</td>
+      <td>The number of currently running flushes.</td>
+      <td>kafka.streams:type=stream-state-metrics,thread-id=([-.\w]+),task-id=([-.\w]+),[store-scope]-id=([-.\w]+)</td>
+    </tr>
+    <tr>
+      <td>compaction-pending</td>
+      <td>This metric reports 1 if at least one compaction is pending, otherwise it reports 0.</td>
+      <td>kafka.streams:type=stream-state-metrics,thread-id=([-.\w]+),task-id=([-.\w]+),[store-scope]-id=([-.\w]+)</td>
+    </tr>
+    <tr>
+      <td>num-running-compactions</td>
+      <td>The number of currently running compactions.</td>
+      <td>kafka.streams:type=stream-state-metrics,thread-id=([-.\w]+),task-id=([-.\w]+),[store-scope]-id=([-.\w]+)</td>
+    </tr>
+    <tr>
+      <td>estimate-pending-compaction-bytes</td>
+      <td>The estimated total number of bytes a compaction needs to rewrite on disk to get all levels down to under
+        target size (only valid for level compaction).</td>
+      <td>kafka.streams:type=stream-state-metrics,thread-id=([-.\w]+),task-id=([-.\w]+),[store-scope]-id=([-.\w]+)</td>
+    </tr>
+    <tr>
+      <td>total-sst-files-size</td>
+      <td>The total size in bytes of all SST files.</td>
+      <td>kafka.streams:type=stream-state-metrics,thread-id=([-.\w]+),task-id=([-.\w]+),[store-scope]-id=([-.\w]+)</td>
+    </tr>
+    <tr>
+      <td>live-sst-files-size</td>
+      <td>The total size in bytes of all SST files that belong to the latest LSM tree.</td>
+      <td>kafka.streams:type=stream-state-metrics,thread-id=([-.\w]+),task-id=([-.\w]+),[store-scope]-id=([-.\w]+)</td>
+    </tr>
+    <tr>
+      <td>num-live-versions</td>
+      <td>Number of live versions of the LSM tree.</td>
+      <td>kafka.streams:type=stream-state-metrics,thread-id=([-.\w]+),task-id=([-.\w]+),[store-scope]-id=([-.\w]+)</td>
+    </tr>
+    <tr>
+      <td>block-cache-capacity</td>
+      <td>The capacity of the block cache in bytes.</td>
+      <td>kafka.streams:type=stream-state-metrics,thread-id=([-.\w]+),task-id=([-.\w]+),[store-scope]-id=([-.\w]+)</td>
+    </tr>
+    <tr>
+      <td>block-cache-usage</td>
+      <td>The memory size of the entries residing in block cache in bytes.</td>
+      <td>kafka.streams:type=stream-state-metrics,thread-id=([-.\w]+),task-id=([-.\w]+),[store-scope]-id=([-.\w]+)</td>
+    </tr>
+    <tr>
+      <td>block-cache-pinned-usage</td>
+      <td>The memory size for the entries being pinned in the block cache in bytes.</td>
+      <td>kafka.streams:type=stream-state-metrics,thread-id=([-.\w]+),task-id=([-.\w]+),[store-scope]-id=([-.\w]+)</td>
+    </tr>
+    <tr>
+      <td>estimate-num-keys</td>
+      <td>The estimated number of keys in the active and unflushed immutable memtables and storage.</td>
+      <td>kafka.streams:type=stream-state-metrics,thread-id=([-.\w]+),task-id=([-.\w]+),[store-scope]-id=([-.\w]+)</td>
+    </tr>
+    <tr>
+      <td>estimate-table-readers-mem</td>
+      <td>The estimated memory in bytes used for reading SST tables, excluding memory used in block cache.</td>
+      <td>kafka.streams:type=stream-state-metrics,thread-id=([-.\w]+),task-id=([-.\w]+),[store-scope]-id=([-.\w]+)</td>
+    </tr>
+    <tr>
+      <td>background-errors</td>
+      <td>The total number of background errors.</td>
       <td>kafka.streams:type=stream-state-metrics,thread-id=([-.\w]+),task-id=([-.\w]+),[store-scope]-id=([-.\w]+)</td>
     </tr>
     </tbody>
