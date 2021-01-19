@@ -26,8 +26,8 @@ import org.apache.kafka.common.protocol.ApiKeys
 import org.apache.kafka.common.requests.{DescribeClusterRequest, DescribeClusterResponse}
 import org.apache.kafka.common.resource.ResourceType
 import org.apache.kafka.common.utils.Utils
-import org.junit.Assert.assertEquals
-import org.junit.{Before, Test}
+import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.{BeforeEach, Test}
 
 import scala.jdk.CollectionConverters._
 
@@ -39,7 +39,7 @@ class DescribeClusterRequestTest extends BaseRequestTest {
     properties.setProperty(KafkaConfig.RackProp, s"rack/${properties.getProperty(KafkaConfig.BrokerIdProp)}")
   }
 
-  @Before
+  @BeforeEach
   override def setUp(): Unit = {
     doSetup(createOffsetsTopic = false)
   }

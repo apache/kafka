@@ -3218,8 +3218,8 @@ class KafkaApis(val requestChannel: RequestChannel,
     var clusterAuthorizedOperations = Int.MinValue
     // get cluster authorized operations
     if (describeClusterRequest.data.includeClusterAuthorizedOperations) {
-      if (authorize(request.context, DESCRIBE, CLUSTER, CLUSTER_NAME))
-        clusterAuthorizedOperations = authorizedOperations(request, Resource.CLUSTER)
+      if (authHelper.authorize(request.context, DESCRIBE, CLUSTER, CLUSTER_NAME))
+        clusterAuthorizedOperations = authHelper.authorizedOperations(request, Resource.CLUSTER)
       else
         clusterAuthorizedOperations = 0
     }
@@ -3227,7 +3227,7 @@ class KafkaApis(val requestChannel: RequestChannel,
     val brokers = metadataCache.getAliveBrokers
     val controllerId = metadataCache.getControllerId.getOrElse(MetadataResponse.NO_CONTROLLER_ID)
 
-    sendResponseMaybeThrottle(request, requestThrottleMs => {
+    requestHelper.sendResponseMaybeThrottle(request, requestThrottleMs => {
       val data = new DescribeClusterResponseData()
         .setThrottleTimeMs(requestThrottleMs)
         .setClusterId(clusterId)
