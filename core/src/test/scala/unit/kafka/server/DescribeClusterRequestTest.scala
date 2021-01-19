@@ -17,12 +17,15 @@
 
 package kafka.server
 
+import java.lang.{Byte => JByte}
 import java.util.Properties
-
 import kafka.network.SocketServer
+import kafka.security.authorizer.AclEntry
 import org.apache.kafka.common.message.{DescribeClusterRequestData, DescribeClusterResponseData}
 import org.apache.kafka.common.protocol.ApiKeys
 import org.apache.kafka.common.requests.{DescribeClusterRequest, DescribeClusterResponse}
+import org.apache.kafka.common.resource.ResourceType
+import org.apache.kafka.common.utils.Utils
 import org.junit.Assert.assertEquals
 import org.junit.{Before, Test}
 
@@ -62,6 +65,14 @@ class DescribeClusterRequestTest extends BaseRequestTest {
     val expectedControllerId = servers.filter(_.kafkaController.isActive).last.config.brokerId
     val expectedClusterId = servers.last.clusterId
 
+    val expectedClusterAuthorizedOperations = if (includeClusterAuthorizedOperations) {
+      Utils.to32BitField(
+        AclEntry.supportedOperations(ResourceType.CLUSTER)
+          .map(_.code.asInstanceOf[JByte]).asJava)
+    } else {
+      Int.MinValue
+    }
+
     for (version <- ApiKeys.DESCRIBE_CLUSTER.oldestVersion to ApiKeys.DESCRIBE_CLUSTER.latestVersion) {
       val describeClusterRequest = new DescribeClusterRequest.Builder(new DescribeClusterRequestData()
         .setIncludeClusterAuthorizedOperations(includeClusterAuthorizedOperations))
@@ -70,10 +81,7 @@ class DescribeClusterRequestTest extends BaseRequestTest {
 
       assertEquals(expectedControllerId, describeClusterResponse.data.controllerId)
       assertEquals(expectedClusterId, describeClusterResponse.data.clusterId)
-      if (includeClusterAuthorizedOperations)
-        assertEquals(8096, describeClusterResponse.data.clusterAuthorizedOperations)
-      else
-        assertEquals(Int.MinValue, describeClusterResponse.data.clusterAuthorizedOperations)
+      assertEquals(expectedClusterAuthorizedOperations, describeClusterResponse.data.clusterAuthorizedOperations)
       assertEquals(expectedBrokers, describeClusterResponse.data.brokers.asScala.toSet)
     }
   }
