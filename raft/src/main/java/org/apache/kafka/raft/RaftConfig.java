@@ -76,13 +76,13 @@ public class RaftConfig extends AbstractConfig {
         CONFIG = new ConfigDef()
             .define(QUORUM_REQUEST_TIMEOUT_MS_CONFIG,
                 ConfigDef.Type.INT,
-                    DEFAULT_QUORUM_REQUEST_TIMEOUT_MS,
+                DEFAULT_QUORUM_REQUEST_TIMEOUT_MS,
                 atLeast(0),
                 ConfigDef.Importance.MEDIUM,
                 QUORUM_REQUEST_TIMEOUT_MS_DOC)
             .define(QUORUM_RETRY_BACKOFF_MS_CONFIG,
                 ConfigDef.Type.INT,
-                    DEFAULT_QUORUM_RETRY_BACKOFF_MS,
+                DEFAULT_QUORUM_RETRY_BACKOFF_MS,
                 atLeast(0L),
                 ConfigDef.Importance.LOW,
                 QUORUM_RETRY_BACKOFF_MS_DOC)
@@ -112,25 +112,25 @@ public class RaftConfig extends AbstractConfig {
                 QUORUM_VOTERS_DOC)
             .define(QUORUM_ELECTION_TIMEOUT_MS_CONFIG,
                 ConfigDef.Type.INT,
-                    DEFAULT_QUORUM_ELECTION_TIMEOUT_MS,
+                DEFAULT_QUORUM_ELECTION_TIMEOUT_MS,
                 atLeast(0L),
                 ConfigDef.Importance.HIGH,
                 QUORUM_ELECTION_TIMEOUT_MS_DOC)
             .define(QUORUM_ELECTION_BACKOFF_MAX_MS_CONFIG,
                 ConfigDef.Type.INT,
-                    DEFAULT_QUORUM_ELECTION_BACKOFF_MAX_MS,
+                DEFAULT_QUORUM_ELECTION_BACKOFF_MAX_MS,
                 atLeast(0),
                 ConfigDef.Importance.HIGH,
                 QUORUM_ELECTION_BACKOFF_MAX_MS_DOC)
             .define(QUORUM_FETCH_TIMEOUT_MS_CONFIG,
                 ConfigDef.Type.INT,
-                    DEFAULT_QUORUM_FETCH_TIMEOUT_MS,
+                DEFAULT_QUORUM_FETCH_TIMEOUT_MS,
                 atLeast(0),
                 ConfigDef.Importance.HIGH,
                 QUORUM_FETCH_TIMEOUT_MS_DOC)
             .define(QUORUM_LINGER_MS_CONFIG,
                 ConfigDef.Type.INT,
-                    DEFAULT_QUORUM_LINGER_MS,
+                DEFAULT_QUORUM_LINGER_MS,
                 atLeast(0),
                 ConfigDef.Importance.MEDIUM,
                 QUORUM_LINGER_MS_DOC);
