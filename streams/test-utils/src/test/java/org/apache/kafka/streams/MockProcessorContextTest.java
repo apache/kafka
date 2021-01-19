@@ -314,7 +314,9 @@ public class MockProcessorContextTest {
 
         // record metadata should be "sticky"
         context.setOffset(1L);
-        context.setTimestamp(10L);
+        context.setRecordTimestamp(10L);
+        context.setCurrentSystemTimeMs(20L);
+        context.setCurrentStreamTimeMs(30L);
 
         {
             processor.process("bar", 50L);
@@ -327,8 +329,8 @@ public class MockProcessorContextTest {
             assertEquals(new KeyValue<>("timestamp", 10L), forwarded.next().keyValue());
             assertEquals(new KeyValue<>("key", "bar"), forwarded.next().keyValue());
             assertEquals(new KeyValue<>("value", 50L), forwarded.next().keyValue());
-            assertEquals(context.timestamp(), context.currentStreamTimeMs());
-            assertEquals(context.timestamp(), context.currentSystemTimeMs());
+            assertEquals(20L, context.currentSystemTimeMs());
+            assertEquals(30L, context.currentStreamTimeMs());
         }
 
         context.resetForwards();
