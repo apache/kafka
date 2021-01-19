@@ -2765,6 +2765,53 @@ class KafkaApisTest {
     response
   }
 
+  @Test
+  def testDescribeClusterRequest(): Unit = {
+    val plaintextListener = ListenerName.forSecurityProtocol(SecurityProtocol.PLAINTEXT)
+    val brokers = Seq(
+      new UpdateMetadataBroker()
+        .setId(0)
+        .setRack("rack")
+        .setEndpoints(Seq(
+          new UpdateMetadataEndpoint()
+            .setHost("broker0")
+            .setPort(9092)
+            .setSecurityProtocol(SecurityProtocol.PLAINTEXT.id)
+            .setListener(plaintextListener.value)
+        ).asJava),
+      new UpdateMetadataBroker()
+        .setId(1)
+        .setRack("rack")
+        .setEndpoints(Seq(
+          new UpdateMetadataEndpoint()
+            .setHost("broker1")
+            .setPort(9092)
+            .setSecurityProtocol(SecurityProtocol.PLAINTEXT.id)
+            .setListener(plaintextListener.value)).asJava)
+    )
+    val updateMetadataRequest = new UpdateMetadataRequest.Builder(ApiKeys.UPDATE_METADATA.latestVersion, 0,
+      0, 0, Seq.empty[UpdateMetadataPartitionState].asJava, brokers.asJava, Collections.emptyMap()).build()
+    metadataCache.updateMetadata(correlationId = 0, updateMetadataRequest)
+
+    val capturedResponse = expectNoThrottling()
+    EasyMock.replay(clientRequestQuotaManager, requestChannel)
+
+    val describeClusterRequest = new DescribeClusterRequest.Builder(new DescribeClusterRequestData()
+      .setIncludeClusterAuthorizedOperations(true)).build()
+
+    val request = buildRequest(describeClusterRequest, plaintextListener)
+    createKafkaApis().handleDescribeCluster(request)
+
+    val describeClusterResponse = readResponse(describeClusterRequest, capturedResponse)
+      .asInstanceOf[DescribeClusterResponse]
+
+    assertEquals(metadataCache.getControllerId.get, describeClusterResponse.data.controllerId)
+    assertEquals(clusterId, describeClusterResponse.data.clusterId)
+    assertEquals(8096, describeClusterResponse.data.clusterAuthorizedOperations)
+    assertEquals(metadataCache.getAliveBrokers.map(_.node(plaintextListener)).toSet,
+      describeClusterResponse.nodes.asScala.values.toSet)
+  }
+
   /**
    * Return pair of listener names in the metadataCache: PLAINTEXT and LISTENER2 respectively.
    */
