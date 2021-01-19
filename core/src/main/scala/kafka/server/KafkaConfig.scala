@@ -1275,7 +1275,7 @@ object KafkaConfig {
       .define(PasswordEncoderIterationsProp, INT, Defaults.PasswordEncoderIterations, atLeast(1024), LOW, PasswordEncoderIterationsDoc)
 
       /** ********* Raft Quorum Configuration *********/
-      .defineInternal(QuorumVotersProp, LIST, Defaults.QuorumVoters, HIGH)
+      .defineInternal(QuorumVotersProp, STRING, Defaults.QuorumVoters, HIGH)
       .defineInternal(QuorumElectionTimeoutMsProp, INT, Defaults.QuorumElectionTimeoutMs, HIGH)
       .defineInternal(QuorumFetchTimeoutMsProp, INT, Defaults.QuorumFetchTimeoutMs, HIGH)
       .defineInternal(QuorumElectionBackoffMsProp, INT, Defaults.QuorumElectionBackoffMs, HIGH)
@@ -1692,6 +1692,15 @@ class KafkaConfig(val props: java.util.Map[_, _], doLog: Boolean, dynamicConfigO
 
   val deleteTopicEnable = getBoolean(KafkaConfig.DeleteTopicEnableProp)
   def compressionType = getString(KafkaConfig.CompressionTypeProp)
+
+  /** ********* Raft Quorum Configuration *********/
+  val quorumVoters = getString(KafkaConfig.QuorumVotersProp)
+  val quorumElectionTimeoutMs = getInt(KafkaConfig.QuorumElectionTimeoutMsProp)
+  val quorumFetchTimeoutMs = getInt(KafkaConfig.QuorumFetchTimeoutMsProp)
+  val quorumElectionBackoffMs = getInt(KafkaConfig.QuorumElectionBackoffMsProp)
+  val quorumLingerMs = getInt(KafkaConfig.QuorumLingerMsProp)
+  val quorumRequestTimeoutMs = getInt(KafkaConfig.QuorumRequestTimeoutMsProp)
+  val quorumRetryBackoffMs = getInt(KafkaConfig.QuorumRetryBackoffMsProp)
 
   def addReconfigurable(reconfigurable: Reconfigurable): Unit = {
     dynamicConfig.addReconfigurable(reconfigurable)

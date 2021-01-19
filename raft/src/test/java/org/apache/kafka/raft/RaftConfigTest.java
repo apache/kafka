@@ -22,7 +22,6 @@ import org.junit.jupiter.api.Test;
 import java.net.InetSocketAddress;
 import java.util.Collections;
 import java.util.HashMap;
-import java.util.Properties;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -31,18 +30,14 @@ public class RaftConfigTest {
 
     @Test
     public void testSingleQuorumVoterConnections() {
-        Properties properties = new Properties();
-        properties.put(RaftConfig.QUORUM_VOTERS_CONFIG, "1@127.0.0.1:9092");
-        RaftConfig config = new RaftConfig(properties);
+        RaftConfig config = raftDefaultConfigWithVoters("1@127.0.0.1:9092");
         assertEquals(Collections.singletonMap(1, new InetSocketAddress("127.0.0.1", 9092)),
             config.quorumVoterConnections());
     }
 
     @Test
     public void testMultiQuorumVoterConnections() {
-        Properties properties = new Properties();
-        properties.put(RaftConfig.QUORUM_VOTERS_CONFIG, "1@kafka1:9092,2@kafka2:9092,3@kafka3:9092");
-        RaftConfig config = new RaftConfig(properties);
+        RaftConfig config = raftDefaultConfigWithVoters("1@kafka1:9092,2@kafka2:9092,3@kafka3:9092");
 
         HashMap<Integer, InetSocketAddress> expected = new HashMap<>();
         expected.put(1, new InetSocketAddress("kafka1", 9092));
@@ -69,8 +64,16 @@ public class RaftConfigTest {
     }
 
     private void assertInvalidQuorumVoters(String value) {
-        Properties properties = new Properties();
-        properties.put(RaftConfig.QUORUM_VOTERS_CONFIG, value);
-        assertThrows(ConfigException.class, () -> new RaftConfig(properties));
+        assertThrows(ConfigException.class, () -> raftDefaultConfigWithVoters(value));
+    }
+
+    private RaftConfig raftDefaultConfigWithVoters(String voters) {
+        return new RaftConfig(RaftConfig.DEFAULT_QUORUM_REQUEST_TIMEOUT_MS,
+                RaftConfig.DEFAULT_QUORUM_RETRY_BACKOFF_MS,
+                RaftConfig.DEFAULT_QUORUM_ELECTION_TIMEOUT_MS,
+                RaftConfig.DEFAULT_QUORUM_ELECTION_BACKOFF_MAX_MS,
+                RaftConfig.DEFAULT_QUORUM_FETCH_TIMEOUT_MS,
+                RaftConfig.DEFAULT_QUORUM_LINGER_MS,
+                voters);
     }
 }

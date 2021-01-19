@@ -20,7 +20,6 @@ import org.apache.kafka.common.Node;
 
 import java.net.InetSocketAddress;
 import java.util.List;
-import java.util.Properties;
 import java.util.Set;
 import java.util.function.Function;
 import java.util.stream.Collectors;
@@ -35,14 +34,6 @@ public class RaftTestUtil {
             int appendLingerMs,
             List<Node> voterNodes
     ) {
-        Properties properties = new Properties();
-        properties.put(RaftConfig.QUORUM_REQUEST_TIMEOUT_MS_CONFIG, requestTimeoutMs);
-        properties.put(RaftConfig.QUORUM_RETRY_BACKOFF_MS_CONFIG, retryBackoffMs);
-        properties.put(RaftConfig.QUORUM_ELECTION_TIMEOUT_MS_CONFIG, electionTimeoutMs);
-        properties.put(RaftConfig.QUORUM_ELECTION_BACKOFF_MAX_MS_CONFIG, electionBackoffMs);
-        properties.put(RaftConfig.QUORUM_FETCH_TIMEOUT_MS_CONFIG, fetchTimeoutMs);
-        properties.put(RaftConfig.QUORUM_LINGER_MS_CONFIG, appendLingerMs);
-
         StringBuilder votersString = new StringBuilder();
         String prefix = "";
         for (Node voter : voterNodes) {
@@ -50,9 +41,8 @@ public class RaftTestUtil {
             votersString.append(voter.id()).append('@').append(voter.host()).append(':').append(voter.port());
             prefix = ",";
         }
-        properties.put(RaftConfig.QUORUM_VOTERS_CONFIG, votersString.toString());
-
-        return new RaftConfig(properties);
+        return new RaftConfig(requestTimeoutMs, retryBackoffMs, electionTimeoutMs, electionBackoffMs, fetchTimeoutMs,
+                appendLingerMs, votersString.toString());
     }
 
     public static List<Node> voterNodesFromIds(Set<Integer> voterIds,

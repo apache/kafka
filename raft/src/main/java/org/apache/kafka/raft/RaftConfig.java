@@ -18,20 +18,15 @@ package org.apache.kafka.raft;
 
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.common.config.AbstractConfig;
-import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.utils.Utils;
 
 import java.net.InetSocketAddress;
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
-import static org.apache.kafka.common.config.ConfigDef.Range.atLeast;
-
-public class RaftConfig extends AbstractConfig {
-    private static final ConfigDef CONFIG;
+public class RaftConfig {
 
     private static final String QUORUM_PREFIX = "controller.quorum.";
 
@@ -72,70 +67,6 @@ public class RaftConfig extends AbstractConfig {
     public static final String QUORUM_RETRY_BACKOFF_MS_DOC = CommonClientConfigs.RETRY_BACKOFF_MS_DOC;
     public static final int DEFAULT_QUORUM_RETRY_BACKOFF_MS = 100;
 
-    static {
-        CONFIG = new ConfigDef()
-            .define(QUORUM_REQUEST_TIMEOUT_MS_CONFIG,
-                ConfigDef.Type.INT,
-                DEFAULT_QUORUM_REQUEST_TIMEOUT_MS,
-                atLeast(0),
-                ConfigDef.Importance.MEDIUM,
-                QUORUM_REQUEST_TIMEOUT_MS_DOC)
-            .define(QUORUM_RETRY_BACKOFF_MS_CONFIG,
-                ConfigDef.Type.INT,
-                DEFAULT_QUORUM_RETRY_BACKOFF_MS,
-                atLeast(0L),
-                ConfigDef.Importance.LOW,
-                QUORUM_RETRY_BACKOFF_MS_DOC)
-            .define(QUORUM_VOTERS_CONFIG,
-                ConfigDef.Type.LIST,
-                ConfigDef.NO_DEFAULT_VALUE,
-                new ConfigDef.Validator() {
-                    @Override
-                    public void ensureValid(String name, Object value) {
-                        if (value == null) {
-                            throw new ConfigException(name, null);
-                        }
-
-                        @SuppressWarnings("unchecked")
-                        Map<Integer, InetSocketAddress> voterConnections = parseVoterConnections((List) value);
-                        if (voterConnections.isEmpty()) {
-                            throw new ConfigException(name, value);
-                        }
-                    }
-
-                    @Override
-                    public String toString() {
-                        return "non-empty list";
-                    }
-                },
-                ConfigDef.Importance.HIGH,
-                QUORUM_VOTERS_DOC)
-            .define(QUORUM_ELECTION_TIMEOUT_MS_CONFIG,
-                ConfigDef.Type.INT,
-                DEFAULT_QUORUM_ELECTION_TIMEOUT_MS,
-                atLeast(0L),
-                ConfigDef.Importance.HIGH,
-                QUORUM_ELECTION_TIMEOUT_MS_DOC)
-            .define(QUORUM_ELECTION_BACKOFF_MAX_MS_CONFIG,
-                ConfigDef.Type.INT,
-                DEFAULT_QUORUM_ELECTION_BACKOFF_MAX_MS,
-                atLeast(0),
-                ConfigDef.Importance.HIGH,
-                QUORUM_ELECTION_BACKOFF_MAX_MS_DOC)
-            .define(QUORUM_FETCH_TIMEOUT_MS_CONFIG,
-                ConfigDef.Type.INT,
-                DEFAULT_QUORUM_FETCH_TIMEOUT_MS,
-                atLeast(0),
-                ConfigDef.Importance.HIGH,
-                QUORUM_FETCH_TIMEOUT_MS_DOC)
-            .define(QUORUM_LINGER_MS_CONFIG,
-                ConfigDef.Type.INT,
-                DEFAULT_QUORUM_LINGER_MS,
-                atLeast(0),
-                ConfigDef.Importance.MEDIUM,
-                QUORUM_LINGER_MS_DOC);
-    }
-
     private final int requestTimeoutMs;
     private final int retryBackoffMs;
     private final int electionTimeoutMs;
@@ -144,31 +75,35 @@ public class RaftConfig extends AbstractConfig {
     private final int appendLingerMs;
     private final Map<Integer, InetSocketAddress> voterConnections;
 
-    public RaftConfig(Map<?, ?> props) {
-        this(props, true);
+    public RaftConfig(AbstractConfig abstractConfig) {
+        this(abstractConfig.getInt(QUORUM_REQUEST_TIMEOUT_MS_CONFIG),
+                abstractConfig.getInt(QUORUM_RETRY_BACKOFF_MS_CONFIG),
+                abstractConfig.getInt(QUORUM_ELECTION_TIMEOUT_MS_CONFIG),
+                abstractConfig.getInt(QUORUM_ELECTION_BACKOFF_MAX_MS_CONFIG),
+                abstractConfig.getInt(QUORUM_FETCH_TIMEOUT_MS_CONFIG),
+                abstractConfig.getInt(QUORUM_LINGER_MS_CONFIG),
+                abstractConfig.getString(QUORUM_VOTERS_CONFIG));
     }
 
-    protected RaftConfig(Map<?, ?> props, boolean doLog) {
-        super(CONFIG, props, doLog);
-        requestTimeoutMs = getInt(QUORUM_REQUEST_TIMEOUT_MS_CONFIG);
-        retryBackoffMs = getInt(QUORUM_RETRY_BACKOFF_MS_CONFIG);
-        electionTimeoutMs = getInt(QUORUM_ELECTION_TIMEOUT_MS_CONFIG);
-        electionBackoffMaxMs = getInt(QUORUM_ELECTION_BACKOFF_MAX_MS_CONFIG);
-        fetchTimeoutMs = getInt(QUORUM_FETCH_TIMEOUT_MS_CONFIG);
-        appendLingerMs = getInt(QUORUM_LINGER_MS_CONFIG);
-        voterConnections = parseVoterConnections(getList(QUORUM_VOTERS_CONFIG));
-    }
-
-    public static Set<String> configNames() {
-        return CONFIG.names();
-    }
-
-    public static ConfigDef configDef() {
-        return new ConfigDef(CONFIG);
-    }
-
-    public static void main(String[] args) {
-        System.out.println(CONFIG.toHtml());
+    public RaftConfig(
+            int requestTimeoutMs,
+            int retryBackoffMs,
+            int electionTimeoutMs,
+            int electionBackoffMaxMs,
+            int fetchTimeoutMs,
+            int appendLingerMs,
+            String votersConnectString
+    ) {
+        this.requestTimeoutMs = requestTimeoutMs;
+        this.retryBackoffMs = retryBackoffMs;
+        this.electionTimeoutMs = electionTimeoutMs;
+        this.electionBackoffMaxMs = electionBackoffMaxMs;
+        this.fetchTimeoutMs = fetchTimeoutMs;
+        this.appendLingerMs = appendLingerMs;
+        this.voterConnections = parseVoterConnections(votersConnectString);
+        if (this.voterConnections.isEmpty()) {
+            throw new ConfigException(QUORUM_VOTERS_CONFIG, votersConnectString);
+        }
     }
 
     public int requestTimeoutMs() {
@@ -211,9 +146,9 @@ public class RaftConfig extends AbstractConfig {
         }
     }
 
-    private static Map<Integer, InetSocketAddress> parseVoterConnections(List<String> voterEntries) {
+    private static Map<Integer, InetSocketAddress> parseVoterConnections(String votersConnectString) {
         Map<Integer, InetSocketAddress> voterMap = new HashMap<>();
-
+        String[] voterEntries = votersConnectString.split(",", -1);
         for (String voterMapEntry : voterEntries) {
             String[] idAndAddress = voterMapEntry.split("@");
             if (idAndAddress.length != 2) {
