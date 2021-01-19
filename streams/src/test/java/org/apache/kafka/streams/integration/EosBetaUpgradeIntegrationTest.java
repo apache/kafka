@@ -993,7 +993,7 @@ public class EosBetaUpgradeIntegrationTest {
         waitForCondition(
             () -> observed.containsAll(expected),
             MAX_WAIT_TIME_MS,
-            () -> "Client did not startup on time. Observers transitions: " + observed
+            () -> "Client did not have the expected state transition on time. Observers transitions: " + observed
         );
     }
 
