@@ -33,7 +33,7 @@ import static org.apache.kafka.common.config.ConfigDef.Range.atLeast;
 public class RaftConfig extends AbstractConfig {
     private static final ConfigDef CONFIG;
 
-    private static final String QUORUM_PREFIX = "quorum.";
+    private static final String QUORUM_PREFIX = "controller.quorum.";
 
     public static final String QUORUM_VOTERS_CONFIG = QUORUM_PREFIX + "voters";
     public static final String QUORUM_VOTERS_DOC = "Map of id/endpoint information for " +
