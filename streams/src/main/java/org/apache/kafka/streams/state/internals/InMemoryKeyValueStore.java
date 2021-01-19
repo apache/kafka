@@ -116,7 +116,7 @@ public class InMemoryKeyValueStore implements KeyValueStore<Bytes, byte[]> {
     }
 
     @Override
-    public KeyValueIterator<Bytes, byte[]> reverseRange(final Bytes from, final Bytes to) {
+    public synchronized KeyValueIterator<Bytes, byte[]> reverseRange(final Bytes from, final Bytes to) {
         return range(from, to, false);
     }
 
@@ -142,7 +142,7 @@ public class InMemoryKeyValueStore implements KeyValueStore<Bytes, byte[]> {
     }
 
     @Override
-    public KeyValueIterator<Bytes, byte[]> reverseAll() {
+    public synchronized KeyValueIterator<Bytes, byte[]> reverseAll() {
         return new DelegatingPeekingKeyValueIterator<>(
             name,
             new InMemoryKeyValueIterator(map.keySet(), false));
