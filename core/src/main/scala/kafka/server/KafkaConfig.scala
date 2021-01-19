@@ -266,13 +266,13 @@ object Defaults {
   val PasswordEncoderIterations = 4096
 
   /** ********* Raft Quorum Configuration *********/
-  val QuorumVoters = RaftConfig.QUORUM_VOTERS_DEFAULT
-  val QuorumElectionTimeoutMs = RaftConfig.QUORUM_ELECTION_TIMEOUT_MS_DEFAULT
-  val QuorumFetchTimeoutMs = RaftConfig.QUORUM_FETCH_TIMEOUT_MS_DEFAULT
-  val QuorumElectionBackoffMs = RaftConfig.QUORUM_ELECTION_BACKOFF_MAX_MS_DEFAULT
-  val QuorumLingerMs = RaftConfig.QUORUM_LINGER_MS_DEFAULT
-  val QuorumRequestTimeoutMs = RaftConfig.QUORUM_REQUEST_TIMEOUT_MS_DEFAULT
-  val QuorumRetryBackoffMs = RaftConfig.QUORUM_RETRY_BACKOFF_MS_DEFAULT
+  val QuorumVoters = RaftConfig.DEFAULT_QUORUM_VOTERS
+  val QuorumElectionTimeoutMs = RaftConfig.DEFAULT_QUORUM_ELECTION_TIMEOUT_MS
+  val QuorumFetchTimeoutMs = RaftConfig.DEFAULT_QUORUM_FETCH_TIMEOUT_MS
+  val QuorumElectionBackoffMs = RaftConfig.DEFAULT_QUORUM_ELECTION_BACKOFF_MAX_MS
+  val QuorumLingerMs = RaftConfig.DEFAULT_QUORUM_LINGER_MS
+  val QuorumRequestTimeoutMs = RaftConfig.DEFAULT_QUORUM_REQUEST_TIMEOUT_MS
+  val QuorumRetryBackoffMs = RaftConfig.DEFAULT_QUORUM_RETRY_BACKOFF_MS
 }
 
 object KafkaConfig {
