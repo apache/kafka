@@ -112,6 +112,17 @@ case class LogReadResult(info: FetchDataInfo,
     case Some(e) => Errors.forException(e)
   }
 
+  def toFetchPartitionData(isReassignmentFetch: Boolean): FetchPartitionData = FetchPartitionData(
+    this.error,
+    this.highWatermark,
+    this.leaderLogStartOffset,
+    this.info.records,
+    this.divergingEpoch,
+    this.lastStableOffset,
+    this.info.abortedTransactions,
+    this.preferredReadReplica,
+    isReassignmentFetch)
+
   def withEmptyFetchInfo: LogReadResult =
     copy(info = FetchDataInfo(LogOffsetMetadata.UnknownOffsetMetadata, MemoryRecords.EMPTY))
 
@@ -1016,16 +1027,7 @@ class ReplicaManager(val config: KafkaConfig,
     if (timeout <= 0 || fetchInfos.isEmpty || bytesReadable >= fetchMinBytes || errorReadingData || hasDivergingEpoch) {
       val fetchPartitionData = logReadResults.map { case (tp, result) =>
         val isReassignmentFetch = isFromFollower && isAddingReplica(tp, replicaId)
-        tp -> FetchPartitionData(
-          result.error,
-          result.highWatermark,
-          result.leaderLogStartOffset,
-          result.info.records,
-          result.divergingEpoch,
-          result.lastStableOffset,
-          result.info.abortedTransactions,
-          result.preferredReadReplica,
-          isReassignmentFetch)
+        tp -> result.toFetchPartitionData(isReassignmentFetch)
       }
       responseCallback(fetchPartitionData)
     } else {
