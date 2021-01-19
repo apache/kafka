@@ -27,7 +27,7 @@ import org.apache.kafka.common.Endpoint
 import org.apache.kafka.common.acl._
 import org.apache.kafka.common.utils.Time
 import org.apache.kafka.server.authorizer._
-import org.junit.{After, Before}
+import org.junit.jupiter.api.{AfterEach, BeforeEach}
 
 class AuthorizerInterfaceDefaultTest extends ZooKeeperTestHarness with BaseAuthorizerTest {
 
@@ -35,7 +35,7 @@ class AuthorizerInterfaceDefaultTest extends ZooKeeperTestHarness with BaseAutho
 
   override def authorizer: Authorizer = interfaceDefaultAuthorizer
 
-  @Before
+  @BeforeEach
   override def setUp(): Unit = {
     super.setUp()
 
@@ -52,7 +52,7 @@ class AuthorizerInterfaceDefaultTest extends ZooKeeperTestHarness with BaseAutho
       Time.SYSTEM, "kafka.test", "AuthorizerInterfaceDefaultTest")
   }
 
-  @After
+  @AfterEach
   override def tearDown(): Unit = {
     interfaceDefaultAuthorizer.close()
     zooKeeperClient.close()

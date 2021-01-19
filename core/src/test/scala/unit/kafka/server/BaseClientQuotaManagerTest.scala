@@ -35,14 +35,14 @@ import org.apache.kafka.common.security.auth.KafkaPrincipal
 import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.common.utils.MockTime
 import org.easymock.EasyMock
-import org.junit.After
+import org.junit.jupiter.api.AfterEach
 
 class BaseClientQuotaManagerTest {
   protected val time = new MockTime
   protected var numCallbacks: Int = 0
   protected val metrics = new Metrics(new MetricConfig(), Collections.emptyList(), time)
 
-  @After
+  @AfterEach
   def tearDown(): Unit = {
     metrics.close()
   }

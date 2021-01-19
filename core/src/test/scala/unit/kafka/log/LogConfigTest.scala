@@ -17,13 +17,13 @@
 
 package kafka.log
 
-import kafka.server.{KafkaConfig, KafkaServer, ThrottledReplicaListValidator}
+import kafka.server.{KafkaConfig, ThrottledReplicaListValidator}
 import kafka.utils.TestUtils
 import org.apache.kafka.common.config.ConfigDef.Importance.MEDIUM
 import org.apache.kafka.common.config.ConfigDef.Type.INT
 import org.apache.kafka.common.config.{ConfigException, TopicConfig}
-import org.junit.Assert._
-import org.junit.{Assert, Test}
+import org.junit.jupiter.api.Assertions._
+import org.junit.jupiter.api.Test
 
 import java.util.{Collections, Properties}
 
@@ -39,7 +39,7 @@ class LogConfigTest {
   @Test
   def ensureNoStaticInitializationOrderDependency(): Unit = {
     // Access any KafkaConfig val to load KafkaConfig object before LogConfig.
-    assertTrue(KafkaConfig.LogRetentionTimeMillisProp != null)
+    assertNotNull(KafkaConfig.LogRetentionTimeMillisProp)
     assertTrue(LogConfig.configNames.forall { config =>
       val serverConfigOpt = LogConfig.serverConfigName(config)
       serverConfigOpt.isDefined && (serverConfigOpt.get != null)
@@ -55,7 +55,7 @@ class LogConfigTest {
     kafkaProps.put(KafkaConfig.LogRetentionTimeHoursProp, "2")
 
     val kafkaConfig = KafkaConfig.fromProps(kafkaProps)
-    val logProps = KafkaServer.copyKafkaConfigToLog(kafkaConfig)
+    val logProps = LogConfig.extractLogConfigMap(kafkaConfig)
     assertEquals(2 * millisInHour, logProps.get(LogConfig.SegmentMsProp))
     assertEquals(2 * millisInHour, logProps.get(LogConfig.SegmentJitterMsProp))
     assertEquals(2 * millisInHour, logProps.get(LogConfig.RetentionMsProp))
@@ -65,7 +65,7 @@ class LogConfigTest {
   def testFromPropsEmpty(): Unit = {
     val p = new Properties()
     val config = LogConfig(p)
-    Assert.assertEquals(LogConfig(), config)
+    assertEquals(LogConfig(), config)
   }
 
   @Test
@@ -119,7 +119,7 @@ class LogConfigTest {
   def testToHtmlTable(): Unit = {
     val html = LogConfig.configDefCopy.toHtmlTable
     val expectedConfig = "<td>file.delete.delay.ms</td>"
-    assertTrue(s"Could not find `$expectedConfig` in:\n $html", html.contains(expectedConfig))
+    assertTrue(html.contains(expectedConfig), s"Could not find `$expectedConfig` in:\n $html")
   }
 
   /* Sanity check that toHtml produces one of the expected configs */
@@ -127,7 +127,7 @@ class LogConfigTest {
   def testToHtml(): Unit = {
     val html = LogConfig.configDefCopy.toHtml(4, (key: String) => "prefix_" + key, Collections.emptyMap())
     val expectedConfig = "<h4><a id=\"file.delete.delay.ms\"></a><a id=\"prefix_file.delete.delay.ms\" href=\"#prefix_file.delete.delay.ms\">file.delete.delay.ms</a></h4>"
-    assertTrue(s"Could not find `$expectedConfig` in:\n $html", html.contains(expectedConfig))
+    assertTrue(html.contains(expectedConfig), s"Could not find `$expectedConfig` in:\n $html")
   }
 
   /* Sanity check that toEnrichedRst produces one of the expected configs */
@@ -135,7 +135,7 @@ class LogConfigTest {
   def testToEnrichedRst(): Unit = {
     val rst = LogConfig.configDefCopy.toEnrichedRst
     val expectedConfig = "``file.delete.delay.ms``"
-    assertTrue(s"Could not find `$expectedConfig` in:\n $rst", rst.contains(expectedConfig))
+    assertTrue(rst.contains(expectedConfig), s"Could not find `$expectedConfig` in:\n $rst")
   }
 
   /* Sanity check that toEnrichedRst produces one of the expected configs */
@@ -143,7 +143,7 @@ class LogConfigTest {
   def testToRst(): Unit = {
     val rst = LogConfig.configDefCopy.toRst
     val expectedConfig = "``file.delete.delay.ms``"
-    assertTrue(s"Could not find `$expectedConfig` in:\n $rst", rst.contains(expectedConfig))
+    assertTrue(rst.contains(expectedConfig), s"Could not find `$expectedConfig` in:\n $rst")
   }
 
   @Test

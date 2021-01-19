@@ -97,7 +97,7 @@ public final class RaftClientTestContext {
     final int requestTimeoutMs;
 
     private final QuorumStateStore quorumStateStore;
-    final int localId;
+    private final OptionalInt localId;
     public final KafkaRaftClient<String> client;
     final Metrics metrics;
     public final MockLog log;
@@ -127,7 +127,7 @@ public final class RaftClientTestContext {
         private final Random random = Mockito.spy(new Random(1));
         private final MockLog log = new MockLog(METADATA_PARTITION);
         private final Set<Integer> voters;
-        private final int localId;
+        private final OptionalInt localId;
 
         private int requestTimeoutMs = DEFAULT_REQUEST_TIMEOUT_MS;
         private int electionTimeoutMs = DEFAULT_ELECTION_TIMEOUT_MS;
@@ -135,6 +135,10 @@ public final class RaftClientTestContext {
         private MemoryPool memoryPool = MemoryPool.NONE;
 
         public Builder(int localId, Set<Integer> voters) {
+            this(OptionalInt.of(localId), voters);
+        }
+
+        public Builder(OptionalInt localId, Set<Integer> voters) {
             this.voters = voters;
             this.localId = localId;
         }
@@ -231,7 +235,7 @@ public final class RaftClientTestContext {
     }
 
     private RaftClientTestContext(
-        int localId,
+        OptionalInt localId,
         KafkaRaftClient<String> client,
         MockLog log,
         MockNetworkChannel channel,
@@ -344,7 +348,11 @@ public final class RaftClientTestContext {
         }
 
         client.poll();
-        assertElectedLeader(epoch, localId);
+        assertElectedLeader(epoch, localIdOrThrow());
+    }
+
+    private int localIdOrThrow() {
+        return localId.orElseThrow(() -> new AssertionError("Required local id is not defined"));
     }
 
     void expectBeginEpoch(
@@ -352,7 +360,7 @@ public final class RaftClientTestContext {
     ) throws Exception {
         pollUntilRequest();
         for (RaftRequest.Outbound request : collectBeginEpochRequests(epoch)) {
-            BeginQuorumEpochResponseData beginEpochResponse = beginEpochResponse(epoch, localId);
+            BeginQuorumEpochResponseData beginEpochResponse = beginEpochResponse(epoch, localIdOrThrow());
             deliverResponse(request.correlationId, request.destinationId(), beginEpochResponse);
         }
         client.poll();
@@ -456,7 +464,7 @@ public final class RaftClientTestContext {
                 VoteRequestData.PartitionData partitionRequest = unwrap(request);
 
                 assertEquals(epoch, partitionRequest.candidateEpoch());
-                assertEquals(localId, partitionRequest.candidateId());
+                assertEquals(localIdOrThrow(), partitionRequest.candidateId());
                 assertEquals(lastEpoch, partitionRequest.lastOffsetEpoch());
                 assertEquals(lastEpochOffset, partitionRequest.lastOffset());
                 voteRequests.add((RaftRequest.Outbound) raftMessage);
@@ -645,7 +653,7 @@ public final class RaftClientTestContext {
                     request.topics().get(0).partitions().get(0);
 
                 assertEquals(epoch, partitionRequest.leaderEpoch());
-                assertEquals(localId, partitionRequest.leaderId());
+                assertEquals(localIdOrThrow(), partitionRequest.leaderId());
 
                 RaftRequest.Outbound outboundRequest = (RaftRequest.Outbound) raftMessage;
                 collectedDestinationIdSet.add(outboundRequest.destinationId());
@@ -681,7 +689,7 @@ public final class RaftClientTestContext {
                 request.topics().get(0).partitions().get(0);
 
             assertEquals(epoch, partitionRequest.leaderEpoch());
-            assertEquals(localId, partitionRequest.leaderId());
+            assertEquals(localIdOrThrow(), partitionRequest.leaderId());
             requests.add(raftRequest);
         }
         return requests;
@@ -824,7 +832,7 @@ public final class RaftClientTestContext {
         assertEquals(epoch, fetchPartition.currentLeaderEpoch());
         assertEquals(fetchOffset, fetchPartition.fetchOffset());
         assertEquals(lastFetchedEpoch, fetchPartition.lastFetchedEpoch());
-        assertEquals(localId, request.replicaId());
+        assertEquals(localId.orElse(-1), request.replicaId());
     }
 
     FetchRequestData fetchRequest(

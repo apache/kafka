@@ -22,8 +22,8 @@ import kafka.utils.Exit
 import org.apache.kafka.clients.admin.PartitionReassignment
 import org.apache.kafka.common.Node
 import org.apache.kafka.common.TopicPartitionInfo
-import org.junit.Assert._
-import org.junit.Test
+import org.junit.jupiter.api.Assertions._
+import org.junit.jupiter.api.Test
 
 import scala.jdk.CollectionConverters._
 

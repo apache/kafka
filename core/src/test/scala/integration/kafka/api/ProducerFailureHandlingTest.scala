@@ -28,8 +28,8 @@ import org.apache.kafka.clients.producer._
 import org.apache.kafka.common.errors._
 import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.record.{DefaultRecord, DefaultRecordBatch}
-import org.junit.Assert._
-import org.junit.{After, Before, Test}
+import org.junit.jupiter.api.Assertions._
+import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
 
 class ProducerFailureHandlingTest extends KafkaServerTestHarness {
   private val producerBufferSize = 30000
@@ -59,7 +59,7 @@ class ProducerFailureHandlingTest extends KafkaServerTestHarness {
   private val topic1 = "topic-1"
   private val topic2 = "topic-2"
 
-  @Before
+  @BeforeEach
   override def setUp(): Unit = {
     super.setUp()
 
@@ -71,7 +71,7 @@ class ProducerFailureHandlingTest extends KafkaServerTestHarness {
       bufferSize = producerBufferSize)
   }
 
-  @After
+  @AfterEach
   override def tearDown(): Unit = {
     if (producer1 != null) producer1.close()
     if (producer2 != null) producer2.close()
@@ -185,10 +185,8 @@ class ProducerFailureHandlingTest extends KafkaServerTestHarness {
 
     // create a record with incorrect partition id (higher than the number of partitions), send should fail
     val higherRecord = new ProducerRecord(topic1, 1, "key".getBytes, "value".getBytes)
-    assertThrows(classOf[ExecutionException], () => producer1.send(higherRecord).get).getCause match {
-      case _: TimeoutException => // this is ok
-      case ex => throw new Exception("Sending to a partition not present in the metadata should result in a TimeoutException", ex)
-    }
+    val e = assertThrows(classOf[ExecutionException], () => producer1.send(higherRecord).get)
+    assertEquals(classOf[TimeoutException], e.getCause.getClass)
   }
 
   /**
@@ -206,18 +204,12 @@ class ProducerFailureHandlingTest extends KafkaServerTestHarness {
     producer2.send(record).get
     producer3.send(record).get
 
-    assertThrows(classOf[IllegalStateException], () => {
-      producer1.close()
-      producer1.send(record)
-    })
-    assertThrows(classOf[IllegalStateException], () => {
-      producer2.close()
-      producer2.send(record)
-    })
-    assertThrows(classOf[IllegalStateException], () =>  {
-      producer3.close()
-      producer3.send(record)
-    })
+    producer1.close()
+    assertThrows(classOf[IllegalStateException], () => producer1.send(record))
+    producer2.close()
+    assertThrows(classOf[IllegalStateException], () => producer2.send(record))
+    producer3.close()
+    assertThrows(classOf[IllegalStateException], () =>  producer3.send(record))
   }
 
   @Test
@@ -225,7 +217,7 @@ class ProducerFailureHandlingTest extends KafkaServerTestHarness {
     TestUtils.createOffsetsTopic(zkClient, servers)
     val thrown = assertThrows(classOf[ExecutionException],
       () => producer2.send(new ProducerRecord(Topic.GROUP_METADATA_TOPIC_NAME, "test".getBytes, "test".getBytes)).get)
-    assertTrue("Unexpected exception while sending to an invalid topic " + thrown.getCause, thrown.getCause.isInstanceOf[InvalidTopicException])
+    assertTrue(thrown.getCause.isInstanceOf[InvalidTopicException], "Unexpected exception while sending to an invalid topic " + thrown.getCause)
   }
 
   @Test
@@ -237,15 +229,8 @@ class ProducerFailureHandlingTest extends KafkaServerTestHarness {
     createTopic(topicName, replicationFactor = numServers, topicConfig = topicProps)
 
     val record = new ProducerRecord(topicName, null, "key".getBytes, "value".getBytes)
-    try {
-      producer3.send(record).get
-      fail("Expected exception when producing to topic with fewer brokers than min.insync.replicas")
-    } catch {
-      case e: ExecutionException =>
-        if (!e.getCause.isInstanceOf[NotEnoughReplicasException]) {
-          fail("Expected NotEnoughReplicasException when producing to topic with fewer brokers than min.insync.replicas")
-        }
-    }
+    val e = assertThrows(classOf[ExecutionException], () => producer3.send(record).get)
+    assertEquals(classOf[NotEnoughReplicasException], e.getCause.getClass)
   }
 
   @Test
@@ -263,18 +248,10 @@ class ProducerFailureHandlingTest extends KafkaServerTestHarness {
     // shut down one broker
     servers.head.shutdown()
     servers.head.awaitShutdown()
-    try {
-      producer3.send(record).get
-      fail("Expected exception when producing to topic with fewer brokers than min.insync.replicas")
-    } catch {
-      case e: ExecutionException =>
-        if (!e.getCause.isInstanceOf[NotEnoughReplicasException]  &&
-            !e.getCause.isInstanceOf[NotEnoughReplicasAfterAppendException] &&
-            !e.getCause.isInstanceOf[TimeoutException]) {
-          fail("Expected NotEnoughReplicasException or NotEnoughReplicasAfterAppendException when producing to topic " +
-            "with fewer brokers than min.insync.replicas, but saw " + e.getCause)
-        }
-    }
+    val e = assertThrows(classOf[ExecutionException], () => producer3.send(record).get)
+    assertTrue(e.getCause.isInstanceOf[NotEnoughReplicasException] ||
+      e.getCause.isInstanceOf[NotEnoughReplicasAfterAppendException] ||
+      e.getCause.isInstanceOf[TimeoutException])
 
     // restart the server
     servers.head.startup()
