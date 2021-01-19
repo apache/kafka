@@ -534,7 +534,7 @@ public class RequestResponseTest {
             new DescribeClusterResponseData()
                 .setBrokers(new DescribeClusterBrokerCollection(
                     Collections.singletonList(new DescribeClusterBroker()
-                        .setNodeId(1)
+                        .setBrokerId(1)
                         .setHost("localhost")
                         .setPort(9092)
                         .setRack("rack1")).iterator()))

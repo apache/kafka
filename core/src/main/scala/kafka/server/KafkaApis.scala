@@ -3234,12 +3234,12 @@ class KafkaApis(val requestChannel: RequestChannel,
         .setControllerId(controllerId)
         .setClusterAuthorizedOperations(clusterAuthorizedOperations);
 
-      brokers.flatMap(_.getNode(request.context.listenerName)).foreach { node =>
+      brokers.flatMap(_.getNode(request.context.listenerName)).foreach { broker =>
         data.brokers.add(new DescribeClusterResponseData.DescribeClusterBroker()
-          .setNodeId(node.id)
-          .setHost(node.host)
-          .setPort(node.port)
-          .setRack(node.rack))
+          .setBrokerId(broker.id)
+          .setHost(broker.host)
+          .setPort(broker.port)
+          .setRack(broker.rack))
       }
 
       new DescribeClusterResponse(data)

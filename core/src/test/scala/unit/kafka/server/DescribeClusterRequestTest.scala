@@ -54,7 +54,7 @@ class DescribeClusterRequestTest extends BaseRequestTest {
   def testDescribeClusterRequest(includeClusterAuthorizedOperations: Boolean): Unit = {
     val expectedBrokers = servers.map { server =>
       new DescribeClusterResponseData.DescribeClusterBroker()
-        .setNodeId(server.config.brokerId)
+        .setBrokerId(server.config.brokerId)
         .setHost("localhost")
         .setPort(server.socketServer.boundPort(listenerName))
         .setRack(server.config.rack.orNull)
