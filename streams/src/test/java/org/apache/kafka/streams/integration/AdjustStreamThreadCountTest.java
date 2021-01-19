@@ -98,7 +98,6 @@ public class AdjustStreamThreadCountTest {
 
     @After
     public void teardown() throws IOException {
-        stateTransitionHistory.clear();
         purgeLocalStreamsState(properties);
     }
 
@@ -118,16 +117,14 @@ public class AdjustStreamThreadCountTest {
         );
     }
 
-    private boolean waitForTransitionFromRebalancingToRunning() throws InterruptedException {
+    private void waitForTransitionFromRebalancingToRunning() throws InterruptedException {
         waitForRunning();
 
         final int historySize = stateTransitionHistory.size();
-        if (historySize >= 2 && stateTransitionHistory.get(historySize - 2).equals(KafkaStreams.State.REBALANCING) &&
-            stateTransitionHistory.get(historySize - 1).equals(KafkaStreams.State.RUNNING)) {
-
-            return true;
-        }
-        return false;
+        assertThat("Client did not transit from REBALANCING to RUNNING. The observed state transitions are: " + stateTransitionHistory,
+            historySize >= 2 &&
+                stateTransitionHistory.get(historySize - 2).equals(KafkaStreams.State.REBALANCING) &&
+                stateTransitionHistory.get(historySize - 1).equals(KafkaStreams.State.RUNNING), is(true));
     }
 
     @Test
@@ -158,7 +155,7 @@ public class AdjustStreamThreadCountTest {
                 equalTo(new String[] {"1", "2", "3"})
             );
 
-            assertThat(waitForTransitionFromRebalancingToRunning(), is(true));
+            waitForTransitionFromRebalancingToRunning();
         }
     }
 
@@ -173,7 +170,7 @@ public class AdjustStreamThreadCountTest {
             assertThat(kafkaStreams.removeStreamThread().get().split("-")[0], equalTo(appId));
             assertThat(kafkaStreams.localThreadsMetadata().size(), equalTo(oldThreadCount - 1));
 
-            assertThat(waitForTransitionFromRebalancingToRunning(), is(true));
+            waitForTransitionFromRebalancingToRunning();
         }
     }
 
@@ -194,7 +191,7 @@ public class AdjustStreamThreadCountTest {
             latch.await(30, TimeUnit.SECONDS);
             assertThat(kafkaStreams.localThreadsMetadata().size(), equalTo(oldThreadCount));
 
-            assertThat(waitForTransitionFromRebalancingToRunning(), is(true));
+            waitForTransitionFromRebalancingToRunning();
         }
     }
 
@@ -226,7 +223,6 @@ public class AdjustStreamThreadCountTest {
                 equalTo(new String[] {"1", "2"})
             );
 
-            // add a new thread
             final Optional<String> name = kafkaStreams.addStreamThread();
 
             assertThat("New thread has index 3", "3".equals(name.get().split("-StreamThread-")[1]));
@@ -248,21 +244,19 @@ public class AdjustStreamThreadCountTest {
                     .toArray(),
                 equalTo(new String[] {"1", "2", "3"})
             );
-            assertThat(waitForTransitionFromRebalancingToRunning(), is(true));
+            waitForTransitionFromRebalancingToRunning();
 
             oldThreadCount = kafkaStreams.localThreadsMetadata().size();
             stateTransitionHistory.clear();
 
-            // remove a thread
             final Optional<String> removedThread = kafkaStreams.removeStreamThread();
 
             assertThat(removedThread, not(Optional.empty()));
             assertThat(kafkaStreams.localThreadsMetadata().size(), equalTo(oldThreadCount - 1));
-            assertThat(waitForTransitionFromRebalancingToRunning(), is(true));
+            waitForTransitionFromRebalancingToRunning();
 
             stateTransitionHistory.clear();
 
-            // add a new thread again
             final Optional<String> name2 = kafkaStreams.addStreamThread();
 
             assertThat(name2, not(Optional.empty()));
@@ -283,7 +277,7 @@ public class AdjustStreamThreadCountTest {
             );
 
             assertThat("the new thread should have received the old threads name", name2.equals(removedThread));
-            assertThat(waitForTransitionFromRebalancingToRunning(), is(true));
+            waitForTransitionFromRebalancingToRunning();
         }
     }
 }
