@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.clients.producer.internals;
 
-import org.apache.kafka.common.protocol.ApiVersion;
 import org.apache.kafka.clients.ApiVersions;
 import org.apache.kafka.clients.ClientResponse;
 import org.apache.kafka.clients.NodeApiVersions;
@@ -28,6 +27,7 @@ import org.apache.kafka.common.errors.InvalidPidMappingException;
 import org.apache.kafka.common.errors.InvalidProducerEpochException;
 import org.apache.kafka.common.errors.RetriableException;
 import org.apache.kafka.common.errors.UnknownProducerIdException;
+import org.apache.kafka.common.message.ApiVersionsResponseData.ApiVersion;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.utils.ProducerIdAndEpoch;
 import org.apache.kafka.common.KafkaException;
@@ -1051,7 +1051,7 @@ public class TransactionManager {
                 nodeApiVersions.apiVersion(ApiKeys.INIT_PRODUCER_ID) :
                 null;
         this.coordinatorSupportsBumpingEpoch = initProducerIdVersion != null &&
-                initProducerIdVersion.maxVersion >= 3;
+                initProducerIdVersion.maxVersion() >= 3;
     }
 
     private void transitionTo(State target) {

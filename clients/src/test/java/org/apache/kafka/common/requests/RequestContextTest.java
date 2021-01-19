@@ -17,7 +17,7 @@
 package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.message.ApiVersionsResponseData;
-import org.apache.kafka.common.message.ApiVersionsResponseData.ApiVersionsResponseKeyCollection;
+import org.apache.kafka.common.message.ApiVersionsResponseData.ApiVersionCollection;
 import org.apache.kafka.common.message.CreateTopicsResponseData;
 import org.apache.kafka.common.network.ClientInformation;
 import org.apache.kafka.common.network.ListenerName;
@@ -60,7 +60,7 @@ public class RequestContextTest {
         Send send = context.buildResponseSend(new ApiVersionsResponse(new ApiVersionsResponseData()
             .setThrottleTimeMs(0)
             .setErrorCode(Errors.UNSUPPORTED_VERSION.code())
-            .setApiKeys(new ApiVersionsResponseKeyCollection())));
+            .setApiKeys(new ApiVersionCollection())));
         ByteBufferChannel channel = new ByteBufferChannel(256);
         send.writeTo(channel);
 

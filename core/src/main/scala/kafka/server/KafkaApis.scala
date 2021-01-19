@@ -1763,7 +1763,7 @@ class KafkaApis(val requestChannel: RequestChannel,
           }
         if (request.context.fromPrivilegedListener) {
           apiVersionsResponse.data.apiKeys().add(
-            new ApiVersionsResponseData.ApiVersionsResponseKey()
+            new ApiVersionsResponseData.ApiVersion()
               .setApiKey(ApiKeys.ENVELOPE.id)
               .setMinVersion(ApiKeys.ENVELOPE.oldestVersion())
               .setMaxVersion(ApiKeys.ENVELOPE.latestVersion())

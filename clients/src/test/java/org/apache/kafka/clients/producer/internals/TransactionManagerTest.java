@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.clients.producer.internals;
 
-import org.apache.kafka.common.protocol.ApiVersion;
 import org.apache.kafka.clients.ApiVersions;
 import org.apache.kafka.clients.MockClient;
 import org.apache.kafka.clients.consumer.CommitFailedException;
@@ -24,6 +23,7 @@ import org.apache.kafka.clients.consumer.ConsumerGroupMetadata;
 import org.apache.kafka.clients.NodeApiVersions;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.common.errors.FencedInstanceIdException;
+import org.apache.kafka.common.message.ApiVersionsResponseData.ApiVersion;
 import org.apache.kafka.common.requests.JoinGroupRequest;
 import org.apache.kafka.common.requests.RequestTestUtils;
 import org.apache.kafka.common.utils.ProducerIdAndEpoch;
@@ -153,8 +153,14 @@ public class TransactionManagerTest {
         Metrics metrics = new Metrics(time);
 
         apiVersions.update("0", new NodeApiVersions(Arrays.asList(
-                new ApiVersion(ApiKeys.INIT_PRODUCER_ID.id, (short) 0, (short) 3),
-                new ApiVersion(ApiKeys.PRODUCE.id, (short) 0, (short) 7))));
+                new ApiVersion()
+                    .setApiKey(ApiKeys.INIT_PRODUCER_ID.id)
+                    .setMinVersion((short) 0)
+                    .setMaxVersion((short) 3),
+                new ApiVersion()
+                    .setApiKey(ApiKeys.PRODUCE.id)
+                    .setMinVersion((short) 0)
+                    .setMaxVersion((short) 7))));
         this.transactionManager = new TransactionManager(logContext, transactionalId.orElse(null),
                 transactionTimeoutMs, DEFAULT_RETRY_BACKOFF_MS, apiVersions, autoDowngrade);
 
@@ -2536,8 +2542,14 @@ public class TransactionManagerTest {
     @Test
     public void testTransitionToFatalErrorWhenRetriedBatchIsExpired() throws InterruptedException {
         apiVersions.update("0", new NodeApiVersions(Arrays.asList(
-                new ApiVersion(ApiKeys.INIT_PRODUCER_ID.id, (short) 0, (short) 1),
-                new ApiVersion(ApiKeys.PRODUCE.id, (short) 0, (short) 7))));
+                new ApiVersion()
+                    .setApiKey(ApiKeys.INIT_PRODUCER_ID.id)
+                    .setMinVersion((short) 0)
+                    .setMaxVersion((short) 1),
+                new ApiVersion()
+                    .setApiKey(ApiKeys.PRODUCE.id)
+                    .setMinVersion((short) 0)
+                    .setMaxVersion((short) 7))));
 
         doInitTransactions();
 
@@ -2730,8 +2742,14 @@ public class TransactionManagerTest {
     @Test
     public void testAbortTransactionAndReuseSequenceNumberOnError() throws InterruptedException {
         apiVersions.update("0", new NodeApiVersions(Arrays.asList(
-                new ApiVersion(ApiKeys.INIT_PRODUCER_ID.id, (short) 0, (short) 1),
-                new ApiVersion(ApiKeys.PRODUCE.id, (short) 0, (short) 7))));
+                new ApiVersion()
+                        .setApiKey(ApiKeys.INIT_PRODUCER_ID.id)
+                        .setMinVersion((short) 0)
+                        .setMaxVersion((short) 1),
+                new ApiVersion()
+                        .setApiKey(ApiKeys.PRODUCE.id)
+                        .setMinVersion((short) 0)
+                        .setMaxVersion((short) 7))));
 
         doInitTransactions();
 
@@ -2777,8 +2795,14 @@ public class TransactionManagerTest {
         // where the sequence number is reset on an UnknownProducerId error, allowing subsequent transactions to
         // append to the log successfully
         apiVersions.update("0", new NodeApiVersions(Arrays.asList(
-                new ApiVersion(ApiKeys.INIT_PRODUCER_ID.id, (short) 0, (short) 1),
-                new ApiVersion(ApiKeys.PRODUCE.id, (short) 0, (short) 7))));
+                new ApiVersion()
+                    .setApiKey(ApiKeys.INIT_PRODUCER_ID.id)
+                    .setMinVersion((short) 0)
+                    .setMaxVersion((short) 1),
+                new ApiVersion()
+                    .setApiKey(ApiKeys.PRODUCE.id)
+                    .setMinVersion((short) 0)
+                    .setMaxVersion((short) 7))));
 
         doInitTransactions();
 
