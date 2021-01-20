@@ -537,7 +537,6 @@ public class TopologyTestDriver implements Closeable {
                 final ConsumerRecords.Metadata metadata = new ConsumerRecords.Metadata(
                     mockWallClockTime.milliseconds(),
                     0L,
-                    0L,
                     0L
                 );
                 task.addFetchedMetadata(entry.getKey(), metadata);
