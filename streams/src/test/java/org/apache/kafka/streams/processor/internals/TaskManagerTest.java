@@ -2779,6 +2779,62 @@ public class TaskManagerTest {
         assertThat(task01.state(), is(Task.State.SUSPENDED));
     }
 
+    @Test
+    public void shouldConvertActiveTaskToStandbyTask() {
+        final StreamTask activeTask = mock(StreamTask.class);
+        expect(activeTask.id()).andReturn(taskId00).anyTimes();
+        expect(activeTask.inputPartitions()).andReturn(taskId00Partitions).anyTimes();
+        expect(activeTask.isActive()).andReturn(true).anyTimes();
+        expect(activeTask.prepareCommit()).andReturn(Collections.emptyMap()).anyTimes();
+
+        final StandbyTask standbyTask = mock(StandbyTask.class);
+        expect(standbyTask.id()).andReturn(taskId00).anyTimes();
+
+        expect(activeTaskCreator.createTasks(anyObject(), eq(taskId00Assignment)))
+            .andReturn(singletonList(activeTask));
+        activeTaskCreator.closeAndRemoveTaskProducerIfNeeded(taskId00);
+        expectLastCall().anyTimes();
+
+        expect(standbyTaskCreator.createStandbyTaskFromActive(anyObject(), eq(taskId00Partitions)))
+            .andReturn(standbyTask);
+
+        replay(activeTask, standbyTask, activeTaskCreator, standbyTaskCreator, consumer);
+
+        taskManager.handleAssignment(taskId00Assignment, Collections.emptyMap());
+        taskManager.handleAssignment(Collections.emptyMap(), taskId00Assignment);
+
+        verify(activeTaskCreator, standbyTaskCreator);
+    }
+
+    @Test
+    public void shouldConvertStandbyTaskToActiveTask() {
+        final StandbyTask standbyTask = mock(StandbyTask.class);
+        expect(standbyTask.id()).andReturn(taskId00).anyTimes();
+        expect(standbyTask.isActive()).andReturn(false).anyTimes();
+        expect(standbyTask.prepareCommit()).andReturn(Collections.emptyMap()).anyTimes();
+        standbyTask.suspend();
+        expectLastCall().anyTimes();
+        standbyTask.postCommit(true);
+        expectLastCall().anyTimes();
+
+        final StreamTask activeTask = mock(StreamTask.class);
+        expect(activeTask.id()).andReturn(taskId00).anyTimes();
+        expect(activeTask.inputPartitions()).andReturn(taskId00Partitions).anyTimes();
+
+        expect(standbyTaskCreator.createTasks(eq(taskId00Assignment)))
+            .andReturn(singletonList(standbyTask));
+
+        expect(activeTaskCreator.createActiveTaskFromStandby(anyObject(), eq(taskId00Partitions), anyObject()))
+            .andReturn(activeTask);
+
+        replay(standbyTask, activeTask, standbyTaskCreator, activeTaskCreator, consumer);
+
+        taskManager.handleAssignment(Collections.emptyMap(), taskId00Assignment);
+        taskManager.handleAssignment(taskId00Assignment, Collections.emptyMap());
+
+        verify(standbyTaskCreator, activeTaskCreator);
+    }
+
     private static void expectRestoreToBeCompleted(final Consumer<byte[], byte[]> consumer,
                                                    final ChangelogReader changeLogReader) {
         expectRestoreToBeCompleted(consumer, changeLogReader, true);
