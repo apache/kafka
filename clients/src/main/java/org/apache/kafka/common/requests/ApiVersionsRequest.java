@@ -19,8 +19,7 @@ package org.apache.kafka.common.requests;
 import java.util.regex.Pattern;
 import org.apache.kafka.common.message.ApiVersionsRequestData;
 import org.apache.kafka.common.message.ApiVersionsResponseData;
-import org.apache.kafka.common.message.ApiVersionsResponseData.ApiVersionsResponseKey;
-import org.apache.kafka.common.message.ApiVersionsResponseData.ApiVersionsResponseKeyCollection;
+import org.apache.kafka.common.message.ApiVersionsResponseData.ApiVersionCollection;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
@@ -108,11 +107,8 @@ public class ApiVersionsRequest extends AbstractRequest {
         // Starting from Apache Kafka 2.4 (KIP-511), ApiKeys field is populated with the supported
         // versions of the ApiVersionsRequest when an UNSUPPORTED_VERSION error is returned.
         if (Errors.forException(e) == Errors.UNSUPPORTED_VERSION) {
-            ApiVersionsResponseKeyCollection apiKeys = new ApiVersionsResponseKeyCollection();
-            apiKeys.add(new ApiVersionsResponseKey()
-                .setApiKey(ApiKeys.API_VERSIONS.id)
-                .setMinVersion(ApiKeys.API_VERSIONS.oldestVersion())
-                .setMaxVersion(ApiKeys.API_VERSIONS.latestVersion()));
+            ApiVersionCollection apiKeys = new ApiVersionCollection();
+            apiKeys.add(ApiVersionsResponse.toApiVersion(ApiKeys.API_VERSIONS));
             data.setApiKeys(apiKeys);
         }
 

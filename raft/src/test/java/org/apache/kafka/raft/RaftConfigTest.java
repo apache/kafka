@@ -73,5 +73,4 @@ public class RaftConfigTest {
         properties.put(RaftConfig.QUORUM_VOTERS_CONFIG, value);
         assertThrows(ConfigException.class, () -> new RaftConfig(properties));
     }
-
 }

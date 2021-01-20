@@ -12,12 +12,12 @@
  */
 package kafka.api
 
+import java.lang.{Byte => JByte}
 import java.time.Duration
 import java.util
 import java.util.concurrent.ExecutionException
 import java.util.regex.Pattern
 import java.util.{Collections, Optional, Properties}
-
 import kafka.admin.ConsumerGroupCommand.{ConsumerGroupCommandOptions, ConsumerGroupService}
 import kafka.log.LogConfig
 import kafka.security.authorizer.AclEntry
@@ -38,6 +38,7 @@ import org.apache.kafka.common.internals.Topic.GROUP_METADATA_TOPIC_NAME
 import org.apache.kafka.common.message.{AddOffsetsToTxnRequestData, AlterPartitionReassignmentsRequestData, AlterReplicaLogDirsRequestData, ControlledShutdownRequestData, CreateAclsRequestData, CreatePartitionsRequestData, CreateTopicsRequestData, DeleteAclsRequestData, DeleteGroupsRequestData, DeleteRecordsRequestData, DeleteTopicsRequestData, DescribeConfigsRequestData, DescribeGroupsRequestData, DescribeLogDirsRequestData, FindCoordinatorRequestData, HeartbeatRequestData, IncrementalAlterConfigsRequestData, JoinGroupRequestData, ListPartitionReassignmentsRequestData, OffsetCommitRequestData, ProduceRequestData, SyncGroupRequestData}
 import org.apache.kafka.common.message.CreatePartitionsRequestData.CreatePartitionsTopic
 import org.apache.kafka.common.message.CreateTopicsRequestData.{CreatableTopic, CreatableTopicCollection}
+import org.apache.kafka.common.message.DescribeClusterRequestData
 import org.apache.kafka.common.message.IncrementalAlterConfigsRequestData.{AlterConfigsResource, AlterableConfig, AlterableConfigCollection}
 import org.apache.kafka.common.message.JoinGroupRequestData.JoinGroupRequestProtocolCollection
 import org.apache.kafka.common.message.LeaderAndIsrRequestData.LeaderAndIsrPartitionState
@@ -56,10 +57,11 @@ import org.apache.kafka.common.resource.PatternType.{LITERAL, PREFIXED}
 import org.apache.kafka.common.resource.ResourceType._
 import org.apache.kafka.common.resource.{PatternType, Resource, ResourcePattern, ResourcePatternFilter, ResourceType}
 import org.apache.kafka.common.security.auth.{AuthenticationContext, KafkaPrincipal, KafkaPrincipalBuilder, SecurityProtocol}
-import org.apache.kafka.common.{ElectionType, IsolationLevel, Node, TopicPartition, requests, Uuid}
+import org.apache.kafka.common.utils.Utils
+import org.apache.kafka.common.{ElectionType, IsolationLevel, Node, TopicPartition, Uuid, requests}
 import org.apache.kafka.test.{TestUtils => JTestUtils}
-import org.junit.Assert._
-import org.junit.{After, Before, Test}
+import org.junit.jupiter.api.Assertions._
+import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
 
 import scala.annotation.nowarn
 import scala.jdk.CollectionConverters._
@@ -276,7 +278,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
     ApiKeys.OFFSET_DELETE -> groupReadAcl
   )
 
-  @Before
+  @BeforeEach
   override def setUp(): Unit = {
     doSetup(createOffsetsTopic = false)
 
@@ -286,7 +288,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
     TestUtils.createOffsetsTopic(zkClient, servers)
   }
 
-  @After
+  @AfterEach
   override def tearDown(): Unit = {
     adminClients.foreach(_.close())
     removeAllClientAcls()
@@ -1640,23 +1642,14 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
     removeAclIdempotenceRequired()
     addAndVerifyAcls(Set(new AccessControlEntry(clientPrincipalString, WildcardHost, DESCRIBE, ALLOW)), topicResource)
 
-    try {
-      // the send should now fail with a cluster auth error
-      producer.send(new ProducerRecord[Array[Byte], Array[Byte]](topic, "hi".getBytes)).get()
-      fail("Should have raised ClusterAuthorizationException")
-    } catch {
-      case e: ExecutionException =>
-        assertTrue(e.getCause.isInstanceOf[TopicAuthorizationException])
-    }
-    try {
-      // the second time, the call to send itself should fail (the producer becomes unusable
-      // if no producerId can be obtained)
-      producer.send(new ProducerRecord[Array[Byte], Array[Byte]](topic, "hi".getBytes)).get()
-      fail("Should have raised ClusterAuthorizationException")
-    } catch {
-      case e: ExecutionException =>
-        assertTrue(e.getCause.isInstanceOf[TopicAuthorizationException])
-    }
+    // the send should now fail with a cluster auth error
+    var e = assertThrows(classOf[ExecutionException], () => producer.send(new ProducerRecord[Array[Byte], Array[Byte]](topic, "hi".getBytes)).get())
+    assertTrue(e.getCause.isInstanceOf[TopicAuthorizationException])
+
+    // the second time, the call to send itself should fail (the producer becomes unusable
+    // if no producerId can be obtained)
+    e = assertThrows(classOf[ExecutionException], () => producer.send(new ProducerRecord[Array[Byte], Array[Byte]](topic, "hi".getBytes)).get())
+    assertTrue(e.getCause.isInstanceOf[TopicAuthorizationException])
   }
 
   @Test
@@ -1776,7 +1769,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
     val request = new requests.MetadataRequest.Builder(List.empty.asJava, false).build()
     val response = connectAndReceive[MetadataResponse](request)
     assertEquals(Collections.emptyMap, response.errorCounts)
-    assertFalse("Cluster id not returned", response.clusterId.isEmpty)
+    assertFalse(response.clusterId.isEmpty, "Cluster id not returned")
   }
 
   @Test
@@ -1860,6 +1853,44 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
     shouldIdempotentProducerFailInInitProducerId(true)
   }
 
+  @Test
+  def testDescribeClusterClusterAuthorizedOperationsWithoutDescribeCluster(): Unit = {
+    removeAllClientAcls()
+
+    for (version <- ApiKeys.DESCRIBE_CLUSTER.oldestVersion to ApiKeys.DESCRIBE_CLUSTER.latestVersion) {
+      val describeClusterRequest = new DescribeClusterRequest.Builder(new DescribeClusterRequestData()
+        .setIncludeClusterAuthorizedOperations(true))
+        .build(version.toShort)
+      val describeClusterResponse = connectAndReceive[DescribeClusterResponse](describeClusterRequest)
+
+      assertEquals(0, describeClusterResponse.data.clusterAuthorizedOperations)
+    }
+  }
+
+  @Test
+  def testDescribeClusterClusterAuthorizedOperationsWithDescribeAndAlterCluster(): Unit = {
+    removeAllClientAcls()
+
+    val clusterResource = new ResourcePattern(ResourceType.CLUSTER, Resource.CLUSTER_NAME, PatternType.LITERAL)
+    val acls = Set(
+      new AccessControlEntry(clientPrincipalString, WildcardHost, DESCRIBE, ALLOW),
+      new AccessControlEntry(clientPrincipalString, WildcardHost, ALTER, ALLOW)
+    )
+    addAndVerifyAcls(acls, clusterResource)
+
+    val expectedClusterAuthorizedOperations = Utils.to32BitField(
+      acls.map(_.operation.code.asInstanceOf[JByte]).asJava)
+
+    for (version <- ApiKeys.DESCRIBE_CLUSTER.oldestVersion to ApiKeys.DESCRIBE_CLUSTER.latestVersion) {
+      val describeClusterRequest = new DescribeClusterRequest.Builder(new DescribeClusterRequestData()
+        .setIncludeClusterAuthorizedOperations(true))
+        .build(version.toShort)
+      val describeClusterResponse = connectAndReceive[DescribeClusterResponse](describeClusterRequest)
+
+      assertEquals(expectedClusterAuthorizedOperations, describeClusterResponse.data.clusterAuthorizedOperations)
+    }
+  }
+
   def removeAllClientAcls(): Unit = {
     val authorizer = servers.head.dataPlaneRequestProcessor.authorizer.get
     val aclEntryFilter = new AccessControlEntryFilter(clientPrincipalString, null, AclOperation.ANY, AclPermissionType.ANY)
@@ -1893,14 +1924,14 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
 
     if (topicExists)
       if (isAuthorized)
-        assertFalse(s"$apiKey should be allowed. Found unexpected authorization error $error", authorizationErrors.contains(error))
+        assertFalse(authorizationErrors.contains(error), s"$apiKey should be allowed. Found unexpected authorization error $error")
       else
-        assertTrue(s"$apiKey should be forbidden. Found error $error but expected one of $authorizationErrors", authorizationErrors.contains(error))
+        assertTrue(authorizationErrors.contains(error), s"$apiKey should be forbidden. Found error $error but expected one of $authorizationErrors")
     else if (resources == Set(TOPIC))
       if (isAuthorized)
-        assertEquals(s"$apiKey had an unexpected error", Errors.UNKNOWN_TOPIC_OR_PARTITION, error)
+        assertEquals(Errors.UNKNOWN_TOPIC_OR_PARTITION, error, s"$apiKey had an unexpected error")
       else
-        assertEquals(s"$apiKey had an unexpected error", Errors.TOPIC_AUTHORIZATION_FAILED, error)
+        assertEquals(Errors.TOPIC_AUTHORIZATION_FAILED, error, s"$apiKey had an unexpected error")
 
     response
   }

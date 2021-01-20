@@ -299,6 +299,16 @@ public class JsonConverter implements Converter, HeaderConverter {
         );
     }
 
+    // visible for testing
+    long sizeOfFromConnectSchemaCache() {
+        return fromConnectSchemaCache.size();
+    }
+
+    // visible for testing
+    long sizeOfToConnectSchemaCache() {
+        return toConnectSchemaCache.size();
+    }
+
     @Override
     public ConfigDef config() {
         return JsonConverterConfig.configDef();

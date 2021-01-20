@@ -22,9 +22,8 @@ import org.apache.kafka.common.record.MemoryRecords;
 import org.apache.kafka.common.requests.FetchRequest;
 import org.apache.kafka.common.requests.FetchResponse;
 import org.apache.kafka.common.utils.LogContext;
-import org.junit.Rule;
-import org.junit.Test;
-import org.junit.rules.Timeout;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.Timeout;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -39,18 +38,16 @@ import java.util.TreeSet;
 
 import static org.apache.kafka.common.requests.FetchMetadata.INITIAL_EPOCH;
 import static org.apache.kafka.common.requests.FetchMetadata.INVALID_SESSION_ID;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertTrue;
-import static org.junit.Assert.fail;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.fail;
 
 /**
  * A unit test for FetchSessionHandler.
  */
+@Timeout(120)
 public class FetchSessionHandlerTest {
-    @Rule
-    final public Timeout globalTimeout = Timeout.millis(120000);
-
     private static final LogContext LOG_CONTEXT = new LogContext("[FetchSessionHandler]=");
 
     /**
@@ -119,10 +116,10 @@ public class FetchSessionHandlerTest {
                 fail("Element " + i + " not found.");
             }
             Map.Entry<TopicPartition, FetchRequest.PartitionData> actuaLEntry = actualIter.next();
-            assertEquals("Element " + i + " had a different TopicPartition than expected.",
-                expectedEntry.getKey(), actuaLEntry.getKey());
-            assertEquals("Element " + i + " had different PartitionData than expected.",
-                expectedEntry.getValue(), actuaLEntry.getValue());
+            assertEquals(expectedEntry.getKey(), actuaLEntry.getKey(), "Element " + i +
+                " had a different TopicPartition than expected.");
+            assertEquals(expectedEntry.getValue(), actuaLEntry.getValue(), "Element " + i +
+                " had different PartitionData than expected.");
             i++;
         }
         if (expectedIter.hasNext()) {

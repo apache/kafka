@@ -20,8 +20,8 @@ import kafka.server.LogDirFailureChannel
 import kafka.utils.{Logging, TestUtils}
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.errors.KafkaStorageException
-import org.junit.Assert._
-import org.junit.Test
+import org.junit.jupiter.api.Assertions._
+import org.junit.jupiter.api.Test
 import org.mockito.Mockito
 
 import scala.collection.Map
@@ -128,8 +128,7 @@ class OffsetCheckpointFileTest extends Logging {
     val logDir = "/tmp/kafka-logs"
     val mockCheckpointFile = Mockito.mock(classOf[OffsetCheckpointFile])
     val lazyCheckpoints = new LazyOffsetCheckpoints(Map(logDir -> mockCheckpointFile))
-    assertThrows(classOf[IllegalArgumentException],
-      () => lazyCheckpoints.fetch("/invalid/kafka-logs", new TopicPartition("foo", 0)))
+    assertThrows(classOf[IllegalArgumentException], () => lazyCheckpoints.fetch("/invalid/kafka-logs", new TopicPartition("foo", 0)))
   }
 
 }

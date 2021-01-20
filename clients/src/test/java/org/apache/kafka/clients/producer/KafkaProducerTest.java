@@ -68,12 +68,12 @@ import org.apache.kafka.test.MockPartitioner;
 import org.apache.kafka.test.MockProducerInterceptor;
 import org.apache.kafka.test.MockSerializer;
 import org.apache.kafka.test.TestUtils;
-import org.junit.Assert;
-import org.junit.Test;
+import org.junit.jupiter.api.Test;
 
 import javax.management.MBeanServer;
 import javax.management.ObjectName;
 import java.lang.management.ManagementFactory;
+import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -98,14 +98,15 @@ import java.util.stream.Stream;
 
 import static java.util.Collections.emptyMap;
 import static java.util.Collections.singletonMap;
-import static org.junit.Assert.assertArrayEquals;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertNotEquals;
-import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.assertThrows;
-import static org.junit.Assert.assertTrue;
-import static org.junit.Assert.fail;
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.fail;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyLong;
@@ -181,7 +182,7 @@ public class KafkaProducerTest {
 
         MockMetricsReporter mockMetricsReporter = (MockMetricsReporter) producer.metrics.reporters().get(0);
 
-        Assert.assertEquals(producer.getClientId(), mockMetricsReporter.clientId);
+        assertEquals(producer.getClientId(), mockMetricsReporter.clientId);
         producer.close();
     }
 
@@ -225,7 +226,7 @@ public class KafkaProducerTest {
         try (KafkaProducer<?, ?> ff = new KafkaProducer<>(props, new StringSerializer(), new StringSerializer())) {
             fail("Constructor should throw exception");
         } catch (ConfigException e) {
-            assertTrue("Unexpected exception message: " + e.getMessage(), e.getMessage().contains("not string key"));
+            assertTrue(e.getMessage().contains("not string key"), "Unexpected exception message: " + e.getMessage());
         }
     }
 
@@ -264,7 +265,7 @@ public class KafkaProducerTest {
             assertEquals(0, MockProducerInterceptor.CLOSE_COUNT.get());
 
             // Cluster metadata will only be updated on calling onSend.
-            Assert.assertNull(MockProducerInterceptor.CLUSTER_META.get());
+            assertNull(MockProducerInterceptor.CLUSTER_META.get());
 
             producer.close();
             assertEquals(1, MockProducerInterceptor.INIT_COUNT.get());
@@ -335,13 +336,12 @@ public class KafkaProducerTest {
             // Ensure send has started
             client.waitForRequests(1, 1000);
 
-            assertTrue("Close terminated prematurely", future.cancel(true));
+            assertTrue(future.cancel(true), "Close terminated prematurely");
 
             TestUtils.waitForCondition(() -> closeException.get() != null,
                     "InterruptException did not occur within timeout.");
 
-            assertTrue("Expected exception not thrown " + closeException,
-                    closeException.get() instanceof InterruptException);
+            assertTrue(closeException.get() instanceof InterruptException, "Expected exception not thrown " + closeException);
         } finally {
             executor.shutdownNow();
         }
@@ -1096,8 +1096,8 @@ public class KafkaProducerTest {
 
         Future<RecordMetadata> future = producer.send(record);
 
-        assertEquals("Cluster has incorrect invalid topic list.", Collections.singleton(invalidTopicName),
-                metadata.fetch().invalidTopics());
+        assertEquals(Collections.singleton(invalidTopicName),
+                metadata.fetch().invalidTopics(), "Cluster has incorrect invalid topic list.");
         TestUtils.assertFutureError(future, InvalidTopicException.class);
 
         producer.close(Duration.ofMillis(0));
@@ -1267,7 +1267,7 @@ public class KafkaProducerTest {
         MetricName testMetricName = producer.metrics.metricName("test-metric",
                 "grp1", "test metric");
         producer.metrics.addMetric(testMetricName, new Avg());
-        Assert.assertNotNull(server.getObjectInstance(new ObjectName("kafka.producer:type=grp1,client-id=client-1")));
+        assertNotNull(server.getObjectInstance(new ObjectName("kafka.producer:type=grp1,client-id=client-1")));
         producer.close();
     }
 
@@ -1307,6 +1307,13 @@ public class KafkaProducerTest {
                 null, null, null, Time.SYSTEM)) {
             assertTrue(config.unused().contains(SslConfigs.SSL_PROTOCOL_CONFIG));
         }
+    }
+
+    @Test
+    public void testNullTopicName() {
+        // send a record with null topic should fail
+        assertThrows(IllegalArgumentException.class, () -> new ProducerRecord<>(null, 1,
+            "key".getBytes(StandardCharsets.UTF_8), "value".getBytes(StandardCharsets.UTF_8)));
     }
 
     private static final List<String> CLIENT_IDS = new ArrayList<>();

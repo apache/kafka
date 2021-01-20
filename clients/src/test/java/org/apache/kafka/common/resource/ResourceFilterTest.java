@@ -17,13 +17,13 @@
 
 package org.apache.kafka.common.resource;
 
-import org.junit.Test;
+import org.junit.jupiter.api.Test;
 
 import static org.apache.kafka.common.resource.ResourceType.ANY;
 import static org.apache.kafka.common.resource.ResourceType.GROUP;
 import static org.apache.kafka.common.resource.ResourceType.TOPIC;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class ResourceFilterTest {
     @Test

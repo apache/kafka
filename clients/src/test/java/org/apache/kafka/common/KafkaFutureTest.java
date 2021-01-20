@@ -17,10 +17,8 @@
 package org.apache.kafka.common;
 
 import org.apache.kafka.common.internals.KafkaFutureImpl;
-import org.junit.Assert;
-import org.junit.Rule;
-import org.junit.Test;
-import org.junit.rules.Timeout;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.Timeout;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -28,19 +26,17 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 
-import static org.junit.Assert.assertThrows;
-import static org.junit.Assert.assertNull;
-import static org.junit.Assert.assertTrue;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 
 /**
  * A unit test for KafkaFuture.
  */
+@Timeout(120)
 public class KafkaFutureTest {
-
-    @Rule
-    final public Timeout globalTimeout = Timeout.millis(120000);
 
     @Test
     public void testCompleteFutures() throws Exception {
@@ -57,13 +53,9 @@ public class KafkaFutureTest {
 
         KafkaFutureImpl<Integer> futureFail = new KafkaFutureImpl<>();
         futureFail.completeExceptionally(new RuntimeException("We require more vespene gas"));
-        try {
-            futureFail.get();
-            Assert.fail("Expected an exception");
-        } catch (ExecutionException e) {
-            assertEquals(RuntimeException.class, e.getCause().getClass());
-            Assert.assertEquals("We require more vespene gas", e.getCause().getMessage());
-        }
+        ExecutionException e = assertThrows(ExecutionException.class, futureFail::get);
+        assertEquals(RuntimeException.class, e.getCause().getClass());
+        assertEquals("We require more vespene gas", e.getCause().getMessage());
     }
 
     @Test
