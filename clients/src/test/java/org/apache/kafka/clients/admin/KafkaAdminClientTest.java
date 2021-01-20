@@ -2120,7 +2120,6 @@ public class KafkaAdminClientTest {
                     MetadataResponse.AUTHORIZED_OPERATIONS_OMITTED,
                     ApiKeys.METADATA.latestVersion()));
 
-            // Test DescribeCluster with the authorized operations omitted.
             final DescribeClusterResult result = env.adminClient().describeCluster();
             assertEquals(env.cluster().clusterResource().clusterId(), result.clusterId().get());
             assertEquals(new HashSet<>(env.cluster().nodes()), new HashSet<>(result.nodes().get()));

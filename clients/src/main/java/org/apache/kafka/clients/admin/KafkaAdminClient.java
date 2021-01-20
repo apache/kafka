@@ -1866,7 +1866,7 @@ public class KafkaAdminClient extends AdminClient {
 
                     Map<Integer, Node> nodes = response.nodes();
                     describeClusterFuture.complete(nodes.values());
-                    // Controller is null if controller id is equals to NO_CONTROLLER_ID
+                    // Controller is null if controller id is equal to NO_CONTROLLER_ID
                     controllerFuture.complete(nodes.get(response.data().controllerId()));
                     clusterIdFuture.complete(response.data().clusterId());
                     authorizedOperationsFuture.complete(
