@@ -22,8 +22,8 @@ import org.apache.kafka.clients.admin.{Admin, AdminClientConfig, CreateDelegatio
 import org.apache.kafka.common.errors.InvalidPrincipalTypeException
 import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.common.utils.SecurityUtils
-import org.junit.Assert._
-import org.junit.{After, Before, Test}
+import org.junit.jupiter.api.Assertions._
+import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
 
 import java.util
 import scala.concurrent.ExecutionException
@@ -39,7 +39,7 @@ class DelegationTokenRequestsTest extends BaseRequestTest with SaslSetup {
 
   override def brokerCount = 1
 
-  @Before
+  @BeforeEach
   override def setUp(): Unit = {
     startSasl(jaasSections(kafkaServerSaslMechanisms, Some(kafkaClientSaslMechanism), KafkaSasl, JaasTestUtils.KafkaServerContextName))
     super.setUp()
@@ -74,7 +74,7 @@ class DelegationTokenRequestsTest extends BaseRequestTest with SaslSetup {
 
     //test describe token
     var tokens = adminClient.describeDelegationToken().delegationTokens().get()
-    assertTrue(tokens.size() == 1)
+    assertEquals(1, tokens.size())
     var token1 = tokens.get(0)
     assertEquals(token1, tokenCreated)
 
@@ -123,7 +123,7 @@ class DelegationTokenRequestsTest extends BaseRequestTest with SaslSetup {
     assertTrue(tokens.isEmpty)
   }
 
-  @After
+  @AfterEach
   override def tearDown(): Unit = {
     if (adminClient != null)
       adminClient.close()

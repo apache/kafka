@@ -33,7 +33,7 @@ import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.record.{MemoryRecords, RecordBatch, RecordConversionStats}
 import org.apache.kafka.common.requests.ProduceResponse.PartitionResponse
 import org.easymock.EasyMock
-import org.junit.{After, Before}
+import org.junit.jupiter.api.{AfterEach, BeforeEach}
 
 import scala.collection._
 import scala.jdk.CollectionConverters._
@@ -51,7 +51,7 @@ abstract class AbstractCoordinatorConcurrencyTest[M <: CoordinatorMember] {
   val serverProps = TestUtils.createBrokerConfig(nodeId = 0, zkConnect = "")
   val random = new Random
 
-  @Before
+  @BeforeEach
   def setUp(): Unit = {
 
     replicaManager = EasyMock.partialMockBuilder(classOf[TestReplicaManager]).createMock()
@@ -60,7 +60,7 @@ abstract class AbstractCoordinatorConcurrencyTest[M <: CoordinatorMember] {
     zkClient = EasyMock.createNiceMock(classOf[KafkaZkClient])
   }
 
-  @After
+  @AfterEach
   def tearDown(): Unit = {
     EasyMock.reset(replicaManager)
     if (executor != null)

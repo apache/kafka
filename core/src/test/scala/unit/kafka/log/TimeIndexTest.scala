@@ -21,8 +21,8 @@ import java.io.File
 
 import kafka.utils.TestUtils
 import org.apache.kafka.common.errors.InvalidOffsetException
-import org.junit.{After, Before, Test}
-import org.junit.Assert.{assertEquals, assertThrows}
+import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
+import org.junit.jupiter.api.Assertions.{assertEquals, assertThrows}
 
 /**
  * Unit test for time index.
@@ -32,12 +32,12 @@ class TimeIndexTest {
   val maxEntries = 30
   val baseOffset = 45L
 
-  @Before
+  @BeforeEach
   def setup(): Unit = {
     this.idx = new TimeIndex(nonExistantTempFile(), baseOffset = baseOffset, maxIndexSize = maxEntries * 12)
   }
 
-  @After
+  @AfterEach
   def teardown(): Unit = {
     if(this.idx != null)
       this.idx.file.delete()

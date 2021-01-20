@@ -31,8 +31,8 @@ import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.errors.CorruptRecordException
 import org.apache.kafka.common.record._
 import org.apache.kafka.common.utils.Utils
-import org.junit.Assert._
-import org.junit.{After, Test}
+import org.junit.jupiter.api.Assertions._
+import org.junit.jupiter.api.{AfterEach, Test}
 
 import scala.collection._
 import scala.jdk.CollectionConverters._
@@ -55,7 +55,7 @@ class LogCleanerTest {
   val tombstoneRetentionMs = 86400000
   val largeTimestamp = Long.MaxValue - tombstoneRetentionMs - 1
 
-  @After
+  @AfterEach
   def teardown(): Unit = {
     Utils.delete(tmpdir)
   }
@@ -183,8 +183,8 @@ class LogCleanerTest {
     // clean the log with only one message removed
     cleaner.clean(LogToClean(new TopicPartition("test", 0), log, 2, log.activeSegment.baseOffset))
 
-    assertTrue("Cleaned segment file should be trimmed to its real size.",
-      log.logSegments.iterator.next().log.channel.size < originalMaxFileSize)
+    assertTrue(log.logSegments.iterator.next().log.channel.size < originalMaxFileSize,
+      "Cleaned segment file should be trimmed to its real size.")
   }
 
   @Test
@@ -819,8 +819,7 @@ class LogCleanerTest {
 
     cleaner.clean(LogToClean(new TopicPartition("test", 0), log, 0, log.activeSegment.baseOffset))
     val keys = LogTest.keysInLog(log).toSet
-    assertTrue("None of the keys we deleted should still exist.",
-               (0 until leo.toInt by 2).forall(!keys.contains(_)))
+    assertTrue((0 until leo.toInt by 2).forall(!keys.contains(_)), "None of the keys we deleted should still exist.")
   }
 
   @Test
@@ -969,17 +968,18 @@ class LogCleanerTest {
     def distinctValuesBySegment = log.logSegments.map(s => s.log.records.asScala.map(record => TestUtils.readString(record.value)).toSet.size).toSeq
 
     val disctinctValuesBySegmentBeforeClean = distinctValuesBySegment
-    assertTrue("Test is not effective unless each segment contains duplicates. Increase segment size or decrease number of keys.",
-      distinctValuesBySegment.reverse.tail.forall(_ > N))
+    assertTrue(distinctValuesBySegment.reverse.tail.forall(_ > N),
+      "Test is not effective unless each segment contains duplicates. Increase segment size or decrease number of keys.")
 
     cleaner.clean(LogToClean(new TopicPartition("test", 0), log, 0, firstUncleanableOffset))
 
     val distinctValuesBySegmentAfterClean = distinctValuesBySegment
 
-    assertTrue("The cleanable segments should have fewer number of values after cleaning",
-      disctinctValuesBySegmentBeforeClean.zip(distinctValuesBySegmentAfterClean).take(numCleanableSegments).forall { case (before, after) => after < before })
-    assertTrue("The uncleanable segments should have the same number of values after cleaning", disctinctValuesBySegmentBeforeClean.zip(distinctValuesBySegmentAfterClean)
-      .slice(numCleanableSegments, numTotalSegments).forall { x => x._1 == x._2 })
+    assertTrue(disctinctValuesBySegmentBeforeClean.zip(distinctValuesBySegmentAfterClean)
+      .take(numCleanableSegments).forall { case (before, after) => after < before },
+      "The cleanable segments should have fewer number of values after cleaning")
+    assertTrue(disctinctValuesBySegmentBeforeClean.zip(distinctValuesBySegmentAfterClean)
+      .slice(numCleanableSegments, numTotalSegments).forall { x => x._1 == x._2 }, "The uncleanable segments should have the same number of values after cleaning")
   }
 
   @Test
@@ -996,8 +996,8 @@ class LogCleanerTest {
 
     val logToClean = LogToClean(new TopicPartition("test", 0), log, log.activeSegment.baseOffset, log.activeSegment.baseOffset)
 
-    assertEquals("Total bytes of LogToClean should equal size of all segments excluding the active segment",
-      logToClean.totalBytes, log.size - log.activeSegment.size)
+    assertEquals(logToClean.totalBytes, log.size - log.activeSegment.size,
+      "Total bytes of LogToClean should equal size of all segments excluding the active segment")
   }
 
   @Test
@@ -1019,14 +1019,16 @@ class LogCleanerTest {
     val expectedCleanSize = segs.take(2).map(_.size).sum
     val expectedCleanableSize = segs.slice(2, 4).map(_.size).sum
 
-    assertEquals("Uncleanable bytes of LogToClean should equal size of all segments prior the one containing first dirty",
-      logToClean.cleanBytes, expectedCleanSize)
-    assertEquals("Cleanable bytes of LogToClean should equal size of all segments from the one containing first dirty offset" +
-      " to the segment prior to the one with the first uncleanable offset",
-      logToClean.cleanableBytes, expectedCleanableSize)
-    assertEquals("Total bytes should be the sum of the clean and cleanable segments", logToClean.totalBytes, expectedCleanSize + expectedCleanableSize)
-    assertEquals("Total cleanable ratio should be the ratio of cleanable size to clean plus cleanable", logToClean.cleanableRatio,
-      expectedCleanableSize / (expectedCleanSize + expectedCleanableSize).toDouble, 1.0e-6d)
+    assertEquals(logToClean.cleanBytes, expectedCleanSize,
+      "Uncleanable bytes of LogToClean should equal size of all segments prior the one containing first dirty")
+    assertEquals(logToClean.cleanableBytes, expectedCleanableSize,
+      "Cleanable bytes of LogToClean should equal size of all segments from the one containing first dirty offset" +
+        " to the segment prior to the one with the first uncleanable offset")
+    assertEquals(logToClean.totalBytes, expectedCleanSize + expectedCleanableSize,
+      "Total bytes should be the sum of the clean and cleanable segments")
+    assertEquals(logToClean.cleanableRatio,
+      expectedCleanableSize / (expectedCleanSize + expectedCleanableSize).toDouble, 1.0e-6d,
+      "Total cleanable ratio should be the ratio of cleanable size to clean plus cleanable")
   }
 
   @Test
@@ -1054,9 +1056,9 @@ class LogCleanerTest {
     val expectedSizeAfterCleaning = log.size - sizeWithUnkeyedMessages
     val (_, stats) = cleaner.clean(LogToClean(new TopicPartition("test", 0), log, 0, log.activeSegment.baseOffset))
 
-    assertEquals("Log should only contain keyed messages after cleaning.", 0, unkeyedMessageCountInLog(log))
-    assertEquals("Log should only contain keyed messages after cleaning.", expectedSizeAfterCleaning, log.size)
-    assertEquals("Cleaner should have seen %d invalid messages.", numInvalidMessages, stats.invalidMessagesRead)
+    assertEquals(0, unkeyedMessageCountInLog(log), "Log should only contain keyed messages after cleaning.")
+    assertEquals(expectedSizeAfterCleaning, log.size, "Log should only contain keyed messages after cleaning.")
+    assertEquals(numInvalidMessages, stats.invalidMessagesRead, "Cleaner should have seen %d invalid messages.")
   }
 
   def lastOffsetsPerBatchInLog(log: Log): Iterable[Long] = {
@@ -1133,11 +1135,11 @@ class LogCleanerTest {
     // grouping by very small values should result in all groups having one entry
     groups = cleaner.groupSegmentsBySize(log.logSegments, maxSize = 1, maxIndexSize = Int.MaxValue, log.logEndOffset)
     assertEquals(log.numberOfSegments, groups.size)
-    assertTrue("All groups should be singletons.", groups.forall(_.size == 1))
+    assertTrue(groups.forall(_.size == 1), "All groups should be singletons.")
     checkSegmentOrder(groups)
     groups = cleaner.groupSegmentsBySize(log.logSegments, maxSize = Int.MaxValue, maxIndexSize = 1, log.logEndOffset)
     assertEquals(log.numberOfSegments, groups.size)
-    assertTrue("All groups should be singletons.", groups.forall(_.size == 1))
+    assertTrue(groups.forall(_.size == 1), "All groups should be singletons.")
     checkSegmentOrder(groups)
 
     val groupSize = 3
@@ -1146,13 +1148,14 @@ class LogCleanerTest {
     val logSize = log.logSegments.take(groupSize).map(_.size).sum.toInt + 1
     groups = cleaner.groupSegmentsBySize(log.logSegments, maxSize = logSize, maxIndexSize = Int.MaxValue, log.logEndOffset)
     checkSegmentOrder(groups)
-    assertTrue("All but the last group should be the target size.", groups.dropRight(1).forall(_.size == groupSize))
+    assertTrue(groups.dropRight(1).forall(_.size == groupSize), "All but the last group should be the target size.")
 
     // check grouping by index size
     val indexSize = log.logSegments.take(groupSize).map(_.offsetIndex.sizeInBytes).sum + 1
     groups = cleaner.groupSegmentsBySize(log.logSegments, maxSize = Int.MaxValue, maxIndexSize = indexSize, log.logEndOffset)
     checkSegmentOrder(groups)
-    assertTrue("All but the last group should be the target size.", groups.dropRight(1).forall(_.size == groupSize))
+    assertTrue(groups.dropRight(1).forall(_.size == groupSize),
+      "All but the last group should be the target size.")
   }
 
   /**
@@ -1200,7 +1203,8 @@ class LogCleanerTest {
     groups = cleaner.groupSegmentsBySize(log.logSegments, maxSize = Int.MaxValue, maxIndexSize = Int.MaxValue, log.logEndOffset)
     assertEquals(log.numberOfSegments - 1, groups.size)
     for (group <- groups)
-      assertTrue("Relative offset greater than Int.MaxValue", group.last.offsetIndex.lastOffset - group.head.offsetIndex.baseOffset <= Int.MaxValue)
+      assertTrue(group.last.offsetIndex.lastOffset - group.head.offsetIndex.baseOffset <= Int.MaxValue,
+        "Relative offset greater than Int.MaxValue")
     checkSegmentOrder(groups)
   }
 
@@ -1234,21 +1238,23 @@ class LogCleanerTest {
     val record4 = messageWithOffset("hello".getBytes, "hello".getBytes, Int.MaxValue.toLong + 1)
     log.appendAsFollower(record4)
 
-    assertTrue("Actual offset range should be > Int.MaxValue", log.logEndOffset - 1 - log.logStartOffset > Int.MaxValue)
-    assertTrue("index.lastOffset is reporting the wrong last offset", log.logSegments.last.offsetIndex.lastOffset - log.logStartOffset <= Int.MaxValue)
+    assertTrue(log.logEndOffset - 1 - log.logStartOffset > Int.MaxValue, "Actual offset range should be > Int.MaxValue")
+    assertTrue(log.logSegments.last.offsetIndex.lastOffset - log.logStartOffset <= Int.MaxValue,
+      "index.lastOffset is reporting the wrong last offset")
 
     // grouping should result in two groups because the second segment takes the offset range > MaxInt
     val groups = cleaner.groupSegmentsBySize(log.logSegments, maxSize = Int.MaxValue, maxIndexSize = Int.MaxValue, log.logEndOffset)
     assertEquals(2, groups.size)
 
     for (group <- groups)
-      assertTrue("Relative offset greater than Int.MaxValue", group.last.readNextOffset - 1 - group.head.baseOffset <= Int.MaxValue)
+      assertTrue(group.last.readNextOffset - 1 - group.head.baseOffset <= Int.MaxValue,
+        "Relative offset greater than Int.MaxValue")
     checkSegmentOrder(groups)
   }
 
   private def checkSegmentOrder(groups: Seq[Seq[LogSegment]]): Unit = {
     val offsets = groups.flatMap(_.map(_.baseOffset))
-    assertEquals("Offsets should be in increasing order.", offsets.sorted, offsets)
+    assertEquals(offsets.sorted, offsets, "Offsets should be in increasing order.")
   }
 
   /**
@@ -1267,12 +1273,12 @@ class LogCleanerTest {
       val stats = new CleanerStats()
       cleaner.buildOffsetMap(log, start, end, map, stats)
       val endOffset = map.latestOffset + 1
-      assertEquals("Last offset should be the end offset.", end, endOffset)
-      assertEquals("Should have the expected number of messages in the map.", end-start, map.size)
+      assertEquals(end, endOffset, "Last offset should be the end offset.")
+      assertEquals(end-start, map.size, "Should have the expected number of messages in the map.")
       for(i <- start until end)
-        assertEquals("Should find all the keys", i.toLong, map.get(key(i)))
-      assertEquals("Should not find a value too small", -1L, map.get(key(start - 1)))
-      assertEquals("Should not find a value too large", -1L, map.get(key(end)))
+        assertEquals(i.toLong, map.get(key(i)), "Should find all the keys")
+      assertEquals(-1L, map.get(key(start - 1)), "Should not find a value too small")
+      assertEquals(-1L, map.get(key(end)), "Should not find a value too large")
       assertEquals(end - start, stats.mapMessagesRead)
     }
 
@@ -1446,10 +1452,10 @@ class LogCleanerTest {
     val offsetSeq = Seq(offsetStart, offsetEnd)
     writeToLog(log, (keyStart until keyEnd) zip (keyStart until keyEnd), offsetSeq)
     cleaner.buildOffsetMap(log, keyStart, offsetEnd + 1L, map, new CleanerStats())
-    assertEquals("Last offset should be the end offset.", offsetEnd, map.latestOffset)
-    assertEquals("Should have the expected number of messages in the map.", keyEnd - keyStart, map.size)
-    assertEquals("Map should contain first value", 0L, map.get(key(0)))
-    assertEquals("Map should contain second value", offsetEnd, map.get(key(1)))
+    assertEquals(offsetEnd, map.latestOffset, "Last offset should be the end offset.")
+    assertEquals(keyEnd - keyStart, map.size, "Should have the expected number of messages in the map.")
+    assertEquals(0L, map.get(key(0)), "Map should contain first value")
+    assertEquals(offsetEnd, map.get(key(1)), "Map should contain second value")
   }
 
   /**
@@ -1560,14 +1566,16 @@ class LogCleanerTest {
     log.roll()
 
     cleaner.clean(LogToClean(new TopicPartition("test", 0), log, 1, log.activeSegment.baseOffset))
-    assertEquals("The tombstone should be retained.", 1, log.logSegments.head.log.batches.iterator.next().lastOffset)
+    assertEquals(1, log.logSegments.head.log.batches.iterator.next().lastOffset,
+      "The tombstone should be retained.")
     // Append a message and roll out another log segment.
     log.appendAsLeader(TestUtils.singletonRecords(value = "1".getBytes,
                                           key = "1".getBytes,
                                           timestamp = time.milliseconds()), leaderEpoch = 0)
     log.roll()
     cleaner.clean(LogToClean(new TopicPartition("test", 0), log, 2, log.activeSegment.baseOffset))
-    assertEquals("The tombstone should be retained.", 1, log.logSegments.head.log.batches.iterator.next().lastOffset)
+    assertEquals(1, log.logSegments.head.log.batches.iterator.next().lastOffset,
+      "The tombstone should be retained.")
   }
 
   /**
@@ -1591,7 +1599,8 @@ class LogCleanerTest {
       log.appendAsFollower(messageWithOffset(1015, 1015, 11L))
 
       val (nextDirtyOffset, _) = cleaner.clean(LogToClean(log.topicPartition, log, 0L, log.activeSegment.baseOffset, needCompactionNow = true))
-      assertEquals("Cleaning point should pass offset gap", log.activeSegment.baseOffset, nextDirtyOffset)
+      assertEquals(log.activeSegment.baseOffset, nextDirtyOffset,
+        "Cleaning point should pass offset gap")
     }
 
 
@@ -1609,7 +1618,8 @@ class LogCleanerTest {
       log.appendAsFollower(messageWithOffset(1015, 1015, 30L))
 
       val (nextDirtyOffset, _) = cleaner.clean(LogToClean(log.topicPartition, log, 0L, log.activeSegment.baseOffset, needCompactionNow = true))
-      assertEquals("Cleaning point should pass offset gap in multiple segments", log.activeSegment.baseOffset, nextDirtyOffset)
+      assertEquals(log.activeSegment.baseOffset, nextDirtyOffset,
+        "Cleaning point should pass offset gap in multiple segments")
     }
   }
 

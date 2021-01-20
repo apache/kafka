@@ -23,8 +23,8 @@ import org.apache.kafka.common.errors.AuthenticationException;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.internals.ClusterResourceListeners;
 import org.apache.kafka.common.message.ApiVersionsResponseData;
-import org.apache.kafka.common.message.ApiVersionsResponseData.ApiVersionsResponseKey;
-import org.apache.kafka.common.message.ApiVersionsResponseData.ApiVersionsResponseKeyCollection;
+import org.apache.kafka.common.message.ApiVersionsResponseData.ApiVersion;
+import org.apache.kafka.common.message.ApiVersionsResponseData.ApiVersionCollection;
 import org.apache.kafka.common.message.ProduceRequestData;
 import org.apache.kafka.common.message.ProduceResponseData;
 import org.apache.kafka.common.network.NetworkReceive;
@@ -304,8 +304,8 @@ public class NetworkClientTest {
         assertEquals(3, header.apiVersion());
 
         // prepare response
-        ApiVersionsResponseKeyCollection apiKeys = new ApiVersionsResponseKeyCollection();
-        apiKeys.add(new ApiVersionsResponseKey()
+        ApiVersionCollection apiKeys = new ApiVersionCollection();
+        apiKeys.add(new ApiVersion()
             .setApiKey(ApiKeys.API_VERSIONS.id)
             .setMinVersion((short) 0)
             .setMaxVersion((short) 2));
@@ -526,19 +526,14 @@ public class NetworkClientTest {
     // Creates expected ApiVersionsResponse from the specified node, where the max protocol version for the specified
     // key is set to the specified version.
     private ApiVersionsResponse createExpectedApiVersionsResponse(ApiKeys key, short maxVersion) {
-        ApiVersionsResponseKeyCollection versionList = new ApiVersionsResponseKeyCollection();
+        ApiVersionCollection versionList = new ApiVersionCollection();
         for (ApiKeys apiKey : ApiKeys.values()) {
             if (apiKey == key) {
-                versionList.add(new ApiVersionsResponseKey()
+                versionList.add(new ApiVersion()
                     .setApiKey(apiKey.id)
                     .setMinVersion((short) 0)
                     .setMaxVersion(maxVersion));
-            } else {
-                versionList.add(new ApiVersionsResponseKey()
-                    .setApiKey(apiKey.id)
-                    .setMinVersion(apiKey.oldestVersion())
-                    .setMaxVersion(apiKey.latestVersion()));
-            }
+            } else versionList.add(ApiVersionsResponse.toApiVersion(apiKey));
         }
         return new ApiVersionsResponse(new ApiVersionsResponseData()
             .setErrorCode(Errors.NONE.code())

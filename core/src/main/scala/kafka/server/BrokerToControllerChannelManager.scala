@@ -18,6 +18,7 @@
 package kafka.server
 
 import java.util.concurrent.LinkedBlockingDeque
+import java.util.concurrent.atomic.AtomicReference
 
 import kafka.common.{InterBrokerSendThread, RequestAndCompletionHandler}
 import kafka.utils.Logging
@@ -50,6 +51,8 @@ class BrokerToControllerChannelManager(
 ) extends Logging {
   private val logContext = new LogContext(s"[broker-${config.brokerId}-to-controller] ")
   private val manualMetadataUpdater = new ManualMetadataUpdater()
+  private val apiVersions = new ApiVersions()
+  private val currentNodeApiVersions = NodeApiVersions.create()
   private val requestThread = newRequestThread
 
   def start(): Unit = {
@@ -102,8 +105,8 @@ class BrokerToControllerChannelManager(
         config.connectionSetupTimeoutMaxMs,
         ClientDnsLookup.USE_ALL_DNS_IPS,
         time,
-        false,
-        new ApiVersions,
+        true,
+        apiVersions,
         logContext
       )
     }
@@ -140,6 +143,14 @@ class BrokerToControllerChannelManager(
       callback
     ))
   }
+
+  def controllerApiVersions(): Option[NodeApiVersions] =
+    requestThread.activeControllerAddress().flatMap(
+      activeController => if (activeController.id() == config.brokerId)
+        Some(currentNodeApiVersions)
+      else
+        Option(apiVersions.get(activeController.idString()))
+  )
 }
 
 abstract class ControllerRequestCompletionHandler extends RequestCompletionHandler {
@@ -169,11 +180,19 @@ class BrokerToControllerRequestThread(
 ) extends InterBrokerSendThread(threadName, networkClient, config.controllerSocketTimeoutMs, time, isInterruptible = false) {
 
   private val requestQueue = new LinkedBlockingDeque[BrokerToControllerQueueItem]()
-  private var activeController: Option[Node] = None
+  private val activeController = new AtomicReference[Node](null)
+
+  def activeControllerAddress(): Option[Node] = {
+    Option(activeController.get())
+  }
+
+  private def updateControllerAddress(newActiveController: Node): Unit = {
+    activeController.set(newActiveController)
+  }
 
   def enqueue(request: BrokerToControllerQueueItem): Unit = {
     requestQueue.add(request)
-    if (activeController.isDefined) {
+    if (activeControllerAddress().isDefined) {
       wakeup()
     }
   }
@@ -190,14 +209,17 @@ class BrokerToControllerRequestThread(
       if (currentTimeMs - request.createdTimeMs >= retryTimeoutMs) {
         requestIter.remove()
         request.callback.onTimeout()
-      } else if (activeController.isDefined) {
-        requestIter.remove()
-        return Some(RequestAndCompletionHandler(
-          time.milliseconds(),
-          activeController.get,
-          request.request,
-          handleResponse(request)
-        ))
+      } else {
+        val controllerAddress = activeControllerAddress()
+        if (controllerAddress.isDefined) {
+          requestIter.remove()
+          return Some(RequestAndCompletionHandler(
+            time.milliseconds(),
+            controllerAddress.get,
+            request.request,
+            handleResponse(request)
+          ))
+        }
       }
     }
     None
@@ -205,12 +227,15 @@ class BrokerToControllerRequestThread(
 
   private[server] def handleResponse(request: BrokerToControllerQueueItem)(response: ClientResponse): Unit = {
     if (response.wasDisconnected()) {
-      activeController = None
+      updateControllerAddress(null)
       requestQueue.putFirst(request)
     } else if (response.responseBody().errorCounts().containsKey(Errors.NOT_CONTROLLER)) {
       // just close the controller connection and wait for metadata cache update in doWork
-      networkClient.disconnect(activeController.get.idString)
-      activeController = None
+      activeControllerAddress().foreach { controllerAddress => {
+        networkClient.disconnect(controllerAddress.idString)
+        updateControllerAddress(null)
+      }}
+
       requestQueue.putFirst(request)
     } else {
       request.callback.onComplete(response)
@@ -218,7 +243,7 @@ class BrokerToControllerRequestThread(
   }
 
   override def doWork(): Unit = {
-    if (activeController.isDefined) {
+    if (activeControllerAddress().isDefined) {
       super.pollOnce(Long.MaxValue)
     } else {
       debug("Controller isn't cached, looking for local metadata changes")
@@ -227,9 +252,8 @@ class BrokerToControllerRequestThread(
         case Some(controller) =>
           info(s"Recorded new controller, from now on will use broker $controller")
           val controllerNode = controller.node(listenerName)
-          activeController = Some(controllerNode)
+          updateControllerAddress(controllerNode)
           metadataUpdater.setNodes(Seq(controllerNode).asJava)
-
         case None =>
           // need to backoff to avoid tight loops
           debug("No controller defined in metadata cache, retrying after backoff")
