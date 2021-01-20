@@ -95,14 +95,14 @@ class ReplicaAlterLogDirsThread(name: String,
       request.minBytes,
       request.maxBytes,
       false,
-      request.fetchData.asScala.toSeq,
+      request.fetchData(replicaMgr.metadataCache.getTopicNames().asJava).asScala.toSeq,
       UnboundedQuota,
       processResponseCallback,
       request.isolationLevel,
       None)
 
     if (partitionData == null)
-      throw new IllegalStateException(s"Failed to fetch data for partitions ${request.fetchData.keySet().toArray.mkString(",")}")
+      throw new IllegalStateException(s"Failed to fetch data for partitions ${request.fetchData(replicaMgr.metadataCache.getTopicNames().asJava).keySet().toArray.mkString(",")}")
 
     partitionData.toMap
   }
@@ -274,7 +274,8 @@ class ReplicaAlterLogDirsThread(name: String,
     } else {
       // Set maxWait and minBytes to 0 because the response should return immediately if
       // the future log has caught up with the current log of the partition
-      val requestBuilder = FetchRequest.Builder.forReplica(ApiKeys.FETCH.latestVersion, replicaId, 0, 0, requestMap).setMaxBytes(maxBytes)
+      val requestBuilder = FetchRequest.Builder.forReplica(ApiKeys.FETCH.latestVersion, replicaId, 0, 0, requestMap,
+        replicaMgr.metadataCache.getTopicIds().asJava).setMaxBytes(maxBytes)
       Some(ReplicaFetch(requestMap, requestBuilder))
     }
 

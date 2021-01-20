@@ -21,9 +21,11 @@ import java.io.{DataInputStream, DataOutputStream}
 import java.net.Socket
 import java.nio.ByteBuffer
 import java.util.Properties
+
 import kafka.api.IntegrationTestHarness
 import kafka.network.SocketServer
-import kafka.utils.NotNothing
+import kafka.utils.{NotNothing, TestUtils}
+import org.apache.kafka.common.Uuid
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.protocol.ApiKeys
 import org.apache.kafka.common.requests.{AbstractRequest, AbstractResponse, RequestHeader, RequestTestUtils, ResponseHeader}
@@ -149,4 +151,16 @@ abstract class BaseRequestTest extends IntegrationTestHarness {
     new RequestHeader(apiKey, apiVersion, clientId, correlationId)
   }
 
+  def getController(): KafkaServer = {
+    val controllerId = TestUtils.waitUntilControllerElected(zkClient)
+    servers.filter(s => s.config.brokerId == controllerId).head
+  }
+
+  def getTopicIds(): Map[String, Uuid] = {
+    getController().kafkaController.controllerContext.topicIds.toMap
+  }
+
+  def getTopicNames(): Map[Uuid, String] = {
+    getController().kafkaController.controllerContext.topicNames.toMap
+  }
 }

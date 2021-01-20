@@ -22,6 +22,7 @@ import java.net.InetAddress
 import java.util
 import java.util.Collections
 import java.util.concurrent.{DelayQueue, TimeUnit}
+
 import kafka.network.RequestChannel
 import kafka.network.RequestChannel.{EndThrottlingResponse, Response, StartThrottlingResponse}
 import org.apache.kafka.common.TopicPartition
@@ -29,6 +30,7 @@ import org.apache.kafka.common.memory.MemoryPool
 import org.apache.kafka.common.metrics.MetricConfig
 import org.apache.kafka.common.network.ClientInformation
 import org.apache.kafka.common.network.ListenerName
+import org.apache.kafka.common.protocol.ApiKeys
 import org.apache.kafka.common.requests.FetchRequest.PartitionData
 import org.apache.kafka.common.requests.{AbstractRequest, FetchRequest, RequestContext, RequestHeader, RequestTestUtils}
 import org.apache.kafka.common.security.auth.{KafkaPrincipal, SecurityProtocol}
@@ -44,7 +46,7 @@ class ThrottledChannelExpirationTest {
   private val metrics = new org.apache.kafka.common.metrics.Metrics(new MetricConfig(),
                                                                     Collections.emptyList(),
                                                                     time)
-  private val request = buildRequest(FetchRequest.Builder.forConsumer(0, 1000, new util.HashMap[TopicPartition, PartitionData]))._2
+  private val request = buildRequest(FetchRequest.Builder.forConsumer(ApiKeys.FETCH.latestVersion, 0, 1000, new util.HashMap[TopicPartition, PartitionData], Collections.emptyMap()))._2
 
   private def buildRequest[T <: AbstractRequest](builder: AbstractRequest.Builder[T],
                                                  listenerName: ListenerName = ListenerName.forSecurityProtocol(SecurityProtocol.PLAINTEXT)): (T, RequestChannel.Request) = {

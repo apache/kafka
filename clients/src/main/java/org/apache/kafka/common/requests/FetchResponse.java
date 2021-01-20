@@ -17,6 +17,7 @@
 package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.message.FetchResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.ByteBufferAccessor;
@@ -33,6 +34,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 import static org.apache.kafka.common.requests.FetchMetadata.INVALID_SESSION_ID;
@@ -259,8 +261,38 @@ public class FetchResponse<T extends BaseRecords> extends AbstractResponse {
         }
     }
 
+    public static final class IdError {
+        private final Uuid id;
+        private final List<FetchResponseData.FetchablePartitionResponse> errorData;
+
+        public IdError(Uuid id,
+                List<Integer> partitions,
+                Errors error) {
+            this.id = id;
+
+            this.errorData = partitions.stream().map(partition -> new FetchResponseData.FetchablePartitionResponse()
+                    .setPartition(partition)
+                    .setErrorCode(error.code())
+                    .setHighWatermark(FetchResponse.INVALID_HIGHWATERMARK)
+                    .setLastStableOffset(FetchResponse.INVALID_LAST_STABLE_OFFSET)
+                    .setLogStartOffset(FetchResponse.INVALID_LOG_START_OFFSET)
+                    .setAbortedTransactions(null)
+                    .setPreferredReadReplica(FetchResponse.INVALID_PREFERRED_REPLICA_ID)
+                    .setRecordSet(MemoryRecords.EMPTY)).collect(Collectors.toList());
+        }
+
+        public Uuid id() {
+            return this.id;
+        }
+
+        public List<FetchResponseData.FetchablePartitionResponse> errorData() {
+            return this.errorData;
+        }
+
+    }
+
     /**
-     * From version 3 or later, the entries in `responseData` should be in the same order as the entries in
+     * From version 3 or later, the 'interesting' entries in `responseData` should be in the same order as the entries in
      * `FetchRequest.fetchData`.
      *
      * @param error             The top-level error code.
@@ -270,25 +302,34 @@ public class FetchResponse<T extends BaseRecords> extends AbstractResponse {
      */
     public FetchResponse(Errors error,
                          LinkedHashMap<TopicPartition, PartitionData<T>> responseData,
+                         List<IdError> idErrors,
+                         Map<String, Uuid> topicIds,
                          int throttleTimeMs,
                          int sessionId) {
         super(ApiKeys.FETCH);
-        this.data = toMessage(throttleTimeMs, error, responseData.entrySet().iterator(), sessionId);
+        this.data = toMessage(throttleTimeMs, error, responseData.entrySet().iterator(), idErrors, topicIds, sessionId);
         this.responseDataMap = responseData;
     }
 
     public FetchResponse(FetchResponseData fetchResponseData) {
         super(ApiKeys.FETCH);
         this.data = fetchResponseData;
-        this.responseDataMap = toResponseDataMap(fetchResponseData);
+        if (!supportsTopicIds()) {
+            this.responseDataMap = toResponseDataMap(fetchResponseData);
+        } else {
+            this.responseDataMap = null;
+        }
     }
 
     public Errors error() {
         return Errors.forCode(data.errorCode());
     }
 
-    public LinkedHashMap<TopicPartition, PartitionData<T>> responseData() {
-        return responseDataMap;
+    public LinkedHashMap<TopicPartition, PartitionData<T>> responseData(Map<Uuid, String> topicNames) {
+        if (!supportsTopicIds())
+            return responseDataMap;
+        return toResponseDataMap(data, topicNames);
+
     }
 
     @Override
@@ -304,8 +345,15 @@ public class FetchResponse<T extends BaseRecords> extends AbstractResponse {
     public Map<Errors, Integer> errorCounts() {
         Map<Errors, Integer> errorCounts = new HashMap<>();
         updateErrorCounts(errorCounts, error());
-        responseDataMap.values().forEach(response ->
-            updateErrorCounts(errorCounts, response.error())
+        if (!supportsTopicIds()) {
+            responseDataMap.values().forEach(response ->
+                    updateErrorCounts(errorCounts, response.error())
+            );
+            return errorCounts;
+        }
+        data.responses().forEach(topic ->
+                topic.partitionResponses().forEach(partition ->
+                        updateErrorCounts(errorCounts, Errors.forCode(partition.errorCode())))
         );
         return errorCounts;
     }
@@ -328,8 +376,26 @@ public class FetchResponse<T extends BaseRecords> extends AbstractResponse {
         return responseMap;
     }
 
+    @SuppressWarnings("unchecked")
+    private static <T extends BaseRecords> LinkedHashMap<TopicPartition, PartitionData<T>> toResponseDataMap(
+            FetchResponseData message, Map<Uuid, String> topicNames) {
+        LinkedHashMap<TopicPartition, PartitionData<T>> responseMap = new LinkedHashMap<>();
+        message.responses().forEach(topicResponse -> {
+            String name = topicNames.get(topicResponse.topicId());
+            if (name != null) {
+                topicResponse.partitionResponses().forEach(partition ->
+                        responseMap.put(new TopicPartition(name, partition.partition()),
+                                new PartitionData(partition)
+                ));
+            }
+        });
+        return responseMap;
+    }
+
     private static <T extends BaseRecords> FetchResponseData toMessage(int throttleTimeMs, Errors error,
                                                                        Iterator<Map.Entry<TopicPartition, PartitionData<T>>> partIterator,
+                                                                       List<IdError> idErrors,
+                                                                       Map<String, Uuid> topicIds,
                                                                        int sessionId) {
         List<FetchResponseData.FetchableTopicResponse> topicResponseList = new ArrayList<>();
         partIterator.forEachRemaining(entry -> {
@@ -347,8 +413,17 @@ public class FetchResponse<T extends BaseRecords> extends AbstractResponse {
                 partitionResponses.add(partitionData.partitionResponse);
                 topicResponseList.add(new FetchResponseData.FetchableTopicResponse()
                         .setTopic(entry.getKey().topic())
+                        .setTopicId(topicIds.getOrDefault(entry.getKey().topic(), Uuid.ZERO_UUID))
                         .setPartitionResponses(partitionResponses));
             }
+        });
+        // ID errors will be empty unless topic IDs are supported and there were topic ID errors
+        idErrors.forEach(idError -> {
+            List<FetchResponseData.FetchablePartitionResponse> partitionResponses = new ArrayList<>();
+            partitionResponses.addAll(idError.errorData);
+            topicResponseList.add(new FetchResponseData.FetchableTopicResponse()
+                    .setTopicId(idError.id())
+                    .setPartitionResponses(partitionResponses));
         });
 
         return new FetchResponseData()
@@ -356,6 +431,15 @@ public class FetchResponse<T extends BaseRecords> extends AbstractResponse {
                 .setErrorCode(error.code())
                 .setSessionId(sessionId)
                 .setResponses(topicResponseList);
+    }
+
+    private Boolean supportsTopicIds() {
+        return data.responses().stream().findFirst().filter(
+            topic -> !topic.topicId().equals(Uuid.ZERO_UUID)).isPresent();
+    }
+
+    public Set<Uuid> topicIds() {
+        return data.responses().stream().map(resp -> resp.topicId()).filter(id -> !id.equals(Uuid.ZERO_UUID)).collect(Collectors.toSet());
     }
 
     /**
@@ -366,10 +450,12 @@ public class FetchResponse<T extends BaseRecords> extends AbstractResponse {
      * @return              The response size in bytes.
      */
     public static <T extends BaseRecords> int sizeOf(short version,
-                                                     Iterator<Map.Entry<TopicPartition, PartitionData<T>>> partIterator) {
+                                                     Iterator<Map.Entry<TopicPartition, PartitionData<T>>> partIterator,
+                                                     List<IdError> idErrors,
+                                                     Map<String, Uuid> topicIds) {
         // Since the throttleTimeMs and metadata field sizes are constant and fixed, we can
         // use arbitrary values here without affecting the result.
-        FetchResponseData data = toMessage(0, Errors.NONE, partIterator, INVALID_SESSION_ID);
+        FetchResponseData data = toMessage(0, Errors.NONE, partIterator, idErrors, topicIds, INVALID_SESSION_ID);
         ObjectSerializationCache cache = new ObjectSerializationCache();
         return 4 + data.size(cache, version);
     }
@@ -377,5 +463,17 @@ public class FetchResponse<T extends BaseRecords> extends AbstractResponse {
     @Override
     public boolean shouldClientThrottle(short version) {
         return version >= 8;
+    }
+
+    // Visible for testing
+    // Returns a FetchResponse as though it has been sent back from the server
+    // Will either contain topic names or topic IDs but not both.
+    public static <T extends BaseRecords> FetchResponse<T> prepareResponse(Errors error,
+                                                LinkedHashMap<TopicPartition, PartitionData<T>> responseData,
+                                                List<IdError> idErrors,
+                                                Map<String, Uuid> topicIds,
+                                                int throttleTimeMs,
+                                                int sessionId) {
+        return new FetchResponse<T>(toMessage(throttleTimeMs, error, responseData.entrySet().iterator(), idErrors, topicIds, sessionId));
     }
 }

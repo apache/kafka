@@ -21,6 +21,7 @@ import org.apache.kafka.common.ClusterResource;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.requests.MetadataResponse;
 import org.apache.kafka.common.requests.MetadataResponse.PartitionMetadata;
 
@@ -49,6 +50,8 @@ public class MetadataCache {
     private final Set<String> internalTopics;
     private final Node controller;
     private final Map<TopicPartition, PartitionMetadata> metadataByPartition;
+    private final Map<String, Uuid> topicIds;
+    private final Map<Uuid, String> topicNames;
 
     private Cluster clusterInstance;
 
@@ -58,8 +61,9 @@ public class MetadataCache {
                   Set<String> unauthorizedTopics,
                   Set<String> invalidTopics,
                   Set<String> internalTopics,
-                  Node controller) {
-        this(clusterId, nodes, partitions, unauthorizedTopics, invalidTopics, internalTopics, controller, null);
+                  Node controller,
+                  Map<String, Uuid> topicIds) {
+        this(clusterId, nodes, partitions, unauthorizedTopics, invalidTopics, internalTopics, controller, topicIds, null);
     }
 
     private MetadataCache(String clusterId,
@@ -69,6 +73,7 @@ public class MetadataCache {
                           Set<String> invalidTopics,
                           Set<String> internalTopics,
                           Node controller,
+                          Map<String, Uuid> topicIds,
                           Cluster clusterInstance) {
         this.clusterId = clusterId;
         this.nodes = nodes;
@@ -76,6 +81,12 @@ public class MetadataCache {
         this.invalidTopics = invalidTopics;
         this.internalTopics = internalTopics;
         this.controller = controller;
+        this.topicIds = topicIds;
+
+        this.topicNames = new HashMap<>(topicIds.size());
+        for (Map.Entry<String, Uuid> entry : topicIds.entrySet()) {
+            this.topicNames.put(entry.getValue(), entry.getKey());
+        }
 
         this.metadataByPartition = new HashMap<>(partitions.size());
         for (PartitionMetadata p : partitions) {
@@ -91,6 +102,14 @@ public class MetadataCache {
 
     Optional<PartitionMetadata> partitionMetadata(TopicPartition topicPartition) {
         return Optional.ofNullable(metadataByPartition.get(topicPartition));
+    }
+
+    Map<String, Uuid> topicIds() {
+        return topicIds;
+    }
+
+    Map<Uuid, String> topicNames() {
+        return topicNames;
     }
 
     Optional<Node> nodeById(int id) {
@@ -130,17 +149,27 @@ public class MetadataCache {
                             Set<String> addInvalidTopics,
                             Set<String> addInternalTopics,
                             Node newController,
+                            Map<String, Uuid> topicIds,
                             BiPredicate<String, Boolean> retainTopic) {
 
         Predicate<String> shouldRetainTopic = topic -> retainTopic.test(topic, internalTopics.contains(topic));
 
         Map<TopicPartition, PartitionMetadata> newMetadataByPartition = new HashMap<>(addPartitions.size());
+        Map<String, Uuid> newTopicIds = new HashMap<>(topicIds.size());
         for (PartitionMetadata partition : addPartitions) {
             newMetadataByPartition.put(partition.topicPartition, partition);
+            newTopicIds.put(partition.topic(), topicIds.get(partition.topic()));
         }
         for (Map.Entry<TopicPartition, PartitionMetadata> entry : metadataByPartition.entrySet()) {
             if (shouldRetainTopic.test(entry.getKey().topic())) {
                 newMetadataByPartition.putIfAbsent(entry.getKey(), entry.getValue());
+            }
+        }
+        // If topicIds.get is null, this metadata response did not support topic IDs and we should not store ID.
+        // This is so we can revert back to older fetch requests that do not use topic ID.
+        for (Map.Entry<String, Uuid> entry : this.topicIds.entrySet()) {
+            if (shouldRetainTopic.test(entry.getKey()) && topicIds.get(entry.getKey()) != null) {
+                newTopicIds.put(entry.getKey(), entry.getValue());
             }
         }
 
@@ -149,7 +178,7 @@ public class MetadataCache {
         Set<String> newInternalTopics = fillSet(addInternalTopics, internalTopics, shouldRetainTopic);
 
         return new MetadataCache(newClusterId, newNodes, newMetadataByPartition.values(), newUnauthorizedTopics,
-                newInvalidTopics, newInternalTopics, newController);
+                newInvalidTopics, newInternalTopics, newController, newTopicIds);
     }
 
     /**
@@ -189,12 +218,12 @@ public class MetadataCache {
         }
         return new MetadataCache(null, nodes, Collections.emptyList(),
                 Collections.emptySet(), Collections.emptySet(), Collections.emptySet(),
-                null, Cluster.bootstrap(addresses));
+                null, Collections.emptyMap(), Cluster.bootstrap(addresses));
     }
 
     static MetadataCache empty() {
         return new MetadataCache(null, Collections.emptyMap(), Collections.emptyList(),
-                Collections.emptySet(), Collections.emptySet(), Collections.emptySet(), null, Cluster.empty());
+                Collections.emptySet(), Collections.emptySet(), Collections.emptySet(), null, Collections.emptyMap(), Cluster.empty());
     }
 
     @Override

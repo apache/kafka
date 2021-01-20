@@ -31,9 +31,10 @@ import org.apache.kafka.common.record.Records
 import org.apache.kafka.common.requests.AbstractRequest.Builder
 import org.apache.kafka.common.requests.{AbstractRequest, FetchResponse, OffsetsForLeaderEpochResponse, FetchMetadata => JFetchMetadata}
 import org.apache.kafka.common.utils.{SystemTime, Time}
-import org.apache.kafka.common.{Node, TopicPartition}
+import org.apache.kafka.common.{Node, TopicPartition, Uuid}
 
 import scala.collection.Map
+import scala.jdk.CollectionConverters._
 
 /**
   * Stub network client used for testing the ReplicaFetcher, wraps the MockClient used for consumer testing
@@ -59,6 +60,7 @@ class ReplicaFetcherMockBlockingSend(offsets: java.util.Map[TopicPartition, Epoc
   var callback: Option[() => Unit] = None
   var currentOffsets: util.Map[TopicPartition, EpochEndOffset] = offsets
   var fetchPartitionData: Map[TopicPartition, FetchResponse.PartitionData[Records]] = Map.empty
+  var topicIds: Map[String, Uuid] = Map.empty
   private val sourceNode = new Node(sourceBroker.id, sourceBroker.host, sourceBroker.port)
 
   def setEpochRequestCallback(postEpochFunction: () => Unit): Unit = {
@@ -71,6 +73,10 @@ class ReplicaFetcherMockBlockingSend(offsets: java.util.Map[TopicPartition, Epoc
 
   def setFetchPartitionDataForNextResponse(partitionData: Map[TopicPartition, FetchResponse.PartitionData[Records]]): Unit = {
     fetchPartitionData = partitionData
+  }
+
+  def setIdsForNextResponse(topicIds: Map[String, Uuid]): Unit = {
+    this.topicIds = topicIds
   }
 
   override def sendRequest(requestBuilder: Builder[_ <: AbstractRequest]): ClientResponse = {
@@ -106,7 +112,7 @@ class ReplicaFetcherMockBlockingSend(offsets: java.util.Map[TopicPartition, Epoc
         val partitionData = new util.LinkedHashMap[TopicPartition, FetchResponse.PartitionData[Records]]
         fetchPartitionData.foreach { case (tp, data) => partitionData.put(tp, data) }
         fetchPartitionData = Map.empty
-        new FetchResponse(Errors.NONE, partitionData, 0,
+        FetchResponse.prepareResponse(Errors.NONE, partitionData, Collections.emptyList(), topicIds.asJava, 0,
           if (partitionData.isEmpty) JFetchMetadata.INVALID_SESSION_ID else 1)
 
       case _ =>

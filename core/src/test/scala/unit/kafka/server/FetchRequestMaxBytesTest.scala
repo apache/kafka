@@ -22,6 +22,7 @@ import kafka.log.LogConfig
 import kafka.utils.TestUtils
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerRecord}
 import org.apache.kafka.common.TopicPartition
+import org.apache.kafka.common.protocol.ApiKeys
 import org.apache.kafka.common.record.MemoryRecords
 import org.apache.kafka.common.requests.FetchRequest.PartitionData
 import org.apache.kafka.common.requests.{FetchRequest, FetchResponse}
@@ -114,10 +115,11 @@ class FetchRequestMaxBytesTest extends BaseRequestTest {
   private def expectNextRecords(expected: IndexedSeq[Array[Byte]],
                                 fetchOffset: Long): Unit = {
     val response = sendFetchRequest(0,
-      FetchRequest.Builder.forConsumer(Int.MaxValue, 0,
+      FetchRequest.Builder.forConsumer(ApiKeys.FETCH.latestVersion, Int.MaxValue, 0,
         Map(testTopicPartition ->
-          new PartitionData(fetchOffset, 0, Integer.MAX_VALUE, Optional.empty())).asJava).build(3))
-    val records = response.responseData().get(testTopicPartition).records.records()
+          new PartitionData(fetchOffset, 0, Integer.MAX_VALUE, Optional.empty())).asJava,
+        getTopicIds().asJava).build(3))
+    val records = response.responseData(getTopicNames().asJava).get(testTopicPartition).records.records()
     assertNotNull(records)
     val recordsList = records.asScala.toList
     assertEquals(expected.size, recordsList.size)

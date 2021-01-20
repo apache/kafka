@@ -416,6 +416,12 @@ abstract class AbstractFetcherThread(name: String,
                        "expected to persist.")
                   partitionsWithError += topicPartition
 
+                case Errors.UNKNOWN_TOPIC_ID =>
+                  warn(s"Received ${Errors.UNKNOWN_TOPIC_ID} from the leader for partition $topicPartition. " +
+                    "This error may be returned transiently when the partition is being created or deleted, but it is not " +
+                    "expected to persist.")
+                  partitionsWithError += topicPartition
+
                 case _ =>
                   error(s"Error for partition $topicPartition at offset ${currentFetchState.fetchOffset}",
                     partitionData.error.exception)

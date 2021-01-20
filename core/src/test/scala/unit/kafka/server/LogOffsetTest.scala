@@ -27,7 +27,7 @@ import org.apache.kafka.common.message.ListOffsetsRequestData.ListOffsetsTopic
 import org.apache.kafka.common.message.ListOffsetsRequestData.ListOffsetsPartition
 import org.apache.kafka.common.message.ListOffsetsResponseData.ListOffsetsPartitionResponse
 import org.apache.kafka.common.message.ListOffsetsResponseData.ListOffsetsTopicResponse
-import org.apache.kafka.common.protocol.Errors
+import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.record.MemoryRecords
 import org.apache.kafka.common.requests.{FetchRequest, FetchResponse, ListOffsetsRequest, ListOffsetsResponse}
 import org.apache.kafka.common.{IsolationLevel, TopicPartition}
@@ -102,6 +102,8 @@ class LogOffsetTest extends BaseRequestTest {
     val topicPartition = new TopicPartition(topic, 0)
 
     createTopic(topic, 1, 1)
+    val topicIds = getTopicIds().asJava
+    val topicNames = topicIds.asScala.map(_.swap).asJava
 
     val logManager = server.getLogManager
     TestUtils.waitUntilTrue(() => logManager.getLog(topicPartition).isDefined,
@@ -123,11 +125,11 @@ class LogOffsetTest extends BaseRequestTest {
     assertEquals(Seq(20L, 18L, 16L, 14L, 12L, 10L, 8L, 6L, 4L, 2L, 0L), consumerOffsets)
 
     // try to fetch using latest offset
-    val fetchRequest = FetchRequest.Builder.forConsumer(0, 1,
+    val fetchRequest = FetchRequest.Builder.forConsumer(ApiKeys.FETCH.latestVersion, 0, 1,
       Map(topicPartition -> new FetchRequest.PartitionData(consumerOffsets.head, FetchRequest.INVALID_LOG_START_OFFSET,
-        300 * 1024, Optional.empty())).asJava).build()
+        300 * 1024, Optional.empty())).asJava, topicIds).build()
     val fetchResponse = sendFetchRequest(fetchRequest)
-    assertFalse(fetchResponse.responseData.get(topicPartition).records.batches.iterator.hasNext)
+    assertFalse(fetchResponse.responseData(topicNames).get(topicPartition).records.batches.iterator.hasNext)
   }
 
   @Test

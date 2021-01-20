@@ -189,6 +189,14 @@ class MetadataCache(brokerId: Int) extends Logging {
     }.toSet
   }
 
+  def getTopicIds(): Map[String, Uuid] = {
+    metadataSnapshot.topicIds
+  }
+
+  def getTopicNames(): Map[Uuid, String] = {
+    metadataSnapshot.topicNames
+  }
+
   private def getAllTopics(snapshot: MetadataSnapshot): Set[String] = {
     snapshot.partitionStates.keySet
   }
@@ -394,6 +402,8 @@ class MetadataCache(brokerId: Int) extends Logging {
                               topicIds: Map[String, Uuid],
                               controllerId: Option[Int],
                               aliveBrokers: mutable.LongMap[Broker],
-                              aliveNodes: mutable.LongMap[collection.Map[ListenerName, Node]])
+                              aliveNodes: mutable.LongMap[collection.Map[ListenerName, Node]]) {
+    val topicNames = topicIds.map { case (topicName, topicId) => (topicId, topicName) }
+  }
 
 }

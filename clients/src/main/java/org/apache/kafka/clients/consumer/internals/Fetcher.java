@@ -38,6 +38,7 @@ import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.errors.CorruptRecordException;
 import org.apache.kafka.common.errors.InvalidTopicException;
 import org.apache.kafka.common.errors.RecordTooLargeException;
@@ -254,8 +255,14 @@ public class Fetcher<K, V> implements Closeable {
         for (Map.Entry<Node, FetchSessionHandler.FetchRequestData> entry : fetchRequestMap.entrySet()) {
             final Node fetchTarget = entry.getKey();
             final FetchSessionHandler.FetchRequestData data = entry.getValue();
+            final short maxVersion;
+            if (data.topicIds().size() == data.numTopic()) {
+                maxVersion = ApiKeys.FETCH.latestVersion();
+            } else {
+                maxVersion = (short) 12;
+            }
             final FetchRequest.Builder request = FetchRequest.Builder
-                    .forConsumer(this.maxWaitMs, this.minBytes, data.toSend())
+                    .forConsumer(maxVersion, this.maxWaitMs, this.minBytes, data.toSend(), metadata.topicIds())
                     .isolationLevel(isolationLevel)
                     .setMaxBytes(this.maxBytes)
                     .metadata(data.metadata())
@@ -284,14 +291,15 @@ public class Fetcher<K, V> implements Closeable {
                                         fetchTarget.id());
                                 return;
                             }
-                            if (!handler.handleResponse(response)) {
+                            if (!handler.handleResponse(response, maxVersion)) {
                                 return;
                             }
 
-                            Set<TopicPartition> partitions = new HashSet<>(response.responseData().keySet());
+                            Map<TopicPartition, FetchResponse.PartitionData<Records>> responseData = response.responseData(data.topicNames());
+                            Set<TopicPartition> partitions = new HashSet<>(responseData.keySet());
                             FetchResponseMetricAggregator metricAggregator = new FetchResponseMetricAggregator(sensors, partitions);
 
-                            for (Map.Entry<TopicPartition, FetchResponse.PartitionData<Records>> entry : response.responseData().entrySet()) {
+                            for (Map.Entry<TopicPartition, FetchResponse.PartitionData<Records>> entry : responseData.entrySet()) {
                                 TopicPartition partition = entry.getKey();
                                 FetchRequest.PartitionData requestData = data.sessionPartitions().get(partition);
                                 if (requestData == null) {
@@ -1154,6 +1162,7 @@ public class Fetcher<K, V> implements Closeable {
         validatePositionsOnMetadataChange();
 
         long currentTimeMs = time.milliseconds();
+        Map<String, Uuid> topicIds = metadata.topicIds();
 
         for (TopicPartition partition : fetchablePartitions()) {
             FetchPosition position = this.subscriptions.position(partition);
@@ -1192,7 +1201,7 @@ public class Fetcher<K, V> implements Closeable {
                     fetchable.put(node, builder);
                 }
 
-                builder.add(partition, new FetchRequest.PartitionData(position.offset,
+                builder.add(partition, topicIds.getOrDefault(partition.topic(), Uuid.ZERO_UUID), new FetchRequest.PartitionData(position.offset,
                     FetchRequest.INVALID_LOG_START_OFFSET, this.fetchSize,
                     position.currentLeader.epoch, Optional.empty()));
 
@@ -1305,6 +1314,9 @@ public class Fetcher<K, V> implements Closeable {
                 this.metadata.requestUpdate();
             } else if (error == Errors.UNKNOWN_TOPIC_OR_PARTITION) {
                 log.warn("Received unknown topic or partition error in fetch for partition {}", tp);
+                this.metadata.requestUpdate();
+            } else if (error == Errors.UNKNOWN_TOPIC_ID) {
+                log.warn("Received unknown topic ID error in fetch for partition {}", tp);
                 this.metadata.requestUpdate();
             } else if (error == Errors.OFFSET_OUT_OF_RANGE) {
                 Optional<Integer> clearedReplicaId = subscriptions.clearPreferredReadReplica(tp);

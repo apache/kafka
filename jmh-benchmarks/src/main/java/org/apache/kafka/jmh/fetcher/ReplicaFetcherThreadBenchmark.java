@@ -44,10 +44,12 @@ import kafka.server.checkpoints.OffsetCheckpoints;
 import kafka.utils.KafkaScheduler;
 import kafka.utils.Pool;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.message.LeaderAndIsrRequestData;
 import org.apache.kafka.common.message.OffsetForLeaderEpochRequestData.OffsetForLeaderPartition;
 import org.apache.kafka.common.message.OffsetForLeaderEpochResponseData.EpochEndOffset;
 import org.apache.kafka.common.metrics.Metrics;
+import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.record.BaseRecords;
 import org.apache.kafka.common.record.Records;
@@ -81,6 +83,7 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.LinkedList;
 import java.util.List;
@@ -138,6 +141,8 @@ public class ReplicaFetcherThreadBenchmark {
                 Time.SYSTEM);
 
         LinkedHashMap<TopicPartition, FetchResponse.PartitionData<BaseRecords>> initialFetched = new LinkedHashMap<>();
+        HashMap<String, Uuid> topicIds = new HashMap<>();
+        List<FetchResponse.IdError> idErrors = new LinkedList<>();
         scala.collection.mutable.Map<TopicPartition, InitialFetchState> initialFetchStates = new scala.collection.mutable.HashMap<>();
         for (int i = 0; i < partitionCount; i++) {
             TopicPartition tp = new TopicPartition("topic", i);
@@ -176,6 +181,8 @@ public class ReplicaFetcherThreadBenchmark {
             };
             initialFetched.put(tp, new FetchResponse.PartitionData<>(Errors.NONE, 0, 0, 0,
                     new LinkedList<>(), fetched));
+            topicIds.putIfAbsent(tp.topic(), Uuid.randomUuid());
+
         }
 
         ReplicaManager replicaManager = Mockito.mock(ReplicaManager.class);
@@ -186,7 +193,7 @@ public class ReplicaFetcherThreadBenchmark {
         // so that we do not measure this time as part of the steady state work
         fetcher.doWork();
         // handle response to engage the incremental fetch session handler
-        fetcher.fetchSessionHandler().handleResponse(new FetchResponse<>(Errors.NONE, initialFetched, 0, 999));
+        fetcher.fetchSessionHandler().handleResponse(FetchResponse.prepareResponse(Errors.NONE, initialFetched, idErrors, topicIds, 0, 999), ApiKeys.FETCH.latestVersion());
     }
 
     @TearDown(Level.Trial)

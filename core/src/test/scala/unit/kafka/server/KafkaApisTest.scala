@@ -1918,16 +1918,18 @@ class KafkaApisTest {
 
     EasyMock.replay(replicaManager, clientQuotaManager, clientRequestQuotaManager, requestChannel, fetchManager)
 
-    val fetchRequest = new FetchRequest.Builder(9, 9, -1, 100, 0, fetchData)
+    val fetchRequest = new FetchRequest.Builder(9, 9, -1, 100, 0, fetchData,
+      metadataCache.getTopicIds().asJava)
       .build()
     val request = buildRequest(fetchRequest)
     createKafkaApis().handleFetchRequest(request)
 
     val response = readResponse(fetchRequest, capturedResponse)
       .asInstanceOf[FetchResponse[BaseRecords]]
-    assertTrue(response.responseData.containsKey(tp))
+    val responseData = response.responseData(metadataCache.getTopicNames().asJava)
+    assertTrue(responseData.containsKey(tp))
 
-    val partitionData = response.responseData.get(tp)
+    val partitionData = responseData.get(tp)
     assertEquals(Errors.NONE, partitionData.error)
     assertEquals(hw, partitionData.highWatermark)
     assertEquals(-1, partitionData.lastStableOffset)
@@ -2460,13 +2462,13 @@ class KafkaApisTest {
     val leaderEpoch = 0
     val tp0 = new TopicPartition("tp", 0)
 
+    setupBasicMetadataCache(tp0.topic, numPartitions = 1, Uuid.randomUuid())
+    val hw = 3
+
     val fetchData = Collections.singletonMap(tp0, new FetchRequest.PartitionData(0, 0, Int.MaxValue, Optional.of(leaderEpoch)))
     val fetchFromFollower = buildRequest(new FetchRequest.Builder(
-      ApiKeys.FETCH.oldestVersion(), ApiKeys.FETCH.latestVersion(), 1, 1000, 0, fetchData
-    ).build())
-
-    setupBasicMetadataCache(tp0.topic, numPartitions = 1)
-    val hw = 3
+      ApiKeys.FETCH.oldestVersion(), ApiKeys.FETCH.latestVersion(), 1, 1000, 0, fetchData,
+        metadataCache.getTopicIds().asJava).build())
 
     val records = MemoryRecords.withRecords(CompressionType.NONE,
       new SimpleRecord(1000, "foo".getBytes(StandardCharsets.UTF_8)))
@@ -2976,7 +2978,7 @@ class KafkaApisTest {
     capturedResponse
   }
 
-  private def createBasicMetadataRequest(topic: String, numPartitions: Int, brokerEpoch: Long): UpdateMetadataRequest = {
+  private def createBasicMetadataRequest(topic: String, numPartitions: Int, brokerEpoch: Long, topicId: Uuid = Uuid.ZERO_UUID): UpdateMetadataRequest = {
     val replicas = List(0.asInstanceOf[Integer]).asJava
 
     def createPartitionState(partition: Int) = new UpdateMetadataPartitionState()
@@ -3000,11 +3002,11 @@ class KafkaApisTest {
         .setListener(plaintextListener.value)).asJava)
     val partitionStates = (0 until numPartitions).map(createPartitionState)
     new UpdateMetadataRequest.Builder(ApiKeys.UPDATE_METADATA.latestVersion, 0,
-      0, brokerEpoch, partitionStates.asJava, Seq(broker).asJava, Collections.emptyMap()).build()
+      0, brokerEpoch, partitionStates.asJava, Seq(broker).asJava, Collections.singletonMap(topic, topicId)).build()
   }
 
-  private def setupBasicMetadataCache(topic: String, numPartitions: Int): Unit = {
-    val updateMetadataRequest = createBasicMetadataRequest(topic, numPartitions, 0)
+  private def setupBasicMetadataCache(topic: String, numPartitions: Int, topicId: Uuid = Uuid.ZERO_UUID): Unit = {
+    val updateMetadataRequest = createBasicMetadataRequest(topic, numPartitions, 0, topicId)
     metadataCache.updateMetadata(correlationId = 0, updateMetadataRequest)
   }
 
@@ -3052,7 +3054,19 @@ class KafkaApisTest {
   }
 
   @Test
+  def testSizeOfThrottledPartitionsWithIdError(): Unit = {
+    val idError = List(new FetchResponse.IdError(Uuid.randomUuid(), List[Integer](1, 2, 3).asJava, Errors.UNKNOWN_TOPIC_ID))
+    checkSizeOfThrottledPartitions(idError)
+  }
+
+  @Test
   def testSizeOfThrottledPartitions(): Unit = {
+    checkSizeOfThrottledPartitions(List[FetchResponse.IdError]())
+  }
+
+  private def checkSizeOfThrottledPartitions(idErrors: List[FetchResponse.IdError]): Unit = {
+    val topicNames = new util.HashMap[Uuid, String]
+    val topicIds = new util.HashMap[String, Uuid]()
     def fetchResponse(data: Map[TopicPartition, String]): FetchResponse[Records] = {
       val responseData = new util.LinkedHashMap[TopicPartition, FetchResponse.PartitionData[Records]](
         data.map { case (tp, raw) =>
@@ -3061,13 +3075,19 @@ class KafkaApisTest {
             MemoryRecords.withRecords(CompressionType.NONE,
               new SimpleRecord(100, raw.getBytes(StandardCharsets.UTF_8))).asInstanceOf[Records])
       }.toMap.asJava)
-      new FetchResponse(Errors.NONE, responseData, 100, 100)
+
+      data.foreach{case (tp, _) =>
+        val id = Uuid.randomUuid()
+        topicIds.put(tp.topic(), id)
+        topicNames.put(id, tp.topic())
+      }
+      FetchResponse.prepareResponse(Errors.NONE, responseData, idErrors.asJava, topicIds, 100, 100)
     }
 
     val throttledPartition = new TopicPartition("throttledData", 0)
     val throttledData = Map(throttledPartition -> "throttledData")
     val expectedSize = FetchResponse.sizeOf(FetchResponseData.HIGHEST_SUPPORTED_VERSION,
-      fetchResponse(throttledData).responseData.entrySet.iterator)
+      fetchResponse(throttledData).responseData(topicNames).entrySet.iterator,  idErrors.asJava, topicIds)
 
     val response = fetchResponse(throttledData ++ Map(new TopicPartition("nonThrottledData", 0) -> "nonThrottledData"))
 
@@ -3075,6 +3095,7 @@ class KafkaApisTest {
     Mockito.when(quota.isThrottled(ArgumentMatchers.any(classOf[TopicPartition])))
       .thenAnswer(invocation => throttledPartition == invocation.getArgument(0).asInstanceOf[TopicPartition])
 
-    assertEquals(expectedSize, KafkaApis.sizeOfThrottledPartitions(FetchResponseData.HIGHEST_SUPPORTED_VERSION, response, quota))
+    assertEquals(expectedSize, KafkaApis.sizeOfThrottledPartitions(FetchResponseData.HIGHEST_SUPPORTED_VERSION, response, quota,
+      idErrors, topicNames, topicIds))
   }
 }

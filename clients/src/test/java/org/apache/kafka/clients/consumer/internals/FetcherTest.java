@@ -40,6 +40,7 @@ import org.apache.kafka.common.MetricNameTemplate;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.errors.InvalidTopicException;
 import org.apache.kafka.common.errors.RecordTooLargeException;
 import org.apache.kafka.common.errors.SerializationException;
@@ -157,6 +158,13 @@ public class FetcherTest {
     private ConsumerRebalanceListener listener = new NoOpConsumerRebalanceListener();
     private String topicName = "test";
     private String groupId = "test-group";
+    private Uuid topicId = Uuid.randomUuid();
+    private Map<String, Uuid> topicIds = new HashMap<String, Uuid>() {
+        {
+            put(topicName, topicId);
+        }
+    };
+    private Map<Uuid, String> topicNames = singletonMap(topicId, topicName);
     private final String metricGroup = "consumer" + groupId + "-fetch-manager-metrics";
     private TopicPartition tp0 = new TopicPartition(topicName, 0);
     private TopicPartition tp1 = new TopicPartition(topicName, 1);
@@ -164,7 +172,7 @@ public class FetcherTest {
     private TopicPartition tp3 = new TopicPartition(topicName, 3);
     private int validLeaderEpoch = 0;
     private MetadataResponse initialUpdateResponse =
-        RequestTestUtils.metadataUpdateWith(1, singletonMap(topicName, 4));
+        RequestTestUtils.metadataUpdateWithIds(1, singletonMap(topicName, 4), topicIds);
 
     private int minBytes = 1;
     private int maxBytes = Integer.MAX_VALUE;
@@ -202,9 +210,19 @@ public class FetcherTest {
         client.updateMetadata(initialUpdateResponse);
 
         // A dummy metadata update to ensure valid leader epoch.
-        metadata.updateWithCurrentRequestVersion(RequestTestUtils.metadataUpdateWith("dummy", 1,
+        metadata.updateWithCurrentRequestVersion(RequestTestUtils.metadataUpdateWithIds("dummy", 1,
             Collections.emptyMap(), singletonMap(topicName, 4),
-            tp -> validLeaderEpoch), false, 0L);
+            tp -> validLeaderEpoch, topicIds), false, 0L);
+    }
+
+    private void assignFromUserNoId(Set<TopicPartition> partitions) {
+        subscriptions.assignFromUser(partitions);
+        client.updateMetadata(RequestTestUtils.metadataUpdateWithIds(1, singletonMap("noId", 1), Collections.emptyMap()));
+
+        // A dummy metadata update to ensure valid leader epoch.
+        metadata.update(9, RequestTestUtils.metadataUpdateWithIds("dummy", 1,
+            Collections.emptyMap(), singletonMap("noId", 1),
+            tp -> validLeaderEpoch, topicIds), false, 0L);
     }
 
     @AfterEach
@@ -240,6 +258,36 @@ public class FetcherTest {
         List<ConsumerRecord<byte[], byte[]>> records = partitionRecords.get(tp0);
         assertEquals(3, records.size());
         assertEquals(4L, subscriptions.position(tp0).offset); // this is the next fetching position
+        long offset = 1;
+        for (ConsumerRecord<byte[], byte[]> record : records) {
+            assertEquals(offset, record.offset());
+            offset += 1;
+        }
+    }
+
+    @Test
+    public void testFetchWithNoId() {
+        // Should work and default to using old request type.
+        buildFetcher();
+
+        TopicPartition noId = new TopicPartition("noId", 0);
+        assignFromUserNoId(singleton(noId));
+        subscriptions.seek(noId, 0);
+
+        // normal fetch
+        assertEquals(1, fetcher.sendFetches());
+        assertFalse(fetcher.hasCompletedFetches());
+
+        client.prepareResponse(fullFetchResponse(noId, this.records, Errors.NONE, 100L, 0));
+        consumerClient.poll(time.timer(0));
+        assertTrue(fetcher.hasCompletedFetches());
+
+        Map<TopicPartition, List<ConsumerRecord<byte[], byte[]>>> partitionRecords = fetchedRecords();
+        assertTrue(partitionRecords.containsKey(noId));
+
+        List<ConsumerRecord<byte[], byte[]>> records = partitionRecords.get(noId);
+        assertEquals(3, records.size());
+        assertEquals(4L, subscriptions.position(noId).offset); // this is the next fetching position
         long offset = 1;
         for (ConsumerRecord<byte[], byte[]> record : records) {
             assertEquals(offset, record.offset());
@@ -429,8 +477,9 @@ public class FetcherTest {
     private MockClient.RequestMatcher matchesOffset(final TopicPartition tp, final long offset) {
         return body -> {
             FetchRequest fetch = (FetchRequest) body;
-            return fetch.fetchData().containsKey(tp) &&
-                    fetch.fetchData().get(tp).fetchOffset == offset;
+            Map<TopicPartition, FetchRequest.PartitionData> fetchData =  fetch.fetchData(topicNames);
+            return fetchData.containsKey(tp) &&
+                    fetchData.get(tp).fetchOffset == offset;
         };
     }
 
@@ -874,8 +923,8 @@ public class FetcherTest {
         subscriptions.assignFromSubscribed(singleton(tp0));
         subscriptions.seek(tp0, 0);
 
-        client.updateMetadata(RequestTestUtils.metadataUpdateWith(
-            1, singletonMap(topicName, 4), tp -> validLeaderEpoch));
+        client.updateMetadata(RequestTestUtils.metadataUpdateWithIds(
+            1, singletonMap(topicName, 4), tp -> validLeaderEpoch, topicIds));
 
         assertEquals(1, fetcher.sendFetches());
 
@@ -898,8 +947,8 @@ public class FetcherTest {
         subscriptions.assignFromSubscribed(singleton(tp0));
         subscriptions.seek(tp0, 0);
 
-        client.updateMetadata(RequestTestUtils.metadataUpdateWith(
-            1, singletonMap(topicName, 4), tp -> validLeaderEpoch));
+        client.updateMetadata(RequestTestUtils.metadataUpdateWithIds(
+            1, singletonMap(topicName, 4), tp -> validLeaderEpoch, topicIds));
 
         assertEquals(1, fetcher.sendFetches());
 
@@ -1134,6 +1183,18 @@ public class FetcherTest {
         assertEquals(0L, metadata.timeToNextUpdate(time.milliseconds()));
     }
 
+    public void testFetchUnknownTopicId() {
+        buildFetcher();
+        assignFromUser(singleton(tp0));
+        subscriptions.seek(tp0, 0);
+
+        assertEquals(1, fetcher.sendFetches());
+        client.prepareResponse(fullFetchResponse(tp0, this.records, Errors.UNKNOWN_TOPIC_ID, 100L, 0));
+        consumerClient.poll(time.timer(0));
+        assertEquals(0, fetcher.fetchedRecords().size());
+        assertEquals(0L, metadata.timeToNextUpdate(time.milliseconds()));
+    }
+
     @Test
     public void testFetchFencedLeaderEpoch() {
         buildFetcher();
@@ -1166,8 +1227,8 @@ public class FetcherTest {
     public void testEpochSetInFetchRequest() {
         buildFetcher();
         subscriptions.assignFromUser(singleton(tp0));
-        MetadataResponse metadataResponse = RequestTestUtils.metadataUpdateWith("dummy", 1,
-                Collections.emptyMap(), Collections.singletonMap(topicName, 4), tp -> 99);
+        MetadataResponse metadataResponse = RequestTestUtils.metadataUpdateWithIds("dummy", 1,
+                Collections.emptyMap(), Collections.singletonMap(topicName, 4), tp -> 99, topicIds);
         client.updateMetadata(metadataResponse);
 
         subscriptions.seek(tp0, 10);
@@ -1177,7 +1238,7 @@ public class FetcherTest {
         MockClient.RequestMatcher matcher = body -> {
             if (body instanceof FetchRequest) {
                 FetchRequest fetchRequest = (FetchRequest) body;
-                fetchRequest.fetchData().values().forEach(partitionData -> {
+                fetchRequest.fetchData(topicNames).values().forEach(partitionData -> {
                     assertTrue(partitionData.currentLeaderEpoch.isPresent(), "Expected Fetcher to set leader epoch in request");
                     assertEquals(99, partitionData.currentLeaderEpoch.get().longValue(), "Expected leader epoch to match epoch from metadata update");
                 });
@@ -1277,7 +1338,7 @@ public class FetcherTest {
             FetchResponse.INVALID_LAST_STABLE_OFFSET, FetchResponse.INVALID_LOG_START_OFFSET, null, records));
         partitions.put(tp0, new FetchResponse.PartitionData<>(Errors.OFFSET_OUT_OF_RANGE, 100,
             FetchResponse.INVALID_LAST_STABLE_OFFSET, FetchResponse.INVALID_LOG_START_OFFSET, null, MemoryRecords.EMPTY));
-        client.prepareResponse(new FetchResponse<>(Errors.NONE, new LinkedHashMap<>(partitions),
+        client.prepareResponse(FetchResponse.prepareResponse(Errors.NONE, new LinkedHashMap<>(partitions), Collections.emptyList(), topicIds,
             0, INVALID_SESSION_ID));
         consumerClient.poll(time.timer(0));
 
@@ -1293,6 +1354,34 @@ public class FetcherTest {
 
         assertEquals(singleton(tp0), e.offsetOutOfRangePartitions().keySet());
         assertEquals(1L, e.offsetOutOfRangePartitions().get(tp0).longValue());
+
+        assertEquals(1, subscriptions.position(tp0).offset);
+        assertEquals(4, subscriptions.position(tp1).offset);
+        assertEquals(3, allFetchedRecords.size());
+    }
+
+    @Test
+    public void testFetchHandlesTopicIdException() {
+        // Verify topicIdError behaves as expected.
+        buildFetcher(OffsetResetStrategy.NONE, new ByteArrayDeserializer(),
+                new ByteArrayDeserializer(), Integer.MAX_VALUE, IsolationLevel.READ_UNCOMMITTED);
+        assignFromUser(Utils.mkSet(tp0, tp1));
+        subscriptions.seek(tp0, 1);
+        subscriptions.seek(tp1, 1);
+
+        assertEquals(1, fetcher.sendFetches());
+
+        Map<TopicPartition, FetchResponse.PartitionData<MemoryRecords>> partitions = new LinkedHashMap<>();
+        partitions.put(tp1, new FetchResponse.PartitionData<>(Errors.NONE, 100,
+                FetchResponse.INVALID_LAST_STABLE_OFFSET, FetchResponse.INVALID_LOG_START_OFFSET, null, records));
+        List<FetchResponse.IdError> idErrors = Collections.singletonList(
+                new FetchResponse.IdError(topicIds.get(tp0.topic()), Collections.singletonList(0), Errors.UNKNOWN_TOPIC_ID));
+        client.prepareResponse(FetchResponse.prepareResponse(Errors.NONE, new LinkedHashMap<>(partitions), idErrors, topicIds,
+                0, INVALID_SESSION_ID));
+        consumerClient.poll(time.timer(0));
+
+        List<ConsumerRecord<byte[], byte[]>> allFetchedRecords = new ArrayList<>();
+        fetchRecordsInto(allFetchedRecords);
 
         assertEquals(1, subscriptions.position(tp0).offset);
         assertEquals(4, subscriptions.position(tp1).offset);
@@ -1327,7 +1416,7 @@ public class FetcherTest {
                 0L, null, nextRecords));
         partitions.put(tp3, new FetchResponse.PartitionData<>(Errors.NONE, 100L, 4,
                 0L, null, partialRecords));
-        client.prepareResponse(new FetchResponse<>(Errors.NONE, new LinkedHashMap<>(partitions),
+        client.prepareResponse(FetchResponse.prepareResponse(Errors.NONE, new LinkedHashMap<>(partitions), Collections.emptyList(), topicIds,
                 0, INVALID_SESSION_ID));
         consumerClient.poll(time.timer(0));
 
@@ -1401,7 +1490,8 @@ public class FetcherTest {
         partitions = new HashMap<>();
         partitions.put(tp1, new FetchResponse.PartitionData<>(Errors.OFFSET_OUT_OF_RANGE, 100,
                 FetchResponse.INVALID_LAST_STABLE_OFFSET, FetchResponse.INVALID_LOG_START_OFFSET, Optional.empty(), null, MemoryRecords.EMPTY));
-        client.prepareResponse(new FetchResponse<>(Errors.NONE, new LinkedHashMap<>(partitions), 0, INVALID_SESSION_ID));
+        client.prepareResponse(FetchResponse.prepareResponse(Errors.NONE, new LinkedHashMap<>(partitions), Collections.emptyList(), topicIds,
+                0, INVALID_SESSION_ID));
         consumerClient.poll(time.timer(0));
         assertEquals(1, fetcher.fetchedRecords().get(tp0).size());
 
@@ -1620,8 +1710,8 @@ public class FetcherTest {
 
         // Set up metadata with no leader epoch
         subscriptions.assignFromUser(singleton(tp0));
-        MetadataResponse metadataWithNoLeaderEpochs = RequestTestUtils.metadataUpdateWith(
-                "kafka-cluster", 1, Collections.emptyMap(), singletonMap(topicName, 4), tp -> null);
+        MetadataResponse metadataWithNoLeaderEpochs = RequestTestUtils.metadataUpdateWithIds(
+                "kafka-cluster", 1, Collections.emptyMap(), singletonMap(topicName, 4), tp -> null, topicIds);
         client.updateMetadata(metadataWithNoLeaderEpochs);
 
         // Return a ListOffsets response with leaderEpoch=1, we should ignore it
@@ -1643,8 +1733,8 @@ public class FetcherTest {
 
         // Set up metadata with leaderEpoch=1
         subscriptions.assignFromUser(singleton(tp0));
-        MetadataResponse metadataWithLeaderEpochs = RequestTestUtils.metadataUpdateWith(
-                "kafka-cluster", 1, Collections.emptyMap(), singletonMap(topicName, 4), tp -> 1);
+        MetadataResponse metadataWithLeaderEpochs = RequestTestUtils.metadataUpdateWithIds(
+                "kafka-cluster", 1, Collections.emptyMap(), singletonMap(topicName, 4), tp -> 1, topicIds);
         client.updateMetadata(metadataWithLeaderEpochs);
 
         // Reset offsets to trigger ListOffsets call
@@ -2079,7 +2169,7 @@ public class FetcherTest {
 
         for (int i = 1; i <= 3; i++) {
             int throttleTimeMs = 100 * i;
-            FetchRequest.Builder builder = FetchRequest.Builder.forConsumer(100, 100, new LinkedHashMap<>());
+            FetchRequest.Builder builder = FetchRequest.Builder.forConsumer(ApiKeys.FETCH.latestVersion(), 100, 100, new LinkedHashMap<>(), topicIds);
             builder.rackId("");
             ClientRequest request = client.newClientRequest(node.idString(), builder, time.milliseconds(), true);
             client.send(request, time.milliseconds());
@@ -2243,7 +2333,9 @@ public class FetcherTest {
         Map<String, Integer> partitionCounts = new HashMap<>();
         partitionCounts.put(topic1, 1);
         partitionCounts.put(topic2, 1);
-        client.updateMetadata(RequestTestUtils.metadataUpdateWith(1, partitionCounts, tp -> validLeaderEpoch));
+        topicIds.put(topic1, Uuid.randomUuid());
+        topicIds.put(topic2, Uuid.randomUuid());
+        client.updateMetadata(RequestTestUtils.metadataUpdateWithIds(1, partitionCounts, tp -> validLeaderEpoch, topicIds));
 
         int expectedBytes = 0;
         LinkedHashMap<TopicPartition, FetchResponse.PartitionData<MemoryRecords>> fetchPartitionData = new LinkedHashMap<>();
@@ -2264,7 +2356,8 @@ public class FetcherTest {
         }
 
         assertEquals(1, fetcher.sendFetches());
-        client.prepareResponse(new FetchResponse<>(Errors.NONE, fetchPartitionData, 0, INVALID_SESSION_ID));
+        client.prepareResponse(FetchResponse.prepareResponse(Errors.NONE, fetchPartitionData, Collections.emptyList(), topicIds,
+                0, INVALID_SESSION_ID));
         consumerClient.poll(time.timer(0));
 
         Map<TopicPartition, List<ConsumerRecord<byte[], byte[]>>> fetchedRecords = fetchedRecords();
@@ -2330,7 +2423,7 @@ public class FetcherTest {
                 FetchResponse.INVALID_LAST_STABLE_OFFSET, 0L, null, MemoryRecords.EMPTY));
 
         assertEquals(1, fetcher.sendFetches());
-        client.prepareResponse(new FetchResponse<>(Errors.NONE, new LinkedHashMap<>(partitions),
+        client.prepareResponse(FetchResponse.prepareResponse(Errors.NONE, new LinkedHashMap<>(partitions), Collections.emptyList(), topicIds,
                 0, INVALID_SESSION_ID));
         consumerClient.poll(time.timer(0));
         fetcher.fetchedRecords();
@@ -2372,7 +2465,7 @@ public class FetcherTest {
                 FetchResponse.INVALID_LAST_STABLE_OFFSET, 0L, null,
                 MemoryRecords.withRecords(CompressionType.NONE, new SimpleRecord("val".getBytes()))));
 
-        client.prepareResponse(new FetchResponse<>(Errors.NONE, new LinkedHashMap<>(partitions),
+        client.prepareResponse(FetchResponse.prepareResponse(Errors.NONE, new LinkedHashMap<>(partitions), Collections.emptyList(), topicIds,
                 0, INVALID_SESSION_ID));
         consumerClient.poll(time.timer(0));
         fetcher.fetchedRecords();
@@ -2491,8 +2584,8 @@ public class FetcherTest {
             Errors.LEADER_NOT_AVAILABLE, Errors.FENCED_LEADER_EPOCH, Errors.UNKNOWN_LEADER_EPOCH);
 
         final int newLeaderEpoch = 3;
-        MetadataResponse updatedMetadata = RequestTestUtils.metadataUpdateWith("dummy", 3,
-            singletonMap(topicName, Errors.NONE), singletonMap(topicName, 4), tp -> newLeaderEpoch);
+        MetadataResponse updatedMetadata = RequestTestUtils.metadataUpdateWithIds("dummy", 3,
+            singletonMap(topicName, Errors.NONE), singletonMap(topicName, 4), tp -> newLeaderEpoch, topicIds);
 
         Node originalLeader = initialUpdateResponse.cluster().leaderFor(tp1);
         Node newLeader = updatedMetadata.cluster().leaderFor(tp1);
@@ -2623,8 +2716,8 @@ public class FetcherTest {
         client.updateMetadata(initialUpdateResponse);
 
         // Metadata update with leader epochs
-        MetadataResponse metadataResponse = RequestTestUtils.metadataUpdateWith("dummy", 1,
-                Collections.emptyMap(), Collections.singletonMap(topicName, 4), tp -> 99);
+        MetadataResponse metadataResponse = RequestTestUtils.metadataUpdateWithIds("dummy", 1,
+                Collections.emptyMap(), Collections.singletonMap(topicName, 4), tp -> 99, topicIds);
         client.updateMetadata(metadataResponse);
 
         // Request latest offset
@@ -2660,7 +2753,7 @@ public class FetcherTest {
         client.reset();
 
         // Metadata initially has one topic
-        MetadataResponse initialMetadata = RequestTestUtils.metadataUpdateWith(3, singletonMap(topicName, 2));
+        MetadataResponse initialMetadata = RequestTestUtils.metadataUpdateWithIds(3, singletonMap(topicName, 2), topicIds);
         client.updateMetadata(initialMetadata);
 
         // The first metadata refresh should contain one topic
@@ -2674,7 +2767,8 @@ public class FetcherTest {
         Map<String, Integer> partitionNumByTopic = new HashMap<>();
         partitionNumByTopic.put(topicName, 2);
         partitionNumByTopic.put(anotherTopic, 1);
-        MetadataResponse updatedMetadata = RequestTestUtils.metadataUpdateWith(3, partitionNumByTopic);
+        topicIds.put("another-topic", Uuid.randomUuid());
+        MetadataResponse updatedMetadata = RequestTestUtils.metadataUpdateWithIds(3, partitionNumByTopic, topicIds);
         client.prepareMetadataUpdate(updatedMetadata);
         client.prepareResponseFrom(listOffsetResponse(t2p0, Errors.NONE, 1000L, 54L),
                 metadata.fetch().leaderFor(t2p0));
@@ -2703,13 +2797,14 @@ public class FetcherTest {
 
         client.reset();
 
-        MetadataResponse initialMetadata = RequestTestUtils.metadataUpdateWith(1, singletonMap(topicName, 1));
+        MetadataResponse initialMetadata = RequestTestUtils.metadataUpdateWithIds(1, singletonMap(topicName, 1), topicIds);
         client.updateMetadata(initialMetadata);
 
         Map<String, Integer> partitionNumByTopic = new HashMap<>();
         partitionNumByTopic.put(topicName, 1);
         partitionNumByTopic.put(anotherTopic, 1);
-        MetadataResponse updatedMetadata = RequestTestUtils.metadataUpdateWith(1, partitionNumByTopic);
+        topicIds.put("another-topic", Uuid.randomUuid());
+        MetadataResponse updatedMetadata = RequestTestUtils.metadataUpdateWithIds(1, partitionNumByTopic, topicIds);
         client.prepareMetadataUpdate(updatedMetadata);
 
         client.prepareResponse(listOffsetRequestMatcher(ListOffsetsRequest.LATEST_TIMESTAMP),
@@ -3211,7 +3306,8 @@ public class FetcherTest {
                 2, 0L, null, this.records));
         partitions1.put(tp1, new FetchResponse.PartitionData<>(Errors.NONE, 100L,
                 FetchResponse.INVALID_LAST_STABLE_OFFSET, 0L, null, emptyRecords));
-        FetchResponse<MemoryRecords> resp1 = new FetchResponse<>(Errors.NONE, partitions1, 0, 123);
+        FetchResponse<MemoryRecords> resp1 = FetchResponse.prepareResponse(Errors.NONE, partitions1, Collections.emptyList(), topicIds,
+                0, 123);
         client.prepareResponse(resp1);
         assertEquals(1, fetcher.sendFetches());
         assertFalse(fetcher.hasCompletedFetches());
@@ -3237,7 +3333,7 @@ public class FetcherTest {
 
         // The second response contains no new records.
         LinkedHashMap<TopicPartition, FetchResponse.PartitionData<MemoryRecords>> partitions2 = new LinkedHashMap<>();
-        FetchResponse<MemoryRecords> resp2 = new FetchResponse<>(Errors.NONE, partitions2, 0, 123);
+        FetchResponse<MemoryRecords> resp2 = FetchResponse.prepareResponse(Errors.NONE, partitions2, Collections.emptyList(), topicIds, 0, 123);
         client.prepareResponse(resp2);
         assertEquals(1, fetcher.sendFetches());
         consumerClient.poll(time.timer(0));
@@ -3250,7 +3346,7 @@ public class FetcherTest {
         LinkedHashMap<TopicPartition, FetchResponse.PartitionData<MemoryRecords>> partitions3 = new LinkedHashMap<>();
         partitions3.put(tp0, new FetchResponse.PartitionData<>(Errors.NONE, 100L,
                 4, 0L, null, this.nextRecords));
-        FetchResponse<MemoryRecords> resp3 = new FetchResponse<>(Errors.NONE, partitions3, 0, 123);
+        FetchResponse<MemoryRecords> resp3 = FetchResponse.prepareResponse(Errors.NONE, partitions3, Collections.emptyList(), topicIds, 0, 123);
         client.prepareResponse(resp3);
         assertEquals(1, fetcher.sendFetches());
         consumerClient.poll(time.timer(0));
@@ -3309,9 +3405,9 @@ public class FetcherTest {
                         }
 
                         @Override
-                        public boolean handleResponse(FetchResponse<?> response) {
+                        public boolean handleResponse(FetchResponse<?> response, short version) {
                             verifySessionPartitions();
-                            return handler.handleResponse(response);
+                            return handler.handleResponse(response, version);
                         }
 
                         @Override
@@ -3341,8 +3437,8 @@ public class FetcherTest {
             }
         };
 
-        MetadataResponse initialMetadataResponse = RequestTestUtils.metadataUpdateWith(1,
-                singletonMap(topicName, numPartitions), tp -> validLeaderEpoch);
+        MetadataResponse initialMetadataResponse = RequestTestUtils.metadataUpdateWithIds(1,
+                singletonMap(topicName, numPartitions), tp -> validLeaderEpoch, topicIds);
         client.updateMetadata(initialMetadataResponse);
         fetchSize = 10000;
 
@@ -3358,13 +3454,14 @@ public class FetcherTest {
                         ClientRequest request = client.requests().peek();
                         FetchRequest fetchRequest = (FetchRequest) request.requestBuilder().build();
                         LinkedHashMap<TopicPartition, FetchResponse.PartitionData<MemoryRecords>> responseMap = new LinkedHashMap<>();
-                        for (Map.Entry<TopicPartition, FetchRequest.PartitionData> entry : fetchRequest.fetchData().entrySet()) {
+                        for (Map.Entry<TopicPartition, FetchRequest.PartitionData> entry : fetchRequest.fetchData(topicNames).entrySet()) {
                             TopicPartition tp = entry.getKey();
                             long offset = entry.getValue().fetchOffset;
                             responseMap.put(tp, new FetchResponse.PartitionData<>(Errors.NONE, offset + 2L, offset + 2,
                                     0L, null, buildRecords(offset, 2, offset)));
                         }
-                        client.respondToRequest(request, new FetchResponse<>(Errors.NONE, responseMap, 0, 123));
+                        client.respondToRequest(request, FetchResponse.prepareResponse(Errors.NONE, responseMap, Collections.emptyList(), topicIds,
+                                0, 123));
                         consumerClient.poll(time.timer(0));
                     }
                 }
@@ -3400,7 +3497,7 @@ public class FetcherTest {
     public void testFetcherSessionEpochUpdate() throws Exception {
         buildFetcher(2);
 
-        MetadataResponse initialMetadataResponse = RequestTestUtils.metadataUpdateWith(1, singletonMap(topicName, 1));
+        MetadataResponse initialMetadataResponse = RequestTestUtils.metadataUpdateWithIds(1, singletonMap(topicName, 1), topicIds);
         client.updateMetadata(initialMetadataResponse);
         assignFromUser(Collections.singleton(tp0));
         subscriptions.seek(tp0, 0L);
@@ -3423,7 +3520,8 @@ public class FetcherTest {
                         responseMap.put(tp0, new FetchResponse.PartitionData<>(Errors.NONE, nextOffset + 2L, nextOffset + 2,
                                 0L, null, buildRecords(nextOffset, 2, nextOffset)));
                         nextOffset += 2;
-                        client.respondToRequest(request, new FetchResponse<>(Errors.NONE, responseMap, 0, 123));
+                        client.respondToRequest(request, FetchResponse.prepareResponse(Errors.NONE, responseMap, Collections.emptyList(), topicIds,
+                                0, 123));
                         consumerClient.poll(time.timer(0));
                     }
                 }
@@ -3550,7 +3648,7 @@ public class FetcherTest {
         Map<String, Integer> partitionNumByTopic = new HashMap<>();
         partitionNumByTopic.put(topicName, 2);
         partitionNumByTopic.put(topicName2, 1);
-        MetadataResponse updateMetadataResponse = RequestTestUtils.metadataUpdateWith(2, partitionNumByTopic);
+        MetadataResponse updateMetadataResponse = RequestTestUtils.metadataUpdateWithIds(2, partitionNumByTopic, topicIds);
         Cluster updatedCluster = updateMetadataResponse.cluster();
 
         // The metadata refresh should contain all the topics.
@@ -3591,7 +3689,7 @@ public class FetcherTest {
     private void testGetOffsetsForTimesWithUnknownOffset() {
         client.reset();
         // Ensure metadata has both partitions.
-        MetadataResponse initialMetadataUpdate = RequestTestUtils.metadataUpdateWith(1, singletonMap(topicName, 1));
+        MetadataResponse initialMetadataUpdate = RequestTestUtils.metadataUpdateWithIds(1, singletonMap(topicName, 1), topicIds);
         client.updateMetadata(initialMetadataUpdate);
 
         ListOffsetsResponseData data = new ListOffsetsResponseData()
@@ -3624,7 +3722,7 @@ public class FetcherTest {
         // Unknown Offset
         client.reset();
         // Ensure metadata has both partition.
-        MetadataResponse initialMetadataUpdate = RequestTestUtils.metadataUpdateWith(1, singletonMap(topicName, 1));
+        MetadataResponse initialMetadataUpdate = RequestTestUtils.metadataUpdateWithIds(1, singletonMap(topicName, 1), topicIds);
         client.updateMetadata(initialMetadataUpdate);
         // Force LIST_OFFSETS version 0
         Node node = metadata.fetch().nodes().get(0);
@@ -3680,7 +3778,7 @@ public class FetcherTest {
         // Initialize the epoch=1
         Map<String, Integer> partitionCounts = new HashMap<>();
         partitionCounts.put(tp0.topic(), 4);
-        MetadataResponse metadataResponse = RequestTestUtils.metadataUpdateWith("dummy", 1, Collections.emptyMap(), partitionCounts, tp -> 1);
+        MetadataResponse metadataResponse = RequestTestUtils.metadataUpdateWithIds("dummy", 1, Collections.emptyMap(), partitionCounts, tp -> 1, topicIds);
         metadata.updateWithCurrentRequestVersion(metadataResponse, false, 0L);
 
         // Seek
@@ -3706,9 +3804,9 @@ public class FetcherTest {
         buildFetcher();
         assignFromUser(Utils.mkSet(tp0, tp1, tp2, tp3));
 
-        metadata.updateWithCurrentRequestVersion(RequestTestUtils.metadataUpdateWith("dummy", 3,
+        metadata.updateWithCurrentRequestVersion(RequestTestUtils.metadataUpdateWithIds("dummy", 3,
             Collections.emptyMap(), singletonMap(topicName, 4),
-            tp -> 5), false, 0L);
+            tp -> 5, topicIds), false, 0L);
 
         for (TopicPartition tp : subscriptions.assignedPartitions()) {
             Metadata.LeaderAndEpoch leaderAndEpoch = new Metadata.LeaderAndEpoch(
@@ -3771,8 +3869,8 @@ public class FetcherTest {
 
         final int epochOne = 1;
 
-        metadata.updateWithCurrentRequestVersion(RequestTestUtils.metadataUpdateWith("dummy", 1,
-                Collections.emptyMap(), partitionCounts, tp -> epochOne), false, 0L);
+        metadata.updateWithCurrentRequestVersion(RequestTestUtils.metadataUpdateWithIds("dummy", 1,
+                Collections.emptyMap(), partitionCounts, tp -> epochOne, topicIds), false, 0L);
 
         Node node = metadata.fetch().nodes().get(0);
         assertFalse(client.isConnected(node.idString()));
@@ -3817,8 +3915,8 @@ public class FetcherTest {
         final int epochTwo = 2;
 
         // Start with metadata, epoch=1
-        metadata.updateWithCurrentRequestVersion(RequestTestUtils.metadataUpdateWith("dummy", 1,
-                Collections.emptyMap(), partitionCounts, tp -> epochOne), false, 0L);
+        metadata.updateWithCurrentRequestVersion(RequestTestUtils.metadataUpdateWithIds("dummy", 1,
+                Collections.emptyMap(), partitionCounts, tp -> epochOne, topicIds), false, 0L);
 
         // Offset validation requires OffsetForLeaderEpoch request v3 or higher
         Node node = metadata.fetch().nodes().get(0);
@@ -3832,8 +3930,8 @@ public class FetcherTest {
             subscriptions.seekUnvalidated(tp0, new SubscriptionState.FetchPosition(0, Optional.of(epochOne), leaderAndEpoch));
 
             // Update metadata to epoch=2, enter validation
-            metadata.updateWithCurrentRequestVersion(RequestTestUtils.metadataUpdateWith("dummy", 1,
-                    Collections.emptyMap(), partitionCounts, tp -> epochTwo), false, 0L);
+            metadata.updateWithCurrentRequestVersion(RequestTestUtils.metadataUpdateWithIds("dummy", 1,
+                    Collections.emptyMap(), partitionCounts, tp -> epochTwo, topicIds), false, 0L);
             fetcher.validateOffsetsIfNeeded();
 
             // Offset validation is skipped
@@ -3847,8 +3945,8 @@ public class FetcherTest {
             subscriptions.seekUnvalidated(tp0, new SubscriptionState.FetchPosition(0, Optional.of(epochOne), leaderAndEpoch));
 
             // Update metadata to epoch=2, enter validation
-            metadata.updateWithCurrentRequestVersion(RequestTestUtils.metadataUpdateWith("dummy", 1,
-                    Collections.emptyMap(), partitionCounts, tp -> epochTwo), false, 0L);
+            metadata.updateWithCurrentRequestVersion(RequestTestUtils.metadataUpdateWithIds("dummy", 1,
+                    Collections.emptyMap(), partitionCounts, tp -> epochTwo, topicIds), false, 0L);
 
             // Subscription should not stay in AWAITING_VALIDATION in prepareFetchRequest
             assertEquals(1, fetcher.sendFetches());
@@ -3868,8 +3966,8 @@ public class FetcherTest {
 
         final int epochOne = 1;
 
-        metadata.updateWithCurrentRequestVersion(RequestTestUtils.metadataUpdateWith("dummy", 1,
-            Collections.emptyMap(), partitionCounts, tp -> epochOne), false, 0L);
+        metadata.updateWithCurrentRequestVersion(RequestTestUtils.metadataUpdateWithIds("dummy", 1,
+            Collections.emptyMap(), partitionCounts, tp -> epochOne, topicIds), false, 0L);
 
         Node node = metadata.fetch().nodes().get(0);
         assertFalse(client.isConnected(node.idString()));
@@ -3883,8 +3981,8 @@ public class FetcherTest {
 
         // Inject an older version of the metadata response
         final short responseVersion = 8;
-        metadata.updateWithCurrentRequestVersion(RequestTestUtils.metadataUpdateWith("dummy", 1,
-            Collections.emptyMap(), partitionCounts, responseVersion), false, 0L);
+        metadata.updateWithCurrentRequestVersion(RequestTestUtils.metadataUpdateWithIds("dummy", 1,
+            Collections.emptyMap(), partitionCounts, responseVersion, topicIds), false, 0L);
         fetcher.validateOffsetsIfNeeded();
         // Offset validation is skipped
         assertFalse(subscriptions.awaitingValidation(tp0));
@@ -3932,8 +4030,8 @@ public class FetcherTest {
         final int epochOne = 1;
         final long initialOffset = 5;
 
-        metadata.updateWithCurrentRequestVersion(RequestTestUtils.metadataUpdateWith("dummy", 1,
-            Collections.emptyMap(), partitionCounts, tp -> epochOne), false, 0L);
+        metadata.updateWithCurrentRequestVersion(RequestTestUtils.metadataUpdateWithIds("dummy", 1,
+            Collections.emptyMap(), partitionCounts, tp -> epochOne, topicIds), false, 0L);
 
         // Offset validation requires OffsetForLeaderEpoch request v3 or higher
         Node node = metadata.fetch().nodes().get(0);
@@ -3982,8 +4080,8 @@ public class FetcherTest {
 
         final int epochOne = 1;
 
-        metadata.updateWithCurrentRequestVersion(RequestTestUtils.metadataUpdateWith("dummy", 1,
-                Collections.emptyMap(), partitionCounts, tp -> epochOne), false, 0L);
+        metadata.updateWithCurrentRequestVersion(RequestTestUtils.metadataUpdateWithIds("dummy", 1,
+                Collections.emptyMap(), partitionCounts, tp -> epochOne, topicIds), false, 0L);
 
         // Offset validation requires OffsetForLeaderEpoch request v3 or higher
         Node node = metadata.fetch().nodes().get(0);
@@ -4023,8 +4121,8 @@ public class FetcherTest {
         final int epochThree = 3;
 
         // Start with metadata, epoch=1
-        metadata.updateWithCurrentRequestVersion(RequestTestUtils.metadataUpdateWith("dummy", 1,
-                Collections.emptyMap(), partitionCounts, tp -> epochOne), false, 0L);
+        metadata.updateWithCurrentRequestVersion(RequestTestUtils.metadataUpdateWithIds("dummy", 1,
+                Collections.emptyMap(), partitionCounts, tp -> epochOne, topicIds), false, 0L);
 
         // Offset validation requires OffsetForLeaderEpoch request v3 or higher
         Node node = metadata.fetch().nodes().get(0);
@@ -4035,8 +4133,8 @@ public class FetcherTest {
         subscriptions.seekValidated(tp0, new SubscriptionState.FetchPosition(0, Optional.of(epochOne), leaderAndEpoch));
 
         // Update metadata to epoch=2, enter validation
-        metadata.updateWithCurrentRequestVersion(RequestTestUtils.metadataUpdateWith("dummy", 1,
-                Collections.emptyMap(), partitionCounts, tp -> epochTwo), false, 0L);
+        metadata.updateWithCurrentRequestVersion(RequestTestUtils.metadataUpdateWithIds("dummy", 1,
+                Collections.emptyMap(), partitionCounts, tp -> epochTwo, topicIds), false, 0L);
         fetcher.validateOffsetsIfNeeded();
         assertTrue(subscriptions.awaitingValidation(tp0));
 
@@ -4072,8 +4170,8 @@ public class FetcherTest {
         apiVersions.update("0", NodeApiVersions.create(ApiKeys.OFFSET_FOR_LEADER_EPOCH.id, (short) 0, (short) 2));
 
         // Start with metadata, epoch=1
-        metadata.updateWithCurrentRequestVersion(RequestTestUtils.metadataUpdateWith("dummy", 1,
-                Collections.emptyMap(), partitionCounts, tp -> 1), false, 0L);
+        metadata.updateWithCurrentRequestVersion(RequestTestUtils.metadataUpdateWithIds("dummy", 1,
+                Collections.emptyMap(), partitionCounts, tp -> 1, topicIds), false, 0L);
 
         // Request offset reset
         subscriptions.requestOffsetReset(tp0, OffsetResetStrategy.LATEST);
@@ -4117,7 +4215,8 @@ public class FetcherTest {
         // Initialize the epoch=2
         Map<String, Integer> partitionCounts = new HashMap<>();
         partitionCounts.put(tp0.topic(), 4);
-        MetadataResponse metadataResponse = RequestTestUtils.metadataUpdateWith("dummy", 1, Collections.emptyMap(), partitionCounts, tp -> 2);
+        MetadataResponse metadataResponse = RequestTestUtils.metadataUpdateWithIds("dummy", 1, Collections.emptyMap(),
+                partitionCounts, tp -> 2, topicIds);
         metadata.updateWithCurrentRequestVersion(metadataResponse, false, 0L);
 
         // Offset validation requires OffsetForLeaderEpoch request v3 or higher
@@ -4163,7 +4262,7 @@ public class FetcherTest {
                 Integer.MAX_VALUE, IsolationLevel.READ_COMMITTED, Duration.ofMinutes(5).toMillis());
 
         subscriptions.assignFromUser(singleton(tp0));
-        client.updateMetadata(RequestTestUtils.metadataUpdateWith(2, singletonMap(topicName, 4), tp -> validLeaderEpoch));
+        client.updateMetadata(RequestTestUtils.metadataUpdateWithIds(2, singletonMap(topicName, 4), tp -> validLeaderEpoch, topicIds));
         subscriptions.seek(tp0, 0);
 
         // Node preferred replica before first fetch response
@@ -4206,7 +4305,7 @@ public class FetcherTest {
                 Integer.MAX_VALUE, IsolationLevel.READ_COMMITTED, Duration.ofMinutes(5).toMillis());
 
         subscriptions.assignFromUser(singleton(tp0));
-        client.updateMetadata(RequestTestUtils.metadataUpdateWith(2, singletonMap(topicName, 4), tp -> validLeaderEpoch));
+        client.updateMetadata(RequestTestUtils.metadataUpdateWithIds(2, singletonMap(topicName, 4), tp -> validLeaderEpoch, topicIds));
 
         subscriptions.seek(tp0, 0);
 
@@ -4461,7 +4560,8 @@ public class FetcherTest {
                                                                                   int throttleTime) {
         Map<TopicPartition, FetchResponse.PartitionData<MemoryRecords>> partitions = Collections.singletonMap(tp0,
                 new FetchResponse.PartitionData<>(error, hw, lastStableOffset, 0L, abortedTransactions, records));
-        return new FetchResponse<>(Errors.NONE, new LinkedHashMap<>(partitions), throttleTime, INVALID_SESSION_ID);
+        return FetchResponse.prepareResponse(Errors.NONE, new LinkedHashMap<>(partitions), Collections.emptyList(), topicIds,
+                throttleTime, INVALID_SESSION_ID);
     }
 
     private FetchResponse<MemoryRecords> fullFetchResponse(TopicPartition tp, MemoryRecords records, Errors error, long hw, int throttleTime) {
@@ -4472,7 +4572,8 @@ public class FetcherTest {
                                             long lastStableOffset, int throttleTime) {
         Map<TopicPartition, FetchResponse.PartitionData<MemoryRecords>> partitions = Collections.singletonMap(tp,
                 new FetchResponse.PartitionData<>(error, hw, lastStableOffset, 0L, null, records));
-        return new FetchResponse<>(Errors.NONE, new LinkedHashMap<>(partitions), throttleTime, INVALID_SESSION_ID);
+        return FetchResponse.prepareResponse(Errors.NONE, new LinkedHashMap<>(partitions), Collections.emptyList(), topicIds,
+                throttleTime, INVALID_SESSION_ID);
     }
 
     private FetchResponse<MemoryRecords> fullFetchResponse(TopicPartition tp, MemoryRecords records, Errors error, long hw,
@@ -4480,14 +4581,16 @@ public class FetcherTest {
         Map<TopicPartition, FetchResponse.PartitionData<MemoryRecords>> partitions = Collections.singletonMap(tp,
                 new FetchResponse.PartitionData<>(error, hw, lastStableOffset, 0L,
                         preferredReplicaId, null, records));
-        return new FetchResponse<>(Errors.NONE, new LinkedHashMap<>(partitions), throttleTime, INVALID_SESSION_ID);
+        return FetchResponse.prepareResponse(Errors.NONE, new LinkedHashMap<>(partitions), Collections.emptyList(), topicIds,
+                throttleTime, INVALID_SESSION_ID);
     }
 
     private FetchResponse<MemoryRecords> fetchResponse(TopicPartition tp, MemoryRecords records, Errors error, long hw,
                                         long lastStableOffset, long logStartOffset, int throttleTime) {
         Map<TopicPartition, FetchResponse.PartitionData<MemoryRecords>> partitions = Collections.singletonMap(tp,
                 new FetchResponse.PartitionData<>(error, hw, lastStableOffset, logStartOffset, null, records));
-        return new FetchResponse<>(Errors.NONE, new LinkedHashMap<>(partitions), throttleTime, INVALID_SESSION_ID);
+        return FetchResponse.prepareResponse(Errors.NONE, new LinkedHashMap<>(partitions), Collections.emptyList(), topicIds,
+                throttleTime, INVALID_SESSION_ID);
     }
 
     private MetadataResponse newMetadataResponse(String topic, Errors error) {

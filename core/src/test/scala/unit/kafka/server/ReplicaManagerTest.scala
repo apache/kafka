@@ -63,6 +63,9 @@ import scala.collection.{Map, Seq}
 class ReplicaManagerTest {
 
   val topic = "test-topic"
+  val topicId = Uuid.randomUuid()
+  val topicIds = scala.Predef.Map("test-topic" -> topicId)
+  val topicNames = scala.Predef.Map(topicId -> "test-topic")
   val time = new MockTime
   val scheduler = new MockScheduler(time)
   val metrics = new Metrics
@@ -240,7 +243,6 @@ class ReplicaManagerTest {
       replicaManager.createPartition(topicPartition)
         .createLogIfNotExists(isNew = false, isFutureReplica = false,
           new LazyOffsetCheckpoints(replicaManager.highWatermarkCheckpoints))
-      val topicIds = Collections.singletonMap(topic, Uuid.randomUuid())
 
       def leaderAndIsrRequest(epoch: Int): LeaderAndIsrRequest = new LeaderAndIsrRequest.Builder(ApiKeys.LEADER_AND_ISR.latestVersion, 0, 0, brokerEpoch,
         Seq(new LeaderAndIsrPartitionState()
@@ -253,7 +255,7 @@ class ReplicaManagerTest {
           .setZkVersion(0)
           .setReplicas(brokerList)
           .setIsNew(true)).asJava,
-        topicIds,
+        topicIds.asJava,
         Set(new Node(0, "host1", 0), new Node(1, "host2", 1)).asJava).build()
 
       replicaManager.becomeLeaderOrFollower(0, leaderAndIsrRequest(0), (_, _) => ())
@@ -1539,6 +1541,10 @@ class ReplicaManagerTest {
         followerBrokerId -> new Node(followerBrokerId, "host2", 9092, "rack-b")).toMap
       )
       .anyTimes()
+    EasyMock
+      .expect(metadataCache.getTopicIds()).andStubReturn(topicIds)
+    EasyMock
+      .expect(metadataCache.getTopicNames()).andStubReturn(topicNames)
     EasyMock.replay(metadataCache)
 
     val mockProducePurgatory = new DelayedOperationPurgatory[DelayedProduce](
@@ -1721,6 +1727,8 @@ class ReplicaManagerTest {
 
     val metadataCache: MetadataCache = Mockito.mock(classOf[MetadataCache])
     Mockito.when(metadataCache.getAliveBrokers).thenReturn(aliveBrokers)
+    Mockito.when(metadataCache.getTopicIds()).thenReturn(topicIds)
+    Mockito.when(metadataCache.getTopicNames()).thenReturn(topicNames)
 
     aliveBrokerIds.foreach { brokerId =>
       Mockito.when(metadataCache.getAliveBroker(brokerId))

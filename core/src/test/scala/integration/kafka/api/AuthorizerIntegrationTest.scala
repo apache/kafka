@@ -36,6 +36,7 @@ import org.apache.kafka.common.config.{ConfigResource, LogLevelConfig}
 import org.apache.kafka.common.errors._
 import org.apache.kafka.common.internals.Topic.GROUP_METADATA_TOPIC_NAME
 import org.apache.kafka.common.message.{AddOffsetsToTxnRequestData, AlterPartitionReassignmentsRequestData, AlterReplicaLogDirsRequestData, ControlledShutdownRequestData, CreateAclsRequestData, CreatePartitionsRequestData, CreateTopicsRequestData, DeleteAclsRequestData, DeleteGroupsRequestData, DeleteRecordsRequestData, DeleteTopicsRequestData, DescribeConfigsRequestData, DescribeGroupsRequestData, DescribeLogDirsRequestData, FindCoordinatorRequestData, HeartbeatRequestData, IncrementalAlterConfigsRequestData, JoinGroupRequestData, ListPartitionReassignmentsRequestData, OffsetCommitRequestData, ProduceRequestData, SyncGroupRequestData}
+//import org.apache.kafka.common.message.{AddOffsetsToTxnRequestData, AlterPartitionReassignmentsRequestData, AlterReplicaLogDirsRequestData, ControlledShutdownRequestData, CreateAclsRequestData, CreatePartitionsRequestData, CreateTopicsRequestData, DeleteAclsRequestData, DeleteRecordsRequestData, DeleteTopicsRequestData, DescribeConfigsRequestData, DescribeGroupsRequestData, DescribeLogDirsRequestData, FindCoordinatorRequestData, HeartbeatRequestData, IncrementalAlterConfigsRequestData, JoinGroupRequestData, ListPartitionReassignmentsRequestData, OffsetCommitRequestData, ProduceRequestData, SyncGroupRequestData}
 import org.apache.kafka.common.message.CreatePartitionsRequestData.CreatePartitionsTopic
 import org.apache.kafka.common.message.CreateTopicsRequestData.{CreatableTopic, CreatableTopicCollection}
 import org.apache.kafka.common.message.DescribeClusterRequestData
@@ -100,7 +101,6 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
 
   val brokerId: Integer = 0
   val topic = "topic"
-  val topicId = Uuid.randomUuid()
   val topicPattern = "topic.*"
   val transactionalId = "transactional.id"
   val producerId = 83392L
@@ -108,8 +108,6 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
   val correlationId = 0
   val clientId = "client-Id"
   val tp = new TopicPartition(topic, part)
-  val topicIds = Collections.singletonMap(topic, topicId)
-  val topicNames = Collections.singletonMap(topicId, topic)
   val logDir = "logDir"
   val group = "my-group"
   val protocolType = "consumer"
@@ -159,10 +157,10 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
   }
 
   @nowarn("cat=deprecation")
-  val requestKeyToError = Map[ApiKeys, Nothing => Errors](
+  val requestKeyToError = (topicNames: Map[Uuid, String]) => Map[ApiKeys, Nothing => Errors](
     ApiKeys.METADATA -> ((resp: requests.MetadataResponse) => resp.errors.asScala.find(_._1 == topic).getOrElse(("test", Errors.NONE))._2),
     ApiKeys.PRODUCE -> ((resp: requests.ProduceResponse) => resp.responses.asScala.find(_._1 == tp).get._2.error),
-    ApiKeys.FETCH -> ((resp: requests.FetchResponse[Records]) => resp.responseData.asScala.find(_._1 == tp).get._2.error),
+    ApiKeys.FETCH -> ((resp: requests.FetchResponse[Records]) => resp.responseData(topicNames.asJava).asScala.find(_._1 == tp).get._2.error),
     ApiKeys.LIST_OFFSETS -> ((resp: ListOffsetsResponse) => {
       Errors.forCode(
         resp.data
@@ -185,7 +183,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
     ApiKeys.LEAVE_GROUP -> ((resp: LeaveGroupResponse) => resp.error),
     ApiKeys.DELETE_GROUPS -> ((resp: DeleteGroupsResponse) => resp.get(group)),
     ApiKeys.LEADER_AND_ISR -> ((resp: requests.LeaderAndIsrResponse) => Errors.forCode(
-      resp.topics.asScala.find(t => topicNames.get(t.topicId) == tp.topic).get.partitionErrors.asScala.find(
+      resp.topics.asScala.find(t => topicNames.getOrElse(t.topicId, "") == tp.topic).get.partitionErrors.asScala.find(
         p => p.partitionIndex == tp.partition).get.errorCode)),
     ApiKeys.STOP_REPLICA -> ((resp: requests.StopReplicaResponse) => Errors.forCode(
       resp.partitionErrors.asScala.find(pe => pe.topicName == tp.topic && pe.partitionIndex == tp.partition).get.errorCode)),
@@ -315,14 +313,20 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
   private def createFetchRequest = {
     val partitionMap = new util.LinkedHashMap[TopicPartition, requests.FetchRequest.PartitionData]
     partitionMap.put(tp, new requests.FetchRequest.PartitionData(0, 0, 100, Optional.of(27)))
-    requests.FetchRequest.Builder.forConsumer(100, Int.MaxValue, partitionMap).build()
+    requests.FetchRequest.Builder.forConsumer(ApiKeys.FETCH.latestVersion, 100, Int.MaxValue, partitionMap, getTopicIds().asJava).build()
+  }
+
+  private def createFetchRequestWithUnknownTopic(id: Uuid, version: Short) = {
+    val partitionMap = new util.LinkedHashMap[TopicPartition, requests.FetchRequest.PartitionData]
+    partitionMap.put(tp, new requests.FetchRequest.PartitionData(0, 0, 100, Optional.of(27)))
+    requests.FetchRequest.Builder.forConsumer(version, 100, Int.MaxValue, partitionMap, Collections.singletonMap(topic, id)).build()
   }
 
   private def createFetchFollowerRequest = {
     val partitionMap = new util.LinkedHashMap[TopicPartition, requests.FetchRequest.PartitionData]
     partitionMap.put(tp, new requests.FetchRequest.PartitionData(0, 0, 100, Optional.of(27)))
     val version = ApiKeys.FETCH.latestVersion
-    requests.FetchRequest.Builder.forReplica(version, 5000, 100, Int.MaxValue, partitionMap).build()
+    requests.FetchRequest.Builder.forReplica(version, 5000, 100, Int.MaxValue, partitionMap, getTopicIds().asJava).build()
   }
 
   private def createListOffsetsRequest = {
@@ -479,7 +483,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
         .setZkVersion(2)
         .setReplicas(Seq(brokerId).asJava)
         .setIsNew(false)).asJava,
-      topicIds,
+      getTopicIds().asJava,
       Set(new Node(brokerId, "localhost", 0)).asJava).build()
   }
 
@@ -630,9 +634,32 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
 
   @Test
   def testAuthorizationWithTopicExisting(): Unit = {
+
+    def sendRequests(requestKeyToRequest: mutable.Map[ApiKeys, AbstractRequest]) = {
+      for ((key, request) <- requestKeyToRequest) {
+        removeAllClientAcls()
+        val resources = requestKeysToAcls(key).map(_._1.resourceType).toSet
+        sendRequestAndVerifyResponseError(request, resources, isAuthorized = false)
+
+        val resourceToAcls = requestKeysToAcls(key)
+        resourceToAcls.get(topicResource).foreach { acls =>
+          val describeAcls = topicDescribeAcl(topicResource)
+          val isAuthorized = describeAcls == acls
+          addAndVerifyAcls(describeAcls, topicResource)
+          sendRequestAndVerifyResponseError(request, resources, isAuthorized = isAuthorized)
+          removeAllClientAcls()
+        }
+
+        for ((resource, acls) <- resourceToAcls)
+          addAndVerifyAcls(acls, resource)
+        sendRequestAndVerifyResponseError(request, resources, isAuthorized = true)
+      }
+    }
+
+    // First create the topic
+    sendRequests(mutable.Map(ApiKeys.CREATE_TOPICS -> createTopicsRequest))
+
     val requestKeyToRequest = mutable.LinkedHashMap[ApiKeys, AbstractRequest](
-      // First create the topic
-      ApiKeys.CREATE_TOPICS -> createTopicsRequest,
 
       ApiKeys.METADATA -> createMetadataRequest(allowAutoTopicCreation = true),
       ApiKeys.PRODUCE -> createProduceRequest,
@@ -673,24 +700,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
       ApiKeys.DELETE_TOPICS -> deleteTopicsRequest
     )
 
-    for ((key, request) <- requestKeyToRequest) {
-      removeAllClientAcls()
-      val resources = requestKeysToAcls(key).map(_._1.resourceType).toSet
-      sendRequestAndVerifyResponseError(request, resources, isAuthorized = false)
-
-      val resourceToAcls = requestKeysToAcls(key)
-      resourceToAcls.get(topicResource).foreach { acls =>
-        val describeAcls = topicDescribeAcl(topicResource)
-        val isAuthorized = describeAcls == acls
-        addAndVerifyAcls(describeAcls, topicResource)
-        sendRequestAndVerifyResponseError(request, resources, isAuthorized = isAuthorized)
-        removeAllClientAcls()
-      }
-
-      for ((resource, acls) <- resourceToAcls)
-        addAndVerifyAcls(acls, resource)
-      sendRequestAndVerifyResponseError(request, resources, isAuthorized = true)
-    }
+    sendRequests(requestKeyToRequest)
   }
 
   /*
@@ -698,10 +708,12 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
    */
   @Test
   def testAuthorizationWithTopicNotExisting(): Unit = {
+    val id = Uuid.randomUuid()
+    val topicNames = Map(id -> "topic")
     val requestKeyToRequest = mutable.LinkedHashMap[ApiKeys, AbstractRequest](
       ApiKeys.METADATA -> createMetadataRequest(allowAutoTopicCreation = false),
       ApiKeys.PRODUCE -> createProduceRequest,
-      ApiKeys.FETCH -> createFetchRequest,
+      ApiKeys.FETCH -> createFetchRequestWithUnknownTopic(id, ApiKeys.FETCH.latestVersion()),
       ApiKeys.LIST_OFFSETS -> createListOffsetsRequest,
       ApiKeys.OFFSET_COMMIT -> createOffsetCommitRequest,
       ApiKeys.OFFSET_FETCH -> createOffsetFetchRequest,
@@ -718,20 +730,51 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
     for ((key, request) <- requestKeyToRequest) {
       removeAllClientAcls()
       val resources = requestKeysToAcls(key).map(_._1.resourceType).toSet
-      sendRequestAndVerifyResponseError(request, resources, isAuthorized = false, topicExists = false)
+      sendRequestAndVerifyResponseError(request, resources, isAuthorized = false, topicExists = false, topicNames = topicNames)
 
       val resourceToAcls = requestKeysToAcls(key)
       resourceToAcls.get(topicResource).foreach { acls =>
         val describeAcls = topicDescribeAcl(topicResource)
         val isAuthorized = describeAcls == acls
         addAndVerifyAcls(describeAcls, topicResource)
-        sendRequestAndVerifyResponseError(request, resources, isAuthorized = isAuthorized, topicExists = false)
+        sendRequestAndVerifyResponseError(request, resources, isAuthorized = isAuthorized, topicExists = false, topicNames = topicNames)
         removeAllClientAcls()
       }
 
       for ((resource, acls) <- resourceToAcls)
         addAndVerifyAcls(acls, resource)
-      sendRequestAndVerifyResponseError(request, resources, isAuthorized = true, topicExists = false)
+      sendRequestAndVerifyResponseError(request, resources, isAuthorized = true, topicExists = false, topicNames = topicNames)
+    }
+  }
+
+  /*
+   * even if the topic doesn't exist, request APIs should not leak the topic name
+   */
+  @Test
+  def testAuthorizationFetchV12WithTopicNotExisting(): Unit = {
+    val id = Uuid.ZERO_UUID
+    val topicNames = Map(id -> "topic")
+    val requestKeyToRequest = mutable.LinkedHashMap[ApiKeys, AbstractRequest](
+      ApiKeys.FETCH -> createFetchRequestWithUnknownTopic(id, 12),
+    )
+
+    for ((key, request) <- requestKeyToRequest) {
+      removeAllClientAcls()
+      val resources = requestKeysToAcls(key).map(_._1.resourceType).toSet
+      sendRequestAndVerifyResponseError(request, resources, isAuthorized = false, topicExists = false, topicNames = topicNames)
+
+      val resourceToAcls = requestKeysToAcls(key)
+      resourceToAcls.get(topicResource).foreach { acls =>
+        val describeAcls = topicDescribeAcl(topicResource)
+        val isAuthorized = describeAcls == acls
+        addAndVerifyAcls(describeAcls, topicResource)
+        sendRequestAndVerifyResponseError(request, resources, isAuthorized = isAuthorized, topicExists = false, topicNames = topicNames)
+        removeAllClientAcls()
+      }
+
+      for ((resource, acls) <- resourceToAcls)
+        addAndVerifyAcls(acls, resource)
+      sendRequestAndVerifyResponseError(request, resources, isAuthorized = true, topicExists = false, topicNames = topicNames)
     }
   }
 
@@ -1906,10 +1949,11 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
   private def sendRequestAndVerifyResponseError(request: AbstractRequest,
                                                 resources: Set[ResourceType],
                                                 isAuthorized: Boolean,
-                                                topicExists: Boolean = true): AbstractResponse = {
+                                                topicExists: Boolean = true,
+                                                topicNames: Map[Uuid, String] = getTopicNames()): AbstractResponse = {
     val apiKey = request.apiKey
     val response = connectAndReceive[AbstractResponse](request)
-    val error = requestKeyToError(apiKey).asInstanceOf[AbstractResponse => Errors](response)
+    val error = requestKeyToError(topicNames)(apiKey).asInstanceOf[AbstractResponse => Errors](response)
 
     val authorizationErrors = resources.flatMap { resourceType =>
       if (resourceType == TOPIC) {
@@ -1929,9 +1973,16 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
         assertTrue(authorizationErrors.contains(error), s"$apiKey should be forbidden. Found error $error but expected one of $authorizationErrors")
     else if (resources == Set(TOPIC))
       if (isAuthorized)
-        assertEquals(Errors.UNKNOWN_TOPIC_OR_PARTITION, error, s"$apiKey had an unexpected error")
-      else
-        assertEquals(Errors.TOPIC_AUTHORIZATION_FAILED, error, s"$apiKey had an unexpected error")
+        if (apiKey.equals(ApiKeys.FETCH) && request.version() >= 13)
+          assertEquals(Errors.UNKNOWN_TOPIC_ID, error, s"$apiKey had an unexpected error")
+        else
+          assertEquals(Errors.UNKNOWN_TOPIC_OR_PARTITION, error, s"$apiKey had an unexpected error")
+      else {
+        if (apiKey.equals(ApiKeys.FETCH) && request.version() >= 13)
+          assertEquals(Errors.UNKNOWN_TOPIC_ID, error, s"$apiKey had an unexpected error")
+        else
+          assertEquals(Errors.TOPIC_AUTHORIZATION_FAILED, error, s"$apiKey had an unexpected error")
+      }
 
     response
   }
@@ -1988,5 +2039,4 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
     adminClients += adminClient
     adminClient
   }
-
 }

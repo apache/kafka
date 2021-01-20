@@ -27,7 +27,7 @@ import kafka.server.AbstractFetcherThread.ReplicaFetch
 import kafka.server.AbstractFetcherThread.ResultWithPartitions
 import kafka.utils.Implicits._
 import org.apache.kafka.clients.FetchSessionHandler
-import org.apache.kafka.common.TopicPartition
+import org.apache.kafka.common.{TopicPartition, Uuid}
 import org.apache.kafka.common.errors.KafkaStorageException
 import org.apache.kafka.common.message.ListOffsetsRequestData.{ListOffsetsPartition, ListOffsetsTopic}
 import org.apache.kafka.common.message.OffsetForLeaderEpochRequestData.OffsetForLeaderTopic
@@ -72,7 +72,8 @@ class ReplicaFetcherThread(name: String,
 
   // Visible for testing
   private[server] val fetchRequestVersion: Short =
-    if (brokerConfig.interBrokerProtocolVersion >= KAFKA_2_7_IV1) 12
+    if (brokerConfig.interBrokerProtocolVersion >= KAFKA_2_8_IV2) 13
+    else if (brokerConfig.interBrokerProtocolVersion >= KAFKA_2_7_IV1) 12
     else if (brokerConfig.interBrokerProtocolVersion >= KAFKA_2_3_IV1) 11
     else if (brokerConfig.interBrokerProtocolVersion >= KAFKA_2_1_IV2) 10
     else if (brokerConfig.interBrokerProtocolVersion >= KAFKA_2_0_IV1) 8
@@ -216,10 +217,10 @@ class ReplicaFetcherThread(name: String,
     try {
       val clientResponse = leaderEndpoint.sendRequest(fetchRequest)
       val fetchResponse = clientResponse.responseBody.asInstanceOf[FetchResponse[Records]]
-      if (!fetchSessionHandler.handleResponse(fetchResponse)) {
+      if (!fetchSessionHandler.handleResponse(fetchResponse, fetchRequestVersion)) {
         Map.empty
       } else {
-        fetchResponse.responseData.asScala
+        fetchResponse.responseData(fetchSessionHandler.getSessionTopicNames).asScala
       }
     } catch {
       case t: Throwable =>
@@ -264,6 +265,7 @@ class ReplicaFetcherThread(name: String,
 
   override def buildFetch(partitionMap: Map[TopicPartition, PartitionFetchState]): ResultWithPartitions[Option[ReplicaFetch]] = {
     val partitionsWithError = mutable.Set[TopicPartition]()
+    val topicIds = replicaMgr.metadataCache.getTopicIds()
 
     val builder = fetchSessionHandler.newBuilder(partitionMap.size, false)
     partitionMap.forKeyValue { (topicPartition, fetchState) =>
@@ -275,7 +277,7 @@ class ReplicaFetcherThread(name: String,
             fetchState.lastFetchedEpoch.map(_.asInstanceOf[Integer]).asJava
           else
             Optional.empty[Integer]
-          builder.add(topicPartition, new FetchRequest.PartitionData(
+          builder.add(topicPartition, topicIds.getOrElse(topicPartition.topic(), Uuid.ZERO_UUID), new FetchRequest.PartitionData(
             fetchState.fetchOffset,
             logStartOffset,
             fetchSize,
@@ -295,7 +297,7 @@ class ReplicaFetcherThread(name: String,
       None
     } else {
       val requestBuilder = FetchRequest.Builder
-        .forReplica(fetchRequestVersion, replicaId, maxWait, minBytes, fetchData.toSend)
+        .forReplica(fetchRequestVersion, replicaId, maxWait, minBytes, fetchData.toSend, replicaMgr.metadataCache.getTopicIds().asJava)
         .setMaxBytes(maxBytes)
         .toForget(fetchData.toForget)
         .metadata(fetchData.metadata)

@@ -736,23 +736,46 @@ public class RequestResponseTest {
     @Test
     public void fetchResponseVersionTest() {
         LinkedHashMap<TopicPartition, FetchResponse.PartitionData<MemoryRecords>> responseData = new LinkedHashMap<>();
+        Map<Uuid, String> topicNames = new HashMap<>();
+        Map<String, Uuid> topicIds = new HashMap<>();
+        Uuid id = Uuid.randomUuid();
+        topicNames.put(id, "test");
+        topicIds.put("test", id);
+
 
         MemoryRecords records = MemoryRecords.readableRecords(ByteBuffer.allocate(10));
         responseData.put(new TopicPartition("test", 0), new FetchResponse.PartitionData<>(
                 Errors.NONE, 1000000, FetchResponse.INVALID_LAST_STABLE_OFFSET,
-                0L, Optional.empty(), Collections.emptyList(), records));
+                FetchResponse.INVALID_LOG_START_OFFSET, Optional.empty(), Collections.emptyList(), records));
 
-        FetchResponse<MemoryRecords> v0Response = new FetchResponse<>(Errors.NONE, responseData, 0, INVALID_SESSION_ID);
-        FetchResponse<MemoryRecords> v1Response = new FetchResponse<>(Errors.NONE, responseData, 10, INVALID_SESSION_ID);
-        assertEquals(0, v0Response.throttleTimeMs(), "Throttle time must be zero");
-        assertEquals(10, v1Response.throttleTimeMs(), "Throttle time must be 10");
-        assertEquals(responseData, v0Response.responseData(), "Response data does not match");
-        assertEquals(responseData, v1Response.responseData(), "Response data does not match");
+        FetchResponse<MemoryRecords> v0Response = new FetchResponse<>(Errors.NONE, responseData, Collections.emptyList(),
+                topicIds, 0, INVALID_SESSION_ID);
+        FetchResponse<MemoryRecords> v1Response = new FetchResponse<>(Errors.NONE, responseData, Collections.emptyList(),
+                topicIds, 10, INVALID_SESSION_ID);
+        FetchResponse<MemoryRecords> v0Deserialized = FetchResponse.parse(v0Response.serialize((short) 0), (short) 0);
+        FetchResponse<MemoryRecords> v1Deserialized = FetchResponse.parse(v1Response.serialize((short) 1), (short) 1);
+        assertEquals(0, v0Deserialized.throttleTimeMs(), "Throttle time must be zero");
+        assertEquals(10, v1Deserialized.throttleTimeMs(), "Throttle time must be 10");
+        assertEquals(responseData, v0Deserialized.responseData(topicNames), "Response data does not match");
+        assertEquals(responseData, v1Deserialized .responseData(topicNames), "Response data does not match");
+
+        FetchResponse<MemoryRecords> idTestResponse = new FetchResponse<>(Errors.NONE, responseData, Collections.emptyList(),
+                topicIds, 0, INVALID_SESSION_ID);
+        FetchResponse<MemoryRecords> v12Deserialized = FetchResponse.parse(idTestResponse.serialize((short) 12), (short) 12);
+        FetchResponse<MemoryRecords> newestDeserialized = FetchResponse.parse(idTestResponse.serialize(FETCH.latestVersion()), FETCH.latestVersion());
+        assertTrue(v12Deserialized.topicIds().isEmpty());
+        assertEquals(1, newestDeserialized.topicIds().size());
+        assertTrue(newestDeserialized.topicIds().contains(id));
     }
 
     @Test
     public void testFetchResponseV4() {
         LinkedHashMap<TopicPartition, FetchResponse.PartitionData<MemoryRecords>> responseData = new LinkedHashMap<>();
+        Map<Uuid, String> topicNames = new HashMap<>();
+        Map<String, Uuid> topicIds = new HashMap<>();
+        topicNames.put(Uuid.randomUuid(), "bar");
+        topicNames.put(Uuid.randomUuid(), "foo");
+        topicNames.forEach((id, name) -> topicIds.put(name, id));
         MemoryRecords records = MemoryRecords.readableRecords(ByteBuffer.allocate(10));
 
         List<FetchResponse.AbortedTransaction> abortedTransactions = asList(
@@ -766,9 +789,9 @@ public class RequestResponseTest {
         responseData.put(new TopicPartition("foo", 0), new FetchResponse.PartitionData<>(Errors.NONE, 70000,
                 6, FetchResponse.INVALID_LOG_START_OFFSET, Optional.empty(), emptyList(), records));
 
-        FetchResponse<MemoryRecords> response = new FetchResponse<>(Errors.NONE, responseData, 10, INVALID_SESSION_ID);
+        FetchResponse<MemoryRecords> response = new FetchResponse<>(Errors.NONE, responseData, Collections.emptyList(), topicIds, 10, INVALID_SESSION_ID);
         FetchResponse<MemoryRecords> deserialized = FetchResponse.parse(response.serialize((short) 4), (short) 4);
-        assertEquals(responseData, deserialized.responseData());
+        assertEquals(responseData, deserialized.responseData(topicNames));
     }
 
     @Test
@@ -882,8 +905,9 @@ public class RequestResponseTest {
     public void testFetchRequestCompat() {
         Map<TopicPartition, FetchRequest.PartitionData> fetchData = new HashMap<>();
         fetchData.put(new TopicPartition("test", 0), new FetchRequest.PartitionData(100, 2, 100, Optional.of(42)));
+        Map<String, Uuid> topicIds = Collections.singletonMap("test1", Uuid.randomUuid());
         FetchRequest req = FetchRequest.Builder
-                .forConsumer(100, 100, fetchData)
+                .forConsumer((short) 2, 100, 100, fetchData, topicIds)
                 .metadata(new FetchMetadata(10, 20))
                 .isolationLevel(IsolationLevel.READ_COMMITTED)
                 .build((short) 2);
@@ -1058,7 +1082,10 @@ public class RequestResponseTest {
                 1000000, Optional.empty()));
         fetchData.put(new TopicPartition("test2", 0), new FetchRequest.PartitionData(200, -1L,
                 1000000, Optional.empty()));
-        return FetchRequest.Builder.forConsumer(100, 100000, fetchData).
+        Map<String, Uuid> topicIds = new HashMap<>();
+        topicIds.put("test1", Uuid.randomUuid());
+        topicIds.put("test2", Uuid.randomUuid());
+        return FetchRequest.Builder.forConsumer((short) version, 100, 100000, fetchData, topicIds).
             metadata(metadata).setMaxBytes(1000).toForget(toForget).build((short) version);
     }
 
@@ -1068,7 +1095,10 @@ public class RequestResponseTest {
                 1000000, Optional.empty()));
         fetchData.put(new TopicPartition("test2", 0), new FetchRequest.PartitionData(200, -1L,
                 1000000, Optional.empty()));
-        return FetchRequest.Builder.forConsumer(100, 100000, fetchData).
+        Map<String, Uuid> topicIds = new HashMap<>();
+        topicIds.put("test1", Uuid.randomUuid());
+        topicIds.put("test2", Uuid.randomUuid());
+        return FetchRequest.Builder.forConsumer((short) version, 100, 100000, fetchData, topicIds).
             isolationLevel(isolationLevel).setMaxBytes(1000).build((short) version);
     }
 
@@ -1078,15 +1108,24 @@ public class RequestResponseTest {
                 1000000, Optional.empty()));
         fetchData.put(new TopicPartition("test2", 0), new FetchRequest.PartitionData(200, -1L,
                 1000000, Optional.empty()));
-        return FetchRequest.Builder.forConsumer(100, 100000, fetchData).setMaxBytes(1000).build((short) version);
+        Map<String, Uuid> topicIds = new HashMap<>();
+        topicIds.put("test1", Uuid.randomUuid());
+        topicIds.put("test2", Uuid.randomUuid());
+        return FetchRequest.Builder.forConsumer((short) version, 100, 100000, fetchData, topicIds).setMaxBytes(1000).build((short) version);
     }
 
     private FetchResponse<MemoryRecords> createFetchResponse(Errors error, int sessionId) {
-        return new FetchResponse<>(error, new LinkedHashMap<>(), 25, sessionId);
+        return FetchResponse.parse(
+                new FetchResponse<>(error, new LinkedHashMap<>(),
+                        new LinkedList<>(), new HashMap<>(),
+                        25, sessionId)
+                        .serialize(FETCH.latestVersion()), FETCH.latestVersion());
     }
 
     private FetchResponse<MemoryRecords> createFetchResponse(int sessionId) {
         LinkedHashMap<TopicPartition, FetchResponse.PartitionData<MemoryRecords>> responseData = new LinkedHashMap<>();
+        Map<String, Uuid> topicIds = new HashMap<>();
+        topicIds.put("test", Uuid.randomUuid());
         MemoryRecords records = MemoryRecords.withRecords(CompressionType.NONE, new SimpleRecord("blah".getBytes()));
         responseData.put(new TopicPartition("test", 0), new FetchResponse.PartitionData<>(Errors.NONE,
             1000000, FetchResponse.INVALID_LAST_STABLE_OFFSET, 0L, Optional.empty(), Collections.emptyList(), records));
@@ -1094,7 +1133,10 @@ public class RequestResponseTest {
             new FetchResponse.AbortedTransaction(234L, 999L));
         responseData.put(new TopicPartition("test", 1), new FetchResponse.PartitionData<>(Errors.NONE,
             1000000, FetchResponse.INVALID_LAST_STABLE_OFFSET, 0L, Optional.empty(), abortedTransactions, MemoryRecords.EMPTY));
-        return new FetchResponse<>(Errors.NONE, responseData, 25, sessionId);
+        return FetchResponse.parse(new FetchResponse<>(Errors.NONE, responseData,
+                Collections.emptyList(), topicIds,
+                25, sessionId)
+                .serialize(FETCH.latestVersion()), FETCH.latestVersion());
     }
 
     private FetchResponse<MemoryRecords> createFetchResponse(boolean includeAborted) {
@@ -1112,7 +1154,10 @@ public class RequestResponseTest {
         responseData.put(new TopicPartition("test", 1), new FetchResponse.PartitionData<>(Errors.NONE,
                 1000000, FetchResponse.INVALID_LAST_STABLE_OFFSET, 0L, Optional.empty(), abortedTransactions, MemoryRecords.EMPTY));
 
-        return new FetchResponse<>(Errors.NONE, responseData, 25, INVALID_SESSION_ID);
+        return FetchResponse.parse(new FetchResponse<>(Errors.NONE, responseData, Collections.emptyList(),
+                Collections.singletonMap("test", Uuid.randomUuid()),
+                25, INVALID_SESSION_ID)
+                .serialize(FETCH.latestVersion()), FETCH.latestVersion());
     }
 
     private HeartbeatRequest createHeartBeatRequest() {
