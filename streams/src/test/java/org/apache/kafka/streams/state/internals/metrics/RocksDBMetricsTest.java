@@ -290,7 +290,7 @@ public class RocksDBMetricsTest {
     @Test
     public void shouldAddCurSizeAllMemTablesMetric() {
         final String name = "cur-size-all-mem-tables";
-        final String description = "Approximate size of active and unflushed immutable memtable in bytes";
+        final String description = "Approximate size of active and unflushed immutable memtables in bytes";
         runAndVerifyMutableMetric(
             name,
             description,
@@ -390,7 +390,7 @@ public class RocksDBMetricsTest {
     @Test
     public void shouldAddNumLiveVersionMetric() {
         final String name = "num-live-versions";
-        final String description = "Number of live versions";
+        final String description = "Number of live versions of the LSM tree";
         runAndVerifyMutableMetric(
             name,
             description,
