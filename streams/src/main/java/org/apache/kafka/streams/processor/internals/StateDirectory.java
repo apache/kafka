@@ -118,7 +118,7 @@ public class StateDirectory {
                 Files.setPosixFilePermissions(basePath, perms);
                 Files.setPosixFilePermissions(statePath, perms);
             } catch (final IOException e) {
-                log.warn("Error changing permissions for the state or base directory {} ", stateDir.getPath(), e);
+                log.error("Error changing permissions for the state or base directory {} ", stateDir.getPath(), e);
             }
         }
     }
