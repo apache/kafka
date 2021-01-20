@@ -421,7 +421,7 @@ subprojects {
       exceptionFormat = testExceptionFormat
     }
     logTestStdout.rehydrate(delegate, owner, this)()
-    
+
     // The suites are for running sets of tests in IDEs.
     // Gradle will run each test class, so we exclude the suites to avoid redundantly running the tests twice.
     exclude '**/*Suite.class'
@@ -754,7 +754,7 @@ tasks.create(name: "testConnect", dependsOn: connectPkgs.collect { it + ":test" 
 
 project(':core') {
   apply plugin: 'scala'
-  
+
   // scaladoc generation is configured at the sub-module level with an artifacts
   // block (cf. see streams-scala). If scaladoc generation is invoked explicitly
   // for the `core` module, this ensures the generated jar doesn't include scaladoc
@@ -771,6 +771,8 @@ project(':core') {
     // even though the `core` module doesn't expose any public API
     api project(':clients')
     api libs.scalaLibrary
+
+    implementation group: 'net.ripe.ipresource', name: 'ipresource', version: '1.47'
 
     implementation project(':metadata')
     implementation project(':raft')
@@ -1300,7 +1302,7 @@ project(':raft') {
       }
     }
   }
-  
+
   compileJava.dependsOn 'processMessages'
 
   jar {
@@ -1432,10 +1434,10 @@ project(':streams') {
       // this transitive dependency is not used in Streams, and it breaks SBT builds
       exclude module: 'javax.ws.rs-api'
     }
-    
+
     // `org.rocksdb.Options` is part of Kafka Streams public api via `RocksDBConfigSetter`
     api libs.rocksDBJni
-    
+
     implementation libs.slf4jApi
     implementation libs.jacksonAnnotations
     implementation libs.jacksonDatabind

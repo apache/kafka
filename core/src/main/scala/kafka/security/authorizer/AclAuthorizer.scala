@@ -26,6 +26,8 @@ import kafka.server.{KafkaConfig, KafkaServer}
 import kafka.utils._
 import kafka.utils.Implicits._
 import kafka.zk._
+import net.ripe.ipresource.IpAddress.parse
+import net.ripe.ipresource.IpRange
 import org.apache.kafka.common.Endpoint
 import org.apache.kafka.common.acl._
 import org.apache.kafka.common.acl.AclOperation._
@@ -536,11 +538,24 @@ class AclAuthorizer extends Authorizer with Logging {
       acl.permissionType == permissionType &&
         (acl.kafkaPrincipal == principal || acl.kafkaPrincipal == AclEntry.WildcardPrincipal) &&
         (operation == acl.operation || acl.operation == AclOperation.ALL) &&
-        (acl.host == host || acl.host == AclEntry.WildcardHost)
+        aclHostMatch(acl, host)
     }.exists { acl =>
       authorizerLogger.debug(s"operation = $operation on resource = $resource from host = $host is $permissionType based on acl = $acl")
       true
     }
+  }
+
+  private def aclHostMatch(acl: AclEntry, host: String): Boolean = {
+    if (acl.host == host || acl.host == AclEntry.WildcardHost) return true
+
+    try {
+      val range =  IpRange.parse(acl.host)
+
+      return range.contains(parse(host))
+    } catch {
+      case e: IllegalArgumentException => return false
+    }
+    false
   }
 
   private def loadCache(): Unit = {
