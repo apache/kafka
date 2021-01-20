@@ -87,6 +87,9 @@ public class EmbeddedConnectCluster {
     private final String workerNamePrefix;
     private final AtomicInteger nextWorkerId = new AtomicInteger(0);
     private final EmbeddedConnectClusterAssertions assertions;
+    // we should keep the original class loader and set it back after connector stopped since the connector will change the class loader,
+    // and then, the Mockito will use the unexpected class loader to generate the wrong proxy instance, which makes mock failed
+    private final ClassLoader originalClassLoader = Thread.currentThread().getContextClassLoader();
 
     private EmbeddedConnectCluster(String name, Map<String, String> workerProps, int numWorkers,
                                    int numBrokers, Properties brokerProps,
@@ -157,6 +160,7 @@ public class EmbeddedConnectCluster {
                 Exit.resetExitProcedure();
                 Exit.resetHaltProcedure();
             }
+            Thread.currentThread().setContextClassLoader(originalClassLoader);
         }
     }
 
