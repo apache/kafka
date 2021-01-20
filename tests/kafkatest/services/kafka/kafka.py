@@ -24,6 +24,7 @@ from ducktape.utils.util import wait_until
 from ducktape.cluster.remoteaccount import RemoteCommandError
 
 from .config import KafkaConfig
+from kafkatest.version import KafkaVersion
 from kafkatest.directory_layout.kafka_path import KafkaPathResolverMixin
 from kafkatest.services.kafka import config_property
 from kafkatest.services.monitor.jmx import JmxMixin
@@ -554,6 +555,11 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
             }
             node.account.ssh(cmd)
 
+    def node_inter_broker_protocol_version(self, node):
+        if config_property.INTER_BROKER_PROTOCOL_VERSION in node.config:
+            return KafkaVersion(node.config[config_property.INTER_BROKER_PROTOCOL_VERSION])
+        return node.version
+
     def all_nodes_topic_command_supports_bootstrap_server(self):
         for node in self.nodes:
             if not node.version.topic_command_supports_bootstrap_server():
@@ -587,6 +593,12 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
     def all_nodes_reassign_partitions_command_supports_bootstrap_server(self):
         for node in self.nodes:
             if not node.version.reassign_partitions_command_supports_bootstrap_server():
+                return False
+        return True
+
+    def all_nodes_support_topic_ids(self):
+        for node in self.nodes:
+            if not self.node_inter_broker_protocol_version(node).supports_topic_ids():
                 return False
         return True
 
@@ -1017,6 +1029,26 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
         except:
             self.logger.debug("Data in /cluster/id znode could not be parsed. Data = %s" % cluster)
             raise
+
+    def topic_id(self, topic):
+        self.logger.debug(
+            "Querying zookeeper to find assigned topic ID for topic %s." % topic)
+        zk_path = "/brokers/topics/%s" % topic
+        topic_info_json = self.zk.query(zk_path, chroot=self.zk_chroot)
+
+        if topic_info_json is None:
+            raise Exception("Error finding state for topic %s." % topic)
+
+        topic_info = json.loads(topic_info_json)
+        self.logger.info(topic_info)
+
+        if self.all_nodes_support_topic_ids():
+            topic_id = topic_info["topic_id"]
+            self.logger.info("Topic ID assigned for topic %s is %s" % (topic, topic_id))
+            return topic_id
+        else:
+            self.logger.info("No topic ID assigned for topic %s" % topic)
+            return None
 
     def check_protocol_errors(self, node):
         """ Checks for common protocol exceptions due to invalid inter broker protocol handling.

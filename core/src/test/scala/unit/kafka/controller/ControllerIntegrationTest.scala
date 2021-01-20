@@ -254,7 +254,7 @@ class ControllerIntegrationTest extends ZooKeeperTestHarness {
       tp0 -> ReplicaAssignment(Seq(0), Seq(), Seq()),
       tp1 -> ReplicaAssignment(Seq(0), Seq(), Seq()))
     TestUtils.createTopic(zkClient, tp0.topic, partitionReplicaAssignment = assignment, servers = servers)
-    zkClient.setTopicAssignment(tp0.topic, Uuid.randomUuid(), expandedAssignment, firstControllerEpochZkVersion)
+    zkClient.setTopicAssignment(tp0.topic, Some(Uuid.randomUuid()), expandedAssignment, firstControllerEpochZkVersion)
     waitForPartitionState(tp1, firstControllerEpoch, 0, LeaderAndIsr.initialLeaderEpoch,
       "failed to get expected partition state upon topic partition expansion")
     TestUtils.waitUntilMetadataIsPropagated(servers, tp1.topic, tp1.partition)
@@ -274,7 +274,7 @@ class ControllerIntegrationTest extends ZooKeeperTestHarness {
     TestUtils.createTopic(zkClient, tp0.topic, partitionReplicaAssignment = assignment, servers = servers)
     servers(otherBrokerId).shutdown()
     servers(otherBrokerId).awaitShutdown()
-    zkClient.setTopicAssignment(tp0.topic, Uuid.randomUuid(), expandedAssignment, firstControllerEpochZkVersion)
+    zkClient.setTopicAssignment(tp0.topic, Some(Uuid.randomUuid()), expandedAssignment, firstControllerEpochZkVersion)
     waitForPartitionState(tp1, firstControllerEpoch, controllerId, LeaderAndIsr.initialLeaderEpoch,
       "failed to get expected partition state upon topic partition expansion")
     TestUtils.waitUntilMetadataIsPropagated(Seq(servers(controllerId)), tp1.topic, tp1.partition)
@@ -858,14 +858,14 @@ class ControllerIntegrationTest extends ZooKeeperTestHarness {
     val assignment1 = Map(tp1.partition -> Seq(0))
 
     // Before adding the topic, an attempt to get the ID should result in None.
-    assertTrue(controller.controllerContext.topicIds.get("t1") == None)
+    assertEquals(None, controller.controllerContext.topicIds.get("t1"))
 
     TestUtils.createTopic(zkClient, tp1.topic(), assignment1, servers)
 
     // Test that the first topic has its ID added correctly
     waitForPartitionState(tp1, firstControllerEpoch, 0, LeaderAndIsr.initialLeaderEpoch,
       "failed to get expected partition state upon topic creation")
-    assertNotEquals(controller.controllerContext.topicIds.get("t1"), None)
+    assertNotEquals(None, controller.controllerContext.topicIds.get("t1"))
     val topicId1 = controller.controllerContext.topicIds("t1")
     assertEquals("t1", controller.controllerContext.topicNames(topicId1))
 
@@ -876,13 +876,44 @@ class ControllerIntegrationTest extends ZooKeeperTestHarness {
     // Test that the second topic has its ID added correctly
     waitForPartitionState(tp2, firstControllerEpoch, 0, LeaderAndIsr.initialLeaderEpoch,
       "failed to get expected partition state upon topic creation")
-    assertNotEquals(controller.controllerContext.topicIds.get("t2"), None)
+    assertNotEquals(None, controller.controllerContext.topicIds.get("t2"))
     val topicId2 = controller.controllerContext.topicIds("t2")
     assertEquals("t2", controller.controllerContext.topicNames(topicId2))
 
     // The first topic ID has not changed
     assertEquals(topicId1, controller.controllerContext.topicIds.get("t1").get)
     assertNotEquals(topicId1, topicId2)
+  }
+
+  @Test
+  def testTopicIdsAreNotAdded(): Unit = {
+    servers = makeServers(1, interBrokerProtocolVersion = Some(KAFKA_2_7_IV0))
+    TestUtils.waitUntilControllerElected(zkClient)
+    val controller = getController().kafkaController
+    val tp1 = new TopicPartition("t1", 0)
+    val assignment1 = Map(tp1.partition -> Seq(0))
+
+    // Before adding the topic, an attempt to get the ID should result in None.
+    assertEquals(None, controller.controllerContext.topicIds.get("t1"))
+
+    TestUtils.createTopic(zkClient, tp1.topic(), assignment1, servers)
+
+    // Test that the first topic has no topic ID added.
+    waitForPartitionState(tp1, firstControllerEpoch, 0, LeaderAndIsr.initialLeaderEpoch,
+      "failed to get expected partition state upon topic creation")
+    assertEquals(None, controller.controllerContext.topicIds.get("t1"))
+
+    val tp2 = new TopicPartition("t2", 0)
+    val assignment2 = Map(tp2.partition -> Seq(0))
+    TestUtils.createTopic(zkClient, tp2.topic(), assignment2, servers)
+
+    // Test that the second topic has no topic ID added.
+    waitForPartitionState(tp2, firstControllerEpoch, 0, LeaderAndIsr.initialLeaderEpoch,
+      "failed to get expected partition state upon topic creation")
+    assertEquals(None, controller.controllerContext.topicIds.get("t2"))
+
+    // The first topic ID has not changed
+    assertEquals(None, controller.controllerContext.topicIds.get("t1"))
   }
 
 
@@ -913,6 +944,32 @@ class ControllerIntegrationTest extends ZooKeeperTestHarness {
   }
 
   @Test
+  def testTopicIdMigrationAndHandlingWithOlderVersion(): Unit = {
+    val tp = new TopicPartition("t", 0)
+    val assignment = Map(tp.partition -> ReplicaAssignment(Seq(0), List(), List()))
+    val adminZkClient = new AdminZkClient(zkClient)
+
+    servers = makeServers(1, interBrokerProtocolVersion = Some(KAFKA_2_7_IV0))
+    adminZkClient.createTopic(tp.topic, 1, 1)
+    waitForPartitionState(tp, firstControllerEpoch, 0, LeaderAndIsr.initialLeaderEpoch,
+      "failed to get expected partition state upon topic creation")
+    val topicIdAfterCreate = zkClient.getTopicIdsForTopics(Set(tp.topic())).get(tp.topic())
+    assertEquals(None, topicIdAfterCreate)
+    assertEquals(topicIdAfterCreate, servers.head.kafkaController.controllerContext.topicIds.get(tp.topic),
+      "incorrect topic ID can be found in the controller context")
+
+    adminZkClient.addPartitions(tp.topic, assignment, adminZkClient.getBrokerMetadatas(), 2)
+    val topicIdAfterAddition = zkClient.getTopicIdsForTopics(Set(tp.topic())).get(tp.topic())
+    assertEquals(topicIdAfterCreate, topicIdAfterAddition)
+    assertEquals(topicIdAfterCreate, servers.head.kafkaController.controllerContext.topicIds.get(tp.topic),
+      "topic ID changed after partition additions")
+
+    adminZkClient.deleteTopic(tp.topic)
+    TestUtils.waitUntilTrue(() => !servers.head.kafkaController.controllerContext.allTopics.contains(tp.topic),
+      "topic should have been removed from controller context after deletion")
+  }
+
+  @Test
   def testTopicIdPersistsThroughControllerReelection(): Unit = {
     servers = makeServers(2)
     val controllerId = TestUtils.waitUntilControllerElected(zkClient)
@@ -929,6 +986,26 @@ class ControllerIntegrationTest extends ZooKeeperTestHarness {
     TestUtils.waitUntilTrue(() => zkClient.getControllerId.isDefined, "failed to elect a controller")
     val controller2 = getController().kafkaController
     assertEquals(topicId, controller2.controllerContext.topicIds.get("t").get)
+  }
+
+  @Test
+  def testNoTopicIdPersistsThroughControllerReelection(): Unit = {
+    servers = makeServers(2, interBrokerProtocolVersion = Some(KAFKA_2_7_IV0))
+    val controllerId = TestUtils.waitUntilControllerElected(zkClient)
+    val controller = getController().kafkaController
+    val tp = new TopicPartition("t", 0)
+    val assignment = Map(tp.partition -> Seq(controllerId))
+    TestUtils.createTopic(zkClient, tp.topic, partitionReplicaAssignment = assignment, servers = servers)
+    waitForPartitionState(tp, firstControllerEpoch, controllerId, LeaderAndIsr.initialLeaderEpoch,
+      "failed to get expected partition state upon topic creation")
+    val emptyTopicId = controller.controllerContext.topicIds.get("t")
+    assertEquals(None, emptyTopicId)
+
+    servers(controllerId).shutdown()
+    servers(controllerId).awaitShutdown()
+    TestUtils.waitUntilTrue(() => zkClient.getControllerId.isDefined, "failed to elect a controller")
+    val controller2 = getController().kafkaController
+    assertEquals(emptyTopicId, controller2.controllerContext.topicIds.get("t"))
   }
 
   @Test
@@ -949,6 +1026,38 @@ class ControllerIntegrationTest extends ZooKeeperTestHarness {
     TestUtils.waitUntilTrue(() => zkClient.getControllerId.isDefined, "failed to elect a controller")
     val controller2 = getController().kafkaController
     assertEquals(topicId, controller2.controllerContext.topicIds.get("t").get)
+  }
+
+  @Test
+  def testTopicIdCreatedOnUpgrade(): Unit = {
+    servers = makeServers(1, interBrokerProtocolVersion = Some(KAFKA_2_7_IV0))
+    val controllerId = TestUtils.waitUntilControllerElected(zkClient)
+    val controller = getController().kafkaController
+    val tp = new TopicPartition("t", 0)
+    val assignment = Map(tp.partition -> Seq(controllerId))
+    TestUtils.createTopic(zkClient, tp.topic, partitionReplicaAssignment = assignment, servers = servers)
+    waitForPartitionState(tp, firstControllerEpoch, controllerId, LeaderAndIsr.initialLeaderEpoch,
+      "failed to get expected partition state upon topic creation")
+    val topicIdAfterCreate = zkClient.getTopicIdsForTopics(Set(tp.topic())).get(tp.topic())
+    assertEquals(None, topicIdAfterCreate)
+    val emptyTopicId = controller.controllerContext.topicIds.get("t")
+    assertEquals(None, emptyTopicId)
+
+    servers(controllerId).shutdown()
+    servers(controllerId).awaitShutdown()
+    servers = makeServers(1)
+    TestUtils.waitUntilTrue(() => zkClient.getControllerId.isDefined, "failed to elect a controller")
+    val topicIdAfterUpgrade = zkClient.getTopicIdsForTopics(Set(tp.topic())).get(tp.topic())
+    assertNotEquals(emptyTopicId, topicIdAfterUpgrade)
+    val controller2 = getController().kafkaController
+    assertNotEquals(emptyTopicId, controller2.controllerContext.topicIds.get("t"))
+    val topicId = controller2.controllerContext.topicIds.get("t").get
+    assertEquals(topicIdAfterUpgrade.get, topicId)
+    assertEquals("t", controller2.controllerContext.topicNames(topicId))
+
+    adminZkClient.deleteTopic(tp.topic)
+    TestUtils.waitUntilTrue(() => !servers.head.kafkaController.controllerContext.allTopics.contains(tp.topic),
+      "topic should have been removed from controller context after deletion")
   }
 
   private def testControllerMove(fun: () => Unit): Unit = {

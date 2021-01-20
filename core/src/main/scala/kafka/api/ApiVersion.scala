@@ -110,7 +110,7 @@ object ApiVersion {
     KAFKA_2_7_IV1,
     // Introduced AlterIsr (KIP-497)
     KAFKA_2_7_IV2,
-    // Flexible versioning on ListOffsets, WriteTxnMarkers and OffsetsForLeaderEpoch.
+    // Flexible versioning on ListOffsets, WriteTxnMarkers and OffsetsForLeaderEpoch. Also adds topic IDs (KIP-516)
     KAFKA_2_8_IV0,
     // Introduced topic IDs to LeaderAndIsr and UpdateMetadata requests/responses (KIP-516)
     KAFKA_2_8_IV1

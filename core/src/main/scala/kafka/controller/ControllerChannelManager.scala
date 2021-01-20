@@ -37,7 +37,7 @@ import org.apache.kafka.common.requests._
 import org.apache.kafka.common.security.JaasContext
 import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.common.utils.{LogContext, Time}
-import org.apache.kafka.common.{KafkaException, Node, Reconfigurable, TopicPartition}
+import org.apache.kafka.common.{KafkaException, Node, Reconfigurable, TopicPartition, Uuid}
 
 import scala.jdk.CollectionConverters._
 import scala.collection.mutable.HashMap
@@ -486,7 +486,7 @@ abstract class AbstractControllerBrokerRequestBatch(config: KafkaConfig,
         val topicIds = leaderAndIsrPartitionStates.keys
           .map(_.topic)
           .toSet[String]
-          .map(topic => (topic, controllerContext.topicIds(topic)))
+          .map(topic => (topic, controllerContext.topicIds.getOrElse(topic, Uuid.ZERO_UUID)))
           .toMap
         val leaderAndIsrRequestBuilder = new LeaderAndIsrRequest.Builder(leaderAndIsrRequestVersion, controllerId,
           controllerEpoch, brokerEpoch, leaderAndIsrPartitionStates.values.toBuffer.asJava, topicIds.asJava, leaders.asJava)
