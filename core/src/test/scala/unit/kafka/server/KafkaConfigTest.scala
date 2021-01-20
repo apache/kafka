@@ -17,7 +17,6 @@
 
 package kafka.server
 
-import java.util.Properties
 import kafka.api.{ApiVersion, KAFKA_0_8_2}
 import kafka.cluster.EndPoint
 import kafka.log.LogConfig
@@ -31,6 +30,10 @@ import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.raft.RaftConfig
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.Test
+
+import java.net.InetSocketAddress
+import java.util
+import java.util.Properties
 
 class KafkaConfigTest {
 
@@ -973,15 +976,23 @@ class KafkaConfigTest {
 
   @Test
   def testValidQuorumVotersConfig(): Unit = {
-    assertValidQuorumVoters("", 0)
-    assertValidQuorumVoters("1@127.0.0.1:9092", 1)
-    assertValidQuorumVoters("1@kafka1:9092,2@kafka2:9092,3@kafka3:9092", 3)
+    val expected = new util.HashMap[Integer, InetSocketAddress]()
+    assertValidQuorumVoters("", expected)
+
+    expected.put(1, new InetSocketAddress("127.0.0.1", 9092))
+    assertValidQuorumVoters("1@127.0.0.1:9092", expected)
+
+    expected.clear()
+    expected.put(1, new InetSocketAddress("kafka1", 9092))
+    expected.put(2, new InetSocketAddress("kafka2", 9092))
+    expected.put(3, new InetSocketAddress("kafka3", 9092))
+    assertValidQuorumVoters("1@kafka1:9092,2@kafka2:9092,3@kafka3:9092", expected)
   }
 
-  private def assertValidQuorumVoters(value: String, expectedVoterCount: Int): Unit = {
+  private def assertValidQuorumVoters(value: String, expectedVoters: util.Map[Integer, InetSocketAddress]): Unit = {
     val props = TestUtils.createBrokerConfig(0, TestUtils.MockZkConnect)
     props.put(RaftConfig.QUORUM_VOTERS_CONFIG, value)
-    assertDoesNotThrow(() => KafkaConfig.fromProps(props))
-    assertEquals(expectedVoterCount, KafkaConfig.fromProps(props).quorumVoters.size)
+    val raftConfig = new RaftConfig(KafkaConfig.fromProps(props))
+    assertEquals(expectedVoters, raftConfig.quorumVoterConnections())
   }
 }

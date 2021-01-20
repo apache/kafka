@@ -16,36 +16,15 @@
  */
 package org.apache.kafka.raft;
 
-import org.apache.kafka.common.Node;
-
 import java.net.InetSocketAddress;
-import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
 public class RaftTestUtil {
-    public static RaftConfig buildRaftConfig(
-            int requestTimeoutMs,
-            int retryBackoffMs,
-            int electionTimeoutMs,
-            int electionBackoffMs,
-            int fetchTimeoutMs,
-            int appendLingerMs,
-            List<Node> voterNodes
-    ) {
-        Map<Integer, InetSocketAddress> voterConnections = voterNodes.stream()
-            .collect(Collectors.toMap(Node::id, node -> new InetSocketAddress(node.host(), node.port())));
-        return new RaftConfig(voterConnections, requestTimeoutMs, retryBackoffMs, electionTimeoutMs, electionBackoffMs,
-            fetchTimeoutMs, appendLingerMs);
-    }
-
-    public static List<Node> voterNodesFromIds(Set<Integer> voterIds,
+    public static Map<Integer, InetSocketAddress> voterNodesFromIds(Set<Integer> voterIds,
                                                Function<Integer, InetSocketAddress> voterAddressGenerator) {
-        return voterIds.stream().map(voterId -> {
-            InetSocketAddress voterAddress = voterAddressGenerator.apply(voterId);
-            return new Node(voterId, voterAddress.getHostName(), voterAddress.getPort());
-        }).collect(Collectors.toList());
+        return voterIds.stream().collect(Collectors.toMap(id -> id, voterAddressGenerator));
     }
 }

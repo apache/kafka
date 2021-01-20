@@ -186,16 +186,8 @@ public class RaftConfig {
             @SuppressWarnings("unchecked")
             List<String> voterStrings = (List) value;
 
-            if (voterStrings.size() == 0) {
-                // TODO: Add a flag to skip validation for an empty voter string, conditionally.
-                //       For now, skip anyway. See https://github.com/apache/kafka/pull/9916#discussion_r560611932
-                return;
-            }
-
-            Map<Integer, InetSocketAddress> voterConnections = parseVoterConnections(voterStrings);
-            if (voterConnections.isEmpty()) {
-                throw new ConfigException(name, value);
-            }
+            // Attempt to parse the connect strings
+            parseVoterConnections(voterStrings);
         }
 
         @Override
