@@ -583,15 +583,6 @@ object KafkaConfig {
   val PasswordEncoderKeyLengthProp =  "password.encoder.key.length"
   val PasswordEncoderIterationsProp =  "password.encoder.iterations"
 
-  /** ********* Raft Quorum Configuration *********/
-  val QuorumVotersProp = RaftConfig.QUORUM_VOTERS_CONFIG
-  val QuorumElectionTimeoutMsProp = RaftConfig.QUORUM_ELECTION_TIMEOUT_MS_CONFIG
-  val QuorumFetchTimeoutMsProp = RaftConfig.QUORUM_FETCH_TIMEOUT_MS_CONFIG
-  val QuorumElectionBackoffMsProp = RaftConfig.QUORUM_ELECTION_BACKOFF_MAX_MS_CONFIG
-  val QuorumLingerMsProp = RaftConfig.QUORUM_LINGER_MS_CONFIG
-  val QuorumRequestTimeoutMsProp = RaftConfig.QUORUM_REQUEST_TIMEOUT_MS_CONFIG
-  val QuorumRetryBackoffMsProp = RaftConfig.QUORUM_RETRY_BACKOFF_MS_CONFIG
-
   /* Documentation */
   /** ********* Zookeeper Configuration ***********/
   val ZkConnectDoc = "Specifies the ZooKeeper connection string in the form <code>hostname:port</code> where host and port are the " +
@@ -1278,13 +1269,13 @@ object KafkaConfig {
       .define(PasswordEncoderIterationsProp, INT, Defaults.PasswordEncoderIterations, atLeast(1024), LOW, PasswordEncoderIterationsDoc)
 
       /** ********* Raft Quorum Configuration *********/
-      .defineInternal(QuorumVotersProp, LIST, Defaults.QuorumVoters, new RaftConfig.ControllerQuorumVotersValidator(), HIGH)
-      .defineInternal(QuorumElectionTimeoutMsProp, INT, Defaults.QuorumElectionTimeoutMs, HIGH)
-      .defineInternal(QuorumFetchTimeoutMsProp, INT, Defaults.QuorumFetchTimeoutMs, HIGH)
-      .defineInternal(QuorumElectionBackoffMsProp, INT, Defaults.QuorumElectionBackoffMs, HIGH)
-      .defineInternal(QuorumLingerMsProp, INT, Defaults.QuorumLingerMs, MEDIUM)
-      .defineInternal(QuorumRequestTimeoutMsProp, INT, Defaults.QuorumRequestTimeoutMs, MEDIUM)
-      .defineInternal(QuorumRetryBackoffMsProp, INT, Defaults.QuorumRetryBackoffMs, LOW)
+      .defineInternal(RaftConfig.QUORUM_VOTERS_CONFIG, LIST, Defaults.QuorumVoters, new RaftConfig.ControllerQuorumVotersValidator(), HIGH)
+      .defineInternal(RaftConfig.QUORUM_ELECTION_TIMEOUT_MS_CONFIG, INT, Defaults.QuorumElectionTimeoutMs, HIGH)
+      .defineInternal(RaftConfig.QUORUM_FETCH_TIMEOUT_MS_CONFIG, INT, Defaults.QuorumFetchTimeoutMs, HIGH)
+      .defineInternal(RaftConfig.QUORUM_ELECTION_BACKOFF_MAX_MS_CONFIG, INT, Defaults.QuorumElectionBackoffMs, HIGH)
+      .defineInternal(RaftConfig.QUORUM_LINGER_MS_CONFIG, INT, Defaults.QuorumLingerMs, MEDIUM)
+      .defineInternal(RaftConfig.QUORUM_REQUEST_TIMEOUT_MS_CONFIG, INT, Defaults.QuorumRequestTimeoutMs, MEDIUM)
+      .defineInternal(RaftConfig.QUORUM_RETRY_BACKOFF_MS_CONFIG, INT, Defaults.QuorumRetryBackoffMs, LOW)
   }
 
   def configNames: Seq[String] = configDef.names.asScala.toBuffer.sorted
@@ -1715,13 +1706,13 @@ class KafkaConfig(val props: java.util.Map[_, _], doLog: Boolean, dynamicConfigO
   def compressionType = getString(KafkaConfig.CompressionTypeProp)
 
   /** ********* Raft Quorum Configuration *********/
-  val quorumVoters = getList(KafkaConfig.QuorumVotersProp)
-  val quorumElectionTimeoutMs = getInt(KafkaConfig.QuorumElectionTimeoutMsProp)
-  val quorumFetchTimeoutMs = getInt(KafkaConfig.QuorumFetchTimeoutMsProp)
-  val quorumElectionBackoffMs = getInt(KafkaConfig.QuorumElectionBackoffMsProp)
-  val quorumLingerMs = getInt(KafkaConfig.QuorumLingerMsProp)
-  val quorumRequestTimeoutMs = getInt(KafkaConfig.QuorumRequestTimeoutMsProp)
-  val quorumRetryBackoffMs = getInt(KafkaConfig.QuorumRetryBackoffMsProp)
+  val quorumVoters = getList(RaftConfig.QUORUM_VOTERS_CONFIG)
+  val quorumElectionTimeoutMs = getInt(RaftConfig.QUORUM_ELECTION_TIMEOUT_MS_CONFIG)
+  val quorumFetchTimeoutMs = getInt(RaftConfig.QUORUM_FETCH_TIMEOUT_MS_CONFIG)
+  val quorumElectionBackoffMs = getInt(RaftConfig.QUORUM_ELECTION_BACKOFF_MAX_MS_CONFIG)
+  val quorumLingerMs = getInt(RaftConfig.QUORUM_LINGER_MS_CONFIG)
+  val quorumRequestTimeoutMs = getInt(RaftConfig.QUORUM_REQUEST_TIMEOUT_MS_CONFIG)
+  val quorumRetryBackoffMs = getInt(RaftConfig.QUORUM_RETRY_BACKOFF_MS_CONFIG)
 
   def addReconfigurable(reconfigurable: Reconfigurable): Unit = {
     dynamicConfig.addReconfigurable(reconfigurable)

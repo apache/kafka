@@ -779,13 +779,13 @@ class KafkaConfigTest {
         case KafkaConfig.KafkaMetricsPollingIntervalSecondsProp => //ignore
 
         // Raft Quorum Configs
-        case KafkaConfig.QuorumVotersProp => // ignore string
-        case KafkaConfig.QuorumElectionTimeoutMsProp => assertPropertyInvalid(baseProperties, name, "not_a_number")
-        case KafkaConfig.QuorumFetchTimeoutMsProp => assertPropertyInvalid(baseProperties, name, "not_a_number")
-        case KafkaConfig.QuorumElectionBackoffMsProp => assertPropertyInvalid(baseProperties, name, "not_a_number")
-        case KafkaConfig.QuorumLingerMsProp => assertPropertyInvalid(baseProperties, name, "not_a_number")
-        case KafkaConfig.QuorumRequestTimeoutMsProp => assertPropertyInvalid(baseProperties, name, "not_a_number")
-        case KafkaConfig.QuorumRetryBackoffMsProp => assertPropertyInvalid(baseProperties, name, "not_a_number")
+        case RaftConfig.QUORUM_VOTERS_CONFIG => // ignore string
+        case RaftConfig.QUORUM_ELECTION_TIMEOUT_MS_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number")
+        case RaftConfig.QUORUM_FETCH_TIMEOUT_MS_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number")
+        case RaftConfig.QUORUM_ELECTION_BACKOFF_MAX_MS_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number")
+        case RaftConfig.QUORUM_LINGER_MS_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number")
+        case RaftConfig.QUORUM_REQUEST_TIMEOUT_MS_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number")
+        case RaftConfig.QUORUM_RETRY_BACKOFF_MS_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number")
 
         case _ => assertPropertyInvalid(baseProperties, name, "not_a_number", "-1")
       }
