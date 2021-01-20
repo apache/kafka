@@ -435,7 +435,7 @@ public class RocksDBMetricsTest {
     public void shouldAddEstimateNumKeysMetric() {
         final String name = "estimate-num-keys";
         final String description =
-            "Estimated number of total keys in the active and unflushed immutable memtables and storage";
+            "Estimated number of keys in the active and unflushed immutable memtables and storage";
         runAndVerifyMutableMetric(
             name,
             description,
