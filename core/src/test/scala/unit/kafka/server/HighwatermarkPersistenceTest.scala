@@ -22,8 +22,8 @@ import java.io.File
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.utils.Utils
 import org.easymock.EasyMock
-import org.junit._
-import org.junit.Assert._
+import org.junit.jupiter.api._
+import org.junit.jupiter.api.Assertions._
 import kafka.utils.{KafkaScheduler, MockTime, TestUtils}
 import kafka.zk.KafkaZkClient
 import java.util.concurrent.atomic.AtomicBoolean
@@ -49,7 +49,7 @@ class HighwatermarkPersistenceTest {
 
   val alterIsrManager = TestUtils.createAlterIsrManager()
 
-  @After
+  @AfterEach
   def teardown(): Unit = {
     for (manager <- logManagers; dir <- manager.liveLogDirs)
       Utils.delete(dir)

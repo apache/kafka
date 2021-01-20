@@ -17,7 +17,6 @@ package kafka.api
 import java.time.Duration
 import java.util.concurrent.TimeUnit
 import java.util.{Collections, HashMap, Properties}
-
 import com.yammer.metrics.core.{Histogram, Meter}
 import kafka.api.QuotaTestClients._
 import kafka.metrics.KafkaYammerMetrics
@@ -33,8 +32,8 @@ import org.apache.kafka.common.protocol.ApiKeys
 import org.apache.kafka.common.quota.ClientQuotaAlteration
 import org.apache.kafka.common.quota.ClientQuotaEntity
 import org.apache.kafka.common.security.auth.KafkaPrincipal
-import org.junit.Assert._
-import org.junit.{Before, Test}
+import org.junit.jupiter.api.Assertions._
+import org.junit.jupiter.api.{BeforeEach, Test}
 
 import scala.collection.Map
 import scala.jdk.CollectionConverters._
@@ -73,7 +72,7 @@ abstract class BaseQuotaTest extends IntegrationTestHarness {
   var followerNode: KafkaServer = _
   var quotaTestClients: QuotaTestClients = _
 
-  @Before
+  @BeforeEach
   override def setUp(): Unit = {
     super.setUp()
 
@@ -91,7 +90,7 @@ abstract class BaseQuotaTest extends IntegrationTestHarness {
     quotaTestClients.verifyProduceThrottle(expectThrottle = true)
 
     // Consumer should read in a bursty manner and get throttled immediately
-    assertTrue("Should have consumed at least one record", quotaTestClients.consumeUntilThrottled(produced) > 0)
+    assertTrue(quotaTestClients.consumeUntilThrottled(produced) > 0, "Should have consumed at least one record")
     quotaTestClients.verifyConsumeThrottle(expectThrottle = true)
   }
 
@@ -127,7 +126,7 @@ abstract class BaseQuotaTest extends IntegrationTestHarness {
     quotaTestClients.verifyProduceThrottle(expectThrottle = true)
 
     // Consumer should be able to consume at least one record, even when throttled
-    assertTrue("Should have consumed at least one record", quotaTestClients.consumeUntilThrottled(produced) > 0)
+    assertTrue(quotaTestClients.consumeUntilThrottled(produced) > 0, "Should have consumed at least one record")
     quotaTestClients.verifyConsumeThrottle(expectThrottle = true)
   }
 
@@ -172,13 +171,13 @@ abstract class BaseQuotaTest extends IntegrationTestHarness {
       throttled = throttleMetric != null && metricValue(throttleMetric) > 0
     }
 
-    assertTrue("Should have been throttled", throttled)
+    assertTrue(throttled, "Should have been throttled")
     quotaTestClients.verifyConsumerClientThrottleTimeMetric(expectThrottle = true,
       Some(ClientQuotaManagerConfig.DefaultQuotaWindowSizeSeconds * 1000.0))
 
     val exemptMetric = quotaTestClients.exemptRequestMetric
-    assertNotNull("Exempt requests not recorded", exemptMetric)
-    assertTrue("Exempt requests not recorded", metricValue(exemptMetric) > 0)
+    assertNotNull(exemptMetric, "Exempt requests not recorded")
+    assertTrue(metricValue(exemptMetric) > 0, "Exempt requests not recorded")
   }
 }
 
@@ -249,9 +248,9 @@ abstract class QuotaTestClients(topic: String,
                                                      clientId: String, expectThrottle: Boolean): Unit = {
     val throttleTimeMs = brokerRequestMetricsThrottleTimeMs(apiKey, metricNameSuffix)
     if (expectThrottle)
-      assertTrue(s"Client with id=$clientId should have been throttled, $throttleTimeMs", throttleTimeMs > 0)
+      assertTrue(throttleTimeMs > 0, s"Client with id=$clientId should have been throttled, $throttleTimeMs")
     else
-      assertEquals(s"Client with id=$clientId should not have been throttled", 0.0, throttleTimeMs, 0.0)
+      assertEquals(0.0, throttleTimeMs, 0.0, s"Client with id=$clientId should not have been throttled")
   }
 
   def verifyProduceThrottle(expectThrottle: Boolean, verifyClientMetric: Boolean = true,
@@ -275,9 +274,9 @@ abstract class QuotaTestClients(topic: String,
   private def verifyThrottleTimeMetric(quotaType: QuotaType, clientId: String, expectThrottle: Boolean): Unit = {
     val throttleMetricValue = metricValue(throttleMetric(quotaType, clientId))
     if (expectThrottle) {
-      assertTrue(s"Client with id=$clientId should have been throttled", throttleMetricValue > 0)
+      assertTrue(throttleMetricValue > 0, s"Client with id=$clientId should have been throttled")
     } else {
-      assertTrue(s"Client with id=$clientId should not have been throttled", throttleMetricValue.isNaN)
+      assertTrue(throttleMetricValue.isNaN, s"Client with id=$clientId should not have been throttled")
     }
   }
 
@@ -322,7 +321,7 @@ abstract class QuotaTestClients(topic: String,
       TestUtils.waitUntilTrue(() => metricValue(avgMetric) > 0.0 && metricValue(maxMetric) > 0.0,
         s"Producer throttle metric not updated: avg=${metricValue(avgMetric)} max=${metricValue(maxMetric)}")
     } else
-      assertEquals("Should not have been throttled", 0.0, metricValue(maxMetric), 0.0)
+      assertEquals(0.0, metricValue(maxMetric), 0.0, "Should not have been throttled")
   }
 
   def verifyConsumerClientThrottleTimeMetric(expectThrottle: Boolean, maxThrottleTime: Option[Double] = None): Unit = {
@@ -334,10 +333,10 @@ abstract class QuotaTestClients(topic: String,
     if (expectThrottle) {
       TestUtils.waitUntilTrue(() => metricValue(avgMetric) > 0.0 && metricValue(maxMetric) > 0.0,
         s"Consumer throttle metric not updated: avg=${metricValue(avgMetric)} max=${metricValue(maxMetric)}")
-      maxThrottleTime.foreach(max => assertTrue(s"Maximum consumer throttle too high: ${metricValue(maxMetric)}",
-        metricValue(maxMetric) <= max))
+      maxThrottleTime.foreach(max => assertTrue(metricValue(maxMetric) <= max,
+        s"Maximum consumer throttle too high: ${metricValue(maxMetric)}"))
     } else
-      assertEquals("Should not have been throttled", 0.0, metricValue(maxMetric), 0.0)
+      assertEquals(0.0, metricValue(maxMetric), 0.0, "Should not have been throttled")
   }
 
   def clientQuotaEntity(user: Option[String], clientId: Option[String]): ClientQuotaEntity = {
@@ -374,10 +373,14 @@ abstract class QuotaTestClients(topic: String,
       val overrideProducerRequestQuota = quota(quotaManagers.request, userPrincipal, producerClientId)
       val overrideConsumerRequestQuota = quota(quotaManagers.request, userPrincipal, consumerClientId)
 
-      assertEquals(s"ClientId $producerClientId of user $userPrincipal must have producer quota", Quota.upperBound(producerQuota.toDouble), overrideProducerQuota)
-      assertEquals(s"ClientId $consumerClientId of user $userPrincipal must have consumer quota", Quota.upperBound(consumerQuota.toDouble), overrideConsumerQuota)
-      assertEquals(s"ClientId $producerClientId of user $userPrincipal must have request quota", Quota.upperBound(requestQuota.toDouble), overrideProducerRequestQuota)
-      assertEquals(s"ClientId $consumerClientId of user $userPrincipal must have request quota", Quota.upperBound(requestQuota.toDouble), overrideConsumerRequestQuota)
+      assertEquals(Quota.upperBound(producerQuota.toDouble), overrideProducerQuota,
+        s"ClientId $producerClientId of user $userPrincipal must have producer quota")
+      assertEquals(Quota.upperBound(consumerQuota.toDouble), overrideConsumerQuota,
+        s"ClientId $consumerClientId of user $userPrincipal must have consumer quota")
+      assertEquals(Quota.upperBound(requestQuota.toDouble), overrideProducerRequestQuota,
+        s"ClientId $producerClientId of user $userPrincipal must have request quota")
+      assertEquals(Quota.upperBound(requestQuota.toDouble), overrideConsumerRequestQuota,
+        s"ClientId $consumerClientId of user $userPrincipal must have request quota")
     }
   }
 }

@@ -133,7 +133,7 @@ public class EmbeddedConnectCluster {
             Exit.setExitProcedure(exitProcedure);
             Exit.setHaltProcedure(haltProcedure);
         }
-        kafkaCluster.before();
+        kafkaCluster.start();
         startConnect();
     }
 
@@ -146,7 +146,7 @@ public class EmbeddedConnectCluster {
     public void stop() {
         connectCluster.forEach(this::stopWorker);
         try {
-            kafkaCluster.after();
+            kafkaCluster.stop();
         } catch (UngracefulShutdownException e) {
             log.warn("Kafka did not shutdown gracefully");
         } catch (Exception e) {
