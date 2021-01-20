@@ -994,6 +994,10 @@ public class SenderTest {
         // Partition 0 - State is reset to current producer epoch
         assertPartitionState(transactionManager, tp0, producerId, (short) 1, 1, OptionalInt.empty());
 
+        // Partition 1 - State is not changed
+        assertPartitionState(transactionManager, tp1, producerId, (short) 0, 1, OptionalInt.of(0));
+        assertTrue(transactionManager.hasStaleProducerIdAndEpoch(tp1));
+
         // Partition 0 - Successful Response
         sendIdempotentProducerResponse(1, 0, tp0, Errors.NONE, 1, -1);
         sender.runOnce();
@@ -1007,6 +1011,7 @@ public class SenderTest {
 
         // Partition 1 - Epoch is bumped, sequence is reset and incremented
         assertPartitionState(transactionManager, tp1, producerId, (short) 1, 1, OptionalInt.empty());
+        assertFalse(transactionManager.hasStaleProducerIdAndEpoch(tp1));
 
         // Partition 1 - Successful Response
         sendIdempotentProducerResponse(1, 0, tp1, Errors.NONE, 1, -1);
@@ -1087,6 +1092,7 @@ public class SenderTest {
         // Partition 1 - State is not changed. The epoch will be lazily bumped when all in-flight
         // batches are completed
         assertPartitionState(transactionManager, tp1, producerId, (short) 0, 2, OptionalInt.of(0));
+        assertTrue(transactionManager.hasStaleProducerIdAndEpoch(tp1));
 
         // Partition 1 - Failed response with NOT_LEADER_OR_FOLLOWER
         sendIdempotentProducerResponse(0, 1, tp1, Errors.NOT_LEADER_OR_FOLLOWER, -1, -1);
@@ -1094,6 +1100,7 @@ public class SenderTest {
 
         // Partition 1 - State is not changed.
         assertPartitionState(transactionManager, tp1, producerId, (short) 0, 2, OptionalInt.of(0));
+        assertTrue(transactionManager.hasStaleProducerIdAndEpoch(tp1));
 
         // Partition 0 - Successful Response
         sendIdempotentProducerResponse(1, 0, tp0, Errors.NONE, 1, -1);
@@ -1108,6 +1115,7 @@ public class SenderTest {
 
         // Partition 1 - State is not changed. It will be lazily updated when the next batch is sent.
         assertPartitionState(transactionManager, tp1, producerId, (short) 0, 2, OptionalInt.of(0));
+        assertTrue(transactionManager.hasStaleProducerIdAndEpoch(tp1));
 
         // Partition 1 - Send third batch
         appendToAccumulator(tp1);
@@ -1115,6 +1123,7 @@ public class SenderTest {
 
         // Partition 1 - Epoch is bumped, sequence is reset
         assertPartitionState(transactionManager, tp1, producerId, (short) 1, 1, OptionalInt.empty());
+        assertFalse(transactionManager.hasStaleProducerIdAndEpoch(tp1));
 
         // Partition 1 - Successful Response
         sendIdempotentProducerResponse(1, 0, tp1, Errors.NONE, 0, -1);
