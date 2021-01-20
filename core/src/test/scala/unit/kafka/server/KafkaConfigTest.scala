@@ -18,7 +18,6 @@
 package kafka.server
 
 import java.util.Properties
-
 import kafka.api.{ApiVersion, KAFKA_0_8_2}
 import kafka.cluster.EndPoint
 import kafka.log.LogConfig
@@ -29,6 +28,7 @@ import org.apache.kafka.common.metrics.Sensor
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.record.Records
 import org.apache.kafka.common.security.auth.SecurityProtocol
+import org.apache.kafka.raft.RaftConfig
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.Test
 
@@ -950,4 +950,38 @@ class KafkaConfigTest {
     })
   }
 
+  @Test
+  def testInvalidQuorumVotersConfig(): Unit = {
+    assertInvalidQuorumVoters("1")
+    assertInvalidQuorumVoters("1@")
+    assertInvalidQuorumVoters("1:")
+    assertInvalidQuorumVoters("blah@")
+    assertInvalidQuorumVoters("1@kafka1")
+    assertInvalidQuorumVoters("1@kafka1:9092,")
+    assertInvalidQuorumVoters("1@kafka1:9092,")
+    assertInvalidQuorumVoters("1@kafka1:9092,2")
+    assertInvalidQuorumVoters("1@kafka1:9092,2@")
+    assertInvalidQuorumVoters("1@kafka1:9092,2@blah")
+    assertInvalidQuorumVoters("1@kafka1:9092,2@blah,")
+  }
+
+  private def assertInvalidQuorumVoters(value: String): Unit = {
+    val props = TestUtils.createBrokerConfig(0, TestUtils.MockZkConnect)
+    props.put(RaftConfig.QUORUM_VOTERS_CONFIG, value)
+    assertThrows(classOf[ConfigException], () => KafkaConfig.fromProps(props))
+  }
+
+  @Test
+  def testValidQuorumVotersConfig(): Unit = {
+    assertValidQuorumVoters("", 0)
+    assertValidQuorumVoters("1@127.0.0.1:9092", 1)
+    assertValidQuorumVoters("1@kafka1:9092,2@kafka2:9092,3@kafka3:9092", 3)
+  }
+
+  private def assertValidQuorumVoters(value: String, expectedVoterCount: Int): Unit = {
+    val props = TestUtils.createBrokerConfig(0, TestUtils.MockZkConnect)
+    props.put(RaftConfig.QUORUM_VOTERS_CONFIG, value)
+    assertDoesNotThrow(() => KafkaConfig.fromProps(props))
+    assertEquals(expectedVoterCount, KafkaConfig.fromProps(props).quorumVoters.size)
+  }
 }

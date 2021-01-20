@@ -1278,7 +1278,7 @@ object KafkaConfig {
       .define(PasswordEncoderIterationsProp, INT, Defaults.PasswordEncoderIterations, atLeast(1024), LOW, PasswordEncoderIterationsDoc)
 
       /** ********* Raft Quorum Configuration *********/
-      .defineInternal(QuorumVotersProp, STRING, Defaults.QuorumVoters, HIGH)
+      .defineInternal(QuorumVotersProp, LIST, Defaults.QuorumVoters, new RaftConfig.ControllerQuorumVotersValidator(), HIGH)
       .defineInternal(QuorumElectionTimeoutMsProp, INT, Defaults.QuorumElectionTimeoutMs, HIGH)
       .defineInternal(QuorumFetchTimeoutMsProp, INT, Defaults.QuorumFetchTimeoutMs, HIGH)
       .defineInternal(QuorumElectionBackoffMsProp, INT, Defaults.QuorumElectionBackoffMs, HIGH)
@@ -1715,7 +1715,7 @@ class KafkaConfig(val props: java.util.Map[_, _], doLog: Boolean, dynamicConfigO
   def compressionType = getString(KafkaConfig.CompressionTypeProp)
 
   /** ********* Raft Quorum Configuration *********/
-  val quorumVoters = getString(KafkaConfig.QuorumVotersProp)
+  val quorumVoters = getList(KafkaConfig.QuorumVotersProp)
   val quorumElectionTimeoutMs = getInt(KafkaConfig.QuorumElectionTimeoutMsProp)
   val quorumFetchTimeoutMs = getInt(KafkaConfig.QuorumFetchTimeoutMsProp)
   val quorumElectionBackoffMs = getInt(KafkaConfig.QuorumElectionBackoffMsProp)

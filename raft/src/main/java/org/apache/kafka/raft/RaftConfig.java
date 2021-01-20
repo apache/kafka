@@ -18,11 +18,14 @@ package org.apache.kafka.raft;
 
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.common.config.AbstractConfig;
+import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.utils.Utils;
 
 import java.net.InetSocketAddress;
+import java.util.Collections;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
@@ -34,7 +37,7 @@ public class RaftConfig {
     public static final String QUORUM_VOTERS_DOC = "Map of id/endpoint information for " +
         "the set of voters in a comma-separated list of `{id}@{host}:{port}` entries. " +
         "For example: `1@localhost:9092,2@localhost:9093,3@localhost:9094`";
-    public static final String DEFAULT_QUORUM_VOTERS = "";
+    public static final List<String> DEFAULT_QUORUM_VOTERS = Collections.emptyList();
 
     public static final String QUORUM_ELECTION_TIMEOUT_MS_CONFIG = QUORUM_PREFIX + "election.timeout.ms";
     public static final String QUORUM_ELECTION_TIMEOUT_MS_DOC = "Maximum time in milliseconds to wait " +
@@ -76,23 +79,23 @@ public class RaftConfig {
     private final Map<Integer, InetSocketAddress> voterConnections;
 
     public RaftConfig(AbstractConfig abstractConfig) {
-        this(abstractConfig.getInt(QUORUM_REQUEST_TIMEOUT_MS_CONFIG),
-                abstractConfig.getInt(QUORUM_RETRY_BACKOFF_MS_CONFIG),
-                abstractConfig.getInt(QUORUM_ELECTION_TIMEOUT_MS_CONFIG),
-                abstractConfig.getInt(QUORUM_ELECTION_BACKOFF_MAX_MS_CONFIG),
-                abstractConfig.getInt(QUORUM_FETCH_TIMEOUT_MS_CONFIG),
-                abstractConfig.getInt(QUORUM_LINGER_MS_CONFIG),
-                abstractConfig.getString(QUORUM_VOTERS_CONFIG));
+        this(parseVoterConnections(abstractConfig.getList(QUORUM_VOTERS_CONFIG)),
+            abstractConfig.getInt(QUORUM_REQUEST_TIMEOUT_MS_CONFIG),
+            abstractConfig.getInt(QUORUM_RETRY_BACKOFF_MS_CONFIG),
+            abstractConfig.getInt(QUORUM_ELECTION_TIMEOUT_MS_CONFIG),
+            abstractConfig.getInt(QUORUM_ELECTION_BACKOFF_MAX_MS_CONFIG),
+            abstractConfig.getInt(QUORUM_FETCH_TIMEOUT_MS_CONFIG),
+            abstractConfig.getInt(QUORUM_LINGER_MS_CONFIG));
     }
 
     public RaftConfig(
-            int requestTimeoutMs,
-            int retryBackoffMs,
-            int electionTimeoutMs,
-            int electionBackoffMaxMs,
-            int fetchTimeoutMs,
-            int appendLingerMs,
-            String votersConnectString
+        Map<Integer, InetSocketAddress> voterConnections,
+        int requestTimeoutMs,
+        int retryBackoffMs,
+        int electionTimeoutMs,
+        int electionBackoffMaxMs,
+        int fetchTimeoutMs,
+        int appendLingerMs
     ) {
         this.requestTimeoutMs = requestTimeoutMs;
         this.retryBackoffMs = retryBackoffMs;
@@ -100,10 +103,7 @@ public class RaftConfig {
         this.electionBackoffMaxMs = electionBackoffMaxMs;
         this.fetchTimeoutMs = fetchTimeoutMs;
         this.appendLingerMs = appendLingerMs;
-        this.voterConnections = parseVoterConnections(votersConnectString);
-        if (this.voterConnections.isEmpty()) {
-            throw new ConfigException(QUORUM_VOTERS_CONFIG, votersConnectString);
-        }
+        this.voterConnections = voterConnections;
     }
 
     public int requestTimeoutMs() {
@@ -146,9 +146,8 @@ public class RaftConfig {
         }
     }
 
-    private static Map<Integer, InetSocketAddress> parseVoterConnections(String votersConnectString) {
+    private static Map<Integer, InetSocketAddress> parseVoterConnections(List<String> voterEntries) {
         Map<Integer, InetSocketAddress> voterMap = new HashMap<>();
-        String[] voterEntries = votersConnectString.split(",", -1);
         for (String voterMapEntry : voterEntries) {
             String[] idAndAddress = voterMapEntry.split("@");
             if (idAndAddress.length != 2) {
@@ -177,4 +176,31 @@ public class RaftConfig {
         return voterMap;
     }
 
+    public static class ControllerQuorumVotersValidator implements ConfigDef.Validator {
+        @Override
+        public void ensureValid(String name, Object value) {
+            if (value == null) {
+                throw new ConfigException(name, null);
+            }
+
+            @SuppressWarnings("unchecked")
+            List<String> voterStrings = (List) value;
+
+            if (voterStrings.size() == 0) {
+                // TODO: Add a flag to skip validation for an empty voter string, conditionally.
+                //       For now, skip anyway. See https://github.com/apache/kafka/pull/9916#discussion_r560611932
+                return;
+            }
+
+            Map<Integer, InetSocketAddress> voterConnections = parseVoterConnections(voterStrings);
+            if (voterConnections.isEmpty()) {
+                throw new ConfigException(name, value);
+            }
+        }
+
+        @Override
+        public String toString() {
+            return "non-empty list";
+        }
+    }
 }

@@ -20,6 +20,7 @@ import org.apache.kafka.common.Node;
 
 import java.net.InetSocketAddress;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.function.Function;
 import java.util.stream.Collectors;
@@ -34,15 +35,10 @@ public class RaftTestUtil {
             int appendLingerMs,
             List<Node> voterNodes
     ) {
-        StringBuilder votersString = new StringBuilder();
-        String prefix = "";
-        for (Node voter : voterNodes) {
-            votersString.append(prefix);
-            votersString.append(voter.id()).append('@').append(voter.host()).append(':').append(voter.port());
-            prefix = ",";
-        }
-        return new RaftConfig(requestTimeoutMs, retryBackoffMs, electionTimeoutMs, electionBackoffMs, fetchTimeoutMs,
-                appendLingerMs, votersString.toString());
+        Map<Integer, InetSocketAddress> voterConnections = voterNodes.stream()
+            .collect(Collectors.toMap(Node::id, node -> new InetSocketAddress(node.host(), node.port())));
+        return new RaftConfig(voterConnections, requestTimeoutMs, retryBackoffMs, electionTimeoutMs, electionBackoffMs,
+            fetchTimeoutMs, appendLingerMs);
     }
 
     public static List<Node> voterNodesFromIds(Set<Integer> voterIds,
