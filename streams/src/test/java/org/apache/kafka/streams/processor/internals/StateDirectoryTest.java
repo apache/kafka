@@ -56,6 +56,7 @@ import static org.apache.kafka.streams.processor.internals.StateDirectory.LOCK_F
 import static org.apache.kafka.streams.processor.internals.StateManagerUtil.CHECKPOINT_FILE_NAME;
 import static org.hamcrest.CoreMatchers.containsString;
 import static org.hamcrest.CoreMatchers.endsWith;
+import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.CoreMatchers.hasItem;
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.CoreMatchers.not;
@@ -126,8 +127,8 @@ public class StateDirectoryTest {
         try {
             final Set<PosixFilePermission> baseFilePermissions = Files.getPosixFilePermissions(statePath);
             final Set<PosixFilePermission> appFilePermissions = Files.getPosixFilePermissions(basePath);
-            assertThat(expectedPermissions.equals(baseFilePermissions), is(true));
-            assertThat(expectedPermissions.equals(appFilePermissions), is(true));
+            assertThat(expectedPermissions, equalTo(baseFilePermissions));
+            assertThat(expectedPermissions, equalTo(appFilePermissions));
         } catch (final IOException e) {
             fail("Should create correct files and set correct permissions");
         }
@@ -545,9 +546,13 @@ public class StateDirectoryTest {
 
     @Test
     public void shouldNotCreateBaseDirectory() throws IOException {
-        initializeStateDirectory(false);
-        assertFalse(stateDir.exists());
-        assertFalse(appDir.exists());
+        try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(StateDirectory.class)) {
+            initializeStateDirectory(false);
+            assertThat(stateDir.exists(), is(false));
+            assertThat(appDir.exists(), is(false));
+            assertThat(appender.getMessages(),
+                not(hasItem(containsString("Error changing permissions for the state or base directory"))));
+        }
     }
 
     @Test
