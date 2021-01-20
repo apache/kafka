@@ -34,7 +34,8 @@ abstract class BaseConsumerTest extends AbstractConsumerTest {
   def testSimpleConsumption(): Unit = {
     val numRecords = 10000
     val producer = createProducer()
-    sendRecords(producer, numRecords, tp)
+    val startingTimestamp = System.currentTimeMillis()
+    sendRecords(producer, numRecords, tp, startingTimestamp = startingTimestamp)
 
     val consumer = createConsumer()
     assertEquals(0, consumer.assignment.size)
@@ -42,7 +43,7 @@ abstract class BaseConsumerTest extends AbstractConsumerTest {
     assertEquals(1, consumer.assignment.size)
 
     consumer.seek(tp, 0)
-    consumeAndVerifyRecords(consumer = consumer, numRecords = numRecords, startingOffset = 0)
+    consumeAndVerifyRecords(consumer = consumer, numRecords = numRecords, startingOffset = 0, startingTimestamp = startingTimestamp)
 
     // check async commit callbacks
     sendAndAwaitAsyncCommit(consumer)

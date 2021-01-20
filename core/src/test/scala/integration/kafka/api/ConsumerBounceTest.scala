@@ -88,7 +88,7 @@ class ConsumerBounceTest extends AbstractConsumerTest with Logging {
   def consumeWithBrokerFailures(numIters: Int): Unit = {
     val numRecords = 1000
     val producer = createProducer()
-    sendRecords(producer, numRecords)
+    producerSend(producer, numRecords)
 
     var consumed = 0L
     val consumer = createConsumer()
@@ -126,7 +126,7 @@ class ConsumerBounceTest extends AbstractConsumerTest with Logging {
   def seekAndCommitWithBrokerFailures(numIters: Int): Unit = {
     val numRecords = 1000
     val producer = createProducer()
-    sendRecords(producer, numRecords)
+    producerSend(producer, numRecords)
 
     val consumer = createConsumer()
     consumer.assign(Collections.singletonList(tp))
@@ -214,7 +214,7 @@ class ConsumerBounceTest extends AbstractConsumerTest with Logging {
   def testClose(): Unit = {
     val numRecords = 10
     val producer = createProducer()
-    sendRecords(producer, numRecords)
+    producerSend(producer, numRecords)
 
     checkCloseGoodPath(numRecords, "group1")
     checkCloseWithCoordinatorFailure(numRecords, "group2", "group3")
@@ -360,7 +360,7 @@ class ConsumerBounceTest extends AbstractConsumerTest with Logging {
     assertTrue(rejectedConsumer.thrownException.get.isInstanceOf[GroupMaxSizeReachedException])
 
     // assert group continues to live
-    sendRecords(createProducer(), maxGroupSize * 100, topic, numPartitions = Some(partitions.size))
+    producerSend(createProducer(), maxGroupSize * 100, topic, numPartitions = Some(partitions.size))
     TestUtils.waitUntilTrue(() => {
       consumerPollers.forall(p => p.receivedMessages >= 100)
     }, "The consumers in the group could not fetch the expected records", 10000L)
@@ -512,10 +512,10 @@ class ConsumerBounceTest extends AbstractConsumerTest with Logging {
     Range(0, numPartitions).map(part => new TopicPartition(topic, part)).toSet
   }
 
-  private def sendRecords(producer: KafkaProducer[Array[Byte], Array[Byte]],
-                          numRecords: Int,
-                          topic: String = this.topic,
-                          numPartitions: Option[Int] = None): Unit = {
+  private def producerSend(producer: KafkaProducer[Array[Byte], Array[Byte]],
+                           numRecords: Int,
+                           topic: String = this.topic,
+                           numPartitions: Option[Int] = None): Unit = {
     var partitionIndex = 0
     def getPartition: Int = {
       numPartitions match {
