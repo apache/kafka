@@ -34,7 +34,7 @@ public class IsNullConditionalTest {
                 buffer.printf("System.out.println(\"null\");%n");
             }).
             generate(buffer);
-        VersionConditionalTest.assertEquals(buffer,
+        VersionConditionalTest.claimEquals(buffer,
             "if (foobar == null) {%n",
             "    System.out.println(\"null\");%n",
             "}%n");
@@ -54,7 +54,7 @@ public class IsNullConditionalTest {
                 buffer.printf("System.out.println(\"not null\");%n");
             }).
             generate(buffer);
-        VersionConditionalTest.assertEquals(buffer,
+        VersionConditionalTest.claimEquals(buffer,
             "if (foobar == null) {%n",
             "    System.out.println(\"null\");%n",
             "} else {%n",
@@ -73,7 +73,7 @@ public class IsNullConditionalTest {
                 buffer.printf("System.out.println(\"not null\");%n");
             }).
             generate(buffer);
-        VersionConditionalTest.assertEquals(buffer,
+        VersionConditionalTest.claimEquals(buffer,
             "if (foobar != null) {%n",
             "    System.out.println(\"not null\");%n",
             "}%n");
@@ -93,7 +93,7 @@ public class IsNullConditionalTest {
                 buffer.printf("System.out.println(\"not null\");%n");
             }).
             generate(buffer);
-        VersionConditionalTest.assertEquals(buffer,
+        VersionConditionalTest.claimEquals(buffer,
             "System.out.println(\"not null\");%n");
     }
 
@@ -112,7 +112,7 @@ public class IsNullConditionalTest {
             }).
             alwaysEmitBlockScope(true).
             generate(buffer);
-        VersionConditionalTest.assertEquals(buffer,
+        VersionConditionalTest.claimEquals(buffer,
             "{%n",
             "    System.out.println(\"not null\");%n",
             "}%n");

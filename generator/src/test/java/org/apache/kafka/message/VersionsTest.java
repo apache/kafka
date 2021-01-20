@@ -40,10 +40,10 @@ public class VersionsTest {
 
     @Test
     public void testVersionsParse() {
-        assertEquals(Versions.parse(null, Versions.NONE), Versions.NONE);
-        assertEquals(Versions.parse(" ", Versions.ALL), Versions.ALL);
-        assertEquals(Versions.parse("", Versions.ALL), Versions.ALL);
-        assertEquals(Versions.parse(" 4-5 ", null), newVersions(4, 5));
+        assertEquals(Versions.NONE, Versions.parse(null, Versions.NONE));
+        assertEquals(Versions.ALL, Versions.parse(" ", Versions.ALL));
+        assertEquals(Versions.ALL, Versions.parse("", Versions.ALL));
+        assertEquals(newVersions(4, 5), Versions.parse(" 4-5 ", null));
     }
 
     @Test
@@ -62,10 +62,10 @@ public class VersionsTest {
 
     @Test
     public void testIntersections() {
-        assertEquals(newVersions(1, 3).intersect(
-                newVersions(2, 4)), newVersions(2, 3));
-        assertEquals(newVersions(0, Short.MAX_VALUE).intersect(
-                newVersions(3, 3)), newVersions(3, 3));
+        assertEquals(newVersions(2, 3), newVersions(1, 3).intersect(
+                newVersions(2, 4)));
+        assertEquals(newVersions(3, 3), newVersions(0, Short.MAX_VALUE).intersect(
+                newVersions(3, 3)));
         assertEquals(Versions.NONE, newVersions(9, Short.MAX_VALUE).intersect(
                 newVersions(2, 8)));
         assertEquals(Versions.NONE, Versions.NONE.intersect(Versions.NONE));
