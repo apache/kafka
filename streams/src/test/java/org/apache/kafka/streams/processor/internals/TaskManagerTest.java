@@ -33,8 +33,10 @@ import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.internals.KafkaFutureImpl;
 import org.apache.kafka.common.metrics.KafkaMetric;
 import org.apache.kafka.common.metrics.Measurable;
+import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.LockException;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.errors.TaskMigratedException;
@@ -42,6 +44,7 @@ import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.StreamThread.ProcessingMode;
 import org.apache.kafka.streams.processor.internals.Task.State;
+import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.processor.internals.testutil.LogCaptureAppender;
 import org.apache.kafka.streams.state.internals.OffsetCheckpoint;
 import org.easymock.EasyMock;
@@ -171,6 +174,7 @@ public class TaskManagerTest {
             changeLogReader,
             UUID.randomUUID(),
             "taskManagerTest",
+            new StreamsMetricsImpl(new Metrics(), "clientId", StreamsConfig.METRICS_LATEST, time),
             activeTaskCreator,
             standbyTaskCreator,
             topologyBuilder,
@@ -1495,8 +1499,8 @@ public class TaskManagerTest {
         };
         task01.setCommitNeeded();
 
-        taskManager.tasks().put(taskId00, task00);
-        taskManager.tasks().put(taskId01, task01);
+        taskManager.addTask(task00);
+        taskManager.addTask(task01);
 
         final RuntimeException thrown = assertThrows(RuntimeException.class,
             () -> taskManager.handleAssignment(
@@ -1514,8 +1518,6 @@ public class TaskManagerTest {
 
     @Test
     public void shouldSuspendAllRevokedActiveTasksAndPropagateSuspendException() {
-        setUpTaskManager(StreamThread.ProcessingMode.EXACTLY_ONCE_ALPHA);
-
         final Task task00 = new StateMachineTask(taskId00, taskId00Partitions, true);
 
         final StateMachineTask task01 = new StateMachineTask(taskId01, taskId01Partitions, true) {
@@ -1528,9 +1530,9 @@ public class TaskManagerTest {
 
         final StateMachineTask task02 = new StateMachineTask(taskId02, taskId02Partitions, true);
 
-        taskManager.tasks().put(taskId00, task00);
-        taskManager.tasks().put(taskId01, task01);
-        taskManager.tasks().put(taskId02, task02);
+        taskManager.addTask(task00);
+        taskManager.addTask(task01);
+        taskManager.addTask(task02);
 
         replay(activeTaskCreator);
 
@@ -1857,7 +1859,7 @@ public class TaskManagerTest {
         final Map<TopicPartition, OffsetAndMetadata> offsets = singletonMap(t1p1, new OffsetAndMetadata(0L, null));
         task01.setCommittableOffsetsAndMetadata(offsets);
         task01.setCommitNeeded();
-        taskManager.tasks().put(taskId01, task01);
+        taskManager.addTask(task01);
 
         consumer.commitSync(offsets);
         expectLastCall();
@@ -1912,11 +1914,11 @@ public class TaskManagerTest {
         final StateMachineTask task01 = new StateMachineTask(taskId01, taskId01Partitions, true);
         task01.setCommittableOffsetsAndMetadata(offsetsT01);
         task01.setCommitNeeded();
-        taskManager.tasks().put(taskId01, task01);
+        taskManager.addTask(task01);
         final StateMachineTask task02 = new StateMachineTask(taskId02, taskId02Partitions, true);
         task02.setCommittableOffsetsAndMetadata(offsetsT02);
         task02.setCommitNeeded();
-        taskManager.tasks().put(taskId02, task02);
+        taskManager.addTask(task02);
 
         reset(consumer);
         expect(consumer.groupMetadata()).andReturn(new ConsumerGroupMetadata("appId")).anyTimes();
@@ -2400,8 +2402,8 @@ public class TaskManagerTest {
                 throw new TaskMigratedException("t2 close exception", new RuntimeException());
             }
         };
-        taskManager.tasks().put(taskId01, migratedTask01);
-        taskManager.tasks().put(taskId02, migratedTask02);
+        taskManager.addTask(migratedTask01);
+        taskManager.addTask(migratedTask02);
 
         final TaskMigratedException thrown = assertThrows(
             TaskMigratedException.class,
@@ -2432,8 +2434,8 @@ public class TaskManagerTest {
                 throw new IllegalStateException("t2 illegal state exception", new RuntimeException());
             }
         };
-        taskManager.tasks().put(taskId01, migratedTask01);
-        taskManager.tasks().put(taskId02, migratedTask02);
+        taskManager.addTask(migratedTask01);
+        taskManager.addTask(migratedTask02);
 
         final RuntimeException thrown = assertThrows(
             RuntimeException.class,
@@ -2463,8 +2465,8 @@ public class TaskManagerTest {
                 throw new KafkaException("Kaboom for t2!", new RuntimeException());
             }
         };
-        taskManager.tasks().put(taskId01, migratedTask01);
-        taskManager.tasks().put(taskId02, migratedTask02);
+        taskManager.addTask(migratedTask01);
+        taskManager.addTask(migratedTask02);
 
         final KafkaException thrown = assertThrows(
             KafkaException.class,
@@ -2573,7 +2575,7 @@ public class TaskManagerTest {
         final Map<TopicPartition, OffsetAndMetadata> offsets = singletonMap(t1p0, new OffsetAndMetadata(0L, null));
         task01.setCommittableOffsetsAndMetadata(offsets);
         task01.setCommitNeeded();
-        taskManager.tasks().put(taskId01, task01);
+        taskManager.addTask(task01);
 
         consumer.commitSync(offsets);
         expectLastCall().andThrow(new CommitFailedException());
@@ -2712,7 +2714,7 @@ public class TaskManagerTest {
         final Map<TopicPartition, OffsetAndMetadata> offsets = singletonMap(t1p0, new OffsetAndMetadata(0L, null));
         task01.setCommittableOffsetsAndMetadata(offsets);
         task01.setCommitNeeded();
-        taskManager.tasks().put(taskId01, task01);
+        taskManager.addTask(task01);
 
         consumer.commitSync(offsets);
         expectLastCall().andThrow(new KafkaException());
@@ -2734,7 +2736,7 @@ public class TaskManagerTest {
         final Map<TopicPartition, OffsetAndMetadata> offsets = singletonMap(t1p0, new OffsetAndMetadata(0L, null));
         task01.setCommittableOffsetsAndMetadata(offsets);
         task01.setCommitNeeded();
-        taskManager.tasks().put(taskId01, task01);
+        taskManager.addTask(task01);
 
         consumer.commitSync(offsets);
         expectLastCall().andThrow(new RuntimeException("KABOOM"));

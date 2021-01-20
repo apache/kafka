@@ -767,6 +767,7 @@ public class StreamThreadTest {
             null,
             null,
             null,
+            null,
             null
         ) {
             @Override
@@ -2564,6 +2565,7 @@ public class StreamThreadTest {
         );
     }
 
+    // TODO: change return type to `StandbyTask`
     private Collection<Task> createStandbyTask() {
         final LogContext logContext = new LogContext("test");
         final Logger log = logContext.logger(StreamThreadTest.class);
