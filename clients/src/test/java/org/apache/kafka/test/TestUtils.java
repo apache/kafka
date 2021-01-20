@@ -464,6 +464,15 @@ public class TestUtils {
         return exceptionCauseClass.cast(exception.getCause());
     }
 
+    public static <T extends Throwable> void assertFutureThrows(
+        Future<?> future,
+        Class<T> expectedCauseClassApiException,
+        String expectedMessage
+    ) {
+        T receivedException = assertFutureThrows(future, expectedCauseClassApiException);
+        assertEquals(expectedMessage, receivedException.getMessage());
+    }
+
     public static void assertFutureError(Future<?> future, Class<? extends Throwable> exceptionClass)
         throws InterruptedException {
         try {
