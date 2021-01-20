@@ -119,7 +119,7 @@ public class ApiVersionsResponse extends AbstractResponse {
 
     public static ApiVersionCollection defaultApiKeys(final byte minMagic) {
         ApiVersionCollection apiKeys = new ApiVersionCollection();
-       for (ApiKeys apiKey : ApiKeys.brokerApis()) {
+        for (ApiKeys apiKey : ApiKeys.brokerApis()) {
             if (apiKey.minRequiredInterBrokerMagic <= minMagic) {
                 apiKeys.add(ApiVersionsResponse.toApiVersion(apiKey));
             }
