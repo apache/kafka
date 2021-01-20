@@ -364,6 +364,7 @@ public class StreamThread extends Thread {
             changelogReader,
             processId,
             logPrefix,
+            streamsMetrics,
             activeTaskCreator,
             standbyTaskCreator,
             builder,
