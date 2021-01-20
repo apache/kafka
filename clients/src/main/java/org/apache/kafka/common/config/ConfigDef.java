@@ -427,7 +427,7 @@ public class ConfigDef {
     }
 
     /**
-ss     * Get the configuration keys
+     * Get the configuration keys
      * @return a map containing all configuration keys
      */
     public Map<String, ConfigKey> configKeys() {

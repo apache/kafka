@@ -647,7 +647,7 @@ object KafkaConfig {
   val RequestTimeoutMsDoc = CommonClientConfigs.REQUEST_TIMEOUT_MS_DOC
   val ConnectionSetupTimeoutMsDoc = CommonClientConfigs.SOCKET_CONNECTION_SETUP_TIMEOUT_MS_DOC
   val ConnectionSetupTimeoutMaxMsDoc = CommonClientConfigs.SOCKET_CONNECTION_SETUP_TIMEOUT_MAX_MS_DOC
-  val ProcessRolesDoc = "[ALPHA] The roles that this process plays: 'broker', 'controller', or 'broker,controller' if it is both. " +
+  val ProcessRolesDoc = "The roles that this process plays: 'broker', 'controller', or 'broker,controller' if it is both. " +
     "This configuration is only for clusters upgraded for KIP-500, which replaces the dependence on Zookeeper with " +
     "a self-managed Raft quorum. Leave this config undefined or empty for Zookeeper clusters."
   /************* Authorizer Configuration ***********/
@@ -999,9 +999,6 @@ object KafkaConfig {
   val PasswordEncoderKeyLengthDoc =  "The key length used for encoding dynamically configured passwords."
   val PasswordEncoderIterationsDoc =  "The iteration count used for encoding dynamically configured passwords."
 
-  /** ********* Experimental metadata quorum configuration ***********/
-  val ProcessRolesDoc = "This configuration determines what roles this process should play: broker, controller, or both"
-
   private val configDef = {
     import ConfigDef.Importance._
     import ConfigDef.Range._
@@ -1011,7 +1008,7 @@ object KafkaConfig {
     new ConfigDef()
 
       /** ********* Zookeeper Configuration ***********/
-      .define(ZkConnectProp, STRING, "", HIGH, ZkConnectDoc)
+      .define(ZkConnectProp, STRING, null, HIGH, ZkConnectDoc)
       .define(ZkSessionTimeoutMsProp, INT, Defaults.ZkSessionTimeoutMs, HIGH, ZkSessionTimeoutMsDoc)
       .define(ZkConnectionTimeoutMsProp, INT, null, HIGH, ZkConnectionTimeoutMsDoc)
       .define(ZkSyncTimeMsProp, INT, Defaults.ZkSyncTimeMs, LOW, ZkSyncTimeMsDoc)
@@ -1909,7 +1906,7 @@ class KafkaConfig(val props: java.util.Map[_, _], doLog: Boolean, dynamicConfigO
         s" ${KafkaConfig.ConnectionsMaxIdleMsProp}=$connectionsMaxIdleMs to prevent failed" +
         s" authentication responses from timing out")
 
-    if (requiresZookeeper && zkConnect.isEmpty) {
+    if (requiresZookeeper && zkConnect == null) {
       throw new ConfigException(s"Missing required configuration '${KafkaConfig.ZkConnectProp}' which has no default value.")
     }
   }
