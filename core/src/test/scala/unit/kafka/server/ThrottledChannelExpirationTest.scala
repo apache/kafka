@@ -23,13 +23,8 @@ import java.util.concurrent.{DelayQueue, TimeUnit}
 
 import org.apache.kafka.common.metrics.MetricConfig
 import org.apache.kafka.common.utils.MockTime
-<<<<<<< HEAD
-import org.easymock.EasyMock
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{BeforeEach, Test}
-=======
-import org.junit.{Assert, Before, Test}
->>>>>>> Encapsulate response construction in RequestChannel
 
 class ThrottledChannelExpirationTest {
   private val time = new MockTime
