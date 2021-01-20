@@ -16,19 +16,19 @@
  */
 package org.apache.kafka.common.serialization;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.config.ConfigException;
-import org.junit.Test;
+import org.junit.jupiter.api.Test;
 
 import java.util.HashMap;
 import java.util.Map;
 
-import static org.hamcrest.MatcherAssert.assertThat;
-import static org.hamcrest.core.Is.is;
-import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.assertThrows;
-import static org.junit.Assert.assertTrue;
 
 public class ListSerializerTest {
     private final ListSerializer<?> listSerializer = new ListSerializer<>();
@@ -42,8 +42,8 @@ public class ListSerializerTest {
         props.put(CommonClientConfigs.DEFAULT_LIST_KEY_SERDE_INNER_CLASS, Serdes.StringSerde.class.getName());
         listSerializer.configure(props, true);
         final Serializer<?> inner = listSerializer.getInnerSerializer();
-        assertNotNull("Inner serializer should be not null", inner);
-        assertTrue("Inner serializer type should be StringSerializer", inner instanceof StringSerializer);
+        assertNotNull(inner, "Inner serializer should be not null");
+        assertTrue(inner instanceof StringSerializer, "Inner serializer type should be StringSerializer");
     }
 
     @Test
@@ -51,8 +51,8 @@ public class ListSerializerTest {
         props.put(CommonClientConfigs.DEFAULT_LIST_VALUE_SERDE_INNER_CLASS, Serdes.StringSerde.class.getName());
         listSerializer.configure(props, false);
         final Serializer<?> inner = listSerializer.getInnerSerializer();
-        assertNotNull("Inner serializer should be not null", inner);
-        assertTrue("Inner serializer type should be StringSerializer", inner instanceof StringSerializer);
+        assertNotNull(inner, "Inner serializer should be not null");
+        assertTrue(inner instanceof StringSerializer, "Inner serializer type should be StringSerializer");
     }
 
     @Test
@@ -60,8 +60,8 @@ public class ListSerializerTest {
         props.put(CommonClientConfigs.DEFAULT_LIST_KEY_SERDE_INNER_CLASS, Serdes.StringSerde.class);
         listSerializer.configure(props, true);
         final Serializer<?> inner = listSerializer.getInnerSerializer();
-        assertNotNull("Inner serializer should be not null", inner);
-        assertTrue("Inner serializer type should be StringSerializer", inner instanceof StringSerializer);
+        assertNotNull(inner, "Inner serializer should be not null");
+        assertTrue(inner instanceof StringSerializer, "Inner serializer type should be StringSerializer");
     }
 
     @Test
@@ -69,8 +69,8 @@ public class ListSerializerTest {
         props.put(CommonClientConfigs.DEFAULT_LIST_VALUE_SERDE_INNER_CLASS, Serdes.StringSerde.class);
         listSerializer.configure(props, false);
         final Serializer<?> inner = listSerializer.getInnerSerializer();
-        assertNotNull("Inner serializer should be not null", inner);
-        assertTrue("Inner serializer type should be StringSerializer", inner instanceof StringSerializer);
+        assertNotNull(inner, "Inner serializer should be not null");
+        assertTrue(inner instanceof StringSerializer, "Inner serializer type should be StringSerializer");
     }
 
     @Test
@@ -79,13 +79,13 @@ public class ListSerializerTest {
             ConfigException.class,
             () -> listSerializer.configure(props, true)
         );
-        assertThat(exception.getMessage(), is("Not able to determine the serializer class because it was neither passed via the constructor nor set in the config."));
+        assertEquals(exception.getMessage(), "Not able to determine the serializer class because it was neither passed via the constructor nor set in the config.");
 
         exception = assertThrows(
             ConfigException.class,
             () -> listSerializer.configure(props, false)
         );
-        assertThat(exception.getMessage(), is("Not able to determine the serializer class because it was neither passed via the constructor nor set in the config."));
+        assertEquals(exception.getMessage(), "Not able to determine the serializer class because it was neither passed via the constructor nor set in the config.");
 
     }
 
@@ -96,7 +96,7 @@ public class ListSerializerTest {
             KafkaException.class,
             () -> listSerializer.configure(props, true)
         );
-        assertThat(exception.getMessage(), is("Could not create a serializer class instance using \"" + CommonClientConfigs.DEFAULT_LIST_KEY_SERDE_INNER_CLASS + "\" property."));
+        assertEquals(exception.getMessage(), "Could not create a serializer class instance using \"" + CommonClientConfigs.DEFAULT_LIST_KEY_SERDE_INNER_CLASS + "\" property.");
     }
 
     @Test
@@ -106,7 +106,7 @@ public class ListSerializerTest {
             KafkaException.class,
             () -> listSerializer.configure(props, false)
         );
-        assertThat(exception.getMessage(), is("Could not create a serializer class instance using \"" + CommonClientConfigs.DEFAULT_LIST_VALUE_SERDE_INNER_CLASS + "\" property."));
+        assertEquals(exception.getMessage(), "Could not create a serializer class instance using \"" + CommonClientConfigs.DEFAULT_LIST_VALUE_SERDE_INNER_CLASS + "\" property.");
     }
 
     @Test
@@ -116,7 +116,7 @@ public class ListSerializerTest {
             KafkaException.class,
             () -> listSerializer.configure(props, true)
         );
-        assertThat(exception.getMessage(), is("Invalid value non.existing.class for configuration " + CommonClientConfigs.DEFAULT_LIST_KEY_SERDE_INNER_CLASS + ": Serializer class " + nonExistingClass + " could not be found."));
+        assertEquals(exception.getMessage(), "Invalid value non.existing.class for configuration " + CommonClientConfigs.DEFAULT_LIST_KEY_SERDE_INNER_CLASS + ": Serializer class " + nonExistingClass + " could not be found.");
     }
 
     @Test
@@ -126,7 +126,7 @@ public class ListSerializerTest {
             KafkaException.class,
             () -> listSerializer.configure(props, false)
         );
-        assertThat(exception.getMessage(), is("Invalid value non.existing.class for configuration " + CommonClientConfigs.DEFAULT_LIST_VALUE_SERDE_INNER_CLASS + ": Serializer class " + nonExistingClass + " could not be found."));
+        assertEquals(exception.getMessage(), "Invalid value non.existing.class for configuration " + CommonClientConfigs.DEFAULT_LIST_VALUE_SERDE_INNER_CLASS + ": Serializer class " + nonExistingClass + " could not be found.");
     }
 
 }
