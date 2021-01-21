@@ -28,6 +28,7 @@ import java.util.HashMap;
 import java.util.Map;
 
 import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 
 public class TimeWindowedDeserializerTest {
@@ -55,5 +56,11 @@ public class TimeWindowedDeserializerTest {
         final Deserializer<?> inner = timeWindowedDeserializer.innerDeserializer();
         assertNotNull("Inner deserializer should be not null", inner);
         assertTrue("Inner deserializer type should be ByteArrayDeserializer", inner instanceof ByteArrayDeserializer);
+    }
+
+    @Test
+    public void shouldThrowErrorIfWindowSizeSetInConfigsAndConstructor() {
+        props.put(StreamsConfig.WINDOW_SIZE_MS_CONFIG, "500L");
+        assertThrows(IllegalArgumentException.class, () -> timeWindowedDeserializer.configure(props, false));
     }
 }

@@ -541,7 +541,7 @@ public class StreamsConfig extends AbstractConfig {
 
     /** <code>window.size.ms</code> */
     public static final String WINDOW_SIZE_MS_CONFIG = "window.size.ms";
-    private static final String WINDOW_SIZE_MS_DOC = "Passes window size to the deserializer in order to calculate window end times. Default is Long.MAX_VALUE";
+    private static final String WINDOW_SIZE_MS_DOC = "Passes window size to the deserializer in order to calculate window end times.";
 
     /** {@code upgrade.from} */
     @SuppressWarnings("WeakerAccess")
@@ -862,7 +862,7 @@ public class StreamsConfig extends AbstractConfig {
                     WINDOW_STORE_CHANGE_LOG_ADDITIONAL_RETENTION_MS_DOC)
             .define(WINDOW_SIZE_MS_CONFIG,
                     Type.LONG,
-                    Long.MAX_VALUE,
+                    null,
                     Importance.LOW,
                     WINDOW_SIZE_MS_DOC);
     }

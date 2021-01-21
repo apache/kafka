@@ -37,10 +37,10 @@ public class TimeWindowedDeserializer<T> implements Deserializer<Windowed<T>> {
     private boolean isChangelogTopic;
 
     private Deserializer<T> inner;
-    
+
     // Default constructor needed by Kafka
     public TimeWindowedDeserializer() {
-        this(null, Long.MAX_VALUE);
+        this(null, null);
     }
 
     @Deprecated
@@ -48,7 +48,7 @@ public class TimeWindowedDeserializer<T> implements Deserializer<Windowed<T>> {
         this(inner, Long.MAX_VALUE);
     }
 
-    public TimeWindowedDeserializer(final Deserializer<T> inner, final long windowSize) {
+    public TimeWindowedDeserializer(final Deserializer<T> inner, final Long windowSize) {
         this.inner = inner;
         this.windowSize = windowSize;
         this.isChangelogTopic = false;
@@ -61,7 +61,12 @@ public class TimeWindowedDeserializer<T> implements Deserializer<Windowed<T>> {
     @SuppressWarnings("unchecked")
     @Override
     public void configure(final Map<String, ?> configs, final boolean isKey) {
-        if (windowSize == Long.MAX_VALUE) {
+        //check if the config is set and the window size is already set from the constructor
+        if (windowSize != null && (configs.get(StreamsConfig.WINDOW_SIZE_MS_CONFIG) != null)) {
+            throw new IllegalArgumentException("Window size should not be set in both the constructor and the window.size.ms config");
+        } else if (windowSize == null && (configs.get(StreamsConfig.WINDOW_SIZE_MS_CONFIG) == null)) {
+            throw new IllegalArgumentException("Window size needs to be set either through the constructor or the window.size.ms config");
+        } else {
             if (configs.get(StreamsConfig.WINDOW_SIZE_MS_CONFIG) instanceof String) {
                 windowSize = Long.parseLong((String) configs.get(StreamsConfig.WINDOW_SIZE_MS_CONFIG));
             } else {

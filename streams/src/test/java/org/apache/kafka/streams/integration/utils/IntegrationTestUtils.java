@@ -1127,10 +1127,10 @@ public class IntegrationTestUtils {
      * @param maxMessages    Maximum number of messages to read via the consumer
      * @return The KeyValue elements retrieved via the consumer
      */
-    private static <K, V> List<KeyValueTimestamp<K, V>> readKeyValuesWithTimestamp(final String topic,
-                                                                                   final Consumer<K, V> consumer,
-                                                                                   final long waitTime,
-                                                                                   final int maxMessages) {
+    public static <K, V> List<KeyValueTimestamp<K, V>> readKeyValuesWithTimestamp(final String topic,
+                                                                                  final Consumer<K, V> consumer,
+                                                                                  final long waitTime,
+                                                                                  final int maxMessages) {
         final List<KeyValueTimestamp<K, V>> consumedValues = new ArrayList<>();
         final List<ConsumerRecord<K, V>> records = readRecords(topic, consumer, waitTime, maxMessages);
         for (final ConsumerRecord<K, V> record : records) {
