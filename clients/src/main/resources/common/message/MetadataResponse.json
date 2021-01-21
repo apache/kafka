@@ -39,7 +39,8 @@
   //
   // Version 10 adds topicId.
   //
-  // Version 11 deprecates ClusterAuthorizedOperations (KIP-700).
+  // Version 11 deprecates ClusterAuthorizedOperations. This is now exposed
+  // by the DescribeCluster API (KIP-700).
   "validVersions": "0-11",
   "flexibleVersions": "9+",
   "fields": [

@@ -1245,7 +1245,7 @@ class KafkaApis(val requestChannel: RequestChannel,
         )
       }
 
-    var clusterAuthorizedOperations = Int.MinValue
+    var clusterAuthorizedOperations = Int.MinValue // Default value in the schema
     if (requestVersion >= 8) {
       // get cluster authorized operations
       if (requestVersion <= 10) {
@@ -3217,7 +3217,7 @@ class KafkaApis(val requestChannel: RequestChannel,
   def handleDescribeCluster(request: RequestChannel.Request): Unit = {
     val describeClusterRequest = request.body[DescribeClusterRequest]
 
-    var clusterAuthorizedOperations = Int.MinValue
+    var clusterAuthorizedOperations = Int.MinValue // Default value in the schema
     // get cluster authorized operations
     if (describeClusterRequest.data.includeClusterAuthorizedOperations) {
       if (authHelper.authorize(request.context, DESCRIBE, CLUSTER, CLUSTER_NAME))

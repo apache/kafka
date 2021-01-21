@@ -34,7 +34,8 @@
     //
     // Version 10 adds topicId.
     //
-    // Version 11 deprecates IncludeClusterAuthorizedOperations field (KIP-700).
+    // Version 11 deprecates IncludeClusterAuthorizedOperations field. This is now exposed
+    // by the DescribeCluster API (KIP-700).
     { "name": "Topics", "type": "[]MetadataRequestTopic", "versions": "0+", "nullableVersions": "1+",
       "about": "The topics to fetch metadata for.", "fields": [
       { "name": "TopicId", "type": "uuid", "versions": "10+", "ignorable": true, "about": "The topic id." },
