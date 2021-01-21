@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.raft;
 
-import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.memory.MemoryPool;
 import org.apache.kafka.common.metrics.Metrics;
@@ -51,9 +50,8 @@ import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
+import java.util.stream.Collectors;
 
-import static org.apache.kafka.raft.RaftTestUtil.buildRaftConfig;
-import static org.apache.kafka.raft.RaftTestUtil.voterNodesFromIds;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
@@ -750,9 +748,10 @@ public class RaftEventSimulationTest {
             PersistentState persistentState = nodes.get(nodeId);
             MockNetworkChannel channel = new MockNetworkChannel(correlationIdCounter);
             MockMessageQueue messageQueue = new MockMessageQueue();
-            List<Node> voterNodes = voterNodesFromIds(voters, Cluster::nodeAddress);
-            RaftConfig raftConfig = buildRaftConfig(REQUEST_TIMEOUT_MS, RETRY_BACKOFF_MS, ELECTION_TIMEOUT_MS,
-                    ELECTION_JITTER_MS, FETCH_TIMEOUT_MS, LINGER_MS, voterNodes);
+            Map<Integer, InetSocketAddress> voterAddressMap = voters.stream()
+                .collect(Collectors.toMap(id -> id, Cluster::nodeAddress));
+            RaftConfig raftConfig = new RaftConfig(voterAddressMap, REQUEST_TIMEOUT_MS, RETRY_BACKOFF_MS, ELECTION_TIMEOUT_MS,
+                    ELECTION_JITTER_MS, FETCH_TIMEOUT_MS, LINGER_MS);
             Metrics metrics = new Metrics(time);
 
             persistentState.log.reopen();

@@ -19,7 +19,7 @@ Create 3 separate raft quorum properties as the following
     
     broker.id=1
     listeners=PLAINTEXT://localhost:9092
-    quorum.voters=1@localhost:9092,2@localhost:9093,3@localhost:9094
+    controller.quorum.voters=1@localhost:9092,2@localhost:9093,3@localhost:9094
     log.dirs=/tmp/raft-logs-1
     
     zookeeper.connect=localhost:2181
@@ -29,7 +29,7 @@ Create 3 separate raft quorum properties as the following
     
     broker.id=2
     listeners=PLAINTEXT://localhost:9093
-    quorum.voters=1@localhost:9092,2@localhost:9093,3@localhost:9094
+    controller.quorum.voters=1@localhost:9092,2@localhost:9093,3@localhost:9094
     log.dirs=/tmp/raft-logs-2
     
     zookeeper.connect=localhost:2181
@@ -39,7 +39,7 @@ Create 3 separate raft quorum properties as the following
     
     broker.id=3
     listeners=PLAINTEXT://localhost:9094
-    quorum.voters=1@localhost:9092,2@localhost:9093,3@localhost:9094
+    controller.quorum.voters=1@localhost:9092,2@localhost:9093,3@localhost:9094
     log.dirs=/tmp/raft-logs-3
     
     zookeeper.connect=localhost:2181

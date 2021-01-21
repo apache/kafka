@@ -41,6 +41,7 @@ import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.record.{LegacyRecord, Records, TimestampType}
 import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.common.utils.Utils
+import org.apache.kafka.raft.RaftConfig
 import org.apache.kafka.server.authorizer.Authorizer
 import org.apache.zookeeper.client.ZKClientConfig
 
@@ -265,6 +266,15 @@ object Defaults {
   val PasswordEncoderCipherAlgorithm = "AES/CBC/PKCS5Padding"
   val PasswordEncoderKeyLength = 128
   val PasswordEncoderIterations = 4096
+
+  /** ********* Raft Quorum Configuration *********/
+  val QuorumVoters = RaftConfig.DEFAULT_QUORUM_VOTERS
+  val QuorumElectionTimeoutMs = RaftConfig.DEFAULT_QUORUM_ELECTION_TIMEOUT_MS
+  val QuorumFetchTimeoutMs = RaftConfig.DEFAULT_QUORUM_FETCH_TIMEOUT_MS
+  val QuorumElectionBackoffMs = RaftConfig.DEFAULT_QUORUM_ELECTION_BACKOFF_MAX_MS
+  val QuorumLingerMs = RaftConfig.DEFAULT_QUORUM_LINGER_MS
+  val QuorumRequestTimeoutMs = RaftConfig.DEFAULT_QUORUM_REQUEST_TIMEOUT_MS
+  val QuorumRetryBackoffMs = RaftConfig.DEFAULT_QUORUM_RETRY_BACKOFF_MS
 }
 
 object KafkaConfig {
@@ -987,6 +997,9 @@ object KafkaConfig {
   val PasswordEncoderKeyLengthDoc =  "The key length used for encoding dynamically configured passwords."
   val PasswordEncoderIterationsDoc =  "The iteration count used for encoding dynamically configured passwords."
 
+  /** ********* Experimental metadata quorum configuration ***********/
+  val ProcessRolesDoc = "This configuration determines what roles this process should play: broker, controller, or both"
+
   private val configDef = {
     import ConfigDef.Importance._
     import ConfigDef.Range._
@@ -1034,7 +1047,7 @@ object KafkaConfig {
 
       // Experimental flag to turn on APIs required for the internal metadata quorum (KIP-500)
       .defineInternal(EnableMetadataQuorumProp, BOOLEAN, false, LOW)
-      .defineInternal(ProcessRolesProp, LIST, Collections.emptyList(), ValidList.in("broker", "controller"), HIGH)
+      .defineInternal(ProcessRolesProp, LIST, Collections.emptyList(), ValidList.in("broker", "controller"), HIGH, ProcessRolesDoc)
 
       /************* Authorizer Configuration ***********/
       .define(AuthorizerClassNameProp, STRING, Defaults.AuthorizerClassName, LOW, AuthorizerClassNameDoc)
@@ -1258,6 +1271,15 @@ object KafkaConfig {
       .define(PasswordEncoderCipherAlgorithmProp, STRING, Defaults.PasswordEncoderCipherAlgorithm, LOW, PasswordEncoderCipherAlgorithmDoc)
       .define(PasswordEncoderKeyLengthProp, INT, Defaults.PasswordEncoderKeyLength, atLeast(8), LOW, PasswordEncoderKeyLengthDoc)
       .define(PasswordEncoderIterationsProp, INT, Defaults.PasswordEncoderIterations, atLeast(1024), LOW, PasswordEncoderIterationsDoc)
+
+      /** ********* Raft Quorum Configuration *********/
+      .defineInternal(RaftConfig.QUORUM_VOTERS_CONFIG, LIST, Defaults.QuorumVoters, new RaftConfig.ControllerQuorumVotersValidator(), HIGH, RaftConfig.QUORUM_VOTERS_DOC)
+      .defineInternal(RaftConfig.QUORUM_ELECTION_TIMEOUT_MS_CONFIG, INT, Defaults.QuorumElectionTimeoutMs, null, HIGH, RaftConfig.QUORUM_ELECTION_TIMEOUT_MS_DOC)
+      .defineInternal(RaftConfig.QUORUM_FETCH_TIMEOUT_MS_CONFIG, INT, Defaults.QuorumFetchTimeoutMs, null, HIGH, RaftConfig.QUORUM_FETCH_TIMEOUT_MS_DOC)
+      .defineInternal(RaftConfig.QUORUM_ELECTION_BACKOFF_MAX_MS_CONFIG, INT, Defaults.QuorumElectionBackoffMs, null, HIGH, RaftConfig.QUORUM_ELECTION_BACKOFF_MAX_MS_DOC)
+      .defineInternal(RaftConfig.QUORUM_LINGER_MS_CONFIG, INT, Defaults.QuorumLingerMs, null, MEDIUM, RaftConfig.QUORUM_LINGER_MS_DOC)
+      .defineInternal(RaftConfig.QUORUM_REQUEST_TIMEOUT_MS_CONFIG, INT, Defaults.QuorumRequestTimeoutMs, null, MEDIUM, RaftConfig.QUORUM_REQUEST_TIMEOUT_MS_DOC)
+      .defineInternal(RaftConfig.QUORUM_RETRY_BACKOFF_MS_CONFIG, INT, Defaults.QuorumRetryBackoffMs, null, LOW, RaftConfig.QUORUM_RETRY_BACKOFF_MS_DOC)
   }
 
   def configNames: Seq[String] = configDef.names.asScala.toBuffer.sorted
@@ -1686,6 +1708,15 @@ class KafkaConfig(val props: java.util.Map[_, _], doLog: Boolean, dynamicConfigO
 
   val deleteTopicEnable = getBoolean(KafkaConfig.DeleteTopicEnableProp)
   def compressionType = getString(KafkaConfig.CompressionTypeProp)
+
+  /** ********* Raft Quorum Configuration *********/
+  val quorumVoters = getList(RaftConfig.QUORUM_VOTERS_CONFIG)
+  val quorumElectionTimeoutMs = getInt(RaftConfig.QUORUM_ELECTION_TIMEOUT_MS_CONFIG)
+  val quorumFetchTimeoutMs = getInt(RaftConfig.QUORUM_FETCH_TIMEOUT_MS_CONFIG)
+  val quorumElectionBackoffMs = getInt(RaftConfig.QUORUM_ELECTION_BACKOFF_MAX_MS_CONFIG)
+  val quorumLingerMs = getInt(RaftConfig.QUORUM_LINGER_MS_CONFIG)
+  val quorumRequestTimeoutMs = getInt(RaftConfig.QUORUM_REQUEST_TIMEOUT_MS_CONFIG)
+  val quorumRetryBackoffMs = getInt(RaftConfig.QUORUM_RETRY_BACKOFF_MS_CONFIG)
 
   def addReconfigurable(reconfigurable: Reconfigurable): Unit = {
     dynamicConfig.addReconfigurable(reconfigurable)
