@@ -61,17 +61,20 @@ public class TimeWindowedDeserializer<T> implements Deserializer<Windowed<T>> {
     @SuppressWarnings("unchecked")
     @Override
     public void configure(final Map<String, ?> configs, final boolean isKey) {
-        //check if the config is set and the window size is already set from the constructor
-        if (windowSize != null && (configs.get(StreamsConfig.WINDOW_SIZE_MS_CONFIG) != null)) {
-            throw new IllegalArgumentException("Window size should not be set in both the constructor and the window.size.ms config");
-        } else if (windowSize == null && (configs.get(StreamsConfig.WINDOW_SIZE_MS_CONFIG) == null)) {
-            throw new IllegalArgumentException("Window size needs to be set either through the constructor or the window.size.ms config");
+        //check to see if the window size config is set and the window size is already set from the constructor
+        final Long configWindowSize;
+        if (configs.get(StreamsConfig.WINDOW_SIZE_MS_CONFIG) instanceof String) {
+            configWindowSize = Long.parseLong((String) configs.get(StreamsConfig.WINDOW_SIZE_MS_CONFIG));
         } else {
-            if (configs.get(StreamsConfig.WINDOW_SIZE_MS_CONFIG) instanceof String) {
-                windowSize = Long.parseLong((String) configs.get(StreamsConfig.WINDOW_SIZE_MS_CONFIG));
-            } else {
-                windowSize = (Long) configs.get(StreamsConfig.WINDOW_SIZE_MS_CONFIG);
-            }
+            configWindowSize = (Long) configs.get(StreamsConfig.WINDOW_SIZE_MS_CONFIG);
+        }
+        if (windowSize != null && configWindowSize != null) {
+            throw new IllegalArgumentException("Window size should not be set in both the time windowed deserializer constructor and the window.size.ms config");
+        } else if (windowSize == null && configWindowSize == null) {
+            throw new IllegalArgumentException("Window size needs to be set either through the time windowed deserializer " +
+                "constructor or the window.size.ms config but not both");
+        } else {
+            windowSize = windowSize == null ? configWindowSize : windowSize;
         }
         if (inner == null) {
             final String propertyName = isKey ? StreamsConfig.DEFAULT_WINDOWED_KEY_SERDE_INNER_CLASS : StreamsConfig.DEFAULT_WINDOWED_VALUE_SERDE_INNER_CLASS;

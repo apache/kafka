@@ -59,8 +59,21 @@ public class TimeWindowedDeserializerTest {
     }
 
     @Test
+    public void setWindowSizeThroughConfigs() {
+        props.put(StreamsConfig.WINDOW_SIZE_MS_CONFIG, "500");
+        final TimeWindowedDeserializer<?> deserializer = new TimeWindowedDeserializer<>();
+        deserializer.configure(props, false);
+    }
+
+    @Test
     public void shouldThrowErrorIfWindowSizeSetInConfigsAndConstructor() {
-        props.put(StreamsConfig.WINDOW_SIZE_MS_CONFIG, "500L");
+        props.put(StreamsConfig.WINDOW_SIZE_MS_CONFIG, "500");
         assertThrows(IllegalArgumentException.class, () -> timeWindowedDeserializer.configure(props, false));
+    }
+
+    @Test
+    public void shouldThrowErrorIfWindowSizeIsNotSet() {
+        final TimeWindowedDeserializer<?> deserializer = new TimeWindowedDeserializer<>();
+        assertThrows(IllegalArgumentException.class, () -> deserializer.configure(props, false));
     }
 }

@@ -539,9 +539,9 @@ public class StreamsConfig extends AbstractConfig {
     public static final String TOPOLOGY_OPTIMIZATION_CONFIG = "topology.optimization";
     private static final String TOPOLOGY_OPTIMIZATION_DOC = "A configuration telling Kafka Streams if it should optimize the topology, disabled by default";
 
-    /** <code>window.size.ms</code> */
+    /** {@code window.size.ms} */
     public static final String WINDOW_SIZE_MS_CONFIG = "window.size.ms";
-    private static final String WINDOW_SIZE_MS_DOC = "Passes window size to the deserializer in order to calculate window end times.";
+    private static final String WINDOW_SIZE_MS_DOC = "Sets window size for the deserializer in order to calculate window end times.";
 
     /** {@code upgrade.from} */
     @SuppressWarnings("WeakerAccess")
