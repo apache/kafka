@@ -426,7 +426,6 @@ public class CastTest {
     @Test
     public void castFieldsWithSchema() {
         Date day = new Date(MILLIS_PER_DAY);
-
         ByteBuffer byteBuffer = ByteBuffer.allocate(8);
         byteBuffer.put((byte) 0xFE);
         byteBuffer.put((byte) 0xDC);
@@ -438,7 +437,10 @@ public class CastTest {
         byteBuffer.put((byte) 0x10);
         byteBuffer.flip();
 
-        xformValue.configure(Collections.singletonMap(Cast.SPEC_CONFIG, "int8:int16,int16:int32,int32:int64,int64:boolean,float32:float64,float64:boolean,boolean:int8,string:int32,bigdecimal:string,date:string,optional:int32"));
+        byte[] byteArray = Arrays.copyOf(byteBuffer.array(), byteBuffer.array().length);
+
+        xformValue.configure(Collections.singletonMap(Cast.SPEC_CONFIG,
+                "int8:int16,int16:int32,int32:int64,int64:boolean,float32:float64,float64:boolean,boolean:int8,string:int32,bigdecimal:string,date:string,optional:int32,bytes:string,byteArray:string"));
 
         // Include an optional fields and fields with defaults to validate their values are passed through properly
         SchemaBuilder builder = SchemaBuilder.struct();
@@ -456,6 +458,8 @@ public class CastTest {
         builder.field("optional", Schema.OPTIONAL_FLOAT32_SCHEMA);
         builder.field("timestamp", Timestamp.SCHEMA);
         builder.field("bytes", Schema.BYTES_SCHEMA);
+        builder.field("byteArray", Schema.BYTES_SCHEMA);
+
         Schema supportedTypesSchema = builder.build();
 
         Struct recordValue = new Struct(supportedTypesSchema);
@@ -471,6 +475,7 @@ public class CastTest {
         recordValue.put("string", "42");
         recordValue.put("timestamp", new Date(0));
         recordValue.put("bytes", byteBuffer);
+        recordValue.put("byteArray", byteArray);
 
         // optional field intentionally omitted
 
@@ -492,6 +497,8 @@ public class CastTest {
         assertEquals(Values.dateFormatFor(day).format(day), ((Struct) transformed.value()).get("date"));
         assertEquals(new Date(0), ((Struct) transformed.value()).get("timestamp"));
         assertEquals("FEDCBA9876543210", ((Struct) transformed.value()).get("bytes"));
+        assertEquals("FEDCBA9876543210", ((Struct) transformed.value()).get("byteArray"));
+
         assertNull(((Struct) transformed.value()).get("optional"));
 
         Schema transformedSchema = ((Struct) transformed.value()).schema();
@@ -507,6 +514,8 @@ public class CastTest {
         assertEquals(Schema.STRING_SCHEMA.type(), transformedSchema.field("date").schema().type());
         assertEquals(Schema.OPTIONAL_INT32_SCHEMA.type(), transformedSchema.field("optional").schema().type());
         assertEquals(Schema.STRING_SCHEMA.type(), transformedSchema.field("bytes").schema().type());
+        assertEquals(Schema.STRING_SCHEMA.type(), transformedSchema.field("byteArray").schema().type());
+
         // The following fields are not changed
         assertEquals(Timestamp.SCHEMA.type(), transformedSchema.field("timestamp").schema().type());
     }
