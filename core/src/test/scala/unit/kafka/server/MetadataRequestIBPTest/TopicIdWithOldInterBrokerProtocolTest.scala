@@ -17,15 +17,16 @@
 
 package kafka.server
 
-import java.util.Properties
+import java.util
+import java.util.{Optional, Properties}
 
 import kafka.api.KAFKA_2_7_IV0
 import kafka.network.SocketServer
-
-import org.apache.kafka.common.Uuid
-import org.apache.kafka.common.protocol.Errors
-import org.apache.kafka.common.requests.{MetadataRequest, MetadataResponse}
-import org.junit.jupiter.api.Assertions.assertEquals;
+import org.apache.kafka.common.{TopicPartition, Uuid}
+import org.apache.kafka.common.protocol.{ApiKeys, Errors}
+import org.apache.kafka.common.record.MemoryRecords
+import org.apache.kafka.common.requests.{FetchRequest, FetchResponse, MetadataRequest, MetadataResponse}
+import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.{BeforeEach, Test}
 
 import scala.jdk.CollectionConverters._
@@ -59,8 +60,71 @@ class TopicIdWithOldInterBrokerProtocolTest extends BaseRequestTest {
     }
   }
 
+  // This also simulates sending a fetch to a broker that is still in the process of updating.
+  @Test
+  def testFetchTopicIdsWithOldIBPWrongFetchVersion(): Unit = {
+    val replicaAssignment = Map(0 -> Seq(1, 2, 0), 1 -> Seq(2, 0, 1))
+    val topic1 = "topic1"
+    val tp0 = new TopicPartition("topic1", 0)
+    val maxResponseBytes = 800
+    val maxPartitionBytes = 190
+    val topicIds = Map("topic1" -> Uuid.randomUuid())
+    val topicNames = topicIds.map(_.swap)
+
+    val leadersMap = createTopic(topic1, replicaAssignment)
+    val req = createFetchRequest(maxResponseBytes, maxPartitionBytes, Seq(tp0),  Map.empty, topicIds, ApiKeys.FETCH.latestVersion())
+    val resp = sendFetchRequest(leadersMap(0), req)
+
+    assertEquals(Errors.UNSUPPORTED_VERSION, resp.error())
+
+    val responseData = resp.responseData(topicNames.asJava)
+    assertEquals(Errors.UNSUPPORTED_VERSION, responseData.get(tp0).error());
+  }
+
+  @Test
+  def testFetchTopicIdsWithOldIBPCorrectFetchVersion(): Unit = {
+    val replicaAssignment = Map(0 -> Seq(1, 2, 0), 1 -> Seq(2, 0, 1))
+    val topic1 = "topic1"
+    val tp0 = new TopicPartition("topic1", 0)
+    val maxResponseBytes = 800
+    val maxPartitionBytes = 190
+    val topicIds = Map("topic1" -> Uuid.randomUuid())
+    val topicNames = topicIds.map(_.swap)
+
+    val leadersMap = createTopic(topic1, replicaAssignment)
+    val req = createFetchRequest(maxResponseBytes, maxPartitionBytes, Seq(tp0),  Map.empty, topicIds, 12)
+    val resp = sendFetchRequest(leadersMap(0), req)
+
+    assertEquals(Errors.NONE, resp.error())
+
+    val responseData = resp.responseData(topicNames.asJava)
+    assertEquals(Errors.NONE, responseData.get(tp0).error());
+  }
+
   private def sendMetadataRequest(request: MetadataRequest, destination: Option[SocketServer]): MetadataResponse = {
     connectAndReceive[MetadataResponse](request, destination = destination.getOrElse(anySocketServer))
+  }
+
+  private def createFetchRequest(maxResponseBytes: Int, maxPartitionBytes: Int, topicPartitions: Seq[TopicPartition],
+                                 offsetMap: Map[TopicPartition, Long],
+                                 topicIds: Map[String, Uuid],
+                                 version: Short): FetchRequest = {
+    FetchRequest.Builder.forConsumer(version, Int.MaxValue, 0, createPartitionMap(maxPartitionBytes, topicPartitions, offsetMap), topicIds.asJava)
+      .setMaxBytes(maxResponseBytes).build()
+  }
+
+  private def createPartitionMap(maxPartitionBytes: Int, topicPartitions: Seq[TopicPartition],
+                                 offsetMap: Map[TopicPartition, Long]): util.LinkedHashMap[TopicPartition, FetchRequest.PartitionData] = {
+    val partitionMap = new util.LinkedHashMap[TopicPartition, FetchRequest.PartitionData]
+    topicPartitions.foreach { tp =>
+      partitionMap.put(tp, new FetchRequest.PartitionData(offsetMap.getOrElse(tp, 0), 0L, maxPartitionBytes,
+        Optional.empty()))
+    }
+    partitionMap
+  }
+
+  private def sendFetchRequest(leaderId: Int, request: FetchRequest): FetchResponse[MemoryRecords] = {
+    connectAndReceive[FetchResponse[MemoryRecords]](request, destination = brokerSocketServer(leaderId))
   }
 
 }
