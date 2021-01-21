@@ -91,7 +91,7 @@ abstract class BaseAdminIntegrationTest extends IntegrationTestHarness with Logg
     createResult.all.get()
     waitForTopics(client, topics, List())
     validateMetadataAndConfigs(createResult)
-    val topicIds = zkClient.getTopicIdsForTopics(topics.toSet)
+    val topicIds = getTopicIds()
     topics.foreach { topic =>
       assertNotEquals(Uuid.ZERO_UUID, createResult.topicId(topic).get())
       assertEquals(topicIds(topic), createResult.topicId(topic).get())

@@ -17,15 +17,17 @@
 
 package kafka.server
 
-import java.util.Properties
+import java.util.{Arrays, Properties}
 
 import kafka.api.KAFKA_2_7_IV0
 import kafka.network.SocketServer
-
+import kafka.utils.TestUtils
 import org.apache.kafka.common.Uuid
+import org.apache.kafka.common.message.DeleteTopicsRequestData
+import org.apache.kafka.common.message.DeleteTopicsRequestData.DeleteTopicState
 import org.apache.kafka.common.protocol.Errors
-import org.apache.kafka.common.requests.{MetadataRequest, MetadataResponse}
-import org.junit.jupiter.api.Assertions.assertEquals;
+import org.apache.kafka.common.requests.{DeleteTopicsRequest, DeleteTopicsResponse, MetadataRequest, MetadataResponse}
+import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
 import org.junit.jupiter.api.{BeforeEach, Test}
 
 import scala.jdk.CollectionConverters._
@@ -59,8 +61,56 @@ class TopicIdWithOldInterBrokerProtocolTest extends BaseRequestTest {
     }
   }
 
+  @Test
+  def testDeleteTopicsWithOldIBP(): Unit = {
+    val timeout = 10000
+    createTopic("topic-3", 5, 2)
+    createTopic("topic-4", 1, 2)
+    val request = new DeleteTopicsRequest.Builder(
+      new DeleteTopicsRequestData()
+        .setTopicNames(Arrays.asList("topic-3", "topic-4"))
+        .setTimeoutMs(timeout)).build()
+    val resp = sendDeleteTopicsRequest(request)
+    val error = resp.errorCounts.asScala.find(_._1 != Errors.NONE)
+    assertTrue(error.isEmpty, s"There should be no errors, found ${resp.data.responses.asScala}")
+    request.data.topicNames.forEach { topic =>
+      validateTopicIsDeleted(topic)
+    }
+    resp.data.responses.forEach { response =>
+      assertEquals(Uuid.ZERO_UUID, response.topicId())
+    }
+  }
+
+  @Test
+  def testDeleteTopicsWithOldIBPUsingIDs(): Unit = {
+    val timeout = 10000
+    createTopic("topic-7", 3, 2)
+    createTopic("topic-6", 1, 2)
+    val ids = Map("topic-7" -> Uuid.randomUuid(), "topic-6" -> Uuid.randomUuid())
+    val request = new DeleteTopicsRequest.Builder(
+      new DeleteTopicsRequestData()
+        .setTopics(Arrays.asList(new DeleteTopicState().setTopicId(ids("topic-7")),
+          new DeleteTopicState().setTopicId(ids("topic-6"))
+        )
+        ).setTimeoutMs(timeout)).build()
+    val response = sendDeleteTopicsRequest(request)
+    val error = response.errorCounts.asScala
+    assertEquals(2, error(Errors.UNSUPPORTED_VERSION))
+  }
+
   private def sendMetadataRequest(request: MetadataRequest, destination: Option[SocketServer]): MetadataResponse = {
     connectAndReceive[MetadataResponse](request, destination = destination.getOrElse(anySocketServer))
+  }
+
+  private def sendDeleteTopicsRequest(request: DeleteTopicsRequest, socketServer: SocketServer = controllerSocketServer): DeleteTopicsResponse = {
+    connectAndReceive[DeleteTopicsResponse](request, destination = socketServer)
+  }
+
+  private def validateTopicIsDeleted(topic: String): Unit = {
+    val metadata = connectAndReceive[MetadataResponse](new MetadataRequest.Builder(
+      List(topic).asJava, true).build).topicMetadata.asScala
+    TestUtils.waitUntilTrue (() => !metadata.exists(p => p.topic.equals(topic) && p.error == Errors.NONE),
+      s"The topic $topic should not exist")
   }
 
 }

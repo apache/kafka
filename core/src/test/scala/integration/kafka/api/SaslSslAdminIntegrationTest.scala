@@ -423,7 +423,7 @@ class SaslSslAdminIntegrationTest extends BaseAdminIntegrationTest with SaslSetu
     createResult.all.get()
     waitForTopics(client, topics, List())
     validateMetadataAndConfigs(createResult)
-    val topicIds = zkClient.getTopicIdsForTopics(topics.toSet)
+    val topicIds = getTopicIds()
     assertNotEquals(Uuid.ZERO_UUID, createResult.topicId(topic1).get())
     assertEquals(topicIds(topic1), createResult.topicId(topic1).get())
     assertFutureExceptionTypeEquals(createResult.topicId(topic2), classOf[TopicAuthorizationException])

@@ -454,7 +454,6 @@ case object KAFKA_2_8_IV1 extends DefaultApiVersion {
   val id: Int = 32
 }
 
-
 object ApiVersionValidator extends Validator {
 
   override def ensureValid(name: String, value: Any): Unit = {

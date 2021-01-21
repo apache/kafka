@@ -430,11 +430,10 @@ public class MockAdminClient extends AdminClient {
             KafkaFutureImpl<Void> future = new KafkaFutureImpl<>();
 
             String name = topicNames.remove(topicId);
-            if (allTopics.remove(name) ==  null) {
+            if (name == null || allTopics.remove(name) == null) {
                 future.completeExceptionally(new UnknownTopicOrPartitionException(String.format("Topic %s does not exist.", topicId)));
             } else {
                 topicIds.remove(name);
-                allTopics.remove(name);
                 future.complete(null);
             }
             deleteTopicsWithIdsResult.put(topicId, future);

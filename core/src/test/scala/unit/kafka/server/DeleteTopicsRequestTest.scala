@@ -53,7 +53,7 @@ class DeleteTopicsRequestTest extends BaseRequestTest {
     // Topic Ids
     createTopic("topic-7", 3, 2)
     createTopic("topic-6", 1, 2)
-    val ids = zkClient.getTopicIdsForTopics(Set("topic-7", "topic-6"))
+    val ids = getTopicIds()
     validateValidDeleteTopicRequestsWithIds(new DeleteTopicsRequest.Builder(
       new DeleteTopicsRequestData()
         .setTopics(Arrays.asList(new DeleteTopicState().setTopicId(ids("topic-7")),
@@ -75,7 +75,7 @@ class DeleteTopicsRequestTest extends BaseRequestTest {
     val response = sendDeleteTopicsRequest(request)
     val error = response.errorCounts.asScala.find(_._1 != Errors.NONE)
     assertTrue(error.isEmpty, s"There should be no errors, found ${response.data.responses.asScala}")
-    response.data().responses().forEach { response =>
+    response.data.responses.forEach { response =>
       validateTopicIsDeleted(response.name())
     }
   }
@@ -106,7 +106,7 @@ class DeleteTopicsRequestTest extends BaseRequestTest {
     
     // Topic IDs
     createTopic("topic-id-1", 1, 1)
-    val validId = zkClient.getTopicIdsForTopics(Set("topic-id-1"))("topic-id-1")
+    val validId = getTopicIds()("topic-id-1")
     val invalidId = Uuid.randomUuid
     validateErrorDeleteTopicRequestsWithIds(new DeleteTopicsRequest.Builder(
       new DeleteTopicsRequestData()
@@ -174,7 +174,7 @@ class DeleteTopicsRequestTest extends BaseRequestTest {
           .setTimeoutMs(1000)).build()
     val response = sendDeleteTopicsRequest(request, notControllerSocketServer)
 
-    val error = response.data.responses().find("not-controller").errorCode()
+    val error = response.data.responses.find("not-controller").errorCode()
     assertEquals(Errors.NOT_CONTROLLER.code,  error, "Expected controller error when routed incorrectly")
   }
 

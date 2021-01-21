@@ -128,7 +128,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
     val createResult = client.createTopics(newTopics.asJava)
     createResult.all.get()
     waitForTopics(client, topics, List())
-    val topicIds = zkClient.getTopicIdsForTopics(topics.toSet).values.toSet
+    val topicIds = getTopicIds().values.toSet
 
     client.deleteTopicsWithIds(topicIds.asJava).all.get()
     waitForTopics(client, List(), topics)
