@@ -17,7 +17,7 @@
 
 package kafka.tools
 
-import java.io.{ByteArrayOutputStream, File}
+import java.io.{ByteArrayOutputStream, File, PrintWriter}
 import java.util.Properties
 
 import kafka.log.{Log, LogConfig, LogManager}
@@ -166,6 +166,19 @@ class DumpLogSegmentsTest {
     assertEquals(Map.empty, errors.misMatchesForTimeIndexFilesMap)
     assertEquals(Map.empty, errors.outOfOrderTimestamp)
     assertEquals(Map.empty, errors.shallowOffsetNotFound)
+  }
+
+  @Test
+  def testDumpEmptyIndex(): Unit = {
+    val indexFile = new File(indexFilePath)
+    new PrintWriter(indexFile).close()
+    val expectOutput = s"$indexFile is empty.\n"
+    val outContent = new ByteArrayOutputStream()
+    Console.withOut(outContent) {
+      DumpLogSegments.dumpIndex(indexFile, indexSanityOnly = false, verifyOnly = true,
+        misMatchesForIndexFilesMap = mutable.Map[String, List[(Long, Long)]](), Int.MaxValue)
+    }
+    assertEquals(expectOutput, outContent.toString)
   }
 
   private def runDumpLogSegments(args: Array[String]): String = {
