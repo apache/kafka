@@ -89,20 +89,22 @@ class ReplicaAlterLogDirsThread(name: String,
       }
     }
 
+    val fetchData = request.fetchData(replicaMgr.metadataCache.getTopicNames().asJava)
+
     replicaMgr.fetchMessages(
       0L, // timeout is 0 so that the callback will be executed immediately
       Request.FutureLocalReplicaId,
       request.minBytes,
       request.maxBytes,
       false,
-      request.fetchData(replicaMgr.metadataCache.getTopicNames().asJava).asScala.toSeq,
+      fetchData.asScala.toSeq,
       UnboundedQuota,
       processResponseCallback,
       request.isolationLevel,
       None)
 
     if (partitionData == null)
-      throw new IllegalStateException(s"Failed to fetch data for partitions ${request.fetchData(replicaMgr.metadataCache.getTopicNames().asJava).keySet().toArray.mkString(",")}")
+      throw new IllegalStateException(s"Failed to fetch data for partitions ${fetchData.keySet().toArray.mkString(",")}")
 
     partitionData.toMap
   }

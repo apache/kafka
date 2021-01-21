@@ -1135,8 +1135,7 @@ public class RequestResponseTest {
             1000000, FetchResponse.INVALID_LAST_STABLE_OFFSET, 0L, Optional.empty(), abortedTransactions, MemoryRecords.EMPTY));
         return FetchResponse.parse(new FetchResponse<>(Errors.NONE, responseData,
                 Collections.emptyList(), topicIds,
-                25, sessionId)
-                .serialize(FETCH.latestVersion()), FETCH.latestVersion());
+                25, sessionId).serialize(FETCH.latestVersion()), FETCH.latestVersion());
     }
 
     private FetchResponse<MemoryRecords> createFetchResponse(boolean includeAborted) {
@@ -1156,8 +1155,7 @@ public class RequestResponseTest {
 
         return FetchResponse.parse(new FetchResponse<>(Errors.NONE, responseData, Collections.emptyList(),
                 Collections.singletonMap("test", Uuid.randomUuid()),
-                25, INVALID_SESSION_ID)
-                .serialize(FETCH.latestVersion()), FETCH.latestVersion());
+                25, INVALID_SESSION_ID).serialize(FETCH.latestVersion()), FETCH.latestVersion());
     }
 
     private HeartbeatRequest createHeartBeatRequest() {

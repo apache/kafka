@@ -112,6 +112,7 @@ class ReplicaFetcherMockBlockingSend(offsets: java.util.Map[TopicPartition, Epoc
         val partitionData = new util.LinkedHashMap[TopicPartition, FetchResponse.PartitionData[Records]]
         fetchPartitionData.foreach { case (tp, data) => partitionData.put(tp, data) }
         fetchPartitionData = Map.empty
+        topicIds = Map.empty
         FetchResponse.prepareResponse(Errors.NONE, partitionData, Collections.emptyList(), topicIds.asJava, 0,
           if (partitionData.isEmpty) JFetchMetadata.INVALID_SESSION_ID else 1)
 

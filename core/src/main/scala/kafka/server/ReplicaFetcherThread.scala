@@ -297,7 +297,7 @@ class ReplicaFetcherThread(name: String,
       None
     } else {
       val requestBuilder = FetchRequest.Builder
-        .forReplica(fetchRequestVersion, replicaId, maxWait, minBytes, fetchData.toSend, replicaMgr.metadataCache.getTopicIds().asJava)
+        .forReplica(fetchRequestVersion, replicaId, maxWait, minBytes, fetchData.toSend, topicIds.asJava)
         .setMaxBytes(maxBytes)
         .toForget(fetchData.toForget)
         .metadata(fetchData.metadata)

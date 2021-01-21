@@ -186,7 +186,6 @@ class FetchRequestDownConversionConfigTest extends BaseRequestTest {
       createPartitionMap(1024, allTopicPartitions), topicIds.asJava).build()
     val fetchResponse = sendFetchRequest(leaderId, fetchRequest)
 
-
     allTopicPartitions.foreach(tp => assertEquals(Errors.NONE, fetchResponse.responseData(topicNames.asJava).get(tp).error))
   }
 }

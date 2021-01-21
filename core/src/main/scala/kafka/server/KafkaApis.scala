@@ -688,7 +688,6 @@ class KafkaApis(val requestChannel: RequestChannel,
         FetchResponse.INVALID_LOG_START_OFFSET, null, MemoryRecords.EMPTY)
     }
 
-
     val erroneous = mutable.ArrayBuffer[(TopicPartition, FetchResponse.PartitionData[Records])]()
     val interesting = mutable.ArrayBuffer[(TopicPartition, FetchRequest.PartitionData)]()
     val idErrors = new mutable.ListBuffer[FetchResponse.IdError]()
