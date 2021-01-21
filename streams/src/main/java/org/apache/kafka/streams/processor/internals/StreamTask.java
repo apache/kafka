@@ -114,7 +114,8 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
                       final Time time,
                       final ProcessorStateManager stateMgr,
                       final RecordCollector recordCollector,
-                      final InternalProcessorContext processorContext) {
+                      final InternalProcessorContext processorContext,
+                      final LogContext logContext) {
         super(
             id,
             topology,
@@ -165,7 +166,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
         // initialize the consumed and committed offset cache
         consumedOffsets = new HashMap<>();
 
-        recordQueueCreator = new RecordQueueCreator(logContext, config.defaultTimestampExtractor(), config.defaultDeserializationExceptionHandler());
+        recordQueueCreator = new RecordQueueCreator(this.logContext, config.defaultTimestampExtractor(), config.defaultDeserializationExceptionHandler());
 
         recordInfo = new PartitionGroup.RecordInfo();
 
@@ -178,7 +179,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
         }
         final long maxTaskIdleMs = config.getLong(StreamsConfig.MAX_TASK_IDLE_MS_CONFIG);
         partitionGroup = new PartitionGroup(
-            id,
+            logContext,
             createPartitionQueues(),
             TaskMetrics.recordLatenessSensor(threadId, taskId, streamsMetrics),
             enforcedProcessingSensor,

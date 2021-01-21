@@ -40,6 +40,7 @@ import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.IntegerSerializer;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.Serializer;
+import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.StreamsConfig;
@@ -124,6 +125,7 @@ public class StreamTaskTest {
     private static final File BASE_DIR = TestUtils.tempDirectory();
     private static final long DEFAULT_TIMESTAMP = 1000;
 
+    private final LogContext logContext = new LogContext("[test] ");
     private final String topic1 = "topic1";
     private final String topic2 = "topic2";
     private final TopicPartition partition1 = new TopicPartition(topic1, 1);
@@ -1504,7 +1506,8 @@ public class StreamTaskTest {
             time,
             stateManager,
             recordCollector,
-            context);
+            context,
+            logContext);
 
         task.initializeIfNeeded();
         task.completeRestoration();
@@ -2070,8 +2073,8 @@ public class StreamTaskTest {
                 time,
                 stateManager,
                 recordCollector,
-                context
-            )
+                context,
+                logContext)
         );
 
         assertThat(exception.getMessage(), equalTo("Invalid topology: " +
@@ -2135,7 +2138,7 @@ public class StreamTaskTest {
             time,
             stateManager,
             recordCollector,
-            context);
+            context, logContext);
     }
 
     private StreamTask createDisconnectedTask(final StreamsConfig config) {
@@ -2174,7 +2177,7 @@ public class StreamTaskTest {
             time,
             stateManager,
             recordCollector,
-            context);
+            context, logContext);
     }
 
     private StreamTask createFaultyStatefulTask(final StreamsConfig config) {
@@ -2204,7 +2207,7 @@ public class StreamTaskTest {
             time,
             stateManager,
             recordCollector,
-            context);
+            context, logContext);
     }
 
     private StreamTask createStatefulTask(final StreamsConfig config, final boolean logged) {
@@ -2240,7 +2243,7 @@ public class StreamTaskTest {
             time,
             stateManager,
             recordCollector,
-            context);
+            context, logContext);
     }
 
     private StreamTask createSingleSourceStateless(final StreamsConfig config,
@@ -2278,7 +2281,7 @@ public class StreamTaskTest {
             time,
             stateManager,
             recordCollector,
-            context);
+            context, logContext);
     }
 
     private StreamTask createStatelessTask(final StreamsConfig config,
@@ -2318,7 +2321,7 @@ public class StreamTaskTest {
             time,
             stateManager,
             recordCollector,
-            context);
+            context, logContext);
     }
 
     private StreamTask createStatelessTaskWithForwardingTopology(final SourceNode<Integer, Integer, Integer, Integer> sourceNode) {
@@ -2355,7 +2358,7 @@ public class StreamTaskTest {
             time,
             stateManager,
             recordCollector,
-            context);
+            context, logContext);
     }
 
     private ConsumerRecord<byte[], byte[]> getConsumerRecordWithOffsetAsTimestamp(final TopicPartition topicPartition,

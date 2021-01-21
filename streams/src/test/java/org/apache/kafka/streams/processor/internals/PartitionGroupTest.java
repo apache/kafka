@@ -32,7 +32,6 @@ import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.LogAndContinueExceptionHandler;
-import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.TimestampExtractor;
 import org.apache.kafka.streams.processor.internals.testutil.LogCaptureAppender;
 import org.apache.kafka.test.InternalMockProcessorContext;
@@ -62,10 +61,9 @@ import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
 public class PartitionGroupTest {
-    private final TaskId id = new TaskId(0, 0);
 
     private final long maxTaskIdleMs = StreamsConfig.MAX_TASK_IDLE_MS_DISABLED;
-    private final LogContext logContext = new LogContext();
+    private final LogContext logContext = new LogContext("[test] ");
     private final Time time = new MockTime();
     private final Serializer<Integer> intSerializer = new IntegerSerializer();
     private final Deserializer<Integer> intDeserializer = new IntegerDeserializer();
@@ -481,7 +479,7 @@ public class PartitionGroupTest {
     @Test
     public void shouldUpdatePartitionQueuesExpand() {
         final PartitionGroup group = new PartitionGroup(
-            id,
+            logContext,
             mkMap(mkEntry(partition1, queue1)),
             getValueSensor(metrics, lastLatenessValue),
             enforcedProcessingSensor,
@@ -513,7 +511,7 @@ public class PartitionGroupTest {
     @Test
     public void shouldUpdatePartitionQueuesShrinkAndExpand() {
         final PartitionGroup group = new PartitionGroup(
-            id,
+            logContext,
             mkMap(mkEntry(partition1, queue1)),
             getValueSensor(metrics, lastLatenessValue),
             enforcedProcessingSensor,
@@ -544,7 +542,7 @@ public class PartitionGroupTest {
     @Test
     public void shouldNeverWaitIfIdlingIsDisabled() {
         final PartitionGroup group = new PartitionGroup(
-            id,
+            logContext,
             mkMap(
                 mkEntry(partition1, queue1),
                 mkEntry(partition2, queue2)
@@ -568,7 +566,7 @@ public class PartitionGroupTest {
                 hasItem(Matchers.allOf(
                     Matchers.hasProperty("level", equalTo("TRACE")),
                     Matchers.hasProperty("message", equalTo(
-                        "[0_0] Ready for processing because max.task.idle.ms is disabled.\n" +
+                        "[test] Ready for processing because max.task.idle.ms is disabled.\n" +
                             "\tThere may be out-of-order processing for this task as a result.\n" +
                             "\tBuffered partitions: [topic-1]\n" +
                             "\tNon-buffered partitions: [topic-2]"
@@ -581,7 +579,7 @@ public class PartitionGroupTest {
     @Test
     public void shouldBeReadyIfAllPartitionsAreBuffered() {
         final PartitionGroup group = new PartitionGroup(
-            id,
+            logContext,
             mkMap(
                 mkEntry(partition1, queue1),
                 mkEntry(partition2, queue2)
@@ -609,7 +607,7 @@ public class PartitionGroupTest {
                 appender.getEvents(),
                 hasItem(Matchers.allOf(
                     Matchers.hasProperty("level", equalTo("DEBUG")),
-                    Matchers.hasProperty("message", equalTo("[0_0] All partitions were buffered locally, so this task is ready for processing."))
+                    Matchers.hasProperty("message", equalTo("[test] All partitions were buffered locally, so this task is ready for processing."))
                 ))
             );
         }
@@ -618,7 +616,7 @@ public class PartitionGroupTest {
     @Test
     public void shouldWaitForFetchesWhenMetadataIsIncomplete() {
         final PartitionGroup group = new PartitionGroup(
-            id,
+            logContext,
             mkMap(
                 mkEntry(partition1, queue1),
                 mkEntry(partition2, queue2)
@@ -641,7 +639,7 @@ public class PartitionGroupTest {
                 appender.getEvents(),
                 hasItem(Matchers.allOf(
                     Matchers.hasProperty("level", equalTo("TRACE")),
-                    Matchers.hasProperty("message", equalTo("[0_0] Waiting to fetch data for topic-2"))
+                    Matchers.hasProperty("message", equalTo("[test] Waiting to fetch data for topic-2"))
                 ))
             );
         }
@@ -652,7 +650,7 @@ public class PartitionGroupTest {
     @Test
     public void shouldWaitForPollWhenLagIsNonzero() {
         final PartitionGroup group = new PartitionGroup(
-            id,
+            logContext,
             mkMap(
                 mkEntry(partition1, queue1),
                 mkEntry(partition2, queue2)
@@ -677,7 +675,7 @@ public class PartitionGroupTest {
                 appender.getEvents(),
                 hasItem(Matchers.allOf(
                     Matchers.hasProperty("level", equalTo("DEBUG")),
-                    Matchers.hasProperty("message", equalTo("[0_0] Lag for topic-2 is currently 1, but no data is buffered locally. Waiting to buffer some records."))
+                    Matchers.hasProperty("message", equalTo("[test] Lag for topic-2 is currently 1, but no data is buffered locally. Waiting to buffer some records."))
                 ))
             );
         }
@@ -686,7 +684,7 @@ public class PartitionGroupTest {
     @Test
     public void shouldIdleAsSpecifiedWhenLagIsZero() {
         final PartitionGroup group = new PartitionGroup(
-            id,
+            logContext,
             mkMap(
                 mkEntry(partition1, queue1),
                 mkEntry(partition2, queue2)
@@ -711,7 +709,7 @@ public class PartitionGroupTest {
                 appender.getEvents(),
                 hasItem(Matchers.allOf(
                     Matchers.hasProperty("level", equalTo("DEBUG")),
-                    Matchers.hasProperty("message", equalTo("[0_0] Lag for topic-2 is currently 0 and current time is 0. Waiting for new data to be produced for configured idle time 1 (deadline is 1)."))
+                    Matchers.hasProperty("message", equalTo("[test] Lag for topic-2 is currently 0 and current time is 0. Waiting for new data to be produced for configured idle time 1 (deadline is 1)."))
                 ))
             );
         }
@@ -725,7 +723,7 @@ public class PartitionGroupTest {
                 hasItem(Matchers.allOf(
                     Matchers.hasProperty("level", equalTo("INFO")),
                     Matchers.hasProperty("message", equalTo(
-                        "[0_0] Continuing to process although some partition timestamps were not buffered locally.\n" +
+                        "[test] Continuing to process although some partition timestamps were not buffered locally.\n" +
                             "\tThere may be out-of-order processing for this task as a result.\n" +
                             "\tPartitions with local data: [topic-1].\n" +
                             "\tPartitions we gave up waiting for, with their corresponding deadlines: {topic-2=1}.\n" +
@@ -745,7 +743,7 @@ public class PartitionGroupTest {
                 hasItem(Matchers.allOf(
                     Matchers.hasProperty("level", equalTo("INFO")),
                     Matchers.hasProperty("message", equalTo(
-                        "[0_0] Continuing to process although some partition timestamps were not buffered locally.\n" +
+                        "[test] Continuing to process although some partition timestamps were not buffered locally.\n" +
                             "\tThere may be out-of-order processing for this task as a result.\n" +
                             "\tPartitions with local data: [topic-1].\n" +
                             "\tPartitions we gave up waiting for, with their corresponding deadlines: {topic-2=1}.\n" +
@@ -759,7 +757,7 @@ public class PartitionGroupTest {
 
     private PartitionGroup getBasicGroup() {
         return new PartitionGroup(
-            id,
+            logContext,
             mkMap(
                 mkEntry(partition1, queue1),
                 mkEntry(partition2, queue2)
