@@ -41,35 +41,34 @@ object DescribeAuthorizedOperationsTest {
 
   val Group1Acl = new AclBinding(
     new ResourcePattern(ResourceType.GROUP, Group1, PatternType.LITERAL),
-    accessControlEntry(JaasTestUtils.KafkaClientPrincipalUnqualifiedName2, ALL, ALLOW))
+    accessControlEntry(JaasTestUtils.KafkaClientPrincipalUnqualifiedName2, ALL))
 
   val Group2Acl = new AclBinding(
     new ResourcePattern(ResourceType.GROUP, Group2, PatternType.LITERAL),
-    accessControlEntry(JaasTestUtils.KafkaClientPrincipalUnqualifiedName2, DESCRIBE, ALLOW))
+    accessControlEntry(JaasTestUtils.KafkaClientPrincipalUnqualifiedName2, DESCRIBE))
 
   val Group3Acl = new AclBinding(
     new ResourcePattern(ResourceType.GROUP, Group3, PatternType.LITERAL),
-    accessControlEntry(JaasTestUtils.KafkaClientPrincipalUnqualifiedName2, DELETE, ALLOW))
+    accessControlEntry(JaasTestUtils.KafkaClientPrincipalUnqualifiedName2, DELETE))
 
   val ClusterAllAcl = new AclBinding(
     new ResourcePattern(ResourceType.CLUSTER, Resource.CLUSTER_NAME, PatternType.LITERAL),
-    accessControlEntry(JaasTestUtils.KafkaClientPrincipalUnqualifiedName2, ALL, ALLOW))
+    accessControlEntry(JaasTestUtils.KafkaClientPrincipalUnqualifiedName2, ALL))
 
   val Topic1Acl = new AclBinding(
     new ResourcePattern(ResourceType.TOPIC, Topic1, PatternType.LITERAL),
-    accessControlEntry(JaasTestUtils.KafkaClientPrincipalUnqualifiedName2, ALL, ALLOW))
+    accessControlEntry(JaasTestUtils.KafkaClientPrincipalUnqualifiedName2, ALL))
 
   val Topic2All = new AclBinding(
     new ResourcePattern(ResourceType.TOPIC, Topic2, PatternType.LITERAL),
-    accessControlEntry(JaasTestUtils.KafkaClientPrincipalUnqualifiedName2, DELETE, ALLOW))
+    accessControlEntry(JaasTestUtils.KafkaClientPrincipalUnqualifiedName2, DELETE))
 
   private def accessControlEntry(
     userName: String,
-    operation: AclOperation,
-    permissionType: AclPermissionType
+    operation: AclOperation
   ): AccessControlEntry = {
     new AccessControlEntry(new KafkaPrincipal(KafkaPrincipal.USER_TYPE, userName).toString,
-      AclEntry.WildcardHost, operation, permissionType)
+      AclEntry.WildcardHost, operation, ALLOW)
   }
 }
 
@@ -95,11 +94,11 @@ class DescribeAuthorizedOperationsTest extends IntegrationTestHarness with SaslS
       authorizer.configure(this.configs.head.originals())
       val result = authorizer.createAcls(null, List(
         new AclBinding(clusterResource, accessControlEntry(
-          JaasTestUtils.KafkaServerPrincipalUnqualifiedName, CLUSTER_ACTION, ALLOW)),
+          JaasTestUtils.KafkaServerPrincipalUnqualifiedName, CLUSTER_ACTION)),
         new AclBinding(clusterResource, accessControlEntry(
-          JaasTestUtils.KafkaClientPrincipalUnqualifiedName2, ALTER, ALLOW)),
+          JaasTestUtils.KafkaClientPrincipalUnqualifiedName2, ALTER)),
         new AclBinding(topicResource, accessControlEntry(
-          JaasTestUtils.KafkaClientPrincipalUnqualifiedName2, DESCRIBE, ALLOW))
+          JaasTestUtils.KafkaClientPrincipalUnqualifiedName2, DESCRIBE))
       ).asJava)
       result.asScala.map(_.toCompletableFuture.get).foreach(result => assertFalse(result.exception.isPresent))
     } finally {
@@ -112,6 +111,7 @@ class DescribeAuthorizedOperationsTest extends IntegrationTestHarness with SaslS
     startSasl(jaasSections(Seq("GSSAPI"), Some("GSSAPI"), Both, JaasTestUtils.KafkaServerContextName))
     super.setUp()
     TestUtils.waitUntilBrokerMetadataIsPropagated(servers)
+    client = Admin.create(createConfig())
   }
 
   @AfterEach
@@ -128,14 +128,12 @@ class DescribeAuthorizedOperationsTest extends IntegrationTestHarness with SaslS
     adminClientConfig.put(AdminClientConfig.REQUEST_TIMEOUT_MS_CONFIG, "20000")
     val securityProps: util.Map[Object, Object] =
       TestUtils.adminClientSecurityConfigs(securityProtocol, trustStoreFile, clientSaslProperties)
-    securityProps.forEach((key, value) => adminClientConfig.put(key.asInstanceOf[String], value))
+    adminClientConfig.putAll(securityProps)
     adminClientConfig
   }
 
   @Test
   def testConsumerGroupAuthorizedOperations(): Unit = {
-    client = Admin.create(createConfig())
-
     val results = client.createAcls(List(Group1Acl, Group2Acl, Group3Acl).asJava)
     assertEquals(Set(Group1Acl, Group2Acl, Group3Acl), results.values.keySet.asScala)
     results.all.get
@@ -157,8 +155,6 @@ class DescribeAuthorizedOperationsTest extends IntegrationTestHarness with SaslS
 
   @Test
   def testClusterAuthorizedOperations(): Unit = {
-    client = Admin.create(createConfig())
-
     // test without includeAuthorizedOperations flag
     var clusterDescribeResult = client.describeCluster()
     assertNull(clusterDescribeResult.authorizedOperations.get())
@@ -184,7 +180,6 @@ class DescribeAuthorizedOperationsTest extends IntegrationTestHarness with SaslS
 
   @Test
   def testTopicAuthorizedOperations(): Unit = {
-    client = Admin.create(createConfig())
     createTopic(Topic1)
     createTopic(Topic2)
 
