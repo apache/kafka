@@ -25,9 +25,8 @@ import java.util.concurrent.locks.ReentrantLock
 import kafka.utils.CoreUtils.inLock
 import kafka.utils.TestUtils
 import org.apache.kafka.common.utils.Time
-import org.junit.{After, Before, Test}
-import org.junit.Assert._
-import org.scalatest.Assertions.intercept
+import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
+import org.junit.jupiter.api.Assertions._
 
 import scala.jdk.CollectionConverters._
 
@@ -36,12 +35,12 @@ class DelayedOperationTest {
   var purgatory: DelayedOperationPurgatory[DelayedOperation] = null
   var executorService: ExecutorService = null
 
-  @Before
+  @BeforeEach
   def setUp(): Unit = {
     purgatory = DelayedOperationPurgatory[DelayedOperation](purgatoryName = "mock")
   }
 
-  @After
+  @AfterEach
   def tearDown(): Unit = {
     purgatory.shutdown()
     if (executorService != null)
@@ -89,17 +88,17 @@ class DelayedOperationTest {
   def testRequestSatisfaction(): Unit = {
     val r1 = new MockDelayedOperation(100000L)
     val r2 = new MockDelayedOperation(100000L)
-    assertEquals("With no waiting requests, nothing should be satisfied", 0, purgatory.checkAndComplete("test1"))
-    assertFalse("r1 not satisfied and hence watched", purgatory.tryCompleteElseWatch(r1, Array("test1")))
-    assertEquals("Still nothing satisfied", 0, purgatory.checkAndComplete("test1"))
-    assertFalse("r2 not satisfied and hence watched", purgatory.tryCompleteElseWatch(r2, Array("test2")))
-    assertEquals("Still nothing satisfied", 0, purgatory.checkAndComplete("test2"))
+    assertEquals(0, purgatory.checkAndComplete("test1"), "With no waiting requests, nothing should be satisfied")
+    assertFalse(purgatory.tryCompleteElseWatch(r1, Array("test1")), "r1 not satisfied and hence watched")
+    assertEquals(0, purgatory.checkAndComplete("test1"), "Still nothing satisfied")
+    assertFalse(purgatory.tryCompleteElseWatch(r2, Array("test2")), "r2 not satisfied and hence watched")
+    assertEquals(0, purgatory.checkAndComplete("test2"), "Still nothing satisfied")
     r1.completable = true
-    assertEquals("r1 satisfied", 1, purgatory.checkAndComplete("test1"))
-    assertEquals("Nothing satisfied", 0, purgatory.checkAndComplete("test1"))
+    assertEquals(1, purgatory.checkAndComplete("test1"), "r1 satisfied")
+    assertEquals(0, purgatory.checkAndComplete("test1"), "Nothing satisfied")
     r2.completable = true
-    assertEquals("r2 satisfied", 1, purgatory.checkAndComplete("test2"))
-    assertEquals("Nothing satisfied", 0, purgatory.checkAndComplete("test2"))
+    assertEquals(1, purgatory.checkAndComplete("test2"), "r2 satisfied")
+    assertEquals(0, purgatory.checkAndComplete("test2"), "Nothing satisfied")
   }
 
   @Test
@@ -108,13 +107,13 @@ class DelayedOperationTest {
     val start = Time.SYSTEM.hiResClockMs
     val r1 = new MockDelayedOperation(expiration)
     val r2 = new MockDelayedOperation(200000L)
-    assertFalse("r1 not satisfied and hence watched", purgatory.tryCompleteElseWatch(r1, Array("test1")))
-    assertFalse("r2 not satisfied and hence watched", purgatory.tryCompleteElseWatch(r2, Array("test2")))
+    assertFalse(purgatory.tryCompleteElseWatch(r1, Array("test1")), "r1 not satisfied and hence watched")
+    assertFalse(purgatory.tryCompleteElseWatch(r2, Array("test2")), "r2 not satisfied and hence watched")
     r1.awaitExpiration()
     val elapsed = Time.SYSTEM.hiResClockMs - start
-    assertTrue("r1 completed due to expiration", r1.isCompleted)
-    assertFalse("r2 hasn't completed", r2.isCompleted)
-    assertTrue(s"Time for expiration $elapsed should at least $expiration", elapsed >= expiration)
+    assertTrue(r1.isCompleted, "r1 completed due to expiration")
+    assertFalse(r2.isCompleted, "r2 hasn't completed")
+    assertTrue(elapsed >= expiration, s"Time for expiration $elapsed should at least $expiration")
   }
 
   @Test
@@ -128,34 +127,34 @@ class DelayedOperationTest {
     def updateResult(futures: List[CompletableFuture[Integer]]): Unit =
       result.set(futures.filterNot(_.isCompletedExceptionally).map(_.get.intValue).sum)
 
-    assertFalse("Unnecessary thread created", hasExecutorThread)
+    assertFalse(hasExecutorThread, "Unnecessary thread created")
 
     // Two completed futures: callback should be executed immediately on the same thread
     val futures1 = List(CompletableFuture.completedFuture(10.asInstanceOf[Integer]),
       CompletableFuture.completedFuture(11.asInstanceOf[Integer]))
     val r1 = purgatory.tryCompleteElseWatch[Integer](100000L, futures1, () => updateResult(futures1))
-    assertTrue("r1 not completed", r1.isCompleted)
+    assertTrue(r1.isCompleted, "r1 not completed")
     assertEquals(21, result.get())
-    assertFalse("Unnecessary thread created", hasExecutorThread)
+    assertFalse(hasExecutorThread, "Unnecessary thread created")
 
     // Two delayed futures: callback should wait for both to complete
     result.set(-1)
     val futures2 = List(new CompletableFuture[Integer], new CompletableFuture[Integer])
     val r2 = purgatory.tryCompleteElseWatch[Integer](100000L, futures2, () => updateResult(futures2))
-    assertFalse("r2 should be incomplete", r2.isCompleted)
+    assertFalse(r2.isCompleted, "r2 should be incomplete")
     futures2.head.complete(20)
     assertFalse(r2.isCompleted)
     assertEquals(-1, result.get())
     futures2(1).complete(21)
     TestUtils.waitUntilTrue(() => r2.isCompleted, "r2 not completed")
     TestUtils.waitUntilTrue(() => result.get == 41, "callback not invoked")
-    assertTrue("Thread not created for executing delayed task", hasExecutorThread)
+    assertTrue(hasExecutorThread, "Thread not created for executing delayed task")
 
     // One immediate and one delayed future: callback should wait for delayed task to complete
     result.set(-1)
     val futures3 = List(new CompletableFuture[Integer], CompletableFuture.completedFuture(31.asInstanceOf[Integer]))
     val r3 = purgatory.tryCompleteElseWatch[Integer](100000L, futures3, () => updateResult(futures3))
-    assertFalse("r3 should be incomplete", r3.isCompleted)
+    assertFalse(r3.isCompleted, "r3 should be incomplete")
     assertEquals(-1, result.get())
     futures3.head.complete(30)
     TestUtils.waitUntilTrue(() => r3.isCompleted, "r3 not completed")
@@ -170,12 +169,12 @@ class DelayedOperationTest {
     val r4 = purgatory.tryCompleteElseWatch[Integer](expirationMs, futures4, () => updateResult(futures4))
     futures4.head.complete(40)
     TestUtils.waitUntilTrue(() => futures4(1).isDone, "r4 futures not expired")
-    assertTrue("r4 not completed after timeout", r4.isCompleted)
+    assertTrue(r4.isCompleted, "r4 not completed after timeout")
     val elapsed = Time.SYSTEM.hiResClockMs - start
-    assertTrue(s"Time for expiration $elapsed should at least $expirationMs", elapsed >= expirationMs)
+    assertTrue(elapsed >= expirationMs, s"Time for expiration $elapsed should at least $expirationMs")
     assertEquals(40, futures4.head.get)
     assertEquals(classOf[org.apache.kafka.common.errors.TimeoutException],
-      intercept[ExecutionException](futures4(1).get).getCause.getClass)
+      assertThrows(classOf[ExecutionException], () => futures4(1).get).getCause.getClass)
     assertEquals(40, result.get())
   }
 
@@ -188,27 +187,27 @@ class DelayedOperationTest {
     purgatory.tryCompleteElseWatch(r2, Array("test1", "test2"))
     purgatory.tryCompleteElseWatch(r3, Array("test1", "test2", "test3"))
 
-    assertEquals("Purgatory should have 3 total delayed operations", 3, purgatory.numDelayed)
-    assertEquals("Purgatory should have 6 watched elements", 6, purgatory.watched)
+    assertEquals(3, purgatory.numDelayed, "Purgatory should have 3 total delayed operations")
+    assertEquals(6, purgatory.watched, "Purgatory should have 6 watched elements")
 
     // complete the operations, it should immediately be purged from the delayed operation
     r2.completable = true
     r2.tryComplete()
-    assertEquals("Purgatory should have 2 total delayed operations instead of " + purgatory.numDelayed, 2, purgatory.numDelayed)
+    assertEquals(2, purgatory.numDelayed, "Purgatory should have 2 total delayed operations instead of " + purgatory.numDelayed)
 
     r3.completable = true
     r3.tryComplete()
-    assertEquals("Purgatory should have 1 total delayed operations instead of " + purgatory.numDelayed, 1, purgatory.numDelayed)
+    assertEquals(1, purgatory.numDelayed, "Purgatory should have 1 total delayed operations instead of " + purgatory.numDelayed)
 
     // checking a watch should purge the watch list
     purgatory.checkAndComplete("test1")
-    assertEquals("Purgatory should have 4 watched elements instead of " + purgatory.watched, 4, purgatory.watched)
+    assertEquals(4, purgatory.watched, "Purgatory should have 4 watched elements instead of " + purgatory.watched)
 
     purgatory.checkAndComplete("test2")
-    assertEquals("Purgatory should have 2 watched elements instead of " + purgatory.watched, 2, purgatory.watched)
+    assertEquals(2, purgatory.watched, "Purgatory should have 2 watched elements instead of " + purgatory.watched)
 
     purgatory.checkAndComplete("test3")
-    assertEquals("Purgatory should have 1 watched elements instead of " + purgatory.watched, 1, purgatory.watched)
+    assertEquals(1, purgatory.watched, "Purgatory should have 1 watched elements instead of " + purgatory.watched)
   }
 
   @Test
@@ -276,7 +275,7 @@ class DelayedOperationTest {
       ops.map { op => scheduleTryComplete(op, random.nextInt(maxDelayMs)) }
     }.foreach { future => future.get }
 
-    ops.foreach { op => assertTrue("Operation should have completed", op.isCompleted) }
+    ops.foreach { op => assertTrue(op.isCompleted, "Operation should have completed") }
   }
 
   def verifyDelayedOperationLock(mockDelayedOperation: => MockDelayedOperation, mismatchedLocks: Boolean): Unit = {
@@ -286,7 +285,7 @@ class DelayedOperationTest {
       (1 to count).map { _ =>
         val op = mockDelayedOperation
         purgatory.tryCompleteElseWatch(op, Seq(key))
-        assertFalse("Not completable", op.isCompleted)
+        assertFalse(op.isCompleted, "Not completable")
         op
       }
     }
@@ -303,9 +302,9 @@ class DelayedOperationTest {
       completableOps.foreach(op => op.completable = true)
       val completed = purgatory.checkAndComplete(key)
       assertEquals(expectedComplete.size, completed)
-      expectedComplete.foreach(op => assertTrue("Should have completed", op.isCompleted))
+      expectedComplete.foreach(op => assertTrue(op.isCompleted, "Should have completed"))
       val expectedNotComplete = completableOps.toSet -- expectedComplete
-      expectedNotComplete.foreach(op => assertFalse("Should not have completed", op.isCompleted))
+      expectedNotComplete.foreach(op => assertFalse(op.isCompleted, "Should not have completed"))
     }
 
     // If locks are free all completable operations should complete
@@ -338,10 +337,10 @@ class DelayedOperationTest {
       try {
         try {
           checkAndComplete(ops, Seq(ops(1)))
-          assertFalse("Should have failed with mismatched locks", mismatchedLocks)
+          assertFalse(mismatchedLocks, "Should have failed with mismatched locks")
         } catch {
           case e: IllegalStateException =>
-            assertTrue("Should not have failed with valid locks", mismatchedLocks)
+            assertTrue(mismatchedLocks, "Should not have failed with valid locks")
         }
       } finally {
         runOnAnotherThread(lock.unlock(), true)
@@ -352,8 +351,8 @@ class DelayedOperationTest {
     // Immediately completable operations should complete without locking
     ops = createCompletableOperations(2)
     ops.foreach { op =>
-      assertTrue("Should have completed", purgatory.tryCompleteElseWatch(op, Seq(key)))
-      assertTrue("Should have completed", op.isCompleted)
+      assertTrue(purgatory.tryCompleteElseWatch(op, Seq(key)), "Should have completed")
+      assertTrue(op.isCompleted, "Should have completed")
     }
   }
 
@@ -364,7 +363,7 @@ class DelayedOperationTest {
     if (shouldComplete)
       future.get()
     else
-      assertFalse("Should not have completed", future.isDone)
+      assertFalse(future.isDone, "Should not have completed")
     future
   }
 

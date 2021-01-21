@@ -24,18 +24,18 @@ import org.apache.kafka.common.protocol.ObjectSerializationCache;
 import org.apache.kafka.common.protocol.types.Schema;
 import org.apache.kafka.common.protocol.types.Struct;
 import org.apache.kafka.common.utils.ByteUtils;
-import org.junit.Test;
+import org.junit.jupiter.api.Test;
 
 import java.nio.ByteBuffer;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.function.Consumer;
 
-import static org.junit.Assert.assertArrayEquals;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNull;
-import static org.junit.Assert.assertThrows;
-import static org.junit.Assert.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class SimpleExampleMessageTest {
 
@@ -231,6 +231,18 @@ public class SimpleExampleMessageTest {
     }
 
     @Test
+    public void testMyUint16() {
+        // Verify that the uint16 field reads as 33000 when not set.
+        testRoundTrip(new SimpleExampleMessageData(),
+            message -> assertEquals(33000, message.myUint16()));
+
+        testRoundTrip(new SimpleExampleMessageData().setMyUint16(123),
+            message -> assertEquals(123, message.myUint16()));
+        testRoundTrip(new SimpleExampleMessageData().setMyUint16(60000),
+            message -> assertEquals(60000, message.myUint16()));
+    }
+
+    @Test
     public void testMyString() {
         // Verify that the tagged field reads as empty when not set.
         testRoundTrip(new SimpleExampleMessageData(),
@@ -242,6 +254,11 @@ public class SimpleExampleMessageTest {
 
     @Test
     public void testMyBytes() {
+        assertThrows(RuntimeException.class,
+            () -> new SimpleExampleMessageData().setMyUint16(-1));
+        assertThrows(RuntimeException.class,
+            () -> new SimpleExampleMessageData().setMyUint16(65536));
+
         // Verify that the tagged field reads as empty when not set.
         testRoundTrip(new SimpleExampleMessageData(),
             message -> assertArrayEquals(new byte[0], message.myBytes()));
@@ -294,12 +311,13 @@ public class SimpleExampleMessageTest {
             message -> assertEquals(myStruct, message.myStruct()), (short) 2);
     }
 
-    @Test(expected = UnsupportedVersionException.class)
+    @Test
     public void testMyStructUnsupportedVersion() {
         SimpleExampleMessageData.MyStruct myStruct =
                 new SimpleExampleMessageData.MyStruct().setStructId(10);
         // Check serialization throws exception for unsupported version
-        testRoundTrip(new SimpleExampleMessageData().setMyStruct(myStruct), (short) 1);
+        assertThrows(UnsupportedVersionException.class,
+            () -> testRoundTrip(new SimpleExampleMessageData().setMyStruct(myStruct), (short) 1));
     }
 
     /**
@@ -401,4 +419,26 @@ public class SimpleExampleMessageTest {
         assertEquals(message.hashCode(), messageFromJson.hashCode());
     }
 
+    @Test
+    public void testToString() {
+        SimpleExampleMessageData message = new SimpleExampleMessageData();
+        message.setMyUint16(65535);
+        message.setTaggedUuid(Uuid.fromString("x7D3Ck_ZRA22-dzIvu_pnQ"));
+        message.setMyFloat64(1.0);
+        assertEquals("SimpleExampleMessageData(processId=AAAAAAAAAAAAAAAAAAAAAA, " +
+                "myTaggedIntArray=[], " +
+                "myNullableString=null, " +
+                "myInt16=123, myFloat64=1.0, " +
+                "myString='', " +
+                "myBytes=[], " +
+                "taggedUuid=x7D3Ck_ZRA22-dzIvu_pnQ, " +
+                "taggedLong=914172222550880202, " +
+                "zeroCopyByteBuffer=java.nio.HeapByteBuffer[pos=0 lim=0 cap=0], " +
+                "nullableZeroCopyByteBuffer=java.nio.HeapByteBuffer[pos=0 lim=0 cap=0], " +
+                "myStruct=MyStruct(structId=0, arrayInStruct=[]), " +
+                "myTaggedStruct=TaggedStruct(structId=''), " +
+                "myCommonStruct=TestCommonStruct(foo=123, bar=123), " +
+                "myOtherCommonStruct=TestCommonStruct(foo=123, bar=123), " +
+                "myUint16=65535)", message.toString());
+    }
 }

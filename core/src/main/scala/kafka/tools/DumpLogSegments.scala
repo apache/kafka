@@ -123,6 +123,11 @@ object DumpLogSegments {
     val fileRecords = FileRecords.open(logFile, false)
     val index = new OffsetIndex(file, baseOffset = startOffset, writable = false)
 
+    if (index.entries == 0) {
+      println(s"$file is empty.")
+      return
+    }
+
     //Check that index passes sanityCheck, this is the check that determines if indexes will be rebuilt on startup or not.
     if (indexSanityOnly) {
       index.sanityCheck()

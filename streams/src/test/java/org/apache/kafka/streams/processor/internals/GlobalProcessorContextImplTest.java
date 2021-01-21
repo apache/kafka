@@ -40,6 +40,7 @@ import static org.easymock.EasyMock.replay;
 import static org.easymock.EasyMock.verify;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.fail;
 
 public class GlobalProcessorContextImplTest {
@@ -110,21 +111,21 @@ public class GlobalProcessorContextImplTest {
         verify(child, recordContext);
     }
 
-    @Test(expected = IllegalStateException.class)
+    @Test
     public void shouldFailToForwardUsingToParameter() {
-        globalContext.forward(null, null, To.all());
+        assertThrows(IllegalStateException.class, () -> globalContext.forward(null, null, To.all()));
     }
 
     @SuppressWarnings("deprecation") // need to test deprecated code until removed
-    @Test(expected = UnsupportedOperationException.class)
+    @Test
     public void shouldNotSupportForwardingViaChildIndex() {
-        globalContext.forward(null, null, 0);
+        assertThrows(UnsupportedOperationException.class, () -> globalContext.forward(null, null, 0));
     }
 
     @SuppressWarnings("deprecation") // need to test deprecated code until removed
-    @Test(expected = UnsupportedOperationException.class)
+    @Test
     public void shouldNotSupportForwardingViaChildName() {
-        globalContext.forward(null, null, "processorName");
+        assertThrows(UnsupportedOperationException.class, () -> globalContext.forward(null, null, "processorName"));
     }
 
     @Test
@@ -133,14 +134,14 @@ public class GlobalProcessorContextImplTest {
     }
 
     @SuppressWarnings("deprecation")
-    @Test(expected = UnsupportedOperationException.class)
+    @Test
     public void shouldNotAllowToSchedulePunctuationsUsingDeprecatedApi() {
-        globalContext.schedule(0L, null, null);
+        assertThrows(UnsupportedOperationException.class, () -> globalContext.schedule(0L, null, null));
     }
 
-    @Test(expected = UnsupportedOperationException.class)
+    @Test
     public void shouldNotAllowToSchedulePunctuations() {
-        globalContext.schedule(null, null, null);
+        assertThrows(UnsupportedOperationException.class, () -> globalContext.schedule(null, null, null));
     }
 
     @Test

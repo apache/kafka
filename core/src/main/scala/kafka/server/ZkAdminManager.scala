@@ -57,7 +57,7 @@ import org.apache.kafka.common.utils.Sanitizer
 import scala.collection.{Map, mutable, _}
 import scala.jdk.CollectionConverters._
 
-class AdminManager(val config: KafkaConfig,
+class ZkAdminManager(val config: KafkaConfig,
                    val metrics: Metrics,
                    val metadataCache: MetadataCache,
                    val zkClient: KafkaZkClient) extends Logging with KafkaMetricsGroup {
@@ -116,7 +116,7 @@ class AdminManager(val config: KafkaConfig,
                                               configs: Properties,
                                               assignments: Map[Int, Seq[Int]]): Unit = {
     metadataAndConfigs.get(topicName).foreach { result =>
-      val logConfig = LogConfig.fromProps(KafkaServer.copyKafkaConfigToLog(config), configs)
+      val logConfig = LogConfig.fromProps(LogConfig.extractLogConfigMap(config), configs)
       val createEntry = createTopicConfigEntry(logConfig, configs, includeSynonyms = false, includeDocumentation = false)(_, _)
       val topicConfigs = logConfig.values.asScala.map { case (k, v) =>
         val entry = createEntry(k, v)
@@ -194,7 +194,7 @@ class AdminManager(val config: KafkaConfig,
           CreatePartitionsMetadata(topic.name, assignments.keySet)
         } else {
           controllerMutationQuota.record(assignments.size)
-          adminZkClient.createTopicWithAssignment(topic.name, configs, assignments, validate = false)
+          adminZkClient.createTopicWithAssignment(topic.name, configs, assignments, validate = false, config.usesTopicId)
           CreatePartitionsMetadata(topic.name, assignments.keySet)
         }
       } catch {
@@ -410,7 +410,7 @@ class AdminManager(val config: KafkaConfig,
             if (metadataCache.contains(topic)) {
               // Consider optimizing this by caching the configs or retrieving them from the `Log` when possible
               val topicProps = adminZkClient.fetchEntityConfig(ConfigType.Topic, topic)
-              val logConfig = LogConfig.fromProps(KafkaServer.copyKafkaConfigToLog(config), topicProps)
+              val logConfig = LogConfig.fromProps(LogConfig.extractLogConfigMap(config), topicProps)
               createResponseConfig(allConfigs(logConfig), createTopicConfigEntry(logConfig, topicProps, includeSynonyms, includeDocumentation))
             } else {
               new DescribeConfigsResponseData.DescribeConfigsResult().setErrorCode(Errors.UNKNOWN_TOPIC_OR_PARTITION.code)
@@ -506,7 +506,7 @@ class AdminManager(val config: KafkaConfig,
     adminZkClient.validateTopicConfig(topic, configProps)
     validateConfigPolicy(resource, configEntriesMap)
     if (!validateOnly) {
-      info(s"Updating topic $topic with new configuration $config")
+      info(s"Updating topic $topic with new configuration : ${toLoggableProps(resource, configProps).mkString(",")}")
       adminZkClient.changeTopicConfig(topic, configProps)
     }
 
@@ -522,6 +522,12 @@ class AdminManager(val config: KafkaConfig,
     if (!validateOnly) {
       if (perBrokerConfig)
         this.config.dynamicConfig.reloadUpdatedFilesWithoutConfigChange(configProps)
+
+      if (perBrokerConfig)
+        info(s"Updating broker ${brokerId.get} with new configuration : ${toLoggableProps(resource, configProps).mkString(",")}")
+      else
+        info(s"Updating brokers with new configuration : ${toLoggableProps(resource, configProps).mkString(",")}")
+
       adminZkClient.changeBrokerConfig(brokerId,
         this.config.dynamicConfig.toPersistentProps(configProps, perBrokerConfig))
     }
@@ -529,13 +535,23 @@ class AdminManager(val config: KafkaConfig,
     resource -> ApiError.NONE
   }
 
+  private def toLoggableProps(resource: ConfigResource, configProps: Properties): Map[String, String] = {
+    configProps.asScala.map {
+      case (key, value) => (key, KafkaConfig.loggableValue(resource.`type`, key, value))
+    }
+  }
+
   private def alterLogLevelConfigs(alterConfigOps: Seq[AlterConfigOp]): Unit = {
     alterConfigOps.foreach { alterConfigOp =>
       val loggerName = alterConfigOp.configEntry().name()
       val logLevel = alterConfigOp.configEntry().value()
       alterConfigOp.opType() match {
-        case OpType.SET => Log4jController.logLevel(loggerName, logLevel)
-        case OpType.DELETE => Log4jController.unsetLogLevel(loggerName)
+        case OpType.SET =>
+          info(s"Updating the log level of $loggerName to $logLevel")
+          Log4jController.logLevel(loggerName, logLevel)
+        case OpType.DELETE =>
+          info(s"Unset the log level of $loggerName")
+          Log4jController.unsetLogLevel(loggerName)
         case _ => throw new IllegalArgumentException(
           s"Log level cannot be changed for OpType: ${alterConfigOp.opType()}")
       }

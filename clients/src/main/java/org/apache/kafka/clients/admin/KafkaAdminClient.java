@@ -112,6 +112,7 @@ import org.apache.kafka.common.message.DeleteRecordsResponseData.DeleteRecordsTo
 import org.apache.kafka.common.message.DeleteTopicsRequestData;
 import org.apache.kafka.common.message.DeleteTopicsRequestData.DeleteTopicState;
 import org.apache.kafka.common.message.DeleteTopicsResponseData.DeletableTopicResult;
+import org.apache.kafka.common.message.DescribeClusterRequestData;
 import org.apache.kafka.common.message.DescribeConfigsRequestData;
 import org.apache.kafka.common.message.DescribeConfigsResponseData;
 import org.apache.kafka.common.message.DescribeGroupsRequestData;
@@ -195,6 +196,8 @@ import org.apache.kafka.common.requests.DescribeAclsRequest;
 import org.apache.kafka.common.requests.DescribeAclsResponse;
 import org.apache.kafka.common.requests.DescribeClientQuotasRequest;
 import org.apache.kafka.common.requests.DescribeClientQuotasResponse;
+import org.apache.kafka.common.requests.DescribeClusterRequest;
+import org.apache.kafka.common.requests.DescribeClusterResponse;
 import org.apache.kafka.common.requests.DescribeConfigsRequest;
 import org.apache.kafka.common.requests.DescribeConfigsResponse;
 import org.apache.kafka.common.requests.DescribeDelegationTokenRequest;
@@ -1932,24 +1935,52 @@ public class KafkaAdminClient extends AdminClient {
         runnable.call(new Call("listNodes", calcDeadlineMs(now, options.timeoutMs()),
             new LeastLoadedNodeProvider()) {
 
+            private boolean useMetadataRequest = false;
+
             @Override
-            MetadataRequest.Builder createRequest(int timeoutMs) {
-                // Since this only requests node information, it's safe to pass true for allowAutoTopicCreation (and it
-                // simplifies communication with older brokers)
-                return new MetadataRequest.Builder(new MetadataRequestData()
-                    .setTopics(Collections.emptyList())
-                    .setAllowAutoTopicCreation(true)
-                    .setIncludeClusterAuthorizedOperations(options.includeAuthorizedOperations()));
+            AbstractRequest.Builder createRequest(int timeoutMs) {
+                if (!useMetadataRequest) {
+                    return new DescribeClusterRequest.Builder(new DescribeClusterRequestData()
+                        .setIncludeClusterAuthorizedOperations(
+                            options.includeAuthorizedOperations()));
+                } else {
+                    // Since this only requests node information, it's safe to pass true for allowAutoTopicCreation (and it
+                    // simplifies communication with older brokers)
+                    return new MetadataRequest.Builder(new MetadataRequestData()
+                        .setTopics(Collections.emptyList())
+                        .setAllowAutoTopicCreation(true)
+                        .setIncludeClusterAuthorizedOperations(
+                            options.includeAuthorizedOperations()));
+                }
             }
 
             @Override
             void handleResponse(AbstractResponse abstractResponse) {
-                MetadataResponse response = (MetadataResponse) abstractResponse;
-                describeClusterFuture.complete(response.brokers());
-                controllerFuture.complete(controller(response));
-                clusterIdFuture.complete(response.clusterId());
-                authorizedOperationsFuture.complete(
+                if (!useMetadataRequest) {
+                    DescribeClusterResponse response = (DescribeClusterResponse) abstractResponse;
+
+                    Errors error = Errors.forCode(response.data().errorCode());
+                    if (error != Errors.NONE) {
+                        ApiError apiError = new ApiError(error, response.data().errorMessage());
+                        handleFailure(apiError.exception());
+                        return;
+                    }
+
+                    Map<Integer, Node> nodes = response.nodes();
+                    describeClusterFuture.complete(nodes.values());
+                    // Controller is null if controller id is equal to NO_CONTROLLER_ID
+                    controllerFuture.complete(nodes.get(response.data().controllerId()));
+                    clusterIdFuture.complete(response.data().clusterId());
+                    authorizedOperationsFuture.complete(
+                        validAclOperations(response.data().clusterAuthorizedOperations()));
+                } else {
+                    MetadataResponse response = (MetadataResponse) abstractResponse;
+                    describeClusterFuture.complete(response.brokers());
+                    controllerFuture.complete(controller(response));
+                    clusterIdFuture.complete(response.clusterId());
+                    authorizedOperationsFuture.complete(
                         validAclOperations(response.clusterAuthorizedOperations()));
+                }
             }
 
             private Node controller(MetadataResponse response) {
@@ -1964,6 +1995,16 @@ public class KafkaAdminClient extends AdminClient {
                 controllerFuture.completeExceptionally(throwable);
                 clusterIdFuture.completeExceptionally(throwable);
                 authorizedOperationsFuture.completeExceptionally(throwable);
+            }
+
+            @Override
+            boolean handleUnsupportedVersionException(final UnsupportedVersionException exception) {
+                if (useMetadataRequest) {
+                    return false;
+                }
+
+                useMetadataRequest = true;
+                return true;
             }
         }, now);
 

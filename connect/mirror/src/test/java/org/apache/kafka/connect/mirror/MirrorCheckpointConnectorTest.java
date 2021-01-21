@@ -17,7 +17,7 @@
 package org.apache.kafka.connect.mirror;
 
 import org.apache.kafka.clients.admin.ConsumerGroupListing;
-import org.junit.Test;
+import org.junit.jupiter.api.Test;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -30,7 +30,7 @@ import java.util.Set;
 import java.util.stream.Collectors;
 
 import static org.apache.kafka.connect.mirror.TestUtils.makeProps;
-import static org.junit.Assert.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.spy;

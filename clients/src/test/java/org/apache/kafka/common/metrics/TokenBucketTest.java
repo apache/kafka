@@ -16,19 +16,19 @@
  */
 package org.apache.kafka.common.metrics;
 
-import static org.junit.Assert.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 
 import java.util.concurrent.TimeUnit;
 import org.apache.kafka.common.metrics.stats.TokenBucket;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
-import org.junit.Before;
-import org.junit.Test;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 
 public class TokenBucketTest {
     Time time;
 
-    @Before
+    @BeforeEach
     public void setup() {
         time = new MockTime(0, System.currentTimeMillis(), System.nanoTime());
     }
