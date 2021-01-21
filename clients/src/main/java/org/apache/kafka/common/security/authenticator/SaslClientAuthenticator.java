@@ -23,7 +23,7 @@ import org.apache.kafka.common.config.SaslConfigs;
 import org.apache.kafka.common.errors.IllegalSaslStateException;
 import org.apache.kafka.common.errors.SaslAuthenticationException;
 import org.apache.kafka.common.errors.UnsupportedSaslMechanismException;
-import org.apache.kafka.common.message.ApiVersionsResponseData.ApiVersionsResponseKey;
+import org.apache.kafka.common.message.ApiVersionsResponseData.ApiVersion;
 import org.apache.kafka.common.message.RequestHeaderData;
 import org.apache.kafka.common.message.SaslAuthenticateRequestData;
 import org.apache.kafka.common.message.SaslHandshakeRequestData;
@@ -390,12 +390,12 @@ public class SaslClientAuthenticator implements Authenticator {
 
     // Visible to override for testing
     protected void setSaslAuthenticateAndHandshakeVersions(ApiVersionsResponse apiVersionsResponse) {
-        ApiVersionsResponseKey authenticateVersion = apiVersionsResponse.apiVersion(ApiKeys.SASL_AUTHENTICATE.id);
+        ApiVersion authenticateVersion = apiVersionsResponse.apiVersion(ApiKeys.SASL_AUTHENTICATE.id);
         if (authenticateVersion != null) {
             this.saslAuthenticateVersion = (short) Math.min(authenticateVersion.maxVersion(),
                     ApiKeys.SASL_AUTHENTICATE.latestVersion());
         }
-        ApiVersionsResponseKey handshakeVersion = apiVersionsResponse.apiVersion(ApiKeys.SASL_HANDSHAKE.id);
+        ApiVersion handshakeVersion = apiVersionsResponse.apiVersion(ApiKeys.SASL_HANDSHAKE.id);
         if (handshakeVersion != null) {
             this.saslHandshakeVersion = (short) Math.min(handshakeVersion.maxVersion(),
                     ApiKeys.SASL_HANDSHAKE.latestVersion());

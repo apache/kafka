@@ -88,6 +88,7 @@ import scala.collection.mutable.ArrayBuffer
 import scala.collection.{Map, Seq, Set, immutable, mutable}
 import scala.util.{Failure, Success, Try}
 import kafka.coordinator.group.GroupOverview
+import org.apache.kafka.common.message.DescribeClusterResponseData
 
 import scala.annotation.nowarn
 
@@ -221,6 +222,7 @@ class KafkaApis(val requestChannel: RequestChannel,
         case ApiKeys.ALTER_ISR => handleAlterIsrRequest(request)
         case ApiKeys.UPDATE_FEATURES => maybeForwardToController(request, handleUpdateFeatures)
         case ApiKeys.ENVELOPE => handleEnvelope(request)
+        case ApiKeys.DESCRIBE_CLUSTER => handleDescribeCluster(request)
 
         // Until we are ready to integrate the Raft layer, these APIs are treated as
         // unexpected and we just close the connection.
@@ -1087,7 +1089,7 @@ class KafkaApis(val requestChannel: RequestChannel,
                           replicationFactor: Int,
                           properties: util.Properties = new util.Properties()): MetadataResponseTopic = {
     try {
-      adminZkClient.createTopic(topic, numPartitions, replicationFactor, properties, RackAwareMode.Safe)
+      adminZkClient.createTopic(topic, numPartitions, replicationFactor, properties, RackAwareMode.Safe, config.usesTopicId)
       info("Auto creation of topic %s with %d partitions and replication factor %d is successful"
         .format(topic, numPartitions, replicationFactor))
       metadataResponseTopic(Errors.LEADER_NOT_AVAILABLE, topic, isInternal(topic), util.Collections.emptyList())
@@ -1763,7 +1765,7 @@ class KafkaApis(val requestChannel: RequestChannel,
           }
         if (request.context.fromPrivilegedListener) {
           apiVersionsResponse.data.apiKeys().add(
-            new ApiVersionsResponseData.ApiVersionsResponseKey()
+            new ApiVersionsResponseData.ApiVersion()
               .setApiKey(ApiKeys.ENVELOPE.id)
               .setMinVersion(ApiKeys.ENVELOPE.oldestVersion())
               .setMaxVersion(ApiKeys.ENVELOPE.latestVersion())
@@ -3208,6 +3210,40 @@ class KafkaApis(val requestChannel: RequestChannel,
     } else {
       controller.updateFeatures(updateFeaturesRequest, sendResponseCallback)
     }
+  }
+
+  def handleDescribeCluster(request: RequestChannel.Request): Unit = {
+    val describeClusterRequest = request.body[DescribeClusterRequest]
+
+    var clusterAuthorizedOperations = Int.MinValue
+    // get cluster authorized operations
+    if (describeClusterRequest.data.includeClusterAuthorizedOperations) {
+      if (authHelper.authorize(request.context, DESCRIBE, CLUSTER, CLUSTER_NAME))
+        clusterAuthorizedOperations = authHelper.authorizedOperations(request, Resource.CLUSTER)
+      else
+        clusterAuthorizedOperations = 0
+    }
+
+    val brokers = metadataCache.getAliveBrokers
+    val controllerId = metadataCache.getControllerId.getOrElse(MetadataResponse.NO_CONTROLLER_ID)
+
+    requestHelper.sendResponseMaybeThrottle(request, requestThrottleMs => {
+      val data = new DescribeClusterResponseData()
+        .setThrottleTimeMs(requestThrottleMs)
+        .setClusterId(clusterId)
+        .setControllerId(controllerId)
+        .setClusterAuthorizedOperations(clusterAuthorizedOperations);
+
+      brokers.flatMap(_.getNode(request.context.listenerName)).foreach { broker =>
+        data.brokers.add(new DescribeClusterResponseData.DescribeClusterBroker()
+          .setBrokerId(broker.id)
+          .setHost(broker.host)
+          .setPort(broker.port)
+          .setRack(broker.rack))
+      }
+
+      new DescribeClusterResponse(data)
+    })
   }
 
   def handleEnvelope(request: RequestChannel.Request): Unit = {

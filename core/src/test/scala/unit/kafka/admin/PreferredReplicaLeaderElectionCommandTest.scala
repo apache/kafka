@@ -70,7 +70,7 @@ class PreferredReplicaLeaderElectionCommandTest extends ZooKeeperTestHarness wit
     servers = brokerConfigs.map(b => TestUtils.createServer(KafkaConfig.fromProps(b)))
     // create the topic
     partitionsAndAssignments.foreach { case (tp, assignment) =>
-      zkClient.createTopicAssignment(tp.topic, Uuid.randomUuid(),
+      zkClient.createTopicAssignment(tp.topic, Some(Uuid.randomUuid()),
       Map(tp -> assignment))
     }
     // wait until replica log is created on every broker

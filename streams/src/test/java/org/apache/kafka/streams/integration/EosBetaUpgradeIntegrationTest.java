@@ -84,7 +84,7 @@ import static org.apache.kafka.common.utils.Utils.mkSet;
 import static org.apache.kafka.test.TestUtils.waitForCondition;
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.MatcherAssert.assertThat;
-import static org.junit.Assert.fail;
+import static org.junit.Assert.assertFalse;
 
 @RunWith(Parameterized.class)
 @Category({IntegrationTest.class})
@@ -147,7 +147,12 @@ public class EosBetaUpgradeIntegrationTest {
     private final static String CONSUMER_GROUP_ID = "readCommitted";
     private final static String MULTI_PARTITION_INPUT_TOPIC = "multiPartitionInputTopic";
     private final static String MULTI_PARTITION_OUTPUT_TOPIC = "multiPartitionOutputTopic";
+    private final static String APP_DIR_1 = "appDir1";
+    private final static String APP_DIR_2 = "appDir2";
+    private final static String UNEXPECTED_EXCEPTION_MSG = "Fail the test since we got an unexpected exception, or " +
+        "there are too many exceptions thrown, please check standard error log for more info.";
     private final String storeName = "store";
+
 
     private final StableAssignmentListener assignmentListener = new StableAssignmentListener();
 
@@ -159,9 +164,15 @@ public class EosBetaUpgradeIntegrationTest {
     private final AtomicInteger commitCounterClient2 = new AtomicInteger(-1);
     private final AtomicInteger commitRequested = new AtomicInteger(0);
 
-    private Throwable uncaughtException;
-
     private int testNumber = 0;
+    private Map<String, Integer> exceptionCounts = new HashMap<String, Integer>() {
+        {
+            put(APP_DIR_1, 0);
+            put(APP_DIR_2, 0);
+        }
+    };
+
+    private volatile boolean hasUnexpectedError = false;
 
     @Before
     public void createTopics() throws Exception {
@@ -247,7 +258,7 @@ public class EosBetaUpgradeIntegrationTest {
 
         try {
             // phase 1: start both clients
-            streams1Alpha = getKafkaStreams("appDir1", StreamsConfig.EXACTLY_ONCE);
+            streams1Alpha = getKafkaStreams(APP_DIR_1, StreamsConfig.EXACTLY_ONCE);
             streams1Alpha.setStateListener(
                 (newState, oldState) -> stateTransitions1.add(KeyValue.pair(oldState, newState))
             );
@@ -258,7 +269,7 @@ public class EosBetaUpgradeIntegrationTest {
             assignmentListener.waitForNextStableAssignment(MAX_WAIT_TIME_MS);
             waitForRunning(stateTransitions1);
 
-            streams2Alpha = getKafkaStreams("appDir2", StreamsConfig.EXACTLY_ONCE);
+            streams2Alpha = getKafkaStreams(APP_DIR_2, StreamsConfig.EXACTLY_ONCE);
             streams2Alpha.setStateListener(
                 (newState, oldState) -> stateTransitions2.add(KeyValue.pair(oldState, newState))
             );
@@ -401,6 +412,7 @@ public class EosBetaUpgradeIntegrationTest {
                 stateTransitions1.clear();
                 streams1Alpha.close();
                 waitForStateTransition(stateTransitions1, CLOSE_CRASHED);
+                assertFalse(UNEXPECTED_EXCEPTION_MSG, hasUnexpectedError);
             }
 
             // phase 5: (restart first client)
@@ -423,7 +435,7 @@ public class EosBetaUpgradeIntegrationTest {
             commitRequested.set(0);
             stateTransitions1.clear();
             stateTransitions2.clear();
-            streams1Beta = getKafkaStreams("appDir1", StreamsConfig.EXACTLY_ONCE_BETA);
+            streams1Beta = getKafkaStreams(APP_DIR_1, StreamsConfig.EXACTLY_ONCE_BETA);
             streams1Beta.setStateListener((newState, oldState) -> stateTransitions1.add(KeyValue.pair(oldState, newState)));
             assignmentListener.prepareForRebalance();
             streams1Beta.start();
@@ -539,6 +551,7 @@ public class EosBetaUpgradeIntegrationTest {
                 stateTransitions2.clear();
                 streams2Alpha.close();
                 waitForStateTransition(stateTransitions2, CLOSE_CRASHED);
+                assertFalse(UNEXPECTED_EXCEPTION_MSG, hasUnexpectedError);
 
                 final List<KeyValue<Long, Long>> expectedCommittedResultAfterFailure =
                     computeExpectedResult(uncommittedInputDataAfterFirstUpgrade, committedState);
@@ -567,7 +580,7 @@ public class EosBetaUpgradeIntegrationTest {
                 commitCounterClient2.set(-1);
                 stateTransitions1.clear();
                 stateTransitions2.clear();
-                streams2AlphaTwo = getKafkaStreams("appDir2", StreamsConfig.EXACTLY_ONCE);
+                streams2AlphaTwo = getKafkaStreams(APP_DIR_2, StreamsConfig.EXACTLY_ONCE);
                 streams2AlphaTwo.setStateListener(
                     (newState, oldState) -> stateTransitions2.add(KeyValue.pair(oldState, newState))
                 );
@@ -629,6 +642,7 @@ public class EosBetaUpgradeIntegrationTest {
                 stateTransitions1.clear();
                 streams1Beta.close();
                 waitForStateTransition(stateTransitions1, CLOSE_CRASHED);
+                assertFalse(UNEXPECTED_EXCEPTION_MSG, hasUnexpectedError);
 
                 final List<KeyValue<Long, Long>> expectedCommittedResultAfterFailure =
                     computeExpectedResult(uncommittedInputDataBetweenUpgrade, committedState);
@@ -638,7 +652,7 @@ public class EosBetaUpgradeIntegrationTest {
                 // 7c. restart the first client in eos-beta mode and wait until rebalance stabilizes
                 stateTransitions1.clear();
                 stateTransitions2.clear();
-                streams1BetaTwo = getKafkaStreams("appDir1", StreamsConfig.EXACTLY_ONCE_BETA);
+                streams1BetaTwo = getKafkaStreams(APP_DIR_1, StreamsConfig.EXACTLY_ONCE_BETA);
                 streams1BetaTwo.setStateListener((newState, oldState) -> stateTransitions1.add(KeyValue.pair(oldState, newState)));
                 assignmentListener.prepareForRebalance();
                 streams1BetaTwo.start();
@@ -750,6 +764,7 @@ public class EosBetaUpgradeIntegrationTest {
                 stateTransitions2.clear();
                 streams2AlphaTwo.close();
                 waitForStateTransition(stateTransitions2, CLOSE_CRASHED);
+                assertFalse(UNEXPECTED_EXCEPTION_MSG, hasUnexpectedError);
             }
 
             // phase 10: (restart second client)
@@ -771,7 +786,7 @@ public class EosBetaUpgradeIntegrationTest {
             commitRequested.set(0);
             stateTransitions1.clear();
             stateTransitions2.clear();
-            streams2Beta = getKafkaStreams("appDir1", StreamsConfig.EXACTLY_ONCE_BETA);
+            streams2Beta = getKafkaStreams(APP_DIR_1, StreamsConfig.EXACTLY_ONCE_BETA);
             streams2Beta.setStateListener(
                 (newState, oldState) -> stateTransitions2.add(KeyValue.pair(oldState, newState))
             );
@@ -881,7 +896,7 @@ public class EosBetaUpgradeIntegrationTest {
                         this.context = context;
                         state = (KeyValueStore<Long, Long>) context.getStateStore(storeName);
                         final String clientId = context.appConfigs().get(StreamsConfig.CLIENT_ID_CONFIG).toString();
-                        if ("appDir1".equals(clientId)) {
+                        if (APP_DIR_1.equals(clientId)) {
                             crash = errorInjectedClient1;
                             sharedCommit = commitCounterClient1;
                         } else {
@@ -950,11 +965,22 @@ public class EosBetaUpgradeIntegrationTest {
 
         final KafkaStreams streams = new KafkaStreams(builder.build(), config, new TestKafkaClientSupplier());
         streams.setUncaughtExceptionHandler((t, e) -> {
-            if (uncaughtException != null) {
+            if (!injectError) {
+                // we don't expect any exception thrown in stop case
                 e.printStackTrace(System.err);
-                fail("Should only get one uncaught exception from Streams.");
+                hasUnexpectedError = true;
+            } else {
+                int exceptionCount = (int) exceptionCounts.get(appDir);
+                // should only have our injected exception or commit exception, and 2 exceptions for each stream
+                if (++exceptionCount > 2 || !(e instanceof RuntimeException) ||
+                    !(e.getMessage().contains("test exception"))) {
+                    // The exception won't cause the test fail since we actually "expected" exception thrown and failed the stream.
+                    // So, log to stderr for debugging when the exception is not what we expected, and fail in the main thread
+                    e.printStackTrace(System.err);
+                    hasUnexpectedError = true;
+                }
+                exceptionCounts.put(appDir, exceptionCount);
             }
-            uncaughtException = e;
         });
 
         return streams;
@@ -975,7 +1001,7 @@ public class EosBetaUpgradeIntegrationTest {
         waitForCondition(
             () -> observed.equals(expected),
             MAX_WAIT_TIME_MS,
-            () -> "Client did not startup on time. Observers transitions: " + observed
+            () -> "Client did not have the expected state transition on time. Observers transitions: " + observed
         );
     }
 
@@ -1155,7 +1181,7 @@ public class EosBetaUpgradeIntegrationTest {
         public ErrorInjector(final Map<String, Object> configs) {
             super(configs, new ByteArraySerializer(), new ByteArraySerializer());
             final String clientId = configs.get(ProducerConfig.CLIENT_ID_CONFIG).toString();
-            if (clientId.contains("appDir1")) {
+            if (clientId.contains(APP_DIR_1)) {
                 crash = commitErrorInjectedClient1;
             } else {
                 crash = commitErrorInjectedClient2;
@@ -1168,7 +1194,7 @@ public class EosBetaUpgradeIntegrationTest {
             if (!crash.compareAndSet(true, false)) {
                 super.commitTransaction();
             } else {
-                throw new RuntimeException("Injected producer commit exception.");
+                throw new RuntimeException("Injected producer commit test exception.");
             }
         }
     }

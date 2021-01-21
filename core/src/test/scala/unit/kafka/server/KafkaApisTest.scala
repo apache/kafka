@@ -616,7 +616,7 @@ class KafkaApisTest {
 
     createKafkaApis(authorizer = Some(authorizer), enableForwarding = true).handleApiVersionsRequest(request)
 
-    val expectedVersions = new ApiVersionsResponseData.ApiVersionsResponseKey()
+    val expectedVersions = new ApiVersionsResponseData.ApiVersion()
       .setApiKey(ApiKeys.ALTER_CONFIGS.id)
       .setMaxVersion(permittedVersion)
       .setMinVersion(permittedVersion)
@@ -655,10 +655,7 @@ class KafkaApisTest {
       .asInstanceOf[ApiVersionsResponse]
     assertEquals(Errors.NONE, Errors.forCode(response.data().errorCode()))
 
-    val expectedVersions = new ApiVersionsResponseData.ApiVersionsResponseKey()
-      .setApiKey(ApiKeys.ALTER_CONFIGS.id)
-      .setMaxVersion(ApiKeys.ALTER_CONFIGS.latestVersion())
-      .setMinVersion(ApiKeys.ALTER_CONFIGS.oldestVersion())
+    val expectedVersions = ApiVersionsResponse.toApiVersion(ApiKeys.ALTER_CONFIGS)
 
     val alterConfigVersions = response.data().apiKeys().find(ApiKeys.ALTER_CONFIGS.id)
     assertEquals(expectedVersions, alterConfigVersions)
@@ -2766,6 +2763,53 @@ class KafkaApisTest {
     val response = readResponse(listGroupsRequest, capturedResponse).asInstanceOf[ListGroupsResponse]
     assertEquals(Errors.NONE.code, response.data.errorCode)
     response
+  }
+
+  @Test
+  def testDescribeClusterRequest(): Unit = {
+    val plaintextListener = ListenerName.forSecurityProtocol(SecurityProtocol.PLAINTEXT)
+    val brokers = Seq(
+      new UpdateMetadataBroker()
+        .setId(0)
+        .setRack("rack")
+        .setEndpoints(Seq(
+          new UpdateMetadataEndpoint()
+            .setHost("broker0")
+            .setPort(9092)
+            .setSecurityProtocol(SecurityProtocol.PLAINTEXT.id)
+            .setListener(plaintextListener.value)
+        ).asJava),
+      new UpdateMetadataBroker()
+        .setId(1)
+        .setRack("rack")
+        .setEndpoints(Seq(
+          new UpdateMetadataEndpoint()
+            .setHost("broker1")
+            .setPort(9092)
+            .setSecurityProtocol(SecurityProtocol.PLAINTEXT.id)
+            .setListener(plaintextListener.value)).asJava)
+    )
+    val updateMetadataRequest = new UpdateMetadataRequest.Builder(ApiKeys.UPDATE_METADATA.latestVersion, 0,
+      0, 0, Seq.empty[UpdateMetadataPartitionState].asJava, brokers.asJava, Collections.emptyMap()).build()
+    metadataCache.updateMetadata(correlationId = 0, updateMetadataRequest)
+
+    val capturedResponse = expectNoThrottling()
+    EasyMock.replay(clientRequestQuotaManager, requestChannel)
+
+    val describeClusterRequest = new DescribeClusterRequest.Builder(new DescribeClusterRequestData()
+      .setIncludeClusterAuthorizedOperations(true)).build()
+
+    val request = buildRequest(describeClusterRequest, plaintextListener)
+    createKafkaApis().handleDescribeCluster(request)
+
+    val describeClusterResponse = readResponse(describeClusterRequest, capturedResponse)
+      .asInstanceOf[DescribeClusterResponse]
+
+    assertEquals(metadataCache.getControllerId.get, describeClusterResponse.data.controllerId)
+    assertEquals(clusterId, describeClusterResponse.data.clusterId)
+    assertEquals(8096, describeClusterResponse.data.clusterAuthorizedOperations)
+    assertEquals(metadataCache.getAliveBrokers.map(_.node(plaintextListener)).toSet,
+      describeClusterResponse.nodes.asScala.values.toSet)
   }
 
   /**
