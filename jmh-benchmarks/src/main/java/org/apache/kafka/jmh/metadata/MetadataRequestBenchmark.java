@@ -22,7 +22,6 @@ import kafka.coordinator.group.GroupCoordinator;
 import kafka.coordinator.transaction.TransactionCoordinator;
 import kafka.network.RequestChannel;
 import kafka.network.RequestConvertToJson;
-import kafka.server.ZkAdminManager;
 import kafka.server.BrokerFeatures;
 import kafka.server.BrokerTopicStats;
 import kafka.server.ClientQuotaManager;
@@ -30,7 +29,6 @@ import kafka.server.ClientRequestQuotaManager;
 import kafka.server.ControllerMutationQuotaManager;
 import kafka.server.FetchManager;
 import kafka.server.FinalizedFeatureCache;
-import kafka.server.ForwardingManager;
 import kafka.server.KafkaApis;
 import kafka.server.KafkaConfig;
 import kafka.server.KafkaConfig$;
@@ -38,6 +36,7 @@ import kafka.server.MetadataCache;
 import kafka.server.QuotaFactory;
 import kafka.server.ReplicaManager;
 import kafka.server.ReplicationQuotaManager;
+import kafka.server.ZkAdminManager;
 import kafka.zk.KafkaZkClient;
 import org.apache.kafka.common.memory.MemoryPool;
 import org.apache.kafka.common.message.UpdateMetadataRequestData.UpdateMetadataBroker;
@@ -99,7 +98,6 @@ public class MetadataRequestBenchmark {
     private ZkAdminManager adminManager = Mockito.mock(ZkAdminManager.class);
     private TransactionCoordinator transactionCoordinator = Mockito.mock(TransactionCoordinator.class);
     private KafkaController kafkaController = Mockito.mock(KafkaController.class);
-    private ForwardingManager forwardingManager = Mockito.mock(ForwardingManager.class);
     private KafkaZkClient kafkaZkClient = Mockito.mock(KafkaZkClient.class);
     private Metrics metrics = new Metrics();
     private int brokerId = 1;
@@ -176,7 +174,7 @@ public class MetadataRequestBenchmark {
             groupCoordinator,
             transactionCoordinator,
             kafkaController,
-            forwardingManager,
+            Option.empty(),
             kafkaZkClient,
             brokerId,
             new KafkaConfig(kafkaProps),

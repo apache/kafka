@@ -87,6 +87,7 @@ class KafkaServer(
   val config: KafkaConfig,
   time: Time = Time.SYSTEM,
   threadNamePrefix: Option[String] = None,
+  enableForwarding: Boolean = false
 ) extends Server with Logging with KafkaMetricsGroup {
 
   private val startupComplete = new AtomicBoolean(false)
@@ -129,7 +130,7 @@ class KafkaServer(
 
   var kafkaController: KafkaController = null
 
-  var forwardingManager: ForwardingManager = null
+  var forwardingManager: Option[ForwardingManager] = None
 
   var alterIsrManager: AlterIsrManager = null
 
@@ -254,10 +255,10 @@ class KafkaServer(
         // Delay starting processors until the end of the initialization sequence to ensure
         // that credentials have been loaded before processing authentications.
         //
-        // Note that we allow the use of disabled APIs when experimental support for
-        // the internal metadata quorum has been enabled
+        // Note that we allow the use of KIP-500 controller APIs when forwarding is enabled
+        // so that the Envelope request is exposed. This is only used in testing currently.
         socketServer = new SocketServer(config, metrics, time, credentialProvider,
-          allowDisabledApis = config.metadataQuorumEnabled)
+          allowControllerOnlyApis = enableForwarding)
         socketServer.startup(startProcessingRequests = false)
 
         /* start replica manager */
@@ -293,15 +294,15 @@ class KafkaServer(
         kafkaController = new KafkaController(config, zkClient, time, metrics, brokerInfo, brokerEpoch, tokenManager, brokerFeatures, featureCache, threadNamePrefix)
         kafkaController.startup()
 
-        if (config.metadataQuorumEnabled) {
-          forwardingManager = ForwardingManager(
+        if (enableForwarding) {
+          this.forwardingManager = Some(ForwardingManager(
             config,
             metadataCache,
             time,
             metrics,
             threadNamePrefix
-          )
-          forwardingManager.start()
+          ))
+          forwardingManager.foreach(_.start())
         }
 
         adminManager = new ZkAdminManager(config, metrics, metadataCache, zkClient)
@@ -685,7 +686,7 @@ class KafkaServer(
           CoreUtils.swallow(alterIsrManager.shutdown(), this)
 
         if (forwardingManager != null)
-          CoreUtils.swallow(forwardingManager.shutdown(), this)
+          CoreUtils.swallow(forwardingManager.foreach(_.shutdown()), this)
 
         if (logManager != null)
           CoreUtils.swallow(logManager.shutdown(), this)

@@ -38,7 +38,7 @@ public class NodeApiVersionsTest {
         NodeApiVersions versions = new NodeApiVersions(new ApiVersionCollection());
         StringBuilder bld = new StringBuilder();
         String prefix = "(";
-        for (ApiKeys apiKey : ApiKeys.enabledApis()) {
+        for (ApiKeys apiKey : ApiKeys.brokerApis()) {
             bld.append(prefix).append(apiKey.name).
                     append("(").append(apiKey.id).append("): UNSUPPORTED");
             prefix = ", ";
@@ -143,10 +143,10 @@ public class NodeApiVersionsTest {
                 .setMaxVersion((short) 1));
         NodeApiVersions versions = new NodeApiVersions(versionList);
         for (ApiKeys apiKey: ApiKeys.values()) {
-            if (apiKey.isEnabled) {
-                assertEquals(apiKey.latestVersion(), versions.latestUsableVersion(apiKey));
-            } else {
+            if (apiKey.isControllerOnlyApi) {
                 assertNull(versions.apiVersion(apiKey));
+            } else {
+                assertEquals(apiKey.latestVersion(), versions.latestUsableVersion(apiKey));
             }
         }
     }

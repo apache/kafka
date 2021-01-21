@@ -363,7 +363,6 @@ object KafkaConfig {
   val RequestTimeoutMsProp = CommonClientConfigs.REQUEST_TIMEOUT_MS_CONFIG
   val ConnectionSetupTimeoutMsProp = CommonClientConfigs.SOCKET_CONNECTION_SETUP_TIMEOUT_MS_CONFIG
   val ConnectionSetupTimeoutMaxMsProp = CommonClientConfigs.SOCKET_CONNECTION_SETUP_TIMEOUT_MAX_MS_CONFIG
-  val EnableMetadataQuorumProp = "enable.metadata.quorum"
   val ProcessRolesProp = "process.roles"
 
   /************* Authorizer Configuration ***********/
@@ -648,6 +647,9 @@ object KafkaConfig {
   val RequestTimeoutMsDoc = CommonClientConfigs.REQUEST_TIMEOUT_MS_DOC
   val ConnectionSetupTimeoutMsDoc = CommonClientConfigs.SOCKET_CONNECTION_SETUP_TIMEOUT_MS_DOC
   val ConnectionSetupTimeoutMaxMsDoc = CommonClientConfigs.SOCKET_CONNECTION_SETUP_TIMEOUT_MAX_MS_DOC
+  val ProcessRolesDoc = "The roles that this process plays: 'broker', 'controller', or 'broker,controller' if it is both. " +
+    "This configuration is only for clusters upgraded for KIP-500, which replaces the dependence on Zookeeper with " +
+    "a self-managed Raft quorum. Leave this config undefined or empty for Zookeeper clusters."
   /************* Authorizer Configuration ***********/
   val AuthorizerClassNameDoc = s"The fully qualified name of a class that implements s${classOf[Authorizer].getName}" +
   " interface, which is used by the broker for authorization. This config also supports authorizers that implement the deprecated" +
@@ -997,9 +999,6 @@ object KafkaConfig {
   val PasswordEncoderKeyLengthDoc =  "The key length used for encoding dynamically configured passwords."
   val PasswordEncoderIterationsDoc =  "The iteration count used for encoding dynamically configured passwords."
 
-  /** ********* Experimental metadata quorum configuration ***********/
-  val ProcessRolesDoc = "This configuration determines what roles this process should play: broker, controller, or both"
-
   private val configDef = {
     import ConfigDef.Importance._
     import ConfigDef.Range._
@@ -1009,7 +1008,7 @@ object KafkaConfig {
     new ConfigDef()
 
       /** ********* Zookeeper Configuration ***********/
-      .define(ZkConnectProp, STRING, HIGH, ZkConnectDoc)
+      .define(ZkConnectProp, STRING, null, HIGH, ZkConnectDoc)
       .define(ZkSessionTimeoutMsProp, INT, Defaults.ZkSessionTimeoutMs, HIGH, ZkSessionTimeoutMsDoc)
       .define(ZkConnectionTimeoutMsProp, INT, null, HIGH, ZkConnectionTimeoutMsDoc)
       .define(ZkSyncTimeMsProp, INT, Defaults.ZkSyncTimeMs, LOW, ZkSyncTimeMsDoc)
@@ -1044,9 +1043,6 @@ object KafkaConfig {
       .define(RequestTimeoutMsProp, INT, Defaults.RequestTimeoutMs, HIGH, RequestTimeoutMsDoc)
       .define(ConnectionSetupTimeoutMsProp, LONG, Defaults.ConnectionSetupTimeoutMs, MEDIUM, ConnectionSetupTimeoutMsDoc)
       .define(ConnectionSetupTimeoutMaxMsProp, LONG, Defaults.ConnectionSetupTimeoutMaxMs, MEDIUM, ConnectionSetupTimeoutMaxMsDoc)
-
-      // Experimental flag to turn on APIs required for the internal metadata quorum (KIP-500)
-      .defineInternal(EnableMetadataQuorumProp, BOOLEAN, false, LOW)
       .defineInternal(ProcessRolesProp, LIST, Collections.emptyList(), ValidList.in("broker", "controller"), HIGH, ProcessRolesDoc)
 
       /************* Authorizer Configuration ***********/
@@ -1480,6 +1476,8 @@ class KafkaConfig(val props: java.util.Map[_, _], doLog: Boolean, dynamicConfigO
   var brokerId: Int = getInt(KafkaConfig.BrokerIdProp)
   val processRoles = parseProcessRoles()
 
+  def requiresZookeeper: Boolean = processRoles.isEmpty
+
   private def parseProcessRoles(): Set[ProcessRole] = {
     val roles = getList(KafkaConfig.ProcessRolesProp).asScala.map {
       case "broker" => BrokerRole
@@ -1618,9 +1616,6 @@ class KafkaConfig(val props: java.util.Map[_, _], doLog: Boolean, dynamicConfigO
 
   /** ********* Feature configuration ***********/
   def isFeatureVersioningSupported = interBrokerProtocolVersion >= KAFKA_2_7_IV0
-
-  /** ********* Experimental metadata quorum configuration ***********/
-  def metadataQuorumEnabled = getBoolean(KafkaConfig.EnableMetadataQuorumProp)
 
   /** ********* Group coordinator configuration ***********/
   val groupMinSessionTimeoutMs = getInt(KafkaConfig.GroupMinSessionTimeoutMsProp)
@@ -1910,5 +1905,9 @@ class KafkaConfig(val props: java.util.Map[_, _], doLog: Boolean, dynamicConfigO
         s"${KafkaConfig.FailedAuthenticationDelayMsProp}=$failedAuthenticationDelayMs should always be less than" +
         s" ${KafkaConfig.ConnectionsMaxIdleMsProp}=$connectionsMaxIdleMs to prevent failed" +
         s" authentication responses from timing out")
+
+    if (requiresZookeeper && zkConnect == null) {
+      throw new ConfigException(s"Missing required configuration '${KafkaConfig.ZkConnectProp}' which has no default value.")
+    }
   }
 }

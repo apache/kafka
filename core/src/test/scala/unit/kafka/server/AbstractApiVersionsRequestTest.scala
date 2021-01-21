@@ -47,7 +47,7 @@ abstract class AbstractApiVersionsRequestTest extends BaseRequestTest {
   }
 
   def validateApiVersionsResponse(apiVersionsResponse: ApiVersionsResponse, listenerName: ListenerName = interBrokerListenerName): Unit = {
-    val expectedApis = ApiKeys.enabledApis()
+    val expectedApis = ApiKeys.brokerApis()
     if (listenerName == controlPlaneListenerName) {
       expectedApis.add(ApiKeys.ENVELOPE)
     }

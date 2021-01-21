@@ -65,11 +65,12 @@ object Kafka extends Logging {
 
   private def buildServer(props: Properties): Server = {
     val config = KafkaConfig.fromProps(props, false)
-    if (config.processRoles.isEmpty) {
+    if (config.requiresZookeeper) {
       new KafkaServer(
         config,
         Time.SYSTEM,
-        threadNamePrefix = None
+        threadNamePrefix = None,
+        enableForwarding = false
       )
     } else {
       new KafkaRaftServer(

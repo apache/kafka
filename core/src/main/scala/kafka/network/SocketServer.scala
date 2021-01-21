@@ -77,7 +77,7 @@ class SocketServer(val config: KafkaConfig,
                    val metrics: Metrics,
                    val time: Time,
                    val credentialProvider: CredentialProvider,
-                   val allowDisabledApis: Boolean = false)
+                   val allowControllerOnlyApis: Boolean = false)
   extends Logging with KafkaMetricsGroup with BrokerReconfigurable {
 
   private val maxQueuedRequests = config.queuedMaxRequests
@@ -93,12 +93,12 @@ class SocketServer(val config: KafkaConfig,
   // data-plane
   private val dataPlaneProcessors = new ConcurrentHashMap[Int, Processor]()
   private[network] val dataPlaneAcceptors = new ConcurrentHashMap[EndPoint, Acceptor]()
-  val dataPlaneRequestChannel = new RequestChannel(maxQueuedRequests, DataPlaneMetricPrefix, time, allowDisabledApis)
+  val dataPlaneRequestChannel = new RequestChannel(maxQueuedRequests, DataPlaneMetricPrefix, time, allowControllerOnlyApis)
   // control-plane
   private var controlPlaneProcessorOpt : Option[Processor] = None
   private[network] var controlPlaneAcceptorOpt : Option[Acceptor] = None
   val controlPlaneRequestChannelOpt: Option[RequestChannel] = config.controlPlaneListenerName.map(_ =>
-    new RequestChannel(20, ControlPlaneMetricPrefix, time, allowDisabledApis))
+    new RequestChannel(20, ControlPlaneMetricPrefix, time, allowControllerOnlyApis))
 
   private var nextProcessorId = 0
   val connectionQuotas = new ConnectionQuotas(config, time, metrics)
@@ -429,7 +429,7 @@ class SocketServer(val config: KafkaConfig,
       memoryPool,
       logContext,
       isPrivilegedListener = isPrivilegedListener,
-      allowDisabledApis = allowDisabledApis
+      allowControllerOnlyApis = allowControllerOnlyApis
     )
   }
 
@@ -790,7 +790,7 @@ private[kafka] class Processor(val id: Int,
                                logContext: LogContext,
                                connectionQueueSize: Int = ConnectionQueueSize,
                                isPrivilegedListener: Boolean = false,
-                               allowDisabledApis: Boolean = false) extends AbstractServerThread(connectionQuotas) with KafkaMetricsGroup {
+                               allowControllerOnlyApis: Boolean = false) extends AbstractServerThread(connectionQuotas) with KafkaMetricsGroup {
 
   private object ConnectionId {
     def fromString(s: String): Option[ConnectionId] = s.split("-") match {
@@ -981,10 +981,10 @@ private[kafka] class Processor(val id: Int,
 
   protected def parseRequestHeader(buffer: ByteBuffer): RequestHeader = {
     val header = RequestHeader.parse(buffer)
-    if (header.apiKey.isEnabled || allowDisabledApis) {
+    if (!header.apiKey.isControllerOnlyApi || allowControllerOnlyApis) {
       header
     } else {
-      throw new InvalidRequestException("Received request for disabled api key " + header.apiKey)
+      throw new InvalidRequestException("Received request for KIP-500 controller-only api key " + header.apiKey)
     }
   }
 
