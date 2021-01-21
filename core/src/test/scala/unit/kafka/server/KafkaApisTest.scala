@@ -591,16 +591,15 @@ class KafkaApisTest {
     EasyMock.expect(forwardingManager.controllerApiVersions()).andReturn(
       Some(NodeApiVersions.create(ApiKeys.ALTER_CONFIGS.id, permittedVersion, permittedVersion)))
 
-    val capturedResponse = expectNoThrottling()
 
     val apiVersionsRequest = new ApiVersionsRequest.Builder()
       .build(requestHeader.apiVersion)
     val request = buildRequest(apiVersionsRequest,
       fromPrivilegedListener = true, requestHeader = Option(requestHeader))
+    val capturedResponse = expectNoThrottling(request)
 
     EasyMock.replay(replicaManager, clientRequestQuotaManager, forwardingManager,
       requestChannel, authorizer, adminManager, controller)
-
     createKafkaApis(authorizer = Some(authorizer), enableForwarding = true).handleApiVersionsRequest(request)
 
     val expectedVersions = new ApiVersionsResponseData.ApiVersion()
@@ -608,8 +607,7 @@ class KafkaApisTest {
       .setMaxVersion(permittedVersion)
       .setMinVersion(permittedVersion)
 
-    val response = readResponse(apiVersionsRequest, capturedResponse)
-      .asInstanceOf[ApiVersionsResponse]
+    val response = capturedResponse.getValue.asInstanceOf[ApiVersionsResponse]
     assertEquals(Errors.NONE, Errors.forCode(response.data().errorCode()))
 
     val alterConfigVersions = response.data().apiKeys().find(ApiKeys.ALTER_CONFIGS.id)
@@ -626,20 +624,17 @@ class KafkaApisTest {
 
     EasyMock.expect(forwardingManager.controllerApiVersions()).andReturn(None)
 
-    val capturedResponse = expectNoThrottling()
-
     val apiVersionsRequest = new ApiVersionsRequest.Builder()
       .build(requestHeader.apiVersion)
     val request = buildRequest(apiVersionsRequest,
       fromPrivilegedListener = true, requestHeader = Option(requestHeader))
+    val capturedResponse = expectNoThrottling(request)
 
     EasyMock.replay(replicaManager, clientRequestQuotaManager, forwardingManager,
       requestChannel, authorizer, adminManager, controller)
-
     createKafkaApis(authorizer = Some(authorizer), enableForwarding = true).handleApiVersionsRequest(request)
 
-    val response = readResponse(apiVersionsRequest, capturedResponse)
-      .asInstanceOf[ApiVersionsResponse]
+    val response = capturedResponse.getValue.asInstanceOf[ApiVersionsResponse]
     assertEquals(Errors.NONE, Errors.forCode(response.data().errorCode()))
 
     val expectedVersions = ApiVersionsResponse.toApiVersion(ApiKeys.ALTER_CONFIGS)
@@ -2780,17 +2775,16 @@ class KafkaApisTest {
       0, 0, Seq.empty[UpdateMetadataPartitionState].asJava, brokers.asJava, Collections.emptyMap()).build()
     metadataCache.updateMetadata(correlationId = 0, updateMetadataRequest)
 
-    val capturedResponse = expectNoThrottling()
-    EasyMock.replay(clientRequestQuotaManager, requestChannel)
-
     val describeClusterRequest = new DescribeClusterRequest.Builder(new DescribeClusterRequestData()
       .setIncludeClusterAuthorizedOperations(true)).build()
 
     val request = buildRequest(describeClusterRequest, plaintextListener)
+    val capturedResponse = expectNoThrottling(request)
+
+    EasyMock.replay(clientRequestQuotaManager, requestChannel)
     createKafkaApis().handleDescribeCluster(request)
 
-    val describeClusterResponse = readResponse(describeClusterRequest, capturedResponse)
-      .asInstanceOf[DescribeClusterResponse]
+    val describeClusterResponse = capturedResponse.getValue.asInstanceOf[DescribeClusterResponse]
 
     assertEquals(metadataCache.getControllerId.get, describeClusterResponse.data.controllerId)
     assertEquals(clusterId, describeClusterResponse.data.clusterId)

@@ -145,7 +145,7 @@ class KafkaApis(val requestChannel: RequestChannel,
           info(s"The client connection will be closed due to controller responded " +
             s"unsupported version exception during $request forwarding. " +
             s"This could happen when the controller changed after the connection was established.")
-          requestHelper.closeConnection(request, Collections.emptyMap())
+          requestChannel.closeConnection(request, Collections.emptyMap())
       }
     }
 
