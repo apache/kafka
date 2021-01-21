@@ -116,8 +116,7 @@ class DescribeAuthorizedOperationsTest extends IntegrationTestHarness with SaslS
 
   @AfterEach
   override def tearDown(): Unit = {
-    if (client != null)
-      Utils.closeQuietly(client, "AdminClient")
+    Utils.closeQuietly(client, "AdminClient")
     super.tearDown()
     closeSasl()
   }
