@@ -117,7 +117,7 @@ public class StateDirectory {
             try {
                 Files.setPosixFilePermissions(basePath, perms);
                 Files.setPosixFilePermissions(statePath, perms);
-            } catch (final IOException e) {
+            } catch (final IOException | UnsupportedOperationException e) {
                 log.error("Error changing permissions for the state or base directory {} ", stateDir.getPath(), e);
             }
         }
