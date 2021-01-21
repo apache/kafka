@@ -971,7 +971,7 @@ public class EosBetaUpgradeIntegrationTest {
         waitForCondition(
             () -> !observed.isEmpty() && observed.get(observed.size() - 1).value.equals(State.RUNNING),
             MAX_WAIT_TIME_MS,
-            () -> "Client did not have the expected state transition on time. Observers transitions: " + observed
+            () -> "Client did not startup on time. Observers transitions: " + observed
         );
     }
 
@@ -983,17 +983,19 @@ public class EosBetaUpgradeIntegrationTest {
             () -> observed.equals(expected),
             MAX_WAIT_TIME_MS,
             () -> "Client did not have the expected state transition on time. Observers transitions: " + observed
+                    + "Expected transitions: " + expected
         );
     }
 
     private void waitForStateTransitionContains(final List<KeyValue<KafkaStreams.State, KafkaStreams.State>> observed,
-                                        final List<KeyValue<KafkaStreams.State, KafkaStreams.State>> expected)
+                                                final List<KeyValue<KafkaStreams.State, KafkaStreams.State>> expected)
             throws Exception {
 
         waitForCondition(
             () -> observed.containsAll(expected),
             MAX_WAIT_TIME_MS,
             () -> "Client did not have the expected state transition on time. Observers transitions: " + observed
+                    + "Expected transitions: " + expected
         );
     }
 
