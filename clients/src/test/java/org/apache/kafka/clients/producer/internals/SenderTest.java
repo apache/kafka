@@ -133,6 +133,7 @@ public class SenderTest {
     private static final int MAX_BLOCK_TIMEOUT = 1000;
     private static final int REQUEST_TIMEOUT = 1000;
     private static final long RETRY_BACKOFF_MS = 50;
+    private static final int DELIVERY_TIMEOUT_MS = 1500;
     private static final long TOPIC_IDLE_MS = 60 * 1000;
 
     private TopicPartition tp0 = new TopicPartition("test", 0);
@@ -935,6 +936,232 @@ public class SenderTest {
     }
 
     @Test
+    public void testEpochBumpOnOutOfOrderSequenceForNextBatchWhenThereIsNoBatchInFlight() throws Exception {
+        // Verify that partitions without in-flight batches when the producer epoch
+        // is bumped get their sequence number reset correctly.
+        final long producerId = 343434L;
+        TransactionManager transactionManager = createTransactionManager();
+        setupWithTransactionState(transactionManager);
+
+        // Init producer id/epoch
+        prepareAndReceiveInitProducerId(producerId, Errors.NONE);
+        assertEquals(producerId, transactionManager.producerIdAndEpoch().producerId);
+        assertEquals(0, transactionManager.producerIdAndEpoch().epoch);
+
+        // Partition 0 - Send first batch
+        appendToAccumulator(tp0);
+        sender.runOnce();
+
+        // Partition 0 - State is lazily initialized
+        assertPartitionState(transactionManager, tp0, producerId, (short) 0, 1, OptionalInt.empty());
+
+        // Partition 0 - Successful response
+        sendIdempotentProducerResponse(0, 0, tp0, Errors.NONE, 0, -1);
+        sender.runOnce();
+
+        // Partition 0 - Last ack is updated
+        assertPartitionState(transactionManager, tp0, producerId, (short) 0, 1, OptionalInt.of(0));
+
+        // Partition 1 - Send first batch
+        appendToAccumulator(tp1);
+        sender.runOnce();
+
+        // Partition 1 - State is lazily initialized
+        assertPartitionState(transactionManager, tp1, producerId, (short) 0, 1, OptionalInt.empty());
+
+        // Partition 1 - Successful response
+        sendIdempotentProducerResponse(0, 0, tp1, Errors.NONE, 0, -1);
+        sender.runOnce();
+
+        // Partition 1 - Last ack is updated
+        assertPartitionState(transactionManager, tp1, producerId, (short) 0, 1, OptionalInt.of(0));
+
+        // Partition 0 - Send second batch
+        appendToAccumulator(tp0);
+        sender.runOnce();
+
+        // Partition 0 - Sequence is incremented
+        assertPartitionState(transactionManager, tp0, producerId, (short) 0, 2, OptionalInt.of(0));
+
+        // Partition 0 - Failed response with OUT_OF_ORDER_SEQUENCE_NUMBER
+        sendIdempotentProducerResponse(0, 1, tp0, Errors.OUT_OF_ORDER_SEQUENCE_NUMBER, -1, -1);
+        sender.runOnce(); // Receive
+        sender.runOnce(); // Bump epoch & Retry
+
+        // Producer epoch is bumped
+        assertEquals(1, transactionManager.producerIdAndEpoch().epoch);
+
+        // Partition 0 - State is reset to current producer epoch
+        assertPartitionState(transactionManager, tp0, producerId, (short) 1, 1, OptionalInt.empty());
+
+        // Partition 1 - State is not changed
+        assertPartitionState(transactionManager, tp1, producerId, (short) 0, 1, OptionalInt.of(0));
+        assertTrue(transactionManager.hasStaleProducerIdAndEpoch(tp1));
+
+        // Partition 0 - Successful Response
+        sendIdempotentProducerResponse(1, 0, tp0, Errors.NONE, 1, -1);
+        sender.runOnce();
+
+        // Partition 0 - Last ack is updated
+        assertPartitionState(transactionManager, tp0, producerId, (short) 1, 1, OptionalInt.of(0));
+
+        // Partition 1 - Send second batch
+        appendToAccumulator(tp1);
+        sender.runOnce();
+
+        // Partition 1 - Epoch is bumped, sequence is reset and incremented
+        assertPartitionState(transactionManager, tp1, producerId, (short) 1, 1, OptionalInt.empty());
+        assertFalse(transactionManager.hasStaleProducerIdAndEpoch(tp1));
+
+        // Partition 1 - Successful Response
+        sendIdempotentProducerResponse(1, 0, tp1, Errors.NONE, 1, -1);
+        sender.runOnce();
+
+        // Partition 1 - Last ack is updated
+        assertPartitionState(transactionManager, tp1, producerId, (short) 1, 1, OptionalInt.of(0));
+    }
+
+    @Test
+    public void testEpochBumpOnOutOfOrderSequenceForNextBatchWhenBatchInFlightFails() throws Exception {
+        // When a batch failed after the producer epoch is bumped, the sequence number of
+        // that partition must be reset for any subsequent batches sent.
+        final long producerId = 343434L;
+        TransactionManager transactionManager = createTransactionManager();
+
+        // Retries once
+        setupWithTransactionState(transactionManager, false, null, true, 1);
+
+        // Init producer id/epoch
+        prepareAndReceiveInitProducerId(producerId, Errors.NONE);
+        assertEquals(producerId, transactionManager.producerIdAndEpoch().producerId);
+        assertEquals(0, transactionManager.producerIdAndEpoch().epoch);
+
+        // Partition 0 - Send first batch
+        appendToAccumulator(tp0);
+        sender.runOnce();
+
+        // Partition 0 - State is lazily initialized
+        assertPartitionState(transactionManager, tp0, producerId, (short) 0, 1, OptionalInt.empty());
+
+        // Partition 0 - Successful response
+        sendIdempotentProducerResponse(0, 0, tp0, Errors.NONE, 0, -1);
+        sender.runOnce();
+
+        // Partition 0 - Last ack is updated
+        assertPartitionState(transactionManager, tp0, producerId, (short) 0, 1, OptionalInt.of(0));
+
+        // Partition 1 - Send first batch
+        appendToAccumulator(tp1);
+        sender.runOnce();
+
+        // Partition 1 - State is lazily initialized
+        assertPartitionState(transactionManager, tp1, producerId, (short) 0, 1, OptionalInt.empty());
+
+        // Partition 1 - Successful response
+        sendIdempotentProducerResponse(0, 0, tp1, Errors.NONE, 0, -1);
+        sender.runOnce();
+
+        // Partition 1 - Last ack is updated
+        assertPartitionState(transactionManager, tp1, producerId, (short) 0, 1, OptionalInt.of(0));
+
+        // Partition 0 - Send second batch
+        appendToAccumulator(tp0);
+        sender.runOnce();
+
+        // Partition 0 - Sequence is incremented
+        assertPartitionState(transactionManager, tp0, producerId, (short) 0, 2, OptionalInt.of(0));
+
+        // Partition 1 - Send second batch
+        appendToAccumulator(tp1);
+        sender.runOnce();
+
+        // Partition 1 - Sequence is incremented
+        assertPartitionState(transactionManager, tp1, producerId, (short) 0, 2, OptionalInt.of(0));
+
+        // Partition 0 - Failed response with OUT_OF_ORDER_SEQUENCE_NUMBER
+        sendIdempotentProducerResponse(0, 1, tp0, Errors.OUT_OF_ORDER_SEQUENCE_NUMBER, -1, -1);
+        sender.runOnce(); // Receive
+        sender.runOnce(); // Bump epoch & Retry
+
+        // Producer epoch is bumped
+        assertEquals(1, transactionManager.producerIdAndEpoch().epoch);
+
+        // Partition 0 - State is reset to current producer epoch
+        assertPartitionState(transactionManager, tp0, producerId, (short) 1, 1, OptionalInt.empty());
+
+        // Partition 1 - State is not changed. The epoch will be lazily bumped when all in-flight
+        // batches are completed
+        assertPartitionState(transactionManager, tp1, producerId, (short) 0, 2, OptionalInt.of(0));
+        assertTrue(transactionManager.hasStaleProducerIdAndEpoch(tp1));
+
+        // Partition 1 - Failed response with NOT_LEADER_OR_FOLLOWER
+        sendIdempotentProducerResponse(0, 1, tp1, Errors.NOT_LEADER_OR_FOLLOWER, -1, -1);
+        sender.runOnce(); // Receive & Retry
+
+        // Partition 1 - State is not changed.
+        assertPartitionState(transactionManager, tp1, producerId, (short) 0, 2, OptionalInt.of(0));
+        assertTrue(transactionManager.hasStaleProducerIdAndEpoch(tp1));
+
+        // Partition 0 - Successful Response
+        sendIdempotentProducerResponse(1, 0, tp0, Errors.NONE, 1, -1);
+        sender.runOnce();
+
+        // Partition 0 - Last ack is updated
+        assertPartitionState(transactionManager, tp0, producerId, (short) 1, 1, OptionalInt.of(0));
+
+        // Partition 1 - Failed response with NOT_LEADER_OR_FOLLOWER
+        sendIdempotentProducerResponse(0, 1, tp1, Errors.NOT_LEADER_OR_FOLLOWER, -1, -1);
+        sender.runOnce(); // Receive & Fail the batch (retries exhausted)
+
+        // Partition 1 - State is not changed. It will be lazily updated when the next batch is sent.
+        assertPartitionState(transactionManager, tp1, producerId, (short) 0, 2, OptionalInt.of(0));
+        assertTrue(transactionManager.hasStaleProducerIdAndEpoch(tp1));
+
+        // Partition 1 - Send third batch
+        appendToAccumulator(tp1);
+        sender.runOnce();
+
+        // Partition 1 - Epoch is bumped, sequence is reset
+        assertPartitionState(transactionManager, tp1, producerId, (short) 1, 1, OptionalInt.empty());
+        assertFalse(transactionManager.hasStaleProducerIdAndEpoch(tp1));
+
+        // Partition 1 - Successful Response
+        sendIdempotentProducerResponse(1, 0, tp1, Errors.NONE, 0, -1);
+        sender.runOnce();
+
+        // Partition 1 - Last ack is updated
+        assertPartitionState(transactionManager, tp1, producerId, (short) 1, 1, OptionalInt.of(0));
+
+        // Partition 0 - Send third batch
+        appendToAccumulator(tp0);
+        sender.runOnce();
+
+        // Partition 0 - Sequence is incremented
+        assertPartitionState(transactionManager, tp0, producerId, (short) 1, 2, OptionalInt.of(0));
+
+        // Partition 0 - Successful Response
+        sendIdempotentProducerResponse(1, 1, tp0, Errors.NONE, 0, -1);
+        sender.runOnce();
+
+        // Partition 0 - Last ack is updated
+        assertPartitionState(transactionManager, tp0, producerId, (short) 1, 2, OptionalInt.of(1));
+    }
+
+    private void assertPartitionState(
+        TransactionManager transactionManager,
+        TopicPartition tp,
+        long expectedProducerId,
+        short expectedProducerEpoch,
+        long expectedSequenceValue,
+        OptionalInt expectedLastAckedSequence
+    ) {
+        assertEquals(expectedProducerId, transactionManager.producerIdAndEpoch(tp).producerId, "Producer Id:");
+        assertEquals(expectedProducerEpoch, transactionManager.producerIdAndEpoch(tp).epoch, "Producer Epoch:");
+        assertEquals(expectedSequenceValue, transactionManager.sequenceNumber(tp).longValue(), "Seq Number:");
+        assertEquals(expectedLastAckedSequence, transactionManager.lastAckedSequence(tp), "Last Acked Seq Number:");
+    }
+
+    @Test
     public void testCorrectHandlingOfOutOfOrderResponses() throws Exception {
         final long producerId = 343434L;
         TransactionManager transactionManager = createTransactionManager();
@@ -1341,8 +1568,8 @@ public class SenderTest {
         assertTrue(successfulResponse.isDone());
         assertEquals(10, successfulResponse.get().offset());
 
-        // Since the response came back for the old producer id, we shouldn't update the next sequence.
-        assertEquals(0, transactionManager.sequenceNumber(tp1).longValue());
+        // The epoch and the sequence are updated when the next batch is sent.
+        assertEquals(1, transactionManager.sequenceNumber(tp1).longValue());
     }
 
     @Test
@@ -1453,7 +1680,8 @@ public class SenderTest {
         client.respond(produceResponse(tp1, 0, Errors.NONE, -1));
         sender.runOnce();
         assertTrue(successfulResponse.isDone());
-        assertEquals(0, transactionManager.sequenceNumber(tp1).intValue());
+        // epoch of partition is bumped and sequence is reset when the next batch is sent
+        assertEquals(1, transactionManager.sequenceNumber(tp1).intValue());
     }
 
     @Test
@@ -1816,19 +2044,32 @@ public class SenderTest {
         assertEquals(OptionalInt.empty(), transactionManager.lastAckedSequence(tp0));
         assertFalse(request2.isDone());
     }
+
     void sendIdempotentProducerResponse(int expectedSequence, TopicPartition tp, Errors responseError, long responseOffset) {
         sendIdempotentProducerResponse(expectedSequence, tp, responseError, responseOffset, -1L);
     }
 
-    void sendIdempotentProducerResponse(final int expectedSequence, TopicPartition tp, Errors responseError, long responseOffset, long logStartOffset) {
+    void sendIdempotentProducerResponse(int expectedSequence, TopicPartition tp, Errors responseError, long responseOffset, long logStartOffset) {
+        sendIdempotentProducerResponse(-1, expectedSequence, tp, responseError, responseOffset, logStartOffset);
+    }
+
+    void sendIdempotentProducerResponse(
+        int expectedEpoch,
+        int expectedSequence,
+        TopicPartition tp,
+        Errors responseError,
+        long responseOffset,
+        long logStartOffset
+    ) {
         client.respond(body -> {
             ProduceRequest produceRequest = (ProduceRequest) body;
             assertTrue(RequestTestUtils.hasIdempotentRecords(produceRequest));
-
-            MemoryRecords records = partitionRecords(produceRequest).get(tp0);
+            MemoryRecords records = partitionRecords(produceRequest).get(tp);
             Iterator<MutableRecordBatch> batchIterator = records.batches().iterator();
             RecordBatch firstBatch = batchIterator.next();
             assertFalse(batchIterator.hasNext());
+            if (expectedEpoch > -1)
+                assertEquals((short) expectedEpoch, firstBatch.producerEpoch());
             assertEquals(expectedSequence, firstBatch.baseSequence());
             return true;
         }, produceResponse(tp, responseOffset, responseError, 0, logStartOffset, null));
@@ -2673,15 +2914,29 @@ public class SenderTest {
     }
     
     private void setupWithTransactionState(TransactionManager transactionManager) {
-        setupWithTransactionState(transactionManager, false, null, true);
+        setupWithTransactionState(transactionManager, false, null, true, Integer.MAX_VALUE);
     }
 
     private void setupWithTransactionState(TransactionManager transactionManager, boolean guaranteeOrder, BufferPool customPool) {
-        setupWithTransactionState(transactionManager, guaranteeOrder, customPool, true);
+        setupWithTransactionState(transactionManager, guaranteeOrder, customPool, true, Integer.MAX_VALUE);
     }
 
-    private void setupWithTransactionState(TransactionManager transactionManager, boolean guaranteeOrder, BufferPool customPool, boolean updateMetadata) {
-        int deliveryTimeoutMs = 1500;
+    private void setupWithTransactionState(
+        TransactionManager transactionManager,
+        boolean guaranteeOrder,
+        BufferPool customPool,
+        boolean updateMetadata
+    ) {
+        setupWithTransactionState(transactionManager, guaranteeOrder, customPool, updateMetadata, Integer.MAX_VALUE);
+    }
+
+    private void setupWithTransactionState(
+        TransactionManager transactionManager,
+        boolean guaranteeOrder,
+        BufferPool customPool,
+        boolean updateMetadata,
+        int retries
+    ) {
         long totalSize = 1024 * 1024;
         String metricGrpName = "producer-metrics";
         MetricConfig metricConfig = new MetricConfig().tags(Collections.singletonMap("client-id", CLIENT_ID));
@@ -2689,10 +2944,10 @@ public class SenderTest {
         BufferPool pool = (customPool == null) ? new BufferPool(totalSize, batchSize, metrics, time, metricGrpName) : customPool;
 
         this.accumulator = new RecordAccumulator(logContext, batchSize, CompressionType.NONE, 0, 0L,
-                deliveryTimeoutMs, metrics, metricGrpName, time, apiVersions, transactionManager, pool);
+            DELIVERY_TIMEOUT_MS, metrics, metricGrpName, time, apiVersions, transactionManager, pool);
         this.senderMetricsRegistry = new SenderMetricsRegistry(this.metrics);
         this.sender = new Sender(logContext, this.client, this.metadata, this.accumulator, guaranteeOrder, MAX_REQUEST_SIZE, ACKS_ALL,
-                Integer.MAX_VALUE, this.senderMetricsRegistry, this.time, REQUEST_TIMEOUT, RETRY_BACKOFF_MS, transactionManager, apiVersions);
+            retries, this.senderMetricsRegistry, this.time, REQUEST_TIMEOUT, RETRY_BACKOFF_MS, transactionManager, apiVersions);
 
         metadata.add("test", time.milliseconds());
         if (updateMetadata)

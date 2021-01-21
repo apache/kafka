@@ -685,6 +685,7 @@ public class TransactionManagerTest {
                 Errors.NONE, 500L, time.milliseconds(), 0L);
         transactionManager.handleCompletedBatch(b2, b2Response);
 
+        transactionManager.maybeUpdateProducerIdAndEpoch(tp0);
         assertEquals(0, transactionManager.sequenceNumber(tp0).intValue());
         assertFalse(transactionManager.lastAckedSequence(tp0).isPresent());
         assertNull(transactionManager.nextBatchBySequence(tp0));
@@ -693,6 +694,7 @@ public class TransactionManagerTest {
     private ProducerBatch writeIdempotentBatchWithValue(TransactionManager manager,
                                                         TopicPartition tp,
                                                         String value) {
+        manager.maybeUpdateProducerIdAndEpoch(tp);
         int seq = manager.sequenceNumber(tp);
         manager.incrementSequenceNumber(tp, 1);
         ProducerBatch batch = batchWithValue(tp, value);
@@ -3135,6 +3137,7 @@ public class TransactionManagerTest {
         tp1b2.done(500L, b1AppendTime, null);
         transactionManager.handleCompletedBatch(tp1b2, t1b2Response);
 
+        transactionManager.maybeUpdateProducerIdAndEpoch(tp1);
         assertFalse(transactionManager.hasInflightBatches(tp1));
         assertEquals(0, transactionManager.sequenceNumber(tp1).intValue());
 
@@ -3149,6 +3152,7 @@ public class TransactionManagerTest {
         tp1b3.done(500L, b1AppendTime, null);
         transactionManager.handleCompletedBatch(tp1b3, t1b3Response);
 
+        transactionManager.maybeUpdateProducerIdAndEpoch(tp1);
         assertFalse(transactionManager.hasInflightBatches(tp1));
         assertEquals(1, transactionManager.sequenceNumber(tp1).intValue());
     }
@@ -3257,6 +3261,7 @@ public class TransactionManagerTest {
         tp1b2.done(500L, b1AppendTime, null);
         transactionManager.handleCompletedBatch(tp1b2, t1b2Response);
 
+        transactionManager.maybeUpdateProducerIdAndEpoch(tp1);
         assertFalse(transactionManager.hasInflightBatches(tp1));
         assertEquals(0, transactionManager.sequenceNumber(tp1).intValue());
 
