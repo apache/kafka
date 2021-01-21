@@ -31,17 +31,14 @@ public class FetchedRecords<K, V> {
     public static final class FetchMetadata {
 
         private final long receivedTimestamp;
-        private final Long beginningOffset;
         private final SubscriptionState.FetchPosition position;
         private final Long endOffset;
 
         public FetchMetadata(final long receivedTimestamp,
                              final SubscriptionState.FetchPosition position,
-                             final Long beginningOffset,
                              final Long endOffset) {
             this.receivedTimestamp = receivedTimestamp;
             this.position = position;
-            this.beginningOffset = beginningOffset;
             this.endOffset = endOffset;
         }
 
@@ -53,10 +50,6 @@ public class FetchedRecords<K, V> {
             return position;
         }
 
-        public Long beginningOffset() {
-            return beginningOffset;
-        }
-
         public Long endOffset() {
             return endOffset;
         }
@@ -65,7 +58,6 @@ public class FetchedRecords<K, V> {
         public String toString() {
             return "FetchMetadata{" +
                 "receivedTimestamp=" + receivedTimestamp +
-                ", beginningOffset=" + beginningOffset +
                 ", position=" + position +
                 ", endOffset=" + endOffset +
                 '}';

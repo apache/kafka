@@ -221,7 +221,7 @@ public class MockConsumer<K, V> implements Consumer<K, V> {
 
         final Map<TopicPartition, ConsumerRecords.Metadata> metadata = new HashMap<>();
         for (final TopicPartition partition : subscriptions.assignedPartitions()) {
-            if (subscriptions.hasValidPosition(partition) && beginningOffsets.containsKey(partition) && endOffsets.containsKey(partition)) {
+            if (subscriptions.hasValidPosition(partition) && endOffsets.containsKey(partition)) {
                 final SubscriptionState.FetchPosition position = subscriptions.position(partition);
                 final long offset = position.offset;
                 final long endOffset = endOffsets.get(partition);

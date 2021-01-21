@@ -638,26 +638,22 @@ public class Fetcher<K, V> implements Closeable {
 
                     TopicPartition partition = nextInLineFetch.partition;
 
+                    // This can be false when a rebalance happened before fetched records
+                    // are returned to the consumer's poll call
                     if (subscriptions.isAssigned(partition)) {
+
                         // initializeCompletedFetch, above, has already persisted the metadata from the fetch in the
                         // SubscriptionState, so we can just read it out, which in particular lets us re-use the logic
                         // for determining the end offset
                         final long receivedTimestamp = nextInLineFetch.receivedTimestamp;
-                        final Long beginningOffset = subscriptions.logStartOffset(partition);
                         final Long endOffset = subscriptions.logEndOffset(partition, isolationLevel);
                         final FetchPosition fetchPosition = subscriptions.position(partition);
 
-                        final FetchedRecords.FetchMetadata fetchMetadata = fetched.metadata().get(partition);
-                        if (fetchMetadata == null
-                            || !fetchMetadata.position().offsetEpoch.isPresent()
-                            || fetchPosition.offsetEpoch.isPresent()
-                            && fetchMetadata.position().offsetEpoch.get() <= fetchPosition.offsetEpoch.get()) {
+                        final FetchedRecords.FetchMetadata metadata =
+                            new FetchedRecords.FetchMetadata(receivedTimestamp, fetchPosition, endOffset);
 
-                            final FetchedRecords.FetchMetadata metadata =
-                                new FetchedRecords.FetchMetadata(receivedTimestamp, fetchPosition, beginningOffset, endOffset);
+                        fetched.addMetadata(partition, metadata);
 
-                            fetched.addMetadata(partition, metadata);
-                        }
                     }
 
                     if (!records.isEmpty()) {
