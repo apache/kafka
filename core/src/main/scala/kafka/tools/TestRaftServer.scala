@@ -413,6 +413,11 @@ object TestRaftServer extends Logging {
 
       val configFile = opts.options.valueOf(opts.configOpt)
       val serverProps = Utils.loadProps(configFile)
+
+      // KafkaConfig requires either `process.roles` or `zookeeper.connect`. Neither are
+      // actually used by the test server, so we fill in `process.roles` with an arbitrary value.
+      serverProps.put(KafkaConfig.ProcessRolesProp, "controller")
+
       val config = KafkaConfig.fromProps(serverProps, doLog = false)
       val throughput = opts.options.valueOf(opts.throughputOpt)
       val recordSize = opts.options.valueOf(opts.recordSizeOpt)
