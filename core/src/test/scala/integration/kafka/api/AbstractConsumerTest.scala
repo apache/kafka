@@ -103,9 +103,11 @@ abstract class AbstractConsumerTest extends BaseRequestTest {
   }
 
   protected def sendRecords(producer: KafkaProducer[Array[Byte], Array[Byte]], numRecords: Int,
-                            tp: TopicPartition): Seq[ProducerRecord[Array[Byte], Array[Byte]]] = {
+                            tp: TopicPartition,
+                            startingTimestamp: Long = System.currentTimeMillis()): Seq[ProducerRecord[Array[Byte], Array[Byte]]] = {
     val records = (0 until numRecords).map { i =>
-      val record = new ProducerRecord(tp.topic(), tp.partition(), i.toLong, s"key $i".getBytes, s"value $i".getBytes)
+      val timestamp = startingTimestamp + i.toLong
+      val record = new ProducerRecord(tp.topic(), tp.partition(), timestamp, s"key $i".getBytes, s"value $i".getBytes)
       producer.send(record)
       record
     }
