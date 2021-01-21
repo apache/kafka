@@ -105,7 +105,6 @@ class KafkaRaftManager[T](
 ) extends RaftManager[T] with Logging {
 
   private val nodeId = config.brokerId
-  private val raftConfig = new RaftConfig(config.originals)
   private val logContext = new LogContext(s"[RaftManager $nodeId] ")
   this.logIdent = logContext.logPrefix()
 
@@ -120,6 +119,7 @@ class KafkaRaftManager[T](
 
   def startup(): Unit = {
     netChannel.start()
+    val raftConfig = new RaftConfig(config)
     raftClient.initialize(raftConfig)
     raftIoThread.start()
   }
@@ -188,7 +188,7 @@ class KafkaRaftManager[T](
 
   private def buildNetworkChannel(): KafkaNetworkChannel = {
     val netClient = buildNetworkClient()
-    new KafkaNetworkChannel(time, netClient, raftConfig.requestTimeoutMs)
+    new KafkaNetworkChannel(time, netClient, config.quorumRequestTimeoutMs)
   }
 
   private def createDataDir(): File = {
@@ -258,7 +258,7 @@ class KafkaRaftManager[T](
       reconnectBackoffMsMs,
       Selectable.USE_DEFAULT_BUFFER_SIZE,
       config.socketReceiveBufferBytes,
-      raftConfig.requestTimeoutMs,
+      config.quorumRequestTimeoutMs,
       config.connectionSetupTimeoutMs,
       config.connectionSetupTimeoutMaxMs,
       ClientDnsLookup.USE_ALL_DNS_IPS,
