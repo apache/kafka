@@ -51,7 +51,7 @@ public final class FileRawSnapshotReader implements RawSnapshotReader {
     }
 
     public BaseRecords read(long position, int size) throws IOException {
-        return fileRecords.slice(Math.toIntExact(position), size);
+        return fileRecords.slice((int) position, size);
     }
 
     @Override

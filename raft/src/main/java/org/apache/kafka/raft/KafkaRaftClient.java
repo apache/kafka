@@ -1231,20 +1231,17 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
             }
 
             int maxSnapshotSize;
-            int maxSnapshotPosition;
             try {
                 maxSnapshotSize = Math.toIntExact(snapshot.sizeInBytes());
             } catch (ArithmeticException e) {
                 maxSnapshotSize = Integer.MAX_VALUE;
             }
 
-            try {
-                maxSnapshotPosition = Math.toIntExact(partitionSnapshot.position());
-            } catch (ArithmeticException e) {
-                maxSnapshotPosition = Integer.MAX_VALUE;
+            if (partitionSnapshot.position() > Integer.MAX_VALUE) {
+                throw new IllegalStateException(String.format("Trying to fetch a snapshot with position: %d lager than Int.MaxValue", partitionSnapshot.position()));
             }
 
-            BaseRecords records = snapshot.read(maxSnapshotPosition, Math.min(data.maxBytes(), maxSnapshotSize));
+            BaseRecords records = snapshot.read(partitionSnapshot.position(), Math.min(data.maxBytes(), maxSnapshotSize));
 
             long snapshotSize = snapshot.sizeInBytes();
 
@@ -1337,7 +1334,7 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
             throw new IllegalStateException(String.format("Received fetch snapshot response with an invalid position. Expected %s; Received %s", snapshot.sizeInBytes(), partitionSnapshot.position()));
         }
 
-        snapshot.append(partitionSnapshot.bytes());
+        snapshot.append((MemoryRecords) partitionSnapshot.bytes());
 
         if (snapshot.sizeInBytes() == partitionSnapshot.size()) {
             // Finished fetching the snapshot.

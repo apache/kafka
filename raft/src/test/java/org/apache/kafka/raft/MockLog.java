@@ -524,7 +524,7 @@ public class MockLog implements ReplicatedLog {
         }
 
         @Override
-        public void append(BaseRecords records) {
+        public void append(MemoryRecords records) {
             if (frozen) {
                 throw new RuntimeException("Snapshot is already frozen " + snapshotId);
             }

@@ -328,7 +328,7 @@ public final class FileRawSnapshotTest {
     private static MemoryRecords buildRecords(ByteBuffer... buffers) {
         return MemoryRecords.withRecords(
             CompressionType.NONE,
-            Arrays.stream(buffers).map(buffer -> new SimpleRecord(buffer)).toArray(SimpleRecord[]::new)
+            Arrays.stream(buffers).map(SimpleRecord::new).toArray(SimpleRecord[]::new)
         );
     }
 }
