@@ -176,6 +176,7 @@ public class StandbyTaskEOSIntegrationTest {
     @Test
     @Deprecated
     public void shouldWipeOutStandbyStateDirectoryIfCheckpointIsMissing() throws Exception {
+        final long time = System.currentTimeMillis();
         final String base = TestUtils.tempDirectory(appId).getPath();
 
         IntegrationTestUtils.produceKeyValuesSynchronouslyWithTimestamp(
@@ -189,7 +190,7 @@ public class StandbyTaskEOSIntegrationTest {
                 IntegerSerializer.class,
                 new Properties()
             ),
-            10L
+            10L + time
         );
 
         try (
@@ -248,7 +249,7 @@ public class StandbyTaskEOSIntegrationTest {
                     IntegerSerializer.class,
                     new Properties()
                 ),
-                10L
+                10L + time
             );
             waitForCondition(
                 () -> streamInstanceOne.state() == KafkaStreams.State.ERROR,
@@ -307,7 +308,7 @@ public class StandbyTaskEOSIntegrationTest {
                     IntegerSerializer.class,
                     new Properties()
                 ),
-                10L
+                10L + time
             );
             waitForCondition(
                 () -> streamInstanceOneRecovery.state() == KafkaStreams.State.ERROR,
