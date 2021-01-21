@@ -50,8 +50,6 @@ import java.util.Properties;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 
-import org.junit.jupiter.api.AfterAll;
-import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Tag;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -104,18 +102,6 @@ public abstract class MirrorConnectorsIntegrationBaseTest {
     protected Properties backupBrokerProps = new Properties();
     protected Map<String, String> primaryWorkerProps = new HashMap<>();
     protected Map<String, String> backupWorkerProps = new HashMap<>();
-
-    private static ClassLoader prevContextLoader;
-
-    @BeforeAll
-    public static void beforeAll() {
-        prevContextLoader = Thread.currentThread().getContextClassLoader();
-    }
-
-    @AfterAll
-    public static void afterAll() {
-        Thread.currentThread().setContextClassLoader(prevContextLoader);
-    }
     
     @BeforeEach
     public void startClusters() throws Exception {
