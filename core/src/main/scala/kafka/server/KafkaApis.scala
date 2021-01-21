@@ -1246,13 +1246,15 @@ class KafkaApis(val requestChannel: RequestChannel,
       }
 
     var clusterAuthorizedOperations = Int.MinValue
-    if (request.header.apiVersion >= 8) {
+    if (requestVersion >= 8) {
       // get cluster authorized operations
-      if (metadataRequest.data.includeClusterAuthorizedOperations) {
-        if (authHelper.authorize(request.context, DESCRIBE, CLUSTER, CLUSTER_NAME))
-          clusterAuthorizedOperations = authHelper.authorizedOperations(request, Resource.CLUSTER)
-        else
-          clusterAuthorizedOperations = 0
+      if (requestVersion <= 10) {
+        if (metadataRequest.data.includeClusterAuthorizedOperations) {
+          if (authHelper.authorize(request.context, DESCRIBE, CLUSTER, CLUSTER_NAME))
+            clusterAuthorizedOperations = authHelper.authorizedOperations(request, Resource.CLUSTER)
+          else
+            clusterAuthorizedOperations = 0
+        }
       }
 
       // get topic authorized operations
