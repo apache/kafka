@@ -995,4 +995,21 @@ class KafkaConfigTest {
     val raftConfig = new RaftConfig(KafkaConfig.fromProps(props))
     assertEquals(expectedVoters, raftConfig.quorumVoterConnections())
   }
+
+  @Test
+  def testZookeeperConnectRequiredIfEmptyProcessRoles(): Unit = {
+    val props = new Properties()
+    props.put(KafkaConfig.ProcessRolesProp, "")
+    props.put(KafkaConfig.ListenersProp, "PLAINTEXT://127.0.0.1:9092")
+    assertFalse(isValidKafkaConfig(props))
+  }
+
+  @Test
+  def testZookeeperConnectNotRequiredIfNonEmptyProcessRoles(): Unit = {
+    val props = new Properties()
+    props.put(KafkaConfig.ProcessRolesProp, "broker")
+    props.put(KafkaConfig.ListenersProp, "PLAINTEXT://127.0.0.1:9092")
+    assertTrue(isValidKafkaConfig(props))
+  }
+
 }

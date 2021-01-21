@@ -232,7 +232,7 @@ class ApiVersionTest {
       Features.emptySupportedFeatures,
       None
     )
-    assertEquals(new util.HashSet[ApiKeys](ApiKeys.enabledApis), apiKeysInResponse(response))
+    assertEquals(new util.HashSet[ApiKeys](ApiKeys.brokerApis), apiKeysInResponse(response))
     assertEquals(AbstractResponse.DEFAULT_THROTTLE_TIME, response.throttleTimeMs)
     assertTrue(response.data.supportedFeatures.isEmpty)
     assertTrue(response.data.finalizedFeatures.isEmpty)
