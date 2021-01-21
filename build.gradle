@@ -249,7 +249,7 @@ subprojects {
   }
 
   // Remove the relevant project name once it's converted to JUnit 5
-  def shouldUseJUnit5 = !(["generator", "runtime", "streams-scala", "streams"].contains(it.project.name))
+  def shouldUseJUnit5 = !(["runtime", "streams-scala", "streams"].contains(it.project.name))
 
   def testLoggingEvents = ["passed", "skipped", "failed"]
   def testShowStandardStreams = false
@@ -407,10 +407,8 @@ subprojects {
         excludeTags "integration"
       }
     } else {
-      if (it.project.name != 'generator') {
-        useJUnit {
-          excludeCategories 'org.apache.kafka.test.IntegrationTest'
-        }
+      useJUnit {
+        excludeCategories 'org.apache.kafka.test.IntegrationTest'
       }
     }
 
@@ -1088,12 +1086,7 @@ project(':generator') {
     compile libs.jacksonDatabind
     compile libs.jacksonJDK8Datatypes
     compile libs.jacksonJaxrsJsonProvider
-    testCompile libs.junitJupiterApi
-    testCompile libs.junitVintageEngine
-  }
-
-  integrationTest {
-    enabled = false
+    testCompile libs.junitJupiter
   }
 
   javadoc {
