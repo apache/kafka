@@ -515,12 +515,18 @@ public class KafkaStreamsTest {
                 () -> globalStreamThread.state() == GlobalStreamThread.State.DEAD,
                 "Thread never stopped.");
             globalStreamThread.join();
-            assertEquals(streams.state(), KafkaStreams.State.PENDING_ERROR);
+            TestUtils.waitForCondition(
+                () -> streams.state() == KafkaStreams.State.PENDING_ERROR,
+                "Thread never stopped."
+            );
         } finally {
             streams.close();
         }
 
-        assertEquals(streams.state(), KafkaStreams.State.PENDING_ERROR);
+        TestUtils.waitForCondition(
+            () -> streams.state() == KafkaStreams.State.ERROR,
+            "Thread never stopped."
+        );
     }
 
     @Test

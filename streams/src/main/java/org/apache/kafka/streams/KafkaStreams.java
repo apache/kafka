@@ -1199,11 +1199,17 @@ public class KafkaStreams implements AutoCloseable {
     private boolean close(final long timeoutMs) {
         if (state == State.ERROR) {
             log.info("Streams client is already in the terminal state ERROR, all resources are closed and the client has stopped.");
-            return false;
+            return true;
         }
         if (state == State.PENDING_ERROR) {
             log.info("Streams client is in PENDING_ERROR, all resources are being closed and the client will be stopped.");
-            return false;
+            if (waitOnState(State.ERROR, timeoutMs)) {
+                log.info("Streams client stopped to ERROR completely");
+                return true;
+            } else {
+                log.info("Streams client cannot transition to ERROR completely within the timeout");
+                return false;
+            }
         }
         if (!setState(State.PENDING_SHUTDOWN)) {
             // if transition failed, it means it was either in PENDING_SHUTDOWN
