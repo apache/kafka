@@ -58,7 +58,6 @@ import static org.apache.kafka.raft.RaftTestUtil.voterNodesFromIds;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
-import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 @Tag("integration")
 public class RaftEventSimulationTest {
@@ -180,9 +179,6 @@ public class RaftEventSimulationTest {
     }
 
     private void checkElectionAfterLeaderShutdown(QuorumConfig config, boolean isGracefulShutdown) {
-        // We need at least three voters to run this tests
-        assumeTrue(config.numVoters > 2);
-
         for (int seed = 0; seed < 100; seed++) {
             Cluster cluster = new Cluster(config, seed);
             MessageRouter router = new MessageRouter(cluster);
@@ -290,9 +286,6 @@ public class RaftEventSimulationTest {
     }
 
     private void checkElectionAfterLeaderNetworkPartition(QuorumConfig config) {
-        // We need at least three voters to run this tests
-        assumeTrue(config.numVoters > 2);
-
         for (int seed = 0; seed < 100; seed++) {
             Cluster cluster = new Cluster(config, seed);
             MessageRouter router = new MessageRouter(cluster);
@@ -329,9 +322,6 @@ public class RaftEventSimulationTest {
     }
 
     private void checkElectionAfterMultiNodeNetworkPartition(QuorumConfig config) {
-        // We need at least three voters to run this tests
-        assumeTrue(config.numVoters > 2);
-
         for (int seed = 0; seed < 100; seed++) {
             Cluster cluster = new Cluster(config, seed);
             MessageRouter router = new MessageRouter(cluster);
@@ -496,7 +486,6 @@ public class RaftEventSimulationTest {
         }
     }
 
-    @FunctionalInterface
     private interface Invariant {
         void verify();
     }
