@@ -17,7 +17,7 @@
   "apiKey": 3,
   "type": "request",
   "name": "MetadataRequest",
-  "validVersions": "0-10",
+  "validVersions": "0-11",
   "flexibleVersions": "9+",
   "fields": [
     // In version 0, an empty array indicates "request metadata for all topics."  In version 1 and
@@ -31,7 +31,11 @@
     // Starting in version 8, authorized operations can be requested for cluster and topic resource.
     //
     // Version 9 is the first flexible version.
-    // Version 10 add topicId
+    //
+    // Version 10 adds topicId.
+    //
+    // Version 11 deprecates IncludeClusterAuthorizedOperations field. This is now exposed
+    // by the DescribeCluster API (KIP-700).
     { "name": "Topics", "type": "[]MetadataRequestTopic", "versions": "0+", "nullableVersions": "1+",
       "about": "The topics to fetch metadata for.", "fields": [
       { "name": "TopicId", "type": "uuid", "versions": "10+", "ignorable": true, "about": "The topic id." },
@@ -40,7 +44,7 @@
     ]},
     { "name": "AllowAutoTopicCreation", "type": "bool", "versions": "4+", "default": "true", "ignorable": false,
       "about": "If this is true, the broker may auto-create topics that we requested which do not already exist, if it is configured to do so." },
-    { "name": "IncludeClusterAuthorizedOperations", "type": "bool", "versions": "8+",
+    { "name": "IncludeClusterAuthorizedOperations", "type": "bool", "versions": "8-10",
       "about": "Whether to include cluster authorized operations." },
     { "name": "IncludeTopicAuthorizedOperations", "type": "bool", "versions": "8+",
       "about": "Whether to include topic authorized operations." }
