@@ -16,7 +16,7 @@
  */
 package org.apache.kafka.snapshot;
 
-import org.apache.kafka.common.record.MemoryRecords;
+import org.apache.kafka.common.record.UnalignedMemoryRecords;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.raft.OffsetAndEpoch;
 
@@ -54,7 +54,7 @@ public final class FileRawSnapshotWriter implements RawSnapshotWriter {
     }
 
     @Override
-    public void append(MemoryRecords records) throws IOException {
+    public void append(UnalignedMemoryRecords records) throws IOException {
         if (frozen) {
             throw new IllegalStateException(
                 String.format("Append is not supported. Snapshot is already frozen: id = %s; temp path = %s", snapshotId, tempSnapshotPath)

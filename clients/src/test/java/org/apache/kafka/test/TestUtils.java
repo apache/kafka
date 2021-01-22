@@ -26,6 +26,7 @@ import org.apache.kafka.common.network.NetworkReceive;
 import org.apache.kafka.common.network.Send;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.record.BaseRecords;
+import org.apache.kafka.common.record.UnalignedFileRecords;
 import org.apache.kafka.common.requests.ByteBufferChannel;
 import org.apache.kafka.common.requests.RequestHeader;
 import org.apache.kafka.common.utils.Exit;
@@ -438,8 +439,8 @@ public class TestUtils {
         }
     }
 
-    public static ByteBuffer toBuffer(BaseRecords records) {
-        return toBuffer(records.toSend());
+    public static ByteBuffer toBuffer(UnalignedFileRecords records) {
+        return toBuffer(records.toFileChannelSend());
     }
 
     public static Set<TopicPartition> generateRandomTopicPartitions(int numTopic, int numPartitionPerTopic) {

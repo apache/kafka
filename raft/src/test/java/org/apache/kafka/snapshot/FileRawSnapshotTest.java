@@ -16,6 +16,19 @@
  */
 package org.apache.kafka.snapshot;
 
+import org.apache.kafka.common.record.BufferSupplier.GrowableBufferSupplier;
+import org.apache.kafka.common.record.CompressionType;
+import org.apache.kafka.common.record.MemoryRecords;
+import org.apache.kafka.common.record.Record;
+import org.apache.kafka.common.record.RecordBatch;
+import org.apache.kafka.common.record.SimpleRecord;
+import org.apache.kafka.common.record.UnalignedFileRecords;
+import org.apache.kafka.common.record.UnalignedMemoryRecords;
+import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.raft.OffsetAndEpoch;
+import org.apache.kafka.test.TestUtils;
+import org.junit.jupiter.api.Test;
+
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.file.Files;
@@ -24,17 +37,6 @@ import java.util.Arrays;
 import java.util.Iterator;
 import java.util.stream.IntStream;
 
-import org.apache.kafka.common.record.BaseRecords;
-import org.apache.kafka.common.record.BufferSupplier.GrowableBufferSupplier;
-import org.apache.kafka.common.record.CompressionType;
-import org.apache.kafka.common.record.MemoryRecords;
-import org.apache.kafka.common.record.RecordBatch;
-import org.apache.kafka.common.record.SimpleRecord;
-import org.apache.kafka.common.record.Record;
-import org.apache.kafka.common.utils.Utils;
-import org.apache.kafka.raft.OffsetAndEpoch;
-import org.apache.kafka.test.TestUtils;
-import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -52,7 +54,7 @@ public final class FileRawSnapshotTest {
         try (FileRawSnapshotWriter snapshot = FileRawSnapshotWriter.create(tempDir, offsetAndEpoch)) {
             assertEquals(0, snapshot.sizeInBytes());
 
-            MemoryRecords records = buildRecords(ByteBuffer.wrap(randomBytes(bufferSize)));
+            UnalignedMemoryRecords records = buildRecords(ByteBuffer.wrap(randomBytes(bufferSize)));
             for (int i = 0; i < batches; i++) {
                 snapshot.append(records);
                 expectedSize += records.sizeInBytes();
@@ -78,7 +80,7 @@ public final class FileRawSnapshotTest {
         ByteBuffer expectedBuffer = ByteBuffer.wrap(randomBytes(bufferSize));
 
         try (FileRawSnapshotWriter snapshot = FileRawSnapshotWriter.create(tempDir, offsetAndEpoch)) {
-            MemoryRecords records = buildRecords(expectedBuffer);
+            UnalignedMemoryRecords records = buildRecords(expectedBuffer);
             for (int i = 0; i < batches; i++) {
                 snapshot.append(records);
             }
@@ -128,8 +130,8 @@ public final class FileRawSnapshotTest {
 
         try (FileRawSnapshotWriter snapshot = FileRawSnapshotWriter.create(tempDir, offsetAndEpoch)) {
 
-            snapshot.append(MemoryRecords.readableRecords(buffer1));
-            snapshot.append(MemoryRecords.readableRecords(buffer2));
+            snapshot.append(UnalignedMemoryRecords.readableRecords(buffer1));
+            snapshot.append(UnalignedMemoryRecords.readableRecords(buffer2));
             snapshot.freeze();
         }
 
@@ -138,8 +140,8 @@ public final class FileRawSnapshotTest {
             int totalSize = Math.toIntExact(snapshot.sizeInBytes());
             assertEquals(expectedBuffer.remaining(), totalSize);
 
-            BaseRecords record1 = snapshot.read(0, totalSize / 2);
-            BaseRecords record2 = snapshot.read(totalSize / 2, totalSize - totalSize / 2);
+            UnalignedFileRecords record1 = (UnalignedFileRecords) snapshot.read(0, totalSize / 2);
+            UnalignedFileRecords record2 = (UnalignedFileRecords) snapshot.read(totalSize / 2, totalSize - totalSize / 2);
 
             assertEquals(buffer1, TestUtils.toBuffer(record1));
             assertEquals(buffer2, TestUtils.toBuffer(record2));
@@ -210,7 +212,7 @@ public final class FileRawSnapshotTest {
                     .range(0, batchSize)
                     .mapToObj(ignore -> ByteBuffer.wrap(randomBytes(bufferSize))).toArray(ByteBuffer[]::new);
 
-                MemoryRecords records = buildRecords(buffers);
+                UnalignedMemoryRecords records = buildRecords(buffers);
                 snapshot.append(records);
                 expectedSize += records.sizeInBytes();
             }
@@ -256,7 +258,7 @@ public final class FileRawSnapshotTest {
         int batches = 10;
 
         try (FileRawSnapshotWriter snapshot = FileRawSnapshotWriter.create(tempDir, offsetAndEpoch)) {
-            MemoryRecords records = buildRecords(ByteBuffer.wrap(randomBytes(bufferSize)));
+            UnalignedMemoryRecords records = buildRecords(ByteBuffer.wrap(randomBytes(bufferSize)));
             for (int i = 0; i < batches; i++) {
                 snapshot.append(records);
             }
@@ -275,7 +277,7 @@ public final class FileRawSnapshotTest {
         int batches = 10;
 
         try (FileRawSnapshotWriter snapshot = FileRawSnapshotWriter.create(tempDir, offsetAndEpoch)) {
-            MemoryRecords records = buildRecords(ByteBuffer.wrap(randomBytes(bufferSize)));
+            UnalignedMemoryRecords records = buildRecords(ByteBuffer.wrap(randomBytes(bufferSize)));
             for (int i = 0; i < batches; i++) {
                 snapshot.append(records);
             }
@@ -298,7 +300,7 @@ public final class FileRawSnapshotTest {
         int batches = 1;
 
         try (FileRawSnapshotWriter snapshot = FileRawSnapshotWriter.create(tempDir, offsetAndEpoch)) {
-            MemoryRecords records = buildRecords(ByteBuffer.wrap(randomBytes(bufferSize)));
+            UnalignedMemoryRecords records = buildRecords(ByteBuffer.wrap(randomBytes(bufferSize)));
             for (int i = 0; i < batches; i++) {
                 snapshot.append(records);
             }
@@ -308,7 +310,7 @@ public final class FileRawSnapshotTest {
 
         // Create another snapshot with the same id
         try (FileRawSnapshotWriter snapshot = FileRawSnapshotWriter.create(tempDir, offsetAndEpoch)) {
-            MemoryRecords records = buildRecords(ByteBuffer.wrap(randomBytes(bufferSize)));
+            UnalignedMemoryRecords records = buildRecords(ByteBuffer.wrap(randomBytes(bufferSize)));
             for (int i = 0; i < batches; i++) {
                 snapshot.append(records);
             }
@@ -325,10 +327,11 @@ public final class FileRawSnapshotTest {
         return array;
     }
 
-    private static MemoryRecords buildRecords(ByteBuffer... buffers) {
-        return MemoryRecords.withRecords(
+    private static UnalignedMemoryRecords buildRecords(ByteBuffer... buffers) {
+        MemoryRecords records =  MemoryRecords.withRecords(
             CompressionType.NONE,
             Arrays.stream(buffers).map(SimpleRecord::new).toArray(SimpleRecord[]::new)
         );
+        return UnalignedMemoryRecords.readableRecords(records.buffer());
     }
 }

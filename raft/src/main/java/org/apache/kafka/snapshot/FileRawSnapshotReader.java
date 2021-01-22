@@ -16,9 +16,10 @@
  */
 package org.apache.kafka.snapshot;
 
-import org.apache.kafka.common.record.BaseRecords;
 import org.apache.kafka.common.record.FileRecords;
 import org.apache.kafka.common.record.RecordBatch;
+import org.apache.kafka.common.record.UnalignedFileRecords;
+import org.apache.kafka.common.record.UnalignedRecords;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.raft.OffsetAndEpoch;
 
@@ -50,8 +51,8 @@ public final class FileRawSnapshotReader implements RawSnapshotReader {
         return Utils.covariantCast(fileRecords.batchIterator());
     }
 
-    public BaseRecords read(long position, int size) throws IOException {
-        return fileRecords.slice((int) position, size);
+    public UnalignedRecords read(long position, int size) throws IOException {
+        return UnalignedFileRecords.readableRecords(fileRecords.channel(), position, size);
     }
 
     @Override

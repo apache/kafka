@@ -17,7 +17,7 @@
 
 package org.apache.kafka.snapshot;
 
-import org.apache.kafka.common.record.MemoryRecords;
+import org.apache.kafka.common.record.UnalignedMemoryRecords;
 import org.apache.kafka.raft.OffsetAndEpoch;
 
 import java.io.Closeable;
@@ -48,7 +48,7 @@ public interface RawSnapshotWriter extends Closeable {
      * @param records the region to append
      * @throws IOException for any IO error during append
      */
-    public void append(MemoryRecords records) throws IOException;
+    public void append(UnalignedMemoryRecords records) throws IOException;
 
     /**
      * Returns true if the snapshot has been frozen, otherwise false is returned.

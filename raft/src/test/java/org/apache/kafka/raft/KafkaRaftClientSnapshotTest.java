@@ -24,6 +24,7 @@ import org.apache.kafka.common.message.FetchSnapshotResponseData;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.record.CompressionType;
 import org.apache.kafka.common.record.MemoryRecords;
+import org.apache.kafka.common.record.UnalignedMemoryRecords;
 import org.apache.kafka.common.requests.FetchSnapshotRequest;
 import org.apache.kafka.common.requests.FetchSnapshotResponse;
 import org.apache.kafka.common.utils.Utils;
@@ -32,7 +33,6 @@ import org.apache.kafka.snapshot.RawSnapshotReader;
 import org.apache.kafka.snapshot.RawSnapshotWriter;
 import org.apache.kafka.snapshot.SnapshotWriter;
 import org.apache.kafka.snapshot.SnapshotWriterTest;
-import org.apache.kafka.test.TestUtils;
 import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
@@ -132,9 +132,9 @@ final public class KafkaRaftClientSnapshotTest {
             assertEquals(0, response.position());
             assertEquals(snapshot.sizeInBytes(), response.bytes().sizeInBytes());
 
-            MemoryRecords memoryRecords = (MemoryRecords) snapshot.read(0, Math.toIntExact(snapshot.sizeInBytes()));
+            UnalignedMemoryRecords memoryRecords = (UnalignedMemoryRecords) snapshot.read(0, Math.toIntExact(snapshot.sizeInBytes()));
 
-            assertEquals(memoryRecords, response.bytes());
+            assertEquals(memoryRecords.buffer(), ((UnalignedMemoryRecords) response.bytes()).buffer());
         }
     }
 
@@ -176,11 +176,11 @@ final public class KafkaRaftClientSnapshotTest {
             assertEquals(0, response.position());
             assertEquals(snapshot.sizeInBytes() / 2, response.bytes().sizeInBytes());
 
-            MemoryRecords memoryRecords = (MemoryRecords) snapshot.read(0, Math.toIntExact(snapshot.sizeInBytes()));
+            UnalignedMemoryRecords memoryRecords = (UnalignedMemoryRecords) snapshot.read(0, Math.toIntExact(snapshot.sizeInBytes()));
             ByteBuffer snapshotBuffer = memoryRecords.buffer();
 
             ByteBuffer responseBuffer = ByteBuffer.allocate(Math.toIntExact(snapshot.sizeInBytes()));
-            responseBuffer.put(((MemoryRecords) response.bytes()).buffer());
+            responseBuffer.put(((UnalignedMemoryRecords) response.bytes()).buffer());
 
             ByteBuffer expectedBytes = snapshotBuffer.duplicate();
             expectedBytes.limit(Math.toIntExact(snapshot.sizeInBytes() / 2));
@@ -206,7 +206,7 @@ final public class KafkaRaftClientSnapshotTest {
             assertEquals(responseBuffer.position(), response.position());
             assertEquals(snapshot.sizeInBytes() - (snapshot.sizeInBytes() / 2), response.bytes().sizeInBytes());
 
-            responseBuffer.put(((MemoryRecords) response.bytes()).buffer());
+            responseBuffer.put(((UnalignedMemoryRecords) response.bytes()).buffer());
             assertEquals(snapshotBuffer, responseBuffer.flip());
         }
     }
@@ -1112,11 +1112,11 @@ final public class KafkaRaftClientSnapshotTest {
         }
 
         @Override
-        public void append(MemoryRecords records) {
+        public void append(UnalignedMemoryRecords records) {
             if (frozen) {
                 throw new RuntimeException("Snapshot is already frozen " + snapshotId);
             }
-            ByteBuffer buffer = TestUtils.toBuffer(records);
+            ByteBuffer buffer = records.buffer();
             if (!(data.remaining() >= buffer.remaining())) {
                 ByteBuffer old = data;
                 old.flip();

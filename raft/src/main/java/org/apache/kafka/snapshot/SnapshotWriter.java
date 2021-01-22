@@ -19,7 +19,7 @@ package org.apache.kafka.snapshot;
 
 import org.apache.kafka.common.memory.MemoryPool;
 import org.apache.kafka.common.record.CompressionType;
-import org.apache.kafka.common.record.MemoryRecords;
+import org.apache.kafka.common.record.UnalignedMemoryRecords;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.raft.OffsetAndEpoch;
 import org.apache.kafka.raft.RecordSerde;
@@ -151,7 +151,7 @@ final public class SnapshotWriter<T> implements Closeable {
         try {
             for (CompletedBatch batch : batches) {
                 ByteBuffer buffer = batch.data.buffer();
-                snapshot.append(MemoryRecords.readableRecords(buffer));
+                snapshot.append(UnalignedMemoryRecords.readableRecords(buffer));
             }
         } finally {
             batches.forEach(CompletedBatch::release);

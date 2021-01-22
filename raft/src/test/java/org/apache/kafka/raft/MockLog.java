@@ -18,7 +18,6 @@ package org.apache.kafka.raft;
 
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.OffsetOutOfRangeException;
-import org.apache.kafka.common.record.BaseRecords;
 import org.apache.kafka.common.record.CompressionType;
 import org.apache.kafka.common.record.MemoryRecords;
 import org.apache.kafka.common.record.MemoryRecordsBuilder;
@@ -27,11 +26,12 @@ import org.apache.kafka.common.record.RecordBatch;
 import org.apache.kafka.common.record.Records;
 import org.apache.kafka.common.record.SimpleRecord;
 import org.apache.kafka.common.record.TimestampType;
+import org.apache.kafka.common.record.UnalignedMemoryRecords;
+import org.apache.kafka.common.record.UnalignedRecords;
 import org.apache.kafka.common.utils.ByteBufferOutputStream;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.snapshot.RawSnapshotReader;
 import org.apache.kafka.snapshot.RawSnapshotWriter;
-import org.apache.kafka.test.TestUtils;
 
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
@@ -524,11 +524,11 @@ public class MockLog implements ReplicatedLog {
         }
 
         @Override
-        public void append(MemoryRecords records) {
+        public void append(UnalignedMemoryRecords records) {
             if (frozen) {
                 throw new RuntimeException("Snapshot is already frozen " + snapshotId);
             }
-            ByteBuffer buffer = TestUtils.toBuffer(records);
+            ByteBuffer buffer = records.buffer();
             data.write(buffer);
 
         }
@@ -580,11 +580,11 @@ public class MockLog implements ReplicatedLog {
         }
 
         @Override
-        public BaseRecords read(long position, int size) {
+        public UnalignedRecords read(long position, int size) {
             ByteBuffer buffer = data.buffer();
             buffer.position(Math.toIntExact(position));
             buffer.limit(Math.min(buffer.limit(), Math.toIntExact(position + size)));
-            return MemoryRecords.readableRecords(buffer.slice());
+            return UnalignedMemoryRecords.readableRecords(buffer.slice());
         }
 
         @Override

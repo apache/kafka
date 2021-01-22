@@ -16,8 +16,8 @@
  */
 package org.apache.kafka.snapshot;
 
-import org.apache.kafka.common.record.BaseRecords;
 import org.apache.kafka.common.record.RecordBatch;
+import org.apache.kafka.common.record.UnalignedRecords;
 import org.apache.kafka.raft.OffsetAndEpoch;
 
 import java.io.Closeable;
@@ -49,5 +49,5 @@ public interface RawSnapshotReader extends Closeable, Iterable<RecordBatch> {
      * @return the region read from snapshot
      * @throws IOException for any IO error while reading the snapshot
      */
-    BaseRecords read(long position, int size) throws IOException;
+    UnalignedRecords read(long position, int size) throws IOException;
 }
