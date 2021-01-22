@@ -362,18 +362,15 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
             // parse the topology to determine the repartition source topics,
             // making sure they are created with the number of partitions as
             // the maximum of the depending sub-topologies source topics' number of partitions
-            final Map<Integer, TopicsInfo> topicGroups = taskManager.builder().topicGroups();
-
             final Map<TopicPartition, PartitionInfo> allRepartitionTopicPartitions = prepareRepartitionTopics(metadata);
-
             final Cluster fullMetadata = metadata.withPartitions(allRepartitionTopicPartitions);
-
             log.debug("Created repartition topics {} from the parsed topology.", allRepartitionTopicPartitions.values());
 
             // ---------------- Step Two ---------------- //
 
             // construct the assignment of tasks to clients
 
+            final Map<Integer, TopicsInfo> topicGroups = taskManager.builder().topicGroups();
             final Set<String> allSourceTopics = new HashSet<>();
             final Map<Integer, Set<String>> sourceTopicsByGroup = new HashMap<>();
             for (final Map.Entry<Integer, TopicsInfo> entry : topicGroups.entrySet()) {
