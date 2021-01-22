@@ -28,7 +28,6 @@ import org.apache.kafka.common.message.LeaderAndIsrResponseData.LeaderAndIsrPart
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.utils.FlattenedIterator;
 import org.apache.kafka.common.utils.Utils;
 
 import java.nio.ByteBuffer;
@@ -183,8 +182,7 @@ public class LeaderAndIsrRequest extends AbstractControlRequest {
 
     public Iterable<LeaderAndIsrPartitionState> partitionStates() {
         if (version() >= 2)
-            return () -> new FlattenedIterator<>(data.topicStates().iterator(),
-                topicState -> topicState.partitionStates().iterator());
+            return () -> data.topicStates().stream().flatMap(topicState -> topicState.partitionStates().stream()).iterator();
         return data.ungroupedPartitionStates();
     }
 

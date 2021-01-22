@@ -24,7 +24,6 @@ import org.apache.kafka.common.message.LeaderAndIsrResponseData.LeaderAndIsrPart
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.utils.FlattenedIterator;
 
 import java.nio.ByteBuffer;
 import java.util.Collections;
@@ -54,11 +53,8 @@ public class LeaderAndIsrResponse extends AbstractResponse {
     }
 
     public Iterable<LeaderAndIsrPartitionError> partitions() {
-        if (version < 5) {
-            return data.partitionErrors();
-        }
-        return () -> new FlattenedIterator<>(data.topics().iterator(),
-            topic -> topic.partitionErrors().iterator());
+        if (version < 5) return data.partitionErrors();
+        return () -> data.topics().stream().flatMap(topic -> topic.partitionErrors().stream()).iterator();
     }
 
     public Errors error() {
