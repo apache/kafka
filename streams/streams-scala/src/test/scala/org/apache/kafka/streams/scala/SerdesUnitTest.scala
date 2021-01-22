@@ -1,5 +1,6 @@
 package org.apache.kafka.streams.scala
 
+import org.apache.log4j.AppenderSkeleton
 import kafka.utils.LogCaptureAppender
 import org.apache.kafka.streams.kstream.WindowedSerdes.TimeWindowedSerde
 import org.hamcrest.CoreMatchers.hasItems
@@ -14,7 +15,7 @@ class SerdesUnitTest {
     Serdes.timeWindowedSerde(new TimeWindowedSerde[String]())
     val appender = LogCaptureAppender.createAndRegister()
     assertThat(
-      appender.getMessages,
+      appender,
       hasItems(
         "Implicit `timeWindowedSerde` produces incorrect end times on deserialization. Explicitly declare a new TimeWindowedDeserializer instead."
       )
