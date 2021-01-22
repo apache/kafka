@@ -128,8 +128,8 @@ public class StateDirectoryTest {
                     PosixFilePermission.GROUP_EXECUTE,
                     PosixFilePermission.OWNER_READ);
             try {
-                final Set<PosixFilePermission> baseFilePermissions = Files.getPosixFilePermissions(path);
-                assertThat(expectedPermissions, equalTo(baseFilePermissions));
+                final Set<PosixFilePermission> filePermissions = Files.getPosixFilePermissions(path);
+                assertThat(expectedPermissions, equalTo(filePermissions));
             } catch (final IOException e) {
                 fail("Should create correct files and set correct permissions");
             }

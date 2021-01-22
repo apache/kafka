@@ -125,9 +125,9 @@ public class StateDirectory {
             }
         } else {
             final File file = path.toFile();
-            boolean set = file.setReadable(true, false);
+            boolean set = file.setReadable(true, true);
             set &= file.setWritable(true, true);
-            set &= file.setExecutable(true, false);
+            set &= file.setExecutable(true, true);
             if (!set) {
                 log.error("Failed to change permissions for the directory {}", file);
             }
