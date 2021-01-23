@@ -141,13 +141,13 @@ private object GroupMetadata extends Logging {
     group.protocolName = Option(protocolName)
     group.leaderId = Option(leaderId)
     group.currentStateTimestamp = currentStateTimestamp
-    members.foreach(member => {
+    members.foreach { member =>
       group.add(member, null)
       if (member.isStaticMember) {
         group.addStaticMember(member.groupInstanceId, member.memberId)
       }
       info(s"Loaded member $member in group $groupId with generation ${group.generationId}.")
-    })
+    }
     group.subscribedTopics = group.computeSubscribedTopics()
     group
   }
@@ -265,7 +265,6 @@ private[group] class GroupMetadata(val groupId: String, initialState: GroupState
 
     if (isLeader(memberId))
       leaderId = members.keys.headOption
-
   }
 
   /**
