@@ -19,7 +19,7 @@ package org.apache.kafka.common.header.internals;
 import org.apache.kafka.common.header.Header;
 import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.record.Record;
-import org.apache.kafka.common.utils.AbstractIterator;
+import org.apache.kafka.common.utils.FilterByKeyIterator;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -96,7 +96,7 @@ public class RecordHeaders implements Headers {
     @Override
     public Iterable<Header> headers(final String key) {
         checkKey(key);
-        return () -> new FilterByKeyIterator(headers.iterator(), key);
+        return () -> new FilterByKeyIterator<>(iterator(), header -> header.key().equals(key));
     }
 
     @Override
@@ -166,29 +166,5 @@ public class RecordHeaders implements Headers {
                "headers = " + headers +
                ", isReadOnly = " + isReadOnly +
                ')';
-    }
-
-    private static final class FilterByKeyIterator extends AbstractIterator<Header> {
-
-        private final Iterator<Header> original;
-        private final String key;
-
-        private FilterByKeyIterator(Iterator<Header> original, String key) {
-            this.original = original;
-            this.key = key;
-        }
-
-        protected Header makeNext() {
-            while (true) {
-                if (original.hasNext()) {
-                    Header header = original.next();
-                    if (!header.key().equals(key))
-                        continue;
-
-                    return header;
-                }
-                return this.allDone();
-            }
-        }
     }
 }

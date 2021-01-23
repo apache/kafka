@@ -19,12 +19,17 @@ package org.apache.kafka.common.utils;
 import org.junit.jupiter.api.Test;
 
 import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.Iterator;
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Collectors;
 
 import static java.util.Arrays.asList;
 import static java.util.Collections.emptyList;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class FlattenedIteratorTest {
 
@@ -111,5 +116,22 @@ public class FlattenedIteratorTest {
         assertEquals(list.stream().flatMap(l -> l.stream()).collect(Collectors.toList()), flattened);
     }
 
+    @Test
+    public void testFilter() {
+        Map<String, List<String>> map = new HashMap<>();
+        map.put("a", asList("ee", "dd"));
+        map.put("b", asList("ee", "dd"));
+        map.put("c", asList("ee", "dd"));
+
+        Iterator<String> iter = new FlattenedIterator<>(map.entrySet().iterator(),
+            e -> e.getKey().equals("a"),
+            e -> e.getValue().iterator());
+
+        assertTrue(iter.hasNext());
+        assertEquals("ee", iter.next());
+        assertTrue(iter.hasNext());
+        assertEquals("dd", iter.next());
+        assertFalse(iter.hasNext());
+    }
 }
 

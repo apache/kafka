@@ -17,9 +17,8 @@
 package org.apache.kafka.clients.consumer;
 
 import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.common.utils.AbstractIterator;
+import org.apache.kafka.common.utils.FlattenedIterator;
 
-import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
@@ -61,12 +60,9 @@ public class ConsumerRecords<K, V> implements Iterable<ConsumerRecord<K, V>> {
     public Iterable<ConsumerRecord<K, V>> records(String topic) {
         if (topic == null)
             throw new IllegalArgumentException("Topic must be non-null.");
-        List<List<ConsumerRecord<K, V>>> recs = new ArrayList<>();
-        for (Map.Entry<TopicPartition, List<ConsumerRecord<K, V>>> entry : records.entrySet()) {
-            if (entry.getKey().topic().equals(topic))
-                recs.add(entry.getValue());
-        }
-        return new ConcatenatedIterable<>(recs);
+        return () -> new FlattenedIterator<>(records.entrySet().iterator(),
+            entry -> entry.getKey().topic().equals(topic),
+            s -> s.getValue().iterator());
     }
 
     /**
@@ -79,7 +75,7 @@ public class ConsumerRecords<K, V> implements Iterable<ConsumerRecord<K, V>> {
 
     @Override
     public Iterator<ConsumerRecord<K, V>> iterator() {
-        return new ConcatenatedIterable<>(records.values()).iterator();
+        return new FlattenedIterator<>(records.values().iterator(), Iterable::iterator);
     }
 
     /**
@@ -90,33 +86,6 @@ public class ConsumerRecords<K, V> implements Iterable<ConsumerRecord<K, V>> {
         for (List<ConsumerRecord<K, V>> recs: this.records.values())
             count += recs.size();
         return count;
-    }
-
-    private static class ConcatenatedIterable<K, V> implements Iterable<ConsumerRecord<K, V>> {
-
-        private final Iterable<? extends Iterable<ConsumerRecord<K, V>>> iterables;
-
-        public ConcatenatedIterable(Iterable<? extends Iterable<ConsumerRecord<K, V>>> iterables) {
-            this.iterables = iterables;
-        }
-
-        @Override
-        public Iterator<ConsumerRecord<K, V>> iterator() {
-            return new AbstractIterator<ConsumerRecord<K, V>>() {
-                Iterator<? extends Iterable<ConsumerRecord<K, V>>> iters = iterables.iterator();
-                Iterator<ConsumerRecord<K, V>> current;
-
-                public ConsumerRecord<K, V> makeNext() {
-                    while (current == null || !current.hasNext()) {
-                        if (iters.hasNext())
-                            current = iters.next().iterator();
-                        else
-                            return allDone();
-                    }
-                    return current.next();
-                }
-            };
-        }
     }
 
     public boolean isEmpty() {
