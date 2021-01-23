@@ -18,11 +18,11 @@ package kafka.raft
 
 import kafka.log.{Log, LogConfig, LogManager}
 import kafka.raft.KafkaRaftManager.RaftIoThread
-import kafka.server.{BrokerTopicStats, KafkaConfig, LogDirFailureChannel}
+import kafka.server.{BrokerTopicStats, KafkaConfig, LogDirFailureChannel, MetaProperties}
 import kafka.utils.timer.SystemTimer
 import kafka.utils.{KafkaScheduler, Logging, ShutdownableThread}
 import org.apache.kafka.clients.{ApiVersions, ClientDnsLookup, ManualMetadataUpdater, NetworkClient}
-import org.apache.kafka.common.TopicPartition
+import org.apache.kafka.common.{KafkaException, TopicPartition}
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.network.{ChannelBuilders, NetworkReceive, Selectable, Selector}
 import org.apache.kafka.common.protocol.ApiMessage
@@ -41,9 +41,10 @@ import scala.jdk.CollectionConverters._
 
 object KafkaRaftManager {
   class RaftIoThread(
-    client: KafkaRaftClient[_]
+    client: KafkaRaftClient[_],
+    threadNamePrefix: String
   ) extends ShutdownableThread(
-    name = "raft-io-thread",
+    name = threadNamePrefix + "-io-thread",
     isInterruptible = false
   ) {
     override def doWork(): Unit = {
@@ -96,27 +97,33 @@ trait RaftManager[T] {
 }
 
 class KafkaRaftManager[T](
+  metaProperties: MetaProperties,
   config: KafkaConfig,
-  baseLogDir: String,
   recordSerde: RecordSerde[T],
   topicPartition: TopicPartition,
   time: Time,
-  metrics: Metrics
+  metrics: Metrics,
+  threadNamePrefixOpt: Option[String]
 ) extends RaftManager[T] with Logging {
 
   private val raftConfig = new RaftConfig(config)
-  private val nodeId = config.brokerId
-  private val logContext = new LogContext(s"[RaftManager $nodeId] ")
+  private val threadNamePrefix = threadNamePrefixOpt.getOrElse("kafka-raft")
+  private val nodeId = metaProperties.controllerId
+    .orElse(metaProperties.brokerId)
+    .getOrElse(throw new KafkaException(s"Could not initialize nodeId from $metaProperties since no ID is defined"))
+  private val idString = buildIdString
+
+  private val logContext = new LogContext(s"[RaftManager $idString] ")
   this.logIdent = logContext.logPrefix()
 
-  private val scheduler = new KafkaScheduler(threads = 1)
+  private val scheduler = new KafkaScheduler(threads = 1, threadNamePrefix + "-scheduler")
   scheduler.startup()
 
   private val dataDir = createDataDir()
   private val metadataLog = buildMetadataLog()
   private val netChannel = buildNetworkChannel()
   private val raftClient = buildRaftClient()
-  private val raftIoThread = new RaftIoThread(raftClient)
+  private val raftIoThread = new RaftIoThread(raftClient, threadNamePrefix)
 
   def startup(): Unit = {
     // Update the voter endpoints (if valid) with what's in RaftConfig
@@ -204,12 +211,12 @@ class KafkaRaftManager[T](
 
   private def buildNetworkChannel(): KafkaNetworkChannel = {
     val netClient = buildNetworkClient()
-    new KafkaNetworkChannel(time, netClient, config.quorumRequestTimeoutMs)
+    new KafkaNetworkChannel(time, netClient, config.quorumRequestTimeoutMs, threadNamePrefix)
   }
 
   private def createDataDir(): File = {
     val logDirName = Log.logDirName(topicPartition)
-    KafkaRaftManager.createLogDirectory(new File(baseLogDir), logDirName)
+    KafkaRaftManager.createLogDirectory(new File(config.metadataLogDir), logDirName)
   }
 
   private def buildMetadataLog(): KafkaMetadataLog = {
@@ -259,7 +266,7 @@ class KafkaRaftManager[T](
       logContext
     )
 
-    val clientId = s"raft-client-$nodeId"
+    val clientId = s"raft-client-$idString"
     val maxInflightRequestsPerConnection = 1
     val reconnectBackoffMs = 50
     val reconnectBackoffMsMs = 500
@@ -284,4 +291,17 @@ class KafkaRaftManager[T](
       logContext
     )
   }
+
+  private def buildIdString: String = {
+    val idString = new StringBuilder
+    metaProperties.brokerId.foreach { brokerId =>
+      idString.append(s"broker=$brokerId")
+    }
+    metaProperties.controllerId.foreach { controllerId =>
+      if (idString.nonEmpty) idString.append(",")
+      idString.append(s"controller=$controllerId")
+    }
+    idString.toString
+  }
+
 }

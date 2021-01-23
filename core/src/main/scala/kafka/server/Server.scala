@@ -46,6 +46,22 @@ object Server {
     new Metrics(metricConfig, reporters, time, true, metricsContext)
   }
 
+  def initializeMetrics(
+    config: KafkaConfig,
+    time: Time,
+    metaProps: MetaProperties
+  ): Metrics = {
+    val jmxReporter = new JmxReporter()
+    jmxReporter.configure(config.originals)
+
+    val reporters = new java.util.ArrayList[MetricsReporter]
+    reporters.add(jmxReporter)
+
+    val metricConfig = buildMetricsConfig(config)
+    val metricsContext = createKafkaMetricsContext(config, metaProps)
+    new Metrics(metricConfig, reporters, time, true, metricsContext)
+  }
+
   def buildMetricsConfig(
     kafkaConfig: KafkaConfig
   ): MetricConfig = {
@@ -58,6 +74,19 @@ object Server {
   val MetricsPrefix: String = "kafka.server"
   private val ClusterIdLabel: String = "kafka.cluster.id"
   private val BrokerIdLabel: String = "kafka.broker.id"
+  private val ControllerIdLabel: String = "kafka.controller.id"
+
+  private[server] def createKafkaMetricsContext(
+    config: KafkaConfig,
+    metaProps: MetaProperties
+  ): KafkaMetricsContext = {
+    val contextLabels = new java.util.HashMap[String, Object]
+    metaProps.brokerId.foreach(id => contextLabels.put(BrokerIdLabel, id.toString))
+    metaProps.controllerId.foreach(id => contextLabels.put(ControllerIdLabel, id.toString))
+    contextLabels.putAll(config.originalsWithPrefix(CommonClientConfigs.METRICS_CONTEXT_PREFIX))
+    val metricsContext = new KafkaMetricsContext(MetricsPrefix, contextLabels)
+    metricsContext
+  }
 
   private[server] def createKafkaMetricsContext(
     clusterId: String,

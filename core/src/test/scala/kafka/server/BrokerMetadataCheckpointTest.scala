@@ -14,6 +14,10 @@ package kafka.server
 
 import java.io.File
 
+import kafka.server.KafkaRaftServer.BrokerRole
+import org.apache.kafka.common.Uuid
+import org.apache.kafka.common.utils.Utils
+import org.apache.kafka.test.TestUtils
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Test
 
@@ -21,5 +25,42 @@ class BrokerMetadataCheckpointTest {
   @Test
   def testReadWithNonExistentFile(): Unit = {
     assertEquals(None, new BrokerMetadataCheckpoint(new File("path/that/does/not/exist")).read())
+  }
+
+  @Test
+  def testCreateLegacyMetadataProperties(): Unit = {
+    val meta = ZkMetaProperties("7bc79ca1-9746-42a3-a35a-efb3cde44492", 3)
+    val properties = meta.toProperties
+    val parsed = RawMetaProperties(properties)
+    assertEquals(0, parsed.version)
+    assertEquals(Some(meta.clusterId), parsed.clusterId)
+    assertEquals(Some(meta.brokerId), parsed.brokerId)
+  }
+
+  @Test
+  def testCreateMetadataProperties(): Unit = {
+    val meta = MetaProperties(
+      clusterId = Uuid.fromString("H3KKO4NTRPaCWtEmm3vW7A"),
+      brokerId = Some(5),
+      controllerId = None
+    )
+    val properties = RawMetaProperties(meta.toProperties)
+    val meta2 = MetaProperties.parse(properties, Set(BrokerRole))
+    assertEquals(meta, meta2)
+  }
+
+  @Test
+  def testGetBrokerMetadataAndOfflineDirsWithNonexistentDirectories(): Unit = {
+    val tempDir = TestUtils.tempDirectory()
+    try {
+      assertEquals((new RawMetaProperties(), Seq(tempDir.getAbsolutePath.toString())),
+        BrokerMetadataCheckpoint.getBrokerMetadataAndOfflineDirs(
+          Seq(tempDir.getAbsolutePath), false))
+      assertEquals((new RawMetaProperties(), Seq()),
+        BrokerMetadataCheckpoint.getBrokerMetadataAndOfflineDirs(
+          Seq(tempDir.getAbsolutePath), true))
+    } finally {
+      Utils.delete(tempDir)
+    }
   }
 }

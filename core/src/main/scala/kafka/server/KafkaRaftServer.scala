@@ -16,6 +16,7 @@
  */
 package kafka.server
 
+import kafka.common.{InconsistentBrokerIdException, InconsistentControllerIdException}
 import kafka.metrics.{KafkaMetricsReporter, KafkaYammerMetrics}
 import kafka.raft.KafkaRaftManager
 import kafka.server.KafkaRaftServer.{BrokerRole, ControllerRole}
@@ -43,19 +44,22 @@ class KafkaRaftServer(
   KafkaMetricsReporter.startReporters(VerifiableProperties(config.originals))
   KafkaYammerMetrics.INSTANCE.configure(config.originals)
 
+  private val (metaProps, _) = loadMetaProperties()
+
   private val metrics = Server.initializeMetrics(
     config,
     time,
-    clusterId = "FIXME"
+    metaProps
   )
 
   private val raftManager = new KafkaRaftManager(
+    metaProps,
     config,
-    config.logDirs.head,
     new StringSerde,
     KafkaRaftServer.MetadataPartition,
     time,
-    metrics
+    metrics,
+    threadNamePrefix
   )
 
   private val broker: Option[BrokerServer] = if (config.processRoles.contains(BrokerRole)) {
@@ -89,6 +93,37 @@ class KafkaRaftServer(
   override def awaitShutdown(): Unit = {
     broker.foreach(_.awaitShutdown())
     controller.foreach(_.awaitShutdown())
+  }
+
+  private def loadMetaProperties(): (MetaProperties, Seq[String]) = {
+    val logDirs = config.logDirs ++ Seq(config.metadataLogDir)
+    val (rawMetaProperties, offlineDirs) = BrokerMetadataCheckpoint.
+      getBrokerMetadataAndOfflineDirs(logDirs, ignoreMissing = false)
+
+    if (offlineDirs.contains(config.metadataLogDir)) {
+      throw new RuntimeException("Cannot start server since `meta.properties` could not be " +
+        s"loaded from ${config.metadataLogDir}")
+    }
+
+    val metaProperties = MetaProperties.parse(rawMetaProperties, config.processRoles)
+
+    val configuredBrokerId = if (config.brokerId < 0) None else Some(config.brokerId)
+    if (configuredBrokerId != metaProperties.brokerId) {
+      throw new InconsistentBrokerIdException(
+        s"Configured broker.id ${config.brokerId} doesn't match stored broker.id ${metaProperties.brokerId} in " +
+          "meta.properties. If you moved your data, make sure your configured broker.id matches. " +
+          "If you intend to create a new broker, you should remove all data in your data directories (log.dirs).")
+    }
+
+    val configuredControllerId = if (config.controllerId < 0) None else Some(config.controllerId)
+    if (configuredControllerId != metaProperties.controllerId) {
+      throw new InconsistentControllerIdException(
+        s"Configured controller.id ${config.controllerId} doesn't match stored controller.id ${metaProperties.controllerId} in " +
+          "meta.properties. If you moved your data, make sure your configured controller.id matches. " +
+          "If you intend to create a new broker, you should remove all data in your data directories (log.dirs).")
+    }
+
+    (metaProperties, offlineDirs.toSeq)
   }
 
 }
