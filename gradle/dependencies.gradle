@@ -61,7 +61,7 @@ versions += [
   bcpkix: "1.66",
   checkstyle: "8.20",
   commonsCli: "1.4",
-  gradle: "6.8",
+  gradle: "6.8.1",
   gradleVersionsPlugin: "0.36.0",
   grgit: "4.1.0",
   httpclient: "4.5.12",
