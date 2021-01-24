@@ -130,8 +130,8 @@ public final class FileRawSnapshotTest {
 
         try (FileRawSnapshotWriter snapshot = FileRawSnapshotWriter.create(tempDir, offsetAndEpoch)) {
 
-            snapshot.append(UnalignedMemoryRecords.readableRecords(buffer1));
-            snapshot.append(UnalignedMemoryRecords.readableRecords(buffer2));
+            snapshot.append(new UnalignedMemoryRecords(buffer1));
+            snapshot.append(new UnalignedMemoryRecords(buffer2));
             snapshot.freeze();
         }
 
@@ -332,6 +332,6 @@ public final class FileRawSnapshotTest {
             CompressionType.NONE,
             Arrays.stream(buffers).map(SimpleRecord::new).toArray(SimpleRecord[]::new)
         );
-        return UnalignedMemoryRecords.readableRecords(records.buffer());
+        return new UnalignedMemoryRecords(records.buffer());
     }
 }

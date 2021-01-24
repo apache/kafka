@@ -1338,7 +1338,7 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
         if (!(partitionSnapshot.bytes() instanceof MemoryRecords)) {
             throw new IllegalStateException(String.format("Received unexpected fetch snapshot response: %s", partitionSnapshot));
         }
-        snapshot.append(UnalignedMemoryRecords.readableRecords(((MemoryRecords) partitionSnapshot.bytes()).buffer()));
+        snapshot.append(new UnalignedMemoryRecords(((MemoryRecords) partitionSnapshot.bytes()).buffer()));
 
         if (snapshot.sizeInBytes() == partitionSnapshot.size()) {
             // Finished fetching the snapshot.

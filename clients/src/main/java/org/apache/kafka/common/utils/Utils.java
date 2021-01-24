@@ -23,6 +23,7 @@ import java.util.SortedSet;
 import java.util.TreeSet;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.config.ConfigException;
+import org.apache.kafka.common.network.TransferableChannel;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -1077,7 +1078,7 @@ public final class Utils {
      *
      * @throws IOException If an I/O error occurs
      */
-    public static final void readFully(InputStream inputStream, ByteBuffer destinationBuffer) throws IOException {
+    public static void readFully(InputStream inputStream, ByteBuffer destinationBuffer) throws IOException {
         if (!destinationBuffer.hasArray())
             throw new IllegalArgumentException("destinationBuffer must be backed by an array");
         int initialOffset = destinationBuffer.arrayOffset() + destinationBuffer.position();
@@ -1096,6 +1097,23 @@ public final class Utils {
     public static void writeFully(FileChannel channel, ByteBuffer sourceBuffer) throws IOException {
         while (sourceBuffer.hasRemaining())
             channel.write(sourceBuffer);
+    }
+
+    public static long tryWriteTo(TransferableChannel destChannel,
+                                  long position,
+                                  int length,
+                                  ByteBuffer sourceBuffer) throws IOException {
+        if (position > Integer.MAX_VALUE)
+            throw new IllegalArgumentException("position should not be greater than Integer.MAX_VALUE: " + position);
+        if (position + length > sourceBuffer.limit())
+            throw new IllegalArgumentException("position+length should not be greater than buffer.limit(), position: "
+                    + position + ", length: " + length + ", buffer.limit(): " + sourceBuffer.limit());
+
+        int pos = (int) position;
+        ByteBuffer dup = sourceBuffer.duplicate();
+        dup.position(pos);
+        dup.limit(pos + length);
+        return destChannel.write(dup);
     }
 
     /**

@@ -584,7 +584,7 @@ public class MockLog implements ReplicatedLog {
             ByteBuffer buffer = data.buffer();
             buffer.position(Math.toIntExact(position));
             buffer.limit(Math.min(buffer.limit(), Math.toIntExact(position + size)));
-            return UnalignedMemoryRecords.readableRecords(buffer.slice());
+            return new UnalignedMemoryRecords(buffer.slice());
         }
 
         @Override

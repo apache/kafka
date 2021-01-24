@@ -17,6 +17,7 @@
 package org.apache.kafka.common.record;
 
 import org.apache.kafka.common.network.FileChannelSend;
+import org.apache.kafka.common.network.TransferableChannel;
 
 import java.io.IOException;
 import java.nio.channels.FileChannel;
@@ -30,7 +31,7 @@ public class UnalignedFileRecords implements UnalignedRecords {
     private final long position;
     private final int size;
 
-    private UnalignedFileRecords(FileChannel channel, long position, int size) {
+    public UnalignedFileRecords(FileChannel channel, long position, int size) {
         this.channel = channel;
         this.position = position;
         this.size = size;
@@ -45,14 +46,10 @@ public class UnalignedFileRecords implements UnalignedRecords {
         return new FileChannelSend(channel, position, size);
     }
 
-    public static UnalignedFileRecords readableRecords(FileChannel channel,
-                                                      long position,
-                                                      int maxSize) throws IOException {
-        long limit = Math.min(channel.size(), position + maxSize);
-        if (position > limit) {
-            throw new IllegalStateException("The start position: " + position +
-                "is larger than the limit: " + limit + "of the file");
-        }
-        return new UnalignedFileRecords(channel, position, Math.toIntExact(limit - position));
+    @Override
+    public long writeTo(TransferableChannel destChannel, long previouslyWritten, int remaining) throws IOException {
+        long position = this.position + previouslyWritten;
+        long count = Math.min(remaining, sizeInBytes() - previouslyWritten);
+        return destChannel.transferFrom(channel, position, count);
     }
 }

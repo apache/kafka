@@ -16,6 +16,10 @@
  */
 package org.apache.kafka.common.record;
 
+import org.apache.kafka.common.network.TransferableChannel;
+import org.apache.kafka.common.utils.Utils;
+
+import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.Objects;
 
@@ -26,8 +30,8 @@ public class UnalignedMemoryRecords implements UnalignedRecords {
 
     private final ByteBuffer buffer;
 
-    private UnalignedMemoryRecords(ByteBuffer buffer) {
-        this.buffer = buffer;
+    public UnalignedMemoryRecords(ByteBuffer buffer) {
+        this.buffer = Objects.requireNonNull(buffer);
     }
 
     public ByteBuffer buffer() {
@@ -42,6 +46,11 @@ public class UnalignedMemoryRecords implements UnalignedRecords {
     public static UnalignedMemoryRecords readableRecords(ByteBuffer buffer) {
         Objects.requireNonNull(buffer, "buffer should not be null");
         return new UnalignedMemoryRecords(buffer);
+    }
+
+    @Override
+    public long writeTo(TransferableChannel channel, long position, int length) throws IOException {
+        return Utils.tryWriteTo(channel, position, length, buffer);
     }
 
 }

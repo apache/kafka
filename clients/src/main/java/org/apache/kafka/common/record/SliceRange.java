@@ -16,14 +16,18 @@
  */
 package org.apache.kafka.common.record;
 
-/**
- * Represents a record set which is not necessarily offset-aligned, and is
- * only used when fetching raft snapshot
- */
-public interface UnalignedRecords extends TransferableRecords {
 
-    @Override
-    default RecordsSend<? extends BaseRecords> toSend() {
-        return new DefaultRecordsSend<>(this, sizeInBytes());
+public class SliceRange {
+
+    public final int start;
+    public final int end;
+
+    public SliceRange(int start, int end) {
+        this.start = start;
+        this.end = end;
+    }
+
+    public int size() {
+        return end - start;
     }
 }

@@ -440,7 +440,7 @@ public class TestUtils {
     }
 
     public static ByteBuffer toBuffer(UnalignedFileRecords records) {
-        return toBuffer(records.toFileChannelSend());
+        return toBuffer(records.toSend());
     }
 
     public static Set<TopicPartition> generateRandomTopicPartitions(int numTopic, int numPartitionPerTopic) {
