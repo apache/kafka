@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.common.record;
 
-import org.apache.kafka.common.network.FileChannelSend;
 import org.apache.kafka.common.network.TransferableChannel;
 
 import java.io.IOException;
@@ -40,10 +39,6 @@ public class UnalignedFileRecords implements UnalignedRecords {
     @Override
     public int sizeInBytes() {
         return size;
-    }
-
-    public FileChannelSend toFileChannelSend() {
-        return new FileChannelSend(channel, position, size);
     }
 
     @Override
