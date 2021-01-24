@@ -606,7 +606,7 @@ public class PartitionGroupTest {
             assertThat(
                 appender.getEvents(),
                 hasItem(Matchers.allOf(
-                    Matchers.hasProperty("level", equalTo("DEBUG")),
+                    Matchers.hasProperty("level", equalTo("TRACE")),
                     Matchers.hasProperty("message", equalTo("[test] All partitions were buffered locally, so this task is ready for processing."))
                 ))
             );
@@ -674,7 +674,7 @@ public class PartitionGroupTest {
             assertThat(
                 appender.getEvents(),
                 hasItem(Matchers.allOf(
-                    Matchers.hasProperty("level", equalTo("DEBUG")),
+                    Matchers.hasProperty("level", equalTo("TRACE")),
                     Matchers.hasProperty("message", equalTo("[test] Lag for topic-2 is currently 1, but no data is buffered locally. Waiting to buffer some records."))
                 ))
             );
@@ -708,7 +708,7 @@ public class PartitionGroupTest {
             assertThat(
                 appender.getEvents(),
                 hasItem(Matchers.allOf(
-                    Matchers.hasProperty("level", equalTo("DEBUG")),
+                    Matchers.hasProperty("level", equalTo("TRACE")),
                     Matchers.hasProperty("message", equalTo("[test] Lag for topic-2 is currently 0 and current time is 0. Waiting for new data to be produced for configured idle time 1 (deadline is 1)."))
                 ))
             );

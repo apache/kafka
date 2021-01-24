@@ -106,7 +106,7 @@ public class PartitionGroup {
     public void addFetchedMetadata(final TopicPartition partition, final ConsumerRecords.Metadata metadata) {
         final Long lag = metadata.lag();
         if (lag != null) {
-            logger.debug("added fetched lag {}: {}", partition, lag);
+            logger.trace("added fetched lag {}: {}", partition, lag);
             fetchedLags.put(partition, lag);
         }
     }
@@ -123,9 +123,9 @@ public class PartitionGroup {
             }
         }
         // Log-level strategy:
-        //  TRACE for messages that don't wait for fetches, since these may be logged at extremely high frequency
-        //  DEBUG when we waited for a fetch and decided to wait some more, as configured
-        //  DEBUG when we are ready for processing and didn't have to enforce processing
+        //  TRACE for messages that don't wait for fetches
+        //  TRACE when we waited for a fetch and decided to wait some more, as configured
+        //  TRACE when we are ready for processing and didn't have to enforce processing
         //  INFO  when we enforce processing, since this has to wait for fetches AND may result in disorder
 
         if (maxTaskIdleMs == StreamsConfig.MAX_TASK_IDLE_MS_DISABLED) {
@@ -170,7 +170,7 @@ public class PartitionGroup {
             } else if (nullableFetchedLag > 0L) {
                 // must wait to poll the data we know to be on the broker
                 idlePartitionDeadlines.remove(partition);
-                logger.debug(
+                logger.trace(
                     "Lag for {} is currently {}, but no data is buffered locally. Waiting to buffer some records.",
                     partition,
                     nullableFetchedLag
@@ -186,7 +186,7 @@ public class PartitionGroup {
                 idlePartitionDeadlines.putIfAbsent(partition, wallClockTime + maxTaskIdleMs);
                 final long deadline = idlePartitionDeadlines.get(partition);
                 if (wallClockTime < deadline) {
-                    logger.debug(
+                    logger.trace(
                         "Lag for {} is currently 0 and current time is {}. Waiting for new data to be produced for configured idle time {} (deadline is {}).",
                         partition,
                         wallClockTime,
@@ -204,10 +204,10 @@ public class PartitionGroup {
             }
         }
         if (enforced == null) {
-            logger.debug("All partitions were buffered locally, so this task is ready for processing.");
+            logger.trace("All partitions were buffered locally, so this task is ready for processing.");
             return true;
         } else if (queued.isEmpty()) {
-            logger.debug("No partitions were buffered locally, so this task is not ready for processing.");
+            logger.trace("No partitions were buffered locally, so this task is not ready for processing.");
             return false;
         } else {
             enforcedProcessingSensor.record(1.0d, wallClockTime);
