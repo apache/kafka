@@ -63,9 +63,8 @@ private[group] class MemberMetadata(var memberId: String,
                                     var supportedProtocols: List[(String, Array[Byte])],
                                     var assignment: Array[Byte] = Array.empty[Byte]) {
 
-  var awaitingJoinCallback: JoinGroupResult => Unit = null
-  var awaitingSyncCallback: SyncGroupResult => Unit = null
-  var isLeaving: Boolean = false
+  var awaitingJoinCallback: JoinGroupResult => Unit = _
+  var awaitingSyncCallback: SyncGroupResult => Unit = _
   var isNew: Boolean = false
 
   def isStaticMember: Boolean = groupInstanceId.isDefined
@@ -77,8 +76,8 @@ private[group] class MemberMetadata(var memberId: String,
   // delayed heartbeat can be completed.
   var heartbeatSatisfied: Boolean = false
 
-  def isAwaitingJoin = awaitingJoinCallback != null
-  def isAwaitingSync = awaitingSyncCallback != null
+  def isAwaitingJoin: Boolean = awaitingJoinCallback != null
+  def isAwaitingSync: Boolean = awaitingSyncCallback != null
 
   /**
    * Get metadata corresponding to the provided protocol.
