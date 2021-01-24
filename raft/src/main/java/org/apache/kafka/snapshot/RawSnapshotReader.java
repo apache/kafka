@@ -30,14 +30,14 @@ public interface RawSnapshotReader extends Closeable, Iterable<RecordBatch> {
     /**
      * Returns the end offset and epoch for the snapshot.
      */
-    public OffsetAndEpoch snapshotId();
+    OffsetAndEpoch snapshotId();
 
     /**
      * Returns the number of bytes for the snapshot.
      *
      * @throws IOException for any IO error while reading the size
      */
-    public long sizeInBytes() throws IOException;
+    long sizeInBytes() throws IOException;
 
     /**
      * Reads bytes from position into the given buffer.

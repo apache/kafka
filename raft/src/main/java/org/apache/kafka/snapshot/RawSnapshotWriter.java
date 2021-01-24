@@ -30,14 +30,14 @@ public interface RawSnapshotWriter extends Closeable {
     /**
      * Returns the end offset and epoch for the snapshot.
      */
-    public OffsetAndEpoch snapshotId();
+    OffsetAndEpoch snapshotId();
 
     /**
      * Returns the number of bytes for the snapshot.
      *
      * @throws IOException for any IO error while reading the size
      */
-    public long sizeInBytes() throws IOException;
+    long sizeInBytes() throws IOException;
 
     /**
      * Fully appends the buffer to the snapshot.
@@ -48,21 +48,21 @@ public interface RawSnapshotWriter extends Closeable {
      * @param records the region to append
      * @throws IOException for any IO error during append
      */
-    public void append(UnalignedMemoryRecords records) throws IOException;
+    void append(UnalignedMemoryRecords records) throws IOException;
 
     /**
      * Returns true if the snapshot has been frozen, otherwise false is returned.
      *
      * Modification to the snapshot are not allowed once it is frozen.
      */
-    public boolean isFrozen();
+    boolean isFrozen();
 
     /**
      * Freezes the snapshot and marking it as immutable.
      *
      * @throws IOException for any IO error during freezing
      */
-    public void freeze() throws IOException;
+    void freeze() throws IOException;
 
     /**
      * Closes the snapshot writer.
@@ -71,5 +71,5 @@ public interface RawSnapshotWriter extends Closeable {
      *
      * @throws IOException for any IO error during close
      */
-    public void close() throws IOException;
+    void close() throws IOException;
 }
