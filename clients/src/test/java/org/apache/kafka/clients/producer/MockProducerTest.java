@@ -114,7 +114,7 @@ public class MockProducerTest {
 
         Future<RecordMetadata> md3 = producer.send(record1);
         Future<RecordMetadata> md4 = producer.send(record2);
-        assertFalse(md3.isDone() && !md4.isDone(), "Requests should not be completed.");
+        assertTrue(!md3.isDone() && !md4.isDone(), "Requests should not be completed.");
         producer.flush();
         assertTrue(md3.isDone() && md4.isDone(), "Requests should be completed.");
     }
