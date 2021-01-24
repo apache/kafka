@@ -199,10 +199,10 @@ class ControllerChannelManagerTest {
     val deserializedRequest = LeaderAndIsrRequest.parse(byteBuffer, expectedLeaderAndIsrVersion)
     
     if (interBrokerProtocolVersion >= KAFKA_2_8_IV1) {
-      assertTrue(!request.topicIds().get("foo").equals(Uuid.ZERO_UUID))
-      assertTrue(!deserializedRequest.topicIds().get("foo").equals(Uuid.ZERO_UUID))
+      assertFalse(request.topicIds().get("foo").equals(Uuid.ZERO_UUID))
+      assertFalse(deserializedRequest.topicIds().get("foo").equals(Uuid.ZERO_UUID))
     } else if (interBrokerProtocolVersion >= KAFKA_2_2_IV0) {
-      assertTrue(!request.topicIds().get("foo").equals(Uuid.ZERO_UUID))
+      assertFalse(request.topicIds().get("foo").equals(Uuid.ZERO_UUID))
       assertTrue(deserializedRequest.topicIds().get("foo").equals(Uuid.ZERO_UUID))
     } else {
       assertTrue(request.topicIds().get("foo") == null)

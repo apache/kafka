@@ -271,8 +271,8 @@ class DynamicBrokerReconfigurationTest extends ZooKeeperTestHarness with SaslSet
     val configPrefix = listenerPrefix(SecureExternal)
     val brokerConfigs = describeConfig(adminClients.head, servers).entries.asScala
     // the following are values before updated
-    assertTrue(!brokerConfigs.exists(_.name == TestMetricsReporter.PollingIntervalProp), "Initial value of polling interval")
-    assertTrue(!brokerConfigs.exists(_.name == configPrefix + KafkaConfig.SslTruststoreTypeProp), "Initial value of ssl truststore type")
+    assertFalse(brokerConfigs.exists(_.name == TestMetricsReporter.PollingIntervalProp), "Initial value of polling interval")
+    assertFalse(brokerConfigs.exists(_.name == configPrefix + KafkaConfig.SslTruststoreTypeProp), "Initial value of ssl truststore type")
     assertNull(brokerConfigs.find(_.name == configPrefix+KafkaConfig.SslKeystorePasswordProp).get.value, "Initial value of ssl keystore password")
 
     // setup ssl properties

@@ -108,7 +108,7 @@ class DelegationTokenManagerTest extends ZooKeeperTestHarness  {
     assertEquals(CreateTokenResult(issueTime, issueTime + renewTimeMsDefault,  issueTime + maxLifeTimeMsDefault, tokenId, password, Errors.NONE), createTokenResult)
 
     val token = tokenManager.getToken(tokenId)
-    assertTrue(!token.isEmpty )
+    assertFalse(token.isEmpty )
     assertTrue(password sameElements token.get.hmac)
   }
 

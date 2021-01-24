@@ -313,12 +313,12 @@ class SimpleAclAuthorizerTest extends ZooKeeperTestHarness {
     //test remove all acls for resource
     simpleAclAuthorizer.removeAcls(resource)
     TestUtils.waitAndVerifyAcls(Set.empty[Acl], simpleAclAuthorizer, resource)
-    assertTrue(!zkClient.resourceExists(resource.toPattern))
+    assertFalse(zkClient.resourceExists(resource.toPattern))
 
     //test removing last acl also deletes ZooKeeper path
     acls = changeAclAndVerify(Set.empty[Acl], Set(acl1), Set.empty[Acl])
     changeAclAndVerify(acls, Set.empty[Acl], acls)
-    assertTrue(!zkClient.resourceExists(resource.toPattern))
+    assertFalse(zkClient.resourceExists(resource.toPattern))
   }
 
   @Test
