@@ -1409,7 +1409,7 @@ class GroupCoordinatorTest {
       Some(protocolType)
     )
     assertEquals(Set(leaderRejoinGroupResult.memberId), getGroup(groupId).allMembers)
-    assertNotEquals(null, getGroup(groupId).leaderOrNull)
+    assertNotNull(getGroup(groupId).leaderOrNull)
     assertEquals(3, getGroup(groupId).generationId)
   }
 
