@@ -38,7 +38,7 @@ public final class ProcessorContextUtils {
      * Note that KIP-622 would move currentSystemTimeMs to ProcessorContext,
      * removing the need for this method.
      */
-    public static long getCurrentSystemTime(final ProcessorContext context) {
+    public static long currentSystemTime(final ProcessorContext context) {
         return context.currentSystemTimeMs();
     }
 

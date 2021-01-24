@@ -274,7 +274,7 @@ public class MockProcessorContext implements ProcessorContext, RecordCollector.S
     @Override
     public long currentStreamTimeMs() {
         if (currentStreamTimeMs == null) {
-            throw new IllegalStateException("System time must be set before use via setCurrentStreamTimeMs().");
+            throw new IllegalStateException("Stream time must be set before use via setCurrentStreamTimeMs().");
         }
         return currentStreamTimeMs;
     }
@@ -371,7 +371,7 @@ public class MockProcessorContext implements ProcessorContext, RecordCollector.S
      * The context exposes this metadata for use in the processor. Normally, they are set by the Kafka Streams framework,
      * but for the purpose of driving unit tests, you can set it directly. Setting this attribute doesn't affect the others.
      *
-     * @param timestamp A record timestamp
+     * @param recordTimestamp A record timestamp
      */
     @SuppressWarnings({"WeakerAccess", "unused"})
     public void setRecordTimestamp(final long recordTimestamp) {
