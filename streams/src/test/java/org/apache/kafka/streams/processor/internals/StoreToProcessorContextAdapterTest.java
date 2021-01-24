@@ -17,7 +17,10 @@
 package org.apache.kafka.streams.processor.internals;
 
 import org.apache.kafka.streams.processor.ProcessorContext;
+import org.apache.kafka.streams.processor.PunctuationType;
+import org.apache.kafka.streams.processor.Punctuator;
 import org.apache.kafka.streams.processor.StateStoreContext;
+import org.apache.kafka.streams.processor.To;
 import org.easymock.EasyMockRunner;
 import org.easymock.Mock;
 import org.easymock.MockType;
@@ -25,11 +28,15 @@ import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 
+import java.time.Duration;
+
 @RunWith(EasyMockRunner.class)
 public class StoreToProcessorContextAdapterTest {
     @Mock(MockType.NICE)
     private StateStoreContext delegate;
     private ProcessorContext context;
+    @Mock(MockType.NICE)
+    private Punctuator punctuator;
 
     @Before
     public void setUp() {
@@ -44,5 +51,73 @@ public class StoreToProcessorContextAdapterTest {
     @Test(expected = UnsupportedOperationException.class)
     public void shouldThrowOnCurrentStreamTime() {
         context.currentStreamTimeMs();
+    }
+
+    @Test(expected = UnsupportedOperationException.class)
+    public void shouldThrowOnGetStateStore() {
+        context.getStateStore("store");
+    }
+
+    @SuppressWarnings("deprecation") // need to test deprecated code until removed
+    @Test(expected = UnsupportedOperationException.class)
+    public void shouldThrowOnSchedule() {
+        context.schedule(0, PunctuationType.WALL_CLOCK_TIME, punctuator);
+    }
+
+    @Test(expected = UnsupportedOperationException.class)
+    public void shouldThrowOnScheduleWithDuration() {
+        context.schedule(Duration.ZERO, PunctuationType.WALL_CLOCK_TIME, punctuator);
+    }
+
+    @Test(expected = UnsupportedOperationException.class)
+    public void shouldThrowOnForward() {
+        context.forward("key", "value");
+    }
+
+    @Test(expected = UnsupportedOperationException.class)
+    public void shouldThrowOnForwardWithTo() {
+        context.forward("key", "value", To.all());
+    }
+
+    @SuppressWarnings("deprecation") // need to test deprecated code until removed
+    @Test(expected = UnsupportedOperationException.class)
+    public void shouldThrowOnForwardWithChildIndex() {
+        context.forward("key", "value", 1);
+    }
+
+    @SuppressWarnings("deprecation") // need to test deprecated code until removed
+    @Test(expected = UnsupportedOperationException.class)
+    public void shouldThrowOnForwardWithChildName() {
+        context.forward("key", "value", "child1");
+    }
+
+    @Test(expected = UnsupportedOperationException.class)
+    public void shouldThrowOnCommit() {
+        context.commit();
+    }
+
+    @Test(expected = UnsupportedOperationException.class)
+    public void shouldThrowOnTopic() {
+        context.topic();
+    }
+
+    @Test(expected = UnsupportedOperationException.class)
+    public void shouldThrowOnPartition() {
+        context.partition();
+    }
+
+    @Test(expected = UnsupportedOperationException.class)
+    public void shouldThrowOnOffset() {
+        context.offset();
+    }
+
+    @Test(expected = UnsupportedOperationException.class)
+    public void shouldThrowOnHeaders() {
+        context.headers();
+    }
+
+    @Test(expected = UnsupportedOperationException.class)
+    public void shouldThrowOnTimestamp() {
+        context.timestamp();
     }
 }
