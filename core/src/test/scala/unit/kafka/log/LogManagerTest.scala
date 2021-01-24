@@ -200,7 +200,7 @@ class LogManagerTest {
     val log = logManager.getLog(new TopicPartition(name, 0))
     assertEquals(None, log, "No log should be found.")
     val logFile = new File(logDir, name + "-0")
-    assertTrue(!logFile.exists)
+    assertFalse(logFile.exists)
   }
 
   /**

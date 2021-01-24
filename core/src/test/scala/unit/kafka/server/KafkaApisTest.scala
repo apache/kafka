@@ -124,14 +124,19 @@ class KafkaApisTest {
     val properties = TestUtils.createBrokerConfig(brokerId, "zk")
     properties.put(KafkaConfig.InterBrokerProtocolVersionProp, interBrokerProtocolVersion.toString)
     properties.put(KafkaConfig.LogMessageFormatVersionProp, interBrokerProtocolVersion.toString)
-    properties.put(KafkaConfig.EnableMetadataQuorumProp, enableForwarding.toString)
+
+    val forwardingManagerOpt = if (enableForwarding)
+      Some(this.forwardingManager)
+    else
+      None
+
     new KafkaApis(requestChannel,
       replicaManager,
       adminManager,
       groupCoordinator,
       txnCoordinator,
       controller,
-      forwardingManager,
+      forwardingManagerOpt,
       zkClient,
       brokerId,
       new KafkaConfig(properties),
@@ -601,7 +606,7 @@ class KafkaApisTest {
     val requestHeader = new RequestHeader(ApiKeys.API_VERSIONS, ApiKeys.API_VERSIONS.latestVersion, clientId, 0)
 
     val permittedVersion: Short = 0
-    EasyMock.expect(forwardingManager.controllerApiVersions()).andReturn(
+    EasyMock.expect(forwardingManager.controllerApiVersions).andReturn(
       Some(NodeApiVersions.create(ApiKeys.ALTER_CONFIGS.id, permittedVersion, permittedVersion)))
 
     val capturedResponse = expectNoThrottling()
@@ -637,7 +642,7 @@ class KafkaApisTest {
 
     val requestHeader = new RequestHeader(ApiKeys.API_VERSIONS, ApiKeys.API_VERSIONS.latestVersion, clientId, 0)
 
-    EasyMock.expect(forwardingManager.controllerApiVersions()).andReturn(None)
+    EasyMock.expect(forwardingManager.controllerApiVersions).andReturn(None)
 
     val capturedResponse = expectNoThrottling()
 

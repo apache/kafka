@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.raft;
 
-import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.memory.MemoryPool;
 import org.apache.kafka.common.message.BeginQuorumEpochRequestData;
@@ -78,8 +77,6 @@ import java.util.Set;
 import java.util.function.Consumer;
 import java.util.stream.Collectors;
 
-import static org.apache.kafka.raft.RaftTestUtil.buildRaftConfig;
-import static org.apache.kafka.raft.RaftTestUtil.voterNodesFromIds;
 import static org.apache.kafka.raft.RaftUtil.hasValidTopicPartition;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -194,9 +191,10 @@ public final class RaftClientTestContext {
             MockNetworkChannel channel = new MockNetworkChannel();
             LogContext logContext = new LogContext();
             MockListener listener = new MockListener();
-            List<Node> voterNodes = voterNodesFromIds(voters, RaftClientTestContext::mockAddress);
-            RaftConfig raftConfig = buildRaftConfig(requestTimeoutMs, RETRY_BACKOFF_MS, electionTimeoutMs,
-                    ELECTION_BACKOFF_MAX_MS, FETCH_TIMEOUT_MS, appendLingerMs, voterNodes);
+            Map<Integer, InetSocketAddress> voterAddressMap = voters.stream()
+                .collect(Collectors.toMap(id -> id, RaftClientTestContext::mockAddress));
+            RaftConfig raftConfig = new RaftConfig(voterAddressMap, requestTimeoutMs, RETRY_BACKOFF_MS, electionTimeoutMs,
+                    ELECTION_BACKOFF_MAX_MS, FETCH_TIMEOUT_MS, appendLingerMs);
 
             KafkaRaftClient<String> client = new KafkaRaftClient<>(
                 STRING_SERDE,

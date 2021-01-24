@@ -85,6 +85,7 @@ abstract class KafkaServerTestHarness extends ZooKeeperTestHarness {
   protected def serverSaslProperties: Option[Properties] = None
   protected def clientSaslProperties: Option[Properties] = None
   protected def brokerTime(brokerId: Int): Time = Time.SYSTEM
+  protected def enableForwarding: Boolean = false
 
   @BeforeEach
   override def setUp(): Unit = {
@@ -98,8 +99,14 @@ abstract class KafkaServerTestHarness extends ZooKeeperTestHarness {
 
     // Add each broker to `servers` buffer as soon as it is created to ensure that brokers
     // are shutdown cleanly in tearDown even if a subsequent broker fails to start
-    for (config <- configs)
-      servers += TestUtils.createServer(config, time = brokerTime(config.brokerId))
+    for (config <- configs) {
+      servers += TestUtils.createServer(
+        config,
+        time = brokerTime(config.brokerId),
+        threadNamePrefix = None,
+        enableForwarding
+      )
+    }
     brokerList = TestUtils.bootstrapServers(servers, listenerName)
     alive = new Array[Boolean](servers.length)
     Arrays.fill(alive, true)
