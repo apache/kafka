@@ -35,11 +35,8 @@ public class FilterByKeyIterator<V> extends AbstractIterator<V> {
     @Override
     protected V makeNext() {
         while (original.hasNext()) {
-            V v = original.next();
-            if (!predicate.test(v)) {
-                continue;
-            }
-            return v;
+            V value = original.next();
+            if (predicate.test(value)) return value;
         }
         return this.allDone();
     }

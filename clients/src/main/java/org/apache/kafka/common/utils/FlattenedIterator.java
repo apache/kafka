@@ -45,8 +45,7 @@ public final class FlattenedIterator<O, I> extends AbstractIterator<I> {
         while (innerIterator == null || !innerIterator.hasNext()) {
             if (outerIterator.hasNext()) {
                 O outerValue = outerIterator.next();
-                if (!outerPredicate.test(outerValue)) continue;
-                innerIterator = innerIteratorFunction.apply(outerValue);
+                if (outerPredicate.test(outerValue)) innerIterator = innerIteratorFunction.apply(outerValue);
             } else return allDone();
         }
         return innerIterator.next();
