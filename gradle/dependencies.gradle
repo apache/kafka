@@ -118,7 +118,7 @@ versions += [
   testRetryPlugin: "1.2.0",
   zinc: "1.3.5",
   zookeeper: "3.5.8",
-  zstd: "1.4.5-12"
+  zstd: "1.4.8-2"
 ]
 libs += [
   activation: "javax.activation:activation:$versions.activation",
