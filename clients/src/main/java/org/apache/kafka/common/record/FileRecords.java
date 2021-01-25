@@ -278,7 +278,8 @@ public class FileRecords extends AbstractRecords implements Closeable {
                     file.getAbsolutePath(), oldSize, newSize));
 
         long position = start + offset;
-        int count = Math.min(length, oldSize);
+//        int count = Math.min(length, oldSize);
+        long count = Math.min(length, oldSize - offset);
         return destChannel.transferFrom(channel, position, count);
     }
 
