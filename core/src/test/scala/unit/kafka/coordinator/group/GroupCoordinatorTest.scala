@@ -408,7 +408,7 @@ class GroupCoordinatorTest {
     val memberIds = 1.to(nbMembers).map(_ => group.generateMemberId(ClientId, None))
 
     memberIds.foreach { memberId =>
-      group.add(new MemberMetadata(memberId, groupId, None, ClientId, ClientHost,
+      group.add(new MemberMetadata(memberId, None, ClientId, ClientHost,
         DefaultRebalanceTimeout, GroupMaxSessionTimeout, protocolType, protocols))
     }
     groupCoordinator.groupManager.addGroup(group)
@@ -1409,7 +1409,7 @@ class GroupCoordinatorTest {
       Some(protocolType)
     )
     assertEquals(Set(leaderRejoinGroupResult.memberId), getGroup(groupId).allMembers)
-    assertNotEquals(null, getGroup(groupId).leaderOrNull)
+    assertNotNull(getGroup(groupId).leaderOrNull)
     assertEquals(3, getGroup(groupId).generationId)
   }
 
@@ -1736,7 +1736,7 @@ class GroupCoordinatorTest {
     val memberId = "memberId"
 
     val group = new GroupMetadata(groupId, Empty, new MockTime())
-    val member = new MemberMetadata(memberId, groupId, groupInstanceId,
+    val member = new MemberMetadata(memberId, groupInstanceId,
       ClientId, ClientHost, DefaultRebalanceTimeout, DefaultSessionTimeout,
       protocolType, List(("range", Array.empty[Byte]), ("roundrobin", Array.empty[Byte])))
 
