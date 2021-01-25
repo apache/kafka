@@ -51,7 +51,6 @@ import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.Message;
 import org.apache.kafka.common.protocol.ObjectSerializationCache;
 import org.apache.kafka.common.protocol.types.RawTaggedField;
-import org.apache.kafka.common.protocol.types.SchemaException;
 import org.apache.kafka.common.protocol.types.Type;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
