@@ -518,7 +518,7 @@ public class FileRecordsTest {
     }
 
     @Test
-    public void testWriteTo() throws IOException {
+    public void testBytesLengthOfWriteTo() throws IOException {
 
         int size = fileRecords.sizeInBytes();
         long firstWritten = size / 3;
