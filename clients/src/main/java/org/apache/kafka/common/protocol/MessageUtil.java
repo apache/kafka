@@ -26,11 +26,9 @@ import java.nio.ByteBuffer;
 import java.util.Arrays;
 import java.util.Iterator;
 import java.util.List;
-import java.util.UUID;
+
 
 public final class MessageUtil {
-    public static final UUID ZERO_UUID = new UUID(0L, 0L);
-
     /**
      * Copy a byte buffer into an array.  This will not affect the buffer's
      * position or mark.
