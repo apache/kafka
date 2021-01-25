@@ -162,9 +162,6 @@ Deserializing Messages
 Message objects may be deserialized using the Message#read method.  This method
 overwrites all the data currently in the message object with new data.
 
-You can also deserialize a message from a Struct by calling Message#fromStruct.
-The Struct will not be modified.
-
 Any fields in the message object that are not present in the version that you
 are deserializing will be reset to default values.  Unless a custom default has
 been set:

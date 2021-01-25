@@ -40,9 +40,6 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class OffsetFetchResponseTest {
-
-    private static final String ERROR_CODE = "error_code";
-
     private final int throttleTimeMs = 10;
     private final int offset = 100;
     private final String metadata = "metadata";
