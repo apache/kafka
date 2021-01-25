@@ -152,6 +152,7 @@
       <allow pkg="org.apache.kafka.common.protocol" />
       <allow pkg="org.apache.kafka.common.protocol.types" />
       <allow pkg="org.apache.kafka.common.errors" />
+      <allow pkg="com.github.luben.zstd" />
     </subpackage>
 
     <subpackage name="header">
