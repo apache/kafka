@@ -91,6 +91,20 @@
         We extended <code>StreamJoined</code> to include the options <code>withLoggingEnabled()</code> and <code>withLoggingDisabled()</code> in
         <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-689%3A+Extend+%60StreamJoined%60+to+allow+more+store+configs">KIP-689</a>.
     </p>
+    <p>
+        We add and option to <code>addThread()</code> and <code>removeThread()</code> in
+        <a href="https://cwiki.apache.org/confluence/x/FDd4CQ">KIP-663</a>.
+        This also caused the KafkaStreams client state machine to change.
+        The ERROR state is now terminal with PENDING_ERROR being a transitional state where the resources are closing.
+        When all thread are dead there is not automatic transition to ERROR as a new thread can be added.
+    </p>
+    <p>
+        We replaced <code>setUncaughtExceptionHandler(final Thread.UncaughtExceptionHandler uncaughtExceptionHandler)</code>
+        with <code>setUncaughtExceptionHandler(final StreamsUncaughtExceptionHandler streamsUncaughtExceptionHandler)</code>.
+        The default handler will close the client into the state ERROR.
+        This new handler will return a <code>StreamThreadExceptionResponse</code>,
+        which will determine how the application will respond to a thread failure.
+    </p>
 
     <h3><a id="streams_api_changes_270" href="#streams_api_changes_270">Streams API changes in 2.7.0</a></h3>
     <p>
