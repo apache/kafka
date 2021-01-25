@@ -1059,9 +1059,15 @@ public class Selector implements Selectable, AutoCloseable {
     class SelectorChannelMetadataRegistry implements ChannelMetadataRegistry {
         private CipherInformation cipherInformation;
         private ClientInformation clientInformation;
+        private boolean closed = false;
 
         @Override
-        public void registerCipherInformation(final CipherInformation cipherInformation) {
+        public synchronized void registerCipherInformation(final CipherInformation cipherInformation) {
+            if (closed) {
+                log.warn("Attempted to update cipher, but the connection was closed.");
+                return;
+            }
+
             if (this.cipherInformation != null) {
                 if (this.cipherInformation.equals(cipherInformation))
                     return;
@@ -1073,12 +1079,17 @@ public class Selector implements Selectable, AutoCloseable {
         }
 
         @Override
-        public CipherInformation cipherInformation() {
+        public synchronized CipherInformation cipherInformation() {
             return cipherInformation;
         }
 
         @Override
-        public void registerClientInformation(final ClientInformation clientInformation) {
+        public synchronized void registerClientInformation(final ClientInformation clientInformation) {
+            if (closed) {
+                log.warn("Attempted to update client information, but the connection was closed.");
+                return;
+            }
+
             if (this.clientInformation != null) {
                 if (this.clientInformation.equals(clientInformation))
                     return;
@@ -1090,12 +1101,12 @@ public class Selector implements Selectable, AutoCloseable {
         }
 
         @Override
-        public ClientInformation clientInformation() {
+        public synchronized ClientInformation clientInformation() {
             return clientInformation;
         }
 
         @Override
-        public void close() {
+        public synchronized void close() {
             if (this.cipherInformation != null) {
                 sensors.connectionsByCipher.decrement(this.cipherInformation);
                 this.cipherInformation = null;
@@ -1105,6 +1116,8 @@ public class Selector implements Selectable, AutoCloseable {
                 sensors.connectionsByClient.decrement(this.clientInformation);
                 this.clientInformation = null;
             }
+
+            this.closed = true;
         }
     }
 

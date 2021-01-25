@@ -19,10 +19,10 @@ package kafka.server
 
 import java.net.{InetAddress, UnknownHostException}
 import java.nio.ByteBuffer
-
 import kafka.network.RequestChannel
 import org.apache.kafka.common.errors.{InvalidRequestException, PrincipalDeserializationException, UnsupportedVersionException}
 import org.apache.kafka.common.network.ClientInformation
+import org.apache.kafka.common.network.DefaultChannelMetadataRegistry
 import org.apache.kafka.common.requests.{EnvelopeRequest, RequestContext, RequestHeader}
 import org.apache.kafka.common.security.auth.KafkaPrincipal
 
@@ -90,6 +90,7 @@ object EnvelopeUtils {
         envelope.memoryPool,
         buffer,
         requestChannelMetrics,
+        new DefaultChannelMetadataRegistry,
         Some(envelope)
       )
     } catch {

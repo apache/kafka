@@ -20,7 +20,6 @@ package kafka.network
 import java.net.InetAddress
 import java.nio.ByteBuffer
 import java.util.concurrent._
-
 import com.fasterxml.jackson.databind.JsonNode
 import com.typesafe.scalalogging.Logger
 import com.yammer.metrics.core.Meter
@@ -34,6 +33,7 @@ import org.apache.kafka.common.memory.MemoryPool
 import org.apache.kafka.common.message.ApiMessageType.ListenerType
 import org.apache.kafka.common.message.IncrementalAlterConfigsRequestData
 import org.apache.kafka.common.message.IncrementalAlterConfigsRequestData._
+import org.apache.kafka.common.network.ChannelMetadataRegistry
 import org.apache.kafka.common.network.Send
 import org.apache.kafka.common.protocol.{ApiKeys, Errors, ObjectSerializationCache}
 import org.apache.kafka.common.requests._
@@ -86,6 +86,7 @@ object RequestChannel extends Logging {
                 val memoryPool: MemoryPool,
                 @volatile var buffer: ByteBuffer,
                 metrics: RequestChannel.Metrics,
+                val channelMetadataRegistry: ChannelMetadataRegistry,
                 val envelope: Option[RequestChannel.Request] = None) extends BaseRequest {
     // These need to be volatile because the readers are in the network thread and the writers are in the request
     // handler threads or the purgatory threads

@@ -21,7 +21,6 @@ import java.net.InetAddress
 import java.util
 import java.util.Properties
 import java.util.concurrent.ExecutionException
-
 import kafka.network.RequestChannel
 import kafka.raft.RaftManager
 import kafka.server.QuotaFactory.QuotaManagers
@@ -35,6 +34,7 @@ import org.apache.kafka.common.message.ApiMessageType.ListenerType
 import org.apache.kafka.common.message.DeleteTopicsRequestData.DeleteTopicState
 import org.apache.kafka.common.message.DeleteTopicsResponseData.DeletableTopicResult
 import org.apache.kafka.common.message.{BrokerRegistrationRequestData, DeleteTopicsRequestData}
+import org.apache.kafka.common.network.DefaultChannelMetadataRegistry
 import org.apache.kafka.common.network.{ClientInformation, ListenerName}
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.requests.{AbstractRequest, AbstractResponse, BrokerRegistrationRequest, BrokerRegistrationResponse, RequestContext, RequestHeader, RequestTestUtils}
@@ -113,7 +113,7 @@ class ControllerApisTest {
     val context = new RequestContext(header, "1", InetAddress.getLocalHost, KafkaPrincipal.ANONYMOUS,
       listenerName, SecurityProtocol.PLAINTEXT, ClientInformation.EMPTY, false)
     new RequestChannel.Request(processor = 1, context = context, startTimeNanos = 0, MemoryPool.NONE, buffer,
-      requestChannelMetrics)
+      requestChannelMetrics, new DefaultChannelMetadataRegistry)
   }
 
   @Test

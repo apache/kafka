@@ -26,6 +26,7 @@ import org.apache.kafka.common.memory.MemoryPool
 import org.apache.kafka.common.metrics.MetricConfig
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.network.ClientInformation
+import org.apache.kafka.common.network.DefaultChannelMetadataRegistry
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.requests.{AbstractRequest, FetchRequest, RequestContext, RequestHeader, RequestTestUtils}
 import org.apache.kafka.common.requests.FetchRequest.PartitionData
@@ -66,7 +67,7 @@ class BaseClientQuotaManagerTest {
     val context = new RequestContext(header, "1", InetAddress.getLocalHost, KafkaPrincipal.ANONYMOUS,
       listenerName, SecurityProtocol.PLAINTEXT, ClientInformation.EMPTY, false)
     (request, new RequestChannel.Request(processor = 1, context = context, startTimeNanos =  0, MemoryPool.NONE, buffer,
-      requestChannelMetrics))
+      requestChannelMetrics, new DefaultChannelMetadataRegistry))
   }
 
   protected def buildSession(user: String): Session = {

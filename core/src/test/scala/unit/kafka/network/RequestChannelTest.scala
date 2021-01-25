@@ -22,7 +22,6 @@ import java.io.IOException
 import java.net.InetAddress
 import java.nio.ByteBuffer
 import java.util.Collections
-
 import com.fasterxml.jackson.databind.ObjectMapper
 import kafka.network
 import org.apache.kafka.clients.admin.AlterConfigOp.OpType
@@ -31,6 +30,7 @@ import org.apache.kafka.common.config.{ConfigResource, SaslConfigs, SslConfigs, 
 import org.apache.kafka.common.memory.MemoryPool
 import org.apache.kafka.common.message.IncrementalAlterConfigsRequestData
 import org.apache.kafka.common.message.IncrementalAlterConfigsRequestData._
+import org.apache.kafka.common.network.DefaultChannelMetadataRegistry
 import org.apache.kafka.common.network.{ClientInformation, ListenerName}
 import org.apache.kafka.common.requests._
 import org.apache.kafka.common.requests.AlterConfigsRequest._
@@ -198,7 +198,8 @@ class RequestChannelTest {
       startTimeNanos = 0,
       createNiceMock(classOf[MemoryPool]),
       buffer,
-      createNiceMock(classOf[RequestChannel.Metrics])
+      createNiceMock(classOf[RequestChannel.Metrics]),
+      new DefaultChannelMetadataRegistry
     )
   }
 

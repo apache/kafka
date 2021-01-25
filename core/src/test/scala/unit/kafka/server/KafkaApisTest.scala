@@ -23,7 +23,6 @@ import java.util
 import java.util.Arrays.asList
 import java.util.concurrent.TimeUnit
 import java.util.{Collections, Optional, Properties, Random}
-
 import kafka.api.{ApiVersion, KAFKA_0_10_2_IV0, KAFKA_2_2_IV1, LeaderAndIsr}
 import kafka.cluster.{Broker, Partition}
 import kafka.controller.{ControllerContext, KafkaController}
@@ -55,6 +54,7 @@ import org.apache.kafka.common.message.StopReplicaRequestData.{StopReplicaPartit
 import org.apache.kafka.common.message.UpdateMetadataRequestData.{UpdateMetadataBroker, UpdateMetadataEndpoint, UpdateMetadataPartitionState}
 import org.apache.kafka.common.message._
 import org.apache.kafka.common.metrics.Metrics
+import org.apache.kafka.common.network.DefaultChannelMetadataRegistry
 import org.apache.kafka.common.network.{ClientInformation, ListenerName}
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.quota.{ClientQuotaAlteration, ClientQuotaEntity}
@@ -3121,7 +3121,8 @@ class KafkaApisTest {
       startTimeNanos = time.nanoseconds(),
       memoryPool = MemoryPool.NONE,
       buffer = envelopeBuffer,
-      metrics = requestChannelMetrics
+      metrics = requestChannelMetrics,
+      channelMetadataRegistry = new DefaultChannelMetadataRegistry
     )
   }
 
@@ -3138,7 +3139,7 @@ class KafkaApisTest {
       listenerName, SecurityProtocol.PLAINTEXT, ClientInformation.EMPTY, fromPrivilegedListener,
       Optional.of(kafkaPrincipalSerde))
     new RequestChannel.Request(processor = 1, context = context, startTimeNanos = 0, MemoryPool.NONE, buffer,
-      requestChannelMetrics, envelope = None)
+      requestChannelMetrics, new DefaultChannelMetadataRegistry, envelope = None)
   }
 
   private def expectNoThrottling(request: RequestChannel.Request): Capture[AbstractResponse] = {
