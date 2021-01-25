@@ -50,8 +50,6 @@ import static org.apache.kafka.connect.runtime.distributed.ConnectProtocolCompat
  * to workers.
  */
 public class WorkerCoordinator extends AbstractCoordinator implements Closeable {
-    public static final String DEFAULT_SUBPROTOCOL = "default";
-
     private final Logger log;
     private final String restUrl;
     private final ConfigBackingStore configStorage;

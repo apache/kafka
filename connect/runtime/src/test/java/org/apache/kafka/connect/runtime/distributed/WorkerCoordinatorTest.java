@@ -59,6 +59,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
+import static org.apache.kafka.connect.runtime.distributed.ConnectProtocolCompatibility.EAGER;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
@@ -105,7 +106,7 @@ public class WorkerCoordinatorTest {
     @Parameters
     public static Iterable<?> mode() {
         return Arrays.asList(new Object[][]{
-                {ConnectProtocolCompatibility.EAGER, 1},
+                {EAGER, 1},
                 {ConnectProtocolCompatibility.COMPATIBLE, 2}});
     }
 
@@ -412,7 +413,7 @@ public class WorkerCoordinatorTest {
                 .setMemberId("member")
                 .setMetadata(ConnectProtocol.serializeMetadata(new ConnectProtocol.WorkerState(MEMBER_URL, 1L)).array())
         );
-        Map<String, ByteBuffer> result = coordinator.performAssignment("leader", WorkerCoordinator.DEFAULT_SUBPROTOCOL, responseMembers);
+        Map<String, ByteBuffer> result = coordinator.performAssignment("leader", EAGER.protocol(), responseMembers);
 
         // configState1 has 1 connector, 1 task
         ConnectProtocol.Assignment leaderAssignment = ConnectProtocol.deserializeAssignment(result.get("leader"));
@@ -455,7 +456,7 @@ public class WorkerCoordinatorTest {
                 .setMetadata(ConnectProtocol.serializeMetadata(new ConnectProtocol.WorkerState(MEMBER_URL, 1L)).array())
         );
 
-        Map<String, ByteBuffer> result = coordinator.performAssignment("leader", WorkerCoordinator.DEFAULT_SUBPROTOCOL, responseMembers);
+        Map<String, ByteBuffer> result = coordinator.performAssignment("leader", EAGER.protocol(), responseMembers);
 
         // configState2 has 2 connector, 3 tasks and should trigger round robin assignment
         ConnectProtocol.Assignment leaderAssignment = ConnectProtocol.deserializeAssignment(result.get("leader"));
@@ -498,7 +499,7 @@ public class WorkerCoordinatorTest {
                 .setMetadata(ConnectProtocol.serializeMetadata(new ConnectProtocol.WorkerState(MEMBER_URL, 1L)).array())
         );
 
-        Map<String, ByteBuffer> result = coordinator.performAssignment("leader", WorkerCoordinator.DEFAULT_SUBPROTOCOL, responseMembers);
+        Map<String, ByteBuffer> result = coordinator.performAssignment("leader", EAGER.protocol(), responseMembers);
 
         // Round robin assignment when there are the same number of connectors and tasks should result in each being
         // evenly distributed across the workers, i.e. round robin assignment of connectors first, then followed by tasks
@@ -535,7 +536,7 @@ public class WorkerCoordinatorTest {
         return new JoinGroupResponse(
                 new JoinGroupResponseData().setErrorCode(error.code())
                 .setGenerationId(generationId)
-                .setProtocolName(WorkerCoordinator.DEFAULT_SUBPROTOCOL)
+                .setProtocolName(EAGER.protocol())
                 .setLeader(memberId)
                 .setMemberId(memberId)
                 .setMembers(metadata)
@@ -546,7 +547,7 @@ public class WorkerCoordinatorTest {
         return new JoinGroupResponse(
                 new JoinGroupResponseData().setErrorCode(error.code())
                         .setGenerationId(generationId)
-                        .setProtocolName(WorkerCoordinator.DEFAULT_SUBPROTOCOL)
+                        .setProtocolName(EAGER.protocol())
                         .setLeader(leaderId)
                         .setMemberId(memberId)
                         .setMembers(Collections.emptyList())
