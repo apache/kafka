@@ -16,14 +16,15 @@
  */
 package kafka.raft
 
+import java.util.OptionalInt
+
 import java.io.File
 import java.nio.file.Files
-import java.util.Random
 import java.util.concurrent.CompletableFuture
 
 import kafka.log.{Log, LogConfig, LogManager}
 import kafka.raft.KafkaRaftManager.RaftIoThread
-import kafka.server.{BrokerTopicStats, KafkaConfig, KafkaServer, LogDirFailureChannel}
+import kafka.server.{BrokerTopicStats, KafkaConfig, LogDirFailureChannel}
 import kafka.utils.timer.SystemTimer
 import kafka.utils.{KafkaScheduler, Logging, ShutdownableThread}
 import org.apache.kafka.clients.{ApiVersions, ClientDnsLookup, ManualMetadataUpdater, NetworkClient}
@@ -34,7 +35,7 @@ import org.apache.kafka.common.protocol.ApiMessage
 import org.apache.kafka.common.requests.RequestHeader
 import org.apache.kafka.common.security.JaasContext
 import org.apache.kafka.common.utils.{LogContext, Time}
-import org.apache.kafka.raft.{FileBasedStateStore, KafkaRaftClient, QuorumState, RaftClient, RaftConfig, RaftRequest, RecordSerde}
+import org.apache.kafka.raft.{FileBasedStateStore, KafkaRaftClient, RaftClient, RaftConfig, RaftRequest, RecordSerde}
 
 import scala.jdk.CollectionConverters._
 
@@ -95,16 +96,15 @@ trait RaftManager[T] {
 }
 
 class KafkaRaftManager[T](
-  nodeId: Int,
+  config: KafkaConfig,
   baseLogDir: String,
   recordSerde: RecordSerde[T],
   topicPartition: TopicPartition,
-  config: KafkaConfig,
   time: Time,
   metrics: Metrics
 ) extends RaftManager[T] with Logging {
 
-  private val raftConfig = new RaftConfig(config.originals)
+  private val nodeId = config.brokerId
   private val logContext = new LogContext(s"[RaftManager $nodeId] ")
   this.logIdent = logContext.logPrefix()
 
@@ -119,7 +119,8 @@ class KafkaRaftManager[T](
 
   def startup(): Unit = {
     netChannel.start()
-    raftClient.initialize()
+    val raftConfig = new RaftConfig(config)
+    raftClient.initialize(raftConfig)
     raftIoThread.start()
   }
 
@@ -168,36 +169,26 @@ class KafkaRaftManager[T](
   }
 
   private def buildRaftClient(): KafkaRaftClient[T] = {
-    val quorumState = new QuorumState(
-      nodeId,
-      raftConfig.quorumVoterIds,
-      raftConfig.electionTimeoutMs,
-      raftConfig.fetchTimeoutMs,
-      new FileBasedStateStore(new File(dataDir, "quorum-state")),
-      time,
-      logContext,
-      new Random()
-    )
-
     val expirationTimer = new SystemTimer("raft-expiration-executor")
     val expirationService = new TimingWheelExpirationService(expirationTimer)
+    val quorumStateStore = new FileBasedStateStore(new File(dataDir, "quorum-state"))
 
     new KafkaRaftClient(
-      raftConfig,
       recordSerde,
       netChannel,
       metadataLog,
-      quorumState,
+      quorumStateStore,
       time,
       metrics,
       expirationService,
-      logContext
+      logContext,
+      OptionalInt.of(nodeId)
     )
   }
 
   private def buildNetworkChannel(): KafkaNetworkChannel = {
     val netClient = buildNetworkClient()
-    new KafkaNetworkChannel(time, netClient, raftConfig.requestTimeoutMs)
+    new KafkaNetworkChannel(time, netClient, config.quorumRequestTimeoutMs)
   }
 
   private def createDataDir(): File = {
@@ -206,7 +197,7 @@ class KafkaRaftManager[T](
   }
 
   private def buildMetadataLog(): KafkaMetadataLog = {
-    val defaultProps = KafkaServer.copyKafkaConfigToLog(config)
+    val defaultProps = LogConfig.extractLogConfigMap(config)
     LogConfig.validateValues(defaultProps)
     val defaultLogConfig = LogConfig(defaultProps)
 
@@ -268,7 +259,7 @@ class KafkaRaftManager[T](
       reconnectBackoffMsMs,
       Selectable.USE_DEFAULT_BUFFER_SIZE,
       config.socketReceiveBufferBytes,
-      raftConfig.requestTimeoutMs,
+      config.quorumRequestTimeoutMs,
       config.connectionSetupTimeoutMs,
       config.connectionSetupTimeoutMaxMs,
       ClientDnsLookup.USE_ALL_DNS_IPS,

@@ -131,7 +131,7 @@ public class MockLogTest {
         appendBatch(5, 1);
         LogOffsetMetadata newOffset = new LogOffsetMetadata(5L);
         log.updateHighWatermark(newOffset);
-        assertEquals(newOffset.offset, log.highWatermark());
+        assertEquals(newOffset.offset, log.highWatermark().offset);
     }
 
     @Test
@@ -319,7 +319,7 @@ public class MockLogTest {
 
         // Update to a high watermark with valid offset metadata
         log.updateHighWatermark(readInfo.startOffsetMetadata);
-        assertEquals(readInfo.startOffsetMetadata.offset, log.highWatermark());
+        assertEquals(readInfo.startOffsetMetadata.offset, log.highWatermark().offset);
 
         // Now update to a high watermark with invalid metadata
         assertThrows(IllegalArgumentException.class, () ->
@@ -462,7 +462,7 @@ public class MockLogTest {
 
         assertEquals(epoch + 1, log.lastFetchedEpoch());
         assertEquals(offset + newRecords, log.endOffset().offset);
-        assertEquals(offset + newRecords, log.highWatermark());
+        assertEquals(offset + newRecords, log.highWatermark().offset);
     }
 
     @Test
@@ -477,7 +477,7 @@ public class MockLogTest {
         assertEquals(0, log.startOffset());
         assertEquals(epoch, log.lastFetchedEpoch());
         assertEquals(offset, log.endOffset().offset);
-        assertEquals(offset, log.highWatermark());
+        assertEquals(offset, log.highWatermark().offset);
     }
 
     @Test
@@ -515,7 +515,7 @@ public class MockLogTest {
         assertEquals(sameEpochSnapshotId.offset, log.startOffset());
         assertEquals(sameEpochSnapshotId.epoch, log.lastFetchedEpoch());
         assertEquals(sameEpochSnapshotId.offset, log.endOffset().offset);
-        assertEquals(sameEpochSnapshotId.offset, log.highWatermark());
+        assertEquals(sameEpochSnapshotId.offset, log.highWatermark().offset);
 
         OffsetAndEpoch greaterEpochSnapshotId = new OffsetAndEpoch(3 * numberOfRecords, epoch + 1);
 
@@ -529,7 +529,7 @@ public class MockLogTest {
         assertEquals(greaterEpochSnapshotId.offset, log.startOffset());
         assertEquals(greaterEpochSnapshotId.epoch, log.lastFetchedEpoch());
         assertEquals(greaterEpochSnapshotId.offset, log.endOffset().offset);
-        assertEquals(greaterEpochSnapshotId.offset, log.highWatermark());
+        assertEquals(greaterEpochSnapshotId.offset, log.highWatermark().offset);
     }
 
     @Test

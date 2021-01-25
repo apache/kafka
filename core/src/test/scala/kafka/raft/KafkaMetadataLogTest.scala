@@ -37,13 +37,13 @@ import org.apache.kafka.raft.LogOffsetMetadata
 import org.apache.kafka.raft.OffsetAndEpoch
 import org.apache.kafka.raft.ReplicatedLog
 import org.apache.kafka.snapshot.Snapshots
-import org.junit.After
-import org.junit.Assert.assertEquals
-import org.junit.Assert.assertFalse
-import org.junit.Assert.assertThrows
-import org.junit.Assert.assertTrue
-import org.junit.Before
-import org.junit.Test
+import org.junit.jupiter.api.AfterAll
+import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertFalse
+import org.junit.jupiter.api.Assertions.assertThrows
+import org.junit.jupiter.api.Assertions.assertTrue
+import org.junit.jupiter.api.BeforeAll
+import org.junit.jupiter.api.Test
 
 final class KafkaMetadataLogTest {
   import KafkaMetadataLogTest._
@@ -51,12 +51,12 @@ final class KafkaMetadataLogTest {
   var tempDir: File = null
   val mockTime = new MockTime()
 
-  @Before
+  @BeforeAll
   def setUp(): Unit = {
     tempDir = TestUtils.tempDir()
   }
 
-  @After
+  @AfterAll
   def tearDown(): Unit = {
     Utils.delete(tempDir)
   }

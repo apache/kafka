@@ -33,8 +33,8 @@ import org.apache.kafka.common.message.UpdateFeaturesRequestData.FeatureUpdateKe
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests.{UpdateFeaturesRequest, UpdateFeaturesResponse}
 import org.apache.kafka.common.utils.Utils
-import org.junit.Test
-import org.junit.Assert.{assertEquals, assertFalse, assertNotEquals, assertNotNull, assertTrue, assertThrows}
+import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertNotEquals, assertNotNull, assertTrue, assertThrows}
 
 import scala.jdk.CollectionConverters._
 import scala.reflect.ClassTag
@@ -135,8 +135,8 @@ class UpdateFeaturesTest extends BaseRequestTest {
         val cause = exception.getCause
         assertNotNull(cause)
         assertEquals(cause.getClass, tag.runtimeClass)
-        assertTrue(s"Received unexpected error message: ${cause.getMessage}",
-                   exceptionMsgPattern.findFirstIn(cause.getMessage).isDefined)
+        assertTrue(exceptionMsgPattern.findFirstIn(cause.getMessage).isDefined,
+                   s"Received unexpected error message: ${cause.getMessage}")
     }
   }
 
@@ -265,7 +265,7 @@ class UpdateFeaturesTest extends BaseRequestTest {
     assertNotNull(result.errorMessage)
     assertFalse(result.errorMessage.isEmpty)
     val exceptionMsgPattern = ".*Can not provide maxVersionLevel: 0 less than 1.*allowDowngrade.*".r
-    assertTrue(result.errorMessage, exceptionMsgPattern.findFirstIn(result.errorMessage).isDefined)
+    assertTrue(exceptionMsgPattern.findFirstIn(result.errorMessage).isDefined, result.errorMessage)
     checkFeatures(
       adminClient,
       nodeBefore,

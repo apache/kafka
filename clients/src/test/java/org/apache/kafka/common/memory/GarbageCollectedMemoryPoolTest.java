@@ -21,18 +21,21 @@ import java.util.concurrent.TimeUnit;
 
 import org.apache.kafka.common.utils.Utils;
 
-import org.junit.After;
-import org.junit.Assert;
-import org.junit.Test;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.Test;
 
-import static org.junit.Assert.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 
 public class GarbageCollectedMemoryPoolTest {
 
     private GarbageCollectedMemoryPool pool;
 
-    @After
+    @AfterEach
     public void releasePool() {
         if (pool != null) pool.close();
     }
@@ -102,40 +105,33 @@ public class GarbageCollectedMemoryPoolTest {
     public void testDoubleFree() {
         pool = new GarbageCollectedMemoryPool(1000, 10, false, null);
         ByteBuffer buffer = pool.tryAllocate(5);
-        Assert.assertNotNull(buffer);
-        pool.release(buffer); //so far so good
-        try {
-            pool.release(buffer);
-            Assert.fail("2nd release() should have failed");
-        } catch (IllegalArgumentException e) {
-            //as expected
-        } catch (Throwable t) {
-            Assert.fail("expected an IllegalArgumentException. instead got " + t);
-        }
+        assertNotNull(buffer);
+        pool.release(buffer);
+        assertThrows(IllegalArgumentException.class, () -> pool.release(buffer));
     }
 
     @Test
     public void testAllocationBound() {
         pool = new GarbageCollectedMemoryPool(21, 10, false, null);
         ByteBuffer buf1 = pool.tryAllocate(10);
-        Assert.assertNotNull(buf1);
-        Assert.assertEquals(10, buf1.capacity());
+        assertNotNull(buf1);
+        assertEquals(10, buf1.capacity());
         ByteBuffer buf2 = pool.tryAllocate(10);
-        Assert.assertNotNull(buf2);
-        Assert.assertEquals(10, buf2.capacity());
+        assertNotNull(buf2);
+        assertEquals(10, buf2.capacity());
         ByteBuffer buf3 = pool.tryAllocate(10);
-        Assert.assertNotNull(buf3);
-        Assert.assertEquals(10, buf3.capacity());
+        assertNotNull(buf3);
+        assertEquals(10, buf3.capacity());
         //no more allocations
-        Assert.assertNull(pool.tryAllocate(1));
+        assertNull(pool.tryAllocate(1));
         //release a buffer
         pool.release(buf3);
         //now we can have more
         ByteBuffer buf4 = pool.tryAllocate(10);
-        Assert.assertNotNull(buf4);
-        Assert.assertEquals(10, buf4.capacity());
+        assertNotNull(buf4);
+        assertEquals(10, buf4.capacity());
         //no more allocations
-        Assert.assertNull(pool.tryAllocate(1));
+        assertNull(pool.tryAllocate(1));
     }
 
     @Test
@@ -144,7 +140,7 @@ public class GarbageCollectedMemoryPoolTest {
         long maxHeap = runtime.maxMemory(); //in bytes
         long maxPool = maxHeap / 2;
         long maxSingleAllocation = maxPool / 10;
-        Assert.assertTrue(maxSingleAllocation < Integer.MAX_VALUE / 2); //test JVM running with too much memory for this test logic (?)
+        assertTrue(maxSingleAllocation < Integer.MAX_VALUE / 2); //test JVM running with too much memory for this test logic (?)
         pool = new GarbageCollectedMemoryPool(maxPool, (int) maxSingleAllocation, false, null);
 
         //we will allocate 30 buffers from this pool, which is sized such that at-most
@@ -171,9 +167,9 @@ public class GarbageCollectedMemoryPoolTest {
             }
         }
 
-        Assert.assertTrue("failed to allocate 30 buffers in " + timeoutSeconds + " seconds."
+        assertTrue(success, "failed to allocate 30 buffers in " + timeoutSeconds + " seconds."
                 + " buffers allocated: " + buffersAllocated + " heap " + Utils.formatBytes(maxHeap)
                 + " pool " + Utils.formatBytes(maxPool) + " single allocation "
-                + Utils.formatBytes(maxSingleAllocation), success);
+                + Utils.formatBytes(maxSingleAllocation));
     }
 }

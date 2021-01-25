@@ -19,17 +19,16 @@ package kafka.raft
 import java.net.InetSocketAddress
 import java.util
 import java.util.Collections
-
 import org.apache.kafka.clients.MockClient.MockMetadataUpdater
-import org.apache.kafka.clients.{ApiVersion, MockClient, NodeApiVersions}
+import org.apache.kafka.clients.{MockClient, NodeApiVersions}
 import org.apache.kafka.common.message.{BeginQuorumEpochResponseData, EndQuorumEpochResponseData, FetchResponseData, VoteResponseData}
 import org.apache.kafka.common.protocol.{ApiKeys, ApiMessage, Errors}
-import org.apache.kafka.common.requests.{AbstractResponse, BeginQuorumEpochRequest, BeginQuorumEpochResponse, EndQuorumEpochRequest, EndQuorumEpochResponse, FetchResponse, VoteRequest, VoteResponse}
+import org.apache.kafka.common.requests.{AbstractResponse, ApiVersionsResponse, BeginQuorumEpochRequest, BeginQuorumEpochResponse, EndQuorumEpochRequest, EndQuorumEpochResponse, FetchResponse, VoteRequest, VoteResponse}
 import org.apache.kafka.common.utils.{MockTime, Time}
 import org.apache.kafka.common.{Node, TopicPartition}
 import org.apache.kafka.raft.{RaftRequest, RaftUtil}
-import org.junit.Assert._
-import org.junit.{Before, Test}
+import org.junit.jupiter.api.Assertions._
+import org.junit.jupiter.api.{BeforeEach, Test}
 
 import scala.jdk.CollectionConverters._
 
@@ -43,9 +42,9 @@ class KafkaNetworkChannelTest {
   private val topicPartition = new TopicPartition("topic", 0)
   private val channel = new KafkaNetworkChannel(time, client, requestTimeoutMs)
 
-  @Before
+  @BeforeEach
   def setupSupportedApis(): Unit = {
-    val supportedApis = RaftApis.map(api => new ApiVersion(api))
+    val supportedApis = RaftApis.map(ApiVersionsResponse.toApiVersion)
     client.setNodeApiVersions(NodeApiVersions.create(supportedApis.asJava))
   }
 

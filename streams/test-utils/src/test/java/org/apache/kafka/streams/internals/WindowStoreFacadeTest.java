@@ -22,11 +22,9 @@ import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.StateStoreContext;
 import org.apache.kafka.streams.state.TimestampedWindowStore;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
-import org.easymock.EasyMockRunner;
-import org.easymock.Mock;
-import org.junit.Before;
-import org.junit.Test;
-import org.junit.runner.RunWith;
+import org.easymock.EasyMock;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 
 import static org.easymock.EasyMock.expect;
 import static org.easymock.EasyMock.expectLastCall;
@@ -36,14 +34,12 @@ import static org.easymock.EasyMock.verify;
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
 
-@RunWith(EasyMockRunner.class)
 public class WindowStoreFacadeTest {
-    @Mock
-    private TimestampedWindowStore<String, String> mockedWindowTimestampStore;
+    private final TimestampedWindowStore<String, String> mockedWindowTimestampStore = EasyMock.mock(TimestampedWindowStore.class);
 
     private WindowStoreFacade<String, String> windowStoreFacade;
 
-    @Before
+    @BeforeEach
     public void setup() {
         windowStoreFacade = new WindowStoreFacade<>(mockedWindowTimestampStore);
     }

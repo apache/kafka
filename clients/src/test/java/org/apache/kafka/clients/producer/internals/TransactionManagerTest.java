@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.clients.producer.internals;
 
-import org.apache.kafka.clients.ApiVersion;
 import org.apache.kafka.clients.ApiVersions;
 import org.apache.kafka.clients.MockClient;
 import org.apache.kafka.clients.consumer.CommitFailedException;
@@ -24,6 +23,7 @@ import org.apache.kafka.clients.consumer.ConsumerGroupMetadata;
 import org.apache.kafka.clients.NodeApiVersions;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.common.errors.FencedInstanceIdException;
+import org.apache.kafka.common.message.ApiVersionsResponseData.ApiVersion;
 import org.apache.kafka.common.requests.JoinGroupRequest;
 import org.apache.kafka.common.requests.RequestTestUtils;
 import org.apache.kafka.common.utils.ProducerIdAndEpoch;
@@ -75,8 +75,8 @@ import org.apache.kafka.common.requests.TxnOffsetCommitResponse;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.test.TestUtils;
-import org.junit.Before;
-import org.junit.Test;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 
 import java.nio.ByteBuffer;
 import java.util.Arrays;
@@ -98,17 +98,14 @@ import java.util.function.Supplier;
 import static java.util.Collections.singleton;
 import static java.util.Collections.singletonList;
 import static java.util.Collections.singletonMap;
-import static org.hamcrest.CoreMatchers.instanceOf;
-import static org.hamcrest.CoreMatchers.is;
-import static org.hamcrest.MatcherAssert.assertThat;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertNotEquals;
-import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.assertNull;
-import static org.junit.Assert.assertThrows;
-import static org.junit.Assert.assertTrue;
-import static org.junit.Assert.fail;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.fail;
 
 public class TransactionManagerTest {
     private static final int MAX_REQUEST_SIZE = 1024 * 1024;
@@ -143,7 +140,7 @@ public class TransactionManagerTest {
     private TransactionManager transactionManager = null;
     private Node brokerNode = null;
 
-    @Before
+    @BeforeEach
     public void setup() {
         this.metadata.add("test", time.milliseconds());
         this.client.updateMetadata(RequestTestUtils.metadataUpdateWith(1, singletonMap("test", 2)));
@@ -156,8 +153,14 @@ public class TransactionManagerTest {
         Metrics metrics = new Metrics(time);
 
         apiVersions.update("0", new NodeApiVersions(Arrays.asList(
-                new ApiVersion(ApiKeys.INIT_PRODUCER_ID.id, (short) 0, (short) 3),
-                new ApiVersion(ApiKeys.PRODUCE.id, (short) 0, (short) 7))));
+                new ApiVersion()
+                    .setApiKey(ApiKeys.INIT_PRODUCER_ID.id)
+                    .setMinVersion((short) 0)
+                    .setMaxVersion((short) 3),
+                new ApiVersion()
+                    .setApiKey(ApiKeys.PRODUCE.id)
+                    .setMinVersion((short) 0)
+                    .setMaxVersion((short) 7))));
         this.transactionManager = new TransactionManager(logContext, transactionalId.orElse(null),
                 transactionTimeoutMs, DEFAULT_RETRY_BACKOFF_MS, apiVersions, autoDowngrade);
 
@@ -682,6 +685,7 @@ public class TransactionManagerTest {
                 Errors.NONE, 500L, time.milliseconds(), 0L);
         transactionManager.handleCompletedBatch(b2, b2Response);
 
+        transactionManager.maybeUpdateProducerIdAndEpoch(tp0);
         assertEquals(0, transactionManager.sequenceNumber(tp0).intValue());
         assertFalse(transactionManager.lastAckedSequence(tp0).isPresent());
         assertNull(transactionManager.nextBatchBySequence(tp0));
@@ -690,6 +694,7 @@ public class TransactionManagerTest {
     private ProducerBatch writeIdempotentBatchWithValue(TransactionManager manager,
                                                         TopicPartition tp,
                                                         String value) {
+        manager.maybeUpdateProducerIdAndEpoch(tp);
         int seq = manager.sequenceNumber(tp);
         manager.incrementSequenceNumber(tp, 1);
         ProducerBatch batch = batchWithValue(tp, value);
@@ -2092,7 +2097,7 @@ public class TransactionManagerTest {
             offsets, new ConsumerGroupMetadata(consumerGroupId));
         prepareAddOffsetsToTxnResponse(Errors.NONE, consumerGroupId, producerId, epoch);
         runUntil(() -> !client.hasPendingResponses());
-        assertThat(addOffsetsResult.isCompleted(), is(false));  // The request should complete only after the TxnOffsetCommit completes.
+        assertFalse(addOffsetsResult.isCompleted());  // The request should complete only after the TxnOffsetCommit completes.
 
         Map<TopicPartition, Errors> txnOffsetCommitResponse = new HashMap<>();
         txnOffsetCommitResponse.put(tp0, Errors.NONE);
@@ -2102,8 +2107,8 @@ public class TransactionManagerTest {
         prepareTxnOffsetCommitResponse(consumerGroupId, producerId, epoch, txnOffsetCommitResponse);
 
         runUntil(addOffsetsResult::isCompleted);
-        assertThat(addOffsetsResult.isSuccessful(), is(false));
-        assertThat(addOffsetsResult.error(), instanceOf(error.exception().getClass()));
+        assertFalse(addOffsetsResult.isSuccessful());
+        assertEquals(error.exception().getClass(), addOffsetsResult.error().getClass());
     }
 
     @Test
@@ -2539,8 +2544,14 @@ public class TransactionManagerTest {
     @Test
     public void testTransitionToFatalErrorWhenRetriedBatchIsExpired() throws InterruptedException {
         apiVersions.update("0", new NodeApiVersions(Arrays.asList(
-                new ApiVersion(ApiKeys.INIT_PRODUCER_ID.id, (short) 0, (short) 1),
-                new ApiVersion(ApiKeys.PRODUCE.id, (short) 0, (short) 7))));
+                new ApiVersion()
+                    .setApiKey(ApiKeys.INIT_PRODUCER_ID.id)
+                    .setMinVersion((short) 0)
+                    .setMaxVersion((short) 1),
+                new ApiVersion()
+                    .setApiKey(ApiKeys.PRODUCE.id)
+                    .setMinVersion((short) 0)
+                    .setMaxVersion((short) 7))));
 
         doInitTransactions();
 
@@ -2733,8 +2744,14 @@ public class TransactionManagerTest {
     @Test
     public void testAbortTransactionAndReuseSequenceNumberOnError() throws InterruptedException {
         apiVersions.update("0", new NodeApiVersions(Arrays.asList(
-                new ApiVersion(ApiKeys.INIT_PRODUCER_ID.id, (short) 0, (short) 1),
-                new ApiVersion(ApiKeys.PRODUCE.id, (short) 0, (short) 7))));
+                new ApiVersion()
+                        .setApiKey(ApiKeys.INIT_PRODUCER_ID.id)
+                        .setMinVersion((short) 0)
+                        .setMaxVersion((short) 1),
+                new ApiVersion()
+                        .setApiKey(ApiKeys.PRODUCE.id)
+                        .setMinVersion((short) 0)
+                        .setMaxVersion((short) 7))));
 
         doInitTransactions();
 
@@ -2780,8 +2797,14 @@ public class TransactionManagerTest {
         // where the sequence number is reset on an UnknownProducerId error, allowing subsequent transactions to
         // append to the log successfully
         apiVersions.update("0", new NodeApiVersions(Arrays.asList(
-                new ApiVersion(ApiKeys.INIT_PRODUCER_ID.id, (short) 0, (short) 1),
-                new ApiVersion(ApiKeys.PRODUCE.id, (short) 0, (short) 7))));
+                new ApiVersion()
+                    .setApiKey(ApiKeys.INIT_PRODUCER_ID.id)
+                    .setMinVersion((short) 0)
+                    .setMaxVersion((short) 1),
+                new ApiVersion()
+                    .setApiKey(ApiKeys.PRODUCE.id)
+                    .setMinVersion((short) 0)
+                    .setMaxVersion((short) 7))));
 
         doInitTransactions();
 
@@ -3114,6 +3137,7 @@ public class TransactionManagerTest {
         tp1b2.done(500L, b1AppendTime, null);
         transactionManager.handleCompletedBatch(tp1b2, t1b2Response);
 
+        transactionManager.maybeUpdateProducerIdAndEpoch(tp1);
         assertFalse(transactionManager.hasInflightBatches(tp1));
         assertEquals(0, transactionManager.sequenceNumber(tp1).intValue());
 
@@ -3128,6 +3152,7 @@ public class TransactionManagerTest {
         tp1b3.done(500L, b1AppendTime, null);
         transactionManager.handleCompletedBatch(tp1b3, t1b3Response);
 
+        transactionManager.maybeUpdateProducerIdAndEpoch(tp1);
         assertFalse(transactionManager.hasInflightBatches(tp1));
         assertEquals(1, transactionManager.sequenceNumber(tp1).intValue());
     }
@@ -3236,6 +3261,7 @@ public class TransactionManagerTest {
         tp1b2.done(500L, b1AppendTime, null);
         transactionManager.handleCompletedBatch(tp1b2, t1b2Response);
 
+        transactionManager.maybeUpdateProducerIdAndEpoch(tp1);
         assertFalse(transactionManager.hasInflightBatches(tp1));
         assertEquals(0, transactionManager.sequenceNumber(tp1).intValue());
 
