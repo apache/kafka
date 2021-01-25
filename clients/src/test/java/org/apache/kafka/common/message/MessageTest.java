@@ -636,7 +636,7 @@ public final class MessageTest {
         for (short version = 0; version <= ApiKeys.OFFSET_FETCH.latestVersion(); version++) {
             final short finalVersion = version;
             if (version < 2) {
-                assertThrows(SchemaException.class, () -> testAllMessageRoundTripsFromVersion(finalVersion, allPartitionData));
+                assertThrows(NullPointerException.class, () -> testAllMessageRoundTripsFromVersion(finalVersion, allPartitionData));
             } else {
                 testAllMessageRoundTripsFromVersion(version, allPartitionData);
             }
