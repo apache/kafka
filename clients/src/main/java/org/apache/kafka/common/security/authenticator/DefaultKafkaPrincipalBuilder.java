@@ -24,7 +24,8 @@ import org.apache.kafka.common.errors.SerializationException;
 import org.apache.kafka.common.message.DefaultPrincipalData;
 import org.apache.kafka.common.network.Authenticator;
 import org.apache.kafka.common.network.TransportLayer;
-import org.apache.kafka.common.protocol.types.Struct;
+import org.apache.kafka.common.protocol.ByteBufferAccessor;
+import org.apache.kafka.common.protocol.MessageUtil;
 import org.apache.kafka.common.security.auth.AuthenticationContext;
 import org.apache.kafka.common.security.auth.KafkaPrincipal;
 import org.apache.kafka.common.security.auth.KafkaPrincipalBuilder;
@@ -173,24 +174,18 @@ public class DefaultKafkaPrincipalBuilder implements KafkaPrincipalBuilder, Kafk
                                         .setType(principal.getPrincipalType())
                                         .setName(principal.getName())
                                         .setTokenAuthenticated(principal.tokenAuthenticated());
-        Struct dataStruct = data.toStruct(DefaultPrincipalData.HIGHEST_SUPPORTED_VERSION);
-        ByteBuffer buffer = ByteBuffer.allocate(2 + dataStruct.sizeOf());
-        buffer.putShort(DefaultPrincipalData.HIGHEST_SUPPORTED_VERSION);
-        dataStruct.writeTo(buffer);
-        return buffer.array();
+        return MessageUtil.toVersionPrefixedBytes(DefaultPrincipalData.HIGHEST_SUPPORTED_VERSION, data);
     }
 
     @Override
     public KafkaPrincipal deserialize(byte[] bytes) {
         ByteBuffer buffer = ByteBuffer.wrap(bytes);
         short version = buffer.getShort();
-        if (version < 0 || version >= DefaultPrincipalData.SCHEMAS.length) {
+        if (version < DefaultPrincipalData.LOWEST_SUPPORTED_VERSION || version > DefaultPrincipalData.HIGHEST_SUPPORTED_VERSION) {
             throw new SerializationException("Invalid principal data version " + version);
         }
 
-        DefaultPrincipalData data = new DefaultPrincipalData(
-            DefaultPrincipalData.SCHEMAS[version].read(buffer),
-            version);
+        DefaultPrincipalData data = new DefaultPrincipalData(new ByteBufferAccessor(buffer), version);
         return new KafkaPrincipal(data.type(), data.name(), data.tokenAuthenticated());
     }
 

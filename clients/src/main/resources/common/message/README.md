@@ -157,16 +157,10 @@ meaning of the request, such as a "validateOnly" boolean, should not be ignored.
 It's often useful to know how much space a message will take up before writing
 it out to a buffer.  You can find this out by calling the Message#size method.
 
-You can also convert a message to a Struct by calling Message#toStruct.  This
-allows you to use the functions that serialize Structs to buffers.
-
 Deserializing Messages
 ----------------------
 Message objects may be deserialized using the Message#read method.  This method
 overwrites all the data currently in the message object with new data.
-
-You can also deserialize a message from a Struct by calling Message#fromStruct.
-The Struct will not be modified.
 
 Any fields in the message object that are not present in the version that you
 are deserializing will be reset to default values.  Unless a custom default has
