@@ -1,41 +1,50 @@
+/**
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements.  See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to You under the Apache License, Version 2.0
+ * (the "License"); you may not use this file except in compliance with
+ * the License.  You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package kafka.tools
 
-import java.time.Duration
 import java.util.Properties
-import java.util.regex.Pattern
-
 import kafka.integration.KafkaServerTestHarness
 import kafka.server.KafkaConfig
 import kafka.utils.{Exit, Logging, TestUtils}
 import org.apache.kafka.clients.CommonClientConfigs
-import org.apache.kafka.clients.consumer.{ConsumerConfig, KafkaConsumer}
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerConfig, ProducerRecord}
-import org.apache.kafka.common.serialization.{StringDeserializer, StringSerializer}
-import org.junit.Assert.{assertEquals, assertTrue}
+import org.apache.kafka.common.serialization.StringSerializer
+import org.junit.Assert.assertEquals
 import org.junit.{Before, Test}
 
 class GetOffsetShellTest extends KafkaServerTestHarness with Logging {
   private val topicCount = 4
   private val offsetTopicPartitionCount = 4
-  private val topicPattern = Pattern.compile("test.*")
 
   override def generateConfigs: collection.Seq[KafkaConfig] = TestUtils.createBrokerConfigs(1, zkConnect)
-    .map(p => {
-      p.put(KafkaConfig.OffsetsTopicPartitionsProp, offsetTopicPartitionCount)
+    .map { p =>
+      p.put(KafkaConfig.OffsetsTopicPartitionsProp, Int.box(offsetTopicPartitionCount))
       p
-    }).map(KafkaConfig.fromProps)
+    }.map(KafkaConfig.fromProps)
 
   @Before
-  def createTopicAndConsume(): Unit = {
+  def createTestAndInternalTopics(): Unit = {
     Range(1, topicCount + 1).foreach(i => createTopic(topicName(i), i))
 
     val props = new Properties()
     props.put(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, brokerList)
     props.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, classOf[StringSerializer])
     props.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, classOf[StringSerializer])
-    props.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, classOf[StringDeserializer])
-    props.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, classOf[StringDeserializer])
-    props.put(ConsumerConfig.GROUP_ID_CONFIG, "GetOffsetShellTest")
 
     // Send X messages to each partition of topicX
     val producer = new KafkaProducer[String, String](props)
@@ -43,84 +52,75 @@ class GetOffsetShellTest extends KafkaServerTestHarness with Logging {
       .foreach(msgCount => producer.send(new ProducerRecord[String, String](topicName(i), msgCount % i, null, "val" + msgCount))))
     producer.close()
 
-    // Consume so consumer offsets topic is created
-    val consumer = new KafkaConsumer[String, String](props)
-    consumer.subscribe(topicPattern)
-    consumer.poll(Duration.ofMillis(1000))
-    consumer.commitSync()
-    consumer.close()
+    TestUtils.createOffsetsTopic(zkClient, servers)
   }
 
   @Test
   def testNoFilterOptions(): Unit = {
     val offsets = executeAndParse(Array())
-    assertTrue(expectedOffsets() sameElements offsets.filter(r => !isConsumerOffsetTopicPartition(r)))
-    assertEquals(offsetTopicPartitionCount, offsets.count(isConsumerOffsetTopicPartition))
+    assertEquals(expectedOffsetsWithInternal(), offsets)
   }
 
   @Test
   def testInternalExcluded(): Unit = {
     val offsets = executeAndParse(Array("--exclude-internal-topics"))
-    assertTrue(expectedOffsets() sameElements offsets.filter(r => !isConsumerOffsetTopicPartition(r)))
-    assertEquals(0, offsets.count(isConsumerOffsetTopicPartition))
+    assertEquals(expectedTestTopicOffsets(), offsets)
   }
 
   @Test
   def testTopicNameArg(): Unit = {
     Range(1, topicCount + 1).foreach(i => {
       val offsets = executeAndParse(Array("--topic", topicName(i)))
-      assertTrue("Offset output did not match for " + topicName(i), expectedOffsetsForTopic(i) sameElements offsets)
+      assertEquals("Offset output did not match for " + topicName(i), expectedOffsetsForTopic(i), offsets)
     })
   }
 
   @Test
   def testTopicPatternArg(): Unit = {
     val offsets = executeAndParse(Array("--topic", "topic.*"))
-    assertTrue(expectedOffsets() sameElements offsets)
+    assertEquals(expectedTestTopicOffsets(), offsets)
   }
 
   @Test
   def testPartitionsArg(): Unit = {
     val offsets = executeAndParse(Array("--partitions", "0,1"))
-    assertTrue(expectedOffsets().filter(r => r._2 <= 1) sameElements offsets.filter(r => !isConsumerOffsetTopicPartition(r)))
-    assertEquals(2, offsets.count(isConsumerOffsetTopicPartition))
+    assertEquals(expectedOffsetsWithInternal().filter { case (_, partition, _) => partition <= 1 }, offsets)
   }
 
   @Test
   def testTopicPatternArgWithPartitionsArg(): Unit = {
     val offsets = executeAndParse(Array("--topic", "topic.*", "--partitions", "0,1"))
-    assertTrue(expectedOffsets().filter(r => r._2 <= 1) sameElements offsets)
+    assertEquals(expectedTestTopicOffsets().filter { case (_, partition, _) => partition <= 1 }, offsets)
   }
 
   @Test
   def testTopicPartitionsArg(): Unit = {
     val offsets = executeAndParse(Array("--topic-partitions", "topic1:0,topic2:1,topic(3|4):2,__.*:3"))
-    assertTrue(
-      Array(
+    assertEquals(
+      List(
+        ("__consumer_offsets", 3, Some(0)),
         ("topic1", 0, Some(1)),
         ("topic2", 1, Some(2)),
         ("topic3", 2, Some(3)),
         ("topic4", 2, Some(4))
-      )
-      sameElements offsets.filter(r => !isConsumerOffsetTopicPartition(r))
+      ),
+      offsets
     )
-    assertEquals(1, offsets.count(isConsumerOffsetTopicPartition))
   }
 
   @Test
   def testTopicPartitionsArgWithInternalExcluded(): Unit = {
     val offsets = executeAndParse(Array("--topic-partitions",
       "topic1:0,topic2:1,topic(3|4):2,__.*:3", "--exclude-internal-topics"))
-    assertTrue(
-      Array(
+    assertEquals(
+      List(
         ("topic1", 0, Some(1)),
         ("topic2", 1, Some(2)),
         ("topic3", 2, Some(3)),
         ("topic4", 2, Some(4))
-      )
-        sameElements offsets.filter(r => !isConsumerOffsetTopicPartition(r))
+      ),
+      offsets
     )
-    assertEquals(0, offsets.count(isConsumerOffsetTopicPartition))
   }
 
   @Test
@@ -134,21 +134,31 @@ class GetOffsetShellTest extends KafkaServerTestHarness with Logging {
   }
 
   @Test
-  def testTopicPartitionsNotFoundForNontMatchingTopicPartitionPattern(): Unit = {
+  def testTopicPartitionsNotFoundForNonMatchingTopicPartitionPattern(): Unit = {
     assertExitCodeIsOne(Array("--topic-partitions", "__consumer_offsets", "--exclude-internal-topics"))
   }
 
-  private def isConsumerOffsetTopicPartition(record: (String, Int, Option[Long])): Boolean = {
-    record._1 == "__consumer_offsets"
+  @Test
+  def testTopicPartitionsFlagWithTopicFlagCauseExit(): Unit = {
+    assertExitCodeIsOne(Array("--topic-partitions", "__consumer_offsets", "--topic", "topic1"))
   }
 
-  private def expectedOffsets(): Array[(String, Int, Option[Long])] = {
-    Range(1, topicCount + 1).flatMap(i => expectedOffsetsForTopic(i)).toArray
+  @Test
+  def testTopicPartitionsFlagWithPartitionsFlagCauseExit(): Unit = {
+    assertExitCodeIsOne(Array("--topic-partitions", "__consumer_offsets", "--partitions", "0"))
   }
 
-  private def expectedOffsetsForTopic(i: Int): Array[(String, Int, Option[Long])] = {
+  private def expectedOffsetsWithInternal(): List[(String, Int, Option[Long])] = {
+    Range(0, offsetTopicPartitionCount).map(i => ("__consumer_offsets", i, Some(0L))).toList ++ expectedTestTopicOffsets()
+  }
+
+  private def expectedTestTopicOffsets(): List[(String, Int, Option[Long])] = {
+    Range(1, topicCount + 1).flatMap(i => expectedOffsetsForTopic(i)).toList
+  }
+
+  private def expectedOffsetsForTopic(i: Int): List[(String, Int, Option[Long])] = {
     val name = topicName(i)
-    Range(0, i).map(p => (name, p, Some(i.toLong))).toArray
+    Range(0, i).map(p => (name, p, Some(i.toLong))).toList
   }
 
   private def topicName(i: Int): String = "topic" + i
@@ -171,7 +181,7 @@ class GetOffsetShellTest extends KafkaServerTestHarness with Logging {
     assertEquals(Some(1), exitStatus)
   }
 
-  private def executeAndParse(args: Array[String]): Array[(String, Int, Option[Long])] = {
+  private def executeAndParse(args: Array[String]): List[(String, Int, Option[Long])] = {
     val output = executeAndGrabOutput(args)
     output.split(System.lineSeparator())
       .map(_.split(":"))
@@ -182,6 +192,7 @@ class GetOffsetShellTest extends KafkaServerTestHarness with Logging {
         val timestamp = if (line.length == 2 || line(2).isEmpty) None else Some(line(2).toLong)
         (topic, partition, timestamp)
       })
+      .toList
   }
 
   private def executeAndGrabOutput(args: Array[String]): String = {
@@ -192,3 +203,5 @@ class GetOffsetShellTest extends KafkaServerTestHarness with Logging {
     args ++ Array("--bootstrap-server", brokerList)
   }
 }
+
+
