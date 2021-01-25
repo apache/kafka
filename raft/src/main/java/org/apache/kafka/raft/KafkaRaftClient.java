@@ -1027,63 +1027,50 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
         }
 
 
-        Optional<OffsetAndEpoch> endOffsetAndEpochOpt = log
-            .endOffsetForEpoch(lastFetchedEpoch)
-            .flatMap(endOffsetAndEpoch -> {
-                if (endOffsetAndEpoch.epoch == lastFetchedEpoch && endOffsetAndEpoch.offset == log.startOffset()) {
-                    // This means that either:
-                    // 1. The lastFetchedEpoch is smaller than any known epoch
-                    // 2. The current leader epoch is lastFetchedEpoch and the log is empty.
-                    // Assume that there is not diverging information
-                    return Optional.empty();
-                } else {
-                    return Optional.of(endOffsetAndEpoch);
-                }
-            });
-        if (endOffsetAndEpochOpt.isPresent()) {
-            OffsetAndEpoch endOffsetAndEpoch = endOffsetAndEpochOpt.get();
-            if (endOffsetAndEpoch.epoch != lastFetchedEpoch || endOffsetAndEpoch.offset < fetchOffset) {
-                return ValidatedFetchOffsetAndEpoch.diverging(endOffsetAndEpoch);
-            } else {
-                return ValidatedFetchOffsetAndEpoch.valid(new OffsetAndEpoch(fetchOffset, lastFetchedEpoch));
-            }
-        } else if (log.startOffset() > 0) {
-            OffsetAndEpoch oldestSnapshotId = log.oldestSnapshotId().orElseThrow(() -> {
+        OffsetAndEpoch endOffsetAndEpoch = log.endOffsetForEpoch(lastFetchedEpoch).orElseThrow(() -> {
+            return new IllegalStateException(
+                String.format(
+                    "Expected to find an end offset for epoch %s since it must be less than the current epoch %s",
+                    lastFetchedEpoch,
+                    quorum.epoch()
+                )
+            );
+        });
+        if (log.oldestSnapshotId().isPresent() &&
+            endOffsetAndEpoch.offset == log.oldestSnapshotId().get().offset &&
+            endOffsetAndEpoch.epoch == lastFetchedEpoch) {
+
+            // The lastFetchedEpoch is smaller thant the smallest epoch on the log.
+            // overide the diverging epoch to the oldest snapshot
+            OffsetAndEpoch oldestSnapshotId = log.oldestSnapshotId().get();
+            endOffsetAndEpoch = new OffsetAndEpoch(oldestSnapshotId.offset, oldestSnapshotId.epoch);
+        }
+
+        if (log.oldestSnapshotId().isPresent() &&
+            ((fetchOffset < log.startOffset()) ||
+             (fetchOffset == log.startOffset() && lastFetchedEpoch != log.oldestSnapshotId().get().epoch) ||
+             (lastFetchedEpoch < log.oldestSnapshotId().get().epoch))) {
+
+            // Send a snapshot if the leader has a snapshot at the log start offset and
+            // 1. the fetch offset is less than the log start offset or
+            // 2. the fetch offset is equal to the log start offset and last fetch epoch doesn't match the oldest snapshot or
+            // 3. last fetch epoch is less than the oldest snapshot's epoch
+
+            OffsetAndEpoch latestSnapshotId = log.latestSnapshotId().orElseThrow(() -> {
                 return new IllegalStateException(
                     String.format(
-                        "The log start offset (%s) was greater than zero but start snapshot was not found",
+                        "The log start offset (%s) was greater than zero but latest snapshot was not found",
                         log.startOffset()
                     )
                 );
             });
 
-            if (fetchOffset == log.startOffset() && lastFetchedEpoch == oldestSnapshotId.epoch) {
-                return ValidatedFetchOffsetAndEpoch.valid(new OffsetAndEpoch(fetchOffset, lastFetchedEpoch));
-            } else {
-                OffsetAndEpoch latestSnapshotId = log.latestSnapshotId().orElseThrow(() -> {
-                    return new IllegalStateException(
-                        String.format(
-                            "The log start offset (%s) was greater than zero but latest snapshot was not found",
-                            log.startOffset()
-                        )
-                    );
-                });
-
-                return ValidatedFetchOffsetAndEpoch.snapshot(latestSnapshotId);
-            }
+            return ValidatedFetchOffsetAndEpoch.snapshot(latestSnapshotId);
+        } else if (endOffsetAndEpoch.epoch != lastFetchedEpoch || endOffsetAndEpoch.offset < fetchOffset) {
+            return ValidatedFetchOffsetAndEpoch.diverging(endOffsetAndEpoch);
         } else {
-            logger.warn(
-                "Replica sent a last fetched epoch ({}) greater than any known epoch ({}). This should not be possible. " +
-                "Log start offset is {} and start snapshot is {}. Ask the replica to truncate to offset 0.",
-                lastFetchedEpoch,
-                quorum.epoch(),
-                log.startOffset(),
-                log.oldestSnapshotId()
-            );
-
-            return ValidatedFetchOffsetAndEpoch.diverging(new OffsetAndEpoch(0, 0));
+            return ValidatedFetchOffsetAndEpoch.valid(new OffsetAndEpoch(fetchOffset, lastFetchedEpoch));
         }
-
     }
 
     private static OptionalInt optionalLeaderId(int leaderIdOrNil) {

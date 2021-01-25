@@ -180,12 +180,14 @@ public class MockLog implements ReplicatedLog {
 
     @Override
     public Optional<OffsetAndEpoch> endOffsetForEpoch(int epoch) {
-        int epochLowerBound = 0;
+        OptionalInt epochLowerBound = OptionalInt.empty();
         for (EpochStartOffset epochStartOffset : epochStartOffsets) {
             if (epochStartOffset.epoch > epoch) {
-                return Optional.of(new OffsetAndEpoch(epochStartOffset.startOffset, epochLowerBound));
+                return Optional.of(
+                    new OffsetAndEpoch(epochStartOffset.startOffset, epochLowerBound.orElse(epoch))
+                );
             }
-            epochLowerBound = epochStartOffset.epoch;
+            epochLowerBound = OptionalInt.of(epochStartOffset.epoch);
         }
 
         if (!epochStartOffsets.isEmpty()) {

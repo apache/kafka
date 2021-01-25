@@ -44,7 +44,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 final public class KafkaRaftClientSnapshotTest {
     @Test
-    public void testFetchRequest() throws Exception {
+    public void testFetchRequestOffsetLessThanLogStart() throws Exception {
         int localId = 0;
         int otherNodeId = localId + 1;
         Set<Integer> voters = Utils.mkSet(localId, otherNodeId);
@@ -56,15 +56,15 @@ final public class KafkaRaftClientSnapshotTest {
         context.becomeLeader();
         int epoch = context.currentEpoch();
 
-        String[] appendRecords = new String[] {"a", "b", "c"};
-        context.client.scheduleAppend(epoch, Arrays.asList(appendRecords));
+        List<String> appendRecords = Arrays.asList("a", "b", "c");
+        context.client.scheduleAppend(epoch, appendRecords);
         context.time.sleep(context.appendLingerMs());
         context.client.poll();
 
         long localLogEndOffset = context.log.endOffset().offset;
         assertTrue(
-            appendRecords.length <= localLogEndOffset,
-            String.format("Record length = %s, log end offset = %s", appendRecords.length, localLogEndOffset)
+            appendRecords.size() <= localLogEndOffset,
+            String.format("Record length = %s, log end offset = %s", appendRecords.size(), localLogEndOffset)
         );
 
         // Advance the highWatermark
@@ -93,7 +93,229 @@ final public class KafkaRaftClientSnapshotTest {
         assertEquals(snapshotId.offset, partitionResponse.snapshotId().endOffset());
     }
 
-    // TODO: Add a few more fetch request tests checking some of the error conditions and edge conditions
+    @Test
+    public void testFetchRequestWithLargerLastFetchedEpoch() throws Exception {
+        int localId = 0;
+        int otherNodeId = localId + 1;
+        Set<Integer> voters = Utils.mkSet(localId, otherNodeId);
+
+        OffsetAndEpoch oldestSnapshotId = new OffsetAndEpoch(3, 2);
+
+        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
+            .appendToLog(oldestSnapshotId.offset, oldestSnapshotId.epoch, Arrays.asList("a", "b", "c"))
+            .withAppendLingerMs(1)
+            .build();
+
+        context.becomeLeader();
+        int epoch = context.currentEpoch();
+        assertEquals(oldestSnapshotId.epoch + 1, epoch);
+
+        // Advance the highWatermark
+        context.deliverRequest(context.fetchRequest(epoch, otherNodeId, oldestSnapshotId.offset, oldestSnapshotId.epoch, 0));
+        context.pollUntilResponse();
+        context.assertSentFetchResponse(Errors.NONE, epoch, OptionalInt.of(localId));
+        assertEquals(oldestSnapshotId.offset, context.client.highWatermark().getAsLong());
+
+        // Create a snapshot at the high watermark
+        try (SnapshotWriter<String> snapshot = context.client.createSnapshot(oldestSnapshotId)) {
+            snapshot.freeze();
+        }
+        context.client.poll();
+
+        context.client.scheduleAppend(epoch, Arrays.asList("a", "b", "c"));
+        context.time.sleep(context.appendLingerMs());
+        context.client.poll();
+
+        // It is an invalid request to send an last fetched epoch greater than the current epoch
+        context.deliverRequest(context.fetchRequest(epoch, otherNodeId, oldestSnapshotId.offset + 1, epoch + 1, 0));
+        context.pollUntilResponse();
+        context.assertSentFetchResponse(Errors.INVALID_REQUEST, epoch, OptionalInt.of(localId));
+    }
+
+    @Test
+    public void testFetchRequestTruncateToLogStart() throws Exception {
+        int localId = 0;
+        int otherNodeId = localId + 1;
+        int syncNodeId = otherNodeId + 1;
+        Set<Integer> voters = Utils.mkSet(localId, otherNodeId, syncNodeId);
+
+        OffsetAndEpoch oldestSnapshotId = new OffsetAndEpoch(3, 2);
+
+        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
+            .appendToLog(oldestSnapshotId.offset, oldestSnapshotId.epoch, Arrays.asList("a", "b", "c"))
+            .appendToLog(oldestSnapshotId.offset + 3, oldestSnapshotId.epoch + 2, Arrays.asList("a", "b", "c"))
+            .withAppendLingerMs(1)
+            .build();
+
+        context.becomeLeader();
+        int epoch = context.currentEpoch();
+        assertEquals(oldestSnapshotId.epoch + 2 + 1, epoch);
+
+        // Advance the highWatermark
+        context.deliverRequest(
+            context.fetchRequest(epoch, syncNodeId, context.log.endOffset().offset, epoch, 0)
+        );
+        context.pollUntilResponse();
+        context.assertSentFetchResponse(Errors.NONE, epoch, OptionalInt.of(localId));
+        assertEquals(context.log.endOffset().offset, context.client.highWatermark().getAsLong());
+
+        // Create a snapshot at the high watermark
+        try (SnapshotWriter<String> snapshot = context.client.createSnapshot(oldestSnapshotId)) {
+            snapshot.freeze();
+        }
+        context.client.poll();
+
+        // This should truncate to the old snapshot
+        context.deliverRequest(
+            context.fetchRequest(epoch, otherNodeId, oldestSnapshotId.offset + 1, oldestSnapshotId.epoch + 1, 0)
+        );
+        context.pollUntilResponse();
+        FetchResponseData.FetchablePartitionResponse partitionResponse = context.assertSentFetchResponse();
+        assertEquals(Errors.NONE, Errors.forCode(partitionResponse.errorCode()));
+        assertEquals(epoch, partitionResponse.currentLeader().leaderEpoch());
+        assertEquals(localId, partitionResponse.currentLeader().leaderId());
+        assertEquals(oldestSnapshotId.epoch, partitionResponse.divergingEpoch().epoch());
+        assertEquals(oldestSnapshotId.offset, partitionResponse.divergingEpoch().endOffset());
+    }
+
+    @Test
+    public void testFetchRequestAtLogStartOffsetWithValidEpoch() throws Exception {
+        int localId = 0;
+        int otherNodeId = localId + 1;
+        int syncNodeId = otherNodeId + 1;
+        Set<Integer> voters = Utils.mkSet(localId, otherNodeId, syncNodeId);
+
+        OffsetAndEpoch oldestSnapshotId = new OffsetAndEpoch(3, 2);
+
+        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
+            .appendToLog(oldestSnapshotId.offset, oldestSnapshotId.epoch, Arrays.asList("a", "b", "c"))
+            .appendToLog(oldestSnapshotId.offset + 3, oldestSnapshotId.epoch + 2, Arrays.asList("a", "b", "c"))
+            .withAppendLingerMs(1)
+            .build();
+
+        context.becomeLeader();
+        int epoch = context.currentEpoch();
+        assertEquals(oldestSnapshotId.epoch + 2 + 1, epoch);
+
+        // Advance the highWatermark
+        context.deliverRequest(
+            context.fetchRequest(epoch, syncNodeId, context.log.endOffset().offset, epoch, 0)
+        );
+        context.pollUntilResponse();
+        context.assertSentFetchResponse(Errors.NONE, epoch, OptionalInt.of(localId));
+        assertEquals(context.log.endOffset().offset, context.client.highWatermark().getAsLong());
+
+        // Create a snapshot at the high watermark
+        try (SnapshotWriter<String> snapshot = context.client.createSnapshot(oldestSnapshotId)) {
+            snapshot.freeze();
+        }
+        context.client.poll();
+
+        // Send fetch request at log start offset with valid last fetched epoch
+        context.deliverRequest(
+            context.fetchRequest(epoch, otherNodeId, oldestSnapshotId.offset, oldestSnapshotId.epoch, 0)
+        );
+        context.pollUntilResponse();
+        context.assertSentFetchResponse(Errors.NONE, epoch, OptionalInt.of(localId));
+    }
+
+    @Test
+    public void testFetchRequestAtLogStartOffsetWithInvalidEpoch() throws Exception {
+        int localId = 0;
+        int otherNodeId = localId + 1;
+        int syncNodeId = otherNodeId + 1;
+        Set<Integer> voters = Utils.mkSet(localId, otherNodeId, syncNodeId);
+
+        OffsetAndEpoch oldestSnapshotId = new OffsetAndEpoch(3, 2);
+
+        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
+            .appendToLog(oldestSnapshotId.offset, oldestSnapshotId.epoch, Arrays.asList("a", "b", "c"))
+            .appendToLog(oldestSnapshotId.offset + 3, oldestSnapshotId.epoch + 2, Arrays.asList("a", "b", "c"))
+            .withAppendLingerMs(1)
+            .build();
+
+        context.becomeLeader();
+        int epoch = context.currentEpoch();
+        assertEquals(oldestSnapshotId.epoch + 2 + 1, epoch);
+
+        // Advance the highWatermark
+        context.deliverRequest(
+            context.fetchRequest(epoch, syncNodeId, context.log.endOffset().offset, epoch, 0)
+        );
+        context.pollUntilResponse();
+        context.assertSentFetchResponse(Errors.NONE, epoch, OptionalInt.of(localId));
+        assertEquals(context.log.endOffset().offset, context.client.highWatermark().getAsLong());
+
+        // Create a snapshot at the high watermark
+        try (SnapshotWriter<String> snapshot = context.client.createSnapshot(oldestSnapshotId)) {
+            snapshot.freeze();
+        }
+        context.client.poll();
+
+        // Send fetch with log start offset and invalid last fetched epoch
+        context.deliverRequest(
+            context.fetchRequest(epoch, otherNodeId, oldestSnapshotId.offset, oldestSnapshotId.epoch + 1, 0)
+        );
+        context.pollUntilResponse();
+        FetchResponseData.FetchablePartitionResponse partitionResponse = context.assertSentFetchResponse();
+        assertEquals(Errors.NONE, Errors.forCode(partitionResponse.errorCode()));
+        assertEquals(epoch, partitionResponse.currentLeader().leaderEpoch());
+        assertEquals(localId, partitionResponse.currentLeader().leaderId());
+        assertEquals(oldestSnapshotId.epoch, partitionResponse.snapshotId().epoch());
+        assertEquals(oldestSnapshotId.offset, partitionResponse.snapshotId().endOffset());
+    }
+
+    @Test
+    public void testFetchRequestWithLastFetchedEpochLessThanOldestSnapshot() throws Exception {
+        int localId = 0;
+        int otherNodeId = localId + 1;
+        int syncNodeId = otherNodeId + 1;
+        Set<Integer> voters = Utils.mkSet(localId, otherNodeId, syncNodeId);
+
+        OffsetAndEpoch oldestSnapshotId = new OffsetAndEpoch(3, 2);
+
+        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
+            .appendToLog(oldestSnapshotId.offset, oldestSnapshotId.epoch, Arrays.asList("a", "b", "c"))
+            .appendToLog(oldestSnapshotId.offset + 3, oldestSnapshotId.epoch + 2, Arrays.asList("a", "b", "c"))
+            .withAppendLingerMs(1)
+            .build();
+
+        context.becomeLeader();
+        int epoch = context.currentEpoch();
+        assertEquals(oldestSnapshotId.epoch + 2 + 1, epoch);
+
+        // Advance the highWatermark
+        context.deliverRequest(
+            context.fetchRequest(epoch, syncNodeId, context.log.endOffset().offset, epoch, 0)
+        );
+        context.pollUntilResponse();
+        context.assertSentFetchResponse(Errors.NONE, epoch, OptionalInt.of(localId));
+        assertEquals(context.log.endOffset().offset, context.client.highWatermark().getAsLong());
+
+        // Create a snapshot at the high watermark
+        try (SnapshotWriter<String> snapshot = context.client.createSnapshot(oldestSnapshotId)) {
+            snapshot.freeze();
+        }
+        context.client.poll();
+
+        // Send a epoch less than the oldest snapshot
+        context.deliverRequest(
+            context.fetchRequest(
+                epoch,
+                otherNodeId,
+                context.log.endOffset().offset,
+                oldestSnapshotId.epoch - 1,
+                0
+            )
+        );
+        context.pollUntilResponse();
+        FetchResponseData.FetchablePartitionResponse partitionResponse = context.assertSentFetchResponse();
+        assertEquals(Errors.NONE, Errors.forCode(partitionResponse.errorCode()));
+        assertEquals(epoch, partitionResponse.currentLeader().leaderEpoch());
+        assertEquals(localId, partitionResponse.currentLeader().leaderId());
+        assertEquals(oldestSnapshotId.epoch, partitionResponse.snapshotId().epoch());
+        assertEquals(oldestSnapshotId.offset, partitionResponse.snapshotId().endOffset());
+    }
 
     @Test
     public void testFetchSnapshotRequestMissingSnapshot() throws Exception {

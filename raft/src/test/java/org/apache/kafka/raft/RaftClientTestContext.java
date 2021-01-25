@@ -546,7 +546,7 @@ public final class RaftClientTestContext {
         assertEquals(leaderId.orElse(-1), partitionResponse.leaderId());
         assertEquals(partitionError, Errors.forCode(partitionResponse.errorCode()));
     }
-    
+
     int assertSentEndQuorumEpochRequest(int epoch, int destinationId) {
         List<RaftRequest.Outbound> endQuorumRequests = collectEndQuorumRequests(
             epoch, Collections.singleton(destinationId));
@@ -619,6 +619,10 @@ public final class RaftClientTestContext {
         assertEquals(error, Errors.forCode(partitionResponse.errorCode()));
         assertEquals(epoch, partitionResponse.currentLeader().leaderEpoch());
         assertEquals(leaderId.orElse(-1), partitionResponse.currentLeader().leaderId());
+        assertEquals(-1, partitionResponse.divergingEpoch().endOffset());
+        assertEquals(-1, partitionResponse.divergingEpoch().epoch());
+        assertEquals(-1, partitionResponse.snapshotId().endOffset());
+        assertEquals(-1, partitionResponse.snapshotId().epoch());
         return (MemoryRecords) partitionResponse.recordSet();
     }
 
@@ -630,6 +634,10 @@ public final class RaftClientTestContext {
         assertEquals(Errors.NONE, Errors.forCode(partitionResponse.errorCode()));
         assertEquals(leaderEpoch, partitionResponse.currentLeader().leaderEpoch());
         assertEquals(highWatermark, partitionResponse.highWatermark());
+        assertEquals(-1, partitionResponse.divergingEpoch().endOffset());
+        assertEquals(-1, partitionResponse.divergingEpoch().epoch());
+        assertEquals(-1, partitionResponse.snapshotId().endOffset());
+        assertEquals(-1, partitionResponse.snapshotId().epoch());
         return (MemoryRecords) partitionResponse.recordSet();
     }
 
