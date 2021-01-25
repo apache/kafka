@@ -528,8 +528,16 @@ public class MockLog implements ReplicatedLog {
             if (frozen) {
                 throw new RuntimeException("Snapshot is already frozen " + snapshotId);
             }
-            ByteBuffer buffer = records.buffer();
-            data.write(buffer);
+            data.write(records.buffer());
+
+        }
+
+        @Override
+        public void append(MemoryRecords records) {
+            if (frozen) {
+                throw new RuntimeException("Snapshot is already frozen " + snapshotId);
+            }
+            data.write(records.buffer());
 
         }
 

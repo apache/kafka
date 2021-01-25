@@ -17,6 +17,7 @@
 
 package org.apache.kafka.snapshot;
 
+import org.apache.kafka.common.record.MemoryRecords;
 import org.apache.kafka.common.record.UnalignedMemoryRecords;
 import org.apache.kafka.raft.OffsetAndEpoch;
 
@@ -40,14 +41,27 @@ public interface RawSnapshotWriter extends Closeable {
     long sizeInBytes() throws IOException;
 
     /**
-     * Fully appends the buffer to the snapshot.
+     * Fully appends the memory record set to the snapshot.
      *
-     * If the method returns without an exception the given buffer was fully writing the
+     * If the method returns without an exception the given record set was fully writing the
      * snapshot.
      *
      * @param records the region to append
      * @throws IOException for any IO error during append
      */
+    void append(MemoryRecords records) throws IOException;
+
+    /**
+     * Fully appends the memory record set to the snapshot, the difference with {@link RawSnapshotWriter#append(MemoryRecords)}
+     * is that the record set are fetched from leader by FetchSnapshotRequest, so the records are unaligned.
+     *
+     * If the method returns without an exception the given records was fully writing the
+     * snapshot.
+     *
+     * @param records the region to append
+     * @throws IOException for any IO error during append
+     */
+
     void append(UnalignedMemoryRecords records) throws IOException;
 
     /**

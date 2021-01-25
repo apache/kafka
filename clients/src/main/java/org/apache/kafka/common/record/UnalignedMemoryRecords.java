@@ -43,14 +43,14 @@ public class UnalignedMemoryRecords implements UnalignedRecords {
         return buffer.remaining();
     }
 
-    public static UnalignedMemoryRecords readableRecords(ByteBuffer buffer) {
-        Objects.requireNonNull(buffer, "buffer should not be null");
-        return new UnalignedMemoryRecords(buffer);
-    }
-
     @Override
     public long writeTo(TransferableChannel channel, long position, int length) throws IOException {
-        return Utils.tryWriteTo(channel, position, length, buffer);
+        if (position > Integer.MAX_VALUE)
+            throw new IllegalArgumentException("position should not be greater than Integer.MAX_VALUE: " + position);
+        if (position + length > buffer.limit())
+            throw new IllegalArgumentException("position+length should not be greater than buffer.limit(), position: "
+                    + position + ", length: " + length + ", buffer.limit(): " + buffer.limit());
+        return Utils.tryWriteTo(channel, (int) position, length, buffer);
     }
 
 }

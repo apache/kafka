@@ -1116,7 +1116,18 @@ final public class KafkaRaftClientSnapshotTest {
             if (frozen) {
                 throw new RuntimeException("Snapshot is already frozen " + snapshotId);
             }
-            ByteBuffer buffer = records.buffer();
+            append(records.buffer());
+        }
+
+        @Override
+        public void append(MemoryRecords records) {
+            if (frozen) {
+                throw new RuntimeException("Snapshot is already frozen " + snapshotId);
+            }
+            append(records.buffer());
+        }
+
+        private void append(ByteBuffer buffer) {
             if (!(data.remaining() >= buffer.remaining())) {
                 ByteBuffer old = data;
                 old.flip();

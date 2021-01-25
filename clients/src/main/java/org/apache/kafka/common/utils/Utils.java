@@ -1099,20 +1099,26 @@ public final class Utils {
             channel.write(sourceBuffer);
     }
 
+    /**
+     * Trying to write data in source buffer to a {@link TransferableChannel}, we may need to call this method multiple
+     * times since this method doesn't ensure data in source buffer can be fully written to dest channel.
+     *
+     * @param destChannel The dest channel
+     * @param position From which the source buffer will be written
+     * @param length The max size of bytes can be written
+     * @param sourceBuffer The source buffer
+     *
+     * @return The length of the actual written data
+     * @throws IOException If an I/O error occurs
+     */
     public static long tryWriteTo(TransferableChannel destChannel,
-                                  long position,
+                                  int position,
                                   int length,
                                   ByteBuffer sourceBuffer) throws IOException {
-        if (position > Integer.MAX_VALUE)
-            throw new IllegalArgumentException("position should not be greater than Integer.MAX_VALUE: " + position);
-        if (position + length > sourceBuffer.limit())
-            throw new IllegalArgumentException("position+length should not be greater than buffer.limit(), position: "
-                    + position + ", length: " + length + ", buffer.limit(): " + sourceBuffer.limit());
 
-        int pos = (int) position;
         ByteBuffer dup = sourceBuffer.duplicate();
-        dup.position(pos);
-        dup.limit(pos + length);
+        dup.position(position);
+        dup.limit(position + length);
         return destChannel.write(dup);
     }
 

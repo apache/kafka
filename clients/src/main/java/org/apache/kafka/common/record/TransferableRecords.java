@@ -21,7 +21,7 @@ import org.apache.kafka.common.network.TransferableChannel;
 import java.io.IOException;
 
 /**
- * Represents a record set which can be transfer to a channel
+ * Represents a record set which can be transferred to a channel
  * @see Records
  * @see UnalignedRecords
  */

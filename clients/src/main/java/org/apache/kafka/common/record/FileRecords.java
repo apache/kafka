@@ -134,16 +134,27 @@ public class FileRecords extends AbstractRecords implements Closeable {
      * @return A sliced wrapper on this message set limited based on the given position and size
      */
     public FileRecords slice(int position, int size) throws IOException {
-        SliceRange range = sliceRange(position, size);
-        return new FileRecords(file, channel, range.start, range.end, true);
+        int availableBytes = availableBytes(position, size);
+        return new FileRecords(file, channel, this.start + position, this.start + position + availableBytes, true);
     }
 
+    /**
+     * Return a slice of records from this instance, the difference with {@link FileRecords#slice(int, int)} is
+     * that the position is not necessarily on an offset boundary.
+     *
+     * This method is reserved for cases where we do not necessarily need to read an entire record batch such as
+     * fetching snapshot in for raft.
+     *
+     * @param position The start position to begin the read from
+     * @param size The number of bytes after the start position to include
+     * @return A unaligned slice of records on this message set limited based on the given position and size
+     */
     public UnalignedFileRecords sliceUnaligned(int position, int size) {
-        SliceRange range = sliceRange(position, size);
-        return new UnalignedFileRecords(channel, range.start, range.size());
+        int availableBytes = availableBytes(position, size);
+        return new UnalignedFileRecords(channel, this.start + position, availableBytes);
     }
 
-    private SliceRange sliceRange(int position, int size) {
+    private int availableBytes(int position, int size) {
         // Cache current size in case concurrent write changes it
         int currentSizeInBytes = sizeInBytes();
 
@@ -154,12 +165,11 @@ public class FileRecords extends AbstractRecords implements Closeable {
         if (size < 0)
             throw new IllegalArgumentException("Invalid size: " + size + " in read from " + this);
 
-        int sliceStart = this.start + position;
-        int sliceEnd = sliceStart + size;
-        // handle integer overflow or if end is beyond the end of the file
-        if (sliceEnd < 0 || sliceEnd > start + currentSizeInBytes)
-            sliceEnd = start + currentSizeInBytes;
-        return new SliceRange(sliceStart, sliceEnd);
+        int limit = this.start + position + size;
+        // Handle integer overflow or if end is beyond the end of the file
+        if (limit < 0 || limit > start + currentSizeInBytes)
+            limit = this.start + currentSizeInBytes;
+        return limit - (this.start + position);
     }
 
     /**
