@@ -35,7 +35,6 @@ import java.nio.channels.FileChannel;
 import java.nio.channels.OverlappingFileLockException;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.Paths;
 import java.nio.file.StandardOpenOption;
 import java.nio.file.attribute.PosixFilePermission;
 import java.time.Duration;
@@ -115,11 +114,12 @@ public class StateDirectoryTest {
 
     @Test
     public void shouldHaveSecurePermissions() {
-        assertPermissions(Paths.get(stateDir.getPath()));
-        assertPermissions(Paths.get(appDir.getPath()));
+        assertPermissions(stateDir);
+        assertPermissions(appDir);
     }
     
-    private void assertPermissions(final Path path) {
+    private void assertPermissions(final File file) {
+        final Path path = file.toPath();
         if (path.getFileSystem().supportedFileAttributeViews().contains("posix")) {
             final Set<PosixFilePermission> expectedPermissions = EnumSet.of(
                     PosixFilePermission.OWNER_EXECUTE,
@@ -134,7 +134,6 @@ public class StateDirectoryTest {
                 fail("Should create correct files and set correct permissions");
             }
         } else {
-            final File file = path.toFile();
             assertThat(file.canRead(), is(true));
             assertThat(file.canWrite(), is(true));
             assertThat(file.canExecute(), is(true));

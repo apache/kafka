@@ -31,7 +31,6 @@ import java.nio.channels.FileChannel;
 import java.nio.channels.FileLock;
 import java.nio.channels.OverlappingFileLockException;
 import java.nio.file.NoSuchFileException;
-import java.nio.file.Paths;
 import java.nio.file.Path;
 import java.nio.file.Files;
 import java.nio.file.StandardOpenOption;
@@ -110,12 +109,13 @@ public class StateDirectory {
                     " due to the fact that this directory can be cleared by the OS");
             }
             // change the dir permission to "rwxr-x---" to avoid world readable
-            configurePermissions(Paths.get(baseDir.getPath()));
-            configurePermissions(Paths.get(stateDir.getPath()));
+            configurePermissions(baseDir);
+            configurePermissions(stateDir);
         }
     }
     
-    private void configurePermissions(final Path path) {
+    private void configurePermissions(final File file) {
+        final Path path = file.toPath();
         if (path.getFileSystem().supportedFileAttributeViews().contains("posix")) {
             final Set<PosixFilePermission> perms = PosixFilePermissions.fromString("rwxr-x---");
             try {
@@ -124,7 +124,6 @@ public class StateDirectory {
                 log.error("Error changing permissions for the directory {} ", path, e);
             }
         } else {
-            final File file = path.toFile();
             boolean set = file.setReadable(true, true);
             set &= file.setWritable(true, true);
             set &= file.setExecutable(true, true);
