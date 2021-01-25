@@ -181,7 +181,7 @@ public class DefaultKafkaPrincipalBuilder implements KafkaPrincipalBuilder, Kafk
     public KafkaPrincipal deserialize(byte[] bytes) {
         ByteBuffer buffer = ByteBuffer.wrap(bytes);
         short version = buffer.getShort();
-        if (version < 0 || version >= DefaultPrincipalData.SCHEMAS.length) {
+        if (version < DefaultPrincipalData.LOWEST_SUPPORTED_VERSION || version > DefaultPrincipalData.HIGHEST_SUPPORTED_VERSION) {
             throw new SerializationException("Invalid principal data version " + version);
         }
 
