@@ -160,7 +160,7 @@ public class EmbeddedConnectCluster {
                 Exit.resetExitProcedure();
                 Exit.resetHaltProcedure();
             }
-            Thread.currentThread().setContextClassLoader(originalClassLoader);
+            Plugins.compareAndSwapLoaders(originalClassLoader);
         }
     }
 
