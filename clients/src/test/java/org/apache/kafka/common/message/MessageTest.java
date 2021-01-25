@@ -52,7 +52,6 @@ import org.apache.kafka.common.protocol.Message;
 import org.apache.kafka.common.protocol.ObjectSerializationCache;
 import org.apache.kafka.common.protocol.types.RawTaggedField;
 import org.apache.kafka.common.protocol.types.SchemaException;
-import org.apache.kafka.common.protocol.types.Struct;
 import org.apache.kafka.common.protocol.types.Type;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
@@ -809,11 +808,9 @@ public final class MessageTest {
 
     private void testMessageRoundTrip(short version, Message message, Message expected) throws Exception {
         testByteBufferRoundTrip(version, message, expected);
-        testStructRoundTrip(version, message, expected);
     }
 
     private void testEquivalentMessageRoundTrip(short version, Message message) throws Exception {
-        testStructRoundTrip(version, message, message);
         testByteBufferRoundTrip(version, message, message);
         testJsonRoundTrip(version, message, message);
     }
@@ -833,15 +830,6 @@ public final class MessageTest {
             "read back in for version " + version);
         assertEquals(expected, message2, "The message object created after a round trip did not match for " +
             "version " + version);
-        assertEquals(expected.hashCode(), message2.hashCode());
-        assertEquals(expected.toString(), message2.toString());
-    }
-
-    private void testStructRoundTrip(short version, Message message, Message expected) throws Exception {
-        Struct struct = message.toStruct(version);
-        Message message2 = message.getClass().getConstructor().newInstance();
-        message2.fromStruct(struct, version);
-        assertEquals(expected, message2);
         assertEquals(expected.hashCode(), message2.hashCode());
         assertEquals(expected.toString(), message2.toString());
     }

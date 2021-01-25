@@ -21,8 +21,8 @@ import org.apache.kafka.common.message.OffsetFetchResponseData;
 import org.apache.kafka.common.message.OffsetFetchResponseData.OffsetFetchResponsePartition;
 import org.apache.kafka.common.message.OffsetFetchResponseData.OffsetFetchResponseTopic;
 import org.apache.kafka.common.protocol.ApiKeys;
+import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.protocol.types.Struct;
 import org.apache.kafka.common.record.RecordBatch;
 import org.apache.kafka.common.requests.OffsetFetchResponse.PartitionData;
 import org.apache.kafka.common.utils.Utils;
@@ -107,12 +107,13 @@ public class OffsetFetchResponseTest {
         OffsetFetchResponse latestResponse = new OffsetFetchResponse(throttleTimeMs, Errors.NONE, partitionDataMap);
 
         for (short version = 0; version <= ApiKeys.OFFSET_FETCH.latestVersion(); version++) {
-            Struct struct = latestResponse.data().toStruct(version);
+            OffsetFetchResponseData data = new OffsetFetchResponseData(
+                new ByteBufferAccessor(latestResponse.serialize(version)), version);
 
-            OffsetFetchResponse oldResponse = OffsetFetchResponse.parse(latestResponse.serialize(version), version);
+            OffsetFetchResponse oldResponse = new OffsetFetchResponse(data, version);
 
             if (version <= 1) {
-                assertFalse(struct.hasField(ERROR_CODE));
+                assertEquals(Errors.NONE.code(), data.errorCode());
 
                 // Partition level error populated in older versions.
                 assertEquals(Errors.GROUP_AUTHORIZATION_FAILED, oldResponse.error());
@@ -120,7 +121,7 @@ public class OffsetFetchResponseTest {
                         Utils.mkEntry(Errors.TOPIC_AUTHORIZATION_FAILED, 1)), oldResponse.errorCounts());
 
             } else {
-                assertTrue(struct.hasField(ERROR_CODE));
+                assertEquals(Errors.NONE.code(), data.errorCode());
 
                 assertEquals(Errors.NONE, oldResponse.error());
                 assertEquals(Utils.mkMap(
@@ -149,7 +150,7 @@ public class OffsetFetchResponseTest {
             Map<TopicPartition, PartitionData> responseData = oldResponse.responseData();
             assertEquals(expectedDataMap, responseData);
 
-            responseData.forEach((tp, data) -> assertTrue(data.hasError()));
+            responseData.forEach((tp, rdata) -> assertTrue(rdata.hasError()));
         }
     }
 
