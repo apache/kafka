@@ -25,20 +25,25 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 
 public class MockNetworkChannel implements NetworkChannel {
     private final AtomicInteger correlationIdCounter;
+    private final Map<Integer, InetSocketAddress> addressCache;
     private final List<RaftRequest.Outbound> sendQueue = new ArrayList<>();
     private final Map<Integer, RaftRequest.Outbound> awaitingResponse = new HashMap<>();
-    private final Map<Integer, InetSocketAddress> addressCache = new HashMap<>();
 
-    public MockNetworkChannel(AtomicInteger correlationIdCounter) {
+    public MockNetworkChannel(AtomicInteger correlationIdCounter, Set<Integer> destinationIds) {
         this.correlationIdCounter = correlationIdCounter;
+        this.addressCache = destinationIds.stream().collect(Collectors.toMap(
+            Function.identity(), id -> new InetSocketAddress("0.0.0.0", 0)));
     }
 
-    public MockNetworkChannel() {
-        this(new AtomicInteger(0));
+    public MockNetworkChannel(Set<Integer> destinationIds) {
+        this(new AtomicInteger(0), destinationIds);
     }
 
     @Override
@@ -53,11 +58,6 @@ public class MockNetworkChannel implements NetworkChannel {
                 request.destinationId() + ", but its address is not yet known");
         }
         sendQueue.add(request);
-    }
-
-    @Override
-    public void updateEndpoint(int id, InetSocketAddress address) {
-        addressCache.put(id, address);
     }
 
     public List<RaftRequest.Outbound> drainSendQueue() {

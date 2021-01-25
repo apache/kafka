@@ -36,7 +36,9 @@ public class RaftConfig {
     public static final String QUORUM_VOTERS_CONFIG = QUORUM_PREFIX + "voters";
     public static final String QUORUM_VOTERS_DOC = "Map of id/endpoint information for " +
         "the set of voters in a comma-separated list of `{id}@{host}:{port}` entries. " +
-        "For example: `1@localhost:9092,2@localhost:9093,3@localhost:9094`";
+        "For example: `1@localhost:9092,2@localhost:9093,3@localhost:9094.`" +
+        "If the voter endpoints are not known at startup, a non-routable address can be provided instead." +
+        "For example: `1@0.0.0.0:0,2@0.0.0.0:0,3@0.0.0.0:0.";
     public static final List<String> DEFAULT_QUORUM_VOTERS = Collections.emptyList();
 
     public static final String QUORUM_ELECTION_TIMEOUT_MS_CONFIG = QUORUM_PREFIX + "election.timeout.ms";
@@ -97,13 +99,13 @@ public class RaftConfig {
         int fetchTimeoutMs,
         int appendLingerMs
     ) {
+        this.voterConnections = voterConnections;
         this.requestTimeoutMs = requestTimeoutMs;
         this.retryBackoffMs = retryBackoffMs;
         this.electionTimeoutMs = electionTimeoutMs;
         this.electionBackoffMaxMs = electionBackoffMaxMs;
         this.fetchTimeoutMs = fetchTimeoutMs;
         this.appendLingerMs = appendLingerMs;
-        this.voterConnections = voterConnections;
     }
 
     public int requestTimeoutMs() {
@@ -146,7 +148,7 @@ public class RaftConfig {
         }
     }
 
-    private static Map<Integer, InetSocketAddress> parseVoterConnections(List<String> voterEntries) {
+    public static Map<Integer, InetSocketAddress> parseVoterConnections(List<String> voterEntries) {
         Map<Integer, InetSocketAddress> voterMap = new HashMap<>();
         for (String voterMapEntry : voterEntries) {
             String[] idAndAddress = voterMapEntry.split("@");

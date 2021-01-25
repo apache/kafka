@@ -73,7 +73,6 @@ import org.apache.kafka.snapshot.SnapshotWriter;
 import org.slf4j.Logger;
 
 import java.io.IOException;
-import java.net.InetSocketAddress;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -152,15 +151,15 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
     private final RaftMessageQueue messageQueue;
     private final QuorumStateStore quorumStateStore;
     private final Metrics metrics;
+    private final RaftConfig raftConfig;
+    private final KafkaRaftMetrics kafkaRaftMetrics;
+    private final QuorumState quorum;
+    private final RequestManager requestManager;
 
     private final List<ListenerContext> listenerContexts = new ArrayList<>();
     private final ConcurrentLinkedQueue<Listener<T>> pendingListeners = new ConcurrentLinkedQueue<>();
 
     private volatile BatchAccumulator<T> accumulator;
-    private RequestManager requestManager;
-    private QuorumState quorum;
-    private KafkaRaftMetrics kafkaRaftMetrics;
-    private RaftConfig raftConfig;
 
     /**
      * Create a new instance.
@@ -177,8 +176,9 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
         Metrics metrics,
         ExpirationService expirationService,
         LogContext logContext,
-        OptionalInt nodeId
-    ) {
+        OptionalInt nodeId,
+        RaftConfig raftConfig
+    ) throws IOException {
         this(serde,
             channel,
             new BlockingMessageQueue(),
@@ -191,7 +191,8 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
             FETCH_MAX_WAIT_MS,
             nodeId,
             logContext,
-            new Random());
+            new Random(),
+            raftConfig);
     }
 
     KafkaRaftClient(
@@ -207,8 +208,9 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
         int fetchMaxWaitMs,
         OptionalInt nodeId,
         LogContext logContext,
-        Random random
-    ) {
+        Random random,
+        RaftConfig raftConfig
+    ) throws IOException {
         this.serde = serde;
         this.channel = channel;
         this.messageQueue = messageQueue;
@@ -224,6 +226,22 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
         this.logContext = logContext;
         this.logger = logContext.logger(KafkaRaftClient.class);
         this.random = random;
+        this.raftConfig = raftConfig;
+
+        Set<Integer> quorumVoterIds = raftConfig.quorumVoterIds();
+        this.requestManager = new RequestManager(quorumVoterIds, raftConfig.retryBackoffMs(),
+            raftConfig.requestTimeoutMs(), random);
+        this.quorum = new QuorumState(
+            nodeId,
+            quorumVoterIds,
+            raftConfig.electionTimeoutMs(),
+            raftConfig.fetchTimeoutMs(),
+            quorumStateStore,
+            time,
+            logContext,
+            random);
+        this.kafkaRaftMetrics = new KafkaRaftMetrics(metrics, "raft", quorum);
+        kafkaRaftMetrics.updateNumUnknownVoterConnections(quorum.remoteVoters().size());
     }
 
     private void updateFollowerHighWatermark(
@@ -321,30 +339,8 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
     }
 
     @Override
-    public void initialize(RaftConfig raftConfig) throws IOException {
-        this.raftConfig = raftConfig;
-        Set<Integer> quorumVoterIds = raftConfig.quorumVoterIds();
-        this.requestManager = new RequestManager(quorumVoterIds, raftConfig.retryBackoffMs(),
-                raftConfig.requestTimeoutMs(), random);
-
-        Map<Integer, InetSocketAddress> voterAddresses = raftConfig.quorumVoterConnections();
-        for (Map.Entry<Integer, InetSocketAddress> voterAddressEntry : voterAddresses.entrySet()) {
-            channel.updateEndpoint(voterAddressEntry.getKey(), voterAddressEntry.getValue());
-        }
-
-        QuorumState quorumState = new QuorumState(
-                nodeId,
-                quorumVoterIds,
-                raftConfig.electionTimeoutMs(),
-                raftConfig.fetchTimeoutMs(),
-                quorumStateStore,
-                time,
-                logContext,
-                random);
-        quorumState.initialize(new OffsetAndEpoch(log.endOffset().offset, log.lastFetchedEpoch()));
-        this.quorum = quorumState;
-        this.kafkaRaftMetrics = new KafkaRaftMetrics(metrics, "raft", quorum);
-        kafkaRaftMetrics.updateNumUnknownVoterConnections(quorum.remoteVoters().size());
+    public void initialize() throws IOException {
+        quorum.initialize(new OffsetAndEpoch(log.endOffset().offset, log.lastFetchedEpoch()));
 
         long currentTimeMs = time.milliseconds();
         if (quorum.isLeader()) {

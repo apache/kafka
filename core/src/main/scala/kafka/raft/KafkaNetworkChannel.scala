@@ -34,6 +34,7 @@ import scala.collection.mutable
 
 object KafkaNetworkChannel {
 
+  val nonRoutableAddress = new InetSocketAddress("0.0.0.0", 0)
   private[raft] def buildRequest(requestData: ApiMessage): AbstractRequest.Builder[_ <: AbstractRequest] = {
     requestData match {
       case voteRequest: VoteRequestData =>
@@ -165,9 +166,12 @@ class KafkaNetworkChannel(
     RaftUtil.errorResponse(apiKey, error)
   }
 
-  override def updateEndpoint(id: Int, address: InetSocketAddress): Unit = {
-    val node = new Node(id, address.getHostString, address.getPort)
-    endpoints.put(id, node)
+  def updateEndpoint(id: Int, address: InetSocketAddress): Unit = {
+    // We update the endpoint only if it's routable/valid
+    if (!address.equals(nonRoutableAddress)) {
+      val node = new Node(id, address.getHostString, address.getPort)
+      endpoints.put(id, node)
+    }
   }
 
   def start(): Unit = {
