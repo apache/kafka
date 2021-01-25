@@ -36,7 +36,7 @@ import org.junit.Test;
 import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.Map;
-import java.util.Properties;
+
 
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.ROLLUP_VALUE;
 import static org.hamcrest.CoreMatchers.containsString;
@@ -49,18 +49,17 @@ import static org.junit.Assert.assertTrue;
 public class ProcessorNodeTest {
 
     @SuppressWarnings("unchecked")
-    @Test(expected = StreamsException.class)
+    @Test
     public void shouldThrowStreamsExceptionIfExceptionCaughtDuringInit() {
         final ProcessorNode node = new ProcessorNode("name", new ExceptionalProcessor(), Collections.emptySet());
-        node.init(null);
+        assertThrows(StreamsException.class, () -> node.init(null));
     }
 
     @SuppressWarnings("unchecked")
-    @Test(expected = StreamsException.class)
+    @Test
     public void shouldThrowStreamsExceptionIfExceptionCaughtDuringClose() {
         final ProcessorNode node = new ProcessorNode("name", new ExceptionalProcessor(), Collections.emptySet());
-        node.init(null);
-        node.close();
+        assertThrows(StreamsException.class, () -> node.init(null));
     }
 
     private static class ExceptionalProcessor implements Processor<Object, Object> {
@@ -171,7 +170,7 @@ public class ProcessorNodeTest {
             });
         final Topology topology = builder.build();
 
-        final TopologyTestDriver testDriver = new TopologyTestDriver(topology, new Properties());
+        final TopologyTestDriver testDriver = new TopologyTestDriver(topology);
         final TestInputTopic<String, String> topic = testDriver.createInputTopic("streams-plaintext-input", new StringSerializer(), new StringSerializer());
 
         final StreamsException se = assertThrows(StreamsException.class, () -> topic.pipeInput("a-key", "a value"));

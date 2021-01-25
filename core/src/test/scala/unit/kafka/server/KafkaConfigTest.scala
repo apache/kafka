@@ -17,8 +17,6 @@
 
 package kafka.server
 
-import java.util.Properties
-
 import kafka.api.{ApiVersion, KAFKA_0_8_2}
 import kafka.cluster.EndPoint
 import kafka.log.LogConfig
@@ -29,9 +27,13 @@ import org.apache.kafka.common.metrics.Sensor
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.record.Records
 import org.apache.kafka.common.security.auth.SecurityProtocol
-import org.junit.Assert._
-import org.junit.Test
-import org.scalatest.Assertions.intercept
+import org.apache.kafka.raft.RaftConfig
+import org.junit.jupiter.api.Assertions._
+import org.junit.jupiter.api.Test
+
+import java.net.InetSocketAddress
+import java.util
+import java.util.Properties
 
 class KafkaConfigTest {
 
@@ -105,21 +107,19 @@ class KafkaConfigTest {
     val cfg1 = KafkaConfig.fromProps(props1)
     val cfg2 = KafkaConfig.fromProps(props2)
     val cfg3 = KafkaConfig.fromProps(props3)
-    assertEquals("Should be -1", -1, cfg1.logRetentionTimeMillis)
-    assertEquals("Should be -1", -1, cfg2.logRetentionTimeMillis)
-    assertEquals("Should be -1", -1, cfg3.logRetentionTimeMillis)
+    assertEquals(-1, cfg1.logRetentionTimeMillis, "Should be -1")
+    assertEquals(-1, cfg2.logRetentionTimeMillis, "Should be -1")
+    assertEquals(-1, cfg3.logRetentionTimeMillis, "Should be -1")
 
     props4.put("log.retention.ms", "-1")
     props4.put("log.retention.minutes", "30")
 
     val cfg4 = KafkaConfig.fromProps(props4)
-    assertEquals("Should be -1", -1, cfg4.logRetentionTimeMillis)
+    assertEquals(-1, cfg4.logRetentionTimeMillis, "Should be -1")
 
     props5.put("log.retention.ms", "0")
 
-    intercept[IllegalArgumentException] {
-      KafkaConfig.fromProps(props5)
-    }
+    assertThrows(classOf[IllegalArgumentException], () => KafkaConfig.fromProps(props5))
   }
 
   @Test
@@ -132,15 +132,9 @@ class KafkaConfigTest {
     props2.put("log.retention.minutes", "0")
     props3.put("log.retention.hours", "0")
 
-    intercept[IllegalArgumentException] {
-      KafkaConfig.fromProps(props1)
-    }
-    intercept[IllegalArgumentException] {
-      KafkaConfig.fromProps(props2)
-    }
-    intercept[IllegalArgumentException] {
-      KafkaConfig.fromProps(props3)
-    }
+    assertThrows(classOf[IllegalArgumentException], () => KafkaConfig.fromProps(props1))
+    assertThrows(classOf[IllegalArgumentException], () => KafkaConfig.fromProps(props2))
+    assertThrows(classOf[IllegalArgumentException], () => KafkaConfig.fromProps(props3))
 
   }
 
@@ -219,12 +213,12 @@ class KafkaConfigTest {
 
     // listeners with duplicate port
     props.put(KafkaConfig.ListenersProp, "PLAINTEXT://localhost:9091,SSL://localhost:9091")
-    var caught = intercept[IllegalArgumentException] { KafkaConfig.fromProps(props) }
+    var caught = assertThrows(classOf[IllegalArgumentException], () => KafkaConfig.fromProps(props))
     assertTrue(caught.getMessage.contains("Each listener must have a different port"))
 
     // listeners with duplicate name
     props.put(KafkaConfig.ListenersProp, "PLAINTEXT://localhost:9091,PLAINTEXT://localhost:9092")
-    caught = intercept[IllegalArgumentException] { KafkaConfig.fromProps(props) }
+    caught = assertThrows(classOf[IllegalArgumentException], () => KafkaConfig.fromProps(props))
     assertTrue(caught.getMessage.contains("Each listener must have a different name"))
 
     // advertised listeners can have duplicate ports
@@ -236,7 +230,7 @@ class KafkaConfigTest {
 
     // but not duplicate names
     props.put(KafkaConfig.AdvertisedListenersProp, "HOST://localhost:9091,HOST://localhost:9091")
-    caught = intercept[IllegalArgumentException] { KafkaConfig.fromProps(props) }
+    caught = assertThrows(classOf[IllegalArgumentException], () => KafkaConfig.fromProps(props))
     assertTrue(caught.getMessage.contains("Each listener must have a different name"))
   }
 
@@ -398,7 +392,7 @@ class KafkaConfigTest {
     val conf2 = KafkaConfig.fromProps(props)
     assertEquals(listenerListToEndPoints("PLAINTEXT://:1111"), conf2.listeners)
     assertEquals(listenerListToEndPoints("PLAINTEXT://:1111"), conf2.advertisedListeners)
-    assertEquals(null, conf2.listeners.find(_.securityProtocol == SecurityProtocol.PLAINTEXT).get.host)
+    assertNull(conf2.listeners.find(_.securityProtocol == SecurityProtocol.PLAINTEXT).get.host)
 
     // configuration with advertised host and port, and no advertised listeners
     props.put(KafkaConfig.AdvertisedHostNameProp, "otherhost")
@@ -473,9 +467,7 @@ class KafkaConfigTest {
     val props = TestUtils.createBrokerConfig(0, TestUtils.MockZkConnect, port = 8181)
     props.put(KafkaConfig.UncleanLeaderElectionEnableProp, "invalid")
 
-    intercept[ConfigException] {
-      KafkaConfig.fromProps(props)
-    }
+    assertThrows(classOf[ConfigException], () => KafkaConfig.fromProps(props))
   }
 
   @Test
@@ -526,9 +518,7 @@ class KafkaConfigTest {
   def testInvalidCompressionType(): Unit = {
     val props = TestUtils.createBrokerConfig(0, TestUtils.MockZkConnect, port = 8181)
     props.put(KafkaConfig.CompressionTypeProp, "abc")
-    intercept[IllegalArgumentException] {
-      KafkaConfig.fromProps(props)
-    }
+    assertThrows(classOf[IllegalArgumentException], () => KafkaConfig.fromProps(props))
   }
 
   @Test
@@ -536,9 +526,7 @@ class KafkaConfigTest {
     val props = TestUtils.createBrokerConfig(0, TestUtils.MockZkConnect, port = 8181)
     props.put(KafkaConfig.ListenersProp, "SSL://localhost:0")
     props.put(KafkaConfig.InterBrokerSecurityProtocolProp, SecurityProtocol.PLAINTEXT.toString)
-    intercept[IllegalArgumentException] {
-      KafkaConfig.fromProps(props)
-    }
+    assertThrows(classOf[IllegalArgumentException], () => KafkaConfig.fromProps(props))
   }
 
   @Test
@@ -554,11 +542,11 @@ class KafkaConfigTest {
     val props = TestUtils.createBrokerConfig(0, TestUtils.MockZkConnect, port = 8181)
     props.put(KafkaConfig.ListenersProp, "TRACE://localhost:9091,SSL://localhost:9093")
     props.put(KafkaConfig.AdvertisedListenersProp, "PLAINTEXT://localhost:9092")
-    var caught = intercept[IllegalArgumentException] { KafkaConfig.fromProps(props) }
+    var caught = assertThrows(classOf[IllegalArgumentException], () => KafkaConfig.fromProps(props))
     assertTrue(caught.getMessage.contains("No security protocol defined for listener TRACE"))
 
     props.put(KafkaConfig.ListenerSecurityProtocolMapProp, "PLAINTEXT:PLAINTEXT,TRACE:PLAINTEXT,SSL:SSL")
-    caught = intercept[IllegalArgumentException] { KafkaConfig.fromProps(props) }
+    caught = assertThrows(classOf[IllegalArgumentException], () => KafkaConfig.fromProps(props))
     assertTrue(caught.getMessage.contains("advertised.listeners listener names must be equal to or a subset of the ones defined in listeners"))
   }
 
@@ -578,9 +566,7 @@ class KafkaConfigTest {
           assertEquals(messageFormatVersion, config.logMessageFormatVersion)
           assertEquals(interBrokerVersion, config.interBrokerProtocolVersion)
         } else {
-          intercept[IllegalArgumentException] {
-            buildConfig(interBrokerVersion, messageFormatVersion)
-          }
+          assertThrows(classOf[IllegalArgumentException], () => buildConfig(interBrokerVersion, messageFormatVersion))
         }
       }
     }
@@ -795,6 +781,15 @@ class KafkaConfigTest {
         case KafkaConfig.KafkaMetricsReporterClassesProp => // ignore
         case KafkaConfig.KafkaMetricsPollingIntervalSecondsProp => //ignore
 
+        // Raft Quorum Configs
+        case RaftConfig.QUORUM_VOTERS_CONFIG => // ignore string
+        case RaftConfig.QUORUM_ELECTION_TIMEOUT_MS_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number")
+        case RaftConfig.QUORUM_FETCH_TIMEOUT_MS_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number")
+        case RaftConfig.QUORUM_ELECTION_BACKOFF_MAX_MS_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number")
+        case RaftConfig.QUORUM_LINGER_MS_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number")
+        case RaftConfig.QUORUM_REQUEST_TIMEOUT_MS_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number")
+        case RaftConfig.QUORUM_RETRY_BACKOFF_MS_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number")
+
         case _ => assertPropertyInvalid(baseProperties, name, "not_a_number", "-1")
       }
     }
@@ -954,10 +949,67 @@ class KafkaConfigTest {
     values.foreach((value) => {
       val props = validRequiredProps
       props.setProperty(name, value.toString)
-      intercept[Exception] {
-        KafkaConfig.fromProps(props)
-      }
+      assertThrows(classOf[Exception], () => KafkaConfig.fromProps(props))
     })
+  }
+
+  @Test
+  def testInvalidQuorumVotersConfig(): Unit = {
+    assertInvalidQuorumVoters("1")
+    assertInvalidQuorumVoters("1@")
+    assertInvalidQuorumVoters("1:")
+    assertInvalidQuorumVoters("blah@")
+    assertInvalidQuorumVoters("1@kafka1")
+    assertInvalidQuorumVoters("1@kafka1:9092,")
+    assertInvalidQuorumVoters("1@kafka1:9092,")
+    assertInvalidQuorumVoters("1@kafka1:9092,2")
+    assertInvalidQuorumVoters("1@kafka1:9092,2@")
+    assertInvalidQuorumVoters("1@kafka1:9092,2@blah")
+    assertInvalidQuorumVoters("1@kafka1:9092,2@blah,")
+  }
+
+  private def assertInvalidQuorumVoters(value: String): Unit = {
+    val props = TestUtils.createBrokerConfig(0, TestUtils.MockZkConnect)
+    props.put(RaftConfig.QUORUM_VOTERS_CONFIG, value)
+    assertThrows(classOf[ConfigException], () => KafkaConfig.fromProps(props))
+  }
+
+  @Test
+  def testValidQuorumVotersConfig(): Unit = {
+    val expected = new util.HashMap[Integer, InetSocketAddress]()
+    assertValidQuorumVoters("", expected)
+
+    expected.put(1, new InetSocketAddress("127.0.0.1", 9092))
+    assertValidQuorumVoters("1@127.0.0.1:9092", expected)
+
+    expected.clear()
+    expected.put(1, new InetSocketAddress("kafka1", 9092))
+    expected.put(2, new InetSocketAddress("kafka2", 9092))
+    expected.put(3, new InetSocketAddress("kafka3", 9092))
+    assertValidQuorumVoters("1@kafka1:9092,2@kafka2:9092,3@kafka3:9092", expected)
+  }
+
+  private def assertValidQuorumVoters(value: String, expectedVoters: util.Map[Integer, InetSocketAddress]): Unit = {
+    val props = TestUtils.createBrokerConfig(0, TestUtils.MockZkConnect)
+    props.put(RaftConfig.QUORUM_VOTERS_CONFIG, value)
+    val raftConfig = new RaftConfig(KafkaConfig.fromProps(props))
+    assertEquals(expectedVoters, raftConfig.quorumVoterConnections())
+  }
+
+  @Test
+  def testZookeeperConnectRequiredIfEmptyProcessRoles(): Unit = {
+    val props = new Properties()
+    props.put(KafkaConfig.ProcessRolesProp, "")
+    props.put(KafkaConfig.ListenersProp, "PLAINTEXT://127.0.0.1:9092")
+    assertFalse(isValidKafkaConfig(props))
+  }
+
+  @Test
+  def testZookeeperConnectNotRequiredIfNonEmptyProcessRoles(): Unit = {
+    val props = new Properties()
+    props.put(KafkaConfig.ProcessRolesProp, "broker")
+    props.put(KafkaConfig.ListenersProp, "PLAINTEXT://127.0.0.1:9092")
+    assertTrue(isValidKafkaConfig(props))
   }
 
 }

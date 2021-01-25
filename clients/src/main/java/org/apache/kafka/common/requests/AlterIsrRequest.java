@@ -20,8 +20,10 @@ package org.apache.kafka.common.requests;
 import org.apache.kafka.common.message.AlterIsrRequestData;
 import org.apache.kafka.common.message.AlterIsrResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
+import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.protocol.types.Struct;
+
+import java.nio.ByteBuffer;
 
 public class AlterIsrRequest extends AbstractRequest {
 
@@ -32,13 +34,9 @@ public class AlterIsrRequest extends AbstractRequest {
         this.data = data;
     }
 
+    @Override
     public AlterIsrRequestData data() {
         return data;
-    }
-
-    @Override
-    protected Struct toStruct() {
-        return data.toStruct(version());
     }
 
     /**
@@ -49,6 +47,10 @@ public class AlterIsrRequest extends AbstractRequest {
         return new AlterIsrResponse(new AlterIsrResponseData()
                 .setThrottleTimeMs(throttleTimeMs)
                 .setErrorCode(Errors.forException(e).code()));
+    }
+
+    public static AlterIsrRequest parse(ByteBuffer buffer, short version) {
+        return new AlterIsrRequest(new AlterIsrRequestData(new ByteBufferAccessor(buffer), version), version);
     }
 
     public static class Builder extends AbstractRequest.Builder<AlterIsrRequest> {

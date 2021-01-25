@@ -28,7 +28,7 @@ import org.apache.kafka.streams.kstream.SessionWindowedCogroupedKStream;
 import org.apache.kafka.streams.kstream.SessionWindows;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.kstream.WindowedSerdes;
-import org.apache.kafka.streams.kstream.internals.graph.StreamsGraphNode;
+import org.apache.kafka.streams.kstream.internals.graph.GraphNode;
 import org.apache.kafka.streams.state.SessionBytesStoreSupplier;
 import org.apache.kafka.streams.state.SessionStore;
 import org.apache.kafka.streams.state.StoreBuilder;
@@ -51,9 +51,9 @@ public class SessionWindowedCogroupedKStreamImpl<K, V> extends
                                         final Set<String> subTopologySourceNodes,
                                         final String name,
                                         final CogroupedStreamAggregateBuilder<K, V> aggregateBuilder,
-                                        final StreamsGraphNode streamsGraphNode,
+                                        final GraphNode graphNode,
                                         final Map<KGroupedStreamImpl<K, ?>, Aggregator<? super K, ? super Object, V>> groupPatterns) {
-        super(name, null, null, subTopologySourceNodes, streamsGraphNode, builder);
+        super(name, null, null, subTopologySourceNodes, graphNode, builder);
         //keySerde and valueSerde are null because there are many different groupStreams that they could be from
         this.sessionWindows = sessionWindows;
         this.aggregateBuilder = aggregateBuilder;

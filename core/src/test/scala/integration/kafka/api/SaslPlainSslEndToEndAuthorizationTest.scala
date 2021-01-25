@@ -31,23 +31,20 @@ import org.apache.kafka.common.config.internals.BrokerSecurityConfigs
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.security.auth._
 import org.apache.kafka.common.security.plain.PlainAuthenticateCallback
-import org.junit.Test
+import org.junit.jupiter.api.Test
 
 object SaslPlainSslEndToEndAuthorizationTest {
 
   class TestPrincipalBuilder extends KafkaPrincipalBuilder {
 
     override def build(context: AuthenticationContext): KafkaPrincipal = {
-      context match {
-        case ctx: SaslAuthenticationContext =>
-          ctx.server.getAuthorizationID match {
-            case KafkaPlainAdmin =>
-              new KafkaPrincipal(KafkaPrincipal.USER_TYPE, "admin")
-            case KafkaPlainUser =>
-              new KafkaPrincipal(KafkaPrincipal.USER_TYPE, "user")
-            case _ =>
-              KafkaPrincipal.ANONYMOUS
-          }
+      context.asInstanceOf[SaslAuthenticationContext].server.getAuthorizationID match {
+        case KafkaPlainAdmin =>
+          new KafkaPrincipal(KafkaPrincipal.USER_TYPE, "admin")
+        case KafkaPlainUser =>
+          new KafkaPrincipal(KafkaPrincipal.USER_TYPE, "user")
+        case _ =>
+          KafkaPrincipal.ANONYMOUS
       }
     }
   }

@@ -16,11 +16,14 @@
  */
 package org.apache.kafka.raft;
 
+import org.apache.kafka.snapshot.SnapshotWriter;
+
+import java.io.Closeable;
 import java.io.IOException;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
 
-public interface RaftClient<T> {
+public interface RaftClient<T> extends Closeable {
 
     interface Listener<T> {
         /**
@@ -59,11 +62,13 @@ public interface RaftClient<T> {
     }
 
     /**
-     * Initialize the client. This should only be called once on startup.
+     * Initialize the client with the given Raft configuration.
+     * This should only be called once on startup.
      *
+     * @param raftConfig the Raft quorum configuration
      * @throws IOException For any IO errors during initialization
      */
-    void initialize() throws IOException;
+    void initialize(RaftConfig raftConfig) throws IOException;
 
     /**
      * Register a listener to get commit/leader notifications.
@@ -93,11 +98,29 @@ public interface RaftClient<T> {
     Long scheduleAppend(int epoch, List<T> records);
 
     /**
-     * Shutdown the client.
+     * Attempt a graceful shutdown of the client. This allows the leader to proactively
+     * resign and help a new leader to get elected rather than forcing the remaining
+     * voters to wait for the fetch timeout.
+     *
+     * Note that if the client has hit an unexpected exception which has left it in an
+     * indeterminate state, then the call to shutdown should be skipped. However, it
+     * is still expected that {@link #close()} will be used to clean up any resources
+     * in use.
      *
      * @param timeoutMs How long to wait for graceful completion of pending operations.
      * @return A future which is completed when shutdown completes successfully or the timeout expires.
      */
     CompletableFuture<Void> shutdown(int timeoutMs);
 
+    /**
+     * Create a writable snapshot file for a given offset and epoch.
+     *
+     * The RaftClient assumes that the snapshot return will contain the records up to but
+     * not including the end offset in the snapshot id. See {@link SnapshotWriter} for
+     * details on how to use this object.
+     *
+     * @param snapshotId the end offset and epoch that identifies the snapshot
+     * @return a writable snapshot
+     */
+    SnapshotWriter<T> createSnapshot(OffsetAndEpoch snapshotId) throws IOException;
 }

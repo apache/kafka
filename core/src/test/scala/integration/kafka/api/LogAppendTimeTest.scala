@@ -18,13 +18,12 @@ package kafka.api
 
 import java.util.Collections
 import java.util.concurrent.TimeUnit
-
 import kafka.server.KafkaConfig
 import kafka.utils.TestUtils
 import org.apache.kafka.clients.producer.ProducerRecord
 import org.apache.kafka.common.record.TimestampType
-import org.junit.{Before, Test}
-import org.junit.Assert.{assertEquals, assertNotEquals, assertTrue}
+import org.junit.jupiter.api.{BeforeEach, Test}
+import org.junit.jupiter.api.Assertions.{assertEquals, assertNotEquals, assertTrue}
 
 /**
   * Tests where the broker is configured to use LogAppendTime. For tests where LogAppendTime is configured via topic
@@ -41,7 +40,7 @@ class LogAppendTimeTest extends IntegrationTestHarness {
 
   private val topic = "topic"
 
-  @Before
+  @BeforeEach
   override def setUp(): Unit = {
     super.setUp()
     createTopic(topic)

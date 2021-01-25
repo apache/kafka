@@ -24,14 +24,16 @@ import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.message.AddPartitionsToTxnRequestData.AddPartitionsToTxnTopic;
 import org.apache.kafka.common.message.AddPartitionsToTxnRequestData.AddPartitionsToTxnTopicCollection;
+import org.apache.kafka.common.message.DescribeClusterResponseData.DescribeClusterBroker;
+import org.apache.kafka.common.message.DescribeClusterResponseData.DescribeClusterBrokerCollection;
 import org.apache.kafka.common.message.DescribeGroupsResponseData.DescribedGroup;
 import org.apache.kafka.common.message.DescribeGroupsResponseData.DescribedGroupMember;
 import org.apache.kafka.common.message.JoinGroupResponseData.JoinGroupResponseMember;
 import org.apache.kafka.common.message.LeaveGroupResponseData.MemberResponse;
-import org.apache.kafka.common.message.ListOffsetRequestData.ListOffsetPartition;
-import org.apache.kafka.common.message.ListOffsetRequestData.ListOffsetTopic;
-import org.apache.kafka.common.message.ListOffsetResponseData.ListOffsetPartitionResponse;
-import org.apache.kafka.common.message.ListOffsetResponseData.ListOffsetTopicResponse;
+import org.apache.kafka.common.message.ListOffsetsRequestData.ListOffsetsPartition;
+import org.apache.kafka.common.message.ListOffsetsRequestData.ListOffsetsTopic;
+import org.apache.kafka.common.message.ListOffsetsResponseData.ListOffsetsPartitionResponse;
+import org.apache.kafka.common.message.ListOffsetsResponseData.ListOffsetsTopicResponse;
 import org.apache.kafka.common.message.OffsetCommitRequestData.OffsetCommitRequestPartition;
 import org.apache.kafka.common.message.OffsetCommitRequestData.OffsetCommitRequestTopic;
 import org.apache.kafka.common.message.OffsetCommitResponseData.OffsetCommitResponsePartition;
@@ -48,17 +50,12 @@ import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.Message;
 import org.apache.kafka.common.protocol.ObjectSerializationCache;
-import org.apache.kafka.common.protocol.types.BoundField;
 import org.apache.kafka.common.protocol.types.RawTaggedField;
-import org.apache.kafka.common.protocol.types.Schema;
 import org.apache.kafka.common.protocol.types.SchemaException;
 import org.apache.kafka.common.protocol.types.Struct;
 import org.apache.kafka.common.protocol.types.Type;
-import org.apache.kafka.common.utils.Utils;
-import org.junit.Assert;
-import org.junit.Rule;
-import org.junit.Test;
-import org.junit.rules.Timeout;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.Timeout;
 
 import java.lang.reflect.Method;
 import java.nio.ByteBuffer;
@@ -69,19 +66,17 @@ import java.util.List;
 import java.util.function.Supplier;
 
 import static java.util.Collections.singletonList;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNotEquals;
-import static org.junit.Assert.assertThrows;
-import static org.junit.Assert.assertTrue;
-import static org.junit.Assert.fail;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.fail;
 
+@Timeout(120)
 public final class MessageTest {
 
     private final String memberId = "memberId";
     private final String instanceId = "instanceId";
-
-    @Rule
-    final public Timeout globalTimeout = Timeout.millis(120000);
 
     @Test
     public void testAddOffsetsToTxnVersions() throws Exception {
@@ -170,12 +165,12 @@ public final class MessageTest {
 
     @Test
     public void testListOffsetsRequestVersions() throws Exception {
-        List<ListOffsetTopic> v = Collections.singletonList(new ListOffsetTopic()
+        List<ListOffsetsTopic> v = Collections.singletonList(new ListOffsetsTopic()
                 .setName("topic")
-                .setPartitions(Collections.singletonList(new ListOffsetPartition()
+                .setPartitions(Collections.singletonList(new ListOffsetsPartition()
                         .setPartitionIndex(0)
                         .setTimestamp(123L))));
-        Supplier<ListOffsetRequestData> newRequest = () -> new ListOffsetRequestData()
+        Supplier<ListOffsetsRequestData> newRequest = () -> new ListOffsetsRequestData()
                 .setTopics(v)
                 .setReplicaId(0);
         testAllMessageRoundTrips(newRequest.get());
@@ -184,17 +179,17 @@ public final class MessageTest {
 
     @Test
     public void testListOffsetsResponseVersions() throws Exception {
-        ListOffsetPartitionResponse partition = new ListOffsetPartitionResponse()
+        ListOffsetsPartitionResponse partition = new ListOffsetsPartitionResponse()
                 .setErrorCode(Errors.NONE.code())
                 .setPartitionIndex(0)
                 .setOldStyleOffsets(Collections.singletonList(321L));
-        List<ListOffsetTopicResponse> topics = Collections.singletonList(new ListOffsetTopicResponse()
+        List<ListOffsetsTopicResponse> topics = Collections.singletonList(new ListOffsetsTopicResponse()
                 .setName("topic")
                 .setPartitions(Collections.singletonList(partition)));
-        Supplier<ListOffsetResponseData> response = () -> new ListOffsetResponseData()
+        Supplier<ListOffsetsResponseData> response = () -> new ListOffsetsResponseData()
                 .setTopics(topics);
         for (short version = 0; version <= ApiKeys.LIST_OFFSETS.latestVersion(); version++) {
-            ListOffsetResponseData responseData = response.get();
+            ListOffsetsResponseData responseData = response.get();
             if (version > 0) {
                 responseData.topics().get(0).partitions().get(0)
                     .setOldStyleOffsets(Collections.emptyList())
@@ -298,6 +293,28 @@ public final class MessageTest {
 
         baseMember.setGroupInstanceId(instanceId);
         testAllMessageRoundTripsFromVersion((short) 4, baseResponse);
+    }
+
+    @Test
+    public void testDescribeClusterRequestVersions() throws Exception {
+        testAllMessageRoundTrips(new DescribeClusterRequestData()
+            .setIncludeClusterAuthorizedOperations(true));
+    }
+
+    @Test
+    public void testDescribeClusterResponseVersions() throws Exception {
+        DescribeClusterResponseData data = new DescribeClusterResponseData()
+            .setBrokers(new DescribeClusterBrokerCollection(
+                Collections.singletonList(new DescribeClusterBroker()
+                    .setBrokerId(1)
+                    .setHost("localhost")
+                    .setPort(9092)
+                    .setRack("rack1")).iterator()))
+            .setClusterId("clusterId")
+            .setControllerId(1)
+            .setClusterAuthorizedOperations(10);
+
+        testAllMessageRoundTrips(data);
     }
 
     @Test
@@ -807,15 +824,15 @@ public final class MessageTest {
         ByteBuffer buf = ByteBuffer.allocate(size);
         ByteBufferAccessor byteBufferAccessor = new ByteBufferAccessor(buf);
         message.write(byteBufferAccessor, cache, version);
-        assertEquals("The result of the size function does not match the number of bytes " +
-            "written for version " + version, size, buf.position());
+        assertEquals(size, buf.position(), "The result of the size function does not match the number of bytes " +
+            "written for version " + version);
         Message message2 = message.getClass().getConstructor().newInstance();
         buf.flip();
         message2.read(byteBufferAccessor, version);
-        assertEquals("The result of the size function does not match the number of bytes " +
-            "read back in for version " + version, size, buf.position());
-        assertEquals("The message object created after a round trip did not match for " +
-            "version " + version, expected, message2);
+        assertEquals(size, buf.position(), "The result of the size function does not match the number of bytes " +
+            "read back in for version " + version);
+        assertEquals(expected, message2, "The message object created after a round trip did not match for " +
+            "version " + version);
         assertEquals(expected.hashCode(), message2.hashCode());
         assertEquals(expected.toString(), message2.toString());
     }
@@ -865,63 +882,17 @@ public final class MessageTest {
             } catch (UnsupportedVersionException e) {
                 fail("No request message spec found for API " + apiKey);
             }
-            assertTrue("Request message spec for " + apiKey + " only " +
-                    "supports versions up to " + message.highestSupportedVersion(),
-                apiKey.latestVersion() <= message.highestSupportedVersion());
+            assertTrue(apiKey.latestVersion() <= message.highestSupportedVersion(),
+                "Request message spec for " + apiKey + " only " + "supports versions up to " +
+                message.highestSupportedVersion());
             try {
                 message = ApiMessageType.fromApiKey(apiKey.id).newResponse();
             } catch (UnsupportedVersionException e) {
                 fail("No response message spec found for API " + apiKey);
             }
-            assertTrue("Response message spec for " + apiKey + " only " +
-                    "supports versions up to " + message.highestSupportedVersion(),
-                apiKey.latestVersion() <= message.highestSupportedVersion());
-        }
-    }
-
-    /**
-     * Test that the JSON request files match the schemas accessible through the ApiKey class.
-     */
-    @Test
-    public void testRequestSchemas() {
-        for (ApiKeys apiKey : ApiKeys.values()) {
-            Schema[] manualSchemas = apiKey.requestSchemas;
-            Schema[] generatedSchemas = ApiMessageType.fromApiKey(apiKey.id).requestSchemas();
-            Assert.assertEquals("Mismatching request SCHEMAS lengths " +
-                "for api key " + apiKey, manualSchemas.length, generatedSchemas.length);
-            for (int v = 0; v < manualSchemas.length; v++) {
-                try {
-                    if (generatedSchemas[v] != null) {
-                        compareTypes(manualSchemas[v], generatedSchemas[v]);
-                    }
-                } catch (Exception e) {
-                    throw new RuntimeException("Failed to compare request schemas " +
-                        "for version " + v + " of " + apiKey, e);
-                }
-            }
-        }
-    }
-
-    /**
-     * Test that the JSON response files match the schemas accessible through the ApiKey class.
-     */
-    @Test
-    public void testResponseSchemas() {
-        for (ApiKeys apiKey : ApiKeys.values()) {
-            Schema[] manualSchemas = apiKey.responseSchemas;
-            Schema[] generatedSchemas = ApiMessageType.fromApiKey(apiKey.id).responseSchemas();
-            Assert.assertEquals("Mismatching response SCHEMAS lengths " +
-                "for api key " + apiKey, manualSchemas.length, generatedSchemas.length);
-            for (int v = 0; v < manualSchemas.length; v++) {
-                try {
-                    if (generatedSchemas[v] != null) {
-                        compareTypes(manualSchemas[v], generatedSchemas[v]);
-                    }
-                } catch (Exception e) {
-                    throw new RuntimeException("Failed to compare response schemas " +
-                        "for version " + v + " of " + apiKey, e);
-                }
-            }
+            assertTrue(apiKey.latestVersion() <= message.highestSupportedVersion(),
+                "Response message spec for " + apiKey + " only " + "supports versions up to " +
+                message.highestSupportedVersion());
         }
     }
 
@@ -950,59 +921,6 @@ public final class MessageTest {
         public String toString() {
             return name + "[" + type + "]";
         }
-    }
-
-    private static void compareTypes(Schema schemaA, Schema schemaB) {
-        compareTypes(new NamedType("schemaA", schemaA),
-                     new NamedType("schemaB", schemaB));
-    }
-
-    private static void compareTypes(NamedType typeA, NamedType typeB) {
-        List<NamedType> listA = flatten(typeA);
-        List<NamedType> listB = flatten(typeB);
-        if (listA.size() != listB.size()) {
-            throw new RuntimeException("Can't match up structures: typeA has " +
-                Utils.join(listA, ", ") + ", but typeB has " +
-                Utils.join(listB, ", "));
-        }
-        for (int i = 0; i < listA.size(); i++) {
-            NamedType entryA = listA.get(i);
-            NamedType entryB = listB.get(i);
-            if (!entryA.hasSimilarType(entryB)) {
-                throw new RuntimeException("Type " + entryA + " in schema A " +
-                    "does not match type " + entryB + " in schema B.");
-            }
-            if (entryA.type.isNullable() != entryB.type.isNullable()) {
-                throw new RuntimeException(String.format(
-                    "Type %s in Schema A is %s, but type %s in " +
-                        "Schema B is %s",
-                    entryA, entryA.type.isNullable() ? "nullable" : "non-nullable",
-                    entryB, entryB.type.isNullable() ? "nullable" : "non-nullable"));
-            }
-            if (entryA.type.isArray()) {
-                compareTypes(new NamedType(entryA.name, entryA.type.arrayElementType().get()),
-                             new NamedType(entryB.name, entryB.type.arrayElementType().get()));
-            }
-        }
-    }
-
-    /**
-     * We want to remove Schema nodes from the hierarchy before doing
-     * our comparison.  The reason is because Schema nodes don't change what
-     * is written to the wire.  Schema(STRING, Schema(INT, SHORT)) is equivalent to
-     * Schema(STRING, INT, SHORT).  This function translates schema nodes into their
-     * component types.
-     */
-    private static List<NamedType> flatten(NamedType type) {
-        if (!(type.type instanceof Schema)) {
-            return singletonList(type);
-        }
-        Schema schema = (Schema) type.type;
-        ArrayList<NamedType> results = new ArrayList<>();
-        for (BoundField field : schema.fields()) {
-            results.addAll(flatten(new NamedType(field.def.name, field.def.type)));
-        }
-        return results;
     }
 
     @Test
@@ -1078,9 +996,8 @@ public final class MessageTest {
                 ByteBufferAccessor byteBufferAccessor = new ByteBufferAccessor(buf);
                 message.write(byteBufferAccessor, cache, version);
             });
-        assertTrue("Expected to get an error message about " + problemText +
-                ", but got: " + e.getMessage(),
-                e.getMessage().contains(problemText));
+        assertTrue(e.getMessage().contains(problemText), "Expected to get an error message about " + problemText +
+            ", but got: " + e.getMessage());
     }
 
     private void verifyWriteSucceeds(short version, Message message) {
@@ -1095,8 +1012,7 @@ public final class MessageTest {
         while (alt.hasRemaining()) {
             bld.append(String.format(" %02x", alt.get()));
         }
-        assertEquals("Expected the serialized size to be " + size +
-            ", but it was " + buf.position(), size, buf.position());
+        assertEquals(size, buf.position(), "Expected the serialized size to be " + size + ", but it was " + buf.position());
     }
 
     @Test

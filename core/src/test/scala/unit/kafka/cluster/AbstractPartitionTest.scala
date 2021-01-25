@@ -23,11 +23,11 @@ import kafka.api.ApiVersion
 import kafka.log.{CleanerConfig, LogConfig, LogManager}
 import kafka.server.{Defaults, MetadataCache}
 import kafka.server.checkpoints.OffsetCheckpoints
-import kafka.utils.TestUtils.MockAlterIsrManager
+import kafka.utils.TestUtils.{MockAlterIsrManager, MockIsrChangeListener}
 import kafka.utils.{MockTime, TestUtils}
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.utils.Utils
-import org.junit.{After, Before}
+import org.junit.jupiter.api.{AfterEach, BeforeEach}
 import org.mockito.ArgumentMatchers
 import org.mockito.Mockito.{mock, when}
 
@@ -41,19 +41,21 @@ class AbstractPartitionTest {
   var logDir2: File = _
   var logManager: LogManager = _
   var alterIsrManager: MockAlterIsrManager = _
+  var isrChangeListener: MockIsrChangeListener = _
   var logConfig: LogConfig = _
-  val stateStore: PartitionStateStore = mock(classOf[PartitionStateStore])
+  var topicConfigProvider: TopicConfigFetcher = _
   val delayedOperations: DelayedOperations = mock(classOf[DelayedOperations])
   val metadataCache: MetadataCache = mock(classOf[MetadataCache])
   val offsetCheckpoints: OffsetCheckpoints = mock(classOf[OffsetCheckpoints])
   var partition: Partition = _
 
-  @Before
+  @BeforeEach
   def setup(): Unit = {
     TestUtils.clearYammerMetrics()
 
     val logProps = createLogProperties(Map.empty)
     logConfig = LogConfig(logProps)
+    topicConfigProvider = TestUtils.createTopicConfigProvider(logProps)
 
     tmpDir = TestUtils.tempDir()
     logDir1 = TestUtils.randomPartitionLogDir(tmpDir)
@@ -63,18 +65,19 @@ class AbstractPartitionTest {
     logManager.startup()
 
     alterIsrManager = TestUtils.createAlterIsrManager()
+    isrChangeListener = TestUtils.createIsrChangeListener()
     partition = new Partition(topicPartition,
       replicaLagTimeMaxMs = Defaults.ReplicaLagTimeMaxMs,
       interBrokerProtocolVersion = ApiVersion.latestVersion,
       localBrokerId = brokerId,
       time,
-      stateStore,
+      topicConfigProvider,
+      isrChangeListener,
       delayedOperations,
       metadataCache,
       logManager,
       alterIsrManager)
 
-    when(stateStore.fetchTopicConfig()).thenReturn(createLogProperties(Map.empty))
     when(offsetCheckpoints.fetch(ArgumentMatchers.anyString, ArgumentMatchers.eq(topicPartition)))
       .thenReturn(None)
   }
@@ -88,7 +91,7 @@ class AbstractPartitionTest {
     logProps
   }
 
-  @After
+  @AfterEach
   def tearDown(): Unit = {
     if (tmpDir.exists()) {
       logManager.shutdown()

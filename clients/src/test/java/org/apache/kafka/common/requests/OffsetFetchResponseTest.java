@@ -26,21 +26,22 @@ import org.apache.kafka.common.protocol.types.Struct;
 import org.apache.kafka.common.record.RecordBatch;
 import org.apache.kafka.common.requests.OffsetFetchResponse.PartitionData;
 import org.apache.kafka.common.utils.Utils;
-import org.junit.Before;
-import org.junit.Test;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
 
-import static org.apache.kafka.common.protocol.CommonFields.ERROR_CODE;
 import static org.apache.kafka.common.requests.AbstractResponse.DEFAULT_THROTTLE_TIME;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class OffsetFetchResponseTest {
+
+    private static final String ERROR_CODE = "error_code";
 
     private final int throttleTimeMs = 10;
     private final int offset = 100;
@@ -55,7 +56,7 @@ public class OffsetFetchResponseTest {
 
     private Map<TopicPartition, PartitionData> partitionDataMap;
 
-    @Before
+    @BeforeEach
     public void setUp() {
         partitionDataMap = new HashMap<>();
         partitionDataMap.put(new TopicPartition(topicOne, partitionOne), new PartitionData(
@@ -106,9 +107,9 @@ public class OffsetFetchResponseTest {
         OffsetFetchResponse latestResponse = new OffsetFetchResponse(throttleTimeMs, Errors.NONE, partitionDataMap);
 
         for (short version = 0; version <= ApiKeys.OFFSET_FETCH.latestVersion(); version++) {
-            Struct struct = latestResponse.data.toStruct(version);
+            Struct struct = latestResponse.data().toStruct(version);
 
-            OffsetFetchResponse oldResponse =  new OffsetFetchResponse(struct, version);
+            OffsetFetchResponse oldResponse = OffsetFetchResponse.parse(latestResponse.serialize(version), version);
 
             if (version <= 1) {
                 assertFalse(struct.hasField(ERROR_CODE));
@@ -148,9 +149,7 @@ public class OffsetFetchResponseTest {
             Map<TopicPartition, PartitionData> responseData = oldResponse.responseData();
             assertEquals(expectedDataMap, responseData);
 
-            responseData.forEach(
-                (tp, data) -> assertTrue(data.hasError())
-            );
+            responseData.forEach((tp, data) -> assertTrue(data.hasError()));
         }
     }
 
@@ -195,7 +194,7 @@ public class OffsetFetchResponseTest {
                                 .setMetadata(null))
                         ))
                 );
-        assertEquals(expectedData, response.data);
+        assertEquals(expectedData, response.data());
     }
 
     @Test
@@ -228,6 +227,6 @@ public class OffsetFetchResponseTest {
                             .setMetadata(metadata))
                     ))
                 );
-        assertEquals(expectedData, response.data);
+        assertEquals(expectedData, response.data());
     }
 }

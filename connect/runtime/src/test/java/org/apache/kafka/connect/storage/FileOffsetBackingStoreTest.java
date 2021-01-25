@@ -35,6 +35,7 @@ import java.util.Map;
 import java.util.concurrent.ThreadPoolExecutor;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 
 @RunWith(PowerMockRunner.class)
@@ -84,7 +85,7 @@ public class FileOffsetBackingStoreTest {
 
         Map<ByteBuffer, ByteBuffer> values = store.get(Arrays.asList(buffer("key"), buffer("bad"))).get();
         assertEquals(buffer("value"), values.get(buffer("key")));
-        assertEquals(null, values.get(buffer("bad")));
+        assertNull(values.get(buffer("bad")));
 
         PowerMock.verifyAll();
     }

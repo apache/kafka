@@ -38,15 +38,15 @@ import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.resource.ResourceType
 import org.apache.kafka.server.authorizer.{Action, AuthorizableRequestContext, AuthorizationResult}
 import org.apache.kafka.test
-import org.junit.Assert._
-import org.junit.{After, Test}
+import org.junit.jupiter.api.Assertions._
+import org.junit.jupiter.api.{AfterEach, Test}
 
 import scala.jdk.CollectionConverters._
 
 class PreferredReplicaLeaderElectionCommandTest extends ZooKeeperTestHarness with Logging {
   var servers: Seq[KafkaServer] = Seq()
 
-  @After
+  @AfterEach
   override def tearDown(): Unit = {
     TestUtils.shutdownServers(servers)
     super.tearDown()
@@ -70,7 +70,7 @@ class PreferredReplicaLeaderElectionCommandTest extends ZooKeeperTestHarness wit
     servers = brokerConfigs.map(b => TestUtils.createServer(KafkaConfig.fromProps(b)))
     // create the topic
     partitionsAndAssignments.foreach { case (tp, assignment) =>
-      zkClient.createTopicAssignment(tp.topic, Uuid.randomUuid(),
+      zkClient.createTopicAssignment(tp.topic, Some(Uuid.randomUuid()),
       Map(tp -> assignment))
     }
     // wait until replica log is created on every broker
@@ -136,15 +136,9 @@ class PreferredReplicaLeaderElectionCommandTest extends ZooKeeperTestHarness wit
   /** Test the case when an invalid broker is given for --bootstrap-broker */
   @Test
   def testInvalidBrokerGiven(): Unit = {
-    try {
-      PreferredReplicaLeaderElectionCommand.run(Array(
-        "--bootstrap-server", "example.com:1234"),
-        timeout = 1000)
-      fail()
-    } catch {
-      case e: AdminCommandFailedException =>
-        assertTrue(e.getCause.isInstanceOf[TimeoutException])
-    }
+    val e = assertThrows(classOf[AdminCommandFailedException], () => PreferredReplicaLeaderElectionCommand.run(Array(
+      "--bootstrap-server", "example.com:1234"), timeout = 1000))
+    assertTrue(e.getCause.isInstanceOf[TimeoutException])
   }
 
   /** Test the case where no partitions are given (=> elect all partitions) */
@@ -281,7 +275,8 @@ class PreferredReplicaLeaderElectionCommandTest extends ZooKeeperTestHarness wit
         assertEquals("1 preferred replica(s) could not be elected", e.getMessage)
         val suppressed = e.getSuppressed()(0)
         assertTrue(suppressed.isInstanceOf[PreferredLeaderNotAvailableException])
-        assertTrue(suppressed.getMessage, suppressed.getMessage.contains("Failed to elect leader for partition test-0 under strategy PreferredReplicaPartitionLeaderElectionStrategy"))
+        assertTrue(suppressed.getMessage.contains("Failed to elect leader for partition test-0 under strategy PreferredReplicaPartitionLeaderElectionStrategy"),
+          suppressed.getMessage)
         // Check we still have the same leader
         assertEquals(leader, awaitLeader(testPartition))
     } finally {
@@ -351,8 +346,8 @@ class PreferredReplicaLeaderElectionCommandTest extends ZooKeeperTestHarness wit
     PreferredReplicaLeaderElectionCommand.writePreferredReplicaElectionData(zkClient, partitionsForPreferredReplicaElection)
     // try to read it back and compare with what was written
     val partitionsUndergoingPreferredReplicaElection = zkClient.getPreferredReplicaElection
-    assertEquals("Preferred replica election ser-de failed", partitionsForPreferredReplicaElection,
-      partitionsUndergoingPreferredReplicaElection)
+    assertEquals(partitionsForPreferredReplicaElection, partitionsUndergoingPreferredReplicaElection,
+      "Preferred replica election ser-de failed")
   }
 
   @Test
@@ -373,7 +368,7 @@ class PreferredReplicaLeaderElectionCommandTest extends ZooKeeperTestHarness wit
     val preferredReplicaElection = new PreferredReplicaLeaderElectionCommand(zkClient, Set(new TopicPartition(topic, partition)))
     preferredReplicaElection.moveLeaderToPreferredReplica()
     val newLeader = TestUtils.waitUntilLeaderIsElectedOrChanged(zkClient, topic, partition, oldLeaderOpt = Some(currentLeader))
-    assertEquals("Preferred replica election failed", preferredReplica, newLeader)
+    assertEquals(preferredReplica, newLeader, "Preferred replica election failed")
   }
 }
 

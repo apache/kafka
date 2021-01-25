@@ -29,7 +29,7 @@ import org.apache.kafka.streams.state.TimestampedKeyValueStore;
 /**
  * Represents a KTable convert From KStream
  */
-public class StreamToTableNode<K, V> extends StreamsGraphNode {
+public class StreamToTableNode<K, V> extends GraphNode {
 
     private final ProcessorParameters<K, V, ?, ?> processorParameters;
     private final MaterializedInternal<K, V, ?> materializedInternal;

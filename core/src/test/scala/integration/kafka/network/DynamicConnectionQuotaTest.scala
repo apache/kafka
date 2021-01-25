@@ -23,19 +23,19 @@ import java.net.{InetAddress, Socket}
 import java.util.concurrent._
 import java.util.{Collections, Properties}
 
-import kafka.server.{BaseRequestTest, ConfigEntityName, DynamicConfig, KafkaConfig}
-import kafka.utils.{CoreUtils, TestUtils}
+import kafka.server.{BaseRequestTest, DynamicConfig, KafkaConfig}
+import kafka.utils.TestUtils
 import org.apache.kafka.clients.admin.{Admin, AdminClientConfig}
 import org.apache.kafka.common.message.ProduceRequestData
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.protocol.Errors
+import org.apache.kafka.common.quota.ClientQuotaEntity
 import org.apache.kafka.common.record.{CompressionType, MemoryRecords, SimpleRecord}
 import org.apache.kafka.common.requests.{ProduceRequest, ProduceResponse}
 import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.common.{KafkaException, requests}
-import org.junit.Assert._
-import org.junit.{After, Before, Test}
-import org.scalatest.Assertions.intercept
+import org.junit.jupiter.api.Assertions._
+import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
 
 import scala.annotation.nowarn
 import scala.jdk.CollectionConverters._
@@ -47,6 +47,7 @@ class DynamicConnectionQuotaTest extends BaseRequestTest {
   val topic = "test"
   val listener = ListenerName.forSecurityProtocol(SecurityProtocol.PLAINTEXT)
   val localAddress = InetAddress.getByName("127.0.0.1")
+  val unknownHost = "255.255.0.1"
   val plaintextListenerDefaultQuota = 30
   var executor: ExecutorService = _
 
@@ -55,13 +56,13 @@ class DynamicConnectionQuotaTest extends BaseRequestTest {
     properties.put("listener.name.plaintext.max.connection.creation.rate", plaintextListenerDefaultQuota.toString)
   }
 
-  @Before
+  @BeforeEach
   override def setUp(): Unit = {
     super.setUp()
     TestUtils.createTopic(zkClient, topic, brokerCount, brokerCount, servers)
   }
 
-  @After
+  @AfterEach
   override def tearDown(): Unit = {
     try {
       if (executor != null) {
@@ -163,7 +164,7 @@ class DynamicConnectionQuotaTest extends BaseRequestTest {
     plaintextConns ++= (0 until 2).map(_ => connect("PLAINTEXT"))
     TestUtils.waitUntilTrue(() => connectionCount <= 10, "Internal connections not closed")
     plaintextConns.foreach(verifyConnection)
-    intercept[IOException](internalConns.foreach { socket =>
+    assertThrows(classOf[IOException], () => internalConns.foreach { socket =>
       sendAndReceive[ProduceResponse](produceRequest, socket)
     })
     plaintextConns.foreach(_.close())
@@ -236,16 +237,19 @@ class DynamicConnectionQuotaTest extends BaseRequestTest {
   @Test
   def testDynamicIpConnectionRateQuota(): Unit = {
     val connRateLimit = 10
+    val initialConnectionCount = connectionCount
     // before setting connection rate to 10, verify we can do at least double that by default (no limit)
-    verifyConnectionRate(2 * connRateLimit, Int.MaxValue, "PLAINTEXT", ignoreIOExceptions = false)
+    verifyConnectionRate(2 * connRateLimit, plaintextListenerDefaultQuota, "PLAINTEXT", ignoreIOExceptions = false)
+    waitForConnectionCount(initialConnectionCount)
     // set default IP connection rate quota, verify that we don't exceed the limit
     updateIpConnectionRate(None, connRateLimit)
     verifyConnectionRate(8, connRateLimit, "PLAINTEXT", ignoreIOExceptions = true)
-
+    waitForConnectionCount(initialConnectionCount)
     // set a higher IP connection rate quota override, verify that the higher limit is now enforced
     val newRateLimit = 18
     updateIpConnectionRate(Some(localAddress.getHostAddress), newRateLimit)
     verifyConnectionRate(14, newRateLimit, "PLAINTEXT", ignoreIOExceptions = true)
+    waitForConnectionCount(initialConnectionCount)
   }
 
   private def reconfigureServers(newProps: Properties, perBrokerConfig: Boolean, aPropToVerify: (String, String)): Unit = {
@@ -259,13 +263,22 @@ class DynamicConnectionQuotaTest extends BaseRequestTest {
   }
 
   private def updateIpConnectionRate(ip: Option[String], updatedRate: Int): Unit = {
-    adminZkClient.changeIpConfig(ip.getOrElse(ConfigEntityName.Default),
-      CoreUtils.propsWith(DynamicConfig.Ip.IpConnectionRateOverrideProp, updatedRate.toString))
-    // use a random throwaway address if ip isn't specified to get the default value
-    TestUtils.waitUntilTrue(() => servers.head.socketServer.connectionQuotas.
-      connectionRateForIp(InetAddress.getByName(ip.getOrElse("255.255.3.4"))) == updatedRate,
-      s"Timed out waiting for connection rate update to propagate"
-    )
+    val initialConnectionCount = connectionCount
+    val adminClient = createAdminClient()
+    try {
+      val entity = new ClientQuotaEntity(Map(ClientQuotaEntity.IP -> ip.orNull).asJava)
+      val request = Map(entity -> Map(DynamicConfig.Ip.IpConnectionRateOverrideProp -> Some(updatedRate.toDouble)))
+      TestUtils.alterClientQuotas(adminClient, request).all.get()
+      // use a random throwaway address if ip isn't specified to get the default value
+      TestUtils.waitUntilTrue(() => servers.head.socketServer.connectionQuotas.
+        connectionRateForIp(InetAddress.getByName(ip.getOrElse(unknownHost))) == updatedRate,
+        s"Timed out waiting for connection rate update to propagate"
+      )
+    } finally {
+      adminClient.close()
+    }
+    TestUtils.waitUntilTrue(() => initialConnectionCount == connectionCount,
+      s"Admin client connection not closed (initial = $initialConnectionCount, current = $connectionCount)")
   }
 
   private def waitForListener(listenerName: String): Unit = {
@@ -345,7 +358,7 @@ class DynamicConnectionQuotaTest extends BaseRequestTest {
     conns = conns :+ connect("PLAINTEXT")
 
     // now try one more (should fail)
-    intercept[IOException](connectWithFailure.apply())
+    assertThrows(classOf[IOException], () => connectWithFailure.apply())
 
     //close one connection
     conns.head.close()
@@ -396,7 +409,7 @@ class DynamicConnectionQuotaTest extends BaseRequestTest {
     val elapsedMs = System.currentTimeMillis - startTimeMs
     val actualRate = (connCount.toDouble / elapsedMs) * 1000
     val rateCap = if (maxConnectionRate < Int.MaxValue) 1.2 * maxConnectionRate.toDouble else Int.MaxValue.toDouble
-    assertTrue(s"Listener $listener connection rate $actualRate must be below $rateCap", actualRate <= rateCap)
-    assertTrue(s"Listener $listener connection rate $actualRate must be above $minConnectionRate", actualRate >= minConnectionRate)
+    assertTrue(actualRate <= rateCap, s"Listener $listener connection rate $actualRate must be below $rateCap")
+    assertTrue(actualRate >= minConnectionRate, s"Listener $listener connection rate $actualRate must be above $minConnectionRate")
   }
 }

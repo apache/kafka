@@ -22,8 +22,8 @@ import java.util.Properties
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests.{AddPartitionsToTxnRequest, AddPartitionsToTxnResponse}
-import org.junit.Assert._
-import org.junit.{Before, Test}
+import org.junit.jupiter.api.Assertions._
+import org.junit.jupiter.api.{BeforeEach, Test}
 
 import scala.jdk.CollectionConverters._
 
@@ -34,7 +34,7 @@ class AddPartitionsToTxnRequestServerTest extends BaseRequestTest {
   override def brokerPropertyOverrides(properties: Properties): Unit =
     properties.put(KafkaConfig.AutoCreateTopicsEnableProp, false.toString)
 
-  @Before
+  @BeforeEach
   override def setUp(): Unit = {
     super.setUp()
     createTopic(topic1, numPartitions, servers.size, new Properties())

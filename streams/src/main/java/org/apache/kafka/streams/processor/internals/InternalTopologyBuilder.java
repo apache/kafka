@@ -1787,7 +1787,7 @@ public class InternalTopologyBuilder {
     }
 
     public static class TopicsInfo {
-        final Set<String> sinkTopics;
+        public final Set<String> sinkTopics;
         public final Set<String> sourceTopics;
         public final Map<String, InternalTopicConfig> stateChangelogTopics;
         public final Map<String, InternalTopicConfig> repartitionSourceTopics;

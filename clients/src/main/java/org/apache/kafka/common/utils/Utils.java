@@ -17,6 +17,7 @@
 package org.apache.kafka.common.utils;
 
 import java.nio.BufferUnderflowException;
+import java.util.AbstractMap;
 import java.util.EnumSet;
 import java.util.SortedSet;
 import java.util.TreeSet;
@@ -548,15 +549,15 @@ public final class Utils {
     }
 
     /**
-     * Create a string representation of a list joined by the given separator
-     * @param list The list of items
+     * Create a string representation of a collection joined by the given separator
+     * @param collection The list of items
      * @param separator The separator
      * @return The string representation.
      */
-    public static <T> String join(Collection<T> list, String separator) {
-        Objects.requireNonNull(list);
+    public static <T> String join(Collection<T> collection, String separator) {
+        Objects.requireNonNull(collection);
         StringBuilder sb = new StringBuilder();
-        Iterator<T> iter = list.iterator();
+        Iterator<T> iter = collection.iterator();
         while (iter.hasNext()) {
             sb.append(iter.next());
             if (iter.hasNext())
@@ -753,22 +754,7 @@ public final class Utils {
      * @return An entry
      */
     public static <K, V> Map.Entry<K, V> mkEntry(final K k, final V v) {
-        return new Map.Entry<K, V>() {
-            @Override
-            public K getKey() {
-                return k;
-            }
-
-            @Override
-            public V getValue() {
-                return v;
-            }
-
-            @Override
-            public V setValue(final V value) {
-                throw new UnsupportedOperationException();
-            }
-        };
+        return new AbstractMap.SimpleEntry<>(k, v);
     }
 
     /**
@@ -1318,5 +1304,10 @@ public final class Utils {
             final Date date = simpleDateFormat.parse(timestamp);
             return date.getTime();
         }
+    }
+
+    @SuppressWarnings("unchecked")
+    public static <S> Iterator<S> covariantCast(Iterator<? extends S> iterator) {
+        return (Iterator<S>) iterator;
     }
 }

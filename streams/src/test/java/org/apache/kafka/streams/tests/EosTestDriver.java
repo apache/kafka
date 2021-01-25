@@ -598,7 +598,7 @@ public class EosTestDriver extends SmokeTestUtil {
 
         final long maxWaitTime = System.currentTimeMillis() + MAX_IDLE_TIME_MS;
         try (final KafkaConsumer<byte[], byte[]> consumerUncommitted = new KafkaConsumer<>(consumerProps)) {
-            while (System.currentTimeMillis() < maxWaitTime) {
+            while (!partitions.isEmpty() && System.currentTimeMillis() < maxWaitTime) {
                 consumer.seekToEnd(partitions);
                 final Map<TopicPartition, Long> topicEndOffsets = consumerUncommitted.endOffsets(partitions);
 

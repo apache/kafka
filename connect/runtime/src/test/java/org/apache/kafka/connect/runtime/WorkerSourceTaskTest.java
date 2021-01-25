@@ -91,6 +91,7 @@ import static org.apache.kafka.connect.runtime.WorkerConfig.TOPIC_CREATION_ENABL
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 
 @PowerMockIgnore({"javax.management.*",
@@ -541,7 +542,7 @@ public class WorkerSourceTaskTest extends ThreadedTest {
         PowerMock.verifyAll();
     }
 
-    @Test(expected = InvalidRecordException.class)
+    @Test
     public void testSendRecordsCorruptTimestamp() throws Exception {
         final Long timestamp = -3L;
         createWorkerTask();
@@ -555,8 +556,8 @@ public class WorkerSourceTaskTest extends ThreadedTest {
         PowerMock.replayAll();
 
         Whitebox.setInternalState(workerTask, "toSend", records);
-        Whitebox.invokeMethod(workerTask, "sendRecords");
-        assertEquals(null, sent.getValue().timestamp());
+        assertThrows(InvalidRecordException.class, () -> Whitebox.invokeMethod(workerTask, "sendRecords"));
+        assertFalse(sent.hasCaptured());
 
         PowerMock.verifyAll();
     }
@@ -578,7 +579,7 @@ public class WorkerSourceTaskTest extends ThreadedTest {
 
         Whitebox.setInternalState(workerTask, "toSend", records);
         Whitebox.invokeMethod(workerTask, "sendRecords");
-        assertEquals(null, sent.getValue().timestamp());
+        assertNull(sent.getValue().timestamp());
 
         PowerMock.verifyAll();
     }
@@ -619,7 +620,7 @@ public class WorkerSourceTaskTest extends ThreadedTest {
         PowerMock.verifyAll();
     }
 
-    @Test(expected = ConnectException.class)
+    @Test
     public void testSendRecordsProducerCallbackFail() throws Exception {
         createWorkerTask();
 
@@ -633,7 +634,7 @@ public class WorkerSourceTaskTest extends ThreadedTest {
         PowerMock.replayAll();
 
         Whitebox.setInternalState(workerTask, "toSend", Arrays.asList(record1, record2));
-        Whitebox.invokeMethod(workerTask, "sendRecords");
+        assertThrows(ConnectException.class, () -> Whitebox.invokeMethod(workerTask, "sendRecords"));
     }
 
     @Test

@@ -18,6 +18,7 @@ package org.apache.kafka.common.metrics;
 
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.MetricNameTemplate;
+import org.apache.kafka.common.metrics.internals.MetricsUtils;
 import org.apache.kafka.common.utils.KafkaThread;
 import org.apache.kafka.common.utils.Time;
 import org.slf4j.Logger;
@@ -227,7 +228,7 @@ public class Metrics implements Closeable {
      * @param keyValue      additional key/value attributes of the metric (must come in pairs)
      */
     public MetricName metricName(String name, String group, String description, String... keyValue) {
-        return metricName(name, group, description, getTags(keyValue));
+        return metricName(name, group, description, MetricsUtils.getTags(keyValue));
     }
 
     /**
@@ -240,16 +241,6 @@ public class Metrics implements Closeable {
      */
     public MetricName metricName(String name, String group, Map<String, String> tags) {
         return metricName(name, group, "", tags);
-    }
-
-    private static Map<String, String> getTags(String... keyValue) {
-        if ((keyValue.length % 2) != 0)
-            throw new IllegalArgumentException("keyValue needs to be specified in pairs");
-        Map<String, String> tags = new LinkedHashMap<>();
-
-        for (int i = 0; i < keyValue.length; i += 2)
-            tags.put(keyValue[i], keyValue[i + 1]);
-        return tags;
     }
 
     /**
@@ -633,7 +624,7 @@ public class Metrics implements Closeable {
     }
 
     public MetricName metricInstance(MetricNameTemplate template, String... keyValue) {
-        return metricInstance(template, getTags(keyValue));
+        return metricInstance(template, MetricsUtils.getTags(keyValue));
     }
 
     public MetricName metricInstance(MetricNameTemplate template, Map<String, String> tags) {
