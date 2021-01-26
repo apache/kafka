@@ -31,7 +31,6 @@ import java.nio.channels.FileChannel;
 import java.nio.channels.FileLock;
 import java.nio.channels.OverlappingFileLockException;
 import java.nio.file.NoSuchFileException;
-import java.nio.file.Paths;
 import java.nio.file.Path;
 import java.nio.file.Files;
 import java.nio.file.StandardOpenOption;
@@ -109,16 +108,27 @@ public class StateDirectory {
                 log.warn("Using /tmp directory in the state.dir property can cause failures with writing the checkpoint file" +
                     " due to the fact that this directory can be cleared by the OS");
             }
-
             // change the dir permission to "rwxr-x---" to avoid world readable
-            final Path basePath = Paths.get(baseDir.getPath());
-            final Path statePath = Paths.get(stateDir.getPath());
+            configurePermissions(baseDir);
+            configurePermissions(stateDir);
+        }
+    }
+    
+    private void configurePermissions(final File file) {
+        final Path path = file.toPath();
+        if (path.getFileSystem().supportedFileAttributeViews().contains("posix")) {
             final Set<PosixFilePermission> perms = PosixFilePermissions.fromString("rwxr-x---");
             try {
-                Files.setPosixFilePermissions(basePath, perms);
-                Files.setPosixFilePermissions(statePath, perms);
+                Files.setPosixFilePermissions(path, perms);
             } catch (final IOException e) {
-                log.error("Error changing permissions for the state or base directory {} ", stateDir.getPath(), e);
+                log.error("Error changing permissions for the directory {} ", path, e);
+            }
+        } else {
+            boolean set = file.setReadable(true, true);
+            set &= file.setWritable(true, true);
+            set &= file.setExecutable(true, true);
+            if (!set) {
+                log.error("Failed to change permissions for the directory {}", file);
             }
         }
     }
