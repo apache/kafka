@@ -29,6 +29,7 @@ import org.apache.kafka.common.record.MemoryRecords;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -263,14 +264,34 @@ public class FetchResponse<T extends BaseRecords> extends AbstractResponse {
 
     public static final class IdError {
         private final Uuid id;
-        private final List<FetchResponseData.FetchablePartitionResponse> errorData;
+        private final Set<Integer> partitions;
+        private final Errors error;
 
         public IdError(Uuid id,
                 List<Integer> partitions,
                 Errors error) {
             this.id = id;
+            this.partitions = new HashSet<>(partitions);
+            this.error = error;
+        }
 
-            this.errorData = partitions.stream().map(partition -> new FetchResponseData.FetchablePartitionResponse()
+        public Uuid id() {
+            return this.id;
+        }
+
+        public Set<Integer> partitions() {
+            return this.partitions;
+        }
+
+        public void addPartitions(List<Integer> partitions) {
+            partitions.forEach(partition -> {
+                if (!partitions.contains(partition))
+                    partitions.add(partition);
+            });
+        }
+
+        private List<FetchResponseData.FetchablePartitionResponse> errorData() {
+            return partitions.stream().map(partition -> new FetchResponseData.FetchablePartitionResponse()
                     .setPartition(partition)
                     .setErrorCode(error.code())
                     .setHighWatermark(FetchResponse.INVALID_HIGHWATERMARK)
@@ -279,14 +300,6 @@ public class FetchResponse<T extends BaseRecords> extends AbstractResponse {
                     .setAbortedTransactions(null)
                     .setPreferredReadReplica(FetchResponse.INVALID_PREFERRED_REPLICA_ID)
                     .setRecordSet(MemoryRecords.EMPTY)).collect(Collectors.toList());
-        }
-
-        public Uuid id() {
-            return this.id;
-        }
-
-        public List<FetchResponseData.FetchablePartitionResponse> errorData() {
-            return this.errorData;
         }
 
     }
@@ -420,7 +433,7 @@ public class FetchResponse<T extends BaseRecords> extends AbstractResponse {
         // ID errors will be empty unless topic IDs are supported and there were topic ID errors
         idErrors.forEach(idError -> {
             List<FetchResponseData.FetchablePartitionResponse> partitionResponses = new ArrayList<>();
-            partitionResponses.addAll(idError.errorData);
+            partitionResponses.addAll(idError.errorData());
             topicResponseList.add(new FetchResponseData.FetchableTopicResponse()
                     .setTopicId(idError.id())
                     .setPartitionResponses(partitionResponses));

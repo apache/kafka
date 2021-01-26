@@ -662,13 +662,13 @@ class KafkaApis(val requestChannel: RequestChannel,
     val versionId = request.header.apiVersion
     val clientId = request.header.clientId
     val fetchRequest = request.body[FetchRequest]
-    val topicNames = metadataCache.getTopicNames().asJava
-    val topicIds = metadataCache.getTopicIds().asJava
+    val topicNames = if (fetchRequest.version() >= 13) metadataCache.getTopicNames().asJava else Collections.emptyMap[Uuid, String]()
+    val topicIds = if (fetchRequest.version() >= 13) metadataCache.getTopicIds().asJava else Collections.emptyMap[String, Uuid]()
+
     val fetchContext = fetchManager.newContext(
-      fetchRequest.metadata,
-      fetchRequest.fetchData(topicNames),
-      fetchRequest.toForget(topicNames),
-      fetchRequest.isFromFollower)
+      fetchRequest,
+      topicNames,
+      topicIds)
 
 
     val clientMetadata: Option[ClientMetadata] = if (versionId >= 11) {
@@ -690,7 +690,6 @@ class KafkaApis(val requestChannel: RequestChannel,
 
     val erroneous = mutable.ArrayBuffer[(TopicPartition, FetchResponse.PartitionData[Records])]()
     val interesting = mutable.ArrayBuffer[(TopicPartition, FetchRequest.PartitionData)]()
-    val idErrors = new mutable.ListBuffer[FetchResponse.IdError]()
     if (fetchRequest.isFromFollower) {
       // The follower must have ClusterAction on ClusterResource in order to fetch partition data.
       if (authHelper.authorize(request.context, CLUSTER_ACTION, CLUSTER, CLUSTER_NAME)) {
@@ -719,16 +718,6 @@ class KafkaApis(val requestChannel: RequestChannel,
           erroneous += topicPartition -> errorResponse(Errors.UNKNOWN_TOPIC_OR_PARTITION)
         else
           interesting += (topicPartition -> data)
-      }
-    }
-
-    if (fetchRequest.version() >= 13) {
-      fetchRequest.data().topics().forEach { topic =>
-        val name = topicNames.get(topic.topicId())
-        if (name == null) {
-          idErrors += new FetchResponse.IdError(topic.topicId(), topic.partitions().asScala.map(part => new Integer(part.partition())).asJava,
-            Errors.UNKNOWN_TOPIC_ID)
-        }
       }
     }
 
@@ -847,7 +836,7 @@ class KafkaApis(val requestChannel: RequestChannel,
           if (fetchRequest.version() >= 13 && topicIds.isEmpty)
               fetchRequest.getErrorResponse(0, Errors.UNSUPPORTED_VERSION.exception).asInstanceOf[FetchResponse[BaseRecords]]
           else
-            new FetchResponse(unconvertedFetchResponse.error, convertedData, idErrors.asJava, topicIds, throttleTimeMs, unconvertedFetchResponse.sessionId)
+            new FetchResponse(unconvertedFetchResponse.error, convertedData, fetchContext.getIdErrors(), topicIds, throttleTimeMs, unconvertedFetchResponse.sessionId)
         // record the bytes out metrics only when the response is being sent
         response.responseData(topicNames).forEach { (tp, data) =>
           brokerTopicStats.updateBytesOut(tp.topic, fetchRequest.isFromFollower, reassigningPartitions.contains(tp), data.records.sizeInBytes)
@@ -868,7 +857,7 @@ class KafkaApis(val requestChannel: RequestChannel,
       if (fetchRequest.isFromFollower) {
         // We've already evaluated against the quota and are good to go. Just need to record it now.
         unconvertedFetchResponse = fetchContext.updateAndGenerateResponseData(partitions)
-        val responseSize = KafkaApis.sizeOfThrottledPartitions(versionId, unconvertedFetchResponse, quotas.leader, idErrors.toList, topicNames, topicIds)
+        val responseSize = KafkaApis.sizeOfThrottledPartitions(versionId, unconvertedFetchResponse, quotas.leader, fetchContext.getIdErrors().asScala.toList, topicNames, topicIds)
         quotas.leader.record(responseSize)
         trace(s"Sending Fetch response with partitions.size=${unconvertedFetchResponse.responseData(topicNames).size}, " +
           s"metadata=${unconvertedFetchResponse.sessionId}")
@@ -881,7 +870,7 @@ class KafkaApis(val requestChannel: RequestChannel,
         // Record both bandwidth and request quota-specific values and throttle by muting the channel if any of the
         // quotas have been violated. If both quotas have been violated, use the max throttle time between the two
         // quotas. When throttled, we unrecord the recorded bandwidth quota value
-        val responseSize = fetchContext.getResponseSize(partitions, versionId, idErrors.asJava, topicIds)
+        val responseSize = fetchContext.getResponseSize(partitions, versionId)
         val timeMs = time.milliseconds()
         val requestThrottleTimeMs = quotas.request.maybeRecordAndGetThrottleTimeMs(request, timeMs)
         val bandwidthThrottleTimeMs = quotas.fetch.maybeRecordAndGetThrottleTimeMs(request, responseSize, timeMs)

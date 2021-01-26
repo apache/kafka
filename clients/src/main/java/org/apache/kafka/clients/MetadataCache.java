@@ -156,20 +156,27 @@ public class MetadataCache {
 
         Map<TopicPartition, PartitionMetadata> newMetadataByPartition = new HashMap<>(addPartitions.size());
         Map<String, Uuid> newTopicIds = new HashMap<>(topicIds.size());
+
+        // We want the most recent topic ID. We add the old one here and replace if a new topic ID is added
+        // or remove if the request did not support topic IDs for this topic.
+        for (Map.Entry<String, Uuid> entry : this.topicIds.entrySet()) {
+            if (shouldRetainTopic.test(entry.getKey())) {
+                newTopicIds.put(entry.getKey(), entry.getValue());
+            }
+        }
+
         for (PartitionMetadata partition : addPartitions) {
             newMetadataByPartition.put(partition.topicPartition, partition);
-            newTopicIds.put(partition.topic(), topicIds.get(partition.topic()));
+            Uuid id = topicIds.get(partition.topic());
+            if (id != null)
+                newTopicIds.put(partition.topic(), id);
+            else
+                // Remove if the latest metadata does not have a topic ID
+                newTopicIds.remove(partition.topic());
         }
         for (Map.Entry<TopicPartition, PartitionMetadata> entry : metadataByPartition.entrySet()) {
             if (shouldRetainTopic.test(entry.getKey().topic())) {
                 newMetadataByPartition.putIfAbsent(entry.getKey(), entry.getValue());
-            }
-        }
-        // If topicIds.get is null, this metadata response did not support topic IDs and we should not store ID.
-        // This is so we can revert back to older fetch requests that do not use topic ID.
-        for (Map.Entry<String, Uuid> entry : this.topicIds.entrySet()) {
-            if (shouldRetainTopic.test(entry.getKey()) && topicIds.get(entry.getKey()) != null) {
-                newTopicIds.put(entry.getKey(), entry.getValue());
             }
         }
 

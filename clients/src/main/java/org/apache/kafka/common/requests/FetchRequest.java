@@ -31,11 +31,15 @@ import org.apache.kafka.common.utils.Utils;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
+import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 public class FetchRequest extends AbstractRequest {
@@ -112,7 +116,68 @@ public class FetchRequest extends AbstractRequest {
         }
     }
 
-    private Optional<Integer> optionalEpoch(int rawEpochValue) {
+    public static final class UnresolvedPartitions {
+        private final Uuid id;
+        private final Map<Integer, PartitionData> partitionData;
+
+        public UnresolvedPartitions(Uuid id, Map<Integer, PartitionData> partitionData) {
+            this.id = id;
+            this.partitionData = partitionData;
+        }
+
+        public Uuid id() {
+            return id;
+        }
+
+        public Map<Integer, PartitionData> partitionData() {
+            return partitionData;
+        }
+    }
+
+
+    public static final class FetchDataAndError {
+        private final Map<TopicPartition, PartitionData> fetchData;
+        private final List<UnresolvedPartitions> unresolvedPartitions;
+        private final Map<Uuid, FetchResponse.IdError> idErrors;
+
+        public FetchDataAndError(Map<TopicPartition, PartitionData> fetchData, List<UnresolvedPartitions> unresolvedPartitions, Map<Uuid, FetchResponse.IdError> idErrors) {
+            this.fetchData = fetchData;
+            this.unresolvedPartitions = unresolvedPartitions;
+            this.idErrors = idErrors;
+        }
+
+        public final Map<TopicPartition, PartitionData> fetchData() {
+            return fetchData;
+        }
+
+        public final List<UnresolvedPartitions> unresolvedPartitions() {
+            return unresolvedPartitions;
+        }
+
+        public final Map<Uuid, FetchResponse.IdError> idErrors() {
+            return idErrors;
+        }
+    }
+
+    public static final class ToForgetAndIds {
+        private final List<TopicPartition> toForget;
+        private final Map<Uuid, Set<Integer>> toForgetIds;
+
+        public ToForgetAndIds(List<TopicPartition> toForget, Map<Uuid, Set<Integer>> toForgetIds) {
+            this.toForget = toForget;
+            this.toForgetIds = toForgetIds;
+        }
+
+        public final List<TopicPartition> toForget() {
+            return toForget;
+        }
+
+        public final Map<Uuid, Set<Integer>> toForgetIds() {
+            return toForgetIds;
+        }
+    }
+
+    private static Optional<Integer> optionalEpoch(int rawEpochValue) {
         if (rawEpochValue < 0) {
             return Optional.empty();
         } else {
@@ -156,6 +221,50 @@ public class FetchRequest extends AbstractRequest {
         return Collections.unmodifiableMap(result);
     }
 
+    // Only used when Fetch is version 13 or greater.
+    private FetchDataAndError toPartitionDataMapAndError(List<FetchRequestData.FetchTopic> fetchableTopics, Map<Uuid, String> topicNames) {
+        Map<TopicPartition, PartitionData> fetchData = new LinkedHashMap<>();
+        List<UnresolvedPartitions> unresolvedPartitions = new LinkedList<>();
+        Map<Uuid, FetchResponse.IdError> idErrors = new HashMap<>();
+        Errors error;
+        if (topicNames.isEmpty()) {
+            error = Errors.UNSUPPORTED_VERSION;
+        } else {
+            error = Errors.UNKNOWN_TOPIC_ID;
+        }
+        fetchableTopics.forEach(fetchTopic -> {
+            String name = topicNames.get(fetchTopic.topicId());
+            if (name != null) {
+                fetchTopic.partitions().forEach(fetchPartition ->
+                        fetchData.put(new TopicPartition(name, fetchPartition.partition()),
+                                new PartitionData(
+                                        fetchPartition.fetchOffset(),
+                                        fetchPartition.logStartOffset(),
+                                        fetchPartition.partitionMaxBytes(),
+                                        optionalEpoch(fetchPartition.currentLeaderEpoch()),
+                                        optionalEpoch(fetchPartition.lastFetchedEpoch())
+                                )
+                        )
+                );
+            } else {
+                unresolvedPartitions.add(new UnresolvedPartitions(fetchTopic.topicId(), fetchTopic.partitions().stream().collect(Collectors.toMap(
+                        FetchRequestData.FetchPartition::partition, fetchPartition -> new PartitionData(
+                        fetchPartition.fetchOffset(),
+                        fetchPartition.logStartOffset(),
+                        fetchPartition.partitionMaxBytes(),
+                        optionalEpoch(fetchPartition.currentLeaderEpoch()),
+                        optionalEpoch(fetchPartition.lastFetchedEpoch()))))));
+
+                if (idErrors.containsKey(fetchTopic.topicId()))
+                    idErrors.get(fetchTopic.topicId()).addPartitions(fetchTopic.partitions().stream().map(part -> part.partition()).collect(Collectors.toList()));
+                else
+                    idErrors.put(fetchTopic.topicId(), new FetchResponse.IdError(fetchTopic.topicId(), fetchTopic.partitions().stream().map(part -> part.partition()).collect(Collectors.toList()),
+                        error));
+            }
+        });
+        return new FetchDataAndError(fetchData, unresolvedPartitions, idErrors);
+    }
+
     private List<TopicPartition> toForgottenTopicList(List<FetchRequestData.ForgottenTopic> forgottenTopics) {
         List<TopicPartition> result = new ArrayList<>();
         forgottenTopics.forEach(forgottenTopic ->
@@ -176,6 +285,28 @@ public class FetchRequest extends AbstractRequest {
                 })
         );
         return result;
+    }
+
+    // Only used when Fetch is version 13 or greater.
+    private ToForgetAndIds toForgottenTopicListAndIds(List<FetchRequestData.ForgottenTopic> forgottenTopics, Map<Uuid, String> topicNames) {
+        List<TopicPartition> result = new ArrayList<>();
+        Map<Uuid, Set<Integer>> unresolvedIds = new HashMap<>();
+        forgottenTopics.forEach(forgottenTopic -> {
+            Set<Integer> partitions = new HashSet<>();
+            forgottenTopic.partitions().forEach(partitionId -> {
+                String name = topicNames.get(forgottenTopic.topicId());
+                if (name != null)
+                    result.add(new TopicPartition(forgottenTopic.topic(), partitionId));
+                else
+                    partitions.add(partitionId);
+            });
+            if (unresolvedIds.containsKey(forgottenTopic.topicId())) {
+                unresolvedIds.get(forgottenTopic.topicId()).addAll(partitions);
+            } else {
+                unresolvedIds.put(forgottenTopic.topicId(), partitions);
+            }
+        });
+        return new ToForgetAndIds(result, unresolvedIds);
     }
 
     public static class Builder extends AbstractRequest.Builder<FetchRequest> {
@@ -399,10 +530,22 @@ public class FetchRequest extends AbstractRequest {
         return toPartitionDataMap(data.topics(), topicNames);
     }
 
+    public FetchDataAndError fetchDataAndError(Map<Uuid, String> topicNames) {
+        if (version() < 13)
+            return new FetchDataAndError(fetchData, Collections.emptyList(), Collections.emptyMap());
+        return toPartitionDataMapAndError(data.topics(), topicNames);
+    }
+
     public List<TopicPartition> toForget(Map<Uuid, String> topicNames) {
         if (version() < 13)
             return toForget;
         return toForgottenTopicList(data.forgottenTopicsData(), topicNames);
+    }
+
+    public ToForgetAndIds toForgetAndIds(Map<Uuid, String> topicNames) {
+        if (version() < 13)
+            return new ToForgetAndIds(toForget, Collections.emptyMap());
+        return toForgottenTopicListAndIds(data.forgottenTopicsData(), topicNames);
     }
 
     public boolean isFromFollower() {

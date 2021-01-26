@@ -656,9 +656,8 @@ class FetchRequestTest extends BaseRequestTest {
 
   /**
    * Test that when an incremental fetch session contains partitions with an ID error,
-   * those partitions are returned in all incremental fetch requests.
-   *
-   * Currently fails.
+   * those partitions are returned in all incremental fetch requests. Tests for
+   * resolving topic IDs can be found in FetchSessionTest.
    */
   @Test
   def testCreateIncrementalFetchWithPartitionsWithIdError(): Unit = {
@@ -675,15 +674,15 @@ class FetchRequestTest extends BaseRequestTest {
     val foo0 = new TopicPartition("foo", 0)
     val foo1 = new TopicPartition("foo", 1)
     createTopic("foo", Map(0 -> List(0, 1), 1 -> List(0, 2)))
+    val topicIds = getTopicIds()
+    val topicIDsWithUnknown = topicIds ++ Map("bar" -> Uuid.randomUuid())
     val bar0 = new TopicPartition("bar", 0)
-    val topicIds = getTopicIds().asJava
-    val topicIds1WithUnknown = topicIds.asScala ++ Map("bar" -> Uuid.randomUuid())
-    val req1 = createFetchRequest(List(foo0, foo1, bar0), JFetchMetadata.INITIAL, Nil, topicIds1WithUnknown)
+    val req1 = createFetchRequest(List(foo0, foo1, bar0), JFetchMetadata.INITIAL, Nil, topicIDsWithUnknown)
     val resp1 = sendFetchRequest(0, req1)
     assertEquals(Errors.NONE, resp1.error())
     assertTrue(resp1.sessionId() > 0, "Expected the broker to create a new incremental fetch session")
     debug(s"Test created an incremental fetch session ${resp1.sessionId}")
-    val topicNames1 = topicIds1WithUnknown.map(_.swap).asJava
+    val topicNames1 = topicIDsWithUnknown.map(_.swap).asJava
     val responseData1 = resp1.responseData(topicNames1)
     assertTrue(responseData1.containsKey(foo0))
     assertTrue(responseData1.containsKey(foo1))
@@ -691,8 +690,8 @@ class FetchRequestTest extends BaseRequestTest {
     assertEquals(Errors.NONE, responseData1.get(foo0).error)
     assertEquals(Errors.NONE, responseData1.get(foo1).error)
     assertEquals(Errors.UNKNOWN_TOPIC_ID, responseData1.get(bar0).error)
-    val topicIds2WithUnknown = topicIds1WithUnknown
-    val req2 = createFetchRequest(Nil, new JFetchMetadata(resp1.sessionId(), 1), Nil, topicIds2WithUnknown)
+    val topicIds2 = topicIds
+    val req2 = createFetchRequest(Nil, new JFetchMetadata(resp1.sessionId(), 1), Nil, topicIds2)
     val resp2 = sendFetchRequest(0, req2)
     assertEquals(Errors.NONE, resp2.error())
     assertEquals(resp1.sessionId(),
@@ -701,31 +700,8 @@ class FetchRequestTest extends BaseRequestTest {
     val responseData2 = resp2.responseData(topicNames2)
     assertFalse(responseData2.containsKey(foo0))
     assertFalse(responseData2.containsKey(foo1))
-    // Currently fails here because unknown topic ID errors are not kept in FetchSession.
-    // If we were to keep ID in fetch session, we would still not handle cases for consumers where topic ID changes (ie, new topic).
-    // I'm not sure if the above case would create a new fetch session anyway.
-    assertTrue(responseData2.containsKey(bar0))
-    assertEquals(Errors.UNKNOWN_TOPIC_ID, responseData2.get(bar0).error)
-    createTopic("bar", Map(0 -> List(0, 1)))
-    val topicIds3 = getController().kafkaController.controllerContext.topicIds
-    val req3 = createFetchRequest(Nil, new JFetchMetadata(resp1.sessionId(), 2), Nil, topicIds3)
-    val resp3 = sendFetchRequest(0, req3)
-    assertEquals(Errors.NONE, resp3.error())
-    val topicNames3 = topicIds3.map(_.swap).asJava
-    val responseData3 = resp3.responseData(topicNames3)
-    assertFalse(responseData3.containsKey(foo0))
-    assertFalse(responseData3.containsKey(foo1))
-    assertTrue(responseData3.containsKey(bar0))
-    assertEquals(Errors.NONE, responseData3.get(bar0).error)
-    val topicIds4 = topicIds3
-    val req4 = createFetchRequest(Nil, new JFetchMetadata(resp1.sessionId(), 3), Nil, topicIds4)
-    val resp4 = sendFetchRequest(0, req4)
-    assertEquals(Errors.NONE, resp4.error())
-    val topicNames4 = topicNames3
-    val responseData4 = resp4.responseData(topicNames4)
-    assertFalse(responseData4 .containsKey(foo0))
-    assertFalse(responseData4 .containsKey(foo1))
-    assertFalse(responseData4 .containsKey(bar0))
+    assertTrue(responseData1.containsKey(bar0))
+    assertEquals(Errors.UNKNOWN_TOPIC_ID, responseData1.get(bar0).error)
   }
 
   @Test

@@ -1906,11 +1906,10 @@ class KafkaApisTest {
       Optional.empty())).asJava
     val fetchMetadata = new JFetchMetadata(0, 0)
     val fetchContext = new FullFetchContext(time, new FetchSessionCache(1000, 100),
-      fetchMetadata, fetchData, false)
-    expect(fetchManager.newContext(anyObject[JFetchMetadata],
-      anyObject[util.Map[TopicPartition, FetchRequest.PartitionData]],
-      anyObject[util.List[TopicPartition]],
-      anyBoolean)).andReturn(fetchContext)
+      fetchMetadata, new FetchRequest.FetchDataAndError(fetchData, Collections.emptyList, Collections.emptyMap), Collections.emptyMap, false)
+    expect(fetchManager.newContext(anyObject[FetchRequest],
+      anyObject[util.Map[Uuid, String]],
+      anyObject[util.Map[String, Uuid]])).andReturn(fetchContext)
 
     val capturedResponse = expectNoThrottling()
     EasyMock.expect(clientQuotaManager.maybeRecordAndGetThrottleTimeMs(
@@ -2486,11 +2485,10 @@ class KafkaApisTest {
 
     val fetchMetadata = new JFetchMetadata(0, 0)
     val fetchContext = new FullFetchContext(time, new FetchSessionCache(1000, 100),
-      fetchMetadata, fetchData, true)
-    expect(fetchManager.newContext(anyObject[JFetchMetadata],
-      anyObject[util.Map[TopicPartition, FetchRequest.PartitionData]],
-      anyObject[util.List[TopicPartition]],
-      anyBoolean)).andReturn(fetchContext)
+      fetchMetadata, new FetchRequest.FetchDataAndError(fetchData, Collections.emptyList, Collections.emptyMap),  metadataCache.getTopicIds().asJava, true)
+    expect(fetchManager.newContext(anyObject[FetchRequest],
+      anyObject[util.Map[Uuid, String]],
+      anyObject[util.Map[String, Uuid]])).andReturn(fetchContext)
 
     expect(replicaQuotaManager.record(anyLong()))
     expect(replicaManager.getLogConfig(EasyMock.eq(tp0))).andReturn(None)
