@@ -84,6 +84,7 @@ import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
 
 import static org.apache.kafka.connect.runtime.distributed.ConnectProtocol.CONNECT_PROTOCOL_V0;
+import static org.apache.kafka.connect.runtime.distributed.IncrementalCooperativeConnectProtocol.CONNECT_PROTOCOL_V1;
 
 /**
  * <p>
@@ -1483,7 +1484,7 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
             // Note that since we don't reset the assignment, we don't revoke leadership here. During a rebalance,
             // it is still important to have a leader that can write configs, offsets, etc.
 
-            if (rebalanceResolved) {
+            if (rebalanceResolved || member.currentProtocolVersion() >= CONNECT_PROTOCOL_V1) {
                 List<Callable<Void>> callables = new ArrayList<>();
                 for (final String connectorName : connectors) {
                     callables.add(getConnectorStoppingCallable(connectorName));
