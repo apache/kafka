@@ -134,11 +134,25 @@ public enum CompressionType {
         @Override
         public InputStream wrapForInput(ByteBuffer buffer, byte messageVersion, BufferSupplier decompressionBufferSupplier) {
             try {
+                // It's ok to reference `BufferPool` since it doesn't load any native libraries.
+                // We use our own BufferSupplier instead of com.github.luben.zstd.RecyclingBufferPool since our
+                // implementation doesn't require locking or soft references.
+                BufferPool bufferPool = new BufferPool() {
+                    @Override
+                    public ByteBuffer get(int capacity) {
+                        return decompressionBufferSupplier.get(capacity);
+                    }
+
+                    @Override
+                    public void release(ByteBuffer buffer) {
+                        decompressionBufferSupplier.release(buffer);
+                    }
+                };
+
                 // Set output buffer (uncompressed) to 16 KB (none by default) to ensure reasonable performance
                 // in cases where the caller reads a small number of bytes (potentially a single byte).
-                // It's ok to reference `RecyclingBufferPool` since it doesn't load any native libraries.
                 return new BufferedInputStream((InputStream) ZstdConstructors.INPUT.invoke(new ByteBufferInputStream(buffer),
-                    RecyclingBufferPool.INSTANCE), 16 * 1024);
+                    bufferPool), 16 * 1024);
             } catch (Throwable e) {
                 throw new KafkaException(e);
             }
