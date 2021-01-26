@@ -51,7 +51,6 @@ import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.Message;
 import org.apache.kafka.common.protocol.ObjectSerializationCache;
 import org.apache.kafka.common.protocol.types.RawTaggedField;
-import org.apache.kafka.common.protocol.types.Type;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 
@@ -833,7 +832,6 @@ public final class MessageTest {
         assertEquals(expected.toString(), message2.toString());
     }
 
-    @SuppressWarnings("unchecked")
     private void testJsonRoundTrip(short version, Message message, Message expected) throws Exception {
         String jsonConverter = jsonConverterTypeName(message.getClass().getTypeName());
         Class<?> converter = Class.forName(jsonConverter);
@@ -880,33 +878,6 @@ public final class MessageTest {
             assertTrue(apiKey.latestVersion() <= message.highestSupportedVersion(),
                 "Response message spec for " + apiKey + " only " + "supports versions up to " +
                 message.highestSupportedVersion());
-        }
-    }
-
-    private static class NamedType {
-        final String name;
-        final Type type;
-
-        NamedType(String name, Type type) {
-            this.name = name;
-            this.type = type;
-        }
-
-        boolean hasSimilarType(NamedType other) {
-            if (type.getClass().equals(other.type.getClass())) {
-                return true;
-            }
-            if (type.getClass().equals(Type.RECORDS.getClass())) {
-                return other.type.getClass().equals(Type.NULLABLE_BYTES.getClass());
-            } else if (type.getClass().equals(Type.NULLABLE_BYTES.getClass())) {
-                return other.type.getClass().equals(Type.RECORDS.getClass());
-            }
-            return false;
-        }
-
-        @Override
-        public String toString() {
-            return name + "[" + type + "]";
         }
     }
 
@@ -993,12 +964,6 @@ public final class MessageTest {
         ByteBuffer buf = ByteBuffer.allocate(size * 2);
         ByteBufferAccessor byteBufferAccessor = new ByteBufferAccessor(buf);
         message.write(byteBufferAccessor, cache, version);
-        ByteBuffer alt = buf.duplicate();
-        alt.flip();
-        StringBuilder bld = new StringBuilder();
-        while (alt.hasRemaining()) {
-            bld.append(String.format(" %02x", alt.get()));
-        }
         assertEquals(size, buf.position(), "Expected the serialized size to be " + size + ", but it was " + buf.position());
     }
 
