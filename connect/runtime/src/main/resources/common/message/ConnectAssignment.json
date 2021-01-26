@@ -22,6 +22,7 @@
   "name": "ConnectAssignment",
   "validVersions": "0",
   "fields": [
+    // the error code of this assignment; 0 signals successful assignment
     { "name": "error", "type": "int16", "versions": "0" },
     { "name": "leader", "type": "string", "versions": "0" },
     { "name": "leaderUrl", "type": "string", "versions": "0" },
