@@ -58,7 +58,8 @@ public class ExtendedWorkerState extends WorkerState {
     public static ExtendedWorkerState of(ByteBuffer buffer) {
         if (buffer == null) return null;
         short version = buffer.getShort();
-        if (version >= ExtendedWorkerMetadata.LOWEST_SUPPORTED_VERSION && version <= ExtendedWorkerMetadata.HIGHEST_SUPPORTED_VERSION) {
+        // for compatibility
+        if (version >= ConnectProtocolCompatibility.EAGER.protocolVersion()) {
             ExtendedWorkerMetadata metadata = new ExtendedWorkerMetadata(new ByteBufferAccessor(buffer), version);
             return new ExtendedWorkerState(
                     metadata.url(),
