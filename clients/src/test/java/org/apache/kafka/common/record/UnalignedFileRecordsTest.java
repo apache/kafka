@@ -17,6 +17,7 @@
 package org.apache.kafka.common.record;
 
 
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -39,6 +40,11 @@ public class UnalignedFileRecordsTest {
     @BeforeEach
     public void setup() throws IOException {
         this.fileRecords = createFileRecords(values);
+    }
+
+    @AfterEach
+    public void cleanup() throws IOException {
+        this.fileRecords.close();
     }
 
     @Test

@@ -135,15 +135,16 @@ public class FileRecords extends AbstractRecords implements Closeable {
      */
     public FileRecords slice(int position, int size) throws IOException {
         int availableBytes = availableBytes(position, size);
-        return new FileRecords(file, channel, this.start + position, this.start + position + availableBytes, true);
+        int startPosition = this.start + position;
+        return new FileRecords(file, channel, startPosition, startPosition + availableBytes, true);
     }
 
     /**
      * Return a slice of records from this instance, the difference with {@link FileRecords#slice(int, int)} is
      * that the position is not necessarily on an offset boundary.
      *
-     * This method is reserved for cases where we do not necessarily need to read an entire record batch such as
-     * fetching snapshot in for raft.
+     * This method is reserved for cases where offset alignment is not necessary, such as in the replication of raft
+     * snapshots.
      *
      * @param position The start position to begin the read from
      * @param size The number of bytes after the start position to include
@@ -165,11 +166,11 @@ public class FileRecords extends AbstractRecords implements Closeable {
         if (size < 0)
             throw new IllegalArgumentException("Invalid size: " + size + " in read from " + this);
 
-        int limit = this.start + position + size;
+        int end = this.start + position + size;
         // Handle integer overflow or if end is beyond the end of the file
-        if (limit < 0 || limit > start + currentSizeInBytes)
-            limit = this.start + currentSizeInBytes;
-        return limit - (this.start + position);
+        if (end < 0 || end > start + currentSizeInBytes)
+            end = this.start + currentSizeInBytes;
+        return end - (this.start + position);
     }
 
     /**

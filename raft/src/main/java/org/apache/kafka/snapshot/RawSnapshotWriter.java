@@ -61,7 +61,6 @@ public interface RawSnapshotWriter extends Closeable {
      * @param records the region to append
      * @throws IOException for any IO error during append
      */
-
     void append(UnalignedMemoryRecords records) throws IOException;
 
     /**

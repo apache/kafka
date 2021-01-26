@@ -1257,7 +1257,7 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
                     return responsePartitionSnapshot
                         .setSize(snapshotSize)
                         .setPosition(partitionSnapshot.position())
-                        .setBytes(records);
+                        .setUnalignedRecords(records);
                 }
             );
         }
@@ -1335,10 +1335,10 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
             throw new IllegalStateException(String.format("Received fetch snapshot response with an invalid position. Expected %s; Received %s", snapshot.sizeInBytes(), partitionSnapshot.position()));
         }
 
-        if (!(partitionSnapshot.bytes() instanceof MemoryRecords)) {
+        if (!(partitionSnapshot.unalignedRecords() instanceof MemoryRecords)) {
             throw new IllegalStateException(String.format("Received unexpected fetch snapshot response: %s", partitionSnapshot));
         }
-        snapshot.append(new UnalignedMemoryRecords(((MemoryRecords) partitionSnapshot.bytes()).buffer()));
+        snapshot.append(new UnalignedMemoryRecords(((MemoryRecords) partitionSnapshot.unalignedRecords()).buffer()));
 
         if (snapshot.sizeInBytes() == partitionSnapshot.size()) {
             // Finished fetching the snapshot.

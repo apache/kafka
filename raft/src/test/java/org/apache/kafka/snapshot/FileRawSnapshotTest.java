@@ -129,14 +129,12 @@ public final class FileRawSnapshotTest {
         buffer2.limit(expectedBuffer.limit());
 
         try (FileRawSnapshotWriter snapshot = FileRawSnapshotWriter.create(tempDir, offsetAndEpoch)) {
-
             snapshot.append(new UnalignedMemoryRecords(buffer1));
             snapshot.append(new UnalignedMemoryRecords(buffer2));
             snapshot.freeze();
         }
 
         try (FileRawSnapshotReader snapshot = FileRawSnapshotReader.open(tempDir, offsetAndEpoch)) {
-
             int totalSize = Math.toIntExact(snapshot.sizeInBytes());
             assertEquals(expectedBuffer.remaining(), totalSize);
 

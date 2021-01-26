@@ -519,7 +519,6 @@ public class MockLog implements ReplicatedLog {
             if (frozen) {
                 throw new RuntimeException("Snapshot is already frozen " + snapshotId);
             }
-
             return data.position();
         }
 
@@ -529,7 +528,6 @@ public class MockLog implements ReplicatedLog {
                 throw new RuntimeException("Snapshot is already frozen " + snapshotId);
             }
             data.write(records.buffer());
-
         }
 
         @Override
@@ -538,7 +536,6 @@ public class MockLog implements ReplicatedLog {
                 throw new RuntimeException("Snapshot is already frozen " + snapshotId);
             }
             data.write(records.buffer());
-
         }
 
         @Override

@@ -150,8 +150,7 @@ final public class SnapshotWriter<T> implements Closeable {
     private void appendBatches(List<CompletedBatch<T>> batches) throws IOException {
         try {
             for (CompletedBatch<T> batch : batches) {
-                ByteBuffer buffer = batch.data.buffer();
-                snapshot.append(new UnalignedMemoryRecords(buffer));
+                snapshot.append(batch.data);
             }
         } finally {
             batches.forEach(CompletedBatch::release);

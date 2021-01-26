@@ -1101,9 +1101,9 @@ public final class Utils {
 
     /**
      * Trying to write data in source buffer to a {@link TransferableChannel}, we may need to call this method multiple
-     * times since this method doesn't ensure data in source buffer can be fully written to dest channel.
+     * times since this method doesn't ensure the data in the source buffer can be fully written to the destination channel.
      *
-     * @param destChannel The dest channel
+     * @param destChannel The destination channel
      * @param position From which the source buffer will be written
      * @param length The max size of bytes can be written
      * @param sourceBuffer The source buffer
