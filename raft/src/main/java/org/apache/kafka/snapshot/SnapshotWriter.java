@@ -19,7 +19,6 @@ package org.apache.kafka.snapshot;
 
 import org.apache.kafka.common.memory.MemoryPool;
 import org.apache.kafka.common.record.CompressionType;
-import org.apache.kafka.common.record.UnalignedMemoryRecords;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.raft.OffsetAndEpoch;
 import org.apache.kafka.raft.RecordSerde;
@@ -28,7 +27,6 @@ import org.apache.kafka.raft.internals.BatchAccumulator.CompletedBatch;
 
 import java.io.Closeable;
 import java.io.IOException;
-import java.nio.ByteBuffer;
 import java.util.List;
 
 /**
