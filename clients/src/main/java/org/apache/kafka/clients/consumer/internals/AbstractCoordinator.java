@@ -1369,10 +1369,8 @@ public abstract class AbstractCoordinator implements Closeable {
 
                         if (coordinatorUnknown()) {
                             if (findCoordinatorFuture != null) {
-                                // if it has failed, clear it so that hb thread can try discover again in the next loop in case main thread is busy
-                                if (findCoordinatorFuture.failed()) {
-                                    clearFindCoordinatorFuture();
-                                }
+                                // clear it so that hb thread can try discover again in the next loop in case main thread cannot
+                                clearFindCoordinatorFuture();
 
                                 // backoff properly
                                 AbstractCoordinator.this.wait(rebalanceConfig.retryBackoffMs);
