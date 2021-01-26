@@ -525,7 +525,7 @@ public class FileRecordsTest {
 
         TransferableChannel channel = Mockito.mock(TransferableChannel.class);
 
-        // Firstly we wrote
+        // Firstly we wrote some of the data
         fileRecords.writeTo(channel, 0, (int) firstWritten);
         verify(channel).transferFrom(any(), anyLong(), eq(firstWritten));
 
