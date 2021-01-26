@@ -22,6 +22,7 @@ import org.apache.kafka.streams.KafkaStreams.State;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.Topology;
+import org.apache.kafka.streams.errors.StreamsUncaughtExceptionHandler;
 import org.apache.kafka.streams.integration.utils.EmbeddedKafkaCluster;
 import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.kstream.Produced;
@@ -68,7 +69,6 @@ public class HandlingSourceTopicDeletionIntegrationTest {
     }
 
     @Test
-    @Deprecated //A single thread should no longer die
     public void shouldThrowErrorAfterSourceTopicDeleted() throws InterruptedException {
         final StreamsBuilder builder = new StreamsBuilder();
         builder.stream(INPUT_TOPIC, Consumed.with(Serdes.Integer(), Serdes.String()))
@@ -88,11 +88,17 @@ public class HandlingSourceTopicDeletionIntegrationTest {
         final Topology topology = builder.build();
         final KafkaStreams kafkaStreams1 = new KafkaStreams(topology, streamsConfiguration);
         final AtomicBoolean calledUncaughtExceptionHandler1 = new AtomicBoolean(false);
-        kafkaStreams1.setUncaughtExceptionHandler((thread, exception) -> calledUncaughtExceptionHandler1.set(true));
+        kafkaStreams1.setUncaughtExceptionHandler(exception -> {
+            calledUncaughtExceptionHandler1.set(true);
+            return StreamsUncaughtExceptionHandler.StreamThreadExceptionResponse.SHUTDOWN_CLIENT;
+        });
         kafkaStreams1.start();
         final KafkaStreams kafkaStreams2 = new KafkaStreams(topology, streamsConfiguration);
         final AtomicBoolean calledUncaughtExceptionHandler2 = new AtomicBoolean(false);
-        kafkaStreams2.setUncaughtExceptionHandler((thread, exception) -> calledUncaughtExceptionHandler2.set(true));
+        kafkaStreams2.setUncaughtExceptionHandler(exception -> {
+            calledUncaughtExceptionHandler2.set(true);
+            return StreamsUncaughtExceptionHandler.StreamThreadExceptionResponse.SHUTDOWN_CLIENT;
+        });
         kafkaStreams2.start();
 
         TestUtils.waitForCondition(
