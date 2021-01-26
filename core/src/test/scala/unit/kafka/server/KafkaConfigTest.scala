@@ -31,10 +31,11 @@ import org.apache.kafka.raft.RaftConfig
 import org.apache.kafka.raft.RaftConfig.{AddressSpec, InetAddressSpec, UNKNOWN_ADDRESS_SPEC_INSTANCE}
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.Test
-
 import java.net.InetSocketAddress
 import java.util
 import java.util.Properties
+
+import org.junit.jupiter.api.function.Executable
 
 class KafkaConfigTest {
 
@@ -617,6 +618,10 @@ class KafkaConfigTest {
         case KafkaConfig.ConnectionSetupTimeoutMsProp => assertPropertyInvalid(baseProperties, name, "not_a_number")
         case KafkaConfig.ConnectionSetupTimeoutMaxMsProp => assertPropertyInvalid(baseProperties, name, "not_a_number")
 
+          // KIP-500 Configurations
+        case KafkaConfig.ControllerIdProp => assertPropertyInvalid(baseProperties, name, "not_a_number")
+        case KafkaConfig.MetadataLogDirProp => // ignore string
+
         case KafkaConfig.AuthorizerClassNameProp => //ignore string
         case KafkaConfig.CreateTopicPolicyClassNameProp => //ignore string
 
@@ -947,11 +952,14 @@ class KafkaConfigTest {
   }
 
   private def assertPropertyInvalid(validRequiredProps: => Properties, name: String, values: Any*): Unit = {
-    values.foreach((value) => {
+    values.foreach { value =>
       val props = validRequiredProps
       props.setProperty(name, value.toString)
-      assertThrows(classOf[Exception], () => KafkaConfig.fromProps(props))
-    })
+
+      val buildConfig: Executable = () => KafkaConfig.fromProps(props)
+      assertThrows(classOf[Exception], buildConfig,
+      s"Expected exception for property `$name` with invalid value `$value` was not thrown")
+    }
   }
 
   @Test
