@@ -130,8 +130,8 @@ final class KafkaMetadataLog private (
         offsetAndEpoch.offset == oldestSnapshotId.get().offset &&
         offsetAndEpoch.leaderEpoch == leaderEpoch) {
 
-        // The lastFetchedEpoch is smaller thant the smallest epoch on the log.
-        // overide the diverging epoch to the oldest snapshot
+        // The leaderEpoch is smaller thant the smallest epoch on the log. Overide the diverging
+        // epoch to the oldest snapshot which should be the snapshot at the log start offset
         val snapshotId = oldestSnapshotId().get();
         new raft.OffsetAndEpoch(snapshotId.offset, snapshotId.epoch);
       } else {
@@ -160,7 +160,7 @@ final class KafkaMetadataLog private (
     log.truncateTo(offset)
   }
 
-  override def truncateFullyToLatestSnapshot(): Boolean = {
+  override def maybeTruncateFullyToLatestSnapshot(): Boolean = {
     val latestEpoch = log.latestEpoch.getOrElse(0)
     latestSnapshotId.asScala match {
       case Some(snapshotId) if (snapshotId.epoch > latestEpoch ||
@@ -317,7 +317,7 @@ object KafkaMetadataLog {
     val replicatedLog = new KafkaMetadataLog(log, snapshotIds, topicPartition, maxFetchSizeInBytes)
     // When recovering, truncate fully if the latest snapshot is after the log end offset. This can happen to a follower
     // when the follower crashes after downloading a snapshot from the leader but before it could truncate the log fully.
-    replicatedLog.truncateFullyToLatestSnapshot()
+    replicatedLog.maybeTruncateFullyToLatestSnapshot()
 
     replicatedLog
   }

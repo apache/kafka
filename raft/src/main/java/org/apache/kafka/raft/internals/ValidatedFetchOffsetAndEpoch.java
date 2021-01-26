@@ -50,4 +50,8 @@ public final class ValidatedFetchOffsetAndEpoch {
     public static ValidatedFetchOffsetAndEpoch valid(OffsetAndEpoch offsetAndEpoch) {
         return new ValidatedFetchOffsetAndEpoch(Type.VALID, offsetAndEpoch);
     }
+
+    public static ValidatedFetchOffsetAndEpoch valid() {
+        return valid(new OffsetAndEpoch(-1, -1));
+    }
 }

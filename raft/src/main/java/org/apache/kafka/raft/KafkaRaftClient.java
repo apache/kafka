@@ -917,7 +917,7 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
         return buildFetchResponse(
             error,
             MemoryRecords.EMPTY,
-            ValidatedFetchOffsetAndEpoch.valid(new OffsetAndEpoch(-1, -1)),
+            ValidatedFetchOffsetAndEpoch.valid(),
             highWatermark
         );
     }
@@ -1415,7 +1415,7 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
             snapshot.freeze();
             state.setFetchingSnapshot(Optional.empty());
 
-            if (log.truncateFullyToLatestSnapshot()) {
+            if (log.maybeTruncateFullyToLatestSnapshot()) {
                 updateFollowerHighWatermark(state, OptionalLong.of(log.highWatermark().offset));
             } else {
                 throw new IllegalStateException(

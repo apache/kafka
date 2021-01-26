@@ -79,7 +79,7 @@ public class MockLog implements ReplicatedLog {
     }
 
     @Override
-    public boolean truncateFullyToLatestSnapshot() {
+    public boolean maybeTruncateFullyToLatestSnapshot() {
         AtomicBoolean truncated = new AtomicBoolean(false);
         latestSnapshotId().ifPresent(snapshotId -> {
             if (snapshotId.epoch > logLastFetchedEpoch().orElse(0) ||

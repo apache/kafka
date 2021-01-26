@@ -19,6 +19,7 @@ package kafka.raft
 import java.io.File
 import java.nio.file.Files
 import java.nio.file.Path
+import java.util.Optional
 import kafka.log.Log
 import kafka.log.LogManager
 import kafka.log.LogTest
@@ -86,7 +87,7 @@ final class KafkaMetadataLogTest {
     val topicPartition = new TopicPartition("cluster-metadata", 0)
     val log = buildMetadataLog(tempDir, mockTime, topicPartition)
 
-    assertFalse(log.readSnapshot(new OffsetAndEpoch(10, 0)).isPresent)
+    assertEquals(Optional.empty(), log.readSnapshot(new OffsetAndEpoch(10, 0)))
   }
 
   @Test
@@ -174,7 +175,7 @@ final class KafkaMetadataLogTest {
       snapshot.freeze()
     }
 
-    assertTrue(log.truncateFullyToLatestSnapshot())
+    assertTrue(log.maybeTruncateFullyToLatestSnapshot())
     assertEquals(sameEpochSnapshotId.offset, log.startOffset)
     assertEquals(sameEpochSnapshotId.epoch, log.lastFetchedEpoch)
     assertEquals(sameEpochSnapshotId.offset, log.endOffset().offset)
@@ -188,7 +189,7 @@ final class KafkaMetadataLogTest {
       snapshot.freeze()
     }
 
-    assertTrue(log.truncateFullyToLatestSnapshot())
+    assertTrue(log.maybeTruncateFullyToLatestSnapshot())
     assertEquals(greaterEpochSnapshotId.offset, log.startOffset)
     assertEquals(greaterEpochSnapshotId.epoch, log.lastFetchedEpoch)
     assertEquals(greaterEpochSnapshotId.offset, log.endOffset().offset)
@@ -209,7 +210,7 @@ final class KafkaMetadataLogTest {
       snapshot.freeze()
     }
 
-    assertFalse(log.truncateFullyToLatestSnapshot())
+    assertFalse(log.maybeTruncateFullyToLatestSnapshot())
 
     append(log, numberOfRecords, epoch)
 
@@ -218,7 +219,7 @@ final class KafkaMetadataLogTest {
       snapshot.freeze()
     }
 
-    assertFalse(log.truncateFullyToLatestSnapshot())
+    assertFalse(log.maybeTruncateFullyToLatestSnapshot())
   }
 
   @Test

@@ -207,7 +207,7 @@ public class MockLogTest {
         try (RawSnapshotWriter snapshot = log.createSnapshot(new OffsetAndEpoch(initialOffset, 0))) {
             snapshot.freeze();
         }
-        log.truncateFullyToLatestSnapshot();
+        log.maybeTruncateFullyToLatestSnapshot();
 
         log.appendAsFollower(MemoryRecords.withRecords(initialOffset, CompressionType.NONE, epoch, recordFoo));
 
@@ -371,7 +371,7 @@ public class MockLogTest {
         try (RawSnapshotWriter snapshot = log.createSnapshot(new OffsetAndEpoch(initialOffset, 0))) {
             snapshot.freeze();
         }
-        log.truncateFullyToLatestSnapshot();
+        log.maybeTruncateFullyToLatestSnapshot();
 
         log.appendAsFollower(MemoryRecords.withRecords(initialOffset, CompressionType.NONE, epoch, recordFoo));
 
@@ -511,7 +511,7 @@ public class MockLogTest {
             snapshot.freeze();
         }
 
-        assertTrue(log.truncateFullyToLatestSnapshot());
+        assertTrue(log.maybeTruncateFullyToLatestSnapshot());
         assertEquals(sameEpochSnapshotId.offset, log.startOffset());
         assertEquals(sameEpochSnapshotId.epoch, log.lastFetchedEpoch());
         assertEquals(sameEpochSnapshotId.offset, log.endOffset().offset);
@@ -525,7 +525,7 @@ public class MockLogTest {
             snapshot.freeze();
         }
 
-        assertTrue(log.truncateFullyToLatestSnapshot());
+        assertTrue(log.maybeTruncateFullyToLatestSnapshot());
         assertEquals(greaterEpochSnapshotId.offset, log.startOffset());
         assertEquals(greaterEpochSnapshotId.epoch, log.lastFetchedEpoch());
         assertEquals(greaterEpochSnapshotId.offset, log.endOffset().offset);
@@ -544,7 +544,7 @@ public class MockLogTest {
             snapshot.freeze();
         }
 
-        assertFalse(log.truncateFullyToLatestSnapshot());
+        assertFalse(log.maybeTruncateFullyToLatestSnapshot());
 
         appendBatch(numberOfRecords, epoch);
 
@@ -553,7 +553,7 @@ public class MockLogTest {
             snapshot.freeze();
         }
 
-        assertFalse(log.truncateFullyToLatestSnapshot());
+        assertFalse(log.maybeTruncateFullyToLatestSnapshot());
     }
 
     private Optional<OffsetRange> readOffsets(long startOffset, Isolation isolation) {

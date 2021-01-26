@@ -109,7 +109,7 @@ public interface ReplicatedLog extends Closeable {
      *
      * @return true when the log is fully truncated, otherwise returns false
      */
-    boolean truncateFullyToLatestSnapshot();
+    boolean maybeTruncateFullyToLatestSnapshot();
 
     /**
      * Update the high watermark and associated metadata (which is used to avoid
