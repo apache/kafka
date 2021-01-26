@@ -94,6 +94,8 @@ import org.apache.kafka.common.message.DescribeConfigsResponseData.DescribeConfi
 import org.apache.kafka.common.message.DescribeGroupsRequestData;
 import org.apache.kafka.common.message.DescribeGroupsResponseData;
 import org.apache.kafka.common.message.DescribeGroupsResponseData.DescribedGroup;
+import org.apache.kafka.common.message.DescribeProducersRequestData;
+import org.apache.kafka.common.message.DescribeProducersResponseData;
 import org.apache.kafka.common.message.ElectLeadersResponseData.PartitionResult;
 import org.apache.kafka.common.message.ElectLeadersResponseData.ReplicaElectionResult;
 import org.apache.kafka.common.message.EndTxnRequestData;
@@ -511,6 +513,9 @@ public class RequestResponseTest {
         checkRequest(createAlterClientQuotasRequest(), true);
         checkErrorResponse(createAlterClientQuotasRequest(), unknownServerException, true);
         checkResponse(createAlterClientQuotasResponse(), 0, true);
+        checkRequest(createDescribeProducersRequest(), true);
+        checkErrorResponse(createDescribeProducersRequest(), unknownServerException, true);
+        checkResponse(createDescribeProducersResponse(), 0, true);
     }
 
     @Test
@@ -2564,6 +2569,37 @@ public class RequestResponseTest {
                     .setEntityType(ClientQuotaEntity.USER)
                     .setEntityName("user")))));
         return new AlterClientQuotasResponse(data);
+    }
+
+    private DescribeProducersRequest createDescribeProducersRequest() {
+        DescribeProducersRequestData data = new DescribeProducersRequestData();
+        DescribeProducersRequestData.TopicRequest topicRequest = new DescribeProducersRequestData.TopicRequest();
+        topicRequest.partitionIndexes().add(0);
+        topicRequest.partitionIndexes().add(1);
+        data.topics().add(topicRequest);
+        return new DescribeProducersRequest.Builder(data).build();
+    }
+
+    private DescribeProducersResponse createDescribeProducersResponse() {
+        DescribeProducersResponseData data = new DescribeProducersResponseData();
+        DescribeProducersResponseData.TopicResponse topicResponse = new DescribeProducersResponseData.TopicResponse();
+        topicResponse.partitions().add(new DescribeProducersResponseData.PartitionResponse()
+            .setErrorCode(Errors.NONE.code())
+            .setPartitionIndex(0)
+            .setActiveProducers(Arrays.asList(
+                new DescribeProducersResponseData.ProducerState()
+                    .setProducerId(1234L)
+                    .setProducerEpoch(15)
+                    .setLastTimestamp(13490218304L)
+                    .setCurrentTxnStartOffset(5000),
+                new DescribeProducersResponseData.ProducerState()
+                    .setProducerId(9876L)
+                    .setProducerEpoch(32)
+                    .setLastTimestamp(13490218399L)
+            ))
+        );
+        data.topics().add(topicResponse);
+        return new DescribeProducersResponse(data);
     }
 
     /**
