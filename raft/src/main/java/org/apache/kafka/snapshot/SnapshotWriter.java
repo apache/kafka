@@ -17,16 +17,17 @@
 
 package org.apache.kafka.snapshot;
 
-import java.io.Closeable;
-import java.io.IOException;
-import java.util.List;
 import org.apache.kafka.common.memory.MemoryPool;
 import org.apache.kafka.common.record.CompressionType;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.raft.OffsetAndEpoch;
 import org.apache.kafka.raft.RecordSerde;
-import org.apache.kafka.raft.internals.BatchAccumulator.CompletedBatch;
 import org.apache.kafka.raft.internals.BatchAccumulator;
+import org.apache.kafka.raft.internals.BatchAccumulator.CompletedBatch;
+
+import java.io.Closeable;
+import java.io.IOException;
+import java.util.List;
 
 /**
  * A type for writing a snapshot fora given end offset and epoch.
@@ -146,8 +147,8 @@ final public class SnapshotWriter<T> implements Closeable {
 
     private void appendBatches(List<CompletedBatch<T>> batches) throws IOException {
         try {
-            for (CompletedBatch batch : batches) {
-                snapshot.append(batch.data.buffer());
+            for (CompletedBatch<T> batch : batches) {
+                snapshot.append(batch.data);
             }
         } finally {
             batches.forEach(CompletedBatch::release);

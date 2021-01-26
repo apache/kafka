@@ -22,6 +22,7 @@ import org.apache.kafka.common.record.MemoryRecords;
 import org.apache.kafka.common.record.MemoryRecordsBuilder;
 import org.apache.kafka.common.record.SimpleRecord;
 import org.apache.kafka.common.record.TimestampType;
+import org.apache.kafka.common.record.UnalignedMemoryRecords;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.test.TestUtils;
 import org.junit.jupiter.api.Test;
@@ -99,6 +100,38 @@ public class SendBuilderTest {
         assertEquals(overwrittenRecords, getRecords(readBuffer, records.sizeInBytes()));
         assertEquals(15, readBuffer.getInt());
     }
+
+    @Test
+    public void testZeroCopyUnalignedRecords() {
+        ByteBuffer buffer = ByteBuffer.allocate(128);
+        MemoryRecords records = createRecords(buffer, "foo");
+
+        ByteBuffer buffer1 = records.buffer().duplicate();
+        buffer1.limit(buffer1.limit() / 2);
+
+        ByteBuffer buffer2 = records.buffer().duplicate();
+        buffer2.position(buffer2.limit() / 2);
+
+        UnalignedMemoryRecords records1 = new UnalignedMemoryRecords(buffer1);
+        UnalignedMemoryRecords records2 = new UnalignedMemoryRecords(buffer2);
+
+        SendBuilder builder = new SendBuilder(8);
+        builder.writeInt(5);
+        builder.writeRecords(records1);
+        builder.writeRecords(records2);
+        builder.writeInt(15);
+        Send send = builder.build();
+
+        // Overwrite the original buffer in order to prove the data was not copied
+        buffer.rewind();
+        MemoryRecords overwrittenRecords = createRecords(buffer, "bar");
+
+        ByteBuffer readBuffer = TestUtils.toBuffer(send);
+        assertEquals(5, readBuffer.getInt());
+        assertEquals(overwrittenRecords, getRecords(readBuffer, records.sizeInBytes()));
+        assertEquals(15, readBuffer.getInt());
+    }
+
 
     private String getString(ByteBuffer buffer, int size) {
         byte[] readData = new byte[size];

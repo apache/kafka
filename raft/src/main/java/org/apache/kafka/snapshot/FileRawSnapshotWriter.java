@@ -16,11 +16,12 @@
  */
 package org.apache.kafka.snapshot;
 
+import org.apache.kafka.common.record.MemoryRecords;
+import org.apache.kafka.common.record.UnalignedMemoryRecords;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.raft.OffsetAndEpoch;
 
 import java.io.IOException;
-import java.nio.ByteBuffer;
 import java.nio.channels.FileChannel;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -53,14 +54,23 @@ public final class FileRawSnapshotWriter implements RawSnapshotWriter {
     }
 
     @Override
-    public void append(ByteBuffer buffer) throws IOException {
+    public void append(UnalignedMemoryRecords records) throws IOException {
         if (frozen) {
             throw new IllegalStateException(
                 String.format("Append is not supported. Snapshot is already frozen: id = %s; temp path = %s", snapshotId, tempSnapshotPath)
             );
         }
+        Utils.writeFully(channel, records.buffer());
+    }
 
-        Utils.writeFully(channel, buffer);
+    @Override
+    public void append(MemoryRecords records) throws IOException {
+        if (frozen) {
+            throw new IllegalStateException(
+                    String.format("Append is not supported. Snapshot is already frozen: id = %s; temp path = %s", snapshotId, tempSnapshotPath)
+            );
+        }
+        Utils.writeFully(channel, records.buffer());
     }
 
     @Override

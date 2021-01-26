@@ -19,18 +19,32 @@ package org.apache.kafka.common.record;
 import org.apache.kafka.common.network.TransferableChannel;
 
 import java.io.IOException;
+import java.nio.channels.FileChannel;
 
-public class DefaultRecordsSend<T extends TransferableRecords> extends RecordsSend<T> {
-    public DefaultRecordsSend(T records) {
-        this(records, records.sizeInBytes());
-    }
+/**
+ * Represents a file record set which is not necessarily offset-aligned
+ */
+public class UnalignedFileRecords implements UnalignedRecords {
 
-    public DefaultRecordsSend(T records, int maxBytesToWrite) {
-        super(records, maxBytesToWrite);
+    private final FileChannel channel;
+    private final long position;
+    private final int size;
+
+    public UnalignedFileRecords(FileChannel channel, long position, int size) {
+        this.channel = channel;
+        this.position = position;
+        this.size = size;
     }
 
     @Override
-    protected long writeTo(TransferableChannel channel, long previouslyWritten, int remaining) throws IOException {
-        return records().writeTo(channel, previouslyWritten, remaining);
+    public int sizeInBytes() {
+        return size;
+    }
+
+    @Override
+    public long writeTo(TransferableChannel destChannel, long previouslyWritten, int remaining) throws IOException {
+        long position = this.position + previouslyWritten;
+        long count = Math.min(remaining, sizeInBytes() - previouslyWritten);
+        return destChannel.transferFrom(channel, position, count);
     }
 }
