@@ -29,7 +29,7 @@ import java.nio.ByteBuffer;
 public class WorkerState {
 
     public static ByteBuffer toByteBuffer(WorkerState workerState) {
-        return MessageUtil.toVersionPrefixedByteBuffer(WorkerMetadata.HIGHEST_SUPPORTED_VERSION,
+        return MessageUtil.toVersionPrefixedByteBuffer(ConnectProtocolCompatibility.EAGER.protocolVersion(),
                 new WorkerMetadata()
                         .setUrl(workerState.url())
                         .setConfigOffset(workerState.offset()));
@@ -45,8 +45,7 @@ public class WorkerState {
      */
     static WorkerState of(ByteBuffer buffer) {
         short version = buffer.getShort();
-        // We only check the LOWEST_SUPPORTED_VERSION for compatibility
-        if (version >= WorkerMetadata.LOWEST_SUPPORTED_VERSION) {
+        if (version >= ConnectProtocolCompatibility.EAGER.protocolVersion()) {
             WorkerMetadata metadata = new WorkerMetadata(new ByteBufferAccessor(buffer), version);
             return new WorkerState(metadata.url(), metadata.configOffset());
 
