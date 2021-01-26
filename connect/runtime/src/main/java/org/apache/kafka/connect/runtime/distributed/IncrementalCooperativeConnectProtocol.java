@@ -33,9 +33,6 @@ import static org.apache.kafka.connect.runtime.distributed.ConnectProtocolCompat
  * and tasks to workers.
  */
 public class IncrementalCooperativeConnectProtocol {
-    public static final short CONNECT_PROTOCOL_V1 = 1;
-    public static final short CONNECT_PROTOCOL_V2 = 2;
-
     /**
      * Returns the collection of Connect protocols that are supported by this version along
      * with their serialized metadata. The protocols are ordered by preference.

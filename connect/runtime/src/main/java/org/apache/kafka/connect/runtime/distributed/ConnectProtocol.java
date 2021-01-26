@@ -28,8 +28,6 @@ import static org.apache.kafka.connect.runtime.distributed.ConnectProtocolCompat
  */
 public class ConnectProtocol {
     public static final int CONNECTOR_TASK = -1;
-    public static final short CONNECT_PROTOCOL_V0 = 0;
-
 
     /**
      * Returns the collection of Connect protocols that are supported by this version along
