@@ -19,7 +19,7 @@ package org.apache.kafka.connect.runtime.distributed;
 import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.MessageUtil;
 import org.apache.kafka.common.protocol.types.SchemaException;
-import org.apache.kafka.connect.internals.generated.WorkerMetadata;
+import org.apache.kafka.connect.internals.generated.ExtendedWorkerMetadata;
 
 import java.nio.ByteBuffer;
 
@@ -29,8 +29,8 @@ import java.nio.ByteBuffer;
 public class WorkerState {
 
     public static ByteBuffer toByteBuffer(WorkerState workerState) {
-        return MessageUtil.toVersionPrefixedByteBuffer(ConnectProtocolCompatibility.EAGER.protocolVersion(),
-                new WorkerMetadata()
+        return MessageUtil.toVersionPrefixedByteBuffer(ExtendedWorkerMetadata.LOWEST_SUPPORTED_VERSION,
+                new ExtendedWorkerMetadata()
                         .setUrl(workerState.url())
                         .setConfigOffset(workerState.offset()));
     }
@@ -45,10 +45,9 @@ public class WorkerState {
      */
     static WorkerState of(ByteBuffer buffer) {
         short version = buffer.getShort();
-        if (version >= ConnectProtocolCompatibility.EAGER.protocolVersion()) {
-            WorkerMetadata metadata = new WorkerMetadata(new ByteBufferAccessor(buffer), version);
+        if (version >= ExtendedWorkerMetadata.LOWEST_SUPPORTED_VERSION && version <= ExtendedWorkerMetadata.HIGHEST_SUPPORTED_VERSION) {
+            ExtendedWorkerMetadata metadata = new ExtendedWorkerMetadata(new ByteBufferAccessor(buffer), version);
             return new WorkerState(metadata.url(), metadata.configOffset());
-
         } else throw new SchemaException("Unsupported subscription version: " + version);
     }
 

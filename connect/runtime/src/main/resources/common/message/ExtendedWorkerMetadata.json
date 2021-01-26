@@ -18,8 +18,8 @@
   "name": "ExtendedWorkerMetadata",
   "validVersions": "0-2",
   "fields": [
-    { "name": "configOffset", "type": "int64", "versions": "0+" },
     { "name": "url", "type": "string", "versions": "0+" },
+    { "name": "configOffset", "type": "int64", "versions": "0+" },
     { "name": "assignmentByteBuffer", "type": "bytes", "versions": "1+", "nullableVersions": "1+",
       "default": "null", "zeroCopy": true, "ignorable": true }
   ]

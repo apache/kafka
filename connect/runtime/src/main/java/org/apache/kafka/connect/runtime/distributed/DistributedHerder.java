@@ -255,7 +255,7 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
         sessionKey = null;
         backoffRetries = BACKOFF_RETRIES;
 
-        currentProtocolVersion = ConnectProtocolCompatibility.compatibility(
+        currentProtocolVersion = ConnectProtocolCompatibility.fromName(
             config.getString(DistributedConfig.CONNECT_PROTOCOL_CONFIG)
         ).protocolVersion();
         if (!internalRequestValidationEnabled(currentProtocolVersion)) {

@@ -77,7 +77,7 @@ public enum ConnectProtocolCompatibility {
      * @param name the name of the protocol compatibility mode
      * @return the enum that corresponds to the protocol compatibility mode
      */
-    public static ConnectProtocolCompatibility compatibility(String name) {
+    public static ConnectProtocolCompatibility fromName(String name) {
         if (EAGER.name().equalsIgnoreCase(name)) return EAGER;
         if (COMPATIBLE.name().equalsIgnoreCase(name)) return COMPATIBLE;
         if (SESSIONED.name().equalsIgnoreCase(name)) return SESSIONED;

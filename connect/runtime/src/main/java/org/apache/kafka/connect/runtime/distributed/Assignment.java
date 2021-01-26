@@ -19,10 +19,11 @@ package org.apache.kafka.connect.runtime.distributed;
 import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.MessageUtil;
 import org.apache.kafka.common.protocol.types.SchemaException;
-import org.apache.kafka.connect.internals.generated.ConnectAssignment;
+import org.apache.kafka.connect.internals.generated.ExtendedConnectAssignment;
 import org.apache.kafka.connect.util.ConnectorTaskId;
 
 import java.nio.ByteBuffer;
+import java.util.AbstractMap;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashSet;
@@ -38,12 +39,12 @@ import java.util.stream.Collectors;
 public class Assignment {
 
     public static ByteBuffer toByteBuffer(Assignment assignment) {
-        return MessageUtil.toVersionPrefixedByteBuffer(ConnectAssignment.HIGHEST_SUPPORTED_VERSION, new ConnectAssignment()
+        return MessageUtil.toVersionPrefixedByteBuffer(ExtendedConnectAssignment.LOWEST_SUPPORTED_VERSION, new ExtendedConnectAssignment()
                 .setError(assignment.error())
                 .setLeader(assignment.leader())
                 .setLeaderUrl(assignment.leaderUrl())
                 .setConfigOffset(assignment.offset())
-                .setConnectorTasks(assignment.asMap().entrySet().stream().map(entry -> new ConnectAssignment.ConnectorTask()
+                .setConnectorTasks(assignment.asMap().entrySet().stream().map(entry -> new ExtendedConnectAssignment.ConnectorTask()
                         .setConnector(entry.getKey())
                         .setTaskIds(entry.getValue()))
                         .collect(Collectors.toList())));
@@ -59,22 +60,17 @@ public class Assignment {
      */
     public static Assignment of(ByteBuffer buffer) {
         short version = buffer.getShort();
-        // We only check the LOWEST_SUPPORTED_VERSION for compatibility
-        if (version >= ConnectAssignment.LOWEST_SUPPORTED_VERSION) {
-            ConnectAssignment assignment = new ConnectAssignment(new ByteBufferAccessor(buffer), version);
-            List<String> connectorIds = new ArrayList<>();
-            List<ConnectorTaskId> taskIds = new ArrayList<>();
-            assignment.connectorTasks().forEach(connectorTask -> connectorTask.taskIds().forEach(id -> {
-                if (id == ConnectProtocol.CONNECTOR_TASK) connectorIds.add(connectorTask.connector());
-                else taskIds.add(new ConnectorTaskId(connectorTask.connector(), id));
-            }));
+        if (version >= ExtendedConnectAssignment.LOWEST_SUPPORTED_VERSION && version <= ExtendedConnectAssignment.HIGHEST_SUPPORTED_VERSION) {
+            ExtendedConnectAssignment assignment = new ExtendedConnectAssignment(new ByteBufferAccessor(buffer), version);
+            AbstractMap.SimpleEntry<Collection<String>, Collection<ConnectorTaskId>> newConnectors =
+                    ExtendedAssignment.extract(assignment.connectorTasks());
             return new Assignment(
                     assignment.error(),
                     assignment.leader(),
                     assignment.leaderUrl(),
                     assignment.configOffset(),
-                    connectorIds,
-                    taskIds
+                    newConnectors.getKey(),
+                    newConnectors.getValue()
             );
         } else throw new SchemaException("Unsupported subscription version: " + version);
     }

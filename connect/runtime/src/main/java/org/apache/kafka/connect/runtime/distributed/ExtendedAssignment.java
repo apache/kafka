@@ -93,7 +93,7 @@ public class ExtendedAssignment extends Assignment {
         } else throw new SchemaException("Unsupported subscription version: " + version);
     }
 
-    private static AbstractMap.SimpleEntry<Collection<String>, Collection<ConnectorTaskId>> extract(
+    static AbstractMap.SimpleEntry<Collection<String>, Collection<ConnectorTaskId>> extract(
             Collection<ExtendedConnectAssignment.ConnectorTask> tasks) {
         if (tasks == null) return new AbstractMap.SimpleEntry<>(Collections.emptyList(), Collections.emptyList());
         List<String> connectorIds = new ArrayList<>();

@@ -28,16 +28,6 @@ import java.nio.ByteBuffer;
  */
 public class ExtendedWorkerState extends WorkerState {
 
-    /**
-     * The fields are serialized in sequence as follows:
-     * Subscription V1:
-     * <pre>
-     *   Version            => Int16
-     *   Url                => [String]
-     *   ConfigOffset       => Int64
-     *   Current Assignment => [Byte]
-     * </pre>
-     */
     public static ByteBuffer toByteBuffer(ExtendedWorkerState workerState, boolean sessioned) {
         short version = sessioned
                 ? ConnectProtocolCompatibility.SESSIONED.protocolVersion()
@@ -58,8 +48,7 @@ public class ExtendedWorkerState extends WorkerState {
     public static ExtendedWorkerState of(ByteBuffer buffer) {
         if (buffer == null) return null;
         short version = buffer.getShort();
-        // for compatibility
-        if (version >= ConnectProtocolCompatibility.EAGER.protocolVersion()) {
+        if (version >= ExtendedWorkerMetadata.LOWEST_SUPPORTED_VERSION && version <= ExtendedWorkerMetadata.HIGHEST_SUPPORTED_VERSION) {
             ExtendedWorkerMetadata metadata = new ExtendedWorkerMetadata(new ByteBufferAccessor(buffer), version);
             return new ExtendedWorkerState(
                     metadata.url(),
