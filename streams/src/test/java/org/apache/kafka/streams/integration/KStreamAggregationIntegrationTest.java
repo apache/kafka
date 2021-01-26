@@ -329,7 +329,7 @@ public class KStreamAggregationIntegrationTest {
         startStreams();
 
         final List<KeyValueTimestamp<Windowed<String>, Integer>> windowedMessages = receiveMessagesWithTimestamp(
-            new TimeWindowedDeserializer(windowedSerde.deserializer(), 500L),
+            new TimeWindowedDeserializer<>(new StringDeserializer(), 500L),
             new IntegerDeserializer(),
             String.class,
             15);
