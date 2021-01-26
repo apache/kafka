@@ -526,6 +526,6 @@ public class SuppressionIntegrationTest {
 
     private static void verifyErrorShutdown(final KafkaStreams driver) throws InterruptedException {
         waitForCondition(() -> !driver.state().isRunningOrRebalancing(), DEFAULT_TIMEOUT, "Streams didn't shut down.");
-        assertThat(driver.state(), is(KafkaStreams.State.PENDING_SHUTDOWN));
+        waitForCondition(() -> driver.state() == KafkaStreams.State.ERROR, "Streams didn't transit to ERROR state");
     }
 }

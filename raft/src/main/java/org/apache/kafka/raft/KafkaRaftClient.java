@@ -44,6 +44,8 @@ import org.apache.kafka.common.record.BufferSupplier;
 import org.apache.kafka.common.record.CompressionType;
 import org.apache.kafka.common.record.MemoryRecords;
 import org.apache.kafka.common.record.Records;
+import org.apache.kafka.common.record.UnalignedMemoryRecords;
+import org.apache.kafka.common.record.UnalignedRecords;
 import org.apache.kafka.common.requests.BeginQuorumEpochRequest;
 import org.apache.kafka.common.requests.BeginQuorumEpochResponse;
 import org.apache.kafka.common.requests.DescribeQuorumRequest;
@@ -75,7 +77,6 @@ import org.slf4j.Logger;
 
 import java.io.IOException;
 import java.net.InetSocketAddress;
-import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Iterator;
@@ -1245,10 +1246,8 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
 
             return FetchSnapshotResponse.singleton(
                 unknownTopicPartition,
-                responsePartitionSnapshot -> {
-                    return responsePartitionSnapshot
-                        .setErrorCode(Errors.UNKNOWN_TOPIC_OR_PARTITION.code());
-                }
+                responsePartitionSnapshot -> responsePartitionSnapshot
+                    .setErrorCode(Errors.UNKNOWN_TOPIC_OR_PARTITION.code())
             );
         }
 
@@ -1259,10 +1258,8 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
         if (leaderValidation.isPresent()) {
             return FetchSnapshotResponse.singleton(
                 log.topicPartition(),
-                responsePartitionSnapshot -> {
-                    return addQuorumLeader(responsePartitionSnapshot)
-                        .setErrorCode(leaderValidation.get().code());
-                }
+                responsePartitionSnapshot -> addQuorumLeader(responsePartitionSnapshot)
+                    .setErrorCode(leaderValidation.get().code())
             );
         }
 
@@ -1274,10 +1271,8 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
         if (!snapshotOpt.isPresent()) {
             return FetchSnapshotResponse.singleton(
                 log.topicPartition(),
-                responsePartitionSnapshot -> {
-                    return addQuorumLeader(responsePartitionSnapshot)
-                        .setErrorCode(Errors.SNAPSHOT_NOT_FOUND.code());
-                }
+                responsePartitionSnapshot -> addQuorumLeader(responsePartitionSnapshot)
+                    .setErrorCode(Errors.SNAPSHOT_NOT_FOUND.code())
             );
         }
 
@@ -1285,10 +1280,8 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
             if (partitionSnapshot.position() < 0 || partitionSnapshot.position() >= snapshot.sizeInBytes()) {
                 return FetchSnapshotResponse.singleton(
                     log.topicPartition(),
-                    responsePartitionSnapshot -> {
-                        return addQuorumLeader(responsePartitionSnapshot)
-                            .setErrorCode(Errors.POSITION_OUT_OF_RANGE.code());
-                    }
+                    responsePartitionSnapshot -> addQuorumLeader(responsePartitionSnapshot)
+                        .setErrorCode(Errors.POSITION_OUT_OF_RANGE.code())
                 );
             }
 
@@ -1299,9 +1292,11 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
                 maxSnapshotSize = Integer.MAX_VALUE;
             }
 
-            ByteBuffer buffer = ByteBuffer.allocate(Math.min(data.maxBytes(), maxSnapshotSize));
-            snapshot.read(buffer, partitionSnapshot.position());
-            buffer.flip();
+            if (partitionSnapshot.position() > Integer.MAX_VALUE) {
+                throw new IllegalStateException(String.format("Trying to fetch a snapshot with position: %d lager than Int.MaxValue", partitionSnapshot.position()));
+            }
+
+            UnalignedRecords records = snapshot.read(partitionSnapshot.position(), Math.min(data.maxBytes(), maxSnapshotSize));
 
             long snapshotSize = snapshot.sizeInBytes();
 
@@ -1316,7 +1311,7 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
                     return responsePartitionSnapshot
                         .setSize(snapshotSize)
                         .setPosition(partitionSnapshot.position())
-                        .setBytes(buffer);
+                        .setUnalignedRecords(records);
                 }
             );
         }
@@ -1408,7 +1403,10 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
             );
         }
 
-        snapshot.append(partitionSnapshot.bytes());
+        if (!(partitionSnapshot.unalignedRecords() instanceof MemoryRecords)) {
+            throw new IllegalStateException(String.format("Received unexpected fetch snapshot response: %s", partitionSnapshot));
+        }
+        snapshot.append(new UnalignedMemoryRecords(((MemoryRecords) partitionSnapshot.unalignedRecords()).buffer()));
 
         if (snapshot.sizeInBytes() == partitionSnapshot.size()) {
             // Finished fetching the snapshot.
