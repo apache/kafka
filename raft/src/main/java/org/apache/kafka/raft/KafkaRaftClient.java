@@ -2329,7 +2329,7 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
         // These fields are visible to both the Raft IO thread and the listener
         // and are protected through synchronization on this `ListenerContext` instance
         private BatchReader<T> lastSent = null;
-        private long lastAckedEndOffset = 0;
+        private long nextOffset = 0;
 
         private ListenerContext(Listener<T> listener) {
             this.listener = listener;
@@ -2339,8 +2339,8 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
          * Get the last acked offset, which is one greater than the offset of the
          * last record which was acked by the state machine.
          */
-        public synchronized long lastAckedEndOffset() {
-            return lastAckedEndOffset;
+        public synchronized long nextOffset() {
+            return nextOffset;
         }
 
         /**
@@ -2360,7 +2360,7 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
                     return OptionalLong.empty();
                 }
             } else {
-                return OptionalLong.of(lastAckedEndOffset);
+                return OptionalLong.of(nextOffset);
             }
         }
 
@@ -2370,7 +2370,7 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
          */
         public void fireHandleSnapshot(long logStartOffset) {
             synchronized (this) {
-                lastAckedEndOffset = logStartOffset;
+                nextOffset = logStartOffset;
                 lastSent = null;
             }
         }
@@ -2412,7 +2412,7 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
             // up to the start of the leader epoch. This guarantees that the
             // state machine has seen the full committed state before it becomes
             // leader and begins writing to the log.
-            if (epoch > claimedEpoch && lastAckedEndOffset() >= epochStartOffset) {
+            if (epoch > claimedEpoch && nextOffset() >= epochStartOffset) {
                 claimedEpoch = epoch;
                 listener.handleClaim(epoch);
             }
@@ -2425,7 +2425,7 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
         public synchronized void onClose(BatchReader<T> reader) {
             OptionalLong lastOffset = reader.lastOffset();
             if (lastOffset.isPresent()) {
-                lastAckedEndOffset = lastOffset.getAsLong() + 1;
+                nextOffset = lastOffset.getAsLong() + 1;
             }
 
             if (lastSent == reader) {
