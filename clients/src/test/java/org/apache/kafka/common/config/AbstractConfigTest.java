@@ -26,7 +26,7 @@ import org.apache.kafka.common.metrics.MetricsReporter;
 import org.apache.kafka.common.security.TestSecurityConfig;
 import org.apache.kafka.common.config.provider.MockVaultConfigProvider;
 import org.apache.kafka.common.config.provider.MockFileConfigProvider;
-import org.junit.Test;
+import org.junit.jupiter.api.Test;
 
 import java.util.Arrays;
 import java.util.Collections;
@@ -36,11 +36,11 @@ import java.util.Map;
 import java.util.Properties;
 import java.util.UUID;
 
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertNull;
-import static org.junit.Assert.assertTrue;
-import static org.junit.Assert.fail;
-import static org.junit.Assert.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.fail;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 
 public class AbstractConfigTest {
 
@@ -227,12 +227,12 @@ public class AbstractConfigTest {
         props.put(ConfiguredFakeMetricsReporter.EXTRA_CONFIG, "my_value");
         TestConfig config = new TestConfig(props);
 
-        assertTrue(ConfiguredFakeMetricsReporter.EXTRA_CONFIG + " should be marked unused before getConfiguredInstances is called",
-            config.unused().contains(ConfiguredFakeMetricsReporter.EXTRA_CONFIG));
+        assertTrue(config.unused().contains(ConfiguredFakeMetricsReporter.EXTRA_CONFIG),
+            ConfiguredFakeMetricsReporter.EXTRA_CONFIG + " should be marked unused before getConfiguredInstances is called");
 
         config.getConfiguredInstances(TestConfig.METRIC_REPORTER_CLASSES_CONFIG, MetricsReporter.class);
-        assertFalse(ConfiguredFakeMetricsReporter.EXTRA_CONFIG + " should be marked as used",
-            config.unused().contains(ConfiguredFakeMetricsReporter.EXTRA_CONFIG));
+        assertFalse(config.unused().contains(ConfiguredFakeMetricsReporter.EXTRA_CONFIG),
+            ConfiguredFakeMetricsReporter.EXTRA_CONFIG + " should be marked as used");
     }
 
     private void testValidInputs(String configValue) {

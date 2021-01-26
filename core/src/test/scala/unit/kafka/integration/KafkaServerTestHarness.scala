@@ -24,7 +24,7 @@ import kafka.server._
 import kafka.utils.TestUtils
 import kafka.zk.ZooKeeperTestHarness
 import org.apache.kafka.common.security.auth.SecurityProtocol
-import org.junit.{After, Before}
+import org.junit.jupiter.api.{AfterEach, BeforeEach}
 
 import scala.collection.Seq
 import scala.collection.mutable.{ArrayBuffer, Buffer}
@@ -85,8 +85,9 @@ abstract class KafkaServerTestHarness extends ZooKeeperTestHarness {
   protected def serverSaslProperties: Option[Properties] = None
   protected def clientSaslProperties: Option[Properties] = None
   protected def brokerTime(brokerId: Int): Time = Time.SYSTEM
+  protected def enableForwarding: Boolean = false
 
-  @Before
+  @BeforeEach
   override def setUp(): Unit = {
     super.setUp()
 
@@ -98,8 +99,14 @@ abstract class KafkaServerTestHarness extends ZooKeeperTestHarness {
 
     // Add each broker to `servers` buffer as soon as it is created to ensure that brokers
     // are shutdown cleanly in tearDown even if a subsequent broker fails to start
-    for (config <- configs)
-      servers += TestUtils.createServer(config, time = brokerTime(config.brokerId))
+    for (config <- configs) {
+      servers += TestUtils.createServer(
+        config,
+        time = brokerTime(config.brokerId),
+        threadNamePrefix = None,
+        enableForwarding
+      )
+    }
     brokerList = TestUtils.bootstrapServers(servers, listenerName)
     alive = new Array[Boolean](servers.length)
     Arrays.fill(alive, true)
@@ -108,7 +115,7 @@ abstract class KafkaServerTestHarness extends ZooKeeperTestHarness {
     configureSecurityAfterServersStart()
   }
 
-  @After
+  @AfterEach
   override def tearDown(): Unit = {
     if (servers != null) {
       TestUtils.shutdownServers(servers)

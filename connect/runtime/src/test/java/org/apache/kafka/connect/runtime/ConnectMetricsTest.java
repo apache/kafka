@@ -36,6 +36,7 @@ import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNotSame;
 import static org.junit.Assert.assertSame;
+import static org.junit.Assert.assertThrows;
 
 @SuppressWarnings("deprecation")
 public class ConnectMetricsTest {
@@ -67,9 +68,10 @@ public class ConnectMetricsTest {
         assertNotNull(metrics.metrics());
     }
 
-    @Test(expected = IllegalArgumentException.class)
+    @Test
     public void testGettingGroupWithOddNumberOfTags() {
-        metrics.group("name", "k1", "v1", "k2", "v2", "extra");
+        assertThrows(IllegalArgumentException.class,
+            () -> metrics.group("name", "k1", "v1", "k2", "v2", "extra"));
     }
 
     @Test

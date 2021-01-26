@@ -68,7 +68,7 @@ object RequestConvertToJson {
       case req: LeaderAndIsrRequest => LeaderAndIsrRequestDataJsonConverter.write(req.data, request.version)
       case req: LeaveGroupRequest => LeaveGroupRequestDataJsonConverter.write(req.data, request.version)
       case req: ListGroupsRequest => ListGroupsRequestDataJsonConverter.write(req.data, request.version)
-      case req: ListOffsetRequest => ListOffsetRequestDataJsonConverter.write(req.data, request.version)
+      case req: ListOffsetsRequest => ListOffsetsRequestDataJsonConverter.write(req.data, request.version)
       case req: ListPartitionReassignmentsRequest => ListPartitionReassignmentsRequestDataJsonConverter.write(req.data, request.version)
       case req: MetadataRequest => MetadataRequestDataJsonConverter.write(req.data, request.version)
       case req: OffsetCommitRequest => OffsetCommitRequestDataJsonConverter.write(req.data, request.version)
@@ -86,6 +86,8 @@ object RequestConvertToJson {
       case req: UpdateMetadataRequest => UpdateMetadataRequestDataJsonConverter.write(req.data, request.version)
       case req: VoteRequest => VoteRequestDataJsonConverter.write(req.data, request.version)
       case req: WriteTxnMarkersRequest => WriteTxnMarkersRequestDataJsonConverter.write(req.data, request.version)
+      case req: FetchSnapshotRequest => FetchSnapshotRequestDataJsonConverter.write(req.data, request.version)
+      case req: DescribeClusterRequest => DescribeClusterRequestDataJsonConverter.write(req.data, request.version)
       case _ => throw new IllegalStateException(s"ApiKey ${request.apiKey} is not currently handled in `request`, the " +
         "code should be updated to do so.");
     }
@@ -134,7 +136,7 @@ object RequestConvertToJson {
       case res: LeaderAndIsrResponse => LeaderAndIsrResponseDataJsonConverter.write(res.data, version)
       case res: LeaveGroupResponse => LeaveGroupResponseDataJsonConverter.write(res.data, version)
       case res: ListGroupsResponse => ListGroupsResponseDataJsonConverter.write(res.data, version)
-      case res: ListOffsetResponse => ListOffsetResponseDataJsonConverter.write(res.data, version)
+      case res: ListOffsetsResponse => ListOffsetsResponseDataJsonConverter.write(res.data, version)
       case res: ListPartitionReassignmentsResponse => ListPartitionReassignmentsResponseDataJsonConverter.write(res.data, version)
       case res: MetadataResponse => MetadataResponseDataJsonConverter.write(res.data, version)
       case res: OffsetCommitResponse => OffsetCommitResponseDataJsonConverter.write(res.data, version)
@@ -152,6 +154,8 @@ object RequestConvertToJson {
       case res: UpdateMetadataResponse => UpdateMetadataResponseDataJsonConverter.write(res.data, version)
       case res: WriteTxnMarkersResponse => WriteTxnMarkersResponseDataJsonConverter.write(res.data, version)
       case res: VoteResponse => VoteResponseDataJsonConverter.write(res.data, version)
+      case res: FetchSnapshotResponse => FetchSnapshotResponseDataJsonConverter.write(res.data, version)
+      case res: DescribeClusterResponse => DescribeClusterResponseDataJsonConverter.write(res.data, version)
       case _ => throw new IllegalStateException(s"ApiKey ${response.apiKey} is not currently handled in `response`, the " +
         "code should be updated to do so.");
     }

@@ -20,59 +20,43 @@ import org.apache.kafka.common.message.ProduceRequestData;
 import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Message;
 import org.apache.kafka.common.protocol.ObjectSerializationCache;
-import org.apache.kafka.common.record.BaseRecords;
 import org.apache.kafka.common.record.RecordBatch;
 import org.apache.kafka.common.record.Records;
 
 import java.nio.ByteBuffer;
-import java.util.AbstractMap;
 import java.util.Iterator;
 import java.util.Optional;
+import java.util.function.Predicate;
 
 public final class RequestUtils {
 
     private RequestUtils() {}
 
-    static Optional<Integer> getLeaderEpoch(int leaderEpoch) {
+    public static Optional<Integer> getLeaderEpoch(int leaderEpoch) {
         return leaderEpoch == RecordBatch.NO_PARTITION_LEADER_EPOCH ?
             Optional.empty() : Optional.of(leaderEpoch);
     }
 
-    // visible for testing
-    public static boolean hasIdempotentRecords(ProduceRequest request) {
-        return flags(request).getKey();
-    }
-
-    // visible for testing
     public static boolean hasTransactionalRecords(ProduceRequest request) {
-        return flags(request).getValue();
+        return flag(request, RecordBatch::isTransactional);
     }
 
     /**
-     * Get both hasIdempotentRecords flag and hasTransactionalRecords flag from produce request.
-     * Noted that we find all flags at once to avoid duplicate loop and record batch construction.
-     * @return first flag is "hasIdempotentRecords" and another is "hasTransactionalRecords"
+     * find a flag from all records of a produce request.
+     * @param request produce request
+     * @param predicate used to predicate the record
+     * @return true if there is any matched flag in the produce request. Otherwise, false
      */
-    public static AbstractMap.SimpleEntry<Boolean, Boolean> flags(ProduceRequest request) {
-        boolean hasIdempotentRecords = false;
-        boolean hasTransactionalRecords = false;
-        for (ProduceRequestData.TopicProduceData tpd : request.data().topicData()) {
-            for (ProduceRequestData.PartitionProduceData ppd : tpd.partitionData()) {
-                BaseRecords records = ppd.records();
-                if (records instanceof Records) {
-                    Iterator<? extends RecordBatch> iterator = ((Records) records).batches().iterator();
-                    if (iterator.hasNext()) {
-                        RecordBatch batch = iterator.next();
-                        hasIdempotentRecords = hasIdempotentRecords || batch.hasProducerId();
-                        hasTransactionalRecords = hasTransactionalRecords || batch.isTransactional();
-                    }
+    static boolean flag(ProduceRequest request, Predicate<RecordBatch> predicate) {
+        for (ProduceRequestData.TopicProduceData tp : request.data().topicData()) {
+            for (ProduceRequestData.PartitionProduceData p : tp.partitionData()) {
+                if (p.records() instanceof Records) {
+                    Iterator<? extends RecordBatch> iter = (((Records) p.records())).batchIterator();
+                    if (iter.hasNext() && predicate.test(iter.next())) return true;
                 }
-                // return early
-                if (hasIdempotentRecords && hasTransactionalRecords)
-                    return new AbstractMap.SimpleEntry<>(true, true);
             }
         }
-        return new AbstractMap.SimpleEntry<>(hasIdempotentRecords, hasTransactionalRecords);
+        return false;
     }
 
     public static ByteBuffer serialize(

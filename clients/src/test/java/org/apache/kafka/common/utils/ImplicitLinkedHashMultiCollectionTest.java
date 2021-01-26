@@ -17,27 +17,24 @@
 package org.apache.kafka.common.utils;
 
 import org.apache.kafka.common.utils.ImplicitLinkedHashCollectionTest.TestElement;
-import org.junit.Assert;
-import org.junit.Rule;
-import org.junit.Test;
-import org.junit.rules.Timeout;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.Timeout;
 
 import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.Random;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertNull;
-import static org.junit.Assert.assertTrue;
-import static org.junit.Assert.fail;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.fail;
 
 /**
  * A unit test for ImplicitLinkedHashMultiCollection.
  */
+@Timeout(120)
 public class ImplicitLinkedHashMultiCollectionTest {
-    @Rule
-    final public Timeout globalTimeout = Timeout.millis(120000);
 
     @Test
     public void testNullForbidden() {
@@ -93,15 +90,15 @@ public class ImplicitLinkedHashMultiCollectionTest {
         int i = 0;
         while (iterator.hasNext()) {
             TestElement element = iterator.next();
-            assertTrue("Iterator yieled " + (i + 1) + " elements, but only " +
-                sequence.length + " were expected.", i < sequence.length);
+            assertTrue(i < sequence.length, "Iterator yieled " + (i + 1) + " elements, but only " +
+                sequence.length + " were expected.");
             if (sequence[i] != element) {
                 fail("Iterator value number " + (i + 1) + " was incorrect.");
             }
             i = i + 1;
         }
-        assertTrue("Iterator yieled " + (i + 1) + " elements, but " +
-            sequence.length + " were expected.", i == sequence.length);
+        assertTrue(i == sequence.length, "Iterator yieled " + (i + 1) + " elements, but " +
+            sequence.length + " were expected.");
     }
 
     @Test
@@ -160,14 +157,14 @@ public class ImplicitLinkedHashMultiCollectionTest {
         int i = 0;
         while (iter.hasNext()) {
             TestElement element = iter.next();
-            Assert.assertTrue("Iterator yieled " + (i + 1) + " elements, but only " +
-                i + " were expected.", expectedIter.hasNext());
+            assertTrue(expectedIter.hasNext(),
+                "Iterator yieled " + (i + 1) + " elements, but only " + i + " were expected.");
             TestElement expected = expectedIter.next();
-            assertTrue("Iterator value number " + (i + 1) + " was incorrect.",
-                expected == element);
+            assertTrue(expected == element,
+                "Iterator value number " + (i + 1) + " was incorrect.");
             i = i + 1;
         }
-        Assert.assertFalse("Iterator yieled " + i + " elements, but at least " +
-            (i + 1) + " were expected.", expectedIter.hasNext());
+        assertFalse(expectedIter.hasNext(),
+            "Iterator yieled " + i + " elements, but at least " + (i + 1) + " were expected.");
     }
 }

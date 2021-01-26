@@ -34,8 +34,8 @@ import org.apache.kafka.common.requests.{ProduceResponse, ResponseHeader}
 import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.common.utils.ByteUtils
 import org.apache.kafka.common.{TopicPartition, requests}
-import org.junit.Assert._
-import org.junit.Test
+import org.junit.jupiter.api.Assertions._
+import org.junit.jupiter.api.Test
 
 import scala.annotation.nowarn
 
@@ -110,7 +110,7 @@ class EdgeCaseRequestTest extends KafkaServerTestHarness {
     val plainSocket = connect()
     try {
       sendRequest(plainSocket, requestHeaderBytes(-1, 0))
-      assertEquals("The server should disconnect", -1, plainSocket.getInputStream.read())
+      assertEquals(-1, plainSocket.getInputStream.read(), "The server should disconnect")
     } finally {
       plainSocket.close()
     }
@@ -152,13 +152,13 @@ class EdgeCaseRequestTest extends KafkaServerTestHarness {
     val responseHeader = ResponseHeader.parse(responseBuffer, responseHeaderVersion)
     val produceResponse = ProduceResponse.parse(responseBuffer, version)
 
-    assertEquals("The response should parse completely", 0, responseBuffer.remaining)
-    assertEquals("The correlationId should match request", correlationId, responseHeader.correlationId)
-    assertEquals("One partition response should be returned", 1, produceResponse.responses.size)
+    assertEquals(0, responseBuffer.remaining, "The response should parse completely")
+    assertEquals(correlationId, responseHeader.correlationId, "The correlationId should match request")
+    assertEquals(1, produceResponse.responses.size, "One partition response should be returned")
 
     val partitionResponse = produceResponse.responses.get(topicPartition)
     assertNotNull(partitionResponse)
-    assertEquals("There should be no error", Errors.NONE, partitionResponse.error)
+    assertEquals(Errors.NONE, partitionResponse.error, "There should be no error")
   }
 
   @Test

@@ -18,11 +18,11 @@ package org.apache.kafka.common.record;
 
 import net.jpountz.xxhash.XXHashFactory;
 
-import org.hamcrest.CoreMatchers;
-import org.junit.Test;
-import org.junit.runner.RunWith;
-import org.junit.runners.Parameterized;
-import org.junit.runners.Parameterized.Parameters;
+import org.junit.jupiter.api.extension.ExtensionContext;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.ArgumentsProvider;
+import org.junit.jupiter.params.provider.ArgumentsSource;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
@@ -30,30 +30,22 @@ import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Collection;
 import java.util.List;
 import java.util.Random;
+import java.util.stream.Stream;
 
 import static org.apache.kafka.common.record.KafkaLZ4BlockOutputStream.LZ4_FRAME_INCOMPRESSIBLE_MASK;
-import static org.hamcrest.MatcherAssert.assertThat;
-import static org.junit.Assert.assertArrayEquals;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.assertThrows;
-import static org.junit.Assert.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
-@RunWith(value = Parameterized.class)
 public class KafkaLZ4Test {
 
     private final static Random RANDOM = new Random(0);
 
-    private final boolean useBrokenFlagDescriptorChecksum;
-    private final boolean ignoreFlagDescriptorChecksum;
-    private final byte[] payload;
-    private final boolean close;
-    private final boolean blockChecksum;
-
-    static class Payload {
+    private static class Payload {
         String name;
         byte[] payload;
 
@@ -71,97 +63,123 @@ public class KafkaLZ4Test {
         }
     }
 
-    @Parameters(name = "{index} useBrokenFlagDescriptorChecksum={0}, ignoreFlagDescriptorChecksum={1}, blockChecksum={2}, close={3}, payload={4}")
-    public static Collection<Object[]> data() {
-        List<Payload> payloads = new ArrayList<>();
+    private static class Args {
+        final boolean useBrokenFlagDescriptorChecksum;
+        final boolean ignoreFlagDescriptorChecksum;
+        final byte[] payload;
+        final boolean close;
+        final boolean blockChecksum;
 
-        payloads.add(new Payload("empty", new byte[]{}));
-        payloads.add(new Payload("onebyte", new byte[]{1}));
-
-        for (int size : Arrays.asList(1000, 1 << 16, (1 << 10) * 96)) {
-            byte[] random = new byte[size];
-            RANDOM.nextBytes(random);
-            payloads.add(new Payload("random", random));
-
-            byte[] ones = new byte[size];
-            Arrays.fill(ones, (byte) 1);
-            payloads.add(new Payload("ones", ones));
+        Args(boolean useBrokenFlagDescriptorChecksum, boolean ignoreFlagDescriptorChecksum,
+             boolean blockChecksum, boolean close, Payload payload) {
+            this.useBrokenFlagDescriptorChecksum = useBrokenFlagDescriptorChecksum;
+            this.ignoreFlagDescriptorChecksum = ignoreFlagDescriptorChecksum;
+            this.blockChecksum = blockChecksum;
+            this.close = close;
+            this.payload = payload.payload;
         }
 
-        List<Object[]> values = new ArrayList<>();
-        for (Payload payload : payloads)
-            for (boolean broken : Arrays.asList(false, true))
-                for (boolean ignore : Arrays.asList(false, true))
-                    for (boolean blockChecksum : Arrays.asList(false, true))
-                        for (boolean close : Arrays.asList(false, true))
-                            values.add(new Object[]{broken, ignore, blockChecksum, close, payload});
-        return values;
+        @Override
+        public String toString() {
+            return "useBrokenFlagDescriptorChecksum=" + useBrokenFlagDescriptorChecksum +
+                ", ignoreFlagDescriptorChecksum=" + ignoreFlagDescriptorChecksum +
+                ", blockChecksum=" + blockChecksum +
+                ", close=" + close +
+                ", payload=" + Arrays.toString(payload);
+        }
     }
 
-    public KafkaLZ4Test(boolean useBrokenFlagDescriptorChecksum, boolean ignoreFlagDescriptorChecksum,
-                        boolean blockChecksum, boolean close, Payload payload) {
-        this.useBrokenFlagDescriptorChecksum = useBrokenFlagDescriptorChecksum;
-        this.ignoreFlagDescriptorChecksum = ignoreFlagDescriptorChecksum;
-        this.payload = payload.payload;
-        this.close = close;
-        this.blockChecksum = blockChecksum;
+    private static class Lz4ArgumentsProvider implements ArgumentsProvider {
+
+        @Override
+        public Stream<? extends Arguments> provideArguments(ExtensionContext context) throws Exception {
+            List<Payload> payloads = new ArrayList<>();
+
+            payloads.add(new Payload("empty", new byte[0]));
+            payloads.add(new Payload("onebyte", new byte[]{1}));
+
+            for (int size : Arrays.asList(1000, 1 << 16, (1 << 10) * 96)) {
+                byte[] random = new byte[size];
+                RANDOM.nextBytes(random);
+                payloads.add(new Payload("random", random));
+
+                byte[] ones = new byte[size];
+                Arrays.fill(ones, (byte) 1);
+                payloads.add(new Payload("ones", ones));
+            }
+
+            List<Arguments> arguments = new ArrayList<>();
+            for (Payload payload : payloads)
+                for (boolean broken : Arrays.asList(false, true))
+                    for (boolean ignore : Arrays.asList(false, true))
+                        for (boolean blockChecksum : Arrays.asList(false, true))
+                            for (boolean close : Arrays.asList(false, true))
+                                arguments.add(Arguments.of(new Args(broken, ignore, blockChecksum, close, payload)));
+
+            return arguments.stream();
+        }
     }
 
-    @Test
-    public void testHeaderPrematureEnd() {
+    @ParameterizedTest
+    @ArgumentsSource(Lz4ArgumentsProvider.class)
+    public void testHeaderPrematureEnd(Args args) {
         ByteBuffer buffer = ByteBuffer.allocate(2);
-        IOException e = assertThrows(IOException.class, () -> makeInputStream(buffer));
+        IOException e = assertThrows(IOException.class, () -> makeInputStream(buffer, args.ignoreFlagDescriptorChecksum));
         assertEquals(KafkaLZ4BlockInputStream.PREMATURE_EOS, e.getMessage());
     }
 
-    private KafkaLZ4BlockInputStream makeInputStream(ByteBuffer buffer) throws IOException {
+    private KafkaLZ4BlockInputStream makeInputStream(ByteBuffer buffer, boolean ignoreFlagDescriptorChecksum) throws IOException {
         return new KafkaLZ4BlockInputStream(buffer, BufferSupplier.create(), ignoreFlagDescriptorChecksum);
     }
 
-    @Test
-    public void testNotSupported() throws Exception {
-        byte[] compressed = compressedBytes();
+    @ParameterizedTest
+    @ArgumentsSource(Lz4ArgumentsProvider.class)
+    public void testNotSupported(Args args) throws Exception {
+        byte[] compressed = compressedBytes(args);
         compressed[0] = 0x00;
         ByteBuffer buffer = ByteBuffer.wrap(compressed);
-        IOException e = assertThrows(IOException.class, () -> makeInputStream(buffer));
+        IOException e = assertThrows(IOException.class, () -> makeInputStream(buffer, args.ignoreFlagDescriptorChecksum));
         assertEquals(KafkaLZ4BlockInputStream.NOT_SUPPORTED, e.getMessage());
     }
 
-    @Test
-    public void testBadFrameChecksum() throws Exception {
-        byte[] compressed = compressedBytes();
+    @ParameterizedTest
+    @ArgumentsSource(Lz4ArgumentsProvider.class)
+    public void testBadFrameChecksum(Args args) throws Exception {
+        byte[] compressed = compressedBytes(args);
         compressed[6] = (byte) 0xFF;
         ByteBuffer buffer = ByteBuffer.wrap(compressed);
 
-        if (ignoreFlagDescriptorChecksum) {
-            makeInputStream(buffer);
+        if (args.ignoreFlagDescriptorChecksum) {
+            makeInputStream(buffer, args.ignoreFlagDescriptorChecksum);
         } else {
-            IOException e = assertThrows(IOException.class, () -> makeInputStream(buffer));
+            IOException e = assertThrows(IOException.class, () -> makeInputStream(buffer, args.ignoreFlagDescriptorChecksum));
             assertEquals(KafkaLZ4BlockInputStream.DESCRIPTOR_HASH_MISMATCH, e.getMessage());
         }
     }
 
-    @Test
-    public void testBadBlockSize() throws Exception {
-        if (!close || (useBrokenFlagDescriptorChecksum && !ignoreFlagDescriptorChecksum))
+    @ParameterizedTest
+    @ArgumentsSource(Lz4ArgumentsProvider.class)
+    public void testBadBlockSize(Args args) throws Exception {
+        if (!args.close || (args.useBrokenFlagDescriptorChecksum && !args.ignoreFlagDescriptorChecksum))
             return;
 
-        byte[] compressed = compressedBytes();
+        byte[] compressed = compressedBytes(args);
         ByteBuffer buffer = ByteBuffer.wrap(compressed).order(ByteOrder.LITTLE_ENDIAN);
 
         int blockSize = buffer.getInt(7);
         blockSize = (blockSize & LZ4_FRAME_INCOMPRESSIBLE_MASK) | (1 << 24 & ~LZ4_FRAME_INCOMPRESSIBLE_MASK);
         buffer.putInt(7, blockSize);
 
-        IOException e = assertThrows(IOException.class, () -> testDecompression(buffer));
-        assertThat(e.getMessage(), CoreMatchers.containsString("exceeded max"));
+        IOException e = assertThrows(IOException.class, () -> testDecompression(buffer, args));
+        assertTrue(e.getMessage().contains("exceeded max"));
     }
 
 
 
-    @Test
-    public void testCompression() throws Exception {
-        byte[] compressed = compressedBytes();
+    @ParameterizedTest
+    @ArgumentsSource(Lz4ArgumentsProvider.class)
+    public void testCompression(Args args) throws Exception {
+        byte[] compressed = compressedBytes(args);
 
         // Check magic bytes stored as little-endian
         int offset = 0;
@@ -209,7 +227,7 @@ public class KafkaLZ4Test {
 
         // Initial implementation of checksum incorrectly applied to full header
         // including magic bytes
-        if (this.useBrokenFlagDescriptorChecksum) {
+        if (args.useBrokenFlagDescriptorChecksum) {
             off = 0;
             len = offset;
         }
@@ -220,7 +238,7 @@ public class KafkaLZ4Test {
         assertEquals((byte) ((hash >> 8) & 0xFF), hc);
 
         // Check EndMark, data block with size `0` expressed as a 32-bits value
-        if (this.close) {
+        if (args.close) {
             offset = compressed.length - 4;
             assertEquals(0, compressed[offset++]);
             assertEquals(0, compressed[offset++]);
@@ -229,15 +247,17 @@ public class KafkaLZ4Test {
         }
     }
 
-    @Test
-    public void testArrayBackedBuffer() throws IOException {
-        byte[] compressed = compressedBytes();
-        testDecompression(ByteBuffer.wrap(compressed));
+    @ParameterizedTest
+    @ArgumentsSource(Lz4ArgumentsProvider.class)
+    public void testArrayBackedBuffer(Args args) throws IOException {
+        byte[] compressed = compressedBytes(args);
+        testDecompression(ByteBuffer.wrap(compressed), args);
     }
 
-    @Test
-    public void testArrayBackedBufferSlice() throws IOException {
-        byte[] compressed = compressedBytes();
+    @ParameterizedTest
+    @ArgumentsSource(Lz4ArgumentsProvider.class)
+    public void testArrayBackedBufferSlice(Args args) throws IOException {
+        byte[] compressed = compressedBytes(args);
 
         int sliceOffset = 12;
 
@@ -247,7 +267,7 @@ public class KafkaLZ4Test {
         buffer.position(sliceOffset);
 
         ByteBuffer slice = buffer.slice();
-        testDecompression(slice);
+        testDecompression(slice, args);
 
         int offset = 42;
         buffer = ByteBuffer.allocate(compressed.length + sliceOffset + offset);
@@ -257,34 +277,37 @@ public class KafkaLZ4Test {
 
         slice = buffer.slice();
         slice.position(offset);
-        testDecompression(slice);
+        testDecompression(slice, args);
     }
 
-    @Test
-    public void testDirectBuffer() throws IOException {
-        byte[] compressed = compressedBytes();
+    @ParameterizedTest
+    @ArgumentsSource(Lz4ArgumentsProvider.class)
+    public void testDirectBuffer(Args args) throws IOException {
+        byte[] compressed = compressedBytes(args);
         ByteBuffer buffer;
 
         buffer = ByteBuffer.allocateDirect(compressed.length);
         buffer.put(compressed).flip();
-        testDecompression(buffer);
+        testDecompression(buffer, args);
 
         int offset = 42;
         buffer = ByteBuffer.allocateDirect(compressed.length + offset + 123);
         buffer.position(offset);
         buffer.put(compressed).flip();
         buffer.position(offset);
-        testDecompression(buffer);
+        testDecompression(buffer, args);
     }
 
-    @Test
-    public void testSkip() throws Exception {
-        if (!close || (useBrokenFlagDescriptorChecksum && !ignoreFlagDescriptorChecksum)) return;
+    @ParameterizedTest
+    @ArgumentsSource(Lz4ArgumentsProvider.class)
+    public void testSkip(Args args) throws Exception {
+        if (!args.close || (args.useBrokenFlagDescriptorChecksum && !args.ignoreFlagDescriptorChecksum)) return;
 
-        final KafkaLZ4BlockInputStream in = makeInputStream(ByteBuffer.wrap(compressedBytes()));
+        final KafkaLZ4BlockInputStream in = makeInputStream(ByteBuffer.wrap(compressedBytes(args)),
+            args.ignoreFlagDescriptorChecksum);
 
         int n = 100;
-        int remaining = payload.length;
+        int remaining = args.payload.length;
         long skipped = in.skip(n);
         assertEquals(Math.min(n, remaining), skipped);
 
@@ -294,12 +317,12 @@ public class KafkaLZ4Test {
         assertEquals(Math.min(n, remaining), skipped);
     }
 
-    private void testDecompression(ByteBuffer buffer) throws IOException {
+    private void testDecompression(ByteBuffer buffer, Args args) throws IOException {
         IOException error = null;
         try {
-            KafkaLZ4BlockInputStream decompressed = makeInputStream(buffer);
+            KafkaLZ4BlockInputStream decompressed = makeInputStream(buffer, args.ignoreFlagDescriptorChecksum);
 
-            byte[] testPayload = new byte[payload.length];
+            byte[] testPayload = new byte[args.payload.length];
 
             byte[] tmp = new byte[1024];
             int n, pos = 0, i = 0;
@@ -315,33 +338,33 @@ public class KafkaLZ4Test {
             pos += i;
 
             assertEquals(-1, decompressed.read(tmp, 0, tmp.length));
-            assertEquals(this.payload.length, pos);
-            assertArrayEquals(this.payload, testPayload);
+            assertEquals(args.payload.length, pos);
+            assertArrayEquals(args.payload, testPayload);
         } catch (IOException e) {
-            if (!ignoreFlagDescriptorChecksum && useBrokenFlagDescriptorChecksum) {
+            if (!args.ignoreFlagDescriptorChecksum && args.useBrokenFlagDescriptorChecksum) {
                 assertEquals(KafkaLZ4BlockInputStream.DESCRIPTOR_HASH_MISMATCH, e.getMessage());
                 error = e;
-            } else if (!close) {
+            } else if (!args.close) {
                 assertEquals(KafkaLZ4BlockInputStream.PREMATURE_EOS, e.getMessage());
                 error = e;
             } else {
                 throw e;
             }
         }
-        if (!ignoreFlagDescriptorChecksum && useBrokenFlagDescriptorChecksum) assertNotNull(error);
-        if (!close) assertNotNull(error);
+        if (!args.ignoreFlagDescriptorChecksum && args.useBrokenFlagDescriptorChecksum) assertNotNull(error);
+        if (!args.close) assertNotNull(error);
     }
 
-    private byte[] compressedBytes() throws IOException {
+    private byte[] compressedBytes(Args args) throws IOException {
         ByteArrayOutputStream output = new ByteArrayOutputStream();
         KafkaLZ4BlockOutputStream lz4 = new KafkaLZ4BlockOutputStream(
             output,
             KafkaLZ4BlockOutputStream.BLOCKSIZE_64KB,
-            blockChecksum,
-            useBrokenFlagDescriptorChecksum
+            args.blockChecksum,
+            args.useBrokenFlagDescriptorChecksum
         );
-        lz4.write(this.payload, 0, this.payload.length);
-        if (this.close) {
+        lz4.write(args.payload, 0, args.payload.length);
+        if (args.close) {
             lz4.close();
         } else {
             lz4.flush();

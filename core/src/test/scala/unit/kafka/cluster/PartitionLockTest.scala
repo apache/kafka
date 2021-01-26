@@ -21,7 +21,7 @@ import java.util.Properties
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent._
 
-import kafka.api.{ApiVersion, LeaderAndIsr}
+import kafka.api.ApiVersion
 import kafka.log._
 import kafka.server._
 import kafka.server.checkpoints.OffsetCheckpoints
@@ -30,8 +30,8 @@ import org.apache.kafka.common.message.LeaderAndIsrRequestData.LeaderAndIsrParti
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.record.{MemoryRecords, SimpleRecord}
 import org.apache.kafka.common.utils.Utils
-import org.junit.Assert.{assertEquals, assertFalse, assertTrue}
-import org.junit.{After, Before, Test}
+import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertTrue}
+import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
 import org.mockito.ArgumentMatchers
 import org.mockito.Mockito.{mock, when}
 
@@ -63,14 +63,14 @@ class PartitionLockTest extends Logging {
   var logManager: LogManager = _
   var partition: Partition = _
 
-  @Before
+  @BeforeEach
   def setUp(): Unit = {
     val logConfig = new LogConfig(new Properties)
     logManager = TestUtils.createLogManager(Seq(logDir), logConfig, CleanerConfig(enableCleaner = false), mockTime)
     partition = setupPartitionWithMocks(logManager, logConfig)
   }
 
-  @After
+  @AfterEach
   def tearDown(): Unit = {
     executorService.shutdownNow()
     logManager.liveLogDirs.foreach(Utils.delete)
@@ -139,7 +139,7 @@ class PartitionLockTest extends Logging {
     val offsetCheckpoints: OffsetCheckpoints = mock(classOf[OffsetCheckpoints])
     // Update replica set synchronously first to avoid race conditions
     partition.makeLeader(partitionState(secondReplicaSet), offsetCheckpoints)
-    assertTrue(s"Expected replica $replicaToCheck to be defined", partition.getReplica(replicaToCheck).isDefined)
+    assertTrue(partition.getReplica(replicaToCheck).isDefined, s"Expected replica $replicaToCheck to be defined")
 
     val future = executorService.submit((() => {
       var i = 0
@@ -160,11 +160,11 @@ class PartitionLockTest extends Logging {
 
     val deadline = 1.seconds.fromNow
     while (deadline.hasTimeLeft()) {
-      assertTrue(s"Expected replica $replicaToCheck to be defined", partition.getReplica(replicaToCheck).isDefined)
+      assertTrue(partition.getReplica(replicaToCheck).isDefined, s"Expected replica $replicaToCheck to be defined")
     }
     active.set(false)
     future.get(5, TimeUnit.SECONDS)
-    assertTrue(s"Expected replica $replicaToCheck to be defined", partition.getReplica(replicaToCheck).isDefined)
+    assertTrue(partition.getReplica(replicaToCheck).isDefined, s"Expected replica $replicaToCheck to be defined")
   }
 
   /**
@@ -248,7 +248,7 @@ class PartitionLockTest extends Logging {
     val leaderEpoch = 1
     val brokerId = 0
     val topicPartition = new TopicPartition("test-topic", 0)
-    val stateStore: PartitionStateStore = mock(classOf[PartitionStateStore])
+    val topicConfigProvider = TestUtils.createTopicConfigProvider(createLogProperties(Map.empty))
     val isrChangeListener: IsrChangeListener = mock(classOf[IsrChangeListener])
     val delayedOperations: DelayedOperations = mock(classOf[DelayedOperations])
     val metadataCache: MetadataCache = mock(classOf[MetadataCache])
@@ -261,7 +261,7 @@ class PartitionLockTest extends Logging {
       interBrokerProtocolVersion = ApiVersion.latestVersion,
       localBrokerId = brokerId,
       mockTime,
-      stateStore,
+      topicConfigProvider,
       isrChangeListener,
       delayedOperations,
       metadataCache,
@@ -282,14 +282,9 @@ class PartitionLockTest extends Logging {
         new SlowLog(log, mockTime, appendSemaphore)
       }
     }
-    when(stateStore.fetchTopicConfig()).thenReturn(createLogProperties(Map.empty))
     when(offsetCheckpoints.fetch(ArgumentMatchers.anyString, ArgumentMatchers.eq(topicPartition)))
       .thenReturn(None)
-    when(stateStore.shrinkIsr(ArgumentMatchers.anyInt, ArgumentMatchers.any[LeaderAndIsr]))
-      .thenReturn(Some(2))
-    when(stateStore.expandIsr(ArgumentMatchers.anyInt, ArgumentMatchers.any[LeaderAndIsr]))
-      .thenReturn(Some(2))
-    when(alterIsrManager.enqueue(ArgumentMatchers.any[AlterIsrItem]))
+    when(alterIsrManager.submit(ArgumentMatchers.any[AlterIsrItem]))
       .thenReturn(true)
 
     partition.createLogIfNotExists(isNew = false, isFutureReplica = false, offsetCheckpoints)
@@ -298,14 +293,14 @@ class PartitionLockTest extends Logging {
     val replicas = (0 to numReplicaFetchers).map(i => Integer.valueOf(brokerId + i)).toList.asJava
     val isr = replicas
 
-    assertTrue("Expected become leader transition to succeed", partition.makeLeader(new LeaderAndIsrPartitionState()
+    assertTrue(partition.makeLeader(new LeaderAndIsrPartitionState()
       .setControllerEpoch(controllerEpoch)
       .setLeader(brokerId)
       .setLeaderEpoch(leaderEpoch)
       .setIsr(isr)
       .setZkVersion(1)
       .setReplicas(replicas)
-      .setIsNew(true), offsetCheckpoints))
+      .setIsNew(true), offsetCheckpoints), "Expected become leader transition to succeed")
 
     partition
   }

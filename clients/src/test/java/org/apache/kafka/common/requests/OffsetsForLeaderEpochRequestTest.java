@@ -19,12 +19,10 @@ package org.apache.kafka.common.requests;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.message.OffsetForLeaderEpochRequestData.OffsetForLeaderTopicCollection;
 import org.apache.kafka.common.protocol.ApiKeys;
-import org.junit.Test;
+import org.junit.jupiter.api.Test;
 
-import java.util.Collections;
-
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 public class OffsetsForLeaderEpochRequestTest {
 
@@ -47,7 +45,7 @@ public class OffsetsForLeaderEpochRequestTest {
         for (short version = 0; version < ApiKeys.OFFSET_FOR_LEADER_EPOCH.latestVersion(); version++) {
             int replicaId = 1;
             OffsetsForLeaderEpochRequest.Builder builder = OffsetsForLeaderEpochRequest.Builder.forFollower(
-                    version, Collections.emptyMap(), replicaId);
+                    version, new OffsetForLeaderTopicCollection(), replicaId);
             OffsetsForLeaderEpochRequest request = builder.build();
             OffsetsForLeaderEpochRequest parsed = OffsetsForLeaderEpochRequest.parse(request.serialize(), version);
             if (version < 3)

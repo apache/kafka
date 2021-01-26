@@ -31,9 +31,8 @@ import org.apache.kafka.clients.consumer.{ConsumerConfig, KafkaConsumer, OffsetA
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerRecord}
 import org.apache.kafka.common.errors.{InvalidProducerEpochException, ProducerFencedException, TimeoutException}
 import org.apache.kafka.common.{KafkaException, TopicPartition}
-import org.junit.Assert._
-import org.junit.{After, Before, Test}
-import org.scalatest.Assertions.fail
+import org.junit.jupiter.api.Assertions._
+import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
 
 import scala.jdk.CollectionConverters._
 import scala.collection.Seq
@@ -58,7 +57,7 @@ class TransactionsTest extends KafkaServerTestHarness {
     TestUtils.createBrokerConfigs(numServers, zkConnect).map(KafkaConfig.fromProps(_, serverProps()))
   }
 
-  @Before
+  @BeforeEach
   override def setUp(): Unit = {
     super.setUp()
     val topicConfig = new Properties()
@@ -74,7 +73,7 @@ class TransactionsTest extends KafkaServerTestHarness {
       createReadUncommittedConsumer("non-transactional-group")
   }
 
-  @After
+  @AfterEach
   override def tearDown(): Unit = {
     transactionalProducers.foreach(_.close())
     transactionalConsumers.foreach(_.close())
@@ -302,8 +301,8 @@ class TransactionsTest extends KafkaServerTestHarness {
       TestUtils.assertCommittedAndGetValue(record).toInt
     }
     val valueSet = valueSeq.toSet
-    assertEquals(s"Expected $numSeedMessages values in $topic2.", numSeedMessages, valueSeq.size)
-    assertEquals(s"Expected ${valueSeq.size} unique messages in $topic2.", valueSeq.size, valueSet.size)
+    assertEquals(numSeedMessages, valueSeq.size, s"Expected $numSeedMessages values in $topic2.")
+    assertEquals(valueSeq.size, valueSet.size, s"Expected ${valueSeq.size} unique messages in $topic2.")
   }
 
   @Test
@@ -325,15 +324,7 @@ class TransactionsTest extends KafkaServerTestHarness {
     producer2.send(TestUtils.producerRecordWithExpectedTransactionStatus(topic1, null, "2", "4", willBeCommitted = true))
     producer2.send(TestUtils.producerRecordWithExpectedTransactionStatus(topic2, null, "2", "4", willBeCommitted = true))
 
-    try {
-      producer1.commitTransaction()
-      fail("Should not be able to commit transactions from a fenced producer.")
-    } catch {
-      case _: ProducerFencedException =>
-        // good!
-      case e: Exception =>
-        fail("Got an unexpected exception from a fenced producer.", e)
-    }
+    assertThrows(classOf[ProducerFencedException], () => producer1.commitTransaction())
 
     producer2.commitTransaction()  // ok
 
@@ -356,22 +347,15 @@ class TransactionsTest extends KafkaServerTestHarness {
     producer1.beginTransaction()
     producer1.send(TestUtils.producerRecordWithExpectedTransactionStatus(topic1, null, "1", "1", willBeCommitted = false))
     producer1.send(TestUtils.producerRecordWithExpectedTransactionStatus(topic2, null, "3", "3", willBeCommitted = false))
+    producer1.flush()
 
     producer2.initTransactions()  // ok, will abort the open transaction.
     producer2.beginTransaction()
     producer2.send(TestUtils.producerRecordWithExpectedTransactionStatus(topic1, null, "2", "4", willBeCommitted = true))
     producer2.send(TestUtils.producerRecordWithExpectedTransactionStatus(topic2, null, "2", "4", willBeCommitted = true))
 
-    try {
-      producer1.sendOffsetsToTransaction(Map(new TopicPartition("foobartopic", 0) -> new OffsetAndMetadata(110L)).asJava,
-        "foobarGroup")
-      fail("Should not be able to send offsets from a fenced producer.")
-    } catch {
-      case _: ProducerFencedException =>
-        // good!
-      case e: Exception =>
-        fail("Got an unexpected exception from a fenced producer.", e)
-    }
+    assertThrows(classOf[ProducerFencedException], () => producer1.sendOffsetsToTransaction(Map(new TopicPartition("foobartopic", 0)
+      -> new OffsetAndMetadata(110L)).asJava, "foobarGroup"))
 
     producer2.commitTransaction()  // ok
 
@@ -406,46 +390,40 @@ class TransactionsTest extends KafkaServerTestHarness {
     TestUtils.waitUntilTrue(() => offsetAndMetadata.equals(consumer.committed(Set(tp).asJava).get(tp)), "cannot read committed offset")
   }
 
-  @Test(expected = classOf[TimeoutException])
+  @Test
   def testInitTransactionsTimeout(): Unit = {
     testTimeout(false, producer => producer.initTransactions())
   }
 
-  @Test(expected = classOf[TimeoutException])
+  @Test
   def testSendOffsetsToTransactionTimeout(): Unit = {
     testTimeout(true, producer => producer.sendOffsetsToTransaction(
       Map(new TopicPartition(topic1, 0) -> new OffsetAndMetadata(0)).asJava, "test-group"))
   }
 
-  @Test(expected = classOf[TimeoutException])
+  @Test
   def testCommitTransactionTimeout(): Unit = {
     testTimeout(true, producer => producer.commitTransaction())
   }
 
-  @Test(expected = classOf[TimeoutException])
+  @Test
   def testAbortTransactionTimeout(): Unit = {
     testTimeout(true, producer => producer.abortTransaction())
   }
 
-  def testTimeout(needInitAndSendMsg: Boolean,
+  private def testTimeout(needInitAndSendMsg: Boolean,
                   timeoutProcess: KafkaProducer[Array[Byte], Array[Byte]] => Unit): Unit = {
-    val producer = createTransactionalProducer("transactionProducer", maxBlockMs =  1000)
-
+    val producer = createTransactionalProducer("transactionProducer", maxBlockMs = 3000)
     if (needInitAndSendMsg) {
       producer.initTransactions()
       producer.beginTransaction()
       producer.send(new ProducerRecord[Array[Byte], Array[Byte]](topic1, "foo".getBytes, "bar".getBytes))
     }
 
-    for  (i <- servers.indices)
-      killBroker(i)
+    for  (i <- servers.indices) killBroker(i)
 
-    try {
-      timeoutProcess(producer)
-      fail("Should raise a TimeoutException")
-    } finally {
-      producer.close(Duration.ZERO)
-    }
+    assertThrows(classOf[TimeoutException], () => timeoutProcess(producer))
+    producer.close(Duration.ZERO)
   }
 
   @Test
@@ -481,7 +459,7 @@ class TransactionsTest extends KafkaServerTestHarness {
       case e: ExecutionException =>
         assertTrue(e.getCause.isInstanceOf[InvalidProducerEpochException])
       case e: Exception =>
-        fail("Got an unexpected exception from a fenced producer.", e)
+        throw new AssertionError("Got an unexpected exception from a fenced producer.", e)
     }
 
     producer2.commitTransaction() // ok
@@ -527,7 +505,7 @@ class TransactionsTest extends KafkaServerTestHarness {
       case e: ExecutionException =>
         assertTrue(e.getCause.isInstanceOf[ProducerFencedException])
       case e: Exception =>
-        fail("Got an unexpected exception from a fenced producer.", e)
+        throw new AssertionError("Got an unexpected exception from a fenced producer.", e)
     }
 
     producer2.commitTransaction()  // ok
@@ -619,13 +597,12 @@ class TransactionsTest extends KafkaServerTestHarness {
     }
   }
 
-  @Test(expected = classOf[KafkaException])
+  @Test
   def testConsecutivelyRunInitTransactions(): Unit = {
     val producer = createTransactionalProducer(transactionalId = "normalProducer")
 
     producer.initTransactions()
-    producer.initTransactions()
-    fail("Should have raised a KafkaException")
+    assertThrows(classOf[KafkaException], () => producer.initTransactions())
   }
 
   @Test
@@ -713,7 +690,7 @@ class TransactionsTest extends KafkaServerTestHarness {
       case _: TimeoutException =>
         // good!
       case e: Exception =>
-        fail("Got an unexpected exception from initTransactions", e)
+        throw new AssertionError("Got an unexpected exception from initTransactions", e)
     } finally {
       producer2.close()
     }
@@ -727,7 +704,7 @@ class TransactionsTest extends KafkaServerTestHarness {
       case _: ProducerFencedException =>
         // good!
       case e: Exception =>
-        fail("Got an unexpected exception from commitTransaction", e)
+        throw new AssertionError("Got an unexpected exception from commitTransaction", e)
     } finally {
       producer1.close()
     }

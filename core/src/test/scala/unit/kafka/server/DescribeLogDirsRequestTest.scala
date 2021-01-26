@@ -24,8 +24,8 @@ import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.message.DescribeLogDirsRequestData
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests._
-import org.junit.Assert._
-import org.junit.Test
+import org.junit.jupiter.api.Assertions._
+import org.junit.jupiter.api.Test
 
 import scala.jdk.CollectionConverters._
 
@@ -68,7 +68,7 @@ class DescribeLogDirsRequestTest extends BaseRequestTest {
     assertEquals(log0.size, replicaInfo0.partitionSize)
     assertEquals(log1.size, replicaInfo1.partitionSize)
     val logEndOffset = servers.head.logManager.getLog(tp0).get.logEndOffset
-    assertTrue(s"LogEndOffset '$logEndOffset' should be > 0", logEndOffset > 0)
+    assertTrue(logEndOffset > 0, s"LogEndOffset '$logEndOffset' should be > 0")
     assertEquals(servers.head.replicaManager.getLogEndOffsetLag(tp0, log0.logEndOffset, false), replicaInfo0.offsetLag)
     assertEquals(servers.head.replicaManager.getLogEndOffsetLag(tp1, log1.logEndOffset, false), replicaInfo1.offsetLag)
   }
