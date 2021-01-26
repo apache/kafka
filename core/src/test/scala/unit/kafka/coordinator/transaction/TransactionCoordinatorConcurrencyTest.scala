@@ -544,7 +544,8 @@ class TransactionCoordinatorConcurrencyTest extends AbstractCoordinatorConcurren
           txnMetadata.producerId,
           txnMetadata.producerEpoch,
           transactionResult(txn),
-          resultCallback)
+          resultCallback,
+          BufferSupplier.create)
       }
     }
     override def awaitAndVerify(txn: Transaction): Unit = {

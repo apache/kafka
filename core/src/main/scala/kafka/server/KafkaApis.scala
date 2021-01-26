@@ -178,7 +178,7 @@ class KafkaApis(val requestChannel: RequestChannel,
         case ApiKeys.OFFSET_COMMIT => handleOffsetCommitRequest(request, bufferSupplier)
         case ApiKeys.OFFSET_FETCH => handleOffsetFetchRequest(request)
         case ApiKeys.FIND_COORDINATOR => handleFindCoordinatorRequest(request)
-        case ApiKeys.JOIN_GROUP => handleJoinGroupRequest(request)
+        case ApiKeys.JOIN_GROUP => handleJoinGroupRequest(request, bufferSupplier)
         case ApiKeys.HEARTBEAT => handleHeartbeatRequest(request)
         case ApiKeys.LEAVE_GROUP => handleLeaveGroupRequest(request)
         case ApiKeys.SYNC_GROUP => handleSyncGroupRequest(request, bufferSupplier)
@@ -1509,7 +1509,7 @@ class KafkaApis(val requestChannel: RequestChannel,
     }
   }
 
-  def handleJoinGroupRequest(request: RequestChannel.Request): Unit = {
+  def handleJoinGroupRequest(request: RequestChannel.Request, bufferSupplier: BufferSupplier): Unit = {
     val joinGroupRequest = request.body[JoinGroupRequest]
 
     // the callback for sending a join-group response
@@ -1568,7 +1568,8 @@ class KafkaApis(val requestChannel: RequestChannel,
         joinGroupRequest.data.sessionTimeoutMs,
         joinGroupRequest.data.protocolType,
         protocols,
-        sendResponseCallback)
+        sendResponseCallback,
+        bufferSupplier)
     }
   }
 

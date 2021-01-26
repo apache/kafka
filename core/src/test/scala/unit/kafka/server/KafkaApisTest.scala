@@ -1991,6 +1991,7 @@ class KafkaApisTest {
       EasyMock.eq(sessionTimeoutMs),
       EasyMock.eq(protocolType),
       EasyMock.capture(capturedProtocols),
+      anyObject(),
       anyObject()
     ))
 
@@ -2010,7 +2011,8 @@ class KafkaApisTest {
                 .setName(name).setMetadata(protocol)
               }.iterator.asJava))
         ).build()
-      ))
+      ),
+      BufferSupplier.create)
 
     EasyMock.verify(groupCoordinator)
 
@@ -2053,7 +2055,8 @@ class KafkaApisTest {
       EasyMock.eq(sessionTimeoutMs),
       EasyMock.eq(protocolType),
       EasyMock.eq(List.empty),
-      EasyMock.capture(capturedCallback)
+      EasyMock.capture(capturedCallback),
+      EasyMock.anyObject()
     ))
 
     val joinGroupRequest = new JoinGroupRequest.Builder(
@@ -2069,7 +2072,7 @@ class KafkaApisTest {
 
     EasyMock.replay(groupCoordinator, clientRequestQuotaManager, requestChannel)
 
-    createKafkaApis().handleJoinGroupRequest(requestChannelRequest)
+    createKafkaApis().handleJoinGroupRequest(requestChannelRequest, BufferSupplier.create())
 
     EasyMock.verify(groupCoordinator)
 
@@ -2126,7 +2129,8 @@ class KafkaApisTest {
       EasyMock.eq(sessionTimeoutMs),
       EasyMock.eq(protocolType),
       EasyMock.eq(List.empty),
-      EasyMock.capture(capturedCallback)
+      EasyMock.capture(capturedCallback),
+      EasyMock.anyObject()
     ))
 
     val joinGroupRequest = new JoinGroupRequest.Builder(
@@ -2142,7 +2146,7 @@ class KafkaApisTest {
 
     EasyMock.replay(groupCoordinator, clientRequestQuotaManager, requestChannel)
 
-    createKafkaApis().handleJoinGroupRequest(requestChannelRequest)
+    createKafkaApis().handleJoinGroupRequest(requestChannelRequest, BufferSupplier.create)
 
     EasyMock.verify(groupCoordinator)
 
@@ -2331,7 +2335,7 @@ class KafkaApisTest {
     ).build()
 
     val requestChannelRequest = buildRequest(joinGroupRequest)
-    createKafkaApis(KAFKA_2_2_IV1).handleJoinGroupRequest(requestChannelRequest)
+    createKafkaApis(KAFKA_2_2_IV1).handleJoinGroupRequest(requestChannelRequest, BufferSupplier.create)
 
     val response = readResponse(joinGroupRequest, capturedResponse).asInstanceOf[JoinGroupResponse]
     assertEquals(Errors.UNSUPPORTED_VERSION, response.error())

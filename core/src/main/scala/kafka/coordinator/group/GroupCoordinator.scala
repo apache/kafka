@@ -165,7 +165,8 @@ class GroupCoordinator(val brokerId: Int,
                       sessionTimeoutMs: Int,
                       protocolType: String,
                       protocols: List[(String, Array[Byte])],
-                      responseCallback: JoinCallback): Unit = {
+                      responseCallback: JoinCallback,
+                      bufferSupplier: BufferSupplier = BufferSupplier.NO_CACHING): Unit = {
     validateGroupStatus(groupId, ApiKeys.JOIN_GROUP).foreach { error =>
       responseCallback(JoinGroupResult(memberId, error))
       return
@@ -187,7 +188,8 @@ class GroupCoordinator(val brokerId: Int,
               group.remove(memberId)
               responseCallback(JoinGroupResult(JoinGroupRequest.UNKNOWN_MEMBER_ID, Errors.GROUP_MAX_SIZE_REACHED))
             } else if (isUnknownMember) {
-              doUnknownJoinGroup(group, groupInstanceId, requireKnownMemberId, clientId, clientHost, rebalanceTimeoutMs, sessionTimeoutMs, protocolType, protocols, responseCallback)
+              doUnknownJoinGroup(group, groupInstanceId, requireKnownMemberId, clientId, clientHost, rebalanceTimeoutMs,
+                sessionTimeoutMs, protocolType, protocols, responseCallback, bufferSupplier)
             } else {
               doJoinGroup(group, memberId, groupInstanceId, clientId, clientHost, rebalanceTimeoutMs, sessionTimeoutMs, protocolType, protocols, responseCallback)
             }
@@ -210,7 +212,8 @@ class GroupCoordinator(val brokerId: Int,
                                  sessionTimeoutMs: Int,
                                  protocolType: String,
                                  protocols: List[(String, Array[Byte])],
-                                 responseCallback: JoinCallback): Unit = {
+                                 responseCallback: JoinCallback,
+                                 bufferSupplier: BufferSupplier): Unit = {
     group.inLock {
       if (group.is(Dead)) {
         // if the group is marked as dead, it means some other thread has just removed the group
@@ -224,7 +227,7 @@ class GroupCoordinator(val brokerId: Int,
         val newMemberId = group.generateMemberId(clientId, groupInstanceId)
 
         if (group.hasStaticMember(groupInstanceId)) {
-          updateStaticMemberAndRebalance(group, newMemberId, groupInstanceId, protocols, responseCallback)
+          updateStaticMemberAndRebalance(group, newMemberId, groupInstanceId, protocols, responseCallback, bufferSupplier)
         } else if (requireKnownMemberId) {
             // If member id required (dynamic membership), register the member in the pending member list
             // and send back a response to call for another join group request with allocated member id.
@@ -1043,7 +1046,8 @@ class GroupCoordinator(val brokerId: Int,
                                              newMemberId: String,
                                              groupInstanceId: Option[String],
                                              protocols: List[(String, Array[Byte])],
-                                             responseCallback: JoinCallback): Unit = {
+                                             responseCallback: JoinCallback,
+                                             bufferSuppler: BufferSupplier): Unit = {
     val oldMemberId = group.getStaticMemberId(groupInstanceId)
     info(s"Static member $groupInstanceId of group ${group.groupId} with unknown member id rejoins, assigning new member id $newMemberId, while " +
       s"old member id $oldMemberId will be removed.")
@@ -1099,7 +1103,7 @@ class GroupCoordinator(val brokerId: Int,
                 leaderId = currentLeader,
                 error = Errors.NONE))
             }
-          })
+          }, bufferSuppler)
         } else {
           maybePrepareRebalance(group, s"Group's selectedProtocol will change because static member ${member.memberId} with instance id $groupInstanceId joined with change of protocol")
         }
