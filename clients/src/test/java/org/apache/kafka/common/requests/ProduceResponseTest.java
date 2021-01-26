@@ -20,9 +20,8 @@ package org.apache.kafka.common.requests;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.protocol.types.Struct;
 import org.apache.kafka.common.record.RecordBatch;
-import org.junit.Test;
+import org.junit.jupiter.api.Test;
 
 import java.nio.ByteBuffer;
 import java.util.Collections;
@@ -30,11 +29,13 @@ import java.util.HashMap;
 import java.util.Map;
 
 import static org.apache.kafka.common.protocol.ApiKeys.PRODUCE;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class ProduceResponseTest {
 
+    @SuppressWarnings("deprecation")
     @Test
     public void produceResponseV5Test() {
         Map<TopicPartition, ProduceResponse.PartitionResponse> responseData = new HashMap<>();
@@ -45,15 +46,11 @@ public class ProduceResponseTest {
         ProduceResponse v5Response = new ProduceResponse(responseData, 10);
         short version = 5;
 
-        ByteBuffer buffer = v5Response.serialize(ApiKeys.PRODUCE, version, 0);
-        buffer.rewind();
+        ByteBuffer buffer = RequestTestUtils.serializeResponseWithHeader(v5Response, version, 0);
 
         ResponseHeader.parse(buffer, ApiKeys.PRODUCE.responseHeaderVersion(version)); // throw away.
-
-        Struct deserializedStruct = ApiKeys.PRODUCE.parseResponse(version, buffer);
-
         ProduceResponse v5FromBytes = (ProduceResponse) AbstractResponse.parseResponse(ApiKeys.PRODUCE,
-                deserializedStruct, version);
+                buffer, version);
 
         assertEquals(1, v5FromBytes.responses().size());
         assertTrue(v5FromBytes.responses().containsKey(tp0));
@@ -64,6 +61,7 @@ public class ProduceResponseTest {
         assertEquals(responseData, v5Response.responses());
     }
 
+    @SuppressWarnings("deprecation")
     @Test
     public void produceResponseVersionTest() {
         Map<TopicPartition, ProduceResponse.PartitionResponse> responseData = new HashMap<>();
@@ -72,20 +70,15 @@ public class ProduceResponseTest {
         ProduceResponse v0Response = new ProduceResponse(responseData);
         ProduceResponse v1Response = new ProduceResponse(responseData, 10);
         ProduceResponse v2Response = new ProduceResponse(responseData, 10);
-        assertEquals("Throttle time must be zero", 0, v0Response.throttleTimeMs());
-        assertEquals("Throttle time must be 10", 10, v1Response.throttleTimeMs());
-        assertEquals("Throttle time must be 10", 10, v2Response.throttleTimeMs());
-        assertEquals("Should use schema version 0", ApiKeys.PRODUCE.responseSchema((short) 0),
-                v0Response.toStruct((short) 0).schema());
-        assertEquals("Should use schema version 1", ApiKeys.PRODUCE.responseSchema((short) 1),
-                v1Response.toStruct((short) 1).schema());
-        assertEquals("Should use schema version 2", ApiKeys.PRODUCE.responseSchema((short) 2),
-                v2Response.toStruct((short) 2).schema());
-        assertEquals("Response data does not match", responseData, v0Response.responses());
-        assertEquals("Response data does not match", responseData, v1Response.responses());
-        assertEquals("Response data does not match", responseData, v2Response.responses());
+        assertEquals(0, v0Response.throttleTimeMs(), "Throttle time must be zero");
+        assertEquals(10, v1Response.throttleTimeMs(), "Throttle time must be 10");
+        assertEquals(10, v2Response.throttleTimeMs(), "Throttle time must be 10");
+        assertEquals(responseData, v0Response.responses(), "Response data does not match");
+        assertEquals(responseData, v1Response.responses(), "Response data does not match");
+        assertEquals(responseData, v2Response.responses(), "Response data does not match");
     }
 
+    @SuppressWarnings("deprecation")
     @Test
     public void produceResponseRecordErrorsTest() {
         Map<TopicPartition, ProduceResponse.PartitionResponse> responseData = new HashMap<>();
@@ -98,9 +91,7 @@ public class ProduceResponseTest {
 
         for (short ver = 0; ver <= PRODUCE.latestVersion(); ver++) {
             ProduceResponse response = new ProduceResponse(responseData);
-            Struct struct = response.toStruct(ver);
-            assertEquals("Should use schema version " + ver, ApiKeys.PRODUCE.responseSchema(ver), struct.schema());
-            ProduceResponse.PartitionResponse deserialized = new ProduceResponse(struct).responses().get(tp);
+            ProduceResponse.PartitionResponse deserialized = ProduceResponse.parse(response.serialize(ver), ver).responses().get(tp);
             if (ver >= 8) {
                 assertEquals(1, deserialized.recordErrors.size());
                 assertEquals(3, deserialized.recordErrors.get(0).batchIndex);
@@ -108,7 +99,7 @@ public class ProduceResponseTest {
                 assertEquals("Produce failed", deserialized.errorMessage);
             } else {
                 assertEquals(0, deserialized.recordErrors.size());
-                assertEquals(null, deserialized.errorMessage);
+                assertNull(deserialized.errorMessage);
             }
         }
     }

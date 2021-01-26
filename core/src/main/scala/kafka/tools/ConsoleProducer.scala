@@ -31,7 +31,6 @@ import org.apache.kafka.clients.producer.{KafkaProducer, ProducerConfig, Produce
 import org.apache.kafka.common.KafkaException
 import org.apache.kafka.common.utils.Utils
 
-import scala.annotation.nowarn
 import scala.jdk.CollectionConverters._
 
 object ConsoleProducer {
@@ -79,7 +78,6 @@ object ConsoleProducer {
     props
   }
 
-  @nowarn("cat=deprecation")
   def producerProps(config: ProducerConfig): Properties = {
     val props =
       if (config.options.has(config.producerConfigOpt))
@@ -148,7 +146,7 @@ object ConsoleProducer {
       .describedAs("size")
       .ofType(classOf[java.lang.Integer])
       .defaultsTo(200)
-    val messageSendMaxRetriesOpt = parser.accepts("message-send-max-retries", "(Deprecated) Brokers can fail receiving the message for multiple reasons, and being unavailable transiently is just one of them. This property specifies the number of retires before the producer give up and drop this message.")
+    val messageSendMaxRetriesOpt = parser.accepts("message-send-max-retries", "Brokers can fail receiving the message for multiple reasons, and being unavailable transiently is just one of them. This property specifies the number of retries before the producer give up and drop this message.")
       .withRequiredArg
       .ofType(classOf[java.lang.Integer])
       .defaultsTo(3)
@@ -268,6 +266,7 @@ object ConsoleProducer {
     var keySeparator = "\t"
     var ignoreError = false
     var lineNumber = 0
+    var printPrompt = System.console != null
 
     override def init(inputStream: InputStream, props: Properties): Unit = {
       topic = props.getProperty("topic")
@@ -282,7 +281,8 @@ object ConsoleProducer {
 
     override def readMessage() = {
       lineNumber += 1
-      print(">")
+      if (printPrompt)
+        print(">")
       (reader.readLine(), parseKey) match {
         case (null, _) => null
         case (line, true) =>

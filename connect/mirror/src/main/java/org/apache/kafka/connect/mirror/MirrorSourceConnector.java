@@ -96,7 +96,7 @@ public class MirrorSourceConnector extends SourceConnector {
         this.replicationPolicy = replicationPolicy;
         this.topicFilter = topicFilter;
         this.configPropertyFilter = configPropertyFilter;
-    } 
+    }
 
     @Override
     public void start(Map<String, String> props) {
@@ -202,6 +202,7 @@ public class MirrorSourceConnector extends SourceConnector {
             throws InterruptedException, ExecutionException {
         Set<String> topics = listTopics(targetAdminClient).stream()
             .filter(t -> sourceAndTarget.source().equals(replicationPolicy.topicSource(t)))
+            .filter(t -> !t.equals(config.checkpointsTopic()))
             .collect(Collectors.toSet());
         return describeTopics(targetAdminClient, topics).stream()
                 .flatMap(MirrorSourceConnector::expandTopicDescription)
@@ -211,21 +212,44 @@ public class MirrorSourceConnector extends SourceConnector {
     // visible for testing
     void refreshTopicPartitions()
             throws InterruptedException, ExecutionException {
-        knownSourceTopicPartitions = findSourceTopicPartitions();
-        knownTargetTopicPartitions = findTargetTopicPartitions();
-        List<TopicPartition> upstreamTargetTopicPartitions = knownTargetTopicPartitions.stream()
-                .map(x -> new TopicPartition(replicationPolicy.upstreamTopic(x.topic()), x.partition()))
-                .collect(Collectors.toList());
 
-        Set<TopicPartition> newTopicPartitions = new HashSet<>(knownSourceTopicPartitions);
-        newTopicPartitions.removeAll(upstreamTargetTopicPartitions);
-        Set<TopicPartition> deadTopicPartitions = new HashSet<>(upstreamTargetTopicPartitions);
-        deadTopicPartitions.removeAll(knownSourceTopicPartitions);
-        if (!newTopicPartitions.isEmpty() || !deadTopicPartitions.isEmpty()) {
-            log.info("Found {} topic-partitions on {}. {} are new. {} were removed. Previously had {}.",
-                    knownSourceTopicPartitions.size(), sourceAndTarget.source(), newTopicPartitions.size(),
-                    deadTopicPartitions.size(), knownSourceTopicPartitions.size());
-            log.trace("Found new topic-partitions: {}", newTopicPartitions);
+        List<TopicPartition> sourceTopicPartitions = findSourceTopicPartitions();
+        List<TopicPartition> targetTopicPartitions = findTargetTopicPartitions();
+
+        Set<TopicPartition> sourceTopicPartitionsSet = new HashSet<>(sourceTopicPartitions);
+        Set<TopicPartition> knownSourceTopicPartitionsSet = new HashSet<>(knownSourceTopicPartitions);
+
+        Set<TopicPartition> upstreamTargetTopicPartitions = targetTopicPartitions.stream()
+                .map(x -> new TopicPartition(replicationPolicy.upstreamTopic(x.topic()), x.partition()))
+                .collect(Collectors.toSet());
+
+        Set<TopicPartition> missingInTarget = new HashSet<>(sourceTopicPartitions);
+        missingInTarget.removeAll(upstreamTargetTopicPartitions);
+
+        knownTargetTopicPartitions = targetTopicPartitions;
+
+        // Detect if topic-partitions were added or deleted from the source cluster
+        // or if topic-partitions are missing from the target cluster
+        if (!knownSourceTopicPartitionsSet.equals(sourceTopicPartitionsSet) || !missingInTarget.isEmpty()) {
+
+            Set<TopicPartition> newTopicPartitions = sourceTopicPartitionsSet;
+            newTopicPartitions.removeAll(knownSourceTopicPartitions);
+
+            Set<TopicPartition> deletedTopicPartitions = knownSourceTopicPartitionsSet;
+            deletedTopicPartitions.removeAll(sourceTopicPartitions);
+
+            log.info("Found {} new topic-partitions on {}. " +
+                     "Found {} deleted topic-partitions on {}. " +
+                     "Found {} topic-partitions missing on {}.",
+                     newTopicPartitions.size(), sourceAndTarget.source(),
+                     deletedTopicPartitions.size(), sourceAndTarget.source(),
+                     missingInTarget.size(), sourceAndTarget.target());
+
+            log.trace("Found new topic-partitions on {}: {}", sourceAndTarget.source(), newTopicPartitions);
+            log.trace("Found deleted topic-partitions on {}: {}", sourceAndTarget.source(), deletedTopicPartitions);
+            log.trace("Found missing topic-partitions on {}: {}", sourceAndTarget.target(), missingInTarget);
+
+            knownSourceTopicPartitions = sourceTopicPartitions;
             computeAndCreateTopicPartitions();
             context.requestTaskReconfiguration();
         }

@@ -43,6 +43,7 @@ import java.util.Map;
 import java.util.Set;
 
 import static java.util.Arrays.asList;
+import static org.apache.kafka.streams.processor.internals.testutil.ConsumerRecordUtil.record;
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.Assert.assertEquals;
@@ -127,7 +128,7 @@ public class GlobalStateTaskTest {
     @Test
     public void shouldProcessRecordsForTopic() {
         globalStateTask.initialize();
-        globalStateTask.update(new ConsumerRecord<>(topic1, 1, 1, "foo".getBytes(), "bar".getBytes()));
+        globalStateTask.update(record(topic1, 1, 1, "foo".getBytes(), "bar".getBytes()));
         assertEquals(1, sourceOne.numReceived);
         assertEquals(0, sourceTwo.numReceived);
     }
@@ -136,7 +137,7 @@ public class GlobalStateTaskTest {
     public void shouldProcessRecordsForOtherTopic() {
         final byte[] integerBytes = new IntegerSerializer().serialize("foo", 1);
         globalStateTask.initialize();
-        globalStateTask.update(new ConsumerRecord<>(topic2, 1, 1, integerBytes, integerBytes));
+        globalStateTask.update(record(topic2, 1, 1, integerBytes, integerBytes));
         assertEquals(1, sourceTwo.numReceived);
         assertEquals(0, sourceOne.numReceived);
     }
@@ -215,7 +216,7 @@ public class GlobalStateTaskTest {
         expectedOffsets.put(t1, 52L);
         expectedOffsets.put(t2, 100L);
         globalStateTask.initialize();
-        globalStateTask.update(new ConsumerRecord<>(topic1, 1, 51, "foo".getBytes(), "foo".getBytes()));
+        globalStateTask.update(record(topic1, 1, 51, "foo".getBytes(), "foo".getBytes()));
         globalStateTask.flushState();
         assertEquals(expectedOffsets, stateMgr.changelogOffsets());
     }
@@ -226,7 +227,7 @@ public class GlobalStateTaskTest {
         expectedOffsets.put(t1, 102L);
         expectedOffsets.put(t2, 100L);
         globalStateTask.initialize();
-        globalStateTask.update(new ConsumerRecord<>(topic1, 1, 101, "foo".getBytes(), "foo".getBytes()));
+        globalStateTask.update(record(topic1, 1, 101, "foo".getBytes(), "foo".getBytes()));
         globalStateTask.flushState();
         assertThat(stateMgr.changelogOffsets(), equalTo(expectedOffsets));
     }

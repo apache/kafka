@@ -27,6 +27,11 @@ public interface FieldType {
         private static final String NAME = "bool";
 
         @Override
+        public String getBoxedJavaType(HeaderGenerator headerGenerator) {
+            return "Boolean";
+        }
+
+        @Override
         public Optional<Integer> fixedLength() {
             return Optional.of(1);
         }
@@ -40,6 +45,11 @@ public interface FieldType {
     final class Int8FieldType implements FieldType {
         static final Int8FieldType INSTANCE = new Int8FieldType();
         private static final String NAME = "int8";
+
+        @Override
+        public String getBoxedJavaType(HeaderGenerator headerGenerator) {
+            return "Byte";
+        }
 
         @Override
         public Optional<Integer> fixedLength() {
@@ -57,6 +67,31 @@ public interface FieldType {
         private static final String NAME = "int16";
 
         @Override
+        public String getBoxedJavaType(HeaderGenerator headerGenerator) {
+            return "Short";
+        }
+
+        @Override
+        public Optional<Integer> fixedLength() {
+            return Optional.of(2);
+        }
+
+        @Override
+        public String toString() {
+            return NAME;
+        }
+    }
+
+    final class Uint16FieldType implements FieldType {
+        static final Uint16FieldType INSTANCE = new Uint16FieldType();
+        private static final String NAME = "uint16";
+
+        @Override
+        public String getBoxedJavaType(HeaderGenerator headerGenerator) {
+            return "Integer";
+        }
+
+        @Override
         public Optional<Integer> fixedLength() {
             return Optional.of(2);
         }
@@ -70,6 +105,11 @@ public interface FieldType {
     final class Int32FieldType implements FieldType {
         static final Int32FieldType INSTANCE = new Int32FieldType();
         private static final String NAME = "int32";
+
+        @Override
+        public String getBoxedJavaType(HeaderGenerator headerGenerator) {
+            return "Integer";
+        }
 
         @Override
         public Optional<Integer> fixedLength() {
@@ -87,6 +127,11 @@ public interface FieldType {
         private static final String NAME = "int64";
 
         @Override
+        public String getBoxedJavaType(HeaderGenerator headerGenerator) {
+            return "Long";
+        }
+
+        @Override
         public Optional<Integer> fixedLength() {
             return Optional.of(8);
         }
@@ -100,6 +145,12 @@ public interface FieldType {
     final class UUIDFieldType implements FieldType {
         static final UUIDFieldType INSTANCE = new UUIDFieldType();
         private static final String NAME = "uuid";
+
+        @Override
+        public String getBoxedJavaType(HeaderGenerator headerGenerator) {
+            headerGenerator.addImport(MessageGenerator.UUID_CLASS);
+            return "Uuid";
+        }
 
         @Override
         public Optional<Integer> fixedLength() {
@@ -122,6 +173,11 @@ public interface FieldType {
         }
 
         @Override
+        public String getBoxedJavaType(HeaderGenerator headerGenerator) {
+            return "Double";
+        }
+
+        @Override
         public boolean isFloat() {
             return true;
         }
@@ -135,6 +191,11 @@ public interface FieldType {
     final class StringFieldType implements FieldType {
         static final StringFieldType INSTANCE = new StringFieldType();
         private static final String NAME = "string";
+
+        @Override
+        public String getBoxedJavaType(HeaderGenerator headerGenerator) {
+            return "String";
+        }
 
         @Override
         public boolean serializationIsDifferentInFlexibleVersions() {
@@ -162,6 +223,12 @@ public interface FieldType {
         private static final String NAME = "bytes";
 
         @Override
+        public String getBoxedJavaType(HeaderGenerator headerGenerator) {
+            headerGenerator.addImport(MessageGenerator.BYTE_BUFFER_CLASS);
+            return "ByteBuffer";
+        }
+
+        @Override
         public boolean serializationIsDifferentInFlexibleVersions() {
             return true;
         }
@@ -185,6 +252,12 @@ public interface FieldType {
     final class RecordsFieldType implements FieldType {
         static final RecordsFieldType INSTANCE = new RecordsFieldType();
         private static final String NAME = "records";
+
+        @Override
+        public String getBoxedJavaType(HeaderGenerator headerGenerator) {
+            headerGenerator.addImport(MessageGenerator.BASE_RECORDS_CLASS);
+            return "BaseRecords";
+        }
 
         @Override
         public boolean serializationIsDifferentInFlexibleVersions() {
@@ -215,6 +288,11 @@ public interface FieldType {
         }
 
         @Override
+        public String getBoxedJavaType(HeaderGenerator headerGenerator) {
+            return type;
+        }
+
+        @Override
         public boolean serializationIsDifferentInFlexibleVersions() {
             return true;
         }
@@ -222,6 +300,10 @@ public interface FieldType {
         @Override
         public boolean isStruct() {
             return true;
+        }
+
+        public String typeName() {
+            return type;
         }
 
         @Override
@@ -240,6 +322,11 @@ public interface FieldType {
         @Override
         public boolean serializationIsDifferentInFlexibleVersions() {
             return true;
+        }
+
+        @Override
+        public String getBoxedJavaType(HeaderGenerator headerGenerator) {
+            throw new UnsupportedOperationException();
         }
 
         @Override
@@ -280,6 +367,8 @@ public interface FieldType {
                 return Int8FieldType.INSTANCE;
             case Int16FieldType.NAME:
                 return Int16FieldType.INSTANCE;
+            case Uint16FieldType.NAME:
+                return Uint16FieldType.INSTANCE;
             case Int32FieldType.NAME:
                 return Int32FieldType.INSTANCE;
             case Int64FieldType.NAME:
@@ -314,6 +403,8 @@ public interface FieldType {
                 }
         }
     }
+
+    String getBoxedJavaType(HeaderGenerator headerGenerator);
 
     /**
      * Returns true if this is an array type.

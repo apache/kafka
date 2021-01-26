@@ -40,7 +40,7 @@ class VerifiableConsumerTest(KafkaTest):
 
     def _partitions(self, assignment):
         partitions = []
-        for parts in assignment.itervalues():
+        for parts in assignment.values():
             partitions += parts
         return partitions
 

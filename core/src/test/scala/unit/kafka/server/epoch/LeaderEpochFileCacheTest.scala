@@ -23,11 +23,11 @@ import scala.collection.Seq
 import scala.collection.mutable.ListBuffer
 
 import kafka.server.checkpoints.{LeaderEpochCheckpoint, LeaderEpochCheckpointFile}
-import org.apache.kafka.common.requests.EpochEndOffset.{UNDEFINED_EPOCH, UNDEFINED_EPOCH_OFFSET}
 import kafka.utils.TestUtils
+import org.apache.kafka.common.requests.OffsetsForLeaderEpochResponse.{UNDEFINED_EPOCH, UNDEFINED_EPOCH_OFFSET}
 import org.apache.kafka.common.TopicPartition
-import org.junit.Assert._
-import org.junit.Test
+import org.junit.jupiter.api.Assertions._
+import org.junit.jupiter.api.Test
 
 /**
   * Unit test for the LeaderEpochFileCache.
@@ -37,10 +37,27 @@ class LeaderEpochFileCacheTest {
   private var logEndOffset = 0L
   private val checkpoint: LeaderEpochCheckpoint = new LeaderEpochCheckpoint {
     private var epochs: Seq[EpochEntry] = Seq()
-    override def write(epochs: Seq[EpochEntry]): Unit = this.epochs = epochs
+    override def write(epochs: Iterable[EpochEntry]): Unit = this.epochs = epochs.toSeq
     override def read(): Seq[EpochEntry] = this.epochs
   }
   private val cache = new LeaderEpochFileCache(tp, () => logEndOffset, checkpoint)
+
+  @Test
+  def testPreviousEpoch(): Unit = {
+    assertEquals(None, cache.previousEpoch)
+
+    cache.assign(epoch = 2, startOffset = 10)
+    assertEquals(None, cache.previousEpoch)
+
+    cache.assign(epoch = 4, startOffset = 15)
+    assertEquals(Some(2), cache.previousEpoch)
+
+    cache.assign(epoch = 10, startOffset = 20)
+    assertEquals(Some(4), cache.previousEpoch)
+
+    cache.truncateFromEnd(18)
+    assertEquals(Some(2), cache.previousEpoch)
+  }
 
   @Test
   def shouldAddEpochAndMessageOffsetToCache() = {
@@ -77,8 +94,8 @@ class LeaderEpochFileCacheTest {
     val epochAndOffsetFor = cache.endOffsetFor(UNDEFINED_EPOCH)
 
     //Then
-    assertEquals("Expected undefined epoch and offset if undefined epoch requested. Cache not empty.",
-                 expectedEpochEndOffset, epochAndOffsetFor)
+    assertEquals(expectedEpochEndOffset,
+                 epochAndOffsetFor, "Expected undefined epoch and offset if undefined epoch requested. Cache not empty.")
   }
 
   @Test
@@ -133,8 +150,8 @@ class LeaderEpochFileCacheTest {
     val offsetFor = cache.endOffsetFor(UNDEFINED_EPOCH)
 
     //Then
-    assertEquals("Expected undefined epoch and offset if undefined epoch requested. Empty cache.",
-                 (UNDEFINED_EPOCH, UNDEFINED_EPOCH_OFFSET), offsetFor)
+    assertEquals((UNDEFINED_EPOCH, UNDEFINED_EPOCH_OFFSET),
+                 offsetFor, "Expected undefined epoch and offset if undefined epoch requested. Empty cache.")
   }
 
   @Test
@@ -510,7 +527,7 @@ class LeaderEpochFileCacheTest {
     cache.assign(epoch = 4, startOffset = 11)
 
     //When reset to offset on epoch boundary
-    cache.truncateFromEnd(endOffset = UNDEFINED_EPOCH_OFFSET)
+    cache.truncateFromStart(startOffset = UNDEFINED_EPOCH_OFFSET)
 
     //Then should do nothing
     assertEquals(3, cache.epochEntries.size)

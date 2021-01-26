@@ -46,6 +46,16 @@ case class LeaderAndIsr(leader: Int,
     if (leader == LeaderAndIsr.NoLeader) None else Some(leader)
   }
 
+  def equalsIgnoreZk(other: LeaderAndIsr): Boolean = {
+    if (this == other) {
+      true
+    } else if (other == null) {
+      false
+    } else {
+      leader == other.leader && leaderEpoch == other.leaderEpoch && isr.equals(other.isr)
+    }
+  }
+
   override def toString: String = {
     s"LeaderAndIsr(leader=$leader, leaderEpoch=$leaderEpoch, isr=$isr, zkVersion=$zkVersion)"
   }

@@ -40,6 +40,7 @@ public interface Callback {
      *                  RecordTooLargeException
      *                  UnknownServerException
      *                  UnknownProducerIdException
+     *                  InvalidProducerEpochException
      *
      *                  Retriable exceptions (transient, may be covered by increasing #.retries):
      *

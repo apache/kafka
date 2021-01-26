@@ -31,14 +31,14 @@ import org.apache.kafka.test.MockDeserializer
 import org.mockito.Mockito._
 import org.mockito.ArgumentMatchers
 import ArgumentMatchers._
-import org.junit.Assert._
-import org.junit.{Before, Test}
+import org.junit.jupiter.api.Assertions._
+import org.junit.jupiter.api.{BeforeEach, Test}
 
 import scala.jdk.CollectionConverters._
 
 class ConsoleConsumerTest {
 
-  @Before
+  @BeforeEach
   def setup(): Unit = {
     ConsoleConsumer.messageCount = 0
   }
@@ -151,7 +151,7 @@ class ConsoleConsumerTest {
 
   }
 
-  @Test(expected = classOf[IllegalArgumentException])
+  @Test
   def shouldExitOnUnrecognizedNewConsumerOption(): Unit = {
     Exit.setExitProcedure((_, message) => throw new IllegalArgumentException(message.orNull))
 
@@ -162,12 +162,8 @@ class ConsoleConsumerTest {
       "--topic", "test",
       "--from-beginning")
 
-    //When
-    try {
-      new ConsoleConsumer.ConsumerConfig(args)
-    } finally {
-      Exit.resetExitProcedure()
-    }
+    try assertThrows(classOf[IllegalArgumentException], () => new ConsoleConsumer.ConsumerConfig(args))
+    finally Exit.resetExitProcedure()
   }
 
   @Test
@@ -268,7 +264,7 @@ class ConsoleConsumerTest {
     assertEquals("latest", consumerProperties.getProperty(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG))
   }
 
-  @Test(expected = classOf[IllegalArgumentException])
+  @Test
   def shouldExitOnInvalidConfigWithAutoOffsetResetAndConflictingFromBeginning(): Unit = {
     Exit.setExitProcedure((_, message) => throw new IllegalArgumentException(message.orNull))
 
@@ -278,13 +274,11 @@ class ConsoleConsumerTest {
       "--topic", "test",
       "--consumer-property", "auto.offset.reset=latest",
       "--from-beginning")
-
     try {
       val config = new ConsoleConsumer.ConsumerConfig(args)
-      ConsoleConsumer.consumerProps(config)
-    } finally {
-      Exit.resetExitProcedure()
+      assertThrows(classOf[IllegalArgumentException], () => ConsoleConsumer.consumerProps(config))
     }
+    finally Exit.resetExitProcedure()
   }
 
   @Test
@@ -323,12 +317,7 @@ class ConsoleConsumerTest {
       "--consumer.config", propsFile.getAbsolutePath
     )
 
-    try {
-      new ConsoleConsumer.ConsumerConfig(args)
-      fail("Expected groups ids provided in different places to match")
-    } catch {
-      case e: IllegalArgumentException => //OK
-    }
+    assertThrows(classOf[IllegalArgumentException], () => new ConsoleConsumer.ConsumerConfig(args))
 
     // the same in all three places
     propsFile = TestUtils.tempFile()
@@ -359,12 +348,7 @@ class ConsoleConsumerTest {
       "--consumer.config", propsFile.getAbsolutePath
     )
 
-    try {
-      new ConsoleConsumer.ConsumerConfig(args)
-      fail("Expected groups ids provided in different places to match")
-    } catch {
-      case e: IllegalArgumentException => //OK
-    }
+    assertThrows(classOf[IllegalArgumentException], () => new ConsoleConsumer.ConsumerConfig(args))
 
     // different via --consumer-property and --group
     args = Array(
@@ -374,12 +358,7 @@ class ConsoleConsumerTest {
       "--consumer-property", "group.id=group-from-properties"
     )
 
-    try {
-      new ConsoleConsumer.ConsumerConfig(args)
-      fail("Expected groups ids provided in different places to match")
-    } catch {
-      case e: IllegalArgumentException => //OK
-    }
+    assertThrows(classOf[IllegalArgumentException], () => new ConsoleConsumer.ConsumerConfig(args))
 
     // different via --group and --consumer.config
     propsFile = TestUtils.tempFile()
@@ -392,13 +371,7 @@ class ConsoleConsumerTest {
       "--group", "group-from-arguments",
       "--consumer.config", propsFile.getAbsolutePath
     )
-
-    try {
-      new ConsoleConsumer.ConsumerConfig(args)
-      fail("Expected groups ids provided in different places to match")
-    } catch {
-      case e: IllegalArgumentException => //OK
-    }
+    assertThrows(classOf[IllegalArgumentException], () => new ConsoleConsumer.ConsumerConfig(args))
 
     // via --group only
     args = Array(
@@ -462,7 +435,7 @@ class ConsoleConsumerTest {
     assertEquals(false, config.fromBeginning)
   }
 
-  @Test(expected = classOf[IllegalArgumentException])
+  @Test
   def shouldExitOnGroupIdAndPartitionGivenTogether(): Unit = {
     Exit.setExitProcedure((_, message) => throw new IllegalArgumentException(message.orNull))
     //Given
@@ -472,15 +445,11 @@ class ConsoleConsumerTest {
       "--group", "test-group",
       "--partition", "0")
 
-    //When
-    try {
-      new ConsoleConsumer.ConsumerConfig(args)
-    } finally {
-      Exit.resetExitProcedure()
-    }
+    try assertThrows(classOf[IllegalArgumentException], () => new ConsoleConsumer.ConsumerConfig(args))
+    finally Exit.resetExitProcedure()
   }
 
-  @Test(expected = classOf[IllegalArgumentException])
+  @Test
   def shouldExitOnOffsetWithoutPartition(): Unit = {
     Exit.setExitProcedure((_, message) => throw new IllegalArgumentException(message.orNull))
     //Given
@@ -489,12 +458,8 @@ class ConsoleConsumerTest {
       "--topic", "test",
       "--offset", "10")
 
-    //When
-    try {
-      new ConsoleConsumer.ConsumerConfig(args)
-    } finally {
-      Exit.resetExitProcedure()
-    }
+    try assertThrows(classOf[IllegalArgumentException], () => new ConsoleConsumer.ConsumerConfig(args))
+    finally Exit.resetExitProcedure()
   }
 
   @Test
@@ -518,18 +483,24 @@ class ConsoleConsumerTest {
     formatter.configure(configs)
     out = new ByteArrayOutputStream()
     formatter.writeTo(record, new PrintStream(out))
-    assertEquals("key\tvalue\t0\n", out.toString)
+    assertEquals("Partition:0\tkey\tvalue\n", out.toString)
 
     configs.put("print.timestamp", "true")
     formatter.configure(configs)
     out = new ByteArrayOutputStream()
     formatter.writeTo(record, new PrintStream(out))
-    assertEquals("NO_TIMESTAMP\tkey\tvalue\t0\n", out.toString)
+    assertEquals("NO_TIMESTAMP\tPartition:0\tkey\tvalue\n", out.toString)
+
+    configs.put("print.offset", "true")
+    formatter.configure(configs)
+    out = new ByteArrayOutputStream()
+    formatter.writeTo(record, new PrintStream(out))
+    assertEquals("NO_TIMESTAMP\tPartition:0\tOffset:123\tkey\tvalue\n", out.toString)
 
     out = new ByteArrayOutputStream()
     val record2 = new ConsumerRecord("topic", 0, 123, 123L, TimestampType.CREATE_TIME, 321L, -1, -1, "key".getBytes, "value".getBytes)
     formatter.writeTo(record2, new PrintStream(out))
-    assertEquals("CreateTime:123\tkey\tvalue\t0\n", out.toString)
+    assertEquals("CreateTime:123\tPartition:0\tOffset:123\tkey\tvalue\n", out.toString)
     formatter.close()
   }
 

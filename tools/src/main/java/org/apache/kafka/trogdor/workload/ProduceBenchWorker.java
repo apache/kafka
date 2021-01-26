@@ -79,7 +79,7 @@ public class ProduceBenchWorker implements TaskWorker {
 
     @Override
     public void start(Platform platform, WorkerStatusTracker status,
-                      KafkaFutureImpl<String> doneFuture) throws Exception {
+                      KafkaFutureImpl<String> doneFuture) {
         if (!running.compareAndSet(false, true)) {
             throw new IllegalStateException("ProducerBenchWorker is already running.");
         }

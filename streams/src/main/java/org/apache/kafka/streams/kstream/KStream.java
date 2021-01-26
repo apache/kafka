@@ -2522,8 +2522,12 @@ public interface KStream<K, V> {
      * If in {@link Transformer#transform(Object, Object) Transformer#transform()} multiple records need to be emitted
      * for each input record, it is recommended to use {@link #flatTransform(TransformerSupplier, String...)
      * flatTransform()}.
+     * The supplier should always generate a new instance each time {@link TransformerSupplier#get()} gets called. Creating
+     * a single {@link Transformer} object and returning the same object reference in {@link TransformerSupplier#get()} would be
+     * a violation of the supplier pattern and leads to runtime exceptions.
      *
-     * @param transformerSupplier an instance of {@link TransformerSupplier} that generates a {@link Transformer}
+     * @param transformerSupplier an instance of {@link TransformerSupplier} that generates a newly constructed
+     *                            {@link Transformer}
      * @param stateStoreNames     the names of the state stores used by the processor; not required if the supplier
      *                            implements {@link ConnectedStoreProvider#stores()}
      * @param <K1>                the key type of the new stream
@@ -2645,8 +2649,12 @@ public interface KStream<K, V> {
      * If in {@link Transformer#transform(Object, Object) Transformer#transform()} multiple records need to be emitted
      * for each input record, it is recommended to use {@link #flatTransform(TransformerSupplier, String...)
      * flatTransform()}.
+     * The supplier should always generate a new instance each time {@link TransformerSupplier#get()} gets called. Creating
+     * a single {@link Transformer} object and returning the same object reference in {@link TransformerSupplier#get()} would be
+     * a violation of the supplier pattern and leads to runtime exceptions.
      *
-     * @param transformerSupplier an instance of {@link TransformerSupplier} that generates a {@link Transformer}
+     * @param transformerSupplier an instance of {@link TransformerSupplier} that generates a newly constructed
+     *                            {@link Transformer}
      * @param named               a {@link Named} config used to name the processor in the topology
      * @param stateStoreNames     the names of the state stores used by the processor; not required if the supplier
      *                            implements {@link ConnectedStoreProvider#stores()}
@@ -2770,8 +2778,11 @@ public interface KStream<K, V> {
      * To ensure type-safety at compile-time, {@link ProcessorContext#forward(Object, Object) context#forward()} should
      * not be used in {@link Transformer#transform(Object, Object) Transformer#transform()} and
      * {@link org.apache.kafka.streams.processor.Punctuator#punctuate(long) Punctuator#punctuate()}.
+     * The supplier should always generate a new instance each time {@link TransformerSupplier#get()} gets called. Creating
+     * a single {@link Transformer} object and returning the same object reference in {@link TransformerSupplier#get()} would be
+     * a violation of the supplier pattern and leads to runtime exceptions.
      *
-     * @param transformerSupplier an instance of {@link TransformerSupplier} that generates a {@link Transformer}
+     * @param transformerSupplier an instance of {@link TransformerSupplier} that generates a newly constructed {@link Transformer}
      * @param stateStoreNames     the names of the state stores used by the processor; not required if the supplier
      *                            implements {@link ConnectedStoreProvider#stores()}
      * @param <K1>                the key type of the new stream
@@ -2893,8 +2904,11 @@ public interface KStream<K, V> {
      * To ensure type-safety at compile-time, {@link ProcessorContext#forward(Object, Object) context#forward()} should
      * not be used in {@link Transformer#transform(Object, Object) Transformer#transform()} and
      * {@link org.apache.kafka.streams.processor.Punctuator#punctuate(long) Punctuator#punctuate()}.
+     * The supplier should always generate a new instance each time {@link TransformerSupplier#get()} gets called. Creating
+     * a single {@link Transformer} object and returning the same object reference in {@link TransformerSupplier#get()} would be
+     * a violation of the supplier pattern and leads to runtime exceptions.
      *
-     * @param transformerSupplier an instance of {@link TransformerSupplier} that generates a {@link Transformer}
+     * @param transformerSupplier an instance of {@link TransformerSupplier} that generates a newly constructed {@link Transformer}
      * @param named               a {@link Named} config used to name the processor in the topology
      * @param stateStoreNames     the names of the state stores used by the processor; not required if the supplier
      *                            implements {@link ConnectedStoreProvider#stores()}
@@ -3004,8 +3018,10 @@ public interface KStream<K, V> {
      * Thus, <em>no</em> internal data redistribution is required if a key based operator (like an aggregation or join)
      * is applied to the result {@code KStream}. (cf. {@link #transform(TransformerSupplier, String...)})
      *
-     * @param valueTransformerSupplier a instance of {@link ValueTransformerSupplier} that generates a
-     *                                 {@link ValueTransformer}
+     * @param valueTransformerSupplier an instance of {@link ValueTransformerSupplier} that generates a newly constructed {@link ValueTransformer}
+     *                                 The supplier should always generate a new instance. Creating a single {@link ValueTransformer} object
+     *                                 and returning the same object reference in {@link ValueTransformer} is a
+     *                                 violation of the supplier pattern and leads to runtime exceptions.
      * @param stateStoreNames          the names of the state stores used by the processor; not required if the supplier
      *                                 implements {@link ConnectedStoreProvider#stores()}
      * @param <VR>                     the value type of the result stream
@@ -3110,8 +3126,10 @@ public interface KStream<K, V> {
      * Thus, <em>no</em> internal data redistribution is required if a key based operator (like an aggregation or join)
      * is applied to the result {@code KStream}. (cf. {@link #transform(TransformerSupplier, String...)})
      *
-     * @param valueTransformerSupplier a instance of {@link ValueTransformerSupplier} that generates a
-     *                                 {@link ValueTransformer}
+     * @param valueTransformerSupplier an instance of {@link ValueTransformerSupplier} that generates a newly constructed {@link ValueTransformer}
+     *                                 The supplier should always generate a new instance. Creating a single {@link ValueTransformer} object
+     *                                 and returning the same object reference in {@link ValueTransformer} is a
+     *                                 violation of the supplier pattern and leads to runtime exceptions.
      * @param named                    a {@link Named} config used to name the processor in the topology
      * @param stateStoreNames          the names of the state stores used by the processor; not required if the supplier
      *                                 implements {@link ConnectedStoreProvider#stores()}
@@ -3222,8 +3240,10 @@ public interface KStream<K, V> {
      * Thus, <em>no</em> internal data redistribution is required if a key based operator (like an aggregation or join)
      * is applied to the result {@code KStream}. (cf. {@link #transform(TransformerSupplier, String...)})
      *
-     * @param valueTransformerSupplier a instance of {@link ValueTransformerWithKeySupplier} that generates a
-     *                                 {@link ValueTransformerWithKey}
+     * @param valueTransformerSupplier an instance of {@link ValueTransformerWithKeySupplier} that generates a newly constructed {@link ValueTransformerWithKey}
+     *                                 The supplier should always generate a new instance. Creating a single {@link ValueTransformerWithKey} object
+     *                                 and returning the same object reference in {@link ValueTransformerWithKey} is a
+     *                                 violation of the supplier pattern and leads to runtime exceptions.
      * @param stateStoreNames          the names of the state stores used by the processor; not required if the supplier
      *                                 implements {@link ConnectedStoreProvider#stores()}
      * @param <VR>                     the value type of the result stream
@@ -3332,8 +3352,10 @@ public interface KStream<K, V> {
      * Thus, <em>no</em> internal data redistribution is required if a key based operator (like an aggregation or join)
      * is applied to the result {@code KStream}. (cf. {@link #transform(TransformerSupplier, String...)})
      *
-     * @param valueTransformerSupplier a instance of {@link ValueTransformerWithKeySupplier} that generates a
-     *                                 {@link ValueTransformerWithKey}
+     * @param valueTransformerSupplier an instance of {@link ValueTransformerWithKeySupplier} that generates a newly constructed {@link ValueTransformerWithKey}
+     *                                 The supplier should always generate a new instance. Creating a single {@link ValueTransformerWithKey} object
+     *                                 and returning the same object reference in {@link ValueTransformerWithKey} is a
+     *                                 violation of the supplier pattern and leads to runtime exceptions.
      * @param named                    a {@link Named} config used to name the processor in the topology
      * @param stateStoreNames          the names of the state stores used by the processor; not required if the supplier
      *                                 implements {@link ConnectedStoreProvider#stores()}
@@ -3451,8 +3473,10 @@ public interface KStream<K, V> {
      * is applied to the result {@code KStream}. (cf. {@link #flatTransform(TransformerSupplier, String...)
      * flatTransform()})
      *
-     * @param valueTransformerSupplier an instance of {@link ValueTransformerSupplier} that generates a
-     *                                 {@link ValueTransformer}
+     * @param valueTransformerSupplier an instance of {@link ValueTransformerSupplier} that generates a newly constructed {@link ValueTransformer}
+     *                                 The supplier should always generate a new instance. Creating a single {@link ValueTransformer} object
+     *                                 and returning the same object reference in {@link ValueTransformer} is a
+     *                                 violation of the supplier pattern and leads to runtime exceptions.
      * @param stateStoreNames          the names of the state stores used by the processor; not required if the supplier
      *                                 implements {@link ConnectedStoreProvider#stores()}
      * @param <VR>                     the value type of the result stream
@@ -3571,8 +3595,10 @@ public interface KStream<K, V> {
      * is applied to the result {@code KStream}. (cf. {@link #flatTransform(TransformerSupplier, String...)
      * flatTransform()})
      *
-     * @param valueTransformerSupplier an instance of {@link ValueTransformerSupplier} that generates a
-     *                                 {@link ValueTransformer}
+     * @param valueTransformerSupplier an instance of {@link ValueTransformerSupplier} that generates a newly constructed {@link ValueTransformer}
+     *                                 The supplier should always generate a new instance. Creating a single {@link ValueTransformer} object
+     *                                 and returning the same object reference in {@link ValueTransformer} is a
+     *                                 violation of the supplier pattern and leads to runtime exceptions.
      * @param named                    a {@link Named} config used to name the processor in the topology
      * @param stateStoreNames          the names of the state stores used by the processor; not required if the supplier
      *                                 implements {@link ConnectedStoreProvider#stores()}
@@ -3694,8 +3720,10 @@ public interface KStream<K, V> {
      * is applied to the result {@code KStream}. (cf. {@link #flatTransform(TransformerSupplier, String...)
      * flatTransform()})
      *
-     * @param valueTransformerSupplier a instance of {@link ValueTransformerWithKeySupplier} that generates a
-     *                                 {@link ValueTransformerWithKey}
+     * @param valueTransformerSupplier an instance of {@link ValueTransformerWithKeySupplier} that generates a newly constructed {@link ValueTransformerWithKey}
+     *                                 The supplier should always generate a new instance. Creating a single {@link ValueTransformerWithKey} object
+     *                                 and returning the same object reference in {@link ValueTransformerWithKey} is a
+     *                                 violation of the supplier pattern and leads to runtime exceptions.
      * @param stateStoreNames          the names of the state stores used by the processor; not required if the supplier
      *                                 implements {@link ConnectedStoreProvider#stores()}
      * @param <VR>                     the value type of the result stream
@@ -3815,8 +3843,10 @@ public interface KStream<K, V> {
      * is applied to the result {@code KStream}. (cf. {@link #flatTransform(TransformerSupplier, String...)
      * flatTransform()})
      *
-     * @param valueTransformerSupplier a instance of {@link ValueTransformerWithKeySupplier} that generates a
-     *                                 {@link ValueTransformerWithKey}
+     * @param valueTransformerSupplier an instance of {@link ValueTransformerWithKeySupplier} that generates a newly constructed {@link ValueTransformerWithKey}
+     *                                 The supplier should always generate a new instance. Creating a single {@link ValueTransformerWithKey} object
+     *                                 and returning the same object reference in {@link ValueTransformerWithKey} is a
+     *                                 violation of the supplier pattern and leads to runtime exceptions.
      * @param named                    a {@link Named} config used to name the processor in the topology
      * @param stateStoreNames          the names of the state stores used by the processor; not required if the supplier
      *                                 implements {@link ConnectedStoreProvider#stores()}
@@ -3914,7 +3944,10 @@ public interface KStream<K, V> {
      * Even if any upstream operation was key-changing, no auto-repartition is triggered.
      * If repartitioning is required, a call to {@link #repartition()} should be performed before {@code process()}.
      *
-     * @param processorSupplier a instance of {@link ProcessorSupplier} that generates a {@link Processor}
+     * @param processorSupplier an instance of {@link ProcessorSupplier} that generates a newly constructed {@link Processor}
+     *                          The supplier should always generate a new instance. Creating a single {@link Processor} object
+     *                          and returning the same object reference in {@link ProcessorSupplier#get()} is a
+     *                          violation of the supplier pattern and leads to runtime exceptions.
      * @param stateStoreNames     the names of the state stores used by the processor; not required if the supplier
      *                            implements {@link ConnectedStoreProvider#stores()}
      * @see #foreach(ForeachAction)
@@ -4005,7 +4038,10 @@ public interface KStream<K, V> {
      * Even if any upstream operation was key-changing, no auto-repartition is triggered.
      * If repartitioning is required, a call to {@link #repartition()} should be performed before {@code process()}.
      *
-     * @param processorSupplier a instance of {@link ProcessorSupplier} that generates a {@link Processor}
+     * @param processorSupplier an instance of {@link ProcessorSupplier} that generates a newly constructed {@link Processor}
+     *                          The supplier should always generate a new instance. Creating a single {@link Processor} object
+     *                          and returning the same object reference in {@link ProcessorSupplier#get()} is a
+     *                          violation of the supplier pattern and leads to runtime exceptions.
      * @param named             a {@link Named} config used to name the processor in the topology
      * @param stateStoreNames   the names of the state store used by the processor
      * @see #foreach(ForeachAction)

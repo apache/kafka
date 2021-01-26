@@ -17,6 +17,7 @@
 package org.apache.kafka.common.utils;
 
 import java.nio.BufferUnderflowException;
+import java.util.AbstractMap;
 import java.util.EnumSet;
 import java.util.SortedSet;
 import java.util.TreeSet;
@@ -72,6 +73,9 @@ import java.util.regex.Pattern;
 import java.util.stream.Collector;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
+import java.text.ParseException;
+import java.text.SimpleDateFormat;
+import java.util.Date;
 
 public final class Utils {
 
@@ -545,15 +549,15 @@ public final class Utils {
     }
 
     /**
-     * Create a string representation of a list joined by the given separator
-     * @param list The list of items
+     * Create a string representation of a collection joined by the given separator
+     * @param collection The list of items
      * @param separator The separator
      * @return The string representation.
      */
-    public static <T> String join(Collection<T> list, String separator) {
-        Objects.requireNonNull(list);
+    public static <T> String join(Collection<T> collection, String separator) {
+        Objects.requireNonNull(collection);
         StringBuilder sb = new StringBuilder();
-        Iterator<T> iter = list.iterator();
+        Iterator<T> iter = collection.iterator();
         while (iter.hasNext()) {
             sb.append(iter.next());
             if (iter.hasNext())
@@ -750,22 +754,7 @@ public final class Utils {
      * @return An entry
      */
     public static <K, V> Map.Entry<K, V> mkEntry(final K k, final V v) {
-        return new Map.Entry<K, V>() {
-            @Override
-            public K getKey() {
-                return k;
-            }
-
-            @Override
-            public V getValue() {
-                return v;
-            }
-
-            @Override
-            public V setValue(final V value) {
-                throw new UnsupportedOperationException();
-            }
-        };
+        return new AbstractMap.SimpleEntry<>(k, v);
     }
 
     /**
@@ -993,7 +982,7 @@ public final class Utils {
     /**
      * A cheap way to deterministically convert a number to a positive value. When the input is
      * positive, the original value is returned. When the input number is negative, the returned
-     * positive value is the original value bit AND against 0x7fffffff which is not its absolutely
+     * positive value is the original value bit AND against 0x7fffffff which is not its absolute
      * value.
      *
      * Note: changing this method in the future will possibly cause partition selection not to be
@@ -1125,6 +1114,10 @@ public final class Utils {
             for (int i = pos; i < length + pos; i++)
                 out.writeByte(buffer.get(i));
         }
+    }
+
+    public static <T> List<T> toList(Iterable<T> iterable) {
+        return toList(iterable.iterator());
     }
 
     public static <T> List<T> toList(Iterator<T> iterator) {
@@ -1270,5 +1263,51 @@ public final class Utils {
             }
         }
         return map;
+    }
+
+    /**
+     * Convert timestamp to an epoch value
+     * @param timestamp the timestamp to be converted, the accepted formats are:
+     *                 (1) yyyy-MM-dd'T'HH:mm:ss.SSS, ex: 2020-11-10T16:51:38.198
+     *                 (2) yyyy-MM-dd'T'HH:mm:ss.SSSZ, ex: 2020-11-10T16:51:38.198+0800
+     *                 (3) yyyy-MM-dd'T'HH:mm:ss.SSSX, ex: 2020-11-10T16:51:38.198+08
+     *                 (4) yyyy-MM-dd'T'HH:mm:ss.SSSXX, ex: 2020-11-10T16:51:38.198+0800
+     *                 (5) yyyy-MM-dd'T'HH:mm:ss.SSSXXX, ex: 2020-11-10T16:51:38.198+08:00
+     *
+     * @return epoch value of a given timestamp (i.e. the number of milliseconds since January 1, 1970, 00:00:00 GMT)
+     * @throws ParseException for timestamp that doesn't follow ISO8601 format or the format is not expected
+     */
+    public static long getDateTime(String timestamp) throws ParseException, IllegalArgumentException {
+        if (timestamp == null) {
+            throw new IllegalArgumentException("Error parsing timestamp with null value");
+        }
+
+        final String[] timestampParts = timestamp.split("T");
+        if (timestampParts.length < 2) {
+            throw new ParseException("Error parsing timestamp. It does not contain a 'T' according to ISO8601 format", timestamp.length());
+        }
+
+        final String secondPart = timestampParts[1];
+        if (!(secondPart.contains("+") || secondPart.contains("-") || secondPart.contains("Z"))) {
+            timestamp = timestamp + "Z";
+        }
+
+        SimpleDateFormat simpleDateFormat = new SimpleDateFormat();
+        // strictly parsing the date/time format
+        simpleDateFormat.setLenient(false);
+        try {
+            simpleDateFormat.applyPattern("yyyy-MM-dd'T'HH:mm:ss.SSSXXX");
+            final Date date = simpleDateFormat.parse(timestamp);
+            return date.getTime();
+        } catch (final ParseException e) {
+            simpleDateFormat.applyPattern("yyyy-MM-dd'T'HH:mm:ss.SSSX");
+            final Date date = simpleDateFormat.parse(timestamp);
+            return date.getTime();
+        }
+    }
+
+    @SuppressWarnings("unchecked")
+    public static <S> Iterator<S> covariantCast(Iterator<? extends S> iterator) {
+        return (Iterator<S>) iterator;
     }
 }

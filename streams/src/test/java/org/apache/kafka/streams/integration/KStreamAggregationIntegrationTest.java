@@ -46,6 +46,7 @@ import org.apache.kafka.streams.kstream.Produced;
 import org.apache.kafka.streams.kstream.Reducer;
 import org.apache.kafka.streams.kstream.SessionWindowedDeserializer;
 import org.apache.kafka.streams.kstream.SessionWindows;
+import org.apache.kafka.streams.kstream.SlidingWindows;
 import org.apache.kafka.streams.kstream.TimeWindowedDeserializer;
 import org.apache.kafka.streams.kstream.TimeWindows;
 import org.apache.kafka.streams.kstream.Transformer;
@@ -87,6 +88,7 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 
 import static java.time.Duration.ofMillis;
+import static java.time.Duration.ofMinutes;
 import static java.time.Instant.ofEpochMilli;
 import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.safeUniqueTestName;
 import static org.hamcrest.CoreMatchers.equalTo;
@@ -457,6 +459,208 @@ public class KStreamAggregationIntegrationTest {
             new KeyValueTimestamp("5@" + window, 1L, timestamp),
             new KeyValueTimestamp("5@" + window, 2L, timestamp)
         )));
+    }
+
+    @Test
+    public void shouldReduceSlidingWindows() throws Exception {
+        final long firstBatchTimestamp = mockTime.milliseconds();
+        final long timeDifference = 500L;
+        produceMessages(firstBatchTimestamp);
+        final long secondBatchTimestamp = firstBatchTimestamp + timeDifference / 2;
+        produceMessages(secondBatchTimestamp);
+        final long thirdBatchTimestamp = firstBatchTimestamp + timeDifference - 100L;
+        produceMessages(thirdBatchTimestamp);
+
+        final Serde<Windowed<String>> windowedSerde = WindowedSerdes.timeWindowedSerdeFrom(String.class);
+        groupedStream
+                .windowedBy(SlidingWindows.withTimeDifferenceAndGrace(ofMillis(timeDifference), ofMillis(2000L)))
+                .reduce(reducer)
+                .toStream()
+                .to(outputTopic, Produced.with(windowedSerde, Serdes.String()));
+
+        startStreams();
+
+        final List<KeyValueTimestamp<Windowed<String>, String>> windowedOutput = receiveMessages(
+                new TimeWindowedDeserializer<>(new StringDeserializer(), 500L),
+                new StringDeserializer(),
+                String.class,
+                30);
+
+        final String resultFromConsoleConsumer = readWindowedKeyedMessagesViaConsoleConsumer(
+                new TimeWindowedDeserializer<String>(),
+                new StringDeserializer(),
+                String.class,
+                30,
+                true);
+
+        final Comparator<KeyValueTimestamp<Windowed<String>, String>> comparator =
+                Comparator.comparing((KeyValueTimestamp<Windowed<String>, String> o) -> o.key().key())
+                        .thenComparing(KeyValueTimestamp::value);
+
+        windowedOutput.sort(comparator);
+        final long firstBatchLeftWindowStart = firstBatchTimestamp - timeDifference;
+        final long firstBatchRightWindowStart = firstBatchTimestamp + 1;
+
+        final long secondBatchLeftWindowStart = secondBatchTimestamp - timeDifference;
+        final long secondBatchRightWindowStart = secondBatchTimestamp + 1;
+
+        final long thirdBatchLeftWindowStart = thirdBatchTimestamp - timeDifference;
+
+
+        final List<KeyValueTimestamp<Windowed<String>, String>> expectResult = Arrays.asList(
+                // A @ firstBatchTimestamp left window created when A @ firstBatchTimestamp processed
+                new KeyValueTimestamp<>(new Windowed<>("A", new TimeWindow(firstBatchLeftWindowStart, Long.MAX_VALUE)), "A", firstBatchTimestamp),
+                // A @ firstBatchTimestamp right window created when A @ secondBatchTimestamp processed
+                new KeyValueTimestamp<>(new Windowed<>("A", new TimeWindow(firstBatchRightWindowStart, Long.MAX_VALUE)), "A", secondBatchTimestamp),
+                // A @ secondBatchTimestamp right window created when A @ thirdBatchTimestamp processed
+                new KeyValueTimestamp<>(new Windowed<>("A", new TimeWindow(secondBatchRightWindowStart, Long.MAX_VALUE)), "A", thirdBatchTimestamp),
+                // A @ secondBatchTimestamp left window created when A @ secondBatchTimestamp processed
+                new KeyValueTimestamp<>(new Windowed<>("A", new TimeWindow(secondBatchLeftWindowStart, Long.MAX_VALUE)), "A:A", secondBatchTimestamp),
+                // A @ firstBatchTimestamp right window updated when A @ thirdBatchTimestamp processed
+                new KeyValueTimestamp<>(new Windowed<>("A", new TimeWindow(firstBatchRightWindowStart, Long.MAX_VALUE)), "A:A", thirdBatchTimestamp),
+                // A @ thirdBatchTimestamp left window created when A @ thirdBatchTimestamp processed
+                new KeyValueTimestamp<>(new Windowed<>("A", new TimeWindow(thirdBatchLeftWindowStart, Long.MAX_VALUE)), "A:A:A", thirdBatchTimestamp),
+
+                new KeyValueTimestamp<>(new Windowed<>("B", new TimeWindow(firstBatchLeftWindowStart, Long.MAX_VALUE)), "B", firstBatchTimestamp),
+                new KeyValueTimestamp<>(new Windowed<>("B", new TimeWindow(firstBatchRightWindowStart, Long.MAX_VALUE)), "B", secondBatchTimestamp),
+                new KeyValueTimestamp<>(new Windowed<>("B", new TimeWindow(secondBatchRightWindowStart, Long.MAX_VALUE)), "B", thirdBatchTimestamp),
+                new KeyValueTimestamp<>(new Windowed<>("B", new TimeWindow(secondBatchLeftWindowStart, Long.MAX_VALUE)), "B:B", secondBatchTimestamp),
+                new KeyValueTimestamp<>(new Windowed<>("B", new TimeWindow(firstBatchRightWindowStart, Long.MAX_VALUE)), "B:B", thirdBatchTimestamp),
+                new KeyValueTimestamp<>(new Windowed<>("B", new TimeWindow(thirdBatchLeftWindowStart, Long.MAX_VALUE)), "B:B:B", thirdBatchTimestamp),
+                new KeyValueTimestamp<>(new Windowed<>("C", new TimeWindow(firstBatchLeftWindowStart, Long.MAX_VALUE)), "C", firstBatchTimestamp),
+                new KeyValueTimestamp<>(new Windowed<>("C", new TimeWindow(firstBatchRightWindowStart, Long.MAX_VALUE)), "C", secondBatchTimestamp),
+                new KeyValueTimestamp<>(new Windowed<>("C", new TimeWindow(secondBatchRightWindowStart, Long.MAX_VALUE)), "C", thirdBatchTimestamp),
+                new KeyValueTimestamp<>(new Windowed<>("C", new TimeWindow(secondBatchLeftWindowStart, Long.MAX_VALUE)), "C:C", secondBatchTimestamp),
+                new KeyValueTimestamp<>(new Windowed<>("C", new TimeWindow(firstBatchRightWindowStart, Long.MAX_VALUE)), "C:C", thirdBatchTimestamp),
+                new KeyValueTimestamp<>(new Windowed<>("C", new TimeWindow(thirdBatchLeftWindowStart, Long.MAX_VALUE)), "C:C:C", thirdBatchTimestamp),
+                new KeyValueTimestamp<>(new Windowed<>("D", new TimeWindow(firstBatchLeftWindowStart, Long.MAX_VALUE)), "D", firstBatchTimestamp),
+                new KeyValueTimestamp<>(new Windowed<>("D", new TimeWindow(firstBatchRightWindowStart, Long.MAX_VALUE)), "D", secondBatchTimestamp),
+                new KeyValueTimestamp<>(new Windowed<>("D", new TimeWindow(secondBatchRightWindowStart, Long.MAX_VALUE)), "D", thirdBatchTimestamp),
+                new KeyValueTimestamp<>(new Windowed<>("D", new TimeWindow(secondBatchLeftWindowStart, Long.MAX_VALUE)), "D:D", secondBatchTimestamp),
+                new KeyValueTimestamp<>(new Windowed<>("D", new TimeWindow(firstBatchRightWindowStart, Long.MAX_VALUE)), "D:D", thirdBatchTimestamp),
+                new KeyValueTimestamp<>(new Windowed<>("D", new TimeWindow(thirdBatchLeftWindowStart, Long.MAX_VALUE)), "D:D:D", thirdBatchTimestamp),
+                new KeyValueTimestamp<>(new Windowed<>("E", new TimeWindow(firstBatchLeftWindowStart, Long.MAX_VALUE)), "E", firstBatchTimestamp),
+                new KeyValueTimestamp<>(new Windowed<>("E", new TimeWindow(firstBatchRightWindowStart, Long.MAX_VALUE)), "E", secondBatchTimestamp),
+                new KeyValueTimestamp<>(new Windowed<>("E", new TimeWindow(secondBatchRightWindowStart, Long.MAX_VALUE)), "E", thirdBatchTimestamp),
+                new KeyValueTimestamp<>(new Windowed<>("E", new TimeWindow(secondBatchLeftWindowStart, Long.MAX_VALUE)), "E:E", secondBatchTimestamp),
+                new KeyValueTimestamp<>(new Windowed<>("E", new TimeWindow(firstBatchRightWindowStart, Long.MAX_VALUE)), "E:E", thirdBatchTimestamp),
+                new KeyValueTimestamp<>(new Windowed<>("E", new TimeWindow(thirdBatchLeftWindowStart, Long.MAX_VALUE)), "E:E:E", thirdBatchTimestamp)
+        );
+        assertThat(windowedOutput, is(expectResult));
+
+        final Set<String> expectResultString = new HashSet<>(expectResult.size());
+        for (final KeyValueTimestamp<Windowed<String>, String> eachRecord: expectResult) {
+            expectResultString.add("CreateTime:" + eachRecord.timestamp() + ", "
+                    + eachRecord.key() + ", " + eachRecord.value());
+        }
+
+        // check every message is contained in the expect result
+        final String[] allRecords = resultFromConsoleConsumer.split("\n");
+        for (final String record: allRecords) {
+            assertTrue(expectResultString.contains(record));
+        }
+    }
+
+    @Test
+    public void shouldAggregateSlidingWindows() throws Exception {
+        final long firstBatchTimestamp = mockTime.milliseconds();
+        final long timeDifference = 500L;
+        produceMessages(firstBatchTimestamp);
+        final long secondBatchTimestamp = firstBatchTimestamp + timeDifference / 2;
+        produceMessages(secondBatchTimestamp);
+        final long thirdBatchTimestamp = firstBatchTimestamp + timeDifference - 100L;
+        produceMessages(thirdBatchTimestamp);
+
+        final Serde<Windowed<String>> windowedSerde = WindowedSerdes.timeWindowedSerdeFrom(String.class);
+        groupedStream.windowedBy(SlidingWindows.withTimeDifferenceAndGrace(ofMillis(500L), ofMinutes(5)))
+                .aggregate(
+                        initializer,
+                        aggregator,
+                        Materialized.with(null, Serdes.Integer())
+                )
+                .toStream()
+                .to(outputTopic, Produced.with(windowedSerde, Serdes.Integer()));
+
+        startStreams();
+
+        final List<KeyValueTimestamp<Windowed<String>, Integer>> windowedMessages = receiveMessagesWithTimestamp(
+                new TimeWindowedDeserializer<>(),
+                new IntegerDeserializer(),
+                String.class,
+                30);
+
+        // read from ConsoleConsumer
+        final String resultFromConsoleConsumer = readWindowedKeyedMessagesViaConsoleConsumer(
+                new TimeWindowedDeserializer<String>(),
+                new IntegerDeserializer(),
+                String.class,
+                30,
+                true);
+
+        final Comparator<KeyValueTimestamp<Windowed<String>, Integer>> comparator =
+                Comparator.comparing((KeyValueTimestamp<Windowed<String>, Integer> o) -> o.key().key())
+                        .thenComparingInt(KeyValueTimestamp::value);
+        windowedMessages.sort(comparator);
+
+        final long firstBatchLeftWindow = firstBatchTimestamp - timeDifference;
+        final long firstBatchRightWindow = firstBatchTimestamp + 1;
+        final long secondBatchLeftWindow = secondBatchTimestamp - timeDifference;
+        final long secondBatchRightWindow = secondBatchTimestamp + 1;
+        final long thirdBatchLeftWindow = thirdBatchTimestamp - timeDifference;
+
+        final List<KeyValueTimestamp<Windowed<String>, Integer>> expectResult = Arrays.asList(
+                // A @ firstBatchTimestamp left window created when A @ firstBatchTimestamp processed
+                new KeyValueTimestamp<>(new Windowed<>("A", new TimeWindow(firstBatchLeftWindow, Long.MAX_VALUE)), 1, firstBatchTimestamp),
+                // A @ firstBatchTimestamp right window created when A @ secondBatchTimestamp processed
+                new KeyValueTimestamp<>(new Windowed<>("A", new TimeWindow(firstBatchRightWindow, Long.MAX_VALUE)), 1, secondBatchTimestamp),
+                // A @ secondBatchTimestamp right window created when A @ thirdBatchTimestamp processed
+                new KeyValueTimestamp<>(new Windowed<>("A", new TimeWindow(secondBatchRightWindow, Long.MAX_VALUE)), 1, thirdBatchTimestamp),
+                // A @ secondBatchTimestamp left window created when A @ secondBatchTimestamp processed
+                new KeyValueTimestamp<>(new Windowed<>("A", new TimeWindow(secondBatchLeftWindow, Long.MAX_VALUE)), 2, secondBatchTimestamp),
+                // A @ firstBatchTimestamp right window updated when A @ thirdBatchTimestamp processed
+                new KeyValueTimestamp<>(new Windowed<>("A", new TimeWindow(firstBatchRightWindow, Long.MAX_VALUE)), 2, thirdBatchTimestamp),
+                // A @ thirdBatchTimestamp left window created when A @ thirdBatchTimestamp processed
+                new KeyValueTimestamp<>(new Windowed<>("A", new TimeWindow(thirdBatchLeftWindow, Long.MAX_VALUE)), 3, thirdBatchTimestamp),
+
+                new KeyValueTimestamp<>(new Windowed<>("B", new TimeWindow(firstBatchLeftWindow, Long.MAX_VALUE)), 1, firstBatchTimestamp),
+                new KeyValueTimestamp<>(new Windowed<>("B", new TimeWindow(firstBatchRightWindow, Long.MAX_VALUE)), 1, secondBatchTimestamp),
+                new KeyValueTimestamp<>(new Windowed<>("B", new TimeWindow(secondBatchRightWindow, Long.MAX_VALUE)), 1, thirdBatchTimestamp),
+                new KeyValueTimestamp<>(new Windowed<>("B", new TimeWindow(secondBatchLeftWindow, Long.MAX_VALUE)), 2, secondBatchTimestamp),
+                new KeyValueTimestamp<>(new Windowed<>("B", new TimeWindow(firstBatchRightWindow, Long.MAX_VALUE)), 2, thirdBatchTimestamp),
+                new KeyValueTimestamp<>(new Windowed<>("B", new TimeWindow(thirdBatchLeftWindow, Long.MAX_VALUE)), 3, thirdBatchTimestamp),
+                new KeyValueTimestamp<>(new Windowed<>("C", new TimeWindow(firstBatchLeftWindow, Long.MAX_VALUE)), 1, firstBatchTimestamp),
+                new KeyValueTimestamp<>(new Windowed<>("C", new TimeWindow(firstBatchRightWindow, Long.MAX_VALUE)), 1, secondBatchTimestamp),
+                new KeyValueTimestamp<>(new Windowed<>("C", new TimeWindow(secondBatchRightWindow, Long.MAX_VALUE)), 1, thirdBatchTimestamp),
+                new KeyValueTimestamp<>(new Windowed<>("C", new TimeWindow(secondBatchLeftWindow, Long.MAX_VALUE)), 2, secondBatchTimestamp),
+                new KeyValueTimestamp<>(new Windowed<>("C", new TimeWindow(firstBatchRightWindow, Long.MAX_VALUE)), 2, thirdBatchTimestamp),
+                new KeyValueTimestamp<>(new Windowed<>("C", new TimeWindow(thirdBatchLeftWindow, Long.MAX_VALUE)), 3, thirdBatchTimestamp),
+                new KeyValueTimestamp<>(new Windowed<>("D", new TimeWindow(firstBatchLeftWindow, Long.MAX_VALUE)), 1, firstBatchTimestamp),
+                new KeyValueTimestamp<>(new Windowed<>("D", new TimeWindow(firstBatchRightWindow, Long.MAX_VALUE)), 1, secondBatchTimestamp),
+                new KeyValueTimestamp<>(new Windowed<>("D", new TimeWindow(secondBatchRightWindow, Long.MAX_VALUE)), 1, thirdBatchTimestamp),
+                new KeyValueTimestamp<>(new Windowed<>("D", new TimeWindow(secondBatchLeftWindow, Long.MAX_VALUE)), 2, secondBatchTimestamp),
+                new KeyValueTimestamp<>(new Windowed<>("D", new TimeWindow(firstBatchRightWindow, Long.MAX_VALUE)), 2, thirdBatchTimestamp),
+                new KeyValueTimestamp<>(new Windowed<>("D", new TimeWindow(thirdBatchLeftWindow, Long.MAX_VALUE)), 3, thirdBatchTimestamp),
+                new KeyValueTimestamp<>(new Windowed<>("E", new TimeWindow(firstBatchLeftWindow, Long.MAX_VALUE)), 1, firstBatchTimestamp),
+                new KeyValueTimestamp<>(new Windowed<>("E", new TimeWindow(firstBatchRightWindow, Long.MAX_VALUE)), 1, secondBatchTimestamp),
+                new KeyValueTimestamp<>(new Windowed<>("E", new TimeWindow(secondBatchRightWindow, Long.MAX_VALUE)), 1, thirdBatchTimestamp),
+                new KeyValueTimestamp<>(new Windowed<>("E", new TimeWindow(secondBatchLeftWindow, Long.MAX_VALUE)), 2, secondBatchTimestamp),
+                new KeyValueTimestamp<>(new Windowed<>("E", new TimeWindow(firstBatchRightWindow, Long.MAX_VALUE)), 2, thirdBatchTimestamp),
+                new KeyValueTimestamp<>(new Windowed<>("E", new TimeWindow(thirdBatchLeftWindow, Long.MAX_VALUE)), 3, thirdBatchTimestamp)
+        );
+
+        assertThat(windowedMessages, is(expectResult));
+
+        final Set<String> expectResultString = new HashSet<>(expectResult.size());
+        for (final KeyValueTimestamp<Windowed<String>, Integer> eachRecord: expectResult) {
+            expectResultString.add("CreateTime:" + eachRecord.timestamp() + ", " + eachRecord.key() + ", " + eachRecord.value());
+        }
+
+        // check every message is contained in the expect result
+        final String[] allRecords = resultFromConsoleConsumer.split("\n");
+        for (final String record: allRecords) {
+            assertTrue(expectResultString.contains(record));
+        }
+
     }
 
     @Test

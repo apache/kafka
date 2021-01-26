@@ -17,28 +17,23 @@
 
 package org.apache.kafka.trogdor.common;
 
+import static java.util.concurrent.TimeUnit.MILLISECONDS;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import org.apache.kafka.test.TestUtils;
-import org.junit.Rule;
-import org.junit.Test;
-import org.junit.rules.Timeout;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.Timeout;
 
 import java.io.File;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertTrue;
-
+@Timeout(value = 120000, unit = MILLISECONDS)
 public class JsonUtilTest {
-    private static final Logger log = LoggerFactory.getLogger(JsonUtilTest.class);
-
-    @Rule
-    final public Timeout globalTimeout = Timeout.millis(120000);
 
     @Test
     public void testOpenBraceComesFirst() {
@@ -62,16 +57,12 @@ public class JsonUtilTest {
 
     @Test
     public void testObjectFromCommandLineArgument() throws Exception {
-        assertEquals(123, JsonUtil.<Foo>
-            objectFromCommandLineArgument("{\"bar\":123}", Foo.class).bar);
-        assertEquals(1, JsonUtil.<Foo>
-            objectFromCommandLineArgument("   {\"bar\": 1}   ", Foo.class).bar);
+        assertEquals(123, JsonUtil.objectFromCommandLineArgument("{\"bar\":123}", Foo.class).bar);
+        assertEquals(1, JsonUtil.objectFromCommandLineArgument("   {\"bar\": 1}   ", Foo.class).bar);
         File tempFile = TestUtils.tempFile();
         try {
-            Files.write(tempFile.toPath(),
-                "{\"bar\": 456}".getBytes(StandardCharsets.UTF_8));
-            assertEquals(456, JsonUtil.<Foo>
-                objectFromCommandLineArgument(tempFile.getAbsolutePath(), Foo.class).bar);
+            Files.write(tempFile.toPath(), "{\"bar\": 456}".getBytes(StandardCharsets.UTF_8));
+            assertEquals(456, JsonUtil.objectFromCommandLineArgument(tempFile.getAbsolutePath(), Foo.class).bar);
         } finally {
             Files.delete(tempFile.toPath());
         }

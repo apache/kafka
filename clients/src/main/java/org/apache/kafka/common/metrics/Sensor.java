@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.common.metrics;
 
+import java.util.function.Supplier;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.metrics.CompoundStat.NamedMeasurable;
 import org.apache.kafka.common.metrics.stats.TokenBucket;
@@ -53,12 +54,20 @@ public final class Sensor {
     private final Object metricLock;
 
     private static class StatAndConfig {
-        public final Stat stat;
-        public final MetricConfig config;
+        private final Stat stat;
+        private final Supplier<MetricConfig> configSupplier;
 
-        StatAndConfig(Stat stat, MetricConfig config) {
+        StatAndConfig(Stat stat, Supplier<MetricConfig> configSupplier) {
             this.stat = stat;
-            this.config = config;
+            this.configSupplier = configSupplier;
+        }
+
+        public Stat stat() {
+            return stat;
+        }
+
+        public MetricConfig config() {
+            return configSupplier.get();
         }
     }
 
@@ -219,7 +228,7 @@ public final class Sensor {
             synchronized (metricLock()) {
                 // increment all the stats
                 for (StatAndConfig statAndConfig : this.stats) {
-                    statAndConfig.stat.record(statAndConfig.config, value, timeMs);
+                    statAndConfig.stat.record(statAndConfig.config(), value, timeMs);
                 }
             }
             if (checkQuotas)
@@ -278,7 +287,7 @@ public final class Sensor {
             return false;
 
         final MetricConfig statConfig = config == null ? this.config : config;
-        stats.add(new StatAndConfig(Objects.requireNonNull(stat), statConfig));
+        stats.add(new StatAndConfig(Objects.requireNonNull(stat), () -> statConfig));
         Object lock = metricLock();
         for (NamedMeasurable m : stat.stats()) {
             final KafkaMetric metric = new KafkaMetric(lock, m.name(), m.stat(), statConfig, time);
@@ -324,7 +333,7 @@ public final class Sensor {
             );
             registry.registerMetric(metric);
             metrics.put(metric.metricName(), metric);
-            stats.add(new StatAndConfig(Objects.requireNonNull(stat), statConfig));
+            stats.add(new StatAndConfig(Objects.requireNonNull(stat), metric::config));
             return true;
         }
     }

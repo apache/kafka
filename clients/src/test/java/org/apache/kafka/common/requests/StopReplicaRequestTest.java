@@ -26,7 +26,7 @@ import org.apache.kafka.common.message.StopReplicaRequestData.StopReplicaTopicV1
 import org.apache.kafka.common.message.StopReplicaRequestData.StopReplicaTopicState;
 import org.apache.kafka.common.message.StopReplicaResponseData.StopReplicaPartitionError;
 import org.apache.kafka.common.protocol.Errors;
-import org.junit.Test;
+import org.junit.jupiter.api.Test;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -37,10 +37,10 @@ import java.util.Map;
 import java.util.Set;
 
 import static org.apache.kafka.common.protocol.ApiKeys.STOP_REPLICA;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertThrows;
-import static org.junit.Assert.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class StopReplicaRequestTest {
 
@@ -129,12 +129,12 @@ public class StopReplicaRequestTest {
         List<StopReplicaTopicState> topicStates = topicStates(true);
 
         for (short version = STOP_REPLICA.oldestVersion(); version < STOP_REPLICA.latestVersion(); version++) {
-            // Create a request for version to get its struct
+            // Create a request for version to get its serialized form
             StopReplicaRequest baseRequest = new StopReplicaRequest.Builder(version, 0, 1, 0,
                 true, topicStates).build(version);
 
-            // Construct the request from the struct
-            StopReplicaRequest request = new StopReplicaRequest(baseRequest.toStruct(), version);
+            // Construct the request from the buffer
+            StopReplicaRequest request = StopReplicaRequest.parse(baseRequest.serialize(), version);
 
             Map<TopicPartition, StopReplicaPartitionState> partitionStates =
                 StopReplicaRequestTest.partitionStates(request.topicStates());
@@ -164,12 +164,12 @@ public class StopReplicaRequestTest {
         List<StopReplicaTopicState> topicStates = topicStates(true);
 
         for (short version = STOP_REPLICA.oldestVersion(); version < STOP_REPLICA.latestVersion(); version++) {
-            // Create a request for version to get its struct
+            // Create a request for version to get its serialized form
             StopReplicaRequest baseRequest = new StopReplicaRequest.Builder(version, 0, 1, 0,
                 true, topicStates).build(version);
 
-            // Construct the request from the struct
-            StopReplicaRequest request = new StopReplicaRequest(baseRequest.toStruct(), version);
+            // Construct the request from the buffer
+            StopReplicaRequest request = StopReplicaRequest.parse(baseRequest.serialize(), version);
 
             Map<TopicPartition, StopReplicaPartitionState> partitionStates = request.partitionStates();
             assertEquals(6, partitionStates.size());

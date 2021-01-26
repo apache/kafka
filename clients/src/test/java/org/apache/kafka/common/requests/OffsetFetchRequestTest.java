@@ -21,8 +21,8 @@ import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.OffsetFetchResponse.PartitionData;
-import org.junit.Before;
-import org.junit.Test;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 
 import java.util.Arrays;
 import java.util.Collections;
@@ -32,11 +32,11 @@ import java.util.Map;
 import java.util.Optional;
 
 import static org.apache.kafka.common.requests.AbstractResponse.DEFAULT_THROTTLE_TIME;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertNull;
-import static org.junit.Assert.assertThrows;
-import static org.junit.Assert.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class OffsetFetchRequestTest {
 
@@ -49,7 +49,7 @@ public class OffsetFetchRequestTest {
     private OffsetFetchRequest.Builder builder;
     private List<TopicPartition> partitions;
 
-    @Before
+    @BeforeEach
     public void setUp() {
         partitions = Arrays.asList(new TopicPartition(topicOne, partitionOne),
                                    new TopicPartition(topicTwo, partitionTwo));
@@ -84,7 +84,8 @@ public class OffsetFetchRequestTest {
             OffsetFetchResponse response = request.getErrorResponse(throttleTimeMs, Errors.NONE);
             assertEquals(Errors.NONE, response.error());
             assertFalse(response.hasError());
-            assertEquals(Collections.singletonMap(Errors.NONE, 1), response.errorCounts());
+            assertEquals(Collections.singletonMap(Errors.NONE, version <= (short) 1 ? 3 : 1), response.errorCounts(),
+                "Incorrect error count for version " + version);
 
             if (version <= 1) {
                 assertEquals(expectedData, response.responseData());

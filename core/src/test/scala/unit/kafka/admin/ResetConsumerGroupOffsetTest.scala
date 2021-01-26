@@ -13,7 +13,7 @@
 package kafka.admin
 
 import java.io.{BufferedWriter, File, FileWriter}
-import java.text.{ParseException, SimpleDateFormat}
+import java.text.{SimpleDateFormat}
 import java.util.{Calendar, Date, Properties}
 
 import joptsimple.OptionException
@@ -23,46 +23,13 @@ import kafka.utils.TestUtils
 import org.apache.kafka.clients.producer.ProducerRecord
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.test
-import org.junit.Assert._
-import org.junit.Test
+import org.junit.jupiter.api.Assertions._
+import org.junit.jupiter.api.Test
 
 import scala.jdk.CollectionConverters._
 import scala.collection.Seq
 
-class TimeConversionTests {
 
-  @Test
-  def testDateTimeFormats(): Unit = {
-    //check valid formats
-    invokeGetDateTimeMethod(new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS"))
-    invokeGetDateTimeMethod(new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSSZ"))
-    invokeGetDateTimeMethod(new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSSX"))
-    invokeGetDateTimeMethod(new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSSXX"))
-    invokeGetDateTimeMethod(new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSSXXX"))
-
-    //check some invalid formats
-    try {
-      invokeGetDateTimeMethod(new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss"))
-      fail("Call to getDateTime should fail")
-    } catch {
-      case _: ParseException =>
-    }
-
-    try {
-      invokeGetDateTimeMethod(new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.X"))
-      fail("Call to getDateTime should fail")
-    } catch {
-      case _: ParseException =>
-    }
-  }
-
-  private def invokeGetDateTimeMethod(format: SimpleDateFormat): Unit = {
-    val checkpoint = new Date()
-    val timestampString = format.format(checkpoint)
-    ConsumerGroupCommand.convertTimestamp(timestampString)
-  }
-
-}
 
 /**
   * Test cases by:
@@ -446,11 +413,11 @@ class ResetConsumerGroupOffsetTest extends ConsumerGroupCommandTest {
     adminZkClient.deleteTopic(topic)
   }
 
-  @Test(expected = classOf[OptionException])
+  @Test
   def testResetWithUnrecognizedNewConsumerOption(): Unit = {
     val cgcArgs = Array("--new-consumer", "--bootstrap-server", brokerList, "--reset-offsets", "--group", group, "--all-topics",
       "--to-offset", "2", "--export")
-    getConsumerGroupService(cgcArgs)
+    assertThrows(classOf[OptionException], () => getConsumerGroupService(cgcArgs))
   }
 
   private def produceMessages(topic: String, numMessages: Int): Unit = {

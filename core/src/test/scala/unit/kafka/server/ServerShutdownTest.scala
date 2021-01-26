@@ -21,6 +21,7 @@ import kafka.utils.{CoreUtils, TestUtils}
 import kafka.utils.TestUtils._
 import java.io.{DataInputStream, File}
 import java.net.ServerSocket
+import java.util.Collections
 import java.util.concurrent.{Executors, TimeUnit}
 
 import kafka.cluster.Broker
@@ -29,6 +30,7 @@ import kafka.log.LogManager
 import kafka.zookeeper.ZooKeeperClientTimeoutException
 import org.apache.kafka.clients.consumer.KafkaConsumer
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerRecord}
+import org.apache.kafka.common.Uuid
 import org.apache.kafka.common.errors.KafkaStorageException
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.network.ListenerName
@@ -37,8 +39,8 @@ import org.apache.kafka.common.requests.LeaderAndIsrRequest
 import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.common.serialization.{IntegerDeserializer, IntegerSerializer, StringDeserializer, StringSerializer}
 import org.apache.kafka.common.utils.Time
-import org.junit.{Before, Test}
-import org.junit.Assert._
+import org.junit.jupiter.api.{BeforeEach, Test}
+import org.junit.jupiter.api.Assertions._
 
 import scala.jdk.CollectionConverters._
 import scala.reflect.ClassTag
@@ -50,7 +52,7 @@ class ServerShutdownTest extends ZooKeeperTestHarness {
   val sent1 = List("hello", "there")
   val sent2 = List("more", "messages")
 
-  @Before
+  @BeforeEach
   override def setUp(): Unit = {
     super.setUp()
     val props = TestUtils.createBrokerConfig(0, zkConnect)
@@ -168,7 +170,7 @@ class ServerShutdownTest extends ZooKeeperTestHarness {
       // identify the correct exception, making sure the server was shutdown, and cleaning up if anything
       // goes wrong so that awaitShutdown doesn't hang
       case e: Exception =>
-        assertTrue(s"Unexpected exception $e", exceptionClassTag.runtimeClass.isInstance(e))
+        assertTrue(exceptionClassTag.runtimeClass.isInstance(e), s"Unexpected exception $e")
         assertEquals(NotRunning.state, server.brokerState.currentState)
     }
     finally {
@@ -233,7 +235,8 @@ class ServerShutdownTest extends ZooKeeperTestHarness {
 
       // Initiate a sendRequest and wait until connection is established and one byte is received by the peer
       val requestBuilder = new LeaderAndIsrRequest.Builder(ApiKeys.LEADER_AND_ISR.latestVersion,
-        controllerId, 1, 0L, Seq.empty.asJava, brokerAndEpochs.keys.map(_.node(listenerName)).toSet.asJava)
+        controllerId, 1, 0L, Seq.empty.asJava, Collections.singletonMap(topic, Uuid.randomUuid()),
+        brokerAndEpochs.keys.map(_.node(listenerName)).toSet.asJava)
       controllerChannelManager.sendRequest(1, requestBuilder)
       receiveFuture.get(10, TimeUnit.SECONDS)
 

@@ -153,8 +153,9 @@ class GroupModeTransactionsTest(Test):
         """
         try:
             splitted_msg = msg.split('\t')
-            tuple = [int(splitted_msg[0]), int(splitted_msg[1])]
-            return tuple
+            value = int(splitted_msg[1])
+            partition = int(splitted_msg[0].split(":")[1])
+            return [value, partition]
 
         except ValueError:
             raise Exception("Unexpected message format (expected a tab separated [value, partition] tuple). Message: %s" % (msg))

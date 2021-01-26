@@ -203,16 +203,24 @@ class LogCleaner(initialConfig: CleanerConfig,
   }
 
   /**
-   * Update checkpoint file, removing topics and partitions that no longer exist
+   * Update checkpoint file to remove partitions if necessary.
    */
-  def updateCheckpoints(dataDir: File): Unit = {
-    cleanerManager.updateCheckpoints(dataDir, update=None)
+  def updateCheckpoints(dataDir: File, partitionToRemove: Option[TopicPartition] = None): Unit = {
+    cleanerManager.updateCheckpoints(dataDir, partitionToRemove = partitionToRemove)
   }
 
+  /**
+   * alter the checkpoint directory for the topicPartition, to remove the data in sourceLogDir, and add the data in destLogDir
+   */
   def alterCheckpointDir(topicPartition: TopicPartition, sourceLogDir: File, destLogDir: File): Unit = {
     cleanerManager.alterCheckpointDir(topicPartition, sourceLogDir, destLogDir)
   }
 
+  /**
+   * Stop cleaning logs in the provided directory
+   *
+   * @param dir     the absolute path of the log dir
+   */
   def handleLogDirFailure(dir: String): Unit = {
     cleanerManager.handleLogDirFailure(dir)
   }
@@ -445,7 +453,7 @@ object LogCleaner {
 
   def createNewCleanedSegment(log: Log, baseOffset: Long): LogSegment = {
     LogSegment.deleteIfExists(log.dir, baseOffset, fileSuffix = Log.CleanedFileSuffix)
-    LogSegment.open(log.dir, baseOffset, log.config, Time.SYSTEM, fileAlreadyExists = false,
+    LogSegment.open(log.dir, baseOffset, log.config, Time.SYSTEM,
       fileSuffix = Log.CleanedFileSuffix, initFileSize = log.initFileSize, preallocate = log.config.preallocate)
   }
 

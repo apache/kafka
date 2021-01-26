@@ -19,17 +19,165 @@
 
 <script id="upgrade-template" type="text/x-handlebars-template">
 
+<h5><a id="upgrade_280_notable" href="#upgrade_280_notable">Notable changes in 2.8.0</a></h5>
+
+<h4><a id="upgrade_2_7_0" href="#upgrade_2_7_0">Upgrading to 2.7.0 from any version 0.8.x through 2.6.x</a></h4>
+
+<p><b>If you are upgrading from a version prior to 2.1.x, please see the note below about the change to the schema used to store consumer offsets.
+    Once you have changed the inter.broker.protocol.version to the latest version, it will not be possible to downgrade to a version prior to 2.1.</b></p>
+
+<p><b>For a rolling upgrade:</b></p>
+
+<ol>
+    <li> Update server.properties on all brokers and add the following properties. CURRENT_KAFKA_VERSION refers to the version you
+        are upgrading from. CURRENT_MESSAGE_FORMAT_VERSION refers to the message format version currently in use. If you have previously
+        overridden the message format version, you should keep its current value. Alternatively, if you are upgrading from a version prior
+        to 0.11.0.x, then CURRENT_MESSAGE_FORMAT_VERSION should be set to match CURRENT_KAFKA_VERSION.
+        <ul>
+            <li>inter.broker.protocol.version=CURRENT_KAFKA_VERSION (e.g., <code>2.6</code>, <code>2.5</code>, etc.)</li>
+            <li>log.message.format.version=CURRENT_MESSAGE_FORMAT_VERSION  (See <a href="#upgrade_10_performance_impact">potential performance impact
+                following the upgrade</a> for the details on what this configuration does.)</li>
+        </ul>
+        If you are upgrading from version 0.11.0.x or above, and you have not overridden the message format, then you only need to override
+        the inter-broker protocol version.
+        <ul>
+            <li>inter.broker.protocol.version=CURRENT_KAFKA_VERSION (e.g., <code>2.6</code>, <code>2.5</code>, etc.)</li>
+        </ul>
+    </li>
+    <li> Upgrade the brokers one at a time: shut down the broker, update the code, and restart it. Once you have done so, the
+        brokers will be running the latest version and you can verify that the cluster's behavior and performance meets expectations.
+        It is still possible to downgrade at this point if there are any problems.
+    </li>
+    <li> Once the cluster's behavior and performance has been verified, bump the protocol version by editing
+        <code>inter.broker.protocol.version</code> and setting it to <code>2.7</code>.
+    </li>
+    <li> Restart the brokers one by one for the new protocol version to take effect. Once the brokers begin using the latest
+        protocol version, it will no longer be possible to downgrade the cluster to an older version.
+    </li>
+    <li> If you have overridden the message format version as instructed above, then you need to do one more rolling restart to
+        upgrade it to its latest version. Once all (or most) consumers have been upgraded to 0.11.0 or later,
+        change log.message.format.version to 2.7 on each broker and restart them one by one. Note that the older Scala clients,
+        which are no longer maintained, do not support the message format introduced in 0.11, so to avoid conversion costs
+        (or to take advantage of <a href="#upgrade_11_exactly_once_semantics">exactly once semantics</a>),
+        the newer Java clients must be used.
+    </li>
+</ol>
+
 <h5><a id="upgrade_270_notable" href="#upgrade_270_notable">Notable changes in 2.7.0</a></h5>
 <ul>
-    <li>The configuration parameter <code>retries</code> is deprecated for the producer, admin, and Kafka Streams clients
-        via <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-572%3A+Improve+timeouts+and+retries+in+Kafka+Streams">KIP-572</a>.
-        You should use the producer's <code>delivery.timeout.ms</code> and <code>max.block.ms</code>, admin's
-        <code>default.api.timeout.ms</code>, and Kafka Streams' new <code>task.timeout.ms</code> parameters instead.
-        Note that parameter <code>retry.backoff.ms</code> is not impacted by this change.
+    <li>
+        The 2.7.0 release includes the core Raft implementation specified in
+        <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-595%3A+A+Raft+Protocol+for+the+Metadata+Quorum">KIP-595</a>.
+        There is a separate "raft" module containing most of the logic. Until integration with the
+        controller is complete, there is a standalone server that users can use for testing the p
+        erformance of the Raft implementation.  See the README.md in the raft module for details
+    </li>
+    <li>
+        KIP-651 <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-651+-+Support+PEM+format+for+SSL+certificates+and+private+key">adds support</a>
+        for using PEM files for key and trust stores.
+    </li>
+    <li>
+        KIP-612 <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-612%3A+Ability+to+Limit+Connection+Creation+Rate+on+Brokers">adds support</a>
+        for enforcing broker-wide and per-listener connection create rates.  The 2.7.0 release contains
+        the first part of KIP-612 with dynamic configuration coming in the 2.8.0 release.
+    </li>
+    <li>
+        The ability to throttle topic and partition creations or
+        topics deletions to prevent a cluster from being harmed via
+        <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-599%3A+Throttle+Create+Topic%2C+Create+Partition+and+Delete+Topic+Operations">KIP-599</a>
+    </li>
+    <li>
+        When new features become available in Kafka there are two main issues:
+        <ol>
+            <li>How do Kafka clients become aware of broker capabilities?</li>
+            <li>How does the broker decide which features to enable?</li>
+        </ol>
+        <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-584%3A+Versioning+scheme+for+features">KIP-584</a>
+        provides a flexible and operationally easy solution for client discovery, feature gating and rolling upgrades using a single restart.
+    </li>
+    <li>
+        The ability to print record offsets and headers with the <code>ConsoleConsumer</code> is now possible
+        via <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-431%3A+Support+of+printing+additional+ConsumerRecord+fields+in+DefaultMessageFormatter">KIP-431</a>
+    </li>
+    <li>
+      The addition of <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-554%3A+Add+Broker-side+SCRAM+Config+API">KIP-554</a>
+        continues progress towards the goal of Zookeeper removal from Kafka. The addition of KIP-554
+        means you don't have to connect directly to ZooKeeper anymore for managing SCRAM credentials.
+    </li>
+    <li>Altering non-reconfigurable configs of existent listeners causes <code>InvalidRequestException</code>.
+        By contrast, the previous (unintended) behavior would have caused the updated configuration to be persisted,
+        but it wouldn't
+        take effect until the broker was restarted. See <a href="https://github.com/apache/kafka/pull/9284">KAFKA-10479</a> for more discussion.
+        See <code>DynamicBrokerConfig.DynamicSecurityConfigs</code> and <code>SocketServer.ListenerReconfigurableConfigs</code>
+        for the supported reconfigurable configs of existent listeners.
+    </li>
+
+    <li>
+        Kafka Streams adds support for
+        <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-450%3A+Sliding+Window+Aggregations+in+the+DSL">Sliding Windows Aggregations</a>
+        in the KStreams DSL.
+    </li>
+    <li>
+        Reverse iteration over state stores enabling more efficient most recent update searches with
+        <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-617%3A+Allow+Kafka+Streams+State+Stores+to+be+iterated+backwards">KIP-617</a>
+    </li>
+    <li>
+        End-to-End latency metrics in Kafka Steams see
+        <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-613%3A+Add+end-to-end+latency+metrics+to+Streams">KIP-613</a>
+        for more details
+    </li>
+    <li>
+        Kafka Streams added metrics reporting default RocksDB properties with
+        <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-607%3A+Add+Metrics+to+Kafka+Streams+to+Report+Properties+of+RocksDB">KIP-607</a>
+    </li>
+    <li>
+        Better Scala implicit Serdes support from
+        <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-616%3A+Rename+implicit+Serdes+instances+in+kafka-streams-scala">KIP-616</a>
     </li>
 </ul>
+<h4><a id="upgrade_2_6_0" href="#upgrade_2_6_0">Upgrading to 2.6.0 from any version 0.8.x through 2.5.x</a></h4>
 
-<h5><a id="upgrade_260_notable" href="#upgrade_260_notable">Notable changes in 2.6.0</a></h5>
+<p><b>If you are upgrading from a version prior to 2.1.x, please see the note below about the change to the schema used to store consumer offsets.
+    Once you have changed the inter.broker.protocol.version to the latest version, it will not be possible to downgrade to a version prior to 2.1.</b></p>
+
+<p><b>For a rolling upgrade:</b></p>
+
+<ol>
+    <li> Update server.properties on all brokers and add the following properties. CURRENT_KAFKA_VERSION refers to the version you
+        are upgrading from. CURRENT_MESSAGE_FORMAT_VERSION refers to the message format version currently in use. If you have previously
+        overridden the message format version, you should keep its current value. Alternatively, if you are upgrading from a version prior
+        to 0.11.0.x, then CURRENT_MESSAGE_FORMAT_VERSION should be set to match CURRENT_KAFKA_VERSION.
+        <ul>
+            <li>inter.broker.protocol.version=CURRENT_KAFKA_VERSION (e.g., <code>2.5</code>, <code>2.4</code>, etc.)</li>
+            <li>log.message.format.version=CURRENT_MESSAGE_FORMAT_VERSION  (See <a href="#upgrade_10_performance_impact">potential performance impact
+                following the upgrade</a> for the details on what this configuration does.)</li>
+        </ul>
+        If you are upgrading from version 0.11.0.x or above, and you have not overridden the message format, then you only need to override
+        the inter-broker protocol version.
+        <ul>
+            <li>inter.broker.protocol.version=CURRENT_KAFKA_VERSION (e.g., <code>2.5</code>, <code>2.4</code>, etc.)</li>
+        </ul>
+    </li>
+    <li> Upgrade the brokers one at a time: shut down the broker, update the code, and restart it. Once you have done so, the
+        brokers will be running the latest version and you can verify that the cluster's behavior and performance meets expectations.
+        It is still possible to downgrade at this point if there are any problems.
+    </li>
+    <li> Once the cluster's behavior and performance has been verified, bump the protocol version by editing
+        <code>inter.broker.protocol.version</code> and setting it to <code>2.6</code>.
+    </li>
+    <li> Restart the brokers one by one for the new protocol version to take effect. Once the brokers begin using the latest
+        protocol version, it will no longer be possible to downgrade the cluster to an older version.
+    </li>
+    <li> If you have overridden the message format version as instructed above, then you need to do one more rolling restart to
+        upgrade it to its latest version. Once all (or most) consumers have been upgraded to 0.11.0 or later,
+        change log.message.format.version to 2.6 on each broker and restart them one by one. Note that the older Scala clients,
+        which are no longer maintained, do not support the message format introduced in 0.11, so to avoid conversion costs
+        (or to take advantage of <a href="#upgrade_11_exactly_once_semantics">exactly once semantics</a>),
+        the newer Java clients must be used.
+    </li>
+</ol>
+
+<h5 class="anchor-heading"><a id="upgrade_260_notable" class="anchor-link"></a><a href="#upgrade_260_notable">Notable changes in 2.6.0</a></h5>
 <ul>
     <li>Kafka Streams adds a new processing mode (requires broker 2.5 or newer) that improves application
         scalability using exactly-once guarantees
@@ -49,6 +197,49 @@
         Fetch requests and other requests intended only for the leader or follower return NOT_LEADER_OR_FOLLOWER(6) instead of REPLICA_NOT_AVAILABLE(9)
         if the broker is not a replica, ensuring that this transient error during reassignments is handled by all clients as a retriable exception.
     </li>
+</ul>
+
+<h4><a id="upgrade_2_5_0" href="#upgrade_2_5_0">Upgrading to 2.5.0 from any version 0.8.x through 2.4.x</a></h4>
+
+<p><b>If you are upgrading from a version prior to 2.1.x, please see the note below about the change to the schema used to store consumer offsets.
+    Once you have changed the inter.broker.protocol.version to the latest version, it will not be possible to downgrade to a version prior to 2.1.</b></p>
+
+<p><b>For a rolling upgrade:</b></p>
+
+<ol>
+    <li> Update server.properties on all brokers and add the following properties. CURRENT_KAFKA_VERSION refers to the version you
+        are upgrading from. CURRENT_MESSAGE_FORMAT_VERSION refers to the message format version currently in use. If you have previously
+        overridden the message format version, you should keep its current value. Alternatively, if you are upgrading from a version prior
+        to 0.11.0.x, then CURRENT_MESSAGE_FORMAT_VERSION should be set to match CURRENT_KAFKA_VERSION.
+        <ul>
+            <li>inter.broker.protocol.version=CURRENT_KAFKA_VERSION (e.g., <code>2.4</code>, <code>2.3</code>, etc.)</li>
+            <li>log.message.format.version=CURRENT_MESSAGE_FORMAT_VERSION  (See <a href="#upgrade_10_performance_impact">potential performance impact
+                following the upgrade</a> for the details on what this configuration does.)</li>
+        </ul>
+        If you are upgrading from version 0.11.0.x or above, and you have not overridden the message format, then you only need to override
+        the inter-broker protocol version.
+        <ul>
+            <li>inter.broker.protocol.version=CURRENT_KAFKA_VERSION (e.g., <code>2.4</code>, <code>2.3</code>, etc.)</li>
+        </ul>
+    </li>
+    <li> Upgrade the brokers one at a time: shut down the broker, update the code, and restart it. Once you have done so, the
+        brokers will be running the latest version and you can verify that the cluster's behavior and performance meets expectations.
+        It is still possible to downgrade at this point if there are any problems.
+    </li>
+    <li> Once the cluster's behavior and performance has been verified, bump the protocol version by editing
+        <code>inter.broker.protocol.version</code> and setting it to <code>2.5</code>.
+    </li>
+    <li> Restart the brokers one by one for the new protocol version to take effect. Once the brokers begin using the latest
+        protocol version, it will no longer be possible to downgrade the cluster to an older version.
+    </li>
+    <li> If you have overridden the message format version as instructed above, then you need to do one more rolling restart to
+        upgrade it to its latest version. Once all (or most) consumers have been upgraded to 0.11.0 or later,
+        change log.message.format.version to 2.5 on each broker and restart them one by one. Note that the older Scala clients,
+        which are no longer maintained, do not support the message format introduced in 0.11, so to avoid conversion costs
+        (or to take advantage of <a href="#upgrade_11_exactly_once_semantics">exactly once semantics</a>),
+        the newer Java clients must be used.
+    </li>
+
     <li>There are several notable changes to the reassignment tool <code>kafka-reassign-partitions.sh</code>
         following the completion of
         <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-455%3A+Create+an+Administrative+API+for+Replica+Reassignment">KIP-455</a>.
@@ -57,9 +248,9 @@
         <code>--cancel</code> command. Finally, reassignment with <code>--zookeeper</code>
         has been deprecated in favor of <code>--bootstrap-server</code>. See the KIP for more detail.
     </li>
-</ul>
+</ol>
 
-<h5><a id="upgrade_250_notable" href="#upgrade_250_notable">Notable changes in 2.5.0</a></h5>
+<h5 class="anchor-heading"><a id="upgrade_250_notable" class="anchor-link"></a><a href="#upgrade_250_notable">Notable changes in 2.5.0</a></h5>
 <ul>
     <li>When <code>RebalanceProtocol#COOPERATIVE</code> is used, <code>Consumer#poll</code> can still return data
         while it is in the middle of a rebalance for those partitions still owned by the consumer; in addition
@@ -819,7 +1010,7 @@
         <ul>
             <li> prepare your application instances for a rolling bounce and make sure that config <code>upgrade.from</code> is set to <code>"0.10.0"</code> for new version 0.11.0.3 </li>
             <li> bounce each instance of your application once </li>
-            <li> prepare your newly deployed 1.0.2 application instances for a second round of rolling bounces; make sure to remove the value for config <code>upgrade.mode</code> </li>
+            <li> prepare your newly deployed 1.0.2 application instances for a second round of rolling bounces; make sure to remove the value for config <code>upgrade.from</code> </li>
             <li> bounce each instance of your application once more to complete the upgrade </li>
         </ul>
     </li>
@@ -911,7 +1102,7 @@
         <ul>
             <li> prepare your application instances for a rolling bounce and make sure that config <code>upgrade.from</code> is set to <code>"0.10.0"</code> for new version 0.11.0.3 </li>
             <li> bounce each instance of your application once </li>
-            <li> prepare your newly deployed 0.11.0.3 application instances for a second round of rolling bounces; make sure to remove the value for config <code>upgrade.mode</code> </li>
+            <li> prepare your newly deployed 0.11.0.3 application instances for a second round of rolling bounces; make sure to remove the value for config <code>upgrade.from</code> </li>
             <li> bounce each instance of your application once more to complete the upgrade </li>
         </ul>
     </li>
@@ -1091,7 +1282,7 @@ Kafka cluster before upgrading your clients. Version 0.10.2 brokers support 0.8.
         <ul>
             <li> prepare your application instances for a rolling bounce and make sure that config <code>upgrade.from</code> is set to <code>"0.10.0"</code> for new version 0.10.2.2 </li>
             <li> bounce each instance of your application once </li>
-            <li> prepare your newly deployed 0.10.2.2 application instances for a second round of rolling bounces; make sure to remove the value for config <code>upgrade.mode</code> </li>
+            <li> prepare your newly deployed 0.10.2.2 application instances for a second round of rolling bounces; make sure to remove the value for config <code>upgrade.from</code> </li>
             <li> bounce each instance of your application once more to complete the upgrade </li>
         </ul>
     </li>
@@ -1200,7 +1391,7 @@ only support 0.10.1.x or later brokers while 0.10.1.x brokers also support older
         <ul>
             <li> prepare your application instances for a rolling bounce and make sure that config <code>upgrade.from</code> is set to <code>"0.10.0"</code> for new version 0.10.1.2 </li>
             <li> bounce each instance of your application once </li>
-            <li> prepare your newly deployed 0.10.1.2 application instances for a second round of rolling bounces; make sure to remove the value for config <code>upgrade.mode</code> </li>
+            <li> prepare your newly deployed 0.10.1.2 application instances for a second round of rolling bounces; make sure to remove the value for config <code>upgrade.from</code> </li>
             <li> bounce each instance of your application once more to complete the upgrade </li>
         </ul>
     </li>

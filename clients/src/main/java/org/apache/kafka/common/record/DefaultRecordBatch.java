@@ -255,11 +255,14 @@ public class DefaultRecordBatch extends AbstractRecordBatch implements MutableRe
         return buffer.getInt(PARTITION_LEADER_EPOCH_OFFSET);
     }
 
-    private CloseableIterator<Record> compressedIterator(BufferSupplier bufferSupplier, boolean skipKeyValue) {
+    public DataInputStream recordInputStream(BufferSupplier bufferSupplier) {
         final ByteBuffer buffer = this.buffer.duplicate();
         buffer.position(RECORDS_OFFSET);
-        final DataInputStream inputStream = new DataInputStream(compressionType().wrapForInput(buffer, magic(),
-            bufferSupplier));
+        return new DataInputStream(compressionType().wrapForInput(buffer, magic(), bufferSupplier));
+    }
+
+    private CloseableIterator<Record> compressedIterator(BufferSupplier bufferSupplier, boolean skipKeyValue) {
+        final DataInputStream inputStream = recordInputStream(bufferSupplier);
 
         if (skipKeyValue) {
             // this buffer is used to skip length delimited fields like key, value, headers
@@ -440,22 +443,22 @@ public class DefaultRecordBatch extends AbstractRecordBatch implements MutableRe
                 producerEpoch, baseSequence, isTransactional, isControlRecord, partitionLeaderEpoch, 0);
     }
 
-    static void writeHeader(ByteBuffer buffer,
-                            long baseOffset,
-                            int lastOffsetDelta,
-                            int sizeInBytes,
-                            byte magic,
-                            CompressionType compressionType,
-                            TimestampType timestampType,
-                            long firstTimestamp,
-                            long maxTimestamp,
-                            long producerId,
-                            short epoch,
-                            int sequence,
-                            boolean isTransactional,
-                            boolean isControlBatch,
-                            int partitionLeaderEpoch,
-                            int numRecords) {
+    public static void writeHeader(ByteBuffer buffer,
+                                   long baseOffset,
+                                   int lastOffsetDelta,
+                                   int sizeInBytes,
+                                   byte magic,
+                                   CompressionType compressionType,
+                                   TimestampType timestampType,
+                                   long firstTimestamp,
+                                   long maxTimestamp,
+                                   long producerId,
+                                   short epoch,
+                                   int sequence,
+                                   boolean isTransactional,
+                                   boolean isControlBatch,
+                                   int partitionLeaderEpoch,
+                                   int numRecords) {
         if (magic < RecordBatch.CURRENT_MAGIC_VALUE)
             throw new IllegalArgumentException("Invalid magic value " + magic);
         if (firstTimestamp < 0 && firstTimestamp != NO_TIMESTAMP)

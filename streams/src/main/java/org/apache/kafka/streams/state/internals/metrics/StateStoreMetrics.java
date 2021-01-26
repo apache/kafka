@@ -386,13 +386,11 @@ public class StateStoreMetrics {
         );
     }
 
-    public static Sensor expiredWindowRecordDropSensor(final String threadId,
-                                                       final String taskId,
+    public static Sensor expiredWindowRecordDropSensor(final String taskId,
                                                        final String storeType,
                                                        final String storeName,
                                                        final StreamsMetricsImpl streamsMetrics) {
         final Sensor sensor = streamsMetrics.storeLevelSensor(
-            threadId,
             taskId,
             storeName,
             EXPIRED_WINDOW_RECORD_DROP,
@@ -401,7 +399,7 @@ public class StateStoreMetrics {
         addInvocationRateAndCountToSensor(
             sensor,
             "stream-" + storeType + "-metrics",
-            streamsMetrics.storeLevelTagMap(threadId, taskId, storeType, storeName),
+            streamsMetrics.storeLevelTagMap(taskId, storeType, storeName),
             EXPIRED_WINDOW_RECORD_DROP,
             EXPIRED_WINDOW_RECORD_DROP_RATE_DESCRIPTION,
             EXPIRED_WINDOW_RECORD_DROP_TOTAL_DESCRIPTION
@@ -447,13 +445,12 @@ public class StateStoreMetrics {
         );
     }
 
-    public static Sensor e2ELatencySensor(final String threadId,
-                                          final String taskId,
+    public static Sensor e2ELatencySensor(final String taskId,
                                           final String storeType,
                                           final String storeName,
                                           final StreamsMetricsImpl streamsMetrics) {
-        final Sensor sensor = streamsMetrics.storeLevelSensor(threadId, taskId, storeName, RECORD_E2E_LATENCY, RecordingLevel.TRACE);
-        final Map<String, String> tagMap = streamsMetrics.storeLevelTagMap(threadId, taskId, storeType, storeName);
+        final Sensor sensor = streamsMetrics.storeLevelSensor(taskId, storeName, RECORD_E2E_LATENCY, RecordingLevel.TRACE);
+        final Map<String, String> tagMap = streamsMetrics.storeLevelTagMap(taskId, storeType, storeName);
         addAvgAndMinAndMaxToSensor(
             sensor,
             STATE_STORE_LEVEL_GROUP,
@@ -477,7 +474,7 @@ public class StateStoreMetrics {
                                             final RecordingLevel recordingLevel,
                                             final StreamsMetricsImpl streamsMetrics) {
         final Version version = streamsMetrics.version();
-        final Sensor sensor = streamsMetrics.storeLevelSensor(threadId, taskId, storeName, metricName, recordingLevel);
+        final Sensor sensor = streamsMetrics.storeLevelSensor(taskId, storeName, metricName, recordingLevel);
         final String group;
         final Map<String, String> tagMap;
         if (version == Version.FROM_0100_TO_24) {
@@ -487,7 +484,7 @@ public class StateStoreMetrics {
 
         } else {
             group = STATE_STORE_LEVEL_GROUP;
-            tagMap = streamsMetrics.storeLevelTagMap(threadId, taskId, storeType, storeName);
+            tagMap = streamsMetrics.storeLevelTagMap(taskId, storeType, storeName);
         }
         addAvgAndMaxToSensor(sensor, group, tagMap, metricName, descriptionOfAvg, descriptionOfMax);
         return sensor;
@@ -507,7 +504,7 @@ public class StateStoreMetrics {
         final Sensor sensor;
         final String latencyMetricName = metricName + LATENCY_SUFFIX;
         final Version version = streamsMetrics.version();
-        final Map<String, String> tagMap = streamsMetrics.storeLevelTagMap(threadId, taskId, storeType, storeName);
+        final Map<String, String> tagMap = streamsMetrics.storeLevelTagMap(taskId, storeType, storeName);
         final String stateStoreLevelGroup = stateStoreLevelGroup(storeType, version);
         if (version == Version.FROM_0100_TO_24) {
             final Sensor parentSensor = parentSensor(
@@ -524,7 +521,7 @@ public class StateStoreMetrics {
                 recordingLevel,
                 streamsMetrics
             );
-            sensor = streamsMetrics.storeLevelSensor(threadId, taskId, storeName, metricName, recordingLevel, parentSensor);
+            sensor = streamsMetrics.storeLevelSensor(taskId, storeName, metricName, recordingLevel, parentSensor);
             addInvocationRateAndCountToSensor(
                 sensor,
                 stateStoreLevelGroup,
@@ -534,7 +531,7 @@ public class StateStoreMetrics {
                 descriptionOfCount
             );
         } else {
-            sensor = streamsMetrics.storeLevelSensor(threadId, taskId, storeName, metricName, recordingLevel);
+            sensor = streamsMetrics.storeLevelSensor(taskId, storeName, metricName, recordingLevel);
             addInvocationRateToSensor(sensor, stateStoreLevelGroup, tagMap, metricName, descriptionOfRate);
         }
         addAvgAndMaxToSensor(
@@ -561,7 +558,7 @@ public class StateStoreMetrics {
                                        final RecordingLevel recordingLevel,
                                        final StreamsMetricsImpl streamsMetrics) {
         final Sensor sensor = streamsMetrics.taskLevelSensor(threadId, taskId, metricName, recordingLevel);
-        final Map<String, String> allTagMap = streamsMetrics.storeLevelTagMap(threadId, taskId, storeType, ROLLUP_VALUE);
+        final Map<String, String> allTagMap = streamsMetrics.storeLevelTagMap(taskId, storeType, ROLLUP_VALUE);
         addAvgAndMaxToSensor(
             sensor,
             stateStoreLevelGroup,

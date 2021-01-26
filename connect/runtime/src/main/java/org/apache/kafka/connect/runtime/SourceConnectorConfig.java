@@ -181,6 +181,6 @@ public class SourceConnectorConfig extends ConnectorConfig {
     }
 
     public static void main(String[] args) {
-        System.out.println(config.toHtml());
+        System.out.println(config.toHtml(4, config -> "sourceconnectorconfigs_" + config));
     }
 }

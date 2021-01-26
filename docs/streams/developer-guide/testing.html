@@ -51,14 +51,12 @@
                 To test a Kafka Streams application, Kafka provides a test-utils artifact that can be added as regular
                 dependency to your test code base. Example <code>pom.xml</code> snippet when using Maven:
             </p>
-            <pre>
-&lt;dependency&gt;
+            <pre class="line-numbers"><code class="language-text">&lt;dependency&gt;
     &lt;groupId&gt;org.apache.kafka&lt;/groupId&gt;
     &lt;artifactId&gt;kafka-streams-test-utils&lt;/artifactId&gt;
     &lt;version&gt;{{fullDotVersion}}&lt;/version&gt;
     &lt;scope&gt;test&lt;/scope&gt;
-&lt;/dependency&gt;
-    </pre>
+&lt;/dependency&gt;</code></pre>
         </div>
         <div class="section" id="testing-topologytestdriver">
             <h2><a class="toc-backref" href="#testing-topologytestdriver" title="Permalink to this headline">Testing a
@@ -73,8 +71,7 @@
                 You can use the test driver to verify that your specified processor topology computes the correct result
                 with the manually piped in data records.
                 The test driver captures the results records and allows to query its embedded state stores.
-            <pre>
-// Processor API
+            <pre class="line-numbers"><code class="language-text">// Processor API
 Topology topology = new Topology();
 topology.addSource("sourceProcessor", "input-topic");
 topology.addProcessor("processor", ..., "sourceProcessor");
@@ -89,16 +86,13 @@ Topology topology = builder.build();
 Properties props = new Properties();
 props.put(StreamsConfig.APPLICATION_ID_CONFIG, "test");
 props.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "dummy:1234");
-TopologyTestDriver testDriver = new TopologyTestDriver(topology, props);
-        </pre>
+TopologyTestDriver testDriver = new TopologyTestDriver(topology, props);</code></pre>
             <p>
                 With the test driver you can create <code>TestInputTopic</code> giving topic name and the corresponding serializers.
                 <code>TestInputTopic</code> provides various methods to pipe new message values, keys and values, or list of KeyValue objects.
             </p>
-            <pre>
-TestInputTopic&lt;String, Long&gt; inputTopic = testDriver.createInputTopic("input-topic", stringSerde.serializer(), longSerde.serializer());
-inputTopic.pipeInput("key", 42L);
-        </pre>
+            <pre class="line-numbers"><code class="language-text">TestInputTopic&lt;String, Long&gt; inputTopic = testDriver.createInputTopic("input-topic", stringSerde.serializer(), longSerde.serializer());
+inputTopic.pipeInput("key", 42L);</code></pre>
             <p>
                 To verify the output, you can use <code>TestOutputTopic</code>
                 where you configure the topic and the corresponding deserializers during initialization.
@@ -106,34 +100,26 @@ inputTopic.pipeInput("key", 42L);
                 For example, you can validate returned <code>KeyValue</code> with standard assertions
                 if you only care about the key and value, but not the timestamp of the result record.
             </p>
-            <pre>
-TestOutputTopic&lt;String, Long&gt; outputTopic = testDriver.createOutputTopic("result-topic", stringSerde.deserializer(), longSerde.deserializer());
-assertThat(outputTopic.readKeyValue(), equalTo(new KeyValue&lt;&gt;("key", 42L)));
-        </pre>
+            <pre class="line-numbers"><code class="language-text">TestOutputTopic&lt;String, Long&gt; outputTopic = testDriver.createOutputTopic("output-topic", stringSerde.deserializer(), longSerde.deserializer());
+assertThat(outputTopic.readKeyValue(), equalTo(new KeyValue&lt;&gt;("key", 42L)));</code></pre>
             <p>
                 <code>TopologyTestDriver</code> supports punctuations, too.
                 Event-time punctuations are triggered automatically based on the processed records' timestamps.
                 Wall-clock-time punctuations can also be triggered by advancing the test driver's wall-clock-time (the
                 driver mocks wall-clock-time internally to give users control over it).
             </p>
-            <pre>
-testDriver.advanceWallClockTime(Duration.ofSeconds(20));
-        </pre>
+            <pre class="line-numbers"><code class="language-text">testDriver.advanceWallClockTime(Duration.ofSeconds(20));</code></pre>
             <p>
                 Additionally, you can access state stores via the test driver before or after a test.
                 Accessing stores before a test is useful to pre-populate a store with some initial values.
                 After data was processed, expected updates to the store can be verified.
             </p>
-            <pre>
-KeyValueStore store = testDriver.getKeyValueStore("store-name");
-        </pre>
+            <pre class="line-numbers"><code class="language-text">KeyValueStore store = testDriver.getKeyValueStore("store-name");</code></pre>
             <p>
                 Note, that you should always close the test driver at the end to make sure all resources are release
                 properly.
             </p>
-            <pre>
-testDriver.close();
-        </pre>
+            <pre class="line-numbers"><code class="language-text">testDriver.close();</code></pre>
 
             <h3>Example</h3>
             <p>
@@ -142,8 +128,7 @@ testDriver.close();
                 While processing, no output is generated, but only the store is updated.
                 Output is only sent downstream based on event-time and wall-clock punctuations.
             </p>
-            <pre>
-private TopologyTestDriver testDriver;
+            <pre class="line-numbers"><code class="language-text">private TopologyTestDriver testDriver;
 private TestInputTopic&lt;String, Long&gt; inputTopic;
 private TestOutputTopic&lt;String, Long&gt; outputTopic;
 private KeyValueStore&lt;String, Long&gt; store;
@@ -277,8 +262,7 @@ public class CustomMaxAggregator implements Processor&lt;String, Long&gt; {
 
     @Override
     public void close() {}
-}
-        </pre>
+}</code></pre>
         </div>
         <div class="section" id="unit-testing-processors">
             <h2>
@@ -296,28 +280,23 @@ public class CustomMaxAggregator implements Processor&lt;String, Long&gt; {
             <b>Construction</b>
             <p>
                 To begin with, instantiate your processor and initialize it with the mock context:
-            <pre>
-final Processor processorUnderTest = ...;
+            <pre class="line-numbers"><code class="language-text">final Processor processorUnderTest = ...;
 final MockProcessorContext context = new MockProcessorContext();
-processorUnderTest.init(context);
-                </pre>
+processorUnderTest.init(context);</code></pre>
             If you need to pass configuration to your processor or set the default serdes, you can create the mock with
             config:
-            <pre>
-final Properties props = new Properties();
+            <pre class="line-numbers"><code class="language-text">final Properties props = new Properties();
 props.put(StreamsConfig.APPLICATION_ID_CONFIG, "unit-test");
 props.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "");
 props.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.String().getClass());
 props.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.Long().getClass());
 props.put("some.other.config", "some config value");
-final MockProcessorContext context = new MockProcessorContext(props);
-                </pre>
+final MockProcessorContext context = new MockProcessorContext(props);</code></pre>
             </p>
             <b>Captured data</b>
             <p>
                 The mock will capture any values that your processor forwards. You can make assertions on them:
-            <pre>
-processorUnderTest.process("key", "value");
+            <pre class="line-numbers"><code class="language-text">processorUnderTest.process("key", "value");
 
 final Iterator&lt;CapturedForward&gt; forwarded = context.forwarded().iterator();
 assertEquals(forwarded.next().keyValue(), new KeyValue&lt;&gt;(..., ...));
@@ -326,34 +305,27 @@ assertFalse(forwarded.hasNext());
 // you can reset forwards to clear the captured data. This may be helpful in constructing longer scenarios.
 context.resetForwards();
 
-assertEquals(context.forwarded().size(), 0);
-            </pre>
+assertEquals(context.forwarded().size(), 0);</code></pre>
             If your processor forwards to specific child processors, you can query the context for captured data by
             child name:
-            <pre>
-final List&lt;CapturedForward&gt; captures = context.forwarded("childProcessorName");
-            </pre>
+            <pre class="line-numbers"><code class="language-text">final List&lt;CapturedForward&gt; captures = context.forwarded("childProcessorName");</code></pre>
             The mock also captures whether your processor has called <code>commit()</code> on the context:
-            <pre>
-assertTrue(context.committed());
+            <pre class="line-numbers"><code class="language-text">assertTrue(context.committed());
 
 // commit captures can also be reset.
 context.resetCommit();
 
-assertFalse(context.committed());
-            </pre>
+assertFalse(context.committed());</code></pre>
             </p>
             <b>Setting record metadata</b>
             <p>
                 In case your processor logic depends on the record metadata (topic, partition, offset, or timestamp),
                 you can set them on the context, either all together or individually:
-            <pre>
-context.setRecordMetadata("topicName", /*partition*/ 0, /*offset*/ 0L, /*timestamp*/ 0L);
+            <pre class="line-numbers"><code class="language-text">context.setRecordMetadata("topicName", /*partition*/ 0, /*offset*/ 0L, /*timestamp*/ 0L);
 context.setTopic("topicName");
 context.setPartition(0);
 context.setOffset(0L);
-context.setTimestamp(0L);
-                </pre>
+context.setTimestamp(0L);</code></pre>
             Once these are set, the context will continue returning the same values, until you set new ones.
             </p>
             <b>State stores</b>
@@ -362,8 +334,7 @@ context.setTimestamp(0L);
                 You're encouraged to use a simple in-memory store of the appropriate type (KeyValue, Windowed, or
                 Session), since the mock context does <i>not</i> manage changelogs, state directories, etc.
             </p>
-            <pre>
-final KeyValueStore&lt;String, Integer&gt; store =
+            <pre class="line-numbers"><code class="language-text">final KeyValueStore&lt;String, Integer&gt; store =
     Stores.keyValueStoreBuilder(
             Stores.inMemoryKeyValueStore("myStore"),
             Serdes.String(),
@@ -372,21 +343,18 @@ final KeyValueStore&lt;String, Integer&gt; store =
         .withLoggingDisabled() // Changelog is not supported by MockProcessorContext.
         .build();
 store.init(context, store);
-context.register(store, /*deprecated parameter*/ false, /*parameter unused in mock*/ null);
-            </pre>
+context.register(store, /*deprecated parameter*/ false, /*parameter unused in mock*/ null);</code></pre>
             <b>Verifying punctuators</b>
             <p>
                 Processors can schedule punctuators to handle periodic tasks.
                 The mock context does <i>not</i> automatically execute punctuators, but it does capture them to
                 allow you to unit test them as well:
-            <pre>
-final MockProcessorContext.CapturedPunctuator capturedPunctuator = context.scheduledPunctuators().get(0);
+            <pre class="line-numbers"><code class="language-text">final MockProcessorContext.CapturedPunctuator capturedPunctuator = context.scheduledPunctuators().get(0);
 final long interval = capturedPunctuator.getIntervalMs();
 final PunctuationType type = capturedPunctuator.getType();
 final boolean cancelled = capturedPunctuator.cancelled();
 final Punctuator punctuator = capturedPunctuator.getPunctuator();
-punctuator.punctuate(/*timestamp*/ 0L);
-                </pre>
+punctuator.punctuate(/*timestamp*/ 0L);</code></pre>
             If you need to write tests involving automatic firing of scheduled punctuators, we recommend creating a
             simple topology with your processor and using the <a href="testing.html#testing-topologytestdriver"><code>TopologyTestDriver</code></a>.
             </p>
@@ -400,10 +368,10 @@ punctuator.punctuate(/*timestamp*/ 0L);
 
 <!--#include virtual="../../../includes/_header.htm" -->
 <!--#include virtual="../../../includes/_top.htm" -->
-<div class="content documentation documentation--current">
+<div class="content documentation ">
     <!--#include virtual="../../../includes/_nav.htm" -->
     <div class="right">
-        <!--#include virtual="../../../includes/_docs_banner.htm" -->
+        <!--//#include virtual="../../../includes/_docs_banner.htm" -->
         <ul class="breadcrumbs">
             <li><a href="/documentation">Documentation</a></li>
             <li><a href="/documentation/streams">Kafka Streams</a></li>

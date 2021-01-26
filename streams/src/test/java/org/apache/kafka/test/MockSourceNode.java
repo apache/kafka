@@ -17,6 +17,7 @@
 package org.apache.kafka.test;
 
 import org.apache.kafka.common.serialization.Deserializer;
+import org.apache.kafka.streams.processor.api.Record;
 import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
 import org.apache.kafka.streams.processor.internals.SourceNode;
 
@@ -39,10 +40,10 @@ public class MockSourceNode<KIn, VIn, KOut, VOut> extends SourceNode<KIn, VIn, K
     }
 
     @Override
-    public void process(final KIn key, final VIn value) {
-        this.numReceived++;
-        this.keys.add(key);
-        this.values.add(value);
+    public void process(final Record<KIn, VIn> record) {
+        numReceived++;
+        keys.add(record.key());
+        values.add(record.value());
     }
 
     @Override
@@ -54,6 +55,6 @@ public class MockSourceNode<KIn, VIn, KOut, VOut> extends SourceNode<KIn, VIn, K
     @Override
     public void close() {
         super.close();
-        this.closed = true;
+        closed = true;
     }
 }

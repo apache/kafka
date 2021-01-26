@@ -54,21 +54,21 @@ private object MemberMetadata {
  */
 @nonthreadsafe
 private[group] class MemberMetadata(var memberId: String,
-                                    val groupId: String,
                                     val groupInstanceId: Option[String],
                                     val clientId: String,
                                     val clientHost: String,
                                     val rebalanceTimeoutMs: Int,
                                     val sessionTimeoutMs: Int,
                                     val protocolType: String,
-                                    var supportedProtocols: List[(String, Array[Byte])]) {
+                                    var supportedProtocols: List[(String, Array[Byte])],
+                                    var assignment: Array[Byte] = Array.empty[Byte]) {
 
-  var assignment: Array[Byte] = Array.empty[Byte]
   var awaitingJoinCallback: JoinGroupResult => Unit = null
   var awaitingSyncCallback: SyncGroupResult => Unit = null
   var isLeaving: Boolean = false
   var isNew: Boolean = false
-  val isStaticMember: Boolean = groupInstanceId.isDefined
+
+  def isStaticMember: Boolean = groupInstanceId.isDefined
 
   // This variable is used to track heartbeat completion through the delayed
   // heartbeat purgatory. When scheduling a new heartbeat expiration, we set

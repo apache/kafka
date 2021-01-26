@@ -484,7 +484,8 @@ public class StreamsConfig extends AbstractConfig {
     /** {@code replication.factor} */
     @SuppressWarnings("WeakerAccess")
     public static final String REPLICATION_FACTOR_CONFIG = "replication.factor";
-    private static final String REPLICATION_FACTOR_DOC = "The replication factor for change log topics and repartition topics created by the stream processing application.";
+    private static final String REPLICATION_FACTOR_DOC = "The replication factor for change log topics and repartition topics created by the stream processing application." +
+        " If your broker cluster is on version 2.4 or newer, you can set -1 to use the broker default replication factor.";
 
     /** {@code request.timeout.ms} */
     @SuppressWarnings("WeakerAccess")
@@ -694,7 +695,7 @@ public class StreamsConfig extends AbstractConfig {
                     CommonClientConfigs.SECURITY_PROTOCOL_DOC)
             .define(TASK_TIMEOUT_MS_CONFIG,
                     Type.LONG,
-                    Duration.ofSeconds(5L).toMillis(),
+                    Duration.ofMinutes(5L).toMillis(),
                     atLeast(0L),
                     Importance.MEDIUM,
                     TASK_TIMEOUT_MS_DOC)
@@ -863,8 +864,6 @@ public class StreamsConfig extends AbstractConfig {
     static {
         final Map<String, Object> tempProducerDefaultOverrides = new HashMap<>();
         tempProducerDefaultOverrides.put(ProducerConfig.LINGER_MS_CONFIG, "100");
-        // Reduce the transaction timeout for quicker pending offset expiration on broker side.
-        tempProducerDefaultOverrides.put(ProducerConfig.TRANSACTION_TIMEOUT_CONFIG, 10000);
         PRODUCER_DEFAULT_OVERRIDES = Collections.unmodifiableMap(tempProducerDefaultOverrides);
     }
 
@@ -873,6 +872,8 @@ public class StreamsConfig extends AbstractConfig {
         final Map<String, Object> tempProducerDefaultOverrides = new HashMap<>(PRODUCER_DEFAULT_OVERRIDES);
         tempProducerDefaultOverrides.put(ProducerConfig.DELIVERY_TIMEOUT_MS_CONFIG, Integer.MAX_VALUE);
         tempProducerDefaultOverrides.put(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG, true);
+        // Reduce the transaction timeout for quicker pending offset expiration on broker side.
+        tempProducerDefaultOverrides.put(ProducerConfig.TRANSACTION_TIMEOUT_CONFIG, 10000);
 
         PRODUCER_EOS_OVERRIDES = Collections.unmodifiableMap(tempProducerDefaultOverrides);
     }
@@ -900,12 +901,7 @@ public class StreamsConfig extends AbstractConfig {
 
         // These are not settable in the main Streams config; they are set by the StreamThread to pass internal
         // state into the assignor.
-        public static final String TASK_MANAGER_FOR_PARTITION_ASSIGNOR = "__task.manager.instance__";
-        public static final String STREAMS_METADATA_STATE_FOR_PARTITION_ASSIGNOR = "__streams.metadata.state.instance__";
-        public static final String STREAMS_ADMIN_CLIENT = "__streams.admin.client.instance__";
-        public static final String ASSIGNMENT_ERROR_CODE = "__assignment.error.code__";
-        public static final String NEXT_SCHEDULED_REBALANCE_MS = "__next.probing.rebalance.ms__";
-        public static final String TIME = "__time__";
+        public static final String REFERENCE_CONTAINER_PARTITION_ASSIGNOR = "__reference.container.instance__";
 
         // This is settable in the main Streams config, but it's a private API for testing
         public static final String ASSIGNMENT_LISTENER = "__assignment.listener__";
@@ -1438,6 +1434,6 @@ public class StreamsConfig extends AbstractConfig {
     }
 
     public static void main(final String[] args) {
-        System.out.println(CONFIG.toHtml());
+        System.out.println(CONFIG.toHtml(4, config -> "streamsconfigs_" + config));
     }
 }

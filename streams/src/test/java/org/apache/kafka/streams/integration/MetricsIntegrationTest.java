@@ -99,6 +99,7 @@ public class MetricsIntegrationTest {
     private static final String TOPOLOGY_DESCRIPTION = "topology-description";
     private static final String STATE = "state";
     private static final String ALIVE_STREAM_THREADS = "alive-stream-threads";
+    private static final String FAILED_STREAM_THREADS = "failed-stream-threads";
     private static final String PUT_LATENCY_AVG = "put-latency-avg";
     private static final String PUT_LATENCY_MAX = "put-latency-max";
     private static final String PUT_IF_ABSENT_LATENCY_AVG = "put-if-absent-latency-avg";
@@ -509,6 +510,7 @@ public class MetricsIntegrationTest {
         checkMetricByName(listMetricThread, TOPOLOGY_DESCRIPTION, 1);
         checkMetricByName(listMetricThread, STATE, 1);
         checkMetricByName(listMetricThread, ALIVE_STREAM_THREADS, 1);
+        checkMetricByName(listMetricThread, FAILED_STREAM_THREADS, 1);
     }
 
     private void checkThreadLevelMetrics(final String builtInMetricsVersion) {

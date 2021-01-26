@@ -22,6 +22,7 @@ import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.ProcessorStateException;
 import org.apache.kafka.streams.processor.TaskId;
+import org.apache.kafka.streams.processor.internals.testutil.LogCaptureAppender;
 import org.apache.kafka.streams.state.internals.OffsetCheckpoint;
 import org.apache.kafka.test.TestUtils;
 import org.junit.After;
@@ -33,10 +34,13 @@ import java.io.IOException;
 import java.nio.channels.FileChannel;
 import java.nio.channels.OverlappingFileLockException;
 import java.nio.file.Files;
+import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
+import java.nio.file.attribute.PosixFilePermission;
 import java.time.Duration;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.EnumSet;
 import java.util.Objects;
 import java.util.Properties;
 import java.util.Set;
@@ -49,12 +53,21 @@ import java.util.stream.Collectors;
 import static org.apache.kafka.common.utils.Utils.mkSet;
 import static org.apache.kafka.streams.processor.internals.StateDirectory.LOCK_FILE_NAME;
 import static org.apache.kafka.streams.processor.internals.StateManagerUtil.CHECKPOINT_FILE_NAME;
+import static org.hamcrest.CoreMatchers.containsString;
+import static org.hamcrest.CoreMatchers.endsWith;
+import static org.hamcrest.CoreMatchers.equalTo;
+import static org.hamcrest.CoreMatchers.hasItem;
+import static org.hamcrest.CoreMatchers.is;
+import static org.hamcrest.CoreMatchers.not;
+import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
+
 
 public class StateDirectoryTest {
 
@@ -97,6 +110,34 @@ public class StateDirectoryTest {
         assertTrue(stateDir.isDirectory());
         assertTrue(appDir.exists());
         assertTrue(appDir.isDirectory());
+    }
+
+    @Test
+    public void shouldHaveSecurePermissions() {
+        assertPermissions(stateDir);
+        assertPermissions(appDir);
+    }
+    
+    private void assertPermissions(final File file) {
+        final Path path = file.toPath();
+        if (path.getFileSystem().supportedFileAttributeViews().contains("posix")) {
+            final Set<PosixFilePermission> expectedPermissions = EnumSet.of(
+                    PosixFilePermission.OWNER_EXECUTE,
+                    PosixFilePermission.GROUP_READ,
+                    PosixFilePermission.OWNER_WRITE,
+                    PosixFilePermission.GROUP_EXECUTE,
+                    PosixFilePermission.OWNER_READ);
+            try {
+                final Set<PosixFilePermission> filePermissions = Files.getPosixFilePermissions(path);
+                assertThat(expectedPermissions, equalTo(filePermissions));
+            } catch (final IOException e) {
+                fail("Should create correct files and set correct permissions");
+            }
+        } else {
+            assertThat(file.canRead(), is(true));
+            assertThat(file.canWrite(), is(true));
+            assertThat(file.canExecute(), is(true));
+        }
     }
 
     @Test
@@ -281,6 +322,7 @@ public class StateDirectoryTest {
         }
     }
 
+
     @Test
     public void shouldCleanupStateDirectoriesWhenLastModifiedIsLessThanNowMinusCleanupDelay() {
         final File dir = directory.directoryForTask(new TaskId(2, 0));
@@ -297,6 +339,38 @@ public class StateDirectoryTest {
         assertTrue(dir.exists());
         assertEquals(1, directory.listAllTaskDirectories().length);
         assertEquals(0, directory.listNonEmptyTaskDirectories().length);
+    }
+
+    @Test
+    public void shouldCleanupObsoleteStateDirectoriesOnlyOnce() {
+        final File dir = directory.directoryForTask(new TaskId(2, 0));
+        assertTrue(new File(dir, "store").mkdir());
+        assertEquals(1, directory.listAllTaskDirectories().length);
+        assertEquals(1, directory.listNonEmptyTaskDirectories().length);
+
+        try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(StateDirectory.class)) {
+            time.sleep(5000);
+            directory.cleanRemovedTasks(0);
+            assertTrue(dir.exists());
+            assertEquals(1, directory.listAllTaskDirectories().length);
+            assertEquals(0, directory.listNonEmptyTaskDirectories().length);
+            assertThat(
+                appender.getMessages(),
+                hasItem(containsString("Deleting obsolete state directory"))
+            );
+        }
+
+        try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(StateDirectory.class)) {
+            time.sleep(5000);
+            directory.cleanRemovedTasks(0);
+            assertTrue(dir.exists());
+            assertEquals(1, directory.listAllTaskDirectories().length);
+            assertEquals(0, directory.listNonEmptyTaskDirectories().length);
+            assertThat(
+                appender.getMessages(),
+                not(hasItem(containsString("Deleting obsolete state directory")))
+            );
+        }
     }
 
     @Test
@@ -478,9 +552,13 @@ public class StateDirectoryTest {
 
     @Test
     public void shouldNotCreateBaseDirectory() throws IOException {
-        initializeStateDirectory(false);
-        assertFalse(stateDir.exists());
-        assertFalse(appDir.exists());
+        try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(StateDirectory.class)) {
+            initializeStateDirectory(false);
+            assertThat(stateDir.exists(), is(false));
+            assertThat(appDir.exists(), is(false));
+            assertThat(appender.getMessages(),
+                not(hasItem(containsString("Error changing permissions for the state or base directory"))));
+        }
     }
 
     @Test
@@ -531,6 +609,39 @@ public class StateDirectoryTest {
         assertTrue(passed.get());
         assertTrue(runner.taskDirectory.exists());
         assertTrue(runner.taskDirectory.isDirectory());
+    }
+
+    @Test
+    public void shouldLogManualUserCallMessage() {
+        final TaskId taskId = new TaskId(0, 0);
+        final File taskDirectory = directory.directoryForTask(taskId);
+        final File testFile = new File(taskDirectory, "testFile");
+        assertThat(testFile.mkdir(), is(true));
+        assertThat(directory.directoryForTaskIsEmpty(taskId), is(false));
+
+        try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(StateDirectory.class)) {
+            directory.clean();
+            assertThat(
+                appender.getMessages(),
+                hasItem(endsWith("as user calling cleanup."))
+            );
+        }
+    }
+
+    @Test
+    public void shouldLogStateDirCleanerMessage() {
+        final TaskId taskId = new TaskId(0, 0);
+        final File taskDirectory = directory.directoryForTask(taskId);
+        final File testFile = new File(taskDirectory, "testFile");
+        assertThat(testFile.mkdir(), is(true));
+        assertThat(directory.directoryForTaskIsEmpty(taskId), is(false));
+
+        try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(StateDirectory.class)) {
+            final long cleanupDelayMs = 0;
+            time.sleep(5000);
+            directory.cleanRemovedTasks(cleanupDelayMs);
+            assertThat(appender.getMessages(), hasItem(endsWith("ms has elapsed (cleanup delay is " +  cleanupDelayMs + "ms).")));
+        }
     }
 
     private static class CreateTaskDirRunner implements Runnable {

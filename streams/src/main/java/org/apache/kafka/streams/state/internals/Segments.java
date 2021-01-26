@@ -34,9 +34,9 @@ interface Segments<S extends Segment> {
 
     void openExisting(final ProcessorContext context, final long streamTime);
 
-    List<S> segments(final long timeFrom, final long timeTo);
+    List<S> segments(final long timeFrom, final long timeTo, final boolean forward);
 
-    List<S> allSegments();
+    List<S> allSegments(final boolean forward);
 
     void flush();
 

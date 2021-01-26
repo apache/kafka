@@ -299,6 +299,16 @@ public class JsonConverter implements Converter, HeaderConverter {
         );
     }
 
+    // visible for testing
+    long sizeOfFromConnectSchemaCache() {
+        return fromConnectSchemaCache.size();
+    }
+
+    // visible for testing
+    long sizeOfToConnectSchemaCache() {
+        return toConnectSchemaCache.size();
+    }
+
     @Override
     public ConfigDef config() {
         return JsonConverterConfig.configDef();
@@ -729,6 +739,7 @@ public class JsonConverter implements Converter, HeaderConverter {
         } else {
             switch (jsonValue.getNodeType()) {
                 case NULL:
+                case MISSING:
                     // Special case. With no schema
                     return null;
                 case BOOLEAN:
@@ -751,7 +762,6 @@ public class JsonConverter implements Converter, HeaderConverter {
                     break;
 
                 case BINARY:
-                case MISSING:
                 case POJO:
                 default:
                     schemaType = null;

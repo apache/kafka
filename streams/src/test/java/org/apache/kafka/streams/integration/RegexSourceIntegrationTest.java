@@ -31,18 +31,19 @@ import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
+import org.apache.kafka.streams.Topology;
 import org.apache.kafka.streams.TopologyWrapper;
+import org.apache.kafka.streams.errors.StreamsUncaughtExceptionHandler;
 import org.apache.kafka.streams.integration.utils.EmbeddedKafkaCluster;
 import org.apache.kafka.streams.integration.utils.IntegrationTestUtils;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.Produced;
-import org.apache.kafka.streams.processor.ProcessorSupplier;
 import org.apache.kafka.streams.processor.internals.DefaultKafkaClientSupplier;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.StoreBuilder;
 import org.apache.kafka.test.IntegrationTest;
+import org.apache.kafka.test.MockApiProcessorSupplier;
 import org.apache.kafka.test.MockKeyValueStoreBuilder;
-import org.apache.kafka.test.MockProcessorSupplier;
 import org.apache.kafka.test.StreamsTestUtils;
 import org.apache.kafka.test.TestCondition;
 import org.apache.kafka.test.TestUtils;
@@ -55,6 +56,7 @@ import org.junit.experimental.categories.Category;
 import org.junit.rules.TestName;
 
 import java.io.IOException;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
@@ -67,9 +69,11 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.regex.Pattern;
 
+import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.startApplicationAndWaitUntilRunning;
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
+import static org.hamcrest.Matchers.greaterThan;
 
 /**
  * End-to-end integration test based on using regex and named topics for creating sources, using
@@ -189,7 +193,7 @@ public class RegexSourceIntegrationTest {
     }
 
     @Test
-    public void testRegexRecordsAreProcessedAfterReassignment() throws Exception {
+    public void testRegexRecordsAreProcessedAfterNewTopicCreatedWithMultipleSubtopologies() throws Exception {
         final String topic1 = "TEST-TOPIC-1";
         final String topic2 = "TEST-TOPIC-2";
 
@@ -198,9 +202,19 @@ public class RegexSourceIntegrationTest {
 
             final StreamsBuilder builder = new StreamsBuilder();
             final KStream<String, String> pattern1Stream = builder.stream(Pattern.compile("TEST-TOPIC-\\d"));
-            pattern1Stream.to(outputTopic, Produced.with(Serdes.String(), Serdes.String()));
-            streams = new KafkaStreams(builder.build(), streamsConfiguration);
-            streams.start();
+            final KStream<String, String> otherStream = builder.stream(Pattern.compile("not-a-match"));
+
+            pattern1Stream
+                .selectKey((k, v) -> k)
+                .groupByKey()
+                .aggregate(() -> "", (k, v, a) -> v)
+                .toStream().to(outputTopic, Produced.with(Serdes.String(), Serdes.String()));
+
+            final Topology topology = builder.build();
+            assertThat(topology.describe().subtopologies().size(), greaterThan(1));
+            streams = new KafkaStreams(topology, streamsConfiguration);
+
+            startApplicationAndWaitUntilRunning(Collections.singletonList(streams), Duration.ofSeconds(30));
 
             CLUSTER.createTopic(topic2);
 
@@ -276,13 +290,12 @@ public class RegexSourceIntegrationTest {
 
     @Test
     public void shouldAddStateStoreToRegexDefinedSource() throws Exception {
-        final ProcessorSupplier<String, String> processorSupplier = new MockProcessorSupplier<>();
         final StoreBuilder<KeyValueStore<Object, Object>> storeBuilder = new MockKeyValueStoreBuilder("testStateStore", false);
         final long thirtySecondTimeout = 30 * 1000;
 
         final TopologyWrapper topology = new TopologyWrapper();
         topology.addSource("ingest", Pattern.compile("topic-\\d+"));
-        topology.addProcessor("my-processor", processorSupplier, "ingest");
+        topology.addProcessor("my-processor", new MockApiProcessorSupplier<>(), "ingest");
         topology.addStateStore(storeBuilder, "my-processor");
 
         streams = new KafkaStreams(topology, streamsConfiguration);
@@ -426,6 +439,10 @@ public class RegexSourceIntegrationTest {
             if (newState == KafkaStreams.State.ERROR) {
                 expectError.set(true);
             }
+        });
+        streams.setUncaughtExceptionHandler(e -> {
+            expectError.set(true);
+            return StreamsUncaughtExceptionHandler.StreamThreadExceptionResponse.SHUTDOWN_CLIENT;
         });
         streams.start();
 

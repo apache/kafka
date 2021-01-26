@@ -26,7 +26,7 @@ import org.apache.kafka.common.metrics.stats.WindowedSum;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.SystemTime;
 import org.apache.kafka.common.utils.Time;
-import org.junit.Test;
+import org.junit.jupiter.api.Test;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -42,14 +42,12 @@ import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import org.mockito.Mockito;
 
-import static org.hamcrest.CoreMatchers.is;
-import static org.hamcrest.MatcherAssert.assertThat;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertNull;
-import static org.junit.Assert.assertThrows;
-import static org.junit.Assert.assertTrue;
-import static org.junit.Assert.fail;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.fail;
 
 public class SensorTest {
 
@@ -220,8 +218,8 @@ public class SensorTest {
             assertTrue(service.awaitTermination(10, TimeUnit.SECONDS));
             needShutdown = false;
             for (Future<Throwable> callable : workers) {
-                assertTrue("If this failure happen frequently, we can try to increase the wait time", callable.isDone());
-                assertNull("Sensor#checkQuotas SHOULD be thread-safe!", callable.get());
+                assertTrue(callable.isDone(), "If this failure happen frequently, we can try to increase the wait time");
+                assertNull(callable.get(), "Sensor#checkQuotas SHOULD be thread-safe!");
             }
         } finally {
             if (needShutdown) {
@@ -235,21 +233,21 @@ public class SensorTest {
         final Metrics metrics = new Metrics();
         final Sensor sensor = metrics.sensor("sensor");
 
-        assertThat(sensor.hasMetrics(), is(false));
+        assertFalse(sensor.hasMetrics());
 
         sensor.add(
             new MetricName("name1", "group1", "description1", Collections.emptyMap()),
             new WindowedSum()
         );
 
-        assertThat(sensor.hasMetrics(), is(true));
+        assertTrue(sensor.hasMetrics());
 
         sensor.add(
             new MetricName("name2", "group2", "description2", Collections.emptyMap()),
             new CumulativeCount()
         );
 
-        assertThat(sensor.hasMetrics(), is(true));
+        assertTrue(sensor.hasMetrics());
     }
 
     @Test
@@ -336,9 +334,39 @@ public class SensorTest {
         Mockito.verify(stat1).record(stat1Config, 10, 1);
         Mockito.verify(stat2).record(stat2Config, 10, 1);
 
-        Mockito.when(stat1.measure(stat1Config, 2)).thenReturn(2.0);
-        Mockito.when(stat2.measure(stat2Config, 2)).thenReturn(2.0);
         sensor.checkQuotas(2);
+        Mockito.verify(stat1).measure(stat1Config, 2);
+        Mockito.verify(stat2).measure(stat2Config, 2);
+
+        metrics.close();
+    }
+
+    @Test
+    public void testUpdatingMetricConfigIsReflectedInTheSensor() {
+        final Time time = new MockTime(0, System.currentTimeMillis(), 0);
+        final Metrics metrics = new Metrics(time);
+        final Sensor sensor = metrics.sensor("sensor");
+
+        final MeasurableStat stat = Mockito.mock(MeasurableStat.class);
+        final MetricName statName = metrics.metricName("stat", "test-group");
+        final MetricConfig statConfig = new MetricConfig().quota(Quota.upperBound(5));
+        sensor.add(statName, stat, statConfig);
+
+        sensor.record(10, 1);
+        Mockito.verify(stat).record(statConfig, 10, 1);
+
+        sensor.checkQuotas(2);
+        Mockito.verify(stat).measure(statConfig, 2);
+
+        // Update the config of the KafkaMetric
+        final MetricConfig newConfig = new MetricConfig().quota(Quota.upperBound(10));
+        metrics.metric(statName).config(newConfig);
+
+        sensor.record(10, 3);
+        Mockito.verify(stat).record(newConfig, 10, 3);
+
+        sensor.checkQuotas(4);
+        Mockito.verify(stat).measure(newConfig, 4);
 
         metrics.close();
     }

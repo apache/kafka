@@ -94,6 +94,7 @@ class WorkerSinkTask extends WorkerTask {
     private int commitFailures;
     private boolean pausedForRedelivery;
     private boolean committing;
+    private boolean taskStopped;
     private final WorkerErrantRecordReporter workerErrantRecordReporter;
 
     public WorkerSinkTask(ConnectorTaskId id,
@@ -138,6 +139,7 @@ class WorkerSinkTask extends WorkerTask {
         this.sinkTaskMetricsGroup.recordOffsetSequenceNumber(commitSeqno);
         this.consumer = consumer;
         this.isTopicTrackingEnabled = workerConfig.getBoolean(TOPIC_TRACKING_ENABLE_CONFIG);
+        this.taskStopped = false;
         this.workerErrantRecordReporter = workerErrantRecordReporter;
     }
 
@@ -168,6 +170,7 @@ class WorkerSinkTask extends WorkerTask {
         } catch (Throwable t) {
             log.warn("Could not stop task", t);
         }
+        taskStopped = true;
         Utils.closeQuietly(consumer, "consumer");
         Utils.closeQuietly(transformationChain, "transformation chain");
         Utils.closeQuietly(retryWithToleranceOperator, "retry operator");
@@ -332,7 +335,7 @@ class WorkerSinkTask extends WorkerTask {
     }
 
     private void doCommitSync(Map<TopicPartition, OffsetAndMetadata> offsets, int seqno) {
-        log.info("{} Committing offsets synchronously using sequence number {}: {}", this, seqno, offsets);
+        log.debug("{} Committing offsets synchronously using sequence number {}: {}", this, seqno, offsets);
         try {
             consumer.commitSync(offsets);
             onCommitCompleted(null, seqno, offsets);
@@ -346,7 +349,7 @@ class WorkerSinkTask extends WorkerTask {
     }
 
     private void doCommitAsync(Map<TopicPartition, OffsetAndMetadata> offsets, final int seqno) {
-        log.info("{} Committing offsets asynchronously using sequence number {}: {}", this, seqno, offsets);
+        log.debug("{} Committing offsets asynchronously using sequence number {}: {}", this, seqno, offsets);
         OffsetCommitCallback cb = new OffsetCommitCallback() {
             @Override
             public void onComplete(Map<TopicPartition, OffsetAndMetadata> offsets, Exception error) {
@@ -712,6 +715,10 @@ class WorkerSinkTask extends WorkerTask {
 
         @Override
         public void onPartitionsRevoked(Collection<TopicPartition> partitions) {
+            if (taskStopped) {
+                log.trace("Skipping partition revocation callback as task has already been stopped");
+                return;
+            }
             log.debug("{} Partitions revoked", WorkerSinkTask.this);
             try {
                 closePartitions();

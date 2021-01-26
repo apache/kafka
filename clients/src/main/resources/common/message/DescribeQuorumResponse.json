@@ -1,0 +1,50 @@
+// Licensed to the Apache Software Foundation (ASF) under one or more
+// contributor license agreements.  See the NOTICE file distributed with
+// this work for additional information regarding copyright ownership.
+// The ASF licenses this file to You under the Apache License, Version 2.0
+// (the "License"); you may not use this file except in compliance with
+// the License.  You may obtain a copy of the License at
+//
+//    http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+{
+  "apiKey": 55,
+  "type": "response",
+  "name": "DescribeQuorumResponse",
+  "validVersions": "0",
+  "flexibleVersions": "0+",
+  "fields": [
+    { "name": "ErrorCode", "type": "int16", "versions": "0+",
+      "about": "The top level error code."},
+    { "name": "Topics", "type": "[]TopicData",
+      "versions": "0+", "fields": [
+      { "name": "TopicName", "type": "string", "versions": "0+", "entityType": "topicName",
+        "about": "The topic name." },
+      { "name": "Partitions", "type": "[]PartitionData",
+        "versions": "0+", "fields": [
+        { "name": "PartitionIndex", "type": "int32", "versions": "0+",
+          "about": "The partition index." },
+        { "name": "ErrorCode", "type": "int16", "versions": "0+"},
+        { "name": "LeaderId", "type": "int32", "versions": "0+",
+          "about": "The ID of the current leader or -1 if the leader is unknown."},
+        { "name": "LeaderEpoch", "type": "int32", "versions": "0+",
+          "about": "The latest known leader epoch"},
+        { "name": "HighWatermark", "type": "int64", "versions": "0+"},
+        { "name": "CurrentVoters", "type": "[]ReplicaState", "versions": "0+" },
+        { "name": "Observers", "type": "[]ReplicaState", "versions": "0+" }
+      ]}
+    ]}],
+  "commonStructs": [
+    { "name": "ReplicaState", "versions": "0+", "fields": [
+      { "name": "ReplicaId", "type": "int32", "versions": "0+"},
+      { "name": "LogEndOffset", "type": "int64", "versions": "0+",
+        "about": "The last known log end offset of the follower or -1 if it is unknown"}
+    ]}
+  ]
+}

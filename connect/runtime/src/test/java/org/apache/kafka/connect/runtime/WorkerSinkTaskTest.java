@@ -316,6 +316,56 @@ public class WorkerSinkTaskTest {
     }
 
     @Test
+    public void testShutdown() throws Exception {
+        createTask(initialState);
+
+        expectInitializeTask();
+        expectTaskGetTopic(true);
+
+        // first iteration
+        expectPollInitialAssignment();
+
+        // second iteration
+        EasyMock.expect(sinkTask.preCommit(EasyMock.anyObject())).andReturn(Collections.emptyMap());
+        expectConsumerPoll(1);
+        expectConversionAndTransformation(1);
+        sinkTask.put(EasyMock.<Collection<SinkRecord>>anyObject());
+        EasyMock.expectLastCall();
+
+        // WorkerSinkTask::stop
+        consumer.wakeup();
+        PowerMock.expectLastCall();
+        sinkTask.stop();
+        PowerMock.expectLastCall();
+
+        // WorkerSinkTask::close
+        consumer.close();
+        PowerMock.expectLastCall().andAnswer(new IAnswer<Object>() {
+            @Override
+            public Object answer() throws Throwable {
+                rebalanceListener.getValue().onPartitionsRevoked(
+                    asList(TOPIC_PARTITION, TOPIC_PARTITION2)
+                );
+                return null;
+            }
+        });
+        transformationChain.close();
+        PowerMock.expectLastCall();
+
+        PowerMock.replayAll();
+
+        workerTask.initialize(TASK_CONFIG);
+        workerTask.initializeAndStart();
+        workerTask.iteration();
+        sinkTaskContext.getValue().requestCommit(); // Force an offset commit
+        workerTask.iteration();
+        workerTask.stop();
+        workerTask.close();
+
+        PowerMock.verifyAll();
+    }
+
+    @Test
     public void testPollRedelivery() throws Exception {
         createTask(initialState);
 
@@ -1299,7 +1349,7 @@ public class WorkerSinkTaskTest {
         SinkRecord record = records.getValue().iterator().next();
 
         // we expect null for missing timestamp, the sentinel value of Record.NO_TIMESTAMP is Kafka's API
-        assertEquals(null, record.timestamp());
+        assertNull(record.timestamp());
         assertEquals(TimestampType.CREATE_TIME, record.timestampType());
 
         PowerMock.verifyAll();

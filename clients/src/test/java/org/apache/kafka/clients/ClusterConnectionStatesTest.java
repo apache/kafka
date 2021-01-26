@@ -17,24 +17,24 @@
 
 package org.apache.kafka.clients;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertNotSame;
-import static org.junit.Assert.assertNull;
-import static org.junit.Assert.assertSame;
-import static org.junit.Assert.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotSame;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertSame;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.net.InetAddress;
 import java.net.UnknownHostException;
 
-import java.util.Set;
+import java.util.List;
 import org.apache.kafka.common.errors.AuthenticationException;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
-import org.junit.Before;
-import org.junit.Test;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 
 public class ClusterConnectionStatesTest {
 
@@ -54,7 +54,7 @@ public class ClusterConnectionStatesTest {
 
     private ClusterConnectionStates connectionStates;
 
-    @Before
+    @BeforeEach
     public void setup() {
         this.connectionStates = new ClusterConnectionStates(
                 reconnectBackoffMs, reconnectBackoffMax,
@@ -263,7 +263,7 @@ public class ClusterConnectionStatesTest {
 
     @Test
     public void testMultipleIPsWithDefault() throws UnknownHostException {
-        assertEquals(2, ClientUtils.resolve(hostTwoIps, ClientDnsLookup.USE_ALL_DNS_IPS).size());
+        assertTrue(ClientUtils.resolve(hostTwoIps, ClientDnsLookup.USE_ALL_DNS_IPS).size() > 1);
 
         connectionStates.connecting(nodeId1, time.milliseconds(), hostTwoIps, ClientDnsLookup.DEFAULT);
         InetAddress currAddress = connectionStates.currentAddress(nodeId1);
@@ -273,22 +273,21 @@ public class ClusterConnectionStatesTest {
 
     @Test
     public void testMultipleIPsWithUseAll() throws UnknownHostException {
-        assertEquals(2, ClientUtils.resolve(hostTwoIps, ClientDnsLookup.USE_ALL_DNS_IPS).size());
+        assertTrue(ClientUtils.resolve(hostTwoIps, ClientDnsLookup.USE_ALL_DNS_IPS).size() > 1);
 
         connectionStates.connecting(nodeId1, time.milliseconds(), hostTwoIps, ClientDnsLookup.USE_ALL_DNS_IPS);
         InetAddress addr1 = connectionStates.currentAddress(nodeId1);
         connectionStates.connecting(nodeId1, time.milliseconds(), hostTwoIps, ClientDnsLookup.USE_ALL_DNS_IPS);
         InetAddress addr2 = connectionStates.currentAddress(nodeId1);
         assertNotSame(addr1, addr2);
-
         connectionStates.connecting(nodeId1, time.milliseconds(), hostTwoIps, ClientDnsLookup.USE_ALL_DNS_IPS);
         InetAddress addr3 = connectionStates.currentAddress(nodeId1);
-        assertSame(addr1, addr3);
+        assertNotSame(addr1, addr3);
     }
 
     @Test
     public void testHostResolveChange() throws UnknownHostException, ReflectiveOperationException {
-        assertEquals(2, ClientUtils.resolve(hostTwoIps, ClientDnsLookup.USE_ALL_DNS_IPS).size());
+        assertTrue(ClientUtils.resolve(hostTwoIps, ClientDnsLookup.USE_ALL_DNS_IPS).size() > 1);
 
         connectionStates.connecting(nodeId1, time.milliseconds(), hostTwoIps, ClientDnsLookup.DEFAULT);
         InetAddress addr1 = connectionStates.currentAddress(nodeId1);
@@ -387,7 +386,7 @@ public class ClusterConnectionStatesTest {
         time.sleep((long) (connectionSetupTimeoutMs / 2 + connectionSetupTimeoutMs * connectionSetupTimeoutJitter));
 
         // Expect two timed out connections.
-        Set<String> timedOutConnections = connectionStates.nodesWithConnectionSetupTimeout(time.milliseconds());
+        List<String> timedOutConnections = connectionStates.nodesWithConnectionSetupTimeout(time.milliseconds());
         assertEquals(2, timedOutConnections.size());
         assertTrue(timedOutConnections.contains(nodeId1));
         assertTrue(timedOutConnections.contains(nodeId2));

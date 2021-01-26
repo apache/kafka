@@ -102,8 +102,8 @@ import static org.apache.kafka.connect.runtime.TopicCreationConfig.REPLICATION_F
 import static org.apache.kafka.connect.runtime.WorkerConfig.TOPIC_CREATION_ENABLE_CONFIG;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 
 @PowerMockIgnore({"javax.management.*",
@@ -566,7 +566,7 @@ public class WorkerSourceTaskWithTopicCreationTest extends ThreadedTest {
         PowerMock.verifyAll();
     }
 
-    @Test(expected = InvalidRecordException.class)
+    @Test
     public void testSendRecordsCorruptTimestamp() throws Exception {
         final Long timestamp = -3L;
         createWorkerTask();
@@ -580,8 +580,8 @@ public class WorkerSourceTaskWithTopicCreationTest extends ThreadedTest {
         PowerMock.replayAll();
 
         Whitebox.setInternalState(workerTask, "toSend", records);
-        Whitebox.invokeMethod(workerTask, "sendRecords");
-        assertEquals(null, sent.getValue().timestamp());
+        assertThrows(InvalidRecordException.class, () -> Whitebox.invokeMethod(workerTask, "sendRecords"));
+        assertFalse(sent.hasCaptured());
 
         PowerMock.verifyAll();
     }
@@ -603,7 +603,7 @@ public class WorkerSourceTaskWithTopicCreationTest extends ThreadedTest {
 
         Whitebox.setInternalState(workerTask, "toSend", records);
         Whitebox.invokeMethod(workerTask, "sendRecords");
-        assertEquals(null, sent.getValue().timestamp());
+        assertNull(sent.getValue().timestamp());
 
         PowerMock.verifyAll();
     }
@@ -644,7 +644,7 @@ public class WorkerSourceTaskWithTopicCreationTest extends ThreadedTest {
         PowerMock.verifyAll();
     }
 
-    @Test(expected = ConnectException.class)
+    @Test
     public void testSendRecordsProducerCallbackFail() throws Exception {
         createWorkerTask();
 
@@ -658,11 +658,11 @@ public class WorkerSourceTaskWithTopicCreationTest extends ThreadedTest {
         PowerMock.replayAll();
 
         Whitebox.setInternalState(workerTask, "toSend", Arrays.asList(record1, record2));
-        Whitebox.invokeMethod(workerTask, "sendRecords");
+        assertThrows(ConnectException.class, () -> Whitebox.invokeMethod(workerTask, "sendRecords"));
     }
 
-    @Test(expected = ConnectException.class)
-    public void testSendRecordsProducerSendFailsImmediately() throws Exception {
+    @Test
+    public void testSendRecordsProducerSendFailsImmediately() {
         createWorkerTask();
 
         SourceRecord record1 = new SourceRecord(PARTITION, OFFSET, TOPIC, 1, KEY_SCHEMA, KEY, RECORD_SCHEMA, RECORD);
@@ -677,7 +677,7 @@ public class WorkerSourceTaskWithTopicCreationTest extends ThreadedTest {
         PowerMock.replayAll();
 
         Whitebox.setInternalState(workerTask, "toSend", Arrays.asList(record1, record2));
-        Whitebox.invokeMethod(workerTask, "sendRecords");
+        assertThrows(ConnectException.class, () -> Whitebox.invokeMethod(workerTask, "sendRecords"));
     }
 
     @Test
@@ -1057,8 +1057,8 @@ public class WorkerSourceTaskWithTopicCreationTest extends ThreadedTest {
         PowerMock.verifyAll();
     }
 
-    @Test(expected = ConnectException.class)
-    public void testTopicDescribeFails() throws Exception {
+    @Test
+    public void testTopicDescribeFails() {
         createWorkerTask();
 
         SourceRecord record1 = new SourceRecord(PARTITION, OFFSET, TOPIC, 1, KEY_SCHEMA, KEY, RECORD_SCHEMA, RECORD);
@@ -1071,10 +1071,10 @@ public class WorkerSourceTaskWithTopicCreationTest extends ThreadedTest {
         PowerMock.replayAll();
 
         Whitebox.setInternalState(workerTask, "toSend", Arrays.asList(record1, record2));
-        Whitebox.invokeMethod(workerTask, "sendRecords");
+        assertThrows(ConnectException.class, () -> Whitebox.invokeMethod(workerTask, "sendRecords"));
     }
 
-    @Test(expected = ConnectException.class)
+    @Test
     public void testTopicCreateFails() throws Exception {
         createWorkerTask();
 
@@ -1091,11 +1091,11 @@ public class WorkerSourceTaskWithTopicCreationTest extends ThreadedTest {
         PowerMock.replayAll();
 
         Whitebox.setInternalState(workerTask, "toSend", Arrays.asList(record1, record2));
-        Whitebox.invokeMethod(workerTask, "sendRecords");
-        assertNotNull(newTopicCapture.getValue());
+        assertThrows(ConnectException.class, () -> Whitebox.invokeMethod(workerTask, "sendRecords"));
+        assertTrue(newTopicCapture.hasCaptured());
     }
 
-    @Test(expected = ConnectException.class)
+    @Test
     public void testTopicCreateFailsWithExceptionWhenCreateReturnsFalse() throws Exception {
         createWorkerTask();
 
@@ -1111,8 +1111,8 @@ public class WorkerSourceTaskWithTopicCreationTest extends ThreadedTest {
         PowerMock.replayAll();
 
         Whitebox.setInternalState(workerTask, "toSend", Arrays.asList(record1, record2));
-        Whitebox.invokeMethod(workerTask, "sendRecords");
-        assertNotNull(newTopicCapture.getValue());
+        assertThrows(ConnectException.class, () -> Whitebox.invokeMethod(workerTask, "sendRecords"));
+        assertTrue(newTopicCapture.hasCaptured());
     }
 
     private void expectPreliminaryCalls() {

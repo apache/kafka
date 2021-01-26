@@ -17,7 +17,8 @@
 
 package org.apache.kafka.trogdor.common;
 
-import static org.junit.Assert.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import org.apache.kafka.clients.admin.MockAdminClient;
 import org.apache.kafka.clients.admin.NewTopic;
@@ -29,9 +30,8 @@ import org.apache.kafka.common.TopicPartitionInfo;
 import org.apache.kafka.common.errors.TopicExistsException;
 import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
 import org.apache.kafka.common.utils.Utils;
-import org.junit.Assert;
-import org.junit.Before;
-import org.junit.Test;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -64,8 +64,8 @@ public class WorkerUtilsTest {
     private MockAdminClient adminClient;
 
 
-    @Before
-    public void setUp() throws Exception {
+    @BeforeEach
+    public void setUp() {
         adminClient = new MockAdminClient(cluster, broker1);
     }
 
@@ -108,7 +108,7 @@ public class WorkerUtilsTest {
         assertEquals(0, adminClient.listTopics().names().get().size());
     }
 
-    @Test(expected = TopicExistsException.class)
+    @Test
     public void testCreateTopicsFailsIfAtLeastOneTopicExists() throws Throwable {
         adminClient.addTopic(
             false,
@@ -123,10 +123,10 @@ public class WorkerUtilsTest {
         newTopics.put("one-more-topic",
                       new NewTopic("one-more-topic", TEST_PARTITIONS, TEST_REPLICATION_FACTOR));
 
-        WorkerUtils.createTopics(log, adminClient, newTopics, true);
+        assertThrows(TopicExistsException.class, () -> WorkerUtils.createTopics(log, adminClient, newTopics, true));
     }
 
-    @Test(expected = RuntimeException.class)
+    @Test
     public void testExistingTopicsMustHaveRequestedNumberOfPartitions() throws Throwable {
         List<TopicPartitionInfo> tpInfo = new ArrayList<>();
         tpInfo.add(new TopicPartitionInfo(0, broker1, singleReplica, Collections.<Node>emptyList()));
@@ -137,8 +137,8 @@ public class WorkerUtilsTest {
             tpInfo,
             null);
 
-        WorkerUtils.createTopics(
-            log, adminClient, Collections.singletonMap(TEST_TOPIC, NEW_TEST_TOPIC), false);
+        assertThrows(RuntimeException.class, () -> WorkerUtils.createTopics(
+            log, adminClient, Collections.singletonMap(TEST_TOPIC, NEW_TEST_TOPIC), false));
     }
 
     @Test
@@ -325,12 +325,8 @@ public class WorkerUtilsTest {
         WorkerUtils.verifyTopics(log, adminClient, Collections.singleton(TEST_TOPIC),
             Collections.singletonMap(TEST_TOPIC, NEW_TEST_TOPIC), 3, 1);
         adminClient.setFetchesRemainingUntilVisible(TEST_TOPIC, 100);
-        try {
+        assertThrows(UnknownTopicOrPartitionException.class, () ->
             WorkerUtils.verifyTopics(log, adminClient, Collections.singleton(TEST_TOPIC),
-                    Collections.singletonMap(TEST_TOPIC, NEW_TEST_TOPIC), 2, 1);
-            Assert.fail("expected to get UnknownTopicOrPartitionException");
-        } catch (UnknownTopicOrPartitionException e) {
-            // expected
-        }
+                Collections.singletonMap(TEST_TOPIC, NEW_TEST_TOPIC), 2, 1));
     }
 }

@@ -44,7 +44,7 @@ class TaskSpec(object):
         """
         node_names = []
         for obj in nodes:
-            if isinstance(obj, basestring):
+            if isinstance(obj, str):
                 node_names.append(obj)
             else:
                 node_names.append(obj.name)

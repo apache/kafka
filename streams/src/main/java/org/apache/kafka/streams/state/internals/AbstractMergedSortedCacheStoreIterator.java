@@ -192,4 +192,3 @@ abstract class AbstractMergedSortedCacheStoreIterator<K, KS, V, VS> implements K
         storeIterator.close();
     }
 }
-

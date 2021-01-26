@@ -16,8 +16,6 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
-import static org.apache.kafka.streams.processor.internals.AbstractReadWriteDecorator.getReadWriteStore;
-
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.processor.Cancellable;
@@ -26,11 +24,14 @@ import org.apache.kafka.streams.processor.Punctuator;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.To;
+import org.apache.kafka.streams.processor.api.Record;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.state.internals.ThreadCache;
+import org.apache.kafka.streams.state.internals.ThreadCache.DirtyEntryFlushListener;
 
 import java.time.Duration;
-import org.apache.kafka.streams.state.internals.ThreadCache.DirtyEntryFlushListener;
+
+import static org.apache.kafka.streams.processor.internals.AbstractReadWriteDecorator.getReadWriteStore;
 
 public class GlobalProcessorContextImpl extends AbstractProcessorContext {
 
@@ -49,24 +50,36 @@ public class GlobalProcessorContextImpl extends AbstractProcessorContext {
         return stateManager;
     }
 
+    @SuppressWarnings("unchecked")
     @Override
-    public StateStore getStateStore(final String name) {
+    public <S extends StateStore> S getStateStore(final String name) {
         final StateStore store = stateManager.getGlobalStore(name);
-        return getReadWriteStore(store);
+        return (S) getReadWriteStore(store);
+    }
+
+    @SuppressWarnings("unchecked")
+    @Override
+    public <K, V> void forward(final Record<K, V> record) {
+        final ProcessorNode<?, ?, ?, ?> previousNode = currentNode();
+        try {
+            for (final ProcessorNode<?, ?, ?, ?> child : currentNode().children()) {
+                setCurrentNode(child);
+                ((ProcessorNode<K, V, ?, ?>) child).process(record);
+            }
+        } finally {
+            setCurrentNode(previousNode);
+        }
+    }
+
+    @Override
+    public <K, V> void forward(final Record<K, V> record, final String childName) {
+        throw new UnsupportedOperationException("this should not happen: forward() not supported in global processor context.");
     }
 
     @SuppressWarnings("unchecked")
     @Override
     public <KIn, VIn> void forward(final KIn key, final VIn value) {
-        final ProcessorNode<?, ?, ?, ?> previousNode = currentNode();
-        try {
-            for (final ProcessorNode<?, ?, ?, ?> child : currentNode().children()) {
-                setCurrentNode(child);
-                ((ProcessorNode<KIn, VIn, ?, ?>) child).process(key, value);
-            }
-        } finally {
-            setCurrentNode(previousNode);
-        }
+        forward(new Record<>(key, value, timestamp(), headers()));
     }
 
     /**

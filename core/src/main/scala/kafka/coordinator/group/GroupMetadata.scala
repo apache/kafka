@@ -22,6 +22,7 @@ import java.util.concurrent.locks.ReentrantLock
 
 import kafka.common.OffsetAndMetadata
 import kafka.utils.{CoreUtils, Logging, nonthreadsafe}
+import kafka.utils.Implicits._
 import org.apache.kafka.clients.consumer.internals.ConsumerProtocol
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.message.JoinGroupResponseData.JoinGroupResponseMember
@@ -140,14 +141,13 @@ private object GroupMetadata extends Logging {
     group.protocolName = Option(protocolName)
     group.leaderId = Option(leaderId)
     group.currentStateTimestamp = currentStateTimestamp
-    members.foreach(member => {
+    members.foreach { member =>
       group.add(member, null)
       if (member.isStaticMember) {
-        info(s"Static member $member.groupInstanceId of group $groupId loaded " +
-          s"with member id ${member.memberId} at generation ${group.generationId}.")
         group.addStaticMember(member.groupInstanceId, member.memberId)
       }
-    })
+      info(s"Loaded member $member in group $groupId with generation ${group.generationId}.")
+    }
     group.subscribedTopics = group.computeSubscribedTopics()
     group
   }
@@ -242,7 +242,6 @@ private[group] class GroupMetadata(val groupId: String, initialState: GroupState
     if (members.isEmpty)
       this.protocolType = Some(member.protocolType)
 
-    assert(groupId == member.groupId)
     assert(this.protocolType.orNull == member.protocolType)
     assert(supportsProtocols(member.protocolType, MemberMetadata.plainProtocolSet(member.supportedProtocols)))
 
@@ -260,6 +259,8 @@ private[group] class GroupMetadata(val groupId: String, initialState: GroupState
       member.supportedProtocols.foreach{ case (protocol, _) => supportedProtocols(protocol) -= 1 }
       if (member.isAwaitingJoin)
         numMembersAwaitingJoin -= 1
+
+      member.groupInstanceId.foreach(staticMembers.remove)
     }
 
     if (isLeader(memberId))
@@ -344,12 +345,6 @@ private[group] class GroupMetadata(val groupId: String, initialState: GroupState
       throw new IllegalArgumentException(s"unexpected null group.instance.id in addStaticMember")
     }
     staticMembers.put(groupInstanceId.get, newMemberId)
-  }
-
-  def removeStaticMember(groupInstanceId: Option[String]) = {
-    if (groupInstanceId.isDefined) {
-      staticMembers.remove(groupInstanceId.get)
-    }
   }
 
   def currentState = state
@@ -475,7 +470,7 @@ private[group] class GroupMetadata(val groupId: String, initialState: GroupState
               // future versions of the consumer protocol. VO must prefix all new versions.
               val buffer = ByteBuffer.wrap(member.metadata(protocolName.get))
               ConsumerProtocol.deserializeVersion(buffer)
-              ConsumerProtocol.deserializeSubscriptionV0(buffer).topics.asScala.toSet
+              ConsumerProtocol.deserializeSubscription(buffer, 0).topics.asScala.toSet
             }.reduceLeft(_ ++ _)
           )
         } catch {
@@ -616,7 +611,7 @@ private[group] class GroupMetadata(val groupId: String, initialState: GroupState
     val producerOffsets = pendingTransactionalOffsetCommits.getOrElseUpdate(producerId,
       mutable.Map.empty[TopicPartition, CommitRecordMetadataAndOffset])
 
-    offsets.foreach { case (topicPartition, offsetAndMetadata) =>
+    offsets.forKeyValue { (topicPartition, offsetAndMetadata) =>
       producerOffsets.put(topicPartition, CommitRecordMetadataAndOffset(None, offsetAndMetadata))
     }
   }
@@ -660,7 +655,7 @@ private[group] class GroupMetadata(val groupId: String, initialState: GroupState
     val pendingOffsetsOpt = pendingTransactionalOffsetCommits.remove(producerId)
     if (isCommit) {
       pendingOffsetsOpt.foreach { pendingOffsets =>
-        pendingOffsets.foreach { case (topicPartition, commitRecordMetadataAndOffset) =>
+        pendingOffsets.forKeyValue { (topicPartition, commitRecordMetadataAndOffset) =>
           if (commitRecordMetadataAndOffset.appendedBatchOffset.isEmpty)
             throw new IllegalStateException(s"Trying to complete a transactional offset commit for producerId $producerId " +
               s"and groupId $groupId even though the offset commit record itself hasn't been appended to the log.")
@@ -698,7 +693,7 @@ private[group] class GroupMetadata(val groupId: String, initialState: GroupState
   def removeOffsets(topicPartitions: Seq[TopicPartition]): immutable.Map[TopicPartition, OffsetAndMetadata] = {
     topicPartitions.flatMap { topicPartition =>
       pendingOffsetCommits.remove(topicPartition)
-      pendingTransactionalOffsetCommits.foreach { case (_, pendingOffsets) =>
+      pendingTransactionalOffsetCommits.forKeyValue { (_, pendingOffsets) =>
         pendingOffsets.remove(topicPartition)
       }
       val removedOffset = offsets.remove(topicPartition)

@@ -24,10 +24,10 @@ import kafka.controller.{ControllerContext, ReplicaAssignment}
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.security.auth.SecurityProtocol
-import org.junit.{Before, Test}
-import org.junit.Assert.assertEquals
-import org.junit.Assert.assertTrue
-import org.junit.Assert.assertFalse
+import org.junit.jupiter.api.{BeforeEach, Test}
+import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertTrue
+import org.junit.jupiter.api.Assertions.assertFalse
 
 
 class ControllerContextTest {
@@ -38,7 +38,7 @@ class ControllerContextTest {
   val tp2 = new TopicPartition("A", 1)
   val tp3 = new TopicPartition("B", 0)
 
-  @Before
+  @BeforeEach
   def setUp(): Unit = {
     context = new ControllerContext
 
@@ -149,6 +149,20 @@ class ControllerContextTest {
     assertEquals(List(), nonReassigningPartition.addingReplicas)
     assertEquals(List(), nonReassigningPartition.removingReplicas)
     assertFalse(nonReassigningPartition.isBeingReassigned)
+  }
+
+  @Test
+  def testReassignToIdempotence(): Unit = {
+    val assignment1 = ReplicaAssignment(Seq(1, 2, 3))
+    assertEquals(assignment1, assignment1.reassignTo(assignment1.targetReplicas))
+
+    val assignment2 = ReplicaAssignment(Seq(4, 5, 6, 1, 2, 3),
+      addingReplicas = Seq(4, 5, 6), removingReplicas = Seq(1, 2, 3))
+    assertEquals(assignment2, assignment2.reassignTo(assignment2.targetReplicas))
+
+    val assignment3 = ReplicaAssignment(Seq(4, 2, 3, 1),
+      addingReplicas = Seq(4), removingReplicas = Seq(1))
+    assertEquals(assignment3, assignment3.reassignTo(assignment3.targetReplicas))
   }
 
   @Test

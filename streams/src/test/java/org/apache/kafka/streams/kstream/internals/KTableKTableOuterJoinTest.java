@@ -31,8 +31,8 @@ import org.apache.kafka.streams.processor.MockProcessorContext;
 import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.internals.testutil.LogCaptureAppender;
 import org.apache.kafka.streams.test.TestRecord;
-import org.apache.kafka.test.MockProcessor;
-import org.apache.kafka.test.MockProcessorSupplier;
+import org.apache.kafka.test.MockApiProcessor;
+import org.apache.kafka.test.MockApiProcessorSupplier;
 import org.apache.kafka.test.MockValueJoiner;
 import org.apache.kafka.test.StreamsTestUtils;
 import org.junit.Test;
@@ -193,13 +193,12 @@ public class KTableKTableOuterJoinTest {
         final KTable<Integer, String> table1;
         final KTable<Integer, String> table2;
         final KTable<Integer, String> joined;
-        final MockProcessorSupplier<Integer, String> supplier;
+        final MockApiProcessorSupplier<Integer, String, Void, Void> supplier = new MockApiProcessorSupplier<>();
 
         table1 = builder.table(topic1, consumed);
         table2 = builder.table(topic2, consumed);
         joined = table1.outerJoin(table2, MockValueJoiner.TOSTRING_JOINER);
 
-        supplier = new MockProcessorSupplier<>();
         final Topology topology = builder.build().addProcessor("proc", supplier, ((KTableImpl<?, ?, ?>) joined).name);
 
         try (final TopologyTestDriver driver = new TopologyTestDriver(topology, props)) {
@@ -207,7 +206,7 @@ public class KTableKTableOuterJoinTest {
                     driver.createInputTopic(topic1, Serdes.Integer().serializer(), Serdes.String().serializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
             final TestInputTopic<Integer, String> inputTopic2 =
                     driver.createInputTopic(topic2, Serdes.Integer().serializer(), Serdes.String().serializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
-            final MockProcessor<Integer, String> proc = supplier.theCapturedProcessor();
+            final MockApiProcessor<Integer, String, Void, Void> proc = supplier.theCapturedProcessor();
 
             assertTrue(((KTableImpl<?, ?, ?>) table1).sendingOldValueEnabled());
             assertTrue(((KTableImpl<?, ?, ?>) table2).sendingOldValueEnabled());
@@ -303,15 +302,14 @@ public class KTableKTableOuterJoinTest {
         final KTable<Integer, String> table1;
         final KTable<Integer, String> table2;
         final KTable<Integer, String> joined;
-        final MockProcessorSupplier<Integer, String> supplier;
+        final MockApiProcessorSupplier<Integer, String, Void, Void> supplier = new MockApiProcessorSupplier<>();
 
         table1 = builder.table(topic1, consumed);
         table2 = builder.table(topic2, consumed);
         joined = table1.outerJoin(table2, MockValueJoiner.TOSTRING_JOINER);
 
-        ((KTableImpl<?, ?, ?>) joined).enableSendingOldValues();
+        ((KTableImpl<?, ?, ?>) joined).enableSendingOldValues(true);
 
-        supplier = new MockProcessorSupplier<>();
         final Topology topology = builder.build().addProcessor("proc", supplier, ((KTableImpl<?, ?, ?>) joined).name);
 
         try (final TopologyTestDriver driver = new TopologyTestDriver(topology, props)) {
@@ -319,7 +317,7 @@ public class KTableKTableOuterJoinTest {
                     driver.createInputTopic(topic1, Serdes.Integer().serializer(), Serdes.String().serializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
             final TestInputTopic<Integer, String> inputTopic2 =
                     driver.createInputTopic(topic2, Serdes.Integer().serializer(), Serdes.String().serializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
-            final MockProcessor<Integer, String> proc = supplier.theCapturedProcessor();
+            final MockApiProcessor<Integer, String, Void, Void> proc = supplier.theCapturedProcessor();
 
             assertTrue(((KTableImpl<?, ?, ?>) table1).sendingOldValueEnabled());
             assertTrue(((KTableImpl<?, ?, ?>) table2).sendingOldValueEnabled());

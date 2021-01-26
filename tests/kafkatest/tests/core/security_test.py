@@ -67,8 +67,9 @@ class SecurityTest(EndToEndTest):
         with hostname verification failure. Hence clients are expected to fail with LEADER_NOT_AVAILABLE.
         """
 
+        # Start Kafka with valid hostnames in the certs' SANs so that we can create the test topic via the admin client
         SecurityConfig.ssl_stores = TestSslStores(self.test_context.local_scratch_dir,
-                                                  valid_hostname=False)
+                                                  valid_hostname=True)
 
         self.create_zookeeper()
         self.zk.start()
@@ -76,6 +77,10 @@ class SecurityTest(EndToEndTest):
         self.create_kafka(security_protocol=security_protocol,
                           interbroker_security_protocol=interbroker_security_protocol)
         self.kafka.start()
+
+        # now set the certs to have invalid hostnames so we can run the actual test
+        SecurityConfig.ssl_stores.valid_hostname = False
+        self.kafka.restart_cluster()
 
         # We need more verbose logging to catch the expected errors
         self.create_and_start_clients(log_level="DEBUG")

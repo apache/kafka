@@ -21,6 +21,7 @@ package org.apache.kafka.streams.scala
 package kstream
 
 import org.apache.kafka.streams.kstream.internals.KTableImpl
+import org.apache.kafka.streams.scala.serialization.Serdes
 import org.apache.kafka.streams.kstream.{KTable => KTableJ, TimeWindowedKStream => TimeWindowedKStreamJ, Windowed}
 import org.apache.kafka.streams.scala.FunctionsCompatConversions.{
   AggregatorFromFunction,
@@ -70,7 +71,7 @@ class TimeWindowedKStream[K, V](val inner: TimeWindowedKStreamJ[K, V]) {
     new KTable(
       javaCountTable.mapValues[Long](
         ((l: java.lang.Long) => Long2long(l)).asValueMapper,
-        Materialized.`with`[Windowed[K], Long, ByteArrayKeyValueStore](tableImpl.keySerde(), Serdes.Long)
+        Materialized.`with`[Windowed[K], Long, ByteArrayKeyValueStore](tableImpl.keySerde(), Serdes.longSerde)
       )
     )
   }

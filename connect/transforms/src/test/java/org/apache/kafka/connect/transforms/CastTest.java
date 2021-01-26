@@ -20,6 +20,7 @@ package org.apache.kafka.connect.transforms;
 import java.util.Arrays;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
+
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.connect.data.Decimal;
 import org.apache.kafka.connect.data.Schema;
@@ -31,8 +32,8 @@ import org.apache.kafka.connect.data.Timestamp;
 import org.apache.kafka.connect.data.Values;
 import org.apache.kafka.connect.errors.DataException;
 import org.apache.kafka.connect.source.SourceRecord;
-import org.junit.After;
-import org.junit.Test;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.Test;
 
 import java.math.BigDecimal;
 import java.util.Collections;
@@ -40,9 +41,10 @@ import java.util.Date;
 import java.util.HashMap;
 import java.util.Map;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNull;
-import static org.junit.Assert.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class CastTest {
     private final Cast<SourceRecord> xformKey = new Cast.Key<>();
@@ -50,40 +52,40 @@ public class CastTest {
     private static final long MILLIS_PER_HOUR = TimeUnit.HOURS.toMillis(1);
     private static final long MILLIS_PER_DAY = TimeUnit.DAYS.toMillis(1);
 
-    @After
+    @AfterEach
     public void teardown() {
         xformKey.close();
         xformValue.close();
     }
 
-    @Test(expected = ConfigException.class)
+    @Test
     public void testConfigEmpty() {
-        xformKey.configure(Collections.singletonMap(Cast.SPEC_CONFIG, ""));
+        assertThrows(ConfigException.class, () -> xformKey.configure(Collections.singletonMap(Cast.SPEC_CONFIG, "")));
     }
 
-    @Test(expected = ConfigException.class)
+    @Test
     public void testConfigInvalidSchemaType() {
-        xformKey.configure(Collections.singletonMap(Cast.SPEC_CONFIG, "foo:faketype"));
+        assertThrows(ConfigException.class, () -> xformKey.configure(Collections.singletonMap(Cast.SPEC_CONFIG, "foo:faketype")));
     }
 
-    @Test(expected = ConfigException.class)
+    @Test
     public void testConfigInvalidTargetType() {
-        xformKey.configure(Collections.singletonMap(Cast.SPEC_CONFIG, "foo:array"));
+        assertThrows(ConfigException.class, () -> xformKey.configure(Collections.singletonMap(Cast.SPEC_CONFIG, "foo:array")));
     }
 
-    @Test(expected = ConfigException.class)
+    @Test
     public void testUnsupportedTargetType() {
-        xformKey.configure(Collections.singletonMap(Cast.SPEC_CONFIG, "foo:bytes"));
+        assertThrows(ConfigException.class, () -> xformKey.configure(Collections.singletonMap(Cast.SPEC_CONFIG, "foo:bytes")));
     }
 
-    @Test(expected = ConfigException.class)
+    @Test
     public void testConfigInvalidMap() {
-        xformKey.configure(Collections.singletonMap(Cast.SPEC_CONFIG, "foo:int8:extra"));
+        assertThrows(ConfigException.class, () -> xformKey.configure(Collections.singletonMap(Cast.SPEC_CONFIG, "foo:int8:extra")));
     }
 
-    @Test(expected = ConfigException.class)
+    @Test
     public void testConfigMixWholeAndFieldTransformation() {
-        xformKey.configure(Collections.singletonMap(Cast.SPEC_CONFIG, "foo:int8,int32"));
+        assertThrows(ConfigException.class, () -> xformKey.configure(Collections.singletonMap(Cast.SPEC_CONFIG, "foo:int8,int32")));
     }
 
     @Test
@@ -320,10 +322,12 @@ public class CastTest {
         assertEquals("42", transformed.value());
     }
 
-    @Test(expected = DataException.class)
+    @Test
     public void castWholeRecordValueSchemalessUnsupportedType() {
         xformValue.configure(Collections.singletonMap(Cast.SPEC_CONFIG, "int8"));
-        xformValue.apply(new SourceRecord(null, null, "topic", 0, null, Collections.singletonList("foo")));
+        assertThrows(DataException.class,
+            () -> xformValue.apply(new SourceRecord(null, null, "topic", 0,
+                    null, Collections.singletonList("foo"))));
     }
 
     @Test

@@ -107,7 +107,7 @@ public class ScramSaslServer implements SaslServer {
                     String serverNonce = formatter.secureRandomString();
                     try {
                         String saslName = clientFirstMessage.saslName();
-                        this.username = formatter.username(saslName);
+                        this.username = ScramFormatter.username(saslName);
                         NameCallback nameCallback = new NameCallback("username", username);
                         ScramCredentialCallback credentialCallback;
                         if (scramExtensions.tokenAuthenticated()) {
@@ -259,7 +259,7 @@ public class ScramSaslServer implements SaslServer {
         @Override
         public String[] getMechanismNames(Map<String, ?> props) {
             Collection<String> mechanisms = ScramMechanism.mechanismNames();
-            return mechanisms.toArray(new String[mechanisms.size()]);
+            return mechanisms.toArray(new String[0]);
         }
     }
 }

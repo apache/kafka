@@ -16,6 +16,8 @@
  */
 package org.apache.kafka.common.record;
 
+import com.github.luben.zstd.BufferPool;
+import com.github.luben.zstd.RecyclingBufferPool;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.utils.ByteBufferInputStream;
 import org.apache.kafka.common.utils.ByteBufferOutputStream;
@@ -119,7 +121,11 @@ public enum CompressionType {
         @Override
         public OutputStream wrapForOutput(ByteBufferOutputStream buffer, byte messageVersion) {
             try {
-                return (OutputStream) ZstdConstructors.OUTPUT.invoke(buffer);
+                // Set input buffer (uncompressed) to 16 KB (none by default) to ensure reasonable performance
+                // in cases where the caller passes a small number of bytes to write (potentially a single byte).
+                // It's ok to reference `RecyclingBufferPool` since it doesn't load any native libraries
+                return new BufferedOutputStream((OutputStream) ZstdConstructors.OUTPUT.invoke(buffer, RecyclingBufferPool.INSTANCE),
+                    16 * 1024);
             } catch (Throwable e) {
                 throw new KafkaException(e);
             }
@@ -128,7 +134,11 @@ public enum CompressionType {
         @Override
         public InputStream wrapForInput(ByteBuffer buffer, byte messageVersion, BufferSupplier decompressionBufferSupplier) {
             try {
-                return (InputStream) ZstdConstructors.INPUT.invoke(new ByteBufferInputStream(buffer));
+                // Set output buffer (uncompressed) to 16 KB (none by default) to ensure reasonable performance
+                // in cases where the caller reads a small number of bytes (potentially a single byte).
+                // It's ok to reference `RecyclingBufferPool` since it doesn't load any native libraries.
+                return new BufferedInputStream((InputStream) ZstdConstructors.INPUT.invoke(new ByteBufferInputStream(buffer),
+                    RecyclingBufferPool.INSTANCE), 16 * 1024);
             } catch (Throwable e) {
                 throw new KafkaException(e);
             }
@@ -215,10 +225,11 @@ public enum CompressionType {
     }
 
     private static class ZstdConstructors {
+        // It's ok to reference `BufferPool` since it doesn't load any native libraries
         static final MethodHandle INPUT = findConstructor("com.github.luben.zstd.ZstdInputStream",
-            MethodType.methodType(void.class, InputStream.class));
+            MethodType.methodType(void.class, InputStream.class, BufferPool.class));
         static final MethodHandle OUTPUT = findConstructor("com.github.luben.zstd.ZstdOutputStream",
-            MethodType.methodType(void.class, OutputStream.class));
+            MethodType.methodType(void.class, OutputStream.class, BufferPool.class));
     }
 
     private static MethodHandle findConstructor(String className, MethodType methodType) {
