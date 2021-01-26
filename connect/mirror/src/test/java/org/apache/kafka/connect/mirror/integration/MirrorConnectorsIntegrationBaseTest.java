@@ -101,7 +101,7 @@ public abstract class MirrorConnectorsIntegrationBaseTest {
     protected Properties primaryBrokerProps = new Properties();
     protected Properties backupBrokerProps = new Properties();
     protected Map<String, String> primaryWorkerProps = new HashMap<>();
-    protected Map<String, String> backupWorkerProps = new HashMap<>(); 
+    protected Map<String, String> backupWorkerProps = new HashMap<>();
     
     @BeforeEach
     public void startClusters() throws Exception {
