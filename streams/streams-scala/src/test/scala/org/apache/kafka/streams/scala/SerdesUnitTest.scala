@@ -16,9 +16,9 @@
  */
 package org.apache.kafka.streams.scala
 
-import kafka.utils.LogCaptureAppender
+import org.apache.kafka.streams.processor.internals.testutil.LogCaptureAppender
 import org.apache.kafka.streams.kstream.WindowedSerdes.TimeWindowedSerde
-import org.junit.Assert.assertTrue
+import org.junit.Assert.assertFalse
 import org.junit.Test
 
 class SerdesUnitTest {
@@ -28,8 +28,8 @@ class SerdesUnitTest {
 
     Serdes.timeWindowedSerde(new TimeWindowedSerde[String]())
     val appender = LogCaptureAppender.createAndRegister()
-    val message = appender.getMessages.find(e => e.getLevel == Level.WARN && e.getThrowableInformation != null)
-    assertTrue("There should be a warning about TimeWindowedDeserializer", message.isDefined)
+    val warning = appender.getMessages()
+    assertFalse("There should be a warning about TimeWindowedDeserializer", warning.isEmpty)
   }
 
 }
