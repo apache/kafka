@@ -1062,10 +1062,7 @@ class ControllerIntegrationTest extends ZooKeeperTestHarness {
 
   private def testControllerMove(fun: () => Unit): Unit = {
     val controller = getController().kafkaController
-    val appender = LogCaptureAppender.createAndRegister()
-    val previousLevel = LogCaptureAppender.setClassLoggerLevel(controller.getClass, Level.INFO)
-
-    try {
+    val appender = LogCaptureAppender.captureLogging(controller.getClass, Level.INFO) {
       TestUtils.waitUntilTrue(() => {
         controller.eventManager.state == ControllerState.Idle
       }, "Controller event thread is still busy")
@@ -1089,17 +1086,12 @@ class ControllerIntegrationTest extends ZooKeeperTestHarness {
       // Resume the controller event thread. At this point, the controller should see mismatch controller epoch zkVersion and resign
       latch.countDown()
       TestUtils.waitUntilTrue(() => !controller.isActive, "Controller fails to resign")
-
-      // Expect to capture the ControllerMovedException in the log of ControllerEventThread
-      val event = appender.getMessages.find(e => e.getLevel == Level.INFO
-        && e.getThrowableInformation != null
-        && e.getThrowableInformation.getThrowable.getClass.getName.equals(classOf[ControllerMovedException].getName))
-      assertTrue(event.isDefined)
-
-    } finally {
-      LogCaptureAppender.unregister(appender)
-      LogCaptureAppender.setClassLoggerLevel(controller.eventManager.thread.getClass, previousLevel)
     }
+    // Expect to capture the ControllerMovedException in the log of ControllerEventThread
+    val event = appender.getMessages.find(e => e.getLevel == Level.INFO
+      && e.getThrowableInformation != null
+      && e.getThrowableInformation.getThrowable.getClass.getName.equals(classOf[ControllerMovedException].getName))
+    assertTrue(event.isDefined)
   }
 
   private def preferredReplicaLeaderElection(controllerId: Int, otherBroker: KafkaServer, tp: TopicPartition,

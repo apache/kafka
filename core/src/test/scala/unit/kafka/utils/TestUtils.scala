@@ -62,6 +62,7 @@ import org.apache.kafka.common.utils.Utils._
 import org.apache.kafka.common.{KafkaFuture, Node, TopicPartition}
 import org.apache.kafka.server.authorizer.{Authorizer => JAuthorizer}
 import org.apache.kafka.test.{TestSslUtils, TestUtils => JTestUtils}
+import org.apache.log4j.PropertyConfigurator
 import org.apache.zookeeper.KeeperException.SessionExpiredException
 import org.apache.zookeeper.ZooDefs._
 import org.apache.zookeeper.data.ACL
@@ -1853,4 +1854,27 @@ object TestUtils extends Logging {
       authorizer, resource)
   }
 
+  /**
+   * Convenience function for tests which mutate log levels which resets the logging configuration after the test.
+   */
+  def withLogReset[T](fn: => T): T = {
+    try {
+      fn
+    } finally {
+      resetLogging
+    }
+  }
+
+  /**
+    * Resets the logging configuration after the test.
+    */
+  def resetLogging[T] = {
+    org.apache.log4j.LogManager.resetConfiguration()
+    val stream = this.getClass.getResourceAsStream("/log4j.properties")
+    try {
+      PropertyConfigurator.configure(stream)
+    } finally {
+      stream.close()
+    }
+  }
 }

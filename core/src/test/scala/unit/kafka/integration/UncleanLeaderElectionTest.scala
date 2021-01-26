@@ -88,6 +88,7 @@ class UncleanLeaderElectionTest extends ZooKeeperTestHarness {
     // restore log levels
     kafkaApisLogger.setLevel(Level.ERROR)
     networkProcessorLogger.setLevel(Level.ERROR)
+    TestUtils.resetLogging
 
     super.tearDown()
   }
