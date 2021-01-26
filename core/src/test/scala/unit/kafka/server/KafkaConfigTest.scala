@@ -1025,4 +1025,35 @@ class KafkaConfigTest {
     assertTrue(isValidKafkaConfig(props))
   }
 
+  @Test
+  def testCustomMetadataLogDir(): Unit = {
+    val metadataDir = "/path/to/metadata/dir"
+    val dataDir = "/path/to/data/dir"
+
+    val props = new Properties()
+    props.put(KafkaConfig.ProcessRolesProp, "broker")
+    props.put(KafkaConfig.MetadataLogDirProp, metadataDir)
+    props.put(KafkaConfig.LogDirProp, dataDir)
+    assertTrue(isValidKafkaConfig(props))
+
+    val config = KafkaConfig.fromProps(props)
+    assertEquals(metadataDir, config.metadataLogDir)
+    assertEquals(Seq(dataDir), config.logDirs)
+  }
+
+  @Test
+  def testDefaultMetadataLogDir(): Unit = {
+    val dataDir1 = "/path/to/data/dir/1"
+    val dataDir2 = "/path/to/data/dir/2"
+
+    val props = new Properties()
+    props.put(KafkaConfig.ProcessRolesProp, "broker")
+    props.put(KafkaConfig.LogDirProp, s"$dataDir1,$dataDir2")
+    assertTrue(isValidKafkaConfig(props))
+
+    val config = KafkaConfig.fromProps(props)
+    assertEquals(dataDir1, config.metadataLogDir)
+    assertEquals(Seq(dataDir1, dataDir2), config.logDirs)
+  }
+
 }

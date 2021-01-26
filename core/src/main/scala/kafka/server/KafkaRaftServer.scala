@@ -44,7 +44,7 @@ class KafkaRaftServer(
   KafkaMetricsReporter.startReporters(VerifiableProperties(config.originals))
   KafkaYammerMetrics.INSTANCE.configure(config.originals)
 
-  private val (metaProps, _) = loadMetaProperties()
+  private val (metaProps, _) = KafkaRaftServer.loadMetaProperties(config)
 
   private val metrics = Server.initializeMetrics(
     config,
@@ -95,7 +95,17 @@ class KafkaRaftServer(
     controller.foreach(_.awaitShutdown())
   }
 
-  private def loadMetaProperties(): (MetaProperties, Seq[String]) = {
+}
+
+object KafkaRaftServer {
+  val MetadataTopic = "@metadata"
+  val MetadataPartition = new TopicPartition(MetadataTopic, 0)
+
+  sealed trait ProcessRole
+  case object BrokerRole extends ProcessRole
+  case object ControllerRole extends ProcessRole
+
+  def loadMetaProperties(config: KafkaConfig): (MetaProperties, Seq[String]) = {
     val logDirs = config.logDirs ++ Seq(config.metadataLogDir)
     val (rawMetaProperties, offlineDirs) = BrokerMetadataCheckpoint.
       getBrokerMetadataAndOfflineDirs(logDirs, ignoreMissing = false)
@@ -126,13 +136,4 @@ class KafkaRaftServer(
     (metaProperties, offlineDirs.toSeq)
   }
 
-}
-
-object KafkaRaftServer {
-  val MetadataTopic = "@metadata"
-  val MetadataPartition = new TopicPartition(MetadataTopic, 0)
-
-  sealed trait ProcessRole
-  case object BrokerRole extends ProcessRole
-  case object ControllerRole extends ProcessRole
 }
