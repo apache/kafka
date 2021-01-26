@@ -180,14 +180,14 @@ public class MockLog implements ReplicatedLog {
 
     @Override
     public Optional<OffsetAndEpoch> endOffsetForEpoch(int epoch) {
-        OptionalInt epochLowerBound = OptionalInt.empty();
+        int epochLowerBound = oldestSnapshotId.map(id -> id.epoch).orElse(0);
         for (EpochStartOffset epochStartOffset : epochStartOffsets) {
             if (epochStartOffset.epoch > epoch) {
                 return Optional.of(
-                    new OffsetAndEpoch(epochStartOffset.startOffset, epochLowerBound.orElse(epoch))
+                    new OffsetAndEpoch(epochStartOffset.startOffset, epochLowerBound)
                 );
             }
-            epochLowerBound = OptionalInt.of(epochStartOffset.epoch);
+            epochLowerBound = epochStartOffset.epoch;
         }
 
         if (!epochStartOffsets.isEmpty()) {
@@ -436,7 +436,7 @@ public class MockLog implements ReplicatedLog {
     public void onSnapshotFrozen(OffsetAndEpoch snapshotId) {}
 
     @Override
-    public boolean updateLogStart(OffsetAndEpoch logStartSnapshotId) {
+    public boolean deleteToNewOldestSnapshotId(OffsetAndEpoch logStartSnapshotId) {
         if (logStartOffset() > logStartSnapshotId.offset || highWatermark.offset < logStartSnapshotId.offset) {
             throw new OffsetOutOfRangeException(
                 String.format(

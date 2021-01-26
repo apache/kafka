@@ -104,7 +104,7 @@ final class KafkaMetadataLogTest {
       snapshot.freeze()
     }
 
-    assertTrue(log.updateLogStart(snapshotId))
+    assertTrue(log.deleteToNewOldestSnapshotId(snapshotId))
     assertEquals(offset, log.startOffset)
     assertEquals(epoch, log.lastFetchedEpoch)
     assertEquals(offset, log.endOffset().offset)
@@ -114,7 +114,7 @@ final class KafkaMetadataLogTest {
     append(log, newRecords, epoch + 1)
 
     // Start offset should not change since a new snapshot was not generated
-    assertFalse(log.updateLogStart(new OffsetAndEpoch(offset + newRecords, epoch)))
+    assertFalse(log.deleteToNewOldestSnapshotId(new OffsetAndEpoch(offset + newRecords, epoch)))
     assertEquals(offset, log.startOffset)
 
     assertEquals(epoch + 1, log.lastFetchedEpoch)
@@ -132,7 +132,7 @@ final class KafkaMetadataLogTest {
     append(log, offset, epoch)
     log.updateHighWatermark(new LogOffsetMetadata(offset))
 
-    assertFalse(log.updateLogStart(new OffsetAndEpoch(1L, epoch)))
+    assertFalse(log.deleteToNewOldestSnapshotId(new OffsetAndEpoch(1L, epoch)))
     assertEquals(0, log.startOffset)
     assertEquals(epoch, log.lastFetchedEpoch)
     assertEquals(offset, log.endOffset().offset)
@@ -156,7 +156,7 @@ final class KafkaMetadataLogTest {
 
     assertThrows(
       classOf[OffsetOutOfRangeException],
-      () => log.updateLogStart(snapshotId)
+      () => log.deleteToNewOldestSnapshotId(snapshotId)
     )
   }
 

@@ -121,12 +121,12 @@ public interface ReplicatedLog extends Closeable {
     void updateHighWatermark(LogOffsetMetadata offsetMetadata);
 
     /**
-     * Updates the log start offset if necessary.
+     * Updates the log start offset and delete segments if necessary.
      *
-     * The replicated log's start offset can be increased when there is a snapshot greater than the
-     * current log start offset.
+     * The replicated log's start offset can be increased and older segments can be deleted when
+     * there is a snapshot greater than the current log start offset.
      */
-    boolean updateLogStart(OffsetAndEpoch logStartSnapshotId);
+    boolean deleteToNewOldestSnapshotId(OffsetAndEpoch logStartSnapshotId);
 
     /**
      * Flush the current log to disk.

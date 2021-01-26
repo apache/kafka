@@ -22,7 +22,7 @@ import java.util.NoSuchElementException
 import java.util.Optional
 import java.util.concurrent.ConcurrentSkipListSet
 
-import kafka.log.{AppendOrigin, Log, SnapshotGenerated}
+import kafka.log.{AppendOrigin, Log, SnapshotGenerated, LogOffsetSnapshot}
 import kafka.server.{FetchHighWatermark, FetchLogEnd}
 import org.apache.kafka.common.record.{MemoryRecords, Records}
 import org.apache.kafka.common.{KafkaException, TopicPartition}
@@ -38,9 +38,8 @@ import scala.compat.java8.OptionConverters._
 
 final class KafkaMetadataLog private (
   log: Log,
-  // This object needs to be thread-safe because the polling thread in the KafkaRaftClient implementation
-  // and other threads will access this object. This object is used to efficiently notify the polling thread
-  // when snapshots are created.
+  // This object needs to be thread-safe because it is used by the snapshotting thread to notify the
+  // polling thread when snapshots are created.
   snapshotIds: ConcurrentSkipListSet[raft.OffsetAndEpoch],
   topicPartition: TopicPartition,
   maxFetchSizeInBytes: Int
@@ -79,20 +78,11 @@ final class KafkaMetadataLog private (
     if (records.sizeInBytes == 0)
       throw new IllegalArgumentException("Attempt to append an empty record set")
 
-    val appendInfo = log.appendAsLeader(records.asInstanceOf[MemoryRecords],
-      leaderEpoch = epoch,
-      origin = AppendOrigin.Coordinator)
-
-    if (appendInfo.firstOffset.exists(_.relativePositionInSegment == 0)) {
-      // Assume that a new segment was created if the relative position is 0
-      log.deleteOldSegments()
-    }
-
-    new LogAppendInfo(
-      appendInfo.firstOffset.map(_.messageOffset).getOrElse {
-        throw new KafkaException("Append failed unexpectedly")
-      },
-      appendInfo.lastOffset
+    handleAndConvertLogAppendInfo(
+      log.appendAsLeader(records.asInstanceOf[MemoryRecords],
+        leaderEpoch = epoch,
+        origin = AppendOrigin.Coordinator
+      )
     )
   }
 
@@ -100,19 +90,20 @@ final class KafkaMetadataLog private (
     if (records.sizeInBytes == 0)
       throw new IllegalArgumentException("Attempt to append an empty record set")
 
-    val appendInfo = log.appendAsFollower(records.asInstanceOf[MemoryRecords])
+    handleAndConvertLogAppendInfo(log.appendAsFollower(records.asInstanceOf[MemoryRecords]))
+  }
 
-    if (appendInfo.firstOffset.exists(_.relativePositionInSegment == 0)) {
-      // Assume that a new segment was created if the relative position is 0
-      log.deleteOldSegments()
+  private def handleAndConvertLogAppendInfo(appendInfo: kafka.log.LogAppendInfo): LogAppendInfo = {
+    appendInfo.firstOffset match {
+      case Some(firstOffset) =>
+        if (firstOffset.relativePositionInSegment == 0) {
+          // Assume that a new segment was created if the relative position is 0
+          log.deleteOldSegments()
+        }
+        new LogAppendInfo(firstOffset.messageOffset, appendInfo.lastOffset)
+      case None =>
+        throw new KafkaException(s"Append failed unexpectedly: $appendInfo")
     }
-
-    new LogAppendInfo(
-      appendInfo.firstOffset.map(_.messageOffset).getOrElse {
-        throw new KafkaException("Append failed unexpectedly")
-      },
-      appendInfo.lastOffset
-    )
   }
 
   override def lastFetchedEpoch: Int = {
@@ -125,7 +116,7 @@ final class KafkaMetadataLog private (
         } else {
           throw new KafkaException(
             s"Log doesn't have a last fetch epoch and there is a snapshot ($snapshotId). " +
-            s"Expected the snapshot's end offset to match the logs end offset ($logEndOffset) " +
+            s"Expected the snapshot's end offset to match the log's end offset ($logEndOffset) " +
             s"and the log start offset ($startOffset)"
           )
         }
@@ -135,8 +126,19 @@ final class KafkaMetadataLog private (
 
   override def endOffsetForEpoch(leaderEpoch: Int): Optional[raft.OffsetAndEpoch] = {
     val endOffsetOpt = log.endOffsetForEpoch(leaderEpoch).map { offsetAndEpoch =>
-      new raft.OffsetAndEpoch(offsetAndEpoch.offset, offsetAndEpoch.leaderEpoch)
+      if (oldestSnapshotId.isPresent() &&
+        offsetAndEpoch.offset == oldestSnapshotId.get().offset &&
+        offsetAndEpoch.leaderEpoch == leaderEpoch) {
+
+        // The lastFetchedEpoch is smaller thant the smallest epoch on the log.
+        // overide the diverging epoch to the oldest snapshot
+        val snapshotId = oldestSnapshotId().get();
+        new raft.OffsetAndEpoch(snapshotId.offset, snapshotId.epoch);
+      } else {
+        new raft.OffsetAndEpoch(offsetAndEpoch.offset, offsetAndEpoch.leaderEpoch)
+      }
     }
+
     endOffsetOpt.asJava
   }
 
@@ -193,7 +195,7 @@ final class KafkaMetadataLog private (
   }
 
   override def highWatermark: LogOffsetMetadata = {
-    val hwm = log.highWatermarkMetadata
+    val LogOffsetSnapshot(_, _, hwm, _) = log.fetchOffsetSnapshot
     val segmentPosition: Optional[OffsetMetadata] = if (hwm.segmentBaseOffset != Log.UnknownOffset &&
       hwm.relativePositionInSegment != kafka.server.LogOffsetMetadata.UnknownFilePosition) {
 
@@ -264,7 +266,7 @@ final class KafkaMetadataLog private (
     snapshotIds.add(snapshotId)
   }
 
-  override def updateLogStart(logStartSnapshotId: raft.OffsetAndEpoch): Boolean = {
+  override def deleteToNewOldestSnapshotId(logStartSnapshotId: raft.OffsetAndEpoch): Boolean = {
     latestSnapshotId.asScala match {
       case Some(snapshotId) if (snapshotIds.contains(logStartSnapshotId) &&
         startOffset < logStartSnapshotId.offset &&

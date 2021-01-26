@@ -1055,15 +1055,6 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
                 )
             );
         });
-        if (log.oldestSnapshotId().isPresent() &&
-            endOffsetAndEpoch.offset == log.oldestSnapshotId().get().offset &&
-            endOffsetAndEpoch.epoch == lastFetchedEpoch) {
-
-            // The lastFetchedEpoch is smaller thant the smallest epoch on the log.
-            // overide the diverging epoch to the oldest snapshot
-            OffsetAndEpoch oldestSnapshotId = log.oldestSnapshotId().get();
-            endOffsetAndEpoch = new OffsetAndEpoch(oldestSnapshotId.offset, oldestSnapshotId.epoch);
-        }
 
         if (log.oldestSnapshotId().isPresent() &&
             ((fetchOffset < log.startOffset()) ||
@@ -2125,7 +2116,7 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
     }
 
     private long pollCurrentState(long currentTimeMs) throws IOException {
-        maybeUpdateLogStart();
+        maybeUpdateOldestSnapshotId();
 
         if (quorum.isLeader()) {
             return pollLeader(currentTimeMs);
@@ -2189,8 +2180,8 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
         return false;
     }
 
-    private void maybeUpdateLogStart() {
-        log.latestSnapshotId().ifPresent(snapshotId -> log.updateLogStart(snapshotId));
+    private void maybeUpdateOldestSnapshotId() {
+        log.latestSnapshotId().ifPresent(snapshotId -> log.deleteToNewOldestSnapshotId(snapshotId));
     }
 
     private void wakeup() {
