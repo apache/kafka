@@ -190,7 +190,7 @@ public class AdjustStreamThreadCountTest {
 
             final int oldThreadCount = kafkaStreams.localThreadsMetadata().size();
             stateTransitionHistory.clear();
-            assertThrows(TimeoutException.class, () ->kafkaStreams.removeStreamThread(Duration.ZERO.minus(DEFAULT_DURATION)));
+            assertThrows(TimeoutException.class, () -> kafkaStreams.removeStreamThread(Duration.ZERO.minus(DEFAULT_DURATION)));
             assertThat(kafkaStreams.localThreadsMetadata().size(), equalTo(oldThreadCount));
         }
     }

@@ -290,6 +290,7 @@ public class StreamThread extends Thread {
     private volatile State state = State.CREATED;
     private volatile ThreadMetadata threadMetadata;
     private StreamThread.StateListener stateListener;
+    private final Optional<String> getGroupInstanceID;
 
     private final ChangelogReader changelogReader;
     private final ConsumerRebalanceListener rebalanceListener;
@@ -516,6 +517,7 @@ public class StreamThread extends Thread {
         this.changelogReader = changelogReader;
         this.originalReset = originalReset;
         this.nextProbingRebalanceMs = nextProbingRebalanceMs;
+        this.getGroupInstanceID = mainConsumer.groupMetadata().groupInstanceId();
 
         this.pollTime = Duration.ofMillis(config.getLong(StreamsConfig.POLL_MS_CONFIG));
         final int dummyThreadIdx = 1;
@@ -1170,7 +1172,7 @@ public class StreamThread extends Thread {
     }
 
     public Optional<String> getGroupInstanceID() {
-        return mainConsumer.groupMetadata().groupInstanceId();
+        return getGroupInstanceID;
     }
 
     public Map<MetricName, Metric> producerMetrics() {
