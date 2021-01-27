@@ -47,7 +47,7 @@ public class RaftConfig {
     public static final String QUORUM_VOTERS_CONFIG = QUORUM_PREFIX + "voters";
     public static final String QUORUM_VOTERS_DOC = "Map of id/endpoint information for " +
         "the set of voters in a comma-separated list of `{id}@{host}:{port}` entries. " +
-        "For example: `1@localhost:9092,2@localhost:9093,3@localhost:9094.`";
+        "For example: `1@localhost:9092,2@localhost:9093,3@localhost:9094`";
     public static final List<String> DEFAULT_QUORUM_VOTERS = Collections.emptyList();
 
     public static final String QUORUM_ELECTION_TIMEOUT_MS_CONFIG = QUORUM_PREFIX + "election.timeout.ms";

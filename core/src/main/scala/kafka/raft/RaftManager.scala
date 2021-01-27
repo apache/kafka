@@ -128,7 +128,7 @@ class KafkaRaftManager[T](
         }
         case invalid: AddressSpec => {
           logger.warn(s"Skipping channel update for destination ID: ${voterAddressEntry.getKey} " +
-            s"because of invalid endpoint: ${invalid.address().toString}")
+            s"because of invalid endpoint: ${invalid.address.toString}")
         }
       }
     }
