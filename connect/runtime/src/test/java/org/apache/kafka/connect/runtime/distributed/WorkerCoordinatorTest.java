@@ -59,6 +59,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
+import static org.apache.kafka.connect.runtime.distributed.ConnectProtocolCompatibility.COMPATIBLE;
 import static org.apache.kafka.connect.runtime.distributed.ConnectProtocolCompatibility.EAGER;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
@@ -107,7 +108,7 @@ public class WorkerCoordinatorTest {
     public static Iterable<?> mode() {
         return Arrays.asList(new Object[][]{
                 {EAGER, 1},
-                {ConnectProtocolCompatibility.COMPATIBLE, 2}});
+                {COMPATIBLE, 2}});
     }
 
     @Parameter
