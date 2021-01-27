@@ -29,10 +29,10 @@ import org.apache.kafka.common.protocol.ApiMessage
 import org.apache.kafka.common.requests.RequestHeader
 import org.apache.kafka.common.security.JaasContext
 import org.apache.kafka.common.utils.{LogContext, Time}
+import org.apache.kafka.raft.RaftConfig.{AddressSpec, InetAddressSpec}
 import org.apache.kafka.raft.{FileBasedStateStore, KafkaRaftClient, RaftClient, RaftConfig, RaftRequest, RecordSerde}
 
 import java.io.File
-import java.net.InetSocketAddress
 import java.nio.file.Files
 import java.util
 import java.util.OptionalInt
@@ -119,10 +119,18 @@ class KafkaRaftManager[T](
   private val raftIoThread = new RaftIoThread(raftClient)
 
   def startup(): Unit = {
-    // Update the voter endpoints with what's in RaftConfig
-    val voterAddresses: util.Map[Integer, InetSocketAddress] = raftConfig.quorumVoterConnections
+    // Update the voter endpoints (if valid) with what's in RaftConfig
+    val voterAddresses: util.Map[Integer, AddressSpec] = raftConfig.quorumVoterConnections
     for (voterAddressEntry <- voterAddresses.entrySet.asScala) {
-      netChannel.updateEndpoint(voterAddressEntry.getKey, voterAddressEntry.getValue)
+      voterAddressEntry.getValue match {
+        case spec: InetAddressSpec => {
+          netChannel.updateEndpoint(voterAddressEntry.getKey, spec)
+        }
+        case invalid: AddressSpec => {
+          logger.warn(s"Skipping channel update for destination ID: ${voterAddressEntry.getKey} " +
+            s"because of invalid endpoint: ${invalid.address().toString}")
+        }
+      }
     }
     netChannel.start()
     raftIoThread.start()

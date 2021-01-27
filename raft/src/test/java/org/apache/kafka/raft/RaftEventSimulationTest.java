@@ -203,11 +203,7 @@ public class RaftEventSimulationTest {
             long highWatermark = cluster.maxHighWatermarkReached();
 
             // Restart the node and verify it catches up
-            try {
-                cluster.start(leaderId);
-            } catch (IOException e) {
-                throw new RuntimeException("Failed to start leader ID: " + leaderId);
-            }
+            cluster.start(leaderId);
             scheduler.runUntil(() -> cluster.allReachedHighWatermark(highWatermark + 10));
         }
     }
@@ -250,11 +246,7 @@ public class RaftEventSimulationTest {
             Iterator<Integer> nodeIdsIterator = cluster.nodes().iterator();
             for (int i = 0; i < cluster.majoritySize(); i++) {
                 Integer nodeId = nodeIdsIterator.next();
-                try {
-                    cluster.start(nodeId);
-                } catch (IOException e) {
-                    throw new RuntimeException("Failed to start node ID: " + nodeId);
-                }
+                cluster.start(nodeId);
             }
 
             scheduler.runUntil(() -> cluster.allReachedHighWatermark(highWatermark + 10));
@@ -730,24 +722,20 @@ public class RaftEventSimulationTest {
             if (!running.isEmpty())
                 throw new IllegalStateException("Some nodes are already started");
             for (int voterId : nodes.keySet()) {
-                try {
-                    start(voterId);
-                } catch (IOException e) {
-                    throw new RuntimeException("Failed to start voter ID: " + voterId);
-                }
+                start(voterId);
             }
         }
 
-        private static InetSocketAddress nodeAddress(int id) {
-            return new InetSocketAddress("localhost", 9990 + id);
+        private static RaftConfig.AddressSpec nodeAddress(int id) {
+            return new RaftConfig.InetAddressSpec(new InetSocketAddress("localhost", 9990 + id));
         }
 
-        void start(int nodeId) throws IOException {
+        void start(int nodeId) {
             LogContext logContext = new LogContext("[Node " + nodeId + "] ");
             PersistentState persistentState = nodes.get(nodeId);
             MockNetworkChannel channel = new MockNetworkChannel(correlationIdCounter, voters);
             MockMessageQueue messageQueue = new MockMessageQueue();
-            Map<Integer, InetSocketAddress> voterAddressMap = voters.stream()
+            Map<Integer, RaftConfig.AddressSpec> voterAddressMap = voters.stream()
                 .collect(Collectors.toMap(id -> id, Cluster::nodeAddress));
             RaftConfig raftConfig = new RaftConfig(voterAddressMap, REQUEST_TIMEOUT_MS, RETRY_BACKOFF_MS, ELECTION_TIMEOUT_MS,
                     ELECTION_JITTER_MS, FETCH_TIMEOUT_MS, LINGER_MS);

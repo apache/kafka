@@ -19,7 +19,6 @@ package kafka.raft
 import java.net.InetSocketAddress
 import java.util.concurrent.ConcurrentLinkedQueue
 import java.util.concurrent.atomic.AtomicInteger
-
 import kafka.common.{InterBrokerSendThread, RequestAndCompletionHandler}
 import kafka.utils.Logging
 import org.apache.kafka.clients.{ClientResponse, KafkaClient}
@@ -28,6 +27,7 @@ import org.apache.kafka.common.message._
 import org.apache.kafka.common.protocol.{ApiKeys, ApiMessage, Errors}
 import org.apache.kafka.common.requests._
 import org.apache.kafka.common.utils.Time
+import org.apache.kafka.raft.RaftConfig.InetAddressSpec
 import org.apache.kafka.raft.{NetworkChannel, RaftRequest, RaftResponse, RaftUtil}
 
 import scala.collection.mutable
@@ -166,12 +166,9 @@ class KafkaNetworkChannel(
     RaftUtil.errorResponse(apiKey, error)
   }
 
-  def updateEndpoint(id: Int, address: InetSocketAddress): Unit = {
-    // We update the endpoint only if it's routable/valid
-    if (!address.equals(nonRoutableAddress)) {
-      val node = new Node(id, address.getHostString, address.getPort)
-      endpoints.put(id, node)
-    }
+  def updateEndpoint(id: Int, spec: InetAddressSpec): Unit = {
+    val node = new Node(id, spec.address.getHostString, spec.address.getPort)
+    endpoints.put(id, node)
   }
 
   def start(): Unit = {

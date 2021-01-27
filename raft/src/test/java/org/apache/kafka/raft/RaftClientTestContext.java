@@ -191,7 +191,7 @@ public final class RaftClientTestContext {
             MockNetworkChannel channel = new MockNetworkChannel(voters);
             LogContext logContext = new LogContext();
             MockListener listener = new MockListener();
-            Map<Integer, InetSocketAddress> voterAddressMap = voters.stream()
+            Map<Integer, RaftConfig.AddressSpec> voterAddressMap = voters.stream()
                 .collect(Collectors.toMap(id -> id, RaftClientTestContext::mockAddress));
             RaftConfig raftConfig = new RaftConfig(voterAddressMap, requestTimeoutMs, RETRY_BACKOFF_MS, electionTimeoutMs,
                     ELECTION_BACKOFF_MAX_MS, FETCH_TIMEOUT_MS, appendLingerMs);
@@ -709,8 +709,8 @@ public final class RaftClientTestContext {
         return response.responses().get(0).partitionResponses().get(0);
     }
 
-    private static InetSocketAddress mockAddress(int id) {
-        return new InetSocketAddress("localhost", 9990 + id);
+    private static RaftConfig.AddressSpec mockAddress(int id) {
+        return new RaftConfig.InetAddressSpec(new InetSocketAddress("localhost", 9990 + id));
     }
 
     EndQuorumEpochResponseData endEpochResponse(

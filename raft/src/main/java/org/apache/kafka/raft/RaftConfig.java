@@ -29,16 +29,25 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
+/**
+ * RaftConfig encapsulates configuration specific to the Raft quorum voter nodes.
+ * Specifically, this class parses the voter node endpoints into an AddressSpec
+ * for use with the KafkaRaftClient/KafkaNetworkChannel.
+ *
+ * If the voter endpoints are not known at startup, a non-routable address can be provided instead.
+ * For example: `1@0.0.0.0:0,2@0.0.0.0:0,3@0.0.0.0:0`
+ * This will allow the voters to be assigned an {@link UnknownAddressSpec} instead.
+ *
+ */
 public class RaftConfig {
 
     private static final String QUORUM_PREFIX = "controller.quorum.";
+    private static final InetSocketAddress UNROUTABLE_ADDRESS = new InetSocketAddress("0.0.0.0", 0);
 
     public static final String QUORUM_VOTERS_CONFIG = QUORUM_PREFIX + "voters";
     public static final String QUORUM_VOTERS_DOC = "Map of id/endpoint information for " +
         "the set of voters in a comma-separated list of `{id}@{host}:{port}` entries. " +
-        "For example: `1@localhost:9092,2@localhost:9093,3@localhost:9094.`" +
-        "If the voter endpoints are not known at startup, a non-routable address can be provided instead." +
-        "For example: `1@0.0.0.0:0,2@0.0.0.0:0,3@0.0.0.0:0.";
+        "For example: `1@localhost:9092,2@localhost:9093,3@localhost:9094.`";
     public static final List<String> DEFAULT_QUORUM_VOTERS = Collections.emptyList();
 
     public static final String QUORUM_ELECTION_TIMEOUT_MS_CONFIG = QUORUM_PREFIX + "election.timeout.ms";
@@ -78,7 +87,48 @@ public class RaftConfig {
     private final int electionBackoffMaxMs;
     private final int fetchTimeoutMs;
     private final int appendLingerMs;
-    private final Map<Integer, InetSocketAddress> voterConnections;
+    private final Map<Integer, AddressSpec> voterConnections;
+
+    public static abstract class AddressSpec {
+       public abstract InetSocketAddress address();
+
+        @Override
+        public boolean equals(Object obj) {
+            if (this == obj) {
+                return true;
+            }
+
+            if (obj == null || getClass() != obj.getClass()) {
+                return false;
+            }
+
+            final AddressSpec that = (AddressSpec) obj;
+            return that.address().equals(address());
+        }
+    }
+
+    public static class InetAddressSpec extends AddressSpec {
+        private final InetSocketAddress address;
+
+        public InetAddressSpec(InetSocketAddress address) {
+            if (address.equals(UNROUTABLE_ADDRESS)) {
+                throw new IllegalArgumentException("Address not routable");
+            }
+            this.address = address;
+        }
+
+        @Override
+        public InetSocketAddress address() {
+            return address;
+        }
+    }
+
+    public static class UnknownAddressSpec extends AddressSpec {
+        @Override
+        public InetSocketAddress address() {
+            return UNROUTABLE_ADDRESS;
+        }
+    }
 
     public RaftConfig(AbstractConfig abstractConfig) {
         this(parseVoterConnections(abstractConfig.getList(QUORUM_VOTERS_CONFIG)),
@@ -91,7 +141,7 @@ public class RaftConfig {
     }
 
     public RaftConfig(
-        Map<Integer, InetSocketAddress> voterConnections,
+        Map<Integer, AddressSpec> voterConnections,
         int requestTimeoutMs,
         int retryBackoffMs,
         int electionTimeoutMs,
@@ -136,7 +186,7 @@ public class RaftConfig {
         return quorumVoterConnections().keySet();
     }
 
-    public Map<Integer, InetSocketAddress> quorumVoterConnections() {
+    public Map<Integer, AddressSpec> quorumVoterConnections() {
         return voterConnections;
     }
 
@@ -148,8 +198,8 @@ public class RaftConfig {
         }
     }
 
-    public static Map<Integer, InetSocketAddress> parseVoterConnections(List<String> voterEntries) {
-        Map<Integer, InetSocketAddress> voterMap = new HashMap<>();
+    public static Map<Integer, AddressSpec> parseVoterConnections(List<String> voterEntries) {
+        Map<Integer, AddressSpec> voterMap = new HashMap<>();
         for (String voterMapEntry : voterEntries) {
             String[] idAndAddress = voterMapEntry.split("@");
             if (idAndAddress.length != 2) {
@@ -172,7 +222,12 @@ public class RaftConfig {
                     + ". Each entry should be in the form `{id}@{host}:{port}`.");
             }
 
-            voterMap.put(voterId, new InetSocketAddress(host, port));
+            InetSocketAddress address = new InetSocketAddress(host, port);
+            if (address.equals(UNROUTABLE_ADDRESS)) {
+                voterMap.put(voterId, new UnknownAddressSpec());
+            } else {
+                voterMap.put(voterId, new InetAddressSpec(address));
+            }
         }
 
         return voterMap;

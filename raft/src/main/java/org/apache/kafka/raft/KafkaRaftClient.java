@@ -179,7 +179,7 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
         LogContext logContext,
         OptionalInt nodeId,
         RaftConfig raftConfig
-    ) throws IOException {
+    ) {
         this(serde,
             channel,
             new BlockingMessageQueue(),
@@ -211,7 +211,7 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
         LogContext logContext,
         Random random,
         RaftConfig raftConfig
-    ) throws IOException {
+    ) {
         this.serde = serde;
         this.channel = channel;
         this.messageQueue = messageQueue;
