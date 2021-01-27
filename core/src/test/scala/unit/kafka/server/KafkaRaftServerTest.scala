@@ -17,9 +17,11 @@
 package kafka.server
 
 import java.io.File
+import java.nio.file.Files
 import java.util.Properties
 
-import kafka.common.{InconsistentBrokerIdException, InconsistentControllerIdException, KafkaException}
+import kafka.common.{InconsistentBrokerIdException, InconsistentBrokerMetadataException, InconsistentControllerIdException, KafkaException}
+import kafka.log.Log
 import org.apache.kafka.common.Uuid
 import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.test.TestUtils
@@ -117,7 +119,7 @@ class KafkaRaftServerTest {
 
       configProperties.put(KafkaConfig.LogDirProp, tempLogDir.getAbsolutePath)
       val config = KafkaConfig.fromProps(configProperties)
-      KafkaRaftServer.loadMetaProperties(config)
+      KafkaRaftServer.initializeLogDirs(config)
     } finally {
       Utils.delete(tempLogDir)
     }
@@ -150,7 +152,7 @@ class KafkaRaftServerTest {
     configProperties.put(KafkaConfig.LogDirProp, Seq(logDir1, logDir2).map(_.getAbsolutePath).mkString(","))
     val config = KafkaConfig.fromProps(configProperties)
 
-    assertThrows(classOf[KafkaException], () => KafkaRaftServer.loadMetaProperties(config))
+    assertThrows(classOf[KafkaException], () => KafkaRaftServer.initializeLogDirs(config))
   }
 
   @Test
@@ -173,7 +175,7 @@ class KafkaRaftServerTest {
     configProperties.put(KafkaConfig.LogDirProp, validDir.getAbsolutePath)
     val config = KafkaConfig.fromProps(configProperties)
 
-    assertThrows(classOf[KafkaException], () => KafkaRaftServer.loadMetaProperties(config))
+    assertThrows(classOf[KafkaException], () => KafkaRaftServer.initializeLogDirs(config))
   }
 
   @Test
@@ -196,9 +198,63 @@ class KafkaRaftServerTest {
     configProperties.put(KafkaConfig.LogDirProp, invalidDir.getAbsolutePath)
     val config = KafkaConfig.fromProps(configProperties)
 
-    val (loadedProperties, offlineDirs) = KafkaRaftServer.loadMetaProperties(config)
+    val (loadedProperties, offlineDirs) = KafkaRaftServer.initializeLogDirs(config)
     assertEquals(Some(brokerId), loadedProperties.brokerId)
     assertEquals(Seq(invalidDir.getAbsolutePath), offlineDirs)
+  }
+
+  @Test
+  def testStartupFailsIfUnexpectedMetadataDir(): Unit = {
+    // Create two directories with valid `meta.properties`
+    val brokerId = 1
+    val clusterId = Uuid.randomUuid()
+    val metadataDir = TestUtils.tempDirectory()
+    val dataDir = TestUtils.tempDirectory()
+
+    Seq(metadataDir, dataDir).foreach { dir =>
+      writeMetaProperties(dir, MetaProperties(
+        clusterId = clusterId,
+        brokerId = Some(brokerId),
+        controllerId = None
+      ))
+    }
+
+    // Create the metadata dir in the data directory
+    Files.createDirectory(new File(dataDir, Log.logDirName(KafkaRaftServer.MetadataPartition)).toPath)
+
+    val configProperties = new Properties
+    configProperties.put(KafkaConfig.ProcessRolesProp, "broker")
+    configProperties.put(KafkaConfig.BrokerIdProp, brokerId.toString)
+    configProperties.put(KafkaConfig.MetadataLogDirProp, metadataDir.getAbsolutePath)
+    configProperties.put(KafkaConfig.LogDirProp, dataDir.getAbsolutePath)
+    val config = KafkaConfig.fromProps(configProperties)
+
+    assertThrows(classOf[KafkaException], () => KafkaRaftServer.initializeLogDirs(config))
+  }
+
+  @Test
+  def testLoadPropertiesWithInconsistentClusterIds(): Unit = {
+    val brokerId = 1
+    val logDir1 = TestUtils.tempDirectory()
+    val logDir2 = TestUtils.tempDirectory()
+
+    // Create a random clusterId in each log dir
+    Seq(logDir1, logDir2).foreach { dir =>
+      writeMetaProperties(dir, MetaProperties(
+        clusterId = Uuid.randomUuid(),
+        brokerId = Some(brokerId),
+        controllerId = None
+      ))
+    }
+
+    val configProperties = new Properties
+    configProperties.put(KafkaConfig.ProcessRolesProp, "broker")
+    configProperties.put(KafkaConfig.BrokerIdProp, brokerId.toString)
+    configProperties.put(KafkaConfig.LogDirProp, Seq(logDir1, logDir2).map(_.getAbsolutePath).mkString(","))
+    val config = KafkaConfig.fromProps(configProperties)
+
+    assertThrows(classOf[InconsistentBrokerMetadataException],
+      () => KafkaRaftServer.initializeLogDirs(config))
   }
 
 }
