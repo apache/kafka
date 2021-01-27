@@ -301,6 +301,7 @@ public class StreamThread extends Thread {
     private java.util.function.Consumer<Throwable> streamsUncaughtExceptionHandler;
     private Runnable shutdownErrorHook;
     private AtomicInteger assignmentErrorCode;
+    private final ProcessingMode processingMode;
 
     public static StreamThread create(final InternalTopologyBuilder builder,
                                       final StreamsConfig config,
@@ -489,7 +490,7 @@ public class StreamThread extends Thread {
         this.shutdownErrorHook = shutdownErrorHook;
         this.streamsUncaughtExceptionHandler = streamsUncaughtExceptionHandler;
         this.cacheResizer = cacheResizer;
-
+        this.processingMode = processingMode(config);
 
         // The following sensors are created here but their references are not stored in this object, since within
         // this object they are not recorded. The sensors are created here so that the stream threads starts with all
@@ -546,8 +547,7 @@ public class StreamThread extends Thread {
         }
         boolean cleanRun = false;
         try {
-            runLoop();
-            cleanRun = true;
+            cleanRun = runLoop();
         } finally {
             completeShutdown(cleanRun);
         }
@@ -559,7 +559,7 @@ public class StreamThread extends Thread {
      * @throws IllegalStateException If store gets registered after initialized is already finished
      * @throws StreamsException      if the store's change log does not contain the partition
      */
-    void runLoop() {
+    boolean runLoop() {
         subscribeConsumer();
 
         // if the thread is still in the middle of a rebalance, we should keep polling
@@ -594,11 +594,18 @@ public class StreamThread extends Thread {
                 }
                 failedStreamThreadSensor.record();
                 this.streamsUncaughtExceptionHandler.accept(e);
+                if (processingMode == ProcessingMode.EXACTLY_ONCE_ALPHA || processingMode == ProcessingMode.EXACTLY_ONCE_BETA) {
+                    return false;
+                }
             } catch (final Throwable e) {
                 failedStreamThreadSensor.record();
                 this.streamsUncaughtExceptionHandler.accept(e);
+                if (processingMode == ProcessingMode.EXACTLY_ONCE_ALPHA || processingMode == ProcessingMode.EXACTLY_ONCE_BETA) {
+                    return false;
+                }
             }
         }
+        return true;
     }
 
     /**
