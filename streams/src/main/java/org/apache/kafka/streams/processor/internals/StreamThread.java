@@ -617,15 +617,28 @@ public class StreamThread extends Thread {
         this.streamsUncaughtExceptionHandler = streamsUncaughtExceptionHandler;
     }
 
-    public void waitOnThreadState(final StreamThread.State targetState) {
+    public void waitOnThreadState(final StreamThread.State targetState, long timeoutMs) {
+        if (timeoutMs < 0) {
+            timeoutMs = 0;
+        } else if (timeoutMs == 0) {
+            timeoutMs = Long.MAX_VALUE;
+        }
+        final long begin = time.milliseconds();
         synchronized (stateLock) {
             boolean interrupted = false;
+            long elapsedMs = 0L;
             try {
                 while (state != targetState) {
-                    try {
-                        stateLock.wait();
-                    } catch (final InterruptedException e) {
-                        interrupted = true;
+                    if (timeoutMs > elapsedMs) {
+                        final long remainingMs = timeoutMs - elapsedMs;
+                        try {
+                            stateLock.wait(remainingMs);
+                        } catch (final InterruptedException e) {
+                            interrupted = true;
+                        }
+                    } else {
+                        log.debug("Cannot transit to {} within {}ms", targetState, timeoutMs);
+                        return;
                     }
                 }
             } finally {
@@ -1156,6 +1169,10 @@ public class StreamThread extends Thread {
      */
     public String toString(final String indent) {
         return indent + "\tStreamsThread threadId: " + getName() + "\n" + taskManager.toString(indent);
+    }
+
+    public String getGroupInstanceID(){
+        return mainConsumer.groupMetadata().groupInstanceId().orElse("");
     }
 
     public Map<MetricName, Metric> producerMetrics() {

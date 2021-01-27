@@ -331,7 +331,7 @@ public class KafkaStreamsTest {
             )
         ).anyTimes();
         EasyMock.expect(thread.threadMetadata()).andStubReturn(threadMetadata);
-        thread.waitOnThreadState(StreamThread.State.DEAD);
+        thread.waitOnThreadState(StreamThread.State.DEAD, -1);
         EasyMock.expectLastCall().anyTimes();
         EasyMock.expect(thread.isAlive()).andReturn(true).times(0, 1);
         thread.resizeCache(EasyMock.anyLong());

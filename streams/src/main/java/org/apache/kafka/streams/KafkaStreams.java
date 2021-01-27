@@ -19,6 +19,8 @@ package org.apache.kafka.streams;
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.ListOffsetsResult.ListOffsetsResultInfo;
+import org.apache.kafka.clients.admin.MemberToRemove;
+import org.apache.kafka.clients.admin.RemoveMembersFromConsumerGroupOptions;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.ProducerConfig;
@@ -991,11 +993,56 @@ public class KafkaStreams implements AutoCloseable {
                             || threads.size() == 1)) {
                         streamThread.shutdown();
                         if (!streamThread.getName().equals(Thread.currentThread().getName())) {
-                            streamThread.waitOnThreadState(StreamThread.State.DEAD);
+                            streamThread.waitOnThreadState(StreamThread.State.DEAD, -1);
                         }
                         threads.remove(streamThread);
                         final long cacheSizePerThread = getCacheSizePerThread(threads.size());
                         resizeThreadCache(cacheSizePerThread);
+                        Collection<MemberToRemove> membersToRemove = Collections.singletonList(new MemberToRemove(streamThread.getGroupInstanceID()));
+                        adminClient.removeMembersFromConsumerGroup(config.getString(StreamsConfig.APPLICATION_ID_CONFIG), new RemoveMembersFromConsumerGroupOptions(membersToRemove));
+                        return Optional.of(streamThread.getName());
+                    }
+                }
+            }
+            log.warn("There are no threads eligible for removal");
+        } else {
+            log.warn("Cannot remove a stream thread when Kafka Streams client is in state  " + state());
+        }
+        return Optional.empty();
+    }
+
+    /**
+     * Removes one stream thread out of the running stream threads from this Kafka Streams client.
+     * <p>
+     * The removed stream thread is gracefully shut down. This method does not specify which stream
+     * thread is shut down.
+     * <p>
+     * Since the number of stream threads decreases, the sizes of the caches in the remaining stream
+     * threads are adapted so that the sum of the cache sizes over all stream threads equals the total
+     * cache size specified in configuration {@link StreamsConfig#CACHE_MAX_BYTES_BUFFERING_CONFIG}.
+     *
+     * @param timeout The the length of time to remove the thread fromt he group
+     * @return name of the removed stream thread or empty if a stream thread could not be removed because
+     *         no stream threads are alive
+     */
+    public Optional<String> removeStreamThread(Duration timeout) {
+        final String msgPrefix = prepareMillisCheckFailMsgPrefix(timeout, "timeout");
+        final long timeoutMs = validateMillisecondDuration(timeout, msgPrefix);
+        if (isRunningOrRebalancing()) {
+            synchronized (changeThreadCount) {
+                // make a copy of threads to avoid holding lock
+                for (final StreamThread streamThread : new ArrayList<>(threads)) {
+                    if (streamThread.isAlive() && (!streamThread.getName().equals(Thread.currentThread().getName())
+                            || threads.size() == 1)) {
+                        streamThread.shutdown();
+                        if (!streamThread.getName().equals(Thread.currentThread().getName())) {
+                            streamThread.waitOnThreadState(StreamThread.State.DEAD, timeoutMs);
+                        }
+                        threads.remove(streamThread);
+                        final long cacheSizePerThread = getCacheSizePerThread(threads.size());
+                        resizeThreadCache(cacheSizePerThread);
+                        Collection<MemberToRemove> membersToRemove = Collections.singletonList(new MemberToRemove(streamThread.getGroupInstanceID()));
+                        adminClient.removeMembersFromConsumerGroup(config.APPLICATION_ID_CONFIG, new RemoveMembersFromConsumerGroupOptions(membersToRemove));
                         return Optional.of(streamThread.getName());
                     }
                 }
