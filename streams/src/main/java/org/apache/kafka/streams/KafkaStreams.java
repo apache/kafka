@@ -1021,7 +1021,7 @@ public class KafkaStreams implements AutoCloseable {
      * threads are adapted so that the sum of the cache sizes over all stream threads equals the total
      * cache size specified in configuration {@link StreamsConfig#CACHE_MAX_BYTES_BUFFERING_CONFIG}.
      *
-     * @param timeout The the length of time to remove the thread fromt he group
+     * @param timeout The the length of time to wait for the thread to shutdown
      * @return name of the removed stream thread or empty if a stream thread could not be removed because
      *         no stream threads are alive
      */
@@ -1036,13 +1036,16 @@ public class KafkaStreams implements AutoCloseable {
                             || threads.size() == 1)) {
                         streamThread.shutdown();
                         if (!streamThread.getName().equals(Thread.currentThread().getName())) {
-                            streamThread.waitOnThreadState(StreamThread.State.DEAD, timeoutMs);
+                            if(!streamThread.waitOnThreadState(StreamThread.State.DEAD, timeoutMs)){
+                                log.warn("Thread " + streamThread.getName() + " did not stop in the allotted time");
+                                return Optional.empty();
+                            }
                         }
                         threads.remove(streamThread);
                         final long cacheSizePerThread = getCacheSizePerThread(threads.size());
                         resizeThreadCache(cacheSizePerThread);
                         Collection<MemberToRemove> membersToRemove = Collections.singletonList(new MemberToRemove(streamThread.getGroupInstanceID()));
-                        adminClient.removeMembersFromConsumerGroup(config.APPLICATION_ID_CONFIG, new RemoveMembersFromConsumerGroupOptions(membersToRemove));
+                        adminClient.removeMembersFromConsumerGroup(config.getString(StreamsConfig.APPLICATION_ID_CONFIG), new RemoveMembersFromConsumerGroupOptions(membersToRemove));
                         return Optional.of(streamThread.getName());
                     }
                 }

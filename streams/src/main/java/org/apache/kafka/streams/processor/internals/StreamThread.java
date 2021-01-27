@@ -617,7 +617,7 @@ public class StreamThread extends Thread {
         this.streamsUncaughtExceptionHandler = streamsUncaughtExceptionHandler;
     }
 
-    public void waitOnThreadState(final StreamThread.State targetState, long timeoutMs) {
+    public boolean waitOnThreadState(final StreamThread.State targetState, long timeoutMs) {
         if (timeoutMs < 0) {
             timeoutMs = 0;
         } else if (timeoutMs == 0) {
@@ -638,9 +638,11 @@ public class StreamThread extends Thread {
                         }
                     } else {
                         log.debug("Cannot transit to {} within {}ms", targetState, timeoutMs);
-                        return;
+                        return false;
                     }
+                    elapsedMs = time.milliseconds() - begin;
                 }
+                return true;
             } finally {
                 // Make sure to restore the interruption status before returning.
                 // We do not always own the current thread that executes this method, i.e., we do not know the
