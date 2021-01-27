@@ -513,25 +513,31 @@ public class RequestResponseTest {
         checkRequest(createAlterClientQuotasRequest(), true);
         checkErrorResponse(createAlterClientQuotasRequest(), unknownServerException, true);
         checkResponse(createAlterClientQuotasResponse(), 0, true);
-        checkRequest(createDescribeProducersRequest(), true);
-        checkErrorResponse(createDescribeProducersRequest(), unknownServerException, true);
-        checkResponse(createDescribeProducersResponse(), 0, true);
+    }
+
+    @Test
+    public void testDescribeProducersSerialization() throws Exception {
+        for (short v = ApiKeys.DESCRIBE_PRODUCERS.oldestVersion(); v <= ApiKeys.DESCRIBE_PRODUCERS.latestVersion(); v++) {
+            checkRequest(createDescribeProducersRequest(v), true);
+            checkErrorResponse(createDescribeProducersRequest(v), unknownServerException, true);
+            checkResponse(createDescribeProducersResponse(), v, true);
+        }
     }
 
     @Test
     public void testDescribeClusterSerialization() throws Exception {
-        for (int v = ApiKeys.DESCRIBE_CLUSTER.oldestVersion(); v <= ApiKeys.DESCRIBE_CLUSTER.latestVersion(); v++) {
+        for (short v = ApiKeys.DESCRIBE_CLUSTER.oldestVersion(); v <= ApiKeys.DESCRIBE_CLUSTER.latestVersion(); v++) {
             checkRequest(createDescribeClusterRequest(v), true);
             checkErrorResponse(createDescribeClusterRequest(v), unknownServerException, true);
             checkResponse(createDescribeClusterResponse(), v, true);
         }
     }
 
-    private DescribeClusterRequest createDescribeClusterRequest(int version) {
+    private DescribeClusterRequest createDescribeClusterRequest(short version) {
         return new DescribeClusterRequest.Builder(
             new DescribeClusterRequestData()
                 .setIncludeClusterAuthorizedOperations(true))
-            .build((short) version);
+            .build(version);
     }
 
     private DescribeClusterResponse createDescribeClusterResponse() {
@@ -2571,13 +2577,13 @@ public class RequestResponseTest {
         return new AlterClientQuotasResponse(data);
     }
 
-    private DescribeProducersRequest createDescribeProducersRequest() {
+    private DescribeProducersRequest createDescribeProducersRequest(short version) {
         DescribeProducersRequestData data = new DescribeProducersRequestData();
         DescribeProducersRequestData.TopicRequest topicRequest = new DescribeProducersRequestData.TopicRequest();
         topicRequest.partitionIndexes().add(0);
         topicRequest.partitionIndexes().add(1);
         data.topics().add(topicRequest);
-        return new DescribeProducersRequest.Builder(data).build();
+        return new DescribeProducersRequest.Builder(data).build(version);
     }
 
     private DescribeProducersResponse createDescribeProducersResponse() {
