@@ -32,6 +32,8 @@
           "about": "The partition index." },
         { "name": "ErrorCode", "type": "int16", "versions": "0+",
           "about": "The partition error code, or 0 if there was no error." },
+        { "name": "ErrorMessage", "type": "string", "versions": "0+", "nullableVersions": "0+", "default": "null",
+          "about": "The partition error message, which may be null if no additional details are available" },
         { "name": "ActiveProducers", "type": "[]ProducerState", "versions": "0+", "fields": [
           { "name": "ProducerId", "type": "int64", "versions": "0+" },
           { "name": "ProducerEpoch", "type": "int32", "versions": "0+" },
