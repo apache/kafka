@@ -3395,9 +3395,7 @@ class KafkaApis(val requestChannel: RequestChannel,
         topicResponse.partitions.add(partitionResponse)
       }
 
-      if (!topicResponse.partitions.isEmpty) {
-        response.topics.add(topicResponse)
-      }
+      response.topics.add(topicResponse)
     }
 
     requestHelper.sendResponseMaybeThrottle(request, requestThrottleMs =>
