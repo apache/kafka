@@ -418,8 +418,8 @@ class KTableTest extends FlatSpec with Matchers with TestDriver {
 
     import scala.jdk.CollectionConverters._
 
-    val filterNode = builder.build().describe().subtopologies().asScala.toList(1).nodes().asScala.toList(1)
-    filterNode.name() shouldBe "my-name"
+    val countNode = builder.build().describe().subtopologies().asScala.toList(1).nodes().asScala.toList(1)
+    countNode.name() shouldBe "my-name"
   }
 
   "setting a name on a join processor" should "pass the name to the topology" in {
