@@ -17,6 +17,7 @@
 
 package org.apache.kafka.connect.rest.basic.auth.extension;
 
+import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.rest.ConnectRestExtensionContext;
 import org.easymock.Capture;
 import org.easymock.EasyMock;
@@ -27,7 +28,12 @@ import org.junit.jupiter.api.Test;
 import javax.security.auth.login.Configuration;
 import javax.ws.rs.core.Configurable;
 
+import java.io.IOException;
+import java.util.function.Supplier;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 public class BasicAuthSecurityRestExtensionTest {
 
@@ -62,5 +68,26 @@ public class BasicAuthSecurityRestExtensionTest {
   
         assertNotEquals(overwrittenConfiguration, jaasFilter.getValue().configuration,
             "Overwritten JAAS configuration should not be used by basic auth REST extension");
+    }
+
+    @Test
+    public void testBadJaasConfiguration() {
+        SecurityException jaasConfigurationException = new SecurityException(new IOException("Bad JAAS config is bad"));
+        Supplier<Configuration> configuration = BasicAuthSecurityRestExtension.initializeConfiguration(() -> {
+            throw jaasConfigurationException;
+        });
+
+        ConnectException thrownException = assertThrows(ConnectException.class, configuration::get);
+        assertEquals(jaasConfigurationException, thrownException.getCause());
+    }
+
+    @Test
+    public void testGoodJaasConfiguration() {
+        Configuration mockConfiguration = EasyMock.mock(Configuration.class);
+        Supplier<Configuration> configuration = BasicAuthSecurityRestExtension.initializeConfiguration(() -> {
+            return mockConfiguration;
+        });
+
+        assertEquals(mockConfiguration, configuration.get());
     }
 }
