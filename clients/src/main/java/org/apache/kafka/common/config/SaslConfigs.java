@@ -50,7 +50,7 @@ public class SaslConfigs {
     public static final String SASL_JAAS_CONFIG = "sasl.jaas.config";
     public static final String SASL_JAAS_CONFIG_DOC = "JAAS login context parameters for SASL connections in the format used by JAAS configuration files. "
         + "JAAS configuration file format is described <a href=\"http://docs.oracle.com/javase/8/docs/technotes/guides/security/jgss/tutorials/LoginConfigFile.html\">here</a>. "
-        + "The format for the value is: '<code>loginModuleClass controlFlag (optionName=optionValue)*;</code>'. For brokers, "
+        + "The format for the value is: <code>loginModuleClass controlFlag (optionName=optionValue)*;</code>. For brokers, "
         + "the config must be prefixed with listener prefix and SASL mechanism name in lower-case. For example, "
         + "listener.name.sasl_ssl.scram-sha-256.sasl.jaas.config=com.example.ScramLoginModule required;";
 
