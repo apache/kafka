@@ -106,6 +106,9 @@ public class Uuid implements Comparable<Uuid> {
      */
     public static Uuid fromString(String str) {
         ByteBuffer uuidBytes = ByteBuffer.wrap(Base64.getUrlDecoder().decode(str));
+        if (uuidBytes.remaining() != 16) {
+            throw new IllegalArgumentException("Failed to parse `" + str + "` as a base64-encoded UUID");
+        }
         return new Uuid(uuidBytes.getLong(), uuidBytes.getLong());
     }
 

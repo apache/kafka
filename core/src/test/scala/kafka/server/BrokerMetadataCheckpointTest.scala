@@ -83,6 +83,15 @@ class BrokerMetadataCheckpointTest {
   }
 
   @Test
+  def testMetaPropertiesDoesNotAllowHexEncodedUUIDs(): Unit = {
+    val properties = RawMetaProperties()
+    properties.version = 1
+    properties.clusterId = "7bc79ca1-9746-42a3-a35a-efb3cde44492"
+    properties.brokerId = 1
+    assertThrows(classOf[RuntimeException], () => MetaProperties.parse(properties, Set(BrokerRole)))
+  }
+
+  @Test
   def testMetaPropertiesWithInvalidClusterId(): Unit = {
     val properties = RawMetaProperties()
     properties.version = 1
