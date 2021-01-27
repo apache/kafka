@@ -21,6 +21,7 @@ import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.ListOffsetsResult.ListOffsetsResultInfo;
 import org.apache.kafka.clients.admin.MemberToRemove;
 import org.apache.kafka.clients.admin.RemoveMembersFromConsumerGroupOptions;
+import org.apache.kafka.clients.admin.RemoveMembersFromConsumerGroupResult;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.ProducerConfig;
@@ -90,10 +91,11 @@ import java.util.Properties;
 import java.util.Set;
 import java.util.TreeMap;
 import java.util.UUID;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.TimeoutException;
+import org.apache.kafka.common.errors.TimeoutException;
 import java.util.function.Consumer;
 import java.util.function.Predicate;
 
@@ -986,30 +988,7 @@ public class KafkaStreams implements AutoCloseable {
      *         no stream threads are alive
      */
     public Optional<String> removeStreamThread() {
-        if (isRunningOrRebalancing()) {
-            synchronized (changeThreadCount) {
-                // make a copy of threads to avoid holding lock
-                for (final StreamThread streamThread : new ArrayList<>(threads)) {
-                    if (streamThread.isAlive() && (!streamThread.getName().equals(Thread.currentThread().getName())
-                            || threads.size() == 1)) {
-                        streamThread.shutdown();
-                        if (!streamThread.getName().equals(Thread.currentThread().getName())) {
-                            streamThread.waitOnThreadState(StreamThread.State.DEAD, -1);
-                        }
-                        threads.remove(streamThread);
-                        final long cacheSizePerThread = getCacheSizePerThread(threads.size());
-                        resizeThreadCache(cacheSizePerThread);
-                        final Collection<MemberToRemove> membersToRemove = Collections.singletonList(new MemberToRemove(streamThread.getGroupInstanceID()));
-                        adminClient.removeMembersFromConsumerGroup(config.getString(StreamsConfig.APPLICATION_ID_CONFIG), new RemoveMembersFromConsumerGroupOptions(membersToRemove));
-                        return Optional.of(streamThread.getName());
-                    }
-                }
-            }
-            log.warn("There are no threads eligible for removal");
-        } else {
-            log.warn("Cannot remove a stream thread when Kafka Streams client is in state  " + state());
-        }
-        return Optional.empty();
+        return removeStreamThread(Long.MAX_VALUE);
     }
 
     /**
@@ -1030,6 +1009,11 @@ public class KafkaStreams implements AutoCloseable {
     public Optional<String> removeStreamThread(final Duration timeout) throws TimeoutException {
         final String msgPrefix = prepareMillisCheckFailMsgPrefix(timeout, "timeout");
         final long timeoutMs = validateMillisecondDuration(timeout, msgPrefix);
+        return removeStreamThread(timeoutMs);
+    }
+
+    private Optional<String> removeStreamThread(final long timeoutMs) throws TimeoutException {
+        final long begin = time.milliseconds();
         if (isRunningOrRebalancing()) {
             synchronized (changeThreadCount) {
                 // make a copy of threads to avoid holding lock
@@ -1046,8 +1030,20 @@ public class KafkaStreams implements AutoCloseable {
                         threads.remove(streamThread);
                         final long cacheSizePerThread = getCacheSizePerThread(threads.size());
                         resizeThreadCache(cacheSizePerThread);
-                        Collection<MemberToRemove> membersToRemove = Collections.singletonList(new MemberToRemove(streamThread.getGroupInstanceID()));
-                        adminClient.removeMembersFromConsumerGroup(config.getString(StreamsConfig.APPLICATION_ID_CONFIG), new RemoveMembersFromConsumerGroupOptions(membersToRemove));
+                        if (streamThread.getGroupInstanceID().isPresent()) {
+                            final MemberToRemove memberToRemove = new MemberToRemove(streamThread.getGroupInstanceID().get());
+                            final Collection<MemberToRemove> membersToRemove = Collections.singletonList(memberToRemove);
+                            final RemoveMembersFromConsumerGroupResult removeMembersFromConsumerGroupResult = adminClient.removeMembersFromConsumerGroup(config.getString(StreamsConfig.APPLICATION_ID_CONFIG), new RemoveMembersFromConsumerGroupOptions(membersToRemove));
+                            try {
+                                removeMembersFromConsumerGroupResult.memberResult(memberToRemove).get(timeoutMs - begin, TimeUnit.MILLISECONDS);
+                            } catch (final java.util.concurrent.TimeoutException e) {
+                                throw new TimeoutException(e.getMessage());
+                            } catch (final InterruptedException e) {
+                                Thread.currentThread().interrupt();
+                            } catch (final ExecutionException e) {
+                                e.printStackTrace();
+                            }
+                        }
                         return Optional.of(streamThread.getName());
                     }
                 }

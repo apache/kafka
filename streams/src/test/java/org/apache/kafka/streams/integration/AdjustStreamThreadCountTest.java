@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.integration;
 
+import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.StreamsBuilder;
@@ -57,6 +58,7 @@ import static org.hamcrest.CoreMatchers.not;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 
 @Category(IntegrationTest.class)
@@ -177,6 +179,19 @@ public class AdjustStreamThreadCountTest {
             assertThat(kafkaStreams.localThreadsMetadata().size(), equalTo(oldThreadCount - 1));
 
             waitForTransitionFromRebalancingToRunning();
+        }
+    }
+
+    @Test
+    public void shouldnNotRemoveStreamThreadWithTimeout() throws Exception {
+        try (final KafkaStreams kafkaStreams = new KafkaStreams(builder.build(), properties)) {
+            addStreamStateChangeListener(kafkaStreams);
+            startStreamsAndWaitForRunning(kafkaStreams);
+
+            final int oldThreadCount = kafkaStreams.localThreadsMetadata().size();
+            stateTransitionHistory.clear();
+            assertThrows(TimeoutException.class, () ->kafkaStreams.removeStreamThread(Duration.ZERO.minus(DEFAULT_DURATION)));
+            assertThat(kafkaStreams.localThreadsMetadata().size(), equalTo(oldThreadCount));
         }
     }
 

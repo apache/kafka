@@ -55,6 +55,7 @@ import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -617,12 +618,7 @@ public class StreamThread extends Thread {
         this.streamsUncaughtExceptionHandler = streamsUncaughtExceptionHandler;
     }
 
-    public boolean waitOnThreadState(final StreamThread.State targetState, long timeoutMs) {
-        if (timeoutMs < 0) {
-            timeoutMs = 0;
-        } else if (timeoutMs == 0) {
-            timeoutMs = Long.MAX_VALUE;
-        }
+    public boolean waitOnThreadState(final StreamThread.State targetState, final long timeoutMs) {
         final long begin = time.milliseconds();
         synchronized (stateLock) {
             boolean interrupted = false;
@@ -1173,8 +1169,8 @@ public class StreamThread extends Thread {
         return indent + "\tStreamsThread threadId: " + getName() + "\n" + taskManager.toString(indent);
     }
 
-    public String getGroupInstanceID() {
-        return mainConsumer.groupMetadata().groupInstanceId().orElse("");
+    public Optional<String> getGroupInstanceID() {
+        return mainConsumer.groupMetadata().groupInstanceId();
     }
 
     public Map<MetricName, Metric> producerMetrics() {
