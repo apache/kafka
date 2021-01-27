@@ -63,7 +63,7 @@ private[log] object ProducerStateEntry {
   private[log] val NumBatchesToRetain = 5
 
   def empty(producerId: Long) = new ProducerStateEntry(producerId,
-    batchMetadata = mutable.Queue[BatchMetadata](),
+    batchMetadata = new mutable.Queue[BatchMetadata](5),
     producerEpoch = RecordBatch.NO_PRODUCER_EPOCH,
     coordinatorEpoch = -1,
     lastTimestamp = RecordBatch.NO_TIMESTAMP,
