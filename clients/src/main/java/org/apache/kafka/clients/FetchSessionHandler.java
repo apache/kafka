@@ -127,23 +127,24 @@ public class FetchSessionHandler {
         private final FetchMetadata metadata;
 
         /**
-         * The number of topics in this fetch request
+         * The topics in this fetch request
          */
-        private final int numTopics;
+        private final boolean canUseTopicIds;
 
         FetchRequestData(Map<TopicPartition, PartitionData> toSend,
                          List<TopicPartition> toForget,
                          Map<TopicPartition, PartitionData> sessionPartitions,
                          Map<String, Uuid> topicIds,
                          Map<Uuid, String> topicNames,
-                         FetchMetadata metadata) {
+                         FetchMetadata metadata,
+                         Map<String, Integer> sessionPartitionsPerTopic) {
             this.toSend = toSend;
             this.toForget = toForget;
             this.sessionPartitions = sessionPartitions;
             this.topicIds = topicIds;
             this.topicNames = topicNames;
             this.metadata = metadata;
-            this.numTopics = sessionPartitions.size();
+            this.canUseTopicIds = topicIds.size() == sessionPartitionsPerTopic.size();
         }
 
         /**
@@ -179,8 +180,8 @@ public class FetchSessionHandler {
             return metadata;
         }
 
-        public int numTopic() {
-            return numTopics;
+        public boolean canUseTopicIds() {
+            return canUseTopicIds;
         }
 
         @Override
@@ -293,7 +294,9 @@ public class FetchSessionHandler {
                         Collections.unmodifiableMap(new HashMap<>(sessionTopicIds));
                 Map<Uuid, String> toSendTopicNames =
                         Collections.unmodifiableMap(new HashMap<>(sessionTopicNames));
-                return new FetchRequestData(toSend, Collections.emptyList(), toSend, toSendTopicIds, toSendTopicNames, nextMetadata);
+                Map<String, Integer> toSendPartitionsPerTopic =
+                        Collections.unmodifiableMap(new HashMap<>(sessionPartitionsPerTopic));
+                return new FetchRequestData(toSend, Collections.emptyList(), toSend, toSendTopicIds, toSendTopicNames, nextMetadata, toSendPartitionsPerTopic);
             }
 
             List<TopicPartition> added = new ArrayList<>();
@@ -361,13 +364,15 @@ public class FetchSessionHandler {
                     Collections.unmodifiableMap(new HashMap<>(sessionTopicIds));
             Map<Uuid, String> toSendTopicNames =
                     Collections.unmodifiableMap(new HashMap<>(sessionTopicNames));
+            Map<String, Integer> toSendPartitionsPerTopic =
+                    Collections.unmodifiableMap(new HashMap<>(sessionPartitionsPerTopic));
 
             next = null;
             topicIds = null;
             topicNames = null;
             partitionsPerTopic = null;
             return new FetchRequestData(toSend, Collections.unmodifiableList(removed),
-                curSessionPartitions, toSendTopicIds, toSendTopicNames, nextMetadata);
+                curSessionPartitions, toSendTopicIds, toSendTopicNames, nextMetadata, toSendPartitionsPerTopic);
         }
     }
 

@@ -833,9 +833,6 @@ class KafkaApis(val requestChannel: RequestChannel,
 
         // Prepare fetch response from converted data
         val response =
-          if (fetchRequest.version() >= 13 && topicIds.isEmpty)
-              fetchRequest.getErrorResponse(0, Errors.UNSUPPORTED_VERSION.exception).asInstanceOf[FetchResponse[BaseRecords]]
-          else
             new FetchResponse(unconvertedFetchResponse.error, convertedData, fetchContext.getIdErrors(), topicIds, throttleTimeMs, unconvertedFetchResponse.sessionId)
         // record the bytes out metrics only when the response is being sent
         response.responseData(topicNames).forEach { (tp, data) =>

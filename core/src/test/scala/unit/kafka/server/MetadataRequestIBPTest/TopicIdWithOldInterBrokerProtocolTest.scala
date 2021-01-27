@@ -75,8 +75,6 @@ class TopicIdWithOldInterBrokerProtocolTest extends BaseRequestTest {
     val req = createFetchRequest(maxResponseBytes, maxPartitionBytes, Seq(tp0),  Map.empty, topicIds, ApiKeys.FETCH.latestVersion())
     val resp = sendFetchRequest(leadersMap(0), req)
 
-    assertEquals(Errors.UNSUPPORTED_VERSION, resp.error())
-
     val responseData = resp.responseData(topicNames.asJava)
     assertEquals(Errors.UNSUPPORTED_VERSION, responseData.get(tp0).error());
   }

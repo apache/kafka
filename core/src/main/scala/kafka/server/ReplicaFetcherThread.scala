@@ -217,7 +217,7 @@ class ReplicaFetcherThread(name: String,
     try {
       val clientResponse = leaderEndpoint.sendRequest(fetchRequest)
       val fetchResponse = clientResponse.responseBody.asInstanceOf[FetchResponse[Records]]
-      if (!fetchSessionHandler.handleResponse(fetchResponse, fetchRequestVersion)) {
+      if (!fetchSessionHandler.handleResponse(fetchResponse, fetchRequest.latestAllowedVersion())) {
         Map.empty
       } else {
         fetchResponse.responseData(fetchSessionHandler.getSessionTopicNames).asScala
@@ -296,8 +296,9 @@ class ReplicaFetcherThread(name: String,
     val fetchRequestOpt = if (fetchData.sessionPartitions.isEmpty && fetchData.toForget.isEmpty) {
       None
     } else {
+      val version: Short = if (fetchRequestVersion >= 13 && !fetchData.canUseTopicIds) 12 else fetchRequestVersion
       val requestBuilder = FetchRequest.Builder
-        .forReplica(fetchRequestVersion, replicaId, maxWait, minBytes, fetchData.toSend, topicIds.asJava)
+        .forReplica(version, replicaId, maxWait, minBytes, fetchData.toSend, topicIds.asJava)
         .setMaxBytes(maxBytes)
         .toForget(fetchData.toForget)
         .metadata(fetchData.metadata)
