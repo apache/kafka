@@ -34,7 +34,6 @@ import scala.collection.mutable
 
 object KafkaNetworkChannel {
 
-  val nonRoutableAddress = new InetSocketAddress("0.0.0.0", 0)
   private[raft] def buildRequest(requestData: ApiMessage): AbstractRequest.Builder[_ <: AbstractRequest] = {
     requestData match {
       case voteRequest: VoteRequestData =>
