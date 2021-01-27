@@ -18,7 +18,6 @@
 package org.apache.kafka.common.protocol;
 
 import org.apache.kafka.common.protocol.types.RawTaggedField;
-import org.apache.kafka.common.protocol.types.Struct;
 
 import java.util.List;
 
@@ -88,30 +87,6 @@ public interface Message {
      *                      by this software.
      */
     void read(Readable readable, short version);
-
-    /**
-     * Reads this message from a Struct object.  This will overwrite all
-     * relevant fields with information from the Struct.
-     *
-     * @param struct        The source struct.
-     * @param version       The version to use.
-     *
-     * @throws {@see org.apache.kafka.common.errors.UnsupportedVersionException}
-     *                      If the specified struct can't be processed with the
-     *                      specified message version.
-     */
-    void fromStruct(Struct struct, short version);
-
-    /**
-     * Writes out this message to a Struct.
-     *
-     * @param version       The version to use.
-     *
-     * @throws {@see org.apache.kafka.common.errors.UnsupportedVersionException}
-     *                      If the specified version is too new to be supported
-     *                      by this software.
-     */
-    Struct toStruct(short version);
 
     /**
      * Returns a list of tagged fields which this software can't understand.

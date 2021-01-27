@@ -419,10 +419,11 @@ public class ConfigDef {
      * @param defaultValue      The default value to use if this config isn't present
      * @param validator         The validator to use in checking the correctness of the config
      * @param importance        The importance of this config (i.e. is this something you will likely need to change?)
+     * @param documentation     The documentation string for the config
      * @return This ConfigDef so you can chain calls
      */
-    public ConfigDef defineInternal(final String name, final Type type, final Object defaultValue, final Validator validator, final Importance importance) {
-        return define(new ConfigKey(name, type, defaultValue, validator, importance, "", "", -1, Width.NONE, name, Collections.<String>emptyList(), null, true));
+    public ConfigDef defineInternal(final String name, final Type type, final Object defaultValue, final Validator validator, final Importance importance, final String documentation) {
+        return define(new ConfigKey(name, type, defaultValue, validator, importance, documentation, "", -1, Width.NONE, name, Collections.<String>emptyList(), null, true));
     }
 
     /**

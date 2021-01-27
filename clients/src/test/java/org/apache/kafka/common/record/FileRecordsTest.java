@@ -20,11 +20,14 @@ import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.header.Header;
 import org.apache.kafka.common.header.internals.RecordHeader;
+import org.apache.kafka.common.network.TransferableChannel;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.test.TestUtils;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.mockito.Mockito;
 
 import java.io.File;
 import java.io.IOException;
@@ -51,7 +54,9 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.times;
@@ -72,6 +77,11 @@ public class FileRecordsTest {
     public void setup() throws IOException {
         this.fileRecords = createFileRecords(values);
         this.time = new MockTime();
+    }
+
+    @AfterEach
+    public void cleanup() throws IOException {
+        this.fileRecords.close();
     }
 
     @Test
@@ -510,6 +520,25 @@ public class FileRecordsTest {
         doTestConversion(CompressionType.GZIP, RecordBatch.MAGIC_VALUE_V1);
         doTestConversion(CompressionType.NONE, RecordBatch.MAGIC_VALUE_V2);
         doTestConversion(CompressionType.GZIP, RecordBatch.MAGIC_VALUE_V2);
+    }
+
+    @Test
+    public void testBytesLengthOfWriteTo() throws IOException {
+
+        int size = fileRecords.sizeInBytes();
+        long firstWritten = size / 3;
+
+        TransferableChannel channel = Mockito.mock(TransferableChannel.class);
+
+        // Firstly we wrote some of the data
+        fileRecords.writeTo(channel, 0, (int) firstWritten);
+        verify(channel).transferFrom(any(), anyLong(), eq(firstWritten));
+
+        // Ensure (length > size - firstWritten)
+        int secondWrittenLength = size - (int) firstWritten + 1;
+        fileRecords.writeTo(channel, firstWritten, secondWrittenLength);
+        // But we still only write (size - firstWritten), which is not fulfilled in the old version
+        verify(channel).transferFrom(any(), anyLong(), eq(size - firstWritten));
     }
 
     private void doTestConversion(CompressionType compressionType, byte toMagic) throws IOException {

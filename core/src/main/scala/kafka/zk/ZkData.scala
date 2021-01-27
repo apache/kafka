@@ -283,7 +283,7 @@ object TopicZNode {
                                       topicId: Option[Uuid],
                                       assignment: Map[TopicPartition, ReplicaAssignment])
   def path(topic: String) = s"${TopicsZNode.path}/$topic"
-  def encode(topicId: Uuid,
+  def encode(topicId: Option[Uuid],
              assignment: collection.Map[TopicPartition, ReplicaAssignment]): Array[Byte] = {
     val replicaAssignmentJson = mutable.Map[String, util.List[Int]]()
     val addingReplicasAssignmentJson = mutable.Map[String, util.List[Int]]()
@@ -299,11 +299,11 @@ object TopicZNode {
 
     val topicAssignment = mutable.Map(
       "version" -> 3,
-      "topic_id" -> topicId.toString,
       "partitions" -> replicaAssignmentJson.asJava,
       "adding_replicas" -> addingReplicasAssignmentJson.asJava,
       "removing_replicas" -> removingReplicasAssignmentJson.asJava
     )
+    topicId.foreach(id => topicAssignment += "topic_id" -> id.toString)
 
     Json.encodeAsBytes(topicAssignment.asJava)
   }

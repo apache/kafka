@@ -2993,7 +2993,7 @@ class LogTest {
 
     // Check the topic ID remains in memory and was copied correctly.
     assertEquals(id, log.topicId)
-    assertTrue(!log.partitionMetadataFile.isEmpty)
+    assertFalse(log.partitionMetadataFile.isEmpty)
     assertEquals(id, log.partitionMetadataFile.get.read().topicId)
   }
 
