@@ -1173,7 +1173,7 @@ public class StreamThread extends Thread {
         return indent + "\tStreamsThread threadId: " + getName() + "\n" + taskManager.toString(indent);
     }
 
-    public String getGroupInstanceID(){
+    public String getGroupInstanceID() {
         return mainConsumer.groupMetadata().groupInstanceId().orElse("");
     }
 

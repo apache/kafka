@@ -93,6 +93,7 @@ import java.util.UUID;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 import java.util.function.Consumer;
 import java.util.function.Predicate;
 
@@ -998,7 +999,7 @@ public class KafkaStreams implements AutoCloseable {
                         threads.remove(streamThread);
                         final long cacheSizePerThread = getCacheSizePerThread(threads.size());
                         resizeThreadCache(cacheSizePerThread);
-                        Collection<MemberToRemove> membersToRemove = Collections.singletonList(new MemberToRemove(streamThread.getGroupInstanceID()));
+                        final Collection<MemberToRemove> membersToRemove = Collections.singletonList(new MemberToRemove(streamThread.getGroupInstanceID()));
                         adminClient.removeMembersFromConsumerGroup(config.getString(StreamsConfig.APPLICATION_ID_CONFIG), new RemoveMembersFromConsumerGroupOptions(membersToRemove));
                         return Optional.of(streamThread.getName());
                     }
@@ -1022,10 +1023,11 @@ public class KafkaStreams implements AutoCloseable {
      * cache size specified in configuration {@link StreamsConfig#CACHE_MAX_BYTES_BUFFERING_CONFIG}.
      *
      * @param timeout The the length of time to wait for the thread to shutdown
+     * @throws TimeoutException if the thread does not stop in time
      * @return name of the removed stream thread or empty if a stream thread could not be removed because
      *         no stream threads are alive
      */
-    public Optional<String> removeStreamThread(Duration timeout) {
+    public Optional<String> removeStreamThread(final Duration timeout) throws TimeoutException {
         final String msgPrefix = prepareMillisCheckFailMsgPrefix(timeout, "timeout");
         final long timeoutMs = validateMillisecondDuration(timeout, msgPrefix);
         if (isRunningOrRebalancing()) {
@@ -1036,9 +1038,9 @@ public class KafkaStreams implements AutoCloseable {
                             || threads.size() == 1)) {
                         streamThread.shutdown();
                         if (!streamThread.getName().equals(Thread.currentThread().getName())) {
-                            if(!streamThread.waitOnThreadState(StreamThread.State.DEAD, timeoutMs)){
+                            if (!streamThread.waitOnThreadState(StreamThread.State.DEAD, timeoutMs)) {
                                 log.warn("Thread " + streamThread.getName() + " did not stop in the allotted time");
-                                return Optional.empty();
+                                throw new TimeoutException("Thread " + streamThread.getName() + " did not stop in the allotted time");
                             }
                         }
                         threads.remove(streamThread);
