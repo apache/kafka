@@ -115,7 +115,7 @@ versions += [
   spotbugs: "3.1.12",
   spotbugsPlugin: "3.0.0",
   spotlessPlugin: "3.27.1",
-  zookeeper: "3.5.8",
+  zookeeper: "3.5.9",
   zstd: "1.4.4-7"
 ]
 libs += [
