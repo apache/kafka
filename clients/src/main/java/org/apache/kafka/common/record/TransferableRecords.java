@@ -20,17 +20,20 @@ import org.apache.kafka.common.network.TransferableChannel;
 
 import java.io.IOException;
 
-public class DefaultRecordsSend<T extends TransferableRecords> extends RecordsSend<T> {
-    public DefaultRecordsSend(T records) {
-        this(records, records.sizeInBytes());
-    }
+/**
+ * Represents a record set which can be transferred to a channel
+ * @see Records
+ * @see UnalignedRecords
+ */
+public interface TransferableRecords extends BaseRecords {
 
-    public DefaultRecordsSend(T records, int maxBytesToWrite) {
-        super(records, maxBytesToWrite);
-    }
-
-    @Override
-    protected long writeTo(TransferableChannel channel, long previouslyWritten, int remaining) throws IOException {
-        return records().writeTo(channel, previouslyWritten, remaining);
-    }
+    /**
+     * Attempts to write the contents of this buffer to a channel.
+     * @param channel The channel to write to
+     * @param position The position in the buffer to write from
+     * @param length The number of bytes to write
+     * @return The number of bytes actually written
+     * @throws IOException For any IO errors
+     */
+    long writeTo(TransferableChannel channel, long position, int length) throws IOException;
 }

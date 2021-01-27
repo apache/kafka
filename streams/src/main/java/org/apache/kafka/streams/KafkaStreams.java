@@ -202,14 +202,14 @@ public class KafkaStreams implements AutoCloseable {
      *         |              |                  |
      *         |              v                  |
      *         |       +------+-------+     +----+-------+
-     *         +-----&gt; | Pending      |&lt;--- | Error (5)  |
-     *                 | Shutdown (3) |     +------------+
-     *                 +------+-------+
-     *                        |
-     *                        v
-     *                 +------+-------+
-     *                 | Not          |
-     *                 | Running (4)  |
+     *         +-----&gt; | Pending      |     | Pending    |
+     *                 | Shutdown (3) |     | Error (5)  |
+     *                 +------+-------+     +-----+------+
+     *                        |                   |
+     *                        v                   v
+     *                 +------+-------+     +-----+--------+
+     *                 | Not          |     | Error (6)    |
+     *                 | Running (4)  |     +--------------+
      *                 +--------------+
      *
      *
@@ -217,9 +217,9 @@ public class KafkaStreams implements AutoCloseable {
      * Note the following:
      * - RUNNING state will transit to REBALANCING if any of its threads is in PARTITION_REVOKED or PARTITIONS_ASSIGNED state
      * - REBALANCING state will transit to RUNNING if all of its threads are in RUNNING state
-     * - Any state except NOT_RUNNING can go to PENDING_SHUTDOWN (whenever close is called)
+     * - Any state except NOT_RUNNING, PENDING_ERROR or ERROR can go to PENDING_SHUTDOWN (whenever close is called)
      * - Of special importance: If the global stream thread dies, or all stream threads die (or both) then
-     *   the instance will be in the ERROR state. The user will need to close it.
+     *   the instance will be in the ERROR state. The user will not need to close it.
      */
     public enum State {
         CREATED(1, 3),          // 0
@@ -227,7 +227,8 @@ public class KafkaStreams implements AutoCloseable {
         RUNNING(1, 2, 3, 5),    // 2
         PENDING_SHUTDOWN(4),    // 3
         NOT_RUNNING,            // 4
-        ERROR(3);               // 5
+        PENDING_ERROR(6),       // 5
+        ERROR;                  // 6
 
         private final Set<Integer> validTransitions = new HashSet<>();
 
@@ -301,8 +302,12 @@ public class KafkaStreams implements AutoCloseable {
             } else if (state == State.REBALANCING && newState == State.REBALANCING) {
                 // when the state is already in REBALANCING, it should not transit to REBALANCING again
                 return false;
-            } else if (state == State.ERROR && newState == State.ERROR) {
-                // when the state is already in ERROR, it should not transit to ERROR again
+            } else if (state == State.ERROR && (newState == State.PENDING_ERROR || newState == State.ERROR)) {
+                // when the state is already in ERROR, its transition to PENDING_ERROR or ERROR (due to consecutive close calls)
+                return false;
+            } else if (state == State.PENDING_ERROR && newState != State.ERROR) {
+                // when the state is already in PENDING_ERROR, all other transitions than ERROR (due to thread dying) will be
+                // refused but we do not throw exception here, to allow appropriate error handling
                 return false;
             } else if (!state.isValidTransition(newState)) {
                 throw new IllegalStateException("Stream-client " + clientId + ": Unexpected state transition from " + oldState + " to " + newState);
@@ -450,7 +455,7 @@ public class KafkaStreams implements AutoCloseable {
             log.warn("The global thread cannot be replaced. Reverting to shutting down the client.");
             log.error("Encountered the following exception during processing " +
                     " The streams client is going to shut down now. ", throwable);
-            close(Duration.ZERO);
+            closeToError();
         }
         final StreamThread deadThread = (StreamThread) Thread.currentThread();
         threads.remove(deadThread);
@@ -480,7 +485,7 @@ public class KafkaStreams implements AutoCloseable {
                 log.error("Encountered the following exception during processing " +
                         "and the registered exception handler opted to " + action + "." +
                         " The streams client is going to shut down now. ", throwable);
-                close(Duration.ZERO);
+                closeToError();
                 break;
             case SHUTDOWN_APPLICATION:
                 if (throwable instanceof Error) {
@@ -493,7 +498,7 @@ public class KafkaStreams implements AutoCloseable {
                     log.error("Exception in global thread caused the application to attempt to shutdown." +
                             " This action will succeed only if there is at least one StreamThread running on this client." +
                             " Currently there are no running threads so will now close the client.");
-                    close(Duration.ZERO);
+                    closeToError();
                 } else {
                     processStreamThread(thread -> thread.sendShutdownRequest(AssignorError.SHUTDOWN_REQUESTED));
                     log.error("Encountered the following exception during processing " +
@@ -564,22 +569,6 @@ public class KafkaStreams implements AutoCloseable {
         }
 
         /**
-         * If all threads are dead set to ERROR
-         */
-        private void maybeSetError() {
-            // check if we have at least one thread running
-            for (final StreamThread.State state : threadState.values()) {
-                if (state != StreamThread.State.DEAD) {
-                    return;
-                }
-            }
-
-            if (setState(State.ERROR)) {
-                log.error("All stream threads have died. The instance will be in error state and should be closed.");
-            }
-        }
-
-        /**
          * If all threads are up, including the global thread, set to RUNNING
          */
         private void maybeSetRunning() {
@@ -614,8 +603,6 @@ public class KafkaStreams implements AutoCloseable {
                         setState(State.REBALANCING);
                     } else if (newState == StreamThread.State.RUNNING) {
                         maybeSetRunning();
-                    } else if (newState == StreamThread.State.DEAD) {
-                        maybeSetError();
                     }
                 } else if (thread instanceof GlobalStreamThread) {
                     // global stream thread has different invariants
@@ -625,9 +612,8 @@ public class KafkaStreams implements AutoCloseable {
                     if (newState == GlobalStreamThread.State.RUNNING) {
                         maybeSetRunning();
                     } else if (newState == GlobalStreamThread.State.DEAD) {
-                        if (setState(State.ERROR)) {
-                            log.error("Global thread has died. The instance will be in error state and should be closed.");
-                        }
+                        log.error("Global thread has died. The streams application or client will now close to ERROR.");
+                        closeToError();
                     }
                 }
             }
@@ -1215,11 +1201,27 @@ public class KafkaStreams implements AutoCloseable {
             metrics.close();
             if (!error) {
                 setState(State.NOT_RUNNING);
+            } else {
+                setState(State.ERROR);
             }
         }, "kafka-streams-close-thread");
     }
 
     private boolean close(final long timeoutMs) {
+        if (state == State.ERROR) {
+            log.info("Streams client is already in the terminal state ERROR, all resources are closed and the client has stopped.");
+            return true;
+        }
+        if (state == State.PENDING_ERROR) {
+            log.info("Streams client is in PENDING_ERROR, all resources are being closed and the client will be stopped.");
+            if (waitOnState(State.ERROR, timeoutMs)) {
+                log.info("Streams client stopped to ERROR completely");
+                return true;
+            } else {
+                log.info("Streams client cannot transition to ERROR completely within the timeout");
+                return false;
+            }
+        }
         if (!setState(State.PENDING_SHUTDOWN)) {
             // if transition failed, it means it was either in PENDING_SHUTDOWN
             // or NOT_RUNNING already; just check that all threads have been stopped
@@ -1241,7 +1243,7 @@ public class KafkaStreams implements AutoCloseable {
     }
 
     private void closeToError() {
-        if (!setState(State.ERROR)) {
+        if (!setState(State.PENDING_ERROR)) {
             log.info("Skipping shutdown since we are already in " + state());
         } else {
             final Thread shutdownThread = shutdownHelper(true);

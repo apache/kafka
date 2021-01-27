@@ -1737,7 +1737,7 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
             // Note that since we don't reset the assignment, we don't revoke leadership here. During a rebalance,
             // it is still important to have a leader that can write configs, offsets, etc.
 
-            if (rebalanceResolved) {
+            if (rebalanceResolved || currentProtocolVersion >= CONNECT_PROTOCOL_V1) {
                 List<Callable<Void>> callables = new ArrayList<>();
                 for (final String connectorName : connectors) {
                     callables.add(getConnectorStoppingCallable(connectorName));
