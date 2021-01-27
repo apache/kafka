@@ -109,16 +109,34 @@ class BrokerMetadataCheckpointTest {
 
   @Test
   def testGetBrokerMetadataAndOfflineDirsWithNonexistentDirectories(): Unit = {
+    // Use a regular file as an invalid log dir to trigger an IO error
+    val invalidDir = TestUtils.tempFile("blah")
+    try {
+      // The `ignoreMissing` flag has no effect if there is an IO error
+      assertEquals((new RawMetaProperties(), Seq(invalidDir.getAbsolutePath)),
+        BrokerMetadataCheckpoint.getBrokerMetadataAndOfflineDirs(
+          Seq(invalidDir.getAbsolutePath), false))
+      assertEquals((new RawMetaProperties(), Seq(invalidDir.getAbsolutePath)),
+        BrokerMetadataCheckpoint.getBrokerMetadataAndOfflineDirs(
+          Seq(invalidDir.getAbsolutePath), true))
+    } finally {
+      Utils.delete(invalidDir)
+    }
+  }
+
+  @Test
+  def testGetBrokerMetadataAndOfflineDirsIgnoreMissing(): Unit = {
     val tempDir = TestUtils.tempDirectory()
     try {
-      assertEquals((new RawMetaProperties(), Seq(tempDir.getAbsolutePath)),
-        BrokerMetadataCheckpoint.getBrokerMetadataAndOfflineDirs(
-          Seq(tempDir.getAbsolutePath), false))
       assertEquals((new RawMetaProperties(), Seq()),
         BrokerMetadataCheckpoint.getBrokerMetadataAndOfflineDirs(
           Seq(tempDir.getAbsolutePath), true))
+      assertThrows(classOf[RuntimeException],
+        () => BrokerMetadataCheckpoint.getBrokerMetadataAndOfflineDirs(
+          Seq(tempDir.getAbsolutePath), false))
     } finally {
       Utils.delete(tempDir)
     }
   }
+
 }

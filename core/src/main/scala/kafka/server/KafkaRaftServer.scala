@@ -16,7 +16,7 @@
  */
 package kafka.server
 
-import kafka.common.{InconsistentBrokerIdException, InconsistentControllerIdException}
+import kafka.common.{InconsistentBrokerIdException, InconsistentControllerIdException, KafkaException}
 import kafka.metrics.{KafkaMetricsReporter, KafkaYammerMetrics}
 import kafka.raft.KafkaRaftManager
 import kafka.server.KafkaRaftServer.{BrokerRole, ControllerRole}
@@ -106,12 +106,12 @@ object KafkaRaftServer {
   case object ControllerRole extends ProcessRole
 
   def loadMetaProperties(config: KafkaConfig): (MetaProperties, Seq[String]) = {
-    val logDirs = config.logDirs ++ Seq(config.metadataLogDir)
+    val logDirs = config.logDirs :+ config.metadataLogDir
     val (rawMetaProperties, offlineDirs) = BrokerMetadataCheckpoint.
       getBrokerMetadataAndOfflineDirs(logDirs, ignoreMissing = false)
 
     if (offlineDirs.contains(config.metadataLogDir)) {
-      throw new RuntimeException("Cannot start server since `meta.properties` could not be " +
+      throw new KafkaException("Cannot start server since `meta.properties` could not be " +
         s"loaded from ${config.metadataLogDir}")
     }
 

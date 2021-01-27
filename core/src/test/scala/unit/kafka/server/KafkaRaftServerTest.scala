@@ -19,7 +19,7 @@ package kafka.server
 import java.io.File
 import java.util.Properties
 
-import kafka.common.{InconsistentBrokerIdException, InconsistentControllerIdException}
+import kafka.common.{InconsistentBrokerIdException, InconsistentControllerIdException, KafkaException}
 import org.apache.kafka.common.Uuid
 import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.test.TestUtils
@@ -127,9 +127,78 @@ class KafkaRaftServerTest {
     logDir: File,
     metaProperties: MetaProperties
   ): Unit = {
-    val metaPropertiesFile = new File(logDir.getAbsolutePath + File.separator + "meta.properties")
+    val metaPropertiesFile = new File(logDir.getAbsolutePath, "meta.properties")
     val checkpoint = new BrokerMetadataCheckpoint(metaPropertiesFile)
     checkpoint.write(metaProperties.toProperties)
+  }
+
+  @Test
+  def testStartupFailsIfMetaPropertiesMissingInSomeLogDir(): Unit = {
+    val logDir1 = TestUtils.tempDirectory()
+    val logDir2 = TestUtils.tempDirectory()
+
+    val brokerId = 1
+    writeMetaProperties(logDir1, MetaProperties(
+      clusterId = Uuid.randomUuid(),
+      brokerId = Some(brokerId),
+      controllerId = None
+    ))
+
+    val configProperties = new Properties
+    configProperties.put(KafkaConfig.ProcessRolesProp, "broker")
+    configProperties.put(KafkaConfig.BrokerIdProp, brokerId.toString)
+    configProperties.put(KafkaConfig.LogDirProp, Seq(logDir1, logDir2).map(_.getAbsolutePath).mkString(","))
+    val config = KafkaConfig.fromProps(configProperties)
+
+    assertThrows(classOf[KafkaException], () => KafkaRaftServer.loadMetaProperties(config))
+  }
+
+  @Test
+  def testStartupFailsIfMetaLogDirIsOffline(): Unit = {
+    // One log dir is online and has properly formatted `meta.properties`
+    val validDir = TestUtils.tempDirectory()
+    val brokerId = 1
+    writeMetaProperties(validDir, MetaProperties(
+      clusterId = Uuid.randomUuid(),
+      brokerId = Some(brokerId),
+      controllerId = None
+    ))
+
+    // Use a regular file as an invalid log dir to trigger an IO error
+    val invalidDir = TestUtils.tempFile("blah")
+    val configProperties = new Properties
+    configProperties.put(KafkaConfig.ProcessRolesProp, "broker")
+    configProperties.put(KafkaConfig.BrokerIdProp, brokerId.toString)
+    configProperties.put(KafkaConfig.MetadataLogDirProp, invalidDir.getAbsolutePath)
+    configProperties.put(KafkaConfig.LogDirProp, validDir.getAbsolutePath)
+    val config = KafkaConfig.fromProps(configProperties)
+
+    assertThrows(classOf[KafkaException], () => KafkaRaftServer.loadMetaProperties(config))
+  }
+
+  @Test
+  def testStartupDoesNotFailIfDataDirIsOffline(): Unit = {
+    // One log dir is online and has properly formatted `meta.properties`
+    val validDir = TestUtils.tempDirectory()
+    val brokerId = 1
+    writeMetaProperties(validDir, MetaProperties(
+      clusterId = Uuid.randomUuid(),
+      brokerId = Some(brokerId),
+      controllerId = None
+    ))
+
+    // Use a regular file as an invalid log dir to trigger an IO error
+    val invalidDir = TestUtils.tempFile("blah")
+    val configProperties = new Properties
+    configProperties.put(KafkaConfig.ProcessRolesProp, "broker")
+    configProperties.put(KafkaConfig.BrokerIdProp, brokerId.toString)
+    configProperties.put(KafkaConfig.MetadataLogDirProp, validDir.getAbsolutePath)
+    configProperties.put(KafkaConfig.LogDirProp, invalidDir.getAbsolutePath)
+    val config = KafkaConfig.fromProps(configProperties)
+
+    val (loadedProperties, offlineDirs) = KafkaRaftServer.loadMetaProperties(config)
+    assertEquals(Some(brokerId), loadedProperties.brokerId)
+    assertEquals(Seq(invalidDir.getAbsolutePath), offlineDirs)
   }
 
 }

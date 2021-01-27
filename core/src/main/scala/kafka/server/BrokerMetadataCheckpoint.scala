@@ -21,7 +21,7 @@ import java.io._
 import java.nio.file.{Files, NoSuchFileException}
 import java.util.Properties
 
-import kafka.common.InconsistentBrokerMetadataException
+import kafka.common.{InconsistentBrokerMetadataException, KafkaException}
 import kafka.server.KafkaRaftServer.{BrokerRole, ControllerRole, ProcessRole}
 import kafka.server.RawMetaProperties._
 import kafka.utils._
@@ -179,22 +179,22 @@ object BrokerMetadataCheckpoint extends Logging {
     val offlineDirs = mutable.ArrayBuffer.empty[String]
 
     for (logDir <- logDirs) {
-      val brokerCheckpointFile = new File(logDir + File.separator + "meta.properties")
+      val brokerCheckpointFile = new File(logDir, "meta.properties")
       val brokerCheckpoint = new BrokerMetadataCheckpoint(brokerCheckpointFile)
 
       try {
         brokerCheckpoint.read() match {
-          case Some(properties) => brokerMetadataMap += logDir -> properties
-          case None => if (ignoreMissing) {
-            logDir -> new Properties()
-          } else {
-            throw new IOException("Not found")
-          }
+          case Some(properties) =>
+            brokerMetadataMap += logDir -> properties
+          case None =>
+            if (!ignoreMissing) {
+              throw new KafkaException(s"No `meta.properties` found in $logDir")
+            }
         }
       } catch {
         case e: IOException =>
           offlineDirs += logDir
-          error(s"Fail to read $brokerCheckpointFile", e)
+          error(s"Failed to read $brokerCheckpointFile", e)
       }
     }
 
