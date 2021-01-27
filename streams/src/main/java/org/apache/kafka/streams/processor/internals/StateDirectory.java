@@ -16,6 +16,13 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
+import java.io.BufferedReader;
+import java.io.BufferedWriter;
+import java.io.FileOutputStream;
+import java.io.OutputStreamWriter;
+import java.nio.charset.StandardCharsets;
+import java.util.UUID;
+import java.util.concurrent.atomic.AtomicReference;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.StreamsConfig;
@@ -54,13 +61,26 @@ public class StateDirectory {
     private static final Logger log = LoggerFactory.getLogger(StateDirectory.class);
     static final String LOCK_FILE_NAME = ".lock";
 
+    /* The process file is used to persist the process id across restarts.
+     * The version 0 schema consists only of the version number and UUID
+     *
+     * If you need to store additional metadata of the process you can bump the version numberand append new fields.
+     * For compatibility reasons you should only ever add fields, and only by appending them to the end
+     */
+    private static final String PROCESS_FILE_NAME = "kafka-streams-process-metadata";
+    private static final int PROCESS_FILE_VERSION = 0;
+
     private final Object taskDirCreationLock = new Object();
     private final Time time;
     private final String appId;
     private final File stateDir;
     private final boolean hasPersistentStores;
+
     private final HashMap<TaskId, FileChannel> channels = new HashMap<>();
     private final HashMap<TaskId, LockAndOwner> locks = new HashMap<>();
+
+    private FileChannel stateDirLockChannel;
+    private FileLock stateDirLock;
 
     private FileChannel globalStateChannel;
     private FileLock globalStateLock;
@@ -105,15 +125,70 @@ public class StateDirectory {
                     String.format("state directory [%s] doesn't exist and couldn't be created", stateDir.getPath()));
             }
             if (stateDirName.startsWith("/tmp")) {
-                log.warn("Using /tmp directory in the state.dir property can cause failures with writing the checkpoint file" +
-                    " due to the fact that this directory can be cleared by the OS");
+                log.warn("It is not recommended to use /tmp as the state.dir as this directory can be cleared at any time by the OS");
             }
             // change the dir permission to "rwxr-x---" to avoid world readable
             configurePermissions(baseDir);
             configurePermissions(stateDir);
+
+            final File lockFile = new File(stateDir, LOCK_FILE_NAME);
+            try {
+                stateDirLockChannel = FileChannel.open(lockFile.toPath(), StandardOpenOption.CREATE, StandardOpenOption.WRITE);
+                stateDirLock = tryLock(stateDirLockChannel);
+            } catch (final IOException e) {
+                log.error("Unable to lock the state directory due to unexpected exception", e);
+                throw new ProcessorStateException("Failed to lock the state directory during startup", e);
+            }
+
+            if (stateDirLock == null) {
+                log.error("Unable to obtain lock as state directory is already locked by another process");
+                throw new StreamsException("Unable to initialize state, this can happen if multiple instances of Kafka Streams are running in the same state directory");
+            }
+
         }
     }
-    
+
+    public UUID getProcessId() {
+        if (!hasPersistentStores) {
+            return UUID.randomUUID();
+        }
+
+        final File processFile = new File(stateDir, PROCESS_FILE_NAME);
+        try {
+            if (processFile.exists()) {
+                try (final BufferedReader reader = Files.newBufferedReader(processFile.toPath())) {
+                    // only field in version 0 is the UUID
+                    final int version = Integer.parseInt(reader.readLine());
+                    if (version > 0) {
+                        log.debug("Unrecognized version {} in process file, ignoring any data after the UUID", version);
+                    } else if (version < 0) {
+                        log.error("Invalid version {} in process id file", version);
+                        throw new ProcessorStateException("Unable to read process file due to invalid version");
+                    }
+                    final UUID processId = UUID.fromString(reader.readLine());
+                    log.info("Reading UUID from version {} process file: {}", version,  processId);
+                    return processId;
+                }
+            } else {
+                final UUID processId = UUID.randomUUID();
+                log.info("No process id found on disk, got fresh process id {}", processId);
+                final FileOutputStream fileOutputStream = new FileOutputStream(processFile);
+                try (final BufferedWriter writer = new BufferedWriter(
+                    new OutputStreamWriter(fileOutputStream, StandardCharsets.UTF_8))) {
+                    writer.write(Integer.toString(PROCESS_FILE_VERSION));
+                    writer.newLine();
+                    writer.write(processId.toString());
+                    writer.newLine();
+                    return processId;
+                }
+            }
+
+        } catch (final IOException e) {
+            log.error("Unable to read/write process file due to unexpected exception", e);
+            throw new ProcessorStateException(e);
+        }
+    }
+
     private void configurePermissions(final File file) {
         final Path path = file.toPath();
         if (path.getFileSystem().supportedFileAttributeViews().contains("posix")) {
@@ -310,14 +385,34 @@ public class StateDirectory {
         }
     }
 
+    public void close() {
+        try {
+            stateDirLock.release();
+            stateDirLockChannel.close();
+
+            stateDirLock = null;
+            stateDirLockChannel = null;
+        } catch (final IOException e) {
+            log.error("Unexpected exception while unlocking the state dir", e);
+            throw new StreamsException("Failed to release the lock on the state directory", e);
+        }
+
+        // all threads should be stopped and cleaned up by now, so none should remain holding a lock
+        if (locks.isEmpty() ) {
+            log.error("Some task directories still locked while closing the state, all threads should already have cleaned up and shutdown");
+        }
+        if (globalStateLock != null) {
+            log.error("Global state lock is present while closing the state, the global thread should have already cleaned up and shutdown");
+        }
+    }
+
     public synchronized void clean() {
-        // remove task dirs
         try {
             cleanRemovedTasksCalledByUser();
         } catch (final Exception e) {
             throw new StreamsException(e);
         }
-        // remove global dir
+
         try {
             if (stateDir.exists()) {
                 Utils.delete(globalStateDir().getAbsoluteFile());
@@ -384,6 +479,7 @@ public class StateDirectory {
     }
 
     private void cleanRemovedTasksCalledByUser() throws Exception {
+        final AtomicReference<Exception> firstException = new AtomicReference<>();
         for (final File taskDir : listAllTaskDirectories()) {
             final String dirName = taskDir.getName();
             final TaskId id = TaskId.parse(dirName);
@@ -403,7 +499,7 @@ public class StateDirectory {
                             logPrefix(), dirName, id),
                         exception
                     );
-                    throw exception;
+                    firstException.compareAndSet(null, exception);
                 } finally {
                     try {
                         unlock(id);
@@ -416,10 +512,14 @@ public class StateDirectory {
                                 logPrefix(), dirName, id),
                             exception
                         );
-                        throw exception;
+                        firstException.compareAndSet(null, exception);
                     }
                 }
             }
+        }
+        final Exception exception = firstException.get();
+        if (exception != null) {
+            throw exception;
         }
     }
 
