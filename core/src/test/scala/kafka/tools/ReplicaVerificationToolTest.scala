@@ -21,8 +21,8 @@ import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.record.{CompressionType, MemoryRecords, SimpleRecord}
 import org.apache.kafka.common.requests.FetchResponse
-import org.junit.Test
-import org.junit.Assert.assertTrue
+import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.Assertions.assertTrue
 
 class ReplicaVerificationToolTest {
 
@@ -54,8 +54,8 @@ class ReplicaVerificationToolTest {
     val output = sb.toString.trim
 
     // If you change this assertion, you should verify that the replica_verification_test.py system test still passes
-    assertTrue(s"Max lag information should be in output: `$output`",
-      output.endsWith(": max lag is 10 for partition a-1 at offset 10 among 3 partitions"))
+    assertTrue(output.endsWith(": max lag is 10 for partition a-1 at offset 10 among 3 partitions"),
+      s"Max lag information should be in output: `$output`")
   }
 
 }

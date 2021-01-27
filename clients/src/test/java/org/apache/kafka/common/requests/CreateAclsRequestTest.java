@@ -26,14 +26,15 @@ import org.apache.kafka.common.message.CreateAclsRequestData;
 import org.apache.kafka.common.resource.PatternType;
 import org.apache.kafka.common.resource.ResourcePattern;
 import org.apache.kafka.common.resource.ResourceType;
-import org.junit.Test;
+import org.junit.jupiter.api.Test;
 
 import java.nio.ByteBuffer;
 import java.util.Arrays;
 import java.util.List;
 import java.util.stream.Collectors;
 
-import static org.junit.Assert.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 public class CreateAclsRequestTest {
     private static final short V0 = 0;
@@ -51,14 +52,14 @@ public class CreateAclsRequestTest {
     private static final AclBinding UNKNOWN_ACL1 = new AclBinding(new ResourcePattern(ResourceType.UNKNOWN, "unknown", PatternType.LITERAL),
         new AccessControlEntry("User:*", "127.0.0.1", AclOperation.CREATE, AclPermissionType.ALLOW));
 
-    @Test(expected = UnsupportedVersionException.class)
+    @Test
     public void shouldThrowOnV0IfNotLiteral() {
-        new CreateAclsRequest(data(PREFIXED_ACL1), V0);
+        assertThrows(UnsupportedVersionException.class, () -> new CreateAclsRequest(data(PREFIXED_ACL1), V0));
     }
 
-    @Test(expected = IllegalArgumentException.class)
+    @Test
     public void shouldThrowOnIfUnknown() {
-        new CreateAclsRequest(data(UNKNOWN_ACL1), V0);
+        assertThrows(IllegalArgumentException.class, () -> new CreateAclsRequest(data(UNKNOWN_ACL1), V0));
     }
 
     @Test
@@ -82,7 +83,7 @@ public class CreateAclsRequestTest {
     }
 
     private static void assertRequestEquals(final CreateAclsRequest original, final CreateAclsRequest actual) {
-        assertEquals("Number of Acls wrong", original.aclCreations().size(), actual.aclCreations().size());
+        assertEquals(original.aclCreations().size(), actual.aclCreations().size(), "Number of Acls wrong");
 
         for (int idx = 0; idx != original.aclCreations().size(); ++idx) {
             final AclBinding originalBinding = CreateAclsRequest.aclBinding(original.aclCreations().get(idx));

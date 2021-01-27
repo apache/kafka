@@ -183,7 +183,6 @@ class GroupCoordinator(val brokerId: Int,
           group.inLock {
             if (!acceptJoiningMember(group, memberId)) {
               group.remove(memberId)
-              group.removeStaticMember(groupInstanceId)
               responseCallback(JoinGroupResult(JoinGroupRequest.UNKNOWN_MEMBER_ID, Errors.GROUP_MAX_SIZE_REACHED))
             } else if (isUnknownMember) {
               doUnknownJoinGroup(group, groupInstanceId, requireKnownMemberId, clientId, clientHost, rebalanceTimeoutMs, sessionTimeoutMs, protocolType, protocols, responseCallback)
@@ -884,7 +883,7 @@ class GroupCoordinator(val brokerId: Int,
         case Stable | CompletingRebalance =>
           for (member <- group.allMemberMetadata) {
             group.maybeInvokeSyncCallback(member, SyncGroupResult(Errors.NOT_COORDINATOR))
-            heartbeatPurgatory.checkAndComplete(MemberKey(member.groupId, member.memberId))
+            heartbeatPurgatory.checkAndComplete(MemberKey(group.groupId, member.memberId))
           }
       }
     }
@@ -962,7 +961,7 @@ class GroupCoordinator(val brokerId: Int,
   }
 
   private def completeAndScheduleNextExpiration(group: GroupMetadata, member: MemberMetadata, timeoutMs: Long): Unit = {
-    val memberKey = MemberKey(member.groupId, member.memberId)
+    val memberKey = MemberKey(group.groupId, member.memberId)
 
     // complete current heartbeat expectation
     member.heartbeatSatisfied = true
@@ -985,7 +984,7 @@ class GroupCoordinator(val brokerId: Int,
 
   private def removeHeartbeatForLeavingMember(group: GroupMetadata, member: MemberMetadata): Unit = {
     member.isLeaving = true
-    val memberKey = MemberKey(member.groupId, member.memberId)
+    val memberKey = MemberKey(group.groupId, member.memberId)
     heartbeatPurgatory.checkAndComplete(memberKey)
   }
 
@@ -999,9 +998,8 @@ class GroupCoordinator(val brokerId: Int,
                                     protocols: List[(String, Array[Byte])],
                                     group: GroupMetadata,
                                     callback: JoinCallback): Unit = {
-    val member = new MemberMetadata(memberId, group.groupId, groupInstanceId,
-      clientId, clientHost, rebalanceTimeoutMs,
-      sessionTimeoutMs, protocolType, protocols)
+    val member = new MemberMetadata(memberId, groupInstanceId, clientId, clientHost,
+      rebalanceTimeoutMs, sessionTimeoutMs, protocolType, protocols)
 
     member.isNew = true
 
@@ -1151,9 +1149,7 @@ class GroupCoordinator(val brokerId: Int,
     // to invoke the callback before removing the member. We return UNKNOWN_MEMBER_ID so that the consumer
     // will retry the JoinGroup request if is still active.
     group.maybeInvokeJoinCallback(member, JoinGroupResult(JoinGroupRequest.UNKNOWN_MEMBER_ID, Errors.UNKNOWN_MEMBER_ID))
-
     group.remove(member.memberId)
-    group.removeStaticMember(member.groupInstanceId)
 
     group.currentState match {
       case Dead | Empty =>
@@ -1178,10 +1174,6 @@ class GroupCoordinator(val brokerId: Int,
     }
   }
 
-  def onExpireJoin(): Unit = {
-    // TODO: add metrics for restabilize timeouts
-  }
-
   def onCompleteJoin(group: GroupMetadata): Unit = {
     group.inLock {
       val notYetRejoinedDynamicMembers = group.notYetRejoinedMembers.filterNot(_._2.isStaticMember)
@@ -1192,7 +1184,6 @@ class GroupCoordinator(val brokerId: Int,
         notYetRejoinedDynamicMembers.values foreach { failedMember =>
           removeHeartbeatForLeavingMember(group, failedMember)
           group.remove(failedMember.memberId)
-          // TODO: cut the socket connection to the client
         }
       }
 
@@ -1294,10 +1285,6 @@ class GroupCoordinator(val brokerId: Int,
         }
       }
     }
-  }
-
-  def onCompleteHeartbeat(): Unit = {
-    // TODO: add metrics for complete heartbeats
   }
 
   def partitionFor(group: String): Int = groupManager.partitionFor(group)

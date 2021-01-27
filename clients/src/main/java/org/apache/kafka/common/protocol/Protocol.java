@@ -133,7 +133,7 @@ public class Protocol {
             b.append("</pre>\n");
             schemaToFieldTableHtml(ResponseHeaderData.SCHEMAS[i], b);
         }
-        for (ApiKeys key : ApiKeys.enabledApis()) {
+        for (ApiKeys key : ApiKeys.brokerApis()) {
             // Key
             b.append("<h5>");
             b.append("<a name=\"The_Messages_" + key.name + "\">");

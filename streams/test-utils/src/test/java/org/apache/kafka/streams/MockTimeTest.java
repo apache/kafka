@@ -16,9 +16,10 @@
  */
 package org.apache.kafka.streams;
 
-import org.junit.Test;
+import org.junit.jupiter.api.Test;
 
-import static org.junit.Assert.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 public class MockTimeTest {
 
@@ -35,9 +36,10 @@ public class MockTimeTest {
         assertEquals(42L, time.hiResClockMs());
     }
 
-    @Test(expected = IllegalArgumentException.class)
+    @Test
     public void shouldNotAllowNegativeSleep() {
-        new TopologyTestDriver.MockTime(42).sleep(-1L);
+        assertThrows(IllegalArgumentException.class,
+            () -> new TopologyTestDriver.MockTime(42).sleep(-1L));
     }
 
     @Test

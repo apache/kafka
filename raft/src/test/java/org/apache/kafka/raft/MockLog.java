@@ -26,6 +26,8 @@ import org.apache.kafka.common.record.RecordBatch;
 import org.apache.kafka.common.record.Records;
 import org.apache.kafka.common.record.SimpleRecord;
 import org.apache.kafka.common.record.TimestampType;
+import org.apache.kafka.common.record.UnalignedMemoryRecords;
+import org.apache.kafka.common.record.UnalignedRecords;
 import org.apache.kafka.common.utils.ByteBufferOutputStream;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.snapshot.RawSnapshotReader;
@@ -255,6 +257,13 @@ public class MockLog implements ReplicatedLog {
         long baseOffset = endOffset().offset;
         long lastOffset = baseOffset;
         for (RecordBatch batch : records.batches()) {
+            Optional<LogEntry> lastEntry = lastEntry();
+
+            if (lastEntry.isPresent() && batch.baseOffset() != lastEntry.get().offset + 1) {
+                throw new IllegalArgumentException("Illegal append at offset " + batch.baseOffset() +
+                    " with current end offset of " + endOffset().offset);
+            }
+
             List<LogEntry> entries = buildEntries(batch, Record::offset);
             appendBatch(new LogBatch(batch.partitionLeaderEpoch(), batch.isControlBatch(), entries));
             lastOffset = entries.get(entries.size() - 1).offset;
@@ -507,16 +516,26 @@ public class MockLog implements ReplicatedLog {
 
         @Override
         public long sizeInBytes() {
+            if (frozen) {
+                throw new RuntimeException("Snapshot is already frozen " + snapshotId);
+            }
             return data.position();
         }
 
         @Override
-        public void append(ByteBuffer buffer) {
+        public void append(UnalignedMemoryRecords records) {
             if (frozen) {
                 throw new RuntimeException("Snapshot is already frozen " + snapshotId);
             }
+            data.write(records.buffer());
+        }
 
-            data.write(buffer);
+        @Override
+        public void append(MemoryRecords records) {
+            if (frozen) {
+                throw new RuntimeException("Snapshot is already frozen " + snapshotId);
+            }
+            data.write(records.buffer());
         }
 
         @Override
@@ -566,14 +585,11 @@ public class MockLog implements ReplicatedLog {
         }
 
         @Override
-        public int read(ByteBuffer buffer, long position) {
-            ByteBuffer copy = data.buffer();
-            copy.position((int) position);
-            copy.limit((int) position + Math.min(copy.remaining(), buffer.remaining()));
-
-            buffer.put(copy);
-
-            return copy.remaining();
+        public UnalignedRecords read(long position, int size) {
+            ByteBuffer buffer = data.buffer();
+            buffer.position(Math.toIntExact(position));
+            buffer.limit(Math.min(buffer.limit(), Math.toIntExact(position + size)));
+            return new UnalignedMemoryRecords(buffer.slice());
         }
 
         @Override

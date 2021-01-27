@@ -32,9 +32,8 @@ import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.requests.{AbstractControlRequest, AbstractResponse, LeaderAndIsrRequest, LeaderAndIsrResponse, StopReplicaRequest, StopReplicaResponse, UpdateMetadataRequest, UpdateMetadataResponse}
 import org.apache.kafka.common.message.LeaderAndIsrResponseData.LeaderAndIsrTopicError
 import org.apache.kafka.common.security.auth.SecurityProtocol
-import org.junit.Assert._
-import org.junit.Test
-import org.scalatest.Assertions
+import org.junit.jupiter.api.Assertions._
+import org.junit.jupiter.api.Test
 
 import scala.jdk.CollectionConverters._
 import scala.collection.mutable
@@ -192,18 +191,18 @@ class ControllerChannelManagerTest {
 
     val leaderAndIsrRequests = batch.collectLeaderAndIsrRequestsFor(2)
     assertEquals(1, leaderAndIsrRequests.size)
-    assertEquals(s"IBP $interBrokerProtocolVersion should use version $expectedLeaderAndIsrVersion",
-      expectedLeaderAndIsrVersion, leaderAndIsrRequests.head.version)
+    assertEquals(expectedLeaderAndIsrVersion, leaderAndIsrRequests.head.version,
+      s"IBP $interBrokerProtocolVersion should use version $expectedLeaderAndIsrVersion")
     
     val request = leaderAndIsrRequests.head
     val byteBuffer = request.serialize
     val deserializedRequest = LeaderAndIsrRequest.parse(byteBuffer, expectedLeaderAndIsrVersion)
     
     if (interBrokerProtocolVersion >= KAFKA_2_8_IV1) {
-      assertTrue(!request.topicIds().get("foo").equals(Uuid.ZERO_UUID))
-      assertTrue(!deserializedRequest.topicIds().get("foo").equals(Uuid.ZERO_UUID))
+      assertFalse(request.topicIds().get("foo").equals(Uuid.ZERO_UUID))
+      assertFalse(deserializedRequest.topicIds().get("foo").equals(Uuid.ZERO_UUID))
     } else if (interBrokerProtocolVersion >= KAFKA_2_2_IV0) {
-      assertTrue(!request.topicIds().get("foo").equals(Uuid.ZERO_UUID))
+      assertFalse(request.topicIds().get("foo").equals(Uuid.ZERO_UUID))
       assertTrue(deserializedRequest.topicIds().get("foo").equals(Uuid.ZERO_UUID))
     } else {
       assertTrue(request.topicIds().get("foo") == null)
@@ -393,9 +392,8 @@ class ControllerChannelManagerTest {
 
     val requests = batch.collectUpdateMetadataRequestsFor(2)
     val allVersions = requests.map(_.version)
-    assertTrue(s"IBP $interBrokerProtocolVersion should use version $expectedUpdateMetadataVersion, " +
-      s"but found versions $allVersions",
-      allVersions.forall(_ == expectedUpdateMetadataVersion))
+    assertTrue(allVersions.forall(_ == expectedUpdateMetadataVersion),
+      s"IBP $interBrokerProtocolVersion should use version $expectedUpdateMetadataVersion, but found versions $allVersions")
   }
 
   @Test
@@ -552,7 +550,7 @@ class ControllerChannelManagerTest {
     // We should only receive events for the topic being deleted
     val includedPartitions = batch.sentEvents.flatMap {
       case event: TopicDeletionStopReplicaResponseReceived => event.partitionErrors.keySet
-      case otherEvent => Assertions.fail(s"Unexpected sent event: $otherEvent")
+      case otherEvent => throw new AssertionError(s"Unexpected sent event: $otherEvent")
     }.toSet
     assertEquals(partitions.keys.filter(_.topic == "foo"), includedPartitions)
   }
@@ -791,9 +789,8 @@ class ControllerChannelManagerTest {
 
     val requests = batch.collectStopReplicaRequestsFor(2)
     val allVersions = requests.map(_.version)
-    assertTrue(s"IBP $interBrokerProtocolVersion should use version $expectedStopReplicaRequestVersion, " +
-      s"but found versions $allVersions",
-      allVersions.forall(_ == expectedStopReplicaRequestVersion))
+    assertTrue(allVersions.forall(_ == expectedStopReplicaRequestVersion),
+      s"IBP $interBrokerProtocolVersion should use version $expectedStopReplicaRequestVersion, but found versions $allVersions")
   }
 
   private case class LeaderAndDelete(leaderAndIsr: LeaderAndIsr,

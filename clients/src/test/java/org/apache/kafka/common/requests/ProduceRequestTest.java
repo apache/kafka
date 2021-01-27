@@ -27,16 +27,16 @@ import org.apache.kafka.common.record.RecordBatch;
 import org.apache.kafka.common.record.RecordVersion;
 import org.apache.kafka.common.record.SimpleRecord;
 import org.apache.kafka.common.record.TimestampType;
-import org.junit.Test;
+import org.junit.jupiter.api.Test;
 
 import java.nio.ByteBuffer;
 import java.util.Arrays;
 import java.util.Collections;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertTrue;
-import static org.junit.Assert.fail;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.fail;
 
 public class ProduceRequestTest {
 
@@ -88,7 +88,7 @@ public class ProduceRequestTest {
                                 .setRecords(memoryRecords)))).iterator()))
                 .setAcks((short) -1)
                 .setTimeoutMs(10)).build();
-        assertTrue(RequestUtils.hasIdempotentRecords(request));
+        assertTrue(RequestTestUtils.hasIdempotentRecords(request));
     }
 
     @Test
@@ -261,7 +261,7 @@ public class ProduceRequestTest {
                         .setTimeoutMs(5000));
         final ProduceRequest request = builder.build();
         assertTrue(RequestUtils.hasTransactionalRecords(request));
-        assertTrue(RequestUtils.hasIdempotentRecords(request));
+        assertTrue(RequestTestUtils.hasIdempotentRecords(request));
     }
 
     @Test
@@ -288,7 +288,7 @@ public class ProduceRequestTest {
 
         final ProduceRequest request = builder.build();
         assertFalse(RequestUtils.hasTransactionalRecords(request));
-        assertTrue(RequestUtils.hasIdempotentRecords(request));
+        assertTrue(RequestTestUtils.hasIdempotentRecords(request));
     }
 
     private void assertThrowsInvalidRecordExceptionForAllVersions(ProduceRequest.Builder builder) {
@@ -302,8 +302,8 @@ public class ProduceRequestTest {
             builder.build(version).serialize();
             fail("Builder did not raise " + InvalidRecordException.class.getName() + " as expected");
         } catch (RuntimeException e) {
-            assertTrue("Unexpected exception type " + e.getClass().getName(),
-                    InvalidRecordException.class.isAssignableFrom(e.getClass()));
+            assertTrue(InvalidRecordException.class.isAssignableFrom(e.getClass()),
+                "Unexpected exception type " + e.getClass().getName());
         }
     }
 

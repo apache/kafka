@@ -25,7 +25,7 @@
   "validVersions": "0-3",
   "flexibleVersions": "3+",
   "fields": [
-    { "name": "TransactionalId", "type": "string", "versions": "0+",
+    { "name": "TransactionalId", "type": "string", "versions": "0+", "entityType": "transactionalId",
       "about": "The ID of the transaction." },
     { "name": "GroupId", "type": "string", "versions": "0+", "entityType": "groupId",
       "about": "The ID of the group." },

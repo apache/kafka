@@ -18,10 +18,11 @@
 package kafka.server
 
 import org.apache.kafka.common.message.ApiVersionsRequestData
+import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.requests.{ApiVersionsRequest, ApiVersionsResponse}
-import org.junit.Assert._
-import org.junit.Test
+import org.junit.jupiter.api.Assertions._
+import org.junit.jupiter.api.Test
 
 class ApiVersionsRequestTest extends AbstractApiVersionsRequestTest {
 
@@ -32,6 +33,13 @@ class ApiVersionsRequestTest extends AbstractApiVersionsRequestTest {
     val request = new ApiVersionsRequest.Builder().build()
     val apiVersionsResponse = sendApiVersionsRequest(request)
     validateApiVersionsResponse(apiVersionsResponse)
+  }
+
+  @Test
+  def testApiVersionsRequestThroughControlPlaneListener(): Unit = {
+    val request = new ApiVersionsRequest.Builder().build()
+    val apiVersionsResponse = sendApiVersionsRequest(request, super.controlPlaneListenerName)
+    validateApiVersionsResponse(apiVersionsResponse, super.controlPlaneListenerName)
   }
 
   @Test
@@ -54,6 +62,13 @@ class ApiVersionsRequestTest extends AbstractApiVersionsRequestTest {
   }
 
   @Test
+  def testApiVersionsRequestValidationV0ThroughControlPlaneListener(): Unit = {
+    val apiVersionsRequest = new ApiVersionsRequest.Builder().build(0.asInstanceOf[Short])
+    val apiVersionsResponse = sendApiVersionsRequest(apiVersionsRequest, super.controlPlaneListenerName)
+    validateApiVersionsResponse(apiVersionsResponse, super.controlPlaneListenerName)
+  }
+
+  @Test
   def testApiVersionsRequestValidationV3(): Unit = {
     // Invalid request because Name and Version are empty by default
     val apiVersionsRequest = new ApiVersionsRequest(new ApiVersionsRequestData(), 3.asInstanceOf[Short])
@@ -61,8 +76,8 @@ class ApiVersionsRequestTest extends AbstractApiVersionsRequestTest {
     assertEquals(Errors.INVALID_REQUEST.code(), apiVersionsResponse.data.errorCode())
   }
 
-  private def sendApiVersionsRequest(request: ApiVersionsRequest): ApiVersionsResponse = {
-    connectAndReceive[ApiVersionsResponse](request)
+  private def sendApiVersionsRequest(request: ApiVersionsRequest,
+                                     listenerName: ListenerName = super.listenerName): ApiVersionsResponse = {
+    connectAndReceive[ApiVersionsResponse](request, listenerName = listenerName)
   }
-
 }

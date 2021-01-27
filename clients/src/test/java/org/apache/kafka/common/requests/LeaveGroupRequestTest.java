@@ -22,16 +22,17 @@ import org.apache.kafka.common.message.LeaveGroupRequestData.MemberIdentity;
 import org.apache.kafka.common.message.LeaveGroupResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
-import org.junit.Before;
-import org.junit.Test;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertTrue;
-import static org.junit.Assert.fail;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.fail;
 
 public class LeaveGroupRequestTest {
 
@@ -46,7 +47,7 @@ public class LeaveGroupRequestTest {
     private LeaveGroupRequest.Builder builder;
     private List<MemberIdentity> members;
 
-    @Before
+    @BeforeEach
     public void setUp() {
         members = Arrays.asList(new MemberIdentity()
                                          .setMemberId(memberIdOne)
@@ -121,8 +122,9 @@ public class LeaveGroupRequestTest {
         }
     }
 
-    @Test(expected = IllegalArgumentException.class)
+    @Test
     public void testBuildEmptyMembers() {
-        new LeaveGroupRequest.Builder(groupId, Collections.emptyList());
+        assertThrows(IllegalArgumentException.class,
+            () -> new LeaveGroupRequest.Builder(groupId, Collections.emptyList()));
     }
 }

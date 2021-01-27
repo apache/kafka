@@ -24,6 +24,7 @@ import java.util.Map;
 import static java.time.Duration.ofMillis;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 
 public class TimeWindowTest {
@@ -33,9 +34,9 @@ public class TimeWindowTest {
     private final TimeWindow window = new TimeWindow(start, end);
     private final SessionWindow sessionWindow = new SessionWindow(start, end);
 
-    @Test(expected = IllegalArgumentException.class)
+    @Test
     public void endMustBeLargerThanStart() {
-        new TimeWindow(start, start);
+        assertThrows(IllegalArgumentException.class, () -> new TimeWindow(start, start));
     }
 
     @Test
@@ -118,9 +119,9 @@ public class TimeWindowTest {
         assertFalse(window.overlap(new TimeWindow(125, 150)));
     }
 
-    @Test(expected = IllegalArgumentException.class)
+    @Test
     public void cannotCompareTimeWindowWithDifferentWindowType() {
-        window.overlap(sessionWindow);
+        assertThrows(IllegalArgumentException.class, () -> window.overlap(sessionWindow));
     }
 
     @Test

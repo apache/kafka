@@ -46,8 +46,8 @@ import org.apache.kafka.common.message.AlterReplicaLogDirsRequestData.AlterRepli
 import org.apache.kafka.common.message.AlterReplicaLogDirsResponseData;
 import org.apache.kafka.common.message.ApiVersionsRequestData;
 import org.apache.kafka.common.message.ApiVersionsResponseData;
-import org.apache.kafka.common.message.ApiVersionsResponseData.ApiVersionsResponseKey;
-import org.apache.kafka.common.message.ApiVersionsResponseData.ApiVersionsResponseKeyCollection;
+import org.apache.kafka.common.message.ApiVersionsResponseData.ApiVersion;
+import org.apache.kafka.common.message.ApiVersionsResponseData.ApiVersionCollection;
 import org.apache.kafka.common.message.ControlledShutdownRequestData;
 import org.apache.kafka.common.message.ControlledShutdownResponseData;
 import org.apache.kafka.common.message.ControlledShutdownResponseData.RemainingPartition;
@@ -83,6 +83,10 @@ import org.apache.kafka.common.message.DescribeAclsResponseData;
 import org.apache.kafka.common.message.DescribeAclsResponseData.AclDescription;
 import org.apache.kafka.common.message.DescribeAclsResponseData.DescribeAclsResource;
 import org.apache.kafka.common.message.DescribeClientQuotasResponseData;
+import org.apache.kafka.common.message.DescribeClusterRequestData;
+import org.apache.kafka.common.message.DescribeClusterResponseData;
+import org.apache.kafka.common.message.DescribeClusterResponseData.DescribeClusterBroker;
+import org.apache.kafka.common.message.DescribeClusterResponseData.DescribeClusterBrokerCollection;
 import org.apache.kafka.common.message.DescribeConfigsRequestData;
 import org.apache.kafka.common.message.DescribeConfigsResponseData;
 import org.apache.kafka.common.message.DescribeConfigsResponseData.DescribeConfigsResourceResult;
@@ -184,7 +188,7 @@ import org.apache.kafka.common.security.token.delegation.DelegationToken;
 import org.apache.kafka.common.security.token.delegation.TokenInformation;
 import org.apache.kafka.common.utils.SecurityUtils;
 import org.apache.kafka.common.utils.Utils;
-import org.junit.Test;
+import org.junit.jupiter.api.Test;
 
 import java.nio.BufferUnderflowException;
 import java.nio.ByteBuffer;
@@ -210,13 +214,13 @@ import static org.apache.kafka.common.protocol.ApiKeys.LIST_GROUPS;
 import static org.apache.kafka.common.protocol.ApiKeys.LIST_OFFSETS;
 import static org.apache.kafka.common.protocol.ApiKeys.SYNC_GROUP;
 import static org.apache.kafka.common.requests.FetchMetadata.INVALID_SESSION_ID;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.assertNull;
-import static org.junit.Assert.assertThrows;
-import static org.junit.Assert.assertTrue;
-import static org.junit.Assert.fail;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.fail;
 
 public class RequestResponseTest {
 
@@ -510,6 +514,36 @@ public class RequestResponseTest {
     }
 
     @Test
+    public void testDescribeClusterSerialization() throws Exception {
+        for (int v = ApiKeys.DESCRIBE_CLUSTER.oldestVersion(); v <= ApiKeys.DESCRIBE_CLUSTER.latestVersion(); v++) {
+            checkRequest(createDescribeClusterRequest(v), true);
+            checkErrorResponse(createDescribeClusterRequest(v), unknownServerException, true);
+            checkResponse(createDescribeClusterResponse(), v, true);
+        }
+    }
+
+    private DescribeClusterRequest createDescribeClusterRequest(int version) {
+        return new DescribeClusterRequest.Builder(
+            new DescribeClusterRequestData()
+                .setIncludeClusterAuthorizedOperations(true))
+            .build((short) version);
+    }
+
+    private DescribeClusterResponse createDescribeClusterResponse() {
+        return new DescribeClusterResponse(
+            new DescribeClusterResponseData()
+                .setBrokers(new DescribeClusterBrokerCollection(
+                    Collections.singletonList(new DescribeClusterBroker()
+                        .setBrokerId(1)
+                        .setHost("localhost")
+                        .setPort(9092)
+                        .setRack("rack1")).iterator()))
+                .setClusterId("clusterId")
+                .setControllerId(1)
+                .setClusterAuthorizedOperations(10));
+    }
+
+    @Test
     public void testResponseHeader() {
         ResponseHeader header = createResponseHeader((short) 1);
         ObjectSerializationCache serializationCache = new ObjectSerializationCache();
@@ -541,25 +575,25 @@ public class RequestResponseTest {
                 DescribeConfigsResourceResult actualEntry = actualEntries.get(i);
                 DescribeConfigsResourceResult expectedEntry = expectedEntries.get(i);
                 assertEquals(expectedEntry.name(), actualEntry.name());
-                assertEquals("Non-matching values for " + actualEntry.name() + " in version " + version,
-                        expectedEntry.value(), actualEntry.value());
-                assertEquals("Non-matching readonly for " + actualEntry.name() + " in version " + version,
-                        expectedEntry.readOnly(), actualEntry.readOnly());
-                assertEquals("Non-matching isSensitive for " + actualEntry.name() + " in version " + version,
-                        expectedEntry.isSensitive(), actualEntry.isSensitive());
+                assertEquals(expectedEntry.value(), actualEntry.value(),
+                    "Non-matching values for " + actualEntry.name() + " in version " + version);
+                assertEquals(expectedEntry.readOnly(), actualEntry.readOnly(),
+                    "Non-matching readonly for " + actualEntry.name() + " in version " + version);
+                assertEquals(expectedEntry.isSensitive(), actualEntry.isSensitive(),
+                    "Non-matching isSensitive for " + actualEntry.name() + " in version " + version);
                 if (version < 3) {
-                    assertEquals("Non-matching configType for " + actualEntry.name() + " in version " + version,
-                            ConfigType.UNKNOWN.id(), actualEntry.configType());
+                    assertEquals(ConfigType.UNKNOWN.id(), actualEntry.configType(),
+                        "Non-matching configType for " + actualEntry.name() + " in version " + version);
                 } else {
-                    assertEquals("Non-matching configType for " + actualEntry.name() + " in version " + version,
-                            expectedEntry.configType(), actualEntry.configType());
+                    assertEquals(expectedEntry.configType(), actualEntry.configType(),
+                        "Non-matching configType for " + actualEntry.name() + " in version " + version);
                 }
                 if (version == 0) {
-                    assertEquals("Non matching configSource for " + actualEntry.name() + " in version " + version,
-                            DescribeConfigsResponse.ConfigSource.STATIC_BROKER_CONFIG.id(), actualEntry.configSource());
+                    assertEquals(DescribeConfigsResponse.ConfigSource.STATIC_BROKER_CONFIG.id(), actualEntry.configSource(),
+                        "Non matching configSource for " + actualEntry.name() + " in version " + version);
                 } else {
-                    assertEquals("Non-matching configSource for " + actualEntry.name() + " in version " + version,
-                            expectedEntry.configSource(), actualEntry.configSource());
+                    assertEquals(expectedEntry.configSource(), actualEntry.configSource(),
+                        "Non-matching configSource for " + actualEntry.name() + " in version " + version);
                 }
             }
         }
@@ -580,8 +614,8 @@ public class RequestResponseTest {
         checkResponse(response, req.version(), checkEqualityAndHashCode);
         if (e instanceof UnknownServerException) {
             String responseStr = response.toString();
-            assertFalse(String.format("Unknown message included in response for %s: %s ", req.apiKey(), responseStr),
-                    responseStr.contains(e.getMessage()));
+            assertFalse(responseStr.contains(e.getMessage()),
+                String.format("Unknown message included in response for %s: %s ", req.apiKey(), responseStr));
         }
     }
 
@@ -595,7 +629,7 @@ public class RequestResponseTest {
             ByteBuffer serializedBytes2 = deserialized.serialize();
             serializedBytes.rewind();
             if (checkEquality)
-                assertEquals("Request " + req + "failed equality test", serializedBytes, serializedBytes2);
+                assertEquals(serializedBytes, serializedBytes2, "Request " + req + "failed equality test");
         } catch (Exception e) {
             throw new RuntimeException("Failed to deserialize request " + req + " with type " + req.getClass(), e);
         }
@@ -611,19 +645,19 @@ public class RequestResponseTest {
             ByteBuffer serializedBytes2 = deserialized.serialize((short) version);
             serializedBytes.rewind();
             if (checkEquality)
-                assertEquals("Response " + response + "failed equality test", serializedBytes, serializedBytes2);
+                assertEquals(serializedBytes, serializedBytes2, "Response " + response + "failed equality test");
         } catch (Exception e) {
             throw new RuntimeException("Failed to deserialize response " + response + " with type " + response.getClass(), e);
         }
     }
 
-    @Test(expected = UnsupportedVersionException.class)
+    @Test
     public void cannotUseFindCoordinatorV0ToFindTransactionCoordinator() {
         FindCoordinatorRequest.Builder builder = new FindCoordinatorRequest.Builder(
                 new FindCoordinatorRequestData()
                     .setKeyType(CoordinatorType.TRANSACTION.id)
                     .setKey("foobar"));
-        builder.build((short) 0);
+        assertThrows(UnsupportedVersionException.class, () -> builder.build((short) 0));
     }
 
     @Test
@@ -710,10 +744,10 @@ public class RequestResponseTest {
 
         FetchResponse<MemoryRecords> v0Response = new FetchResponse<>(Errors.NONE, responseData, 0, INVALID_SESSION_ID);
         FetchResponse<MemoryRecords> v1Response = new FetchResponse<>(Errors.NONE, responseData, 10, INVALID_SESSION_ID);
-        assertEquals("Throttle time must be zero", 0, v0Response.throttleTimeMs());
-        assertEquals("Throttle time must be 10", 10, v1Response.throttleTimeMs());
-        assertEquals("Response data does not match", responseData, v0Response.responseData());
-        assertEquals("Response data does not match", responseData, v1Response.responseData());
+        assertEquals(0, v0Response.throttleTimeMs(), "Throttle time must be zero");
+        assertEquals(10, v1Response.throttleTimeMs(), "Throttle time must be 10");
+        assertEquals(responseData, v0Response.responseData(), "Response data does not match");
+        assertEquals(responseData, v1Response.responseData(), "Response data does not match");
     }
 
     @Test
@@ -782,9 +816,10 @@ public class RequestResponseTest {
         assertEquals(response.data().remainingPartitions(), deserialized.data().remainingPartitions());
     }
 
-    @Test(expected = UnsupportedVersionException.class)
+    @Test
     public void testCreateTopicRequestV0FailsIfValidateOnly() {
-        createCreateTopicRequest(0, true);
+        assertThrows(UnsupportedVersionException.class,
+            () -> createCreateTopicRequest(0, true));
     }
 
     @Test
@@ -908,11 +943,11 @@ public class RequestResponseTest {
         assertTrue(request.isValid());
     }
 
-    @Test(expected = UnsupportedVersionException.class)
+    @Test
     public void testListGroupRequestV3FailsWithStates() {
         ListGroupsRequestData data = new ListGroupsRequestData()
                 .setStatesFilter(asList(ConsumerGroupState.STABLE.name()));
-        new ListGroupsRequest.Builder(data).build((short) 3);
+        assertThrows(UnsupportedVersionException.class, () -> new ListGroupsRequest.Builder(data).build((short) 3));
     }
 
     @Test
@@ -939,7 +974,7 @@ public class RequestResponseTest {
 
         assertEquals(Errors.UNSUPPORTED_VERSION.code(), response.data().errorCode());
 
-        ApiVersionsResponseKey apiVersion = response.data().apiKeys().find(ApiKeys.API_VERSIONS.id);
+        ApiVersion apiVersion = response.data().apiKeys().find(ApiKeys.API_VERSIONS.id);
         assertNotNull(apiVersion);
         assertEquals(ApiKeys.API_VERSIONS.id, apiVersion.apiKey());
         assertEquals(ApiKeys.API_VERSIONS.oldestVersion(), apiVersion.minVersion());
@@ -1699,8 +1734,8 @@ public class RequestResponseTest {
     }
 
     private ApiVersionsResponse createApiVersionResponse() {
-        ApiVersionsResponseKeyCollection apiVersions = new ApiVersionsResponseKeyCollection();
-        apiVersions.add(new ApiVersionsResponseKey()
+        ApiVersionCollection apiVersions = new ApiVersionCollection();
+        apiVersions.add(new ApiVersion()
             .setApiKey((short) 0)
             .setMinVersion((short) 0)
             .setMaxVersion((short) 2));

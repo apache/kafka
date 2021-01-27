@@ -23,8 +23,8 @@ import org.apache.kafka.common.message.TxnOffsetCommitRequestData.TxnOffsetCommi
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.TxnOffsetCommitRequest.CommittedOffset;
-import org.junit.Before;
-import org.junit.Test;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 
 import java.util.Arrays;
 import java.util.Collections;
@@ -33,9 +33,9 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNull;
-import static org.junit.Assert.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 public class TxnOffsetCommitRequestTest extends OffsetCommitRequestTest {
 
@@ -47,7 +47,7 @@ public class TxnOffsetCommitRequestTest extends OffsetCommitRequestTest {
     private static TxnOffsetCommitRequest.Builder builder;
     private static TxnOffsetCommitRequest.Builder builderWithGroupMetadata;
 
-    @Before
+    @BeforeEach
     @Override
     public void setUp() {
         super.setUp();

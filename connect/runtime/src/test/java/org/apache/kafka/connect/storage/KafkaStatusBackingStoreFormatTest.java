@@ -50,6 +50,7 @@ import static org.easymock.EasyMock.expectLastCall;
 import static org.easymock.EasyMock.newCapture;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 
 @RunWith(PowerMockRunner.class)
@@ -198,7 +199,7 @@ public class KafkaStatusBackingStoreFormatTest extends EasyMockSupport {
         // check capture state
         assertEquals(topicStatus, store.parseTopicStatus(valueCapture.getValue()));
         // state is not visible until read back from the log
-        assertEquals(null, store.getTopic(FOO_CONNECTOR, FOO_TOPIC));
+        assertNull(store.getTopic(FOO_CONNECTOR, FOO_TOPIC));
 
         ConsumerRecord<String, byte[]> statusRecord = new ConsumerRecord<>(STATUS_TOPIC, 0, 0, key, valueCapture.getValue());
         store.read(statusRecord);
@@ -231,7 +232,7 @@ public class KafkaStatusBackingStoreFormatTest extends EasyMockSupport {
         // check capture state
         assertEquals(topicStatus, store.parseTopicStatus(valueCapture.getValue()));
         // state is not visible until read back from the log
-        assertEquals(null, store.getTopic(FOO_CONNECTOR, FOO_TOPIC));
+        assertNull(store.getTopic(FOO_CONNECTOR, FOO_TOPIC));
 
         verifyAll();
     }
@@ -257,7 +258,7 @@ public class KafkaStatusBackingStoreFormatTest extends EasyMockSupport {
         // check capture state
         assertEquals(topicStatus, store.parseTopicStatus(valueCapture.getValue()));
         // state is not visible until read back from the log
-        assertEquals(null, store.getTopic(FOO_CONNECTOR, FOO_TOPIC));
+        assertNull(store.getTopic(FOO_CONNECTOR, FOO_TOPIC));
 
         verifyAll();
     }

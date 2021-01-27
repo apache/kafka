@@ -34,6 +34,7 @@ import java.util.List;
 
 import static org.apache.kafka.streams.state.QueryableStoreTypes.windowStore;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertThrows;
 
 public class WrappingStoreProviderTest {
 
@@ -75,10 +76,10 @@ public class WrappingStoreProviderTest {
         assertEquals(2, windowStores.size());
     }
 
-    @Test(expected = InvalidStateStoreException.class)
+    @Test
     public void shouldThrowInvalidStoreExceptionIfNoStoreOfTypeFound() {
         wrappingStoreProvider.setStoreQueryParameters(StoreQueryParameters.fromNameAndType("doesn't exist", QueryableStoreTypes.<String, String>keyValueStore()));
-        wrappingStoreProvider.stores("doesn't exist", QueryableStoreTypes.<String, String>keyValueStore());
+        assertThrows(InvalidStateStoreException.class, () -> wrappingStoreProvider.stores("doesn't exist", QueryableStoreTypes.<String, String>keyValueStore()));
     }
 
     @Test
