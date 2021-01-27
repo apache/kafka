@@ -999,18 +999,17 @@ class KStream[K, V](val inner: KStreamJ[K, V]) {
    * Join records of this stream with `GlobalKTable`'s records using non-windowed inner equi join.
    *
    * @param globalKTable   the `GlobalKTable` to be joined with this stream
+   * @param named          a [[Named]] config used to name the processor in the topology
    * @param keyValueMapper a function used to map from the (key, value) of this stream
    *                       to the key of the `GlobalKTable`
    * @param joiner         a function that computes the join result for a pair of matching records
-   * @param named          a [[Named]] config used to name the processor in the topology
    * @return a [[KStream]] that contains join-records for each key and values computed by the given `joiner`,
    *         one output for each input [[KStream]] record
    * @see `org.apache.kafka.streams.kstream.KStream#join`
    */
-  def join[GK, GV, RV](globalKTable: GlobalKTable[GK, GV])(
+  def join[GK, GV, RV](globalKTable: GlobalKTable[GK, GV], named: Named)(
     keyValueMapper: (K, V) => GK,
-    joiner: (V, GV) => RV,
-    named: Named
+    joiner: (V, GV) => RV
   ): KStream[K, RV] =
     new KStream(
       inner.join[GK, GV, RV](
@@ -1042,18 +1041,17 @@ class KStream[K, V](val inner: KStreamJ[K, V]) {
    * Join records of this stream with `GlobalKTable`'s records using non-windowed left equi join.
    *
    * @param globalKTable   the `GlobalKTable` to be joined with this stream
+   * @param named          a [[Named]] config used to name the processor in the topology
    * @param keyValueMapper a function used to map from the (key, value) of this stream
    *                       to the key of the `GlobalKTable`
    * @param joiner         a function that computes the join result for a pair of matching records
-   * @param named          a [[Named]] config used to name the processor in the topology
    * @return a [[KStream]] that contains join-records for each key and values computed by the given `joiner`,
    *         one output for each input [[KStream]] record
    * @see `org.apache.kafka.streams.kstream.KStream#leftJoin`
    */
-  def leftJoin[GK, GV, RV](globalKTable: GlobalKTable[GK, GV])(
+  def leftJoin[GK, GV, RV](globalKTable: GlobalKTable[GK, GV], named: Named)(
     keyValueMapper: (K, V) => GK,
-    joiner: (V, GV) => RV,
-    named: Named
+    joiner: (V, GV) => RV
   ): KStream[K, RV] =
     new KStream(inner.leftJoin[GK, GV, RV](globalKTable, keyValueMapper.asKeyValueMapper, joiner.asValueJoiner, named))
 
