@@ -44,6 +44,7 @@ import org.apache.kafka.common.message.JoinGroupRequestData.JoinGroupRequestProt
 import org.apache.kafka.common.message.LeaderAndIsrRequestData.LeaderAndIsrPartitionState
 import org.apache.kafka.common.message.LeaveGroupRequestData.MemberIdentity
 import org.apache.kafka.common.message.ListOffsetsRequestData.{ListOffsetsPartition, ListOffsetsTopic}
+import org.apache.kafka.common.message.MetadataRequestData
 import org.apache.kafka.common.message.OffsetForLeaderEpochRequestData.OffsetForLeaderPartition
 import org.apache.kafka.common.message.OffsetForLeaderEpochRequestData.OffsetForLeaderTopic
 import org.apache.kafka.common.message.OffsetForLeaderEpochRequestData.OffsetForLeaderTopicCollection
@@ -1854,16 +1855,61 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
   }
 
   @Test
+  def testMetadataClusterAuthorizedOperationsWithoutDescribeCluster(): Unit = {
+    removeAllClientAcls()
+
+    // MetadataRequest versions older than 1 are not supported.
+    for (version <- 1 to ApiKeys.METADATA.latestVersion) {
+      testMetadataClusterClusterAuthorizedOperations(version.toShort, 0)
+    }
+  }
+
+  @Test
+  def testMetadataClusterAuthorizedOperationsWithDescribeAndAlterCluster(): Unit = {
+    removeAllClientAcls()
+
+    val clusterResource = new ResourcePattern(ResourceType.CLUSTER, Resource.CLUSTER_NAME, PatternType.LITERAL)
+    val acls = Set(
+      new AccessControlEntry(clientPrincipalString, WildcardHost, DESCRIBE, ALLOW),
+      new AccessControlEntry(clientPrincipalString, WildcardHost, ALTER, ALLOW)
+    )
+    addAndVerifyAcls(acls, clusterResource)
+
+    val expectedClusterAuthorizedOperations = Utils.to32BitField(
+      acls.map(_.operation.code.asInstanceOf[JByte]).asJava)
+
+    // MetadataRequest versions older than 1 are not supported.
+    for (version <- 1 to ApiKeys.METADATA.latestVersion) {
+      testMetadataClusterClusterAuthorizedOperations(version.toShort, expectedClusterAuthorizedOperations)
+    }
+  }
+
+  private def testMetadataClusterClusterAuthorizedOperations(
+    version: Short,
+    expectedClusterAuthorizedOperations: Int
+  ): Unit = {
+    val metadataRequest = new MetadataRequest.Builder(new MetadataRequestData()
+      .setTopics(Collections.emptyList())
+      .setAllowAutoTopicCreation(true)
+      .setIncludeClusterAuthorizedOperations(true))
+      .build(version)
+
+    // The expected value is only verified if the request supports it.
+    if (version >= 8 && version <= 10) {
+      val metadataResponse = connectAndReceive[MetadataResponse](metadataRequest)
+      assertEquals(expectedClusterAuthorizedOperations, metadataResponse.data.clusterAuthorizedOperations)
+    } else {
+      assertThrows(classOf[UnsupportedVersionException],
+        () => connectAndReceive[MetadataResponse](metadataRequest))
+    }
+  }
+
+  @Test
   def testDescribeClusterClusterAuthorizedOperationsWithoutDescribeCluster(): Unit = {
     removeAllClientAcls()
 
     for (version <- ApiKeys.DESCRIBE_CLUSTER.oldestVersion to ApiKeys.DESCRIBE_CLUSTER.latestVersion) {
-      val describeClusterRequest = new DescribeClusterRequest.Builder(new DescribeClusterRequestData()
-        .setIncludeClusterAuthorizedOperations(true))
-        .build(version.toShort)
-      val describeClusterResponse = connectAndReceive[DescribeClusterResponse](describeClusterRequest)
-
-      assertEquals(0, describeClusterResponse.data.clusterAuthorizedOperations)
+      testDescribeClusterClusterAuthorizedOperations(version.toShort, 0)
     }
   }
 
@@ -1882,13 +1928,20 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
       acls.map(_.operation.code.asInstanceOf[JByte]).asJava)
 
     for (version <- ApiKeys.DESCRIBE_CLUSTER.oldestVersion to ApiKeys.DESCRIBE_CLUSTER.latestVersion) {
-      val describeClusterRequest = new DescribeClusterRequest.Builder(new DescribeClusterRequestData()
-        .setIncludeClusterAuthorizedOperations(true))
-        .build(version.toShort)
-      val describeClusterResponse = connectAndReceive[DescribeClusterResponse](describeClusterRequest)
-
-      assertEquals(expectedClusterAuthorizedOperations, describeClusterResponse.data.clusterAuthorizedOperations)
+      testDescribeClusterClusterAuthorizedOperations(version.toShort, expectedClusterAuthorizedOperations)
     }
+  }
+
+  private def testDescribeClusterClusterAuthorizedOperations(
+    version: Short,
+    expectedClusterAuthorizedOperations: Int
+  ): Unit = {
+    val describeClusterRequest = new DescribeClusterRequest.Builder(new DescribeClusterRequestData()
+      .setIncludeClusterAuthorizedOperations(true))
+      .build(version)
+
+    val describeClusterResponse = connectAndReceive[DescribeClusterResponse](describeClusterRequest)
+    assertEquals(expectedClusterAuthorizedOperations, describeClusterResponse.data.clusterAuthorizedOperations)
   }
 
   def removeAllClientAcls(): Unit = {

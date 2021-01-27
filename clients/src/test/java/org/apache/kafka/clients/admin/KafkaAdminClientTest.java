@@ -290,7 +290,7 @@ public class KafkaAdminClientTest {
         Set<String> ids = new HashSet<>();
         for (int i = 0; i < 10; i++) {
             String id = KafkaAdminClient.generateClientId(newConfMap(AdminClientConfig.CLIENT_ID_CONFIG, ""));
-            assertTrue(!ids.contains(id), "Got duplicate id " + id);
+            assertFalse(ids.contains(id), "Got duplicate id " + id);
             ids.add(id);
         }
         assertEquals("myCustomId",

@@ -16,21 +16,14 @@
  */
 package org.apache.kafka.common.record;
 
-import org.apache.kafka.common.network.TransferableChannel;
-
-import java.io.IOException;
-
-public class DefaultRecordsSend<T extends TransferableRecords> extends RecordsSend<T> {
-    public DefaultRecordsSend(T records) {
-        this(records, records.sizeInBytes());
-    }
-
-    public DefaultRecordsSend(T records, int maxBytesToWrite) {
-        super(records, maxBytesToWrite);
-    }
+/**
+ * Represents a record set which is not necessarily offset-aligned, and is
+ * only used when fetching raft snapshot
+ */
+public interface UnalignedRecords extends TransferableRecords {
 
     @Override
-    protected long writeTo(TransferableChannel channel, long previouslyWritten, int remaining) throws IOException {
-        return records().writeTo(channel, previouslyWritten, remaining);
+    default RecordsSend<? extends BaseRecords> toSend() {
+        return new DefaultRecordsSend<>(this, sizeInBytes());
     }
 }
