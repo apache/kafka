@@ -100,7 +100,7 @@
         We deprecated <code>setUncaughtExceptionHandler(final Thread.UncaughtExceptionHandler uncaughtExceptionHandler)</code>
         in favor of <code>setUncaughtExceptionHandler(final StreamsUncaughtExceptionHandler streamsUncaughtExceptionHandler)</code>
         in <a href="https://cwiki.apache.org/confluence/x/lkN4CQ">KIP-671</a>.
-        The default handler will close the client and the client will transit to state ERROR.
+        The default handler will close the Kafka Streams client and the client will transit to state ERROR.
         If you implement a custom handler, the new interface allows you to return a <code>StreamThreadExceptionResponse</code>,
         which will determine how the application will respond to a stream thread failure.
     </p>
