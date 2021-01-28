@@ -99,8 +99,8 @@ public class RaftConfig {
         public final InetSocketAddress address;
 
         public InetAddressSpec(InetSocketAddress address) {
-            if (address != null && address.equals(NON_ROUTABLE_ADDRESS)) {
-                throw new IllegalArgumentException("Address not routable");
+            if (address == null || address.equals(NON_ROUTABLE_ADDRESS)) {
+                throw new IllegalArgumentException("Invalid address: " + address);
             }
             this.address = address;
         }
