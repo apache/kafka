@@ -620,6 +620,12 @@ class RequestQuotaTest extends BaseRequestTest {
         case ApiKeys.DESCRIBE_CLUSTER =>
           new DescribeClusterRequest.Builder(new DescribeClusterRequestData())
 
+        case ApiKeys.BROKER_REGISTRATION =>
+          new BrokerRegistrationRequest.Builder(new BrokerRegistrationRequestData())
+
+        case ApiKeys.BROKER_HEARTBEAT =>
+          new BrokerHeartbeatRequest.Builder(new BrokerHeartbeatRequestData())
+
         case _ =>
           throw new IllegalArgumentException("Unsupported API key " + apiKey)
     }
