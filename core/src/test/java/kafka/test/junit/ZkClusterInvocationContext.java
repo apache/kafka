@@ -75,6 +75,7 @@ public class ZkClusterInvocationContext implements TestTemplateInvocationContext
 
     @Override
     public List<Extension> getAdditionalExtensions() {
+        ClusterInstance clusterShim = new ZkClusterInstance(clusterConfig, clusterReference);
         return Arrays.asList(
             (BeforeTestExecutionCallback) context -> {
                 // We have to wait to actually create the underlying cluster until after our @BeforeEach methods
@@ -125,11 +126,11 @@ public class ZkClusterInvocationContext implements TestTemplateInvocationContext
                 // TODO consumer and producer configs
                 clusterReference.set(cluster);
                 if (clusterConfig.isAutoStart()) {
-                    clusterReference.get().setUp();
+                    clusterShim.start();
                 }
             },
-            (AfterTestExecutionCallback) context -> clusterReference.get().tearDown(),
-            new ClusterInstanceParameterResolver(new ZkClusterInstance(clusterConfig, clusterReference)),
+            (AfterTestExecutionCallback) context -> clusterShim.stop(),
+            new ClusterInstanceParameterResolver(clusterShim),
             new GenericParameterResolver<>(clusterConfig, ClusterConfig.class),
             new GenericParameterResolver<>(new IntegrationTestHelper(), IntegrationTestHelper.class)
         );
