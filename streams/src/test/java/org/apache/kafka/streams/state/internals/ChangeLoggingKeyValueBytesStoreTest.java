@@ -217,8 +217,8 @@ public class ChangeLoggingKeyValueBytesStoreTest {
             numberOfKeysReturned++;
         }
         assertThat(numberOfKeysReturned, is(1));
-        assertThat(keys, is(Collections.singletonList("hi")));
-        assertThat(values, is(Collections.singletonList("there")));
+        assertThat(keys, is(Collections.singletonList(hi)));
+        assertThat(values, is(Collections.singletonList(Bytes.wrap(there))));
     }
 
     @Test
