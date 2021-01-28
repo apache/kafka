@@ -130,12 +130,6 @@ public class StateDirectory {
             // change the dir permission to "rwxr-x---" to avoid world readable
             configurePermissions(baseDir);
             configurePermissions(stateDir);
-
-            if (!lockStateDirectory()) {
-                log.error("Unable to obtain lock as state directory is already locked by another process");
-                throw new StreamsException("Unable to initialize state, this can happen if multiple instances of " +
-                                               "Kafka Streams are running in the same state directory");
-            }
         }
     }
 
@@ -162,6 +156,7 @@ public class StateDirectory {
      * @return true if the state directory was successfully locked
      */
     private boolean lockStateDirectory() {
+        // it should be re-entrant as we sometimes start up multiple KafkaStreams during integration tests
         if (stateDirLock == null) {
             final File lockFile = new File(stateDir, LOCK_FILE_NAME);
             try {
@@ -176,9 +171,15 @@ public class StateDirectory {
         return stateDirLock != null;
     }
 
-    public UUID getProcessId() {
+    public UUID initializeProcessId() {
         if (!hasPersistentStores) {
             return UUID.randomUUID();
+        }
+
+        if (!lockStateDirectory()) {
+            log.error("Unable to obtain lock as state directory is already locked by another process");
+            throw new StreamsException("Unable to initialize state, this can happen if multiple instances of " +
+                                           "Kafka Streams are running in the same state directory");
         }
 
         final File processFile = new File(stateDir, PROCESS_FILE_NAME);

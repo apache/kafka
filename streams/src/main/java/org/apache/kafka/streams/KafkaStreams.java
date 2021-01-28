@@ -796,7 +796,7 @@ public class KafkaStreams implements AutoCloseable {
 
         try {
             stateDirectory = new StateDirectory(config, time, hasPersistentStores);
-            processId = stateDirectory.getProcessId();
+            processId = stateDirectory.initializeProcessId();
         } catch (final ProcessorStateException fatal) {
             throw new StreamsException(fatal);
         }
