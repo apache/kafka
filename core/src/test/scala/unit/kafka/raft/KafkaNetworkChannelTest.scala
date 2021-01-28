@@ -145,25 +145,6 @@ class KafkaNetworkChannelTest {
     }
   }
 
-  @Test
-  def testNonRoutableAddressUpdateRequest(): Unit = {
-    val destinationId = 2
-    assertThrows(classOf[IllegalArgumentException],
-      () => new InetAddressSpec(new InetSocketAddress("0.0.0.0", 0)))
-
-    // Update channel with a valid endpoint
-    val destinationNode = new Node(destinationId, "127.0.0.1", 9092)
-    channel.updateEndpoint(destinationId, new InetAddressSpec(
-      new InetSocketAddress(destinationNode.host, destinationNode.port)))
-
-    for (apiKey <- RaftApis) {
-      val expectedError = Errors.NONE
-      val response = buildResponse(buildTestErrorResponse(apiKey, expectedError))
-      client.prepareResponseFrom(response, destinationNode)
-      sendAndAssertErrorResponse(apiKey, destinationId, expectedError)
-    }
-  }
-
   private def sendTestRequest(
     apiKey: ApiKeys,
     destinationId: Int,

@@ -29,7 +29,7 @@ import org.apache.kafka.common.protocol.ApiMessage
 import org.apache.kafka.common.requests.RequestHeader
 import org.apache.kafka.common.security.JaasContext
 import org.apache.kafka.common.utils.{LogContext, Time}
-import org.apache.kafka.raft.RaftConfig.{AddressSpec, InetAddressSpec}
+import org.apache.kafka.raft.RaftConfig.{AddressSpec, InetAddressSpec, UnknownAddressSpec, NON_ROUTABLE_ADDRESS}
 import org.apache.kafka.raft.{FileBasedStateStore, KafkaRaftClient, RaftClient, RaftConfig, RaftRequest, RecordSerde}
 
 import java.io.File
@@ -126,9 +126,13 @@ class KafkaRaftManager[T](
         case spec: InetAddressSpec => {
           netChannel.updateEndpoint(voterAddressEntry.getKey, spec)
         }
+        case _: UnknownAddressSpec => {
+          logger.info(s"Skipping channel update for destination ID: ${voterAddressEntry.getKey} " +
+            s"because of non-routable endpoint: ${NON_ROUTABLE_ADDRESS.toString}")
+        }
         case invalid: AddressSpec => {
-          logger.warn(s"Skipping channel update for destination ID: ${voterAddressEntry.getKey} " +
-            s"because of invalid endpoint: ${invalid.address.toString}")
+          logger.warn(s"Unexpected address spec (type: ${invalid.getClass}) for channel update for " +
+            s"destination ID: ${voterAddressEntry.getKey}")
         }
       }
     }

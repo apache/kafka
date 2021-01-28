@@ -36,13 +36,16 @@ import java.util.Set;
  *
  * If the voter endpoints are not known at startup, a non-routable address can be provided instead.
  * For example: `1@0.0.0.0:0,2@0.0.0.0:0,3@0.0.0.0:0`
- * This will allow the voters to be assigned an {@link UnknownAddressSpec} instead.
+ * This will assign an {@link UnknownAddressSpec} to the voter entries
  *
  */
 public class RaftConfig {
 
     private static final String QUORUM_PREFIX = "controller.quorum.";
-    private static final InetSocketAddress UNROUTABLE_ADDRESS = new InetSocketAddress("0.0.0.0", 0);
+
+    // Non-routable address represents an endpoint that does not resolve to any particular node
+    public static final InetSocketAddress NON_ROUTABLE_ADDRESS = new InetSocketAddress("0.0.0.0", 0);
+    public static final UnknownAddressSpec UNKNOWN_ADDRESS_SPEC_INSTANCE = new UnknownAddressSpec();
 
     public static final String QUORUM_VOTERS_CONFIG = QUORUM_PREFIX + "voters";
     public static final String QUORUM_VOTERS_DOC = "Map of id/endpoint information for " +
@@ -89,8 +92,23 @@ public class RaftConfig {
     private final int appendLingerMs;
     private final Map<Integer, AddressSpec> voterConnections;
 
-    public static abstract class AddressSpec {
-       public abstract InetSocketAddress address();
+    public interface AddressSpec {
+    }
+
+    public static class InetAddressSpec implements AddressSpec {
+        public final InetSocketAddress address;
+
+        public InetAddressSpec(InetSocketAddress address) {
+            if (address.equals(NON_ROUTABLE_ADDRESS)) {
+                throw new IllegalArgumentException("Address not routable");
+            }
+            this.address = address;
+        }
+
+        @Override
+        public int hashCode() {
+            return address.hashCode();
+        }
 
         @Override
         public boolean equals(Object obj) {
@@ -102,31 +120,23 @@ public class RaftConfig {
                 return false;
             }
 
-            final AddressSpec that = (AddressSpec) obj;
-            return that.address().equals(address());
+            final InetAddressSpec that = (InetAddressSpec) obj;
+            return that.address.equals(address);
         }
     }
 
-    public static class InetAddressSpec extends AddressSpec {
-        private final InetSocketAddress address;
-
-        public InetAddressSpec(InetSocketAddress address) {
-            if (address.equals(UNROUTABLE_ADDRESS)) {
-                throw new IllegalArgumentException("Address not routable");
-            }
-            this.address = address;
+    public static class UnknownAddressSpec implements AddressSpec {
+        private UnknownAddressSpec() {
         }
 
         @Override
-        public InetSocketAddress address() {
-            return address;
+        public int hashCode() {
+            return NON_ROUTABLE_ADDRESS.hashCode();
         }
-    }
 
-    public static class UnknownAddressSpec extends AddressSpec {
         @Override
-        public InetSocketAddress address() {
-            return UNROUTABLE_ADDRESS;
+        public boolean equals(Object obj) {
+            return obj != null && getClass() == obj.getClass();
         }
     }
 
@@ -223,8 +233,8 @@ public class RaftConfig {
             }
 
             InetSocketAddress address = new InetSocketAddress(host, port);
-            if (address.equals(UNROUTABLE_ADDRESS)) {
-                voterMap.put(voterId, new UnknownAddressSpec());
+            if (address.equals(NON_ROUTABLE_ADDRESS)) {
+                voterMap.put(voterId, UNKNOWN_ADDRESS_SPEC_INSTANCE);
             } else {
                 voterMap.put(voterId, new InetAddressSpec(address));
             }

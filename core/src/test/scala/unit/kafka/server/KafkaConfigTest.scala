@@ -28,7 +28,7 @@ import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.record.Records
 import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.raft.RaftConfig
-import org.apache.kafka.raft.RaftConfig.{AddressSpec, InetAddressSpec, UnknownAddressSpec}
+import org.apache.kafka.raft.RaftConfig.{AddressSpec, InetAddressSpec, UNKNOWN_ADDRESS_SPEC_INSTANCE}
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.Test
 
@@ -984,7 +984,7 @@ class KafkaConfigTest {
     assertValidQuorumVoters("1@127.0.0.1:9092", expected)
 
     expected.clear()
-    expected.put(1, new UnknownAddressSpec())
+    expected.put(1, UNKNOWN_ADDRESS_SPEC_INSTANCE)
     assertValidQuorumVoters("1@0.0.0.0:0", expected)
 
     expected.clear()
@@ -999,6 +999,12 @@ class KafkaConfigTest {
     props.put(RaftConfig.QUORUM_VOTERS_CONFIG, value)
     val raftConfig = new RaftConfig(KafkaConfig.fromProps(props))
     assertEquals(expectedVoters, raftConfig.quorumVoterConnections())
+  }
+
+  @Test
+  def testNonRoutableAddressSpecException(): Unit = {
+    assertThrows(classOf[IllegalArgumentException],
+      () => new InetAddressSpec(new InetSocketAddress("0.0.0.0", 0)))
   }
 
   @Test

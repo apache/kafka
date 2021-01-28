@@ -16,9 +16,6 @@
  */
 package kafka.raft
 
-import java.net.InetSocketAddress
-import java.util.concurrent.ConcurrentLinkedQueue
-import java.util.concurrent.atomic.AtomicInteger
 import kafka.common.{InterBrokerSendThread, RequestAndCompletionHandler}
 import kafka.utils.Logging
 import org.apache.kafka.clients.{ClientResponse, KafkaClient}
@@ -30,6 +27,8 @@ import org.apache.kafka.common.utils.Time
 import org.apache.kafka.raft.RaftConfig.InetAddressSpec
 import org.apache.kafka.raft.{NetworkChannel, RaftRequest, RaftResponse, RaftUtil}
 
+import java.util.concurrent.ConcurrentLinkedQueue
+import java.util.concurrent.atomic.AtomicInteger
 import scala.collection.mutable
 
 object KafkaNetworkChannel {
