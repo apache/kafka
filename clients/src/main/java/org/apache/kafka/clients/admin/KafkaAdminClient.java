@@ -2411,8 +2411,7 @@ public class KafkaAdminClient extends AdminClient {
                     // Query selected partitions in all log directories
                     return new DescribeLogDirsRequest.Builder(new DescribeLogDirsRequestData().setTopics(null));
                 }
-
-                @SuppressWarnings("deprecation")
+                
                 @Override
                 public void handleResponse(AbstractResponse abstractResponse) {
                     DescribeLogDirsResponse response = (DescribeLogDirsResponse) abstractResponse;
