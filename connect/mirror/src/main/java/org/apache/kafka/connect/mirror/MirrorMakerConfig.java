@@ -89,11 +89,30 @@ public class MirrorMakerConfig extends AbstractConfig {
     public List<SourceAndTarget> clusterPairs() {
         List<SourceAndTarget> pairs = new ArrayList<>();
         Set<String> clusters = clusters();
+        Map<String, String> originalStrings = originalsStrings();
+        boolean globalHeartbeatsEnabled = MirrorConnectorConfig.EMIT_HEARTBEATS_ENABLED_DEFAULT;
+        if (originalStrings.containsKey(MirrorConnectorConfig.EMIT_HEARTBEATS_ENABLED)) {
+            globalHeartbeatsEnabled = Boolean.valueOf(originalStrings.get(MirrorConnectorConfig.EMIT_HEARTBEATS_ENABLED));
+        }
+
         for (String source : clusters) {
             for (String target : clusters) {
-                SourceAndTarget sourceAndTarget = new SourceAndTarget(source, target);
                 if (!source.equals(target)) {
-                    pairs.add(sourceAndTarget);
+                    String clusterPairConfigPrefix = source + "->" + target + ".";
+                    boolean clusterPairEnabled = Boolean.valueOf(originalStrings.getOrDefault(clusterPairConfigPrefix + "enabled", "false"));
+                    boolean clusterPairHeartbeatsEnabled = globalHeartbeatsEnabled;
+                    if (originalStrings.containsKey(clusterPairConfigPrefix + MirrorConnectorConfig.EMIT_HEARTBEATS_ENABLED)) {
+                        clusterPairHeartbeatsEnabled = Boolean.valueOf(originalStrings.get(clusterPairConfigPrefix + MirrorConnectorConfig.EMIT_HEARTBEATS_ENABLED));
+                    }
+
+                    // By default, all source->target Herder combinations are created even if `x->y.enabled=false`
+                    // Unless `emit.heartbeats.enabled=false` or `x->y.emit.heartbeats.enabled=false`
+                    // Reason for this behavior: for a given replication flow A->B with heartbeats, 2 herders are required :
+                    // B->A for the MirrorHeartbeatConnector (emits heartbeats into A for monitoring replication health)
+                    // A->B for the MirrorSourceConnector (actual replication flow)
+                    if (clusterPairEnabled || clusterPairHeartbeatsEnabled) {
+                        pairs.add(new SourceAndTarget(source, target));
+                    }
                 }
             }
         }
