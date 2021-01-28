@@ -446,7 +446,7 @@ public class MeteredKeyValueStoreTest {
         assertThat(iterator.next().value, equalTo(VALUE));
         iterator.close();
 
-        final KafkaMetric metric = metrics.metric(new MetricName("prefix-scan-rate", STORE_LEVEL_GROUP, "", tags));
+        final KafkaMetric metric = metric("prefix-scan-rate");
         assertTrue((Double) metric.metricValue() > 0);
         verify(inner);
     }
