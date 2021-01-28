@@ -26,8 +26,13 @@ import kafka.log.{AppendOrigin, Log, SnapshotGenerated, LogOffsetSnapshot}
 import kafka.server.{FetchHighWatermark, FetchLogEnd}
 import org.apache.kafka.common.record.{MemoryRecords, Records}
 import org.apache.kafka.common.{KafkaException, TopicPartition}
-import org.apache.kafka.raft
-import org.apache.kafka.raft.{LogAppendInfo, LogFetchInfo, LogOffsetMetadata, Isolation, OffsetMetadata, ReplicatedLog}
+import org.apache.kafka.raft.Isolation
+import org.apache.kafka.raft.LogAppendInfo
+import org.apache.kafka.raft.LogFetchInfo
+import org.apache.kafka.raft.LogOffsetMetadata
+import org.apache.kafka.raft.OffsetAndEpoch
+import org.apache.kafka.raft.OffsetMetadata
+import org.apache.kafka.raft.ReplicatedLog
 import org.apache.kafka.snapshot.FileRawSnapshotReader
 import org.apache.kafka.snapshot.FileRawSnapshotWriter
 import org.apache.kafka.snapshot.RawSnapshotReader
@@ -40,7 +45,7 @@ final class KafkaMetadataLog private (
   log: Log,
   // This object needs to be thread-safe because it is used by the snapshotting thread to notify the
   // polling thread when snapshots are created.
-  snapshotIds: ConcurrentSkipListSet[raft.OffsetAndEpoch],
+  snapshotIds: ConcurrentSkipListSet[OffsetAndEpoch],
   topicPartition: TopicPartition,
   maxFetchSizeInBytes: Int
 ) extends ReplicatedLog {
@@ -124,22 +129,22 @@ final class KafkaMetadataLog private (
     }
   }
 
-  override def endOffsetForEpoch(leaderEpoch: Int): Optional[raft.OffsetAndEpoch] = {
-    val endOffsetOpt = log.endOffsetForEpoch(leaderEpoch).map { offsetAndEpoch =>
-      if (oldestSnapshotId.isPresent() &&
-        offsetAndEpoch.offset == oldestSnapshotId.get().offset &&
-        offsetAndEpoch.leaderEpoch == leaderEpoch) {
+  override def endOffsetForEpoch(epoch: Int): OffsetAndEpoch = {
+    (log.endOffsetForEpoch(epoch), oldestSnapshotId.asScala) match {
+      case (Some(offsetAndEpoch), Some(snapshotId)) if (
+        offsetAndEpoch.offset == snapshotId.offset &&
+        offsetAndEpoch.leaderEpoch == epoch) =>
 
-        // The leaderEpoch is smaller thant the smallest epoch on the log. Overide the diverging
+        // The epoch is smaller thant the smallest epoch on the log. Overide the diverging
         // epoch to the oldest snapshot which should be the snapshot at the log start offset
-        val snapshotId = oldestSnapshotId().get();
-        new raft.OffsetAndEpoch(snapshotId.offset, snapshotId.epoch);
-      } else {
-        new raft.OffsetAndEpoch(offsetAndEpoch.offset, offsetAndEpoch.leaderEpoch)
-      }
-    }
+        new OffsetAndEpoch(snapshotId.offset, snapshotId.epoch)
 
-    endOffsetOpt.asJava
+      case (Some(offsetAndEpoch), _) =>
+        new OffsetAndEpoch(offsetAndEpoch.offset, offsetAndEpoch.leaderEpoch)
+
+      case (None, _) =>
+        new OffsetAndEpoch(endOffset.offset, lastFetchedEpoch)
+    }
   }
 
   override def endOffset: LogOffsetMetadata = {
@@ -148,8 +153,9 @@ final class KafkaMetadataLog private (
       endOffsetMetadata.messageOffset,
       Optional.of(SegmentPosition(
         endOffsetMetadata.segmentBaseOffset,
-        endOffsetMetadata.relativePositionInSegment))
+        endOffsetMetadata.relativePositionInSegment)
       )
+    )
   }
 
   override def startOffset: Long = {
@@ -222,7 +228,7 @@ final class KafkaMetadataLog private (
     topicPartition
   }
 
-  override def createSnapshot(snapshotId: raft.OffsetAndEpoch): RawSnapshotWriter = {
+  override def createSnapshot(snapshotId: OffsetAndEpoch): RawSnapshotWriter = {
     // Do not let the state machine create snapshots older than the latest snapshot
     latestSnapshotId().ifPresent { latest =>
       if (latest.epoch > snapshotId.epoch || latest.offset > snapshotId.offset) {
@@ -236,7 +242,7 @@ final class KafkaMetadataLog private (
     FileRawSnapshotWriter.create(log.dir.toPath, snapshotId, Optional.of(this))
   }
 
-  override def readSnapshot(snapshotId: raft.OffsetAndEpoch): Optional[RawSnapshotReader] = {
+  override def readSnapshot(snapshotId: OffsetAndEpoch): Optional[RawSnapshotReader] = {
     try {
       if (snapshotIds.contains(snapshotId)) {
         Optional.of(FileRawSnapshotReader.open(log.dir.toPath, snapshotId))
@@ -249,7 +255,7 @@ final class KafkaMetadataLog private (
     }
   }
 
-  override def latestSnapshotId(): Optional[raft.OffsetAndEpoch] = {
+  override def latestSnapshotId(): Optional[OffsetAndEpoch] = {
     try {
       Optional.of(snapshotIds.last)
     } catch {
@@ -258,15 +264,15 @@ final class KafkaMetadataLog private (
     }
   }
 
-  override def oldestSnapshotId(): Optional[raft.OffsetAndEpoch] = {
+  override def oldestSnapshotId(): Optional[OffsetAndEpoch] = {
     oldestSnapshotId
   }
 
-  override def onSnapshotFrozen(snapshotId: raft.OffsetAndEpoch): Unit = {
+  override def onSnapshotFrozen(snapshotId: OffsetAndEpoch): Unit = {
     snapshotIds.add(snapshotId)
   }
 
-  override def deleteToNewOldestSnapshotId(logStartSnapshotId: raft.OffsetAndEpoch): Boolean = {
+  override def deleteToNewOldestSnapshotId(logStartSnapshotId: OffsetAndEpoch): Boolean = {
     latestSnapshotId.asScala match {
       case Some(snapshotId) if (snapshotIds.contains(logStartSnapshotId) &&
         startOffset < logStartSnapshotId.offset &&
@@ -293,7 +299,7 @@ object KafkaMetadataLog {
     topicPartition: TopicPartition,
     maxFetchSizeInBytes: Int = 1024 * 1024
   ): KafkaMetadataLog = {
-    val snapshotIds = new ConcurrentSkipListSet[raft.OffsetAndEpoch]()
+    val snapshotIds = new ConcurrentSkipListSet[OffsetAndEpoch]()
     // Scan the log directory; deleting partial snapshots and remembering immutable snapshots
     Files
       .walk(log.dir.toPath, 1)

@@ -14,15 +14,13 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.raft.internals;
+package org.apache.kafka.raft;
 
-import org.apache.kafka.raft.OffsetAndEpoch;
-
-public final class ValidatedFetchOffsetAndEpoch {
+public final class ValidOffsetAndEpoch {
     final private Type type;
     final private OffsetAndEpoch offsetAndEpoch;
 
-    ValidatedFetchOffsetAndEpoch(Type type, OffsetAndEpoch offsetAndEpoch) {
+    ValidOffsetAndEpoch(Type type, OffsetAndEpoch offsetAndEpoch) {
         this.type = type;
         this.offsetAndEpoch = offsetAndEpoch;
     }
@@ -39,19 +37,19 @@ public final class ValidatedFetchOffsetAndEpoch {
         DIVERGING, SNAPSHOT, VALID
     }
 
-    public static ValidatedFetchOffsetAndEpoch diverging(OffsetAndEpoch offsetAndEpoch) {
-        return new ValidatedFetchOffsetAndEpoch(Type.DIVERGING, offsetAndEpoch);
+    public static ValidOffsetAndEpoch diverging(OffsetAndEpoch offsetAndEpoch) {
+        return new ValidOffsetAndEpoch(Type.DIVERGING, offsetAndEpoch);
     }
 
-    public static ValidatedFetchOffsetAndEpoch snapshot(OffsetAndEpoch offsetAndEpoch) {
-        return new ValidatedFetchOffsetAndEpoch(Type.SNAPSHOT, offsetAndEpoch);
+    public static ValidOffsetAndEpoch snapshot(OffsetAndEpoch offsetAndEpoch) {
+        return new ValidOffsetAndEpoch(Type.SNAPSHOT, offsetAndEpoch);
     }
 
-    public static ValidatedFetchOffsetAndEpoch valid(OffsetAndEpoch offsetAndEpoch) {
-        return new ValidatedFetchOffsetAndEpoch(Type.VALID, offsetAndEpoch);
+    public static ValidOffsetAndEpoch valid(OffsetAndEpoch offsetAndEpoch) {
+        return new ValidOffsetAndEpoch(Type.VALID, offsetAndEpoch);
     }
 
-    public static ValidatedFetchOffsetAndEpoch valid() {
+    public static ValidOffsetAndEpoch valid() {
         return valid(new OffsetAndEpoch(-1, -1));
     }
 }

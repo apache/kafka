@@ -62,10 +62,64 @@ public interface ReplicatedLog extends Closeable {
     int lastFetchedEpoch();
 
     /**
-     * Find the first epoch less than or equal to the given epoch and its end offset,
-     * if one exists.
+     * Validate the given offset and epoch against the log and oldest snapshot.
+     *
+     * Returns the largest valid offset and epoch given `offset` and `epoch` as the upper bound.
+     * This can result in three possible values returned:
+     *
+     * 1. ValidOffsetAndEpoch.valid if the given offset and epoch is valid in the log.
+     *
+     * 2. ValidOffsetAndEpoch.diverging if the given offset and epoch is not valid; and the
+     * largest valid offset and epoch is in the log.
+     *
+     * 3. ValidOffsetAndEpoch.snapshot if the given offset and epoch is not valid; and the largest
+     * valid offset and epoch is less than the oldest snapshot.
+     *
+     * @param offset the offset to validate
+     * @param epoch the epoch of the record at offset - 1
+     * @return the largest valid offset and epoch
      */
-    Optional<OffsetAndEpoch> endOffsetForEpoch(int leaderEpoch);
+    default ValidOffsetAndEpoch validateOffsetAndEpoch(long offset, int epoch) {
+        if (startOffset() == 0 && offset == 0) {
+            return ValidOffsetAndEpoch.valid(new OffsetAndEpoch(offset, 0));
+        } else if (
+                oldestSnapshotId().isPresent() &&
+                ((offset < startOffset()) ||
+                 (offset == startOffset() && epoch != oldestSnapshotId().get().epoch) ||
+                 (epoch < oldestSnapshotId().get().epoch))
+        ) {
+            /* Send a snapshot if the leader has a snapshot at the log start offset and
+             * 1. the fetch offset is less than the log start offset or
+             * 2. the fetch offset is equal to the log start offset and last fetch epoch doesn't match
+             *    the oldest snapshot or
+             * 3. last fetch epoch is less than the oldest snapshot's epoch
+             */
+
+            OffsetAndEpoch latestSnapshotId = latestSnapshotId().orElseThrow(() -> {
+                return new IllegalStateException(
+                    String.format(
+                        "Log start offset (%s) is greater than zero but latest snapshot was not found",
+                        startOffset()
+                    )
+                );
+            });
+
+            return ValidOffsetAndEpoch.snapshot(latestSnapshotId);
+        } else {
+            OffsetAndEpoch endOffsetAndEpoch = endOffsetForEpoch(epoch);
+
+            if (endOffsetAndEpoch.epoch != epoch || endOffsetAndEpoch.offset < offset) {
+                return ValidOffsetAndEpoch.diverging(endOffsetAndEpoch);
+            } else {
+                return ValidOffsetAndEpoch.valid(new OffsetAndEpoch(offset, epoch));
+            }
+        }
+    }
+
+    /**
+     * Find the first epoch less than or equal to the given epoch and its end offset.
+     */
+    OffsetAndEpoch endOffsetForEpoch(int epoch);
 
     /**
      * Get the current log end offset metadata. This is always one plus the offset of the last
@@ -153,20 +207,13 @@ public interface ReplicatedLog extends Closeable {
         final long truncationOffset;
         int leaderEpoch = endOffset.epoch;
         if (leaderEpoch == 0) {
-            truncationOffset = endOffset.offset;
+            truncationOffset = Math.min(endOffset.offset, endOffset().offset);
         } else {
-            Optional<OffsetAndEpoch> localEndOffsetOpt = endOffsetForEpoch(leaderEpoch);
-            if (localEndOffsetOpt.isPresent()) {
-                OffsetAndEpoch localEndOffset = localEndOffsetOpt.get();
-                if (localEndOffset.epoch == leaderEpoch) {
-                    truncationOffset = Math.min(localEndOffset.offset, endOffset.offset);
-                } else {
-                    truncationOffset = Math.min(localEndOffset.offset, endOffset().offset);
-                }
+            OffsetAndEpoch localEndOffset = endOffsetForEpoch(leaderEpoch);
+            if (localEndOffset.epoch == leaderEpoch) {
+                truncationOffset = Math.min(localEndOffset.offset, endOffset.offset);
             } else {
-                // The leader has no epoch which is less than or equal to our own epoch. We simply truncate
-                // to the leader offset and begin replication from there.
-                truncationOffset = endOffset.offset;
+                truncationOffset = localEndOffset.offset;
             }
         }
 
@@ -208,10 +255,11 @@ public interface ReplicatedLog extends Closeable {
     /**
      * Returns the snapshot id at the log start offset.
      *
-     * If the log start offset is nonzero then it is expected that there is a snapshot with an end offset equal to
-     * the start offset.
+     * If the log start offset is nonzero then it is expected that there is a snapshot with an end
+     * offset equal to the start offset.
      *
-     * @return an Optional snapshot id at the log start offset if nonzero, otherwise returns an empty Optional
+     * @return an Optional snapshot id at the log start offset if nonzero, otherwise returns an empty
+     *         Optional
      */
     Optional<OffsetAndEpoch> oldestSnapshotId();
 

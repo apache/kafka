@@ -69,7 +69,6 @@ import org.apache.kafka.raft.internals.KafkaRaftMetrics;
 import org.apache.kafka.raft.internals.MemoryBatchReader;
 import org.apache.kafka.raft.internals.RecordsBatchReader;
 import org.apache.kafka.raft.internals.ThresholdPurgatory;
-import org.apache.kafka.raft.internals.ValidatedFetchOffsetAndEpoch;
 import org.apache.kafka.snapshot.RawSnapshotReader;
 import org.apache.kafka.snapshot.RawSnapshotWriter;
 import org.apache.kafka.snapshot.SnapshotWriter;
@@ -879,7 +878,7 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
     private FetchResponseData buildFetchResponse(
         Errors error,
         Records records,
-        ValidatedFetchOffsetAndEpoch validatedOffsetAndEpoch,
+        ValidOffsetAndEpoch validOffsetAndEpoch,
         Optional<LogOffsetMetadata> highWatermark
     ) {
         return RaftUtil.singletonFetchResponse(log.topicPartition(), Errors.NONE, partitionData -> {
@@ -895,16 +894,16 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
                 .setLeaderEpoch(quorum.epoch())
                 .setLeaderId(quorum.leaderIdOrSentinel());
 
-            switch (validatedOffsetAndEpoch.type()) {
+            switch (validOffsetAndEpoch.type()) {
                 case DIVERGING:
                     partitionData.divergingEpoch()
-                        .setEpoch(validatedOffsetAndEpoch.offsetAndEpoch().epoch)
-                        .setEndOffset(validatedOffsetAndEpoch.offsetAndEpoch().offset);
+                        .setEpoch(validOffsetAndEpoch.offsetAndEpoch().epoch)
+                        .setEndOffset(validOffsetAndEpoch.offsetAndEpoch().offset);
                     break;
                 case SNAPSHOT:
                     partitionData.snapshotId()
-                        .setEpoch(validatedOffsetAndEpoch.offsetAndEpoch().epoch)
-                        .setEndOffset(validatedOffsetAndEpoch.offsetAndEpoch().offset);
+                        .setEpoch(validOffsetAndEpoch.offsetAndEpoch().epoch)
+                        .setEndOffset(validOffsetAndEpoch.offsetAndEpoch().offset);
                     break;
                 default:
             }
@@ -918,7 +917,7 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
         return buildFetchResponse(
             error,
             MemoryRecords.EMPTY,
-            ValidatedFetchOffsetAndEpoch.valid(),
+            ValidOffsetAndEpoch.valid(),
             highWatermark
         );
     }
@@ -1008,10 +1007,10 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
             long fetchOffset = request.fetchOffset();
             int lastFetchedEpoch = request.lastFetchedEpoch();
             LeaderState state = quorum.leaderStateOrThrow();
-            ValidatedFetchOffsetAndEpoch validatedOffsetAndEpoch = validateFetchOffsetAndEpoch(fetchOffset, lastFetchedEpoch);
+            ValidOffsetAndEpoch validOffsetAndEpoch = log.validateOffsetAndEpoch(fetchOffset, lastFetchedEpoch);
 
             final Records records;
-            if (validatedOffsetAndEpoch.type() == ValidatedFetchOffsetAndEpoch.Type.VALID) {
+            if (validOffsetAndEpoch.type() == ValidOffsetAndEpoch.Type.VALID) {
                 LogFetchInfo info = log.read(fetchOffset, Isolation.UNCOMMITTED);
 
                 if (state.updateReplicaState(replicaId, currentTimeMs, info.startOffsetMetadata)) {
@@ -1023,64 +1022,10 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
                 records = MemoryRecords.EMPTY;
             }
 
-            return buildFetchResponse(Errors.NONE, records, validatedOffsetAndEpoch, state.highWatermark());
+            return buildFetchResponse(Errors.NONE, records, validOffsetAndEpoch, state.highWatermark());
         } catch (Exception e) {
             logger.error("Caught unexpected error in fetch completion of request {}", request, e);
             return buildEmptyFetchResponse(Errors.UNKNOWN_SERVER_ERROR, Optional.empty());
-        }
-    }
-
-    /**
-     * Check whether a fetch offset and epoch is valid. Return the diverging epoch, which
-     * is the largest epoch such that subsequent records are known to diverge.
-     */
-    private ValidatedFetchOffsetAndEpoch validateFetchOffsetAndEpoch(long fetchOffset, int lastFetchedEpoch) {
-        if (log.startOffset() == 0 && fetchOffset == 0) {
-            if (lastFetchedEpoch != 0) {
-                logger.warn(
-                    "Replica sent a zero fetch offset ({}) but the last fetched epoch ({}) was not zero",
-                    fetchOffset,
-                    lastFetchedEpoch
-                );
-            }
-            return ValidatedFetchOffsetAndEpoch.valid(new OffsetAndEpoch(fetchOffset, lastFetchedEpoch));
-        }
-
-
-        OffsetAndEpoch endOffsetAndEpoch = log.endOffsetForEpoch(lastFetchedEpoch).orElseThrow(() -> {
-            return new IllegalStateException(
-                String.format(
-                    "Expected to find an end offset for epoch %s since it must be less than the current epoch %s",
-                    lastFetchedEpoch,
-                    quorum.epoch()
-                )
-            );
-        });
-
-        if (log.oldestSnapshotId().isPresent() &&
-            ((fetchOffset < log.startOffset()) ||
-             (fetchOffset == log.startOffset() && lastFetchedEpoch != log.oldestSnapshotId().get().epoch) ||
-             (lastFetchedEpoch < log.oldestSnapshotId().get().epoch))) {
-
-            // Send a snapshot if the leader has a snapshot at the log start offset and
-            // 1. the fetch offset is less than the log start offset or
-            // 2. the fetch offset is equal to the log start offset and last fetch epoch doesn't match the oldest snapshot or
-            // 3. last fetch epoch is less than the oldest snapshot's epoch
-
-            OffsetAndEpoch latestSnapshotId = log.latestSnapshotId().orElseThrow(() -> {
-                return new IllegalStateException(
-                    String.format(
-                        "The log start offset (%s) was greater than zero but latest snapshot was not found",
-                        log.startOffset()
-                    )
-                );
-            });
-
-            return ValidatedFetchOffsetAndEpoch.snapshot(latestSnapshotId);
-        } else if (endOffsetAndEpoch.epoch != lastFetchedEpoch || endOffsetAndEpoch.offset < fetchOffset) {
-            return ValidatedFetchOffsetAndEpoch.diverging(endOffsetAndEpoch);
-        } else {
-            return ValidatedFetchOffsetAndEpoch.valid(new OffsetAndEpoch(fetchOffset, lastFetchedEpoch));
         }
     }
 

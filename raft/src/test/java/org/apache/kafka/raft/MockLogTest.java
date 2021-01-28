@@ -168,7 +168,7 @@ public class MockLogTest {
 
         assertEquals(1, extractRecords.size());
         assertEquals(recordFoo.value(), extractRecords.get(0));
-        assertEquals(Optional.of(new OffsetAndEpoch(1, currentEpoch)), log.endOffsetForEpoch(currentEpoch));
+        assertEquals(new OffsetAndEpoch(1, currentEpoch), log.endOffsetForEpoch(currentEpoch));
     }
 
     @Test
@@ -195,7 +195,7 @@ public class MockLogTest {
         }
 
         assertEquals(1, extractRecords.size());
-        assertEquals(Optional.of(new OffsetAndEpoch(1, currentEpoch)), log.endOffsetForEpoch(currentEpoch));
+        assertEquals(new OffsetAndEpoch(1, currentEpoch), log.endOffsetForEpoch(currentEpoch));
     }
 
     @Test
@@ -223,8 +223,8 @@ public class MockLogTest {
 
         assertEquals(1, extractRecords.size());
         assertEquals(recordFoo.value(), extractRecords.get(0));
-        assertEquals(Optional.of(new OffsetAndEpoch(5, 0)), log.endOffsetForEpoch(0));
-        assertEquals(Optional.of(new OffsetAndEpoch(log.endOffset().offset, epoch)), log.endOffsetForEpoch(epoch));
+        assertEquals(new OffsetAndEpoch(5, 0), log.endOffsetForEpoch(0));
+        assertEquals(new OffsetAndEpoch(log.endOffset().offset, epoch), log.endOffsetForEpoch(epoch));
     }
 
     @Test
@@ -348,12 +348,12 @@ public class MockLogTest {
         appendBatch(5, 3);
         appendBatch(10, 4);
 
-        assertEquals(Optional.of(new OffsetAndEpoch(0, 0)), log.endOffsetForEpoch(0));
-        assertEquals(Optional.of(new OffsetAndEpoch(15L, 1)), log.endOffsetForEpoch(1));
-        assertEquals(Optional.of(new OffsetAndEpoch(15L, 1)), log.endOffsetForEpoch(2));
-        assertEquals(Optional.of(new OffsetAndEpoch(20L, 3)), log.endOffsetForEpoch(3));
-        assertEquals(Optional.of(new OffsetAndEpoch(30L, 4)), log.endOffsetForEpoch(4));
-        assertEquals(Optional.empty(), log.endOffsetForEpoch(5));
+        assertEquals(new OffsetAndEpoch(0, 0), log.endOffsetForEpoch(0));
+        assertEquals(new OffsetAndEpoch(15L, 1), log.endOffsetForEpoch(1));
+        assertEquals(new OffsetAndEpoch(15L, 1), log.endOffsetForEpoch(2));
+        assertEquals(new OffsetAndEpoch(20L, 3), log.endOffsetForEpoch(3));
+        assertEquals(new OffsetAndEpoch(30L, 4), log.endOffsetForEpoch(4));
+        assertEquals(new OffsetAndEpoch(30L, 4), log.endOffsetForEpoch(5));
     }
 
     @Test
@@ -387,15 +387,15 @@ public class MockLogTest {
         assertEquals(5L, log.endOffset().offset);
 
         log.initializeLeaderEpoch(2);
-        assertEquals(Optional.of(new OffsetAndEpoch(5L, 1)), log.endOffsetForEpoch(1));
-        assertEquals(Optional.of(new OffsetAndEpoch(5L, 2)), log.endOffsetForEpoch(2));
+        assertEquals(new OffsetAndEpoch(5L, 1), log.endOffsetForEpoch(1));
+        assertEquals(new OffsetAndEpoch(5L, 2), log.endOffsetForEpoch(2));
 
         // Initialize a new epoch at the same end offset. The epoch cache ensures
         // that the start offset of each retained epoch increases monotonically.
         log.initializeLeaderEpoch(3);
-        assertEquals(Optional.of(new OffsetAndEpoch(5L, 1)), log.endOffsetForEpoch(1));
-        assertEquals(Optional.of(new OffsetAndEpoch(5L, 1)), log.endOffsetForEpoch(2));
-        assertEquals(Optional.of(new OffsetAndEpoch(5L, 3)), log.endOffsetForEpoch(3));
+        assertEquals(new OffsetAndEpoch(5L, 1), log.endOffsetForEpoch(1));
+        assertEquals(new OffsetAndEpoch(5L, 1), log.endOffsetForEpoch(2));
+        assertEquals(new OffsetAndEpoch(5L, 3), log.endOffsetForEpoch(3));
     }
 
     @Test

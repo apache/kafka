@@ -181,24 +181,16 @@ public class MockLog implements ReplicatedLog {
     }
 
     @Override
-    public Optional<OffsetAndEpoch> endOffsetForEpoch(int epoch) {
+    public OffsetAndEpoch endOffsetForEpoch(int epoch) {
         int epochLowerBound = oldestSnapshotId.map(id -> id.epoch).orElse(0);
         for (EpochStartOffset epochStartOffset : epochStartOffsets) {
             if (epochStartOffset.epoch > epoch) {
-                return Optional.of(
-                    new OffsetAndEpoch(epochStartOffset.startOffset, epochLowerBound)
-                );
+                return new OffsetAndEpoch(epochStartOffset.startOffset, epochLowerBound);
             }
             epochLowerBound = epochStartOffset.epoch;
         }
 
-        if (!epochStartOffsets.isEmpty()) {
-            EpochStartOffset lastEpochStartOffset = epochStartOffsets.get(epochStartOffsets.size() - 1);
-            if (lastEpochStartOffset.epoch == epoch)
-                return Optional.of(new OffsetAndEpoch(endOffset().offset, epoch));
-        }
-
-        return Optional.empty();
+        return new OffsetAndEpoch(endOffset().offset, lastFetchedEpoch());
     }
 
     private Optional<LogEntry> lastEntry() {
