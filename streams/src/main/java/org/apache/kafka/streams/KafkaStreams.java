@@ -25,6 +25,7 @@ import org.apache.kafka.clients.admin.RemoveMembersFromConsumerGroupResult;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.ProducerConfig;
+import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Metric;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.TopicPartition;
@@ -1051,6 +1052,7 @@ public class KafkaStreams implements AutoCloseable {
                                 Thread.currentThread().interrupt();
                             } catch (final ExecutionException e) {
                                 log.error("Getting the member result threw this ExecutionException: " + e.getMessage());
+                                throw new StreamsException("Could not remove member from group for the following reason: ", e.getCause());
                             }
                         }
                         if (timeout) {
