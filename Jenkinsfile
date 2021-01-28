@@ -33,9 +33,9 @@ def doValidation() {
   '''
 }
 
-def doTest() {
+def doTest(target = "unitTest integrationTest") {
   sh '''
-    ./gradlew -PscalaVersion=$SCALA_VERSION unitTest integrationTest \
+    ./gradlew -PscalaVersion=$SCALA_VERSION $target \
         --profile --no-daemon --continue -PtestLoggingEvents=started,passed,skipped,failed \
         -PignoreFailures=true -PmaxParallelForks=2 -PmaxTestRetries=1 -PmaxTestRetryFailures=5
   '''
@@ -171,6 +171,8 @@ pipeline {
           steps {
             setupGradle()
             doValidation()
+            doTest('unitTest')
+            echo 'Skipping Kafka Streams archetype test for ARM build'
           }
         }
       }
