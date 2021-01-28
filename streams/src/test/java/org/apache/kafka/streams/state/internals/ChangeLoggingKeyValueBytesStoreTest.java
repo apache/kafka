@@ -206,8 +206,8 @@ public class ChangeLoggingKeyValueBytesStoreTest {
         store.put(hi, there);
         store.put(Bytes.increment(hi), world);
         final KeyValueIterator<Bytes, byte[]> keysWithPrefix = store.prefixScan(hi.toString(), new StringSerializer());
-        final List<String> keys = new ArrayList<>();
-        final List<String> values = new ArrayList<>();
+        final List<Bytes> keys = new ArrayList<>();
+        final List<Bytes> values = new ArrayList<>();
         int numberOfKeysReturned = 0;
 
         while (keysWithPrefix.hasNext()) {
