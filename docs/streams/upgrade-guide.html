@@ -97,7 +97,7 @@
         These enabled adding a removing StreamThreads to running KafkaStreams client.
    </p>
     <p>
-        We deprecated <code>setUncaughtExceptionHandler(final Thread.UncaughtExceptionHandler uncaughtExceptionHandler)</code>
+        We deprecated <code>KafkaStreams#setUncaughtExceptionHandler(final Thread.UncaughtExceptionHandler uncaughtExceptionHandler)</code>
         in favor of <code>KafkaStreams#setUncaughtExceptionHandler(final StreamsUncaughtExceptionHandler streamsUncaughtExceptionHandler)</code>
         in <a href="https://cwiki.apache.org/confluence/x/lkN4CQ">KIP-671</a>.
         The default handler will close the Kafka Streams client and the client will transit to state ERROR.
