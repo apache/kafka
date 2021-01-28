@@ -43,6 +43,7 @@ public class ClusterConfig {
 
     private final Properties adminClientProperties = new Properties();
     private final Properties saslServerProperties = new Properties();
+    private final Properties saslClientProperties = new Properties();
 
     ClusterConfig(Type type, int brokers, int controllers, String name, boolean autoStart,
                   Properties serverProperties, String ibp,
@@ -100,6 +101,10 @@ public class ClusterConfig {
 
     public Properties saslServerProperties() {
         return saslServerProperties;
+    }
+
+    public Properties saslClientProperties() {
+        return saslClientProperties;
     }
 
     public Map<String, String> nameTags() {

@@ -107,8 +107,11 @@ public class ZkClusterInvocationContext implements TestTemplateInvocationContext
 
                     @Override
                     public Option<Properties> clientSaslProperties() {
-                        // TODO add this to ClusterConfig
-                        return Option.empty();
+                        if (clusterConfig.saslClientProperties().isEmpty()) {
+                            return Option.empty();
+                        } else {
+                            return Option.apply(clusterConfig.saslClientProperties());
+                        }
                     }
 
                     @Override

@@ -49,7 +49,7 @@ class SaslApiVersionsRequestTest(helper: IntegrationTestHelper,
     sasl = new SaslSetup() {}
     sasl.startSasl(sasl.jaasSections(kafkaServerSaslMechanisms, Some(kafkaClientSaslMechanism), KafkaSasl, JaasTestUtils.KafkaServerContextName))
     config.saslServerProperties().putAll(sasl.kafkaServerSaslProperties(kafkaServerSaslMechanisms, kafkaClientSaslMechanism))
-
+    config.saslClientProperties().putAll(sasl.kafkaClientSaslProperties(kafkaClientSaslMechanism))
     super.brokerPropertyOverrides(config.serverProperties())
   }
 
