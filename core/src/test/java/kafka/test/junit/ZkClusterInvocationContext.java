@@ -54,12 +54,12 @@ import java.util.stream.Collectors;
  *     <li>IntegrationTestHelper (helper methods)</li>
  * </ul>
  */
-public class LegacyClusterInvocationContext implements TestTemplateInvocationContext {
+public class ZkClusterInvocationContext implements TestTemplateInvocationContext {
 
     private final ClusterConfig clusterConfig;
     private final AtomicReference<IntegrationTestHarness> clusterReference;
 
-    public LegacyClusterInvocationContext(ClusterConfig clusterConfig) {
+    public ZkClusterInvocationContext(ClusterConfig clusterConfig) {
         this.clusterConfig = clusterConfig;
         this.clusterReference = new AtomicReference<>();
     }
@@ -69,7 +69,7 @@ public class LegacyClusterInvocationContext implements TestTemplateInvocationCon
         String clusterDesc = clusterConfig.nameTags().entrySet().stream()
             .map(Object::toString)
             .collect(Collectors.joining(", "));
-        return String.format("[Legacy %d] %s", invocationIndex, clusterDesc);
+        return String.format("[Zk %d] %s", invocationIndex, clusterDesc);
     }
 
     @Override
@@ -112,7 +112,7 @@ public class LegacyClusterInvocationContext implements TestTemplateInvocationCon
 
                     @Override
                     public int brokerCount() {
-                        // Brokers and controllers are the same in legacy mode, so just use the max
+                        // Brokers and controllers are the same in zk mode, so just use the max
                         return Math.max(clusterConfig.brokers(), clusterConfig.controllers());
                     }
                 };
@@ -123,18 +123,18 @@ public class LegacyClusterInvocationContext implements TestTemplateInvocationCon
                 clusterReference.get().setUp();
             },
             (AfterTestExecutionCallback) context -> clusterReference.get().tearDown(),
-            new ClusterInstanceParameterResolver(new LegacyClusterInstance(clusterConfig, clusterReference)),
+            new ClusterInstanceParameterResolver(new ZkClusterInstance(clusterConfig, clusterReference)),
             new GenericParameterResolver<>(clusterConfig, ClusterConfig.class),
             new GenericParameterResolver<>(new IntegrationTestHelper(), IntegrationTestHelper.class)
         );
     }
 
-    public static class LegacyClusterInstance implements ClusterInstance {
+    public static class ZkClusterInstance implements ClusterInstance {
 
         final AtomicReference<IntegrationTestHarness> clusterReference;
         final ClusterConfig config;
 
-        LegacyClusterInstance(ClusterConfig config, AtomicReference<IntegrationTestHarness> clusterReference) {
+        ZkClusterInstance(ClusterConfig config, AtomicReference<IntegrationTestHarness> clusterReference) {
             this.config = config;
             this.clusterReference = clusterReference;
         }

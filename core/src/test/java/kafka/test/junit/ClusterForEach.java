@@ -128,7 +128,7 @@ public class ClusterForEach implements TestTemplateInvocationContextProvider {
 
         generatedClusterConfigs.forEach(config -> {
             if (config.clusterType() == ClusterConfig.Type.Zk) {
-                testInvocations.accept(new LegacyClusterInvocationContext(config.copyOf()));
+                testInvocations.accept(new ZkClusterInvocationContext(config.copyOf()));
             } else {
                 throw new IllegalStateException("Unknown cluster type " + config.clusterType());
             }
@@ -183,7 +183,7 @@ public class ClusterForEach implements TestTemplateInvocationContextProvider {
         switch (type) {
             case Zk:
             case Both:
-                testInvocations.accept(new LegacyClusterInvocationContext(builder.build()));
+                testInvocations.accept(new ZkClusterInvocationContext(builder.build()));
                 break;
         }
     }
