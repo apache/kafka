@@ -1118,6 +1118,7 @@ project(':clients') {
     testCompile libs.bcpkix
     testCompile libs.junitJupiter
     testCompile libs.mockitoCore
+    testCompile libs.hamcrest
 
     testRuntime libs.slf4jlog4j
     testRuntime libs.jacksonDatabind

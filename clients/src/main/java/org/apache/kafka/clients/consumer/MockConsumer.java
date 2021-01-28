@@ -218,7 +218,21 @@ public class MockConsumer<K, V> implements Consumer<K, V> {
         }
 
         toClear.forEach(p -> this.records.remove(p));
-        return new ConsumerRecords<>(results);
+
+        final Map<TopicPartition, ConsumerRecords.Metadata> metadata = new HashMap<>();
+        for (final TopicPartition partition : subscriptions.assignedPartitions()) {
+            if (subscriptions.hasValidPosition(partition) && endOffsets.containsKey(partition)) {
+                final SubscriptionState.FetchPosition position = subscriptions.position(partition);
+                final long offset = position.offset;
+                final long endOffset = endOffsets.get(partition);
+                metadata.put(
+                    partition,
+                    new ConsumerRecords.Metadata(System.currentTimeMillis(), offset, endOffset)
+                );
+            }
+        }
+
+        return new ConsumerRecords<>(results, metadata);
     }
 
     public synchronized void addRecord(ConsumerRecord<K, V> record) {
@@ -229,6 +243,7 @@ public class MockConsumer<K, V> implements Consumer<K, V> {
             throw new IllegalStateException("Cannot add records for a partition that is not assigned to the consumer");
         List<ConsumerRecord<K, V>> recs = this.records.computeIfAbsent(tp, k -> new ArrayList<>());
         recs.add(record);
+        endOffsets.compute(tp, (ignore, offset) -> offset == null ? record.offset() : Math.max(offset, record.offset()));
     }
 
     /**
