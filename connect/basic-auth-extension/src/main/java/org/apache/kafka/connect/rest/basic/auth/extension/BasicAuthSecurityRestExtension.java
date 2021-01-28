@@ -81,10 +81,21 @@ public class BasicAuthSecurityRestExtension implements ConnectRestExtension {
         }
     }
 
+    private final Supplier<Configuration> configuration;
+
+    public BasicAuthSecurityRestExtension() {
+        this(CONFIGURATION);
+    }
+
+    // For testing
+    BasicAuthSecurityRestExtension(Supplier<Configuration> configuration) {
+        this.configuration = configuration;
+    }
+
     @Override
     public void register(ConnectRestExtensionContext restPluginContext) {
         log.trace("Registering JAAS basic auth filter");
-        restPluginContext.configurable().register(new JaasBasicAuthFilter(CONFIGURATION.get()));
+        restPluginContext.configurable().register(new JaasBasicAuthFilter(configuration.get()));
         log.trace("Finished registering JAAS basic auth filter");
     }
 
@@ -96,7 +107,7 @@ public class BasicAuthSecurityRestExtension implements ConnectRestExtension {
     @Override
     public void configure(Map<String, ?> configs) {
         // If we failed to retrieve a JAAS configuration during startup, throw that exception now
-        CONFIGURATION.get();
+        configuration.get();
     }
 
     @Override

@@ -29,11 +29,14 @@ import javax.security.auth.login.Configuration;
 import javax.ws.rs.core.Configurable;
 
 import java.io.IOException;
+import java.util.Collections;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Supplier;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class BasicAuthSecurityRestExtensionTest {
 
@@ -71,7 +74,7 @@ public class BasicAuthSecurityRestExtensionTest {
     }
 
     @Test
-    public void testBadJaasConfiguration() {
+    public void testBadJaasConfigInitialization() {
         SecurityException jaasConfigurationException = new SecurityException(new IOException("Bad JAAS config is bad"));
         Supplier<Configuration> configuration = BasicAuthSecurityRestExtension.initializeConfiguration(() -> {
             throw jaasConfigurationException;
@@ -82,12 +85,31 @@ public class BasicAuthSecurityRestExtensionTest {
     }
 
     @Test
-    public void testGoodJaasConfiguration() {
+    public void testGoodJaasConfigInitialization() {
+        AtomicBoolean configurationInitializerEvaluated = new AtomicBoolean(false);
         Configuration mockConfiguration = EasyMock.mock(Configuration.class);
         Supplier<Configuration> configuration = BasicAuthSecurityRestExtension.initializeConfiguration(() -> {
+            configurationInitializerEvaluated.set(true);
             return mockConfiguration;
         });
 
+        assertTrue(configurationInitializerEvaluated.get());
         assertEquals(mockConfiguration, configuration.get());
+    }
+
+    @Test
+    public void testBadJaasConfigExtensionSetup() {
+        SecurityException jaasConfigurationException = new SecurityException(new IOException("Bad JAAS config is bad"));
+        Supplier<Configuration> configuration = () -> {
+            throw jaasConfigurationException;
+        };
+
+        BasicAuthSecurityRestExtension extension = new BasicAuthSecurityRestExtension(configuration);
+
+        Exception thrownException = assertThrows(Exception.class, () -> extension.configure(Collections.emptyMap()));
+        assertEquals(jaasConfigurationException, thrownException);
+
+        thrownException = assertThrows(Exception.class, () -> extension.register(EasyMock.mock(ConnectRestExtensionContext.class)));
+        assertEquals(jaasConfigurationException, thrownException);
     }
 }
