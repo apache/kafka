@@ -123,17 +123,14 @@ class KafkaRaftManager[T](
     val voterAddresses: util.Map[Integer, AddressSpec] = raftConfig.quorumVoterConnections
     for (voterAddressEntry <- voterAddresses.entrySet.asScala) {
       voterAddressEntry.getValue match {
-        case spec: InetAddressSpec => {
+        case spec: InetAddressSpec =>
           netChannel.updateEndpoint(voterAddressEntry.getKey, spec)
-        }
-        case _: UnknownAddressSpec => {
+        case _: UnknownAddressSpec =>
           logger.info(s"Skipping channel update for destination ID: ${voterAddressEntry.getKey} " +
             s"because of non-routable endpoint: ${NON_ROUTABLE_ADDRESS.toString}")
-        }
-        case invalid: AddressSpec => {
+        case invalid: AddressSpec =>
           logger.warn(s"Unexpected address spec (type: ${invalid.getClass}) for channel update for " +
             s"destination ID: ${voterAddressEntry.getKey}")
-        }
       }
     }
     netChannel.start()

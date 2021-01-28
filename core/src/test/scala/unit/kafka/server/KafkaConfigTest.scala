@@ -1002,12 +1002,6 @@ class KafkaConfigTest {
   }
 
   @Test
-  def testNonRoutableAddressSpecException(): Unit = {
-    assertThrows(classOf[IllegalArgumentException],
-      () => new InetAddressSpec(new InetSocketAddress("0.0.0.0", 0)))
-  }
-
-  @Test
   def testZookeeperConnectRequiredIfEmptyProcessRoles(): Unit = {
     val props = new Properties()
     props.put(KafkaConfig.ProcessRolesProp, "")

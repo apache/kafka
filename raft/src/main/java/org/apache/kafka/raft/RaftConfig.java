@@ -99,7 +99,7 @@ public class RaftConfig {
         public final InetSocketAddress address;
 
         public InetAddressSpec(InetSocketAddress address) {
-            if (address.equals(NON_ROUTABLE_ADDRESS)) {
+            if (address != null && address.equals(NON_ROUTABLE_ADDRESS)) {
                 throw new IllegalArgumentException("Address not routable");
             }
             this.address = address;
@@ -127,16 +127,6 @@ public class RaftConfig {
 
     public static class UnknownAddressSpec implements AddressSpec {
         private UnknownAddressSpec() {
-        }
-
-        @Override
-        public int hashCode() {
-            return NON_ROUTABLE_ADDRESS.hashCode();
-        }
-
-        @Override
-        public boolean equals(Object obj) {
-            return obj != null && getClass() == obj.getClass();
         }
     }
 
