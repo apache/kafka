@@ -212,8 +212,8 @@ public class ChangeLoggingKeyValueBytesStoreTest {
 
         while (keysWithPrefix.hasNext()) {
             final KeyValue<Bytes, byte[]> next = keysWithPrefix.next();
-            keys.add(next.key.toString());
-            values.add(new String(next.value));
+            keys.add(next.key);
+            values.add(Bytes.wrap(next.value));
             numberOfKeysReturned++;
         }
         assertThat(numberOfKeysReturned, is(1));
