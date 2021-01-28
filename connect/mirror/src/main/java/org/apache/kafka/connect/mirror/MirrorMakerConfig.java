@@ -105,6 +105,11 @@ public class MirrorMakerConfig extends AbstractConfig {
                         clusterPairHeartbeatsEnabled = Boolean.valueOf(originalStrings.get(clusterPairConfigPrefix + MirrorConnectorConfig.EMIT_HEARTBEATS_ENABLED));
                     }
 
+                    // By default, all source->target Herder combinations are created even if `x->y.enabled=false`
+                    // Unless `emit.heartbeats.enabled=false` or `x->y.emit.heartbeats.enabled=false`
+                    // Reason for this behavior: for a given replication flow A->B with heartbeats, 2 herders are required :
+                    // B->A for the MirrorHeartbeatConnector (emits heartbeats into A for monitoring replication health)
+                    // A->B for the MirrorSourceConnector (actual replication flow)
                     if (clusterPairEnabled || clusterPairHeartbeatsEnabled) {
                         pairs.add(new SourceAndTarget(source, target));
                     }
