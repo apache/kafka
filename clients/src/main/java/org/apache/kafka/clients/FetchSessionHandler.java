@@ -89,7 +89,7 @@ public class FetchSessionHandler {
     /**
      * The number of partitions for all topics which exist in the fetch request session.
      */
-    private Map<String, Integer> sessionPartitionsPerTopic = new HashMap<>(0);
+    private Map<String, Set<Integer>> sessionPartitionsPerTopic = new HashMap<>(0);
 
     public Map<Uuid, String> getSessionTopicNames() {
         return sessionTopicNames;
@@ -137,14 +137,14 @@ public class FetchSessionHandler {
                          Map<String, Uuid> topicIds,
                          Map<Uuid, String> topicNames,
                          FetchMetadata metadata,
-                         Map<String, Integer> sessionPartitionsPerTopic) {
+                         boolean canUseTopicIds) {
             this.toSend = toSend;
             this.toForget = toForget;
             this.sessionPartitions = sessionPartitions;
             this.topicIds = topicIds;
             this.topicNames = topicNames;
             this.metadata = metadata;
-            this.canUseTopicIds = topicIds.size() == sessionPartitionsPerTopic.size();
+            this.canUseTopicIds = canUseTopicIds;
         }
 
         /**
@@ -243,7 +243,7 @@ public class FetchSessionHandler {
         private LinkedHashMap<TopicPartition, PartitionData> next;
         private Map<String, Uuid> topicIds;
         private Map<Uuid, String> topicNames;
-        private Map<String, Integer> partitionsPerTopic;
+        private Map<String, Set<Integer>> partitionsPerTopic;
         private final boolean copySessionPartitions;
 
         Builder() {
@@ -266,11 +266,8 @@ public class FetchSessionHandler {
          * Mark that we want data from this partition in the upcoming fetch.
          */
         public void add(TopicPartition topicPartition, Uuid id, PartitionData data) {
-            if (next.put(topicPartition, data) == null)
-                partitionsPerTopic.merge(topicPartition.topic(), 1, (prev, next) -> prev + next);
-            if (!id.equals(Uuid.ZERO_UUID)) {
-                topicIds.put(topicPartition.topic(), id);
-                topicNames.put(id, topicPartition.topic());
+            if (next.put(topicPartition, data) == null) {
+                addPartitionsAndIds(partitionsPerTopic, topicPartition, id, topicIds, topicNames);
             }
         }
 
@@ -294,9 +291,8 @@ public class FetchSessionHandler {
                         Collections.unmodifiableMap(new HashMap<>(sessionTopicIds));
                 Map<Uuid, String> toSendTopicNames =
                         Collections.unmodifiableMap(new HashMap<>(sessionTopicNames));
-                Map<String, Integer> toSendPartitionsPerTopic =
-                        Collections.unmodifiableMap(new HashMap<>(sessionPartitionsPerTopic));
-                return new FetchRequestData(toSend, Collections.emptyList(), toSend, toSendTopicIds, toSendTopicNames, nextMetadata, toSendPartitionsPerTopic);
+                boolean canUseTopicIds = sessionPartitionsPerTopic.size() == toSendTopicIds.size();
+                return new FetchRequestData(toSend, Collections.emptyList(), toSend, toSendTopicIds, toSendTopicNames, nextMetadata, canUseTopicIds);
             }
 
             List<TopicPartition> added = new ArrayList<>();
@@ -321,8 +317,9 @@ public class FetchSessionHandler {
                     // Indicate that we no longer want to listen to this partition.
                     removed.add(topicPartition);
                     // Remove one partition from the session.
-                    sessionPartitionsPerTopic.merge(topicPartition.topic(), 0, (prev, next) -> prev - 1);
-                    if (sessionPartitionsPerTopic.get(topicPartition.topic()) == 0) {
+                    if (sessionPartitionsPerTopic.containsKey(topicPartition.topic()))
+                        sessionPartitionsPerTopic.get(topicPartition.topic()).remove(topicPartition.partition());
+                    if (sessionPartitionsPerTopic.get(topicPartition.topic()).isEmpty()) {
                         // If no more partitions for this topic, remove the topic from this map, topic IDs map, and topic names map.
                         sessionPartitionsPerTopic.remove(topicPartition.topic());
                         Uuid id = sessionTopicIds.remove(topicPartition.topic());
@@ -342,12 +339,8 @@ public class FetchSessionHandler {
                     break;
                 }
                 sessionPartitions.put(topicPartition, nextData);
-                Uuid id = topicIds.get(topicPartition.topic());
-                if (id != null) {
-                    sessionTopicIds.put(topicPartition.topic(), id);
-                    sessionTopicNames.put(id, topicPartition.topic());
-                }
-                sessionPartitionsPerTopic.merge(topicPartition.topic(), 1, (prev, next) -> prev + next);
+                addPartitionsAndIds(sessionPartitionsPerTopic, topicPartition, topicIds.getOrDefault(topicPartition.topic(),
+                        Uuid.ZERO_UUID), sessionTopicIds, sessionTopicNames);
                 added.add(topicPartition);
             }
             if (log.isDebugEnabled()) {
@@ -364,15 +357,28 @@ public class FetchSessionHandler {
                     Collections.unmodifiableMap(new HashMap<>(sessionTopicIds));
             Map<Uuid, String> toSendTopicNames =
                     Collections.unmodifiableMap(new HashMap<>(sessionTopicNames));
-            Map<String, Integer> toSendPartitionsPerTopic =
-                    Collections.unmodifiableMap(new HashMap<>(sessionPartitionsPerTopic));
+            boolean canUseTopicIds = sessionPartitionsPerTopic.size() == toSendTopicIds.size();
 
             next = null;
             topicIds = null;
             topicNames = null;
             partitionsPerTopic = null;
             return new FetchRequestData(toSend, Collections.unmodifiableList(removed),
-                curSessionPartitions, toSendTopicIds, toSendTopicNames, nextMetadata, toSendPartitionsPerTopic);
+                curSessionPartitions, toSendTopicIds, toSendTopicNames, nextMetadata, canUseTopicIds);
+        }
+
+        private void addPartitionsAndIds(Map<String, Set<Integer>> partitionsPerTopic,
+                                         TopicPartition tp, Uuid id, Map<String, Uuid> topicIds,
+                                         Map<Uuid, String> topicNames) {
+            if (partitionsPerTopic.containsKey(tp.topic())) {
+                partitionsPerTopic.get(tp.topic()).add(tp.partition());
+            } else {
+                partitionsPerTopic.put(tp.topic(), new HashSet<>(tp.partition()));
+                if (!id.equals(Uuid.ZERO_UUID)) {
+                    topicIds.put(tp.topic(), id);
+                    topicNames.put(id, tp.topic());
+                }
+            }
         }
     }
 
