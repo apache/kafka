@@ -95,4 +95,17 @@ public class TimelineHashMapTest {
         map.putAll(Collections.singletonMap(2, "b"));
         assertTrue(map.containsKey(2));
     }
+
+    @Test
+    public void testMapEquals() {
+        SnapshotRegistry registry = new SnapshotRegistry(0);
+        TimelineHashMap<Integer, String> map1 = new TimelineHashMap<>(registry, 1);
+        assertEquals(null, map1.putIfAbsent(1, "xyz"));
+        assertEquals(null, map1.putIfAbsent(2, "abc"));
+        TimelineHashMap<Integer, String> map2 = new TimelineHashMap<>(registry, 1);
+        assertEquals(null, map2.putIfAbsent(1, "xyz"));
+        assertFalse(map1.equals(map2));
+        assertEquals(null, map2.putIfAbsent(2, "abc"));
+        assertEquals(map1, map2);
+    }
 }

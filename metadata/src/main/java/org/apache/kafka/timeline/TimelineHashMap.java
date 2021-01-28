@@ -47,7 +47,7 @@ public class TimelineHashMap<K, V>
         TimelineHashMapEntry(K key, V value) {
             this.key = key;
             this.value = value;
-            this.startEpoch = Long.MAX_VALUE;
+            this.startEpoch = SnapshottableHashTable.LATEST_EPOCH;
         }
 
         @Override
@@ -100,7 +100,7 @@ public class TimelineHashMap<K, V>
 
     @Override
     public int size() {
-        return size(Long.MAX_VALUE);
+        return size(SnapshottableHashTable.LATEST_EPOCH);
     }
 
     public int size(long epoch) {
@@ -109,7 +109,7 @@ public class TimelineHashMap<K, V>
 
     @Override
     public boolean isEmpty() {
-        return isEmpty(Long.MAX_VALUE);
+        return isEmpty(SnapshottableHashTable.LATEST_EPOCH);
     }
 
     public boolean isEmpty(long epoch) {
@@ -118,7 +118,7 @@ public class TimelineHashMap<K, V>
 
     @Override
     public boolean containsKey(Object key) {
-        return containsKey(key, Long.MAX_VALUE);
+        return containsKey(key, SnapshottableHashTable.LATEST_EPOCH);
     }
 
     public boolean containsKey(Object key, long epoch) {
@@ -139,7 +139,7 @@ public class TimelineHashMap<K, V>
 
     @Override
     public V get(Object key) {
-        return get(key, Long.MAX_VALUE);
+        return get(key, SnapshottableHashTable.LATEST_EPOCH);
     }
 
     public V get(Object key, long epoch) {
@@ -178,7 +178,7 @@ public class TimelineHashMap<K, V>
 
     @Override
     public void clear() {
-        Iterator<TimelineHashMapEntry<K, V>> iter = snapshottableIterator(Long.MAX_VALUE);
+        Iterator<TimelineHashMapEntry<K, V>> iter = snapshottableIterator(SnapshottableHashTable.LATEST_EPOCH);
         while (iter.hasNext()) {
             iter.next();
             iter.remove();
@@ -197,7 +197,7 @@ public class TimelineHashMap<K, V>
         }
 
         public final void clear() {
-            if (epoch != Long.MAX_VALUE) {
+            if (epoch != SnapshottableHashTable.LATEST_EPOCH) {
                 throw new RuntimeException("can't modify snapshot");
             }
             TimelineHashMap.this.clear();
@@ -212,7 +212,7 @@ public class TimelineHashMap<K, V>
         }
 
         public final boolean remove(Object o) {
-            if (epoch != Long.MAX_VALUE) {
+            if (epoch != SnapshottableHashTable.LATEST_EPOCH) {
                 throw new RuntimeException("can't modify snapshot");
             }
             return TimelineHashMap.this.remove(o) != null;
@@ -245,7 +245,7 @@ public class TimelineHashMap<K, V>
 
     @Override
     public Set<K> keySet() {
-        return keySet(Long.MAX_VALUE);
+        return keySet(SnapshottableHashTable.LATEST_EPOCH);
     }
 
     public Set<K> keySet(long epoch) {
@@ -264,7 +264,7 @@ public class TimelineHashMap<K, V>
         }
 
         public final void clear() {
-            if (epoch != Long.MAX_VALUE) {
+            if (epoch != SnapshottableHashTable.LATEST_EPOCH) {
                 throw new RuntimeException("can't modify snapshot");
             }
             TimelineHashMap.this.clear();
@@ -305,7 +305,7 @@ public class TimelineHashMap<K, V>
 
     @Override
     public Collection<V> values() {
-        return values(Long.MAX_VALUE);
+        return values(SnapshottableHashTable.LATEST_EPOCH);
     }
 
     public Collection<V> values(long epoch) {
@@ -324,7 +324,7 @@ public class TimelineHashMap<K, V>
         }
 
         public final void clear() {
-            if (epoch != Long.MAX_VALUE) {
+            if (epoch != SnapshottableHashTable.LATEST_EPOCH) {
                 throw new RuntimeException("can't modify snapshot");
             }
             TimelineHashMap.this.clear();
@@ -339,7 +339,7 @@ public class TimelineHashMap<K, V>
         }
 
         public final boolean remove(Object o) {
-            if (epoch != Long.MAX_VALUE) {
+            if (epoch != SnapshottableHashTable.LATEST_EPOCH) {
                 throw new RuntimeException("can't modify snapshot");
             }
             return snapshottableRemove(o) != null;
@@ -371,7 +371,7 @@ public class TimelineHashMap<K, V>
 
     @Override
     public Set<Entry<K, V>> entrySet() {
-        return entrySet(Long.MAX_VALUE);
+        return entrySet(SnapshottableHashTable.LATEST_EPOCH);
     }
 
     public Set<Entry<K, V>> entrySet(long epoch) {
@@ -401,7 +401,7 @@ public class TimelineHashMap<K, V>
             Iterator<Entry<K, V>> iter = entrySet().iterator();
             while (iter.hasNext()) {
                 Entry<K, V> entry = iter.next();
-                if (!get(entry.getKey()).equals(entry.getValue())) {
+                if (!m.get(entry.getKey()).equals(entry.getValue())) {
                     return false;
                 }
             }

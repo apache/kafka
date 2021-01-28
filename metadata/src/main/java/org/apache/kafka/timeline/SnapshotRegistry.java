@@ -117,6 +117,9 @@ public class SnapshotRegistry {
      */
     public void revertToSnapshot(long epoch) {
         Snapshot target = null;
+        // Iterate through all the snapshots, looking for the one to revert to.
+        // Once we find the snapshot we are looking for, we delete all the snapshots
+        // that come after that.
         for (Iterator<Snapshot> iter = snapshots.iterator(); iter.hasNext(); ) {
             Snapshot snapshot = iter.next();
             if (target == null) {
@@ -126,6 +129,9 @@ public class SnapshotRegistry {
             } else {
                 iter.remove();
             }
+        }
+        if (target == null) {
+            throw new RuntimeException("Unable to find snapshot " + epoch);
         }
         log.info("Reverting to snapshot {}", epoch);
         target.handleRevert();
@@ -139,11 +145,11 @@ public class SnapshotRegistry {
         return curEpoch;
     }
 
-    public void deleteSnapshotsUpTo(long offset) {
+    public void deleteSnapshotsUpTo(long targetEpoch) {
         Iterator<Snapshot> iter = snapshots.iterator();
         while (iter.hasNext()) {
             Snapshot snapshot = iter.next();
-            if (snapshot.epoch() >= offset) {
+            if (snapshot.epoch() >= targetEpoch) {
                 break;
             }
             log.debug("Deleting snapshot {}", snapshot.epoch());

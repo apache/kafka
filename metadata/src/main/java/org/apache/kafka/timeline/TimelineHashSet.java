@@ -41,7 +41,7 @@ public class TimelineHashSet<T>
 
         TimelineHashSetEntry(T value) {
             this.value = value;
-            this.startEpoch = Long.MAX_VALUE;
+            this.startEpoch = SnapshottableHashTable.LATEST_EPOCH;
         }
 
         public T getValue() {
@@ -78,7 +78,7 @@ public class TimelineHashSet<T>
 
     @Override
     public int size() {
-        return size(Long.MAX_VALUE);
+        return size(SnapshottableHashTable.LATEST_EPOCH);
     }
 
     public int size(long epoch) {
@@ -87,7 +87,7 @@ public class TimelineHashSet<T>
 
     @Override
     public boolean isEmpty() {
-        return isEmpty(Long.MAX_VALUE);
+        return isEmpty(SnapshottableHashTable.LATEST_EPOCH);
     }
 
     public boolean isEmpty(long epoch) {
@@ -96,7 +96,7 @@ public class TimelineHashSet<T>
 
     @Override
     public boolean contains(Object key) {
-        return contains(key, Long.MAX_VALUE);
+        return contains(key, SnapshottableHashTable.LATEST_EPOCH);
     }
 
     public boolean contains(Object object, long epoch) {
@@ -128,7 +128,7 @@ public class TimelineHashSet<T>
 
     @Override
     public Iterator<T> iterator() {
-        return iterator(Long.MAX_VALUE);
+        return iterator(SnapshottableHashTable.LATEST_EPOCH);
     }
 
     public Iterator<T> iterator(long epoch) {
@@ -225,7 +225,8 @@ public class TimelineHashSet<T>
 
     @Override
     public void clear() {
-        Iterator<TimelineHashSetEntry<T>> iter = snapshottableIterator(Long.MAX_VALUE);
+        Iterator<TimelineHashSetEntry<T>> iter =
+            snapshottableIterator(SnapshottableHashTable.LATEST_EPOCH);
         while (iter.hasNext()) {
             iter.next();
             iter.remove();

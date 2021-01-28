@@ -134,14 +134,14 @@ public class SnapshottableHashTableTest {
         assertTrue(table.snapshottableAddUnlessPresent(E_2A));
         assertTrue(table.snapshottableAddUnlessPresent(E_3A));
         registry.createSnapshot(0);
-        assertIteratorContains(table.snapshottableIterator(0), E_1B, E_2A, E_3A);
-        table.snapshottableRemove(E_1B);
-        assertIteratorContains(table.snapshottableIterator(0), E_1B, E_2A, E_3A);
-        table.snapshottableRemove(E_1A);
-        assertIteratorContains(table.snapshottableIterator(Long.MAX_VALUE), E_2A, E_3A);
-        table.snapshottableRemove(E_2A);
-        table.snapshottableRemove(E_3A);
-        assertIteratorContains(table.snapshottableIterator(0), E_1B, E_2A, E_3A);
+        assertIteratorYields(table.snapshottableIterator(0), E_1B, E_2A, E_3A);
+        assertEquals(E_1B, table.snapshottableRemove(E_1B));
+        assertIteratorYields(table.snapshottableIterator(0), E_1B, E_2A, E_3A);
+        assertEquals(null, table.snapshottableRemove(E_1A));
+        assertIteratorYields(table.snapshottableIterator(Long.MAX_VALUE), E_2A, E_3A);
+        assertEquals(E_2A, table.snapshottableRemove(E_2A));
+        assertEquals(E_3A, table.snapshottableRemove(E_3A));
+        assertIteratorYields(table.snapshottableIterator(0), E_1B, E_2A, E_3A);
     }
 
     @Test
@@ -154,7 +154,7 @@ public class SnapshottableHashTableTest {
         Iterator<TestElement> iter = table.snapshottableIterator(0);
         assertTrue(table.snapshottableAddUnlessPresent(E_2A));
         assertTrue(table.snapshottableAddUnlessPresent(E_3A));
-        assertIteratorContains(iter, E_1A);
+        assertIteratorYields(iter, E_1A);
     }
 
     @Test
@@ -177,7 +177,7 @@ public class SnapshottableHashTableTest {
         assertEquals(E_1B, table.snapshottableRemove(E_1B));
         iterElements.add(iter.next());
         assertFalse(iter.hasNext());
-        assertIteratorContains(iterElements.iterator(), E_1B, E_2A, E_3A);
+        assertIteratorYields(iterElements.iterator(), E_1B, E_2A, E_3A);
     }
 
     @Test
@@ -193,7 +193,7 @@ public class SnapshottableHashTableTest {
         assertEquals(E_3A, table.snapshottableAddOrReplace(E_3B));
         registry.createSnapshot(1);
         assertEquals(3, table.snapshottableSize(Long.MAX_VALUE));
-        assertIteratorContains(table.snapshottableIterator(Long.MAX_VALUE), E_1B, E_2A, E_3B);
+        assertIteratorYields(table.snapshottableIterator(Long.MAX_VALUE), E_1B, E_2A, E_3B);
         table.snapshottableRemove(E_1B);
         table.snapshottableRemove(E_2A);
         table.snapshottableRemove(E_3B);
@@ -201,15 +201,15 @@ public class SnapshottableHashTableTest {
         assertEquals(3, table.snapshottableSize(0));
         assertEquals(3, table.snapshottableSize(1));
         registry.revertToSnapshot(0);
-        assertIteratorContains(table.snapshottableIterator(Long.MAX_VALUE), E_1A, E_2A, E_3A);
+        assertIteratorYields(table.snapshottableIterator(Long.MAX_VALUE), E_1A, E_2A, E_3A);
     }
 
     /**
      * Assert that the given iterator contains the given elements, in any order.
      * We compare using reference equality here, rather than object equality.
      */
-    private static void assertIteratorContains(Iterator<? extends Object> iter,
-                                               Object... expected) {
+    private static void assertIteratorYields(Iterator<? extends Object> iter,
+                                             Object... expected) {
         IdentityHashMap<Object, Boolean> remaining = new IdentityHashMap<>();
         for (Object object : expected) {
             remaining.put(object, true);
