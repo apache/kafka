@@ -58,6 +58,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.stream.Collectors;
@@ -304,6 +305,7 @@ public class StreamThread extends Thread {
     private Runnable shutdownErrorHook;
     private AtomicInteger assignmentErrorCode;
     private final ProcessingMode processingMode;
+    private AtomicBoolean leaveGroup;
 
     public static StreamThread create(final InternalTopologyBuilder builder,
                                       final StreamsConfig config,
@@ -473,7 +475,7 @@ public class StreamThread extends Thread {
                         final java.util.function.Consumer<Long> cacheResizer) {
         super(threadId);
         this.stateLock = new Object();
-
+        this.leaveGroup = new AtomicBoolean(false);
         this.adminClient = adminClient;
         this.streamsMetrics = streamsMetrics;
         this.commitSensor = ThreadMetrics.commitSensor(threadId, streamsMetrics);
@@ -1087,6 +1089,9 @@ public class StreamThread extends Thread {
         streamsMetrics.removeAllThreadLevelSensors(getName());
 
         setState(State.DEAD);
+        if (leaveGroup.get()) {
+            mainConsumer.unsubscribe();
+        }
         log.info("Shutdown complete");
     }
 
@@ -1173,6 +1178,10 @@ public class StreamThread extends Thread {
 
     public Optional<String> getGroupInstanceID() {
         return getGroupInstanceID;
+    }
+
+    public void leaveGroup() {
+        this.leaveGroup.set(true);
     }
 
     public Map<MetricName, Metric> producerMetrics() {

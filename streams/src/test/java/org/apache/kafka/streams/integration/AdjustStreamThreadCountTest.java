@@ -183,7 +183,23 @@ public class AdjustStreamThreadCountTest {
     }
 
     @Test
-    public void shouldnNotRemoveStreamThreadWithTimeout() throws Exception {
+    public void shouldRemoveStreamThreadWithStaticMembership() throws Exception {
+        properties.put("group.instance.id", "test");
+        try (final KafkaStreams kafkaStreams = new KafkaStreams(builder.build(), properties)) {
+            addStreamStateChangeListener(kafkaStreams);
+            startStreamsAndWaitForRunning(kafkaStreams);
+
+            final int oldThreadCount = kafkaStreams.localThreadsMetadata().size();
+            stateTransitionHistory.clear();
+            assertThat(kafkaStreams.removeStreamThread().get().split("-")[0], equalTo(appId));
+            assertThat(kafkaStreams.localThreadsMetadata().size(), equalTo(oldThreadCount - 1));
+
+            waitForTransitionFromRebalancingToRunning();
+        }
+    }
+
+    @Test
+    public void shouldnNotRemoveStreamThreadWithinTimeout() throws Exception {
         try (final KafkaStreams kafkaStreams = new KafkaStreams(builder.build(), properties)) {
             addStreamStateChangeListener(kafkaStreams);
             startStreamsAndWaitForRunning(kafkaStreams);
