@@ -305,7 +305,7 @@ public class StreamThread extends Thread {
     private Runnable shutdownErrorHook;
     private AtomicInteger assignmentErrorCode;
     private final ProcessingMode processingMode;
-    private AtomicBoolean leaveGroup;
+    private AtomicBoolean leaveGroupRequested;
 
     public static StreamThread create(final InternalTopologyBuilder builder,
                                       final StreamsConfig config,
@@ -475,7 +475,7 @@ public class StreamThread extends Thread {
                         final java.util.function.Consumer<Long> cacheResizer) {
         super(threadId);
         this.stateLock = new Object();
-        this.leaveGroup = new AtomicBoolean(false);
+        this.leaveGroupRequested = new AtomicBoolean(false);
         this.adminClient = adminClient;
         this.streamsMetrics = streamsMetrics;
         this.commitSensor = ThreadMetrics.commitSensor(threadId, streamsMetrics);
@@ -629,7 +629,7 @@ public class StreamThread extends Thread {
             long elapsedMs = 0L;
             try {
                 while (state != targetState) {
-                    if (timeoutMs > elapsedMs) {
+                    if (timeoutMs >= elapsedMs) {
                         final long remainingMs = timeoutMs - elapsedMs;
                         try {
                             stateLock.wait(remainingMs);
@@ -1076,6 +1076,9 @@ public class StreamThread extends Thread {
         } catch (final Throwable e) {
             log.error("Failed to close changelog reader due to the following error:", e);
         }
+        if (leaveGroupRequested.get()) {
+            mainConsumer.unsubscribe();
+        }
         try {
             mainConsumer.close();
         } catch (final Throwable e) {
@@ -1089,9 +1092,7 @@ public class StreamThread extends Thread {
         streamsMetrics.removeAllThreadLevelSensors(getName());
 
         setState(State.DEAD);
-        if (leaveGroup.get()) {
-            mainConsumer.unsubscribe();
-        }
+
         log.info("Shutdown complete");
     }
 
@@ -1180,8 +1181,8 @@ public class StreamThread extends Thread {
         return getGroupInstanceID;
     }
 
-    public void leaveGroup() {
-        this.leaveGroup.set(true);
+    public void requestLeaveGroupDuringShutdown() {
+        this.leaveGroupRequested.set(true);
     }
 
     public Map<MetricName, Metric> producerMetrics() {

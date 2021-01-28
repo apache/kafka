@@ -1019,13 +1019,14 @@ public class KafkaStreams implements AutoCloseable {
             synchronized (changeThreadCount) {
                 // make a copy of threads to avoid holding lock
                 for (final StreamThread streamThread : new ArrayList<>(threads)) {
-                    if (streamThread.isAlive() && (!streamThread.getName().equals(Thread.currentThread().getName())
-                            || threads.size() == 1)) {
+                    final boolean callingThreadIsNotCurrentStreamThread = !streamThread.getName().equals(Thread.currentThread().getName());
+                    if (streamThread.isAlive() && (callingThreadIsNotCurrentStreamThread || threads.size() == 1)) {
+                        log.info("Removing StreamThread " + streamThread.getName());
                         final Optional<String> groupInstanceID = streamThread.getGroupInstanceID();
-                        streamThread.leaveGroup();
+                        streamThread.requestLeaveGroupDuringShutdown();
                         streamThread.shutdown();
                         if (!streamThread.getName().equals(Thread.currentThread().getName())) {
-                            if (!streamThread.waitOnThreadState(StreamThread.State.DEAD, timeoutMs)) {
+                            if (!streamThread.waitOnThreadState(StreamThread.State.DEAD, timeoutMs - begin)) {
                                 log.warn("Thread " + streamThread.getName() + " did not shutdown in the allotted time");
                                 timeout = true;
                             }
@@ -1033,7 +1034,7 @@ public class KafkaStreams implements AutoCloseable {
                         threads.remove(streamThread);
                         final long cacheSizePerThread = getCacheSizePerThread(threads.size());
                         resizeThreadCache(cacheSizePerThread);
-                        if (groupInstanceID.isPresent() && !streamThread.getName().equals(Thread.currentThread().getName())) {
+                        if (groupInstanceID.isPresent() && callingThreadIsNotCurrentStreamThread) {
                             final MemberToRemove memberToRemove = new MemberToRemove(groupInstanceID.get());
                             final Collection<MemberToRemove> membersToRemove = Collections.singletonList(memberToRemove);
                             final RemoveMembersFromConsumerGroupResult removeMembersFromConsumerGroupResult = 
@@ -1044,11 +1045,12 @@ public class KafkaStreams implements AutoCloseable {
                             try {
                                 removeMembersFromConsumerGroupResult.memberResult(memberToRemove).get(timeoutMs - begin, TimeUnit.MILLISECONDS);
                             } catch (final java.util.concurrent.TimeoutException e) {
+                                log.warn("Rethrowing a java TimeoutException as a kafka TimeoutException " + Arrays.toString(e.getStackTrace()));
                                 throw new TimeoutException(e.getMessage());
                             } catch (final InterruptedException e) {
                                 Thread.currentThread().interrupt();
                             } catch (final ExecutionException e) {
-                                e.printStackTrace();
+                                log.error("Getting the member result threw this ExecutionException: " + e.getMessage());
                             }
                         }
                         if (timeout) {
