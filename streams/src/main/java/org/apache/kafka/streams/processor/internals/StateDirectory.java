@@ -156,16 +156,13 @@ public class StateDirectory {
      * @return true if the state directory was successfully locked
      */
     private boolean lockStateDirectory() {
-        // it should be re-entrant as we sometimes start up multiple KafkaStreams during integration tests
-        if (stateDirLock == null) {
-            final File lockFile = new File(stateDir, LOCK_FILE_NAME);
-            try {
-                stateDirLockChannel = FileChannel.open(lockFile.toPath(), StandardOpenOption.CREATE, StandardOpenOption.WRITE);
-                stateDirLock = tryLock(stateDirLockChannel);
-            } catch (final IOException e) {
-                log.error("Unable to lock the state directory due to unexpected exception", e);
-                throw new ProcessorStateException("Failed to lock the state directory during startup", e);
-            }
+        final File lockFile = new File(stateDir, LOCK_FILE_NAME);
+        try {
+            stateDirLockChannel = FileChannel.open(lockFile.toPath(), StandardOpenOption.CREATE, StandardOpenOption.WRITE);
+            stateDirLock = tryLock(stateDirLockChannel);
+        } catch (final IOException e) {
+            log.error("Unable to lock the state directory due to unexpected exception", e);
+            throw new ProcessorStateException("Failed to lock the state directory during startup", e);
         }
 
         return stateDirLock != null;
@@ -399,23 +396,25 @@ public class StateDirectory {
     }
 
     public void close() {
-        try {
-            stateDirLock.release();
-            stateDirLockChannel.close();
+        if (hasPersistentStores) {
+            try {
+                stateDirLock.release();
+                stateDirLockChannel.close();
 
-            stateDirLock = null;
-            stateDirLockChannel = null;
-        } catch (final IOException e) {
-            log.error("Unexpected exception while unlocking the state dir", e);
-            throw new StreamsException("Failed to release the lock on the state directory", e);
-        }
+                stateDirLock = null;
+                stateDirLockChannel = null;
+            } catch (final IOException e) {
+                log.error("Unexpected exception while unlocking the state dir", e);
+                throw new StreamsException("Failed to release the lock on the state directory", e);
+            }
 
-        // all threads should be stopped and cleaned up by now, so none should remain holding a lock
-        if (locks.isEmpty()) {
-            log.error("Some task directories still locked while closing state, this indicates unclean shutdown: {}", locks);
-        }
-        if (globalStateLock != null) {
-            log.error("Global state lock is present while closing the state, this indicates unclean shutdown");
+            // all threads should be stopped and cleaned up by now, so none should remain holding a lock
+            if (locks.isEmpty()) {
+                log.error("Some task directories still locked while closing state, this indicates unclean shutdown: {}", locks);
+            }
+            if (globalStateLock != null) {
+                log.error("Global state lock is present while closing the state, this indicates unclean shutdown");
+            }
         }
     }
 
