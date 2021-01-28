@@ -17,6 +17,7 @@
 package org.apache.kafka.streams.processor.internals;
 
 import org.apache.kafka.clients.consumer.ConsumerRecord;
+import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.TimeoutException;
@@ -156,6 +157,11 @@ public interface Task {
     // runtime methods (using in RUNNING state)
 
     void addRecords(TopicPartition partition, Iterable<ConsumerRecord<byte[], byte[]>> records);
+
+    /**
+     * Add to this task any metadata returned from the poll.
+     */
+    void addFetchedMetadata(TopicPartition partition, ConsumerRecords.Metadata metadata);
 
     default boolean process(final long wallClockTime) {
         return false;

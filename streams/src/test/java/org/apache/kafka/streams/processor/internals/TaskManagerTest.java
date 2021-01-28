@@ -24,6 +24,7 @@ import org.apache.kafka.clients.consumer.CommitFailedException;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerGroupMetadata;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
+import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Metric;
@@ -3055,6 +3056,11 @@ public class TaskManagerTest {
             } else {
                 throw new IllegalStateException("Can't add records to an inactive task.");
             }
+        }
+
+        @Override
+        public void addFetchedMetadata(final TopicPartition partition, final ConsumerRecords.Metadata metadata) {
+            // do nothing
         }
 
         @Override

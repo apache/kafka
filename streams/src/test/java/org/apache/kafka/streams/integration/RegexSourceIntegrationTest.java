@@ -128,6 +128,7 @@ public class RegexSourceIntegrationTest {
         properties.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 100);
         properties.put(ConsumerConfig.METADATA_MAX_AGE_CONFIG, "1000");
         properties.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
+        properties.put(StreamsConfig.MAX_TASK_IDLE_MS_CONFIG, 0L);
 
         streamsConfiguration = StreamsTestUtils.getStreamsConfig(
             IntegrationTestUtils.safeUniqueTestName(RegexSourceIntegrationTest.class, new TestName()),
