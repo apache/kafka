@@ -50,6 +50,10 @@ final class KafkaMetadataLog private (
   maxFetchSizeInBytes: Int
 ) extends ReplicatedLog {
 
+  /* The oldest snapshot id is the snapshot at the log start offset. Since the KafkaMetadataLog doesn't
+   * currently delete snapshots, it is possible for the oldest snapshot id to not be the smallest
+   * snapshot id in the snapshotIds set.
+   */
   private[this] var oldestSnapshotId = snapshotIds
     .stream()
     .filter(_.offset == startOffset)
@@ -107,7 +111,7 @@ final class KafkaMetadataLog private (
         }
         new LogAppendInfo(firstOffset.messageOffset, appendInfo.lastOffset)
       case None =>
-        throw new KafkaException(s"Append failed unexpectedly: $appendInfo")
+        throw new KafkaException(s"Append failed unexpectedly: ${appendInfo.errorMessage}")
     }
   }
 
@@ -166,7 +170,7 @@ final class KafkaMetadataLog private (
     log.truncateTo(offset)
   }
 
-  override def maybeTruncateFullyToLatestSnapshot(): Boolean = {
+  override def truncateToLatestSnapshot(): Boolean = {
     val latestEpoch = log.latestEpoch.getOrElse(0)
     latestSnapshotId.asScala match {
       case Some(snapshotId) if (snapshotId.epoch > latestEpoch ||
@@ -202,9 +206,7 @@ final class KafkaMetadataLog private (
 
   override def highWatermark: LogOffsetMetadata = {
     val LogOffsetSnapshot(_, _, hwm, _) = log.fetchOffsetSnapshot
-    val segmentPosition: Optional[OffsetMetadata] = if (hwm.segmentBaseOffset != Log.UnknownOffset &&
-      hwm.relativePositionInSegment != kafka.server.LogOffsetMetadata.UnknownFilePosition) {
-
+    val segmentPosition: Optional[OffsetMetadata] = if (hwm.messageOffsetOnly) {
       Optional.of(SegmentPosition(hwm.segmentBaseOffset, hwm.relativePositionInSegment))
     } else {
       Optional.empty()
@@ -272,7 +274,7 @@ final class KafkaMetadataLog private (
     snapshotIds.add(snapshotId)
   }
 
-  override def deleteToNewOldestSnapshotId(logStartSnapshotId: OffsetAndEpoch): Boolean = {
+  override def deleteBeforeSnapshot(logStartSnapshotId: OffsetAndEpoch): Boolean = {
     latestSnapshotId.asScala match {
       case Some(snapshotId) if (snapshotIds.contains(logStartSnapshotId) &&
         startOffset < logStartSnapshotId.offset &&
@@ -323,7 +325,7 @@ object KafkaMetadataLog {
     val replicatedLog = new KafkaMetadataLog(log, snapshotIds, topicPartition, maxFetchSizeInBytes)
     // When recovering, truncate fully if the latest snapshot is after the log end offset. This can happen to a follower
     // when the follower crashes after downloading a snapshot from the leader but before it could truncate the log fully.
-    replicatedLog.maybeTruncateFullyToLatestSnapshot()
+    replicatedLog.truncateToLatestSnapshot()
 
     replicatedLog
   }

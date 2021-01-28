@@ -105,7 +105,7 @@ final class KafkaMetadataLogTest {
       snapshot.freeze()
     }
 
-    assertTrue(log.deleteToNewOldestSnapshotId(snapshotId))
+    assertTrue(log.deleteBeforeSnapshot(snapshotId))
     assertEquals(offset, log.startOffset)
     assertEquals(epoch, log.lastFetchedEpoch)
     assertEquals(offset, log.endOffset().offset)
@@ -115,7 +115,7 @@ final class KafkaMetadataLogTest {
     append(log, newRecords, epoch + 1)
 
     // Start offset should not change since a new snapshot was not generated
-    assertFalse(log.deleteToNewOldestSnapshotId(new OffsetAndEpoch(offset + newRecords, epoch)))
+    assertFalse(log.deleteBeforeSnapshot(new OffsetAndEpoch(offset + newRecords, epoch)))
     assertEquals(offset, log.startOffset)
 
     assertEquals(epoch + 1, log.lastFetchedEpoch)
@@ -133,7 +133,7 @@ final class KafkaMetadataLogTest {
     append(log, offset, epoch)
     log.updateHighWatermark(new LogOffsetMetadata(offset))
 
-    assertFalse(log.deleteToNewOldestSnapshotId(new OffsetAndEpoch(1L, epoch)))
+    assertFalse(log.deleteBeforeSnapshot(new OffsetAndEpoch(1L, epoch)))
     assertEquals(0, log.startOffset)
     assertEquals(epoch, log.lastFetchedEpoch)
     assertEquals(offset, log.endOffset().offset)
@@ -157,7 +157,7 @@ final class KafkaMetadataLogTest {
 
     assertThrows(
       classOf[OffsetOutOfRangeException],
-      () => log.deleteToNewOldestSnapshotId(snapshotId)
+      () => log.deleteBeforeSnapshot(snapshotId)
     )
   }
 
@@ -175,7 +175,7 @@ final class KafkaMetadataLogTest {
       snapshot.freeze()
     }
 
-    assertTrue(log.maybeTruncateFullyToLatestSnapshot())
+    assertTrue(log.truncateToLatestSnapshot())
     assertEquals(sameEpochSnapshotId.offset, log.startOffset)
     assertEquals(sameEpochSnapshotId.epoch, log.lastFetchedEpoch)
     assertEquals(sameEpochSnapshotId.offset, log.endOffset().offset)
@@ -189,7 +189,7 @@ final class KafkaMetadataLogTest {
       snapshot.freeze()
     }
 
-    assertTrue(log.maybeTruncateFullyToLatestSnapshot())
+    assertTrue(log.truncateToLatestSnapshot())
     assertEquals(greaterEpochSnapshotId.offset, log.startOffset)
     assertEquals(greaterEpochSnapshotId.epoch, log.lastFetchedEpoch)
     assertEquals(greaterEpochSnapshotId.offset, log.endOffset().offset)
@@ -210,7 +210,7 @@ final class KafkaMetadataLogTest {
       snapshot.freeze()
     }
 
-    assertFalse(log.maybeTruncateFullyToLatestSnapshot())
+    assertFalse(log.truncateToLatestSnapshot())
 
     append(log, numberOfRecords, epoch)
 
@@ -219,7 +219,7 @@ final class KafkaMetadataLogTest {
       snapshot.freeze()
     }
 
-    assertFalse(log.maybeTruncateFullyToLatestSnapshot())
+    assertFalse(log.truncateToLatestSnapshot())
   }
 
   @Test

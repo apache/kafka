@@ -81,7 +81,7 @@ public interface ReplicatedLog extends Closeable {
      */
     default ValidOffsetAndEpoch validateOffsetAndEpoch(long offset, int epoch) {
         if (startOffset() == 0 && offset == 0) {
-            return ValidOffsetAndEpoch.valid(new OffsetAndEpoch(offset, 0));
+            return ValidOffsetAndEpoch.valid(new OffsetAndEpoch(0, 0));
         } else if (
                 oldestSnapshotId().isPresent() &&
                 ((offset < startOffset()) ||
@@ -163,7 +163,7 @@ public interface ReplicatedLog extends Closeable {
      *
      * @return true when the log is fully truncated, otherwise returns false
      */
-    boolean maybeTruncateFullyToLatestSnapshot();
+    boolean truncateToLatestSnapshot();
 
     /**
      * Update the high watermark and associated metadata (which is used to avoid
@@ -180,7 +180,7 @@ public interface ReplicatedLog extends Closeable {
      * The replicated log's start offset can be increased and older segments can be deleted when
      * there is a snapshot greater than the current log start offset.
      */
-    boolean deleteToNewOldestSnapshotId(OffsetAndEpoch logStartSnapshotId);
+    boolean deleteBeforeSnapshot(OffsetAndEpoch logStartSnapshotId);
 
     /**
      * Flush the current log to disk.

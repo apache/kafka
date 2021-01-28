@@ -207,7 +207,7 @@ public class MockLogTest {
         try (RawSnapshotWriter snapshot = log.createSnapshot(new OffsetAndEpoch(initialOffset, 0))) {
             snapshot.freeze();
         }
-        log.maybeTruncateFullyToLatestSnapshot();
+        log.truncateToLatestSnapshot();
 
         log.appendAsFollower(MemoryRecords.withRecords(initialOffset, CompressionType.NONE, epoch, recordFoo));
 
@@ -371,7 +371,7 @@ public class MockLogTest {
         try (RawSnapshotWriter snapshot = log.createSnapshot(new OffsetAndEpoch(initialOffset, 0))) {
             snapshot.freeze();
         }
-        log.maybeTruncateFullyToLatestSnapshot();
+        log.truncateToLatestSnapshot();
 
         log.appendAsFollower(MemoryRecords.withRecords(initialOffset, CompressionType.NONE, epoch, recordFoo));
 
@@ -447,7 +447,7 @@ public class MockLogTest {
             snapshot.freeze();
         }
 
-        assertTrue(log.deleteToNewOldestSnapshotId(snapshotId));
+        assertTrue(log.deleteBeforeSnapshot(snapshotId));
         assertEquals(offset, log.startOffset());
         assertEquals(epoch, log.lastFetchedEpoch());
         assertEquals(offset, log.endOffset().offset);
@@ -457,7 +457,7 @@ public class MockLogTest {
         log.updateHighWatermark(new LogOffsetMetadata(offset + newRecords));
 
         // Start offset should not change since a new snapshot was not generated
-        assertFalse(log.deleteToNewOldestSnapshotId(new OffsetAndEpoch(offset + newRecords, epoch)));
+        assertFalse(log.deleteBeforeSnapshot(new OffsetAndEpoch(offset + newRecords, epoch)));
         assertEquals(offset, log.startOffset());
 
         assertEquals(epoch + 1, log.lastFetchedEpoch());
@@ -473,7 +473,7 @@ public class MockLogTest {
         appendBatch(offset, epoch);
         log.updateHighWatermark(new LogOffsetMetadata(offset));
 
-        assertFalse(log.deleteToNewOldestSnapshotId(new OffsetAndEpoch(1, epoch)));
+        assertFalse(log.deleteBeforeSnapshot(new OffsetAndEpoch(1, epoch)));
         assertEquals(0, log.startOffset());
         assertEquals(epoch, log.lastFetchedEpoch());
         assertEquals(offset, log.endOffset().offset);
@@ -495,7 +495,7 @@ public class MockLogTest {
 
         assertThrows(
             OffsetOutOfRangeException.class,
-            () -> log.deleteToNewOldestSnapshotId(snapshotId)
+            () -> log.deleteBeforeSnapshot(snapshotId)
         );
     }
 
@@ -511,7 +511,7 @@ public class MockLogTest {
             snapshot.freeze();
         }
 
-        assertTrue(log.maybeTruncateFullyToLatestSnapshot());
+        assertTrue(log.truncateToLatestSnapshot());
         assertEquals(sameEpochSnapshotId.offset, log.startOffset());
         assertEquals(sameEpochSnapshotId.epoch, log.lastFetchedEpoch());
         assertEquals(sameEpochSnapshotId.offset, log.endOffset().offset);
@@ -525,7 +525,7 @@ public class MockLogTest {
             snapshot.freeze();
         }
 
-        assertTrue(log.maybeTruncateFullyToLatestSnapshot());
+        assertTrue(log.truncateToLatestSnapshot());
         assertEquals(greaterEpochSnapshotId.offset, log.startOffset());
         assertEquals(greaterEpochSnapshotId.epoch, log.lastFetchedEpoch());
         assertEquals(greaterEpochSnapshotId.offset, log.endOffset().offset);
@@ -544,7 +544,7 @@ public class MockLogTest {
             snapshot.freeze();
         }
 
-        assertFalse(log.maybeTruncateFullyToLatestSnapshot());
+        assertFalse(log.truncateToLatestSnapshot());
 
         appendBatch(numberOfRecords, epoch);
 
@@ -553,7 +553,7 @@ public class MockLogTest {
             snapshot.freeze();
         }
 
-        assertFalse(log.maybeTruncateFullyToLatestSnapshot());
+        assertFalse(log.truncateToLatestSnapshot());
     }
 
     private Optional<OffsetRange> readOffsets(long startOffset, Isolation isolation) {

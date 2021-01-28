@@ -81,7 +81,7 @@ public class MockLog implements ReplicatedLog {
     }
 
     @Override
-    public boolean maybeTruncateFullyToLatestSnapshot() {
+    public boolean truncateToLatestSnapshot() {
         AtomicBoolean truncated = new AtomicBoolean(false);
         latestSnapshotId().ifPresent(snapshotId -> {
             if (snapshotId.epoch > logLastFetchedEpoch().orElse(0) ||
@@ -430,8 +430,10 @@ public class MockLog implements ReplicatedLog {
     public void onSnapshotFrozen(OffsetAndEpoch snapshotId) {}
 
     @Override
-    public boolean deleteToNewOldestSnapshotId(OffsetAndEpoch logStartSnapshotId) {
-        if (logStartOffset() > logStartSnapshotId.offset || highWatermark.offset < logStartSnapshotId.offset) {
+    public boolean deleteBeforeSnapshot(OffsetAndEpoch logStartSnapshotId) {
+        if (logStartOffset() > logStartSnapshotId.offset ||
+            highWatermark.offset < logStartSnapshotId.offset) {
+
             throw new OffsetOutOfRangeException(
                 String.format(
                     "New log start (%s) is less than start offset (%s) or is greater than the high watermark (%s)",

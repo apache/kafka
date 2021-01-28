@@ -1358,7 +1358,7 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
             snapshot.freeze();
             state.setFetchingSnapshot(Optional.empty());
 
-            if (log.maybeTruncateFullyToLatestSnapshot()) {
+            if (log.truncateToLatestSnapshot()) {
                 updateFollowerHighWatermark(state, OptionalLong.of(log.highWatermark().offset));
             } else {
                 throw new IllegalStateException(
@@ -2124,7 +2124,7 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
     }
 
     private void maybeUpdateOldestSnapshotId() {
-        log.latestSnapshotId().ifPresent(snapshotId -> log.deleteToNewOldestSnapshotId(snapshotId));
+        log.latestSnapshotId().ifPresent(snapshotId -> log.deleteBeforeSnapshot(snapshotId));
     }
 
     private void wakeup() {

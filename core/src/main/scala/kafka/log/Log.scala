@@ -1284,7 +1284,7 @@ class Log(@volatile private var _dir: File,
 
   private def checkForLogDirFailure(): Unit = {
     if (logDirOffline) {
-      throw new KafkaStorageException(s"The log dir $parentDir is offline due to a previous IO exception.");
+      throw new KafkaStorageException(s"The log dir $parentDir is offline due to a previous IO exception.")
     }
   }
 
@@ -1930,10 +1930,12 @@ class Log(@volatile private var _dir: File,
         Note that this is only required for pre-V2 message formats because these do not store the first message offset
         in the header.
       */
-      appendInfo.firstOffset match {
-        case Some(firstOffset) => roll(Some(firstOffset.messageOffset))
-        case None => roll(Some(maxOffsetInMessages - Integer.MAX_VALUE))
-      }
+      val rollOffset = appendInfo
+        .firstOffset
+        .map(_.messageOffset)
+        .getOrElse(maxOffsetInMessages - Integer.MAX_VALUE)
+
+      roll(Some(rollOffset))
     } else {
       segment
     }
