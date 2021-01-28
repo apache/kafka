@@ -1843,8 +1843,6 @@ class KafkaApis(val requestChannel: RequestChannel,
               .setNumPartitions(-1)
               .setReplicationFactor(-1)
               .setTopicConfigErrorCode(Errors.NONE.code)
-          } else {
-            result.setTopicId(controller.controllerContext.topicIds.getOrElse(result.name(), Uuid.ZERO_UUID))
           }
         }
         sendResponseCallback(results)
@@ -1949,26 +1947,30 @@ class KafkaApis(val requestChannel: RequestChannel,
       }
       sendResponseCallback(results)
     } else {
+      val topicIdsFromRequest = deleteTopicRequest.topicIds().asScala.filter(topicId => topicId != Uuid.ZERO_UUID).toSet
       deleteTopicRequest.topics().forEach { topic =>
-        val name = if (topic.topicId().equals(Uuid.ZERO_UUID)) topic.name()
-          else controller.controllerContext.topicNames.getOrElse(topic.topicId(), null)
+        if (topic.name() != null && topic.topicId() != Uuid.ZERO_UUID)
+          throw new InvalidRequestException("Topic name and topic ID can not both be specified.")
+        val name = if (topic.topicId() == Uuid.ZERO_UUID) topic.name()
+        else controller.controllerContext.topicNames.getOrElse(topic.topicId(), null)
         results.add(new DeletableTopicResult()
           .setName(name)
           .setTopicId(topic.topicId()))
       }
-      val authorizedTopics = authHelper.filterByAuthorized(request.context, DELETE, TOPIC,
-        results.asScala)(_.name)
+      val authorizedDescribeTopics = authHelper.filterByAuthorized(request.context, DESCRIBE, TOPIC,
+        results.asScala.filter(result => result.name() != null))(_.name)
+      val authorizedDeleteTopics = authHelper.filterByAuthorized(request.context, DELETE, TOPIC,
+        results.asScala.filter(result => result.name() != null))(_.name)
       results.forEach { topic =>
-         val foundTopicId = !topic.topicId().equals(Uuid.ZERO_UUID) && topic.name() != null
-         val topicIdSpecified = !topic.topicId().equals(Uuid.ZERO_UUID)
-         if (!foundTopicId && topicIdSpecified) {
-           if (config.usesTopicId)
+        val unresolvedTopicId = !(topic.topicId() == Uuid.ZERO_UUID) && topic.name() == null
+         if (!config.usesTopicId && topicIdsFromRequest.contains(topic.topicId)) {
+           topic.setErrorCode(Errors.UNSUPPORTED_VERSION.code)
+           topic.setErrorMessage("Topic IDs are not supported on the server.")
+         } else if (unresolvedTopicId)
              topic.setErrorCode(Errors.UNKNOWN_TOPIC_ID.code)
-           else {
-             topic.setErrorCode(Errors.UNSUPPORTED_VERSION.code)
-             topic.setErrorMessage("Topic IDs are not supported on the server.")
-           }
-         } else if (!authorizedTopics.contains(topic.name))
+         else if (topicIdsFromRequest.contains(topic.topicId) && !authorizedDescribeTopics(topic.name))
+           topic.setErrorCode(Errors.UNKNOWN_TOPIC_ID.code)
+         else if (!authorizedDeleteTopics.contains(topic.name))
            topic.setErrorCode(Errors.TOPIC_AUTHORIZATION_FAILED.code)
          else if (!metadataCache.contains(topic.name))
            topic.setErrorCode(Errors.UNKNOWN_TOPIC_OR_PARTITION.code)

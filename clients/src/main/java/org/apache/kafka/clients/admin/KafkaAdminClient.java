@@ -1630,7 +1630,7 @@ public class KafkaAdminClient extends AdminClient {
 
     @Override
     public DeleteTopicsWithIdsResult deleteTopicsWithIds(final Collection<Uuid> topicIds,
-                                           final DeleteTopicsOptions options) {
+                                                         final DeleteTopicsOptions options) {
         final Map<Uuid, KafkaFutureImpl<Void>> topicFutures = new HashMap<>(topicIds.size());
         final List<Uuid> validTopicIds = new ArrayList<>(topicIds.size());
         for (Uuid topicId : topicIds) {
@@ -1727,11 +1727,11 @@ public class KafkaAdminClient extends AdminClient {
     }
    
     private Call getDeleteTopicsWithIdsCall(final DeleteTopicsOptions options,
-                                     final Map<Uuid, KafkaFutureImpl<Void>> futures,
-                                     final List<Uuid> topicIds,
-                                     final Map<Uuid, ThrottlingQuotaExceededException> quotaExceededExceptions,
-                                     final long now,
-                                     final long deadline) {
+                                            final Map<Uuid, KafkaFutureImpl<Void>> futures,
+                                            final List<Uuid> topicIds,
+                                            final Map<Uuid, ThrottlingQuotaExceededException> quotaExceededExceptions,
+                                            final long now,
+                                            final long deadline) {
         return new Call("deleteTopics", deadline, new ControllerNodeProvider()) {
             @Override
             DeleteTopicsRequest.Builder createRequest(int timeoutMs) {

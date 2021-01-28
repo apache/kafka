@@ -42,7 +42,7 @@ public class DeleteTopicsRequest extends AbstractRequest {
 
         @Override
         public DeleteTopicsRequest build(short version) {
-            if (version >= 6 && data.topicNames().size() != 0) {
+            if (version >= 6 && !data.topicNames().isEmpty()) {
                 data.setTopics(groupByTopic(data.topicNames()));
             } else if (version >= 6) {
                 for (DeleteTopicState topic : data.topics()) {

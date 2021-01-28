@@ -21,7 +21,6 @@ import java.io.{DataInputStream, DataOutputStream}
 import java.net.Socket
 import java.nio.ByteBuffer
 import java.util.Properties
-
 import kafka.api.IntegrationTestHarness
 import kafka.network.SocketServer
 import kafka.utils.NotNothing
@@ -149,4 +148,5 @@ abstract class BaseRequestTest extends IntegrationTestHarness {
     }
     new RequestHeader(apiKey, apiVersion, clientId, correlationId)
   }
+
 }

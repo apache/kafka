@@ -15,12 +15,13 @@
  * limitations under the License.
  */
 
-package kafka.server
+package unit.kafka.server
 
 import java.util.{Arrays, Properties}
 
 import kafka.api.KAFKA_2_7_IV0
 import kafka.network.SocketServer
+import kafka.server.{BaseRequestTest, KafkaConfig}
 import kafka.utils.TestUtils
 import org.apache.kafka.common.Uuid
 import org.apache.kafka.common.message.DeleteTopicsRequestData
@@ -30,8 +31,8 @@ import org.apache.kafka.common.requests.{DeleteTopicsRequest, DeleteTopicsRespon
 import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
 import org.junit.jupiter.api.{BeforeEach, Test}
 
-import scala.jdk.CollectionConverters._
 import scala.collection.Seq
+import scala.jdk.CollectionConverters._
 
 class TopicIdWithOldInterBrokerProtocolTest extends BaseRequestTest {
 
@@ -91,8 +92,7 @@ class TopicIdWithOldInterBrokerProtocolTest extends BaseRequestTest {
       new DeleteTopicsRequestData()
         .setTopics(Arrays.asList(new DeleteTopicState().setTopicId(ids("topic-7")),
           new DeleteTopicState().setTopicId(ids("topic-6"))
-        )
-        ).setTimeoutMs(timeout)).build()
+        )).setTimeoutMs(timeout)).build()
     val response = sendDeleteTopicsRequest(request)
     val error = response.errorCounts.asScala
     assertEquals(2, error(Errors.UNSUPPORTED_VERSION))

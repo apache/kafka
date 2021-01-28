@@ -984,7 +984,7 @@ public class KafkaAdminClientTest {
                     prepareDeleteTopicsResponse(1000,
                             deletableTopicResultWithId(topicId1, Errors.NONE),
                             deletableTopicResultWithId(topicId2, Errors.THROTTLING_QUOTA_EXCEEDED),
-                            deletableTopicResultWithId(topicId3, Errors.TOPIC_ALREADY_EXISTS)));
+                            deletableTopicResultWithId(topicId3, Errors.UNKNOWN_TOPIC_ID)));
 
             env.kafkaClient().prepareResponse(
                     expectDeleteTopicsRequestWithTopicIds(topicId2),
@@ -1002,7 +1002,7 @@ public class KafkaAdminClientTest {
 
             assertNull(resultIds.values().get(topicId1).get());
             assertNull(resultIds.values().get(topicId2).get());
-            TestUtils.assertFutureThrows(resultIds.values().get(topicId3), TopicExistsException.class);
+            TestUtils.assertFutureThrows(resultIds.values().get(topicId3), UnknownTopicIdException.class);
         }
     }
 
@@ -1058,7 +1058,7 @@ public class KafkaAdminClientTest {
                     prepareDeleteTopicsResponse(1000,
                             deletableTopicResultWithId(topicId1, Errors.NONE),
                             deletableTopicResultWithId(topicId2, Errors.THROTTLING_QUOTA_EXCEEDED),
-                            deletableTopicResultWithId(topicId3, Errors.TOPIC_ALREADY_EXISTS)));
+                            deletableTopicResultWithId(topicId3, Errors.UNKNOWN_TOPIC_ID)));
 
             env.kafkaClient().prepareResponse(
                     expectDeleteTopicsRequestWithTopicIds(topicId2),
@@ -1084,7 +1084,7 @@ public class KafkaAdminClientTest {
             e = TestUtils.assertFutureThrows(resultIds.values().get(topicId2),
                     ThrottlingQuotaExceededException.class);
             assertEquals(0, e.throttleTimeMs());
-            TestUtils.assertFutureThrows(resultIds.values().get(topicId3), TopicExistsException.class);
+            TestUtils.assertFutureThrows(resultIds.values().get(topicId3), UnknownTopicIdException.class);
         }
     }
 
@@ -1119,7 +1119,7 @@ public class KafkaAdminClientTest {
                     prepareDeleteTopicsResponse(1000,
                             deletableTopicResultWithId(topicId1, Errors.NONE),
                             deletableTopicResultWithId(topicId2, Errors.THROTTLING_QUOTA_EXCEEDED),
-                            deletableTopicResultWithId(topicId3, Errors.TOPIC_ALREADY_EXISTS)));
+                            deletableTopicResultWithId(topicId3, Errors.UNKNOWN_TOPIC_ID)));
 
             DeleteTopicsWithIdsResult resultIds = env.adminClient().deleteTopicsWithIds(
                     asList(topicId1, topicId2, topicId3),
@@ -1129,7 +1129,7 @@ public class KafkaAdminClientTest {
             e = TestUtils.assertFutureThrows(resultIds.values().get(topicId2),
                     ThrottlingQuotaExceededException.class);
             assertEquals(1000, e.throttleTimeMs());
-            TestUtils.assertFutureError(resultIds.values().get(topicId3), TopicExistsException.class);
+            TestUtils.assertFutureError(resultIds.values().get(topicId3), UnknownTopicIdException.class);
         }
     }
 

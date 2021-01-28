@@ -29,7 +29,7 @@
   // in the response if the topics deletion is throttled (KIP-599).
   //
   // Version 6 adds topic ID to responses. An UNSUPPORTED_VERSION error code will be returned when attempting to
-  // delete using topic IDs when IBP > 2.8. UNKNOWN_TOPIC_ID error code will be returned when IBP is at least 2.8, but
+  // delete using topic IDs when IBP < 2.8. UNKNOWN_TOPIC_ID error code will be returned when IBP is at least 2.8, but
   // the topic ID was not found.
   "validVersions": "0-6",
   "flexibleVersions": "4+",
