@@ -1026,7 +1026,7 @@ public class KafkaStreams implements AutoCloseable {
                         streamThread.shutdown();
                         if (!streamThread.getName().equals(Thread.currentThread().getName())) {
                             if (!streamThread.waitOnThreadState(StreamThread.State.DEAD, timeoutMs)) {
-                                log.warn("Thread " + streamThread.getName() + " did not stop in the allotted time");
+                                log.warn("Thread " + streamThread.getName() + " did not shutdown in the allotted time");
                                 timeout = true;
                             }
                         }
