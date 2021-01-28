@@ -158,6 +158,21 @@ pipeline {
             echo 'Skipping Kafka Streams archetype test for Java 15'
           }
         }
+
+        stage('ARM') {
+          agent { label 'arm4' }
+          options {
+            timeout(time: 8, unit: 'HOURS') 
+            timestamps()
+          }
+          environment {
+            SCALA_VERSION=2.12
+          }
+          steps {
+            setupGradle()
+            doValidation()
+          }
+        }
       }
     }
   }
