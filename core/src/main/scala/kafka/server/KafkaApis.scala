@@ -70,7 +70,7 @@ import org.apache.kafka.common.replica.ClientMetadata
 import org.apache.kafka.common.replica.ClientMetadata.DefaultClientMetadata
 import org.apache.kafka.common.requests.FindCoordinatorRequest.CoordinatorType
 import org.apache.kafka.common.requests.ProduceResponse.PartitionResponse
-import org.apache.kafka.common.requests._
+import org.apache.kafka.common.requests.{BrokerHeartbeatRequest, BrokerRegistrationRequest, DecommissionBrokerRequest, _}
 import org.apache.kafka.common.resource.Resource.CLUSTER_NAME
 import org.apache.kafka.common.resource.ResourceType._
 import org.apache.kafka.common.resource.{Resource, ResourceType}
@@ -232,6 +232,10 @@ class KafkaApis(val requestChannel: RequestChannel,
         case ApiKeys.DESCRIBE_QUORUM => requestHelper.closeConnection(request, util.Collections.emptyMap())
         case ApiKeys.FETCH_SNAPSHOT => requestHelper.closeConnection(request, util.Collections.emptyMap())
 
+        // Handle requests that should have been sent to the KIP-500 controller.
+        case ApiKeys.BROKER_REGISTRATION => handleBrokerRegistration(request)
+        case ApiKeys.BROKER_HEARTBEAT => handleBrokerHeartbeat(request)
+        case ApiKeys.DECOMMISSION_BROKER => maybeForwardToController(request, handleDecommissionBrokerRequest)
       }
     } catch {
       case e: FatalExitError => throw e
@@ -3294,6 +3298,27 @@ class KafkaApis(val requestChannel: RequestChannel,
 
     val forwardedRequest = parseForwardedRequest(request, forwardedContext, forwardedRequestBuffer)
     handle(forwardedRequest)
+  }
+
+  def handleBrokerRegistration(request: RequestChannel.Request): Unit = {
+    val registrationRequest = request.body[BrokerRegistrationRequest]
+    requestHelper.sendResponseMaybeThrottle(request, requestThrottleMs =>
+      registrationRequest.getErrorResponse(requestThrottleMs,
+        Errors.NOT_CONTROLLER.exception))
+  }
+
+  def handleBrokerHeartbeat(request: RequestChannel.Request): Unit = {
+    val heartbeatRequest = request.body[BrokerHeartbeatRequest]
+    requestHelper.sendResponseMaybeThrottle(request, requestThrottleMs =>
+      heartbeatRequest.getErrorResponse(requestThrottleMs,
+        Errors.NOT_CONTROLLER.exception))
+  }
+
+  def handleDecommissionBrokerRequest(request: RequestChannel.Request): Unit = {
+    val decommissionBrokerRequest = request.body[DecommissionBrokerRequest]
+    requestHelper.sendResponseMaybeThrottle(request, requestThrottleMs =>
+      decommissionBrokerRequest.getErrorResponse(requestThrottleMs,
+        Errors.UNSUPPORTED_VERSION.exception))
   }
 
   private def parseForwardedClientAddress(
