@@ -32,8 +32,7 @@ import org.junit.jupiter.api.extension.ExtendWith
 import java.util
 import java.util.concurrent.{ExecutionException, TimeUnit}
 import kafka.utils.TestUtils
-import kafka.test.ClusterConfig.Type
-import kafka.test.annotations.{ClusterTest, ClusterTestDefaults}
+import kafka.test.annotations.{ClusterTest, ClusterTestDefaults, Type}
 import kafka.test.junit.ClusterForEach
 
 import scala.jdk.CollectionConverters._

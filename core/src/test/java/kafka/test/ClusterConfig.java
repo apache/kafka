@@ -18,6 +18,7 @@
 package kafka.test;
 
 import kafka.server.KafkaConfig;
+import kafka.test.annotations.Type;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
 
 import java.util.LinkedHashMap;
@@ -29,17 +30,12 @@ import java.util.Properties;
  * Represents a requested configuration of a Kafka cluster for integration testing
  */
 public class ClusterConfig {
-    public enum Type {
-        // Raft,
-        Zk,
-        Both,
-        Default
-    }
 
     private final Type type;
     private final int brokers;
     private final int controllers;
     private final String name;
+    private final boolean autoStart;
     private final Properties serverProperties;
     private final String ibp;
     private final String securityProtocol;
@@ -48,12 +44,14 @@ public class ClusterConfig {
     private final Properties adminClientProperties = new Properties();
     private final Properties saslServerProperties = new Properties();
 
-    ClusterConfig(Type type, int brokers, int controllers, String name, Properties serverProperties, String ibp,
+    ClusterConfig(Type type, int brokers, int controllers, String name, boolean autoStart,
+                  Properties serverProperties, String ibp,
                   String securityProtocol, String listenerName) {
         this.type = type;
         this.brokers = brokers;
         this.controllers = controllers;
         this.name = name;
+        this.autoStart = autoStart;
         this.serverProperties = serverProperties;
         this.ibp = ibp;
         this.securityProtocol = securityProtocol;
@@ -74,6 +72,10 @@ public class ClusterConfig {
 
     public Optional<String> name() {
         return Optional.ofNullable(name);
+    }
+
+    public boolean isAutoStart() {
+        return autoStart;
     }
 
     public Properties serverProperties() {
@@ -112,15 +114,15 @@ public class ClusterConfig {
     public ClusterConfig copyOf() {
         Properties props = new Properties();
         props.putAll(serverProperties);
-        return new ClusterConfig(type, brokers, controllers, name, props, ibp, securityProtocol, listenerName);
+        return new ClusterConfig(type, brokers, controllers, name, autoStart, props, ibp, securityProtocol, listenerName);
     }
 
     public static Builder defaultClusterBuilder() {
-        return new Builder(Type.Zk, 1, 1, SecurityProtocol.PLAINTEXT.name);
+        return new Builder(Type.Zk, 1, 1, true, SecurityProtocol.PLAINTEXT.name);
     }
 
-    public static Builder clusterBuilder(Type type, int brokers, int controllers, String securityProtocol) {
-        return new Builder(type, brokers, controllers, securityProtocol);
+    public static Builder clusterBuilder(Type type, int brokers, int controllers, boolean autoStart, String securityProtocol) {
+        return new Builder(type, brokers, controllers, autoStart, securityProtocol);
     }
 
     public static class Builder {
@@ -128,15 +130,17 @@ public class ClusterConfig {
         private int brokers;
         private int controllers;
         private String name;
+        private boolean autoStart;
         private Properties serverProperties;
         private String ibp;
         private String securityProtocol;
         private String listenerName;
 
-        Builder(Type type, int brokers, int controllers, String securityProtocol) {
+        Builder(Type type, int brokers, int controllers, boolean autoStart, String securityProtocol) {
             this.type = type;
             this.brokers = brokers;
             this.controllers = controllers;
+            this.autoStart = autoStart;
             this.securityProtocol = securityProtocol;
         }
 
@@ -157,6 +161,11 @@ public class ClusterConfig {
 
         public Builder name(String name) {
             this.name = name;
+            return this;
+        }
+
+        public Builder autoStart(boolean autoStart) {
+            this.autoStart = autoStart;
             return this;
         }
 
@@ -188,7 +197,7 @@ public class ClusterConfig {
             if (ibp != null) {
                 props.put(KafkaConfig.InterBrokerProtocolVersionProp(), ibp);
             }
-            return new ClusterConfig(type, brokers, controllers, name, props, ibp, securityProtocol, listenerName);
+            return new ClusterConfig(type, brokers, controllers, name, autoStart, props, ibp, securityProtocol, listenerName);
         }
     }
 }

@@ -17,7 +17,6 @@
 
 package kafka.test.annotations;
 
-import kafka.test.ClusterConfig;
 import org.junit.jupiter.api.TestTemplate;
 
 import java.lang.annotation.Documented;
@@ -32,9 +31,10 @@ import static java.lang.annotation.RetentionPolicy.RUNTIME;
 @Retention(RUNTIME)
 @TestTemplate
 public @interface ClusterTest {
-    ClusterConfig.Type clusterType() default ClusterConfig.Type.Default;
+    Type clusterType() default Type.Default;
     int brokers() default 0;
     int controllers() default 0;
+    AutoStart autoStart() default AutoStart.Default;
 
     String name() default "";
     String securityProtocol() default "PLAINTEXT";

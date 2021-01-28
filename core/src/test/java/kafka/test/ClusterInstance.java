@@ -60,4 +60,7 @@ public interface ClusterInstance {
         return createAdminClient(new Properties());
     }
 
+    void start();
+
+    void stop();
 }

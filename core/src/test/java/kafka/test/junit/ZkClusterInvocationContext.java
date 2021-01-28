@@ -39,6 +39,7 @@ import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import java.util.Properties;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
 
@@ -120,7 +121,9 @@ public class ZkClusterInvocationContext implements TestTemplateInvocationContext
                 cluster.serverConfig().putAll(clusterConfig.serverProperties());
                 // TODO consumer and producer configs
                 clusterReference.set(cluster);
-                clusterReference.get().setUp();
+                if (clusterConfig.isAutoStart()) {
+                    clusterReference.get().setUp();
+                }
             },
             (AfterTestExecutionCallback) context -> clusterReference.get().tearDown(),
             new ClusterInstanceParameterResolver(new ZkClusterInstance(clusterConfig, clusterReference)),
@@ -133,6 +136,8 @@ public class ZkClusterInvocationContext implements TestTemplateInvocationContext
 
         final AtomicReference<IntegrationTestHarness> clusterReference;
         final ClusterConfig config;
+        final AtomicBoolean started = new AtomicBoolean(false);
+        final AtomicBoolean stopped = new AtomicBoolean(false);
 
         ZkClusterInstance(ClusterConfig config, AtomicReference<IntegrationTestHarness> clusterReference) {
             this.config = config;
@@ -197,6 +202,20 @@ public class ZkClusterInvocationContext implements TestTemplateInvocationContext
         @Override
         public Admin createAdminClient(Properties configOverrides) {
             return clusterReference.get().createAdminClient(configOverrides);
+        }
+
+        @Override
+        public void start() {
+            if (started.compareAndSet(false, true)) {
+                clusterReference.get().setUp();
+            }
+        }
+
+        @Override
+        public void stop() {
+            if (stopped.compareAndSet(false, true)) {
+                clusterReference.get().tearDown();
+            }
         }
     }
 }

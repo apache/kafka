@@ -17,11 +17,13 @@
 
 package kafka.test;
 
+import kafka.test.annotations.AutoStart;
 import kafka.test.annotations.ClusterProperty;
 import kafka.test.annotations.ClusterTemplate;
 import kafka.test.annotations.ClusterTest;
 import kafka.test.annotations.ClusterTestDefaults;
 import kafka.test.annotations.ClusterTests;
+import kafka.test.annotations.Type;
 import kafka.test.junit.ClusterForEach;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Assertions;
@@ -29,7 +31,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.extension.ExtendWith;
 
 
-@ClusterTestDefaults(clusterType = ClusterConfig.Type.Zk)   // Set defaults for a few params in @ClusterTest(s)
+@ClusterTestDefaults(clusterType = Type.Zk)   // Set defaults for a few params in @ClusterTest(s)
 @ExtendWith(ClusterForEach.class)
 public class ClusterForEachTest {
 
@@ -80,11 +82,11 @@ public class ClusterForEachTest {
 
     // Multiple @ClusterTest can be used with @ClusterTests
     @ClusterTests({
-        @ClusterTest(name = "cluster-tests-1", clusterType = ClusterConfig.Type.Zk, properties = {
+        @ClusterTest(name = "cluster-tests-1", clusterType = Type.Zk, properties = {
             @ClusterProperty(key = "foo", value = "bar"),
             @ClusterProperty(key = "spam", value = "eggs")
         }),
-        @ClusterTest(name = "cluster-tests-2", clusterType = ClusterConfig.Type.Zk, properties = {
+        @ClusterTest(name = "cluster-tests-2", clusterType = Type.Zk, properties = {
             @ClusterProperty(key = "foo", value = "baz"),
             @ClusterProperty(key = "spam", value = "eggz")
         })
@@ -99,5 +101,12 @@ public class ClusterForEachTest {
         } else {
             Assertions.fail("Unknown cluster config " + clusterInstance.config().name());
         }
+    }
+
+    @ClusterTest(autoStart = AutoStart.No)
+    public void testNoAutoStart() {
+        Assertions.assertFalse(clusterInstance.anyBroker().isPresent());
+        clusterInstance.start();
+        Assertions.assertTrue(clusterInstance.anyBroker().isPresent());
     }
 }

@@ -24,6 +24,7 @@ import kafka.test.annotations.ClusterProperty;
 import kafka.test.annotations.ClusterTemplate;
 import kafka.test.annotations.ClusterTest;
 import kafka.test.annotations.ClusterTests;
+import kafka.test.annotations.Type;
 import org.junit.jupiter.api.extension.ExtensionContext;
 import org.junit.jupiter.api.extension.TestTemplateInvocationContext;
 import org.junit.jupiter.api.extension.TestTemplateInvocationContextProvider;
@@ -127,7 +128,7 @@ public class ClusterForEach implements TestTemplateInvocationContextProvider {
         }
 
         generatedClusterConfigs.forEach(config -> {
-            if (config.clusterType() == ClusterConfig.Type.Zk) {
+            if (config.clusterType() == Type.Zk) {
                 testInvocations.accept(new ZkClusterInvocationContext(config.copyOf()));
             } else {
                 throw new IllegalStateException("Unknown cluster type " + config.clusterType());
@@ -143,8 +144,8 @@ public class ClusterForEach implements TestTemplateInvocationContextProvider {
 
     private void processClusterTest(ClusterTest annot, ClusterTestDefaults defaults,
                                     Consumer<TestTemplateInvocationContext> testInvocations) {
-        final ClusterConfig.Type type;
-        if (annot.clusterType() == ClusterConfig.Type.Default) {
+        final Type type;
+        if (annot.clusterType() == Type.Default) {
             type = defaults.clusterType();
         } else {
             type = annot.clusterType();
@@ -168,7 +169,22 @@ public class ClusterForEach implements TestTemplateInvocationContextProvider {
             throw new IllegalArgumentException("Number of brokers/controllers must be greater than zero.");
         }
 
-        ClusterConfig.Builder builder = ClusterConfig.clusterBuilder(type, brokers, controllers, annot.securityProtocol());
+        final boolean autoStart;
+        switch (annot.autoStart()) {
+            case Yes:
+                autoStart = true;
+                break;
+            case No:
+                autoStart = false;
+                break;
+            case Default:
+                autoStart = defaults.autoStart();
+                break;
+            default:
+                throw new IllegalStateException();
+        }
+
+        ClusterConfig.Builder builder = ClusterConfig.clusterBuilder(type, brokers, controllers, autoStart, annot.securityProtocol());
         if (!annot.name().isEmpty()) {
             builder.name(annot.name());
         }

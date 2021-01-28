@@ -17,7 +17,6 @@
 
 package kafka.test.annotations;
 
-import kafka.test.ClusterConfig;
 import kafka.test.junit.ClusterForEach;
 
 import java.lang.annotation.Documented;
@@ -36,7 +35,8 @@ import static java.lang.annotation.RetentionPolicy.RUNTIME;
 @Target({TYPE})
 @Retention(RUNTIME)
 public @interface ClusterTestDefaults {
-    ClusterConfig.Type clusterType() default ClusterConfig.Type.Zk;
+    Type clusterType() default Type.Zk;
     int brokers() default 1;
     int controllers() default 1;
+    boolean autoStart() default true;
 }
