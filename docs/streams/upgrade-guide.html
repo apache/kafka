@@ -108,7 +108,7 @@
         Changes in <a href="https://cwiki.apache.org/confluence/x/FDd4CQ">KIP-663</a> necessitated the KafkaStreams client
         state machine to update, which was done in <a href="https://cwiki.apache.org/confluence/x/lCvZCQ">KIP-696</a>..
         The ERROR state is now terminal with PENDING_ERROR being a transitional state where the resources are closing.
-        The ERROR state indicates that there is something wrong and the KafkaStreams clinet should not be blindly
+        The ERROR state indicates that there is something wrong and the Kafka Streams client should not be blindly
         restarted without classifying the error that caused the thread to fail.
         If the error is of a type that you would like to retry, you should have the
         <code>StreamsUncaughtExceptionHandler</code> return <code>REPLACE_THREAD</code>.
