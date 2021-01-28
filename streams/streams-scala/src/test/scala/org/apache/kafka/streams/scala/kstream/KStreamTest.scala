@@ -24,6 +24,7 @@ import java.time.Instant
 import org.apache.kafka.streams.KeyValue
 import org.apache.kafka.streams.kstream.{
   JoinWindows,
+  Named,
   Transformer,
   ValueTransformer,
   ValueTransformerSupplier,
@@ -216,8 +217,10 @@ class KStreamTest extends FlatSpec with Matchers with TestDriver {
   "transform a KStream" should "transform correctly records" in {
     class TestTransformer extends Transformer[String, String, KeyValue[String, String]] {
       override def init(context: ProcessorContext): Unit = {}
+
       override def transform(key: String, value: String): KeyValue[String, String] =
         new KeyValue(s"$key-transformed", s"$value-transformed")
+
       override def close(): Unit = {}
     }
     val builder = new StreamsBuilder()
@@ -248,8 +251,10 @@ class KStreamTest extends FlatSpec with Matchers with TestDriver {
   "flatTransform a KStream" should "flatTransform correctly records" in {
     class TestTransformer extends Transformer[String, String, Iterable[KeyValue[String, String]]] {
       override def init(context: ProcessorContext): Unit = {}
+
       override def transform(key: String, value: String): Iterable[KeyValue[String, String]] =
         Array(new KeyValue(s"$key-transformed", s"$value-transformed"))
+
       override def close(): Unit = {}
     }
     val builder = new StreamsBuilder()
@@ -280,8 +285,10 @@ class KStreamTest extends FlatSpec with Matchers with TestDriver {
   "flatTransformValues a KStream" should "correctly flatTransform values in records" in {
     class TestTransformer extends ValueTransformer[String, Iterable[String]] {
       override def init(context: ProcessorContext): Unit = {}
+
       override def transform(value: String): Iterable[String] =
         Array(s"$value-transformed")
+
       override def close(): Unit = {}
     }
     val builder = new StreamsBuilder()
@@ -313,8 +320,10 @@ class KStreamTest extends FlatSpec with Matchers with TestDriver {
   "flatTransformValues with key in a KStream" should "correctly flatTransformValues in records" in {
     class TestTransformer extends ValueTransformerWithKey[String, String, Iterable[String]] {
       override def init(context: ProcessorContext): Unit = {}
+
       override def transform(key: String, value: String): Iterable[String] =
         Array(s"$value-transformed-$key")
+
       override def close(): Unit = {}
     }
     val builder = new StreamsBuilder()
@@ -366,5 +375,80 @@ class KStreamTest extends FlatSpec with Matchers with TestDriver {
     testOutput.isEmpty shouldBe true
 
     testDriver.close()
+  }
+
+  "setting a name on a filter" should "pass the name to the topology" in {
+    val builder = new StreamsBuilder()
+    val sourceTopic = "source"
+    val sinkTopic = "sink"
+
+    builder
+      .stream[String, String](sourceTopic)
+      .filter((_, value) => value != "value2", Named.as("my-name"))
+      .to(sinkTopic)
+
+    import scala.jdk.CollectionConverters._
+
+    val filterNode = builder.build().describe().subtopologies().asScala.head.nodes().asScala.toList(1)
+    filterNode.name() shouldBe "my-name"
+  }
+
+  "setting a name on output table" should "pass the name to the topology" in {
+    val builder = new StreamsBuilder()
+    val sourceTopic1 = "source1"
+    val sinkTopic = "sink"
+
+    builder
+      .stream[String, String](sourceTopic1)
+      .toTable(Named.as("my-name"))
+      .toStream
+      .to(sinkTopic)
+
+    import scala.jdk.CollectionConverters._
+
+    val tableNode = builder.build().describe().subtopologies().asScala.head.nodes().asScala.toList(1)
+    tableNode.name() shouldBe "my-name"
+  }
+
+  "setting a name on a join" should "pass the name to the topology" in {
+    val builder = new StreamsBuilder()
+    val sourceTopic1 = "source"
+    val sourceGTable = "table"
+    val sinkTopic = "sink"
+
+    val stream = builder.stream[String, String](sourceTopic1)
+    val table = builder.globalTable[String, String](sourceGTable)
+    stream
+      .join(table, Named.as("my-name"))((a, b) => s"$a-$b", (a, b) => a + b)
+      .to(sinkTopic)
+
+    import scala.jdk.CollectionConverters._
+
+    val joinNode = builder.build().describe().subtopologies().asScala.head.nodes().asScala.toList(1)
+    joinNode.name() shouldBe "my-name"
+  }
+
+  "setting a name on a transform" should "pass the name to the topology" in {
+    class TestTransformer extends Transformer[String, String, KeyValue[String, String]] {
+      override def init(context: ProcessorContext): Unit = {}
+
+      override def transform(key: String, value: String): KeyValue[String, String] =
+        new KeyValue(s"$key-transformed", s"$value-transformed")
+
+      override def close(): Unit = {}
+    }
+    val builder = new StreamsBuilder()
+    val sourceTopic = "source"
+    val sinkTopic = "sink"
+
+    val stream = builder.stream[String, String](sourceTopic)
+    stream
+      .transform(() => new TestTransformer, Named.as("my-name"))
+      .to(sinkTopic)
+
+    import scala.jdk.CollectionConverters._
+
+    val transformNode = builder.build().describe().subtopologies().asScala.head.nodes().asScala.toList(1)
+    transformNode.name() shouldBe "my-name"
   }
 }
