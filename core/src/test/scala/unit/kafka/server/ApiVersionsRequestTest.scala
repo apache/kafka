@@ -22,7 +22,7 @@ import kafka.test.{ClusterConfig, ClusterInstance}
 import org.apache.kafka.common.message.ApiVersionsRequestData
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.requests.ApiVersionsRequest
-import kafka.test.annotations.ClusterTest
+import kafka.test.annotation.ClusterTest
 import kafka.test.junit.ClusterForEach
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.BeforeEach

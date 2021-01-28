@@ -25,7 +25,7 @@ import kafka.utils.JaasTestUtils
 import org.apache.kafka.common.message.SaslHandshakeRequestData
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.requests.{ApiVersionsRequest, ApiVersionsResponse, SaslHandshakeRequest, SaslHandshakeResponse}
-import kafka.test.annotations.{ClusterTest, Type}
+import kafka.test.annotation.{ClusterTest, Type}
 import kafka.test.{ClusterConfig, ClusterInstance}
 import kafka.test.junit.ClusterForEach
 import org.junit.jupiter.api.Assertions._

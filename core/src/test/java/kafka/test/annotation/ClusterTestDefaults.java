@@ -15,7 +15,7 @@
  * limitations under the License.
  */
 
-package kafka.test.annotations;
+package kafka.test.annotation;
 
 import kafka.test.junit.ClusterForEach;
 

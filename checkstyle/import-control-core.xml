@@ -59,7 +59,7 @@
   </subpackage>
 
   <subpackage name="test">
-    <allow pkg="kafka.test.annotations"/>
+    <allow pkg="kafka.test.annotation"/>
     <allow pkg="kafka.test.junit"/>
     <allow pkg="kafka.network"/>
     <allow pkg="kafka.api"/>

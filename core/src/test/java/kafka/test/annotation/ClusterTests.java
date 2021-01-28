@@ -15,18 +15,21 @@
  * limitations under the License.
  */
 
-package kafka.test.annotations;
+package kafka.test.annotation;
+
+import org.junit.jupiter.api.TestTemplate;
 
 import java.lang.annotation.Documented;
-import java.lang.annotation.ElementType;
 import java.lang.annotation.Retention;
-import java.lang.annotation.RetentionPolicy;
 import java.lang.annotation.Target;
 
+import static java.lang.annotation.ElementType.METHOD;
+import static java.lang.annotation.RetentionPolicy.RUNTIME;
+
 @Documented
-@Target({ElementType.ANNOTATION_TYPE})
-@Retention(RetentionPolicy.RUNTIME)
-public @interface ClusterProperty {
-    String key();
-    String value();
+@Target({METHOD})
+@Retention(RUNTIME)
+@TestTemplate
+public @interface ClusterTests {
+    ClusterTest[] value();
 }

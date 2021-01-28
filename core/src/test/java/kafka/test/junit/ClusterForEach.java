@@ -19,12 +19,12 @@ package kafka.test.junit;
 
 import kafka.test.ClusterConfig;
 import kafka.test.ClusterGenerator;
-import kafka.test.annotations.ClusterTestDefaults;
-import kafka.test.annotations.ClusterProperty;
-import kafka.test.annotations.ClusterTemplate;
-import kafka.test.annotations.ClusterTest;
-import kafka.test.annotations.ClusterTests;
-import kafka.test.annotations.Type;
+import kafka.test.annotation.ClusterTestDefaults;
+import kafka.test.annotation.ClusterProperty;
+import kafka.test.annotation.ClusterTemplate;
+import kafka.test.annotation.ClusterTest;
+import kafka.test.annotation.ClusterTests;
+import kafka.test.annotation.Type;
 import org.junit.jupiter.api.extension.ExtensionContext;
 import org.junit.jupiter.api.extension.TestTemplateInvocationContext;
 import org.junit.jupiter.api.extension.TestTemplateInvocationContextProvider;

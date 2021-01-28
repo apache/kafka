@@ -17,13 +17,13 @@
 
 package kafka.test;
 
-import kafka.test.annotations.AutoStart;
-import kafka.test.annotations.ClusterProperty;
-import kafka.test.annotations.ClusterTemplate;
-import kafka.test.annotations.ClusterTest;
-import kafka.test.annotations.ClusterTestDefaults;
-import kafka.test.annotations.ClusterTests;
-import kafka.test.annotations.Type;
+import kafka.test.annotation.AutoStart;
+import kafka.test.annotation.ClusterProperty;
+import kafka.test.annotation.ClusterTemplate;
+import kafka.test.annotation.ClusterTest;
+import kafka.test.annotation.ClusterTestDefaults;
+import kafka.test.annotation.ClusterTests;
+import kafka.test.annotation.Type;
 import kafka.test.junit.ClusterForEach;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Assertions;

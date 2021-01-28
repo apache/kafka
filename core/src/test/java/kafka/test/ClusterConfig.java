@@ -18,7 +18,7 @@
 package kafka.test;
 
 import kafka.server.KafkaConfig;
-import kafka.test.annotations.Type;
+import kafka.test.annotation.Type;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
 
 import java.util.LinkedHashMap;

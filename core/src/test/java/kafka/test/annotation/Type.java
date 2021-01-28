@@ -1,4 +1,4 @@
-package kafka.test.annotations;
+package kafka.test.annotation;
 
 public enum Type {
     // Raft,
