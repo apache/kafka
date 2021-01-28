@@ -230,8 +230,7 @@ public class StateStoreMetricsTest {
         );
         replay(StreamsMetricsImpl.class, streamsMetrics);
 
-        final Sensor sensor =
-                StateStoreMetrics.prefixScanSensor(TASK_ID, STORE_TYPE, STORE_NAME, streamsMetrics);
+        final Sensor sensor = StateStoreMetrics.prefixScanSensor(TASK_ID, STORE_TYPE, STORE_NAME, streamsMetrics);
 
         verify(StreamsMetricsImpl.class, streamsMetrics);
         assertThat(sensor, is(expectedSensor));
