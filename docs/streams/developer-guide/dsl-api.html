@@ -373,12 +373,12 @@
                             <p>Branching is useful, for example, to route records to different downstream topics.</p>
                             <pre class="brush: java;">
 KStream<String, Long> stream = ...;
-Map<String, KStream<String, Long>> branches = 
-stream.split(Named.as("Branch-"))
-.branch((key, value) -> key.startsWith("A"),  /* first predicate  */ 
-Branched.as("A")) 
-.branch((key, value) -> key.startsWith("B"),  /* second predicate */
-Branched.as("B"))  
+Map<String, KStream<String, Long>> branches =
+    stream.split(Named.as("Branch-"))
+        .branch((key, value) -> key.startsWith("A"),  /* first predicate  */
+             Branched.as("A"))
+        .branch((key, value) -> key.startsWith("B"),  /* second predicate */
+             Branched.as("B"))
 .defaultBranch(Branched.as("C"))
 );
 

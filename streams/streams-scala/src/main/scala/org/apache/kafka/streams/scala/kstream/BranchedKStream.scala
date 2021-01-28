@@ -35,13 +35,13 @@ import scala.jdk.CollectionConverters._
  *
  * Each branch (which is a [[KStream]] instance) then can be processed either by
  * a function or a consumer provided via a [[Branched]]
- * parameter. If certain conditions are met, it also can be accessed from the Map returned by
- * [[defaultBranch]] or [[noDefaultBranch]].
+ * parameter. If certain conditions are met, it also can be accessed from the `Map` returned by
+ * an optional [[defaultBranch]] or [[noDefaultBranch]] method call.
  * <p>
- * The branching happens on first-match: A record in the original stream is assigned to the corresponding result
+ * The branching happens on a first match basis: A record in the original stream is assigned to the corresponding result
  * stream for the first predicate that evaluates to true, and is assigned to this stream only. If you need
- * to route a record to multiple streams, you can apply multiple [[KStream.filter]] operators,
- * one for each predicate, instead of branching.
+ * to route a record to multiple streams, you can apply multiple [[KStream.filter]] operators to the same [[KStream]]
+ * instance, one for each predicate, instead of branching.
  * <p>
  * The process of routing the records to different branches is a stateless record-by-record operation.
  *
@@ -51,7 +51,7 @@ import scala.jdk.CollectionConverters._
 class BranchedKStream[K, V](val inner: BranchedKStreamJ[K, V]) {
 
   /**
-   * Defines a branch for records that match the predicate.
+   * Define a branch for records that match the predicate.
    *
    * @param predicate A predicate against which each record will be evaluated.
    *                  If this predicate returns `true` for a given record, the record will be
@@ -65,7 +65,7 @@ class BranchedKStream[K, V](val inner: BranchedKStreamJ[K, V]) {
   }
 
   /**
-   * Defines a branch for records that match the predicate.
+   * Define a branch for records that match the predicate.
    *
    * @param predicate A predicate against which each record will be evaluated.
    *                  If this predicate returns `true` for a given record, the record will be
@@ -82,8 +82,8 @@ class BranchedKStream[K, V](val inner: BranchedKStreamJ[K, V]) {
   }
 
   /**
-   * Finalizes the construction of branches and defines the default branch for the messages not intercepted
-   * by other branches.
+   * Finalize the construction of branches and defines the default branch for the messages not intercepted
+   * by other branches. Calling [[defaultBranch]] or [[noDefaultBranch]] is optional.
    *
    * @return Map of named branches. For rules of forming the resulting map, see [[BranchedKStream]]
    *         description.
@@ -91,8 +91,8 @@ class BranchedKStream[K, V](val inner: BranchedKStreamJ[K, V]) {
   def defaultBranch(): Map[String, KStream[K, V]] = toScalaMap(inner.defaultBranch())
 
   /**
-   * Finalizes the construction of branches and defines the default branch for the messages not intercepted
-   * by other branches.
+   * Finalize the construction of branches and defines the default branch for the messages not intercepted
+   * by other branches. Calling [[defaultBranch]] or [[noDefaultBranch]] is optional.
    *
    * @param branched A [[Branched]] parameter, that allows to define a branch name, an in-place
    *                 branch consumer or branch mapper for [[BranchedKStream]].

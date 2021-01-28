@@ -775,7 +775,7 @@ public interface KStream<K, V> {
      * @param named  a {@link Named} config used to name the processor in the topology
      * @param predicates the ordered list of {@link Predicate} instances
      * @return multiple distinct substreams of this {@code KStream}
-     * @deprecated since 2.7. Use {@link #split(Named)} instead.
+     * @deprecated since 2.8. Use {@link #split(Named)} instead.
      */
     @Deprecated
     @SuppressWarnings("unchecked")

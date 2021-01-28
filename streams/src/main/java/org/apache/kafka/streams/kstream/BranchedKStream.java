@@ -29,16 +29,17 @@ import java.util.Map;
  * <p>
  * Each branch (which is a {@link KStream} instance) then can be processed either by
  * a {@link java.util.function.Function} or a {@link java.util.function.Consumer} provided via a {@link Branched}
- * parameter. If certain conditions are met, it also can be accessed from the {@link Map} returned by
- * {@link BranchedKStream#defaultBranch(Branched)} or {@link BranchedKStream#noDefaultBranch()}
+ * parameter. If certain conditions are met, it also can be accessed from the {@link Map} returned by an optional
+ * {@link BranchedKStream#defaultBranch(Branched)} or {@link BranchedKStream#noDefaultBranch()} method call
  * (see <a href="#examples">usage examples</a>).
  * <p>
- * The branching happens on first-match: A record in the original stream is assigned to the corresponding result
- * stream for the first predicate that evaluates to true, and is assigned to this stream only. If you need
- * to route a record to multiple streams, you can apply multiple {@link KStream#filter(Predicate)} operators,
- * one for each predicate, instead of branching.
+ * The branching happens on a first-match basis: A record in the original stream is assigned to the corresponding result
+ * stream for the first predicate that evaluates to {@code true}, and is assigned to this stream only. If you need
+ * to route a record to multiple streams, you can apply multiple {@link KStream#filter(Predicate)} operators
+ * to the same {@link KStream} instance, one for each predicate, instead of branching.
  * <p>
  * The process of routing the records to different branches is a stateless record-by-record operation.
+ *
  * <h2><a name="maprules">Rules of forming the resulting map</a></h2>
  * The keys of the {@code Map<String, KStream<K, V>>} entries returned by {@link BranchedKStream#defaultBranch(Branched)} or
  * {@link BranchedKStream#noDefaultBranch()} are defined by the following rules:
@@ -56,10 +57,10 @@ import java.util.Map;
  * <ul>
  *     <li>If no chain function or consumer is provided in {@link BranchedKStream#branch(Predicate, Branched)} via
  *     the {@link Branched} parameter, then the the branch itself is added to the {@code Map}
- *     <li>If a non-null chain function is provided and it returns a non-null value for a given branch, then the value
+ *     <li>If chain function is provided and it returns a non-null value for a given branch, then the value
  *     is the result returned by this function
  *     <li>If a chain function returns {@code null} for a given branch, then no entry is added to the map
- *     <li>If a non-null consumer is provided for a given branch, then no entry is added to the map
+ *     <li>If a consumer is provided for a given branch, then no entry is added to the map
  * </ul>
  * For example:
  * <pre> {@code
@@ -114,7 +115,7 @@ import java.util.Map;
  */
 public interface BranchedKStream<K, V> {
     /**
-     * Defines a branch for records that match the predicate.
+     * Define a branch for records that match the predicate.
      *
      * @param predicate A {@link Predicate} instance, against which each record will be evaluated.
      *                  If this predicate returns {@code true} for a given record, the record will be
@@ -125,7 +126,7 @@ public interface BranchedKStream<K, V> {
     BranchedKStream<K, V> branch(Predicate<? super K, ? super V> predicate);
 
     /**
-     * Defines a branch for records that match the predicate.
+     * Define a branch for records that match the predicate.
      *
      * @param predicate A {@link Predicate} instance, against which each record will be evaluated.
      *                  If this predicate returns {@code true} for a given record, the record will be
@@ -139,8 +140,8 @@ public interface BranchedKStream<K, V> {
     BranchedKStream<K, V> branch(Predicate<? super K, ? super V> predicate, Branched<K, V> branched);
 
     /**
-     * Finalizes the construction of branches and defines the default branch for the messages not intercepted
-     * by other branches.
+     * Finalize the construction of branches and defines the default branch for the messages not intercepted
+     * by other branches. Calling {@code defaultBranch} or {@link #noDefaultBranch()} is optional.
      *
      * @return {@link Map} of named branches. For rules of forming the resulting map, see {@code BranchedKStream}
      * <a href="#maprules">description</a>.
@@ -148,8 +149,8 @@ public interface BranchedKStream<K, V> {
     Map<String, KStream<K, V>> defaultBranch();
 
     /**
-     * Finalizes the construction of branches and defines the default branch for the messages not intercepted
-     * by other branches.
+     * Finalize the construction of branches and defines the default branch for the messages not intercepted
+     * by other branches. Calling {@code defaultBranch} or {@link #noDefaultBranch()} is optional.
      *
      * @param branched A {@link Branched} parameter, that allows to define a branch name, an in-place
      *                 branch consumer or branch mapper (see <a href="#examples">code examples</a>
@@ -160,7 +161,8 @@ public interface BranchedKStream<K, V> {
     Map<String, KStream<K, V>> defaultBranch(Branched<K, V> branched);
 
     /**
-     * Finalizes the construction of branches without forming a default branch.
+     * Finalize the construction of branches without forming a default branch.  Calling {@code #noDefaultBranch()}
+     * or {@link #defaultBranch()} is optional.
      *
      * @return {@link Map} of named branches. For rules of forming the resulting map, see {@link BranchedKStream}
      * <a href="#maprules">description</a>.
