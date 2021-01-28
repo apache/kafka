@@ -208,6 +208,9 @@ public class StateDirectory {
                     writer.newLine();
                     writer.write(processId.toString());
                     writer.newLine();
+                    writer.flush();
+                    fileOutputStream.getFD().sync();
+
                     return processId;
                 }
             }
@@ -409,10 +412,10 @@ public class StateDirectory {
 
         // all threads should be stopped and cleaned up by now, so none should remain holding a lock
         if (locks.isEmpty()) {
-            log.error("Some task directories still locked while closing the state, all threads should already have cleaned up and shutdown");
+            log.error("Some task directories still locked while closing state, this indicates unclean shutdown: {}", locks);
         }
         if (globalStateLock != null) {
-            log.error("Global state lock is present while closing the state, the global thread should have already cleaned up and shutdown");
+            log.error("Global state lock is present while closing the state, this indicates unclean shutdown");
         }
     }
 

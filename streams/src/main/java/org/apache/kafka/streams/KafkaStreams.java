@@ -871,16 +871,16 @@ public class KafkaStreams implements AutoCloseable {
         streamStateListener = new StreamStateListener(threadState, globalThreadState);
 
         final GlobalStateStoreProvider globalStateStoreProvider = new GlobalStateStoreProvider(internalTopologyBuilder.globalStateStores());
-        storeProviders = new ArrayList<>();
-        queryableStoreProvider = new QueryableStoreProvider(storeProviders, globalStateStoreProvider);
 
         if (hasGlobalTopology) {
             globalStreamThread.setStateListener(streamStateListener);
         }
 
+        storeProviders = new ArrayList<>();
         for (int i = 1; i <= numStreamThreads; i++) {
             createAndAddStreamThread(cacheSizePerThread, i);
         }
+        queryableStoreProvider = new QueryableStoreProvider(storeProviders, globalStateStoreProvider);
 
         stateDirCleaner = setupStateDirCleaner();
         maybeWarnAboutCodeInRocksDBConfigSetter(log, config);
