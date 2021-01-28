@@ -72,7 +72,7 @@ object Defaults {
   val QueuedMaxRequestBytes = -1
 
   /** KIP-500 Configuration */
-  val ControllerId = -1
+  val EmptyNodeId: Int = -1
 
   /************* Authorizer Configuration ***********/
   val AuthorizerClassName = ""
@@ -369,7 +369,7 @@ object KafkaConfig {
 
   /** KIP-500 Configuration */
   val ProcessRolesProp = "process.roles"
-  val ControllerIdProp = "controller.id"
+  val NodeIdProp = "node.id"
   val MetadataLogDirProp = "metadata.log.dir"
 
   /************* Authorizer Configuration ***********/
@@ -659,8 +659,8 @@ object KafkaConfig {
   val ProcessRolesDoc = "The roles that this process plays: 'broker', 'controller', or 'broker,controller' if it is both. " +
     "This configuration is only for clusters upgraded for KIP-500, which replaces the dependence on Zookeeper with " +
     "a self-managed Raft quorum. Leave this config undefined or empty for Zookeeper clusters."
-  val ControllerIdDoc = "The controller id for this server. This must be set to a non-negative number when running " +
-    "as a KIP-500 controller. Controller IDs should not overlap with broker IDs."
+  val NodeIdDoc = "The node ID associated with the roles this process is playing when `process.roles` is non-empty. " +
+    "This is required configuration when the self-managed quorum is enabled."
   val MetadataLogDirDoc = "This configuration determines where we put the metadata log for clusters upgraded to " +
     "KIP-500. If it is not set, the metadata log is placed in the first log directory from log.dirs."
 
@@ -1063,7 +1063,7 @@ object KafkaConfig {
        * them public once we are ready to enable KIP-500 in a release.
        */
       .defineInternal(ProcessRolesProp, LIST, Collections.emptyList(), ValidList.in("broker", "controller"), HIGH, ProcessRolesDoc)
-      .defineInternal(ControllerIdProp, INT, Defaults.ControllerId, null, HIGH, ControllerIdDoc)
+      .defineInternal(NodeIdProp, INT, Defaults.EmptyNodeId, null, HIGH, NodeIdDoc)
       .defineInternal(MetadataLogDirProp, STRING, null, null, HIGH, MetadataLogDirDoc)
 
       /************* Authorizer Configuration ***********/
@@ -1495,10 +1495,11 @@ class KafkaConfig(val props: java.util.Map[_, _], doLog: Boolean, dynamicConfigO
   val brokerIdGenerationEnable: Boolean = getBoolean(KafkaConfig.BrokerIdGenerationEnableProp)
   val maxReservedBrokerId: Int = getInt(KafkaConfig.MaxReservedBrokerIdProp)
   var brokerId: Int = getInt(KafkaConfig.BrokerIdProp)
-  val controllerId: Int = getInt(KafkaConfig.ControllerIdProp)
+  val nodeId: Int = getInt(KafkaConfig.NodeIdProp)
   val processRoles: Set[ProcessRole] = parseProcessRoles()
 
   def requiresZookeeper: Boolean = processRoles.isEmpty
+  def usesSelfManagedQuorum: Boolean = processRoles.nonEmpty
 
   private def parseProcessRoles(): Set[ProcessRole] = {
     val roles = getList(KafkaConfig.ProcessRolesProp).asScala.map {
@@ -1936,7 +1937,10 @@ class KafkaConfig(val props: java.util.Map[_, _], doLog: Boolean, dynamicConfigO
         s" authentication responses from timing out")
 
     if (requiresZookeeper && zkConnect == null) {
-      throw new ConfigException(s"Missing required configuration '${KafkaConfig.ZkConnectProp}' which has no default value.")
+      throw new ConfigException(s"Missing required configuration `${KafkaConfig.ZkConnectProp}` which has no default value.")
+    } else if (usesSelfManagedQuorum && nodeId < 0) {
+      throw new ConfigException(s"Missing required configuration `${KafkaConfig.NodeIdProp}` which is required " +
+        s"when `process.roles` is defined (i.e. when using the self-managed quorum).")
     }
   }
 }

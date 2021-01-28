@@ -15,7 +15,6 @@ package kafka.server
 import java.io.File
 import java.util.Properties
 
-import kafka.server.KafkaRaftServer.{BrokerRole, ControllerRole}
 import org.apache.kafka.common.Uuid
 import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.test.TestUtils
@@ -66,11 +65,10 @@ class BrokerMetadataCheckpointTest {
   def testCreateMetadataProperties(): Unit = {
     val meta = MetaProperties(
       clusterId = Uuid.fromString("H3KKO4NTRPaCWtEmm3vW7A"),
-      brokerId = Some(5),
-      controllerId = None
+      nodeId = 5
     )
     val properties = RawMetaProperties(meta.toProperties)
-    val meta2 = MetaProperties.parse(properties, Set(BrokerRole))
+    val meta2 = MetaProperties.parse(properties)
     assertEquals(meta, meta2)
   }
 
@@ -78,8 +76,8 @@ class BrokerMetadataCheckpointTest {
   def testMetaPropertiesWithMissingVersion(): Unit = {
     val properties = RawMetaProperties()
     properties.clusterId = "H3KKO4NTRPaCWtEmm3vW7A"
-    properties.brokerId = 1
-    assertThrows(classOf[RuntimeException], () => MetaProperties.parse(properties, Set(BrokerRole)))
+    properties.nodeId = 1
+    assertThrows(classOf[RuntimeException], () => MetaProperties.parse(properties))
   }
 
   @Test
@@ -87,8 +85,8 @@ class BrokerMetadataCheckpointTest {
     val properties = RawMetaProperties()
     properties.version = 1
     properties.clusterId = "7bc79ca1-9746-42a3-a35a-efb3cde44492"
-    properties.brokerId = 1
-    assertThrows(classOf[RuntimeException], () => MetaProperties.parse(properties, Set(BrokerRole)))
+    properties.nodeId = 1
+    assertThrows(classOf[RuntimeException], () => MetaProperties.parse(properties))
   }
 
   @Test
@@ -96,8 +94,8 @@ class BrokerMetadataCheckpointTest {
     val properties = RawMetaProperties()
     properties.version = 1
     properties.clusterId = "not a valid uuid"
-    properties.brokerId = 1
-    assertThrows(classOf[RuntimeException], () => MetaProperties.parse(properties, Set(BrokerRole)))
+    properties.nodeId = 1
+    assertThrows(classOf[RuntimeException], () => MetaProperties.parse(properties))
   }
 
   @Test
@@ -105,7 +103,7 @@ class BrokerMetadataCheckpointTest {
     val properties = RawMetaProperties()
     properties.version = 1
     properties.clusterId = "H3KKO4NTRPaCWtEmm3vW7A"
-    assertThrows(classOf[RuntimeException], () => MetaProperties.parse(properties, Set(BrokerRole)))
+    assertThrows(classOf[RuntimeException], () => MetaProperties.parse(properties))
   }
 
   @Test
@@ -113,7 +111,7 @@ class BrokerMetadataCheckpointTest {
     val properties = RawMetaProperties()
     properties.version = 1
     properties.clusterId = "H3KKO4NTRPaCWtEmm3vW7A"
-    assertThrows(classOf[RuntimeException], () => MetaProperties.parse(properties, Set(ControllerRole)))
+    assertThrows(classOf[RuntimeException], () => MetaProperties.parse(properties))
   }
 
   @Test

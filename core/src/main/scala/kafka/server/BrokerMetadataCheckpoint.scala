@@ -22,7 +22,6 @@ import java.nio.file.{Files, NoSuchFileException}
 import java.util.Properties
 
 import kafka.common.{InconsistentBrokerMetadataException, KafkaException}
-import kafka.server.KafkaRaftServer.{BrokerRole, ControllerRole, ProcessRole}
 import kafka.server.RawMetaProperties._
 import kafka.utils._
 import org.apache.kafka.common.Uuid
@@ -34,7 +33,7 @@ import scala.jdk.CollectionConverters._
 object RawMetaProperties {
   val ClusterIdKey = "cluster.id"
   val BrokerIdKey = "broker.id"
-  val ControllerIdKey = "controller.id"
+  val NodeIdKey = "node.id"
   val VersionKey = "version"
 }
 
@@ -56,12 +55,12 @@ case class RawMetaProperties(props: Properties = new Properties()) {
     props.setProperty(BrokerIdKey, id.toString)
   }
 
-  def controllerId: Option[Int] = {
-    intValue(ControllerIdKey)
+  def nodeId: Option[Int] = {
+    intValue(NodeIdKey)
   }
 
-  def controllerId_=(id: Int): Unit = {
-    props.setProperty(ControllerIdKey, id.toString)
+  def nodeId_=(id: Int): Unit = {
+    props.setProperty(NodeIdKey, id.toString)
   }
 
   def version: Int = {
@@ -96,22 +95,11 @@ case class RawMetaProperties(props: Properties = new Properties()) {
 }
 
 object MetaProperties {
-  def parse(
-    properties: RawMetaProperties,
-    processRoles: Set[ProcessRole]
-  ): MetaProperties = {
+  def parse(properties: RawMetaProperties): MetaProperties = {
     properties.requireVersion(expectedVersion = 1)
     val clusterId = requireClusterId(properties)
-
-    if (processRoles.contains(BrokerRole)) {
-      require(BrokerIdKey, properties.brokerId)
-    }
-
-    if (processRoles.contains(ControllerRole)) {
-      require(ControllerIdKey, properties.controllerId)
-    }
-
-    new MetaProperties(clusterId, properties.brokerId, properties.controllerId)
+    val nodeId = require(NodeIdKey, properties.nodeId)
+    new MetaProperties(clusterId, nodeId)
   }
 
   def require[T](key: String, value: Option[T]): T = {
@@ -148,23 +136,18 @@ case class ZkMetaProperties(
 
 case class MetaProperties(
   clusterId: Uuid,
-  brokerId: Option[Int] = None,
-  controllerId: Option[Int] = None
+  nodeId: Int,
 ) {
   def toProperties: Properties = {
     val properties = new RawMetaProperties()
     properties.version = 1
     properties.clusterId = clusterId.toString
-    brokerId.foreach(properties.brokerId = _)
-    controllerId.foreach(properties.controllerId = _)
+    properties.nodeId = nodeId
     properties.props
   }
 
   override def toString: String  = {
-    s"MetaProperties(clusterId=$clusterId" +
-      s", brokerId=${brokerId.getOrElse("none")}" +
-      s", controllerId=${controllerId.getOrElse("none")}" +
-      ")"
+    s"MetaProperties(clusterId=$clusterId, nodeId=$nodeId)"
   }
 }
 

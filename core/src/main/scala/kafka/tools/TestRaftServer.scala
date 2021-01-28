@@ -72,8 +72,7 @@ class TestRaftServer(
 
     val metaProperties = MetaProperties(
       clusterId = Uuid.ZERO_UUID,
-      brokerId = Some(config.brokerId),
-      controllerId = None
+      nodeId = config.nodeId
     )
 
     raftManager = new KafkaRaftManager[Array[Byte]](

@@ -18,7 +18,7 @@ package kafka.server
 
 import java.io.File
 
-import kafka.common.{InconsistentBrokerIdException, InconsistentControllerIdException, KafkaException}
+import kafka.common.{InconsistentNodeIdException, KafkaException}
 import kafka.log.Log
 import kafka.metrics.{KafkaMetricsReporter, KafkaYammerMetrics}
 import kafka.raft.KafkaRaftManager
@@ -137,20 +137,10 @@ object KafkaRaftServer {
       }
     }
 
-    val metaProperties = MetaProperties.parse(rawMetaProperties, config.processRoles)
-
-    val configuredBrokerId = if (config.brokerId < 0) None else Some(config.brokerId)
-    if (configuredBrokerId != metaProperties.brokerId) {
-      throw new InconsistentBrokerIdException(
-        s"Configured broker.id ${config.brokerId} doesn't match stored broker.id ${metaProperties.brokerId} in " +
-          "meta.properties. If you moved your data, make sure your configured broker.id matches. " +
-          "If you intend to create a new broker, you should remove all data in your data directories (log.dirs).")
-    }
-
-    val configuredControllerId = if (config.controllerId < 0) None else Some(config.controllerId)
-    if (configuredControllerId != metaProperties.controllerId) {
-      throw new InconsistentControllerIdException(
-        s"Configured controller.id ${config.controllerId} doesn't match stored controller.id ${metaProperties.controllerId} in " +
+    val metaProperties = MetaProperties.parse(rawMetaProperties)
+    if (config.nodeId != metaProperties.nodeId) {
+      throw new InconsistentNodeIdException(
+        s"Configured node.id `${config.nodeId}` doesn't match stored node.id `${metaProperties.nodeId}' in " +
           "meta.properties. If you moved your data, make sure your configured controller.id matches. " +
           "If you intend to create a new broker, you should remove all data in your data directories (log.dirs).")
     }

@@ -16,27 +16,28 @@
  */
 package kafka.raft
 
+import java.io.File
+import java.nio.file.Files
+import java.util
+import java.util.OptionalInt
+import java.util.concurrent.CompletableFuture
+
 import kafka.log.{Log, LogConfig, LogManager}
 import kafka.raft.KafkaRaftManager.RaftIoThread
 import kafka.server.{BrokerTopicStats, KafkaConfig, LogDirFailureChannel, MetaProperties}
 import kafka.utils.timer.SystemTimer
 import kafka.utils.{KafkaScheduler, Logging, ShutdownableThread}
 import org.apache.kafka.clients.{ApiVersions, ClientDnsLookup, ManualMetadataUpdater, NetworkClient}
-import org.apache.kafka.common.{KafkaException, TopicPartition}
+import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.network.{ChannelBuilders, NetworkReceive, Selectable, Selector}
 import org.apache.kafka.common.protocol.ApiMessage
 import org.apache.kafka.common.requests.RequestHeader
 import org.apache.kafka.common.security.JaasContext
 import org.apache.kafka.common.utils.{LogContext, Time}
-import org.apache.kafka.raft.RaftConfig.{AddressSpec, InetAddressSpec, UnknownAddressSpec, NON_ROUTABLE_ADDRESS}
+import org.apache.kafka.raft.RaftConfig.{AddressSpec, InetAddressSpec, NON_ROUTABLE_ADDRESS, UnknownAddressSpec}
 import org.apache.kafka.raft.{FileBasedStateStore, KafkaRaftClient, RaftClient, RaftConfig, RaftRequest, RecordSerde}
 
-import java.io.File
-import java.nio.file.Files
-import java.util
-import java.util.OptionalInt
-import java.util.concurrent.CompletableFuture
 import scala.jdk.CollectionConverters._
 
 object KafkaRaftManager {
@@ -108,12 +109,7 @@ class KafkaRaftManager[T](
 
   private val raftConfig = new RaftConfig(config)
   private val threadNamePrefix = threadNamePrefixOpt.getOrElse("kafka-raft")
-  private val nodeId = metaProperties.controllerId
-    .orElse(metaProperties.brokerId)
-    .getOrElse(throw new KafkaException(s"Could not initialize nodeId from $metaProperties since no ID is defined"))
-  private val idString = buildIdString
-
-  private val logContext = new LogContext(s"[RaftManager $idString] ")
+  private val logContext = new LogContext(s"[RaftManager nodeId=${config.nodeId}] ")
   this.logIdent = logContext.logPrefix()
 
   private val scheduler = new KafkaScheduler(threads = 1, threadNamePrefix + "-scheduler")
@@ -202,7 +198,7 @@ class KafkaRaftManager[T](
       metrics,
       expirationService,
       logContext,
-      OptionalInt.of(nodeId),
+      OptionalInt.of(config.nodeId),
       raftConfig
     )
     client.initialize()
@@ -266,7 +262,7 @@ class KafkaRaftManager[T](
       logContext
     )
 
-    val clientId = s"raft-client-$idString"
+    val clientId = s"raft-client-${config.nodeId}"
     val maxInflightRequestsPerConnection = 1
     val reconnectBackoffMs = 50
     val reconnectBackoffMsMs = 500
@@ -290,18 +286,6 @@ class KafkaRaftManager[T](
       new ApiVersions,
       logContext
     )
-  }
-
-  private def buildIdString: String = {
-    val idString = new StringBuilder
-    metaProperties.brokerId.foreach { brokerId =>
-      idString.append(s"broker=$brokerId")
-    }
-    metaProperties.controllerId.foreach { controllerId =>
-      if (idString.nonEmpty) idString.append(",")
-      idString.append(s"controller=$controllerId")
-    }
-    idString.toString
   }
 
 }

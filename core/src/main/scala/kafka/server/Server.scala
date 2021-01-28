@@ -74,15 +74,14 @@ object Server {
   val MetricsPrefix: String = "kafka.server"
   private val ClusterIdLabel: String = "kafka.cluster.id"
   private val BrokerIdLabel: String = "kafka.broker.id"
-  private val ControllerIdLabel: String = "kafka.controller.id"
+  private val NodeIdLabel: String = "kafka.node.id"
 
   private[server] def createKafkaMetricsContext(
     config: KafkaConfig,
     metaProps: MetaProperties
   ): KafkaMetricsContext = {
     val contextLabels = new java.util.HashMap[String, Object]
-    metaProps.brokerId.foreach(id => contextLabels.put(BrokerIdLabel, id.toString))
-    metaProps.controllerId.foreach(id => contextLabels.put(ControllerIdLabel, id.toString))
+    contextLabels.put(NodeIdLabel, metaProps.nodeId.toString)
     contextLabels.putAll(config.originalsWithPrefix(CommonClientConfigs.METRICS_CONTEXT_PREFIX))
     val metricsContext = new KafkaMetricsContext(MetricsPrefix, contextLabels)
     metricsContext

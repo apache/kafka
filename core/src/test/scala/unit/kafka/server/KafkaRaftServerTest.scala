@@ -20,7 +20,7 @@ import java.io.File
 import java.nio.file.Files
 import java.util.Properties
 
-import kafka.common.{InconsistentBrokerIdException, InconsistentBrokerMetadataException, InconsistentControllerIdException, KafkaException}
+import kafka.common.{InconsistentBrokerMetadataException, InconsistentNodeIdException, KafkaException}
 import kafka.log.Log
 import org.apache.kafka.common.Uuid
 import org.apache.kafka.common.utils.Utils
@@ -32,26 +32,13 @@ class KafkaRaftServerTest {
 
   @Test
   def testSuccessfulLoadMetaProperties(): Unit = {
-    testSuccessfulLoadMetaProperties(brokerId = Some(0), controllerId = None)
-    testSuccessfulLoadMetaProperties(brokerId = Some(0), controllerId = Some(10))
-    testSuccessfulLoadMetaProperties(brokerId = None, controllerId = Some(10))
-  }
-
-  def testSuccessfulLoadMetaProperties(
-    brokerId: Option[Int],
-    controllerId: Option[Int]
-  ): Unit = {
-    val metaProperties = MetaProperties(
-      clusterId = Uuid.randomUuid(),
-      brokerId = brokerId,
-      controllerId = controllerId
-    )
+    val clusterId = Uuid.randomUuid()
+    val nodeId = 0
+    val metaProperties = MetaProperties(clusterId, nodeId)
 
     val configProperties = new Properties
-    val roles = Seq(brokerId.map(_ => "broker"), controllerId.map(_ => "controller")).flatten.mkString(",")
-    configProperties.put(KafkaConfig.ProcessRolesProp, roles)
-    brokerId.foreach(id => configProperties.put(KafkaConfig.BrokerIdProp, id.toString))
-    controllerId.foreach(id => configProperties.put(KafkaConfig.ControllerIdProp, id.toString))
+    configProperties.put(KafkaConfig.ProcessRolesProp, "broker,controller")
+    configProperties.put(KafkaConfig.NodeIdProp, nodeId.toString)
 
     val (loadedMetaProperties, offlineDirs) =
       invokeLoadMetaProperties(metaProperties, configProperties)
@@ -61,51 +48,18 @@ class KafkaRaftServerTest {
   }
 
   @Test
-  def testLoadMetaPropertiesWithInconsistentBrokerId(): Unit = {
-    testLoadMetaPropertiesWithInconsistentBrokerId(metaBrokerId = 1, configBrokerId = Some(0))
-    testLoadMetaPropertiesWithInconsistentBrokerId(metaBrokerId = 1, configBrokerId = None)
-  }
+  def testLoadMetaPropertiesWithInconsistentNodeId(): Unit = {
+    val clusterId = Uuid.randomUuid()
+    val metaNodeId = 1
+    val configNodeId = 0
 
-  def testLoadMetaPropertiesWithInconsistentBrokerId(
-    metaBrokerId: Int,
-    configBrokerId: Option[Int]
-  ): Unit = {
-    val metaProperties = MetaProperties(
-      clusterId = Uuid.randomUuid(),
-      brokerId = Some(metaBrokerId),
-      controllerId = None
-    )
-
-    val configProperties = new Properties
-    configProperties.put(KafkaConfig.ProcessRolesProp, "broker")
-    configBrokerId.foreach(brokerId => configProperties.put(KafkaConfig.BrokerIdProp, brokerId.toString))
-
-    assertThrows(classOf[InconsistentBrokerIdException], () =>
-      invokeLoadMetaProperties(metaProperties, configProperties))
-  }
-
-  @Test
-  def testLoadMetaPropertiesWithInconsistentControllerId(): Unit = {
-    testLoadMetaPropertiesWithInconsistentControllerId(metaControllerId = 1, configControllerId = Some(0))
-    testLoadMetaPropertiesWithInconsistentControllerId(metaControllerId = 1, configControllerId = None)
-  }
-
-  def testLoadMetaPropertiesWithInconsistentControllerId(
-    metaControllerId: Int,
-    configControllerId: Option[Int]
-  ): Unit = {
-    val metaProperties = MetaProperties(
-      clusterId = Uuid.randomUuid(),
-      brokerId = None,
-      controllerId = Some(metaControllerId)
-    )
-
+    val metaProperties = MetaProperties(clusterId, metaNodeId)
     val configProperties = new Properties
 
     configProperties.put(KafkaConfig.ProcessRolesProp, "controller")
-    configControllerId.foreach(brokerId => configProperties.put(KafkaConfig.ControllerIdProp, brokerId.toString))
+    configProperties.put(KafkaConfig.NodeIdProp, configNodeId.toString)
 
-    assertThrows(classOf[InconsistentControllerIdException], () =>
+    assertThrows(classOf[InconsistentNodeIdException], () =>
       invokeLoadMetaProperties(metaProperties, configProperties))
   }
 
@@ -136,19 +90,18 @@ class KafkaRaftServerTest {
 
   @Test
   def testStartupFailsIfMetaPropertiesMissingInSomeLogDir(): Unit = {
+    val clusterId = Uuid.randomUuid()
+    val nodeId = 1
+
+    // One log dir is online and has properly formatted `meta.properties`.
+    // The other is online, but has no `meta.properties`.
     val logDir1 = TestUtils.tempDirectory()
     val logDir2 = TestUtils.tempDirectory()
-
-    val brokerId = 1
-    writeMetaProperties(logDir1, MetaProperties(
-      clusterId = Uuid.randomUuid(),
-      brokerId = Some(brokerId),
-      controllerId = None
-    ))
+    writeMetaProperties(logDir1, MetaProperties(clusterId, nodeId))
 
     val configProperties = new Properties
     configProperties.put(KafkaConfig.ProcessRolesProp, "broker")
-    configProperties.put(KafkaConfig.BrokerIdProp, brokerId.toString)
+    configProperties.put(KafkaConfig.NodeIdProp, nodeId.toString)
     configProperties.put(KafkaConfig.LogDirProp, Seq(logDir1, logDir2).map(_.getAbsolutePath).mkString(","))
     val config = KafkaConfig.fromProps(configProperties)
 
@@ -157,20 +110,18 @@ class KafkaRaftServerTest {
 
   @Test
   def testStartupFailsIfMetaLogDirIsOffline(): Unit = {
+    val clusterId = Uuid.randomUuid()
+    val nodeId = 1
+
     // One log dir is online and has properly formatted `meta.properties`
     val validDir = TestUtils.tempDirectory()
-    val brokerId = 1
-    writeMetaProperties(validDir, MetaProperties(
-      clusterId = Uuid.randomUuid(),
-      brokerId = Some(brokerId),
-      controllerId = None
-    ))
+    writeMetaProperties(validDir, MetaProperties(clusterId, nodeId))
 
     // Use a regular file as an invalid log dir to trigger an IO error
     val invalidDir = TestUtils.tempFile("blah")
     val configProperties = new Properties
     configProperties.put(KafkaConfig.ProcessRolesProp, "broker")
-    configProperties.put(KafkaConfig.BrokerIdProp, brokerId.toString)
+    configProperties.put(KafkaConfig.NodeIdProp, nodeId.toString)
     configProperties.put(KafkaConfig.MetadataLogDirProp, invalidDir.getAbsolutePath)
     configProperties.put(KafkaConfig.LogDirProp, validDir.getAbsolutePath)
     val config = KafkaConfig.fromProps(configProperties)
@@ -180,43 +131,38 @@ class KafkaRaftServerTest {
 
   @Test
   def testStartupDoesNotFailIfDataDirIsOffline(): Unit = {
+    val clusterId = Uuid.randomUuid()
+    val nodeId = 1
+
     // One log dir is online and has properly formatted `meta.properties`
     val validDir = TestUtils.tempDirectory()
-    val brokerId = 1
-    writeMetaProperties(validDir, MetaProperties(
-      clusterId = Uuid.randomUuid(),
-      brokerId = Some(brokerId),
-      controllerId = None
-    ))
+    writeMetaProperties(validDir, MetaProperties(clusterId, nodeId))
 
     // Use a regular file as an invalid log dir to trigger an IO error
     val invalidDir = TestUtils.tempFile("blah")
     val configProperties = new Properties
     configProperties.put(KafkaConfig.ProcessRolesProp, "broker")
-    configProperties.put(KafkaConfig.BrokerIdProp, brokerId.toString)
+    configProperties.put(KafkaConfig.NodeIdProp, nodeId.toString)
     configProperties.put(KafkaConfig.MetadataLogDirProp, validDir.getAbsolutePath)
     configProperties.put(KafkaConfig.LogDirProp, invalidDir.getAbsolutePath)
     val config = KafkaConfig.fromProps(configProperties)
 
     val (loadedProperties, offlineDirs) = KafkaRaftServer.initializeLogDirs(config)
-    assertEquals(Some(brokerId), loadedProperties.brokerId)
+    assertEquals(nodeId, loadedProperties.nodeId)
     assertEquals(Seq(invalidDir.getAbsolutePath), offlineDirs)
   }
 
   @Test
   def testStartupFailsIfUnexpectedMetadataDir(): Unit = {
-    // Create two directories with valid `meta.properties`
-    val brokerId = 1
+    val nodeId = 1
     val clusterId = Uuid.randomUuid()
+
+    // Create two directories with valid `meta.properties`
     val metadataDir = TestUtils.tempDirectory()
     val dataDir = TestUtils.tempDirectory()
 
     Seq(metadataDir, dataDir).foreach { dir =>
-      writeMetaProperties(dir, MetaProperties(
-        clusterId = clusterId,
-        brokerId = Some(brokerId),
-        controllerId = None
-      ))
+      writeMetaProperties(dir, MetaProperties(clusterId, nodeId))
     }
 
     // Create the metadata dir in the data directory
@@ -224,7 +170,7 @@ class KafkaRaftServerTest {
 
     val configProperties = new Properties
     configProperties.put(KafkaConfig.ProcessRolesProp, "broker")
-    configProperties.put(KafkaConfig.BrokerIdProp, brokerId.toString)
+    configProperties.put(KafkaConfig.NodeIdProp, nodeId.toString)
     configProperties.put(KafkaConfig.MetadataLogDirProp, metadataDir.getAbsolutePath)
     configProperties.put(KafkaConfig.LogDirProp, dataDir.getAbsolutePath)
     val config = KafkaConfig.fromProps(configProperties)
@@ -234,22 +180,18 @@ class KafkaRaftServerTest {
 
   @Test
   def testLoadPropertiesWithInconsistentClusterIds(): Unit = {
-    val brokerId = 1
+    val nodeId = 1
     val logDir1 = TestUtils.tempDirectory()
     val logDir2 = TestUtils.tempDirectory()
 
     // Create a random clusterId in each log dir
     Seq(logDir1, logDir2).foreach { dir =>
-      writeMetaProperties(dir, MetaProperties(
-        clusterId = Uuid.randomUuid(),
-        brokerId = Some(brokerId),
-        controllerId = None
-      ))
+      writeMetaProperties(dir, MetaProperties(clusterId = Uuid.randomUuid(), nodeId))
     }
 
     val configProperties = new Properties
     configProperties.put(KafkaConfig.ProcessRolesProp, "broker")
-    configProperties.put(KafkaConfig.BrokerIdProp, brokerId.toString)
+    configProperties.put(KafkaConfig.NodeIdProp, nodeId.toString)
     configProperties.put(KafkaConfig.LogDirProp, Seq(logDir1, logDir2).map(_.getAbsolutePath).mkString(","))
     val config = KafkaConfig.fromProps(configProperties)
 
