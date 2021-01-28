@@ -37,7 +37,6 @@ import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.errors.InvalidStateStoreException;
-import org.apache.kafka.streams.errors.LockException;
 import org.apache.kafka.streams.errors.ProcessorStateException;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.errors.StreamsUncaughtExceptionHandler;
@@ -868,19 +867,20 @@ public class KafkaStreams implements AutoCloseable {
         }
 
         threads = Collections.synchronizedList(new LinkedList<>());
-        for (int i = 1; i <= numStreamThreads; i++) {
-            createAndAddStreamThread(cacheSizePerThread, i);
-        }
-
         threadState = new HashMap<>(numStreamThreads);
-        storeProviders = new ArrayList<>();
         streamStateListener = new StreamStateListener(threadState, globalThreadState);
+
+        final GlobalStateStoreProvider globalStateStoreProvider = new GlobalStateStoreProvider(internalTopologyBuilder.globalStateStores());
+        storeProviders = new ArrayList<>();
+        queryableStoreProvider = new QueryableStoreProvider(storeProviders, globalStateStoreProvider);
+
         if (hasGlobalTopology) {
             globalStreamThread.setStateListener(streamStateListener);
         }
 
-        final GlobalStateStoreProvider globalStateStoreProvider = new GlobalStateStoreProvider(internalTopologyBuilder.globalStateStores());
-        queryableStoreProvider = new QueryableStoreProvider(storeProviders, globalStateStoreProvider);
+        for (int i = 1; i <= numStreamThreads; i++) {
+            createAndAddStreamThread(cacheSizePerThread, i);
+        }
 
         stateDirCleaner = setupStateDirCleaner();
         maybeWarnAboutCodeInRocksDBConfigSetter(log, config);
@@ -1236,7 +1236,7 @@ public class KafkaStreams implements AutoCloseable {
             if (state == State.PENDING_ERROR && waitOnState(State.ERROR, timeoutMs)) {
                 log.info("Streams client stopped to ERROR completely");
                 return true;
-            } if (state == State.PENDING_SHUTDOWN && waitOnState(State.NOT_RUNNING, timeoutMs)) {
+            } else if (state == State.PENDING_SHUTDOWN && waitOnState(State.NOT_RUNNING, timeoutMs)) {
                 log.info("Streams client stopped to NOT_RUNNING completely");
                 return true;
             } else {

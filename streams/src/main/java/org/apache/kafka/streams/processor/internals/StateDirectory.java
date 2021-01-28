@@ -131,6 +131,38 @@ public class StateDirectory {
             configurePermissions(baseDir);
             configurePermissions(stateDir);
 
+            if (!lockStateDirectory()) {
+                log.error("Unable to obtain lock as state directory is already locked by another process");
+                throw new StreamsException("Unable to initialize state, this can happen if multiple instances of " +
+                                               "Kafka Streams are running in the same state directory");
+            }
+        }
+    }
+
+    private void configurePermissions(final File file) {
+        final Path path = file.toPath();
+        if (path.getFileSystem().supportedFileAttributeViews().contains("posix")) {
+            final Set<PosixFilePermission> perms = PosixFilePermissions.fromString("rwxr-x---");
+            try {
+                Files.setPosixFilePermissions(path, perms);
+            } catch (final IOException e) {
+                log.error("Error changing permissions for the directory {} ", path, e);
+            }
+        } else {
+            boolean set = file.setReadable(true, true);
+            set &= file.setWritable(true, true);
+            set &= file.setExecutable(true, true);
+            if (!set) {
+                log.error("Failed to change permissions for the directory {}", file);
+            }
+        }
+    }
+
+    /**
+     * @return true if the state directory was successfully locked
+     */
+    private boolean lockStateDirectory() {
+        if (stateDirLock == null) {
             final File lockFile = new File(stateDir, LOCK_FILE_NAME);
             try {
                 stateDirLockChannel = FileChannel.open(lockFile.toPath(), StandardOpenOption.CREATE, StandardOpenOption.WRITE);
@@ -139,13 +171,9 @@ public class StateDirectory {
                 log.error("Unable to lock the state directory due to unexpected exception", e);
                 throw new ProcessorStateException("Failed to lock the state directory during startup", e);
             }
-
-            if (stateDirLock == null) {
-                log.error("Unable to obtain lock as state directory is already locked by another process");
-                throw new StreamsException("Unable to initialize state, this can happen if multiple instances of Kafka Streams are running in the same state directory");
-            }
-
         }
+
+        return stateDirLock != null;
     }
 
     public UUID getProcessId() {
@@ -166,7 +194,7 @@ public class StateDirectory {
                         throw new ProcessorStateException("Unable to read process file due to invalid version");
                     }
                     final UUID processId = UUID.fromString(reader.readLine());
-                    log.info("Reading UUID from version {} process file: {}", version,  processId);
+                    log.info("Reading UUID from version {} process file: {}", version, processId);
                     return processId;
                 }
             } else {
@@ -186,25 +214,6 @@ public class StateDirectory {
         } catch (final IOException e) {
             log.error("Unable to read/write process file due to unexpected exception", e);
             throw new ProcessorStateException(e);
-        }
-    }
-
-    private void configurePermissions(final File file) {
-        final Path path = file.toPath();
-        if (path.getFileSystem().supportedFileAttributeViews().contains("posix")) {
-            final Set<PosixFilePermission> perms = PosixFilePermissions.fromString("rwxr-x---");
-            try {
-                Files.setPosixFilePermissions(path, perms);
-            } catch (final IOException e) {
-                log.error("Error changing permissions for the directory {} ", path, e);
-            }
-        } else {
-            boolean set = file.setReadable(true, true);
-            set &= file.setWritable(true, true);
-            set &= file.setExecutable(true, true);
-            if (!set) {
-                log.error("Failed to change permissions for the directory {}", file);
-            }
         }
     }
 
@@ -398,7 +407,7 @@ public class StateDirectory {
         }
 
         // all threads should be stopped and cleaned up by now, so none should remain holding a lock
-        if (locks.isEmpty() ) {
+        if (locks.isEmpty()) {
             log.error("Some task directories still locked while closing the state, all threads should already have cleaned up and shutdown");
         }
         if (globalStateLock != null) {
