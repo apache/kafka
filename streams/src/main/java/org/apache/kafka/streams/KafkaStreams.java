@@ -1034,7 +1034,7 @@ public class KafkaStreams implements AutoCloseable {
                         final long cacheSizePerThread = getCacheSizePerThread(threads.size());
                         resizeThreadCache(cacheSizePerThread);
                         if (groupInstanceID.isPresent() && !streamThread.getName().equals(Thread.currentThread().getName())) {
-                            final MemberToRemove memberToRemove = new MemberToRemove(streamThread.getGroupInstanceID().get());
+                            final MemberToRemove memberToRemove = new MemberToRemove(groupInstanceID.get());
                             final Collection<MemberToRemove> membersToRemove = Collections.singletonList(memberToRemove);
                             final RemoveMembersFromConsumerGroupResult removeMembersFromConsumerGroupResult = 
                                 adminClient.removeMembersFromConsumerGroup(
