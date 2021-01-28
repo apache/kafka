@@ -244,7 +244,7 @@ public class ConnectSchema implements Schema {
         switch (schema.type()) {
             case STRUCT:
                 Struct struct = (Struct) value;
-                if (!struct.schema().equals(schema))
+                if (!struct.schema().equals(schema.schema()))
                     throw new DataException("Struct schemas do not match.");
                 struct.validate();
                 break;
