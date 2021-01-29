@@ -123,7 +123,7 @@ public class SnapshotRegistry {
     /**
      * The head of a list of snapshots, sorted by epoch.
      */
-    private final Snapshot head = new Snapshot(-1);
+    private final Snapshot head = new Snapshot(Long.MIN_VALUE);
 
     public SnapshotRegistry(LogContext logContext) {
         this.log = logContext.logger(SnapshotRegistry.class);
