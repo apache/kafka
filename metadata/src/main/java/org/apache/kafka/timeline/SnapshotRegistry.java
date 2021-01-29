@@ -185,10 +185,8 @@ public class SnapshotRegistry {
         last.add(snapshot);
         snapshots.put(epoch, snapshot);
         log.debug("Creating snapshot {}", epoch);
-        System.out.println("WATERMELON: snapshots = " + snapshots);
         Snapshot n = head.next();
         while (n != head) {
-            System.out.println("WATERMELON: n = " + n.epoch() + " n.prev = " + n.prev() + " n.next = " + n.next());
             n = n.next();
         }
         return snapshot;
