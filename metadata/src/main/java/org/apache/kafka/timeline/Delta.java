@@ -18,15 +18,14 @@
 package org.apache.kafka.timeline;
 
 /**
- * An API which all snapshot data structures implement, indicating that their contents
- * can be reverted to a point in time.
+ * An API which snapshot delta structures implement.
  */
-interface Revertable {
+interface Delta {
     /**
-     * Revert to the target epoch.
+     * Merge the source delta into this one.
      *
-     * @param targetEpoch   The epoch to revert to.
-     * @param delta         The delta associated with this epoch for this object.
+     * @param destinationEpoch  The epoch of this delta.
+     * @param source            The source delta.
      */
-    void executeRevert(long targetEpoch, Delta delta);
+    void mergeFrom(long destinationEpoch, Delta source);
 }

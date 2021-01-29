@@ -34,7 +34,7 @@ public class SnapshotRegistryTest {
     @Test
     public void testEmptyRegistry() {
         SnapshotRegistry registry = new SnapshotRegistry(new LogContext());
-        assertThrows(RuntimeException.class, () -> registry.get(0));
+        assertThrows(RuntimeException.class, () -> registry.getSnapshot(0));
         assertIteratorContains(registry.iterator());
     }
 
@@ -56,8 +56,8 @@ public class SnapshotRegistryTest {
     public void testCreateSnapshots() {
         SnapshotRegistry registry = new SnapshotRegistry(new LogContext());
         Snapshot snapshot123 = registry.createSnapshot(123);
-        assertEquals(snapshot123, registry.get(123));
-        assertThrows(RuntimeException.class, () -> registry.get(456));
+        assertEquals(snapshot123, registry.getSnapshot(123));
+        assertThrows(RuntimeException.class, () -> registry.getSnapshot(456));
         assertIteratorContains(registry.iterator(), snapshot123);
         assertEquals("Can't create a new snapshot at epoch 1 because there is already " +
             "a snapshot with epoch 123", assertThrows(RuntimeException.class,

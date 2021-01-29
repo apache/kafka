@@ -22,6 +22,7 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.NoSuchElementException;
 
+
 /**
  * SnapshottableHashTable implements a hash table that supports creating point-in-time
  * snapshots.  Each snapshot is immutable once it is created; the past cannot be changed.
@@ -94,12 +95,30 @@ class SnapshottableHashTable<T extends SnapshottableHashTable.ElementWithStartEp
         long startEpoch();
     }
 
-    static class HashTier<T> {
+    static class HashTier<T extends SnapshottableHashTable.ElementWithStartEpoch> implements Delta {
         private final int size;
         private BaseHashTable<T> deltaTable;
 
         HashTier(int size) {
             this.size = size;
+        }
+
+        @SuppressWarnings("unchecked")
+        @Override
+        public void mergeFrom(long epoch, Delta source) {
+            HashTier<T> other = (HashTier<T>) source;
+            List<T> list = new ArrayList<>();
+            Object[] otherElements = other.deltaTable.baseElements();
+            for (int slot = 0; slot < otherElements.length; slot++) {
+                BaseHashTable.unpackSlot(list, otherElements, slot);
+                for (T element : list) {
+                    // When merging in a later hash tier, we want to keep only the elements
+                    // that were present at our epoch.
+                    if (element.startEpoch() <= epoch) {
+                        deltaTable.baseAddOrReplace(element);
+                    }
+                }
+            }
         }
     }
 
@@ -220,20 +239,23 @@ class SnapshottableHashTable<T extends SnapshottableHashTable.ElementWithStartEp
                  * holds for different powers of two.  The "snapshot slot" of an element
                  * will be the top few bits of the top tier slot of that element.
                  */
-                HashTier<T> tier = snapshot.data(SnapshottableHashTable.this);
-                if (tier != null && tier.deltaTable != null) {
-                    BaseHashTable<T> deltaTable = tier.deltaTable;
-                    int shift = Integer.numberOfLeadingZeros(deltaTable.baseElements().length) -
-                        Integer.numberOfLeadingZeros(topTier.length);
-                    int tierSlot = slot >>> shift;
-                    BaseHashTable.unpackSlot(temp, deltaTable.baseElements(), tierSlot);
-                    for (T object : temp) {
-                        if (BaseHashTable.findSlot(object, topTier.length) == slot) {
-                            ready.add(object);
-                        } else {
+                Iterator<Snapshot> iterator = snapshotRegistry.iterator(snapshot);
+                while (iterator.hasNext()) {
+                    Snapshot curSnapshot = iterator.next();
+                    HashTier<T> tier = curSnapshot.getDelta(SnapshottableHashTable.this);
+                    if (tier != null && tier.deltaTable != null) {
+                        BaseHashTable<T> deltaTable = tier.deltaTable;
+                        int shift = Integer.numberOfLeadingZeros(deltaTable.baseElements().length) -
+                            Integer.numberOfLeadingZeros(topTier.length);
+                        int tierSlot = slot >>> shift;
+                        BaseHashTable.unpackSlot(temp, deltaTable.baseElements(), tierSlot);
+                        for (T object : temp) {
+                            if (BaseHashTable.findSlot(object, topTier.length) == slot) {
+                                ready.add(object);
+                            }
                         }
+                        temp.clear();
                     }
-                    temp.clear();
                 }
                 slot++;
             }
@@ -260,13 +282,15 @@ class SnapshottableHashTable<T extends SnapshottableHashTable.ElementWithStartEp
         if (epoch == LATEST_EPOCH) {
             return baseSize();
         } else {
-            Snapshot snapshot = snapshotRegistry.get(epoch);
-            HashTier<T> tier = snapshot.data(SnapshottableHashTable.this);
-            if (tier == null) {
-                return baseSize();
-            } else {
-                return tier.size;
+            Iterator<Snapshot> iterator = snapshotRegistry.iterator(epoch);
+            while (iterator.hasNext()) {
+                Snapshot snapshot = iterator.next();
+                HashTier<T> tier = snapshot.getDelta(SnapshottableHashTable.this);
+                if (tier != null) {
+                    return tier.size;
+                }
             }
+            return baseSize();
         }
     }
 
@@ -278,13 +302,22 @@ class SnapshottableHashTable<T extends SnapshottableHashTable.ElementWithStartEp
         if (epoch == LATEST_EPOCH) {
             return null;
         }
-        Snapshot snapshot = snapshotRegistry.get(epoch);
-        HashTier<T> tier = snapshot.data(SnapshottableHashTable.this);
-        if (tier == null || tier.deltaTable == null) {
-            return null;
+        Iterator<Snapshot> iterator = snapshotRegistry.iterator(epoch);
+        while (iterator.hasNext()) {
+            Snapshot snapshot = iterator.next();
+            HashTier<T> tier = snapshot.getDelta(SnapshottableHashTable.this);
+            if (tier != null && tier.deltaTable != null) {
+                result = tier.deltaTable.baseGet(key);
+                if (result != null) {
+                    if (result.startEpoch() <= epoch) {
+                        return result;
+                    } else {
+                        return null;
+                    }
+                }
+            }
         }
-        result = tier.deltaTable.baseGet(key);
-        return result;
+        return null;
     }
 
     boolean snapshottableAddUnlessPresent(T object) {
@@ -322,25 +355,25 @@ class SnapshottableHashTable<T extends SnapshottableHashTable.ElementWithStartEp
     }
 
     private void updateTierData(int prevSize) {
-        Iterator<Snapshot> iter = snapshotRegistry.iterator();
-        while (iter.hasNext()) {
-            Snapshot snapshot = iter.next();
-            HashTier<T> tier = snapshot.data(SnapshottableHashTable.this);
+        Iterator<Snapshot> iterator = snapshotRegistry.reverseIterator();
+        if (iterator.hasNext()) {
+            Snapshot snapshot = iterator.next();
+            HashTier<T> tier = snapshot.getDelta(SnapshottableHashTable.this);
             if (tier == null) {
                 tier = new HashTier<>(prevSize);
-                snapshot.setData(SnapshottableHashTable.this, tier);
+                snapshot.setDelta(SnapshottableHashTable.this, tier);
             }
         }
     }
 
     private void updateTierData(T prev, int prevSize) {
-        Iterator<Snapshot> iter = snapshotRegistry.iterator();
-        while (iter.hasNext()) {
-            Snapshot snapshot = iter.next();
-            HashTier<T> tier = snapshot.data(SnapshottableHashTable.this);
+        Iterator<Snapshot> iterator = snapshotRegistry.reverseIterator();
+        if (iterator.hasNext()) {
+            Snapshot snapshot = iterator.next();
+            HashTier<T> tier = snapshot.getDelta(SnapshottableHashTable.this);
             if (tier == null) {
                 tier = new HashTier<>(prevSize);
-                snapshot.setData(SnapshottableHashTable.this, tier);
+                snapshot.setDelta(SnapshottableHashTable.this, tier);
             }
             if (prev.startEpoch() <= snapshot.epoch()) {
                 if (tier.deltaTable == null) {
@@ -355,7 +388,7 @@ class SnapshottableHashTable<T extends SnapshottableHashTable.ElementWithStartEp
         if (epoch == LATEST_EPOCH) {
             return new CurrentIterator(baseElements());
         } else {
-            return new HistoricalIterator(baseElements(), snapshotRegistry.get(epoch));
+            return new HistoricalIterator(baseElements(), snapshotRegistry.getSnapshot(epoch));
         }
     }
 
@@ -370,7 +403,7 @@ class SnapshottableHashTable<T extends SnapshottableHashTable.ElementWithStartEp
             Snapshot snapshot = iter.next();
             bld.append(prefix);
             bld.append("epoch ").append(snapshot.epoch()).append(": ");
-            HashTier<T> tier = snapshot.data(this);
+            HashTier<T> tier = snapshot.getDelta(this);
             if (tier == null) {
                 bld.append("null");
             } else {
@@ -392,8 +425,8 @@ class SnapshottableHashTable<T extends SnapshottableHashTable.ElementWithStartEp
 
     @SuppressWarnings("unchecked")
     @Override
-    public void executeRevert(long targetEpoch, Object data) {
-        HashTier<T> tier = (HashTier<T>) data;
+    public void executeRevert(long targetEpoch, Delta delta) {
+        HashTier<T> tier = (HashTier<T>) delta;
         Iterator<T> iter = snapshottableIterator(LATEST_EPOCH);
         while (iter.hasNext()) {
             T element = iter.next();

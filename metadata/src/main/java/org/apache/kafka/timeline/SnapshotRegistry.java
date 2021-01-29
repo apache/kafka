@@ -21,8 +21,6 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
-import java.util.ListIterator;
-import java.util.NoSuchElementException;
 import java.util.stream.Collectors;
 
 import org.apache.kafka.common.utils.LogContext;
@@ -35,81 +33,53 @@ import org.slf4j.Logger;
  * Therefore, we use ArrayLists here rather than a data structure with higher overhead.
  */
 public class SnapshotRegistry {
-    class SnapshotIterator implements ListIterator<Snapshot> {
-        private Snapshot cur;
-        private Snapshot lastResult = null;
+    class SnapshotIterator implements Iterator<Snapshot> {
+        Snapshot cur;
+        Snapshot result = null;
 
-        SnapshotIterator(Snapshot startAfter) {
-            this.cur = startAfter;
+        SnapshotIterator(Snapshot start) {
+            cur = start;
         }
 
         @Override
         public boolean hasNext() {
-            return cur.next() != head;
-        }
-
-        @Override
-        public Snapshot next() {
-            if (!hasNext()) {
-                throw new NoSuchElementException();
-            }
-            cur = cur.next();
-            lastResult = cur;
-            return cur;
-        }
-
-        @Override
-        public boolean hasPrevious() {
             return cur != head;
         }
 
         @Override
-        public Snapshot previous() {
-            if (!hasPrevious()) {
-                throw new NoSuchElementException();
-            }
-            Snapshot result = cur;
-            cur = cur.prev();
-            lastResult = result;
+        public Snapshot next() {
+            result = cur;
+            cur = cur.next();
             return result;
         }
 
         @Override
-        public int nextIndex() {
-            throw new UnsupportedOperationException();
-        }
-
-        @Override
-        public int previousIndex() {
-            throw new UnsupportedOperationException();
-        }
-
-        @Override
         public void remove() {
-            if (lastResult == null) {
+            if (result == null) {
                 throw new IllegalStateException();
             }
-            if (cur == lastResult) {
-                cur = cur.prev();
-            }
-            snapshots.remove(lastResult.epoch());
-            lastResult.removeSelfFromList();
-            lastResult = null;
+            deleteSnapshot(result);
+            result = null;
+        }
+    }
+
+    class ReverseSnapshotIterator implements Iterator<Snapshot> {
+        Snapshot cur;
+
+        ReverseSnapshotIterator() {
+            cur = head.prev();
         }
 
         @Override
-        public void set(Snapshot snapshot) {
-            throw new UnsupportedOperationException();
+        public boolean hasNext() {
+            return cur != head;
         }
 
         @Override
-        public void add(Snapshot snapshot) {
-            if (cur.epoch() >= snapshot.epoch()) {
-                throw new IllegalArgumentException("Can't add snapshot " +
-                    snapshot.epoch() + " after snapshot " + cur.epoch());
-            }
-            cur.add(snapshot);
-            cur = snapshot;
+        public Snapshot next() {
+            Snapshot result = cur;
+            cur = cur.prev();
+            return result;
         }
     }
 
@@ -130,27 +100,44 @@ public class SnapshotRegistry {
     }
 
     /**
-     * Returns an iterator that moves through snapshots from the lowest to the highest epoch.
+     * Returns a snapshot iterator that iterates from the snapshots with the
+     * lowest epoch to those with the highest.
      */
-    public ListIterator<Snapshot> iterator() {
-        return new SnapshotIterator(head);
+    public Iterator<Snapshot> iterator() {
+        return new SnapshotIterator(head.next());
     }
 
     /**
-     * Returns an iterator that moves through snapshots from the lowest to the highest epoch.
-     *
-     * @param startAfter    A snapshot that we should start after.
+     * Returns a snapshot iterator that iterates from the snapshots with the
+     * lowest epoch to those with the highest, starting at the snapshot with the
+     * given epoch.
      */
-    ListIterator<Snapshot> iterator(Snapshot startAfter) {
-        return new SnapshotIterator(startAfter);
+    public Iterator<Snapshot> iterator(long epoch) {
+        return iterator(getSnapshot(epoch));
+    }
+
+    /**
+     * Returns a snapshot iterator that iterates from the snapshots with the
+     * lowest epoch to those with the highest, starting at the given snapshot.
+     */
+    public Iterator<Snapshot> iterator(Snapshot snapshot) {
+        return new SnapshotIterator(snapshot);
+    }
+
+    /**
+     * Returns a reverse snapshot iterator that iterates from the snapshots with the
+     * highest epoch to those with the lowest.
+     */
+    public Iterator<Snapshot> reverseIterator() {
+        return new ReverseSnapshotIterator();
     }
 
     /**
      * Returns a sorted list of snapshot epochs.
      */
-    List<Long> epochsList() {
+    public List<Long> epochsList() {
         List<Long> result = new ArrayList<>();
-        for (ListIterator<Snapshot> iterator = iterator(); iterator.hasNext(); ) {
+        for (Iterator<Snapshot> iterator = iterator(); iterator.hasNext(); ) {
             result.add(iterator.next().epoch());
         }
         return result;
@@ -159,7 +146,7 @@ public class SnapshotRegistry {
     /**
      * Gets the snapshot for a specific epoch.
      */
-    public Snapshot get(long epoch) {
+    public Snapshot getSnapshot(long epoch) {
         Snapshot snapshot = snapshots.get(epoch);
         if (snapshot == null) {
             throw new RuntimeException("No snapshot for epoch " + epoch + ". Snapshot " +
@@ -182,7 +169,7 @@ public class SnapshotRegistry {
                 " because there is already a snapshot with epoch " + last.epoch());
         }
         Snapshot snapshot = new Snapshot(epoch);
-        last.add(snapshot);
+        last.appendNext(snapshot);
         snapshots.put(epoch, snapshot);
         log.debug("Creating snapshot {}", epoch);
         Snapshot n = head.next();
@@ -198,8 +185,10 @@ public class SnapshotRegistry {
      * @param targetEpoch       The epoch of the snapshot to revert to.
      */
     public void revertToSnapshot(long targetEpoch) {
-        Snapshot target = get(targetEpoch);
-        for (Iterator<Snapshot> iterator = iterator(target); iterator.hasNext(); ) {
+        Snapshot target = getSnapshot(targetEpoch);
+        Iterator<Snapshot> iterator = iterator(target);
+        iterator.next();
+        while (iterator.hasNext()) {
             Snapshot snapshot = iterator.next();
             log.debug("Deleting snapshot {} because we are reverting to {}",
                 snapshot.epoch(), targetEpoch);
@@ -214,14 +203,23 @@ public class SnapshotRegistry {
      * @param targetEpoch       The epoch of the snapshot to delete.
      */
     public void deleteSnapshot(long targetEpoch) {
-        Snapshot snapshot = snapshots.remove(targetEpoch);
-        if (snapshot == null) {
-            throw new RuntimeException("No snapshot for epoch " + targetEpoch + ". Snapshot " +
-                "epochs are: " + epochsList().stream().map(e -> e.toString()).
-                collect(Collectors.joining(", ")));
+        deleteSnapshot(getSnapshot(targetEpoch));
+    }
+
+    /**
+     * Deletes the given snapshot.
+     *
+     * @param snapshot          The snapshot to delete.
+     */
+    public void deleteSnapshot(Snapshot snapshot) {
+        Snapshot prev = snapshot.prev();
+        if (prev != head) {
+            prev.mergeFrom(snapshot);
+        } else {
+            snapshot.erase();
         }
         log.debug("Deleting snapshot {}", snapshot.epoch());
-        snapshot.removeSelfFromList();
+        snapshots.remove(snapshot.epoch(), snapshot);
     }
 
     /**

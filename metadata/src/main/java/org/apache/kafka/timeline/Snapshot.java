@@ -24,13 +24,12 @@ import java.util.Map;
  * A snapshot of some timeline data structures.
  *
  * The snapshot contains historical data for several timeline data structures.
- * We use an IdentityHashMap to store this data.  This way, removing the snapshot from
- * the snapshot registry deletes the data for all the structures simultaneously, in
- * O(1) time.
+ * We use an IdentityHashMap to store this data.  This way, we can easily drop all of
+ * the snapshot data.
  */
 class Snapshot {
     private final long epoch;
-    private final IdentityHashMap<Revertable, Object> map = new IdentityHashMap<>(4);
+    private IdentityHashMap<Revertable, Delta> map = new IdentityHashMap<>(4);
     private Snapshot prev = this;
     private Snapshot next = this;
 
@@ -43,18 +42,35 @@ class Snapshot {
     }
 
     @SuppressWarnings("unchecked")
-    <T> T data(Revertable owner) {
+    <T extends Delta> T getDelta(Revertable owner) {
         return (T) map.get(owner);
     }
 
-    <T> void setData(Revertable owner, T data) {
-        map.put(owner, data);
+    void setDelta(Revertable owner, Delta delta) {
+        map.put(owner, delta);
     }
 
     void handleRevert() {
-        for (Map.Entry<Revertable, Object> entry : map.entrySet()) {
+        for (Map.Entry<Revertable, Delta> entry : map.entrySet()) {
             entry.getKey().executeRevert(epoch, entry.getValue());
         }
+    }
+
+    void mergeFrom(Snapshot source) {
+        // Merge the deltas from the source snapshot into this snapshot.
+        for (Map.Entry<Revertable, Delta> entry : source.map.entrySet()) {
+            // We first try to just copy over the object reference.  That will work if
+            //we have no entry at all for the given Revertable.
+            Delta destinationDelta = map.putIfAbsent(entry.getKey(), entry.getValue());
+            if (destinationDelta != null) {
+                // If we already have an entry for the Revertable, we need to merge the
+                // source delta into our delta.
+                destinationDelta.mergeFrom(epoch, entry.getValue());
+            }
+        }
+        // Delete the source snapshot to make sure nobody tries to reuse it.  We might now
+        // share some delta entries with it.
+        source.erase();
     }
 
     Snapshot prev() {
@@ -65,14 +81,15 @@ class Snapshot {
         return next;
     }
 
-    void add(Snapshot newNext) {
+    void appendNext(Snapshot newNext) {
         newNext.prev = this;
         newNext.next = next;
         next.prev = newNext;
         next = newNext;
     }
 
-    void removeSelfFromList() {
+    void erase() {
+        map = null;
         next.prev = prev;
         prev.next = next;
         prev = this;
