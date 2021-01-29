@@ -27,15 +27,20 @@
   //
   // Version 5 adds ErrorMessage in the response and may return a THROTTLING_QUOTA_EXCEEDED error
   // in the response if the topics deletion is throttled (KIP-599).
-  "validVersions": "0-5",
+  //
+  // Version 6 adds topic ID to responses. An UNSUPPORTED_VERSION error code will be returned when attempting to
+  // delete using topic IDs when IBP < 2.8. UNKNOWN_TOPIC_ID error code will be returned when IBP is at least 2.8, but
+  // the topic ID was not found.
+  "validVersions": "0-6",
   "flexibleVersions": "4+",
   "fields": [
     { "name": "ThrottleTimeMs", "type": "int32", "versions": "1+", "ignorable": true,
       "about": "The duration in milliseconds for which the request was throttled due to a quota violation, or zero if the request did not violate any quota." },
     { "name": "Responses", "type": "[]DeletableTopicResult", "versions": "0+",
       "about": "The results for each topic we tried to delete.", "fields": [
-      { "name": "Name", "type": "string", "versions": "0+", "mapKey": true, "entityType": "topicName",
+      { "name": "Name", "type": "string", "versions": "0+", "nullableVersions": "6+", "mapKey": true, "entityType": "topicName",
         "about": "The topic name" },
+      {"name": "TopicId", "type": "uuid", "versions": "6+", "ignorable": "true", "about": "the unique topic ID"},
       { "name": "ErrorCode", "type": "int16", "versions": "0+",
         "about": "The deletion error, or 0 if the deletion succeeded." },
       { "name": "ErrorMessage", "type": "string", "versions": "5+", "nullableVersions": "5+", "ignorable": true, "default": "null",

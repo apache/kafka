@@ -48,6 +48,7 @@ import org.slf4j.LoggerFactory
 import scala.annotation.nowarn
 import scala.jdk.CollectionConverters._
 import scala.collection.Seq
+import scala.compat.java8.OptionConverters._
 import scala.concurrent.duration.Duration
 import scala.concurrent.{Await, Future}
 import scala.util.Random
@@ -113,6 +114,24 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
     val e = assertThrows(classOf[ExecutionException],
       () => client.createTopics(newTopicsWithInvalidRF.asJava, new CreateTopicsOptions().validateOnly(true)).all.get())
     assertTrue(e.getCause.isInstanceOf[TopicExistsException])
+  }
+
+  @Test
+  def testDeleteTopicsWithIds(): Unit = {
+    client = Admin.create(createConfig)
+    val topics = Seq("mytopic", "mytopic2", "mytopic3")
+    val newTopics = Seq(
+      new NewTopic("mytopic", Map((0: Integer) -> Seq[Integer](1, 2).asJava, (1: Integer) -> Seq[Integer](2, 0).asJava).asJava),
+      new NewTopic("mytopic2", 3, 3.toShort),
+      new NewTopic("mytopic3", Option.empty[Integer].asJava, Option.empty[java.lang.Short].asJava)
+    )
+    val createResult = client.createTopics(newTopics.asJava)
+    createResult.all.get()
+    waitForTopics(client, topics, List())
+    val topicIds = getTopicIds().values.toSet
+
+    client.deleteTopicsWithIds(topicIds.asJava).all.get()
+    waitForTopics(client, List(), topics)
   }
 
   @Test

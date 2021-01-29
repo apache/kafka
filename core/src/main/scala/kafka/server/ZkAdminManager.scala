@@ -30,6 +30,7 @@ import kafka.utils.Implicits._
 import kafka.zk.{AdminZkClient, KafkaZkClient}
 import org.apache.kafka.clients.admin.{AlterConfigOp, ScramMechanism}
 import org.apache.kafka.clients.admin.AlterConfigOp.OpType
+import org.apache.kafka.common.Uuid
 import org.apache.kafka.common.config.ConfigDef.ConfigKey
 import org.apache.kafka.common.config.{AbstractConfig, ConfigDef, ConfigException, ConfigResource, LogLevelConfig}
 import org.apache.kafka.common.errors.ThrottlingQuotaExceededException
@@ -133,6 +134,13 @@ class ZkAdminManager(val config: KafkaConfig,
     }
   }
 
+  private def populateIds(metadataAndConfigs: Map[String, CreatableTopicResult],
+                                              topicName: String) : Unit = {
+    metadataAndConfigs.get(topicName).foreach { result =>
+        result.setTopicId(zkClient.getTopicIdsForTopics(Predef.Set(result.name())).getOrElse(result.name(), Uuid.ZERO_UUID))
+    }
+  }
+
   /**
     * Create topics and wait until the topics have been completely created.
     * The callback function will be triggered either when timeout, error or the topics are created.
@@ -195,6 +203,7 @@ class ZkAdminManager(val config: KafkaConfig,
         } else {
           controllerMutationQuota.record(assignments.size)
           adminZkClient.createTopicWithAssignment(topic.name, configs, assignments, validate = false, config.usesTopicId)
+          populateIds(includeConfigsAndMetadata, topic.name)
           CreatePartitionsMetadata(topic.name, assignments.keySet)
         }
       } catch {

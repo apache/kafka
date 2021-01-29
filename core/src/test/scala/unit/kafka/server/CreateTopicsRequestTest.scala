@@ -18,6 +18,7 @@
 package kafka.server
 
 import kafka.utils._
+import org.apache.kafka.common.Uuid
 import org.apache.kafka.common.message.CreateTopicsRequestData
 import org.apache.kafka.common.message.CreateTopicsRequestData.CreatableTopicCollection
 import org.apache.kafka.common.protocol.ApiKeys
@@ -170,6 +171,11 @@ class CreateTopicsRequestTest extends AbstractCreateTopicsRequestTest {
         assertEquals(-1, topicResponse.replicationFactor)
         assertTrue(topicResponse.configs.isEmpty)
       }
+
+      if (version >= 7)
+        assertNotEquals(Uuid.ZERO_UUID, topicResponse.topicId())
+      else
+        assertEquals(Uuid.ZERO_UUID, topicResponse.topicId())
     }
   }
 }
