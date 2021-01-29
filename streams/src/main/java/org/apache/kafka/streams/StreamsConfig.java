@@ -45,6 +45,7 @@ import org.apache.kafka.streams.processor.internals.StreamsPartitionAssignor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.File;
 import java.time.Duration;
 import java.util.Collections;
 import java.util.HashMap;
@@ -604,7 +605,7 @@ public class StreamsConfig extends AbstractConfig {
                     REPLICATION_FACTOR_DOC)
             .define(STATE_DIR_CONFIG,
                     Type.STRING,
-                    "/tmp/kafka-streams",
+                    System.getProperty("java.io.tmpdir") + File.separator + "kafka-streams",
                     Importance.HIGH,
                     STATE_DIR_DOC)
 
