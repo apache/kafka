@@ -18,27 +18,28 @@ package org.apache.kafka.raft;
 
 import org.apache.kafka.common.protocol.ApiKeys;
 
-import java.net.InetSocketAddress;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
 
 public class MockNetworkChannel implements NetworkChannel {
     private final AtomicInteger correlationIdCounter;
+    private final Set<Integer> nodeCache;
     private final List<RaftRequest.Outbound> sendQueue = new ArrayList<>();
     private final Map<Integer, RaftRequest.Outbound> awaitingResponse = new HashMap<>();
-    private final Map<Integer, InetSocketAddress> addressCache = new HashMap<>();
 
-    public MockNetworkChannel(AtomicInteger correlationIdCounter) {
+    public MockNetworkChannel(AtomicInteger correlationIdCounter, Set<Integer> destinationIds) {
         this.correlationIdCounter = correlationIdCounter;
+        this.nodeCache = destinationIds;
     }
 
-    public MockNetworkChannel() {
-        this(new AtomicInteger(0));
+    public MockNetworkChannel(Set<Integer> destinationIds) {
+        this(new AtomicInteger(0), destinationIds);
     }
 
     @Override
@@ -48,16 +49,11 @@ public class MockNetworkChannel implements NetworkChannel {
 
     @Override
     public void send(RaftRequest.Outbound request) {
-        if (!addressCache.containsKey(request.destinationId())) {
+        if (!nodeCache.contains(request.destinationId())) {
             throw new IllegalArgumentException("Attempted to send to destination " +
                 request.destinationId() + ", but its address is not yet known");
         }
         sendQueue.add(request);
-    }
-
-    @Override
-    public void updateEndpoint(int id, InetSocketAddress address) {
-        addressCache.put(id, address);
     }
 
     public List<RaftRequest.Outbound> drainSendQueue() {
