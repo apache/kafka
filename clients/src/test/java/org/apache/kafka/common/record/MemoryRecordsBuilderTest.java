@@ -390,7 +390,6 @@ public class MemoryRecordsBuilderTest {
             else
                 assertEquals(2L, info.shallowOffsetOfMaxTimestamp);
 
-
             for (RecordBatch batch : records.batches()) {
                 assertEquals(TimestampType.LOG_APPEND_TIME, batch.timestampType());
                 for (Record record : batch)
