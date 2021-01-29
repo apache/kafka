@@ -344,6 +344,13 @@ public class FetchResponse<T extends BaseRecords> extends AbstractResponse {
 
     }
 
+    // Used when we can guarantee responseData is populated with all possible partitions
+    // This occurs when we have a response version < 13 or we built the FetchResponse with
+    // responseDataMap as a parameter and we have the same topic IDs available.
+    public LinkedHashMap<TopicPartition, PartitionData<T>> resolvedResponseData() {
+        return responseDataMap;
+    }
+
     @Override
     public int throttleTimeMs() {
         return data.throttleTimeMs();

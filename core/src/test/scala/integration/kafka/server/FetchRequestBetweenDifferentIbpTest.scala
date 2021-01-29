@@ -139,6 +139,7 @@ class FetchRequestBetweenDifferentIbpTest extends BaseRequestTest {
   }
 
   private def ensureControllerIn(brokerIds: Seq[Int]): Unit = {
+    TestUtils.waitUntilControllerElected(zkClient)
     while (!brokerIds.contains(controllerSocketServer.config.brokerId)) {
       zkClient.deleteController(ZkVersion.MatchAnyVersion)
 
