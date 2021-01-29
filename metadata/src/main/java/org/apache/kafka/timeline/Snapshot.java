@@ -31,6 +31,8 @@ import java.util.Map;
 class Snapshot {
     private final long epoch;
     private final IdentityHashMap<Revertable, Object> map = new IdentityHashMap<>(4);
+    private Snapshot prev = this;
+    private Snapshot next = this;
 
     Snapshot(long epoch) {
         this.epoch = epoch;
@@ -53,5 +55,27 @@ class Snapshot {
         for (Map.Entry<Revertable, Object> entry : map.entrySet()) {
             entry.getKey().executeRevert(epoch, entry.getValue());
         }
+    }
+
+    Snapshot prev() {
+        return prev;
+    }
+
+    Snapshot next() {
+        return next;
+    }
+
+    void add(Snapshot newNext) {
+        newNext.prev = this;
+        newNext.next = next;
+        next.prev = newNext;
+        next = newNext;
+    }
+
+    void removeSelfFromList() {
+        next.prev = prev;
+        prev.next = next;
+        prev = this;
+        next = this;
     }
 }

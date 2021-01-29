@@ -23,17 +23,19 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
+
+import org.apache.kafka.common.utils.LogContext;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 
+
 @Timeout(value = 40)
 public class SnapshotRegistryTest {
-
     @Test
     public void testEmptyRegistry() {
-        SnapshotRegistry registry = new SnapshotRegistry(0);
+        SnapshotRegistry registry = new SnapshotRegistry(new LogContext());
         assertThrows(RuntimeException.class, () -> registry.get(0));
-        assertIteratorContains(registry.snapshots());
+        assertIteratorContains(registry.iterator());
     }
 
     private static void assertIteratorContains(Iterator<Snapshot> iter,
@@ -52,35 +54,35 @@ public class SnapshotRegistryTest {
 
     @Test
     public void testCreateSnapshots() {
-        SnapshotRegistry registry = new SnapshotRegistry(0);
+        SnapshotRegistry registry = new SnapshotRegistry(new LogContext());
         Snapshot snapshot123 = registry.createSnapshot(123);
         assertEquals(snapshot123, registry.get(123));
         assertThrows(RuntimeException.class, () -> registry.get(456));
-        assertIteratorContains(registry.snapshots(), snapshot123);
-        assertEquals("Can't create a new snapshot at epoch 1 because the current " +
-            "epoch is 124", assertThrows(RuntimeException.class,
+        assertIteratorContains(registry.iterator(), snapshot123);
+        assertEquals("Can't create a new snapshot at epoch 1 because there is already " +
+            "a snapshot with epoch 123", assertThrows(RuntimeException.class,
                 () -> registry.createSnapshot(1)).getMessage());
         Snapshot snapshot456 = registry.createSnapshot(456);
-        assertIteratorContains(registry.snapshots(), snapshot123, snapshot456);
+        assertIteratorContains(registry.iterator(), snapshot123, snapshot456);
     }
 
     @Test
     public void testCreateAndDeleteSnapshots() {
-        SnapshotRegistry registry = new SnapshotRegistry(0);
+        SnapshotRegistry registry = new SnapshotRegistry(new LogContext());
         Snapshot snapshot123 = registry.createSnapshot(123);
         Snapshot snapshot456 = registry.createSnapshot(456);
         Snapshot snapshot789 = registry.createSnapshot(789);
         registry.deleteSnapshot(snapshot456.epoch());
-        assertIteratorContains(registry.snapshots(), snapshot123, snapshot789);
+        assertIteratorContains(registry.iterator(), snapshot123, snapshot789);
     }
 
     @Test
     public void testDeleteSnapshotUpTo() {
-        SnapshotRegistry registry = new SnapshotRegistry(0);
+        SnapshotRegistry registry = new SnapshotRegistry(new LogContext());
         registry.createSnapshot(10);
         registry.createSnapshot(12);
         Snapshot snapshot14 = registry.createSnapshot(14);
         registry.deleteSnapshotsUpTo(14);
-        assertIteratorContains(registry.snapshots(), snapshot14);
+        assertIteratorContains(registry.iterator(), snapshot14);
     }
 }

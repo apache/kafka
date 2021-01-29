@@ -18,6 +18,8 @@
 package org.apache.kafka.timeline;
 
 import java.util.Arrays;
+
+import org.apache.kafka.common.utils.LogContext;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 
@@ -34,7 +36,7 @@ public class TimelineHashSetTest {
 
     @Test
     public void testEmptySet() {
-        SnapshotRegistry registry = new SnapshotRegistry(0);
+        SnapshotRegistry registry = new SnapshotRegistry(new LogContext());
         TimelineHashSet<String> set = new TimelineHashSet<>(registry, 1);
         assertTrue(set.isEmpty());
         assertEquals(0, set.size());
@@ -44,14 +46,14 @@ public class TimelineHashSetTest {
 
     @Test
     public void testNullsForbidden() {
-        SnapshotRegistry registry = new SnapshotRegistry(0);
+        SnapshotRegistry registry = new SnapshotRegistry(new LogContext());
         TimelineHashSet<String> set = new TimelineHashSet<>(registry, 1);
         assertThrows(NullPointerException.class, () -> set.add(null));
     }
 
     @Test
     public void testIteration() {
-        SnapshotRegistry registry = new SnapshotRegistry(0);
+        SnapshotRegistry registry = new SnapshotRegistry(new LogContext());
         TimelineHashSet<String> set = new TimelineHashSet<>(registry, 1);
         set.add("a");
         set.add("b");
@@ -75,7 +77,7 @@ public class TimelineHashSetTest {
 
     @Test
     public void testToArray() {
-        SnapshotRegistry registry = new SnapshotRegistry(0);
+        SnapshotRegistry registry = new SnapshotRegistry(new LogContext());
         TimelineHashSet<String> set = new TimelineHashSet<>(registry, 1);
         set.add("z");
         assertArrayEquals(new String[] {"z"}, set.toArray());
@@ -85,7 +87,7 @@ public class TimelineHashSetTest {
 
     @Test
     public void testSetMethods() {
-        SnapshotRegistry registry = new SnapshotRegistry(0);
+        SnapshotRegistry registry = new SnapshotRegistry(new LogContext());
         TimelineHashSet<String> set = new TimelineHashSet<>(registry, 1);
         assertTrue(set.add("xyz"));
         assertFalse(set.add("xyz"));

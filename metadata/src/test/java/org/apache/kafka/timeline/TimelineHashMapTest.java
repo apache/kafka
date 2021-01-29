@@ -22,6 +22,8 @@ import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+
+import org.apache.kafka.common.utils.LogContext;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 
@@ -37,7 +39,7 @@ public class TimelineHashMapTest {
 
     @Test
     public void testEmptyMap() {
-        SnapshotRegistry registry = new SnapshotRegistry(0);
+        SnapshotRegistry registry = new SnapshotRegistry(new LogContext());
         TimelineHashMap<Integer, String> map = new TimelineHashMap<>(registry, 1);
         assertTrue(map.isEmpty());
         assertEquals(0, map.size());
@@ -47,7 +49,7 @@ public class TimelineHashMapTest {
 
     @Test
     public void testNullsForbidden() {
-        SnapshotRegistry registry = new SnapshotRegistry(0);
+        SnapshotRegistry registry = new SnapshotRegistry(new LogContext());
         TimelineHashMap<String, Boolean> map = new TimelineHashMap<>(registry, 1);
         assertThrows(NullPointerException.class, () -> map.put(null, true));
         assertThrows(NullPointerException.class, () -> map.put("abc", null));
@@ -56,7 +58,7 @@ public class TimelineHashMapTest {
 
     @Test
     public void testIteration() {
-        SnapshotRegistry registry = new SnapshotRegistry(0);
+        SnapshotRegistry registry = new SnapshotRegistry(new LogContext());
         TimelineHashMap<Integer, String> map = new TimelineHashMap<>(registry, 1);
         map.put(123, "abc");
         map.put(456, "def");
@@ -87,7 +89,7 @@ public class TimelineHashMapTest {
 
     @Test
     public void testMapMethods() {
-        SnapshotRegistry registry = new SnapshotRegistry(0);
+        SnapshotRegistry registry = new SnapshotRegistry(new LogContext());
         TimelineHashMap<Integer, String> map = new TimelineHashMap<>(registry, 1);
         assertEquals(null, map.putIfAbsent(1, "xyz"));
         assertEquals("xyz", map.putIfAbsent(1, "123"));
@@ -98,7 +100,7 @@ public class TimelineHashMapTest {
 
     @Test
     public void testMapEquals() {
-        SnapshotRegistry registry = new SnapshotRegistry(0);
+        SnapshotRegistry registry = new SnapshotRegistry(new LogContext());
         TimelineHashMap<Integer, String> map1 = new TimelineHashMap<>(registry, 1);
         assertEquals(null, map1.putIfAbsent(1, "xyz"));
         assertEquals(null, map1.putIfAbsent(2, "abc"));

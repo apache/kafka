@@ -292,7 +292,7 @@ class SnapshottableHashTable<T extends SnapshottableHashTable.ElementWithStartEp
         if (prev != null) {
             return false;
         }
-        object.setStartEpoch(snapshotRegistry.curEpoch());
+        object.setStartEpoch(snapshotRegistry.latestEpoch() + 1);
         int prevSize = baseSize();
         baseAddOrReplace(object);
         updateTierData(prevSize);
@@ -300,7 +300,7 @@ class SnapshottableHashTable<T extends SnapshottableHashTable.ElementWithStartEp
     }
 
     T snapshottableAddOrReplace(T object) {
-        object.setStartEpoch(snapshotRegistry.curEpoch());
+        object.setStartEpoch(snapshotRegistry.latestEpoch() + 1);
         int prevSize = baseSize();
         T prev = baseAddOrReplace(object);
         if (prev == null) {
@@ -322,7 +322,7 @@ class SnapshottableHashTable<T extends SnapshottableHashTable.ElementWithStartEp
     }
 
     private void updateTierData(int prevSize) {
-        Iterator<Snapshot> iter = snapshotRegistry.snapshots();
+        Iterator<Snapshot> iter = snapshotRegistry.iterator();
         while (iter.hasNext()) {
             Snapshot snapshot = iter.next();
             HashTier<T> tier = snapshot.data(SnapshottableHashTable.this);
@@ -334,7 +334,7 @@ class SnapshottableHashTable<T extends SnapshottableHashTable.ElementWithStartEp
     }
 
     private void updateTierData(T prev, int prevSize) {
-        Iterator<Snapshot> iter = snapshotRegistry.snapshots();
+        Iterator<Snapshot> iter = snapshotRegistry.iterator();
         while (iter.hasNext()) {
             Snapshot snapshot = iter.next();
             HashTier<T> tier = snapshot.data(SnapshottableHashTable.this);
@@ -366,7 +366,7 @@ class SnapshottableHashTable<T extends SnapshottableHashTable.ElementWithStartEp
         bld.append(baseToDebugString());
         bld.append(String.format(",%nsnapshot tiers: [%n"));
         String prefix = "";
-        for (Iterator<Snapshot> iter = snapshotRegistry.snapshots(); iter.hasNext(); ) {
+        for (Iterator<Snapshot> iter = snapshotRegistry.iterator(); iter.hasNext(); ) {
             Snapshot snapshot = iter.next();
             bld.append(prefix);
             bld.append("epoch ").append(snapshot.epoch()).append(": ");

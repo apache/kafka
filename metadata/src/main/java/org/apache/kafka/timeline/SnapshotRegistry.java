@@ -18,11 +18,16 @@
 package org.apache.kafka.timeline;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.Iterator;
+import java.util.List;
+import java.util.ListIterator;
+import java.util.NoSuchElementException;
 import java.util.stream.Collectors;
 
 import org.apache.kafka.common.utils.LogContext;
 import org.slf4j.Logger;
+
 
 /**
  * A registry containing snapshots of timeline data structures.
@@ -30,45 +35,138 @@ import org.slf4j.Logger;
  * Therefore, we use ArrayLists here rather than a data structure with higher overhead.
  */
 public class SnapshotRegistry {
+    class SnapshotIterator implements ListIterator<Snapshot> {
+        private Snapshot cur;
+        private Snapshot lastResult = null;
+
+        SnapshotIterator(Snapshot startAfter) {
+            this.cur = startAfter;
+        }
+
+        @Override
+        public boolean hasNext() {
+            return cur.next() != head;
+        }
+
+        @Override
+        public Snapshot next() {
+            if (!hasNext()) {
+                throw new NoSuchElementException();
+            }
+            cur = cur.next();
+            lastResult = cur;
+            return cur;
+        }
+
+        @Override
+        public boolean hasPrevious() {
+            return cur != head;
+        }
+
+        @Override
+        public Snapshot previous() {
+            if (!hasPrevious()) {
+                throw new NoSuchElementException();
+            }
+            Snapshot result = cur;
+            cur = cur.prev();
+            lastResult = result;
+            return result;
+        }
+
+        @Override
+        public int nextIndex() {
+            throw new UnsupportedOperationException();
+        }
+
+        @Override
+        public int previousIndex() {
+            throw new UnsupportedOperationException();
+        }
+
+        @Override
+        public void remove() {
+            if (lastResult == null) {
+                throw new IllegalStateException();
+            }
+            if (cur == lastResult) {
+                cur = cur.prev();
+            }
+            snapshots.remove(lastResult.epoch());
+            lastResult.removeSelfFromList();
+            lastResult = null;
+        }
+
+        @Override
+        public void set(Snapshot snapshot) {
+            throw new UnsupportedOperationException();
+        }
+
+        @Override
+        public void add(Snapshot snapshot) {
+            if (cur.epoch() >= snapshot.epoch()) {
+                throw new IllegalArgumentException("Can't add snapshot " +
+                    snapshot.epoch() + " after snapshot " + cur.epoch());
+            }
+            cur.add(snapshot);
+            cur = snapshot;
+        }
+    }
+
     private final Logger log;
 
     /**
-     * The current epoch.  All snapshot epochs are lower than this number.
+     * A map from snapshot epochs to snapshot data structures.
      */
-    private long curEpoch;
+    private final HashMap<Long, Snapshot> snapshots = new HashMap<>();
 
     /**
-     * An ArrayList of snapshots, kept in sorted order.
+     * The head of a list of snapshots, sorted by epoch.
      */
-    private final ArrayList<Snapshot> snapshots;
+    private final Snapshot head = new Snapshot(-1);
 
-    public SnapshotRegistry(long startEpoch) {
-        this(new LogContext(), startEpoch);
-    }
-
-    public SnapshotRegistry(LogContext logContext, long startEpoch) {
+    public SnapshotRegistry(LogContext logContext) {
         this.log = logContext.logger(SnapshotRegistry.class);
-        this.curEpoch = startEpoch;
-        this.snapshots = new ArrayList<>(5);
     }
 
     /**
      * Returns an iterator that moves through snapshots from the lowest to the highest epoch.
      */
-    public Iterator<Snapshot> snapshots() {
-        return snapshots.iterator();
+    public ListIterator<Snapshot> iterator() {
+        return new SnapshotIterator(head);
+    }
+
+    /**
+     * Returns an iterator that moves through snapshots from the lowest to the highest epoch.
+     *
+     * @param startAfter    A snapshot that we should start after.
+     */
+    ListIterator<Snapshot> iterator(Snapshot startAfter) {
+        return new SnapshotIterator(startAfter);
+    }
+
+    /**
+     * Returns a sorted list of snapshot epochs.
+     */
+    List<Long> epochsList() {
+        List<Long> result = new ArrayList<>();
+        for (ListIterator<Snapshot> iterator = iterator(); iterator.hasNext(); ) {
+            result.add(iterator.next().epoch());
+        }
+        return result;
     }
 
     /**
      * Gets the snapshot for a specific epoch.
      */
     public Snapshot get(long epoch) {
-        for (Snapshot snapshot : snapshots) {
-            if (snapshot.epoch() == epoch) {
-                return snapshot;
-            }
+        Snapshot snapshot = snapshots.get(epoch);
+        if (snapshot == null) {
+            throw new RuntimeException("No snapshot for epoch " + epoch + ". Snapshot " +
+                "epochs are: " + epochsList().stream().map(e -> e.toString()).
+                    collect(Collectors.joining(", ")));
         }
-        throw new RuntimeException("No snapshot for epoch " + epoch);
+        return snapshot;
     }
 
     /**
@@ -78,82 +176,76 @@ public class SnapshotRegistry {
      *                          will be advanced to one past this epoch.
      */
     public Snapshot createSnapshot(long epoch) {
-        if (epoch < curEpoch) {
+        Snapshot last = head.prev();
+        if (last.epoch() >= epoch) {
             throw new RuntimeException("Can't create a new snapshot at epoch " + epoch +
-                    " because the current epoch is " + curEpoch);
+                " because there is already a snapshot with epoch " + last.epoch());
         }
         Snapshot snapshot = new Snapshot(epoch);
-        snapshots.add(snapshot);
-        curEpoch = epoch + 1;
+        last.add(snapshot);
+        snapshots.put(epoch, snapshot);
         log.debug("Creating snapshot {}", epoch);
-        return snapshot;
-    }
-
-    /**
-     * Deletes the snapshot with the given epoch.
-     *
-     * @param epoch             The epoch of the snapshot to delete.
-     */
-    public void deleteSnapshot(long epoch) {
-        Iterator<Snapshot> iter = snapshots.iterator();
-        while (iter.hasNext()) {
-            Snapshot snapshot = iter.next();
-            if (snapshot.epoch() == epoch) {
-                log.debug("Deleting snapshot {}", epoch);
-                iter.remove();
-                return;
-            }
+        System.out.println("WATERMELON: snapshots = " + snapshots);
+        Snapshot n = head.next();
+        while (n != head) {
+            System.out.println("WATERMELON: n = " + n.epoch() + " n.prev = " + n.prev() + " n.next = " + n.next());
+            n = n.next();
         }
-        throw new RuntimeException(String.format(
-            "No snapshot at epoch %d found. Snapshot epochs are %s.", epoch,
-                snapshots.stream().map(snapshot -> String.valueOf(snapshot.epoch())).
-                    collect(Collectors.joining(", "))));
+        return snapshot;
     }
 
     /**
      * Reverts the state of all data structures to the state at the given epoch.
      *
-     * @param epoch             The epoch of the snapshot to revert to.
+     * @param targetEpoch       The epoch of the snapshot to revert to.
      */
-    public void revertToSnapshot(long epoch) {
-        Snapshot target = null;
-        // Iterate through all the snapshots, looking for the one to revert to.
-        // Once we find the snapshot we are looking for, we delete all the snapshots
-        // that come after that.
-        for (Iterator<Snapshot> iter = snapshots.iterator(); iter.hasNext(); ) {
-            Snapshot snapshot = iter.next();
-            if (target == null) {
-                if (snapshot.epoch() == epoch) {
-                    target = snapshot;
-                }
-            } else {
-                iter.remove();
-            }
+    public void revertToSnapshot(long targetEpoch) {
+        Snapshot target = get(targetEpoch);
+        for (Iterator<Snapshot> iterator = iterator(target); iterator.hasNext(); ) {
+            Snapshot snapshot = iterator.next();
+            log.debug("Deleting snapshot {} because we are reverting to {}",
+                snapshot.epoch(), targetEpoch);
+            iterator.remove();
         }
-        if (target == null) {
-            throw new RuntimeException("Unable to find snapshot " + epoch);
-        }
-        log.info("Reverting to snapshot {}", epoch);
         target.handleRevert();
-        curEpoch = epoch;
     }
 
     /**
-     * Returns the current epoch.
+     * Deletes the snapshot with the given epoch.
+     *
+     * @param targetEpoch       The epoch of the snapshot to delete.
      */
-    public long curEpoch() {
-        return curEpoch;
+    public void deleteSnapshot(long targetEpoch) {
+        Snapshot snapshot = snapshots.remove(targetEpoch);
+        if (snapshot == null) {
+            throw new RuntimeException("No snapshot for epoch " + targetEpoch + ". Snapshot " +
+                "epochs are: " + epochsList().stream().map(e -> e.toString()).
+                collect(Collectors.joining(", ")));
+        }
+        log.debug("Deleting snapshot {}", snapshot.epoch());
+        snapshot.removeSelfFromList();
     }
 
+    /**
+     * Deletes all the snapshots up to the given epoch
+     *
+     * @param targetEpoch       The epoch to delete up to.
+     */
     public void deleteSnapshotsUpTo(long targetEpoch) {
-        Iterator<Snapshot> iter = snapshots.iterator();
-        while (iter.hasNext()) {
-            Snapshot snapshot = iter.next();
+        for (Iterator<Snapshot> iterator = iterator(); iterator.hasNext(); ) {
+            Snapshot snapshot = iterator.next();
             if (snapshot.epoch() >= targetEpoch) {
-                break;
+                return;
             }
             log.debug("Deleting snapshot {}", snapshot.epoch());
-            iter.remove();
+            iterator.remove();
         }
+    }
+
+    /**
+     * Return the latest epoch.
+     */
+    public long latestEpoch() {
+        return head.prev().epoch();
     }
 }
