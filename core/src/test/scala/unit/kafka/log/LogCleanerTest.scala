@@ -218,17 +218,17 @@ class LogCleanerTest {
 
     // check duplicate append from producer 1
     var logAppendInfo = appendIdempotentAsLeader(log, pid1, producerEpoch)(Seq(1, 2, 3))
-    assertEquals(0L, logAppendInfo.firstOffset.get)
+    assertEquals(0L, logAppendInfo.firstOffset.get.messageOffset)
     assertEquals(2L, logAppendInfo.lastOffset)
 
     // check duplicate append from producer 3
     logAppendInfo = appendIdempotentAsLeader(log, pid3, producerEpoch)(Seq(1, 4))
-    assertEquals(6L, logAppendInfo.firstOffset.get)
+    assertEquals(6L, logAppendInfo.firstOffset.get.messageOffset)
     assertEquals(7L, logAppendInfo.lastOffset)
 
     // check duplicate append from producer 2
     logAppendInfo = appendIdempotentAsLeader(log, pid2, producerEpoch)(Seq(3, 1, 4))
-    assertEquals(3L, logAppendInfo.firstOffset.get)
+    assertEquals(3L, logAppendInfo.firstOffset.get.messageOffset)
     assertEquals(5L, logAppendInfo.lastOffset)
 
     // do one more append and a round of cleaning to force another deletion from producer 1's batch
@@ -244,7 +244,7 @@ class LogCleanerTest {
 
     // duplicate append from producer1 should still be fine
     logAppendInfo = appendIdempotentAsLeader(log, pid1, producerEpoch)(Seq(1, 2, 3))
-    assertEquals(0L, logAppendInfo.firstOffset.get)
+    assertEquals(0L, logAppendInfo.firstOffset.get.messageOffset)
     assertEquals(2L, logAppendInfo.lastOffset)
   }
 
@@ -1687,7 +1687,8 @@ class LogCleanerTest {
                 checkDone = checkDone)
 
   private def writeToLog(log: Log, seq: Iterable[(Int, Int)]): Iterable[Long] = {
-    for ((key, value) <- seq) yield log.appendAsLeader(record(key, value), leaderEpoch = 0).firstOffset.get
+    for ((key, value) <- seq)
+      yield log.appendAsLeader(record(key, value), leaderEpoch = 0).firstOffset.get.messageOffset
   }
 
   private def key(id: Long) = ByteBuffer.wrap(id.toString.getBytes)
