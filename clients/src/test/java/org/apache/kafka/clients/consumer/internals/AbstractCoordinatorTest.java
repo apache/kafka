@@ -107,6 +107,7 @@ public class AbstractCoordinatorTest {
     @AfterEach
     public void closeCoordinator() {
         Utils.closeQuietly(coordinator, "close coordinator");
+        Utils.closeQuietly(consumerClient, "close consumer client");
     }
 
     private void setupCoordinator() {
