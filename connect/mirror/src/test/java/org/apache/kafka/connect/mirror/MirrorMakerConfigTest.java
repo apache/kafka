@@ -274,8 +274,7 @@ public class MirrorMakerConfigTest {
         // c->b.enabled=false
         // c->b.emit.heartbeat.enabled=true
         List<SourceAndTarget> clusterPairs = mirrorConfig.clusterPairs();
-        assertEquals("clusterPairs count should match all combinations count",
-                6, clusterPairs.size());
+        assertEquals(6, clusterPairs.size(), "clusterPairs count should match all combinations count");
     }
 
     @Test
@@ -283,8 +282,7 @@ public class MirrorMakerConfigTest {
         MirrorMakerConfig mirrorConfig = new MirrorMakerConfig(makeProps(
                 "clusters", "a, b, c",
                 "emit.heartbeats.enabled", "false"));
-        assertEquals("clusterPairs count should be 0",
-                0, mirrorConfig.clusterPairs().size());
+        assertEquals(0, mirrorConfig.clusterPairs().size(), "clusterPairs count should be 0");
     }
 
     @Test
@@ -294,8 +292,8 @@ public class MirrorMakerConfigTest {
                 "a->b.emit.heartbeats.enabled", "false",
                 "a->c.emit.heartbeats.enabled", "false"));
         List<SourceAndTarget> clusterPairs = mirrorConfig.clusterPairs();
-        assertEquals("clusterPairs count should match all combinations count except x->y.emit.heartbeats.enabled=false",
-                4, clusterPairs.size());
+        assertEquals(4, clusterPairs.size(),
+            "clusterPairs count should match all combinations count except x->y.emit.heartbeats.enabled=false");
     }
 
     @Test
@@ -309,12 +307,12 @@ public class MirrorMakerConfigTest {
                 "a->e.enabled", "false",
                 "a->f.enabled", "false"));
         List<SourceAndTarget> clusterPairs = mirrorConfig.clusterPairs();
-        assertEquals("clusterPairs count should match (x->y.enabled=true or x->y.emit.heartbeats.enabled=true) count",
-                3, clusterPairs.size());
+        assertEquals(3, clusterPairs.size(),
+            "clusterPairs count should match (x->y.enabled=true or x->y.emit.heartbeats.enabled=true) count");
 
         // Link b->a.enabled doesn't exist therefore it must not be in clusterPairs
         SourceAndTarget sourceAndTarget = new SourceAndTarget("b", "a");
-        assertFalse("disabled/unset link x->y should not be in clusterPairs", clusterPairs.contains(sourceAndTarget));
+        assertFalse(clusterPairs.contains(sourceAndTarget), "disabled/unset link x->y should not be in clusterPairs");
     }
 
     @Test
@@ -326,8 +324,8 @@ public class MirrorMakerConfigTest {
                 "central->local_two.enabled", "true",
                 "beats_emitter->central.emit.heartbeats.enabled", "true"));
 
-        assertEquals("clusterPairs count should match (x->y.enabled=true or x->y.emit.heartbeats.enabled=true) count",
-                3, mirrorConfig.clusterPairs().size());
+        assertEquals(3, mirrorConfig.clusterPairs().size(),
+            "clusterPairs count should match (x->y.enabled=true or x->y.emit.heartbeats.enabled=true) count");
     }
 
     public static class FakeConfigProvider implements ConfigProvider {
