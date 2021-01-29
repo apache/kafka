@@ -1240,7 +1240,8 @@ public class KafkaStreams implements AutoCloseable {
                 log.info("Streams client stopped to NOT_RUNNING completely");
                 return true;
             } else {
-                log.warn("Streams client cannot transition to {}} completely within the timeout", state);
+                log.warn("Streams client cannot transition to {}} completely within the timeout",
+                         state == State.PENDING_SHUTDOWN ? State.NOT_RUNNING : State.ERROR);
                 return false;
             }
         }
