@@ -16,13 +16,7 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
-import java.io.BufferedReader;
-import java.io.BufferedWriter;
-import java.io.FileOutputStream;
-import java.io.OutputStreamWriter;
-import java.nio.charset.StandardCharsets;
-import java.util.UUID;
-import java.util.concurrent.atomic.AtomicReference;
+
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.StreamsConfig;
@@ -32,6 +26,9 @@ import org.apache.kafka.streams.processor.TaskId;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+import com.fasterxml.jackson.annotation.JsonProperty;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import java.io.File;
 import java.io.IOException;
 import java.nio.channels.FileChannel;
@@ -46,6 +43,8 @@ import java.nio.file.attribute.PosixFilePermissions;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Set;
+import java.util.UUID;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.regex.Pattern;
 
 import static org.apache.kafka.streams.processor.internals.StateManagerUtil.CHECKPOINT_FILE_NAME;
@@ -62,13 +61,23 @@ public class StateDirectory {
     static final String LOCK_FILE_NAME = ".lock";
 
     /* The process file is used to persist the process id across restarts.
-     * The version 0 schema consists only of the version number and UUID
-     *
-     * If you need to store additional metadata of the process you can bump the version numberand append new fields.
-     * For compatibility reasons you should only ever add fields, and only by appending them to the end
+     * For compatibility reasons you should only ever add fields to the json schema
      */
-    private static final String PROCESS_FILE_NAME = "kafka-streams-process-metadata";
-    private static final int PROCESS_FILE_VERSION = 0;
+    static final String PROCESS_FILE_NAME = "kafka-streams-process-metadata";
+
+    @JsonIgnoreProperties(ignoreUnknown = true)
+    static class StateDirectoryProcessFile {
+        @JsonProperty
+        private final UUID processId;
+
+        public StateDirectoryProcessFile() {
+            this.processId = null;
+        }
+
+        StateDirectoryProcessFile(final UUID processId) {
+            this.processId = processId;
+        }
+    }
 
     private final Object taskDirCreationLock = new Object();
     private final Time time;
@@ -180,38 +189,26 @@ public class StateDirectory {
         }
 
         final File processFile = new File(stateDir, PROCESS_FILE_NAME);
+        final ObjectMapper mapper = new ObjectMapper();
+
         try {
             if (processFile.exists()) {
-                try (final BufferedReader reader = Files.newBufferedReader(processFile.toPath())) {
-                    // only field in version 0 is the UUID
-                    final int version = Integer.parseInt(reader.readLine());
-                    if (version > 0) {
-                        log.debug("Unrecognized version {} in process file, ignoring any data after the UUID", version);
-                    } else if (version < 0) {
-                        log.error("Invalid version {} in process id file", version);
-                        throw new ProcessorStateException("Unable to read process file due to invalid version");
+                try {
+                    final StateDirectoryProcessFile processFileData = mapper.readValue(processFile, StateDirectoryProcessFile.class);
+                    log.info("Reading UUID from process file: {}", processFileData.processId);
+                    if (processFileData.processId != null) {
+                        return processFileData.processId;
                     }
-                    final UUID processId = UUID.fromString(reader.readLine());
-                    log.info("Reading UUID from version {} process file: {}", version, processId);
-                    return processId;
-                }
-            } else {
-                final UUID processId = UUID.randomUUID();
-                log.info("No process id found on disk, got fresh process id {}", processId);
-                final FileOutputStream fileOutputStream = new FileOutputStream(processFile);
-                try (final BufferedWriter writer = new BufferedWriter(
-                    new OutputStreamWriter(fileOutputStream, StandardCharsets.UTF_8))) {
-                    writer.write(Integer.toString(PROCESS_FILE_VERSION));
-                    writer.newLine();
-                    writer.write(processId.toString());
-                    writer.newLine();
-                    writer.flush();
-                    fileOutputStream.getFD().sync();
-
-                    return processId;
+                } catch (final Exception e) {
+                    log.warn("Failed to read json process file", e);
                 }
             }
 
+            final StateDirectoryProcessFile processFileData = new StateDirectoryProcessFile(UUID.randomUUID());
+            log.info("No process id found on disk, got fresh process id {}", processFileData.processId);
+
+            mapper.writeValue(processFile, processFileData);
+            return processFileData.processId;
         } catch (final IOException e) {
             log.error("Unable to read/write process file due to unexpected exception", e);
             throw new ProcessorStateException(e);
