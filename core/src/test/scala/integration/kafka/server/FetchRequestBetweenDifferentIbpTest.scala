@@ -21,15 +21,12 @@ import java.time.Duration
 import java.util.Arrays.asList
 
 import kafka.api.{ApiVersion, KAFKA_2_7_IV0, KAFKA_2_8_IV2}
-//import kafka.network.SocketServer
 import kafka.server.{BaseRequestTest, KafkaConfig}
 import kafka.utils.TestUtils
 import kafka.zk.ZkVersion
 import org.apache.kafka.clients.producer.ProducerRecord
 import org.apache.kafka.common.{TopicPartition, Uuid}
 import org.apache.kafka.common.message.MetadataRequestData
-//import org.apache.kafka.common.protocol.Errors
-//import org.apache.kafka.common.requests.{MetadataRequest, MetadataResponse}
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.Test
 
