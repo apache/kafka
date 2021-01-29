@@ -239,6 +239,8 @@ public abstract class AbstractRequest implements AbstractRequestResponse {
                 return new ListPartitionReassignmentsRequest(struct, apiVersion);
             case OFFSET_DELETE:
                 return new OffsetDeleteRequest(struct, apiVersion);
+            case LI_CONTROLLED_SHUTDOWN_SKIP_SAFETY_CHECK:
+                return new LiControlledShutdownSkipSafetyCheckRequest(struct, apiVersion);
             default:
                 throw new AssertionError(String.format("ApiKey %s is not currently handled in `parseRequest`, the " +
                         "code should be updated to do so.", apiKey));

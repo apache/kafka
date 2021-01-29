@@ -155,9 +155,9 @@ object Election extends Logging {
    */
   def leaderForControlledShutdown(controllerContext: ControllerContext,
                                   leaderAndIsrs: Seq[(TopicPartition, LeaderAndIsr)]): Seq[ElectionResult] = {
-    val shuttingDownBrokerIds = controllerContext.shuttingDownBrokerIds.toSet
+    val shuttingDownBrokerIdSet = controllerContext.shuttingDownBrokerIds.keySet.toSet
     leaderAndIsrs.map { case (partition, leaderAndIsr) =>
-      leaderForControlledShutdown(partition, leaderAndIsr, shuttingDownBrokerIds, controllerContext)
+      leaderForControlledShutdown(partition, leaderAndIsr, shuttingDownBrokerIdSet, controllerContext)
     }
   }
 }

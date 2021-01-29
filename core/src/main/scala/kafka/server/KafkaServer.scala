@@ -563,23 +563,30 @@ class KafkaServer(val config: KafkaConfig, time: Time = Time.SYSTEM, threadNameP
                 else if (config.interBrokerProtocolVersion < KAFKA_2_4_IV1) 2
                 else 3
 
+              // Keep track of our brokerEpoch at the time we send the request. If it has changed by the time we
+              // get a response we'll start over.
+              val brokerEpochAtRequestTime = kafkaController.brokerEpoch
               val controlledShutdownRequest = new ControlledShutdownRequest.Builder(
                   new ControlledShutdownRequestData()
                     .setBrokerId(config.brokerId)
-                    .setBrokerEpoch(kafkaController.brokerEpoch),
+                    .setBrokerEpoch(brokerEpochAtRequestTime),
                     controlledShutdownApiVersion)
               val request = networkClient.newClientRequest(node(prevController).idString, controlledShutdownRequest,
                 time.milliseconds(), true)
               val clientResponse = NetworkClientUtils.sendAndReceive(networkClient, request, time)
 
-              val shutdownResponse = clientResponse.responseBody.asInstanceOf[ControlledShutdownResponse]
-              if (shutdownResponse.error == Errors.NONE && shutdownResponse.data.remainingPartitions.isEmpty) {
-                shutdownSucceeded = true
-                info("Controlled shutdown succeeded")
-              }
-              else {
-                info(s"Remaining partitions to move: ${shutdownResponse.data.remainingPartitions}")
-                info(s"Error from controller: ${shutdownResponse.error}")
+              if (brokerEpochAtRequestTime == kafkaController.brokerEpoch) {
+                val shutdownResponse = clientResponse.responseBody.asInstanceOf[ControlledShutdownResponse]
+                if (shutdownResponse.error == Errors.NONE && shutdownResponse.data.remainingPartitions.isEmpty) {
+                  shutdownSucceeded = true
+                  info("Controlled shutdown succeeded")
+                }
+                else {
+                  info(s"Remaining partitions to move: ${shutdownResponse.data.remainingPartitions}")
+                  info(s"Error from controller: ${shutdownResponse.error}")
+                }
+              } else {
+                info(s"Local brokerEpoch changed from $brokerEpochAtRequestTime to ${kafkaController.brokerEpoch} while waiting for ControlledShutdownResponse. Ignoring response and trying again.")
               }
             }
             catch {

@@ -179,6 +179,7 @@ object TestUtils extends Logging {
   def createBrokerConfigs(numConfigs: Int,
     zkConnect: String,
     enableControlledShutdown: Boolean = true,
+    enableControlledShutdownSafetyCheck: Boolean = false,
     enableDeleteTopic: Boolean = true,
     interBrokerSecurityProtocol: Option[SecurityProtocol] = None,
     trustStoreFile: Option[File] = None,
@@ -193,9 +194,10 @@ object TestUtils extends Logging {
     numPartitions: Int = 1,
     defaultReplicationFactor: Short = 1): Seq[Properties] = {
     (0 until numConfigs).map { node =>
-      createBrokerConfig(node, zkConnect, enableControlledShutdown, enableDeleteTopic, RandomPort,
-        interBrokerSecurityProtocol, trustStoreFile, saslProperties, enablePlaintext = enablePlaintext, enableSsl = enableSsl,
-        enableSaslPlaintext = enableSaslPlaintext, enableSaslSsl = enableSaslSsl, rack = rackInfo.get(node), logDirCount = logDirCount, enableToken = enableToken,
+      createBrokerConfig(node, zkConnect, enableControlledShutdown, enableControlledShutdownSafetyCheck,
+        enableDeleteTopic, RandomPort, interBrokerSecurityProtocol, trustStoreFile, saslProperties,
+        enablePlaintext = enablePlaintext, enableSsl = enableSsl, enableSaslPlaintext = enableSaslPlaintext,
+        enableSaslSsl = enableSaslSsl, rack = rackInfo.get(node), logDirCount = logDirCount, enableToken = enableToken,
         numPartitions = numPartitions, defaultReplicationFactor = defaultReplicationFactor)
     }
   }
@@ -238,6 +240,7 @@ object TestUtils extends Logging {
   def createBrokerConfig(nodeId: Int,
                          zkConnect: String,
                          enableControlledShutdown: Boolean = true,
+                         enableControlledShutdownSafetyCheck: Boolean = false,
                          enableDeleteTopic: Boolean = true,
                          port: Int = RandomPort,
                          interBrokerSecurityProtocol: Option[SecurityProtocol] = None,
@@ -289,6 +292,7 @@ object TestUtils extends Logging {
     props.put(KafkaConfig.ReplicaSocketTimeoutMsProp, "1500")
     props.put(KafkaConfig.ControllerSocketTimeoutMsProp, "1500")
     props.put(KafkaConfig.ControlledShutdownEnableProp, enableControlledShutdown.toString)
+    props.put(KafkaConfig.ControlledShutdownSafetyCheckEnableProp, enableControlledShutdownSafetyCheck.toString)
     props.put(KafkaConfig.DeleteTopicEnableProp, enableDeleteTopic.toString)
     props.put(KafkaConfig.LogDeleteDelayMsProp, "1000")
     props.put(KafkaConfig.ControlledShutdownRetryBackoffMsProp, "100")

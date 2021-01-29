@@ -505,6 +505,13 @@ class RequestQuotaTest extends BaseRequestTest {
                     new OffsetDeleteRequestData.OffsetDeleteRequestPartition()
                       .setPartitionIndex(0)))).iterator())))
 
+        case ApiKeys.LI_CONTROLLED_SHUTDOWN_SKIP_SAFETY_CHECK =>
+          new LiControlledShutdownSkipSafetyCheckRequest.Builder(
+            new LiControlledShutdownSkipSafetyCheckRequestData()
+              .setBrokerId(112)
+              .setBrokerEpoch(6431),
+            ApiKeys.LI_CONTROLLED_SHUTDOWN_SKIP_SAFETY_CHECK.latestVersion)
+
         case _ =>
           throw new IllegalArgumentException("Unsupported API key " + apiKey)
     }
@@ -611,6 +618,9 @@ class RequestQuotaTest extends BaseRequestTest {
       case ApiKeys.ALTER_PARTITION_REASSIGNMENTS => new AlterPartitionReassignmentsResponse(response).throttleTimeMs
       case ApiKeys.LIST_PARTITION_REASSIGNMENTS => new ListPartitionReassignmentsResponse(response).throttleTimeMs
       case ApiKeys.OFFSET_DELETE => new OffsetDeleteResponse(response).throttleTimeMs()
+      case ApiKeys.LI_CONTROLLED_SHUTDOWN_SKIP_SAFETY_CHECK => new LiControlledShutdownSkipSafetyCheckResponse(
+          response,
+          ApiKeys.LI_CONTROLLED_SHUTDOWN_SKIP_SAFETY_CHECK.latestVersion).throttleTimeMs()
       case requestId => throw new IllegalArgumentException(s"No throttle time for $requestId")
     }
   }

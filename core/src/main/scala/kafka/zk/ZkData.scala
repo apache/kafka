@@ -88,6 +88,16 @@ object BrokerIdsZNode {
   def encode: Array[Byte] = null
 }
 
+object BrokerShutdownNode {
+  def path = s"${BrokersZNode.path}/shutdown"
+}
+
+object BrokerShutdownIdZNode {
+  def path(id: Int) = s"${BrokerShutdownNode.path}/$id"
+  def encode(epoch: Long): Array[Byte] = epoch.toString.getBytes(UTF_8)
+  def decode(bytes: Array[Byte]): Long = new String(bytes, UTF_8).toLong
+}
+
 object BrokerInfo {
 
   /**
@@ -770,6 +780,7 @@ object ZkData {
   // Important: it is necessary to add any new top level Zookeeper path to the Seq
   val SecureRootPaths = Seq(AdminZNode.path,
     BrokersZNode.path,
+    BrokerShutdownNode.path,
     ClusterZNode.path,
     ConfigZNode.path,
     ControllerZNode.path,
@@ -784,6 +795,7 @@ object ZkData {
   val PersistentZkPaths = Seq(
     ConsumerPathZNode.path, // old consumer path
     BrokerIdsZNode.path,
+    BrokerShutdownNode.path,
     PreferredControllersZNode.path,
     TopicsZNode.path,
     ConfigEntityChangeNotificationZNode.path,

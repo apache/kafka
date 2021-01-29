@@ -21,6 +21,8 @@ import org.apache.kafka.common.message.ApiVersionsRequestData;
 import org.apache.kafka.common.message.ApiVersionsResponseData;
 import org.apache.kafka.common.message.ControlledShutdownRequestData;
 import org.apache.kafka.common.message.ControlledShutdownResponseData;
+import org.apache.kafka.common.message.LiControlledShutdownSkipSafetyCheckRequestData;
+import org.apache.kafka.common.message.LiControlledShutdownSkipSafetyCheckResponseData;
 import org.apache.kafka.common.message.CreateDelegationTokenRequestData;
 import org.apache.kafka.common.message.CreateDelegationTokenResponseData;
 import org.apache.kafka.common.message.CreateTopicsRequestData;
@@ -206,7 +208,10 @@ public enum ApiKeys {
                                   AlterPartitionReassignmentsResponseData.SCHEMAS),
     LIST_PARTITION_REASSIGNMENTS(46, "ListPartitionReassignments", ListPartitionReassignmentsRequestData.SCHEMAS,
                                  ListPartitionReassignmentsResponseData.SCHEMAS),
-    OFFSET_DELETE(47, "OffsetDelete", OffsetDeleteRequestData.SCHEMAS, OffsetDeleteResponseData.SCHEMAS);
+    OFFSET_DELETE(47, "OffsetDelete", OffsetDeleteRequestData.SCHEMAS, OffsetDeleteResponseData.SCHEMAS),
+
+    // LinkedIn API keys for APIs not yet upstreamed.
+    LI_CONTROLLED_SHUTDOWN_SKIP_SAFETY_CHECK(1000, "LiControlledShutdownSkipSafetyCheck", true, LiControlledShutdownSkipSafetyCheckRequestData.SCHEMAS, LiControlledShutdownSkipSafetyCheckResponseData.SCHEMAS);
 
     private static final ApiKeys[] ID_TO_TYPE;
     private static final int MIN_API_KEY = 0;
@@ -287,7 +292,15 @@ public enum ApiKeys {
     }
 
     public static boolean hasId(int id) {
-        return id >= MIN_API_KEY && id <= MAX_API_KEY;
+        if (id < MIN_API_KEY) {
+            return false;
+        }
+
+        if (id > MAX_API_KEY) {
+            return false;
+        }
+
+        return ID_TO_TYPE[id] != null;
     }
 
     public short latestVersion() {

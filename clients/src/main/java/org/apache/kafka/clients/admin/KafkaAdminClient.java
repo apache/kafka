@@ -85,6 +85,7 @@ import org.apache.kafka.common.message.IncrementalAlterConfigsRequestData.Altera
 import org.apache.kafka.common.message.IncrementalAlterConfigsRequestData.AlterableConfigCollection;
 import org.apache.kafka.common.message.LeaveGroupRequestData.MemberIdentity;
 import org.apache.kafka.common.message.LeaveGroupResponseData.MemberResponse;
+import org.apache.kafka.common.message.LiControlledShutdownSkipSafetyCheckRequestData;
 import org.apache.kafka.common.message.ListGroupsRequestData;
 import org.apache.kafka.common.message.ListGroupsResponseData;
 import org.apache.kafka.common.message.ListPartitionReassignmentsRequestData;
@@ -154,6 +155,8 @@ import org.apache.kafka.common.requests.IncrementalAlterConfigsResponse;
 import org.apache.kafka.common.requests.JoinGroupRequest;
 import org.apache.kafka.common.requests.LeaveGroupRequest;
 import org.apache.kafka.common.requests.LeaveGroupResponse;
+import org.apache.kafka.common.requests.LiControlledShutdownSkipSafetyCheckRequest;
+import org.apache.kafka.common.requests.LiControlledShutdownSkipSafetyCheckResponse;
 import org.apache.kafka.common.requests.ListGroupsRequest;
 import org.apache.kafka.common.requests.ListGroupsResponse;
 import org.apache.kafka.common.requests.ListPartitionReassignmentsRequest;
@@ -3186,6 +3189,44 @@ public class KafkaAdminClient extends AdminClient {
     @Override
     public Map<MetricName, ? extends Metric> metrics() {
         return Collections.unmodifiableMap(this.metrics.metrics());
+    }
+
+    @Override
+    public SkipShutdownSafetyCheckResult skipShutdownSafetyCheck(SkipShutdownSafetyCheckOptions options) {
+        final KafkaFutureImpl<Void> future = new KafkaFutureImpl<>();
+        final long now = time.milliseconds();
+
+        runnable.call(new Call("skipShutdownSafetyCheck", calcDeadlineMs(now, options.timeoutMs()),
+            new ControllerNodeProvider()) {
+
+            @Override
+            AbstractRequest.Builder createRequest(int timeoutMs) {
+                return new LiControlledShutdownSkipSafetyCheckRequest.Builder(
+                    new LiControlledShutdownSkipSafetyCheckRequestData()
+                    .setBrokerId(options.brokerId())
+                    .setBrokerEpoch(options.brokerEpoch()),
+                    (short) 0);
+            }
+
+            @Override
+            void handleResponse(AbstractResponse abstractResponse) {
+                LiControlledShutdownSkipSafetyCheckResponse response = (LiControlledShutdownSkipSafetyCheckResponse) abstractResponse;
+                Errors error = Errors.forCode(response.data().errorCode());
+                if (error != Errors.NONE) {
+                    future.completeExceptionally(error.exception());
+                    return;
+                }
+
+                future.complete(null);
+            }
+
+            @Override
+            void handleFailure(Throwable throwable) {
+                future.completeExceptionally(throwable);
+            }
+        }, now);
+
+        return new SkipShutdownSafetyCheckResult(future);
     }
 
     @Override

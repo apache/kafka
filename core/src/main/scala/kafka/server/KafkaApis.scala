@@ -174,6 +174,9 @@ class KafkaApis(val requestChannel: RequestChannel,
         case ApiKeys.ALTER_PARTITION_REASSIGNMENTS => handleAlterPartitionReassignmentsRequest(request)
         case ApiKeys.LIST_PARTITION_REASSIGNMENTS => handleListPartitionReassignmentsRequest(request)
         case ApiKeys.OFFSET_DELETE => handleOffsetDeleteRequest(request)
+
+        // LinkedIn internal request types
+        case ApiKeys.LI_CONTROLLED_SHUTDOWN_SKIP_SAFETY_CHECK => handleLiControlledShutdownSkipSafetyCheck(request)
       }
     } catch {
       case e: FatalExitError => throw e
@@ -3001,5 +3004,27 @@ class KafkaApis(val requestChannel: RequestChannel,
     } catch {
       case e: Exception => error(s"Observer failed to observe ${Observer.describeRequestAndResponse(request, response)}", e)
     }
+  }
+
+  def handleLiControlledShutdownSkipSafetyCheck(request: RequestChannel.Request): Unit = {
+    authorizeClusterOperation(request, CLUSTER_ACTION)
+
+    val skipSafetyCheckRequest = request.body[LiControlledShutdownSkipSafetyCheckRequest]
+
+    def callback(result: Try[Unit]): Unit = {
+      val response = result match {
+        case Success(partitionsRemaining) =>
+          LiControlledShutdownSkipSafetyCheckResponse.prepareResponse(Errors.NONE)
+
+        case Failure(throwable) =>
+          skipSafetyCheckRequest.getErrorResponse(throwable)
+      }
+      sendResponseExemptThrottle(request, response)
+    }
+
+    controller.skipControlledShutdownSafetyCheck(
+      skipSafetyCheckRequest.data.brokerId,
+      skipSafetyCheckRequest.data.brokerEpoch,
+      callback)
   }
 }

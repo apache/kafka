@@ -191,7 +191,7 @@ class PartitionStateMachineTest {
     controllerContext.setLiveBrokerAndEpochs(Map(
       TestUtils.createBrokerAndEpoch(brokerId, "host", 0),
       TestUtils.createBrokerAndEpoch(otherBrokerId, "host", 0)))
-    controllerContext.shuttingDownBrokerIds.add(brokerId)
+    controllerContext.shuttingDownBrokerIds += (brokerId -> 0)
     controllerContext.updatePartitionReplicaAssignment(partition, Seq(brokerId, otherBrokerId))
     controllerContext.putPartitionState(partition, OnlinePartition)
     val leaderAndIsr = LeaderAndIsr(brokerId, List(brokerId, otherBrokerId))

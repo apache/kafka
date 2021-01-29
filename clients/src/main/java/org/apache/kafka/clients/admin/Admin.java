@@ -1084,4 +1084,12 @@ public interface Admin extends AutoCloseable {
      * Get the metrics kept by the adminClient
      */
     Map<MetricName, ? extends Metric> metrics();
+
+    /**
+     * Skip the shutdown safety check for a given (brokerId, brokerEpoch).
+     *
+     * @param options The options to use when skipping the shutdown safety check for a broker.
+     * @return The SkipShutdownSafetyCheckResult.
+     */
+    SkipShutdownSafetyCheckResult skipShutdownSafetyCheck(SkipShutdownSafetyCheckOptions options);
 }
