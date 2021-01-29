@@ -82,11 +82,11 @@ public class ClusterForEachTest {
 
     // Multiple @ClusterTest can be used with @ClusterTests
     @ClusterTests({
-        @ClusterTest(name = "cluster-tests-1", clusterType = Type.Zk, properties = {
+        @ClusterTest(name = "cluster-tests-1", clusterType = Type.Zk, serverProperties = {
             @ClusterProperty(key = "foo", value = "bar"),
             @ClusterProperty(key = "spam", value = "eggs")
         }),
-        @ClusterTest(name = "cluster-tests-2", clusterType = Type.Zk, properties = {
+        @ClusterTest(name = "cluster-tests-2", clusterType = Type.Zk, serverProperties = {
             @ClusterProperty(key = "foo", value = "baz"),
             @ClusterProperty(key = "spam", value = "eggz")
         })

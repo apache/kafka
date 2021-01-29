@@ -191,15 +191,18 @@ public class ClusterForEach implements TestTemplateInvocationContextProvider {
         if (!annot.listener().isEmpty()) {
             builder.listenerName(annot.listener());
         }
+
         Properties properties = new Properties();
-        for (ClusterProperty property : annot.properties()) {
+        for (ClusterProperty property : annot.serverProperties()) {
             properties.put(property.key(), property.value());
         }
-        builder.serverProperties(properties);
+
         switch (type) {
             case Zk:
             case Both:
-                testInvocations.accept(new ZkClusterInvocationContext(builder.build()));
+                ClusterConfig config = builder.build();
+                config.serverProperties().putAll(properties);
+                testInvocations.accept(new ZkClusterInvocationContext(config));
                 break;
         }
     }

@@ -33,7 +33,9 @@ import org.junit.jupiter.api.extension.Extension;
 import org.junit.jupiter.api.extension.TestTemplateInvocationContext;
 import scala.Option;
 import scala.collection.JavaConverters;
+import scala.compat.java8.OptionConverters;
 
+import java.io.File;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.List;
@@ -87,6 +89,26 @@ public class ZkClusterInvocationContext implements TestTemplateInvocationContext
                 // configure the cluster using values from ClusterConfig
                 IntegrationTestHarness cluster = new IntegrationTestHarness() {
                     @Override
+                    public Properties serverConfig() {
+                        return clusterConfig.serverProperties();
+                    }
+
+                    @Override
+                    public Properties adminClientConfig() {
+                        return clusterConfig.adminClientProperties();
+                    }
+
+                    @Override
+                    public Properties consumerConfig() {
+                        return clusterConfig.consumerProperties();
+                    }
+
+                    @Override
+                    public Properties producerConfig() {
+                        return clusterConfig.producerProperties();
+                    }
+
+                    @Override
                     public SecurityProtocol securityProtocol() {
                         return SecurityProtocol.forName(clusterConfig.securityProtocol());
                     }
@@ -120,9 +142,13 @@ public class ZkClusterInvocationContext implements TestTemplateInvocationContext
                         // Brokers and controllers are the same in zk mode, so just use the max
                         return Math.max(clusterConfig.brokers(), clusterConfig.controllers());
                     }
+
+                    @Override
+                    public Option<File> trustStoreFile() {
+                        return OptionConverters.toScala(clusterConfig.trustStoreFile());
+                    }
                 };
-                cluster.adminClientConfig().putAll(clusterConfig.adminClientProperties());
-                cluster.serverConfig().putAll(clusterConfig.serverProperties());
+
                 // TODO consumer and producer configs
                 clusterReference.set(cluster);
                 if (clusterConfig.isAutoStart()) {

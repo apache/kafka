@@ -17,10 +17,10 @@
 
 package kafka.test;
 
-import kafka.server.KafkaConfig;
 import kafka.test.annotation.Type;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
 
+import java.io.File;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Optional;
@@ -36,27 +36,28 @@ public class ClusterConfig {
     private final int controllers;
     private final String name;
     private final boolean autoStart;
-    private final Properties serverProperties;
-    private final String ibp;
+
     private final String securityProtocol;
     private final String listenerName;
+    private final File trustStoreFile;
 
+    private final Properties serverProperties = new Properties();
+    private final Properties producerProperties = new Properties();
+    private final Properties consumerProperties = new Properties();
     private final Properties adminClientProperties = new Properties();
     private final Properties saslServerProperties = new Properties();
     private final Properties saslClientProperties = new Properties();
 
     ClusterConfig(Type type, int brokers, int controllers, String name, boolean autoStart,
-                  Properties serverProperties, String ibp,
-                  String securityProtocol, String listenerName) {
+                  String securityProtocol, String listenerName, File trustStoreFile) {
         this.type = type;
         this.brokers = brokers;
         this.controllers = controllers;
         this.name = name;
         this.autoStart = autoStart;
-        this.serverProperties = serverProperties;
-        this.ibp = ibp;
         this.securityProtocol = securityProtocol;
         this.listenerName = listenerName;
+        this.trustStoreFile = trustStoreFile;
     }
 
     public Type clusterType() {
@@ -83,20 +84,16 @@ public class ClusterConfig {
         return serverProperties;
     }
 
+    public Properties producerProperties() {
+        return producerProperties;
+    }
+
+    public Properties consumerProperties() {
+        return consumerProperties;
+    }
+
     public Properties adminClientProperties() {
         return adminClientProperties;
-    }
-
-    public Optional<String> ibp() {
-        return Optional.ofNullable(ibp);
-    }
-
-    public String securityProtocol() {
-        return securityProtocol;
-    }
-
-    public Optional<String> listenerName() {
-        return Optional.ofNullable(listenerName);
     }
 
     public Properties saslServerProperties() {
@@ -107,19 +104,34 @@ public class ClusterConfig {
         return saslClientProperties;
     }
 
+    public String securityProtocol() {
+        return securityProtocol;
+    }
+
+    public Optional<String> listenerName() {
+        return Optional.ofNullable(listenerName);
+    }
+
+    public Optional<File> trustStoreFile() {
+        return Optional.ofNullable(trustStoreFile);
+    }
+
     public Map<String, String> nameTags() {
         Map<String, String> tags = new LinkedHashMap<>(3);
         name().ifPresent(name -> tags.put("Name", name));
-        ibp().ifPresent(ibp -> tags.put("IBP", ibp));
         tags.put("security", securityProtocol);
         listenerName().ifPresent(listener -> tags.put("listener", listener));
         return tags;
     }
 
     public ClusterConfig copyOf() {
-        Properties props = new Properties();
-        props.putAll(serverProperties);
-        return new ClusterConfig(type, brokers, controllers, name, autoStart, props, ibp, securityProtocol, listenerName);
+        ClusterConfig copy = new ClusterConfig(type, brokers, controllers, name, autoStart, securityProtocol, listenerName, trustStoreFile);
+        copy.serverProperties.putAll(serverProperties);
+        copy.producerProperties.putAll(producerProperties);
+        copy.consumerProperties.putAll(consumerProperties);
+        copy.saslServerProperties.putAll(saslServerProperties);
+        copy.saslClientProperties.putAll(saslClientProperties);
+        return copy;
     }
 
     public static Builder defaultClusterBuilder() {
@@ -136,10 +148,9 @@ public class ClusterConfig {
         private int controllers;
         private String name;
         private boolean autoStart;
-        private Properties serverProperties;
-        private String ibp;
         private String securityProtocol;
         private String listenerName;
+        private File trustStoreFile;
 
         Builder(Type type, int brokers, int controllers, boolean autoStart, String securityProtocol) {
             this.type = type;
@@ -174,16 +185,6 @@ public class ClusterConfig {
             return this;
         }
 
-        public Builder serverProperties(Properties serverProperties) {
-            this.serverProperties = serverProperties;
-            return this;
-        }
-
-        public Builder ibp(String interBrokerProtocol) {
-            this.ibp = interBrokerProtocol;
-            return this;
-        }
-
         public Builder securityProtocol(String securityProtocol) {
             this.securityProtocol = securityProtocol;
             return this;
@@ -194,15 +195,13 @@ public class ClusterConfig {
             return this;
         }
 
+        public Builder trustStoreFile(File trustStoreFile) {
+            this.trustStoreFile = trustStoreFile;
+            return this;
+        }
+
         public ClusterConfig build() {
-            Properties props = new Properties();
-            if (serverProperties != null) {
-                props.putAll(serverProperties);
-            }
-            if (ibp != null) {
-                props.put(KafkaConfig.InterBrokerProtocolVersionProp(), ibp);
-            }
-            return new ClusterConfig(type, brokers, controllers, name, autoStart, props, ibp, securityProtocol, listenerName);
+            return new ClusterConfig(type, brokers, controllers, name, autoStart, securityProtocol, listenerName, trustStoreFile);
         }
     }
 }

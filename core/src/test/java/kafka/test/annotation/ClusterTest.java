@@ -39,7 +39,7 @@ public @interface ClusterTest {
     String name() default "";
     String securityProtocol() default "PLAINTEXT";
     String listener() default "";
-    ClusterProperty[] properties() default {};
+    ClusterProperty[] serverProperties() default {};
 }
 
 
