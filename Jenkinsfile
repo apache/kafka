@@ -162,7 +162,7 @@ pipeline {
         stage('ARM') {
           agent { label 'arm4' }
           options {
-            timeout(time: 8, unit: 'HOURS') 
+            timeout(time: 1, unit: 'HOURS') 
             timestamps()
           }
           environment {
@@ -171,7 +171,9 @@ pipeline {
           steps {
             setupGradle()
             doValidation()
-            doTest('unitTest')
+            catchError(buildResult: 'SUCCESS', stageResult: 'FAILURE', message: 'ARM unit tests failed') {
+              doTest('unitTest')
+            }
             echo 'Skipping Kafka Streams archetype test for ARM build'
           }
         }
