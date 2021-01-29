@@ -85,6 +85,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
     private final RecordCollector recordCollector;
     private final PartitionGroup.RecordInfo recordInfo;
     private final Map<TopicPartition, Long> consumedOffsets;
+    private final Set<TopicPartition> resetOffsetsForPartitions;
     private final PunctuationQueue streamTimePunctuationQueue;
     private final PunctuationQueue systemTimePunctuationQueue;
     private final StreamsMetricsImpl streamsMetrics;
@@ -167,6 +168,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
 
         // initialize the consumed and committed offset cache
         consumedOffsets = new HashMap<>();
+        resetOffsetsForPartitions = new HashSet<>();
 
         recordQueueCreator = new RecordQueueCreator(this.logContext, config.defaultTimestampExtractor(), config.defaultDeserializationExceptionHandler());
 
@@ -212,8 +214,9 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
      * @throws StreamsException fatal error, should close the thread
      */
     @Override
-    public void initializeIfNeeded() {
+    public void initializeIfNeeded(java.util.function.Consumer<Set<TopicPartition>> offsetResetter) {
         if (state() == State.CREATED) {
+            initOffsetsIfNeeded(offsetResetter);
             recordCollector.initialize();
 
             StateManagerUtil.registerStateStores(log, logPrefix, topology, stateMgr, stateDirectory, processorContext);
@@ -227,6 +230,27 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
 
             log.info("Initialized");
         }
+    }
+
+    private void initOffsetsIfNeeded(java.util.function.Consumer<Set<TopicPartition>> offsetResetter) {
+        final Map<TopicPartition, OffsetAndMetadata> committed = mainConsumer.committed(resetOffsetsForPartitions);
+        for (final Map.Entry<TopicPartition, OffsetAndMetadata> committedEntry : committed.entrySet()) {
+            final OffsetAndMetadata offsetAndMetadata = committedEntry.getValue();
+            if (offsetAndMetadata != null) {
+                mainConsumer.seek(committedEntry.getKey(), offsetAndMetadata);
+                resetOffsetsForPartitions.remove(committedEntry.getKey());
+            }
+        }
+
+        if (!resetOffsetsForPartitions.isEmpty()) {
+            offsetResetter.accept(resetOffsetsForPartitions);
+            resetOffsetsForPartitions.clear();
+        }
+    }
+
+    public void addPartitionsForOffsetReset(final Set<TopicPartition> partitionsForOffsetReset) {
+        mainConsumer.pause(partitionsForOffsetReset);
+        resetOffsetsForPartitions.addAll(partitionsForOffsetReset);
     }
 
     /**

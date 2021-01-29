@@ -160,7 +160,7 @@ public class StreamThreadStateStoreProviderTest {
             clientSupplier,
             processorTopology,
             new TaskId(0, 0));
-        taskOne.initializeIfNeeded();
+        taskOne.initializeIfNeeded(null);
         tasks.put(new TaskId(0, 0), taskOne);
 
         final StreamTask taskTwo = createStreamsTask(
@@ -168,7 +168,7 @@ public class StreamThreadStateStoreProviderTest {
             clientSupplier,
             processorTopology,
             new TaskId(0, 1));
-        taskTwo.initializeIfNeeded();
+        taskTwo.initializeIfNeeded(null);
         tasks.put(new TaskId(0, 1), taskTwo);
 
         threadMock = EasyMock.createNiceMock(StreamThread.class);

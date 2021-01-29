@@ -107,7 +107,11 @@ public interface Task {
      * @throws LockException could happen when multi-threads within the single instance, could retry
      * @throws StreamsException fatal error, should close the thread
      */
-    void initializeIfNeeded();
+    void initializeIfNeeded(java.util.function.Consumer<Set<TopicPartition>> offsetResetter);
+
+    default void addPartitionsForOffsetReset(final Set<TopicPartition> partitionsForOffsetReset) {
+        throw new UnsupportedOperationException();
+    }
 
     /**
      * @throws StreamsException fatal error, should close the thread
