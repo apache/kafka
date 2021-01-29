@@ -25,7 +25,7 @@ import org.apache.kafka.clients.admin.RemoveMembersFromConsumerGroupResult;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.ProducerConfig;
-import org.apache.kafka.common.KafkaException;
+import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.Metric;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.TopicPartition;
@@ -73,7 +73,6 @@ import org.apache.kafka.streams.state.internals.GlobalStateStoreProvider;
 import org.apache.kafka.streams.state.internals.QueryableStoreProvider;
 import org.apache.kafka.streams.state.internals.RocksDBGenericOptionsToDbOptionsColumnFamilyOptionsAdapter;
 import org.apache.kafka.streams.state.internals.StreamThreadStateStoreProvider;
-import org.apache.kafka.common.errors.TimeoutException;
 import org.slf4j.Logger;
 
 import java.time.Duration;
@@ -1046,13 +1045,20 @@ public class KafkaStreams implements AutoCloseable {
                             try {
                                 removeMembersFromConsumerGroupResult.memberResult(memberToRemove).get(timeoutMs - begin, TimeUnit.MILLISECONDS);
                             } catch (final java.util.concurrent.TimeoutException e) {
-                                log.warn("Rethrowing a java TimeoutException as a kafka TimeoutException " + Arrays.toString(e.getStackTrace()));
-                                throw new TimeoutException(e.getMessage());
+                                log.error("Could not remove static member {} from consumer group {} due to a timeout: {}",
+                                        groupInstanceID.get(), config.getString(StreamsConfig.APPLICATION_ID_CONFIG), e);
+                                throw new TimeoutException(e.getMessage(), e);
                             } catch (final InterruptedException e) {
                                 Thread.currentThread().interrupt();
                             } catch (final ExecutionException e) {
-                                log.error("Getting the member result threw this ExecutionException: " + e.getMessage());
-                                throw new StreamsException("Could not remove member from group for the following reason: ", e.getCause());
+                                log.error("Could not remove static member {} from consumer group {} due to: {}",
+                                        groupInstanceID.get(), config.getString(StreamsConfig.APPLICATION_ID_CONFIG), e);
+                                throw new StreamsException(
+                                        "Could not remove static member " + groupInstanceID.get()
+                                            + " from consumer group " + config.getString(StreamsConfig.APPLICATION_ID_CONFIG)
+                                            + " the following reason: ",
+                                        e.getCause()
+                                );
                             }
                         }
                         if (timeout) {

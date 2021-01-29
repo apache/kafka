@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.integration;
 
+import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.streams.KafkaStreams;
@@ -184,7 +185,7 @@ public class AdjustStreamThreadCountTest {
 
     @Test
     public void shouldRemoveStreamThreadWithStaticMembership() throws Exception {
-        properties.put("group.instance.id", "test");
+        properties.put(ConsumerConfig.GROUP_INSTANCE_ID_CONFIG, "member-A");
         try (final KafkaStreams kafkaStreams = new KafkaStreams(builder.build(), properties)) {
             addStreamStateChangeListener(kafkaStreams);
             startStreamsAndWaitForRunning(kafkaStreams);
