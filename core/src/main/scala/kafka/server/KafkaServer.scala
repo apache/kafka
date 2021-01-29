@@ -403,7 +403,7 @@ class KafkaServer(
   }
 
   private[server] def notifyMetricsReporters(metricsReporters: Seq[AnyRef]): Unit = {
-    val metricsContext = Server.createKafkaMetricsContext(clusterId, config)
+    val metricsContext = Server.createKafkaMetricsContext(config, clusterId)
     metricsReporters.foreach {
       case x: MetricsReporter => x.contextChange(metricsContext)
       case _ => //do nothing

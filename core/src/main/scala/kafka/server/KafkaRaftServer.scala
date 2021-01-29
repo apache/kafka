@@ -52,7 +52,7 @@ class KafkaRaftServer(
   private val metrics = Server.initializeMetrics(
     config,
     time,
-    metaProps
+    metaProps.clusterId.toString
   )
 
   private val raftManager = new KafkaRaftManager(

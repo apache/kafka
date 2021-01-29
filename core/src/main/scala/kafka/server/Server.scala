@@ -30,36 +30,28 @@ trait Server {
 
 object Server {
 
+  val MetricsPrefix: String = "kafka.server"
+  val ClusterIdLabel: String = "kafka.cluster.id"
+  val BrokerIdLabel: String = "kafka.broker.id"
+  val NodeIdLabel: String = "kafka.node.id"
+
   def initializeMetrics(
     config: KafkaConfig,
     time: Time,
     clusterId: String
   ): Metrics = {
-    val jmxReporter = new JmxReporter()
-    jmxReporter.configure(config.originals)
-
-    val reporters = new java.util.ArrayList[MetricsReporter]
-    reporters.add(jmxReporter)
-
-    val metricConfig = buildMetricsConfig(config)
-    val metricsContext = createKafkaMetricsContext(clusterId, config)
-    new Metrics(metricConfig, reporters, time, true, metricsContext)
+    val metricsContext = createKafkaMetricsContext(config, clusterId)
+    buildMetrics(config, time, metricsContext)
   }
 
-  def initializeMetrics(
+  private def buildMetrics(
     config: KafkaConfig,
     time: Time,
-    metaProps: MetaProperties
+    metricsContext: KafkaMetricsContext
   ): Metrics = {
-    val jmxReporter = new JmxReporter()
-    jmxReporter.configure(config.originals)
-
-    val reporters = new java.util.ArrayList[MetricsReporter]
-    reporters.add(jmxReporter)
-
+    val defaultReporters = initializeDefaultReporters(config)
     val metricConfig = buildMetricsConfig(config)
-    val metricsContext = createKafkaMetricsContext(config, metaProps)
-    new Metrics(metricConfig, reporters, time, true, metricsContext)
+    new Metrics(metricConfig, defaultReporters, time, true, metricsContext)
   }
 
   def buildMetricsConfig(
@@ -71,31 +63,32 @@ object Server {
       .timeWindow(kafkaConfig.metricSampleWindowMs, TimeUnit.MILLISECONDS)
   }
 
-  val MetricsPrefix: String = "kafka.server"
-  private val ClusterIdLabel: String = "kafka.cluster.id"
-  private val BrokerIdLabel: String = "kafka.broker.id"
-  private val NodeIdLabel: String = "kafka.node.id"
-
   private[server] def createKafkaMetricsContext(
     config: KafkaConfig,
-    metaProps: MetaProperties
-  ): KafkaMetricsContext = {
-    val contextLabels = new java.util.HashMap[String, Object]
-    contextLabels.put(NodeIdLabel, metaProps.nodeId.toString)
-    contextLabels.putAll(config.originalsWithPrefix(CommonClientConfigs.METRICS_CONTEXT_PREFIX))
-    val metricsContext = new KafkaMetricsContext(MetricsPrefix, contextLabels)
-    metricsContext
-  }
-
-  private[server] def createKafkaMetricsContext(
-    clusterId: String,
-    config: KafkaConfig
+    clusterId: String
   ): KafkaMetricsContext = {
     val contextLabels = new java.util.HashMap[String, Object]
     contextLabels.put(ClusterIdLabel, clusterId)
-    contextLabels.put(BrokerIdLabel, config.brokerId.toString)
+
+    if (config.usesSelfManagedQuorum) {
+      contextLabels.put(NodeIdLabel, config.nodeId.toString)
+    } else {
+      contextLabels.put(BrokerIdLabel, config.brokerId.toString)
+    }
+
     contextLabels.putAll(config.originalsWithPrefix(CommonClientConfigs.METRICS_CONTEXT_PREFIX))
-    val metricsContext = new KafkaMetricsContext(MetricsPrefix, contextLabels)
-    metricsContext
+    new KafkaMetricsContext(MetricsPrefix, contextLabels)
   }
+
+  private def initializeDefaultReporters(
+    config: KafkaConfig
+  ): java.util.List[MetricsReporter] = {
+    val jmxReporter = new JmxReporter()
+    jmxReporter.configure(config.originals)
+
+    val reporters = new java.util.ArrayList[MetricsReporter]
+    reporters.add(jmxReporter)
+    reporters
+  }
+
 }
