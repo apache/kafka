@@ -179,7 +179,6 @@ class KafkaNetworkChannel(
 
   override def close(): Unit = {
     requestThread.shutdown()
-    client.close()
   }
 
 }
