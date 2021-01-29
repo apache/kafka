@@ -162,7 +162,7 @@ pipeline {
         stage('ARM') {
           agent { label 'arm4' }
           options {
-            timeout(time: 1, unit: 'HOURS') 
+            timeout(time: 2, unit: 'HOURS') 
             timestamps()
           }
           environment {
