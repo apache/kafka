@@ -130,8 +130,6 @@ public class NetworkClient implements KafkaClient {
 
     private final AtomicReference<State> state;
 
-    private final HostResolver hostResolver;
-
     public NetworkClient(Selectable selector,
                          Metadata metadata,
                          String clientId,
@@ -148,9 +146,8 @@ public class NetworkClient implements KafkaClient {
                          boolean discoverBrokerVersions,
                          ApiVersions apiVersions,
                          LogContext logContext) {
-        this(null,
+        this(selector,
              metadata,
-             selector,
              clientId,
              maxInFlightRequestsPerConnection,
              reconnectBackoffMs,
@@ -169,22 +166,22 @@ public class NetworkClient implements KafkaClient {
     }
 
     public NetworkClient(Selectable selector,
-            Metadata metadata,
-            String clientId,
-            int maxInFlightRequestsPerConnection,
-            long reconnectBackoffMs,
-            long reconnectBackoffMax,
-            int socketSendBuffer,
-            int socketReceiveBuffer,
-            int defaultRequestTimeoutMs,
-            long connectionSetupTimeoutMs,
-            long connectionSetupTimeoutMaxMs,
-            ClientDnsLookup clientDnsLookup,
-            Time time,
-            boolean discoverBrokerVersions,
-            ApiVersions apiVersions,
-            Sensor throttleTimeSensor,
-            LogContext logContext) {
+                         Metadata metadata,
+                         String clientId,
+                         int maxInFlightRequestsPerConnection,
+                         long reconnectBackoffMs,
+                         long reconnectBackoffMax,
+                         int socketSendBuffer,
+                         int socketReceiveBuffer,
+                         int defaultRequestTimeoutMs,
+                         long connectionSetupTimeoutMs,
+                         long connectionSetupTimeoutMaxMs,
+                         ClientDnsLookup clientDnsLookup,
+                         Time time,
+                         boolean discoverBrokerVersions,
+                         ApiVersions apiVersions,
+                         Sensor throttleTimeSensor,
+                         LogContext logContext) {
         this(null,
              metadata,
              selector,
@@ -202,7 +199,8 @@ public class NetworkClient implements KafkaClient {
              discoverBrokerVersions,
              apiVersions,
              throttleTimeSensor,
-             logContext);
+             logContext,
+             new DefaultHostResolver());
     }
 
     public NetworkClient(Selectable selector,
@@ -238,45 +236,8 @@ public class NetworkClient implements KafkaClient {
              discoverBrokerVersions,
              apiVersions,
              null,
-             logContext);
-    }
-
-    public NetworkClient(MetadataUpdater metadataUpdater,
-                         Metadata metadata,
-                         Selectable selector,
-                         String clientId,
-                         int maxInFlightRequestsPerConnection,
-                         long reconnectBackoffMs,
-                         long reconnectBackoffMax,
-                         int socketSendBuffer,
-                         int socketReceiveBuffer,
-                         int defaultRequestTimeoutMs,
-                         long connectionSetupTimeoutMs,
-                         long connectionSetupTimeoutMaxMs,
-                         ClientDnsLookup clientDnsLookup,
-                         Time time,
-                         boolean discoverBrokerVersions,
-                         ApiVersions apiVersions,
-                         Sensor throttleTimeSensor,
-                         LogContext logContext) {
-        this(metadataUpdater,
-                metadata,
-                selector,
-                clientId, maxInFlightRequestsPerConnection,
-                reconnectBackoffMs,
-                reconnectBackoffMax,
-                socketSendBuffer,
-                socketReceiveBuffer,
-                defaultRequestTimeoutMs,
-                connectionSetupTimeoutMs,
-                connectionSetupTimeoutMaxMs,
-                clientDnsLookup,
-                time,
-                discoverBrokerVersions,
-                apiVersions,
-                throttleTimeSensor,
-                logContext,
-                new DefaultHostResolver());
+             logContext,
+             new DefaultHostResolver());
     }
 
     public NetworkClient(MetadataUpdater metadataUpdater,
@@ -328,7 +289,6 @@ public class NetworkClient implements KafkaClient {
         this.log = logContext.logger(NetworkClient.class);
         this.clientDnsLookup = clientDnsLookup;
         this.state = new AtomicReference<>(State.ACTIVE);
-        this.hostResolver = hostResolver;
     }
 
     /**

@@ -936,8 +936,8 @@ public class NetworkClientTest {
             } else if (newAddresses.contains(inetAddress)) {
                 newAddressConns.incrementAndGet();
             }
-            return (mockHostResolver.getUseNewAddresses() && newAddresses.contains(inetAddress)) ||
-                   (!mockHostResolver.getUseNewAddresses() && initialAddresses.contains(inetAddress));
+            return (mockHostResolver.useNewAddresses() && newAddresses.contains(inetAddress)) ||
+                   (!mockHostResolver.useNewAddresses() && initialAddresses.contains(inetAddress));
         });
         NetworkClient client = new NetworkClient(metadataUpdater, null, selector, "mock", Integer.MAX_VALUE,
                 reconnectBackoffMsTest, reconnectBackoffMaxMsTest, 64 * 1024, 64 * 1024,
@@ -961,9 +961,10 @@ public class NetworkClientTest {
         client.poll(0, time.milliseconds());
         assertTrue(client.isReady(node, time.milliseconds()));
 
-        // We should have tried to connect to one initial address and one new address
+        // We should have tried to connect to one initial address and one new address, and resolved DNS twice
         assertEquals(1, initialAddressConns.get());
         assertEquals(1, newAddressConns.get());
+        assertEquals(2, mockHostResolver.resolutionCount());
     }
 
     @Test
@@ -1000,7 +1001,7 @@ public class NetworkClientTest {
         assertTrue(client.isReady(node, time.milliseconds()));
 
         // We should have tried to connect to two of the initial addresses, none of the new address, and should
-        // only have performed one DNS resolution
+        // only have resolved DNS once
         assertEquals(2, initialAddressConns.get());
         assertEquals(0, newAddressConns.get());
         assertEquals(1, mockHostResolver.resolutionCount());
@@ -1051,8 +1052,8 @@ public class NetworkClientTest {
         client.poll(0, time.milliseconds());
         assertTrue(client.isReady(node, time.milliseconds()));
 
-        // We should have tried to connect to two of the initial addresses, none of the new address, and should
-        // only have performed one DNS resolution
+        // We should have tried to connect to one of the initial addresses and two of the new addresses (the first one
+        // failed), and resolved DNS twice, once for each set of addresses
         assertEquals(1, initialAddressConns.get());
         assertEquals(2, newAddressConns.get());
         assertEquals(2, mockHostResolver.resolutionCount());
@@ -1128,7 +1129,7 @@ public class NetworkClientTest {
             useNewAddresses = true;
         }
 
-        public boolean getUseNewAddresses() {
+        public boolean useNewAddresses() {
             return useNewAddresses;
         }
 

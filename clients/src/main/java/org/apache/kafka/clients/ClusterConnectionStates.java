@@ -187,8 +187,9 @@ final class ClusterConnectionStates {
         } else {
             resetConnectionSetupTimeout(nodeState);
             if (nodeState.state.isConnected()) {
-                // If a connection had previously been established, re-resolve DNS because the IPs may have changed
-                nodeState.addresses = Collections.emptyList();
+                // If a connection had previously been established, clear the addresses to trigger a new DNS resolution
+                // because the node IPs may have changed
+                nodeState.clearAddresses();
             }
         }
         nodeState.state = ConnectionState.DISCONNECTED;
@@ -526,6 +527,13 @@ final class ClusterConnectionStates {
             addressIndex = (addressIndex + 1) % addresses.size();
             if (addressIndex == 0)
                 addresses = Collections.emptyList(); // Exhausted list. Re-resolve on next currentAddress() call
+        }
+
+        /**
+         * Clears the resolved addresses in order to trigger re-resolving on the next {@link #currentAddress()} call.
+         */
+        private void clearAddresses() {
+            addresses = Collections.emptyList();
         }
 
         public String toString() {
