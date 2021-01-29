@@ -28,6 +28,7 @@ import java.util.Set;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Arrays;
+import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -253,6 +254,78 @@ public class MirrorMakerConfigTest {
             "security properties should be transformed in worker config");
         assertEquals("secret2", bProps.get("producer.ssl.key.password"),
             "security properties should be transformed in worker producer config");
+    }
+
+    @Test
+    public void testClusterPairsWithDefaultSettings() {
+        MirrorMakerConfig mirrorConfig = new MirrorMakerConfig(makeProps(
+                "clusters", "a, b, c"));
+        // implicit configuration associated
+        // a->b.enabled=false
+        // a->b.emit.heartbeat.enabled=true
+        // a->c.enabled=false
+        // a->c.emit.heartbeat.enabled=true
+        // b->a.enabled=false
+        // b->a.emit.heartbeat.enabled=true
+        // b->c.enabled=false
+        // b->c.emit.heartbeat.enabled=true
+        // c->a.enabled=false
+        // c->a.emit.heartbeat.enabled=true
+        // c->b.enabled=false
+        // c->b.emit.heartbeat.enabled=true
+        List<SourceAndTarget> clusterPairs = mirrorConfig.clusterPairs();
+        assertEquals(6, clusterPairs.size(), "clusterPairs count should match all combinations count");
+    }
+
+    @Test
+    public void testEmptyClusterPairsWithGloballyDisabledHeartbeats() {
+        MirrorMakerConfig mirrorConfig = new MirrorMakerConfig(makeProps(
+                "clusters", "a, b, c",
+                "emit.heartbeats.enabled", "false"));
+        assertEquals(0, mirrorConfig.clusterPairs().size(), "clusterPairs count should be 0");
+    }
+
+    @Test
+    public void testClusterPairsWithTwoDisabledHeartbeats() {
+        MirrorMakerConfig mirrorConfig = new MirrorMakerConfig(makeProps(
+                "clusters", "a, b, c",
+                "a->b.emit.heartbeats.enabled", "false",
+                "a->c.emit.heartbeats.enabled", "false"));
+        List<SourceAndTarget> clusterPairs = mirrorConfig.clusterPairs();
+        assertEquals(4, clusterPairs.size(),
+            "clusterPairs count should match all combinations count except x->y.emit.heartbeats.enabled=false");
+    }
+
+    @Test
+    public void testClusterPairsWithGloballyDisabledHeartbeats() {
+        MirrorMakerConfig mirrorConfig = new MirrorMakerConfig(makeProps(
+                "clusters", "a, b, c, d, e, f",
+                "emit.heartbeats.enabled", "false",
+                "a->b.enabled", "true",
+                "a->c.enabled", "true",
+                "a->d.enabled", "true",
+                "a->e.enabled", "false",
+                "a->f.enabled", "false"));
+        List<SourceAndTarget> clusterPairs = mirrorConfig.clusterPairs();
+        assertEquals(3, clusterPairs.size(),
+            "clusterPairs count should match (x->y.enabled=true or x->y.emit.heartbeats.enabled=true) count");
+
+        // Link b->a.enabled doesn't exist therefore it must not be in clusterPairs
+        SourceAndTarget sourceAndTarget = new SourceAndTarget("b", "a");
+        assertFalse(clusterPairs.contains(sourceAndTarget), "disabled/unset link x->y should not be in clusterPairs");
+    }
+
+    @Test
+    public void testClusterPairsWithGloballyDisabledHeartbeatsCentralLocal() {
+        MirrorMakerConfig mirrorConfig = new MirrorMakerConfig(makeProps(
+                "clusters", "central, local_one, local_two, beats_emitter",
+                "emit.heartbeats.enabled", "false",
+                "central->local_one.enabled", "true",
+                "central->local_two.enabled", "true",
+                "beats_emitter->central.emit.heartbeats.enabled", "true"));
+
+        assertEquals(3, mirrorConfig.clusterPairs().size(),
+            "clusterPairs count should match (x->y.enabled=true or x->y.emit.heartbeats.enabled=true) count");
     }
 
     public static class FakeConfigProvider implements ConfigProvider {

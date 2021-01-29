@@ -19,8 +19,7 @@ package org.apache.kafka.common.record;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.header.Header;
 import org.apache.kafka.common.message.LeaderChangeMessage;
-import org.apache.kafka.common.protocol.ByteBufferAccessor;
-import org.apache.kafka.common.protocol.ObjectSerializationCache;
+import org.apache.kafka.common.protocol.MessageUtil;
 import org.apache.kafka.common.protocol.types.Struct;
 import org.apache.kafka.common.utils.ByteBufferOutputStream;
 import org.apache.kafka.common.utils.Utils;
@@ -596,14 +595,8 @@ public class MemoryRecordsBuilder implements AutoCloseable {
         if (partitionLeaderEpoch == RecordBatch.NO_PARTITION_LEADER_EPOCH) {
             throw new IllegalArgumentException("Partition leader epoch must be valid, but get " + partitionLeaderEpoch);
         }
-
-        ObjectSerializationCache cache = new ObjectSerializationCache();
-        int size = leaderChangeMessage.size(cache, ControlRecordUtils.LEADER_CHANGE_SCHEMA_VERSION);
-        ByteBuffer buffer = ByteBuffer.allocate(size);
-        ByteBufferAccessor accessor = new ByteBufferAccessor(buffer);
-        leaderChangeMessage.write(accessor, cache, ControlRecordUtils.LEADER_CHANGE_SCHEMA_VERSION);
-        buffer.flip();
-        return appendControlRecord(timestamp, ControlRecordType.LEADER_CHANGE, buffer);
+        return appendControlRecord(timestamp, ControlRecordType.LEADER_CHANGE,
+                MessageUtil.toByteBuffer(leaderChangeMessage, ControlRecordUtils.LEADER_CHANGE_SCHEMA_VERSION));
     }
 
     /**
