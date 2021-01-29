@@ -721,20 +721,21 @@ public class RaftEventSimulationTest {
         void startAll() {
             if (!running.isEmpty())
                 throw new IllegalStateException("Some nodes are already started");
-            for (int voterId : nodes.keySet())
+            for (int voterId : nodes.keySet()) {
                 start(voterId);
+            }
         }
 
-        private static InetSocketAddress nodeAddress(int id) {
-            return new InetSocketAddress("localhost", 9990 + id);
+        private static RaftConfig.AddressSpec nodeAddress(int id) {
+            return new RaftConfig.InetAddressSpec(new InetSocketAddress("localhost", 9990 + id));
         }
 
         void start(int nodeId) {
             LogContext logContext = new LogContext("[Node " + nodeId + "] ");
             PersistentState persistentState = nodes.get(nodeId);
-            MockNetworkChannel channel = new MockNetworkChannel(correlationIdCounter);
+            MockNetworkChannel channel = new MockNetworkChannel(correlationIdCounter, voters);
             MockMessageQueue messageQueue = new MockMessageQueue();
-            Map<Integer, InetSocketAddress> voterAddressMap = voters.stream()
+            Map<Integer, RaftConfig.AddressSpec> voterAddressMap = voters.stream()
                 .collect(Collectors.toMap(id -> id, Cluster::nodeAddress));
             RaftConfig raftConfig = new RaftConfig(voterAddressMap, REQUEST_TIMEOUT_MS, RETRY_BACKOFF_MS, ELECTION_TIMEOUT_MS,
                     ELECTION_JITTER_MS, FETCH_TIMEOUT_MS, LINGER_MS);
@@ -758,7 +759,8 @@ public class RaftEventSimulationTest {
                 FETCH_MAX_WAIT_MS,
                 OptionalInt.of(nodeId),
                 logContext,
-                random
+                random,
+                raftConfig
             );
             RaftNode node = new RaftNode(
                 nodeId,
@@ -769,8 +771,7 @@ public class RaftEventSimulationTest {
                 persistentState.store,
                 logContext,
                 time,
-                random,
-                raftConfig
+                random
             );
             node.initialize();
             running.put(nodeId, node);
@@ -788,7 +789,6 @@ public class RaftEventSimulationTest {
         final ReplicatedCounter counter;
         final Time time;
         final Random random;
-        final RaftConfig raftConfig;
 
         private RaftNode(
             int nodeId,
@@ -799,8 +799,7 @@ public class RaftEventSimulationTest {
             MockQuorumStateStore store,
             LogContext logContext,
             Time time,
-            Random random,
-            RaftConfig raftConfig
+            Random random
         ) {
             this.nodeId = nodeId;
             this.client = client;
@@ -812,13 +811,12 @@ public class RaftEventSimulationTest {
             this.time = time;
             this.random = random;
             this.counter = new ReplicatedCounter(nodeId, client, logContext);
-            this.raftConfig = raftConfig;
         }
 
         void initialize() {
             try {
                 client.register(this.counter);
-                client.initialize(raftConfig);
+                client.initialize();
             } catch (IOException e) {
                 throw new RuntimeException(e);
             }
