@@ -296,11 +296,11 @@ public interface ProcessorContext {
      *
      * <p>
      * Note: this method returns the internally cached system timestamp from the Kafka Stream runtime.
-     * Thus, it may return a different value compared to `System.currentTimeMillis()`.
+     * Thus, it may return a different value compared to {@code System.currentTimeMillis()} .
      * <p>
      *
      * For a global processor, Kafka Streams does not cache system time and thus calling this method will return
-     * the same value as `System.currentTimeMillis()`.
+     * the same value as {@code System.currentTimeMillis()}.
      *
      * @return the current system timestamp in milliseconds
      */
@@ -318,7 +318,7 @@ public interface ProcessorContext {
      * Note: this method is not supported for global processors (cf. {@link Topology#addGlobalStore} (...)
      * and {@link StreamsBuilder#addGlobalStore} (...),
      * because there is no concept of stream-time for this case.
-     * Calling this method in a global processor with result in an {@link UnsupportedOperationException}.
+     * Calling this method in a global processor will result in an {@link UnsupportedOperationException}.
      *
      * @return the current stream-time in milliseconds
      */
