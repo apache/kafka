@@ -2361,41 +2361,45 @@ class ReplicaManagerTest {
   def testActiveProducerState(): Unit = {
     val brokerId = 0
     val replicaManager = setupReplicaManagerWithMockedPurgatories(new MockTimer(time), brokerId)
+    try {
+      val fooPartition = new TopicPartition("foo", 0)
+      Mockito.when(replicaManager.metadataCache.contains(fooPartition)).thenReturn(false)
+      val fooProducerState = replicaManager.activeProducerState(fooPartition)
+      assertEquals(Errors.UNKNOWN_TOPIC_OR_PARTITION, Errors.forCode(fooProducerState.errorCode))
 
-    val fooPartition = new TopicPartition("foo", 0)
-    Mockito.when(replicaManager.metadataCache.contains(fooPartition)).thenReturn(false)
-    val fooProducerState = replicaManager.activeProducerState(fooPartition)
-    assertEquals(Errors.UNKNOWN_TOPIC_OR_PARTITION, Errors.forCode(fooProducerState.errorCode))
+      val oofPartition = new TopicPartition("oof", 0)
+      Mockito.when(replicaManager.metadataCache.contains(oofPartition)).thenReturn(true)
+      val oofProducerState = replicaManager.activeProducerState(oofPartition)
+      assertEquals(Errors.NOT_LEADER_OR_FOLLOWER, Errors.forCode(oofProducerState.errorCode))
 
-    val oofPartition = new TopicPartition("oof", 0)
-    Mockito.when(replicaManager.metadataCache.contains(oofPartition)).thenReturn(true)
-    val oofProducerState = replicaManager.activeProducerState(oofPartition)
-    assertEquals(Errors.NOT_LEADER_OR_FOLLOWER, Errors.forCode(oofProducerState.errorCode))
+      // This API is supported by both leaders and followers
 
-    // This API is supported by both leaders and followers
+      val barPartition = new TopicPartition("bar", 0)
+      val barLeaderAndIsrRequest = leaderAndIsrRequest(
+        topicId = Uuid.randomUuid(),
+        topicPartition = barPartition,
+        replicas = Seq(brokerId),
+        leaderAndIsr = LeaderAndIsr(brokerId, List(brokerId))
+      )
+      replicaManager.becomeLeaderOrFollower(0, barLeaderAndIsrRequest, (_, _) => ())
+      val barProducerState = replicaManager.activeProducerState(barPartition)
+      assertEquals(Errors.NONE, Errors.forCode(barProducerState.errorCode))
 
-    val barPartition = new TopicPartition("bar", 0)
-    val barLeaderAndIsrRequest = leaderAndIsrRequest(
-      topicId = Uuid.randomUuid(),
-      topicPartition = barPartition,
-      replicas = Seq(brokerId),
-      leaderAndIsr = LeaderAndIsr(brokerId, List(brokerId))
-    )
-    replicaManager.becomeLeaderOrFollower(0, barLeaderAndIsrRequest, (_, _) => ())
-    val barProducerState = replicaManager.activeProducerState(barPartition)
-    assertEquals(Errors.NONE, Errors.forCode(barProducerState.errorCode))
+      val otherBrokerId = 1
+      val bazPartition = new TopicPartition("baz", 0)
+      val bazLeaderAndIsrRequest = leaderAndIsrRequest(
+        topicId = Uuid.randomUuid(),
+        topicPartition = bazPartition,
+        replicas = Seq(brokerId, otherBrokerId),
+        leaderAndIsr = LeaderAndIsr(otherBrokerId, List(brokerId, otherBrokerId))
+      )
+      replicaManager.becomeLeaderOrFollower(0, bazLeaderAndIsrRequest, (_, _) => ())
+      val bazProducerState = replicaManager.activeProducerState(bazPartition)
+      assertEquals(Errors.NONE, Errors.forCode(bazProducerState.errorCode))
+    } finally {
+      replicaManager.shutdown(checkpointHW = false)
+    }
 
-    val otherBrokerId = 1
-    val bazPartition = new TopicPartition("baz", 0)
-    val bazLeaderAndIsrRequest = leaderAndIsrRequest(
-      topicId = Uuid.randomUuid(),
-      topicPartition = bazPartition,
-      replicas = Seq(brokerId, otherBrokerId),
-      leaderAndIsr = LeaderAndIsr(otherBrokerId, List(brokerId, otherBrokerId))
-    )
-    replicaManager.becomeLeaderOrFollower(0, bazLeaderAndIsrRequest, (_, _) => ())
-    val bazProducerState = replicaManager.activeProducerState(bazPartition)
-    assertEquals(Errors.NONE, Errors.forCode(bazProducerState.errorCode))
   }
 
 }
