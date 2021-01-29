@@ -37,6 +37,7 @@ import org.apache.kafka.raft.LogAppendInfo
 import org.apache.kafka.raft.LogOffsetMetadata
 import org.apache.kafka.raft.OffsetAndEpoch
 import org.apache.kafka.raft.ReplicatedLog
+import org.apache.kafka.snapshot.SnapshotPath
 import org.apache.kafka.snapshot.Snapshots
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Assertions.assertEquals
@@ -253,7 +254,7 @@ final class KafkaMetadataLogTest {
     // Assert that the log dir doesn't contain any partial snapshots
     Files
       .walk(logDir, 1)
-      .map(Snapshots.parse)
+      .map[Optional[SnapshotPath]](Snapshots.parse)
       .filter(_.isPresent)
       .forEach { path =>
         assertFalse(path.get.partial)

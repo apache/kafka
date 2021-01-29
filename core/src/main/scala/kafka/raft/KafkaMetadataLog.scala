@@ -37,6 +37,7 @@ import org.apache.kafka.snapshot.FileRawSnapshotReader
 import org.apache.kafka.snapshot.FileRawSnapshotWriter
 import org.apache.kafka.snapshot.RawSnapshotReader
 import org.apache.kafka.snapshot.RawSnapshotWriter
+import org.apache.kafka.snapshot.SnapshotPath
 import org.apache.kafka.snapshot.Snapshots
 
 import scala.compat.java8.OptionConverters._
@@ -117,7 +118,7 @@ final class KafkaMetadataLog private (
 
   override def lastFetchedEpoch: Int = {
     log.latestEpoch.getOrElse {
-      latestSnapshotId.map { snapshotId =>
+      latestSnapshotId.map[Int] { snapshotId =>
         val logEndOffset = endOffset().offset
         if (snapshotId.offset == startOffset && snapshotId.offset == logEndOffset) {
           // Return the epoch of the snapshot when the log is empty
@@ -305,7 +306,7 @@ object KafkaMetadataLog {
     // Scan the log directory; deleting partial snapshots and remembering immutable snapshots
     Files
       .walk(log.dir.toPath, 1)
-      .map { path =>
+      .map[Optional[SnapshotPath]] { path =>
         if (path != log.dir.toPath) {
           Snapshots.parse(path)
         } else {
