@@ -19,7 +19,7 @@ package kafka.server
 import java.io.File
 import java.util.Optional
 import java.util.concurrent.TimeUnit
-import java.util.concurrent.atomic.{AtomicBoolean}
+import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.locks.Lock
 
 import com.yammer.metrics.core.Meter
@@ -44,8 +44,8 @@ import org.apache.kafka.common.message.DeleteRecordsResponseData.DeleteRecordsPa
 import org.apache.kafka.common.message.{DescribeLogDirsResponseData, FetchResponseData, LeaderAndIsrResponseData}
 import org.apache.kafka.common.message.LeaderAndIsrResponseData.LeaderAndIsrTopicError
 import org.apache.kafka.common.message.LeaderAndIsrResponseData.LeaderAndIsrPartitionError
-import org.apache.kafka.common.message.OffsetForLeaderEpochRequestData.{OffsetForLeaderTopic}
-import org.apache.kafka.common.message.OffsetForLeaderEpochResponseData.{OffsetForLeaderTopicResult, EpochEndOffset}
+import org.apache.kafka.common.message.OffsetForLeaderEpochRequestData.OffsetForLeaderTopic
+import org.apache.kafka.common.message.OffsetForLeaderEpochResponseData.{EpochEndOffset, OffsetForLeaderTopicResult}
 import org.apache.kafka.common.message.StopReplicaRequestData.StopReplicaPartitionState
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.network.ListenerName
@@ -170,6 +170,14 @@ object HostedPartition {
    * This broker hosts the partition and it is online.
    */
   final case class Online(partition: Partition) extends HostedPartition
+
+  /**
+   * This broker hosted the partition but it is deferring metadata changes
+   * until it catches up on the Raft-based metadata log.
+   * This state only applies to brokers that are using a Raft-based metadata
+   * quorum; it never happens when using ZooKeeper.
+   */
+  final case class Deferred(partition: Partition) extends HostedPartition
 
   /**
    * This broker hosts the partition, but it is in an offline log directory.
@@ -316,7 +324,7 @@ class ReplicaManager(val config: KafkaConfig,
   private def maybeRemoveTopicMetrics(topic: String): Unit = {
     val topicHasOnlinePartition = allPartitions.values.exists {
       case HostedPartition.Online(partition) => topic == partition.topic
-      case HostedPartition.None | HostedPartition.Offline => false
+      case _ => false
     }
     if (!topicHasOnlinePartition)
       brokerTopicStats.removeMetrics(topic)
@@ -394,7 +402,7 @@ class ReplicaManager(val config: KafkaConfig,
                 responseMap.put(topicPartition, Errors.FENCED_LEADER_EPOCH)
               }
 
-            case HostedPartition.None =>
+            case _ => // use catch-all for None and Deferred since Deferred never happens with ZooKeeper
               // Delete log and corresponding folders in case replica manager doesn't hold them anymore.
               // This could happen when topic is being deleted while broker is down and recovers.
               stoppedPartitions += topicPartition -> partitionState
@@ -474,19 +482,19 @@ class ReplicaManager(val config: KafkaConfig,
     partition
   }
 
-  def nonOfflinePartition(topicPartition: TopicPartition): Option[Partition] = {
+  def onlinePartition(topicPartition: TopicPartition): Option[Partition] = {
     getPartition(topicPartition) match {
       case HostedPartition.Online(partition) => Some(partition)
-      case HostedPartition.None | HostedPartition.Offline => None
+      case _ => None
     }
   }
 
   // An iterator over all non offline partitions. This is a weakly consistent iterator; a partition made offline after
   // the iterator has been constructed could still be returned by this iterator.
-  private def nonOfflinePartitionsIterator: Iterator[Partition] = {
+  private def onlinePartitionsIterator: Iterator[Partition] = {
     allPartitions.values.iterator.flatMap {
       case HostedPartition.Online(partition) => Some(partition)
-      case HostedPartition.None | HostedPartition.Offline => None
+      case _ => None
     }
   }
 
@@ -521,6 +529,11 @@ class ReplicaManager(val config: KafkaConfig,
         // the local replica has been deleted.
         Left(Errors.NOT_LEADER_OR_FOLLOWER)
 
+      case HostedPartition.Deferred(_) =>
+        // The topic exists, but this broker is deferring metadata changes for it, so we return NOT_LEADER_OR_FOLLOWER
+        // which forces clients to refresh metadata.
+        Left(Errors.NOT_LEADER_OR_FOLLOWER)
+
       case HostedPartition.None =>
         Left(Errors.UNKNOWN_TOPIC_OR_PARTITION)
     }
@@ -539,7 +552,7 @@ class ReplicaManager(val config: KafkaConfig,
   }
 
   def localLog(topicPartition: TopicPartition): Option[Log] = {
-    nonOfflinePartition(topicPartition).flatMap(_.log)
+    onlinePartition(topicPartition).flatMap(_.log)
   }
 
   def getLogDir(topicPartition: TopicPartition): Option[String] = {
@@ -702,6 +715,9 @@ class ReplicaManager(val config: KafkaConfig,
               }
             case HostedPartition.Offline =>
               throw new KafkaStorageException(s"Partition $topicPartition is offline")
+
+            case HostedPartition.Deferred(_) =>
+              throw new KafkaStorageException(s"Partition $topicPartition is deferred")
 
             case HostedPartition.None => // Do nothing
           }
@@ -881,7 +897,7 @@ class ReplicaManager(val config: KafkaConfig,
     def processFailedRecord(topicPartition: TopicPartition, t: Throwable) = {
       val logStartOffset = getPartition(topicPartition) match {
         case HostedPartition.Online(partition) => partition.logStartOffset
-        case HostedPartition.None | HostedPartition.Offline => -1L
+        case _ => -1L
       }
       brokerTopicStats.topicStats(topicPartition.topic).failedProduceRequestRate.mark()
       brokerTopicStats.allTopicsStats.failedProduceRequestRate.mark()
@@ -1302,6 +1318,14 @@ class ReplicaManager(val config: KafkaConfig,
                 responseMap.put(topicPartition, Errors.KAFKA_STORAGE_ERROR)
                 None
 
+              case HostedPartition.Deferred(_) =>
+                stateChangeLogger.error(s"Ignoring LeaderAndIsr request from " +
+                  s"controller $controllerId with correlation id $correlationId " +
+                  s"epoch $controllerEpoch for partition $topicPartition as the local replica for the " +
+                  "partition is in deferred state (should never happen when using ZooKeeper)")
+                responseMap.put(topicPartition, Errors.KAFKA_STORAGE_ERROR)
+                None
+
               case HostedPartition.Online(partition) =>
                 Some(partition)
 
@@ -1699,7 +1723,7 @@ class ReplicaManager(val config: KafkaConfig,
 
     // Shrink ISRs for non offline partitions
     allPartitions.keys.foreach { topicPartition =>
-      nonOfflinePartition(topicPartition).foreach(_.maybeShrinkIsr())
+      onlinePartition(topicPartition).foreach(_.maybeShrinkIsr())
     }
   }
 
@@ -1720,7 +1744,7 @@ class ReplicaManager(val config: KafkaConfig,
           s"log read returned error ${readResult.error}")
         readResult
       } else {
-        nonOfflinePartition(topicPartition) match {
+        onlinePartition(topicPartition) match {
           case Some(partition) =>
             if (partition.updateFollowerFetchState(followerId,
               followerFetchOffsetMetadata = readResult.info.fetchOffsetMetadata,
@@ -1745,10 +1769,10 @@ class ReplicaManager(val config: KafkaConfig,
   }
 
   private def leaderPartitionsIterator: Iterator[Partition] =
-    nonOfflinePartitionsIterator.filter(_.leaderLogIfLocal.isDefined)
+    onlinePartitionsIterator.filter(_.leaderLogIfLocal.isDefined)
 
   def getLogEndOffset(topicPartition: TopicPartition): Option[Long] =
-    nonOfflinePartition(topicPartition).flatMap(_.leaderLogIfLocal.map(_.logEndOffset))
+    onlinePartition(topicPartition).flatMap(_.leaderLogIfLocal.map(_.logEndOffset))
 
   // Flushes the highwatermark value for all partitions to the highwatermark file
   def checkpointHighWatermarks(): Unit = {
@@ -1761,7 +1785,7 @@ class ReplicaManager(val config: KafkaConfig,
 
     val logDirToHws = new mutable.AnyRefMap[String, mutable.AnyRefMap[TopicPartition, Long]](
       allPartitions.size)
-    nonOfflinePartitionsIterator.foreach { partition =>
+    onlinePartitionsIterator.foreach { partition =>
       partition.log.foreach(putHw(logDirToHws, _))
       partition.futureLog.foreach(putHw(logDirToHws, _))
     }
@@ -1792,11 +1816,11 @@ class ReplicaManager(val config: KafkaConfig,
       return
     warn(s"Stopping serving replicas in dir $dir")
     replicaStateChangeLock synchronized {
-      val newOfflinePartitions = nonOfflinePartitionsIterator.filter { partition =>
+      val newOfflinePartitions = onlinePartitionsIterator.filter { partition =>
         partition.log.exists { _.parentDir == dir }
       }.map(_.topicPartition).toSet
 
-      val partitionsWithOfflineFutureReplica = nonOfflinePartitionsIterator.filter { partition =>
+      val partitionsWithOfflineFutureReplica = onlinePartitionsIterator.filter { partition =>
         partition.futureLog.exists { _.parentDir == dir }
       }.toSet
 
@@ -1890,6 +1914,11 @@ class ReplicaManager(val config: KafkaConfig,
               .setErrorCode(Errors.KAFKA_STORAGE_ERROR.code)
 
           case HostedPartition.None if metadataCache.contains(tp) =>
+            new EpochEndOffset()
+              .setPartition(offsetForLeaderPartition.partition)
+              .setErrorCode(Errors.NOT_LEADER_OR_FOLLOWER.code)
+
+          case HostedPartition.Deferred(_) =>
             new EpochEndOffset()
               .setPartition(offsetForLeaderPartition.partition)
               .setErrorCode(Errors.NOT_LEADER_OR_FOLLOWER.code)
