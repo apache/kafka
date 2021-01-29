@@ -27,7 +27,7 @@ import org.slf4j.{Logger, LoggerFactory}
 
 @deprecated(
   "Use org.apache.kafka.streams.scala.serialization.Serdes. For WindowedSerdes.TimeWindowedSerde, use explicit constructors.",
-  "2.8.0"
+  "2.7.0"
 )
 object Serdes {
   val LOG: Logger = LoggerFactory.getLogger(getClass)
