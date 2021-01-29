@@ -232,6 +232,8 @@ class KafkaApis(val requestChannel: RequestChannel,
         case ApiKeys.DESCRIBE_QUORUM => requestHelper.closeConnection(request, util.Collections.emptyMap())
         case ApiKeys.FETCH_SNAPSHOT => requestHelper.closeConnection(request, util.Collections.emptyMap())
 
+        // Handle requests that should have been sent to the KIP-500 controller.
+        case ApiKeys.DECOMMISSION_BROKER => maybeForwardToController(request, handleDecommissionBrokerRequest)
       }
     } catch {
       case e: FatalExitError => throw e
@@ -3294,6 +3296,13 @@ class KafkaApis(val requestChannel: RequestChannel,
 
     val forwardedRequest = parseForwardedRequest(request, forwardedContext, forwardedRequestBuffer)
     handle(forwardedRequest)
+  }
+
+  def handleDecommissionBrokerRequest(request: RequestChannel.Request): Unit = {
+    val decommissionBrokerRequest = request.body[DecommissionBrokerRequest]
+    requestHelper.sendResponseMaybeThrottle(request, requestThrottleMs =>
+      decommissionBrokerRequest.getErrorResponse(requestThrottleMs,
+        Errors.UNSUPPORTED_VERSION.exception))
   }
 
   private def parseForwardedClientAddress(
