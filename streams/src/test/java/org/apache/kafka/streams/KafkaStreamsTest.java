@@ -319,6 +319,7 @@ public class KafkaStreamsTest {
                 StreamThread.State.PARTITIONS_ASSIGNED);
             return null;
         }).anyTimes();
+        EasyMock.expect(thread.getGroupInstanceID()).andStubReturn(Optional.empty());
         EasyMock.expect(thread.threadMetadata()).andReturn(new ThreadMetadata(
                 "newThead",
                 "DEAD",
@@ -330,11 +331,11 @@ public class KafkaStreamsTest {
                 Collections.emptySet()
             )
         ).anyTimes();
-        EasyMock.expect(thread.threadMetadata()).andStubReturn(threadMetadata);
-        thread.waitOnThreadState(StreamThread.State.DEAD);
-        EasyMock.expectLastCall().anyTimes();
+        EasyMock.expect(thread.waitOnThreadState(EasyMock.isA(StreamThread.State.class), anyLong())).andStubReturn(true);
         EasyMock.expect(thread.isAlive()).andReturn(true).times(0, 1);
         thread.resizeCache(EasyMock.anyLong());
+        EasyMock.expectLastCall().anyTimes();
+        thread.requestLeaveGroupDuringShutdown();
         EasyMock.expectLastCall().anyTimes();
         EasyMock.expect(thread.getName()).andStubReturn("newThread");
         thread.shutdown();
