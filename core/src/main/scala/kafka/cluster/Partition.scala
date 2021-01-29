@@ -28,7 +28,6 @@ import kafka.server._
 import kafka.server.checkpoints.OffsetCheckpoints
 import kafka.utils.CoreUtils.{inReadLock, inWriteLock}
 import kafka.utils._
-import kafka.zk.AdminZkClient
 import kafka.zookeeper.ZooKeeperClientException
 import org.apache.kafka.common.errors._
 import org.apache.kafka.common.message.FetchResponseData
@@ -89,8 +88,7 @@ object Partition extends KafkaMetricsGroup {
 
     val configProvider = new TopicConfigFetcher {
       override def fetch(): Properties = {
-        val adminZkClient = new AdminZkClient(replicaManager.zkClient)
-        adminZkClient.fetchEntityConfig(ConfigType.Topic, topicPartition.topic)
+        replicaManager.configRepository.topicConfigs(topicPartition.topic())
       }
     }
 

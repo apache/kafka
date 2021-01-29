@@ -19,7 +19,7 @@ package kafka.server
 import java.io.File
 import java.util.Optional
 import java.util.concurrent.TimeUnit
-import java.util.concurrent.atomic.{AtomicBoolean}
+import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.locks.Lock
 
 import com.yammer.metrics.core.Meter
@@ -33,9 +33,10 @@ import kafka.server.{FetchMetadata => SFetchMetadata}
 import kafka.server.HostedPartition.Online
 import kafka.server.QuotaFactory.QuotaManagers
 import kafka.server.checkpoints.{LazyOffsetCheckpoints, OffsetCheckpointFile, OffsetCheckpoints}
+import kafka.server.metadata.{ConfigRepository, ZkConfigRepository}
 import kafka.utils._
 import kafka.utils.Implicits._
-import kafka.zk.KafkaZkClient
+import kafka.zk.{AdminZkClient, KafkaZkClient}
 import org.apache.kafka.common.{ElectionType, IsolationLevel, Node, TopicPartition, Uuid}
 import org.apache.kafka.common.errors._
 import org.apache.kafka.common.internals.Topic
@@ -44,8 +45,8 @@ import org.apache.kafka.common.message.DeleteRecordsResponseData.DeleteRecordsPa
 import org.apache.kafka.common.message.{DescribeLogDirsResponseData, FetchResponseData, LeaderAndIsrResponseData}
 import org.apache.kafka.common.message.LeaderAndIsrResponseData.LeaderAndIsrTopicError
 import org.apache.kafka.common.message.LeaderAndIsrResponseData.LeaderAndIsrPartitionError
-import org.apache.kafka.common.message.OffsetForLeaderEpochRequestData.{OffsetForLeaderTopic}
-import org.apache.kafka.common.message.OffsetForLeaderEpochResponseData.{OffsetForLeaderTopicResult, EpochEndOffset}
+import org.apache.kafka.common.message.OffsetForLeaderEpochRequestData.OffsetForLeaderTopic
+import org.apache.kafka.common.message.OffsetForLeaderEpochResponseData.{EpochEndOffset, OffsetForLeaderTopicResult}
 import org.apache.kafka.common.message.StopReplicaRequestData.StopReplicaPartitionState
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.network.ListenerName
@@ -197,6 +198,7 @@ class ReplicaManager(val config: KafkaConfig,
                      val delayedDeleteRecordsPurgatory: DelayedOperationPurgatory[DelayedDeleteRecords],
                      val delayedElectLeaderPurgatory: DelayedOperationPurgatory[DelayedElectLeader],
                      threadNamePrefix: Option[String],
+                     val configRepository: ConfigRepository,
                      val alterIsrManager: AlterIsrManager) extends Logging with KafkaMetricsGroup {
 
   def this(config: KafkaConfig,
@@ -225,7 +227,7 @@ class ReplicaManager(val config: KafkaConfig,
         purgeInterval = config.deleteRecordsPurgatoryPurgeIntervalRequests),
       DelayedOperationPurgatory[DelayedElectLeader](
         purgatoryName = "ElectLeader", brokerId = config.brokerId),
-      threadNamePrefix, alterIsrManager)
+      threadNamePrefix, new ZkConfigRepository(new AdminZkClient(zkClient)), alterIsrManager)
   }
 
   /* epoch of the controller that last changed the leader */
@@ -1818,7 +1820,11 @@ class ReplicaManager(val config: KafkaConfig,
     logManager.handleLogDirFailure(dir)
 
     if (sendZkNotification)
-      zkClient.propagateLogDirEvent(localBrokerId)
+      if (zkClient == null) {
+        warn("Unable to propagate log dir failure via Zookeeper in KIP-500 mode") // will be handled via KIP-589
+      } else {
+        zkClient.propagateLogDirEvent(localBrokerId)
+      }
     warn(s"Stopped serving replicas in dir $dir")
   }
 
