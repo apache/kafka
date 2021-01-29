@@ -285,8 +285,7 @@ public class FetchResponse<T extends BaseRecords> extends AbstractResponse {
 
         public void addPartitions(List<Integer> partitions) {
             partitions.forEach(partition -> {
-                if (!partitions.contains(partition))
-                    partitions.add(partition);
+                partitions.add(partition);
             });
         }
 

@@ -282,11 +282,10 @@ class ReplicaAlterLogDirsThread(name: String,
     } else {
       // Set maxWait and minBytes to 0 because the response should return immediately if
       // the future log has caught up with the current log of the partition
-      val version: Short = if (ApiKeys.FETCH.latestVersion >= 13) {
-        if (topics.size() == topicIdsInRequest.size()) ApiKeys.FETCH.latestVersion else 12
-      } else {
+      val version: Short = if (ApiKeys.FETCH.latestVersion >= 13 && topics.size() != topicIdsInRequest.size())
+        12
+      else
         ApiKeys.FETCH.latestVersion
-       }
       val requestBuilder = FetchRequest.Builder.forReplica(version, replicaId, 0, 0, requestMap,
         topicIds).setMaxBytes(maxBytes)
       Some(ReplicaFetch(requestMap, requestBuilder))

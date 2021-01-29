@@ -833,7 +833,7 @@ class KafkaApis(val requestChannel: RequestChannel,
 
         // Prepare fetch response from converted data
         val response =
-            new FetchResponse(unconvertedFetchResponse.error, convertedData, fetchContext.getIdErrors(), topicIds, throttleTimeMs, unconvertedFetchResponse.sessionId)
+          new FetchResponse(unconvertedFetchResponse.error, convertedData, fetchContext.getIdErrors(), topicIds, throttleTimeMs, unconvertedFetchResponse.sessionId)
         // record the bytes out metrics only when the response is being sent
         response.responseData(topicNames).forEach { (tp, data) =>
           brokerTopicStats.updateBytesOut(tp.topic, fetchRequest.isFromFollower, reassigningPartitions.contains(tp), data.records.sizeInBytes)

@@ -547,13 +547,13 @@ class FetchSessionTest {
     topicIds.put("foo", Uuid.randomUuid())
     val context4 = fetchManager.newContext(request4, topicNames, topicIds)
     assertEquals(classOf[IncrementalFetchContext], context4.getClass)
-    val parts4 = Set(new TopicPartition("bar", 0))
+    val parts4 = Set(new TopicPartition("bar", 0), new TopicPartition("foo", 1))
     val reqData4Iter = parts4.iterator
     context4.foreachPartition((topicPart, _) => {
       assertEquals(reqData4Iter.next(), topicPart)
     })
     assertEquals(None, context4.getFetchOffset(new TopicPartition("foo", 0)))
-    assertEquals(None, context4.getFetchOffset(new TopicPartition("foo", 1)))
+    assertEquals(10, context4.getFetchOffset(new TopicPartition("foo", 1)).get)
     assertEquals(15, context4.getFetchOffset(new TopicPartition("bar", 0)).get)
     assertEquals(None, context4.getFetchOffset(new TopicPartition("bar", 2)))
     val respData4 = new util.LinkedHashMap[TopicPartition, FetchResponse.PartitionData[Records]]
@@ -655,12 +655,12 @@ class FetchSessionTest {
     topicIds.put("foo", Uuid.randomUuid())
     val context3 = fetchManager.newContext(request3, topicNames, topicIds)
     assertEquals(classOf[IncrementalFetchContext], context3.getClass)
-    val parts3 = Set(new TopicPartition("bar", 1))
+    val parts3 = Set(new TopicPartition("foo", 0), new TopicPartition("bar", 1))
     val reqData3Iter = parts3.iterator
     context3.foreachPartition((topicPart, _) => {
       assertEquals(reqData3Iter.next(), topicPart)
     })
-    assertEquals(None, context3.getFetchOffset(new TopicPartition("foo", 0)))
+    assertEquals(0, context3.getFetchOffset(new TopicPartition("foo", 0)).get)
     assertEquals(10, context3.getFetchOffset(new TopicPartition("bar", 1)).get)
     val respData3 = new util.LinkedHashMap[TopicPartition, FetchResponse.PartitionData[Records]]
     respData3.put(new TopicPartition("bar", 1), new FetchResponse.PartitionData(

@@ -75,7 +75,7 @@ object FetchSession {
   * localLogStartOffset is the log start offset of the partition on this broker.
   */
 class CachedPartition(val topic: String,
-                      val topicId: Uuid,
+                      var topicId: Uuid,
                       val partition: Int,
                       var maxBytes: Int,
                       var fetchOffset: Long,
@@ -129,8 +129,9 @@ class CachedPartition(val topic: String,
     lastFetchedEpoch = reqData.lastFetchedEpoch
   }
 
-  def addId(id: Uuid) = new CachedPartition(topic, id, partition, maxBytes, fetchOffset, highWatermark, leaderEpoch, fetcherLogStartOffset,
-    localLogStartOffset, lastFetchedEpoch)
+  def addId(id: Uuid): Unit = {
+    topicId = id
+  }
 
   /**
     * Determine whether or not the specified cached partition should be included in the FetchResponse we send back to
@@ -364,7 +365,7 @@ class FetchSession(val id: Int,
       //    the ID in topic IDs (likely due to topic deletion and recreation) or there is no valid topic
       //    ID on the broker (topic deleted or broker received a metadataResponse without IDs),
       //    remove the cached partition from partitionMap.
-      val partitionIterator = partitionMap.iterator()
+      /**val partitionIterator = partitionMap.iterator()
       while (partitionIterator.hasNext()) {
         val partition = partitionIterator.next()
         if (partition.topicId.equals(Uuid.ZERO_UUID)) {
@@ -378,6 +379,7 @@ class FetchSession(val id: Int,
           partitionMap.remove(new CachedPartition(removedTp))
         }
       }
+      */
 
       // Add new unresolved IDs.
       fetchDataAndError.unresolvedPartitions.forEach { idAndData =>
@@ -596,16 +598,26 @@ class IncrementalFetchContext(private val time: Time,
         val topicPart = element.getKey
         val respData = element.getValue
         val cachedPart = session.partitionMap.find(new CachedPartition(topicPart))
-        val mustRespond = cachedPart.maybeUpdateResponseData(respData, updateFetchContextAndRemoveUnselected)
-        if (mustRespond) {
+
+        if (cachedPart.topicId == Uuid.ZERO_UUID)
+          cachedPart.addId(topicIds.getOrDefault(topicPart.topic, Uuid.ZERO_UUID))
+
+        if (cachedPart.topicId != topicIds.getOrDefault(topicPart.topic, Uuid.ZERO_UUID)) {
           nextElement = element
-          if (updateFetchContextAndRemoveUnselected) {
-            session.partitionMap.remove(cachedPart)
-            session.partitionMap.mustAdd(cachedPart)
-          }
+          session.partitionMap.remove(cachedPart)
+          iter.remove()
         } else {
-          if (updateFetchContextAndRemoveUnselected) {
-            iter.remove()
+          val mustRespond = cachedPart.maybeUpdateResponseData(respData, updateFetchContextAndRemoveUnselected)
+          if (mustRespond) {
+            nextElement = element
+            if (updateFetchContextAndRemoveUnselected) {
+              session.partitionMap.remove(cachedPart)
+              session.partitionMap.mustAdd(cachedPart)
+            }
+          } else {
+            if (updateFetchContextAndRemoveUnselected) {
+              iter.remove()
+            }
           }
         }
       }
