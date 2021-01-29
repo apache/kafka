@@ -233,8 +233,8 @@ class KafkaApis(val requestChannel: RequestChannel,
         case ApiKeys.FETCH_SNAPSHOT => requestHelper.closeConnection(request, util.Collections.emptyMap())
 
         // Handle requests that should have been sent to the KIP-500 controller.
-        case ApiKeys.BROKER_REGISTRATION => handleBrokerRegistration(request)
-        case ApiKeys.BROKER_HEARTBEAT => handleBrokerHeartbeat(request)
+        case ApiKeys.BROKER_REGISTRATION => requestHelper.closeConnection(request, util.Collections.emptyMap())
+        case ApiKeys.BROKER_HEARTBEAT => requestHelper.closeConnection(request, util.Collections.emptyMap())
       }
     } catch {
       case e: FatalExitError => throw e
@@ -3297,20 +3297,6 @@ class KafkaApis(val requestChannel: RequestChannel,
 
     val forwardedRequest = parseForwardedRequest(request, forwardedContext, forwardedRequestBuffer)
     handle(forwardedRequest)
-  }
-
-  def handleBrokerRegistration(request: RequestChannel.Request): Unit = {
-    val registrationRequest = request.body[BrokerRegistrationRequest]
-    requestHelper.sendResponseMaybeThrottle(request, requestThrottleMs =>
-      registrationRequest.getErrorResponse(requestThrottleMs,
-        Errors.NOT_CONTROLLER.exception))
-  }
-
-  def handleBrokerHeartbeat(request: RequestChannel.Request): Unit = {
-    val heartbeatRequest = request.body[BrokerHeartbeatRequest]
-    requestHelper.sendResponseMaybeThrottle(request, requestThrottleMs =>
-      heartbeatRequest.getErrorResponse(requestThrottleMs,
-        Errors.NOT_CONTROLLER.exception))
   }
 
   private def parseForwardedClientAddress(
