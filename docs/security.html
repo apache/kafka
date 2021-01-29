@@ -76,7 +76,7 @@
             Server host name verification may be disabled by setting <code>ssl.endpoint.identification.algorithm</code> to an empty string.<br>
             For dynamically configured broker listeners, hostname verification may be disabled using <code>kafka-configs.sh</code>:<br>
 
-            <pre class="line-numbers"><code class="language-text">                bin/kafka-configs.sh --bootstrap-server localhost:9093 --entity-type brokers --entity-name 0 --alter --add-config "listener.name.internal.ssl.endpoint.identification.algorithm="</code></pre>
+            <pre class="line-numbers"><code class="language-text">bin/kafka-configs.sh --bootstrap-server localhost:9093 --entity-type brokers --entity-name 0 --alter --add-config "listener.name.internal.ssl.endpoint.identification.algorithm="</code></pre>
 
             <p><b>Note:</b></p>
             Normally there is no good reason to disable hostname verification apart from being the quickest way to "just get it to work" followed
@@ -320,10 +320,10 @@ keyUsage               = digitalSignature, keyEncipherment</code></pre>
             <pre>listeners</code></pre>
 
             If SSL is not enabled for inter-broker communication (see below for how to enable it), both PLAINTEXT and SSL ports will be necessary.
-            <pre class="line-numbers"><code class="language-text">            listeners=PLAINTEXT://host.name:port,SSL://host.name:port</code></pre>
+            <pre class="line-numbers"><code class="language-text">listeners=PLAINTEXT://host.name:port,SSL://host.name:port</code></pre>
 
             Following SSL configs are needed on the broker side
-            <pre class="line-numbers"><code class="language-text">            ssl.keystore.location=/var/private/ssl/server.keystore.jks
+            <pre class="line-numbers"><code class="language-text">ssl.keystore.location=/var/private/ssl/server.keystore.jks
             ssl.keystore.password=test1234
             ssl.key.password=test1234
             ssl.truststore.location=/var/private/ssl/server.truststore.jks
@@ -341,7 +341,7 @@ keyUsage               = digitalSignature, keyEncipherment</code></pre>
                 <li>ssl.secure.random.implementation=SHA1PRNG</li>
             </ol>
             If you want to enable SSL for inter-broker communication, add the following to the server.properties file (it defaults to PLAINTEXT)
-            <pre class="line-numbers"><code class="language-text">            security.inter.broker.protocol=SSL</code></pre>
+            <pre class="line-numbers"><code class="language-text">security.inter.broker.protocol=SSL</code></pre>
 
             <p>
             Due to import regulations in some countries, the Oracle implementation limits the strength of cryptographic algorithms available by default. If stronger algorithms are needed (for example, AES with 256-bit keys), the <a href="http://www.oracle.com/technetwork/java/javase/downloads/index.html">JCE Unlimited Strength Jurisdiction Policy Files</a> must be obtained and installed in the JDK/JRE. See the
@@ -357,13 +357,13 @@ keyUsage               = digitalSignature, keyEncipherment</code></pre>
             </p>
 
             Once you start the broker you should be able to see in the server.log
-            <pre class="line-numbers"><code class="language-text">            with addresses: PLAINTEXT -> EndPoint(192.168.64.1,9092,PLAINTEXT),SSL -> EndPoint(192.168.64.1,9093,SSL)</code></pre>
+            <pre class="line-numbers"><code class="language-text">with addresses: PLAINTEXT -> EndPoint(192.168.64.1,9092,PLAINTEXT),SSL -> EndPoint(192.168.64.1,9093,SSL)</code></pre>
 
             To check quickly if  the server keystore and truststore are setup properly you can run the following command
             <pre>openssl s_client -debug -connect localhost:9093 -tls1</code></pre> (Note: TLSv1 should be listed under ssl.enabled.protocols)<br>
             In the output of this command you should see server's certificate:
-            <pre class="line-numbers"><code class="language-text">            -----BEGIN CERTIFICATE-----
-            {variable sized random bytes}
+            <pre class="line-numbers"><code class="language-text">-----BEGIN CERTIFICATE-----
+                {variable sized random bytes}
             -----END CERTIFICATE-----
             subject=/C=US/ST=CA/L=Santa Clara/O=org/OU=org/CN=Sriharsha Chintalapani
             issuer=/C=US/ST=CA/L=Santa Clara/O=org/OU=org/CN=kafka/emailAddress=test@test.com</code></pre>
@@ -372,14 +372,14 @@ keyUsage               = digitalSignature, keyEncipherment</code></pre>
         <li><h4 class="anchor-heading"><a id="security_configclients" class="anchor-link"></a><a href="#security_configclients">Configuring Kafka Clients</a></h4>
             SSL is supported only for the new Kafka Producer and Consumer, the older API is not supported. The configs for SSL will be the same for both producer and consumer.<br>
             If client authentication is not required in the broker, then the following is a minimal configuration example:
-            <pre class="line-numbers"><code class="language-text">            security.protocol=SSL
+            <pre class="line-numbers"><code class="language-text">security.protocol=SSL
             ssl.truststore.location=/var/private/ssl/client.truststore.jks
             ssl.truststore.password=test1234</code></pre>
 
             Note: ssl.truststore.password is technically optional but highly recommended. If a password is not set access to the truststore is still available, but integrity checking is disabled.
 
             If client authentication is required, then a keystore must be created like in step 1 and the following must also be configured:
-            <pre class="line-numbers"><code class="language-text">            ssl.keystore.location=/var/private/ssl/client.keystore.jks
+            <pre class="line-numbers"><code class="language-text">ssl.keystore.location=/var/private/ssl/client.keystore.jks
             ssl.keystore.password=test1234
             ssl.key.password=test1234</code></pre>
 
@@ -434,7 +434,7 @@ keyUsage               = digitalSignature, keyEncipherment</code></pre>
             login module may be specified in the config value. If multiple mechanisms are configured on a
             listener, configs must be provided for each mechanism using the listener and mechanism prefix.
             For example,
-                    <pre class="line-numbers"><code class="language-text">        listener.name.sasl_ssl.scram-sha-256.sasl.jaas.config=org.apache.kafka.common.security.scram.ScramLoginModule required \
+                    <pre class="line-numbers"><code class="language-text">listener.name.sasl_ssl.scram-sha-256.sasl.jaas.config=org.apache.kafka.common.security.scram.ScramLoginModule required \
             username="admin" \
             password="admin-secret";
         listener.name.sasl_ssl.plain.sasl.jaas.config=org.apache.kafka.common.security.plain.PlainLoginModule required \
@@ -491,7 +491,7 @@ keyUsage               = digitalSignature, keyEncipherment</code></pre>
                     <a href="#security_sasl_oauthbearer_clientconfig">OAUTHBEARER</a>.
                     For example, <a href="#security_sasl_gssapi_clientconfig">GSSAPI</a>
                     credentials may be configured as:
-                    <pre class="line-numbers"><code class="language-text">        KafkaClient {
+                    <pre class="line-numbers"><code class="language-text">KafkaClient {
         com.sun.security.auth.module.Krb5LoginModule required
         useKeyTab=true
         storeKey=true
@@ -570,7 +570,7 @@ keyUsage               = digitalSignature, keyEncipherment</code></pre>
         <li><h5 class="anchor-heading"><a id="security_sasl_kerberos_brokerconfig" class="anchor-link"></a><a href="#security_sasl_kerberos_brokerconfig">Configuring Kafka Brokers</a></h5>
         <ol>
             <li>Add a suitably modified JAAS file similar to the one below to each Kafka broker's config directory, let's call it kafka_server_jaas.conf for this example (note that each broker should have its own keytab):
-            <pre class="line-numbers"><code class="language-text">        KafkaServer {
+            <pre class="line-numbers"><code class="language-text">KafkaServer {
             com.sun.security.auth.module.Krb5LoginModule required
             useKeyTab=true
             storeKey=true
@@ -615,7 +615,7 @@ keyUsage               = digitalSignature, keyEncipherment</code></pre>
                     The property <code>sasl.jaas.config</code> in producer.properties or consumer.properties describes
                     how clients like producer and consumer can connect to the Kafka Broker. The following is an example
                     configuration for a client using a keytab (recommended for long-running processes):
-                <pre class="line-numbers"><code class="language-text">    sasl.jaas.config=com.sun.security.auth.module.Krb5LoginModule required \
+                <pre class="line-numbers"><code class="language-text">sasl.jaas.config=com.sun.security.auth.module.Krb5LoginModule required \
         useKeyTab=true \
         storeKey=true  \
         keyTab="/etc/security/keytabs/kafka_client.keytab" \
@@ -623,7 +623,7 @@ keyUsage               = digitalSignature, keyEncipherment</code></pre>
 
                    For command-line utilities like kafka-console-consumer or kafka-console-producer, kinit can be used
                    along with "useTicketCache=true" as in:
-                <pre class="line-numbers"><code class="language-text">    sasl.jaas.config=com.sun.security.auth.module.Krb5LoginModule required \
+                <pre class="line-numbers"><code class="language-text">sasl.jaas.config=com.sun.security.auth.module.Krb5LoginModule required \
         useTicketCache=true;</code></pre>
 
                    JAAS configuration for clients may alternatively be specified as a JVM parameter similar to brokers
@@ -633,7 +633,7 @@ keyUsage               = digitalSignature, keyEncipherment</code></pre>
                 <li>Optionally pass the krb5 file locations as JVM parameters to each client JVM (see <a href="https://docs.oracle.com/javase/8/docs/technotes/guides/security/jgss/tutorials/KerberosReq.html">here</a> for more details):
                 <pre>    -Djava.security.krb5.conf=/etc/kafka/krb5.conf</code></pre></li>
                 <li>Configure the following properties in producer.properties or consumer.properties:
-                <pre class="line-numbers"><code class="language-text">    security.protocol=SASL_PLAINTEXT (or SASL_SSL)
+                <pre class="line-numbers"><code class="language-text">security.protocol=SASL_PLAINTEXT (or SASL_SSL)
     sasl.mechanism=GSSAPI
     sasl.kerberos.service.name=kafka</code></pre></li>
             </ol>
@@ -649,7 +649,7 @@ keyUsage               = digitalSignature, keyEncipherment</code></pre>
         <li><h5 class="anchor-heading"><a id="security_sasl_plain_brokerconfig" class="anchor-link"></a><a href="#security_sasl_plain_brokerconfig">Configuring Kafka Brokers</a></h5>
             <ol>
             <li>Add a suitably modified JAAS file similar to the one below to each Kafka broker's config directory, let's call it kafka_server_jaas.conf for this example:
-                <pre class="line-numbers"><code class="language-text">        KafkaServer {
+                <pre class="line-numbers"><code class="language-text">KafkaServer {
             org.apache.kafka.common.security.plain.PlainLoginModule required
             username="admin"
             password="admin-secret"
@@ -677,7 +677,7 @@ keyUsage               = digitalSignature, keyEncipherment</code></pre>
             <li>Configure the JAAS configuration property for each client in producer.properties or consumer.properties.
                 The login module describes how the clients like producer and consumer can connect to the Kafka Broker.
                 The following is an example configuration for a client for the PLAIN mechanism:
-                <pre class="line-numbers"><code class="language-text">    sasl.jaas.config=org.apache.kafka.common.security.plain.PlainLoginModule required \
+                <pre class="line-numbers"><code class="language-text">sasl.jaas.config=org.apache.kafka.common.security.plain.PlainLoginModule required \
         username="alice" \
         password="alice-secret";</code></pre>
                 <p>The options <tt>username</tt> and <tt>password</tt> are used by clients to configure
@@ -689,7 +689,7 @@ keyUsage               = digitalSignature, keyEncipherment</code></pre>
                 as described <a href="#security_client_staticjaas">here</a>. Clients use the login section named
                 <tt>KafkaClient</tt>. This option allows only one user for all client connections from a JVM.</p></li>
             <li>Configure the following properties in producer.properties or consumer.properties:
-                <pre class="line-numbers"><code class="language-text">    security.protocol=SASL_SSL
+                <pre class="line-numbers"><code class="language-text">security.protocol=SASL_SSL
     sasl.mechanism=PLAIN</code></pre></li>
             </ol>
         </li>
@@ -740,7 +740,7 @@ keyUsage               = digitalSignature, keyEncipherment</code></pre>
         <li><h5 class="anchor-heading"><a id="security_sasl_scram_brokerconfig" class="anchor-link"></a><a href="#security_sasl_scram_brokerconfig">Configuring Kafka Brokers</a></h5>
             <ol>
             <li>Add a suitably modified JAAS file similar to the one below to each Kafka broker's config directory, let's call it kafka_server_jaas.conf for this example:
-                <pre class="line-numbers"><code class="language-text">    KafkaServer {
+                <pre class="line-numbers"><code class="language-text">KafkaServer {
         org.apache.kafka.common.security.scram.ScramLoginModule required
         username="admin"
         password="admin-secret";
@@ -751,7 +751,7 @@ keyUsage               = digitalSignature, keyEncipherment</code></pre>
             <li>Pass the JAAS config file location as JVM parameter to each Kafka broker:
                 <pre>    -Djava.security.auth.login.config=/etc/kafka/kafka_server_jaas.conf</code></pre></li>
             <li>Configure SASL port and SASL mechanisms in server.properties as described <a href="#security_sasl_brokerconfig">here</a>.</code></pre> For example:
-                <pre class="line-numbers"><code class="language-text">    listeners=SASL_SSL://host.name:port
+                <pre class="line-numbers"><code class="language-text">listeners=SASL_SSL://host.name:port
     security.inter.broker.protocol=SASL_SSL
     sasl.mechanism.inter.broker.protocol=SCRAM-SHA-256 (or SCRAM-SHA-512)
     sasl.enabled.mechanisms=SCRAM-SHA-256 (or SCRAM-SHA-512)</code></pre></li>
@@ -764,7 +764,7 @@ keyUsage               = digitalSignature, keyEncipherment</code></pre>
             <li>Configure the JAAS configuration property for each client in producer.properties or consumer.properties.
                 The login module describes how the clients like producer and consumer can connect to the Kafka Broker.
                 The following is an example configuration for a client for the SCRAM mechanisms:
-                <pre class="line-numbers"><code class="language-text">   sasl.jaas.config=org.apache.kafka.common.security.scram.ScramLoginModule required \
+                <pre class="line-numbers"><code class="language-text">sasl.jaas.config=org.apache.kafka.common.security.scram.ScramLoginModule required \
         username="alice" \
         password="alice-secret";</code></pre>
 
@@ -777,7 +777,7 @@ keyUsage               = digitalSignature, keyEncipherment</code></pre>
                 as described <a href="#security_client_staticjaas">here</a>. Clients use the login section named
                 <tt>KafkaClient</tt>. This option allows only one user for all client connections from a JVM.</p></li>
             <li>Configure the following properties in producer.properties or consumer.properties:
-                <pre class="line-numbers"><code class="language-text">    security.protocol=SASL_SSL
+                <pre class="line-numbers"><code class="language-text">security.protocol=SASL_SSL
     sasl.mechanism=SCRAM-SHA-256 (or SCRAM-SHA-512)</code></pre></li>
             </ol>
         </li>
@@ -811,7 +811,7 @@ keyUsage               = digitalSignature, keyEncipherment</code></pre>
         <li><h5 class="anchor-heading"><a id="security_sasl_oauthbearer_brokerconfig" class="anchor-link"></a><a href="#security_sasl_oauthbearer_brokerconfig">Configuring Kafka Brokers</a></h5>
             <ol>
             <li>Add a suitably modified JAAS file similar to the one below to each Kafka broker's config directory, let's call it kafka_server_jaas.conf for this example:
-                <pre class="line-numbers"><code class="language-text">    KafkaServer {
+                <pre class="line-numbers"><code class="language-text">KafkaServer {
         org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginModule required
         unsecuredLoginStringClaim_sub="admin";
     };</code></pre>
@@ -821,7 +821,7 @@ keyUsage               = digitalSignature, keyEncipherment</code></pre>
             <li>Pass the JAAS config file location as JVM parameter to each Kafka broker:
                 <pre>    -Djava.security.auth.login.config=/etc/kafka/kafka_server_jaas.conf</code></pre></li>
             <li>Configure SASL port and SASL mechanisms in server.properties as described <a href="#security_sasl_brokerconfig">here</a>.</code></pre> For example:
-                <pre class="line-numbers"><code class="language-text">    listeners=SASL_SSL://host.name:port (or SASL_PLAINTEXT if non-production)
+                <pre class="line-numbers"><code class="language-text">listeners=SASL_SSL://host.name:port (or SASL_PLAINTEXT if non-production)
     security.inter.broker.protocol=SASL_SSL (or SASL_PLAINTEXT if non-production)
     sasl.mechanism.inter.broker.protocol=OAUTHBEARER
     sasl.enabled.mechanisms=OAUTHBEARER</code></pre></li>
@@ -834,7 +834,7 @@ keyUsage               = digitalSignature, keyEncipherment</code></pre>
 	    <li>Configure the JAAS configuration property for each client in producer.properties or consumer.properties.
                 The login module describes how the clients like producer and consumer can connect to the Kafka Broker.
 	        The following is an example configuration for a client for the OAUTHBEARER mechanisms:
-                <pre class="line-numbers"><code class="language-text">   sasl.jaas.config=org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginModule required \
+                <pre class="line-numbers"><code class="language-text">sasl.jaas.config=org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginModule required \
         unsecuredLoginStringClaim_sub="alice";</code></pre>
 
                 <p>The option <tt>unsecuredLoginStringClaim_sub</tt> is used by clients to configure
@@ -847,7 +847,7 @@ keyUsage               = digitalSignature, keyEncipherment</code></pre>
                 as described <a href="#security_client_staticjaas">here</a>. Clients use the login section named
                 <tt>KafkaClient</tt>. This option allows only one user for all client connections from a JVM.</p></li>
             <li>Configure the following properties in producer.properties or consumer.properties:
-                <pre class="line-numbers"><code class="language-text">    security.protocol=SASL_SSL (or SASL_PLAINTEXT if non-production)
+                <pre class="line-numbers"><code class="language-text">security.protocol=SASL_SSL (or SASL_PLAINTEXT if non-production)
     sasl.mechanism=OAUTHBEARER</code></pre></li>
              <li>The default implementation of SASL/OAUTHBEARER depends on the jackson-databind library.
                  Since it's an optional dependency, users have to configure it as a dependency via their build tool.</li>
@@ -1006,7 +1006,7 @@ keyUsage               = digitalSignature, keyEncipherment</code></pre>
     <li><h4 class="anchor-heading"><a id="security_sasl_multimechanism" class="anchor-link"></a><a href="#security_sasl_multimechanism">Enabling multiple SASL mechanisms in a broker</a></h4>
         <ol>
         <li>Specify configuration for the login modules of all enabled mechanisms in the <tt>KafkaServer</tt> section of the JAAS config file. For example:
-            <pre class="line-numbers"><code class="language-text">        KafkaServer {
+            <pre class="line-numbers"><code class="language-text">KafkaServer {
             com.sun.security.auth.module.Krb5LoginModule required
             useKeyTab=true
             storeKey=true
@@ -1021,7 +1021,7 @@ keyUsage               = digitalSignature, keyEncipherment</code></pre>
         };</code></pre></li>
         <li>Enable the SASL mechanisms in server.properties: <pre>    sasl.enabled.mechanisms=GSSAPI,PLAIN,SCRAM-SHA-256,SCRAM-SHA-512,OAUTHBEARER</code></pre></li>
         <li>Specify the SASL security protocol and mechanism for inter-broker communication in server.properties if required:
-            <pre class="line-numbers"><code class="language-text">    security.inter.broker.protocol=SASL_PLAINTEXT (or SASL_SSL)
+            <pre class="line-numbers"><code class="language-text">security.inter.broker.protocol=SASL_PLAINTEXT (or SASL_SSL)
     sasl.mechanism.inter.broker.protocol=GSSAPI (or one of the other enabled mechanisms)</code></pre></li>
         <li>Follow the mechanism-specific steps in <a href="#security_sasl_kerberos_brokerconfig">GSSAPI (Kerberos)</a>,
             <a href="#security_sasl_plain_brokerconfig">PLAIN</a>,
@@ -1098,7 +1098,7 @@ keyUsage               = digitalSignature, keyEncipherment</code></pre>
                     <li>Configure the JAAS configuration property for each client in producer.properties or consumer.properties.
                 The login module describes how the clients like producer and consumer can connect to the Kafka Broker.
                 The following is an example configuration for a client for the token authentication:
-                <pre class="line-numbers"><code class="language-text">   sasl.jaas.config=org.apache.kafka.common.security.scram.ScramLoginModule required \
+                <pre class="line-numbers"><code class="language-text">sasl.jaas.config=org.apache.kafka.common.security.scram.ScramLoginModule required \
         username="tokenID123" \
         password="lAYYSFmLs4bTjf+lTZ1LCHR/ZZFNA==" \
         tokenauth="true";</code></pre>
@@ -1153,11 +1153,11 @@ keyUsage               = digitalSignature, keyEncipherment</code></pre>
     string representation of the X.500 certificate distinguished name. If the distinguished name matches the pattern, then the replacement command will be run over the name.
     This also supports lowercase/uppercase options, to force the translated result to be all lower/uppercase case. This is done by adding a "/L" or "/U' to the end of the rule.
 
-    <pre class="line-numbers"><code class="language-text">        RULE:pattern/replacement/
+    <pre class="line-numbers"><code class="language-text">RULE:pattern/replacement/
         RULE:pattern/replacement/[LU]</code></pre>
 
     Example <code>ssl.principal.mapping.rules</code> values are:
-    <pre class="line-numbers"><code class="language-text">        RULE:^CN=(.*?),OU=ServiceUsers.*$/$1/,
+    <pre class="line-numbers"><code class="language-text">RULE:^CN=(.*?),OU=ServiceUsers.*$/$1/,
         RULE:^CN=(.*?),OU=(.*?),O=(.*?),L=(.*?),ST=(.*?),C=(.*?)$/$1@$2/L,
         RULE:^.*[Cc][Nn]=([a-zA-Z0-9.]*).*$/$1/L,
         DEFAULT</code></pre>
@@ -1173,7 +1173,7 @@ keyUsage               = digitalSignature, keyEncipherment</code></pre>
     By default, the SASL user name will be the primary part of the Kerberos principal. One can change that by setting <code>sasl.kerberos.principal.to.local.rules</code> to a customized rule in server.properties.
     The format of <code>sasl.kerberos.principal.to.local.rules</code> is a list where each rule works in the same way as the auth_to_local in <a href="http://web.mit.edu/Kerberos/krb5-latest/doc/admin/conf_files/krb5_conf.html">Kerberos configuration file (krb5.conf)</a>. This also support additional lowercase/uppercase rule, to force the translated result to be all lowercase/uppercase. This is done by adding a "/L" or "/U" to the end of the rule. check below formats for syntax.
     Each rules starts with RULE: and contains an expression as the following formats. See the kerberos documentation for more details.
-    <pre class="line-numbers"><code class="language-text">        RULE:[n:string](regexp)s/pattern/replacement/
+    <pre class="line-numbers"><code class="language-text">RULE:[n:string](regexp)s/pattern/replacement/
         RULE:[n:string](regexp)s/pattern/replacement/g
         RULE:[n:string](regexp)s/pattern/replacement//L
         RULE:[n:string](regexp)s/pattern/replacement/g/L
@@ -1929,42 +1929,42 @@ keyUsage               = digitalSignature, keyEncipherment</code></pre>
         When performing an incremental bounce stop the brokers cleanly via a SIGTERM. It's also good practice to wait for restarted replicas to return to the ISR list before moving onto the next node.
         <p></p>
         As an example, say we wish to encrypt both broker-client and broker-broker communication with SSL. In the first incremental bounce, an SSL port is opened on each node:
-            <pre class="line-numbers"><code class="language-text">            listeners=PLAINTEXT://broker1:9091,SSL://broker1:9092</code></pre>
+            <pre class="line-numbers"><code class="language-text">listeners=PLAINTEXT://broker1:9091,SSL://broker1:9092</code></pre>
 
         We then restart the clients, changing their config to point at the newly opened, secured port:
 
-            <pre class="line-numbers"><code class="language-text">            bootstrap.servers = [broker1:9092,...]
+            <pre class="line-numbers"><code class="language-text">bootstrap.servers = [broker1:9092,...]
             security.protocol = SSL
             ...etc</code></pre>
 
         In the second incremental server bounce we instruct Kafka to use SSL as the broker-broker protocol (which will use the same SSL port):
 
-            <pre class="line-numbers"><code class="language-text">            listeners=PLAINTEXT://broker1:9091,SSL://broker1:9092
+            <pre class="line-numbers"><code class="language-text">listeners=PLAINTEXT://broker1:9091,SSL://broker1:9092
             security.inter.broker.protocol=SSL</code></pre>
 
         In the final bounce we secure the cluster by closing the PLAINTEXT port:
 
-            <pre class="line-numbers"><code class="language-text">            listeners=SSL://broker1:9092
+            <pre class="line-numbers"><code class="language-text">listeners=SSL://broker1:9092
             security.inter.broker.protocol=SSL</code></pre>
 
         Alternatively we might choose to open multiple ports so that different protocols can be used for broker-broker and broker-client communication. Say we wished to use SSL encryption throughout (i.e. for broker-broker and broker-client communication) but we'd like to add SASL authentication to the broker-client connection also. We would achieve this by opening two additional ports during the first bounce:
 
-            <pre class="line-numbers"><code class="language-text">            listeners=PLAINTEXT://broker1:9091,SSL://broker1:9092,SASL_SSL://broker1:9093</code></pre>
+            <pre class="line-numbers"><code class="language-text">listeners=PLAINTEXT://broker1:9091,SSL://broker1:9092,SASL_SSL://broker1:9093</code></pre>
 
         We would then restart the clients, changing their config to point at the newly opened, SASL & SSL secured port:
 
-            <pre class="line-numbers"><code class="language-text">            bootstrap.servers = [broker1:9093,...]
+            <pre class="line-numbers"><code class="language-text">bootstrap.servers = [broker1:9093,...]
             security.protocol = SASL_SSL
             ...etc</code></pre>
 
         The second server bounce would switch the cluster to use encrypted broker-broker communication via the SSL port we previously opened on port 9092:
 
-            <pre class="line-numbers"><code class="language-text">            listeners=PLAINTEXT://broker1:9091,SSL://broker1:9092,SASL_SSL://broker1:9093
+            <pre class="line-numbers"><code class="language-text">listeners=PLAINTEXT://broker1:9091,SSL://broker1:9092,SASL_SSL://broker1:9093
             security.inter.broker.protocol=SSL</code></pre>
 
         The final bounce secures the cluster by closing the PLAINTEXT port.
 
-            <pre class="line-numbers"><code class="language-text">        listeners=SSL://broker1:9092,SASL_SSL://broker1:9093
+            <pre class="line-numbers"><code class="language-text">listeners=SSL://broker1:9092,SASL_SSL://broker1:9093
         security.inter.broker.protocol=SSL</code></pre>
 
         ZooKeeper can be secured independently of the Kafka cluster. The steps for doing this are covered in section <a href="#zk_authz_migration">7.6.2</a>.
@@ -2028,7 +2028,7 @@ keyUsage               = digitalSignature, keyEncipherment</code></pre>
     Here is a sample (partial) ZooKeeper configuration for enabling TLS authentication.
     These configurations are described in the
     <a href="https://zookeeper.apache.org/doc/r3.5.7/zookeeperAdmin.html#sc_authOptions">ZooKeeper Admin Guide</a>.
-    <pre class="line-numbers"><code class="language-text">        secureClientPort=2182
+    <pre class="line-numbers"><code class="language-text">secureClientPort=2182
         serverCnxnFactory=org.apache.zookeeper.server.NettyServerCnxnFactory
         authProvider.x509=org.apache.zookeeper.server.auth.X509AuthenticationProvider
         ssl.keyStore.location=/path/to/zk/keystore.jks
@@ -2042,7 +2042,7 @@ keyUsage               = digitalSignature, keyEncipherment</code></pre>
     <p>Here is a sample (partial) Kafka Broker configuration for connecting to ZooKeeper with mTLS authentication.
     These configurations are described above in <a href="#brokerconfigs">Broker Configs</a>.
     </p>
-    <pre class="line-numbers"><code class="language-text">        # connect to the ZooKeeper port configured for TLS
+    <pre class="line-numbers"><code class="language-text"># connect to the ZooKeeper port configured for TLS
         zookeeper.connect=zk1:2182,zk2:2182,zk3:2182
         # required to use TLS to ZooKeeper (default is false)
         zookeeper.ssl.client.enable=true
@@ -2063,7 +2063,7 @@ keyUsage               = digitalSignature, keyEncipherment</code></pre>
     If you are running a version of Kafka that does not support security or simply with security disabled, and you want to make the cluster secure, then you need to execute the following steps to enable ZooKeeper authentication with minimal disruption to your operations:
     <ol>
         <li>Enable SASL and/or mTLS authentication on ZooKeeper.  If enabling mTLS, you would now have both a non-TLS port and a TLS port, like this:
-            <pre class="line-numbers"><code class="language-text">    clientPort=2181
+            <pre class="line-numbers"><code class="language-text">clientPort=2181
     secureClientPort=2182
     serverCnxnFactory=org.apache.zookeeper.server.NettyServerCnxnFactory
     authProvider.x509=org.apache.zookeeper.server.auth.X509AuthenticationProvider
@@ -2106,7 +2106,7 @@ keyUsage               = digitalSignature, keyEncipherment</code></pre>
     and setting this value to <tt>none</tt> in ZooKeeper allows clients to connect via a TLS-encrypted connection
     without presenting their own certificate.  Here is a sample (partial) Kafka Broker configuration for connecting to ZooKeeper with just TLS encryption.
     These configurations are described above in <a href="#brokerconfigs">Broker Configs</a>.
-    <pre class="line-numbers"><code class="language-text">        # connect to the ZooKeeper port configured for TLS
+    <pre class="line-numbers"><code class="language-text"># connect to the ZooKeeper port configured for TLS
         zookeeper.connect=zk1:2182,zk2:2182,zk3:2182
         # required to use TLS to ZooKeeper (default is false)
         zookeeper.ssl.client.enable=true
