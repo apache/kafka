@@ -351,7 +351,7 @@ public enum Errors {
     POSITION_OUT_OF_RANGE(
         99,
         "Requested position is not greater than or equal to zero, and less than the size of the snapshot.",
-            PositionOutOfRangeException::new),
+        PositionOutOfRangeException::new),
     UNKNOWN_TOPIC_ID(100, "This server does not host this topic ID.", UnknownTopicIdException::new);
 
     private static final Logger log = LoggerFactory.getLogger(Errors.class);

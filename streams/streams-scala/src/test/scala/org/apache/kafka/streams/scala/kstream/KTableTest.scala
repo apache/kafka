@@ -19,8 +19,7 @@
 package org.apache.kafka.streams.scala.kstream
 
 import java.time.Duration
-
-import org.apache.kafka.streams.kstream.{SessionWindows, Suppressed => JSuppressed, TimeWindows, Windowed}
+import org.apache.kafka.streams.kstream.{Named, SessionWindows, TimeWindows, Windowed, Suppressed => JSuppressed}
 import org.apache.kafka.streams.kstream.Suppressed.BufferConfig
 import org.apache.kafka.streams.scala.ImplicitConversions._
 import org.apache.kafka.streams.scala.serialization.Serdes._
@@ -391,4 +390,57 @@ class KTableTest extends FlatSpec with Matchers with TestDriver {
 
     testDriver.close()
   }
+
+  "setting a name on a filter processor" should "pass the name to the topology" in {
+    val builder = new StreamsBuilder()
+    val sourceTopic = "source"
+    val sinkTopic = "sink"
+
+    val table = builder.stream[String, String](sourceTopic).groupBy((key, _) => key).count()
+    table
+      .filter((key, value) => key.equals("a") && value == 1, Named.as("my-name"))
+      .toStream
+      .to(sinkTopic)
+
+    import scala.jdk.CollectionConverters._
+
+    val filterNode = builder.build().describe().subtopologies().asScala.toList(1).nodes().asScala.toList(3)
+    filterNode.name() shouldBe "my-name"
+  }
+
+  "setting a name on a count processor" should "pass the name to the topology" in {
+    val builder = new StreamsBuilder()
+    val sourceTopic = "source"
+    val sinkTopic = "sink"
+
+    val table = builder.stream[String, String](sourceTopic).groupBy((key, _) => key).count(Named.as("my-name"))
+    table.toStream.to(sinkTopic)
+
+    import scala.jdk.CollectionConverters._
+
+    val countNode = builder.build().describe().subtopologies().asScala.toList(1).nodes().asScala.toList(1)
+    countNode.name() shouldBe "my-name"
+  }
+
+  "setting a name on a join processor" should "pass the name to the topology" in {
+    val builder = new StreamsBuilder()
+    val sourceTopic1 = "source1"
+    val sourceTopic2 = "source2"
+    val sinkTopic = "sink"
+
+    val table1 = builder.stream[String, String](sourceTopic1).groupBy((key, _) => key).count()
+    val table2 = builder.stream[String, String](sourceTopic2).groupBy((key, _) => key).count()
+    table1
+      .join(table2, Named.as("my-name"))((a, b) => a + b)
+      .toStream
+      .to(sinkTopic)
+
+    import scala.jdk.CollectionConverters._
+
+    val joinNodeLeft = builder.build().describe().subtopologies().asScala.toList(1).nodes().asScala.toList(6)
+    val joinNodeRight = builder.build().describe().subtopologies().asScala.toList(1).nodes().asScala.toList(7)
+    joinNodeLeft.name() should include("my-name")
+    joinNodeRight.name() should include("my-name")
+  }
+
 }

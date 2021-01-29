@@ -78,7 +78,7 @@ class FetchRequestBetweenDifferentIbpTest extends BaseRequestTest {
     val producer = createProducer()
     val consumer = createConsumer()
 
-    // Ensure controller version = KAFKA_2_8_IV0, and then create a topic where leader of partition 1 is the old version.
+    // Ensure controller version = KAFKA_2_8_IV1, and then create a topic where leader of partition 1 is the old version.
     ensureControllerIn(Seq(2))
     val partitionLeaders = createTopic(topic,  Map(0 -> Seq(1, 0, 2), 1 -> Seq(0, 2, 1)))
     TestUtils.waitUntilMetadataIsPropagated(servers, topic, 0)

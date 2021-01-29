@@ -101,7 +101,7 @@ class KafkaApis(val requestChannel: RequestChannel,
                 val groupCoordinator: GroupCoordinator,
                 val txnCoordinator: TransactionCoordinator,
                 val controller: KafkaController,
-                val forwardingManager: ForwardingManager,
+                val forwardingManager: Option[ForwardingManager],
                 val zkClient: KafkaZkClient,
                 val brokerId: Int,
                 val config: KafkaConfig,
@@ -131,7 +131,7 @@ class KafkaApis(val requestChannel: RequestChannel,
   }
 
   private def isForwardingEnabled(request: RequestChannel.Request): Boolean = {
-    config.metadataQuorumEnabled && request.context.principalSerde.isPresent
+    forwardingManager.isDefined && request.context.principalSerde.isPresent
   }
 
   private def maybeForwardToController(
@@ -149,12 +149,12 @@ class KafkaApis(val requestChannel: RequestChannel,
       }
     }
 
-    if (!request.isForwarded && !controller.isActive && isForwardingEnabled(request)) {
-      forwardingManager.forwardRequest(request, responseCallback)
-    } else {
-      // When the KIP-500 mode is off or the principal serde is undefined, forwarding is not supported,
-      // therefore requests are handled directly.
-      handler(request)
+    forwardingManager match {
+      case Some(mgr) if !request.isForwarded && !controller.isActive =>
+        mgr.forwardRequest(request, responseCallback)
+
+      case _ =>
+        handler(request)
     }
   }
 
@@ -1248,14 +1248,16 @@ class KafkaApis(val requestChannel: RequestChannel,
         )
       }
 
-    var clusterAuthorizedOperations = Int.MinValue
-    if (request.header.apiVersion >= 8) {
+    var clusterAuthorizedOperations = Int.MinValue // Default value in the schema
+    if (requestVersion >= 8) {
       // get cluster authorized operations
-      if (metadataRequest.data.includeClusterAuthorizedOperations) {
-        if (authHelper.authorize(request.context, DESCRIBE, CLUSTER, CLUSTER_NAME))
-          clusterAuthorizedOperations = authHelper.authorizedOperations(request, Resource.CLUSTER)
-        else
-          clusterAuthorizedOperations = 0
+      if (requestVersion <= 10) {
+        if (metadataRequest.data.includeClusterAuthorizedOperations) {
+          if (authHelper.authorize(request.context, DESCRIBE, CLUSTER, CLUSTER_NAME))
+            clusterAuthorizedOperations = authHelper.authorizedOperations(request, Resource.CLUSTER)
+          else
+            clusterAuthorizedOperations = 0
+        }
       }
 
       // get topic authorized operations
@@ -1745,11 +1747,7 @@ class KafkaApis(val requestChannel: RequestChannel,
       else {
         val supportedFeatures = brokerFeatures.supportedFeatures
         val finalizedFeaturesOpt = finalizedFeatureCache.get
-        val controllerApiVersions = if (isForwardingEnabled(request)) {
-          forwardingManager.controllerApiVersions()
-        } else {
-          None
-        }
+        val controllerApiVersions = forwardingManager.flatMap(_.controllerApiVersions)
 
         val apiVersionsResponse =
           finalizedFeaturesOpt match {
@@ -1933,29 +1931,47 @@ class KafkaApis(val requestChannel: RequestChannel,
     val results = new DeletableTopicResultCollection(deleteTopicRequest.data.topicNames.size)
     val toDelete = mutable.Set[String]()
     if (!controller.isActive) {
-      deleteTopicRequest.data.topicNames.forEach { topic =>
+      deleteTopicRequest.topics().forEach { topic =>
         results.add(new DeletableTopicResult()
-          .setName(topic)
+          .setName(topic.name())
+          .setTopicId(topic.topicId())
           .setErrorCode(Errors.NOT_CONTROLLER.code))
       }
       sendResponseCallback(results)
     } else if (!config.deleteTopicEnable) {
       val error = if (request.context.apiVersion < 3) Errors.INVALID_REQUEST else Errors.TOPIC_DELETION_DISABLED
-      deleteTopicRequest.data.topicNames.forEach { topic =>
+      deleteTopicRequest.topics().forEach { topic =>
         results.add(new DeletableTopicResult()
-          .setName(topic)
+          .setName(topic.name())
+          .setTopicId(topic.topicId())
           .setErrorCode(error.code))
       }
       sendResponseCallback(results)
     } else {
-      deleteTopicRequest.data.topicNames.forEach { topic =>
+      val topicIdsFromRequest = deleteTopicRequest.topicIds().asScala.filter(topicId => topicId != Uuid.ZERO_UUID).toSet
+      deleteTopicRequest.topics().forEach { topic =>
+        if (topic.name() != null && topic.topicId() != Uuid.ZERO_UUID)
+          throw new InvalidRequestException("Topic name and topic ID can not both be specified.")
+        val name = if (topic.topicId() == Uuid.ZERO_UUID) topic.name()
+        else controller.controllerContext.topicNames.getOrElse(topic.topicId(), null)
         results.add(new DeletableTopicResult()
-          .setName(topic))
+          .setName(name)
+          .setTopicId(topic.topicId()))
       }
-      val authorizedTopics = authHelper.filterByAuthorized(request.context, DELETE, TOPIC,
-        results.asScala)(_.name)
+      val authorizedDescribeTopics = authHelper.filterByAuthorized(request.context, DESCRIBE, TOPIC,
+        results.asScala.filter(result => result.name() != null))(_.name)
+      val authorizedDeleteTopics = authHelper.filterByAuthorized(request.context, DELETE, TOPIC,
+        results.asScala.filter(result => result.name() != null))(_.name)
       results.forEach { topic =>
-         if (!authorizedTopics.contains(topic.name))
+        val unresolvedTopicId = !(topic.topicId() == Uuid.ZERO_UUID) && topic.name() == null
+         if (!config.usesTopicId && topicIdsFromRequest.contains(topic.topicId)) {
+           topic.setErrorCode(Errors.UNSUPPORTED_VERSION.code)
+           topic.setErrorMessage("Topic IDs are not supported on the server.")
+         } else if (unresolvedTopicId)
+             topic.setErrorCode(Errors.UNKNOWN_TOPIC_ID.code)
+         else if (topicIdsFromRequest.contains(topic.topicId) && !authorizedDescribeTopics(topic.name))
+           topic.setErrorCode(Errors.UNKNOWN_TOPIC_ID.code)
+         else if (!authorizedDeleteTopics.contains(topic.name))
            topic.setErrorCode(Errors.TOPIC_AUTHORIZATION_FAILED.code)
          else if (!metadataCache.contains(topic.name))
            topic.setErrorCode(Errors.UNKNOWN_TOPIC_OR_PARTITION.code)
@@ -3218,7 +3234,7 @@ class KafkaApis(val requestChannel: RequestChannel,
   def handleDescribeCluster(request: RequestChannel.Request): Unit = {
     val describeClusterRequest = request.body[DescribeClusterRequest]
 
-    var clusterAuthorizedOperations = Int.MinValue
+    var clusterAuthorizedOperations = Int.MinValue // Default value in the schema
     // get cluster authorized operations
     if (describeClusterRequest.data.includeClusterAuthorizedOperations) {
       if (authHelper.authorize(request.context, DESCRIBE, CLUSTER, CLUSTER_NAME))
@@ -3254,9 +3270,9 @@ class KafkaApis(val requestChannel: RequestChannel,
 
     // If forwarding is not yet enabled or this request has been received on an invalid endpoint,
     // then we treat the request as unparsable and close the connection.
-    if (!config.metadataQuorumEnabled) {
+    if (!isForwardingEnabled(request)) {
       info(s"Closing connection ${request.context.connectionId} because it sent an `Envelope` " +
-        s"request, which is not accepted without enabling the internal config ${KafkaConfig.EnableMetadataQuorumProp}")
+        "request even though forwarding has not been enabled")
       requestHelper.closeConnection(request, Collections.emptyMap())
       return
     } else if (!request.context.fromPrivilegedListener) {
@@ -3282,7 +3298,7 @@ class KafkaApis(val requestChannel: RequestChannel,
     val forwardedRequestHeader = parseForwardedRequestHeader(forwardedRequestBuffer)
 
     val forwardedApi = forwardedRequestHeader.apiKey
-    if (!forwardedApi.forwardable || !forwardedApi.isEnabled) {
+    if (!forwardedApi.forwardable) {
       throw new InvalidRequestException(s"API $forwardedApi is not enabled or is not eligible for forwarding")
     }
 

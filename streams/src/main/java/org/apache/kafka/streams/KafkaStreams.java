@@ -19,12 +19,16 @@ package org.apache.kafka.streams;
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.ListOffsetsResult.ListOffsetsResultInfo;
+import org.apache.kafka.clients.admin.MemberToRemove;
+import org.apache.kafka.clients.admin.RemoveMembersFromConsumerGroupOptions;
+import org.apache.kafka.clients.admin.RemoveMembersFromConsumerGroupResult;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.common.Metric;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.metrics.JmxReporter;
 import org.apache.kafka.common.metrics.KafkaMetricsContext;
 import org.apache.kafka.common.metrics.MetricConfig;
@@ -88,6 +92,7 @@ import java.util.Properties;
 import java.util.Set;
 import java.util.TreeMap;
 import java.util.UUID;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
@@ -202,14 +207,14 @@ public class KafkaStreams implements AutoCloseable {
      *         |              |                  |
      *         |              v                  |
      *         |       +------+-------+     +----+-------+
-     *         +-----&gt; | Pending      |&lt;--- | Error (5)  |
-     *                 | Shutdown (3) |     +------------+
-     *                 +------+-------+
-     *                        |
-     *                        v
-     *                 +------+-------+
-     *                 | Not          |
-     *                 | Running (4)  |
+     *         +-----&gt; | Pending      |     | Pending    |
+     *                 | Shutdown (3) |     | Error (5)  |
+     *                 +------+-------+     +-----+------+
+     *                        |                   |
+     *                        v                   v
+     *                 +------+-------+     +-----+--------+
+     *                 | Not          |     | Error (6)    |
+     *                 | Running (4)  |     +--------------+
      *                 +--------------+
      *
      *
@@ -217,9 +222,9 @@ public class KafkaStreams implements AutoCloseable {
      * Note the following:
      * - RUNNING state will transit to REBALANCING if any of its threads is in PARTITION_REVOKED or PARTITIONS_ASSIGNED state
      * - REBALANCING state will transit to RUNNING if all of its threads are in RUNNING state
-     * - Any state except NOT_RUNNING can go to PENDING_SHUTDOWN (whenever close is called)
+     * - Any state except NOT_RUNNING, PENDING_ERROR or ERROR can go to PENDING_SHUTDOWN (whenever close is called)
      * - Of special importance: If the global stream thread dies, or all stream threads die (or both) then
-     *   the instance will be in the ERROR state. The user will need to close it.
+     *   the instance will be in the ERROR state. The user will not need to close it.
      */
     public enum State {
         CREATED(1, 3),          // 0
@@ -227,7 +232,8 @@ public class KafkaStreams implements AutoCloseable {
         RUNNING(1, 2, 3, 5),    // 2
         PENDING_SHUTDOWN(4),    // 3
         NOT_RUNNING,            // 4
-        ERROR(3);               // 5
+        PENDING_ERROR(6),       // 5
+        ERROR;                  // 6
 
         private final Set<Integer> validTransitions = new HashSet<>();
 
@@ -250,20 +256,31 @@ public class KafkaStreams implements AutoCloseable {
     private boolean waitOnState(final State targetState, final long waitMs) {
         final long begin = time.milliseconds();
         synchronized (stateLock) {
+            boolean interrupted = false;
             long elapsedMs = 0L;
-            while (state != targetState) {
-                if (waitMs > elapsedMs) {
-                    final long remainingMs = waitMs - elapsedMs;
-                    try {
-                        stateLock.wait(remainingMs);
-                    } catch (final InterruptedException e) {
-                        // it is ok: just move on to the next iteration
+            try {
+                while (state != targetState) {
+                    if (waitMs > elapsedMs) {
+                        final long remainingMs = waitMs - elapsedMs;
+                        try {
+                            stateLock.wait(remainingMs);
+                        } catch (final InterruptedException e) {
+                            interrupted = true;
+                        }
+                    } else {
+                        log.debug("Cannot transit to {} within {}ms", targetState, waitMs);
+                        return false;
                     }
-                } else {
-                    log.debug("Cannot transit to {} within {}ms", targetState, waitMs);
-                    return false;
+                    elapsedMs = time.milliseconds() - begin;
                 }
-                elapsedMs = time.milliseconds() - begin;
+            } finally {
+                // Make sure to restore the interruption status before returning.
+                // We do not always own the current thread that executes this method, i.e., we do not know the
+                // interruption policy of the thread. The least we can do is restore the interruption status before
+                // the current thread exits this method.
+                if (interrupted) {
+                    Thread.currentThread().interrupt();
+                }
             }
             return true;
         }
@@ -290,8 +307,12 @@ public class KafkaStreams implements AutoCloseable {
             } else if (state == State.REBALANCING && newState == State.REBALANCING) {
                 // when the state is already in REBALANCING, it should not transit to REBALANCING again
                 return false;
-            } else if (state == State.ERROR && newState == State.ERROR) {
-                // when the state is already in ERROR, it should not transit to ERROR again
+            } else if (state == State.ERROR && (newState == State.PENDING_ERROR || newState == State.ERROR)) {
+                // when the state is already in ERROR, its transition to PENDING_ERROR or ERROR (due to consecutive close calls)
+                return false;
+            } else if (state == State.PENDING_ERROR && newState != State.ERROR) {
+                // when the state is already in PENDING_ERROR, all other transitions than ERROR (due to thread dying) will be
+                // refused but we do not throw exception here, to allow appropriate error handling
                 return false;
             } else if (!state.isValidTransition(newState)) {
                 throw new IllegalStateException("Stream-client " + clientId + ": Unexpected state transition from " + oldState + " to " + newState);
@@ -439,7 +460,7 @@ public class KafkaStreams implements AutoCloseable {
             log.warn("The global thread cannot be replaced. Reverting to shutting down the client.");
             log.error("Encountered the following exception during processing " +
                     " The streams client is going to shut down now. ", throwable);
-            close(Duration.ZERO);
+            closeToError();
         }
         final StreamThread deadThread = (StreamThread) Thread.currentThread();
         threads.remove(deadThread);
@@ -469,7 +490,7 @@ public class KafkaStreams implements AutoCloseable {
                 log.error("Encountered the following exception during processing " +
                         "and the registered exception handler opted to " + action + "." +
                         " The streams client is going to shut down now. ", throwable);
-                close(Duration.ZERO);
+                closeToError();
                 break;
             case SHUTDOWN_APPLICATION:
                 if (throwable instanceof Error) {
@@ -482,7 +503,7 @@ public class KafkaStreams implements AutoCloseable {
                     log.error("Exception in global thread caused the application to attempt to shutdown." +
                             " This action will succeed only if there is at least one StreamThread running on this client." +
                             " Currently there are no running threads so will now close the client.");
-                    close(Duration.ZERO);
+                    closeToError();
                 } else {
                     processStreamThread(thread -> thread.sendShutdownRequest(AssignorError.SHUTDOWN_REQUESTED));
                     log.error("Encountered the following exception during processing " +
@@ -553,22 +574,6 @@ public class KafkaStreams implements AutoCloseable {
         }
 
         /**
-         * If all threads are dead set to ERROR
-         */
-        private void maybeSetError() {
-            // check if we have at least one thread running
-            for (final StreamThread.State state : threadState.values()) {
-                if (state != StreamThread.State.DEAD) {
-                    return;
-                }
-            }
-
-            if (setState(State.ERROR)) {
-                log.error("All stream threads have died. The instance will be in error state and should be closed.");
-            }
-        }
-
-        /**
          * If all threads are up, including the global thread, set to RUNNING
          */
         private void maybeSetRunning() {
@@ -603,8 +608,6 @@ public class KafkaStreams implements AutoCloseable {
                         setState(State.REBALANCING);
                     } else if (newState == StreamThread.State.RUNNING) {
                         maybeSetRunning();
-                    } else if (newState == StreamThread.State.DEAD) {
-                        maybeSetError();
                     }
                 } else if (thread instanceof GlobalStreamThread) {
                     // global stream thread has different invariants
@@ -614,9 +617,8 @@ public class KafkaStreams implements AutoCloseable {
                     if (newState == GlobalStreamThread.State.RUNNING) {
                         maybeSetRunning();
                     } else if (newState == GlobalStreamThread.State.DEAD) {
-                        if (setState(State.ERROR)) {
-                            log.error("Global thread has died. The instance will be in error state and should be closed.");
-                        }
+                        log.error("Global thread has died. The streams application or client will now close to ERROR.");
+                        closeToError();
                     }
                 }
             }
@@ -986,19 +988,82 @@ public class KafkaStreams implements AutoCloseable {
      *         no stream threads are alive
      */
     public Optional<String> removeStreamThread() {
+        return removeStreamThread(Long.MAX_VALUE);
+    }
+
+    /**
+     * Removes one stream thread out of the running stream threads from this Kafka Streams client.
+     * <p>
+     * The removed stream thread is gracefully shut down. This method does not specify which stream
+     * thread is shut down.
+     * <p>
+     * Since the number of stream threads decreases, the sizes of the caches in the remaining stream
+     * threads are adapted so that the sum of the cache sizes over all stream threads equals the total
+     * cache size specified in configuration {@link StreamsConfig#CACHE_MAX_BYTES_BUFFERING_CONFIG}.
+     *
+     * @param timeout The the length of time to wait for the thread to shutdown
+     * @throws org.apache.kafka.common.errors.TimeoutException if the thread does not stop in time
+     * @return name of the removed stream thread or empty if a stream thread could not be removed because
+     *         no stream threads are alive
+     */
+    public Optional<String> removeStreamThread(final Duration timeout) {
+        final String msgPrefix = prepareMillisCheckFailMsgPrefix(timeout, "timeout");
+        final long timeoutMs = validateMillisecondDuration(timeout, msgPrefix);
+        return removeStreamThread(timeoutMs);
+    }
+
+    private Optional<String> removeStreamThread(final long timeoutMs) throws TimeoutException {
+        final long begin = time.milliseconds();
+        boolean timeout = false;
         if (isRunningOrRebalancing()) {
             synchronized (changeThreadCount) {
                 // make a copy of threads to avoid holding lock
                 for (final StreamThread streamThread : new ArrayList<>(threads)) {
-                    if (streamThread.isAlive() && (!streamThread.getName().equals(Thread.currentThread().getName())
-                            || threads.size() == 1)) {
+                    final boolean callingThreadIsNotCurrentStreamThread = !streamThread.getName().equals(Thread.currentThread().getName());
+                    if (streamThread.isAlive() && (callingThreadIsNotCurrentStreamThread || threads.size() == 1)) {
+                        log.info("Removing StreamThread " + streamThread.getName());
+                        final Optional<String> groupInstanceID = streamThread.getGroupInstanceID();
+                        streamThread.requestLeaveGroupDuringShutdown();
                         streamThread.shutdown();
                         if (!streamThread.getName().equals(Thread.currentThread().getName())) {
-                            streamThread.waitOnThreadState(StreamThread.State.DEAD);
+                            if (!streamThread.waitOnThreadState(StreamThread.State.DEAD, timeoutMs - begin)) {
+                                log.warn("Thread " + streamThread.getName() + " did not shutdown in the allotted time");
+                                timeout = true;
+                            }
                         }
                         threads.remove(streamThread);
                         final long cacheSizePerThread = getCacheSizePerThread(threads.size());
                         resizeThreadCache(cacheSizePerThread);
+                        if (groupInstanceID.isPresent() && callingThreadIsNotCurrentStreamThread) {
+                            final MemberToRemove memberToRemove = new MemberToRemove(groupInstanceID.get());
+                            final Collection<MemberToRemove> membersToRemove = Collections.singletonList(memberToRemove);
+                            final RemoveMembersFromConsumerGroupResult removeMembersFromConsumerGroupResult = 
+                                adminClient.removeMembersFromConsumerGroup(
+                                    config.getString(StreamsConfig.APPLICATION_ID_CONFIG), 
+                                    new RemoveMembersFromConsumerGroupOptions(membersToRemove)
+                                );
+                            try {
+                                removeMembersFromConsumerGroupResult.memberResult(memberToRemove).get(timeoutMs - begin, TimeUnit.MILLISECONDS);
+                            } catch (final java.util.concurrent.TimeoutException e) {
+                                log.error("Could not remove static member {} from consumer group {} due to a timeout: {}",
+                                        groupInstanceID.get(), config.getString(StreamsConfig.APPLICATION_ID_CONFIG), e);
+                                throw new TimeoutException(e.getMessage(), e);
+                            } catch (final InterruptedException e) {
+                                Thread.currentThread().interrupt();
+                            } catch (final ExecutionException e) {
+                                log.error("Could not remove static member {} from consumer group {} due to: {}",
+                                        groupInstanceID.get(), config.getString(StreamsConfig.APPLICATION_ID_CONFIG), e);
+                                throw new StreamsException(
+                                        "Could not remove static member " + groupInstanceID.get()
+                                            + " from consumer group " + config.getString(StreamsConfig.APPLICATION_ID_CONFIG)
+                                            + " for the following reason: ",
+                                        e.getCause()
+                                );
+                            }
+                        }
+                        if (timeout) {
+                            throw new TimeoutException("Thread " + streamThread.getName() + " did not stop in the allotted time");
+                        }
                         return Optional.of(streamThread.getName());
                     }
                 }
@@ -1204,11 +1269,27 @@ public class KafkaStreams implements AutoCloseable {
             metrics.close();
             if (!error) {
                 setState(State.NOT_RUNNING);
+            } else {
+                setState(State.ERROR);
             }
         }, "kafka-streams-close-thread");
     }
 
     private boolean close(final long timeoutMs) {
+        if (state == State.ERROR) {
+            log.info("Streams client is already in the terminal state ERROR, all resources are closed and the client has stopped.");
+            return true;
+        }
+        if (state == State.PENDING_ERROR) {
+            log.info("Streams client is in PENDING_ERROR, all resources are being closed and the client will be stopped.");
+            if (waitOnState(State.ERROR, timeoutMs)) {
+                log.info("Streams client stopped to ERROR completely");
+                return true;
+            } else {
+                log.info("Streams client cannot transition to ERROR completely within the timeout");
+                return false;
+            }
+        }
         if (!setState(State.PENDING_SHUTDOWN)) {
             // if transition failed, it means it was either in PENDING_SHUTDOWN
             // or NOT_RUNNING already; just check that all threads have been stopped
@@ -1230,7 +1311,7 @@ public class KafkaStreams implements AutoCloseable {
     }
 
     private void closeToError() {
-        if (!setState(State.ERROR)) {
+        if (!setState(State.PENDING_ERROR)) {
             log.info("Skipping shutdown since we are already in " + state());
         } else {
             final Thread shutdownThread = shutdownHelper(true);

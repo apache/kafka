@@ -17,20 +17,23 @@
 
 package kafka.server
 
-import java.util
-import java.util.{Optional, Properties}
+import java.util.{Arrays, LinkedHashMap, Optional, Properties}
 
 import kafka.api.KAFKA_2_7_IV0
 import kafka.network.SocketServer
+import kafka.server.{BaseRequestTest, KafkaConfig}
+import kafka.utils.TestUtils
 import org.apache.kafka.common.{TopicPartition, Uuid}
+import org.apache.kafka.common.message.DeleteTopicsRequestData
+import org.apache.kafka.common.message.DeleteTopicsRequestData.DeleteTopicState
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.record.MemoryRecords
-import org.apache.kafka.common.requests.{FetchRequest, FetchResponse, MetadataRequest, MetadataResponse}
-import org.junit.jupiter.api.Assertions.assertEquals
+import org.apache.kafka.common.requests.{DeleteTopicsRequest, DeleteTopicsResponse, FetchRequest, FetchResponse, MetadataRequest, MetadataResponse}
+import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
 import org.junit.jupiter.api.{BeforeEach, Test}
 
-import scala.jdk.CollectionConverters._
 import scala.collection.Seq
+import scala.jdk.CollectionConverters._
 
 class TopicIdWithOldInterBrokerProtocolTest extends BaseRequestTest {
 
@@ -90,13 +93,49 @@ class TopicIdWithOldInterBrokerProtocolTest extends BaseRequestTest {
     val topicNames = topicIds.map(_.swap)
 
     val leadersMap = createTopic(topic1, replicaAssignment)
-    val req = createFetchRequest(maxResponseBytes, maxPartitionBytes, Seq(tp0),  Map.empty, topicIds, 12)
+    val req = createFetchRequest(maxResponseBytes, maxPartitionBytes, Seq(tp0), Map.empty, topicIds, 12)
     val resp = sendFetchRequest(leadersMap(0), req)
 
     assertEquals(Errors.NONE, resp.error())
 
     val responseData = resp.responseData(topicNames.asJava)
     assertEquals(Errors.NONE, responseData.get(tp0).error());
+  }
+
+  @Test
+  def testDeleteTopicsWithOldIBP(): Unit = {
+    val timeout = 10000
+    createTopic("topic-3", 5, 2)
+    createTopic("topic-4", 1, 2)
+    val request = new DeleteTopicsRequest.Builder(
+      new DeleteTopicsRequestData()
+        .setTopicNames(Arrays.asList("topic-3", "topic-4"))
+        .setTimeoutMs(timeout)).build()
+    val resp = sendDeleteTopicsRequest(request)
+    val error = resp.errorCounts.asScala.find(_._1 != Errors.NONE)
+    assertTrue(error.isEmpty, s"There should be no errors, found ${resp.data.responses.asScala}")
+    request.data.topicNames.forEach { topic =>
+      validateTopicIsDeleted(topic)
+    }
+    resp.data.responses.forEach { response =>
+      assertEquals(Uuid.ZERO_UUID, response.topicId())
+    }
+  }
+
+  @Test
+  def testDeleteTopicsWithOldIBPUsingIDs(): Unit = {
+    val timeout = 10000
+    createTopic("topic-7", 3, 2)
+    createTopic("topic-6", 1, 2)
+    val ids = Map("topic-7" -> Uuid.randomUuid(), "topic-6" -> Uuid.randomUuid())
+    val request = new DeleteTopicsRequest.Builder(
+      new DeleteTopicsRequestData()
+        .setTopics(Arrays.asList(new DeleteTopicState().setTopicId(ids("topic-7")),
+          new DeleteTopicState().setTopicId(ids("topic-6"))
+        )).setTimeoutMs(timeout)).build()
+    val response = sendDeleteTopicsRequest(request)
+    val error = response.errorCounts.asScala
+    assertEquals(2, error(Errors.UNSUPPORTED_VERSION))
   }
 
   private def sendMetadataRequest(request: MetadataRequest, destination: Option[SocketServer]): MetadataResponse = {
@@ -112,8 +151,8 @@ class TopicIdWithOldInterBrokerProtocolTest extends BaseRequestTest {
   }
 
   private def createPartitionMap(maxPartitionBytes: Int, topicPartitions: Seq[TopicPartition],
-                                 offsetMap: Map[TopicPartition, Long]): util.LinkedHashMap[TopicPartition, FetchRequest.PartitionData] = {
-    val partitionMap = new util.LinkedHashMap[TopicPartition, FetchRequest.PartitionData]
+                                 offsetMap: Map[TopicPartition, Long]): LinkedHashMap[TopicPartition, FetchRequest.PartitionData] = {
+    val partitionMap = new LinkedHashMap[TopicPartition, FetchRequest.PartitionData]
     topicPartitions.foreach { tp =>
       partitionMap.put(tp, new FetchRequest.PartitionData(offsetMap.getOrElse(tp, 0), 0L, maxPartitionBytes,
         Optional.empty()))
@@ -123,6 +162,17 @@ class TopicIdWithOldInterBrokerProtocolTest extends BaseRequestTest {
 
   private def sendFetchRequest(leaderId: Int, request: FetchRequest): FetchResponse[MemoryRecords] = {
     connectAndReceive[FetchResponse[MemoryRecords]](request, destination = brokerSocketServer(leaderId))
+  }
+
+  private def sendDeleteTopicsRequest(request: DeleteTopicsRequest, socketServer: SocketServer = controllerSocketServer): DeleteTopicsResponse = {
+    connectAndReceive[DeleteTopicsResponse](request, destination = socketServer)
+  }
+
+  private def validateTopicIsDeleted(topic: String): Unit = {
+    val metadata = connectAndReceive[MetadataResponse](new MetadataRequest.Builder(
+      List(topic).asJava, true).build).topicMetadata.asScala
+    TestUtils.waitUntilTrue (() => !metadata.exists(p => p.topic.equals(topic) && p.error == Errors.NONE),
+      s"The topic $topic should not exist")
   }
 
 }
