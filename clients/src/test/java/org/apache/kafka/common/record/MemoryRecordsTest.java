@@ -36,10 +36,13 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
+import java.util.function.BiFunction;
 import java.util.function.Supplier;
 import java.util.stream.Stream;
 
 import static java.util.Arrays.asList;
+import static org.apache.kafka.common.record.RecordBatch.MAGIC_VALUE_V0;
+import static org.apache.kafka.common.record.RecordBatch.MAGIC_VALUE_V1;
 import static org.apache.kafka.common.record.RecordBatch.MAGIC_VALUE_V2;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -949,7 +952,6 @@ public class MemoryRecordsTest {
     @ParameterizedTest
     @ArgumentsSource(MemoryRecordsArgumentsProvider.class)
     public void testNextBatchSize(Args args) {
-
         ByteBuffer buffer = ByteBuffer.allocate(2048);
         MemoryRecordsBuilder builder = MemoryRecords.builder(buffer, args.magic, args.compression,
                 TimestampType.LOG_APPEND_TIME, 0L, logAppendTime, args.pid, args.epoch, args.firstSequence);
@@ -986,13 +988,20 @@ public class MemoryRecordsTest {
         byte magic = args.magic;
         Supplier<MemoryRecords> recordsSupplier = () -> MemoryRecords.withRecords(magic, compression,
             new SimpleRecord(10L, "key1".getBytes(), "value1".getBytes()));
-        if (compression != CompressionType.ZSTD || magic >= MAGIC_VALUE_V2) {
-            MemoryRecords memoryRecords = recordsSupplier.get();
-            String key = Utils.utf8(memoryRecords.batches().iterator().next().iterator().next().key());
-            assertEquals("key1", key);
-        } else {
-            assertThrows(IllegalArgumentException.class, recordsSupplier::get);
-        }
+        MemoryRecords memoryRecords = recordsSupplier.get();
+        String key = Utils.utf8(memoryRecords.batches().iterator().next().iterator().next().key());
+        assertEquals("key1", key);
+    }
+
+    @Test
+    public void testUnsupportedCompress() {
+        BiFunction<Byte, CompressionType, MemoryRecords> builderBiFunction = (magic, compressionType) ->
+                 MemoryRecords.withRecords(magic, compressionType, new SimpleRecord(10L, "key1".getBytes(), "value1".getBytes()));
+
+        Arrays.asList(MAGIC_VALUE_V0, MAGIC_VALUE_V1).forEach(magic -> {
+            Exception e = assertThrows(IllegalArgumentException.class, () -> builderBiFunction.apply(magic, CompressionType.ZSTD));
+            assertEquals(e.getMessage(), "ZStandard compression is not supported for magic " + magic);
+        });
     }
 
     private static class RetainNonNullKeysFilter extends MemoryRecords.RecordFilter {
