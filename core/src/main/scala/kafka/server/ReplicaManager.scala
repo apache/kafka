@@ -153,7 +153,6 @@ case class FetchPartitionData(error: Errors = Errors.NONE,
                               preferredReadReplica: Option[Int],
                               isReassignmentFetch: Boolean)
 
-
 /**
  * Trait to represent the state of hosted partitions. We create a concrete (active) Partition
  * instance when the broker receives a LeaderAndIsr request from the controller indicating
@@ -205,7 +204,8 @@ class ReplicaManager(val config: KafkaConfig,
                      val delayedDeleteRecordsPurgatory: DelayedOperationPurgatory[DelayedDeleteRecords],
                      val delayedElectLeaderPurgatory: DelayedOperationPurgatory[DelayedElectLeader],
                      threadNamePrefix: Option[String],
-                     val alterIsrManager: AlterIsrManager) extends Logging with KafkaMetricsGroup {
+                     val alterIsrManager: AlterIsrManager,
+                     usingRaftMetadataQuorum: Boolean) extends Logging with KafkaMetricsGroup {
 
   def this(config: KafkaConfig,
            metrics: Metrics,
@@ -233,7 +233,7 @@ class ReplicaManager(val config: KafkaConfig,
         purgeInterval = config.deleteRecordsPurgatoryPurgeIntervalRequests),
       DelayedOperationPurgatory[DelayedElectLeader](
         purgatoryName = "ElectLeader", brokerId = config.brokerId),
-      threadNamePrefix, alterIsrManager)
+      threadNamePrefix, alterIsrManager, false)
   }
 
   /* epoch of the controller that last changed the leader */
@@ -262,6 +262,25 @@ class ReplicaManager(val config: KafkaConfig,
         Exit.halt(1)
       }
       handleLogDirFailure(newOfflineLogDir)
+    }
+  }
+
+  // Changes are initially deferrable when using a Raft-based metadata quorum, and may flip-flop thereafter;
+  // changes are never deferrable when using ZooKeeper.  When true, this indicates that we should transition online
+  // partitions to the deferred state if we see metadata with a different leader epoch.
+  @volatile private var changesDeferrable: Boolean = usingRaftMetadataQuorum
+  stateChangeLogger.info(s"Metadata changes deferrable=$changesDeferrable")
+
+  private def confirmChangesNotDeferrableWithZooKeeper(): Unit = {
+    if (changesDeferrable) {
+      throw new IllegalStateException("Partition metadata changes should never be deferrable when using ZooKeeper")
+    }
+  }
+
+  def deferrableMetadataChanges(): Unit = {
+    replicaStateChangeLock synchronized {
+      changesDeferrable = true
+      stateChangeLogger.info(s"Metadata changes are now deferrable")
     }
   }
 
@@ -343,6 +362,7 @@ class ReplicaManager(val config: KafkaConfig,
                    partitionStates: Map[TopicPartition, StopReplicaPartitionState]
                   ): (mutable.Map[TopicPartition, Errors], Errors) = {
     replicaStateChangeLock synchronized {
+      confirmChangesNotDeferrableWithZooKeeper()
       stateChangeLogger.info(s"Handling StopReplica request correlationId $correlationId from controller " +
         s"$controllerId for ${partitionStates.size} partitions")
       if (stateChangeLogger.isTraceEnabled)
@@ -1263,7 +1283,8 @@ class ReplicaManager(val config: KafkaConfig,
 
   def maybeUpdateMetadataCache(correlationId: Int, updateMetadataRequest: UpdateMetadataRequest) : Seq[TopicPartition] =  {
     replicaStateChangeLock synchronized {
-      if(updateMetadataRequest.controllerEpoch < controllerEpoch) {
+      confirmChangesNotDeferrableWithZooKeeper()
+      if (updateMetadataRequest.controllerEpoch < controllerEpoch) {
         val stateControllerEpochErrorMessage = s"Received update metadata request with correlation id $correlationId " +
           s"from an old controller ${updateMetadataRequest.controllerId} with epoch ${updateMetadataRequest.controllerEpoch}. " +
           s"Latest known controller epoch is $controllerEpoch"
@@ -1282,6 +1303,7 @@ class ReplicaManager(val config: KafkaConfig,
                              onLeadershipChange: (Iterable[Partition], Iterable[Partition]) => Unit): LeaderAndIsrResponse = {
     val startMs = time.milliseconds()
     replicaStateChangeLock synchronized {
+      confirmChangesNotDeferrableWithZooKeeper()
       val controllerId = leaderAndIsrRequest.controllerId
       val requestPartitionStates = leaderAndIsrRequest.partitionStates.asScala
       stateChangeLogger.info(s"Handling LeaderAndIsr request correlationId $correlationId from controller " +
