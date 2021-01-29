@@ -171,7 +171,7 @@ pipeline {
           steps {
             setupGradle()
             doValidation()
-            catchError(buildResult: 'SUCCESS', stageResult: 'FAILURE', message: 'ARM unit tests failed') {
+            catchError(buildResult: 'SUCCESS', stageResult: 'FAILURE') {
               doTest('unitTest')
             }
             echo 'Skipping Kafka Streams archetype test for ARM build'
