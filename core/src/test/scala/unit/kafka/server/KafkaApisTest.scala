@@ -109,6 +109,10 @@ class KafkaApisTest {
   private val time = new MockTime
   private val clientId = ""
 
+
+  private val emptyUnresolvedPart =  List[FetchRequest.UnresolvedPartitions]().asJava
+  private val emptyIdErrors = Map[Uuid, FetchResponse.IdError]().asJava
+
   @AfterEach
   def tearDown(): Unit = {
     quotas.shutdown()
@@ -1906,7 +1910,7 @@ class KafkaApisTest {
       Optional.empty())).asJava
     val fetchMetadata = new JFetchMetadata(0, 0)
     val fetchContext = new FullFetchContext(time, new FetchSessionCache(1000, 100),
-      fetchMetadata, new FetchRequest.FetchDataAndError(fetchData, Collections.emptyList, Collections.emptyMap), Collections.emptyMap, false)
+      fetchMetadata, new FetchRequest.FetchDataAndError(fetchData, emptyUnresolvedPart, emptyIdErrors),  metadataCache.getTopicIds().asJava, false)
     expect(fetchManager.newContext(anyObject[FetchRequest],
       anyObject[util.Map[Uuid, String]],
       anyObject[util.Map[String, Uuid]])).andReturn(fetchContext)
@@ -2485,7 +2489,7 @@ class KafkaApisTest {
 
     val fetchMetadata = new JFetchMetadata(0, 0)
     val fetchContext = new FullFetchContext(time, new FetchSessionCache(1000, 100),
-      fetchMetadata, new FetchRequest.FetchDataAndError(fetchData, Collections.emptyList, Collections.emptyMap),  metadataCache.getTopicIds().asJava, true)
+      fetchMetadata, new FetchRequest.FetchDataAndError(fetchData, emptyUnresolvedPart, emptyIdErrors),  metadataCache.getTopicIds().asJava, true)
     expect(fetchManager.newContext(anyObject[FetchRequest],
       anyObject[util.Map[Uuid, String]],
       anyObject[util.Map[String, Uuid]])).andReturn(fetchContext)
