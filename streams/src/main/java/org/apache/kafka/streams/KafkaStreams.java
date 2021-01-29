@@ -25,10 +25,10 @@ import org.apache.kafka.clients.admin.RemoveMembersFromConsumerGroupResult;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.ProducerConfig;
-import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.Metric;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.metrics.JmxReporter;
 import org.apache.kafka.common.metrics.KafkaMetricsContext;
 import org.apache.kafka.common.metrics.MetricConfig;
@@ -1056,7 +1056,7 @@ public class KafkaStreams implements AutoCloseable {
                                 throw new StreamsException(
                                         "Could not remove static member " + groupInstanceID.get()
                                             + " from consumer group " + config.getString(StreamsConfig.APPLICATION_ID_CONFIG)
-                                            + " the following reason: ",
+                                            + " for the following reason: ",
                                         e.getCause()
                                 );
                             }
