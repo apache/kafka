@@ -88,7 +88,7 @@ public class StandbyTask extends AbstractTask implements Task {
      * @throws StreamsException fatal error, should close the thread
      */
     @Override
-    public void initializeIfNeeded(java.util.function.Consumer<Set<TopicPartition>> offsetResetter) {
+    public void initializeIfNeeded(final java.util.function.Consumer<Set<TopicPartition>> offsetResetter) {
         if (state() == State.CREATED) {
             StateManagerUtil.registerStateStores(log, logPrefix, topology, stateMgr, stateDirectory, processorContext);
 

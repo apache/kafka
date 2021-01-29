@@ -407,7 +407,7 @@ public class TaskManager {
      * @throws StreamsException if the store's change log does not contain the partition
      * @return {@code true} if all tasks are fully restored
      */
-    boolean tryToCompleteRestoration(final long now, java.util.function.Consumer<Set<TopicPartition>> offsetResetter) {
+    boolean tryToCompleteRestoration(final long now, final java.util.function.Consumer<Set<TopicPartition>> offsetResetter) {
         boolean allRunning = true;
 
         final List<Task> activeTasks = new LinkedList<>();

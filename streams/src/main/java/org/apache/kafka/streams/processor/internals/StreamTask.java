@@ -214,7 +214,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
      * @throws StreamsException fatal error, should close the thread
      */
     @Override
-    public void initializeIfNeeded(java.util.function.Consumer<Set<TopicPartition>> offsetResetter) {
+    public void initializeIfNeeded(final java.util.function.Consumer<Set<TopicPartition>> offsetResetter) {
         if (state() == State.CREATED) {
             initOffsetsIfNeeded(offsetResetter);
             recordCollector.initialize();
@@ -232,7 +232,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
         }
     }
 
-    private void initOffsetsIfNeeded(java.util.function.Consumer<Set<TopicPartition>> offsetResetter) {
+    private void initOffsetsIfNeeded(final java.util.function.Consumer<Set<TopicPartition>> offsetResetter) {
         final Map<TopicPartition, OffsetAndMetadata> committed = mainConsumer.committed(resetOffsetsForPartitions);
         for (final Map.Entry<TopicPartition, OffsetAndMetadata> committedEntry : committed.entrySet()) {
             final OffsetAndMetadata offsetAndMetadata = committedEntry.getValue();

@@ -642,12 +642,6 @@ public class TaskManagerTest {
         expectLastCall().anyTimes();
 
         expect(consumer.assignment()).andReturn(taskId00Partitions);
-        consumer.pause(taskId00Partitions);
-        expectLastCall();
-        final OffsetAndMetadata offsetAndMetadata = new OffsetAndMetadata(0L);
-        expect(consumer.committed(taskId00Partitions)).andReturn(singletonMap(t1p0, offsetAndMetadata));
-        consumer.seek(t1p0, offsetAndMetadata);
-        expectLastCall();
         replay(activeTaskCreator, topologyBuilder, consumer, changeLogReader);
         taskManager.handleAssignment(taskId00Assignment, emptyMap());
         assertThat(taskManager.tryToCompleteRestoration(time.milliseconds(), tp -> assertThat(tp, is(empty()))), is(true));
@@ -684,12 +678,6 @@ public class TaskManagerTest {
         topologyBuilder.addSubscribedTopicsFromAssignment(anyObject(), anyString());
         expectLastCall().anyTimes();
         expect(consumer.assignment()).andReturn(taskId00Partitions);
-        consumer.pause(taskId00Partitions);
-        expectLastCall();
-        final OffsetAndMetadata offsetAndMetadata = new OffsetAndMetadata(0L);
-        expect(consumer.committed(taskId00Partitions)).andReturn(singletonMap(t1p0, offsetAndMetadata));
-        consumer.seek(t1p0, offsetAndMetadata);
-        expectLastCall();
         replay(activeTaskCreator, topologyBuilder, consumer, changeLogReader);
 
         taskManager.handleAssignment(taskId00Assignment, emptyMap());
@@ -727,12 +715,6 @@ public class TaskManagerTest {
         expectRestoreToBeCompleted(consumer, changeLogReader);
         consumer.commitSync(eq(emptyMap()));
         expect(consumer.assignment()).andReturn(taskId00Partitions);
-        consumer.pause(taskId00Partitions);
-        expectLastCall();
-        final OffsetAndMetadata offsetAndMetadata = new OffsetAndMetadata(0L);
-        expect(consumer.committed(taskId00Partitions)).andReturn(singletonMap(t1p0, offsetAndMetadata));
-        consumer.seek(t1p0, offsetAndMetadata);
-        expectLastCall();
         replay(activeTaskCreator, topologyBuilder, consumer, changeLogReader);
         taskManager.handleAssignment(assignment, emptyMap());
         assertThat(taskManager.tryToCompleteRestoration(time.milliseconds(), tp -> assertThat(tp, is(empty()))), is(true));
@@ -767,12 +749,6 @@ public class TaskManagerTest {
         expectLastCall().anyTimes();
 
         expect(consumer.assignment()).andReturn(taskId00Partitions);
-        consumer.pause(taskId00Partitions);
-        expectLastCall();
-        final OffsetAndMetadata offsetAndMetadata = new OffsetAndMetadata(0L);
-        expect(consumer.committed(taskId00Partitions)).andReturn(singletonMap(t1p0, offsetAndMetadata));
-        consumer.seek(t1p0, offsetAndMetadata);
-        expectLastCall();
 
         replay(activeTaskCreator, topologyBuilder, consumer, changeLogReader);
         //taskManager.setPartitionResetter(tp -> assertThat(tp, is(empty())));
@@ -931,13 +907,13 @@ public class TaskManagerTest {
         );
         final Task task00 = new StateMachineTask(taskId00, taskId00Partitions, true) {
             @Override
-            public void initializeIfNeeded(java.util.function.Consumer<Set<TopicPartition>> offsetResetter) {
+            public void initializeIfNeeded(final java.util.function.Consumer<Set<TopicPartition>> offsetResetter) {
                 throw new LockException("can't lock");
             }
         };
         final Task task01 = new StateMachineTask(taskId01, taskId01Partitions, true) {
             @Override
-            public void initializeIfNeeded(java.util.function.Consumer<Set<TopicPartition>> offsetResetter) {
+            public void initializeIfNeeded(final java.util.function.Consumer<Set<TopicPartition>> offsetResetter) {
                 throw new TimeoutException("timed out");
             }
         };
@@ -2966,13 +2942,18 @@ public class TaskManagerTest {
         }
 
         @Override
-        public void initializeIfNeeded(java.util.function.Consumer<Set<TopicPartition>> offsetResetter) {
+        public void initializeIfNeeded(final java.util.function.Consumer<Set<TopicPartition>> offsetResetter) {
             if (state() == State.CREATED) {
                 transitionTo(State.RESTORING);
                 if (!active) {
                     transitionTo(State.RUNNING);
                 }
             }
+        }
+
+        @Override
+        public void addPartitionsForOffsetReset(final Set<TopicPartition> partitionsForOffsetReset) {
+
         }
 
         @Override
