@@ -16,12 +16,6 @@
  */
 package kafka.raft
 
-import java.util.OptionalInt
-
-import java.io.File
-import java.nio.file.Files
-import java.util.concurrent.CompletableFuture
-
 import kafka.log.{Log, LogConfig, LogManager}
 import kafka.raft.KafkaRaftManager.RaftIoThread
 import kafka.server.{BrokerTopicStats, KafkaConfig, LogDirFailureChannel}
@@ -35,8 +29,14 @@ import org.apache.kafka.common.protocol.ApiMessage
 import org.apache.kafka.common.requests.RequestHeader
 import org.apache.kafka.common.security.JaasContext
 import org.apache.kafka.common.utils.{LogContext, Time}
+import org.apache.kafka.raft.RaftConfig.{AddressSpec, InetAddressSpec, UnknownAddressSpec, NON_ROUTABLE_ADDRESS}
 import org.apache.kafka.raft.{FileBasedStateStore, KafkaRaftClient, RaftClient, RaftConfig, RaftRequest, RecordSerde}
 
+import java.io.File
+import java.nio.file.Files
+import java.util
+import java.util.OptionalInt
+import java.util.concurrent.CompletableFuture
 import scala.jdk.CollectionConverters._
 
 object KafkaRaftManager {
@@ -104,6 +104,7 @@ class KafkaRaftManager[T](
   metrics: Metrics
 ) extends RaftManager[T] with Logging {
 
+  private val raftConfig = new RaftConfig(config)
   private val nodeId = config.brokerId
   private val logContext = new LogContext(s"[RaftManager $nodeId] ")
   this.logIdent = logContext.logPrefix()
@@ -118,9 +119,21 @@ class KafkaRaftManager[T](
   private val raftIoThread = new RaftIoThread(raftClient)
 
   def startup(): Unit = {
+    // Update the voter endpoints (if valid) with what's in RaftConfig
+    val voterAddresses: util.Map[Integer, AddressSpec] = raftConfig.quorumVoterConnections
+    for (voterAddressEntry <- voterAddresses.entrySet.asScala) {
+      voterAddressEntry.getValue match {
+        case spec: InetAddressSpec =>
+          netChannel.updateEndpoint(voterAddressEntry.getKey, spec)
+        case _: UnknownAddressSpec =>
+          logger.info(s"Skipping channel update for destination ID: ${voterAddressEntry.getKey} " +
+            s"because of non-routable endpoint: ${NON_ROUTABLE_ADDRESS.toString}")
+        case invalid: AddressSpec =>
+          logger.warn(s"Unexpected address spec (type: ${invalid.getClass}) for channel update for " +
+            s"destination ID: ${voterAddressEntry.getKey}")
+      }
+    }
     netChannel.start()
-    val raftConfig = new RaftConfig(config)
-    raftClient.initialize(raftConfig)
     raftIoThread.start()
   }
 
@@ -173,7 +186,7 @@ class KafkaRaftManager[T](
     val expirationService = new TimingWheelExpirationService(expirationTimer)
     val quorumStateStore = new FileBasedStateStore(new File(dataDir, "quorum-state"))
 
-    new KafkaRaftClient(
+    val client = new KafkaRaftClient(
       recordSerde,
       netChannel,
       metadataLog,
@@ -182,8 +195,11 @@ class KafkaRaftManager[T](
       metrics,
       expirationService,
       logContext,
-      OptionalInt.of(nodeId)
+      OptionalInt.of(nodeId),
+      raftConfig
     )
+    client.initialize()
+    client
   }
 
   private def buildNetworkChannel(): KafkaNetworkChannel = {
