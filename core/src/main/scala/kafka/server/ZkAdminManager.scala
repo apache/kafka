@@ -116,7 +116,7 @@ class ZkAdminManager(val config: KafkaConfig,
                                               configs: Properties,
                                               assignments: Map[Int, Seq[Int]]): Unit = {
     metadataAndConfigs.get(topicName).foreach { result =>
-      val logConfig = LogConfig.fromProps(Server.copyKafkaConfigToLog(config), configs)
+      val logConfig = LogConfig.fromProps(LogConfig.extractLogConfigMap(config), configs)
       val createEntry = configHelper.createTopicConfigEntry(logConfig, configs, includeSynonyms = false, includeDocumentation = false)(_, _)
       val topicConfigs = logConfig.values.asScala.map { case (k, v) =>
         val entry = createEntry(k, v)

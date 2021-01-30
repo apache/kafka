@@ -374,4 +374,40 @@ object LogConfig {
     MessageTimestampDifferenceMaxMsProp -> KafkaConfig.LogMessageTimestampDifferenceMaxMsProp,
     MessageDownConversionEnableProp -> KafkaConfig.LogMessageDownConversionEnableProp
   )
+
+
+  /**
+   * Copy the subset of properties that are relevant to Logs. The individual properties
+   * are listed here since the names are slightly different in each Config class...
+   */
+  def extractLogConfigMap(
+    kafkaConfig: KafkaConfig
+  ): java.util.Map[String, Object] = {
+    val logProps = new java.util.HashMap[String, Object]()
+    logProps.put(SegmentBytesProp, kafkaConfig.logSegmentBytes)
+    logProps.put(SegmentMsProp, kafkaConfig.logRollTimeMillis)
+    logProps.put(SegmentJitterMsProp, kafkaConfig.logRollTimeJitterMillis)
+    logProps.put(SegmentIndexBytesProp, kafkaConfig.logIndexSizeMaxBytes)
+    logProps.put(FlushMessagesProp, kafkaConfig.logFlushIntervalMessages)
+    logProps.put(FlushMsProp, kafkaConfig.logFlushIntervalMs)
+    logProps.put(RetentionBytesProp, kafkaConfig.logRetentionBytes)
+    logProps.put(RetentionMsProp, kafkaConfig.logRetentionTimeMillis: java.lang.Long)
+    logProps.put(MaxMessageBytesProp, kafkaConfig.messageMaxBytes)
+    logProps.put(IndexIntervalBytesProp, kafkaConfig.logIndexIntervalBytes)
+    logProps.put(DeleteRetentionMsProp, kafkaConfig.logCleanerDeleteRetentionMs)
+    logProps.put(MinCompactionLagMsProp, kafkaConfig.logCleanerMinCompactionLagMs)
+    logProps.put(MaxCompactionLagMsProp, kafkaConfig.logCleanerMaxCompactionLagMs)
+    logProps.put(FileDeleteDelayMsProp, kafkaConfig.logDeleteDelayMs)
+    logProps.put(MinCleanableDirtyRatioProp, kafkaConfig.logCleanerMinCleanRatio)
+    logProps.put(CleanupPolicyProp, kafkaConfig.logCleanupPolicy)
+    logProps.put(MinInSyncReplicasProp, kafkaConfig.minInSyncReplicas)
+    logProps.put(CompressionTypeProp, kafkaConfig.compressionType)
+    logProps.put(UncleanLeaderElectionEnableProp, kafkaConfig.uncleanLeaderElectionEnable)
+    logProps.put(PreAllocateEnableProp, kafkaConfig.logPreAllocateEnable)
+    logProps.put(MessageFormatVersionProp, kafkaConfig.logMessageFormatVersion.version)
+    logProps.put(MessageTimestampTypeProp, kafkaConfig.logMessageTimestampType.name)
+    logProps.put(MessageTimestampDifferenceMaxMsProp, kafkaConfig.logMessageTimestampDifferenceMaxMs: java.lang.Long)
+    logProps.put(MessageDownConversionEnableProp, kafkaConfig.logMessageDownConversionEnable: java.lang.Boolean)
+    logProps
+  }
 }
