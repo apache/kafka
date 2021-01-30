@@ -37,7 +37,7 @@ object RawMetaProperties {
   val VersionKey = "version"
 }
 
-case class RawMetaProperties(props: Properties = new Properties()) {
+class RawMetaProperties(props: Properties = new Properties()) {
 
   def clusterId: Option[String] = {
     Option(props.getProperty(ClusterIdKey))
