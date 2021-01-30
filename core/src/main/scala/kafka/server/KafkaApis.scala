@@ -21,7 +21,7 @@ import java.lang.{Long => JLong}
 import java.net.{InetAddress, UnknownHostException}
 import java.nio.ByteBuffer
 import java.util
-import java.util.{Collections, Optional, Properties}
+import java.util.{Collections, Optional}
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicInteger
 
@@ -31,19 +31,19 @@ import kafka.common.OffsetAndMetadata
 import kafka.controller.{KafkaController, ReplicaAssignment}
 import kafka.coordinator.group.{GroupCoordinator, JoinGroupResult, LeaveGroupResult, SyncGroupResult}
 import kafka.coordinator.transaction.{InitProducerIdResult, TransactionCoordinator}
-import kafka.log.{AppendOrigin, LogConfig}
+import kafka.log.AppendOrigin
 import kafka.message.ZStdCompressionCodec
 import kafka.network.RequestChannel
 import kafka.security.authorizer.AuthorizerUtils
 import kafka.server.QuotaFactory.{QuotaManagers, UnboundedQuota}
-import kafka.utils.{CoreUtils, Log4jController, Logging}
+import kafka.utils.{CoreUtils, Logging}
 import kafka.utils.Implicits._
 import kafka.zk.{AdminZkClient, KafkaZkClient}
 import org.apache.kafka.clients.admin.{AlterConfigOp, ConfigEntry}
 import org.apache.kafka.clients.admin.AlterConfigOp.OpType
 import org.apache.kafka.common.acl.{AclBinding, AclOperation}
 import org.apache.kafka.common.acl.AclOperation._
-import org.apache.kafka.common.config.{AbstractConfig, ConfigDef, ConfigResource}
+import org.apache.kafka.common.config.ConfigResource
 import org.apache.kafka.common.errors._
 import org.apache.kafka.common.internals.{FatalExitError, Topic}
 import org.apache.kafka.common.internals.Topic.{GROUP_METADATA_TOPIC_NAME, TRANSACTION_STATE_TOPIC_NAME, isInternal}
@@ -89,9 +89,6 @@ import scala.collection.mutable.ArrayBuffer
 import scala.collection.{Map, Seq, Set, immutable, mutable}
 import scala.util.{Failure, Success, Try}
 import kafka.coordinator.group.GroupOverview
-import kafka.server.metadata.ConfigRepository
-import org.apache.kafka.common.message.DescribeConfigsRequestData.DescribeConfigsResource
-import org.apache.kafka.common.requests.DescribeConfigsResponse.ConfigSource
 
 import scala.annotation.nowarn
 
@@ -3561,187 +3558,6 @@ class KafkaApis(val requestChannel: RequestChannel,
       // brokerEpochInRequest > controller.brokerEpoch is possible in rare scenarios where the controller gets notified
       // about the new broker epoch and sends a control request with this epoch before the broker learns about it
       brokerEpochInRequest < controller.get.brokerEpoch
-    }
-  }
-}
-
-class ConfigHelper(metadataCache: MetadataCache, config: KafkaConfig, configRepository: ConfigRepository) extends Logging {
-
-  def describeConfigs(resourceToConfigNames: List[DescribeConfigsResource],
-                      includeSynonyms: Boolean,
-                      includeDocumentation: Boolean): List[DescribeConfigsResponseData.DescribeConfigsResult] = {
-    resourceToConfigNames.map { case resource =>
-
-      def allConfigs(config: AbstractConfig) = {
-        config.originals.asScala.filter(_._2 != null) ++ config.nonInternalValues.asScala
-      }
-
-      def createResponseConfig(configs: Map[String, Any],
-                               createConfigEntry: (String, Any) => DescribeConfigsResponseData.DescribeConfigsResourceResult): DescribeConfigsResponseData.DescribeConfigsResult = {
-        val filteredConfigPairs = if (resource.configurationKeys == null)
-          configs.toBuffer
-        else
-          configs.filter { case (configName, _) =>
-            resource.configurationKeys.asScala.forall(_.contains(configName))
-          }.toBuffer
-
-        val configEntries = filteredConfigPairs.map { case (name, value) => createConfigEntry(name, value) }
-        new DescribeConfigsResponseData.DescribeConfigsResult().setErrorCode(Errors.NONE.code)
-          .setConfigs(configEntries.asJava)
-      }
-
-      try {
-        val configResult = ConfigResource.Type.forId(resource.resourceType) match {
-          case ConfigResource.Type.TOPIC =>
-            val topic = resource.resourceName
-            Topic.validate(topic)
-            if (metadataCache.contains(topic)) {
-              val topicProps = configRepository.topicConfigs(topic)
-              val logConfig = LogConfig.fromProps(Server.copyKafkaConfigToLog(config), topicProps)
-              createResponseConfig(allConfigs(logConfig), createTopicConfigEntry(logConfig, topicProps, includeSynonyms, includeDocumentation))
-            } else {
-              new DescribeConfigsResponseData.DescribeConfigsResult().setErrorCode(Errors.UNKNOWN_TOPIC_OR_PARTITION.code)
-                .setConfigs(Collections.emptyList[DescribeConfigsResponseData.DescribeConfigsResourceResult])
-            }
-
-          case ConfigResource.Type.BROKER =>
-            if (resource.resourceName == null || resource.resourceName.isEmpty)
-              createResponseConfig(config.dynamicConfig.currentDynamicDefaultConfigs,
-                createBrokerConfigEntry(perBrokerConfig = false, includeSynonyms, includeDocumentation))
-            else if (resourceNameToBrokerId(resource.resourceName) == config.brokerId)
-              createResponseConfig(allConfigs(config),
-                createBrokerConfigEntry(perBrokerConfig = true, includeSynonyms, includeDocumentation))
-            else
-              throw new InvalidRequestException(s"Unexpected broker id, expected ${config.brokerId} or empty string, but received ${resource.resourceName}")
-
-          case ConfigResource.Type.BROKER_LOGGER =>
-            if (resource.resourceName == null || resource.resourceName.isEmpty)
-              throw new InvalidRequestException("Broker id must not be empty")
-            else if (resourceNameToBrokerId(resource.resourceName) != config.brokerId)
-              throw new InvalidRequestException(s"Unexpected broker id, expected ${config.brokerId} but received ${resource.resourceName}")
-            else
-              createResponseConfig(Log4jController.loggers,
-                (name, value) => new DescribeConfigsResponseData.DescribeConfigsResourceResult().setName(name)
-                  .setValue(value.toString).setConfigSource(ConfigSource.DYNAMIC_BROKER_LOGGER_CONFIG.id)
-                  .setIsSensitive(false).setReadOnly(false).setSynonyms(List.empty.asJava))
-          case resourceType => throw new InvalidRequestException(s"Unsupported resource type: $resourceType")
-        }
-        configResult.setResourceName(resource.resourceName).setResourceType(resource.resourceType)
-      } catch {
-        case e: Throwable =>
-          // Log client errors at a lower level than unexpected exceptions
-          val message = s"Error processing describe configs request for resource $resource"
-          if (e.isInstanceOf[ApiException])
-            info(message, e)
-          else
-            error(message, e)
-          val err = ApiError.fromThrowable(e)
-          new DescribeConfigsResponseData.DescribeConfigsResult()
-            .setResourceName(resource.resourceName)
-            .setResourceType(resource.resourceType)
-            .setErrorMessage(err.message)
-            .setErrorCode(err.error.code)
-            .setConfigs(Collections.emptyList[DescribeConfigsResponseData.DescribeConfigsResourceResult])
-      }
-    }
-  }
-
-  def createTopicConfigEntry(logConfig: LogConfig, topicProps: Properties, includeSynonyms: Boolean, includeDocumentation: Boolean)
-                            (name: String, value: Any): DescribeConfigsResponseData.DescribeConfigsResourceResult = {
-    val configEntryType = LogConfig.configType(name)
-    val isSensitive = KafkaConfig.maybeSensitive(configEntryType)
-    val valueAsString = if (isSensitive) null else ConfigDef.convertToString(value, configEntryType.orNull)
-    val allSynonyms = {
-      val list = LogConfig.TopicConfigSynonyms.get(name)
-        .map(s => configSynonyms(s, brokerSynonyms(s), isSensitive))
-        .getOrElse(List.empty)
-      if (!topicProps.containsKey(name))
-        list
-      else
-        new DescribeConfigsResponseData.DescribeConfigsSynonym().setName(name).setValue(valueAsString)
-          .setSource(ConfigSource.TOPIC_CONFIG.id) +: list
-    }
-    val source = if (allSynonyms.isEmpty) ConfigSource.DEFAULT_CONFIG.id else allSynonyms.head.source
-    val synonyms = if (!includeSynonyms) List.empty else allSynonyms
-    val dataType = configResponseType(configEntryType)
-    val configDocumentation = if (includeDocumentation) logConfig.documentationOf(name) else null
-    new DescribeConfigsResponseData.DescribeConfigsResourceResult()
-      .setName(name).setValue(valueAsString).setConfigSource(source)
-      .setIsSensitive(isSensitive).setReadOnly(false).setSynonyms(synonyms.asJava)
-      .setDocumentation(configDocumentation).setConfigType(dataType.id)
-  }
-
-  private def createBrokerConfigEntry(perBrokerConfig: Boolean, includeSynonyms: Boolean, includeDocumentation: Boolean)
-                                     (name: String, value: Any): DescribeConfigsResponseData.DescribeConfigsResourceResult = {
-    val allNames = brokerSynonyms(name)
-    val configEntryType = KafkaConfig.configType(name)
-    val isSensitive = KafkaConfig.maybeSensitive(configEntryType)
-    val valueAsString = if (isSensitive)
-      null
-    else value match {
-      case v: String => v
-      case _ => ConfigDef.convertToString(value, configEntryType.orNull)
-    }
-    val allSynonyms = configSynonyms(name, allNames, isSensitive)
-      .filter(perBrokerConfig || _.source == ConfigSource.DYNAMIC_DEFAULT_BROKER_CONFIG.id)
-    val synonyms = if (!includeSynonyms) List.empty else allSynonyms
-    val source = if (allSynonyms.isEmpty) ConfigSource.DEFAULT_CONFIG.id else allSynonyms.head.source
-    val readOnly = !DynamicBrokerConfig.AllDynamicConfigs.contains(name)
-
-    val dataType = configResponseType(configEntryType)
-    val configDocumentation = if (includeDocumentation) brokerDocumentation(name) else null
-    new DescribeConfigsResponseData.DescribeConfigsResourceResult().setName(name).setValue(valueAsString).setConfigSource(source)
-      .setIsSensitive(isSensitive).setReadOnly(readOnly).setSynonyms(synonyms.asJava)
-      .setDocumentation(configDocumentation).setConfigType(dataType.id)
-  }
-
-  private def configSynonyms(name: String, synonyms: List[String], isSensitive: Boolean): List[DescribeConfigsResponseData.DescribeConfigsSynonym] = {
-    val dynamicConfig = config.dynamicConfig
-    val allSynonyms = mutable.Buffer[DescribeConfigsResponseData.DescribeConfigsSynonym]()
-
-    def maybeAddSynonym(map: Map[String, String], source: ConfigSource)(name: String): Unit = {
-      map.get(name).map { value =>
-        val configValue = if (isSensitive) null else value
-        allSynonyms += new DescribeConfigsResponseData.DescribeConfigsSynonym().setName(name).setValue(configValue).setSource(source.id)
-      }
-    }
-
-    synonyms.foreach(maybeAddSynonym(dynamicConfig.currentDynamicBrokerConfigs, ConfigSource.DYNAMIC_BROKER_CONFIG))
-    synonyms.foreach(maybeAddSynonym(dynamicConfig.currentDynamicDefaultConfigs, ConfigSource.DYNAMIC_DEFAULT_BROKER_CONFIG))
-    synonyms.foreach(maybeAddSynonym(dynamicConfig.staticBrokerConfigs, ConfigSource.STATIC_BROKER_CONFIG))
-    synonyms.foreach(maybeAddSynonym(dynamicConfig.staticDefaultConfigs, ConfigSource.DEFAULT_CONFIG))
-    allSynonyms.dropWhile(s => s.name != name).toList // e.g. drop listener overrides when describing base config
-  }
-
-  private def brokerSynonyms(name: String): List[String] = {
-    DynamicBrokerConfig.brokerConfigSynonyms(name, matchListenerOverride = true)
-  }
-
-  private def brokerDocumentation(name: String): String = {
-    config.documentationOf(name)
-  }
-
-  private def configResponseType(configType: Option[ConfigDef.Type]): DescribeConfigsResponse.ConfigType = {
-    if (configType.isEmpty)
-      DescribeConfigsResponse.ConfigType.UNKNOWN
-    else configType.get match {
-      case ConfigDef.Type.BOOLEAN => DescribeConfigsResponse.ConfigType.BOOLEAN
-      case ConfigDef.Type.STRING => DescribeConfigsResponse.ConfigType.STRING
-      case ConfigDef.Type.INT => DescribeConfigsResponse.ConfigType.INT
-      case ConfigDef.Type.SHORT => DescribeConfigsResponse.ConfigType.SHORT
-      case ConfigDef.Type.LONG => DescribeConfigsResponse.ConfigType.LONG
-      case ConfigDef.Type.DOUBLE => DescribeConfigsResponse.ConfigType.DOUBLE
-      case ConfigDef.Type.LIST => DescribeConfigsResponse.ConfigType.LIST
-      case ConfigDef.Type.CLASS => DescribeConfigsResponse.ConfigType.CLASS
-      case ConfigDef.Type.PASSWORD => DescribeConfigsResponse.ConfigType.PASSWORD
-      case _ => DescribeConfigsResponse.ConfigType.UNKNOWN
-    }
-  }
-
-  private def resourceNameToBrokerId(resourceName: String): Int = {
-    try resourceName.toInt catch {
-      case _: NumberFormatException =>
-        throw new InvalidRequestException(s"Broker id must be an integer, but it is: $resourceName")
     }
   }
 }
