@@ -2713,7 +2713,7 @@ class KafkaApis(val requestChannel: RequestChannel,
   def handleListPartitionReassignmentsRequest(request: RequestChannel.Request): Unit = {
     authHelper.authorizeClusterOperation(request, DESCRIBE)
     if (usingRaftMetadataQuorum) {
-      throw new ClusterAuthorizationException(s"Request $request is not yet supported when using a Raft-based metadata quorum.")
+      throw new UnsupportedVersionException(s"Request $request is not yet supported when using a Raft-based metadata quorum.")
     }
     val listPartitionReassignmentsRequest = request.body[ListPartitionReassignmentsRequest]
 
@@ -3064,7 +3064,10 @@ class KafkaApis(val requestChannel: RequestChannel,
     }
 
     // not yet supported when using a Raft-based metadata quorum
-    if (usingRaftMetadataQuorum || !authHelper.authorize(request.context, ALTER, CLUSTER, CLUSTER_NAME)) {
+    if (usingRaftMetadataQuorum) {
+      throw new UnsupportedVersionException(s"Request $request is not yet supported when using a Raft-based metadata quorum.")
+    }
+    if (!authHelper.authorize(request.context, ALTER, CLUSTER, CLUSTER_NAME)) {
       val error = new ApiError(Errors.CLUSTER_AUTHORIZATION_FAILED, null)
       val partitionErrors: Map[TopicPartition, ApiError] =
         electionRequest.topicPartitions.iterator.map(partition => partition -> error).toMap
