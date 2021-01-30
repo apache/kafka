@@ -26,6 +26,7 @@ import java.util.Optional
 import java.util.concurrent.atomic._
 import java.util.concurrent.{ConcurrentNavigableMap, ConcurrentSkipListMap, TimeUnit}
 import java.util.regex.Pattern
+
 import kafka.api.{ApiVersion, KAFKA_0_10_0_IV0}
 import kafka.common.{LogSegmentOffsetOverflowException, LongRef, OffsetsOutOfOrderException, UnexpectedAppendOffsetException}
 import kafka.message.{BrokerCompressionCodec, CompressionCodec, NoCompressionCodec}
@@ -35,7 +36,7 @@ import kafka.server.epoch.LeaderEpochFileCache
 import kafka.server.{BrokerTopicStats, FetchDataInfo, FetchHighWatermark, FetchIsolation, FetchLogEnd, FetchTxnCommitted, LogDirFailureChannel, LogOffsetMetadata, OffsetAndEpoch, PartitionMetadataFile}
 import kafka.utils._
 import org.apache.kafka.common.errors._
-import org.apache.kafka.common.message.FetchResponseData
+import org.apache.kafka.common.message.{DescribeProducersResponseData, FetchResponseData}
 import org.apache.kafka.common.record.FileRecords.TimestampAndOffset
 import org.apache.kafka.common.record._
 import org.apache.kafka.common.requests.FetchResponse.AbortedTransaction
@@ -973,6 +974,20 @@ class Log(@volatile private var _dir: File,
   private def loadProducerState(lastOffset: Long, reloadFromCleanShutdown: Boolean): Unit = lock synchronized {
     rebuildProducerState(lastOffset, reloadFromCleanShutdown, producerStateManager)
     maybeIncrementFirstUnstableOffset()
+  }
+
+  def activeProducers: Seq[DescribeProducersResponseData.ProducerState] = {
+    lock synchronized {
+      producerStateManager.activeProducers.map { case (producerId, state) =>
+        new DescribeProducersResponseData.ProducerState()
+          .setProducerId(producerId)
+          .setProducerEpoch(state.producerEpoch)
+          .setLastSequence(state.lastSeq)
+          .setLastTimestamp(state.lastTimestamp)
+          .setCoordinatorEpoch(state.coordinatorEpoch)
+          .setCurrentTxnStartOffset(state.currentTxnFirstOffset.getOrElse(-1L))
+      }
+    }.toSeq
   }
 
   private[log] def activeProducersWithLastSequence: Map[Long, Int] = lock synchronized {

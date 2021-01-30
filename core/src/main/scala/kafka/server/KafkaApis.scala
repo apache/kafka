@@ -24,6 +24,7 @@ import java.util
 import java.util.{Collections, Optional}
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicInteger
+
 import kafka.admin.{AdminUtils, RackAwareMode}
 import kafka.api.{ApiVersion, ElectLeadersRequestOps, KAFKA_0_11_0_IV0, KAFKA_2_3_IV0}
 import kafka.common.OffsetAndMetadata
@@ -48,7 +49,7 @@ import org.apache.kafka.common.internals.{FatalExitError, Topic}
 import org.apache.kafka.common.internals.Topic.{GROUP_METADATA_TOPIC_NAME, TRANSACTION_STATE_TOPIC_NAME, isInternal}
 import org.apache.kafka.common.message.CreateTopicsRequestData.CreatableTopic
 import org.apache.kafka.common.message.CreatePartitionsResponseData.CreatePartitionsTopicResult
-import org.apache.kafka.common.message.{AddOffsetsToTxnResponseData, AlterClientQuotasResponseData, AlterConfigsResponseData, AlterPartitionReassignmentsResponseData, AlterReplicaLogDirsResponseData, ApiVersionsResponseData, CreateAclsResponseData, CreatePartitionsResponseData, CreateTopicsResponseData, DeleteAclsResponseData, DeleteGroupsResponseData, DeleteRecordsResponseData, DeleteTopicsResponseData, DescribeAclsResponseData, DescribeClientQuotasResponseData, DescribeConfigsResponseData, DescribeGroupsResponseData, DescribeLogDirsResponseData, EndTxnResponseData, ExpireDelegationTokenResponseData, FindCoordinatorResponseData, HeartbeatResponseData, InitProducerIdResponseData, JoinGroupResponseData, LeaveGroupResponseData, ListGroupsResponseData, ListOffsetsResponseData, ListPartitionReassignmentsResponseData, MetadataResponseData, OffsetCommitRequestData, OffsetCommitResponseData, OffsetDeleteResponseData, OffsetForLeaderEpochResponseData, RenewDelegationTokenResponseData, SaslAuthenticateResponseData, SaslHandshakeResponseData, StopReplicaResponseData, SyncGroupResponseData, UpdateMetadataResponseData}
+import org.apache.kafka.common.message.{AddOffsetsToTxnResponseData, AlterClientQuotasResponseData, AlterConfigsResponseData, AlterPartitionReassignmentsResponseData, AlterReplicaLogDirsResponseData, ApiVersionsResponseData, CreateAclsResponseData, CreatePartitionsResponseData, CreateTopicsResponseData, DeleteAclsResponseData, DeleteGroupsResponseData, DeleteRecordsResponseData, DeleteTopicsResponseData, DescribeAclsResponseData, DescribeClientQuotasResponseData, DescribeClusterResponseData, DescribeConfigsResponseData, DescribeGroupsResponseData, DescribeLogDirsResponseData, DescribeProducersResponseData, EndTxnResponseData, ExpireDelegationTokenResponseData, FindCoordinatorResponseData, HeartbeatResponseData, InitProducerIdResponseData, JoinGroupResponseData, LeaveGroupResponseData, ListGroupsResponseData, ListOffsetsResponseData, ListPartitionReassignmentsResponseData, MetadataResponseData, OffsetCommitRequestData, OffsetCommitResponseData, OffsetDeleteResponseData, OffsetForLeaderEpochResponseData, RenewDelegationTokenResponseData, SaslAuthenticateResponseData, SaslHandshakeResponseData, StopReplicaResponseData, SyncGroupResponseData, UpdateMetadataResponseData}
 import org.apache.kafka.common.message.CreateTopicsResponseData.{CreatableTopicResult, CreatableTopicResultCollection}
 import org.apache.kafka.common.message.DeleteGroupsResponseData.{DeletableGroupResult, DeletableGroupResultCollection}
 import org.apache.kafka.common.message.AlterPartitionReassignmentsResponseData.{ReassignablePartitionResponse, ReassignableTopicResponse}
@@ -88,7 +89,6 @@ import scala.collection.mutable.ArrayBuffer
 import scala.collection.{Map, Seq, Set, immutable, mutable}
 import scala.util.{Failure, Success, Try}
 import kafka.coordinator.group.GroupOverview
-import org.apache.kafka.common.message.DescribeClusterResponseData
 
 import scala.annotation.nowarn
 
@@ -223,6 +223,7 @@ class KafkaApis(val requestChannel: RequestChannel,
         case ApiKeys.UPDATE_FEATURES => maybeForwardToController(request, handleUpdateFeatures)
         case ApiKeys.ENVELOPE => handleEnvelope(request)
         case ApiKeys.DESCRIBE_CLUSTER => handleDescribeCluster(request)
+        case ApiKeys.DESCRIBE_PRODUCERS => handleDescribeProducersRequest(request)
 
         // Until we are ready to integrate the Raft layer, these APIs are treated as
         // unexpected and we just close the connection.
@@ -3381,6 +3382,42 @@ class KafkaApis(val requestChannel: RequestChannel,
         throw new PrincipalDeserializationException("Could not deserialize principal since " +
           "no `KafkaPrincipalSerde` has been defined")
     }
+  }
+
+  def handleDescribeProducersRequest(request: RequestChannel.Request): Unit = {
+    val describeProducersRequest = request.body[DescribeProducersRequest]
+
+    def partitionError(topicPartition: TopicPartition, error: Errors): DescribeProducersResponseData.PartitionResponse = {
+      new DescribeProducersResponseData.PartitionResponse()
+        .setPartitionIndex(topicPartition.partition)
+        .setErrorCode(error.code)
+    }
+
+    val response = new DescribeProducersResponseData()
+    describeProducersRequest.data.topics.forEach { topicRequest =>
+      val topicResponse = new DescribeProducersResponseData.TopicResponse()
+        .setName(topicRequest.name)
+      val topicError = if (!authHelper.authorize(request.context, READ, TOPIC, topicRequest.name))
+        Some(Errors.TOPIC_AUTHORIZATION_FAILED)
+      else if (!metadataCache.contains(topicRequest.name))
+        Some(Errors.UNKNOWN_TOPIC_OR_PARTITION)
+      else
+        None
+
+      topicRequest.partitionIndexes.forEach { partitionId =>
+        val topicPartition = new TopicPartition(topicRequest.name, partitionId)
+        val partitionResponse = topicError match {
+          case Some(error) => partitionError(topicPartition, error)
+          case None => replicaManager.activeProducerState(topicPartition)
+        }
+        topicResponse.partitions.add(partitionResponse)
+      }
+
+      response.topics.add(topicResponse)
+    }
+
+    requestHelper.sendResponseMaybeThrottle(request, requestThrottleMs =>
+      new DescribeProducersResponse(response.setThrottleTimeMs(requestThrottleMs)))
   }
 
   private def updateRecordConversionStats(request: RequestChannel.Request,

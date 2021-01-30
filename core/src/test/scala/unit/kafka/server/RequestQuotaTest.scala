@@ -620,6 +620,12 @@ class RequestQuotaTest extends BaseRequestTest {
         case ApiKeys.DESCRIBE_CLUSTER =>
           new DescribeClusterRequest.Builder(new DescribeClusterRequestData())
 
+        case ApiKeys.DESCRIBE_PRODUCERS =>
+          new DescribeProducersRequest.Builder(new DescribeProducersRequestData()
+            .setTopics(List(new DescribeProducersRequestData.TopicRequest()
+              .setName("test-topic")
+              .setPartitionIndexes(List(1, 2, 3).map(Int.box).asJava)).asJava))
+
         case _ =>
           throw new IllegalArgumentException("Unsupported API key " + apiKey)
     }
