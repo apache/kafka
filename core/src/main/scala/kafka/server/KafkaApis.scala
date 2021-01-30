@@ -153,14 +153,13 @@ class KafkaApis(val requestChannel: RequestChannel,
     }
 
     forwardingManager match {
-      case Some(mgr) if request.isForwarded && usingRaftMetadataQuorum =>
-        error("Broker should never receive a forwarded request")
-        handler(request) // will send NOT_CONTROLLER
-
       case Some(mgr) if !request.isForwarded && (usingRaftMetadataQuorum || !controller.get.isActive) =>
         mgr.forwardRequest(request, responseCallback)
 
       case _ =>
+        if (request.isForwarded && usingRaftMetadataQuorum) {
+          warn("A broker using a Raft-based metadata quorum should never receive a forwarded request")
+        }
         handler(request)
     }
   }
