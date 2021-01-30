@@ -1806,9 +1806,10 @@ public class FetcherTest {
         assertEquals(OffsetResetStrategy.LATEST, subscriptions.resetStrategy(tp0));
 
         fetcher.resetOffsetsIfNeeded();
-        client.prepareResponse(req -> {
-            return listOffsetMatchesExpectedReset(tp0, OffsetResetStrategy.LATEST, req);
-        }, listOffsetResponse(Errors.NONE, 1L, 10L));
+        client.prepareResponse(
+            req -> listOffsetMatchesExpectedReset(tp0, OffsetResetStrategy.LATEST, req),
+            listOffsetResponse(Errors.NONE, 1L, 10L)
+        );
         consumerClient.pollNoWakeup();
 
         assertFalse(subscriptions.isOffsetResetNeeded(tp0));
