@@ -1187,7 +1187,7 @@ object LogManager {
             time: Time,
             brokerTopicStats: BrokerTopicStats,
             logDirFailureChannel: LogDirFailureChannel): LogManager = {
-    val defaultProps = LogConfig.extractLogConfigMap(config)
+    val defaultProps = Server.copyKafkaConfigToLog(config)
 
     LogConfig.validateValues(defaultProps)
     val defaultLogConfig = LogConfig(defaultProps)
