@@ -32,7 +32,7 @@ class BrokerMetadataCheckpointTest {
   def testCreateZkMetadataProperties(): Unit = {
     val meta = ZkMetaProperties("7bc79ca1-9746-42a3-a35a-efb3cde44492", 3)
     val properties = meta.toProperties
-    val parsed = RawMetaProperties(properties)
+    val parsed = new RawMetaProperties(properties)
     assertEquals(0, parsed.version)
     assertEquals(Some(meta.clusterId), parsed.clusterId)
     assertEquals(Some(meta.brokerId), parsed.brokerId)
@@ -47,7 +47,7 @@ class BrokerMetadataCheckpointTest {
     properties.put(RawMetaProperties.BrokerIdKey, brokerId.toString)
     properties.put(RawMetaProperties.ClusterIdKey, clusterId)
 
-    val parsed = RawMetaProperties(properties)
+    val parsed = new RawMetaProperties(properties)
     assertEquals(Some(brokerId), parsed.brokerId)
     assertEquals(Some(clusterId), parsed.clusterId)
     assertEquals(0, parsed.version)
@@ -57,7 +57,7 @@ class BrokerMetadataCheckpointTest {
   def testRawPropertiesWithInvalidBrokerId(): Unit = {
     val properties = new Properties()
     properties.put(RawMetaProperties.BrokerIdKey, "oof")
-    val parsed = RawMetaProperties(properties)
+    val parsed = new RawMetaProperties(properties)
     assertThrows(classOf[RuntimeException], () => parsed.brokerId)
   }
 
@@ -67,14 +67,14 @@ class BrokerMetadataCheckpointTest {
       clusterId = Uuid.fromString("H3KKO4NTRPaCWtEmm3vW7A"),
       nodeId = 5
     )
-    val properties = RawMetaProperties(meta.toProperties)
+    val properties = new RawMetaProperties(meta.toProperties)
     val meta2 = MetaProperties.parse(properties)
     assertEquals(meta, meta2)
   }
 
   @Test
   def testMetaPropertiesWithMissingVersion(): Unit = {
-    val properties = RawMetaProperties()
+    val properties = new RawMetaProperties()
     properties.clusterId = "H3KKO4NTRPaCWtEmm3vW7A"
     properties.nodeId = 1
     assertThrows(classOf[RuntimeException], () => MetaProperties.parse(properties))
@@ -82,7 +82,7 @@ class BrokerMetadataCheckpointTest {
 
   @Test
   def testMetaPropertiesDoesNotAllowHexEncodedUUIDs(): Unit = {
-    val properties = RawMetaProperties()
+    val properties = new RawMetaProperties()
     properties.version = 1
     properties.clusterId = "7bc79ca1-9746-42a3-a35a-efb3cde44492"
     properties.nodeId = 1
@@ -91,7 +91,7 @@ class BrokerMetadataCheckpointTest {
 
   @Test
   def testMetaPropertiesWithInvalidClusterId(): Unit = {
-    val properties = RawMetaProperties()
+    val properties = new RawMetaProperties()
     properties.version = 1
     properties.clusterId = "not a valid uuid"
     properties.nodeId = 1
@@ -100,7 +100,7 @@ class BrokerMetadataCheckpointTest {
 
   @Test
   def testMetaPropertiesWithMissingBrokerId(): Unit = {
-    val properties = RawMetaProperties()
+    val properties = new RawMetaProperties()
     properties.version = 1
     properties.clusterId = "H3KKO4NTRPaCWtEmm3vW7A"
     assertThrows(classOf[RuntimeException], () => MetaProperties.parse(properties))
@@ -108,7 +108,7 @@ class BrokerMetadataCheckpointTest {
 
   @Test
   def testMetaPropertiesWithMissingControllerId(): Unit = {
-    val properties = RawMetaProperties()
+    val properties = new RawMetaProperties()
     properties.version = 1
     properties.clusterId = "H3KKO4NTRPaCWtEmm3vW7A"
     assertThrows(classOf[RuntimeException], () => MetaProperties.parse(properties))
@@ -120,12 +120,10 @@ class BrokerMetadataCheckpointTest {
     val invalidDir = TestUtils.tempFile("blah")
     try {
       // The `ignoreMissing` flag has no effect if there is an IO error
-      assertEquals((new RawMetaProperties(), Seq(invalidDir.getAbsolutePath)),
-        BrokerMetadataCheckpoint.getBrokerMetadataAndOfflineDirs(
-          Seq(invalidDir.getAbsolutePath), false))
-      assertEquals((new RawMetaProperties(), Seq(invalidDir.getAbsolutePath)),
-        BrokerMetadataCheckpoint.getBrokerMetadataAndOfflineDirs(
-          Seq(invalidDir.getAbsolutePath), true))
+      testEmptyGetBrokerMetadataAndOfflineDirs(invalidDir,
+        expectedOfflineDirs = Seq(invalidDir), ignoreMissing = true)
+      testEmptyGetBrokerMetadataAndOfflineDirs(invalidDir,
+        expectedOfflineDirs = Seq(invalidDir), ignoreMissing = false)
     } finally {
       Utils.delete(invalidDir)
     }
@@ -135,15 +133,26 @@ class BrokerMetadataCheckpointTest {
   def testGetBrokerMetadataAndOfflineDirsIgnoreMissing(): Unit = {
     val tempDir = TestUtils.tempDirectory()
     try {
-      assertEquals((new RawMetaProperties(), Seq()),
-        BrokerMetadataCheckpoint.getBrokerMetadataAndOfflineDirs(
-          Seq(tempDir.getAbsolutePath), true))
+      testEmptyGetBrokerMetadataAndOfflineDirs(tempDir,
+        expectedOfflineDirs = Seq(), ignoreMissing = true)
+
       assertThrows(classOf[RuntimeException],
         () => BrokerMetadataCheckpoint.getBrokerMetadataAndOfflineDirs(
           Seq(tempDir.getAbsolutePath), false))
     } finally {
       Utils.delete(tempDir)
     }
+  }
+
+  private def testEmptyGetBrokerMetadataAndOfflineDirs(
+    logDir: File,
+    expectedOfflineDirs: Seq[File],
+    ignoreMissing: Boolean
+  ): Unit = {
+    val (metaProperties, offlineDirs) = BrokerMetadataCheckpoint.getBrokerMetadataAndOfflineDirs(
+      Seq(logDir.getAbsolutePath), ignoreMissing)
+    assertEquals(expectedOfflineDirs.map(_.getAbsolutePath), offlineDirs)
+    assertEquals(new Properties(), metaProperties.props)
   }
 
 }

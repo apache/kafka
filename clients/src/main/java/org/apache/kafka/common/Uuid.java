@@ -113,7 +113,7 @@ public class Uuid implements Comparable<Uuid> {
         ByteBuffer uuidBytes = ByteBuffer.wrap(Base64.getUrlDecoder().decode(str));
         if (uuidBytes.remaining() != 16) {
             throw new IllegalArgumentException("Input string `" + str + "` decoded as "
-                + uuidBytes.remaining() + " bytes, which is more than the expected 16 bytes "
+                + uuidBytes.remaining() + " bytes, which is not equal to the expected 16 bytes "
                 + "of a base64-encoded UUID");
         }
 

@@ -223,7 +223,7 @@ class ServerGenerateClusterIdTest extends ZooKeeperTestHarness {
         new File(logDir + File.separator + brokerMetaPropsFile)).read()
       brokerMetadataOpt match {
         case Some(properties) =>
-          val brokerMetadata = RawMetaProperties(properties)
+          val brokerMetadata = new RawMetaProperties(properties)
           if (brokerMetadata.clusterId.exists(_ != clusterId)) return false
         case _ => return false
       }
