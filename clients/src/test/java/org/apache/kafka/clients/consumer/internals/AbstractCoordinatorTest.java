@@ -51,7 +51,9 @@ import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Timer;
+import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.test.TestUtils;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 
 import java.nio.ByteBuffer;
@@ -101,6 +103,12 @@ public class AbstractCoordinatorTest {
     private final String memberId = "memberId";
     private final String leaderId = "leaderId";
     private final int defaultGeneration = -1;
+
+    @AfterEach
+    public void closeCoordinator() {
+        Utils.closeQuietly(coordinator, "close coordinator");
+        Utils.closeQuietly(consumerClient, "close consumer client");
+    }
 
     private void setupCoordinator() {
         setupCoordinator(RETRY_BACKOFF_MS, REBALANCE_TIMEOUT_MS,
