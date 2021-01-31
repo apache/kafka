@@ -19,7 +19,6 @@ package kafka.controller
 
 import java.util.Properties
 import java.util.concurrent.{CountDownLatch, LinkedBlockingQueue}
-
 import com.yammer.metrics.Metrics
 import com.yammer.metrics.core.Timer
 import kafka.api.LeaderAndIsr
@@ -32,8 +31,10 @@ import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.errors.{ControllerMovedException, NotEnoughReplicasException, StaleBrokerEpochException}
 import org.apache.log4j.Level
 import kafka.utils.LogCaptureAppender
+import org.apache.kafka.clients.admin.{Admin, AdminClient, AdminClientConfig}
 import org.apache.kafka.common.config.TopicConfig
 import org.apache.kafka.common.metrics.KafkaMetric
+import org.apache.kafka.common.network.ListenerName
 import org.scalatest.Assertions.fail
 
 import scala.collection.JavaConverters._
@@ -557,7 +558,7 @@ class ControllerIntegrationTest extends ZooKeeperTestHarness {
     val controller = servers.find(p => p.config.brokerId == controllerId).get.kafkaController
     val resultQueue = new LinkedBlockingQueue[Try[collection.Set[TopicPartition]]]()
 
-    controller.setMinInSyncReplicas(topic, 2)
+    // The controller should record the min.insync.replicas config for this newly created topic.
     TestUtils.waitUntilTrue(() => controller.controllerContext.topicMinIsrConfig.getOrElse(topic, -1) == 2, "Controller never saw min.insync.replicas config change for topic.")
 
     // Attempt to shut down one broker, which should be allowed with the ISR at 3 and the min ISR of 2
@@ -599,7 +600,8 @@ class ControllerIntegrationTest extends ZooKeeperTestHarness {
     val newControllerId = zkClient.getControllerId.get
     val newController = servers.find(p => p.config.brokerId == newControllerId).get.kafkaController
 
-    newController.setMinInSyncReplicas(topic, 2)
+    // The controller should record the min.insync.replicas config for this newly created topic since the controller
+    // will scan topic configurations on failover.
     TestUtils.waitUntilTrue(() => newController.controllerContext.topicMinIsrConfig.getOrElse(topic, -1) == 2, "Controller never saw min.insync.replicas config change for topic.")
 
     // Controller moved, try to shut down again. We should get rejected in the same way.
@@ -634,6 +636,17 @@ class ControllerIntegrationTest extends ZooKeeperTestHarness {
     assertEquals(0, leaderAfterShutdown)
     assertEquals(2, partitionStateInfo.isr.size)
     assertEquals(List(0, 3), partitionStateInfo.isr.asScala)
+
+    // The controller should see topic configuration changes.
+    val adminClient = createAdminClient();
+    try{
+      val updatedTopicConfig = new Properties()
+      updatedTopicConfig.setProperty(KafkaConfig.MinInSyncReplicasProp, "1")
+      TestUtils.alterTopicConfigs(adminClient, topic, updatedTopicConfig)
+    } finally {
+      adminClient.close()
+    }
+    TestUtils.waitUntilTrue(() => newController.controllerContext.topicMinIsrConfig.getOrElse(topic, -1) == 1, "Controller never saw min.insync.replicas config change for topic.")
   }
 
   @Test
@@ -867,4 +880,11 @@ class ControllerIntegrationTest extends ZooKeeperTestHarness {
     servers.filter(s => s.config.brokerId == controllerId).head
   }
 
+  private def createAdminClient(): Admin = {
+    val config = new Properties
+    val bootstrapServers = TestUtils.bootstrapServers(servers, new ListenerName("PLAINTEXT"))
+    config.put(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers)
+    config.put(AdminClientConfig.METADATA_MAX_AGE_CONFIG, "10")
+    AdminClient.create(config)
+  }
 }
