@@ -95,7 +95,8 @@ private[raft] class RaftSendThread(
 class KafkaNetworkChannel(
   time: Time,
   client: KafkaClient,
-  requestTimeoutMs: Int
+  requestTimeoutMs: Int,
+  threadNamePrefix: String
 ) extends NetworkChannel with Logging {
   import KafkaNetworkChannel._
 
@@ -105,7 +106,7 @@ class KafkaNetworkChannel(
   private val endpoints = mutable.HashMap.empty[Int, Node]
 
   private val requestThread = new RaftSendThread(
-    name = "raft-outbound-request-thread",
+    name = threadNamePrefix + "-outbound-request-thread",
     networkClient = client,
     requestTimeoutMs = requestTimeoutMs,
     time = time,
@@ -179,7 +180,6 @@ class KafkaNetworkChannel(
 
   override def close(): Unit = {
     requestThread.shutdown()
-    client.close()
   }
 
 }

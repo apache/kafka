@@ -55,8 +55,10 @@ import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.stream.Collectors;
@@ -289,6 +291,7 @@ public class StreamThread extends Thread {
     private volatile State state = State.CREATED;
     private volatile ThreadMetadata threadMetadata;
     private StreamThread.StateListener stateListener;
+    private final Optional<String> getGroupInstanceID;
 
     private final ChangelogReader changelogReader;
     private final ConsumerRebalanceListener rebalanceListener;
@@ -302,6 +305,7 @@ public class StreamThread extends Thread {
     private Runnable shutdownErrorHook;
     private AtomicInteger assignmentErrorCode;
     private final ProcessingMode processingMode;
+    private AtomicBoolean leaveGroupRequested;
 
     public static StreamThread create(final InternalTopologyBuilder builder,
                                       final StreamsConfig config,
@@ -471,7 +475,7 @@ public class StreamThread extends Thread {
                         final java.util.function.Consumer<Long> cacheResizer) {
         super(threadId);
         this.stateLock = new Object();
-
+        this.leaveGroupRequested = new AtomicBoolean(false);
         this.adminClient = adminClient;
         this.streamsMetrics = streamsMetrics;
         this.commitSensor = ThreadMetrics.commitSensor(threadId, streamsMetrics);
@@ -515,6 +519,7 @@ public class StreamThread extends Thread {
         this.changelogReader = changelogReader;
         this.originalReset = originalReset;
         this.nextProbingRebalanceMs = nextProbingRebalanceMs;
+        this.getGroupInstanceID = mainConsumer.groupMetadata().groupInstanceId();
 
         this.pollTime = Duration.ofMillis(config.getLong(StreamsConfig.POLL_MS_CONFIG));
         final int dummyThreadIdx = 1;
@@ -617,17 +622,27 @@ public class StreamThread extends Thread {
         this.streamsUncaughtExceptionHandler = streamsUncaughtExceptionHandler;
     }
 
-    public void waitOnThreadState(final StreamThread.State targetState) {
+    public boolean waitOnThreadState(final StreamThread.State targetState, final long timeoutMs) {
+        final long begin = time.milliseconds();
         synchronized (stateLock) {
             boolean interrupted = false;
+            long elapsedMs = 0L;
             try {
                 while (state != targetState) {
-                    try {
-                        stateLock.wait();
-                    } catch (final InterruptedException e) {
-                        interrupted = true;
+                    if (timeoutMs >= elapsedMs) {
+                        final long remainingMs = timeoutMs - elapsedMs;
+                        try {
+                            stateLock.wait(remainingMs);
+                        } catch (final InterruptedException e) {
+                            interrupted = true;
+                        }
+                    } else {
+                        log.debug("Cannot transit to {} within {}ms", targetState, timeoutMs);
+                        return false;
                     }
+                    elapsedMs = time.milliseconds() - begin;
                 }
+                return true;
             } finally {
                 // Make sure to restore the interruption status before returning.
                 // We do not always own the current thread that executes this method, i.e., we do not know the
@@ -1061,6 +1076,9 @@ public class StreamThread extends Thread {
         } catch (final Throwable e) {
             log.error("Failed to close changelog reader due to the following error:", e);
         }
+        if (leaveGroupRequested.get()) {
+            mainConsumer.unsubscribe();
+        }
         try {
             mainConsumer.close();
         } catch (final Throwable e) {
@@ -1074,6 +1092,7 @@ public class StreamThread extends Thread {
         streamsMetrics.removeAllThreadLevelSensors(getName());
 
         setState(State.DEAD);
+
         log.info("Shutdown complete");
     }
 
@@ -1156,6 +1175,14 @@ public class StreamThread extends Thread {
      */
     public String toString(final String indent) {
         return indent + "\tStreamsThread threadId: " + getName() + "\n" + taskManager.toString(indent);
+    }
+
+    public Optional<String> getGroupInstanceID() {
+        return getGroupInstanceID;
+    }
+
+    public void requestLeaveGroupDuringShutdown() {
+        this.leaveGroupRequested.set(true);
     }
 
     public Map<MetricName, Metric> producerMetrics() {

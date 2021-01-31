@@ -30,7 +30,7 @@
     { "name": "myString", "type": "string", "taggedVersions": "1+", "tag": 4 },
     { "name": "myBytes", "type": "bytes",
         "nullableVersions": "1+", "taggedVersions": "1+", "tag": 5 },
-    { "name": "taggedUuid", "type": "uuid", "default": "212d54944a8b4fdf94b388b470beb367",
+    { "name": "taggedUuid", "type": "uuid", "default": "H3KKO4NTRPaCWtEmm3vW7A",
         "taggedVersions": "1+", "tag": 6 },
     { "name": "taggedLong", "type": "int64", "default": "0xcafcacafcacafca",
         "taggedVersions": "1+", "tag": 7 },

@@ -41,7 +41,7 @@ class KafkaNetworkChannelTest {
   private val time = new MockTime()
   private val client = new MockClient(time, new StubMetadataUpdater)
   private val topicPartition = new TopicPartition("topic", 0)
-  private val channel = new KafkaNetworkChannel(time, client, requestTimeoutMs)
+  private val channel = new KafkaNetworkChannel(time, client, requestTimeoutMs, threadNamePrefix = "test-raft")
 
   @BeforeEach
   def setupSupportedApis(): Unit = {

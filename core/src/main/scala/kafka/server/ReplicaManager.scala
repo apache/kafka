@@ -41,7 +41,7 @@ import org.apache.kafka.common.errors._
 import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.message.LeaderAndIsrRequestData.LeaderAndIsrPartitionState
 import org.apache.kafka.common.message.DeleteRecordsResponseData.DeleteRecordsPartitionResult
-import org.apache.kafka.common.message.{DescribeLogDirsResponseData, FetchResponseData, LeaderAndIsrResponseData}
+import org.apache.kafka.common.message.{DescribeLogDirsResponseData, DescribeProducersResponseData, FetchResponseData, LeaderAndIsrResponseData}
 import org.apache.kafka.common.message.LeaderAndIsrResponseData.LeaderAndIsrTopicError
 import org.apache.kafka.common.message.LeaderAndIsrResponseData.LeaderAndIsrPartitionError
 import org.apache.kafka.common.message.OffsetForLeaderEpochRequestData.OffsetForLeaderTopic
@@ -610,11 +610,17 @@ class ReplicaManager(val config: KafkaConfig,
       debug("Produce to local log in %d ms".format(time.milliseconds - sTime))
 
       val produceStatus = localProduceResults.map { case (topicPartition, result) =>
-        topicPartition ->
-                ProducePartitionStatus(
-                  result.info.lastOffset + 1, // required offset
-                  new PartitionResponse(result.error, result.info.firstOffset.getOrElse(-1), result.info.logAppendTime,
-                    result.info.logStartOffset, result.info.recordErrors.asJava, result.info.errorMessage)) // response status
+        topicPartition -> ProducePartitionStatus(
+          result.info.lastOffset + 1, // required offset
+          new PartitionResponse(
+            result.error,
+            result.info.firstOffset.map(_.messageOffset).getOrElse(-1),
+            result.info.logAppendTime,
+            result.info.logStartOffset,
+            result.info.recordErrors.asJava,
+            result.info.errorMessage
+          )
+        ) // response status
       }
 
       actionQueue.add {
@@ -661,8 +667,12 @@ class ReplicaManager(val config: KafkaConfig,
       // If required.acks is outside accepted range, something is wrong with the client
       // Just return an error and don't handle the request at all
       val responseStatus = entriesPerPartition.map { case (topicPartition, _) =>
-        topicPartition -> new PartitionResponse(Errors.INVALID_REQUIRED_ACKS,
-          LogAppendInfo.UnknownLogAppendInfo.firstOffset.getOrElse(-1), RecordBatch.NO_TIMESTAMP, LogAppendInfo.UnknownLogAppendInfo.logStartOffset)
+        topicPartition -> new PartitionResponse(
+          Errors.INVALID_REQUIRED_ACKS,
+          LogAppendInfo.UnknownLogAppendInfo.firstOffset.map(_.messageOffset).getOrElse(-1),
+          RecordBatch.NO_TIMESTAMP,
+          LogAppendInfo.UnknownLogAppendInfo.logStartOffset
+        )
       }
       responseCallback(responseStatus)
     }
@@ -1999,4 +2009,14 @@ class ReplicaManager(val config: KafkaConfig,
 
     controller.electLeaders(partitions, electionType, electionCallback)
   }
+
+  def activeProducerState(requestPartition: TopicPartition): DescribeProducersResponseData.PartitionResponse = {
+    getPartitionOrError(requestPartition) match {
+      case Left(error) => new DescribeProducersResponseData.PartitionResponse()
+        .setPartitionIndex(requestPartition.partition)
+        .setErrorCode(error.code)
+      case Right(partition) => partition.activeProducerState
+    }
+  }
+
 }

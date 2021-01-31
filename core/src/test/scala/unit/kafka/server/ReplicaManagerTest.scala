@@ -35,6 +35,7 @@ import kafka.utils.TestUtils.createBroker
 import kafka.utils.timer.MockTimer
 import kafka.utils.{MockScheduler, MockTime, TestUtils}
 import kafka.zk.KafkaZkClient
+import org.apache.kafka.common.message.LeaderAndIsrRequestData
 import org.apache.kafka.common.message.LeaderAndIsrRequestData.LeaderAndIsrPartitionState
 import org.apache.kafka.common.message.OffsetForLeaderEpochResponseData.EpochEndOffset
 import org.apache.kafka.common.message.StopReplicaRequestData.StopReplicaPartitionState
@@ -597,7 +598,8 @@ class ReplicaManagerTest {
     val maxFetchBytes = 1024 * 1024
     val aliveBrokersIds = Seq(0, 1)
     val leaderEpoch = 5
-    val replicaManager = setupReplicaManagerWithMockedPurgatories(new MockTimer(time), aliveBrokersIds)
+    val replicaManager = setupReplicaManagerWithMockedPurgatories(new MockTimer(time),
+      brokerId = 0, aliveBrokersIds)
     try {
       val tp = new TopicPartition(topic, 0)
       val replicas = aliveBrokersIds.toList.map(Int.box).asJava
@@ -1709,9 +1711,13 @@ class ReplicaManagerTest {
     result
   }
 
-  private def setupReplicaManagerWithMockedPurgatories(timer: MockTimer, aliveBrokerIds: Seq[Int] = Seq(0, 1),
-                                                       propsModifier: Properties => Unit = _ => {}): ReplicaManager = {
-    val props = TestUtils.createBrokerConfig(0, TestUtils.MockZkConnect)
+  private def setupReplicaManagerWithMockedPurgatories(
+    timer: MockTimer,
+    brokerId: Int = 0,
+    aliveBrokerIds: Seq[Int] = Seq(0, 1),
+    propsModifier: Properties => Unit = _ => {}
+  ): ReplicaManager = {
+    val props = TestUtils.createBrokerConfig(brokerId, TestUtils.MockZkConnect)
     props.put("log.dirs", TestUtils.tempRelativeDir("data").getAbsolutePath + "," + TestUtils.tempRelativeDir("data2").getAbsolutePath)
     propsModifier.apply(props)
     val config = KafkaConfig.fromProps(props)
@@ -2311,4 +2317,89 @@ class ReplicaManagerTest {
       assertTrue(log4.partitionMetadataFile.get.isEmpty())
     } finally replicaManager.shutdown(checkpointHW = false)
   }
+
+  private def leaderAndIsrRequest(
+    topicId: Uuid,
+    topicPartition: TopicPartition,
+    replicas: Seq[Int],
+    leaderAndIsr: LeaderAndIsr,
+    isNew: Boolean = true,
+    brokerEpoch: Int = 0,
+    controllerId: Int = 0,
+    controllerEpoch: Int = 0,
+    version: Short = LeaderAndIsrRequestData.HIGHEST_SUPPORTED_VERSION
+  ): LeaderAndIsrRequest = {
+    val partitionState = new LeaderAndIsrPartitionState()
+      .setTopicName(topicPartition.topic)
+      .setPartitionIndex(topicPartition.partition)
+      .setControllerEpoch(controllerEpoch)
+      .setLeader(leaderAndIsr.leader)
+      .setLeaderEpoch(leaderAndIsr.leaderEpoch)
+      .setIsr(leaderAndIsr.isr.map(Int.box).asJava)
+      .setZkVersion(leaderAndIsr.zkVersion)
+      .setReplicas(replicas.map(Int.box).asJava)
+      .setIsNew(isNew)
+
+    def mkNode(replicaId: Int): Node = {
+      new Node(replicaId, s"host-$replicaId", 9092)
+    }
+
+    val nodes = Set(mkNode(controllerId)) ++ replicas.map(mkNode).toSet
+
+    new LeaderAndIsrRequest.Builder(
+      version,
+      controllerId,
+      controllerEpoch,
+      brokerEpoch,
+      Seq(partitionState).asJava,
+      Map(topicPartition.topic -> topicId).asJava,
+      nodes.asJava
+    ).build()
+  }
+
+  @Test
+  def testActiveProducerState(): Unit = {
+    val brokerId = 0
+    val replicaManager = setupReplicaManagerWithMockedPurgatories(new MockTimer(time), brokerId)
+    try {
+      val fooPartition = new TopicPartition("foo", 0)
+      Mockito.when(replicaManager.metadataCache.contains(fooPartition)).thenReturn(false)
+      val fooProducerState = replicaManager.activeProducerState(fooPartition)
+      assertEquals(Errors.UNKNOWN_TOPIC_OR_PARTITION, Errors.forCode(fooProducerState.errorCode))
+
+      val oofPartition = new TopicPartition("oof", 0)
+      Mockito.when(replicaManager.metadataCache.contains(oofPartition)).thenReturn(true)
+      val oofProducerState = replicaManager.activeProducerState(oofPartition)
+      assertEquals(Errors.NOT_LEADER_OR_FOLLOWER, Errors.forCode(oofProducerState.errorCode))
+
+      // This API is supported by both leaders and followers
+
+      val barPartition = new TopicPartition("bar", 0)
+      val barLeaderAndIsrRequest = leaderAndIsrRequest(
+        topicId = Uuid.randomUuid(),
+        topicPartition = barPartition,
+        replicas = Seq(brokerId),
+        leaderAndIsr = LeaderAndIsr(brokerId, List(brokerId))
+      )
+      replicaManager.becomeLeaderOrFollower(0, barLeaderAndIsrRequest, (_, _) => ())
+      val barProducerState = replicaManager.activeProducerState(barPartition)
+      assertEquals(Errors.NONE, Errors.forCode(barProducerState.errorCode))
+
+      val otherBrokerId = 1
+      val bazPartition = new TopicPartition("baz", 0)
+      val bazLeaderAndIsrRequest = leaderAndIsrRequest(
+        topicId = Uuid.randomUuid(),
+        topicPartition = bazPartition,
+        replicas = Seq(brokerId, otherBrokerId),
+        leaderAndIsr = LeaderAndIsr(otherBrokerId, List(brokerId, otherBrokerId))
+      )
+      replicaManager.becomeLeaderOrFollower(0, bazLeaderAndIsrRequest, (_, _) => ())
+      val bazProducerState = replicaManager.activeProducerState(bazPartition)
+      assertEquals(Errors.NONE, Errors.forCode(bazProducerState.errorCode))
+    } finally {
+      replicaManager.shutdown(checkpointHW = false)
+    }
+
+  }
+
 }
