@@ -229,13 +229,14 @@ public class SimpleExampleMessageTest {
     public void testTaggedUuid() {
         testRoundTrip(new SimpleExampleMessageData(),
             message -> assertEquals(
-                Uuid.fromString("212d54944a8b4fdf94b388b470beb367"),
+                Uuid.fromString("H3KKO4NTRPaCWtEmm3vW7A"),
                 message.taggedUuid()));
 
+        Uuid randomUuid = Uuid.randomUuid();
         testRoundTrip(new SimpleExampleMessageData().
-                setTaggedUuid(Uuid.fromString("0123456789abcdef0123456789abcdef")),
+                setTaggedUuid(randomUuid),
             message -> assertEquals(
-                Uuid.fromString("0123456789abcdef0123456789abcdef"),
+                randomUuid,
                 message.taggedUuid()));
     }
 

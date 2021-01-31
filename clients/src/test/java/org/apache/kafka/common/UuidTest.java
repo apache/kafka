@@ -18,8 +18,11 @@ package org.apache.kafka.common;
 
 import org.junit.jupiter.api.Test;
 
+import java.util.Base64;
+
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 public class UuidTest {
 
@@ -94,4 +97,14 @@ public class UuidTest {
         assertEquals(-1, id01.compareTo(id10));
         assertEquals(1, id10.compareTo(id01));
     }
+
+    @Test
+    public void testFromStringWithInvalidInput() {
+        String oversizeString = Base64.getUrlEncoder().withoutPadding().encodeToString(new byte[32]);
+        assertThrows(IllegalArgumentException.class, () -> Uuid.fromString(oversizeString));
+
+        String undersizeString = Base64.getUrlEncoder().withoutPadding().encodeToString(new byte[4]);
+        assertThrows(IllegalArgumentException.class, () -> Uuid.fromString(undersizeString));
+    }
+
 }
