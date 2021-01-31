@@ -278,6 +278,9 @@ class ReplicaManager(val config: KafkaConfig,
 
   def deferrableMetadataChanges(): Unit = {
     replicaStateChangeLock synchronized {
+      if (config.requiresZookeeper) {
+        throw new IllegalStateException("Partition metadata changes can never be deferred when using ZooKeeper")
+      }
       changesDeferrable = true
       stateChangeLogger.info(s"Metadata changes are now deferrable")
     }
