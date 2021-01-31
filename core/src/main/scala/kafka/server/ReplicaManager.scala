@@ -204,8 +204,7 @@ class ReplicaManager(val config: KafkaConfig,
                      val delayedDeleteRecordsPurgatory: DelayedOperationPurgatory[DelayedDeleteRecords],
                      val delayedElectLeaderPurgatory: DelayedOperationPurgatory[DelayedElectLeader],
                      threadNamePrefix: Option[String],
-                     val alterIsrManager: AlterIsrManager,
-                     usingRaftMetadataQuorum: Boolean) extends Logging with KafkaMetricsGroup {
+                     val alterIsrManager: AlterIsrManager) extends Logging with KafkaMetricsGroup {
 
   def this(config: KafkaConfig,
            metrics: Metrics,
@@ -233,7 +232,7 @@ class ReplicaManager(val config: KafkaConfig,
         purgeInterval = config.deleteRecordsPurgatoryPurgeIntervalRequests),
       DelayedOperationPurgatory[DelayedElectLeader](
         purgatoryName = "ElectLeader", brokerId = config.brokerId),
-      threadNamePrefix, alterIsrManager, false)
+      threadNamePrefix, alterIsrManager)
   }
 
   /* epoch of the controller that last changed the leader */
@@ -268,7 +267,7 @@ class ReplicaManager(val config: KafkaConfig,
   // Changes are initially deferrable when using a Raft-based metadata quorum, and may flip-flop thereafter;
   // changes are never deferrable when using ZooKeeper.  When true, this indicates that we should transition online
   // partitions to the deferred state if we see metadata with a different leader epoch.
-  @volatile private var changesDeferrable: Boolean = usingRaftMetadataQuorum
+  @volatile private var changesDeferrable: Boolean = !config.requiresZookeeper
   stateChangeLogger.info(s"Metadata changes deferrable=$changesDeferrable")
 
   private def confirmChangesNotDeferrableWithZooKeeper(): Unit = {
