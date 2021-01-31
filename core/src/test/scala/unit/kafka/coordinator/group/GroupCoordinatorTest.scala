@@ -34,7 +34,6 @@ import java.util.concurrent.locks.ReentrantLock
 
 import kafka.cluster.Partition
 import kafka.log.AppendOrigin
-import kafka.zk.KafkaZkClient
 import org.apache.kafka.clients.consumer.ConsumerPartitionAssignor.Subscription
 import org.apache.kafka.clients.consumer.internals.ConsumerProtocol
 import org.apache.kafka.common.internals.Topic
@@ -72,7 +71,6 @@ class GroupCoordinatorTest {
   var groupCoordinator: GroupCoordinator = null
   var replicaManager: ReplicaManager = null
   var scheduler: KafkaScheduler = null
-  var zkClient: KafkaZkClient = null
 
   private val groupId = "groupId"
   private val protocolType = "consumer"
@@ -104,11 +102,6 @@ class GroupCoordinatorTest {
 
     replicaManager = EasyMock.createNiceMock(classOf[ReplicaManager])
 
-    zkClient = EasyMock.createNiceMock(classOf[KafkaZkClient])
-    // make two partitions of the group topic to make sure some partitions are not owned by the coordinator
-    EasyMock.expect(zkClient.getTopicPartitionCount(Topic.GROUP_METADATA_TOPIC_NAME)).andReturn(Some(2))
-    EasyMock.replay(zkClient)
-
     timer = new MockTimer
 
     val config = KafkaConfig.fromProps(props)
@@ -116,8 +109,8 @@ class GroupCoordinatorTest {
     val heartbeatPurgatory = new DelayedOperationPurgatory[DelayedHeartbeat]("Heartbeat", timer, config.brokerId, reaperEnabled = false)
     val joinPurgatory = new DelayedOperationPurgatory[DelayedJoin]("Rebalance", timer, config.brokerId, reaperEnabled = false)
 
-    groupCoordinator = GroupCoordinator(config, zkClient, replicaManager, heartbeatPurgatory, joinPurgatory, timer.time, new Metrics())
-    groupCoordinator.startup(enableMetadataExpiration = false)
+    groupCoordinator = GroupCoordinator(config, replicaManager, heartbeatPurgatory, joinPurgatory, timer.time, new Metrics())
+    groupCoordinator.startup(2, enableMetadataExpiration = false)
 
     // add the partition into the owned partition list
     groupPartitionId = groupCoordinator.partitionFor(groupId)

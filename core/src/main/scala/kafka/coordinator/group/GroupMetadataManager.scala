@@ -35,7 +35,6 @@ import kafka.server.{FetchLogEnd, ReplicaManager}
 import kafka.utils.CoreUtils.inLock
 import kafka.utils.Implicits._
 import kafka.utils._
-import kafka.zk.KafkaZkClient
 import org.apache.kafka.clients.consumer.ConsumerRecord
 import org.apache.kafka.clients.consumer.internals.ConsumerProtocol
 import org.apache.kafka.common.internals.Topic
@@ -57,7 +56,6 @@ class GroupMetadataManager(brokerId: Int,
                            interBrokerProtocolVersion: ApiVersion,
                            config: OffsetConfig,
                            val replicaManager: ReplicaManager,
-                           zkClient: KafkaZkClient,
                            time: Time,
                            metrics: Metrics) extends Logging with KafkaMetricsGroup {
 
@@ -78,7 +76,7 @@ class GroupMetadataManager(brokerId: Int,
   private val shuttingDown = new AtomicBoolean(false)
 
   /* number of partitions for the consumer metadata topic */
-  private val groupMetadataTopicPartitionCount = getGroupMetadataTopicPartitionCount
+  private var groupMetadataTopicPartitionCount: Int = -1
 
   /* single-thread scheduler to handle offset/group metadata cache loading and unloading */
   private val scheduler = new KafkaScheduler(threads = 1, threadNamePrefix = "group-metadata-manager-")
@@ -170,7 +168,13 @@ class GroupMetadataManager(brokerId: Int,
       }
     })
 
-  def startup(enableMetadataExpiration: Boolean): Unit = {
+  def startup(groupMetadataTopicPartitionCount: Int,
+              enableMetadataExpiration: Boolean): Unit = {
+    if (groupMetadataTopicPartitionCount <= 0) {
+      throw new IllegalArgumentException("Can't set groupMetadataTopicPartitionCount to " +
+        s"${groupMetadataTopicPartitionCount}. This value must be positive.")
+    }
+    this.groupMetadataTopicPartitionCount = groupMetadataTopicPartitionCount
     scheduler.startup()
     if (enableMetadataExpiration) {
       scheduler.schedule(name = "delete-expired-group-metadata",
@@ -180,13 +184,23 @@ class GroupMetadataManager(brokerId: Int,
     }
   }
 
+  // For testing without having to invoke startup()
+  private[group] def setGroupMetadataTopicPartitionCount(groupMetadataTopicPartitionCount: Int): Unit = {
+    this.groupMetadataTopicPartitionCount = groupMetadataTopicPartitionCount
+  }
+
   def currentGroups: Iterable[GroupMetadata] = groupMetadataCache.values
 
   def isPartitionOwned(partition: Int) = inLock(partitionLock) { ownedPartitions.contains(partition) }
 
   def isPartitionLoading(partition: Int) = inLock(partitionLock) { loadingPartitions.contains(partition) }
 
-  def partitionFor(groupId: String): Int = Utils.abs(groupId.hashCode) % groupMetadataTopicPartitionCount
+  def partitionFor(groupId: String): Int = {
+    if (groupMetadataTopicPartitionCount <= 0) {
+      throw new IllegalStateException("GroupMetadataManager has not yet been initialized.")
+    }
+    Utils.abs(groupId.hashCode) % groupMetadataTopicPartitionCount
+  }
 
   def isGroupLocal(groupId: String): Boolean = isPartitionOwned(partitionFor(groupId))
 
@@ -932,14 +946,6 @@ class GroupMetadataManager(brokerId: Int,
       scheduler.shutdown()
 
     // TODO: clear the caches
-  }
-
-  /**
-   * Gets the partition count of the group metadata topic from ZooKeeper.
-   * If the topic does not exist, the configured partition count is returned.
-   */
-  private def getGroupMetadataTopicPartitionCount: Int = {
-    zkClient.getTopicPartitionCount(Topic.GROUP_METADATA_TOPIC_NAME).getOrElse(config.offsetsTopicNumPartitions)
   }
 
   /**

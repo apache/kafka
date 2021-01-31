@@ -33,7 +33,6 @@ import org.apache.kafka.common.message.LeaveGroupRequestData.MemberIdentity
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests.{JoinGroupRequest, OffsetFetchResponse}
 import org.apache.kafka.common.utils.Time
-import org.easymock.EasyMock
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
 
@@ -69,11 +68,6 @@ class GroupCoordinatorConcurrencyTest extends AbstractCoordinatorConcurrencyTest
   override def setUp(): Unit = {
     super.setUp()
 
-    EasyMock.expect(zkClient.getTopicPartitionCount(Topic.GROUP_METADATA_TOPIC_NAME))
-      .andReturn(Some(numPartitions))
-      .anyTimes()
-    EasyMock.replay(zkClient)
-
     serverProps.setProperty(KafkaConfig.GroupMinSessionTimeoutMsProp, ConsumerMinSessionTimeout.toString)
     serverProps.setProperty(KafkaConfig.GroupMaxSessionTimeoutMsProp, ConsumerMaxSessionTimeout.toString)
     serverProps.setProperty(KafkaConfig.GroupInitialRebalanceDelayMsProp, GroupInitialRebalanceDelay.toString)
@@ -83,8 +77,8 @@ class GroupCoordinatorConcurrencyTest extends AbstractCoordinatorConcurrencyTest
     heartbeatPurgatory = new DelayedOperationPurgatory[DelayedHeartbeat]("Heartbeat", timer, config.brokerId, reaperEnabled = false)
     joinPurgatory = new DelayedOperationPurgatory[DelayedJoin]("Rebalance", timer, config.brokerId, reaperEnabled = false)
 
-    groupCoordinator = GroupCoordinator(config, zkClient, replicaManager, heartbeatPurgatory, joinPurgatory, timer.time, new Metrics())
-    groupCoordinator.startup(false)
+    groupCoordinator = GroupCoordinator(config, replicaManager, heartbeatPurgatory, joinPurgatory, timer.time, new Metrics())
+    groupCoordinator.startup(numPartitions, false)
   }
 
   @AfterEach
@@ -148,9 +142,9 @@ class GroupCoordinatorConcurrencyTest extends AbstractCoordinatorConcurrencyTest
 
     if (groupCoordinator != null)
       groupCoordinator.shutdown()
-    groupCoordinator = GroupCoordinator(config, zkClient, replicaManager, heartbeatPurgatory,
+    groupCoordinator = GroupCoordinator(config, replicaManager, heartbeatPurgatory,
       joinPurgatory, timer.time, new Metrics())
-    groupCoordinator.startup(false)
+    groupCoordinator.startup(numPartitions, false)
 
     val members = new Group(s"group", nMembersPerGroup, groupCoordinator, replicaManager)
       .members

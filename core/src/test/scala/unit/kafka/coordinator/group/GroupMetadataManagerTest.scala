@@ -31,7 +31,6 @@ import kafka.log.{AppendOrigin, Log, LogAppendInfo}
 import kafka.metrics.KafkaYammerMetrics
 import kafka.server.{FetchDataInfo, FetchLogEnd, HostedPartition, KafkaConfig, LogOffsetMetadata, ReplicaManager}
 import kafka.utils.{KafkaScheduler, MockTime, TestUtils}
-import kafka.zk.KafkaZkClient
 import org.apache.kafka.clients.consumer.ConsumerPartitionAssignor
 import org.apache.kafka.clients.consumer.ConsumerPartitionAssignor.Subscription
 import org.apache.kafka.clients.consumer.internals.ConsumerProtocol
@@ -83,14 +82,6 @@ class GroupMetadataManagerTest {
       offsetCommitRequiredAcks = config.offsetCommitRequiredAcks)
   }
 
-  private def mockKafkaZkClient: KafkaZkClient = {
-    // make two partitions of the group topic to make sure some partitions are not owned by the coordinator
-    val zkClient: KafkaZkClient = EasyMock.createNiceMock(classOf[KafkaZkClient])
-    EasyMock.expect(zkClient.getTopicPartitionCount(Topic.GROUP_METADATA_TOPIC_NAME)).andReturn(Some(2))
-    EasyMock.replay(zkClient)
-    zkClient
-  }
-
   @BeforeEach
   def setUp(): Unit = {
     defaultOffsetRetentionMs = offsetConfig.offsetsRetentionMs
@@ -98,7 +89,9 @@ class GroupMetadataManagerTest {
     time = new MockTime
     replicaManager = EasyMock.createNiceMock(classOf[ReplicaManager])
     groupMetadataManager = new GroupMetadataManager(0, ApiVersion.latestVersion, offsetConfig, replicaManager,
-      mockKafkaZkClient, time, metrics)
+      time, metrics)
+    // Specify two partitions in the group topic to make sure some partitions are not owned by the coordinator
+    groupMetadataManager.setGroupMetadataTopicPartitionCount(2)
     partition = EasyMock.niceMock(classOf[Partition])
   }
 
@@ -106,7 +99,7 @@ class GroupMetadataManagerTest {
   def testLogInfoFromCleanupGroupMetadata(): Unit = {
     var expiredOffsets: Int = 0
     var infoCount = 0
-    val gmm = new GroupMetadataManager(0, ApiVersion.latestVersion, offsetConfig, replicaManager, mockKafkaZkClient, time, metrics) {
+    val gmm = new GroupMetadataManager(0, ApiVersion.latestVersion, offsetConfig, replicaManager, time, metrics) {
       override def cleanupGroupMetadata(groups: Iterable[GroupMetadata],
                                         selector: GroupMetadata => Map[TopicPartition, OffsetAndMetadata]): Int = expiredOffsets
 
