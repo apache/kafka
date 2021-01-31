@@ -48,6 +48,7 @@ import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.message.LeaderAndIsrRequestData;
 import org.apache.kafka.common.message.OffsetForLeaderEpochRequestData.OffsetForLeaderPartition;
 import org.apache.kafka.common.message.OffsetForLeaderEpochResponseData.EpochEndOffset;
+import org.apache.kafka.common.message.UpdateMetadataRequestData;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
@@ -56,6 +57,7 @@ import org.apache.kafka.common.record.Records;
 import org.apache.kafka.common.record.RecordsSend;
 import org.apache.kafka.common.requests.FetchRequest;
 import org.apache.kafka.common.requests.FetchResponse;
+import org.apache.kafka.common.requests.UpdateMetadataRequest;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.mockito.Mockito;
@@ -77,6 +79,7 @@ import scala.collection.Iterator;
 import scala.collection.JavaConverters;
 import scala.compat.java8.OptionConverters;
 import scala.collection.Map;
+import scala.jdk.CollectionConverters;
 
 import java.io.File;
 import java.io.IOException;
@@ -185,8 +188,25 @@ public class ReplicaFetcherThreadBenchmark {
 
         }
 
+        List<Integer> replicas = Arrays.asList(0, 1, 2);
+        List<UpdateMetadataRequestData.UpdateMetadataPartitionState> updatePartitionState = Collections.singletonList(
+                new UpdateMetadataRequestData.UpdateMetadataPartitionState()
+                .setControllerEpoch(0)
+                .setLeader(0)
+                .setLeaderEpoch(0)
+                .setIsr(replicas)
+                .setZkVersion(1)
+                .setReplicas(replicas));
+
+        UpdateMetadataRequest updateMetadataRequest = new UpdateMetadataRequest.Builder(ApiKeys.UPDATE_METADATA.latestVersion(),
+                0, 0, 0, updatePartitionState, Collections.emptyList(), topicIds).build();
+
+        MetadataCache metadataCache = new MetadataCache(0);
+        metadataCache.updateMetadata(0, updateMetadataRequest);
+
         ReplicaManager replicaManager = Mockito.mock(ReplicaManager.class);
         Mockito.when(replicaManager.brokerTopicStats()).thenReturn(brokerTopicStats);
+        Mockito.when(replicaManager.metadataCache()).thenReturn(metadataCache);
         fetcher = new ReplicaFetcherBenchThread(config, replicaManager, pool);
         fetcher.addPartitions(initialFetchStates);
         // force a pass to move partitions to fetching state. We do this in the setup phase
