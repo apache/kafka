@@ -110,6 +110,7 @@ class GroupCoordinatorTest {
     val joinPurgatory = new DelayedOperationPurgatory[DelayedJoin]("Rebalance", timer, config.brokerId, reaperEnabled = false)
 
     groupCoordinator = GroupCoordinator(config, replicaManager, heartbeatPurgatory, joinPurgatory, timer.time, new Metrics())
+    // make two partitions of the group topic to make sure some partitions are not owned by the coordinator
     groupCoordinator.startup(2, enableMetadataExpiration = false)
 
     // add the partition into the owned partition list

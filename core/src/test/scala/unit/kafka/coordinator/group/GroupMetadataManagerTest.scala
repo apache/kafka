@@ -90,7 +90,7 @@ class GroupMetadataManagerTest {
     replicaManager = EasyMock.createNiceMock(classOf[ReplicaManager])
     groupMetadataManager = new GroupMetadataManager(0, ApiVersion.latestVersion, offsetConfig, replicaManager,
       time, metrics)
-    // Specify two partitions in the group topic to make sure some partitions are not owned by the coordinator
+    // make two partitions of the group topic to make sure some partitions are not owned by the coordinator
     groupMetadataManager.setGroupMetadataTopicPartitionCount(2)
     partition = EasyMock.niceMock(classOf[Partition])
   }
