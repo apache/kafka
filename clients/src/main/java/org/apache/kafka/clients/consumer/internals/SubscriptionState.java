@@ -562,6 +562,18 @@ public class SubscriptionState {
         assignedState(tp).lastStableOffset(lastStableOffset);
     }
 
+    synchronized Long logStartOffset(TopicPartition tp) {
+        return assignedState(tp).logStartOffset;
+    }
+
+    synchronized Long logEndOffset(TopicPartition tp, IsolationLevel isolationLevel) {
+        TopicPartitionState topicPartitionState = assignedState(tp);
+        if (isolationLevel == IsolationLevel.READ_COMMITTED)
+            return topicPartitionState.lastStableOffset == null ? null : topicPartitionState.lastStableOffset;
+        else
+            return topicPartitionState.highWatermark == null ? null : topicPartitionState.highWatermark;
+    }
+
     /**
      * Set the preferred read replica with a lease timeout. After this time, the replica will no longer be valid and
      * {@link #preferredReadReplica(TopicPartition, long)} will return an empty result.

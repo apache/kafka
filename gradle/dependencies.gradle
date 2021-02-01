@@ -27,7 +27,7 @@ ext {
 }
 
 // Add Scala version
-def defaultScala212Version = '2.12.12'
+def defaultScala212Version = '2.12.13'
 def defaultScala213Version = '2.13.4'
 if (hasProperty('scalaVersion')) {
   if (scalaVersion == '2.12') {
@@ -117,7 +117,7 @@ versions += [
   spotlessPlugin: "5.8.2",
   testRetryPlugin: "1.2.0",
   zinc: "1.3.5",
-  zookeeper: "3.5.8",
+  zookeeper: "3.5.9",
   zstd: "1.4.8-2"
 ]
 libs += [

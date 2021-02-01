@@ -23,7 +23,6 @@ import org.apache.kafka.streams.integration.utils.IntegrationTestUtils;
 import org.apache.kafka.streams.tests.SmokeTestClient;
 import org.apache.kafka.streams.tests.SmokeTestDriver;
 import org.apache.kafka.test.IntegrationTest;
-
 import org.junit.Assert;
 import org.junit.ClassRule;
 import org.junit.Test;

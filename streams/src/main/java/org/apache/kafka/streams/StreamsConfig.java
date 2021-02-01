@@ -45,6 +45,7 @@ import org.apache.kafka.streams.processor.internals.StreamsPartitionAssignor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.File;
 import java.time.Duration;
 import java.util.Collections;
 import java.util.HashMap;
@@ -134,15 +135,16 @@ import static org.apache.kafka.common.config.ConfigDef.ValidString.in;
 @SuppressWarnings("deprecation")
 public class StreamsConfig extends AbstractConfig {
 
-    private final static Logger log = LoggerFactory.getLogger(StreamsConfig.class);
+    private static final Logger log = LoggerFactory.getLogger(StreamsConfig.class);
 
     private static final ConfigDef CONFIG;
 
     private final boolean eosEnabled;
-    private final static long DEFAULT_COMMIT_INTERVAL_MS = 30000L;
-    private final static long EOS_DEFAULT_COMMIT_INTERVAL_MS = 100L;
+    private static final long DEFAULT_COMMIT_INTERVAL_MS = 30000L;
+    private static final long EOS_DEFAULT_COMMIT_INTERVAL_MS = 100L;
 
-    public final static int DUMMY_THREAD_INDEX = 1;
+    public static final int DUMMY_THREAD_INDEX = 1;
+    public static final long MAX_TASK_IDLE_MS_DISABLED = -1;
 
     /**
      * Prefix used to provide default topic configs to be applied when creating internal topics.
@@ -603,7 +605,7 @@ public class StreamsConfig extends AbstractConfig {
                     REPLICATION_FACTOR_DOC)
             .define(STATE_DIR_CONFIG,
                     Type.STRING,
-                    "/tmp/kafka-streams",
+                    System.getProperty("java.io.tmpdir") + File.separator + "kafka-streams",
                     Importance.HIGH,
                     STATE_DIR_DOC)
 
