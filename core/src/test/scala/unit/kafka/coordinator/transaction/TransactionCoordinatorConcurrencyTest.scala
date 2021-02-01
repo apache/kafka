@@ -71,7 +71,7 @@ class TransactionCoordinatorConcurrencyTest extends AbstractCoordinatorConcurren
       .anyTimes()
     EasyMock.replay(zkClient)
 
-    txnStateManager = new TransactionStateManager(0, zkClient, scheduler, replicaManager, txnConfig, time,
+    txnStateManager = TransactionStateManager(0, zkClient, scheduler, replicaManager, txnConfig, time,
       new Metrics())
     for (i <- 0 until numPartitions)
       txnStateManager.addLoadedTransactionsToCache(i, coordinatorEpoch, new Pool[String, TransactionMetadata]())

@@ -63,7 +63,7 @@ class TransactionStateManagerTest {
   val metrics = new Metrics()
 
   val txnConfig = TransactionConfig()
-  val transactionManager: TransactionStateManager = new TransactionStateManager(0, zkClient, scheduler,
+  val transactionManager: TransactionStateManager = TransactionStateManager(0, zkClient, scheduler,
     replicaManager, txnConfig, time, metrics)
 
   val transactionalId1: String = "one"
