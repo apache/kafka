@@ -308,13 +308,16 @@ public class AbstractConfigTest {
             testConfig.checkInstances(ClassTestConfig.RESTRICTED_CLASS, ClassTestConfig.VISIBLE_CLASS, ClassTestConfig.RESTRICTED_CLASS);
 
             // Properties specified as classNames should fail to load classes
-            assertThrows(ConfigException.class, () -> new ClassTestConfig(ClassTestConfig.RESTRICTED_CLASS.getName(), null));
+            assertThrows(ConfigException.class, () -> new ClassTestConfig(ClassTestConfig.RESTRICTED_CLASS.getName(), null),
+                "Config created with class property that cannot be loaded");
 
             ClassTestConfig config = new ClassTestConfig(null, Arrays.asList(ClassTestConfig.VISIBLE_CLASS.getName(), ClassTestConfig.RESTRICTED_CLASS.getName()));
-            assertThrows(KafkaException.class, () -> config.getConfiguredInstances("list.prop", MetricsReporter.class));
+            assertThrows(KafkaException.class, () -> config.getConfiguredInstances("list.prop", MetricsReporter.class),
+                "Should have failed to load class");
 
             ClassTestConfig config2 = new ClassTestConfig(null, ClassTestConfig.VISIBLE_CLASS.getName() + "," + ClassTestConfig.RESTRICTED_CLASS.getName());
-            assertThrows(KafkaException.class, () -> config2.getConfiguredInstances("list.prop", MetricsReporter.class));
+            assertThrows(KafkaException.class, () -> config2.getConfiguredInstances("list.prop", MetricsReporter.class),
+                "Should have failed to load class");
         } finally {
             Thread.currentThread().setContextClassLoader(origin);
         }
