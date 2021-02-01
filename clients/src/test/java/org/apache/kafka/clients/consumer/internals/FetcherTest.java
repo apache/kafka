@@ -48,11 +48,11 @@ import org.apache.kafka.common.errors.TopicAuthorizationException;
 import org.apache.kafka.common.header.Header;
 import org.apache.kafka.common.header.internals.RecordHeader;
 import org.apache.kafka.common.internals.ClusterResourceListeners;
-import org.apache.kafka.common.message.ListOffsetsRequestData.ListOffsetsTopic;
 import org.apache.kafka.common.message.ListOffsetsRequestData.ListOffsetsPartition;
+import org.apache.kafka.common.message.ListOffsetsRequestData.ListOffsetsTopic;
 import org.apache.kafka.common.message.ListOffsetsResponseData;
-import org.apache.kafka.common.message.ListOffsetsResponseData.ListOffsetsTopicResponse;
 import org.apache.kafka.common.message.ListOffsetsResponseData.ListOffsetsPartitionResponse;
+import org.apache.kafka.common.message.ListOffsetsResponseData.ListOffsetsTopicResponse;
 import org.apache.kafka.common.message.OffsetForLeaderEpochRequestData;
 import org.apache.kafka.common.message.OffsetForLeaderEpochRequestData.OffsetForLeaderPartition;
 import org.apache.kafka.common.message.OffsetForLeaderEpochResponseData;
@@ -78,6 +78,7 @@ import org.apache.kafka.common.record.RecordBatch;
 import org.apache.kafka.common.record.Records;
 import org.apache.kafka.common.record.SimpleRecord;
 import org.apache.kafka.common.record.TimestampType;
+import org.apache.kafka.common.requests.AbstractRequest;
 import org.apache.kafka.common.requests.ApiVersionsResponse;
 import org.apache.kafka.common.requests.FetchRequest;
 import org.apache.kafka.common.requests.FetchResponse;
@@ -102,7 +103,6 @@ import org.apache.kafka.test.TestUtils;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.Timeout;
 
 import java.io.DataOutputStream;
 import java.lang.reflect.Field;
@@ -120,7 +120,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
-import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
@@ -135,9 +134,9 @@ import static java.util.Collections.emptyList;
 import static java.util.Collections.emptyMap;
 import static java.util.Collections.singleton;
 import static java.util.Collections.singletonMap;
+import static org.apache.kafka.common.requests.FetchMetadata.INVALID_SESSION_ID;
 import static org.apache.kafka.common.requests.OffsetsForLeaderEpochResponse.UNDEFINED_EPOCH;
 import static org.apache.kafka.common.requests.OffsetsForLeaderEpochResponse.UNDEFINED_EPOCH_OFFSET;
-import static org.apache.kafka.common.requests.FetchMetadata.INVALID_SESSION_ID;
 import static org.apache.kafka.test.TestUtils.assertOptional;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -148,8 +147,6 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
-import static org.mockito.Mockito.doAnswer;
-import static org.mockito.Mockito.spy;
 
 public class FetcherTest {
     private static final double EPSILON = 0.0001;
@@ -1745,51 +1742,62 @@ public class FetcherTest {
         assertEquals(237L, subscriptions.position(tp0).offset);
     }
 
-    @Timeout(10)
+    private boolean listOffsetMatchesExpectedReset(
+        TopicPartition tp,
+        OffsetResetStrategy strategy,
+        AbstractRequest request
+    ) {
+        assertTrue(request instanceof ListOffsetsRequest);
+
+        ListOffsetsRequest req = (ListOffsetsRequest) request;
+        assertEquals(singleton(tp.topic()), req.data().topics().stream()
+            .map(ListOffsetsTopic::name).collect(Collectors.toSet()));
+
+        ListOffsetsTopic listTopic = req.data().topics().get(0);
+        assertEquals(singleton(tp.partition()), listTopic.partitions().stream()
+            .map(ListOffsetsPartition::partitionIndex).collect(Collectors.toSet()));
+
+        ListOffsetsPartition listPartition = listTopic.partitions().get(0);
+        if (strategy == OffsetResetStrategy.EARLIEST) {
+            assertEquals(ListOffsetsRequest.EARLIEST_TIMESTAMP, listPartition.timestamp());
+        } else if (strategy == OffsetResetStrategy.LATEST) {
+            assertEquals(ListOffsetsRequest.LATEST_TIMESTAMP, listPartition.timestamp());
+        }
+        return true;
+    }
+
     @Test
-    public void testEarlierOffsetResetArrivesLate() throws InterruptedException {
-        LogContext lc = new LogContext();
-        buildFetcher(spy(new SubscriptionState(lc, OffsetResetStrategy.EARLIEST)), lc);
+    public void testEarlierOffsetResetArrivesLate() {
+        buildFetcher();
         assignFromUser(singleton(tp0));
 
-        ExecutorService es = Executors.newSingleThreadExecutor();
-        CountDownLatch latchLatestStart = new CountDownLatch(1);
-        CountDownLatch latchEarliestStart = new CountDownLatch(1);
-        CountDownLatch latchEarliestDone = new CountDownLatch(1);
-        CountDownLatch latchEarliestFinish = new CountDownLatch(1);
-        try {
-            doAnswer(invocation -> {
-                latchLatestStart.countDown();
-                latchEarliestStart.await();
-                Object result = invocation.callRealMethod();
-                latchEarliestDone.countDown();
-                return result;
-            }).when(subscriptions).maybeSeekUnvalidated(tp0, new SubscriptionState.FetchPosition(0L,
-                Optional.empty(), metadata.currentLeader(tp0)), OffsetResetStrategy.EARLIEST);
+        subscriptions.requestOffsetReset(tp0, OffsetResetStrategy.EARLIEST);
+        fetcher.resetOffsetsIfNeeded();
 
-            es.submit(() -> {
-                subscriptions.requestOffsetReset(tp0, OffsetResetStrategy.EARLIEST);
-                fetcher.resetOffsetsIfNeeded();
-                consumerClient.pollNoWakeup();
-                client.respond(listOffsetResponse(Errors.NONE, 1L, 0L));
-                consumerClient.pollNoWakeup();
-                latchEarliestFinish.countDown();
-            }, Void.class);
+        client.prepareResponse(req -> {
+            if (listOffsetMatchesExpectedReset(tp0, OffsetResetStrategy.EARLIEST, req)) {
+                // Before the response is handled, we get a request to reset to the latest offset
+                subscriptions.requestOffsetReset(tp0, OffsetResetStrategy.LATEST);
+                return true;
+            } else {
+                return false;
+            }
+        }, listOffsetResponse(Errors.NONE, 1L, 0L));
+        consumerClient.pollNoWakeup();
 
-            latchLatestStart.await();
-            subscriptions.requestOffsetReset(tp0, OffsetResetStrategy.LATEST);
-            fetcher.resetOffsetsIfNeeded();
-            consumerClient.pollNoWakeup();
-            client.respond(listOffsetResponse(Errors.NONE, 1L, 10L));
-            latchEarliestStart.countDown();
-            latchEarliestDone.await();
-            consumerClient.pollNoWakeup();
-            latchEarliestFinish.await();
-            assertEquals(10, subscriptions.position(tp0).offset);
-        } finally {
-            es.shutdown();
-            es.awaitTermination(10000, TimeUnit.MILLISECONDS);
-        }
+        // The list offset result should be ignored
+        assertTrue(subscriptions.isOffsetResetNeeded(tp0));
+        assertEquals(OffsetResetStrategy.LATEST, subscriptions.resetStrategy(tp0));
+
+        fetcher.resetOffsetsIfNeeded();
+        client.prepareResponse(
+            req -> listOffsetMatchesExpectedReset(tp0, OffsetResetStrategy.LATEST, req),
+            listOffsetResponse(Errors.NONE, 1L, 10L)
+        );
+        consumerClient.pollNoWakeup();
+
+        assertFalse(subscriptions.isOffsetResetNeeded(tp0));
+        assertEquals(10, subscriptions.position(tp0).offset);
     }
 
     @Test
