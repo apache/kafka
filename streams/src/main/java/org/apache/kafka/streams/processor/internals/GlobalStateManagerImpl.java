@@ -447,7 +447,7 @@ public class GlobalStateManagerImpl implements GlobalStateManager {
             checkpointFile.write(filteredOffsets);
         } catch (final IOException e) {
             log.warn("Failed to write offset checkpoint file to {} for global stores: {}." +
-                " This may occur if OS cleaned the state.dir in case when it is located in the (default) /tmp/kafka-streams directory." +
+                " This may occur if OS cleaned the state.dir in case when it is located in the (default) ${java.io.tmpdir}/kafka-streams directory." +
                 " Changing the location of state.dir may resolve the problem", checkpointFile, e);
         }
     }

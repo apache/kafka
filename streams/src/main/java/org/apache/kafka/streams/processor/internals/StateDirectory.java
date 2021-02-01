@@ -104,9 +104,10 @@ public class StateDirectory {
                 throw new ProcessorStateException(
                     String.format("state directory [%s] doesn't exist and couldn't be created", stateDir.getPath()));
             }
-            if (stateDirName.startsWith("/tmp")) {
-                log.warn("Using /tmp directory in the state.dir property can cause failures with writing the checkpoint file" +
-                    " due to the fact that this directory can be cleared by the OS");
+            if (stateDirName.startsWith(System.getProperty("java.io.tmpdir"))) {
+                log.warn("Using an OS temp directory in the state.dir property can cause failures with writing" +
+                    " the checkpoint file due to the fact that this directory can be cleared by the OS." +
+                    " Resolved state.dir: [" + stateDirName + "]");
             }
             // change the dir permission to "rwxr-x---" to avoid world readable
             configurePermissions(baseDir);

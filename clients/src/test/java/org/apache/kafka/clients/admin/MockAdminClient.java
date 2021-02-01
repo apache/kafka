@@ -17,15 +17,16 @@
 package org.apache.kafka.clients.admin;
 
 import org.apache.kafka.clients.admin.DescribeReplicaLogDirsResult.ReplicaLogDirInfo;
+import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.Metric;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.common.ElectionType;
 import org.apache.kafka.common.TopicPartitionInfo;
 import org.apache.kafka.common.TopicPartitionReplica;
+import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.acl.AclBinding;
 import org.apache.kafka.common.acl.AclBindingFilter;
 import org.apache.kafka.common.acl.AclOperation;
@@ -60,6 +61,8 @@ public class MockAdminClient extends AdminClient {
 
     private final List<Node> brokers;
     private final Map<String, TopicMetadata> allTopics = new HashMap<>();
+    private final Map<String, Uuid> topicIds = new HashMap<>();
+    private final Map<Uuid, String> topicNames = new HashMap<>();
     private final Map<TopicPartition, NewPartitionReassignment> reassignments =
         new HashMap<>();
     private final Map<TopicPartitionReplica, ReplicaLogDirInfo> replicaMoves =
@@ -207,6 +210,9 @@ public class MockAdminClient extends AdminClient {
             }
         }
         allTopics.put(name, new TopicMetadata(internal, partitions, logDirs, configs));
+        Uuid id = Uuid.randomUuid();
+        topicIds.put(name, id);
+        topicNames.put(id, name);
     }
 
     synchronized public void markTopicForDeletion(final String name) {
@@ -298,6 +304,9 @@ public class MockAdminClient extends AdminClient {
                 logDirs.add(brokerLogDirs.get(partitions.get(i).leader().id()).get(0));
             }
             allTopics.put(topicName, new TopicMetadata(false, partitions, logDirs, newTopic.configs()));
+            Uuid id = Uuid.randomUuid();
+            topicIds.put(topicName, id);
+            topicNames.put(id, topicName);
             future.complete(null);
             createTopicResult.put(topicName, future);
         }
@@ -393,12 +402,44 @@ public class MockAdminClient extends AdminClient {
             if (allTopics.remove(topicName) == null) {
                 future.completeExceptionally(new UnknownTopicOrPartitionException(String.format("Topic %s does not exist.", topicName)));
             } else {
+                topicNames.remove(topicIds.remove(topicName));
                 future.complete(null);
             }
             deleteTopicsResult.put(topicName, future);
         }
 
         return new DeleteTopicsResult(deleteTopicsResult);
+    }
+
+    @Override
+    synchronized public DeleteTopicsWithIdsResult deleteTopicsWithIds(Collection<Uuid> topicsToDelete, DeleteTopicsOptions options) {
+        Map<Uuid, KafkaFuture<Void>> deleteTopicsWithIdsResult = new HashMap<>();
+
+        if (timeoutNextRequests > 0) {
+            for (final Uuid topicId : topicsToDelete) {
+                KafkaFutureImpl<Void> future = new KafkaFutureImpl<>();
+                future.completeExceptionally(new TimeoutException());
+                deleteTopicsWithIdsResult.put(topicId, future);
+            }
+
+            --timeoutNextRequests;
+            return new DeleteTopicsWithIdsResult(deleteTopicsWithIdsResult);
+        }
+
+        for (final Uuid topicId : topicsToDelete) {
+            KafkaFutureImpl<Void> future = new KafkaFutureImpl<>();
+
+            String name = topicNames.remove(topicId);
+            if (name == null || allTopics.remove(name) == null) {
+                future.completeExceptionally(new UnknownTopicOrPartitionException(String.format("Topic %s does not exist.", topicId)));
+            } else {
+                topicIds.remove(name);
+                future.complete(null);
+            }
+            deleteTopicsWithIdsResult.put(topicId, future);
+        }
+
+        return new DeleteTopicsWithIdsResult(deleteTopicsWithIdsResult);
     }
 
     @Override

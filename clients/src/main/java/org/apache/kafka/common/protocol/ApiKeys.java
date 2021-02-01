@@ -99,7 +99,8 @@ public enum ApiKeys {
     ENVELOPE(ApiMessageType.ENVELOPE, true, RecordBatch.MAGIC_VALUE_V0, false, true),
     FETCH_SNAPSHOT(ApiMessageType.FETCH_SNAPSHOT, false, RecordBatch.MAGIC_VALUE_V0, false, true),
     DESCRIBE_CLUSTER(ApiMessageType.DESCRIBE_CLUSTER),
-    DECOMMISSION_BROKER(ApiMessageType.DECOMMISSION_BROKER, false, RecordBatch.MAGIC_VALUE_V0, true, true);
+    DESCRIBE_PRODUCERS(ApiMessageType.DESCRIBE_PRODUCERS),
+    DECOMMISSION_BROKER(ApiMessageType.DECOMMISSION_BROKER, false, RecordBatch.MAGIC_VALUE_V0, false, false);
 
     // The generator ensures every `ApiMessageType` has a unique id
     private static final Map<Integer, ApiKeys> ID_TO_TYPE = Arrays.stream(ApiKeys.values())
