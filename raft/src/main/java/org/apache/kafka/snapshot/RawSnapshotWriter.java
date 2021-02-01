@@ -17,10 +17,12 @@
 
 package org.apache.kafka.snapshot;
 
+import org.apache.kafka.common.record.MemoryRecords;
+import org.apache.kafka.common.record.UnalignedMemoryRecords;
+import org.apache.kafka.raft.OffsetAndEpoch;
+
 import java.io.Closeable;
 import java.io.IOException;
-import java.nio.ByteBuffer;
-import org.apache.kafka.raft.OffsetAndEpoch;
 
 /**
  * Interface for writing snapshot as a sequence of records.
@@ -29,39 +31,51 @@ public interface RawSnapshotWriter extends Closeable {
     /**
      * Returns the end offset and epoch for the snapshot.
      */
-    public OffsetAndEpoch snapshotId();
+    OffsetAndEpoch snapshotId();
 
     /**
      * Returns the number of bytes for the snapshot.
      *
      * @throws IOException for any IO error while reading the size
      */
-    public long sizeInBytes() throws IOException;
+    long sizeInBytes() throws IOException;
 
     /**
-     * Fully appends the buffer to the snapshot.
+     * Fully appends the memory record set to the snapshot.
      *
-     * If the method returns without an exception the given buffer was fully writing the
+     * If the method returns without an exception the given record set was fully writing the
      * snapshot.
      *
-     * @param buffer the buffer to append
+     * @param records the region to append
      * @throws IOException for any IO error during append
      */
-    public void append(ByteBuffer buffer) throws IOException;
+    void append(MemoryRecords records) throws IOException;
+
+    /**
+     * Fully appends the memory record set to the snapshot, the difference with {@link RawSnapshotWriter#append(MemoryRecords)}
+     * is that the record set are fetched from leader by FetchSnapshotRequest, so the records are unaligned.
+     *
+     * If the method returns without an exception the given records was fully writing the
+     * snapshot.
+     *
+     * @param records the region to append
+     * @throws IOException for any IO error during append
+     */
+    void append(UnalignedMemoryRecords records) throws IOException;
 
     /**
      * Returns true if the snapshot has been frozen, otherwise false is returned.
      *
      * Modification to the snapshot are not allowed once it is frozen.
      */
-    public boolean isFrozen();
+    boolean isFrozen();
 
     /**
      * Freezes the snapshot and marking it as immutable.
      *
      * @throws IOException for any IO error during freezing
      */
-    public void freeze() throws IOException;
+    void freeze() throws IOException;
 
     /**
      * Closes the snapshot writer.
@@ -70,5 +84,5 @@ public interface RawSnapshotWriter extends Closeable {
      *
      * @throws IOException for any IO error during close
      */
-    public void close() throws IOException;
+    void close() throws IOException;
 }

@@ -18,13 +18,14 @@
 package kafka.server
 
 import kafka.utils._
+import org.apache.kafka.common.Uuid
 import org.apache.kafka.common.message.CreateTopicsRequestData
 import org.apache.kafka.common.message.CreateTopicsRequestData.CreatableTopicCollection
 import org.apache.kafka.common.protocol.ApiKeys
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests.CreateTopicsRequest
-import org.junit.Assert._
-import org.junit.Test
+import org.junit.jupiter.api.Assertions._
+import org.junit.jupiter.api.Test
 
 import scala.jdk.CollectionConverters._
 
@@ -170,6 +171,11 @@ class CreateTopicsRequestTest extends AbstractCreateTopicsRequestTest {
         assertEquals(-1, topicResponse.replicationFactor)
         assertTrue(topicResponse.configs.isEmpty)
       }
+
+      if (version >= 7)
+        assertNotEquals(Uuid.ZERO_UUID, topicResponse.topicId())
+      else
+        assertEquals(Uuid.ZERO_UUID, topicResponse.topicId())
     }
   }
 }

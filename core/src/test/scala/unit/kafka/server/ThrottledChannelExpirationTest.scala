@@ -34,7 +34,8 @@ import org.apache.kafka.common.requests.{AbstractRequest, FetchRequest, RequestC
 import org.apache.kafka.common.security.auth.{KafkaPrincipal, SecurityProtocol}
 import org.apache.kafka.common.utils.MockTime
 import org.easymock.EasyMock
-import org.junit.{Assert, Before, Test}
+import org.junit.jupiter.api.Assertions._
+import org.junit.jupiter.api.{BeforeEach, Test}
 
 class ThrottledChannelExpirationTest {
   private val time = new MockTime
@@ -68,7 +69,7 @@ class ThrottledChannelExpirationTest {
     }
   }
 
-  @Before
+  @BeforeEach
   def beforeMethod(): Unit = {
     numCallbacksForStartThrottling = 0
     numCallbacksForEndThrottling = 0
@@ -90,18 +91,18 @@ class ThrottledChannelExpirationTest {
       delayQueue.add(channel2)
       delayQueue.add(channel3)
       delayQueue.add(channel4)
-      Assert.assertEquals(4, numCallbacksForStartThrottling)
+      assertEquals(4, numCallbacksForStartThrottling)
 
       for(itr <- 1 to 3) {
         time.sleep(10)
         reaper.doWork()
-        Assert.assertEquals(itr, numCallbacksForEndThrottling)
+        assertEquals(itr, numCallbacksForEndThrottling)
       }
       reaper.doWork()
-      Assert.assertEquals(4, numCallbacksForEndThrottling)
-      Assert.assertEquals(0, delayQueue.size())
+      assertEquals(4, numCallbacksForEndThrottling)
+      assertEquals(0, delayQueue.size())
       reaper.doWork()
-      Assert.assertEquals(4, numCallbacksForEndThrottling)
+      assertEquals(4, numCallbacksForEndThrottling)
     } finally {
       clientMetrics.shutdown()
     }
@@ -112,14 +113,14 @@ class ThrottledChannelExpirationTest {
     val t1: ThrottledChannel = new ThrottledChannel(request, time, 10, callback)
     val t2: ThrottledChannel = new ThrottledChannel(request, time, 20, callback)
     val t3: ThrottledChannel = new ThrottledChannel(request, time, 20, callback)
-    Assert.assertEquals(10, t1.throttleTimeMs)
-    Assert.assertEquals(20, t2.throttleTimeMs)
-    Assert.assertEquals(20, t3.throttleTimeMs)
+    assertEquals(10, t1.throttleTimeMs)
+    assertEquals(20, t2.throttleTimeMs)
+    assertEquals(20, t3.throttleTimeMs)
 
     for(itr <- 0 to 2) {
-      Assert.assertEquals(10 - 10*itr, t1.getDelay(TimeUnit.MILLISECONDS))
-      Assert.assertEquals(20 - 10*itr, t2.getDelay(TimeUnit.MILLISECONDS))
-      Assert.assertEquals(20 - 10*itr, t3.getDelay(TimeUnit.MILLISECONDS))
+      assertEquals(10 - 10*itr, t1.getDelay(TimeUnit.MILLISECONDS))
+      assertEquals(20 - 10*itr, t2.getDelay(TimeUnit.MILLISECONDS))
+      assertEquals(20 - 10*itr, t3.getDelay(TimeUnit.MILLISECONDS))
       time.sleep(10)
     }
   }

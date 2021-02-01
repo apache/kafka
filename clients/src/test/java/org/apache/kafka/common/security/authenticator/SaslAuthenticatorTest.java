@@ -58,8 +58,8 @@ import org.apache.kafka.common.config.types.Password;
 import org.apache.kafka.common.errors.SaslAuthenticationException;
 import org.apache.kafka.common.message.ApiVersionsRequestData;
 import org.apache.kafka.common.message.ApiVersionsResponseData;
-import org.apache.kafka.common.message.ApiVersionsResponseData.ApiVersionsResponseKey;
-import org.apache.kafka.common.message.ApiVersionsResponseData.ApiVersionsResponseKeyCollection;
+import org.apache.kafka.common.message.ApiVersionsResponseData.ApiVersion;
+import org.apache.kafka.common.message.ApiVersionsResponseData.ApiVersionCollection;
 import org.apache.kafka.common.message.ListOffsetsResponseData;
 import org.apache.kafka.common.message.ListOffsetsResponseData.ListOffsetsTopicResponse;
 import org.apache.kafka.common.message.ListOffsetsResponseData.ListOffsetsPartitionResponse;
@@ -713,7 +713,7 @@ public class SaslAuthenticatorTest {
         ApiVersionsResponse response = ApiVersionsResponse.parse(responseBuffer, (short) 0);
         assertEquals(Errors.UNSUPPORTED_VERSION.code(), response.data().errorCode());
 
-        ApiVersionsResponseKey apiVersion = response.data().apiKeys().find(ApiKeys.API_VERSIONS.id);
+        ApiVersion apiVersion = response.data().apiKeys().find(ApiKeys.API_VERSIONS.id);
         assertNotNull(apiVersion);
         assertEquals(ApiKeys.API_VERSIONS.id, apiVersion.apiKey());
         assertEquals(ApiKeys.API_VERSIONS.oldestVersion(), apiVersion.minVersion());
@@ -1844,9 +1844,9 @@ public class SaslAuthenticatorTest {
 
                     @Override
                     protected ApiVersionsResponse apiVersionsResponse() {
-                        ApiVersionsResponseKeyCollection versionCollection = new ApiVersionsResponseKeyCollection(2);
-                        versionCollection.add(new ApiVersionsResponseKey().setApiKey(ApiKeys.SASL_HANDSHAKE.id).setMinVersion((short) 0).setMaxVersion((short) 100));
-                        versionCollection.add(new ApiVersionsResponseKey().setApiKey(ApiKeys.SASL_AUTHENTICATE.id).setMinVersion((short) 0).setMaxVersion((short) 100));
+                        ApiVersionCollection versionCollection = new ApiVersionCollection(2);
+                        versionCollection.add(new ApiVersion().setApiKey(ApiKeys.SASL_HANDSHAKE.id).setMinVersion((short) 0).setMaxVersion((short) 100));
+                        versionCollection.add(new ApiVersion().setApiKey(ApiKeys.SASL_AUTHENTICATE.id).setMinVersion((short) 0).setMaxVersion((short) 100));
                         return new ApiVersionsResponse(new ApiVersionsResponseData().setApiKeys(versionCollection));
                     }
                 };
@@ -1887,16 +1887,12 @@ public class SaslAuthenticatorTest {
                     @Override
                     protected ApiVersionsResponse apiVersionsResponse() {
                         ApiVersionsResponse defaultApiVersionResponse = ApiVersionsResponse.DEFAULT_API_VERSIONS_RESPONSE;
-                        ApiVersionsResponseKeyCollection apiVersions = new ApiVersionsResponseKeyCollection();
-                        for (ApiVersionsResponseKey apiVersion : defaultApiVersionResponse.data().apiKeys()) {
+                        ApiVersionCollection apiVersions = new ApiVersionCollection();
+                        for (ApiVersion apiVersion : defaultApiVersionResponse.data().apiKeys()) {
                             if (apiVersion.apiKey() != ApiKeys.SASL_AUTHENTICATE.id) {
-                                // ApiVersionsResponseKey can NOT be reused in second ApiVersionsResponseKeyCollection
+                                // ApiVersion can NOT be reused in second ApiVersionCollection
                                 // due to the internal pointers it contains.
-                                apiVersions.add(new ApiVersionsResponseKey()
-                                    .setApiKey(apiVersion.apiKey())
-                                    .setMinVersion(apiVersion.minVersion())
-                                    .setMaxVersion(apiVersion.maxVersion())
-                                );
+                                apiVersions.add(apiVersion.duplicate());
                             }
 
                         }

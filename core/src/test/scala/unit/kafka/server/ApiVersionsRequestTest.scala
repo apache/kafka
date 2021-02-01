@@ -21,8 +21,8 @@ import org.apache.kafka.common.message.ApiVersionsRequestData
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.requests.{ApiVersionsRequest, ApiVersionsResponse}
-import org.junit.Assert._
-import org.junit.Test
+import org.junit.jupiter.api.Assertions._
+import org.junit.jupiter.api.Test
 
 class ApiVersionsRequestTest extends AbstractApiVersionsRequestTest {
 

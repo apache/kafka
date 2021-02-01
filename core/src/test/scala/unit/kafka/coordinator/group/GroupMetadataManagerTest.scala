@@ -44,8 +44,8 @@ import org.apache.kafka.common.requests.OffsetFetchResponse
 import org.apache.kafka.common.requests.ProduceResponse.PartitionResponse
 import org.apache.kafka.common.utils.Utils
 import org.easymock.{Capture, EasyMock, IAnswer}
-import org.junit.Assert.{assertEquals, assertFalse, assertNull, assertTrue, assertThrows}
-import org.junit.{Before, Test}
+import org.junit.jupiter.api.Assertions._
+import org.junit.jupiter.api.{BeforeEach, Test}
 
 import scala.jdk.CollectionConverters._
 import scala.collection._
@@ -91,7 +91,7 @@ class GroupMetadataManagerTest {
     zkClient
   }
 
-  @Before
+  @BeforeEach
   def setUp(): Unit = {
     defaultOffsetRetentionMs = offsetConfig.offsetsRetentionMs
     metrics = new kMetrics()
@@ -818,8 +818,8 @@ class GroupMetadataManagerTest {
     assertEquals(groupId, group.groupId)
     assertEquals(Stable, group.currentState)
 
-    assertEquals("segment2 group record member should be elected", segment2MemberId, group.leaderOrNull)
-    assertEquals("segment2 group record member should be only member", Set(segment2MemberId), group.allMembers)
+    assertEquals(segment2MemberId, group.leaderOrNull, "segment2 group record member should be elected")
+    assertEquals(Set(segment2MemberId), group.allMembers, "segment2 group record member should be only member")
 
     // offsets of segment1 should be overridden by segment2 offsets of the same topic partitions
     val committedOffsets = segment1Offsets ++ segment2Offsets
@@ -843,10 +843,10 @@ class GroupMetadataManagerTest {
     val staticMemberId = "staticMemberId"
     val dynamicMemberId = "dynamicMemberId"
 
-    val staticMember = new MemberMetadata(staticMemberId, groupId, groupInstanceId, "", "", rebalanceTimeout, sessionTimeout,
+    val staticMember = new MemberMetadata(staticMemberId, groupInstanceId, "", "", rebalanceTimeout, sessionTimeout,
       protocolType, List(("protocol", Array[Byte]())))
 
-    val dynamicMember = new MemberMetadata(dynamicMemberId, groupId, None, "", "", rebalanceTimeout, sessionTimeout,
+    val dynamicMember = new MemberMetadata(dynamicMemberId, None, "", "", rebalanceTimeout, sessionTimeout,
       protocolType, List(("protocol", Array[Byte]())))
 
     val members = Seq(staticMember, dynamicMember)
@@ -874,7 +874,7 @@ class GroupMetadataManagerTest {
       ("protocol", ConsumerProtocol.serializeSubscription(new Subscription(List(topic).asJava)).array())
     )
 
-    val member = new MemberMetadata(memberId, groupId, groupInstanceId, "", "", rebalanceTimeout,
+    val member = new MemberMetadata(memberId, groupInstanceId, "", "", rebalanceTimeout,
       sessionTimeout, protocolType, subscriptions)
 
     val members = Seq(member)
@@ -914,7 +914,7 @@ class GroupMetadataManagerTest {
 
     val subscriptions = List(("protocol", Array[Byte]()))
 
-    val member = new MemberMetadata(memberId, groupId, groupInstanceId, "", "", rebalanceTimeout,
+    val member = new MemberMetadata(memberId, groupInstanceId, "", "", rebalanceTimeout,
       sessionTimeout, protocolType, subscriptions)
 
     val members = Seq(member)
@@ -960,11 +960,11 @@ class GroupMetadataManagerTest {
       val deserializedGroupMetadata = GroupMetadataManager.readGroupMessageValue(groupId, groupMetadataRecord.value(), time)
       // GROUP_METADATA_VALUE_SCHEMA_V2 or higher should correctly set the currentStateTimestamp
       if (apiVersion >= KAFKA_2_1_IV0)
-        assertEquals(s"the apiVersion $apiVersion doesn't set the currentStateTimestamp correctly.",
-          Some(time.milliseconds()), deserializedGroupMetadata.currentStateTimestamp)
+        assertEquals(Some(time.milliseconds()), deserializedGroupMetadata.currentStateTimestamp,
+          s"the apiVersion $apiVersion doesn't set the currentStateTimestamp correctly.")
       else
-        assertTrue(s"the apiVersion $apiVersion should not set the currentStateTimestamp.",
-          deserializedGroupMetadata.currentStateTimestamp.isEmpty)
+        assertTrue(deserializedGroupMetadata.currentStateTimestamp.isEmpty,
+          s"the apiVersion $apiVersion should not set the currentStateTimestamp.")
     }
   }
 
@@ -1091,7 +1091,7 @@ class GroupMetadataManagerTest {
     val group = new GroupMetadata(groupId, Empty, time)
     groupMetadataManager.addGroup(group)
 
-    val member = new MemberMetadata(memberId, groupId, groupInstanceId, clientId, clientHost, rebalanceTimeout, sessionTimeout,
+    val member = new MemberMetadata(memberId, groupInstanceId, clientId, clientHost, rebalanceTimeout, sessionTimeout,
       protocolType, List(("protocol", Array[Byte]())))
     group.add(member, _ => ())
     group.transitionTo(PreparingRebalance)
@@ -1120,7 +1120,7 @@ class GroupMetadataManagerTest {
 
     val group = new GroupMetadata(groupId, Empty, time)
 
-    val member = new MemberMetadata(memberId, groupId, groupInstanceId, clientId, clientHost, rebalanceTimeout, sessionTimeout,
+    val member = new MemberMetadata(memberId, groupInstanceId, clientId, clientHost, rebalanceTimeout, sessionTimeout,
       protocolType, List(("protocol", Array[Byte]())))
     group.add(member, _ => ())
     group.transitionTo(PreparingRebalance)
@@ -1619,7 +1619,7 @@ class GroupMetadataManagerTest {
     groupMetadataManager.addGroup(group)
 
     val subscription = new Subscription(List(topic).asJava)
-    val member = new MemberMetadata(memberId, groupId, groupInstanceId, clientId, clientHost, rebalanceTimeout, sessionTimeout,
+    val member = new MemberMetadata(memberId, groupInstanceId, clientId, clientHost, rebalanceTimeout, sessionTimeout,
       protocolType, List(("protocol", ConsumerProtocol.serializeSubscription(subscription).array())))
     group.add(member, _ => ())
     group.transitionTo(PreparingRebalance)
@@ -1864,7 +1864,6 @@ class GroupMetadataManagerTest {
 
     val member = new MemberMetadata(
       memberId,
-      groupId,
       groupInstanceId,
       clientId,
       clientHost,
@@ -2303,7 +2302,7 @@ class GroupMetadataManagerTest {
                                                assignmentBytes: Array[Byte] = Array.emptyByteArray,
                                                apiVersion: ApiVersion = ApiVersion.latestVersion): SimpleRecord = {
     val memberProtocols = List((protocol, Array.emptyByteArray))
-    val member = new MemberMetadata(memberId, groupId, groupInstanceId, "clientId", "clientHost", 30000, 10000, protocolType, memberProtocols)
+    val member = new MemberMetadata(memberId, groupInstanceId, "clientId", "clientHost", 30000, 10000, protocolType, memberProtocols)
     val group = GroupMetadata.loadGroup(groupId, Stable, generation, protocolType, protocol, memberId,
       if (apiVersion >= KAFKA_2_1_IV0) Some(time.milliseconds()) else None, Seq(member), time)
     val groupMetadataKey = GroupMetadataManager.groupMetadataKey(groupId)

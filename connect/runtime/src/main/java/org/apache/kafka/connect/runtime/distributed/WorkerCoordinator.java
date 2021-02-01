@@ -50,9 +50,6 @@ import static org.apache.kafka.connect.runtime.distributed.ConnectProtocolCompat
  * to workers.
  */
 public class WorkerCoordinator extends AbstractCoordinator implements Closeable {
-    // Currently doesn't support multiple task assignment strategies, so we just fill in a default value
-    public static final String DEFAULT_SUBPROTOCOL = "default";
-
     private final Logger log;
     private final String restUrl;
     private final ConfigBackingStore configStorage;

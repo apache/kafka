@@ -86,6 +86,35 @@
         More details about the new config <code>StreamsConfig#TOPOLOGY_OPTIMIZATION</code> can be found in <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-295%3A+Add+Streams+Configuration+Allowing+for+Optional+Topology+Optimization">KIP-295</a>.
     </p>
 
+    <h3><a id="streams_api_changes_280" href="#streams_api_changes_280">Streams API changes in 2.8.0</a></h3>
+    <p>
+        We extended <code>StreamJoined</code> to include the options <code>withLoggingEnabled()</code> and <code>withLoggingDisabled()</code> in
+        <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-689%3A+Extend+%60StreamJoined%60+to+allow+more+store+configs">KIP-689</a>.
+    </p>
+    <p>
+        We added two new methods to <code>KafkaStreams</code>, namely <code>KafkaStreams#addStreamThread()</code> and <code>KafkaStreams#removeStreamThread()</code> in
+        <a href="https://cwiki.apache.org/confluence/x/FDd4CQ">KIP-663</a>.
+        These methods have enabled adding and removing StreamThreads to a running KafkaStreams client.
+   </p>
+    <p>
+        We deprecated <code>KafkaStreams#setUncaughtExceptionHandler(final Thread.UncaughtExceptionHandler uncaughtExceptionHandler)</code>
+        in favor of <code>KafkaStreams#setUncaughtExceptionHandler(final StreamsUncaughtExceptionHandler streamsUncaughtExceptionHandler)</code>
+        in <a href="https://cwiki.apache.org/confluence/x/lkN4CQ">KIP-671</a>.
+        The default handler will close the Kafka Streams client and the client will transit to state ERROR.
+        If you implement a custom handler, the new interface allows you to return a <code>StreamThreadExceptionResponse</code>,
+        which will determine how the application will respond to a stream thread failure.
+    </p>
+    <p>
+        Changes in <a href="https://cwiki.apache.org/confluence/x/FDd4CQ">KIP-663</a> necessitated the KafkaStreams client
+        state machine to update, which was done in <a href="https://cwiki.apache.org/confluence/x/lCvZCQ">KIP-696</a>.
+        The ERROR state is now terminal with PENDING_ERROR being a transitional state where the resources are closing.
+        The ERROR state indicates that there is something wrong and the Kafka Streams client should not be blindly
+        restarted without classifying the error that caused the thread to fail.
+        If the error is of a type that you would like to retry, you should have the
+        <code>StreamsUncaughtExceptionHandler</code> return <code>REPLACE_THREAD</code>.
+        When all stream threads are dead there is no automatic transition to ERROR as a new stream thread can be added.
+    </p>
+
     <h3><a id="streams_api_changes_270" href="#streams_api_changes_270">Streams API changes in 2.7.0</a></h3>
     <p>
         In <code>KeyQueryMetadata</code> we deprecated <code>getActiveHost()</code>, <code>getStandbyHosts()</code> as well as <code>getPartition()</code>

@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.raft;
 
-import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.memory.MemoryPool;
 import org.apache.kafka.common.metrics.Metrics;
@@ -30,6 +29,7 @@ import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.raft.MockLog.LogBatch;
 import org.apache.kafka.raft.MockLog.LogEntry;
 import org.apache.kafka.raft.internals.BatchMemoryPool;
+import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
@@ -51,14 +51,13 @@ import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
+import java.util.stream.Collectors;
 
-import static org.apache.kafka.raft.RaftTestUtil.buildRaftConfig;
-import static org.apache.kafka.raft.RaftTestUtil.voterNodesFromIds;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
-import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
+@Tag("integration")
 public class RaftEventSimulationTest {
     private static final TopicPartition METADATA_PARTITION = new TopicPartition("__cluster_metadata", 0);
     private static final int ELECTION_TIMEOUT_MS = 1000;
@@ -140,47 +139,44 @@ public class RaftEventSimulationTest {
     }
 
     private void testElectionAfterLeaderFailure(QuorumConfig config) {
-        testElectionAfterLeaderShutdown(config, false);
+        checkElectionAfterLeaderShutdown(config, false);
     }
 
     @Test
     public void testElectionAfterLeaderGracefulShutdownQuorumSizeThree() {
-        testElectionAfterLeaderGracefulShutdown(new QuorumConfig(3, 0));
+        checkElectionAfterLeaderGracefulShutdown(new QuorumConfig(3, 0));
     }
 
     @Test
     public void testElectionAfterLeaderGracefulShutdownQuorumSizeThreeAndTwoObservers() {
-        testElectionAfterLeaderGracefulShutdown(new QuorumConfig(3, 2));
+        checkElectionAfterLeaderGracefulShutdown(new QuorumConfig(3, 2));
     }
 
     @Test
     public void testElectionAfterLeaderGracefulShutdownQuorumSizeFour() {
-        testElectionAfterLeaderGracefulShutdown(new QuorumConfig(4, 0));
+        checkElectionAfterLeaderGracefulShutdown(new QuorumConfig(4, 0));
     }
 
     @Test
     public void testElectionAfterLeaderGracefulShutdownQuorumSizeFourAndTwoObservers() {
-        testElectionAfterLeaderGracefulShutdown(new QuorumConfig(4, 2));
+        checkElectionAfterLeaderGracefulShutdown(new QuorumConfig(4, 2));
     }
 
     @Test
     public void testElectionAfterLeaderGracefulShutdownQuorumSizeFive() {
-        testElectionAfterLeaderGracefulShutdown(new QuorumConfig(5, 0));
+        checkElectionAfterLeaderGracefulShutdown(new QuorumConfig(5, 0));
     }
 
     @Test
     public void testElectionAfterLeaderGracefulShutdownQuorumSizeFiveAndThreeObservers() {
-        testElectionAfterLeaderGracefulShutdown(new QuorumConfig(5, 3));
+        checkElectionAfterLeaderGracefulShutdown(new QuorumConfig(5, 3));
     }
 
-    private void testElectionAfterLeaderGracefulShutdown(QuorumConfig config) {
-        testElectionAfterLeaderShutdown(config, true);
+    private void checkElectionAfterLeaderGracefulShutdown(QuorumConfig config) {
+        checkElectionAfterLeaderShutdown(config, true);
     }
 
-    private void testElectionAfterLeaderShutdown(QuorumConfig config, boolean isGracefulShutdown) {
-        // We need at least three voters to run this tests
-        assumeTrue(config.numVoters > 2);
-
+    private void checkElectionAfterLeaderShutdown(QuorumConfig config, boolean isGracefulShutdown) {
         for (int seed = 0; seed < 100; seed++) {
             Cluster cluster = new Cluster(config, seed);
             MessageRouter router = new MessageRouter(cluster);
@@ -214,20 +210,20 @@ public class RaftEventSimulationTest {
 
     @Test
     public void testRecoveryAfterAllNodesFailQuorumSizeThree() {
-        testRecoveryAfterAllNodesFail(new QuorumConfig(3));
+        checkRecoveryAfterAllNodesFail(new QuorumConfig(3));
     }
 
     @Test
     public void testRecoveryAfterAllNodesFailQuorumSizeFour() {
-        testRecoveryAfterAllNodesFail(new QuorumConfig(4));
+        checkRecoveryAfterAllNodesFail(new QuorumConfig(4));
     }
 
     @Test
     public void testRecoveryAfterAllNodesFailQuorumSizeFive() {
-        testRecoveryAfterAllNodesFail(new QuorumConfig(5));
+        checkRecoveryAfterAllNodesFail(new QuorumConfig(5));
     }
 
-    private void testRecoveryAfterAllNodesFail(QuorumConfig config) {
+    private void checkRecoveryAfterAllNodesFail(QuorumConfig config) {
         for (int seed = 0; seed < 100; seed++) {
             Cluster cluster = new Cluster(config, seed);
             MessageRouter router = new MessageRouter(cluster);
@@ -259,38 +255,35 @@ public class RaftEventSimulationTest {
 
     @Test
     public void testElectionAfterLeaderNetworkPartitionQuorumSizeThree() {
-        testElectionAfterLeaderNetworkPartition(new QuorumConfig(3));
+        checkElectionAfterLeaderNetworkPartition(new QuorumConfig(3));
     }
 
     @Test
     public void testElectionAfterLeaderNetworkPartitionQuorumSizeThreeAndTwoObservers() {
-        testElectionAfterLeaderNetworkPartition(new QuorumConfig(3, 2));
+        checkElectionAfterLeaderNetworkPartition(new QuorumConfig(3, 2));
     }
 
     @Test
     public void testElectionAfterLeaderNetworkPartitionQuorumSizeFour() {
-        testElectionAfterLeaderNetworkPartition(new QuorumConfig(4));
+        checkElectionAfterLeaderNetworkPartition(new QuorumConfig(4));
     }
 
     @Test
     public void testElectionAfterLeaderNetworkPartitionQuorumSizeFourAndTwoObservers() {
-        testElectionAfterLeaderNetworkPartition(new QuorumConfig(4, 2));
+        checkElectionAfterLeaderNetworkPartition(new QuorumConfig(4, 2));
     }
 
     @Test
     public void testElectionAfterLeaderNetworkPartitionQuorumSizeFive() {
-        testElectionAfterLeaderNetworkPartition(new QuorumConfig(5));
+        checkElectionAfterLeaderNetworkPartition(new QuorumConfig(5));
     }
 
     @Test
     public void testElectionAfterLeaderNetworkPartitionQuorumSizeFiveAndThreeObservers() {
-        testElectionAfterLeaderNetworkPartition(new QuorumConfig(5, 3));
+        checkElectionAfterLeaderNetworkPartition(new QuorumConfig(5, 3));
     }
 
-    private void testElectionAfterLeaderNetworkPartition(QuorumConfig config) {
-        // We need at least three voters to run this tests
-        assumeTrue(config.numVoters > 2);
-
+    private void checkElectionAfterLeaderNetworkPartition(QuorumConfig config) {
         for (int seed = 0; seed < 100; seed++) {
             Cluster cluster = new Cluster(config, seed);
             MessageRouter router = new MessageRouter(cluster);
@@ -318,18 +311,15 @@ public class RaftEventSimulationTest {
 
     @Test
     public void testElectionAfterMultiNodeNetworkPartitionQuorumSizeFive() {
-        testElectionAfterMultiNodeNetworkPartition(new QuorumConfig(5));
+        checkElectionAfterMultiNodeNetworkPartition(new QuorumConfig(5));
     }
 
     @Test
     public void testElectionAfterMultiNodeNetworkPartitionQuorumSizeFiveAndTwoObservers() {
-        testElectionAfterMultiNodeNetworkPartition(new QuorumConfig(5, 2));
+        checkElectionAfterMultiNodeNetworkPartition(new QuorumConfig(5, 2));
     }
 
-    private void testElectionAfterMultiNodeNetworkPartition(QuorumConfig config) {
-        // We need at least three voters to run this tests
-        assumeTrue(config.numVoters > 2);
-
+    private void checkElectionAfterMultiNodeNetworkPartition(QuorumConfig config) {
         for (int seed = 0; seed < 100; seed++) {
             Cluster cluster = new Cluster(config, seed);
             MessageRouter router = new MessageRouter(cluster);
@@ -372,15 +362,15 @@ public class RaftEventSimulationTest {
 
     @Test
     public void testBackToBackLeaderFailuresQuorumSizeThree() {
-        testBackToBackLeaderFailures(new QuorumConfig(3));
+        checkBackToBackLeaderFailures(new QuorumConfig(3));
     }
 
     @Test
     public void testBackToBackLeaderFailuresQuorumSizeFiveAndTwoObservers() {
-        testBackToBackLeaderFailures(new QuorumConfig(5, 2));
+        checkBackToBackLeaderFailures(new QuorumConfig(5, 2));
     }
 
-    private void testBackToBackLeaderFailures(QuorumConfig config) {
+    private void checkBackToBackLeaderFailures(QuorumConfig config) {
         for (int seed = 0; seed < 100; seed++) {
             Cluster cluster = new Cluster(config, seed);
             MessageRouter router = new MessageRouter(cluster);
@@ -430,24 +420,19 @@ public class RaftEventSimulationTest {
         }
     }
 
-    @FunctionalInterface
-    private interface Action {
-        void execute();
-    }
-
     private static abstract class Event implements Comparable<Event> {
         final int eventId;
         final long deadlineMs;
-        final Action action;
+        final Runnable action;
 
-        protected Event(Action action, int eventId, long deadlineMs) {
+        protected Event(Runnable action, int eventId, long deadlineMs) {
             this.action = action;
             this.eventId = eventId;
             this.deadlineMs = deadlineMs;
         }
 
         void execute(EventScheduler scheduler) {
-            action.execute();
+            action.run();
         }
 
         public int compareTo(Event other) {
@@ -463,7 +448,7 @@ public class RaftEventSimulationTest {
         final int periodMs;
         final int jitterMs;
 
-        protected PeriodicEvent(Action action,
+        protected PeriodicEvent(Runnable action,
                                 int eventId,
                                 Random random,
                                 long deadlineMs,
@@ -483,7 +468,7 @@ public class RaftEventSimulationTest {
         }
     }
 
-    private static class SequentialAppendAction implements Action {
+    private static class SequentialAppendAction implements Runnable {
         final Cluster cluster;
 
         private SequentialAppendAction(Cluster cluster) {
@@ -491,7 +476,7 @@ public class RaftEventSimulationTest {
         }
 
         @Override
-        public void execute() {
+        public void run() {
             cluster.withCurrentLeader(node -> {
                 if (!node.client.isShuttingDown() && node.counter.isWritable())
                     node.counter.increment();
@@ -499,7 +484,6 @@ public class RaftEventSimulationTest {
         }
     }
 
-    @FunctionalInterface
     private interface Invariant {
         void verify();
     }
@@ -531,7 +515,7 @@ public class RaftEventSimulationTest {
             validations.add(validation);
         }
 
-        void schedule(Action action, int delayMs, int periodMs, int jitterMs) {
+        void schedule(Runnable action, int delayMs, int periodMs, int jitterMs) {
             long initialDeadlineMs = time.milliseconds() + delayMs;
             int eventId = eventIdGenerator.incrementAndGet();
             PeriodicEvent event = new PeriodicEvent(action, eventId, random, initialDeadlineMs, periodMs, jitterMs);
@@ -737,22 +721,24 @@ public class RaftEventSimulationTest {
         void startAll() {
             if (!running.isEmpty())
                 throw new IllegalStateException("Some nodes are already started");
-            for (int voterId : nodes.keySet())
+            for (int voterId : nodes.keySet()) {
                 start(voterId);
+            }
         }
 
-        private static InetSocketAddress nodeAddress(int id) {
-            return new InetSocketAddress("localhost", 9990 + id);
+        private static RaftConfig.AddressSpec nodeAddress(int id) {
+            return new RaftConfig.InetAddressSpec(new InetSocketAddress("localhost", 9990 + id));
         }
 
         void start(int nodeId) {
             LogContext logContext = new LogContext("[Node " + nodeId + "] ");
             PersistentState persistentState = nodes.get(nodeId);
-            MockNetworkChannel channel = new MockNetworkChannel(correlationIdCounter);
+            MockNetworkChannel channel = new MockNetworkChannel(correlationIdCounter, voters);
             MockMessageQueue messageQueue = new MockMessageQueue();
-            List<Node> voterNodes = voterNodesFromIds(voters, Cluster::nodeAddress);
-            RaftConfig raftConfig = buildRaftConfig(REQUEST_TIMEOUT_MS, RETRY_BACKOFF_MS, ELECTION_TIMEOUT_MS,
-                    ELECTION_JITTER_MS, FETCH_TIMEOUT_MS, LINGER_MS, voterNodes);
+            Map<Integer, RaftConfig.AddressSpec> voterAddressMap = voters.stream()
+                .collect(Collectors.toMap(id -> id, Cluster::nodeAddress));
+            RaftConfig raftConfig = new RaftConfig(voterAddressMap, REQUEST_TIMEOUT_MS, RETRY_BACKOFF_MS, ELECTION_TIMEOUT_MS,
+                    ELECTION_JITTER_MS, FETCH_TIMEOUT_MS, LINGER_MS);
             Metrics metrics = new Metrics(time);
 
             persistentState.log.reopen();
@@ -773,7 +759,8 @@ public class RaftEventSimulationTest {
                 FETCH_MAX_WAIT_MS,
                 OptionalInt.of(nodeId),
                 logContext,
-                random
+                random,
+                raftConfig
             );
             RaftNode node = new RaftNode(
                 nodeId,
@@ -784,8 +771,7 @@ public class RaftEventSimulationTest {
                 persistentState.store,
                 logContext,
                 time,
-                random,
-                raftConfig
+                random
             );
             node.initialize();
             running.put(nodeId, node);
@@ -803,7 +789,6 @@ public class RaftEventSimulationTest {
         final ReplicatedCounter counter;
         final Time time;
         final Random random;
-        final RaftConfig raftConfig;
 
         private RaftNode(
             int nodeId,
@@ -814,8 +799,7 @@ public class RaftEventSimulationTest {
             MockQuorumStateStore store,
             LogContext logContext,
             Time time,
-            Random random,
-            RaftConfig raftConfig
+            Random random
         ) {
             this.nodeId = nodeId;
             this.client = client;
@@ -827,13 +811,12 @@ public class RaftEventSimulationTest {
             this.time = time;
             this.random = random;
             this.counter = new ReplicatedCounter(nodeId, client, logContext);
-            this.raftConfig = raftConfig;
         }
 
         void initialize() {
             try {
                 client.register(this.counter);
-                client.initialize(raftConfig);
+                client.initialize();
             } catch (IOException e) {
                 throw new RuntimeException(e);
             }

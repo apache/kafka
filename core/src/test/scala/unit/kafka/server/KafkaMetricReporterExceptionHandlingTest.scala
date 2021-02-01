@@ -24,9 +24,8 @@ import org.apache.kafka.common.metrics.MetricsReporter
 import org.apache.kafka.common.metrics.KafkaMetric
 import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.common.protocol.Errors
-import org.junit.Assert._
-import org.junit.{Before, Test}
-import org.junit.After
+import org.junit.jupiter.api.Assertions._
+import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
 import java.util.concurrent.atomic.AtomicInteger
 
 import org.apache.kafka.common.message.ListGroupsRequestData
@@ -43,7 +42,7 @@ class KafkaMetricReporterExceptionHandlingTest extends BaseRequestTest {
     properties.put(KafkaConfig.MetricReporterClassesProp, classOf[KafkaMetricReporterExceptionHandlingTest.BadReporter].getName + "," + classOf[KafkaMetricReporterExceptionHandlingTest.GoodReporter].getName)
   }
 
-  @Before
+  @BeforeEach
   override def setUp(): Unit = {
     super.setUp()
 
@@ -53,7 +52,7 @@ class KafkaMetricReporterExceptionHandlingTest extends BaseRequestTest {
     adminZkClient.changeClientIdConfig("<default>", quotaProps)
   }
 
-  @After
+  @AfterEach
   override def tearDown(): Unit = {
     KafkaMetricReporterExceptionHandlingTest.goodReporterRegistered.set(0)
     KafkaMetricReporterExceptionHandlingTest.badReporterRegistered.set(0)

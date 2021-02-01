@@ -40,8 +40,8 @@ import org.apache.kafka.clients.consumer.internals.ConsumerProtocol
 import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.message.LeaveGroupRequestData.MemberIdentity
-import org.junit.Assert._
-import org.junit.{After, Assert, Before, Test}
+import org.junit.jupiter.api.Assertions._
+import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
 
 import scala.jdk.CollectionConverters._
 import scala.collection.{Seq, mutable}
@@ -91,7 +91,7 @@ class GroupCoordinatorTest {
   // we use this string value since its hashcode % #.partitions is different
   private val otherGroupId = "otherGroup"
 
-  @Before
+  @BeforeEach
   def setUp(): Unit = {
     val props = TestUtils.createBrokerConfig(nodeId = 0, zkConnect = "")
     props.setProperty(KafkaConfig.GroupMinSessionTimeoutMsProp, GroupMinSessionTimeout.toString)
@@ -124,7 +124,7 @@ class GroupCoordinatorTest {
     groupCoordinator.groupManager.addPartitionOwnership(groupPartitionId)
   }
 
-  @After
+  @AfterEach
   def tearDown(): Unit = {
     EasyMock.reset(replicaManager)
     if (groupCoordinator != null)
@@ -408,7 +408,7 @@ class GroupCoordinatorTest {
     val memberIds = 1.to(nbMembers).map(_ => group.generateMemberId(ClientId, None))
 
     memberIds.foreach { memberId =>
-      group.add(new MemberMetadata(memberId, groupId, None, ClientId, ClientHost,
+      group.add(new MemberMetadata(memberId, None, ClientId, ClientHost,
         DefaultRebalanceTimeout, GroupMaxSessionTimeout, protocolType, protocols))
     }
     groupCoordinator.groupManager.addGroup(group)
@@ -1409,7 +1409,7 @@ class GroupCoordinatorTest {
       Some(protocolType)
     )
     assertEquals(Set(leaderRejoinGroupResult.memberId), getGroup(groupId).allMembers)
-    assertNotEquals(null, getGroup(groupId).leaderOrNull)
+    assertNotNull(getGroup(groupId).leaderOrNull)
     assertEquals(3, getGroup(groupId).generationId)
   }
 
@@ -1736,7 +1736,7 @@ class GroupCoordinatorTest {
     val memberId = "memberId"
 
     val group = new GroupMetadata(groupId, Empty, new MockTime())
-    val member = new MemberMetadata(memberId, groupId, groupInstanceId,
+    val member = new MemberMetadata(memberId, groupInstanceId,
       ClientId, ClientHost, DefaultRebalanceTimeout, DefaultSessionTimeout,
       protocolType, List(("range", Array.empty[Byte]), ("roundrobin", Array.empty[Byte])))
 
@@ -3706,12 +3706,8 @@ class GroupCoordinatorTest {
   }
 
   private def verifyDelayedTaskNotCompleted(firstJoinFuture: Future[JoinGroupResult]) = {
-    try {
-      await(firstJoinFuture, 1)
-      Assert.fail("should have timed out as rebalance delay not expired")
-    } catch {
-      case _: TimeoutException => // ok
-    }
+    assertThrows(classOf[TimeoutException], () => await(firstJoinFuture, 1),
+      () => "should have timed out as rebalance delay not expired")
   }
 
   @Test

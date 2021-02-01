@@ -55,8 +55,10 @@ import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.stream.Collectors;
@@ -275,6 +277,12 @@ public class StreamThread extends Thread {
     private final Sensor commitRatioSensor;
     private final Sensor failedStreamThreadSensor;
 
+    private static final long LOG_SUMMARY_INTERVAL_MS = 2 * 60 * 1000L; // log a summary of processing every 2 minutes
+    private long lastLogSummaryMs = -1L;
+    private long totalRecordsProcessedSinceLastSummary = 0L;
+    private long totalPunctuatorsSinceLastSummary = 0L;
+    private long totalCommittedSinceLastSummary = 0L;
+
     private long now;
     private long lastPollMs;
     private long lastCommitMs;
@@ -283,6 +291,7 @@ public class StreamThread extends Thread {
     private volatile State state = State.CREATED;
     private volatile ThreadMetadata threadMetadata;
     private StreamThread.StateListener stateListener;
+    private final Optional<String> getGroupInstanceID;
 
     private final ChangelogReader changelogReader;
     private final ConsumerRebalanceListener rebalanceListener;
@@ -295,6 +304,8 @@ public class StreamThread extends Thread {
     private java.util.function.Consumer<Throwable> streamsUncaughtExceptionHandler;
     private Runnable shutdownErrorHook;
     private AtomicInteger assignmentErrorCode;
+    private final ProcessingMode processingMode;
+    private AtomicBoolean leaveGroupRequested;
 
     public static StreamThread create(final InternalTopologyBuilder builder,
                                       final StreamsConfig config,
@@ -364,6 +375,7 @@ public class StreamThread extends Thread {
             changelogReader,
             processId,
             logPrefix,
+            streamsMetrics,
             activeTaskCreator,
             standbyTaskCreator,
             builder,
@@ -406,7 +418,7 @@ public class StreamThread extends Thread {
             referenceContainer.nextScheduledRebalanceMs,
             shutdownErrorHook,
             streamsUncaughtExceptionHandler,
-            cacheSize -> cache.resize(cacheSize)
+            cache::resize
         );
 
         taskManager.setPartitionResetter(partitions -> streamThread.resetOffsets(partitions, null));
@@ -463,7 +475,7 @@ public class StreamThread extends Thread {
                         final java.util.function.Consumer<Long> cacheResizer) {
         super(threadId);
         this.stateLock = new Object();
-
+        this.leaveGroupRequested = new AtomicBoolean(false);
         this.adminClient = adminClient;
         this.streamsMetrics = streamsMetrics;
         this.commitSensor = ThreadMetrics.commitSensor(threadId, streamsMetrics);
@@ -482,7 +494,7 @@ public class StreamThread extends Thread {
         this.shutdownErrorHook = shutdownErrorHook;
         this.streamsUncaughtExceptionHandler = streamsUncaughtExceptionHandler;
         this.cacheResizer = cacheResizer;
-
+        this.processingMode = processingMode(config);
 
         // The following sensors are created here but their references are not stored in this object, since within
         // this object they are not recorded. The sensors are created here so that the stream threads starts with all
@@ -507,6 +519,7 @@ public class StreamThread extends Thread {
         this.changelogReader = changelogReader;
         this.originalReset = originalReset;
         this.nextProbingRebalanceMs = nextProbingRebalanceMs;
+        this.getGroupInstanceID = mainConsumer.groupMetadata().groupInstanceId();
 
         this.pollTime = Duration.ofMillis(config.getLong(StreamsConfig.POLL_MS_CONFIG));
         final int dummyThreadIdx = 1;
@@ -539,8 +552,7 @@ public class StreamThread extends Thread {
         }
         boolean cleanRun = false;
         try {
-            runLoop();
-            cleanRun = true;
+            cleanRun = runLoop();
         } finally {
             completeShutdown(cleanRun);
         }
@@ -552,7 +564,7 @@ public class StreamThread extends Thread {
      * @throws IllegalStateException If store gets registered after initialized is already finished
      * @throws StreamsException      if the store's change log does not contain the partition
      */
-    void runLoop() {
+    boolean runLoop() {
         subscribeConsumer();
 
         // if the thread is still in the middle of a rebalance, we should keep polling
@@ -587,11 +599,18 @@ public class StreamThread extends Thread {
                 }
                 failedStreamThreadSensor.record();
                 this.streamsUncaughtExceptionHandler.accept(e);
+                if (processingMode == ProcessingMode.EXACTLY_ONCE_ALPHA || processingMode == ProcessingMode.EXACTLY_ONCE_BETA) {
+                    return false;
+                }
             } catch (final Throwable e) {
                 failedStreamThreadSensor.record();
                 this.streamsUncaughtExceptionHandler.accept(e);
+                if (processingMode == ProcessingMode.EXACTLY_ONCE_ALPHA || processingMode == ProcessingMode.EXACTLY_ONCE_BETA) {
+                    return false;
+                }
             }
         }
+        return true;
     }
 
     /**
@@ -603,13 +622,34 @@ public class StreamThread extends Thread {
         this.streamsUncaughtExceptionHandler = streamsUncaughtExceptionHandler;
     }
 
-    public void waitOnThreadState(final StreamThread.State targetState) {
+    public boolean waitOnThreadState(final StreamThread.State targetState, final long timeoutMs) {
+        final long begin = time.milliseconds();
         synchronized (stateLock) {
-            while (state != targetState) {
-                try {
-                    stateLock.wait();
-                } catch (final InterruptedException e) {
-                    // it is ok: just move on to the next iteration
+            boolean interrupted = false;
+            long elapsedMs = 0L;
+            try {
+                while (state != targetState) {
+                    if (timeoutMs >= elapsedMs) {
+                        final long remainingMs = timeoutMs - elapsedMs;
+                        try {
+                            stateLock.wait(remainingMs);
+                        } catch (final InterruptedException e) {
+                            interrupted = true;
+                        }
+                    } else {
+                        log.debug("Cannot transit to {} within {}ms", targetState, timeoutMs);
+                        return false;
+                    }
+                    elapsedMs = time.milliseconds() - begin;
+                }
+                return true;
+            } finally {
+                // Make sure to restore the interruption status before returning.
+                // We do not always own the current thread that executes this method, i.e., we do not know the
+                // interruption policy of the thread. The least we can do is restore the interruption status before
+                // the current thread exits this method.
+                if (interrupted) {
+                    Thread.currentThread().interrupt();
                 }
             }
         }
@@ -689,8 +729,6 @@ public class StreamThread extends Thread {
         advanceNowAndComputeLatency();
 
         int totalProcessed = 0;
-        int totalPunctuated = 0;
-        int totalCommitted = 0;
         long totalCommitLatency = 0L;
         long totalProcessLatency = 0L;
         long totalPunctuateLatency = 0L;
@@ -721,6 +759,7 @@ public class StreamThread extends Thread {
                     processLatencySensor.record(processLatency / (double) processed, now);
 
                     totalProcessed += processed;
+                    totalRecordsProcessedSinceLastSummary += processed;
                 }
 
                 log.debug("Processed {} records with {} iterations; invoking punctuators if necessary",
@@ -728,7 +767,7 @@ public class StreamThread extends Thread {
                           numIterations);
 
                 final int punctuated = taskManager.punctuate();
-                totalPunctuated += punctuated;
+                totalPunctuatorsSinceLastSummary += punctuated;
                 final long punctuateLatency = advanceNowAndComputeLatency();
                 totalPunctuateLatency += punctuateLatency;
                 if (punctuated > 0) {
@@ -738,7 +777,7 @@ public class StreamThread extends Thread {
                 log.debug("{} punctuators ran.", punctuated);
 
                 final int committed = maybeCommit();
-                totalCommitted += committed;
+                totalCommittedSinceLastSummary += committed;
                 final long commitLatency = advanceNowAndComputeLatency();
                 totalCommitLatency += commitLatency;
                 if (committed > 0) {
@@ -751,7 +790,7 @@ public class StreamThread extends Thread {
                 }
 
                 if (processed == 0) {
-                    // if there is no records to be processed, exit after punctuate / commit
+                    // if there are no records to be processed, exit after punctuate / commit
                     break;
                 } else if (Math.max(now - lastPollMs, 0) > maxPollTimeMs / 2) {
                     numIterations = numIterations > 1 ? numIterations / 2 : numIterations;
@@ -766,12 +805,6 @@ public class StreamThread extends Thread {
             // we record the ratio out of the while loop so that the accumulated latency spans over
             // multiple iterations with reasonably large max.num.records and hence is less vulnerable to outliers
             taskManager.recordTaskProcessRatio(totalProcessLatency, now);
-
-            // Don't log summary if no new records were processed to avoid spamming logs for low-traffic topics
-            if (totalProcessed > 0 || totalPunctuated > 0 || totalCommitted > 0) {
-                log.info("Processed {} total records, ran {} punctuators, and committed {} total tasks",
-                         totalProcessed, totalPunctuated, totalCommitted);
-            }
         }
 
         now = time.milliseconds();
@@ -781,6 +814,17 @@ public class StreamThread extends Thread {
         punctuateRatioSensor.record((double) totalPunctuateLatency / runOnceLatency, now);
         pollRatioSensor.record((double) pollLatency / runOnceLatency, now);
         commitRatioSensor.record((double) totalCommitLatency / runOnceLatency, now);
+
+        final boolean logProcessingSummary = now - lastLogSummaryMs > LOG_SUMMARY_INTERVAL_MS;
+        if (logProcessingSummary) {
+            log.info("Processed {} total records, ran {} punctuators, and committed {} total tasks since the last update",
+                 totalRecordsProcessedSinceLastSummary, totalPunctuatorsSinceLastSummary, totalCommittedSinceLastSummary);
+
+            totalRecordsProcessedSinceLastSummary = 0L;
+            totalPunctuatorsSinceLastSummary = 0L;
+            totalCommittedSinceLastSummary = 0L;
+            lastLogSummaryMs = now;
+        }
     }
 
     private void initializeAndRestorePhase() {
@@ -845,13 +889,17 @@ public class StreamThread extends Thread {
         final long pollLatency = advanceNowAndComputeLatency();
 
         final int numRecords = records.count();
-        if (numRecords > 0) {
-            log.info("Main Consumer poll completed in {} ms and fetched {} records", pollLatency, numRecords);
-        }
+
+        log.debug(
+            "Main Consumer poll completed in {} ms and fetched {} records and {} metadata",
+            pollLatency,
+            numRecords,
+            records.metadata().size()
+        );
 
         pollSensor.record(pollLatency, now);
 
-        if (!records.isEmpty()) {
+        if (!records.isEmpty() || !records.metadata().isEmpty()) {
             pollRecordsSensor.record(numRecords, now);
             taskManager.addRecordsToTasks(records);
         }
@@ -1028,6 +1076,9 @@ public class StreamThread extends Thread {
         } catch (final Throwable e) {
             log.error("Failed to close changelog reader due to the following error:", e);
         }
+        if (leaveGroupRequested.get()) {
+            mainConsumer.unsubscribe();
+        }
         try {
             mainConsumer.close();
         } catch (final Throwable e) {
@@ -1041,6 +1092,7 @@ public class StreamThread extends Thread {
         streamsMetrics.removeAllThreadLevelSensors(getName());
 
         setState(State.DEAD);
+
         log.info("Shutdown complete");
     }
 
@@ -1123,6 +1175,14 @@ public class StreamThread extends Thread {
      */
     public String toString(final String indent) {
         return indent + "\tStreamsThread threadId: " + getName() + "\n" + taskManager.toString(indent);
+    }
+
+    public Optional<String> getGroupInstanceID() {
+        return getGroupInstanceID;
+    }
+
+    public void requestLeaveGroupDuringShutdown() {
+        this.leaveGroupRequested.set(true);
     }
 
     public Map<MetricName, Metric> producerMetrics() {
