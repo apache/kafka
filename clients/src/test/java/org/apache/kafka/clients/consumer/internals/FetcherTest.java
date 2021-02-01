@@ -1747,38 +1747,22 @@ public class FetcherTest {
         OffsetResetStrategy strategy,
         AbstractRequest request
     ) {
-        if (!(request instanceof ListOffsetsRequest)) {
-            return false;
-        }
+        assertTrue(request instanceof ListOffsetsRequest);
 
         ListOffsetsRequest req = (ListOffsetsRequest) request;
-        if (req.data().topics().size() != 1) {
-            return false;
-        }
+        assertEquals(singleton(tp.topic()), req.data().topics().stream()
+            .map(ListOffsetsTopic::name).collect(Collectors.toSet()));
 
         ListOffsetsTopic listTopic = req.data().topics().get(0);
-        if (!listTopic.name().equals(tp.topic())) {
-            return false;
-        }
-
-        if (listTopic.partitions().size() != 1) {
-            return false;
-        }
+        assertEquals(singleton(tp.partition()), listTopic.partitions().stream()
+            .map(ListOffsetsPartition::partitionIndex).collect(Collectors.toSet()));
 
         ListOffsetsPartition listPartition = listTopic.partitions().get(0);
-        if (listPartition.partitionIndex() != tp.partition()) {
-            return false;
+        if (strategy == OffsetResetStrategy.EARLIEST) {
+            assertEquals(ListOffsetsRequest.EARLIEST_TIMESTAMP, listPartition.timestamp());
+        } else if (strategy == OffsetResetStrategy.LATEST) {
+            assertEquals(ListOffsetsRequest.LATEST_TIMESTAMP, listPartition.timestamp());
         }
-
-        long timestamp = listPartition.timestamp();
-        if (strategy == OffsetResetStrategy.EARLIEST && timestamp != ListOffsetsRequest.EARLIEST_TIMESTAMP) {
-            return false;
-        }
-
-        if (strategy == OffsetResetStrategy.LATEST && timestamp != ListOffsetsRequest.LATEST_TIMESTAMP) {
-            return false;
-        }
-
         return true;
     }
 
