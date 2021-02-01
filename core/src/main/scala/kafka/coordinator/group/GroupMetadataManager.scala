@@ -1006,7 +1006,7 @@ object GroupMetadataManager {
             time: Time,
             metrics: Metrics): GroupMetadataManager = {
     new GroupMetadataManager(brokerId, interBrokerProtocolVersion, config, replicaManager,
-      new OffsetsTopicPartitionCountViaZooKeeper(zkClient, config.offsetsTopicNumPartitions).offsetsTopicPartitionCount,
+      () => zkClient.getTopicPartitionCount(Topic.GROUP_METADATA_TOPIC_NAME).getOrElse(config.offsetsTopicNumPartitions),
       time, metrics)
   }
 

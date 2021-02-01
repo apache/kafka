@@ -1298,13 +1298,6 @@ class GroupCoordinator(val brokerId: Int,
   private def isCoordinatorLoadInProgress(groupId: String) = groupManager.isGroupLoading(groupId)
 }
 
-class OffsetsTopicPartitionCountViaZooKeeper(zkClient: KafkaZkClient,
-                                                     defaultOffsetsPartitionCount: Int) {
-  def offsetsTopicPartitionCount(): Int = {
-    zkClient.getTopicPartitionCount(Topic.GROUP_METADATA_TOPIC_NAME).getOrElse(defaultOffsetsPartitionCount)
-  }
-}
-
 object GroupCoordinator {
 
   val NoState = ""
@@ -1322,9 +1315,9 @@ object GroupCoordinator {
             replicaManager: ReplicaManager,
             time: Time,
             metrics: Metrics): GroupCoordinator = {
-    val offsetsTopicPartitionCountFunc: () => Int =
-      new OffsetsTopicPartitionCountViaZooKeeper(zkClient, config.offsetsTopicPartitions).offsetsTopicPartitionCount
-    GroupCoordinator(config, offsetsTopicPartitionCountFunc, replicaManager, time, metrics)
+    GroupCoordinator(config,
+      () => zkClient.getTopicPartitionCount(Topic.GROUP_METADATA_TOPIC_NAME).getOrElse(config.offsetsTopicPartitions),
+      replicaManager, time, metrics)
   }
 
   def apply(config: KafkaConfig,
@@ -1334,9 +1327,9 @@ object GroupCoordinator {
             joinPurgatory: DelayedOperationPurgatory[DelayedJoin],
             time: Time,
             metrics: Metrics): GroupCoordinator = {
-    val offsetsTopicPartitionCountFunc: () => Int =
-      new OffsetsTopicPartitionCountViaZooKeeper(zkClient, config.offsetsTopicPartitions).offsetsTopicPartitionCount
-    GroupCoordinator(config, offsetsTopicPartitionCountFunc, replicaManager, heartbeatPurgatory, joinPurgatory, time, metrics)
+    GroupCoordinator(config,
+      () => zkClient.getTopicPartitionCount(Topic.GROUP_METADATA_TOPIC_NAME).getOrElse(config.offsetsTopicPartitions),
+      replicaManager, heartbeatPurgatory, joinPurgatory, time, metrics)
   }
 
   def apply(config: KafkaConfig,

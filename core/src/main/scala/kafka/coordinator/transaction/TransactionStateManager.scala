@@ -61,7 +61,7 @@ object TransactionStateManager {
             time: Time,
             metrics: Metrics) = {
     new TransactionStateManager(brokerId,
-      new TransactionStateTopicPartitionCountViaZooKeeper(zkClient, config.transactionLogNumPartitions).transactionStateTopicPartitionCount,
+      () => zkClient.getTopicPartitionCount(Topic.TRANSACTION_STATE_TOPIC_NAME).getOrElse(config.transactionLogNumPartitions),
       scheduler, replicaManager, config, time, metrics)
   }
 }
