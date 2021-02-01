@@ -749,6 +749,7 @@ project(':core') {
 
   dependencies {
     compile project(':clients')
+    compile project(':metadata')
     compile project(':raft')
     compile libs.jacksonDatabind
     compile libs.jacksonModuleScala
