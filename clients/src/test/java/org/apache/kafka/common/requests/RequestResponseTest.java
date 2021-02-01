@@ -2656,6 +2656,7 @@ public class RequestResponseTest {
                 .setBrokerEpoch(1)
                 .setThrottleTimeMs(0);
         return new BrokerRegistrationResponse(data);
+    }
 
     /**
      * Check that all error codes in the response get included in {@link AbstractResponse#errorCounts()}.

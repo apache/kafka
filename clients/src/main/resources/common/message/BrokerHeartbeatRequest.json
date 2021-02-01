@@ -14,7 +14,7 @@
 // limitations under the License.
 
 {
-  "apiKey": 62,
+  "apiKey": 63,
   "type": "request",
   "name": "BrokerHeartbeatRequest",
   "validVersions": "0",
