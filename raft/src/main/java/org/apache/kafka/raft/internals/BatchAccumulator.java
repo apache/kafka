@@ -19,7 +19,6 @@ package org.apache.kafka.raft.internals;
 import org.apache.kafka.common.memory.MemoryPool;
 import org.apache.kafka.common.record.CompressionType;
 import org.apache.kafka.common.record.MemoryRecords;
-import org.apache.kafka.common.record.RecordBatch;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.raft.RecordSerde;
 
@@ -180,7 +179,7 @@ public class BatchAccumulator<T> implements Closeable {
                 nextOffset,
                 time.milliseconds(),
                 false,
-                RecordBatch.NO_PARTITION_LEADER_EPOCH,
+                epoch,
                 maxBatchSize
             );
         }

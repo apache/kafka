@@ -296,6 +296,10 @@ class BatchAccumulatorTest {
         List<BatchAccumulator.CompletedBatch<String>> drained = acc.drain();
         assertEquals(1, drained.size());
         assertEquals(Long.MAX_VALUE - time.milliseconds(), acc.timeUntilDrain(time.milliseconds()));
+        drained.stream().forEach(completedBatch -> {
+            completedBatch.data.batches().forEach(recordBatch -> {
+                assertEquals(leaderEpoch, recordBatch.partitionLeaderEpoch()); });
+        });
     }
 
 }

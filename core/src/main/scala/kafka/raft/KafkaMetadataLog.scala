@@ -91,7 +91,7 @@ final class KafkaMetadataLog private (
     handleAndConvertLogAppendInfo(
       log.appendAsLeader(records.asInstanceOf[MemoryRecords],
         leaderEpoch = epoch,
-        origin = AppendOrigin.Coordinator
+        origin = AppendOrigin.RaftLeader
       )
     )
   }
