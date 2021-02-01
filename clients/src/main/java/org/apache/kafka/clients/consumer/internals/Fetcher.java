@@ -256,7 +256,7 @@ public class Fetcher<K, V> implements Closeable {
             final Node fetchTarget = entry.getKey();
             final FetchSessionHandler.FetchRequestData data = entry.getValue();
             final short maxVersion;
-            if (ApiKeys.FETCH.latestVersion() >= 13 && !data.canUseTopicIds()) {
+            if (!data.canUseTopicIds()) {
                 maxVersion = (short) 12;
             } else {
                 maxVersion = ApiKeys.FETCH.latestVersion();

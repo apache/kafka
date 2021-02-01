@@ -138,12 +138,12 @@ public class FetchRequest extends AbstractRequest {
     public static final class FetchDataAndError {
         private final Map<TopicPartition, PartitionData> fetchData;
         private final List<UnresolvedPartitions> unresolvedPartitions;
-        private final Map<Uuid, FetchResponse.IdError> idErrors;
+        private final Map<Uuid, FetchResponse.TopicIdError> topicIdErrors;
 
-        public FetchDataAndError(Map<TopicPartition, PartitionData> fetchData, List<UnresolvedPartitions> unresolvedPartitions, Map<Uuid, FetchResponse.IdError> idErrors) {
+        public FetchDataAndError(Map<TopicPartition, PartitionData> fetchData, List<UnresolvedPartitions> unresolvedPartitions, Map<Uuid, FetchResponse.TopicIdError> topicIdErrors) {
             this.fetchData = fetchData;
             this.unresolvedPartitions = unresolvedPartitions;
-            this.idErrors = idErrors;
+            this.topicIdErrors = topicIdErrors;
         }
 
         public final Map<TopicPartition, PartitionData> fetchData() {
@@ -154,8 +154,8 @@ public class FetchRequest extends AbstractRequest {
             return unresolvedPartitions;
         }
 
-        public final Map<Uuid, FetchResponse.IdError> idErrors() {
-            return idErrors;
+        public final Map<Uuid, FetchResponse.TopicIdError> topicIdErrors() {
+            return topicIdErrors;
         }
     }
 
@@ -225,7 +225,7 @@ public class FetchRequest extends AbstractRequest {
     private FetchDataAndError toPartitionDataMapAndError(List<FetchRequestData.FetchTopic> fetchableTopics, Map<Uuid, String> topicNames) {
         Map<TopicPartition, PartitionData> fetchData = new LinkedHashMap<>();
         List<UnresolvedPartitions> unresolvedPartitions = new LinkedList<>();
-        Map<Uuid, FetchResponse.IdError> idErrors = new HashMap<>();
+        Map<Uuid, FetchResponse.TopicIdError> topicIdErrors = new HashMap<>();
         Errors error;
         if (topicNames.isEmpty()) {
             error = Errors.UNSUPPORTED_VERSION;
@@ -255,14 +255,14 @@ public class FetchRequest extends AbstractRequest {
                         optionalEpoch(fetchPartition.currentLeaderEpoch()),
                         optionalEpoch(fetchPartition.lastFetchedEpoch()))))));
 
-                if (idErrors.containsKey(fetchTopic.topicId()))
-                    idErrors.get(fetchTopic.topicId()).addPartitions(fetchTopic.partitions().stream().map(part -> part.partition()).collect(Collectors.toList()));
+                if (topicIdErrors.containsKey(fetchTopic.topicId()))
+                    topicIdErrors.get(fetchTopic.topicId()).addPartitions(fetchTopic.partitions().stream().map(part -> part.partition()).collect(Collectors.toList()));
                 else
-                    idErrors.put(fetchTopic.topicId(), new FetchResponse.IdError(fetchTopic.topicId(), fetchTopic.partitions().stream().map(part -> part.partition()).collect(Collectors.toList()),
+                    topicIdErrors.put(fetchTopic.topicId(), new FetchResponse.TopicIdError(fetchTopic.topicId(), fetchTopic.partitions().stream().map(part -> part.partition()).collect(Collectors.toList()),
                         error));
             }
         });
-        return new FetchDataAndError(fetchData, unresolvedPartitions, idErrors);
+        return new FetchDataAndError(fetchData, unresolvedPartitions, topicIdErrors);
     }
 
     private List<TopicPartition> toForgottenTopicList(List<FetchRequestData.ForgottenTopic> forgottenTopics) {

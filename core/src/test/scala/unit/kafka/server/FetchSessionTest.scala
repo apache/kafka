@@ -475,11 +475,11 @@ class FetchSessionTest {
     assertTrue(resp1.sessionId() != INVALID_SESSION_ID)
     assertEquals(2, resp1.responseData(topicNames).size())
     resp1.responseData(topicNames).forEach( (_, resp) => assertEquals(Errors.UNKNOWN_TOPIC_ID, resp.error()))
-    val idErrors = context1.getIdErrors()
-    assertEquals(1, idErrors.size())
-    idErrors.forEach( idError => {
-      assertEquals(topicIds.get("foo"), idError.id())
-      assertEquals(Set(0,1).asJava, idError.partitions())
+    val topicIdErrors = context1.getIdErrors()
+    assertEquals(1, topicIdErrors.size())
+    topicIdErrors.forEach( topicIdError => {
+      assertEquals(topicIds.get("foo"), topicIdError.id())
+      assertEquals(Set(0,1).asJava, topicIdError.partitions())
     })
 
     // Create an incremental fetch request that removes foo-0 and adds bar-0
@@ -509,11 +509,11 @@ class FetchSessionTest {
     assertEquals(2, resp2.responseData(topicNames).size)
     assertTrue(resp2.sessionId > 0)
     assertEquals(Errors.UNKNOWN_TOPIC_ID, resp2.responseData(topicNames).get(new TopicPartition("foo", 1)).error())
-    val idErrors2 = context2.getIdErrors()
-    assertEquals(1, idErrors2.size())
-    idErrors2.forEach( idError => {
-      assertEquals(topicIds.get("foo"), idError.id())
-      assertEquals(Set(1).asJava, idError.partitions())
+    val topicIdErrors2 = context2.getIdErrors()
+    assertEquals(1, topicIdErrors2.size())
+    topicIdErrors2.forEach( topicIdError => {
+      assertEquals(topicIds.get("foo"), topicIdError.id())
+      assertEquals(Set(1).asJava, topicIdError.partitions())
     })
 
     // Create an incremental fetch request that resolves foo-0's topic ID

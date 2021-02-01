@@ -79,7 +79,6 @@ import scala.collection.Iterator;
 import scala.collection.JavaConverters;
 import scala.compat.java8.OptionConverters;
 import scala.collection.Map;
-import scala.jdk.CollectionConverters;
 
 import java.io.File;
 import java.io.IOException;
@@ -145,7 +144,7 @@ public class ReplicaFetcherThreadBenchmark {
 
         LinkedHashMap<TopicPartition, FetchResponse.PartitionData<BaseRecords>> initialFetched = new LinkedHashMap<>();
         HashMap<String, Uuid> topicIds = new HashMap<>();
-        List<FetchResponse.IdError> idErrors = new LinkedList<>();
+        List<FetchResponse.TopicIdError> topicIdErrors = new LinkedList<>();
         scala.collection.mutable.Map<TopicPartition, InitialFetchState> initialFetchStates = new scala.collection.mutable.HashMap<>();
         for (int i = 0; i < partitionCount; i++) {
             TopicPartition tp = new TopicPartition("topic", i);
@@ -213,7 +212,7 @@ public class ReplicaFetcherThreadBenchmark {
         // so that we do not measure this time as part of the steady state work
         fetcher.doWork();
         // handle response to engage the incremental fetch session handler
-        fetcher.fetchSessionHandler().handleResponse(FetchResponse.prepareResponse(Errors.NONE, initialFetched, idErrors, topicIds, 0, 999), ApiKeys.FETCH.latestVersion());
+        fetcher.fetchSessionHandler().handleResponse(FetchResponse.prepareResponse(Errors.NONE, initialFetched, topicIdErrors, topicIds, 0, 999), ApiKeys.FETCH.latestVersion());
     }
 
     @TearDown(Level.Trial)

@@ -262,12 +262,12 @@ public class FetchResponse<T extends BaseRecords> extends AbstractResponse {
         }
     }
 
-    public static final class IdError {
+    public static final class TopicIdError {
         private final Uuid id;
         private final Set<Integer> partitions;
         private final Errors error;
 
-        public IdError(Uuid id,
+        public TopicIdError(Uuid id,
                 List<Integer> partitions,
                 Errors error) {
             this.id = id;
@@ -284,9 +284,7 @@ public class FetchResponse<T extends BaseRecords> extends AbstractResponse {
         }
 
         public void addPartitions(List<Integer> partitions) {
-            partitions.forEach(partition -> {
-                partitions.add(partition);
-            });
+            partitions.addAll(partitions);
         }
 
         private List<FetchResponseData.FetchablePartitionResponse> errorData() {
@@ -314,12 +312,12 @@ public class FetchResponse<T extends BaseRecords> extends AbstractResponse {
      */
     public FetchResponse(Errors error,
                          LinkedHashMap<TopicPartition, PartitionData<T>> responseData,
-                         List<IdError> idErrors,
+                         List<TopicIdError> topicIdErrors,
                          Map<String, Uuid> topicIds,
                          int throttleTimeMs,
                          int sessionId) {
         super(ApiKeys.FETCH);
-        this.data = toMessage(throttleTimeMs, error, responseData.entrySet().iterator(), idErrors, topicIds, sessionId);
+        this.data = toMessage(throttleTimeMs, error, responseData.entrySet().iterator(), topicIdErrors, topicIds, sessionId);
         this.responseDataMap = responseData;
     }
 
@@ -413,7 +411,7 @@ public class FetchResponse<T extends BaseRecords> extends AbstractResponse {
 
     private static <T extends BaseRecords> FetchResponseData toMessage(int throttleTimeMs, Errors error,
                                                                        Iterator<Map.Entry<TopicPartition, PartitionData<T>>> partIterator,
-                                                                       List<IdError> idErrors,
+                                                                       List<TopicIdError> topicIdErrors,
                                                                        Map<String, Uuid> topicIds,
                                                                        int sessionId) {
         List<FetchResponseData.FetchableTopicResponse> topicResponseList = new ArrayList<>();
@@ -437,11 +435,11 @@ public class FetchResponse<T extends BaseRecords> extends AbstractResponse {
             }
         });
         // ID errors will be empty unless topic IDs are supported and there were topic ID errors
-        idErrors.forEach(idError -> {
+        topicIdErrors.forEach(topicIdError -> {
             List<FetchResponseData.FetchablePartitionResponse> partitionResponses = new ArrayList<>();
-            partitionResponses.addAll(idError.errorData());
+            partitionResponses.addAll(topicIdError.errorData());
             topicResponseList.add(new FetchResponseData.FetchableTopicResponse()
-                    .setTopicId(idError.id())
+                    .setTopicId(topicIdError.id())
                     .setPartitionResponses(partitionResponses));
         });
 
@@ -470,11 +468,11 @@ public class FetchResponse<T extends BaseRecords> extends AbstractResponse {
      */
     public static <T extends BaseRecords> int sizeOf(short version,
                                                      Iterator<Map.Entry<TopicPartition, PartitionData<T>>> partIterator,
-                                                     List<IdError> idErrors,
+                                                     List<TopicIdError> topicIdErrors,
                                                      Map<String, Uuid> topicIds) {
         // Since the throttleTimeMs and metadata field sizes are constant and fixed, we can
         // use arbitrary values here without affecting the result.
-        FetchResponseData data = toMessage(0, Errors.NONE, partIterator, idErrors, topicIds, INVALID_SESSION_ID);
+        FetchResponseData data = toMessage(0, Errors.NONE, partIterator, topicIdErrors, topicIds, INVALID_SESSION_ID);
         ObjectSerializationCache cache = new ObjectSerializationCache();
         return 4 + data.size(cache, version);
     }
@@ -489,10 +487,10 @@ public class FetchResponse<T extends BaseRecords> extends AbstractResponse {
     // Will either contain topic names or topic IDs but not both.
     public static <T extends BaseRecords> FetchResponse<T> prepareResponse(Errors error,
                                                 LinkedHashMap<TopicPartition, PartitionData<T>> responseData,
-                                                List<IdError> idErrors,
+                                                List<TopicIdError> topicIdErrors,
                                                 Map<String, Uuid> topicIds,
                                                 int throttleTimeMs,
                                                 int sessionId) {
-        return new FetchResponse<T>(toMessage(throttleTimeMs, error, responseData.entrySet().iterator(), idErrors, topicIds, sessionId));
+        return new FetchResponse<T>(toMessage(throttleTimeMs, error, responseData.entrySet().iterator(), topicIdErrors, topicIds, sessionId));
     }
 }

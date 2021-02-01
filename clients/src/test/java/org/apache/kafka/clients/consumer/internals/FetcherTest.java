@@ -1374,9 +1374,9 @@ public class FetcherTest {
         Map<TopicPartition, FetchResponse.PartitionData<MemoryRecords>> partitions = new LinkedHashMap<>();
         partitions.put(tp1, new FetchResponse.PartitionData<>(Errors.NONE, 100,
                 FetchResponse.INVALID_LAST_STABLE_OFFSET, FetchResponse.INVALID_LOG_START_OFFSET, null, records));
-        List<FetchResponse.IdError> idErrors = Collections.singletonList(
-                new FetchResponse.IdError(topicIds.get(tp0.topic()), Collections.singletonList(0), Errors.UNKNOWN_TOPIC_ID));
-        client.prepareResponse(FetchResponse.prepareResponse(Errors.NONE, new LinkedHashMap<>(partitions), idErrors, topicIds,
+        List<FetchResponse.TopicIdError> topicIdErrors = Collections.singletonList(
+                new FetchResponse.TopicIdError(topicIds.get(tp0.topic()), Collections.singletonList(0), Errors.UNKNOWN_TOPIC_ID));
+        client.prepareResponse(FetchResponse.prepareResponse(Errors.NONE, new LinkedHashMap<>(partitions), topicIdErrors, topicIds,
                 0, INVALID_SESSION_ID));
         consumerClient.poll(time.timer(0));
 

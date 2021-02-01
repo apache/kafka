@@ -220,7 +220,7 @@ class ReplicaFetcherThread(name: String,
       if (!fetchSessionHandler.handleResponse(fetchResponse, fetchRequest.latestAllowedVersion())) {
         Map.empty
       } else {
-        fetchResponse.responseData(fetchSessionHandler.getSessionTopicNames).asScala
+        fetchResponse.responseData(fetchSessionHandler.sessionTopicNames).asScala
       }
     } catch {
       case t: Throwable =>

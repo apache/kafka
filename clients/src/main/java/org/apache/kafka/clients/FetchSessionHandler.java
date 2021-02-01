@@ -91,7 +91,7 @@ public class FetchSessionHandler {
      */
     private Map<String, Set<Integer>> sessionPartitionsPerTopic = new HashMap<>(0);
 
-    public Map<Uuid, String> getSessionTopicNames() {
+    public Map<Uuid, String> sessionTopicNames() {
         return sessionTopicNames;
     }
 
@@ -127,7 +127,8 @@ public class FetchSessionHandler {
         private final FetchMetadata metadata;
 
         /**
-         * The topics in this fetch request
+         * A boolean indicating whether we have a topic ID for every topic in the request so that we can send a request that
+         * uses topic IDs
          */
         private final boolean canUseTopicIds;
 
@@ -408,26 +409,15 @@ public class FetchSessionHandler {
     /**
      * Return some partitions which are expected to be in a particular set, but which are not.
      *
-     * @param toFind    The partitions to look for.
-     * @param toSearch  The set of partitions to search.
-     * @return          null if all partitions were found; some of the missing ones
-     *                  in string form, if not.
+     * @param toFind    The items to look for.
+     * @param toSearch  The set of items to search.
+     * @return          null if all items were found; some of the missing ones in a set, if not
      */
-    static Set<TopicPartition> findMissing(Set<TopicPartition> toFind, Set<TopicPartition> toSearch) {
-        Set<TopicPartition> ret = new LinkedHashSet<>();
-        for (TopicPartition partition : toFind) {
-            if (!toSearch.contains(partition)) {
-                ret.add(partition);
-            }
-        }
-        return ret;
-    }
-
-    static Set<Uuid> findMissingId(Set<Uuid> toFind, Set<Uuid> toSearch) {
-        Set<Uuid> ret = new HashSet<>();
-        for (Uuid id : toFind) {
-            if (!toSearch.contains(id)) {
-                ret.add(id);
+    static <T> Set<T> findMissing(Set<T> toFind, Set<T> toSearch) {
+        Set<T> ret = new LinkedHashSet<>();
+        for (T toFindItem: toFind) {
+            if (!toSearch.contains(toFindItem)) {
+                ret.add(toFindItem);
             }
         }
         return ret;
@@ -449,7 +439,7 @@ public class FetchSessionHandler {
             findMissing(sessionPartitions.keySet(), topicPartitions);
         Set<Uuid> extraIds = new HashSet<>();
         if (version >= 13) {
-            extraIds = findMissingId(ids, sessionTopicNames.keySet());
+            extraIds = findMissing(ids, sessionTopicNames.keySet());
         }
         if (!omitted.isEmpty()) {
             bld.append("omitted=(").append(Utils.join(omitted, ", ")).append(", ");
@@ -478,7 +468,7 @@ public class FetchSessionHandler {
     String verifyIncrementalFetchResponsePartitions(Set<TopicPartition> topicPartitions, Set<Uuid> ids, short version) {
         Set<Uuid> extraIds = new HashSet<>();
         if (version >= 13) {
-            extraIds = findMissingId(ids, sessionTopicNames.keySet());
+            extraIds = findMissing(ids, sessionTopicNames.keySet());
         }
         Set<TopicPartition> extra =
             findMissing(topicPartitions, sessionPartitions.keySet());

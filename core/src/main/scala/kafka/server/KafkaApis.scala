@@ -3425,10 +3425,10 @@ object KafkaApis {
   private[server] def sizeOfThrottledPartitions[T >: MemoryRecords <: BaseRecords](versionId: Short,
                                                 unconvertedResponse: FetchResponse[Records],
                                                 quota: ReplicationQuotaManager,
-                                                idErrors: List[FetchResponse.IdError],
+                                                topicIdErrors: List[FetchResponse.TopicIdError],
                                                 topicNames: util.Map[Uuid, String],
                                                 topicIds: util.Map[String, Uuid]): Int = {
     FetchResponse.sizeOf(versionId, unconvertedResponse.resolvedResponseData.entrySet
-      .iterator.asScala.filter(element => quota.isThrottled(element.getKey)).asJava, idErrors.asJava, topicIds)
+      .iterator.asScala.filter(element => quota.isThrottled(element.getKey)).asJava, topicIdErrors.asJava, topicIds)
   }
 }
