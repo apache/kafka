@@ -373,8 +373,8 @@ abstract class BaseProducerSendTest extends KafkaServerTestHarness {
     }
     adminZkClient.addPartitions(topic, existingAssignment, adminZkClient.getBrokerMetadatas(), 2)
     // read metadata from a broker and verify the new topic partitions exist
-    TestUtils.waitUntilMetadataIsPropagated(servers, topic, 0)
-    TestUtils.waitUntilMetadataIsPropagated(servers, topic, 1)
+    TestUtils.waitForPartitionMetadata(servers, topic, 0)
+    TestUtils.waitForPartitionMetadata(servers, topic, 1)
 
     // send records to the newly added partition after confirming that metadata have been updated.
     val futures1 = (1 to numRecords).map { i =>

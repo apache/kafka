@@ -207,7 +207,7 @@ class BrokerEpochIntegrationTest extends ZooKeeperTestHarness {
         else {
           // broker epoch in UPDATE_METADATA >= current broker epoch
           sendAndVerifySuccessfulResponse(controllerChannelManager, requestBuilder)
-          TestUtils.waitUntilMetadataIsPropagated(Seq(broker2), tp.topic, tp.partition, 10000)
+          TestUtils.waitForPartitionMetadata(Seq(broker2), tp.topic, tp.partition, 10000)
           assertEquals(brokerId2,
             broker2.metadataCache.getPartitionInfo(tp.topic, tp.partition).get.leader)
         }

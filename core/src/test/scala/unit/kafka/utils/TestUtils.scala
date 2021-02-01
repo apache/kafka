@@ -26,6 +26,7 @@ import java.time.Duration
 import java.util.concurrent.atomic.{AtomicBoolean, AtomicInteger}
 import java.util.{Arrays, Collections, Properties}
 import java.util.concurrent.{Callable, ExecutionException, Executors, TimeUnit}
+
 import javax.net.ssl.X509TrustManager
 import kafka.api._
 import kafka.cluster.{Broker, EndPoint, IsrChangeListener, TopicConfigFetcher}
@@ -48,6 +49,7 @@ import org.apache.kafka.common.config.ConfigResource
 import org.apache.kafka.common.errors.{KafkaStorageException, UnknownTopicOrPartitionException}
 import org.apache.kafka.common.header.Header
 import org.apache.kafka.common.internals.Topic
+import org.apache.kafka.common.message.UpdateMetadataRequestData.UpdateMetadataPartitionState
 import org.apache.kafka.common.network.{ListenerName, Mode}
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.quota.{ClientQuotaAlteration, ClientQuotaEntity}
@@ -283,11 +285,11 @@ object TestUtils extends Logging {
       val logDirs = (1 to logDirCount).toList.map(i =>
         // We would like to allow user to specify both relative path and absolute path as log directory for backward-compatibility reason
         // We can verify this by using a mixture of relative path and absolute path as log directories in the test
-        if (i % 2 == 0) TestUtils.tempDir().getAbsolutePath else TestUtils.tempRelativeDir("data")
+        if (i % 2 == 0) tempDir().getAbsolutePath else tempRelativeDir("data")
       ).mkString(",")
       props.put(KafkaConfig.LogDirsProp, logDirs)
     } else {
-      props.put(KafkaConfig.LogDirProp, TestUtils.tempDir().getAbsolutePath)
+      props.put(KafkaConfig.LogDirProp, tempDir().getAbsolutePath)
     }
     props.put(KafkaConfig.ZkConnectProp, zkConnect)
     props.put(KafkaConfig.ZkConnectionTimeoutMsProp, "10000")
@@ -349,10 +351,12 @@ object TestUtils extends Logging {
       !hasSessionExpirationException},
       s"Can't create topic $topic")
 
-    // wait until the update metadata request for new topic reaches all servers
+    // wait until we've propagated all partitions metadata to all servers
+    val allPartitionsMetadata = waitForAllPartitionsMetadata(servers, topic, numPartitions)
+
     (0 until numPartitions).map { i =>
-      TestUtils.waitUntilMetadataIsPropagated(servers, topic, i)
-      i -> TestUtils.waitUntilLeaderIsElectedOrChanged(zkClient, topic, i)
+      i -> allPartitionsMetadata.get(new TopicPartition(topic, i)).map(_.leader()).getOrElse(
+        throw new IllegalStateException(s"Cannot get the partition leader for topic: $topic, partition: $i in server metadata cache"))
     }.toMap
   }
 
@@ -391,10 +395,12 @@ object TestUtils extends Logging {
       !hasSessionExpirationException},
       s"Can't create topic $topic")
 
-    // wait until the update metadata request for new topic reaches all servers
+    // wait until we've propagated all partitions metadata to all servers
+    val allPartitionsMetadata = waitForAllPartitionsMetadata(servers, topic, partitionReplicaAssignment.size)
+
     partitionReplicaAssignment.keySet.map { i =>
-      TestUtils.waitUntilMetadataIsPropagated(servers, topic, i)
-      i -> TestUtils.waitUntilLeaderIsElectedOrChanged(zkClient, topic, i)
+      i -> allPartitionsMetadata.get(new TopicPartition(topic, i)).map(_.leader()).getOrElse(
+        throw new IllegalStateException(s"Cannot get the partition leader for topic: $topic, partition: $i in server metadata cache"))
     }.toMap
   }
 
@@ -886,6 +892,32 @@ object TestUtils extends Logging {
   }
 
   /**
+   * Wait until the expected number of partitions is in the metadata cache in each broker.
+   *
+   * @param servers The list of servers that the metadata should reach to
+   * @param topic The topic name
+   * @param expectedNumPartitions The expected number of partitions
+   * @return all partitions metadata
+   */
+  def waitForAllPartitionsMetadata(servers: Seq[KafkaServer],
+                                   topic: String, expectedNumPartitions: Int): Map[TopicPartition, UpdateMetadataPartitionState] = {
+    waitUntilTrue(
+      () => servers.forall { server =>
+        server.metadataCache.numPartitions(topic) match {
+          case Some(numPartitions) => numPartitions == expectedNumPartitions
+          case _ => false
+        }
+      },
+      s"Topic [$topic] metadata not propagated after 60000 ms", waitTimeMs = 60000L)
+
+    // since the metadata is propagated, we should get the same metadata from each server
+    (0 until expectedNumPartitions).map { i =>
+      new TopicPartition(topic, i) -> servers.head.metadataCache.getPartitionInfo(topic, i).getOrElse(
+          throw new IllegalStateException(s"Cannot get topic: $topic, partition: $i in server metadata cache"))
+    }.toMap
+  }
+
+  /**
    * Wait until a valid leader is propagated to the metadata cache in each broker.
    * It assumes that the leader propagated to each broker is the same.
    *
@@ -893,28 +925,26 @@ object TestUtils extends Logging {
    * @param topic The topic name
    * @param partition The partition Id
    * @param timeout The amount of time waiting on this condition before assert to fail
-   * @return The leader of the partition.
+   * @return The metadata of the partition.
    */
-  def waitUntilMetadataIsPropagated(servers: Seq[KafkaServer], topic: String, partition: Int,
-                                    timeout: Long = JTestUtils.DEFAULT_MAX_WAIT_MS): Int = {
-    var leader: Int = -1
+  def waitForPartitionMetadata(servers: Seq[KafkaServer], topic: String, partition: Int,
+                               timeout: Long = JTestUtils.DEFAULT_MAX_WAIT_MS): UpdateMetadataPartitionState = {
     waitUntilTrue(
       () => servers.forall { server =>
-        server.dataPlaneRequestProcessor.metadataCache.getPartitionInfo(topic, partition) match {
-          case Some(partitionState) if Request.isValidBrokerId(partitionState.leader) =>
-            leader = partitionState.leader
-            true
+        server.metadataCache.getPartitionInfo(topic, partition) match {
+          case Some(partitionState) => Request.isValidBrokerId(partitionState.leader)
           case _ => false
         }
       },
       "Partition [%s,%d] metadata not propagated after %d ms".format(topic, partition, timeout),
       waitTimeMs = timeout)
 
-    leader
+    servers.head.metadataCache.getPartitionInfo(topic, partition).getOrElse(
+      throw new IllegalStateException(s"Cannot get topic: $topic, partition: $partition in server metadata cache"))
   }
 
   def waitUntilControllerElected(zkClient: KafkaZkClient, timeout: Long = JTestUtils.DEFAULT_MAX_WAIT_MS): Int = {
-    val (controllerId, _) = TestUtils.computeUntilTrue(zkClient.getControllerId, waitTime = timeout)(_.isDefined)
+    val (controllerId, _) = computeUntilTrue(zkClient.getControllerId, waitTime = timeout)(_.isDefined)
     controllerId.getOrElse(throw new AssertionError(s"Controller not elected after $timeout ms"))
   }
 
@@ -1200,7 +1230,7 @@ object TestUtils extends Logging {
     }
 
     // Wait for ReplicaHighWatermarkCheckpoint to happen so that the log directory of the topic will be offline
-    TestUtils.waitUntilTrue(() => !leaderServer.logManager.isLogDirOnline(logDir.getAbsolutePath), "Expected log directory offline", 3000L)
+    waitUntilTrue(() => !leaderServer.logManager.isLogDirOnline(logDir.getAbsolutePath), "Expected log directory offline", 3000L)
     assertTrue(leaderServer.replicaManager.localLog(partition).isEmpty)
   }
 
@@ -1448,7 +1478,7 @@ object TestUtils extends Logging {
                                   requestTimeoutMs: Int = 30000,
                                   maxInFlight: Int = 5): KafkaProducer[Array[Byte], Array[Byte]] = {
     val props = new Properties()
-    props.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, TestUtils.getBrokerListStrFromServers(servers))
+    props.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, getBrokerListStrFromServers(servers))
     props.put(ProducerConfig.ACKS_CONFIG, "all")
     props.put(ProducerConfig.BATCH_SIZE_CONFIG, batchSize.toString)
     props.put(ProducerConfig.TRANSACTIONAL_ID_CONFIG, transactionalId)
@@ -1465,7 +1495,7 @@ object TestUtils extends Logging {
   def seedTopicWithNumberedRecords(topic: String, numRecords: Int, servers: Seq[KafkaServer]): Unit = {
     val props = new Properties()
     props.put(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG, "true")
-    props.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, TestUtils.getBrokerListStrFromServers(servers))
+    props.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, getBrokerListStrFromServers(servers))
     val producer = new KafkaProducer[Array[Byte], Array[Byte]](props, new ByteArraySerializer, new ByteArraySerializer)
     try {
       for (i <- 0 until numRecords) {
@@ -1569,7 +1599,7 @@ object TestUtils extends Logging {
     val topic = topicPartition.topic
     val partition = topicPartition.partition
 
-    TestUtils.waitUntilTrue(() => {
+    waitUntilTrue(() => {
       try {
         val topicResult = client.describeTopics(Arrays.asList(topic)).all.get.get(topic)
         val partitionResult = topicResult.partitions.get(partition)
@@ -1581,7 +1611,7 @@ object TestUtils extends Logging {
   }
 
   def waitForBrokersOutOfIsr(client: Admin, partition: Set[TopicPartition], brokerIds: Set[Int]): Unit = {
-    TestUtils.waitUntilTrue(
+    waitUntilTrue(
       () => {
         val description = client.describeTopics(partition.map(_.topic).asJava).all.get.asScala
         val isr = description
@@ -1597,7 +1627,7 @@ object TestUtils extends Logging {
   }
 
   def waitForBrokersInIsr(client: Admin, partition: TopicPartition, brokerIds: Set[Int]): Unit = {
-    TestUtils.waitUntilTrue(
+    waitUntilTrue(
       () => {
         val description = client.describeTopics(Set(partition.topic).asJava).all.get.asScala
         val isr = description
@@ -1613,7 +1643,7 @@ object TestUtils extends Logging {
   }
 
   def waitForReplicasAssigned(client: Admin, partition: TopicPartition, brokerIds: Seq[Int]): Unit = {
-    TestUtils.waitUntilTrue(
+    waitUntilTrue(
       () => {
         val description = client.describeTopics(Set(partition.topic).asJava).all.get.asScala
         val replicas = description

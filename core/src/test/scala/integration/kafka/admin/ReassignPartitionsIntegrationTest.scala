@@ -694,9 +694,7 @@ class ReassignPartitionsIntegrationTest extends ZooKeeperTestHarness {
       }.toList.asJava).all().get()
       topics.foreach {
         case (topicName, parts) =>
-          parts.indices.foreach {
-            index => TestUtils.waitUntilMetadataIsPropagated(servers, topicName, index)
-          }
+          TestUtils.waitForAllPartitionsMetadata(servers, topicName, parts.size)
       }
     }
 
