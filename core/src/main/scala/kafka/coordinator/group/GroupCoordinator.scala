@@ -24,6 +24,7 @@ import kafka.log.LogConfig
 import kafka.message.ProducerCompressionCodec
 import kafka.server._
 import kafka.utils.Logging
+import kafka.zk.KafkaZkClient
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.message.JoinGroupResponseData.JoinGroupResponseMember
@@ -103,10 +104,9 @@ class GroupCoordinator(val brokerId: Int,
   /**
    * Startup logic executed at the same time when the server starts up.
    */
-  def startup(groupMetadataTopicPartitionCount: Int,
-              enableMetadataExpiration: Boolean = true): Unit = {
+  def startup(enableMetadataExpiration: Boolean = true): Unit = {
     info("Starting up.")
-    groupManager.startup(groupMetadataTopicPartitionCount, enableMetadataExpiration)
+    groupManager.startup(enableMetadataExpiration)
     isActive.set(true)
     info("Startup complete.")
   }
@@ -1298,6 +1298,13 @@ class GroupCoordinator(val brokerId: Int,
   private def isCoordinatorLoadInProgress(groupId: String) = groupManager.isGroupLoading(groupId)
 }
 
+class OffsetsTopicPartitionCountViaZooKeeper(zkClient: KafkaZkClient,
+                                                     defaultOffsetsPartitionCount: Int) {
+  def offsetsTopicPartitionCount(): Int = {
+    zkClient.getTopicPartitionCount(Topic.GROUP_METADATA_TOPIC_NAME).getOrElse(defaultOffsetsPartitionCount)
+  }
+}
+
 object GroupCoordinator {
 
   val NoState = ""
@@ -1311,12 +1318,35 @@ object GroupCoordinator {
   val NewMemberJoinTimeoutMs: Int = 5 * 60 * 1000
 
   def apply(config: KafkaConfig,
+            zkClient: KafkaZkClient,
+            replicaManager: ReplicaManager,
+            time: Time,
+            metrics: Metrics): GroupCoordinator = {
+    val offsetsTopicPartitionCountFunc: () => Int =
+      new OffsetsTopicPartitionCountViaZooKeeper(zkClient, config.offsetsTopicPartitions).offsetsTopicPartitionCount
+    GroupCoordinator(config, offsetsTopicPartitionCountFunc, replicaManager, time, metrics)
+  }
+
+  def apply(config: KafkaConfig,
+            zkClient: KafkaZkClient,
+            replicaManager: ReplicaManager,
+            heartbeatPurgatory: DelayedOperationPurgatory[DelayedHeartbeat],
+            joinPurgatory: DelayedOperationPurgatory[DelayedJoin],
+            time: Time,
+            metrics: Metrics): GroupCoordinator = {
+    val offsetsTopicPartitionCountFunc: () => Int =
+      new OffsetsTopicPartitionCountViaZooKeeper(zkClient, config.offsetsTopicPartitions).offsetsTopicPartitionCount
+    GroupCoordinator(config, offsetsTopicPartitionCountFunc, replicaManager, heartbeatPurgatory, joinPurgatory, time, metrics)
+  }
+
+  def apply(config: KafkaConfig,
+            offsetsTopicPartitionCountFunc: () => Int,
             replicaManager: ReplicaManager,
             time: Time,
             metrics: Metrics): GroupCoordinator = {
     val heartbeatPurgatory = DelayedOperationPurgatory[DelayedHeartbeat]("Heartbeat", config.brokerId)
     val joinPurgatory = DelayedOperationPurgatory[DelayedJoin]("Rebalance", config.brokerId)
-    apply(config, replicaManager, heartbeatPurgatory, joinPurgatory, time, metrics)
+    apply(config, offsetsTopicPartitionCountFunc, replicaManager, heartbeatPurgatory, joinPurgatory, time, metrics)
   }
 
   private[group] def offsetConfig(config: KafkaConfig) = OffsetConfig(
@@ -1333,6 +1363,7 @@ object GroupCoordinator {
   )
 
   def apply(config: KafkaConfig,
+            offsetsTopicPartitionCountFunc: () => Int,
             replicaManager: ReplicaManager,
             heartbeatPurgatory: DelayedOperationPurgatory[DelayedHeartbeat],
             joinPurgatory: DelayedOperationPurgatory[DelayedJoin],
@@ -1345,7 +1376,7 @@ object GroupCoordinator {
       groupInitialRebalanceDelayMs = config.groupInitialRebalanceDelay)
 
     val groupMetadataManager = new GroupMetadataManager(config.brokerId, config.interBrokerProtocolVersion,
-      offsetConfig, replicaManager, time, metrics)
+      offsetConfig, replicaManager, offsetsTopicPartitionCountFunc, time, metrics)
     new GroupCoordinator(config.brokerId, groupConfig, offsetConfig, groupMetadataManager, heartbeatPurgatory, joinPurgatory, time, metrics)
   }
 
