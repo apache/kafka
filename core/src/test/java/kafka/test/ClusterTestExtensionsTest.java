@@ -24,7 +24,7 @@ import kafka.test.annotation.ClusterTest;
 import kafka.test.annotation.ClusterTestDefaults;
 import kafka.test.annotation.ClusterTests;
 import kafka.test.annotation.Type;
-import kafka.test.junit.ClusterForEach;
+import kafka.test.junit.ClusterTestExtensions;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
@@ -32,13 +32,13 @@ import org.junit.jupiter.api.extension.ExtendWith;
 
 
 @ClusterTestDefaults(clusterType = Type.Zk)   // Set defaults for a few params in @ClusterTest(s)
-@ExtendWith(ClusterForEach.class)
-public class ClusterForEachTest {
+@ExtendWith(ClusterTestExtensions.class)
+public class ClusterTestExtensionsTest {
 
     private final ClusterInstance clusterInstance;
     private final ClusterConfig config;
 
-    ClusterForEachTest(ClusterInstance clusterInstance, ClusterConfig config) {     // Constructor injections
+    ClusterTestExtensionsTest(ClusterInstance clusterInstance, ClusterConfig config) {     // Constructor injections
         this.clusterInstance = clusterInstance;
         this.config = config;
     }

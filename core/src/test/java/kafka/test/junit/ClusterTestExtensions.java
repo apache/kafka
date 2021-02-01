@@ -39,9 +39,9 @@ import java.util.function.Consumer;
 import java.util.stream.Stream;
 
 /**
- * ClusterForEach is a custom JUnit extension that will generate some number of test invocations depending on a few
- * custom annotations. These annotations are placed on so-called test template methods. Template methods look like
- * normal JUnit test methods, but instead of being invoked directly, they are used as templates for generating
+ * This class is a custom JUnit extension that will generate some number of test invocations depending on the processing
+ * of a few custom annotations. These annotations are placed on so-called test template methods. Template methods look
+ * like normal JUnit test methods, but instead of being invoked directly, they are used as templates for generating
  * multiple test invocations.
  *
  * Test class that use this extension should use one of the following annotations on each template method:
@@ -62,7 +62,7 @@ import java.util.stream.Stream;
  * For example:
  *
  * <pre>
- * &#64;ExtendWith(value = Array(classOf[ClusterForEach]))
+ * &#64;ExtendWith(value = Array(classOf[ClusterTestExtensions]))
  * class SomeIntegrationTest {
  *   &#64;ClusterTest(brokers = 1, controllers = 1, clusterType = ClusterType.Both)
  *   def someTest(): Unit = {
@@ -75,7 +75,7 @@ import java.util.stream.Stream;
  * SomeIntegrationTest will be instantiated, lifecycle methods (before/after) will be run, and "someTest" will be invoked.
  *
  **/
-public class ClusterForEach implements TestTemplateInvocationContextProvider {
+public class ClusterTestExtensions implements TestTemplateInvocationContextProvider {
     @Override
     public boolean supportsTestTemplate(ExtensionContext context) {
         return true;

@@ -23,13 +23,13 @@ import org.apache.kafka.common.message.ApiVersionsRequestData
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.requests.ApiVersionsRequest
 import kafka.test.annotation.ClusterTest
-import kafka.test.junit.ClusterForEach
+import kafka.test.junit.ClusterTestExtensions
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.extension.ExtendWith
 
 
-@ExtendWith(value = Array(classOf[ClusterForEach]))
+@ExtendWith(value = Array(classOf[ClusterTestExtensions]))
 class ApiVersionsRequestTest(helper: IntegrationTestHelper,
                              cluster: ClusterInstance) extends AbstractApiVersionsRequestTest(helper, cluster) {
 

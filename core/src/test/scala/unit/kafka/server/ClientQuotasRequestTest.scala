@@ -33,12 +33,12 @@ import java.util
 import java.util.concurrent.{ExecutionException, TimeUnit}
 import kafka.utils.TestUtils
 import kafka.test.annotation.{ClusterTest, ClusterTestDefaults, Type}
-import kafka.test.junit.ClusterForEach
+import kafka.test.junit.ClusterTestExtensions
 
 import scala.jdk.CollectionConverters._
 
 @ClusterTestDefaults(clusterType = Type.Zk)
-@ExtendWith(value = Array(classOf[ClusterForEach]))
+@ExtendWith(value = Array(classOf[ClusterTestExtensions]))
 class ClientQuotasRequestTest(cluster: ClusterInstance,
                               helper: IntegrationTestHelper) {
   private val ConsumerByteRateProp = DynamicConfig.Client.ConsumerByteRateOverrideProp

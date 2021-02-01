@@ -26,8 +26,8 @@ import org.apache.kafka.common.message.SaslHandshakeRequestData
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.requests.{ApiVersionsRequest, ApiVersionsResponse, SaslHandshakeRequest, SaslHandshakeResponse}
 import kafka.test.annotation.{ClusterTest, Type}
+import kafka.test.junit.ClusterTestExtensions
 import kafka.test.{ClusterConfig, ClusterInstance}
-import kafka.test.junit.ClusterForEach
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, BeforeEach}
 import org.junit.jupiter.api.extension.ExtendWith
@@ -35,7 +35,7 @@ import org.junit.jupiter.api.extension.ExtendWith
 import scala.jdk.CollectionConverters._
 
 
-@ExtendWith(value = Array(classOf[ClusterForEach]))
+@ExtendWith(value = Array(classOf[ClusterTestExtensions]))
 class SaslApiVersionsRequestTest(helper: IntegrationTestHelper,
                                  cluster: ClusterInstance) extends AbstractApiVersionsRequestTest(helper, cluster) {
 

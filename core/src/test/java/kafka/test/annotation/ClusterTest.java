@@ -41,5 +41,3 @@ public @interface ClusterTest {
     String listener() default "";
     ClusterProperty[] serverProperties() default {};
 }
-
-

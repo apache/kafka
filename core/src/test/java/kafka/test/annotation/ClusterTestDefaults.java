@@ -17,7 +17,7 @@
 
 package kafka.test.annotation;
 
-import kafka.test.junit.ClusterForEach;
+import kafka.test.junit.ClusterTestExtensions;
 
 import java.lang.annotation.Documented;
 import java.lang.annotation.Retention;
@@ -29,7 +29,7 @@ import static java.lang.annotation.RetentionPolicy.RUNTIME;
 /**
  * Used to set class level defaults for any test template methods annotated with {@link ClusterTest} or
  * {@link ClusterTests}. The default values here are also used as the source for defaults in
- * {@link ClusterForEach}.
+ * {@link ClusterTestExtensions}.
  */
 @Documented
 @Target({TYPE})
