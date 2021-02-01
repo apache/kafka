@@ -131,7 +131,7 @@ class MetadataRequestTest extends BaseRequestTest {
       assertEquals(Errors.LEADER_NOT_AVAILABLE, response.errors.get(autoCreatedTopic))
       assertEquals(Some(servers.head.config.numPartitions), zkClient.getTopicPartitionCount(autoCreatedTopic))
       for (i <- 0 until servers.head.config.numPartitions)
-        TestUtils.waitUntilMetadataIsPropagated(servers, autoCreatedTopic, i)
+        TestUtils.waitForPartitionMetadata(servers, autoCreatedTopic, i)
     }
 
     val topic1 = "t1"
@@ -189,7 +189,7 @@ class MetadataRequestTest extends BaseRequestTest {
     assertEquals(topic2, topicMetadata2.topic)
 
     TestUtils.waitUntilLeaderIsElectedOrChanged(zkClient, topic1, 0)
-    TestUtils.waitUntilMetadataIsPropagated(servers, topic1, 0)
+    TestUtils.waitForPartitionMetadata(servers, topic1, 0)
 
     // retry the metadata for the first auto created topic
     val response2 = sendMetadataRequest(new MetadataRequest.Builder(Seq(topic1).asJava, true).build)
