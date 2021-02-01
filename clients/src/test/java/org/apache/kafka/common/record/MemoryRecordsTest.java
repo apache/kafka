@@ -986,9 +986,8 @@ public class MemoryRecordsTest {
     public void testWithRecords(Args args) {
         CompressionType compression = args.compression;
         byte magic = args.magic;
-        Supplier<MemoryRecords> recordsSupplier = () -> MemoryRecords.withRecords(magic, compression,
-            new SimpleRecord(10L, "key1".getBytes(), "value1".getBytes()));
-        MemoryRecords memoryRecords = recordsSupplier.get();
+        MemoryRecords memoryRecords = MemoryRecords.withRecords(magic, compression,
+                new SimpleRecord(10L, "key1".getBytes(), "value1".getBytes()));
         String key = Utils.utf8(memoryRecords.batches().iterator().next().iterator().next().key());
         assertEquals("key1", key);
     }
