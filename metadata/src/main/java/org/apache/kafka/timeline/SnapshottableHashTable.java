@@ -27,30 +27,34 @@ import java.util.NoSuchElementException;
  * SnapshottableHashTable implements a hash table that supports creating point-in-time
  * snapshots.  Each snapshot is immutable once it is created; the past cannot be changed.
  * We handle divergences between the current state and historical state by copying a
- * reference to elements that have been deleted or overwritten into the snapshot tiers
- * in which they still exist.  Each tier has its own hash table.
+ * reference to elements that have been deleted or overwritten into the most recent
+ * snapshot tier.
  *
- * In order to retrieve an object from epoch E, we only have to check two tiers: the
- * current tier, and the tier associated with the snapshot from epoch E.  This design
- * makes snapshot reads a little faster and simpler, at the cost of requiring us to copy
- * references into multiple snapshot tiers sometimes when altering the current state.
- * In general, we don't expect there to be many snapshots at any given point in time,
- * though.  We expect to use about 2 snapshots at most.
+ * Note that there are no keys in SnapshottableHashTable, only values.  So it more similar
+ * to a hash set than a hash map.  The subclasses implement full-featured maps and sets
+ * using this class as a building block.
+ *
+ * Each snapshot tier contains a size and a hash table.  The size reflects the size at
+ * the time the snapshot was taken.  Note that, as an optimization, snapshot tiers will
+ * be null if they don't contain anything.  So for example, if snapshot 20 of Object O
+ * contains the same entries as snapshot 10 of that object, the snapshot 20 tier for
+ * object O will be null.
  *
  * The current tier's data is stored in the fields inherited from BaseHashTable.  It
  * would be conceptually simpler to have a separate BaseHashTable object, but since Java
  * doesn't have value types, subclassing is the only way to avoid another pointer
  * indirection and the associated extra memory cost.
  *
- * In contrast, the data for snapshot tiers is stored in the Snapshot object itself.
- * We access it by looking up our object reference in the Snapshot's IdentityHashMap.
- * This design ensures that we can remove snapshots in O(1) time, simply by deleting the
- * Snapshot object from the SnapshotRegistry.
+ * Note that each element in the hash table contains a start epoch, and a value.  The
+ * start epoch is there to identify when the object was first inserted.  This in turn
+ * determines which snapshots it is a member of.
  *
- * As mentioned before, an element only exists in a snapshot tier if the element was
- * overwritten or removed from a later tier.  If there are no changes between then and
- * now, there is no data at all stored for the tier.  We don't even store a hash table
- * object for a tier unless there is at least one change between then and now.
+ * In order to retrieve an object from snapshot E, we start by checking to see if the
+ * object exists in the "current" hash tier.  If it does, and its startEpoch extends back
+ * to E, we return that object.  Otherwise, we check all the snapshot tiers, starting
+ * with E, and ending with the most recent snapshot, to see if the object is there.
+ * As an optimization, if we encounter the object in a snapshot tier but its epoch is too
+ * new, we know that its value at epoch E must be null, so we can return that immediately.
  *
  * The class hierarchy looks like this:
  *

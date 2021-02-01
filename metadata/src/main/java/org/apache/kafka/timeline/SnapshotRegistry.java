@@ -33,6 +33,10 @@ import org.slf4j.Logger;
  * Therefore, we use ArrayLists here rather than a data structure with higher overhead.
  */
 public class SnapshotRegistry {
+    /**
+     * Iterate through the list of snapshots in order of creation, such that older
+     * snapshots come first.
+     */
     class SnapshotIterator implements Iterator<Snapshot> {
         Snapshot cur;
         Snapshot result = null;
@@ -63,6 +67,10 @@ public class SnapshotRegistry {
         }
     }
 
+    /**
+     * Iterate through the list of snapshots in reverse order of creation, such that
+     * the newest snapshot is first.
+     */
     class ReverseSnapshotIterator implements Iterator<Snapshot> {
         Snapshot cur;
 
