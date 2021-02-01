@@ -30,6 +30,13 @@ import org.apache.kafka.common.record.RecordBatch
 import org.apache.kafka.common.requests.TransactionResult
 import org.apache.kafka.common.utils.{LogContext, ProducerIdAndEpoch, Time}
 
+class TransactionStateTopicPartitionCountViaZooKeeper(zkClient: KafkaZkClient,
+                                                      defaultTransactionTopicPartitionCount: Int) {
+  def transactionStateTopicPartitionCount(): Int = {
+    zkClient.getTopicPartitionCount(Topic.TRANSACTION_STATE_TOPIC_NAME).getOrElse(defaultTransactionTopicPartitionCount)
+  }
+}
+
 object TransactionCoordinator {
 
   def apply(config: KafkaConfig,
@@ -39,7 +46,19 @@ object TransactionCoordinator {
             metrics: Metrics,
             metadataCache: MetadataCache,
             time: Time): TransactionCoordinator = {
+    TransactionCoordinator(config, replicaManager, scheduler,
+      new TransactionStateTopicPartitionCountViaZooKeeper(zkClient, config.transactionTopicPartitions).transactionStateTopicPartitionCount,
+      zkClient, metrics, metadataCache, time)
+  }
 
+  def apply(config: KafkaConfig,
+            replicaManager: ReplicaManager,
+            scheduler: Scheduler,
+            transactionTopicPartitionCountFunc: () => Int,
+            zkClient: KafkaZkClient,
+            metrics: Metrics,
+            metadataCache: MetadataCache,
+            time: Time): TransactionCoordinator = {
     val txnConfig = TransactionConfig(config.transactionalIdExpirationMs,
       config.transactionMaxTimeoutMs,
       config.transactionTopicPartitions,
@@ -52,8 +71,8 @@ object TransactionCoordinator {
       config.requestTimeoutMs)
 
     val producerIdManager = new ProducerIdManager(config.brokerId, zkClient)
-    val txnStateManager = new TransactionStateManager(config.brokerId, zkClient, scheduler, replicaManager, txnConfig,
-      time, metrics)
+    val txnStateManager = new TransactionStateManager(config.brokerId, transactionTopicPartitionCountFunc,
+      scheduler, replicaManager, txnConfig, time, metrics)
 
     val logContext = new LogContext(s"[TransactionCoordinator id=${config.brokerId}] ")
     val txnMarkerChannelManager = TransactionMarkerChannelManager(config, metrics, metadataCache, txnStateManager,
