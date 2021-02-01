@@ -16,10 +16,6 @@
  */
 package kafka.raft
 
-import java.net.InetSocketAddress
-import java.util.concurrent.ConcurrentLinkedQueue
-import java.util.concurrent.atomic.AtomicInteger
-
 import kafka.common.{InterBrokerSendThread, RequestAndCompletionHandler}
 import kafka.utils.Logging
 import org.apache.kafka.clients.{ClientResponse, KafkaClient}
@@ -28,8 +24,11 @@ import org.apache.kafka.common.message._
 import org.apache.kafka.common.protocol.{ApiKeys, ApiMessage, Errors}
 import org.apache.kafka.common.requests._
 import org.apache.kafka.common.utils.Time
+import org.apache.kafka.raft.RaftConfig.InetAddressSpec
 import org.apache.kafka.raft.{NetworkChannel, RaftRequest, RaftResponse, RaftUtil}
 
+import java.util.concurrent.ConcurrentLinkedQueue
+import java.util.concurrent.atomic.AtomicInteger
 import scala.collection.mutable
 
 object KafkaNetworkChannel {
@@ -96,7 +95,8 @@ private[raft] class RaftSendThread(
 class KafkaNetworkChannel(
   time: Time,
   client: KafkaClient,
-  requestTimeoutMs: Int
+  requestTimeoutMs: Int,
+  threadNamePrefix: String
 ) extends NetworkChannel with Logging {
   import KafkaNetworkChannel._
 
@@ -106,7 +106,7 @@ class KafkaNetworkChannel(
   private val endpoints = mutable.HashMap.empty[Int, Node]
 
   private val requestThread = new RaftSendThread(
-    name = "raft-outbound-request-thread",
+    name = threadNamePrefix + "-outbound-request-thread",
     networkClient = client,
     requestTimeoutMs = requestTimeoutMs,
     time = time,
@@ -165,8 +165,8 @@ class KafkaNetworkChannel(
     RaftUtil.errorResponse(apiKey, error)
   }
 
-  override def updateEndpoint(id: Int, address: InetSocketAddress): Unit = {
-    val node = new Node(id, address.getHostString, address.getPort)
+  def updateEndpoint(id: Int, spec: InetAddressSpec): Unit = {
+    val node = new Node(id, spec.address.getHostString, spec.address.getPort)
     endpoints.put(id, node)
   }
 
@@ -180,7 +180,6 @@ class KafkaNetworkChannel(
 
   override def close(): Unit = {
     requestThread.shutdown()
-    client.close()
   }
 
 }

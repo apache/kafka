@@ -31,7 +31,7 @@ import kafka.utils._
 import kafka.zk.AdminZkClient
 import kafka.zookeeper.ZooKeeperClientException
 import org.apache.kafka.common.errors._
-import org.apache.kafka.common.message.FetchResponseData
+import org.apache.kafka.common.message.{DescribeProducersResponseData, FetchResponseData}
 import org.apache.kafka.common.message.LeaderAndIsrRequestData.LeaderAndIsrPartitionState
 import org.apache.kafka.common.message.OffsetForLeaderEpochResponseData.EpochEndOffset
 import org.apache.kafka.common.protocol.Errors
@@ -1164,6 +1164,23 @@ class Partition(val topicPartition: TopicPartition,
         getOffsetByTimestamp.filter(timestampAndOffset => timestampAndOffset.offset < lastFetchableOffset)
           .orElse(maybeOffsetsError.map(e => throw e))
     }
+  }
+
+  def activeProducerState: DescribeProducersResponseData.PartitionResponse = {
+    val producerState = new DescribeProducersResponseData.PartitionResponse()
+      .setPartitionIndex(topicPartition.partition())
+
+    log.map(_.activeProducers) match {
+      case Some(producers) =>
+        producerState
+          .setErrorCode(Errors.NONE.code)
+          .setActiveProducers(producers.asJava)
+      case None =>
+        producerState
+          .setErrorCode(Errors.NOT_LEADER_OR_FOLLOWER.code)
+    }
+
+    producerState
   }
 
   def fetchOffsetSnapshot(currentLeaderEpoch: Optional[Integer],

@@ -23,10 +23,17 @@
   //
   // Version 5 adds ErrorMessage in the response and may return a THROTTLING_QUOTA_EXCEEDED error
   // in the response if the topics deletion is throttled (KIP-599).
-  "validVersions": "0-5",
+  //
+  // Version 6 reorganizes topics, adds topic IDs and allows topic names to be null.
+  "validVersions": "0-6",
   "flexibleVersions": "4+",
   "fields": [
-    { "name": "TopicNames", "type": "[]string", "versions": "0+", "entityType": "topicName",
+    { "name": "Topics", "type": "[]DeleteTopicState", "versions": "6+", "about": "The name or topic ID of the topic",
+      "fields": [
+        {"name": "Name", "type": "string", "versions": "6+", "nullableVersions": "6+", "about": "The topic name"},
+        {"name": "TopicId", "type": "uuid", "versions": "6+", "about": "The unique topic ID"}
+    ]},
+    { "name": "TopicNames", "type": "[]string", "versions": "0-5", "entityType": "topicName", "ignorable": true,
       "about": "The names of the topics to delete" },
     { "name": "TimeoutMs", "type": "int32", "versions": "0+",
       "about": "The length of time in milliseconds to wait for the deletions to complete." }

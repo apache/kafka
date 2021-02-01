@@ -28,12 +28,14 @@ import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.record.Records
 import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.raft.RaftConfig
+import org.apache.kafka.raft.RaftConfig.{AddressSpec, InetAddressSpec, UNKNOWN_ADDRESS_SPEC_INSTANCE}
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.Test
-
 import java.net.InetSocketAddress
 import java.util
 import java.util.Properties
+
+import org.junit.jupiter.api.function.Executable
 
 class KafkaConfigTest {
 
@@ -616,6 +618,10 @@ class KafkaConfigTest {
         case KafkaConfig.ConnectionSetupTimeoutMsProp => assertPropertyInvalid(baseProperties, name, "not_a_number")
         case KafkaConfig.ConnectionSetupTimeoutMaxMsProp => assertPropertyInvalid(baseProperties, name, "not_a_number")
 
+          // KIP-500 Configurations
+        case KafkaConfig.NodeIdProp => assertPropertyInvalid(baseProperties, name, "not_a_number")
+        case KafkaConfig.MetadataLogDirProp => // ignore string
+
         case KafkaConfig.AuthorizerClassNameProp => //ignore string
         case KafkaConfig.CreateTopicPolicyClassNameProp => //ignore string
 
@@ -946,11 +952,14 @@ class KafkaConfigTest {
   }
 
   private def assertPropertyInvalid(validRequiredProps: => Properties, name: String, values: Any*): Unit = {
-    values.foreach((value) => {
+    values.foreach { value =>
       val props = validRequiredProps
       props.setProperty(name, value.toString)
-      assertThrows(classOf[Exception], () => KafkaConfig.fromProps(props))
-    })
+
+      val buildConfig: Executable = () => KafkaConfig.fromProps(props)
+      assertThrows(classOf[Exception], buildConfig,
+      s"Expected exception for property `$name` with invalid value `$value` was not thrown")
+    }
   }
 
   @Test
@@ -976,20 +985,24 @@ class KafkaConfigTest {
 
   @Test
   def testValidQuorumVotersConfig(): Unit = {
-    val expected = new util.HashMap[Integer, InetSocketAddress]()
+    val expected = new util.HashMap[Integer, AddressSpec]()
     assertValidQuorumVoters("", expected)
 
-    expected.put(1, new InetSocketAddress("127.0.0.1", 9092))
+    expected.put(1, new InetAddressSpec(new InetSocketAddress("127.0.0.1", 9092)))
     assertValidQuorumVoters("1@127.0.0.1:9092", expected)
 
     expected.clear()
-    expected.put(1, new InetSocketAddress("kafka1", 9092))
-    expected.put(2, new InetSocketAddress("kafka2", 9092))
-    expected.put(3, new InetSocketAddress("kafka3", 9092))
+    expected.put(1, UNKNOWN_ADDRESS_SPEC_INSTANCE)
+    assertValidQuorumVoters("1@0.0.0.0:0", expected)
+
+    expected.clear()
+    expected.put(1, new InetAddressSpec(new InetSocketAddress("kafka1", 9092)))
+    expected.put(2, new InetAddressSpec(new InetSocketAddress("kafka2", 9092)))
+    expected.put(3, new InetAddressSpec(new InetSocketAddress("kafka3", 9092)))
     assertValidQuorumVoters("1@kafka1:9092,2@kafka2:9092,3@kafka3:9092", expected)
   }
 
-  private def assertValidQuorumVoters(value: String, expectedVoters: util.Map[Integer, InetSocketAddress]): Unit = {
+  private def assertValidQuorumVoters(value: String, expectedVoters: util.Map[Integer, AddressSpec]): Unit = {
     val props = TestUtils.createBrokerConfig(0, TestUtils.MockZkConnect)
     props.put(RaftConfig.QUORUM_VOTERS_CONFIG, value)
     val raftConfig = new RaftConfig(KafkaConfig.fromProps(props))
@@ -1009,7 +1022,41 @@ class KafkaConfigTest {
     val props = new Properties()
     props.put(KafkaConfig.ProcessRolesProp, "broker")
     props.put(KafkaConfig.ListenersProp, "PLAINTEXT://127.0.0.1:9092")
+    props.put(KafkaConfig.NodeIdProp, "1")
     assertTrue(isValidKafkaConfig(props))
+  }
+
+  @Test
+  def testCustomMetadataLogDir(): Unit = {
+    val metadataDir = "/path/to/metadata/dir"
+    val dataDir = "/path/to/data/dir"
+
+    val props = new Properties()
+    props.put(KafkaConfig.ProcessRolesProp, "broker")
+    props.put(KafkaConfig.MetadataLogDirProp, metadataDir)
+    props.put(KafkaConfig.LogDirProp, dataDir)
+    props.put(KafkaConfig.NodeIdProp, "1")
+    assertTrue(isValidKafkaConfig(props))
+
+    val config = KafkaConfig.fromProps(props)
+    assertEquals(metadataDir, config.metadataLogDir)
+    assertEquals(Seq(dataDir), config.logDirs)
+  }
+
+  @Test
+  def testDefaultMetadataLogDir(): Unit = {
+    val dataDir1 = "/path/to/data/dir/1"
+    val dataDir2 = "/path/to/data/dir/2"
+
+    val props = new Properties()
+    props.put(KafkaConfig.ProcessRolesProp, "broker")
+    props.put(KafkaConfig.LogDirProp, s"$dataDir1,$dataDir2")
+    props.put(KafkaConfig.NodeIdProp, "1")
+    assertTrue(isValidKafkaConfig(props))
+
+    val config = KafkaConfig.fromProps(props)
+    assertEquals(dataDir1, config.metadataLogDir)
+    assertEquals(Seq(dataDir1, dataDir2), config.logDirs)
   }
 
 }

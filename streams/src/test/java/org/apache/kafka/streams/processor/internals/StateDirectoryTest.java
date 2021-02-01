@@ -50,6 +50,8 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
 
+import static org.apache.kafka.common.utils.Utils.mkEntry;
+import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.common.utils.Utils.mkSet;
 import static org.apache.kafka.streams.processor.internals.StateDirectory.LOCK_FILE_NAME;
 import static org.apache.kafka.streams.processor.internals.StateManagerUtil.CHECKPOINT_FILE_NAME;
@@ -641,6 +643,28 @@ public class StateDirectoryTest {
             time.sleep(5000);
             directory.cleanRemovedTasks(cleanupDelayMs);
             assertThat(appender.getMessages(), hasItem(endsWith("ms has elapsed (cleanup delay is " +  cleanupDelayMs + "ms).")));
+        }
+    }
+
+    @Test
+    public void shouldLogTempDirMessage() {
+        try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(StateDirectory.class)) {
+            new StateDirectory(
+                new StreamsConfig(
+                    mkMap(
+                        mkEntry(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, ""),
+                        mkEntry(StreamsConfig.APPLICATION_ID_CONFIG, "")
+                    )
+                ),
+                new MockTime(),
+                true
+            );
+            assertThat(
+                appender.getMessages(),
+                hasItem("Using an OS temp directory in the state.dir property can cause failures with writing the" +
+                    " checkpoint file due to the fact that this directory can be cleared by the OS." +
+                    " Resolved state.dir: [/tmp/kafka-streams]")
+            );
         }
     }
 
