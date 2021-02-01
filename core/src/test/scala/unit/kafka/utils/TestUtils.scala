@@ -26,6 +26,7 @@ import java.time.Duration
 import java.util.concurrent.atomic.{AtomicBoolean, AtomicInteger}
 import java.util.{Arrays, Collections, Properties}
 import java.util.concurrent.{Callable, ExecutionException, Executors, TimeUnit}
+
 import javax.net.ssl.X509TrustManager
 import kafka.api._
 import kafka.cluster.{Broker, EndPoint, IsrChangeListener, TopicConfigFetcher}
@@ -48,6 +49,7 @@ import org.apache.kafka.common.config.ConfigResource
 import org.apache.kafka.common.errors.{KafkaStorageException, UnknownTopicOrPartitionException}
 import org.apache.kafka.common.header.Header
 import org.apache.kafka.common.internals.Topic
+import org.apache.kafka.common.message.UpdateMetadataRequestData.UpdateMetadataPartitionState
 import org.apache.kafka.common.network.{ListenerName, Mode}
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.quota.{ClientQuotaAlteration, ClientQuotaEntity}
@@ -349,13 +351,12 @@ object TestUtils extends Logging {
       !hasSessionExpirationException},
       s"Can't create topic $topic")
 
-    // wait until we've got the expected partition size
-    waitUntilMetadataIsPropagatedWithExpectedSize(servers, topic, numPartitions)
+    // wait until we've propagated all partitions metadata to all servers
+    val allPartitionsMetadata = waitForAllPartitionsMetadata(servers, topic, numPartitions)
 
-    // wait until the update metadata request for new topic reaches all servers
     (0 until numPartitions).map { i =>
-      waitUntilMetadataIsPropagated(servers, topic, i)
-      i -> waitUntilLeaderIsElectedOrChanged(zkClient, topic, i)
+      i -> allPartitionsMetadata.get(new TopicPartition(topic, i)).map(_.leader()).getOrElse(
+        throw new IllegalStateException(s"Cannot get the partition leader for topic: $topic, partition: $i in server metadata cache"))
     }.toMap
   }
 
@@ -394,13 +395,12 @@ object TestUtils extends Logging {
       !hasSessionExpirationException},
       s"Can't create topic $topic")
 
-    // wait until we've got the expected partition size
-    waitUntilMetadataIsPropagatedWithExpectedSize(servers, topic, partitionReplicaAssignment.size)
+    // wait until we've propagated all partitions metadata to all servers
+    val allPartitionsMetadata = waitForAllPartitionsMetadata(servers, topic, partitionReplicaAssignment.size)
 
-    // wait until the update metadata request for new topic reaches all servers
     partitionReplicaAssignment.keySet.map { i =>
-      waitUntilMetadataIsPropagated(servers, topic, i)
-      i -> waitUntilLeaderIsElectedOrChanged(zkClient, topic, i)
+      i -> allPartitionsMetadata.get(new TopicPartition(topic, i)).map(_.leader()).getOrElse(
+        throw new IllegalStateException(s"Cannot get the partition leader for topic: $topic, partition: $i in server metadata cache"))
     }.toMap
   }
 
@@ -897,16 +897,24 @@ object TestUtils extends Logging {
    * @param servers The list of servers that the metadata should reach to
    * @param topic The topic name
    * @param expectedNumPartitions The expected number of partitions
+   * @return all partitions metadata
    */
-  def waitUntilMetadataIsPropagatedWithExpectedSize(servers: Seq[KafkaServer], topic: String, expectedNumPartitions: Int): Unit = {
+  def waitForAllPartitionsMetadata(servers: Seq[KafkaServer],
+                                   topic: String, expectedNumPartitions: Int): Map[TopicPartition, UpdateMetadataPartitionState] = {
     waitUntilTrue(
       () => servers.forall { server =>
-        server.dataPlaneRequestProcessor.metadataCache.numPartitions(topic) match {
+        server.metadataCache.numPartitions(topic) match {
           case Some(numPartitions) => numPartitions == expectedNumPartitions
           case _ => false
         }
       },
       s"Topic [$topic] metadata not propagated after 60000 ms", waitTimeMs = 60000L)
+
+    // since the metadata is propagated, we should get the same metadata from each server
+    (0 until expectedNumPartitions).map { i =>
+      new TopicPartition(topic, i) -> servers.head.metadataCache.getPartitionInfo(topic, i).getOrElse(
+          throw new IllegalStateException(s"Cannot get topic: $topic, partition: $i in server metadata cache"))
+    }.toMap
   }
 
   /**
@@ -917,24 +925,22 @@ object TestUtils extends Logging {
    * @param topic The topic name
    * @param partition The partition Id
    * @param timeout The amount of time waiting on this condition before assert to fail
-   * @return The leader of the partition.
+   * @return The metadata of the partition.
    */
-  def waitUntilMetadataIsPropagated(servers: Seq[KafkaServer], topic: String, partition: Int,
-                                    timeout: Long = JTestUtils.DEFAULT_MAX_WAIT_MS): Int = {
-    var leader: Int = -1
+  def waitForPartitionMetadata(servers: Seq[KafkaServer], topic: String, partition: Int,
+                               timeout: Long = JTestUtils.DEFAULT_MAX_WAIT_MS): UpdateMetadataPartitionState = {
     waitUntilTrue(
       () => servers.forall { server =>
-        server.dataPlaneRequestProcessor.metadataCache.getPartitionInfo(topic, partition) match {
-          case Some(partitionState) if Request.isValidBrokerId(partitionState.leader) =>
-            leader = partitionState.leader
-            true
+        server.metadataCache.getPartitionInfo(topic, partition) match {
+          case Some(partitionState) => Request.isValidBrokerId(partitionState.leader)
           case _ => false
         }
       },
       "Partition [%s,%d] metadata not propagated after %d ms".format(topic, partition, timeout),
       waitTimeMs = timeout)
 
-    leader
+    servers.head.metadataCache.getPartitionInfo(topic, partition).getOrElse(
+      throw new IllegalStateException(s"Cannot get topic: $topic, partition: $partition in server metadata cache"))
   }
 
   def waitUntilControllerElected(zkClient: KafkaZkClient, timeout: Long = JTestUtils.DEFAULT_MAX_WAIT_MS): Int = {
