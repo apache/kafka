@@ -63,7 +63,7 @@ class DescribeClusterRequestTest extends BaseRequestTest {
         .setRack(server.config.rack.orNull)
     }.toSet
     val expectedControllerId = servers.filter(_.kafkaController.isActive).last.config.brokerId
-    val expectedClusterId = servers.last.clusterId
+    val expectedClusterId = servers.last.clusterId()
 
     val expectedClusterAuthorizedOperations = if (includeClusterAuthorizedOperations) {
       Utils.to32BitField(
