@@ -433,7 +433,10 @@ class ReplicaManager(val config: KafkaConfig,
                 responseMap.put(topicPartition, Errors.FENCED_LEADER_EPOCH)
               }
 
-            case _ => // use catch-all for None and Deferred since Deferred never happens with ZooKeeper
+            case HostedPartition.Deferred(_) =>
+              throw new IllegalStateException("We should never be deferring partition metadata changes and stopping a replica when using ZooKeeper")
+
+            case HostedPartition.Offline =>
               // Delete log and corresponding folders in case replica manager doesn't hold them anymore.
               // This could happen when topic is being deleted while broker is down and recovers.
               stoppedPartitions += topicPartition -> partitionState
@@ -1362,12 +1365,7 @@ class ReplicaManager(val config: KafkaConfig,
                 None
 
               case HostedPartition.Deferred(_) =>
-                stateChangeLogger.error(s"Ignoring LeaderAndIsr request from " +
-                  s"controller $controllerId with correlation id $correlationId " +
-                  s"epoch $controllerEpoch for partition $topicPartition as the local replica for the " +
-                  "partition is in deferred state (should never happen when using ZooKeeper)")
-                responseMap.put(topicPartition, Errors.KAFKA_STORAGE_ERROR)
-                None
+                throw new IllegalStateException("We should never be deferring partition metadata changes and becoming a leader or follower when using ZooKeeper")
 
               case HostedPartition.Online(partition) =>
                 Some(partition)
