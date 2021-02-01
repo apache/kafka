@@ -47,9 +47,7 @@ public class BrokerRegistrationResponse extends AbstractResponse {
     @Override
     public Map<Errors, Integer> errorCounts() {
         Map<Errors, Integer> errorCounts = new HashMap<>();
-        if (data.errorCode() != 0) {
-            errorCounts.put(Errors.forCode(data.errorCode()), 1);
-        }
+        errorCounts.put(Errors.forCode(data.errorCode()), 1);
         return errorCounts;
     }
 

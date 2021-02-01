@@ -224,6 +224,7 @@ class KafkaApis(val requestChannel: RequestChannel,
         case ApiKeys.ENVELOPE => handleEnvelope(request)
         case ApiKeys.DESCRIBE_CLUSTER => handleDescribeCluster(request)
 
+        // Handle requests that should have been sent to the KIP-500 controller.
         // Until we are ready to integrate the Raft layer, these APIs are treated as
         // unexpected and we just close the connection.
         case ApiKeys.VOTE => requestHelper.closeConnection(request, util.Collections.emptyMap())
@@ -231,8 +232,6 @@ class KafkaApis(val requestChannel: RequestChannel,
         case ApiKeys.END_QUORUM_EPOCH => requestHelper.closeConnection(request, util.Collections.emptyMap())
         case ApiKeys.DESCRIBE_QUORUM => requestHelper.closeConnection(request, util.Collections.emptyMap())
         case ApiKeys.FETCH_SNAPSHOT => requestHelper.closeConnection(request, util.Collections.emptyMap())
-
-        // Handle requests that should have been sent to the KIP-500 controller.
         case ApiKeys.BROKER_REGISTRATION => requestHelper.closeConnection(request, util.Collections.emptyMap())
         case ApiKeys.BROKER_HEARTBEAT => requestHelper.closeConnection(request, util.Collections.emptyMap())
       }

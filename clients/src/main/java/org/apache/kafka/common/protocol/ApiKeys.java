@@ -99,8 +99,8 @@ public enum ApiKeys {
     ENVELOPE(ApiMessageType.ENVELOPE, true, RecordBatch.MAGIC_VALUE_V0, false, true),
     FETCH_SNAPSHOT(ApiMessageType.FETCH_SNAPSHOT, false, RecordBatch.MAGIC_VALUE_V0, false, true),
     DESCRIBE_CLUSTER(ApiMessageType.DESCRIBE_CLUSTER),
-    BROKER_REGISTRATION(ApiMessageType.BROKER_REGISTRATION, false, RecordBatch.MAGIC_VALUE_V0, false, true),
-    BROKER_HEARTBEAT(ApiMessageType.BROKER_HEARTBEAT, false, RecordBatch.MAGIC_VALUE_V0, false, true);
+    BROKER_REGISTRATION(ApiMessageType.BROKER_REGISTRATION, true, RecordBatch.MAGIC_VALUE_V0, false, true),
+    BROKER_HEARTBEAT(ApiMessageType.BROKER_HEARTBEAT, true, RecordBatch.MAGIC_VALUE_V0, false, true);
 
     // The generator ensures every `ApiMessageType` has a unique id
     private static final Map<Integer, ApiKeys> ID_TO_TYPE = Arrays.stream(ApiKeys.values())
