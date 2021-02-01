@@ -24,7 +24,7 @@ import joptsimple.OptionException
 import kafka.network.SocketServer
 import kafka.raft.{KafkaRaftManager, RaftManager}
 import kafka.security.CredentialProvider
-import kafka.server.{KafkaConfig, KafkaRequestHandlerPool}
+import kafka.server.{KafkaConfig, KafkaRequestHandlerPool, MetaProperties}
 import kafka.utils.{CommandDefaultOptions, CommandLineUtils, CoreUtils, Exit, Logging, ShutdownableThread}
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.metrics.stats.Percentiles.BucketSizing
@@ -33,7 +33,7 @@ import org.apache.kafka.common.protocol.Writable
 import org.apache.kafka.common.security.scram.internals.ScramMechanism
 import org.apache.kafka.common.security.token.delegation.internals.DelegationTokenCache
 import org.apache.kafka.common.utils.{Time, Utils}
-import org.apache.kafka.common.{TopicPartition, protocol}
+import org.apache.kafka.common.{TopicPartition, Uuid, protocol}
 import org.apache.kafka.raft.BatchReader.Batch
 import org.apache.kafka.raft.{BatchReader, RaftClient, RecordSerde}
 
@@ -54,6 +54,7 @@ class TestRaftServer(
   private val time = Time.SYSTEM
   private val metrics = new Metrics(time)
   private val shutdownLatch = new CountDownLatch(1)
+  private val threadNamePrefix = "test-raft"
 
   var socketServer: SocketServer = _
   var credentialProvider: CredentialProvider = _
@@ -69,13 +70,19 @@ class TestRaftServer(
     socketServer = new SocketServer(config, metrics, time, credentialProvider, allowControllerOnlyApis = true)
     socketServer.startup(startProcessingRequests = false)
 
+    val metaProperties = MetaProperties(
+      clusterId = Uuid.ZERO_UUID,
+      nodeId = config.nodeId
+    )
+
     raftManager = new KafkaRaftManager[Array[Byte]](
+      metaProperties,
       config,
-      config.logDirs.head,
       new ByteArraySerde,
       partition,
       time,
-      metrics
+      metrics,
+      Some(threadNamePrefix)
     )
 
     workloadGenerator = new RaftWorkloadGenerator(

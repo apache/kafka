@@ -16,6 +16,10 @@
  */
 package kafka.server
 
+import java.io.File
+
+import kafka.common.{InconsistentNodeIdException, KafkaException}
+import kafka.log.Log
 import kafka.metrics.{KafkaMetricsReporter, KafkaYammerMetrics}
 import kafka.raft.KafkaRaftManager
 import kafka.server.KafkaRaftServer.{BrokerRole, ControllerRole}
@@ -43,19 +47,22 @@ class KafkaRaftServer(
   KafkaMetricsReporter.startReporters(VerifiableProperties(config.originals))
   KafkaYammerMetrics.INSTANCE.configure(config.originals)
 
+  private val (metaProps, _) = KafkaRaftServer.initializeLogDirs(config)
+
   private val metrics = Server.initializeMetrics(
     config,
     time,
-    clusterId = "FIXME"
+    metaProps.clusterId.toString
   )
 
   private val raftManager = new KafkaRaftManager(
+    metaProps,
     config,
-    config.logDirs.head,
     new StringSerde,
     KafkaRaftServer.MetadataPartition,
     time,
-    metrics
+    metrics,
+    threadNamePrefix
   )
 
   private val broker: Option[BrokerServer] = if (config.processRoles.contains(BrokerRole)) {
@@ -100,4 +107,45 @@ object KafkaRaftServer {
   sealed trait ProcessRole
   case object BrokerRole extends ProcessRole
   case object ControllerRole extends ProcessRole
+
+  /**
+   * Initialize the configured log directories, including both [[KafkaConfig.MetadataLogDirProp]]
+   * and [[KafkaConfig.LogDirProp]]. This method performs basic validation to ensure that all
+   * directories are accessible and have been initialized with consistent `meta.properties`.
+   *
+   * @param config The process configuration
+   * @return A tuple containing the loaded meta properties (which are guaranteed to
+   *         be consistent across all log dirs) and the offline directories
+   */
+  def initializeLogDirs(config: KafkaConfig): (MetaProperties, Seq[String]) = {
+    val logDirs = config.logDirs :+ config.metadataLogDir
+    val (rawMetaProperties, offlineDirs) = BrokerMetadataCheckpoint.
+      getBrokerMetadataAndOfflineDirs(logDirs, ignoreMissing = false)
+
+    if (offlineDirs.contains(config.metadataLogDir)) {
+      throw new KafkaException("Cannot start server since `meta.properties` could not be " +
+        s"loaded from ${config.metadataLogDir}")
+    }
+
+    val metadataPartitionDirName = Log.logDirName(MetadataPartition)
+    val onlineNonMetadataDirs = logDirs.diff(offlineDirs :+ config.metadataLogDir)
+    onlineNonMetadataDirs.foreach { logDir =>
+      val metadataDir = new File(logDir, metadataPartitionDirName)
+      if (metadataDir.exists) {
+        throw new KafkaException(s"Found unexpected metadata location in data directory `$metadataDir` " +
+          s"(the configured metadata directory is ${config.metadataLogDir}).")
+      }
+    }
+
+    val metaProperties = MetaProperties.parse(rawMetaProperties)
+    if (config.nodeId != metaProperties.nodeId) {
+      throw new InconsistentNodeIdException(
+        s"Configured node.id `${config.nodeId}` doesn't match stored node.id `${metaProperties.nodeId}' in " +
+          "meta.properties. If you moved your data, make sure your configured controller.id matches. " +
+          "If you intend to create a new broker, you should remove all data in your data directories (log.dirs).")
+    }
+
+    (metaProperties, offlineDirs.toSeq)
+  }
+
 }
