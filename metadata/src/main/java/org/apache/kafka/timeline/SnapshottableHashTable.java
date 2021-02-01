@@ -374,12 +374,14 @@ class SnapshottableHashTable<T extends SnapshottableHashTable.ElementWithStartEp
         Iterator<Snapshot> iterator = snapshotRegistry.reverseIterator();
         if (iterator.hasNext()) {
             Snapshot snapshot = iterator.next();
-            HashTier<T> tier = snapshot.getDelta(SnapshottableHashTable.this);
-            if (tier == null) {
-                tier = new HashTier<>(prevSize);
-                snapshot.setDelta(SnapshottableHashTable.this, tier);
-            }
+            // If the previous element was present in the most recent snapshot, add it to
+            // that snapshot's hash tier.
             if (prev.startEpoch() <= snapshot.epoch()) {
+                HashTier<T> tier = snapshot.getDelta(SnapshottableHashTable.this);
+                if (tier == null) {
+                    tier = new HashTier<>(prevSize);
+                    snapshot.setDelta(SnapshottableHashTable.this, tier);
+                }
                 if (tier.deltaTable == null) {
                     tier.deltaTable = new BaseHashTable<>(1);
                 }
