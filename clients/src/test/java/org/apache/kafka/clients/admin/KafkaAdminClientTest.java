@@ -82,6 +82,7 @@ import org.apache.kafka.common.message.CreatePartitionsResponseData.CreatePartit
 import org.apache.kafka.common.message.CreateTopicsResponseData;
 import org.apache.kafka.common.message.CreateTopicsResponseData.CreatableTopicResult;
 import org.apache.kafka.common.message.CreateTopicsResponseData.CreatableTopicResultCollection;
+import org.apache.kafka.common.message.DecommissionBrokerResponseData;
 import org.apache.kafka.common.message.DeleteAclsResponseData;
 import org.apache.kafka.common.message.DeleteGroupsResponseData;
 import org.apache.kafka.common.message.DeleteGroupsResponseData.DeletableGroupResult;
@@ -138,6 +139,7 @@ import org.apache.kafka.common.requests.CreatePartitionsRequest;
 import org.apache.kafka.common.requests.CreatePartitionsResponse;
 import org.apache.kafka.common.requests.CreateTopicsRequest;
 import org.apache.kafka.common.requests.CreateTopicsResponse;
+import org.apache.kafka.common.requests.DecommissionBrokerResponse;
 import org.apache.kafka.common.requests.DeleteAclsResponse;
 import org.apache.kafka.common.requests.DeleteGroupsResponse;
 import org.apache.kafka.common.requests.DeleteRecordsResponse;
@@ -5167,6 +5169,69 @@ public class KafkaAdminClientTest {
         errorCounts.clear();
         errorCounts.put(Errors.COORDINATOR_NOT_AVAILABLE, 1);
         assertTrue(ConsumerGroupOperationContext.shouldRefreshCoordinator(errorCounts));
+    }
+
+    @Test
+    public void testDecommissionBrokerSuccess() throws InterruptedException, ExecutionException {
+        int decommissionedBrokerNode = 1;
+        try (AdminClientUnitTestEnv env = mockClientEnv()) {
+            env.kafkaClient().setNodeApiVersions(NodeApiVersions.create());
+            env.kafkaClient().prepareResponse(prepareDecommissionBrokerResponse(Errors.NONE, 0));
+
+            DecommissionBrokerResult result = env.adminClient().decommissionBroker(decommissionedBrokerNode);
+
+            // Validate response
+            assertNotNull(result.all());
+            result.all().get();
+        }
+    }
+
+    @Test
+    public void testDecommissionBrokerFailure() {
+        int decommissionedBrokerNode = 1;
+        try (AdminClientUnitTestEnv env = mockClientEnv()) {
+            env.kafkaClient().setNodeApiVersions(NodeApiVersions.create());
+            env.kafkaClient().prepareResponse(prepareDecommissionBrokerResponse(Errors.BROKER_NOT_AVAILABLE, 0));
+
+            DecommissionBrokerResult result = env.adminClient().decommissionBroker(decommissionedBrokerNode);
+
+            // Validate response
+            assertNotNull(result.all());
+            TestUtils.assertFutureThrows(result.all(), Errors.BROKER_NOT_AVAILABLE.exception().getClass());
+        }
+    }
+
+    @Test
+    public void testDecommissionBrokerNotControllerHandler() throws ExecutionException, InterruptedException {
+        int decommissionedBrokerNode = 1;
+        try (AdminClientUnitTestEnv env = mockClientEnv()) {
+            env.kafkaClient().setNodeApiVersions(NodeApiVersions.create());
+
+            DecommissionBrokerResponseData notControllerErrResponseData = new DecommissionBrokerResponseData()
+                    .setErrorCode(Errors.NOT_CONTROLLER.code())
+                    .setErrorMessage(Errors.NOT_CONTROLLER.message());
+            MetadataResponse controllerNodeResponse = RequestTestUtils.metadataResponse(env.cluster().nodes(),
+                    env.cluster().clusterResource().clusterId(), 1, Collections.emptyList());
+            DecommissionBrokerResponseData normalResponseData = new DecommissionBrokerResponseData();
+
+            // Queue responses
+            env.kafkaClient().prepareResponse(new DecommissionBrokerResponse(notControllerErrResponseData));
+            env.kafkaClient().prepareResponse(controllerNodeResponse);
+            env.kafkaClient().prepareResponse(new DecommissionBrokerResponse(normalResponseData));
+
+            DecommissionBrokerResult result = env.adminClient().decommissionBroker(decommissionedBrokerNode);
+
+            // Validate response
+            assertNotNull(result.all());
+            result.all().get();
+        }
+    }
+
+    private DecommissionBrokerResponse prepareDecommissionBrokerResponse(Errors error, int throttleTimeMs) {
+        return new DecommissionBrokerResponse(new DecommissionBrokerResponseData()
+                .setErrorCode(error.code())
+                .setErrorMessage(error.message())
+                .setThrottleTimeMs(throttleTimeMs));
     }
 
     private DescribeLogDirsResponse prepareDescribeLogDirsResponse(Errors error, String logDir) {

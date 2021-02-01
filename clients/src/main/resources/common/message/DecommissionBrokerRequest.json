@@ -14,7 +14,7 @@
 // limitations under the License.
 
 {
-  "apiKey": 63,
+  "apiKey": 62,
   "type": "request",
   "name": "DecommissionBrokerRequest",
   "validVersions": "0",

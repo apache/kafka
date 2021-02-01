@@ -70,6 +70,8 @@ import org.apache.kafka.common.message.CreateTopicsRequestData.CreateableTopicCo
 import org.apache.kafka.common.message.CreateTopicsResponseData;
 import org.apache.kafka.common.message.CreateTopicsResponseData.CreatableTopicConfigs;
 import org.apache.kafka.common.message.CreateTopicsResponseData.CreatableTopicResult;
+import org.apache.kafka.common.message.DecommissionBrokerRequestData;
+import org.apache.kafka.common.message.DecommissionBrokerResponseData;
 import org.apache.kafka.common.message.DeleteAclsRequestData;
 import org.apache.kafka.common.message.DeleteAclsResponseData;
 import org.apache.kafka.common.message.DeleteGroupsRequestData;
@@ -530,6 +532,15 @@ public class RequestResponseTest {
             checkRequest(createDescribeClusterRequest(v), true);
             checkErrorResponse(createDescribeClusterRequest(v), unknownServerException, true);
             checkResponse(createDescribeClusterResponse(), v, true);
+        }
+    }
+
+    @Test
+    public void testDecommissionBrokerSerialization() {
+        for (short v = ApiKeys.DECOMMISSION_BROKER.oldestVersion(); v <= ApiKeys.DECOMMISSION_BROKER.latestVersion(); v++) {
+            checkRequest(createDecommissionBrokerRequest(v), true);
+            checkErrorResponse(createDecommissionBrokerRequest(v), unknownServerException, true);
+            checkResponse(createDecommissionBrokerResponse(), v, true);
         }
     }
 
@@ -2606,6 +2617,15 @@ public class RequestResponseTest {
         );
         data.topics().add(topicResponse);
         return new DescribeProducersResponse(data);
+    }
+
+    private DecommissionBrokerRequest createDecommissionBrokerRequest(short version) {
+        DecommissionBrokerRequestData data = new DecommissionBrokerRequestData().setBrokerId(1);
+        return new DecommissionBrokerRequest.Builder(data).build(version);
+    }
+
+    private DecommissionBrokerResponse createDecommissionBrokerResponse() {
+        return new DecommissionBrokerResponse(new DecommissionBrokerResponseData());
     }
 
     /**

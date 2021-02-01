@@ -1487,6 +1487,8 @@ public interface Admin extends AutoCloseable {
 
     /**
      * Unregisters a broker.
+     * <p>
+     * This operation is supported only on self-managed Kafka clusters.
      *
      * @param brokerId  the broker id to unregister.
      *
@@ -1501,6 +1503,8 @@ public interface Admin extends AutoCloseable {
     /**
      * Unregisters a broker.
      * <p>
+     * This operation is supported only on self-managed Kafka clusters.
+     *
      * The following exceptions can be anticipated when calling {@code get()} on the future from the
      * returned {@link DescribeFeaturesResult}:
      * <ul>
