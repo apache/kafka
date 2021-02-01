@@ -25,16 +25,16 @@ public class LogSegmentData {
     private final File timeIndex;
     private final File txnIndex;
     private final File producerIdSnapshotIndex;
-    private final File leaderEpochCache;
+    private final File leaderEpochCheckpoint;
 
     public LogSegmentData(File logSegment, File offsetIndex, File timeIndex, File txnIndex, File producerIdSnapshotIndex,
-                          File leaderEpochCache) {
+                          File leaderEpochCheckpoint) {
         this.logSegment = logSegment;
         this.offsetIndex = offsetIndex;
         this.timeIndex = timeIndex;
         this.txnIndex = txnIndex;
         this.producerIdSnapshotIndex = producerIdSnapshotIndex;
-        this.leaderEpochCache = leaderEpochCache;
+        this.leaderEpochCheckpoint = leaderEpochCheckpoint;
     }
 
     public File logSegment() {
@@ -57,7 +57,7 @@ public class LogSegmentData {
         return producerIdSnapshotIndex;
     }
 
-    public File leaderEpochCache() {
-        return leaderEpochCache;
+    public File leaderEpochCheckpoint() {
+        return leaderEpochCheckpoint;
     }
 }

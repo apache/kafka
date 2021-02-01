@@ -33,5 +33,5 @@ case class FetchDataInfo(fetchOffsetMetadata: LogOffsetMetadata,
                          abortedTransactions: Option[List[AbortedTransaction]] = None,
                          delayedRemoteStorageFetch: Option[RemoteStorageFetchInfo] = None)
 
-case class RemoteStorageFetchInfo(fetchMaxByes: Int, minOneMessage: Boolean, topicPartition: TopicPartition,
+case class RemoteStorageFetchInfo(fetchMaxBytes: Int, minOneMessage: Boolean, topicPartition: TopicPartition,
                                   fetchInfo: PartitionData, fetchIsolation: FetchIsolation)

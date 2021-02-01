@@ -1056,7 +1056,7 @@ class ReplicaManager(val config: KafkaConfig,
         val remoteFetchResult = new CompletableFuture[RemoteLogReadResult]
         var remoteFetchTask: RemoteLogManager#AsyncReadTask  = null
         try {
-          remoteFetchTask = remoteLogManager.get.asyncRead(remoteFetchInfo.get, (result:RemoteLogReadResult) => {
+          remoteFetchTask = remoteLogManager.get.asyncRead(remoteFetchInfo.get, (result: RemoteLogReadResult) => {
             remoteFetchResult.complete(result)
             remoteFetchPurgatory.checkAndComplete(key)
           })
@@ -1150,8 +1150,8 @@ class ReplicaManager(val config: KafkaConfig,
       val followerLogStartOffset = fetchInfo.logStartOffset
 
       val adjustedMaxBytes = math.min(fetchInfo.maxBytes, limitBytes)
-      var log:Log = null
-      var partition:Partition = null
+      var log: Log = null
+      var partition: Partition = null
       try {
         if (traceEnabled)
           trace(s"Fetching log segment for partition $tp, offset $offset, partition fetch size $partitionFetchSize, " +
@@ -1195,16 +1195,7 @@ class ReplicaManager(val config: KafkaConfig,
             fetchOnlyFromLeader = fetchOnlyFromLeader,
             minOneMessage = minOneMessage)
 
-          val fetchDataInfo = if (shouldLeaderThrottle(quota, partition, replicaId)) {
-            // If the partition is being throttled, simply return an empty set.
-            FetchDataInfo(readInfo.fetchedData.fetchOffsetMetadata, MemoryRecords.EMPTY)
-          } else if (!hardMaxBytesLimit && readInfo.fetchedData.firstEntryIncomplete) {
-            // For FetchRequest version 3, we replace incomplete message sets with an empty one as consumers can make
-            // progress in such cases and don't need to report a `RecordTooLargeException`
-            FetchDataInfo(readInfo.fetchedData.fetchOffsetMetadata, MemoryRecords.EMPTY)
-          } else {
-            readInfo.fetchedData
-          }
+          val fetchDataInfo = checkFetchDataInfo(partition, readInfo.fetchedData)
 
           LogReadResult(info = fetchDataInfo,
             divergingEpoch = readInfo.divergingEpoch,
@@ -1247,9 +1238,7 @@ class ReplicaManager(val config: KafkaConfig,
                 // create a dummy FetchDataInfo with the remote storage fetch information
                 // For the first topic-partition that needs remote data, we will use this information to read the data in another thread
                 // For the following topic-partitions, we return an empty record set
-                val logOffsetMetadata = LogOffsetMetadata(fetchInfo.fetchOffset,
-                  relativePositionInSegment = LogOffsetMetadata.UnknownFilePosition)
-                FetchDataInfo(logOffsetMetadata, MemoryRecords.EMPTY,
+                FetchDataInfo(LogOffsetMetadata(fetchInfo.fetchOffset), MemoryRecords.EMPTY,
                   delayedRemoteStorageFetch = Some(
                     RemoteStorageFetchInfo(adjustedMaxBytes, minOneMessage, tp, fetchInfo, fetchIsolation)))
               }

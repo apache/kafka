@@ -40,6 +40,9 @@ public final class LocalTieredStorageEvent implements Comparable<LocalTieredStor
         FETCH_SEGMENT,
         FETCH_OFFSET_INDEX,
         FETCH_TIME_INDEX,
+        FETCH_TRANSACTION_INDEX,
+        FETCH_LEADER_EPOCH_CHECKPOINT,
+        FETCH_PRODUCER_SNAPSHOT,
         DELETE_SEGMENT
     }
 

@@ -21,8 +21,10 @@ import kafka.server.{BrokerTopicStats, FetchDataInfo, RemoteStorageFetchInfo}
 import kafka.utils.Logging
 import org.apache.kafka.common.utils.Time
 
-class RemoteLogReader(fetchInfo: RemoteStorageFetchInfo, rlm: RemoteLogManager, brokerTopicStats: BrokerTopicStats, callback: (RemoteLogReadResult) => Unit)
-  extends RemoteStorageTask[Unit] with Logging {
+class RemoteLogReader(fetchInfo: RemoteStorageFetchInfo,
+                      rlm: RemoteLogManager,
+                      brokerTopicStats: BrokerTopicStats,
+                      callback: RemoteLogReadResult => Unit) extends RemoteStorageTask[Unit] with Logging {
   brokerTopicStats.topicStats(fetchInfo.topicPartition.topic()).remoteReadRequestRate.mark()
 
   override def execute(): Unit = {

@@ -61,6 +61,7 @@ import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
 
 public final class LocalTieredStorageTest {
     @Rule
@@ -146,6 +147,36 @@ public final class LocalTieredStorageTest {
         tieredStorage.copyLogSegment(newRemoteLogSegmentMetadata(id), segment);
 
         remoteStorageVerifier.verifyFetchedTimeIndex(id, LocalLogSegments.TIME_FILE_BYTES);
+    }
+
+    @Test
+    public void fetchTransactionIndex() throws RemoteStorageException {
+        final RemoteLogSegmentId id = newRemoteLogSegmentId();
+        final LogSegmentData segment = localLogSegments.nextSegment();
+
+        tieredStorage.copyLogSegment(newRemoteLogSegmentMetadata(id), segment);
+
+        remoteStorageVerifier.verifyFetchedTransactionIndex(id, LocalLogSegments.TXN_FILE_BYTES);
+    }
+
+    @Test
+    public void fetchLeaderEpochCheckpoint() throws RemoteStorageException {
+        final RemoteLogSegmentId id = newRemoteLogSegmentId();
+        final LogSegmentData segment = localLogSegments.nextSegment();
+
+        tieredStorage.copyLogSegment(newRemoteLogSegmentMetadata(id), segment);
+
+        remoteStorageVerifier.verifyLeaderEpochCheckpoint(id, LocalLogSegments.LEADER_EPOCH_CHECKPOINT_FILE_BYTES);
+    }
+
+    @Test
+    public void fetchProducerSnapshot() throws RemoteStorageException {
+        final RemoteLogSegmentId id = newRemoteLogSegmentId();
+        final LogSegmentData segment = localLogSegments.nextSegment();
+
+        tieredStorage.copyLogSegment(newRemoteLogSegmentMetadata(id), segment);
+
+        remoteStorageVerifier.verifyProducerSnapshot(id, LocalLogSegments.PRODUCER_SNAPSHOT_FILE_BYTES);
     }
 
     @Test
@@ -255,6 +286,14 @@ public final class LocalTieredStorageTest {
             () -> tieredStorage.fetchLogSegmentData(metadata, 0L, null));
         assertThrows(RemoteResourceNotFoundException.class, () -> tieredStorage.fetchOffsetIndex(metadata));
         assertThrows(RemoteResourceNotFoundException.class, () -> tieredStorage.fetchTimestampIndex(metadata));
+        assertThrows(RemoteResourceNotFoundException.class, () -> tieredStorage.fetchLeaderEpochIndex(metadata));
+
+        try {
+            assertArrayEquals(new byte[0], remoteStorageVerifier.readFully(tieredStorage.fetchTransactionIndex(metadata)));
+            assertArrayEquals(new byte[0], remoteStorageVerifier.readFully(tieredStorage.fetchProducerSnapshotIndex(metadata)));
+        } catch (Exception ex) {
+            fail("Shouldn't have thrown an exception when optional file doesn't exists in the remote store");
+        }
     }
 
     @Test
@@ -312,7 +351,10 @@ public final class LocalTieredStorageTest {
             return Arrays.asList(
                     Paths.get(rootPath, topicPartitionSubpath, uuid + "-segment").toString(),
                     Paths.get(rootPath, topicPartitionSubpath, uuid + "-offset_index").toString(),
-                    Paths.get(rootPath, topicPartitionSubpath, uuid + "-time_index").toString()
+                    Paths.get(rootPath, topicPartitionSubpath, uuid + "-time_index").toString(),
+                    Paths.get(rootPath, topicPartitionSubpath, uuid + "-transaction_index").toString(),
+                    Paths.get(rootPath, topicPartitionSubpath, uuid + "-leader_epoch_checkpoint").toString(),
+                    Paths.get(rootPath, topicPartitionSubpath, uuid + "-producer_snapshot").toString()
             );
         }
 
@@ -376,13 +418,7 @@ public final class LocalTieredStorageTest {
          * @param expected The expected content.
          */
         public void verifyFetchedOffsetIndex(final RemoteLogSegmentId id, final byte[] expected) {
-            try {
-                final InputStream in = remoteStorage.fetchOffsetIndex(newMetadata(id));
-                assertArrayEquals(expected, readFully(in));
-
-            } catch (RemoteStorageException | IOException e) {
-                throw new AssertionError(e);
-            }
+            verifyFileContents(remoteStorage::fetchOffsetIndex, id, expected);
         }
 
         /**
@@ -392,10 +428,45 @@ public final class LocalTieredStorageTest {
          * @param expected The expected content.
          */
         public void verifyFetchedTimeIndex(final RemoteLogSegmentId id, final byte[] expected) {
-            try {
-                final InputStream in = remoteStorage.fetchTimestampIndex(newMetadata(id));
-                assertArrayEquals(expected, readFully(in));
+            verifyFileContents(remoteStorage::fetchTimestampIndex, id, expected);
+        }
 
+        /**
+         * Verifies the content of the remote transaction index matches with the {@code expected} array.
+         *
+         * @param id The unique ID of the remote log segment and associated resources (e.g. offset and time indexes).
+         * @param expected The expected content.
+         */
+        public void verifyFetchedTransactionIndex(final RemoteLogSegmentId id, final byte[] expected) {
+            verifyFileContents(remoteStorage::fetchTransactionIndex, id, expected);
+        }
+
+        /**
+         * Verifies the content of the remote leader epoch checkpoint matches with the {@code expected} array.
+         *
+         * @param id The unique ID of the remote log segment and associated resources (e.g. offset and time indexes).
+         * @param expected The expected content.
+         */
+        public void verifyLeaderEpochCheckpoint(final RemoteLogSegmentId id, final byte[] expected) {
+            verifyFileContents(remoteStorage::fetchLeaderEpochIndex, id, expected);
+        }
+
+        /**
+         * Verifies the content of the remote producer snapshot matches with the {@code expected} array.
+         *
+         * @param id The unique ID of the remote log segment and associated resources (e.g. offset and time indexes).
+         * @param expected The expected content.
+         */
+        public void verifyProducerSnapshot(final RemoteLogSegmentId id, final byte[] expected) {
+            verifyFileContents(remoteStorage::fetchProducerSnapshotIndex, id, expected);
+        }
+
+        private void verifyFileContents(final Function<RemoteLogSegmentMetadata, InputStream> actual,
+                                        final RemoteLogSegmentId id,
+                                        final byte[] expected) {
+            try {
+                final InputStream in = actual.apply(newMetadata(id));
+                assertArrayEquals(expected, readFully(in));
             } catch (RemoteStorageException | IOException e) {
                 throw new AssertionError(e);
             }
@@ -449,9 +520,16 @@ public final class LocalTieredStorageTest {
         }
     }
 
+    private interface Function<A, B> {
+        B apply(A a) throws RemoteStorageException;
+    }
+
     private static final class LocalLogSegments {
         private static final byte[] OFFSET_FILE_BYTES = "offset".getBytes();
         private static final byte[] TIME_FILE_BYTES = "time".getBytes();
+        private static final byte[] TXN_FILE_BYTES = "txn".getBytes();
+        private static final byte[] PRODUCER_SNAPSHOT_FILE_BYTES = "pid".getBytes();
+        private static final byte[] LEADER_EPOCH_CHECKPOINT_FILE_BYTES = "0\n2\n0 0\n2 12".getBytes();
 
         private static final NumberFormat OFFSET_FORMAT = NumberFormat.getInstance();
 
@@ -499,14 +577,18 @@ public final class LocalTieredStorageTest {
                 final File offsetIndex = new File(segmentDir, offset + ".index");
                 final File timeIndex = new File(segmentDir, offset + ".time");
                 final File txnIndex = new File(segmentDir, offset + ".txn");
-                final File producerIdSnapshotIndex = new File(segmentDir, offset + ".pid");
+                final File producerIdSnapshot = new File(segmentDir, offset + ".snapshot");
+                final File leaderEpochCheckpoint = new File(segmentDir, "leader-epoch-checkpoint");
 
                 Files.write(offsetIndex.toPath(), OFFSET_FILE_BYTES);
                 Files.write(timeIndex.toPath(), TIME_FILE_BYTES);
+                Files.write(txnIndex.toPath(), TXN_FILE_BYTES);
+                Files.write(producerIdSnapshot.toPath(), PRODUCER_SNAPSHOT_FILE_BYTES);
+                Files.write(leaderEpochCheckpoint.toPath(), LEADER_EPOCH_CHECKPOINT_FILE_BYTES);
 
                 baseOffset += data.length;
-                //todo-tier pass leaderepoch state
-                return new LogSegmentData(segment, offsetIndex, timeIndex, txnIndex, producerIdSnapshotIndex, producerIdSnapshotIndex);
+                return new LogSegmentData(segment, offsetIndex, timeIndex, txnIndex,
+                        producerIdSnapshot, leaderEpochCheckpoint);
 
             } catch (IOException e) {
                 throw new AssertionError(e);

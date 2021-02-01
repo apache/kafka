@@ -23,7 +23,6 @@ import org.slf4j.Logger;
 import java.io.File;
 import java.io.IOException;
 import java.util.Collection;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -36,16 +35,18 @@ import java.util.stream.Collectors;
 import java.util.stream.StreamSupport;
 
 import static java.lang.String.format;
-import static java.util.Arrays.asList;
 import static java.util.Arrays.stream;
 import static java.util.Collections.unmodifiableMap;
 import static java.util.Objects.requireNonNull;
 import static java.util.function.Function.identity;
 import static java.util.regex.Pattern.compile;
 import static java.util.stream.Collectors.toMap;
+import static org.apache.kafka.common.log.remote.storage.RemoteLogSegmentFileset.RemoteLogSegmentFileType.LEADER_EPOCH_CHECKPOINT;
 import static org.apache.kafka.common.log.remote.storage.RemoteLogSegmentFileset.RemoteLogSegmentFileType.OFFSET_INDEX;
+import static org.apache.kafka.common.log.remote.storage.RemoteLogSegmentFileset.RemoteLogSegmentFileType.PRODUCER_SNAPSHOT;
 import static org.apache.kafka.common.log.remote.storage.RemoteLogSegmentFileset.RemoteLogSegmentFileType.SEGMENT;
 import static org.apache.kafka.common.log.remote.storage.RemoteLogSegmentFileset.RemoteLogSegmentFileType.TIME_INDEX;
+import static org.apache.kafka.common.log.remote.storage.RemoteLogSegmentFileset.RemoteLogSegmentFileType.TRANSACTION_INDEX;
 import static org.apache.kafka.common.log.remote.storage.RemoteLogSegmentFileset.RemoteLogSegmentFileType.getFileType;
 import static org.apache.kafka.common.log.remote.storage.RemoteTopicPartitionDirectory.openTopicPartitionDirectory;
 import static org.slf4j.LoggerFactory.getLogger;
@@ -78,9 +79,18 @@ public final class RemoteLogSegmentFileset {
      * Characterises the type of a file in the local tiered storage copied from Apache Kafka's standard storage.
      */
     public enum RemoteLogSegmentFileType {
-        SEGMENT,
-        OFFSET_INDEX,
-        TIME_INDEX;
+        SEGMENT(false),
+        OFFSET_INDEX(false),
+        TIME_INDEX(false),
+        TRANSACTION_INDEX(true),
+        LEADER_EPOCH_CHECKPOINT(false),
+        PRODUCER_SNAPSHOT(true);
+
+        private final boolean optional;
+
+        RemoteLogSegmentFileType(boolean optional) {
+            this.optional = optional;
+        }
 
         /**
          * Provides the name of the file of this type for the given UUID in the local tiered storage,
@@ -117,6 +127,10 @@ public final class RemoteLogSegmentFileset {
                 throw new IllegalArgumentException(format("Not a remote log segment file: %s", filename));
             }
             return m.group(group);
+        }
+
+        public boolean isOptional() {
+            return optional;
         }
     }
 
@@ -162,11 +176,12 @@ public final class RemoteLogSegmentFileset {
                         .filter(file -> file.getName().startsWith(uuid.toString()))
                         .collect(toMap(file -> getFileType(file.getName()), identity()));
 
-        final Set<RemoteLogSegmentFileType> expectedTypes = new HashSet<>(asList(RemoteLogSegmentFileType.values()));
+        final Set<RemoteLogSegmentFileType> expectedFileTypes = stream(RemoteLogSegmentFileType.values())
+                .filter(x -> !x.isOptional()).collect(Collectors.toSet());
 
-        if (!files.keySet().equals(expectedTypes)) {
-            expectedTypes.removeAll(files.keySet());
-            throw new IllegalStateException(format("Invalid fileset, missing files: %s", expectedTypes));
+        if (!files.keySet().containsAll(expectedFileTypes)) {
+            expectedFileTypes.removeAll(files.keySet());
+            throw new IllegalStateException(format("Invalid fileset, missing files: %s", expectedFileTypes));
         }
 
         final RemoteLogSegmentId id = new RemoteLogSegmentId(tpDirectory.getTopicPartition(), uuid);
@@ -195,6 +210,9 @@ public final class RemoteLogSegmentFileset {
         transferer.transfer(data.logSegment(), files.get(SEGMENT));
         transferer.transfer(data.offsetIndex(), files.get(OFFSET_INDEX));
         transferer.transfer(data.timeIndex(), files.get(TIME_INDEX));
+        transferer.transfer(data.txnIndex(), files.get(TRANSACTION_INDEX));
+        transferer.transfer(data.leaderEpochCheckpoint(), files.get(LEADER_EPOCH_CHECKPOINT));
+        transferer.transfer(data.producerIdSnapshotIndex(), files.get(PRODUCER_SNAPSHOT));
     }
 
     public String toString() {

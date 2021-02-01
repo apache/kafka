@@ -20,7 +20,6 @@ package kafka.log.remote
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.{Callable, LinkedBlockingQueue, ThreadFactory, ThreadPoolExecutor, TimeUnit}
 
-import com.yammer.metrics.core.Gauge
 import kafka.metrics.KafkaMetricsGroup
 import kafka.utils.{Exit, Logging}
 import org.apache.kafka.common.internals.FatalExitError
@@ -48,31 +47,25 @@ abstract class RemoteStorageThreadPool(name: String, threadNamePrefix: String, n
     new LinkedBlockingQueue[Runnable](maxPendingTasks), new RemoteStorageThreadFactory(threadNamePrefix + "-"))
     with Logging
     with KafkaMetricsGroup {
-  newGauge(metricNamePrefix.concat("TaskQueueSize"), new Gauge[Int] {
-    def value() = {
-      getQueue().size()
-    }
+  newGauge(metricNamePrefix.concat("TaskQueueSize"), () => {
+    getQueue().size()
   })
 
-  newGauge(metricNamePrefix.concat("AvgIdlePercent"), new Gauge[Double] {
-    def value() = {
-      1 - getActiveCount.asInstanceOf[Double] / getCorePoolSize.asInstanceOf[Double]
-    }
+  newGauge(metricNamePrefix.concat("AvgIdlePercent"), () => {
+    1 - getActiveCount.asInstanceOf[Double] / getCorePoolSize.asInstanceOf[Double]
   })
 
-  this.logIdent = s"[${name}] "
+  this.logIdent = s"[$name] "
 
   override def afterExecute(r: Runnable, e: Throwable): Unit = {
-    if(e != null)
+    if (e != null)
       e match {
-      case e: FatalExitError => {
-        info("Stopped")
-        Exit.exit(e.statusCode())
-      }
-      case e: Throwable => {
-        if (!isShutdown)
-          error("Error due to", e)
-      }
+        case e: FatalExitError =>
+          info("Stopped")
+          Exit.exit(e.statusCode())
+        case e: Throwable =>
+          if (!isShutdown)
+            error("Error due to", e)
     }
   }
 

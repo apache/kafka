@@ -40,13 +40,19 @@ import static java.nio.file.Files.newInputStream;
 import static java.nio.file.StandardOpenOption.READ;
 import static org.apache.kafka.common.log.remote.storage.LocalTieredStorageEvent.EventType;
 import static org.apache.kafka.common.log.remote.storage.LocalTieredStorageEvent.EventType.DELETE_SEGMENT;
+import static org.apache.kafka.common.log.remote.storage.LocalTieredStorageEvent.EventType.FETCH_LEADER_EPOCH_CHECKPOINT;
 import static org.apache.kafka.common.log.remote.storage.LocalTieredStorageEvent.EventType.FETCH_OFFSET_INDEX;
+import static org.apache.kafka.common.log.remote.storage.LocalTieredStorageEvent.EventType.FETCH_PRODUCER_SNAPSHOT;
 import static org.apache.kafka.common.log.remote.storage.LocalTieredStorageEvent.EventType.FETCH_SEGMENT;
 import static org.apache.kafka.common.log.remote.storage.LocalTieredStorageEvent.EventType.FETCH_TIME_INDEX;
+import static org.apache.kafka.common.log.remote.storage.LocalTieredStorageEvent.EventType.FETCH_TRANSACTION_INDEX;
 import static org.apache.kafka.common.log.remote.storage.LocalTieredStorageEvent.EventType.OFFLOAD_SEGMENT;
+import static org.apache.kafka.common.log.remote.storage.RemoteLogSegmentFileset.RemoteLogSegmentFileType.LEADER_EPOCH_CHECKPOINT;
 import static org.apache.kafka.common.log.remote.storage.RemoteLogSegmentFileset.RemoteLogSegmentFileType.OFFSET_INDEX;
+import static org.apache.kafka.common.log.remote.storage.RemoteLogSegmentFileset.RemoteLogSegmentFileType.PRODUCER_SNAPSHOT;
 import static org.apache.kafka.common.log.remote.storage.RemoteLogSegmentFileset.RemoteLogSegmentFileType.SEGMENT;
 import static org.apache.kafka.common.log.remote.storage.RemoteLogSegmentFileset.RemoteLogSegmentFileType.TIME_INDEX;
+import static org.apache.kafka.common.log.remote.storage.RemoteLogSegmentFileset.RemoteLogSegmentFileType.TRANSACTION_INDEX;
 import static org.apache.kafka.common.log.remote.storage.RemoteLogSegmentFileset.openFileset;
 import static org.apache.kafka.common.log.remote.storage.RemoteTopicPartitionDirectory.openExistingTopicPartitionDirectory;
 
@@ -123,7 +129,11 @@ public final class LocalTieredStorage implements RemoteStorageManager {
     private volatile File storageDirectory;
     private volatile boolean deleteOnClose = false;
     private volatile boolean deleteEnabled = true;
-    private volatile Transferer transferer = (from, to) -> Files.copy(from.toPath(), to.toPath());
+    private volatile Transferer transferer = (from, to) -> {
+        if (from.exists()) {
+            Files.copy(from.toPath(), to.toPath());
+        }
+    };
     private volatile int brokerId = -1;
 
     private volatile Logger logger = LoggerFactory.getLogger(LocalTieredStorage.class);
@@ -232,6 +242,8 @@ public final class LocalTieredStorage implements RemoteStorageManager {
                     storageDirectory.getAbsolutePath());
 
         } else {
+            // NOTE: Provide the absolute storage directory path when testing with LocalTieredStorage in standalone mode.
+            // storageDirectory = new File(storageDir + "/" + ROOT_STORAGES_DIR_NAME);
             storageDirectory = new File(new File("."), ROOT_STORAGES_DIR_NAME + "/" + storageDir);
             final boolean existed = storageDirectory.exists();
 
@@ -260,9 +272,16 @@ public final class LocalTieredStorage implements RemoteStorageManager {
             try {
                 fileset = openFileset(storageDirectory, id);
 
-                logger.info("Offloading log segment for {} from offset={}",
+                logger.info("Offloading log segment for {} from offset={}, isOffsetIdxFileExists: {}, " +
+                        "isTimestampIdxFileExists: {}, isLeaderEpochCheckpointFileExists={}, " +
+                        "isTxnIdxFileExists : {}, isProducerSnapshotFileExists: {}",
                         id.topicPartition(),
-                        data.logSegment().getName().split("\\.")[0]);
+                        data.logSegment().getName().split("\\.")[0],
+                        data.offsetIndex().exists(),
+                        data.timeIndex().exists(),
+                        data.leaderEpochCheckpoint().exists(),
+                        data.txnIndex().exists(),
+                        data.producerIdSnapshotIndex().exists());
 
                 fileset.copy(transferer, data);
 
@@ -325,34 +344,43 @@ public final class LocalTieredStorage implements RemoteStorageManager {
 
     @Override
     public InputStream fetchOffsetIndex(final RemoteLogSegmentMetadata metadata) throws RemoteStorageException {
-        return wrap(() -> {
-            final LocalTieredStorageEvent.Builder eventBuilder = newEventBuilder(FETCH_OFFSET_INDEX, metadata);
-
-            try {
-                final RemoteLogSegmentFileset fileset = openFileset(storageDirectory, metadata.remoteLogSegmentId());
-
-                final InputStream inputStream = newInputStream(fileset.getFile(OFFSET_INDEX).toPath(), READ);
-
-                storageListeners.onStorageEvent(eventBuilder.withFileset(fileset).build());
-
-                return inputStream;
-
-            } catch (final Exception e) {
-                storageListeners.onStorageEvent(eventBuilder.withException(e).build());
-                throw e;
-            }
-        });
+        return fetchFile(metadata, FETCH_OFFSET_INDEX, OFFSET_INDEX);
     }
 
     @Override
     public InputStream fetchTimestampIndex(final RemoteLogSegmentMetadata metadata) throws RemoteStorageException {
+        return fetchFile(metadata, FETCH_TIME_INDEX, TIME_INDEX);
+    }
+
+    @Override
+    public InputStream fetchLeaderEpochIndex(RemoteLogSegmentMetadata metadata) throws RemoteStorageException {
+        return fetchFile(metadata, FETCH_LEADER_EPOCH_CHECKPOINT, LEADER_EPOCH_CHECKPOINT);
+    }
+
+    @Override
+    public InputStream fetchTransactionIndex(RemoteLogSegmentMetadata metadata) throws RemoteStorageException {
+        return fetchFile(metadata, FETCH_TRANSACTION_INDEX, TRANSACTION_INDEX);
+    }
+
+    @Override
+    public InputStream fetchProducerSnapshotIndex(RemoteLogSegmentMetadata metadata)
+            throws RemoteStorageException {
+        return fetchFile(metadata, FETCH_PRODUCER_SNAPSHOT, PRODUCER_SNAPSHOT);
+    }
+
+    private InputStream fetchFile(
+            RemoteLogSegmentMetadata metadata,
+            LocalTieredStorageEvent.EventType eventType,
+            RemoteLogSegmentFileset.RemoteLogSegmentFileType fileType) throws RemoteStorageException {
         return wrap(() -> {
-            final LocalTieredStorageEvent.Builder eventBuilder = newEventBuilder(FETCH_TIME_INDEX, metadata);
+            final LocalTieredStorageEvent.Builder eventBuilder = newEventBuilder(eventType, metadata);
 
             try {
                 final RemoteLogSegmentFileset fileset = openFileset(storageDirectory, metadata.remoteLogSegmentId());
 
-                final InputStream inputStream = newInputStream(fileset.getFile(TIME_INDEX).toPath(), READ);
+                File file = fileset.getFile(fileType);
+                final InputStream inputStream = (fileType.isOptional() && !file.exists()) ?
+                        EMPTY_INPUT_STREAM : newInputStream(file.toPath(), READ);
 
                 storageListeners.onStorageEvent(eventBuilder.withFileset(fileset).build());
 

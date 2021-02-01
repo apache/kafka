@@ -37,59 +37,43 @@ class ClassLoaderAwareRemoteStorageManager(val rsm: RemoteStorageManager,
     }
   }
 
-  //FIXME: Remove
+  // FIXME: Remove
   def delegate(): RemoteStorageManager = {
     rsm
   }
 
-  override def close(): Unit = {
-    withClassLoader {
-      rsm.close()
-    }
+  override def close(): Unit = withClassLoader {
+    rsm.close()
   }
 
-  override def configure(configs: util.Map[String, _]): Unit = {
-    withClassLoader {
-      rsm.configure(configs)
-    }
+  override def configure(configs: util.Map[String, _]): Unit = withClassLoader {
+    rsm.configure(configs)
   }
 
-  override def copyLogSegment(remoteLogSegmentMetadata: RemoteLogSegmentMetadata, logSegmentData: LogSegmentData): Unit = {
-    withClassLoader {
-      rsm.copyLogSegment(remoteLogSegmentMetadata, logSegmentData)
-    }
+  override def copyLogSegment(remoteLogSegmentMetadata: RemoteLogSegmentMetadata,
+                              logSegmentData: LogSegmentData): Unit = withClassLoader {
+    rsm.copyLogSegment(remoteLogSegmentMetadata, logSegmentData)
   }
 
   override def fetchLogSegmentData(remoteLogSegmentMetadata: RemoteLogSegmentMetadata,
                                    startPosition: lang.Long,
-                                   endPosition: lang.Long): InputStream = {
-    withClassLoader {
-      rsm.fetchLogSegmentData(remoteLogSegmentMetadata, startPosition, endPosition)
-    }
+                                   endPosition: lang.Long): InputStream = withClassLoader {
+    rsm.fetchLogSegmentData(remoteLogSegmentMetadata, startPosition, endPosition)
   }
 
-  override def fetchOffsetIndex(remoteLogSegmentMetadata: RemoteLogSegmentMetadata): InputStream = {
-    withClassLoader {
-      rsm.fetchOffsetIndex(remoteLogSegmentMetadata)
-    }
-
+  override def fetchOffsetIndex(remoteLogSegmentMetadata: RemoteLogSegmentMetadata): InputStream = withClassLoader {
+    rsm.fetchOffsetIndex(remoteLogSegmentMetadata)
   }
 
-  override def fetchTimestampIndex(remoteLogSegmentMetadata: RemoteLogSegmentMetadata): InputStream = {
-    withClassLoader {
-      rsm.fetchTimestampIndex(remoteLogSegmentMetadata)
-    }
+  override def fetchTimestampIndex(remoteLogSegmentMetadata: RemoteLogSegmentMetadata): InputStream = withClassLoader {
+    rsm.fetchTimestampIndex(remoteLogSegmentMetadata)
   }
 
-  override def deleteLogSegment(remoteLogSegmentMetadata: RemoteLogSegmentMetadata): Unit = {
-    withClassLoader {
-      rsm.deleteLogSegment(remoteLogSegmentMetadata)
-    }
+  override def deleteLogSegment(remoteLogSegmentMetadata: RemoteLogSegmentMetadata): Unit = withClassLoader {
+    rsm.deleteLogSegment(remoteLogSegmentMetadata)
   }
 
-  override def fetchTransactionIndex(remoteLogSegmentMetadata: RemoteLogSegmentMetadata): InputStream = {
-    withClassLoader {
-      rsm.fetchTransactionIndex(remoteLogSegmentMetadata)
-    }
+  override def fetchTransactionIndex(remoteLogSegmentMetadata: RemoteLogSegmentMetadata): InputStream = withClassLoader {
+    rsm.fetchTransactionIndex(remoteLogSegmentMetadata)
   }
 }

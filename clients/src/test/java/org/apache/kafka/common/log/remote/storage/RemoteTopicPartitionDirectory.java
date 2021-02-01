@@ -119,8 +119,8 @@ public final class RemoteTopicPartitionDirectory {
     public static RemoteTopicPartitionDirectory openExistingTopicPartitionDirectory(final String dirname,
                                                                                     final File storageDirectory) {
 
-        final char topicParitionSeparator = '-';
-        final int separatorIndex = dirname.lastIndexOf(topicParitionSeparator);
+        final char topicPartitionSeparator = '-';
+        final int separatorIndex = dirname.lastIndexOf(topicPartitionSeparator);
 
         if (separatorIndex == -1) {
             throw new IllegalArgumentException(format(
@@ -141,8 +141,8 @@ public final class RemoteTopicPartitionDirectory {
         final RemoteTopicPartitionDirectory directory =
                 openTopicPartitionDirectory(new TopicPartition(topic, partition), storageDirectory);
 
-        if (!directory.existed) {
-            throw new IllegalArgumentException(format("Topic-partitition directory %s not found", dirname));
+        if (!directory.didExist()) {
+            throw new IllegalArgumentException(format("Topic-partition directory %s not found", dirname));
         }
 
         return directory;
