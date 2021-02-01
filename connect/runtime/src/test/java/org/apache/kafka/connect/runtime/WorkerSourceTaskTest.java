@@ -704,16 +704,24 @@ public class WorkerSourceTaskTest extends ThreadedTest {
     }
 
     @Test
-    public void testCancel() {
+    public void testCancel() throws Exception {
         createWorkerTask();
 
         offsetReader.close();
         PowerMock.expectLastCall();
 
+        CountDownLatch producerClosed = new CountDownLatch(1);
+        producer.close(Duration.ZERO);
+        PowerMock.expectLastCall().andAnswer(() -> {
+            producerClosed.countDown();
+            return null;
+        }).anyTimes();
+
         PowerMock.replayAll();
 
         workerTask.cancel();
 
+        assertTrue("Producer was not closed after task was cancelled", producerClosed.await(5, TimeUnit.SECONDS));
         PowerMock.verifyAll();
     }
 

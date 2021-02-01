@@ -65,6 +65,7 @@ public class ConnectWorkerIntegrationTest {
     private static final long OFFSET_COMMIT_INTERVAL_MS = TimeUnit.SECONDS.toMillis(30);
     private static final int NUM_WORKERS = 3;
     private static final int NUM_TASKS = 4;
+    private static final int MESSAGES_PER_POLL = 10;
     private static final String CONNECTOR_NAME = "simple-source";
     private static final String TOPIC_NAME = "test-topic";
 
@@ -288,14 +289,42 @@ public class ConnectWorkerIntegrationTest {
                 decreasedNumTasks, "Connector task statuses did not update in time.");
     }
 
+    @Test
+    public void testSourceTaskOnNonExistentTopic() throws Exception {
+        connect = connectBuilder
+            .numWorkers(1)
+            .numBrokers(1)
+            .build();
+        connect.start();
+
+        connect.assertions().assertAtLeastNumWorkersAreUp(1, "Initial group of workers did not start in time.");
+
+        Map<String, String> props = defaultSourceConnectorProps("nonexistenttopic");
+        props.remove(DEFAULT_TOPIC_CREATION_PREFIX + REPLICATION_FACTOR_CONFIG);
+        props.remove(DEFAULT_TOPIC_CREATION_PREFIX + PARTITIONS_CONFIG);
+        props.put("throughput", "-1");
+
+        ConnectorHandle connector = RuntimeHandles.get().connectorHandle(CONNECTOR_NAME);
+        connector.expectedRecords(NUM_TASKS * MESSAGES_PER_POLL);
+        connect.configureConnector(CONNECTOR_NAME, props);
+        connect.assertions().assertConnectorAndExactlyNumTasksAreRunning(CONNECTOR_NAME,
+            NUM_TASKS, "Connector tasks did not start in time");
+        connector.awaitRecords(TimeUnit.MINUTES.toMillis(1));
+
+        StartAndStopLatch stopCounter = connector.expectedStops(1);
+        connect.deleteConnector(CONNECTOR_NAME);
+
+        assertTrue("Connector and all tasks were not stopped in time", stopCounter.await(1, TimeUnit.MINUTES));
+    }
+
     private Map<String, String> defaultSourceConnectorProps(String topic) {
         // setup up props for the source connector
         Map<String, String> props = new HashMap<>();
         props.put(CONNECTOR_CLASS_CONFIG, MonitorableSourceConnector.class.getSimpleName());
         props.put(TASKS_MAX_CONFIG, String.valueOf(NUM_TASKS));
         props.put(TOPIC_CONFIG, topic);
-        props.put("throughput", String.valueOf(10));
-        props.put("messages.per.poll", String.valueOf(10));
+        props.put("throughput", "10");
+        props.put("messages.per.poll", String.valueOf(MESSAGES_PER_POLL));
         props.put(KEY_CONVERTER_CLASS_CONFIG, StringConverter.class.getName());
         props.put(VALUE_CONVERTER_CLASS_CONFIG, StringConverter.class.getName());
         props.put(DEFAULT_TOPIC_CREATION_PREFIX + REPLICATION_FACTOR_CONFIG, String.valueOf(1));

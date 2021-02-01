@@ -171,13 +171,9 @@ class WorkerSourceTask extends WorkerTask {
                 log.warn("Could not stop task", t);
             }
         }
-        if (producer != null) {
-            try {
-                producer.close(Duration.ofSeconds(30));
-            } catch (Throwable t) {
-                log.warn("Could not close producer", t);
-            }
-        }
+
+        closeProducer(30);
+
         if (admin != null) {
             try {
                 admin.close(Duration.ofSeconds(30));
@@ -202,6 +198,8 @@ class WorkerSourceTask extends WorkerTask {
     public void cancel() {
         super.cancel();
         offsetReader.close();
+        // Run on a separate thread to avoid potentially blocking the herder thread
+        new Thread(() -> closeProducer(0)).start();
     }
 
     @Override
@@ -256,6 +254,16 @@ class WorkerSourceTask extends WorkerTask {
             // and commit offsets. Worst case, task.flush() will also throw an exception causing the offset commit
             // to fail.
             commitOffsets();
+        }
+    }
+
+    private void closeProducer(long timeout) {
+        if (producer != null) {
+            try {
+                producer.close(Duration.ofSeconds(timeout));
+            } catch (Throwable t) {
+                log.warn("Could not close producer", t);
+            }
         }
     }
 
@@ -488,7 +496,9 @@ class WorkerSourceTask extends WorkerTask {
             while (!outstandingMessages.isEmpty()) {
                 try {
                     long timeoutMs = timeout - time.milliseconds();
-                    if (timeoutMs <= 0) {
+                    // If the task has been cancelled, no more records will be sent from the producer; in that case, if any outstanding messages remain,
+                    // we can stop flushing immediately
+                    if (cancelled || timeoutMs <= 0) {
                         log.error("{} Failed to flush, timed out while waiting for producer to flush outstanding {} messages", this, outstandingMessages.size());
                         finishFailedFlush();
                         recordCommitFailure(time.milliseconds() - started, null);

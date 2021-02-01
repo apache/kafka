@@ -61,7 +61,7 @@ abstract class WorkerTask implements Runnable {
     private final TaskMetricsGroup taskMetricsGroup;
     private volatile TargetState targetState;
     private volatile boolean stopping;   // indicates whether the Worker has asked the task to stop
-    private volatile boolean cancelled;  // indicates whether the Worker has cancelled the task (e.g. because of slow shutdown)
+    protected volatile boolean cancelled;  // indicates whether the Worker has cancelled the task (e.g. because of slow shutdown)
 
     protected final RetryWithToleranceOperator retryWithToleranceOperator;
 
