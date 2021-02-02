@@ -90,19 +90,19 @@ public enum ApiKeys {
     ALTER_CLIENT_QUOTAS(ApiMessageType.ALTER_CLIENT_QUOTAS, false, true),
     DESCRIBE_USER_SCRAM_CREDENTIALS(ApiMessageType.DESCRIBE_USER_SCRAM_CREDENTIALS),
     ALTER_USER_SCRAM_CREDENTIALS(ApiMessageType.ALTER_USER_SCRAM_CREDENTIALS, false, true),
-    VOTE(ApiMessageType.VOTE, true, RecordBatch.MAGIC_VALUE_V0, false, true, true),
-    BEGIN_QUORUM_EPOCH(ApiMessageType.BEGIN_QUORUM_EPOCH, true, RecordBatch.MAGIC_VALUE_V0, false, true, true),
-    END_QUORUM_EPOCH(ApiMessageType.END_QUORUM_EPOCH, true, RecordBatch.MAGIC_VALUE_V0, false, true, true),
-    DESCRIBE_QUORUM(ApiMessageType.DESCRIBE_QUORUM, true, RecordBatch.MAGIC_VALUE_V0, false, true, true),
+    VOTE(ApiMessageType.VOTE, true, RecordBatch.MAGIC_VALUE_V0, false, true),
+    BEGIN_QUORUM_EPOCH(ApiMessageType.BEGIN_QUORUM_EPOCH, true, RecordBatch.MAGIC_VALUE_V0, false, true),
+    END_QUORUM_EPOCH(ApiMessageType.END_QUORUM_EPOCH, true, RecordBatch.MAGIC_VALUE_V0, false, true),
+    DESCRIBE_QUORUM(ApiMessageType.DESCRIBE_QUORUM, true, RecordBatch.MAGIC_VALUE_V0, false, true),
     ALTER_ISR(ApiMessageType.ALTER_ISR, true),
     UPDATE_FEATURES(ApiMessageType.UPDATE_FEATURES, false, true),
-    ENVELOPE(ApiMessageType.ENVELOPE, true, RecordBatch.MAGIC_VALUE_V0, false, true, true),
-    FETCH_SNAPSHOT(ApiMessageType.FETCH_SNAPSHOT, false, RecordBatch.MAGIC_VALUE_V0, false, true, true),
+    ENVELOPE(ApiMessageType.ENVELOPE, true, RecordBatch.MAGIC_VALUE_V0, false, true),
+    FETCH_SNAPSHOT(ApiMessageType.FETCH_SNAPSHOT, false, RecordBatch.MAGIC_VALUE_V0, false, true),
     DESCRIBE_CLUSTER(ApiMessageType.DESCRIBE_CLUSTER),
     DESCRIBE_PRODUCERS(ApiMessageType.DESCRIBE_PRODUCERS),
-    BROKER_REGISTRATION(ApiMessageType.BROKER_REGISTRATION, true, RecordBatch.MAGIC_VALUE_V0, false, true, true),
-    BROKER_HEARTBEAT(ApiMessageType.BROKER_HEARTBEAT, true, RecordBatch.MAGIC_VALUE_V0, false, true, true),
-    DECOMMISSION_BROKER(ApiMessageType.DECOMMISSION_BROKER, false, RecordBatch.MAGIC_VALUE_V0, true, false, true);
+    BROKER_REGISTRATION(ApiMessageType.BROKER_REGISTRATION, true, RecordBatch.MAGIC_VALUE_V0, false, true),
+    BROKER_HEARTBEAT(ApiMessageType.BROKER_HEARTBEAT, true, RecordBatch.MAGIC_VALUE_V0, false, true),
+    DECOMMISSION_BROKER(ApiMessageType.DECOMMISSION_BROKER, false, RecordBatch.MAGIC_VALUE_V0, true, true);
 
     // The generator ensures every `ApiMessageType` has a unique id
     private static final Map<Integer, ApiKeys> ID_TO_TYPE = Arrays.stream(ApiKeys.values())
@@ -126,9 +126,6 @@ public enum ApiKeys {
     /** indicates whether the API is enabled for forwarding **/
     public final boolean forwardable;
 
-    /** indicates if this API is exclusive to the KIP-500 mode **/
-    public final boolean isKip500OnlyApi;
-
     public final boolean requiresDelayedAllocation;
 
     public final ApiMessageType messageType;
@@ -146,7 +143,7 @@ public enum ApiKeys {
     }
 
     ApiKeys(ApiMessageType messageType, boolean clusterAction, byte minRequiredInterBrokerMagic, boolean forwardable) {
-        this(messageType, clusterAction, minRequiredInterBrokerMagic, forwardable, false, false);
+        this(messageType, clusterAction, minRequiredInterBrokerMagic, forwardable, false);
     }
 
     ApiKeys(
@@ -154,8 +151,7 @@ public enum ApiKeys {
         boolean clusterAction,
         byte minRequiredInterBrokerMagic,
         boolean forwardable,
-        boolean isControllerOnlyApi,
-        boolean isKip500OnlyApi
+        boolean isControllerOnlyApi
     ) {
         this.messageType = messageType;
         this.id = messageType.apiKey();
@@ -163,7 +159,6 @@ public enum ApiKeys {
         this.clusterAction = clusterAction;
         this.minRequiredInterBrokerMagic = minRequiredInterBrokerMagic;
         this.isControllerOnlyApi = isControllerOnlyApi;
-        this.isKip500OnlyApi = isKip500OnlyApi;
 
         this.requiresDelayedAllocation = forwardable || shouldRetainsBufferReference(messageType.requestSchemas());
         this.forwardable = forwardable;

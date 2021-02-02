@@ -118,17 +118,12 @@ class KafkaApisTest {
 
   def createKafkaApis(interBrokerProtocolVersion: ApiVersion = ApiVersion.latestVersion,
                       authorizer: Option[Authorizer] = None,
-                      enableForwarding: Boolean = false,
-                      isKip500Mode: Boolean = false): KafkaApis = {
+                      enableForwarding: Boolean = false): KafkaApis = {
     val brokerFeatures = BrokerFeatures.createDefault()
     val cache = new FinalizedFeatureCache(brokerFeatures)
     val properties = TestUtils.createBrokerConfig(brokerId, "zk")
     properties.put(KafkaConfig.InterBrokerProtocolVersionProp, interBrokerProtocolVersion.toString)
     properties.put(KafkaConfig.LogMessageFormatVersionProp, interBrokerProtocolVersion.toString)
-    if (isKip500Mode) {
-      properties.put(KafkaConfig.ProcessRolesProp, "broker")
-      properties.put(KafkaConfig.NodeIdProp, "1")
-    }
 
     val forwardingManagerOpt = if (enableForwarding)
       Some(this.forwardingManager)
@@ -749,68 +744,6 @@ class KafkaApisTest {
           new CreatableTopic().setName("topic").setNumPartitions(1).
             setReplicationFactor(1.toShort)).iterator())))
     testForwardableAPI(ApiKeys.CREATE_TOPICS, requestBuilder)
-  }
-
-  @Test
-  def testHandleApiVersionsInZookeeperMode(): Unit = {
-    val authorizer: Authorizer = EasyMock.niceMock(classOf[Authorizer])
-
-    val requestHeader = new RequestHeader(ApiKeys.API_VERSIONS, ApiKeys.API_VERSIONS.latestVersion, clientId, 0)
-
-    EasyMock.expect(forwardingManager.controllerApiVersions).andReturn(None)
-
-    val capturedResponse = expectNoThrottling()
-
-    val apiVersionsRequest = new ApiVersionsRequest.Builder()
-      .build(requestHeader.apiVersion)
-    val request = buildRequest(apiVersionsRequest,
-      fromPrivilegedListener = true, requestHeader = Option(requestHeader))
-
-    EasyMock.replay(replicaManager, clientRequestQuotaManager, forwardingManager,
-      requestChannel, authorizer, adminManager, controller)
-
-    createKafkaApis(authorizer = Some(authorizer), enableForwarding = true).handle(request)
-
-    val response = readResponse(apiVersionsRequest, capturedResponse)
-      .asInstanceOf[ApiVersionsResponse]
-    assertEquals(Errors.NONE, Errors.forCode(response.data().errorCode()))
-
-    val foundKip500APIs =
-      response.data().apiKeys().stream().anyMatch(apiVersion => ApiKeys.forId(apiVersion.apiKey()).isKip500OnlyApi)
-    assertFalse(foundKip500APIs)
-
-    verify(authorizer, adminManager, forwardingManager)
-  }
-
-  @Test
-  def testHandleApiVersionsInKip500Mode(): Unit = {
-    val authorizer: Authorizer = EasyMock.niceMock(classOf[Authorizer])
-
-    val requestHeader = new RequestHeader(ApiKeys.API_VERSIONS, ApiKeys.API_VERSIONS.latestVersion, clientId, 0)
-
-    EasyMock.expect(forwardingManager.controllerApiVersions).andReturn(None)
-
-    val capturedResponse = expectNoThrottling()
-
-    val apiVersionsRequest = new ApiVersionsRequest.Builder()
-      .build(requestHeader.apiVersion)
-    val request = buildRequest(apiVersionsRequest,
-      fromPrivilegedListener = true, requestHeader = Option(requestHeader))
-
-    EasyMock.replay(replicaManager, clientRequestQuotaManager, forwardingManager,
-      requestChannel, authorizer, adminManager, controller)
-
-    createKafkaApis(authorizer = Some(authorizer), enableForwarding = true, isKip500Mode = true).handle(request)
-
-    val response = readResponse(apiVersionsRequest, capturedResponse)
-      .asInstanceOf[ApiVersionsResponse]
-    assertEquals(Errors.NONE, Errors.forCode(response.data().errorCode()))
-
-    val foundKip500APIs =
-      response.data().apiKeys().stream().anyMatch(apiVersion => ApiKeys.forId(apiVersion.apiKey()).isKip500OnlyApi)
-    assertTrue(foundKip500APIs)
-
-    verify(authorizer, adminManager, forwardingManager)
   }
 
   private def createTopicAuthorization(authorizer: Authorizer,

@@ -1773,12 +1773,6 @@ class KafkaApis(val requestChannel: RequestChannel,
               .setMaxVersion(ApiKeys.ENVELOPE.latestVersion())
           )
         }
-
-        // Remove API keys supported only when in KIP-500 mode
-        if (config.requiresZookeeper) {
-          apiVersionsResponse.data.apiKeys.removeIf(apiVersion => ApiKeys.forId(apiVersion.apiKey).isKip500OnlyApi)
-        }
-
         apiVersionsResponse
       }
     }
