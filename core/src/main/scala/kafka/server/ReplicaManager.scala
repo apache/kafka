@@ -764,7 +764,7 @@ class ReplicaManager(val config: KafkaConfig,
               throw new KafkaStorageException(s"Partition $topicPartition is offline")
 
             case HostedPartition.Deferred(_) =>
-              throw new KafkaStorageException(s"Partition $topicPartition is deferred")
+              throw new IllegalStateException(s"Partition $topicPartition is deferred")
 
             case HostedPartition.None => // Do nothing
           }
