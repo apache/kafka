@@ -88,6 +88,8 @@ public class SaslChannelBuilder implements ChannelBuilder, ListenerReconfigurabl
 
     private SslFactory sslFactory;
     private Map<String, ?> configs;
+    private final String sslClientAuthOverride;
+
     private KerberosShortNamer kerberosShortNamer;
     private Map<String, AuthenticateCallbackHandler> saslCallbackHandlers;
     private Map<String, Long> connectionsMaxReauthMsByMechanism;
@@ -104,6 +106,7 @@ public class SaslChannelBuilder implements ChannelBuilder, ListenerReconfigurabl
                               boolean handshakeRequestEnable,
                               CredentialCache credentialCache,
                               DelegationTokenCache tokenCache,
+                              String sslClientAuthOverride,
                               Time time,
                               LogContext logContext) {
         this.mode = mode;
@@ -117,6 +120,7 @@ public class SaslChannelBuilder implements ChannelBuilder, ListenerReconfigurabl
         this.clientSaslMechanism = clientSaslMechanism;
         this.credentialCache = credentialCache;
         this.tokenCache = tokenCache;
+        this.sslClientAuthOverride = sslClientAuthOverride;
         this.saslCallbackHandlers = new HashMap<>();
         this.connectionsMaxReauthMsByMechanism = new HashMap<>();
         this.time = time;
@@ -164,7 +168,7 @@ public class SaslChannelBuilder implements ChannelBuilder, ListenerReconfigurabl
             }
             if (this.securityProtocol == SecurityProtocol.SASL_SSL) {
                 // Disable SSL client authentication as we are using SASL authentication
-                this.sslFactory = new SslFactory(mode, "none", isInterBrokerListener);
+                this.sslFactory = new SslFactory(mode, sslClientAuthOverride, isInterBrokerListener);
                 this.sslFactory.configure(configs);
             }
         } catch (Throwable e) {

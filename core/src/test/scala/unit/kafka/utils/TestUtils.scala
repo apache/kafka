@@ -537,16 +537,32 @@ object TestUtils extends Logging {
     builder.toString
   }
 
+  /**
+   * Returns security configuration options for broker or clients
+   *
+   * @param mode Client or server mode
+   * @param securityProtocol Security protocol which indicates if SASL or SSL or both configs are included
+   * @param trustStoreFile Trust store file must be provided for SSL and SASL_SSL
+   * @param certAlias Alias of certificate in SSL key store
+   * @param certCn CN for certificate
+   * @param saslProperties SASL configs if security protocol is SASL_SSL or SASL_PLAINTEXT
+   * @param tlsProtocol TLS version
+   * @param needsClientCert If not empty, a flag which indicates if client certificates are required. By default
+   *                        client certificates are generated only if securityProtocol is SSL (not for SASL_SSL).
+   */
   def securityConfigs(mode: Mode,
                       securityProtocol: SecurityProtocol,
                       trustStoreFile: Option[File],
                       certAlias: String,
                       certCn: String,
                       saslProperties: Option[Properties],
-                      tlsProtocol: String = TestSslUtils.DEFAULT_TLS_PROTOCOL_FOR_TESTS): Properties = {
+                      tlsProtocol: String = TestSslUtils.DEFAULT_TLS_PROTOCOL_FOR_TESTS,
+                      needsClientCert: Option[Boolean] = None): Properties = {
     val props = new Properties
-    if (usesSslTransportLayer(securityProtocol))
-      props ++= sslConfigs(mode, securityProtocol == SecurityProtocol.SSL, trustStoreFile, certAlias, certCn, tlsProtocol)
+    if (usesSslTransportLayer(securityProtocol)) {
+      val addClientCert = needsClientCert.getOrElse(securityProtocol == SecurityProtocol.SSL)
+      props ++= sslConfigs(mode, addClientCert, trustStoreFile, certAlias, certCn, tlsProtocol)
+    }
 
     if (usesSaslAuthentication(securityProtocol))
       props ++= JaasTestUtils.saslConfigs(saslProperties)
