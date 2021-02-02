@@ -24,7 +24,6 @@ import org.apache.kafka.streams.KeyValue
 import org.apache.kafka.streams.kstream.{
   GlobalKTable,
   JoinWindows,
-  Named,
   Printed,
   TransformerSupplier,
   ValueTransformerSupplier,
