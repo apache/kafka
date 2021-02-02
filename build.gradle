@@ -1781,6 +1781,7 @@ project(':jmh-benchmarks') {
       exclude group: 'net.sf.jopt-simple', module: 'jopt-simple'
     }
     compile project(':clients')
+    compile project(':metadata')
     compile project(':streams')
     compile project(':core')
     compile project(':clients').sourceSets.test.output

@@ -180,10 +180,6 @@ public class SnapshotRegistry {
         last.appendNext(snapshot);
         snapshots.put(epoch, snapshot);
         log.debug("Creating snapshot {}", epoch);
-        Snapshot n = head.next();
-        while (n != head) {
-            n = n.next();
-        }
         return snapshot;
     }
 
