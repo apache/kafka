@@ -277,27 +277,23 @@ class ReplicaManager(val config: KafkaConfig,
   // Changes are never deferred when using ZooKeeper.  When true, this indicates that we should transition
   // online partitions to the deferred state if we see a metadata update for that partition.
   @volatile private var deferringMetadataChanges: Boolean = !config.requiresZookeeper
-  stateChangeLogger.info(s"Metadata changes deferred=$deferringMetadataChanges")
-
-  private def confirmNotDeferringMetadataUpdatesWithZooKeeper(): Unit = {
-    if (deferringMetadataChanges) {
-      throw new IllegalStateException("Partition metadata changes should never be deferred when using ZooKeeper")
-    }
-  }
+  stateChangeLogger.debug(s"Metadata changes deferred=$deferringMetadataChanges")
 
   def beginMetadataChangeDeferral(): Unit = {
+    if (config.requiresZookeeper) {
+      throw new IllegalStateException("Partition metadata changes can never be deferred when using ZooKeeper")
+    }
     replicaStateChangeLock synchronized {
-      if (config.requiresZookeeper) {
-        throw new IllegalStateException("Partition metadata changes can never be deferred when using ZooKeeper")
-      }
       deferringMetadataChanges = true
       stateChangeLogger.info(s"Metadata changes are now being deferred")
     }
   }
 
   def endMetadataChangeDeferral(): Unit = {
+    if (config.requiresZookeeper) {
+      throw new IllegalStateException("Partition metadata changes can never be deferred when using ZooKeeper")
+    }
     replicaStateChangeLock synchronized {
-      // TODO: implement for Raft-based metadata log messages
       deferringMetadataChanges = false
       stateChangeLogger.info(s"Metadata changes are no longer being deferred")
     }
@@ -381,7 +377,6 @@ class ReplicaManager(val config: KafkaConfig,
                    partitionStates: Map[TopicPartition, StopReplicaPartitionState]
                   ): (mutable.Map[TopicPartition, Errors], Errors) = {
     replicaStateChangeLock synchronized {
-      confirmNotDeferringMetadataUpdatesWithZooKeeper()
       stateChangeLogger.info(s"Handling StopReplica request correlationId $correlationId from controller " +
         s"$controllerId for ${partitionStates.size} partitions")
       if (stateChangeLogger.isTraceEnabled)
@@ -1315,7 +1310,6 @@ class ReplicaManager(val config: KafkaConfig,
 
   def maybeUpdateMetadataCache(correlationId: Int, updateMetadataRequest: UpdateMetadataRequest) : Seq[TopicPartition] =  {
     replicaStateChangeLock synchronized {
-      confirmNotDeferringMetadataUpdatesWithZooKeeper()
       if (updateMetadataRequest.controllerEpoch < controllerEpoch) {
         val stateControllerEpochErrorMessage = s"Received update metadata request with correlation id $correlationId " +
           s"from an old controller ${updateMetadataRequest.controllerId} with epoch ${updateMetadataRequest.controllerEpoch}. " +
@@ -1335,7 +1329,6 @@ class ReplicaManager(val config: KafkaConfig,
                              onLeadershipChange: (Iterable[Partition], Iterable[Partition]) => Unit): LeaderAndIsrResponse = {
     val startMs = time.milliseconds()
     replicaStateChangeLock synchronized {
-      confirmNotDeferringMetadataUpdatesWithZooKeeper()
       val controllerId = leaderAndIsrRequest.controllerId
       val requestPartitionStates = leaderAndIsrRequest.partitionStates.asScala
       stateChangeLogger.info(s"Handling LeaderAndIsr request correlationId $correlationId from controller " +
