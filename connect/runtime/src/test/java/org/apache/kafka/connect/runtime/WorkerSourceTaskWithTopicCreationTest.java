@@ -1096,7 +1096,27 @@ public class WorkerSourceTaskWithTopicCreationTest extends ThreadedTest {
     }
 
     @Test
-    public void testTopicCreateFailsWithExceptionWhenCreateReturnsFalse() throws Exception {
+    public void testTopicCreateFailsWithExceptionWhenCreateReturnsFalseAndTopicNotFound() throws Exception {
+        createWorkerTask();
+
+        SourceRecord record1 = new SourceRecord(PARTITION, OFFSET, TOPIC, 1, KEY_SCHEMA, KEY, RECORD_SCHEMA, RECORD);
+        SourceRecord record2 = new SourceRecord(PARTITION, OFFSET, TOPIC, 2, KEY_SCHEMA, KEY, RECORD_SCHEMA, RECORD);
+
+        expectPreliminaryCalls();
+        EasyMock.expect(admin.describeTopics(TOPIC)).andReturn(Collections.emptyMap()).times(2);
+
+        Capture<NewTopic> newTopicCapture = EasyMock.newCapture();
+        EasyMock.expect(admin.createTopic(EasyMock.capture(newTopicCapture))).andReturn(false);
+
+        PowerMock.replayAll();
+
+        Whitebox.setInternalState(workerTask, "toSend", Arrays.asList(record1, record2));
+        assertThrows(ConnectException.class, () -> Whitebox.invokeMethod(workerTask, "sendRecords"));
+        assertTrue(newTopicCapture.hasCaptured());
+    }
+
+    @Test
+    public void testTopicCreateSucceedsWhenCreateReturnsFalseAndTopicFound() throws Exception {
         createWorkerTask();
 
         SourceRecord record1 = new SourceRecord(PARTITION, OFFSET, TOPIC, 1, KEY_SCHEMA, KEY, RECORD_SCHEMA, RECORD);
@@ -1108,11 +1128,17 @@ public class WorkerSourceTaskWithTopicCreationTest extends ThreadedTest {
         Capture<NewTopic> newTopicCapture = EasyMock.newCapture();
         EasyMock.expect(admin.createTopic(EasyMock.capture(newTopicCapture))).andReturn(false);
 
+        TopicPartitionInfo topicPartitionInfo = new TopicPartitionInfo(0, null, Collections.emptyList(), Collections.emptyList());
+        TopicDescription topicDesc = new TopicDescription(TOPIC, false, Collections.singletonList(topicPartitionInfo));
+        EasyMock.expect(admin.describeTopics(TOPIC)).andReturn(Collections.singletonMap(TOPIC, topicDesc));
+
+        expectSendRecordTaskCommitRecordSucceed(false, false);
+        expectSendRecordTaskCommitRecordSucceed(false, false);
+
         PowerMock.replayAll();
 
         Whitebox.setInternalState(workerTask, "toSend", Arrays.asList(record1, record2));
-        assertThrows(ConnectException.class, () -> Whitebox.invokeMethod(workerTask, "sendRecords"));
-        assertTrue(newTopicCapture.hasCaptured());
+        Whitebox.invokeMethod(workerTask, "sendRecords");
     }
 
     private void expectPreliminaryCalls() {
