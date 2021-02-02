@@ -1816,7 +1816,7 @@ public class SaslAuthenticatorTest {
         SecurityProtocol securityProtocol = SecurityProtocol.SASL_SSL;
         configureMechanisms("PLAIN", Collections.singletonList("PLAIN"));
         String listenerPrefix = useListenerPrefix ? ListenerName.forSecurityProtocol(securityProtocol).configPrefix() : "";
-        saslServerConfigs.put(listenerPrefix  + BrokerSecurityConfigs.SSL_CLIENT_AUTH_CONFIG, configuredClientAuth.name());
+        saslServerConfigs.put(listenerPrefix + BrokerSecurityConfigs.SSL_CLIENT_AUTH_CONFIG, configuredClientAuth.name());
         saslServerConfigs.put(BrokerSecurityConfigs.PRINCIPAL_BUILDER_CLASS_CONFIG, SaslSslPrincipalBuilder.class.getName());
         server = createEchoServer(securityProtocol);
 

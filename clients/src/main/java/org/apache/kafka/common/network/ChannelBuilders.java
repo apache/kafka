@@ -118,7 +118,6 @@ public class ChannelBuilders {
                                          Time time,
                                          LogContext logContext) {
         Map<String, Object> configs = channelBuilderConfigs(config, listenerName);
-        String sslClientAuthOverride = null;
 
         ChannelBuilder channelBuilder;
         switch (securityProtocol) {
@@ -130,6 +129,7 @@ public class ChannelBuilders {
             case SASL_PLAINTEXT:
                 requireNonNullMode(mode, securityProtocol);
                 Map<String, JaasContext> jaasContexts;
+                String sslClientAuthOverride = null;
                 if (mode == Mode.SERVER) {
                     @SuppressWarnings("unchecked")
                     List<String> enabledMechanisms = (List<String>) configs.get(BrokerSecurityConfigs.SASL_ENABLED_MECHANISMS_CONFIG);
@@ -142,6 +142,11 @@ public class ChannelBuilders {
                         String configuredClientAuth = (String) configs.get(BrokerSecurityConfigs.SSL_CLIENT_AUTH_CONFIG);
                         String listenerClientAuth = (String) config.originalsWithPrefix(listenerName.configPrefix(), true)
                                 .get(BrokerSecurityConfigs.SSL_CLIENT_AUTH_CONFIG);
+
+                        // If `ssl.client.auth` is configured at the listener-level, we don't set an override and SslFactory
+                        // uses the value from `configs`. If not, we propagate `sslClientAuthOverride=NONE` to SslFactory and
+                        // it applies the override to the latest configs when it is configured or reconfigured. `Note that
+                        // ssl.client.auth` cannot be dynamically altered.
                         if (listenerClientAuth == null) {
                             sslClientAuthOverride = SslClientAuth.NONE.name().toLowerCase(Locale.ROOT);
                             if (configuredClientAuth != null && !configuredClientAuth.equalsIgnoreCase(SslClientAuth.NONE.name())) {
