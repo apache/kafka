@@ -52,7 +52,7 @@ class TransactionCoordinatorTest {
   val coordinator = new TransactionCoordinator(brokerId,
     TransactionConfig(),
     scheduler,
-    pidGenerator,
+    () => pidGenerator,
     transactionManager,
     transactionMarkerChannelManager,
     time,

@@ -324,7 +324,7 @@ class KafkaServer(
         /* start transaction coordinator, with a separate background thread scheduler for transaction expiration and log loading */
         // Hardcode Time.SYSTEM for now as some Streams tests fail otherwise, it would be good to fix the underlying issue
         transactionCoordinator = TransactionCoordinator(config, replicaManager, new KafkaScheduler(threads = 1, threadNamePrefix = "transaction-log-manager-"),
-          new ProducerIdManager(config.brokerId, zkClient), zkClient, metrics, metadataCache, Time.SYSTEM)
+          () => new ProducerIdManager(config.brokerId, zkClient), zkClient, metrics, metadataCache, Time.SYSTEM)
         transactionCoordinator.startup()
 
         /* Get the authorizer and initialize it if one is specified.*/

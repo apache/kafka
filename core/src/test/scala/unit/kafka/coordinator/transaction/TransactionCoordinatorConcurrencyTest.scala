@@ -98,7 +98,7 @@ class TransactionCoordinatorConcurrencyTest extends AbstractCoordinatorConcurren
     transactionCoordinator = new TransactionCoordinator(brokerId = 0,
       txnConfig,
       scheduler,
-      pidGenerator,
+      () => pidGenerator,
       txnStateManager,
       txnMarkerChannelManager,
       time,

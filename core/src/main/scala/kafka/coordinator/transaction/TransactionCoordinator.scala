@@ -35,7 +35,7 @@ object TransactionCoordinator {
   def apply(config: KafkaConfig,
             replicaManager: ReplicaManager,
             scheduler: Scheduler,
-            producerIdGenerator: ProducerIdGenerator,
+            producerIdGeneratorFactory: () => ProducerIdGenerator,
             zkClient: KafkaZkClient,
             metrics: Metrics,
             metadataCache: MetadataCache,
@@ -59,7 +59,7 @@ object TransactionCoordinator {
     val txnMarkerChannelManager = TransactionMarkerChannelManager(config, metrics, metadataCache, txnStateManager,
       time, logContext)
 
-    new TransactionCoordinator(config.brokerId, txnConfig, scheduler, producerIdGenerator, txnStateManager, txnMarkerChannelManager,
+    new TransactionCoordinator(config.brokerId, txnConfig, scheduler, producerIdGeneratorFactory, txnStateManager, txnMarkerChannelManager,
       time, logContext)
   }
 
@@ -83,7 +83,7 @@ object TransactionCoordinator {
 class TransactionCoordinator(brokerId: Int,
                              txnConfig: TransactionConfig,
                              scheduler: Scheduler,
-                             producerIdGenerator: ProducerIdGenerator,
+                             producerIdGeneratorFactory: () => ProducerIdGenerator,
                              txnManager: TransactionStateManager,
                              txnMarkerChannelManager: TransactionMarkerChannelManager,
                              time: Time,
@@ -99,6 +99,8 @@ class TransactionCoordinator(brokerId: Int,
 
   /* Active flag of the coordinator */
   private val isActive = new AtomicBoolean(false)
+
+  val producerIdGenerator = producerIdGeneratorFactory()
 
   def handleInitProducerId(transactionalId: String,
                            transactionTimeoutMs: Int,
