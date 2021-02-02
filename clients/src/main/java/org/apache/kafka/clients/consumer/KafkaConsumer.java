@@ -1236,7 +1236,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
                 }
 
                 final FetchedRecords<K, V> records = pollForFetches(timer);
-                if (!records.isEmpty()) {
+                if (!records.records().isEmpty()) {
                     // before returning the fetched records, we can send off the next round of fetches
                     // and avoid block waiting for their responses to enable pipelining while the user
                     // is handling the fetched records.

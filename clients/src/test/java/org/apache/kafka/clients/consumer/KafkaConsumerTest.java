@@ -2164,6 +2164,46 @@ public class KafkaConsumerTest {
         consumer.close(Duration.ZERO);
     }
 
+    @Test
+    public void testPollTimeoutWithNoRecords() throws Exception {
+        final Time time = new MockTime();
+        final SubscriptionState subscription = new SubscriptionState(new LogContext(),
+                OffsetResetStrategy.EARLIEST);
+        final ConsumerMetadata metadata = createMetadata(subscription);
+        final MockClient client = new MockClient(time, metadata);
+
+        initMetadata(client, singletonMap(topic, 1));
+        final ConsumerPartitionAssignor assignor = new RoundRobinAssignor();
+
+        final KafkaConsumer<String, String> consumer =
+                newConsumer(time, client, subscription, metadata, assignor, true, groupInstanceId);
+
+        final FetchInfo fetchInfo = new FetchInfo(1L, 99L, 50L, 0);
+        client.prepareResponse(fetchResponse(singletonMap(tp0, fetchInfo)));
+
+        final ExecutorService executor = Executors.newSingleThreadExecutor();
+        try {
+            consumer.assign(singleton(tp0));
+            consumer.seek(tp0, 50L);
+
+            final Future<ConsumerRecords<String, String>> future = executor.submit(() ->
+                    consumer.poll(Duration.ofSeconds(30)));
+            TestUtils.waitForCondition(() -> !client.hasPendingResponses(), "Request not processed");
+            assertFalse(future.isDone());
+
+            TestUtils.waitForCondition(client::hasInFlightRequests, "Fetch request not sent");
+
+            final FetchInfo newFetchInfo = new FetchInfo(1L, 99L, 50L, 5);
+            client.respond(fetchResponse(singletonMap(tp0, newFetchInfo)));
+            final ConsumerRecords<String, String> records = future.get(10, TimeUnit.SECONDS);
+            assertEquals(5, records.count());
+        } finally {
+            executor.shutdownNow();
+            assertTrue(executor.awaitTermination(10, TimeUnit.SECONDS));
+            consumer.close(Duration.ZERO);
+        }
+    }
+
     private KafkaConsumer<String, String> consumerWithPendingAuthenticationError() {
         Time time = new MockTime();
         SubscriptionState subscription = new SubscriptionState(new LogContext(), OffsetResetStrategy.EARLIEST);
