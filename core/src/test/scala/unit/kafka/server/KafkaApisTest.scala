@@ -3355,7 +3355,60 @@ class KafkaApisTest {
     val bazTopic = response.data.topics.asScala.find(_.name == tp3.topic).get
     val bazPartition = bazTopic.partitions.asScala.find(_.partitionIndex == tp3.partition).get
     assertEquals(Errors.UNKNOWN_TOPIC_OR_PARTITION, Errors.forCode(bazPartition.errorCode))
+  }
 
+  @Test
+  def testDescribeTransactions(): Unit = {
+    val authorizer: Authorizer = EasyMock.niceMock(classOf[Authorizer])
+    val data = new DescribeTransactionsRequestData()
+      .setTransactionalIds(List("foo", "bar").asJava)
+    val describeTransactionsRequest = new DescribeTransactionsRequest.Builder(data).build()
+    val request = buildRequest(describeTransactionsRequest)
+    val capturedResponse = expectNoThrottling()
+
+    def buildExpectedActions(transactionalId: String): util.List[Action] = {
+      val pattern = new ResourcePattern(ResourceType.TRANSACTIONAL_ID, transactionalId, PatternType.LITERAL)
+      val action = new Action(AclOperation.DESCRIBE, pattern, 1, true, true)
+      Collections.singletonList(action)
+    }
+
+    EasyMock.expect(txnCoordinator.handleDescribeTransactions("foo"))
+      .andReturn(new DescribeTransactionsResponseData.TransactionState()
+        .setErrorCode(Errors.NONE.code)
+        .setTransactionalId("foo")
+        .setProducerId(12345L)
+        .setProducerEpoch(15)
+        .setTransactionStartTimeMs(time.milliseconds())
+        .setTransactionState("Ongoing")
+        .setTopicPartitions(List.empty.asJava)
+        .setTransactionTimeoutMs(10000))
+
+    EasyMock.expect(authorizer.authorize(anyObject[RequestContext], EasyMock.eq(buildExpectedActions("foo"))))
+      .andReturn(Seq(AuthorizationResult.ALLOWED).asJava)
+      .once()
+
+    EasyMock.expect(authorizer.authorize(anyObject[RequestContext], EasyMock.eq(buildExpectedActions("bar"))))
+      .andReturn(Seq(AuthorizationResult.DENIED).asJava)
+      .once()
+
+    EasyMock.replay(replicaManager, clientRequestQuotaManager, requestChannel, txnCoordinator, authorizer)
+    createKafkaApis(authorizer = Some(authorizer)).handleDescribeTransactionsRequest(request)
+
+    val response = readResponse(describeTransactionsRequest, capturedResponse)
+      .asInstanceOf[DescribeTransactionsResponse]
+    assertEquals(2, response.data.transactionStates.size())
+
+    val fooState = response.data.transactionStates.asScala.find(_.transactionalId == "foo").get
+    assertEquals(Errors.NONE.code, fooState.errorCode)
+    assertEquals(12345L, fooState.producerId)
+    assertEquals(15, fooState.producerEpoch)
+    assertEquals(time.milliseconds(), fooState.transactionStartTimeMs)
+    assertEquals("Ongoing", fooState.transactionState)
+    assertEquals(10000, fooState.transactionTimeoutMs)
+    assertEquals(List.empty.asJava, fooState.topicPartitions)
+
+    val barState = response.data.transactionStates.asScala.find(_.transactionalId == "bar").get
+    assertEquals(Errors.TRANSACTIONAL_ID_AUTHORIZATION_FAILED.code, barState.errorCode)
   }
 
   private def createMockRequest(): RequestChannel.Request = {
