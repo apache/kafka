@@ -669,7 +669,10 @@ class DynamicLogConfig(logManager: LogManager, server: KafkaBroker) extends Brok
     updateLogsConfig(newBrokerDefaults.asScala)
 
     if (logManager.currentDefaultConfig.uncleanLeaderElectionEnable && !origUncleanLeaderElectionEnable) {
-      server.zkBasedKafkaController.foreach(_.enableDefaultUncleanLeaderElection())
+      server match {
+        case kafkaServer: KafkaServer => kafkaServer.kafkaController.enableDefaultUncleanLeaderElection()
+        case _ =>
+      }
     }
   }
 }
@@ -936,7 +939,10 @@ class DynamicListenerConfig(server: KafkaBroker) extends BrokerReconfigurable wi
     if (listenersAdded.nonEmpty)
       server.socketServer.addListeners(listenersAdded)
 
-    server.zkBasedKafkaController.foreach(_.updateBrokerInfo(server.createBrokerInfo))
+    server match {
+      case kafkaServer: KafkaServer => kafkaServer.kafkaController.updateBrokerInfo(kafkaServer.createBrokerInfo)
+      case _ =>
+    }
   }
 
   private def listenersToMap(listeners: Seq[EndPoint]): Map[ListenerName, EndPoint] =

@@ -442,11 +442,7 @@ class KafkaServer(
     zkClient.getClusterId.getOrElse(zkClient.createOrGetClusterId(CoreUtils.generateUuidAsBase64()))
   }
 
-  override def zkBasedKafkaController: Option[KafkaController] = {
-    Some(kafkaController)
-  }
-
-  override def createBrokerInfo: BrokerInfo = {
+  def createBrokerInfo: BrokerInfo = {
     val endPoints = config.advertisedListeners.map(e => s"${e.host}:${e.port}")
     zkClient.getAllBrokersInCluster.filter(_.id != config.brokerId).foreach { broker =>
       val commonEndPoints = broker.endPoints.map(e => s"${e.host}:${e.port}").intersect(endPoints)

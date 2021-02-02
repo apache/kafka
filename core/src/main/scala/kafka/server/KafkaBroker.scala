@@ -20,12 +20,10 @@ package kafka.server
 import java.util
 
 import com.yammer.metrics.{core => yammer}
-import kafka.controller.KafkaController
 import kafka.log.LogManager
 import kafka.metrics.{KafkaMetricsGroup, KafkaYammerMetrics, LinuxIoMetricsCollector}
 import kafka.network.SocketServer
 import kafka.utils.{KafkaScheduler, Logging}
-import kafka.zk.BrokerInfo
 import org.apache.kafka.clients.CommonClientConfigs
 import org.apache.kafka.common.ClusterResource
 import org.apache.kafka.common.internals.ClusterResourceListeners
@@ -82,11 +80,6 @@ trait KafkaBroker extends Logging with KafkaMetricsGroup {
   def quotaManagers: QuotaFactory.QuotaManagers
   def replicaManager: ReplicaManager
   def socketServer: SocketServer
-
-  // must override the following in KafkaServer since they only apply there
-  def zkBasedKafkaController: Option[KafkaController] = None
-  def createBrokerInfo: BrokerInfo = throw new UnsupportedOperationException("Unsupported in with a Raft-based meadata quorum")
-
 
   newKafkaServerGauge("BrokerState", () => brokerState.currentState)
   newKafkaServerGauge("ClusterId", () => clusterId)
