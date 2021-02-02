@@ -61,6 +61,10 @@ public class ApiKeysTest {
         // Newer protocol apis include throttle time ms even for cluster actions
         Set<ApiKeys> clusterActionsWithThrottleTimeMs = EnumSet.of(ApiKeys.ALTER_ISR);
         for (ApiKeys apiKey: ApiKeys.values()) {
+            // Disable broker-to-controller API throttling test
+            if (apiKey.isControllerOnlyApi) {
+                continue;
+            }
             Schema responseSchema = apiKey.messageType.responseSchemas()[apiKey.latestVersion()];
             BoundField throttleTimeField = responseSchema.get("throttle_time_ms");
             if ((apiKey.clusterAction && !clusterActionsWithThrottleTimeMs.contains(apiKey))

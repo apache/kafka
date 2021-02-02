@@ -14,17 +14,21 @@
 // limitations under the License.
 
 {
-  "apiKey": 64,
-  "type": "response",
-  "name": "DecommissionBrokerResponse",
+  "apiKey": 63,
+  "type": "request",
+  "name": "BrokerHeartbeatRequest",
   "validVersions": "0",
   "flexibleVersions": "0+",
   "fields": [
-    { "name": "ThrottleTimeMs", "type": "int32", "versions": "0+",
-      "about": "Duration in milliseconds for which the request was throttled due to a quota violation, or zero if the request did not violate any quota." },
-    { "name": "ErrorCode", "type": "int16", "versions": "0+",
-      "about": "The error code, or 0 if there was no error." },
-    { "name": "ErrorMessage", "type": "string", "versions": "0+", "nullableVersions": "0+",
-      "about": "The top-level error message, or `null` if there was no top-level error." }
+    { "name": "BrokerId", "type": "int32", "versions": "0+",
+      "about": "The broker ID." },
+    { "name": "BrokerEpoch", "type": "int64", "versions": "0+", "default": "-1",
+      "about": "The broker epoch." },
+    { "name": "CurrentMetadataOffset", "type": "int64", "versions": "0+",
+      "about": "The highest metadata offset which the broker has reached." },
+    { "name": "WantFence", "type": "bool", "versions": "0+",
+      "about": "True if the broker wants to be fenced, false otherwise." },
+    { "name": "WantShutDown", "type": "bool", "versions": "0+",
+      "about": "True if the broker wants to be shut down, false otherwise." }
   ]
 }

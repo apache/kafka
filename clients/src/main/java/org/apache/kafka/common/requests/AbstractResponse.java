@@ -235,6 +235,10 @@ public abstract class AbstractResponse implements AbstractRequestResponse {
                 return DescribeClusterResponse.parse(responseBuffer, version);
             case DESCRIBE_PRODUCERS:
                 return DescribeProducersResponse.parse(responseBuffer, version);
+            case BROKER_REGISTRATION:
+                return BrokerRegistrationResponse.parse(responseBuffer, version);
+            case BROKER_HEARTBEAT:
+                return BrokerHeartbeatResponse.parse(responseBuffer, version);
             case DECOMMISSION_BROKER:
                 return DecommissionBrokerResponse.parse(responseBuffer, version);
             default:
