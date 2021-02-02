@@ -60,6 +60,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutionException;
+import java.util.concurrent.Executor;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
@@ -86,6 +87,7 @@ class WorkerSourceTask extends WorkerTask {
     private final TopicAdmin admin;
     private final CloseableOffsetStorageReader offsetReader;
     private final OffsetStorageWriter offsetWriter;
+    private final Executor closeExecutor;
     private final SourceTaskMetricsGroup sourceTaskMetricsGroup;
     private final AtomicReference<Exception> producerSendException;
     private final boolean isTopicTrackingEnabled;
@@ -123,7 +125,8 @@ class WorkerSourceTask extends WorkerTask {
                             ClassLoader loader,
                             Time time,
                             RetryWithToleranceOperator retryWithToleranceOperator,
-                            StatusBackingStore statusBackingStore) {
+                            StatusBackingStore statusBackingStore,
+                            Executor closeExecutor) {
 
         super(id, statusListener, initialState, loader, connectMetrics,
                 retryWithToleranceOperator, time, statusBackingStore);
@@ -139,6 +142,7 @@ class WorkerSourceTask extends WorkerTask {
         this.admin = admin;
         this.offsetReader = offsetReader;
         this.offsetWriter = offsetWriter;
+        this.closeExecutor = closeExecutor;
 
         this.toSend = null;
         this.lastSendFailed = false;
@@ -172,7 +176,7 @@ class WorkerSourceTask extends WorkerTask {
             }
         }
 
-        closeProducer(30);
+        closeProducer(Duration.ofSeconds(30));
 
         if (admin != null) {
             try {
@@ -198,8 +202,14 @@ class WorkerSourceTask extends WorkerTask {
     public void cancel() {
         super.cancel();
         offsetReader.close();
-        // Run on a separate thread to avoid potentially blocking the herder thread
-        new Thread(() -> closeProducer(0)).start();
+        // We proactively close the producer here as the main work thread for the task may
+        // be blocked indefinitely in a call to Producer::send if automatic topic creation is
+        // not enabled on either the connector or the Kafka cluster. Closing the producer should
+        // unblock it in that case and allow shutdown to proceed normally.
+        // With a duration of 0, the producer's own shutdown logic should be fairly quick,
+        // but closing user-pluggable classes like interceptors may lag indefinitely. So, we
+        // call close on a separate thread in order to avoid blocking the herder's tick thread.
+        closeExecutor.execute(() -> closeProducer(Duration.ZERO));
     }
 
     @Override
@@ -257,10 +267,10 @@ class WorkerSourceTask extends WorkerTask {
         }
     }
 
-    private void closeProducer(long timeout) {
+    private void closeProducer(Duration duration) {
         if (producer != null) {
             try {
-                producer.close(Duration.ofSeconds(timeout));
+                producer.close(duration);
             } catch (Throwable t) {
                 log.warn("Could not close producer", t);
             }

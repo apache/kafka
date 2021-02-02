@@ -71,8 +71,8 @@ public class ConnectWorkerIntegrationTest {
 
     private EmbeddedConnectCluster.Builder connectBuilder;
     private EmbeddedConnectCluster connect;
-    Map<String, String> workerProps = new HashMap<>();
-    Properties brokerProps = new Properties();
+    Map<String, String> workerProps;
+    Properties brokerProps;
 
     @Rule
     public TestRule watcher = ConnectIntegrationTestUtils.newTestWatcher(log);
@@ -80,10 +80,12 @@ public class ConnectWorkerIntegrationTest {
     @Before
     public void setup() {
         // setup Connect worker properties
+        workerProps = new HashMap<>();
         workerProps.put(OFFSET_COMMIT_INTERVAL_MS_CONFIG, String.valueOf(OFFSET_COMMIT_INTERVAL_MS));
         workerProps.put(CONNECTOR_CLIENT_POLICY_CLASS_CONFIG, "All");
 
         // setup Kafka broker properties
+        brokerProps = new Properties();
         brokerProps.put("auto.create.topics.enable", String.valueOf(false));
 
         // build a Connect cluster backed by Kafka and Zk
@@ -290,8 +292,11 @@ public class ConnectWorkerIntegrationTest {
     }
 
     @Test
-    public void testSourceTaskOnNonExistentTopic() throws Exception {
+    public void testSourceTaskNotBlockedOnShutdownWithNonExistentTopic() throws Exception {
+        // Ensure that automatic topic creation is disabled on the broker
+        brokerProps.put("auto.create.topics.enable", "false");
         connect = connectBuilder
+            .brokerProps(brokerProps)
             .numWorkers(1)
             .numBrokers(1)
             .build();
@@ -311,6 +316,7 @@ public class ConnectWorkerIntegrationTest {
             NUM_TASKS, "Connector tasks did not start in time");
         connector.awaitRecords(TimeUnit.MINUTES.toMillis(1));
 
+        // After we delete the connector, it and each of its tasks should  be stopped by the framework
         StartAndStopLatch stopCounter = connector.expectedStops(1);
         connect.deleteConnector(CONNECTOR_NAME);
 

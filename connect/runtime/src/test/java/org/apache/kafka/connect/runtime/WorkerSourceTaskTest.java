@@ -197,7 +197,7 @@ public class WorkerSourceTaskTest extends ThreadedTest {
         workerTask = new WorkerSourceTask(taskId, sourceTask, statusListener, initialState, keyConverter, valueConverter, headerConverter,
                 transformationChain, producer, admin, null,
                 offsetReader, offsetWriter, config, clusterConfigState, metrics, plugins.delegatingLoader(), Time.SYSTEM,
-                RetryWithToleranceOperatorTest.NOOP_OPERATOR, statusBackingStore);
+                RetryWithToleranceOperatorTest.NOOP_OPERATOR, statusBackingStore, Runnable::run);
     }
 
     @Test
@@ -704,24 +704,19 @@ public class WorkerSourceTaskTest extends ThreadedTest {
     }
 
     @Test
-    public void testCancel() throws Exception {
+    public void testCancel() {
         createWorkerTask();
 
         offsetReader.close();
         PowerMock.expectLastCall();
 
-        CountDownLatch producerClosed = new CountDownLatch(1);
         producer.close(Duration.ZERO);
-        PowerMock.expectLastCall().andAnswer(() -> {
-            producerClosed.countDown();
-            return null;
-        }).anyTimes();
+        PowerMock.expectLastCall();
 
         PowerMock.replayAll();
 
         workerTask.cancel();
 
-        assertTrue("Producer was not closed after task was cancelled", producerClosed.await(5, TimeUnit.SECONDS));
         PowerMock.verifyAll();
     }
 
