@@ -384,6 +384,7 @@ public class StreamTaskTest {
         // because we mocked the `resetter` positions don't change
         assertThat(consumer.position(partition1), equalTo(5L));
         assertThat(consumer.position(partition2), equalTo(15L));
+        EasyMock.verify(resettter);
     }
 
     @Test
