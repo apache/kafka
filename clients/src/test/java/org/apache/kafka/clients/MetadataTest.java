@@ -53,6 +53,7 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicReference;
 
+import static org.apache.kafka.common.record.RecordBatch.NO_PARTITION_LEADER_EPOCH;
 import static org.apache.kafka.test.TestUtils.assertOptional;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -202,8 +203,8 @@ public class MetadataTest {
             assertFalse(response.hasReliableLeaderEpochs());
             metadata.updateWithCurrentRequestVersion(response, false, 100);
             assertTrue(metadata.partitionMetadataIfCurrent(tp).isPresent());
-            MetadataResponse.PartitionMetadata responseMetadata = this.metadata.partitionMetadataIfCurrent(tp).get();
-            assertEquals(Optional.empty(), responseMetadata.leaderEpoch);
+            MetadataResponsePartition responseMetadata = this.metadata.partitionMetadataIfCurrent(tp).get();
+            assertEquals(NO_PARTITION_LEADER_EPOCH, responseMetadata.leaderEpoch());
         }
 
         for (short version = 9; version <= ApiKeys.METADATA.latestVersion(); version++) {
@@ -212,8 +213,8 @@ public class MetadataTest {
             assertTrue(response.hasReliableLeaderEpochs());
             metadata.updateWithCurrentRequestVersion(response, false, 100);
             assertTrue(metadata.partitionMetadataIfCurrent(tp).isPresent());
-            MetadataResponse.PartitionMetadata responseMetadata = metadata.partitionMetadataIfCurrent(tp).get();
-            assertEquals(Optional.of(10), responseMetadata.leaderEpoch);
+            MetadataResponsePartition responseMetadata = metadata.partitionMetadataIfCurrent(tp).get();
+            assertEquals(10, responseMetadata.leaderEpoch());
         }
     }
 
@@ -261,10 +262,10 @@ public class MetadataTest {
         assertEquals(Optional.of(10), metadata.lastSeenLeaderEpoch(tp));
 
         assertTrue(metadata.partitionMetadataIfCurrent(tp).isPresent());
-        MetadataResponse.PartitionMetadata responseMetadata = this.metadata.partitionMetadataIfCurrent(tp).get();
+        MetadataResponsePartition responseMetadata = this.metadata.partitionMetadataIfCurrent(tp).get();
 
-        assertEquals(Arrays.asList(1, 2, 3), responseMetadata.inSyncReplicaIds);
-        assertEquals(Optional.of(10), responseMetadata.leaderEpoch);
+        assertEquals(Arrays.asList(1, 2, 3), responseMetadata.isrNodes());
+        assertEquals(10, responseMetadata.leaderEpoch());
     }
 
     @Test
@@ -392,8 +393,15 @@ public class MetadataTest {
         {
             MetadataResponse metadataResponse = RequestTestUtils.metadataUpdateWith("dummy", 1, Collections.emptyMap(), partitionCounts, _tp -> 99,
                 (error, partition, leader, leaderEpoch, replicas, isr, offlineReplicas) ->
-                        new MetadataResponse.PartitionMetadata(error, partition, leader,
-                            leaderEpoch, replicas, Collections.emptyList(), offlineReplicas), ApiKeys.METADATA.latestVersion());
+                    new MetadataResponsePartition().
+                        setErrorCode(error.code())
+                        .setPartitionIndex(partition.partition())
+                        .setLeaderId(leader)
+                        .setLeaderEpoch(leaderEpoch)
+                        .setReplicaNodes(replicas)
+                        .setIsrNodes(Collections.emptyList())
+                        .setOfflineReplicas(offlineReplicas)
+                        .setLeaderEpoch(leaderEpoch), ApiKeys.METADATA.latestVersion());
             metadata.updateWithCurrentRequestVersion(metadataResponse, false, 20L);
             assertEquals(metadata.fetch().partition(tp).inSyncReplicas().length, 1);
             assertEquals(metadata.lastSeenLeaderEpoch(tp).get().longValue(), 100);
@@ -403,8 +411,15 @@ public class MetadataTest {
         {
             MetadataResponse metadataResponse = RequestTestUtils.metadataUpdateWith("dummy", 1, Collections.emptyMap(), partitionCounts, _tp -> 100,
                 (error, partition, leader, leaderEpoch, replicas, isr, offlineReplicas) ->
-                        new MetadataResponse.PartitionMetadata(error, partition, leader,
-                            leaderEpoch, replicas, Collections.emptyList(), offlineReplicas), ApiKeys.METADATA.latestVersion());
+                    new MetadataResponsePartition().
+                        setErrorCode(error.code())
+                        .setPartitionIndex(partition.partition())
+                        .setLeaderId(leader)
+                        .setLeaderEpoch(leaderEpoch)
+                        .setReplicaNodes(replicas)
+                        .setIsrNodes(Collections.emptyList())
+                        .setOfflineReplicas(offlineReplicas)
+                        .setLeaderEpoch(leaderEpoch), ApiKeys.METADATA.latestVersion());
             metadata.updateWithCurrentRequestVersion(metadataResponse, false, 20L);
             assertEquals(metadata.fetch().partition(tp).inSyncReplicas().length, 0);
             assertEquals(metadata.lastSeenLeaderEpoch(tp).get().longValue(), 100);
@@ -482,13 +497,13 @@ public class MetadataTest {
 
         // still works
         assertTrue(metadata.partitionMetadataIfCurrent(tp).isPresent());
-        assertEquals(0, metadata.partitionMetadataIfCurrent(tp).get().partition());
-        assertEquals(Optional.of(0), metadata.partitionMetadataIfCurrent(tp).get().leaderId);
+        assertEquals(0, metadata.partitionMetadataIfCurrent(tp).get().partitionIndex());
+        assertEquals(0, metadata.partitionMetadataIfCurrent(tp).get().leaderId());
 
         // Since epoch was null, this shouldn't update it
         metadata.updateLastSeenEpochIfNewer(tp, 10);
         assertTrue(metadata.partitionMetadataIfCurrent(tp).isPresent());
-        assertFalse(metadata.partitionMetadataIfCurrent(tp).get().leaderEpoch.isPresent());
+        assertEquals(NO_PARTITION_LEADER_EPOCH, metadata.partitionMetadataIfCurrent(tp).get().leaderEpoch());
     }
 
     @Test
@@ -710,9 +725,15 @@ public class MetadataTest {
 
         MetadataResponse metadataResponse = RequestTestUtils.metadataUpdateWith("dummy", 2, Collections.emptyMap(), partitionCounts, _tp -> 99,
             (error, partition, leader, leaderEpoch, replicas, isr, offlineReplicas) ->
-                new MetadataResponse.PartitionMetadata(error, partition, Optional.of(node0.id()), leaderEpoch,
-                    Collections.singletonList(node0.id()), Collections.emptyList(),
-                        Collections.singletonList(node1.id())), ApiKeys.METADATA.latestVersion());
+            new MetadataResponsePartition().
+                setErrorCode(error.code())
+                .setPartitionIndex(partition.partition())
+                .setLeaderId(node0.id())
+                .setLeaderEpoch(leaderEpoch)
+                .setReplicaNodes(Collections.singletonList(node0.id()))
+                .setIsrNodes(Collections.emptyList())
+                .setOfflineReplicas(Collections.singletonList(node1.id()))
+                .setLeaderEpoch(leaderEpoch), ApiKeys.METADATA.latestVersion());
         metadata.updateWithCurrentRequestVersion(emptyMetadataResponse(), false, 0L);
         metadata.updateWithCurrentRequestVersion(metadataResponse, false, 10L);
 

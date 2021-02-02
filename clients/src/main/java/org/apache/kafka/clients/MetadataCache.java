@@ -21,11 +21,10 @@ import org.apache.kafka.common.ClusterResource;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.message.MetadataResponseData;
 import org.apache.kafka.common.requests.MetadataResponse;
-import org.apache.kafka.common.requests.MetadataResponse.PartitionMetadata;
 
 import java.net.InetSocketAddress;
-import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -48,23 +47,23 @@ public class MetadataCache {
     private final Set<String> invalidTopics;
     private final Set<String> internalTopics;
     private final Node controller;
-    private final Map<TopicPartition, PartitionMetadata> metadataByPartition;
+    private final Map<TopicPartition, MetadataResponseData.MetadataResponsePartition> metadataByPartition;
 
     private Cluster clusterInstance;
 
     MetadataCache(String clusterId,
                   Map<Integer, Node> nodes,
-                  Collection<PartitionMetadata> partitions,
+                  Map<TopicPartition, MetadataResponseData.MetadataResponsePartition> metadataByPartition,
                   Set<String> unauthorizedTopics,
                   Set<String> invalidTopics,
                   Set<String> internalTopics,
                   Node controller) {
-        this(clusterId, nodes, partitions, unauthorizedTopics, invalidTopics, internalTopics, controller, null);
+        this(clusterId, nodes, metadataByPartition, unauthorizedTopics, invalidTopics, internalTopics, controller, null);
     }
 
     private MetadataCache(String clusterId,
                           Map<Integer, Node> nodes,
-                          Collection<PartitionMetadata> partitions,
+                          Map<TopicPartition, MetadataResponseData.MetadataResponsePartition> metadataByPartition,
                           Set<String> unauthorizedTopics,
                           Set<String> invalidTopics,
                           Set<String> internalTopics,
@@ -77,10 +76,7 @@ public class MetadataCache {
         this.internalTopics = internalTopics;
         this.controller = controller;
 
-        this.metadataByPartition = new HashMap<>(partitions.size());
-        for (PartitionMetadata p : partitions) {
-            this.metadataByPartition.put(p.topicPartition, p);
-        }
+        this.metadataByPartition = metadataByPartition;
 
         if (clusterInstance == null) {
             computeClusterView();
@@ -89,7 +85,7 @@ public class MetadataCache {
         }
     }
 
-    Optional<PartitionMetadata> partitionMetadata(TopicPartition topicPartition) {
+    Optional<MetadataResponseData.MetadataResponsePartition> partitionMetadata(TopicPartition topicPartition) {
         return Optional.ofNullable(metadataByPartition.get(topicPartition));
     }
 
@@ -125,7 +121,7 @@ public class MetadataCache {
      */
     MetadataCache mergeWith(String newClusterId,
                             Map<Integer, Node> newNodes,
-                            Collection<PartitionMetadata> addPartitions,
+                            Map<TopicPartition, MetadataResponseData.MetadataResponsePartition> addPartitions,
                             Set<String> addUnauthorizedTopics,
                             Set<String> addInvalidTopics,
                             Set<String> addInternalTopics,
@@ -134,11 +130,11 @@ public class MetadataCache {
 
         Predicate<String> shouldRetainTopic = topic -> retainTopic.test(topic, internalTopics.contains(topic));
 
-        Map<TopicPartition, PartitionMetadata> newMetadataByPartition = new HashMap<>(addPartitions.size());
-        for (PartitionMetadata partition : addPartitions) {
-            newMetadataByPartition.put(partition.topicPartition, partition);
+        Map<TopicPartition, MetadataResponseData.MetadataResponsePartition> newMetadataByPartition = new HashMap<>(addPartitions.size());
+        for (Map.Entry<TopicPartition, MetadataResponseData.MetadataResponsePartition> entry : addPartitions.entrySet()) {
+            newMetadataByPartition.put(entry.getKey(), entry.getValue());
         }
-        for (Map.Entry<TopicPartition, PartitionMetadata> entry : metadataByPartition.entrySet()) {
+        for (Map.Entry<TopicPartition, MetadataResponseData.MetadataResponsePartition> entry : metadataByPartition.entrySet()) {
             if (shouldRetainTopic.test(entry.getKey().topic())) {
                 newMetadataByPartition.putIfAbsent(entry.getKey(), entry.getValue());
             }
@@ -148,7 +144,7 @@ public class MetadataCache {
         Set<String> newInvalidTopics = fillSet(addInvalidTopics, invalidTopics, shouldRetainTopic);
         Set<String> newInternalTopics = fillSet(addInternalTopics, internalTopics, shouldRetainTopic);
 
-        return new MetadataCache(newClusterId, newNodes, newMetadataByPartition.values(), newUnauthorizedTopics,
+        return new MetadataCache(newClusterId, newNodes, newMetadataByPartition, newUnauthorizedTopics,
                 newInvalidTopics, newInternalTopics, newController);
     }
 
@@ -172,9 +168,9 @@ public class MetadataCache {
     }
 
     private void computeClusterView() {
-        List<PartitionInfo> partitionInfos = metadataByPartition.values()
+        List<PartitionInfo> partitionInfos = metadataByPartition.entrySet()
                 .stream()
-                .map(metadata -> MetadataResponse.toPartitionInfo(metadata, nodes))
+                .map(metadata -> MetadataResponse.toPartitionInfo(metadata.getKey().topic(), metadata.getValue(), nodes))
                 .collect(Collectors.toList());
         this.clusterInstance = new Cluster(clusterId, nodes.values(), partitionInfos, unauthorizedTopics,
                 invalidTopics, internalTopics, controller);
@@ -187,13 +183,13 @@ public class MetadataCache {
             nodes.put(nodeId, new Node(nodeId, address.getHostString(), address.getPort()));
             nodeId--;
         }
-        return new MetadataCache(null, nodes, Collections.emptyList(),
+        return new MetadataCache(null, nodes, Collections.emptyMap(),
                 Collections.emptySet(), Collections.emptySet(), Collections.emptySet(),
                 null, Cluster.bootstrap(addresses));
     }
 
     static MetadataCache empty() {
-        return new MetadataCache(null, Collections.emptyMap(), Collections.emptyList(),
+        return new MetadataCache(null, Collections.emptyMap(), Collections.emptyMap(),
                 Collections.emptySet(), Collections.emptySet(), Collections.emptySet(), null, Cluster.empty());
     }
 

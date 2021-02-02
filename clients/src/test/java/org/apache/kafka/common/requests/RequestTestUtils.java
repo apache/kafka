@@ -31,8 +31,10 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 import java.util.function.Function;
+
+import static org.apache.kafka.common.record.RecordBatch.NO_PARTITION_LEADER_EPOCH;
+import static org.apache.kafka.common.requests.MetadataResponse.NO_LEADER_ID;
 
 public class RequestTestUtils {
 
@@ -84,17 +86,7 @@ public class RequestTestUtils {
                     .setName(topicMetadata.topic())
                     .setIsInternal(topicMetadata.isInternal())
                     .setTopicAuthorizedOperations(topicMetadata.authorizedOperations());
-
-            for (MetadataResponse.PartitionMetadata partitionMetadata : topicMetadata.partitionMetadata()) {
-                metadataResponseTopic.partitions().add(new MetadataResponseData.MetadataResponsePartition()
-                        .setErrorCode(partitionMetadata.error.code())
-                        .setPartitionIndex(partitionMetadata.partition())
-                        .setLeaderId(partitionMetadata.leaderId.orElse(MetadataResponse.NO_LEADER_ID))
-                        .setLeaderEpoch(partitionMetadata.leaderEpoch.orElse(RecordBatch.NO_PARTITION_LEADER_EPOCH))
-                        .setReplicaNodes(partitionMetadata.replicaIds)
-                        .setIsrNodes(partitionMetadata.inSyncReplicaIds)
-                        .setOfflineReplicas(partitionMetadata.offlineReplicaIds));
-            }
+            metadataResponseTopic.setPartitions(topicMetadata.partitionMetadata());
             topics.add(metadataResponseTopic);
         });
         return MetadataResponse.prepareResponse(responseVersion, throttleTimeMs, brokers, clusterId, controllerId,
@@ -109,14 +101,14 @@ public class RequestTestUtils {
                                                       final Map<String, Integer> topicPartitionCounts,
                                                       final Function<TopicPartition, Integer> epochSupplier) {
         return metadataUpdateWith("kafka-cluster", numNodes, Collections.emptyMap(),
-                topicPartitionCounts, epochSupplier, MetadataResponse.PartitionMetadata::new, ApiKeys.METADATA.latestVersion());
+                topicPartitionCounts, epochSupplier, defaultPartitionMetadataSupplier, ApiKeys.METADATA.latestVersion());
     }
 
     public static MetadataResponse metadataUpdateWith(final String clusterId,
                                                       final int numNodes,
                                                       final Map<String, Integer> topicPartitionCounts) {
         return metadataUpdateWith(clusterId, numNodes, Collections.emptyMap(),
-                topicPartitionCounts, tp -> null, MetadataResponse.PartitionMetadata::new, ApiKeys.METADATA.latestVersion());
+                topicPartitionCounts, tp -> null, defaultPartitionMetadataSupplier, ApiKeys.METADATA.latestVersion());
     }
 
     public static MetadataResponse metadataUpdateWith(final String clusterId,
@@ -124,7 +116,7 @@ public class RequestTestUtils {
                                                       final Map<String, Errors> topicErrors,
                                                       final Map<String, Integer> topicPartitionCounts) {
         return metadataUpdateWith(clusterId, numNodes, topicErrors,
-                topicPartitionCounts, tp -> null, MetadataResponse.PartitionMetadata::new, ApiKeys.METADATA.latestVersion());
+                topicPartitionCounts, tp -> null, defaultPartitionMetadataSupplier, ApiKeys.METADATA.latestVersion());
     }
 
     public static MetadataResponse metadataUpdateWith(final String clusterId,
@@ -133,7 +125,7 @@ public class RequestTestUtils {
                                                       final Map<String, Integer> topicPartitionCounts,
                                                       final short responseVersion) {
         return metadataUpdateWith(clusterId, numNodes, topicErrors,
-                topicPartitionCounts, tp -> null, MetadataResponse.PartitionMetadata::new, responseVersion);
+                topicPartitionCounts, tp -> null, defaultPartitionMetadataSupplier, responseVersion);
     }
 
     public static MetadataResponse metadataUpdateWith(final String clusterId,
@@ -142,7 +134,7 @@ public class RequestTestUtils {
                                                       final Map<String, Integer> topicPartitionCounts,
                                                       final Function<TopicPartition, Integer> epochSupplier) {
         return metadataUpdateWith(clusterId, numNodes, topicErrors,
-                topicPartitionCounts, epochSupplier, MetadataResponse.PartitionMetadata::new, ApiKeys.METADATA.latestVersion());
+                topicPartitionCounts, epochSupplier, defaultPartitionMetadataSupplier, ApiKeys.METADATA.latestVersion());
     }
 
     public static MetadataResponse metadataUpdateWith(final String clusterId,
@@ -161,13 +153,13 @@ public class RequestTestUtils {
             String topic = topicPartitionCountEntry.getKey();
             int numPartitions = topicPartitionCountEntry.getValue();
 
-            List<MetadataResponse.PartitionMetadata> partitionMetadata = new ArrayList<>(numPartitions);
+            List<MetadataResponseData.MetadataResponsePartition> partitionMetadata = new ArrayList<>(numPartitions);
             for (int i = 0; i < numPartitions; i++) {
                 TopicPartition tp = new TopicPartition(topic, i);
                 Node leader = nodes.get(i % nodes.size());
                 List<Integer> replicaIds = Collections.singletonList(leader.id());
                 partitionMetadata.add(partitionSupplier.supply(
-                        Errors.NONE, tp, Optional.of(leader.id()), Optional.ofNullable(epochSupplier.apply(tp)),
+                        Errors.NONE, tp, leader.id(), epochSupplier.apply(tp),
                         replicaIds, replicaIds, replicaIds));
             }
 
@@ -186,12 +178,23 @@ public class RequestTestUtils {
 
     @FunctionalInterface
     public interface PartitionMetadataSupplier {
-        MetadataResponse.PartitionMetadata supply(Errors error,
-                                                  TopicPartition partition,
-                                                  Optional<Integer> leaderId,
-                                                  Optional<Integer> leaderEpoch,
-                                                  List<Integer> replicas,
-                                                  List<Integer> isr,
-                                                  List<Integer> offlineReplicas);
+        MetadataResponseData.MetadataResponsePartition supply(Errors error,
+                                                              TopicPartition partition,
+                                                              Integer leaderId,
+                                                              Integer leaderEpoch,
+                                                              List<Integer> replicas,
+                                                              List<Integer> isr,
+                                                              List<Integer> offlineReplicas);
     }
+
+    private static PartitionMetadataSupplier defaultPartitionMetadataSupplier = (error, partition, leaderId, leaderEpoch, replicas, isr, offlineReplicas) ->
+        new MetadataResponseData.MetadataResponsePartition()
+        .setErrorCode(error.code())
+        .setPartitionIndex(partition.partition())
+        .setLeaderId(leaderId == null ? NO_LEADER_ID : leaderId)
+        .setLeaderEpoch(leaderEpoch == null ? NO_PARTITION_LEADER_EPOCH : leaderEpoch)
+        .setReplicaNodes(replicas)
+        .setIsrNodes(isr)
+        .setOfflineReplicas(offlineReplicas);
+
 }
