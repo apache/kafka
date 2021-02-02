@@ -697,9 +697,9 @@ public abstract class ConsumerCoordinatorTest {
         client.prepareResponse(joinGroupLeaderResponse(1, consumerId, memberSubscriptions, Errors.NONE));
         client.prepareResponse(body -> {
             SyncGroupRequest sync = (SyncGroupRequest) body;
-            return sync.data().memberId().equals(consumerId) &&
-                    sync.data().generationId() == 1 &&
-                    sync.groupAssignments().containsKey(consumerId);
+            assertEquals(sync.data().memberId(), consumerId);
+            assertEquals(1, sync.data().generationId());
+            assertTrue(sync.groupAssignments().containsKey(consumerId));
         }, syncGroupResponse(assigned, Errors.NONE));
         coordinator.poll(time.timer(Long.MAX_VALUE));
 
@@ -735,9 +735,9 @@ public abstract class ConsumerCoordinatorTest {
                     1, consumerId, singletonMap(consumerId, oldSubscription), Errors.NONE));
         client.prepareResponse(body -> {
             SyncGroupRequest sync = (SyncGroupRequest) body;
-            return sync.data().memberId().equals(consumerId) &&
-                    sync.data().generationId() == 1 &&
-                    sync.groupAssignments().containsKey(consumerId);
+            assertEquals(consumerId, sync.data().memberId());
+            assertEquals(1, sync.data().generationId());
+            assertTrue(sync.groupAssignments().containsKey(consumerId));
         }, syncGroupResponse(oldAssignment, Errors.NONE));
 
         // Second correct assignment for subscription
@@ -746,9 +746,9 @@ public abstract class ConsumerCoordinatorTest {
                     1, consumerId, singletonMap(consumerId, newSubscription), Errors.NONE));
         client.prepareResponse(body -> {
             SyncGroupRequest sync = (SyncGroupRequest) body;
-            return sync.data().memberId().equals(consumerId) &&
-                    sync.data().generationId() == 1 &&
-                    sync.groupAssignments().containsKey(consumerId);
+            assertEquals(consumerId, sync.data().memberId());
+            assertEquals(1, sync.data().generationId());
+            assertTrue(sync.groupAssignments().containsKey(consumerId));
         }, syncGroupResponse(newAssignment, Errors.NONE));
 
         // Poll once so that the join group future gets created and complete
@@ -821,9 +821,9 @@ public abstract class ConsumerCoordinatorTest {
         client.prepareResponse(joinGroupLeaderResponse(1, consumerId, memberSubscriptions, Errors.NONE));
         client.prepareResponse(body -> {
             SyncGroupRequest sync = (SyncGroupRequest) body;
-            return sync.data().memberId().equals(consumerId) &&
-                    sync.data().generationId() == 1 &&
-                    sync.groupAssignments().containsKey(consumerId);
+            assertEquals(consumerId, sync.data().memberId());
+            assertEquals(1, sync.data().generationId());
+            assertTrue(sync.groupAssignments().containsKey(consumerId));
         }, syncGroupResponse(assigned, Errors.NONE));
         // expect client to force updating the metadata, if yes gives it both topics
         client.prepareMetadataUpdate(metadataResponse);
@@ -867,7 +867,6 @@ public abstract class ConsumerCoordinatorTest {
             for (String topic : updatedSubscription)
                 updatedPartitions.put(topic, 1);
             client.updateMetadata(RequestTestUtils.metadataUpdateWith(1, updatedPartitions));
-            return true;
         }, syncGroupResponse(oldAssigned, Errors.NONE));
         coordinator.poll(time.timer(Long.MAX_VALUE));
 
@@ -897,13 +896,11 @@ public abstract class ConsumerCoordinatorTest {
             ByteBuffer metadata = ByteBuffer.wrap(protocolMetadata.metadata());
             ConsumerPartitionAssignor.Subscription subscription = ConsumerProtocol.deserializeSubscription(metadata);
             metadata.rewind();
-            return subscription.topics().containsAll(updatedSubscription);
+            assertTrue(subscription.topics().containsAll(updatedSubscription));
         }, joinGroupLeaderResponse(2, consumerId, updatedSubscriptions, Errors.NONE));
         // update the metadata again back to topic1
-        client.prepareResponse(body -> {
-            client.updateMetadata(RequestTestUtils.metadataUpdateWith(1, singletonMap(topic1, 1)));
-            return true;
-        }, syncGroupResponse(newAssigned, Errors.NONE));
+        client.prepareResponse(body -> client.updateMetadata(RequestTestUtils.metadataUpdateWith(1, singletonMap(topic1, 1))),
+                syncGroupResponse(newAssigned, Errors.NONE));
 
         coordinator.poll(time.timer(Long.MAX_VALUE));
 
@@ -931,7 +928,7 @@ public abstract class ConsumerCoordinatorTest {
             ByteBuffer metadata = ByteBuffer.wrap(protocolMetadata.metadata());
             ConsumerPartitionAssignor.Subscription subscription = ConsumerProtocol.deserializeSubscription(metadata);
             metadata.rewind();
-            return subscription.topics().contains(topic1);
+            assertTrue(subscription.topics().contains(topic1));
         }, joinGroupLeaderResponse(3, consumerId, initialSubscription, Errors.NONE));
         client.prepareResponse(syncGroupResponse(oldAssigned, Errors.NONE));
 
@@ -970,9 +967,9 @@ public abstract class ConsumerCoordinatorTest {
         client.prepareResponse(joinGroupFollowerResponse(1, consumerId, "leader", Errors.NONE));
         client.prepareResponse(body -> {
             SyncGroupRequest sync = (SyncGroupRequest) body;
-            return sync.data().memberId().equals(consumerId) &&
-                sync.data().generationId() == 1 &&
-                sync.groupAssignments().isEmpty();
+            assertEquals(consumerId, sync.data().memberId());
+            assertEquals(1, sync.data().generationId());
+            assertTrue(sync.groupAssignments().isEmpty());
         }, syncGroupResponse(singletonList(t1p), Errors.NONE));
 
         partitionAssignor.prepare(singletonMap(consumerId, singletonList(t1p)));
@@ -1103,9 +1100,9 @@ public abstract class ConsumerCoordinatorTest {
         client.prepareResponse(joinGroupFollowerResponse(1, consumerId, "leader", Errors.NONE));
         client.prepareResponse(body -> {
             SyncGroupRequest sync = (SyncGroupRequest) body;
-            return sync.data().memberId().equals(consumerId) &&
-                    sync.data().generationId() == 1 &&
-                    sync.groupAssignments().isEmpty();
+            assertEquals(consumerId, sync.data().memberId());
+            assertEquals(1, sync.data().generationId());
+            assertTrue(sync.groupAssignments().isEmpty());
         }, syncGroupResponse(assigned, Errors.NONE));
 
         coordinator.joinGroupIfNeeded(time.timer(Long.MAX_VALUE));
@@ -1167,9 +1164,9 @@ public abstract class ConsumerCoordinatorTest {
         client.prepareResponse(joinGroupFollowerResponse(1, consumerId, "leader", Errors.NONE));
         client.prepareResponse(body -> {
             SyncGroupRequest sync = (SyncGroupRequest) body;
-            return sync.data().memberId().equals(consumerId) &&
-                    sync.data().generationId() == 1 &&
-                    sync.groupAssignments().isEmpty();
+            assertEquals(sync.data().memberId(), consumerId);
+            assertEquals(1, sync.data().generationId());
+            assertTrue(sync.groupAssignments().isEmpty());
         }, syncGroupResponse(assigned, Errors.NONE));
         // expect client to force updating the metadata, if yes gives it both topics
         client.prepareMetadataUpdate(metadataResponse);
@@ -1195,7 +1192,7 @@ public abstract class ConsumerCoordinatorTest {
         client.prepareResponse(body -> {
             received.set(true);
             LeaveGroupRequest leaveRequest = (LeaveGroupRequest) body;
-            return validateLeaveGroup(groupId, consumerId, leaveRequest);
+            assertTrue(validateLeaveGroup(groupId, consumerId, leaveRequest));
         }, new LeaveGroupResponse(
             new LeaveGroupResponseData().setErrorCode(Errors.NONE.code())));
         coordinator.close(time.timer(0));
@@ -1211,7 +1208,7 @@ public abstract class ConsumerCoordinatorTest {
         client.prepareResponse(body -> {
             received.set(true);
             LeaveGroupRequest leaveRequest = (LeaveGroupRequest) body;
-            return validateLeaveGroup(groupId, consumerId, leaveRequest);
+            assertTrue(validateLeaveGroup(groupId, consumerId, leaveRequest));
         }, new LeaveGroupResponse(new LeaveGroupResponseData().setErrorCode(Errors.NONE.code())));
         coordinator.maybeLeaveGroup("test maybe leave group");
         assertTrue(received.get());
@@ -1254,7 +1251,7 @@ public abstract class ConsumerCoordinatorTest {
         client.prepareResponse(body -> {
             received.set(true);
             LeaveGroupRequest leaveRequest = (LeaveGroupRequest) body;
-            return validateLeaveGroup(groupId, consumerId, leaveRequest);
+            assertTrue(validateLeaveGroup(groupId, consumerId, leaveRequest));
         }, new LeaveGroupResponse(new LeaveGroupResponseData().setErrorCode(Errors.NONE.code())));
 
         coordinator.maybeLeaveGroup("pending member leaves");
@@ -1288,7 +1285,7 @@ public abstract class ConsumerCoordinatorTest {
         // now we should see a new join with the empty UNKNOWN_MEMBER_ID
         client.prepareResponse(body -> {
             JoinGroupRequest joinRequest = (JoinGroupRequest) body;
-            return joinRequest.data().memberId().equals(JoinGroupRequest.UNKNOWN_MEMBER_ID);
+            assertTrue(joinRequest.data().memberId().equals(JoinGroupRequest.UNKNOWN_MEMBER_ID));
         }, joinGroupFollowerResponse(2, consumerId, "leader", Errors.NONE));
         client.prepareResponse(syncGroupResponse(singletonList(t1p), Errors.NONE));
 
@@ -1333,7 +1330,7 @@ public abstract class ConsumerCoordinatorTest {
         // then let the full join/sync finish successfully
         client.prepareResponse(body -> {
             JoinGroupRequest joinRequest = (JoinGroupRequest) body;
-            return joinRequest.data().memberId().equals(JoinGroupRequest.UNKNOWN_MEMBER_ID);
+            assertEquals(JoinGroupRequest.UNKNOWN_MEMBER_ID, joinRequest.data().memberId());
         }, joinGroupFollowerResponse(2, consumerId, "leader", Errors.NONE));
         client.prepareResponse(syncGroupResponse(singletonList(t1p), Errors.NONE));
 
@@ -1397,17 +1394,14 @@ public abstract class ConsumerCoordinatorTest {
         client.prepareResponse(joinGroupLeaderResponse(1, consumerId, memberSubscriptions, Errors.NONE));
         client.prepareResponse(body -> {
             SyncGroupRequest sync = (SyncGroupRequest) body;
-            if (sync.data().memberId().equals(consumerId) &&
-                    sync.data().generationId() == 1 &&
-                    sync.groupAssignments().containsKey(consumerId)) {
-                // trigger the metadata update including both topics after the sync group request has been sent
-                Map<String, Integer> topicPartitionCounts = new HashMap<>();
-                topicPartitionCounts.put(topic1, 1);
-                topicPartitionCounts.put(topic2, 1);
-                client.updateMetadata(RequestTestUtils.metadataUpdateWith(1, topicPartitionCounts));
-                return true;
-            }
-            return false;
+            assertEquals(consumerId, sync.data().memberId());
+            assertEquals(1, sync.data().generationId());
+            assertTrue(sync.groupAssignments().containsKey(consumerId));
+            // trigger the metadata update including both topics after the sync group request has been sent
+            Map<String, Integer> topicPartitionCounts = new HashMap<>();
+            topicPartitionCounts.put(topic1, 1);
+            topicPartitionCounts.put(topic2, 1);
+            client.updateMetadata(RequestTestUtils.metadataUpdateWith(1, topicPartitionCounts));
         }, syncGroupResponse(Collections.singletonList(tp1), Errors.NONE));
         coordinator.poll(time.timer(Long.MAX_VALUE));
 
@@ -1899,8 +1893,8 @@ public abstract class ConsumerCoordinatorTest {
         // the client should not reuse generation/memberId from auto-subscribed generation
         client.prepareResponse(body -> {
             OffsetCommitRequest commitRequest = (OffsetCommitRequest) body;
-            return commitRequest.data().memberId().equals(OffsetCommitRequest.DEFAULT_MEMBER_ID) &&
-                    commitRequest.data().generationId() == OffsetCommitRequest.DEFAULT_GENERATION_ID;
+            assertEquals(OffsetCommitRequest.DEFAULT_MEMBER_ID, commitRequest.data().memberId());
+            assertEquals(OffsetCommitRequest.DEFAULT_GENERATION_ID,  commitRequest.data().generationId());
         }, offsetCommitResponse(singletonMap(t1p, Errors.NONE)));
 
         AtomicBoolean success = new AtomicBoolean(false);
@@ -2286,9 +2280,9 @@ public abstract class ConsumerCoordinatorTest {
 
         client.prepareResponse(body -> {
             SyncGroupRequest sync = (SyncGroupRequest) body;
-            return sync.data().memberId().equals(consumerId) &&
-                sync.data().generationId() == 1 &&
-                sync.groupAssignments().containsKey(consumerId);
+            assertEquals(consumerId, sync.data().memberId());
+            assertEquals(1, sync.data().generationId());
+            assertTrue(sync.groupAssignments().containsKey(consumerId));
         }, syncGroupResponse(singletonList(t1p), Errors.NONE));
         coordinator.poll(time.timer(Long.MAX_VALUE));
 
@@ -2961,12 +2955,12 @@ public abstract class ConsumerCoordinatorTest {
         client.prepareResponse(body -> {
             commitRequested.set(true);
             OffsetCommitRequest commitRequest = (OffsetCommitRequest) body;
-            return commitRequest.data().groupId().equals(groupId);
+            assertTrue(commitRequest.data().groupId().equals(groupId));
         }, new OffsetCommitResponse(new OffsetCommitResponseData()));
         client.prepareResponse(body -> {
             leaveGroupRequested.set(true);
             LeaveGroupRequest leaveRequest = (LeaveGroupRequest) body;
-            return leaveRequest.data().groupId().equals(groupId);
+            assertTrue(leaveRequest.data().groupId().equals(groupId));
         }, new LeaveGroupResponse(new LeaveGroupResponseData()
                 .setErrorCode(Errors.NONE.code())));
 
@@ -3137,9 +3131,9 @@ public abstract class ConsumerCoordinatorTest {
                         generation, consumerId, singletonMap(consumerId, subscription), Errors.NONE));
         client.prepareResponse(body -> {
             SyncGroupRequest sync = (SyncGroupRequest) body;
-            return sync.data().memberId().equals(consumerId) &&
-                    sync.data().generationId() == generation &&
-                    sync.groupAssignments().containsKey(consumerId);
+            assertEquals(consumerId, sync.data().memberId());
+            assertEquals(generation, sync.data().generationId());
+            assertTrue(sync.groupAssignments().containsKey(consumerId));
         }, syncGroupResponse(assignment, Errors.NONE));
     }
 
@@ -3156,24 +3150,17 @@ public abstract class ConsumerCoordinatorTest {
         client.respond(offsetCommitRequestMatcher(expectedOffsets), offsetCommitResponse(errors));
     }
 
-    private MockClient.RequestMatcher offsetCommitRequestMatcher(final Map<TopicPartition, Long> expectedOffsets) {
+    private MockClient.RequestAssertion offsetCommitRequestMatcher(final Map<TopicPartition, Long> expectedOffsets) {
         return body -> {
             OffsetCommitRequest req = (OffsetCommitRequest) body;
             Map<TopicPartition, Long> offsets = req.offsets();
-            if (offsets.size() != expectedOffsets.size())
-                return false;
+            assertEquals(expectedOffsets.size(), offsets.size());
 
             for (Map.Entry<TopicPartition, Long> expectedOffset : expectedOffsets.entrySet()) {
-                if (!offsets.containsKey(expectedOffset.getKey())) {
-                    return false;
-                } else {
-                    Long actualOffset = offsets.get(expectedOffset.getKey());
-                    if (!actualOffset.equals(expectedOffset.getValue())) {
-                        return false;
-                    }
-                }
+                assertTrue(offsets.containsKey(expectedOffset.getKey()));
+                Long actualOffset = offsets.get(expectedOffset.getKey());
+                assertEquals(expectedOffset.getValue(), actualOffset);
             }
-            return true;
         };
     }
 

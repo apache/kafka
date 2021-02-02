@@ -110,6 +110,7 @@ import java.util.concurrent.atomic.AtomicReference;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
@@ -209,13 +210,12 @@ public class SenderTest {
 
         client.prepareResponse(body -> {
             ProduceRequest request = (ProduceRequest) body;
-            if (request.version() != 2)
-                return false;
+            assertEquals(2, request.version());
 
             MemoryRecords records = partitionRecords(request).get(tp0);
-            return records != null &&
-                    records.sizeInBytes() > 0 &&
-                    records.hasMatchingMagic(RecordBatch.MAGIC_VALUE_V1);
+            assertNotNull(records);
+            assertTrue(records.sizeInBytes() > 0);
+            assertTrue(records.hasMatchingMagic(RecordBatch.MAGIC_VALUE_V1));
         }, produceResponse(tp0, offset, Errors.NONE, 0));
 
         sender.runOnce(); // connect
@@ -256,18 +256,16 @@ public class SenderTest {
 
         client.prepareResponse(body -> {
             ProduceRequest request = (ProduceRequest) body;
-            if (request.version() != 2)
-                return false;
+            assertEquals(2, request.version());
 
             Map<TopicPartition, MemoryRecords> recordsMap = partitionRecords(request);
-            if (recordsMap.size() != 2)
-                return false;
+            assertEquals(2, recordsMap.size());
 
             for (MemoryRecords records : recordsMap.values()) {
-                if (records == null || records.sizeInBytes() == 0 || !records.hasMatchingMagic(RecordBatch.MAGIC_VALUE_V1))
-                    return false;
+                assertNotNull(records);
+                assertNotEquals(0, records.sizeInBytes());
+                assertTrue(records.hasMatchingMagic(RecordBatch.MAGIC_VALUE_V1));
             }
-            return true;
         }, produceResponse);
 
         sender.runOnce(); // connect
@@ -671,7 +669,6 @@ public class SenderTest {
         client.respond(body -> {
             ProduceRequest request = (ProduceRequest) body;
             assertFalse(RequestTestUtils.hasIdempotentRecords(request));
-            return true;
         }, produceResponse(tp0, -1L, Errors.TOPIC_AUTHORIZATION_FAILED, 0));
         sender.runOnce();
         assertTrue(future.isDone());
@@ -2075,7 +2072,6 @@ public class SenderTest {
             if (expectedEpoch > -1)
                 assertEquals((short) expectedEpoch, firstBatch.producerEpoch());
             assertEquals(expectedSequence, firstBatch.baseSequence());
-            return true;
         }, produceResponse(tp, responseOffset, responseError, 0, logStartOffset, null));
     }
 
@@ -2091,7 +2087,10 @@ public class SenderTest {
         // cluster authorization is a fatal error for the producer
         Future<RecordMetadata> future = appendToAccumulator(tp0);
         client.prepareResponse(
-            body -> body instanceof ProduceRequest && RequestTestUtils.hasIdempotentRecords((ProduceRequest) body),
+            body -> {
+                assertTrue(body instanceof ProduceRequest);
+                assertTrue(RequestTestUtils.hasIdempotentRecords((ProduceRequest) body));
+            },
             produceResponse(tp0, -1, Errors.CLUSTER_AUTHORIZATION_FAILED, 0));
 
         sender.runOnce();
@@ -2119,7 +2118,10 @@ public class SenderTest {
         sender.runOnce();
 
         client.respond(
-            body -> body instanceof ProduceRequest && RequestTestUtils.hasIdempotentRecords((ProduceRequest) body),
+            body -> {
+                assertTrue(body instanceof ProduceRequest);
+                assertTrue(RequestTestUtils.hasIdempotentRecords((ProduceRequest) body));
+            },
             produceResponse(tp0, -1, Errors.CLUSTER_AUTHORIZATION_FAILED, 0));
 
         sender.runOnce();
@@ -2131,7 +2133,10 @@ public class SenderTest {
 
         // Should be fine if the second response eventually returns
         client.respond(
-            body -> body instanceof ProduceRequest && RequestTestUtils.hasIdempotentRecords((ProduceRequest) body),
+            body -> {
+                assertTrue(body instanceof ProduceRequest);
+                assertTrue(RequestTestUtils.hasIdempotentRecords((ProduceRequest) body));
+            },
             produceResponse(tp1, 0, Errors.NONE, 0));
         sender.runOnce();
     }
@@ -2147,7 +2152,10 @@ public class SenderTest {
 
         Future<RecordMetadata> future = appendToAccumulator(tp0);
         client.prepareResponse(
-            body -> body instanceof ProduceRequest && RequestTestUtils.hasIdempotentRecords((ProduceRequest) body),
+            body -> {
+                assertTrue(body instanceof ProduceRequest);
+                assertTrue(RequestTestUtils.hasIdempotentRecords((ProduceRequest) body));
+            },
             produceResponse(tp0, -1, Errors.UNSUPPORTED_FOR_MESSAGE_FORMAT, 0));
 
         sender.runOnce();
@@ -2168,7 +2176,10 @@ public class SenderTest {
 
         Future<RecordMetadata> future = appendToAccumulator(tp0);
         client.prepareUnsupportedVersionResponse(
-            body -> body instanceof ProduceRequest && RequestTestUtils.hasIdempotentRecords((ProduceRequest) body));
+            body -> {
+                assertTrue(body instanceof ProduceRequest);
+                assertTrue(RequestTestUtils.hasIdempotentRecords((ProduceRequest) body));
+            });
 
         sender.runOnce();
         assertFutureFailure(future, UnsupportedVersionException.class);
@@ -2195,19 +2206,16 @@ public class SenderTest {
 
         Future<RecordMetadata> responseFuture = appendToAccumulator(tp0);
         client.prepareResponse(body -> {
-            if (body instanceof ProduceRequest) {
-                ProduceRequest request = (ProduceRequest) body;
-                MemoryRecords records = partitionRecords(request).get(tp0);
-                Iterator<MutableRecordBatch> batchIterator = records.batches().iterator();
-                assertTrue(batchIterator.hasNext());
-                RecordBatch batch = batchIterator.next();
-                assertFalse(batchIterator.hasNext());
-                assertEquals(0, batch.baseSequence());
-                assertEquals(producerId, batch.producerId());
-                assertEquals(0, batch.producerEpoch());
-                return true;
-            }
-            return false;
+            assertTrue(body instanceof ProduceRequest);
+            ProduceRequest request = (ProduceRequest) body;
+            MemoryRecords records = partitionRecords(request).get(tp0);
+            Iterator<MutableRecordBatch> batchIterator = records.batches().iterator();
+            assertTrue(batchIterator.hasNext());
+            RecordBatch batch = batchIterator.next();
+            assertFalse(batchIterator.hasNext());
+            assertEquals(0, batch.baseSequence());
+            assertEquals(producerId, batch.producerId());
+            assertEquals(0, batch.producerEpoch());
         }, produceResponse(tp0, 0, Errors.NONE, 0));
 
         sender.runOnce();  // connect.
@@ -2836,7 +2844,7 @@ public class SenderTest {
         assertEquals(expectedMessage, e1.getCause().getMessage());
     }
 
-    class AssertEndTxnRequestMatcher implements MockClient.RequestMatcher {
+    class AssertEndTxnRequestMatcher implements MockClient.RequestAssertion {
 
         private TransactionResult requiredResult;
         private boolean matched = false;
@@ -2846,14 +2854,10 @@ public class SenderTest {
         }
 
         @Override
-        public boolean matches(AbstractRequest body) {
-            if (body instanceof EndTxnRequest) {
-                assertSame(requiredResult, ((EndTxnRequest) body).result());
-                matched = true;
-                return true;
-            } else {
-                return false;
-            }
+        public void assertRequest(AbstractRequest body) {
+            assertTrue(body instanceof EndTxnRequest);
+            assertSame(requiredResult, ((EndTxnRequest) body).result());
+            matched = true;
         }
     }
 
@@ -2886,30 +2890,27 @@ public class SenderTest {
         }
     }
 
-    private MockClient.RequestMatcher produceRequestMatcher(final TopicPartition tp,
-                                                            final ProducerIdAndEpoch producerIdAndEpoch,
-                                                            final int sequence,
-                                                            final boolean isTransactional) {
+    private MockClient.RequestAssertion produceRequestMatcher(final TopicPartition tp,
+                                                              final ProducerIdAndEpoch producerIdAndEpoch,
+                                                              final int sequence,
+                                                              final boolean isTransactional) {
         return body -> {
-            if (!(body instanceof ProduceRequest))
-                return false;
+            assertTrue(body instanceof ProduceRequest, "Expected a ProduceRequest, but was " + (body == null ? "null" : body.getClass()));
 
             ProduceRequest request = (ProduceRequest) body;
             Map<TopicPartition, MemoryRecords> recordsMap = partitionRecords(request);
             MemoryRecords records = recordsMap.get(tp);
-            if (records == null)
-                return false;
+            assertNotNull(records, "No records for topic partition " + tp);
 
             List<MutableRecordBatch> batches = TestUtils.toList(records.batches());
-            if (batches.size() != 1)
-                return false;
+            assertEquals(1, batches.size(), "Expected batch size of 1 for partition " + tp);
 
             MutableRecordBatch batch = batches.get(0);
-            return batch.baseOffset() == 0L &&
-                    batch.baseSequence() == sequence &&
-                    batch.producerId() == producerIdAndEpoch.producerId &&
-                    batch.producerEpoch() == producerIdAndEpoch.epoch &&
-                    batch.isTransactional() == isTransactional;
+            assertEquals(0L, batch.baseOffset(), "Unexpected base offset in batch for partition " + tp);
+            assertEquals(sequence, batch.baseSequence(), "Unexpected base sequence in batch for partition " + tp);
+            assertEquals(producerIdAndEpoch.producerId, batch.producerId(), "Unexpected producer id in batch for partition " + tp);
+            assertEquals(producerIdAndEpoch.epoch, batch.producerEpoch(), "Unexpected producer epoch in batch for partition " + tp);
+            assertEquals(isTransactional, batch.isTransactional(), "Unexpected transactional flag in batch for partition " + tp);
         };
     }
 
@@ -3045,8 +3046,10 @@ public class SenderTest {
             producerEpoch = RecordBatch.NO_PRODUCER_EPOCH;
 
         client.prepareResponse(
-            body -> body instanceof InitProducerIdRequest &&
-                ((InitProducerIdRequest) body).data().transactionalId() == null,
+            body -> {
+                assertTrue(body instanceof InitProducerIdRequest);
+                assertNull(((InitProducerIdRequest) body).data().transactionalId());
+            },
             initProducerIdResponse(producerId, producerEpoch, error));
         sender.runOnce();
     }
