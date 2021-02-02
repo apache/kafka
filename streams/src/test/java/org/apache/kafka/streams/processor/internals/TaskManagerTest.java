@@ -640,17 +640,17 @@ public class TaskManagerTest {
         expect(activeTaskCreator.createTasks(anyObject(), eq(taskId00Assignment))).andStubReturn(singletonList(task00));
         topologyBuilder.addSubscribedTopicsFromAssignment(anyObject(), anyString());
         expectLastCall().anyTimes();
-
         expect(consumer.assignment()).andReturn(taskId00Partitions);
         replay(activeTaskCreator, topologyBuilder, consumer, changeLogReader);
+
         taskManager.handleAssignment(taskId00Assignment, emptyMap());
         assertThat(taskManager.tryToCompleteRestoration(time.milliseconds(), tp -> assertThat(tp, is(empty()))), is(true));
         assertThat(task00.state(), is(Task.State.RUNNING));
 
         taskManager.handleCorruption(singletonMap(taskId00, taskId00Partitions));
-
         assertThat(task00.commitPrepared, is(true));
         assertThat(task00.state(), is(Task.State.CREATED));
+        assertThat(task00.partitionsForOffsetReset, equalTo(taskId00Partitions));
         assertThat(enforcedCheckpoint.get(), is(true));
         assertThat(taskManager.activeTaskMap(), is(singletonMap(taskId00, task00)));
         assertThat(taskManager.standbyTaskMap(), Matchers.anEmptyMap());
@@ -687,6 +687,7 @@ public class TaskManagerTest {
         taskManager.handleCorruption(singletonMap(taskId00, taskId00Partitions));
         assertThat(task00.commitPrepared, is(true));
         assertThat(task00.state(), is(Task.State.CREATED));
+        assertThat(task00.partitionsForOffsetReset, equalTo(taskId00Partitions));
         assertThat(taskManager.activeTaskMap(), is(singletonMap(taskId00, task00)));
         assertThat(taskManager.standbyTaskMap(), Matchers.anEmptyMap());
 
@@ -711,11 +712,11 @@ public class TaskManagerTest {
             .andStubReturn(asList(corruptedTask, nonCorruptedTask));
         topologyBuilder.addSubscribedTopicsFromAssignment(anyObject(), anyString());
         expectLastCall().anyTimes();
-
         expectRestoreToBeCompleted(consumer, changeLogReader);
         consumer.commitSync(eq(emptyMap()));
         expect(consumer.assignment()).andReturn(taskId00Partitions);
         replay(activeTaskCreator, topologyBuilder, consumer, changeLogReader);
+
         taskManager.handleAssignment(assignment, emptyMap());
         assertThat(taskManager.tryToCompleteRestoration(time.milliseconds(), tp -> assertThat(tp, is(empty()))), is(true));
 
@@ -723,8 +724,10 @@ public class TaskManagerTest {
         nonCorruptedTask.setCommitNeeded();
 
         taskManager.handleCorruption(singletonMap(taskId00, taskId00Partitions));
-
         assertTrue(nonCorruptedTask.commitPrepared);
+        assertThat(nonCorruptedTask.partitionsForOffsetReset, equalTo(Collections.emptySet()));
+        assertThat(corruptedTask.partitionsForOffsetReset, equalTo(taskId00Partitions));
+
         verify(consumer);
     }
 
@@ -747,15 +750,15 @@ public class TaskManagerTest {
             .andStubReturn(asList(corruptedTask, nonRunningNonCorruptedTask));
         topologyBuilder.addSubscribedTopicsFromAssignment(anyObject(), anyString());
         expectLastCall().anyTimes();
-
         expect(consumer.assignment()).andReturn(taskId00Partitions);
-
         replay(activeTaskCreator, topologyBuilder, consumer, changeLogReader);
-        //taskManager.setPartitionResetter(tp -> assertThat(tp, is(empty())));
+
         taskManager.handleAssignment(assignment, emptyMap());
-        assertThat(nonRunningNonCorruptedTask.state(), is(Task.State.CREATED));
 
         taskManager.handleCorruption(singletonMap(taskId00, taskId00Partitions));
+        assertThat(nonRunningNonCorruptedTask.state(), is(Task.State.CREATED));
+        assertThat(nonRunningNonCorruptedTask.partitionsForOffsetReset, equalTo(Collections.emptySet()));
+        assertThat(corruptedTask.partitionsForOffsetReset, equalTo(taskId00Partitions));
 
         verify(activeTaskCreator);
         assertFalse(nonRunningNonCorruptedTask.commitPrepared);
@@ -2923,6 +2926,7 @@ public class TaskManagerTest {
         private Map<TopicPartition, OffsetAndMetadata> committableOffsets = Collections.emptyMap();
         private Map<TopicPartition, Long> purgeableOffsets;
         private Map<TopicPartition, Long> changelogOffsets = Collections.emptyMap();
+        private Set<TopicPartition> partitionsForOffsetReset = Collections.emptySet();
         private Long timeout = null;
 
         private final Map<TopicPartition, LinkedList<ConsumerRecord<byte[], byte[]>>> queue = new HashMap<>();
@@ -2953,7 +2957,7 @@ public class TaskManagerTest {
 
         @Override
         public void addPartitionsForOffsetReset(final Set<TopicPartition> partitionsForOffsetReset) {
-
+            this.partitionsForOffsetReset = partitionsForOffsetReset;
         }
 
         @Override

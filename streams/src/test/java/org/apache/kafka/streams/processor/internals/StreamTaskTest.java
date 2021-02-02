@@ -83,6 +83,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
@@ -325,6 +326,64 @@ public class StreamTaskTest {
         task = null;
 
         ctrl.verify();
+    }
+
+    @Test
+    public void shouldResetOffsetsToLastCommittedForSpecifiedPartitions() {
+        task = createStatelessTask(createConfig("100"), StreamsConfig.METRICS_LATEST);
+        task.addPartitionsForOffsetReset(Collections.singleton(partition1));
+
+        consumer.seek(partition1, 5L);
+        consumer.commitSync();
+
+        consumer.seek(partition1, 10L);
+        consumer.seek(partition2, 15L);
+
+        final java.util.function.Consumer<Set<TopicPartition>> resetter =
+            EasyMock.mock(java.util.function.Consumer.class);
+        EasyMock.replay(resetter);
+
+        task.initializeIfNeeded(resetter);
+
+        assertThat(consumer.position(partition1), equalTo(5L));
+        assertThat(consumer.position(partition2), equalTo(15L));
+    }
+
+    @Test
+    public void shouldAutoOffsetResetIfNoCommittedOffsetFound() {
+        task = createStatelessTask(createConfig("100"), StreamsConfig.METRICS_LATEST);
+        task.addPartitionsForOffsetReset(Collections.singleton(partition1));
+
+        final AtomicReference<AssertionError> shouldNotSeek = new AtomicReference<>();
+        final MockConsumer<byte[], byte[]> consumer = new MockConsumer<byte[], byte[]>(OffsetResetStrategy.EARLIEST) {
+            @Override
+            public void seek(final TopicPartition partition, final long offset) {
+                final AssertionError error = shouldNotSeek.get();
+                if (error != null) {
+                    throw error;
+                }
+                super.seek(partition, offset);
+            }
+        };
+        consumer.assign(asList(partition1, partition2));
+        consumer.updateBeginningOffsets(mkMap(mkEntry(partition1, 0L), mkEntry(partition2, 0L)));
+
+        consumer.seek(partition1, 5L);
+        consumer.seek(partition2, 15L);
+
+        shouldNotSeek.set(new AssertionError("Should not seek"));
+
+        final java.util.function.Consumer<Set<TopicPartition>> resettter =
+            EasyMock.mock(java.util.function.Consumer.class);
+        resettter.accept(Collections.singleton(partition1));
+        EasyMock.expectLastCall();
+        EasyMock.replay(resettter);
+
+        task.initializeIfNeeded(resettter);
+
+        // because we mocked the `resetter` positions don't change
+        assertThat(consumer.position(partition1), equalTo(5L));
+        assertThat(consumer.position(partition2), equalTo(15L));
     }
 
     @Test
