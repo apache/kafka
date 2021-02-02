@@ -942,7 +942,7 @@ class ReplicaManager(val config: KafkaConfig,
                                requiredAcks: Short): Map[TopicPartition, LogAppendResult] = {
     val traceEnabled = isTraceEnabled
     def processFailedRecord(topicPartition: TopicPartition, t: Throwable) = {
-      val logStartOffset: Long = onlinePartition(topicPartition).map(_.logStartOffset).getOrElse(-1)
+      val logStartOffset = onlinePartition(topicPartition).map(_.logStartOffset).getOrElse(-1L)
       brokerTopicStats.topicStats(topicPartition.topic).failedProduceRequestRate.mark()
       brokerTopicStats.allTopicsStats.failedProduceRequestRate.mark()
       error(s"Error processing append operation on partition $topicPartition", t)
