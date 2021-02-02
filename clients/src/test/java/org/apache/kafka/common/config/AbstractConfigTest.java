@@ -279,7 +279,6 @@ public class AbstractConfigTest {
 
         ClassLoader originClassLoader = Thread.currentThread().getContextClassLoader();
         try {
-
             // Test default classloading where all classes are visible to thread context classloader
             Thread.currentThread().setContextClassLoader(defaultClassLoader);
             ClassTestConfig testConfig = new ClassTestConfig();
