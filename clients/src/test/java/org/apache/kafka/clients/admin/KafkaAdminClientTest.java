@@ -5175,7 +5175,8 @@ public class KafkaAdminClientTest {
     public void testDecommissionBrokerSuccess() throws InterruptedException, ExecutionException {
         int decommissionedBrokerNode = 1;
         try (AdminClientUnitTestEnv env = mockClientEnv()) {
-            env.kafkaClient().setNodeApiVersions(NodeApiVersions.create());
+            env.kafkaClient().setNodeApiVersions(
+                    NodeApiVersions.create(ApiKeys.DECOMMISSION_BROKER.id, (short) 0, (short) 0));
             env.kafkaClient().prepareResponse(prepareDecommissionBrokerResponse(Errors.NONE, 0));
 
             DecommissionBrokerResult result = env.adminClient().decommissionBroker(decommissionedBrokerNode);
@@ -5190,7 +5191,8 @@ public class KafkaAdminClientTest {
     public void testDecommissionBrokerFailure() {
         int decommissionedBrokerNode = 1;
         try (AdminClientUnitTestEnv env = mockClientEnv()) {
-            env.kafkaClient().setNodeApiVersions(NodeApiVersions.create());
+            env.kafkaClient().setNodeApiVersions(
+                    NodeApiVersions.create(ApiKeys.DECOMMISSION_BROKER.id, (short) 0, (short) 0));
             env.kafkaClient().prepareResponse(prepareDecommissionBrokerResponse(Errors.BROKER_NOT_AVAILABLE, 0));
 
             DecommissionBrokerResult result = env.adminClient().decommissionBroker(decommissionedBrokerNode);
@@ -5205,7 +5207,8 @@ public class KafkaAdminClientTest {
     public void testDecommissionBrokerNotControllerHandler() throws ExecutionException, InterruptedException {
         int decommissionedBrokerNode = 1;
         try (AdminClientUnitTestEnv env = mockClientEnv()) {
-            env.kafkaClient().setNodeApiVersions(NodeApiVersions.create());
+            env.kafkaClient().setNodeApiVersions(
+                    NodeApiVersions.create(ApiKeys.DECOMMISSION_BROKER.id, (short) 0, (short) 0));
 
             DecommissionBrokerResponseData notControllerErrResponseData = new DecommissionBrokerResponseData()
                     .setErrorCode(Errors.NOT_CONTROLLER.code())
