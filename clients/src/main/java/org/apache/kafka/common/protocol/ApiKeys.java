@@ -102,6 +102,8 @@ public enum ApiKeys {
     DESCRIBE_PRODUCERS(ApiMessageType.DESCRIBE_PRODUCERS),
     BROKER_REGISTRATION(ApiMessageType.BROKER_REGISTRATION, true, RecordBatch.MAGIC_VALUE_V0, false, true),
     BROKER_HEARTBEAT(ApiMessageType.BROKER_HEARTBEAT, true, RecordBatch.MAGIC_VALUE_V0, false, true),
+
+    // Once we have the controller integration for supporting broker decommissioning, we will support forwarding from the broker
     DECOMMISSION_BROKER(ApiMessageType.DECOMMISSION_BROKER, false, RecordBatch.MAGIC_VALUE_V0, true, true);
 
     // The generator ensures every `ApiMessageType` has a unique id
