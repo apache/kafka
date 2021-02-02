@@ -276,7 +276,7 @@ class ReplicaManager(val config: KafkaConfig,
   // being deferred and being deferred again thereafter as the broker (re)acquires/loses its lease.
   // Changes are never deferred when using ZooKeeper.  When true, this indicates that we should transition
   // online partitions to the deferred state if we see a metadata update for that partition.
-  @volatile private var deferringMetadataChanges: Boolean = !config.requiresZookeeper
+  private var deferringMetadataChanges: Boolean = !config.requiresZookeeper
   stateChangeLogger.debug(s"Metadata changes deferred=$deferringMetadataChanges")
 
   def beginMetadataChangeDeferral(): Unit = {
