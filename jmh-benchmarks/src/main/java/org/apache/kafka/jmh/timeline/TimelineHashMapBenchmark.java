@@ -31,6 +31,7 @@ import org.openjdk.jmh.annotations.State;
 import org.openjdk.jmh.annotations.Warmup;
 
 import java.util.HashMap;
+import java.util.Map;
 import java.util.concurrent.TimeUnit;
 
 @State(Scope.Benchmark)
@@ -44,35 +45,36 @@ public class TimelineHashMapBenchmark {
     private final static int NUM_ENTRIES = 1_000_000;
 
     @Benchmark
-    public void testAddEntriesInHashMap() {
-        SnapshotRegistry snapshotRegistry = new SnapshotRegistry(new LogContext());
+    public Map<Integer, String> testAddEntriesInHashMap() {
         HashMap<Integer, String> map = new HashMap<>(NUM_ENTRIES);
         for (int i = 0; i < NUM_ENTRIES; i++) {
-            int key = (int)(0xffffffff & ((i * 2862933555777941757L) + 3037000493L));
+            int key = (int) (0xffffffff & ((i * 2862933555777941757L) + 3037000493L));
             map.put(key, String.valueOf(key));
         }
+        return map;
     }
 
     @Benchmark
-    public void testAddEntriesInTimelineMap() {
+    public Map<Integer, String> testAddEntriesInTimelineMap() {
         SnapshotRegistry snapshotRegistry = new SnapshotRegistry(new LogContext());
         TimelineHashMap<Integer, String> map =
             new TimelineHashMap<>(snapshotRegistry, NUM_ENTRIES);
         for (int i = 0; i < NUM_ENTRIES; i++) {
-            int key = (int)(0xffffffff & ((i * 2862933555777941757L) + 3037000493L));
+            int key = (int) (0xffffffff & ((i * 2862933555777941757L) + 3037000493L));
             map.put(key, String.valueOf(key));
         }
+        return map;
     }
 
     @Benchmark
-    public void testAddEntriesWithSnapshots() {
+    public Map<Integer, String> testAddEntriesWithSnapshots() {
         SnapshotRegistry snapshotRegistry = new SnapshotRegistry(new LogContext());
         TimelineHashMap<Integer, String> map =
             new TimelineHashMap<>(snapshotRegistry, NUM_ENTRIES);
         long epoch = 0;
         int j = 0;
         for (int i = 0; i < NUM_ENTRIES; i++) {
-            int key = (int)(0xffffffff & ((i * 2862933555777941757L) + 3037000493L));
+            int key = (int) (0xffffffff & ((i * 2862933555777941757L) + 3037000493L));
             if (j > 10 && key % 3 == 0) {
                 j = 0;
             } else {
@@ -83,5 +85,6 @@ public class TimelineHashMapBenchmark {
             map.put(key, String.valueOf(key));
             epoch++;
         }
+        return map;
     }
 }
