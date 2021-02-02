@@ -85,7 +85,7 @@ trait KafkaBroker extends KafkaMetricsGroup {
   newKafkaServerGauge("ClusterId", () => clusterId)
   newKafkaServerGauge("yammer-metrics-count", () =>  KafkaYammerMetrics.defaultRegistry.allMetrics.size)
 
-  val linuxIoMetricsCollector = new LinuxIoMetricsCollector("/proc", Time.SYSTEM, logger.underlying)
+  private val linuxIoMetricsCollector = new LinuxIoMetricsCollector("/proc", Time.SYSTEM, logger.underlying)
 
   if (linuxIoMetricsCollector.usable()) {
     newGauge("linux-disk-read-bytes", () => linuxIoMetricsCollector.readBytes())
