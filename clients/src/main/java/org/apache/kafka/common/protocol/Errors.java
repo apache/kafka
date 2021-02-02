@@ -111,6 +111,7 @@ import org.apache.kafka.common.errors.UnknownLeaderEpochException;
 import org.apache.kafka.common.errors.UnknownMemberIdException;
 import org.apache.kafka.common.errors.UnknownProducerIdException;
 import org.apache.kafka.common.errors.UnknownServerException;
+import org.apache.kafka.common.errors.UnknownTopicIdException;
 import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
 import org.apache.kafka.common.errors.UnstableOffsetCommitException;
 import org.apache.kafka.common.errors.UnsupportedByAuthenticationException;
@@ -350,7 +351,8 @@ public enum Errors {
     POSITION_OUT_OF_RANGE(
         99,
         "Requested position is not greater than or equal to zero, and less than the size of the snapshot.",
-        PositionOutOfRangeException::new);
+        PositionOutOfRangeException::new),
+    UNKNOWN_TOPIC_ID(100, "This server does not host this topic ID.", UnknownTopicIdException::new);
 
     private static final Logger log = LoggerFactory.getLogger(Errors.class);
 
