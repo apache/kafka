@@ -436,7 +436,7 @@ class ReplicaManager(val config: KafkaConfig,
             case HostedPartition.Deferred(_) =>
               throw new IllegalStateException("We should never be deferring partition metadata changes and stopping a replica when using ZooKeeper")
 
-            case HostedPartition.Offline =>
+            case HostedPartition.None =>
               // Delete log and corresponding folders in case replica manager doesn't hold them anymore.
               // This could happen when topic is being deleted while broker is down and recovers.
               stoppedPartitions += topicPartition -> partitionState
