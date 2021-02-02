@@ -358,7 +358,7 @@ class ReplicaManager(val config: KafkaConfig,
   private def maybeRemoveTopicMetrics(topic: String): Unit = {
     val topicHasNonOfflinePartition = allPartitions.values.exists {
       case nonOffline: NonOffline => topic == nonOffline.partition.topic
-      case _ => false
+      case HostedPartition.None | HostedPartition.Offline => false
     }
     if (!topicHasNonOfflinePartition) // nothing online or deferred
       brokerTopicStats.removeMetrics(topic)
@@ -942,10 +942,7 @@ class ReplicaManager(val config: KafkaConfig,
                                requiredAcks: Short): Map[TopicPartition, LogAppendResult] = {
     val traceEnabled = isTraceEnabled
     def processFailedRecord(topicPartition: TopicPartition, t: Throwable) = {
-      val logStartOffset = getPartition(topicPartition) match {
-        case HostedPartition.Online(partition) => partition.logStartOffset
-        case _ => -1L
-      }
+      val logStartOffset = onlinePartition(topicPartition).map(_.logStartOffset).getOrElse(-1)
       brokerTopicStats.topicStats(topicPartition.topic).failedProduceRequestRate.mark()
       brokerTopicStats.allTopicsStats.failedProduceRequestRate.mark()
       error(s"Error processing append operation on partition $topicPartition", t)
