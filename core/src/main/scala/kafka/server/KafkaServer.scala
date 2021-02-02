@@ -157,7 +157,7 @@ class KafkaServer(
 
   val featureCache: FinalizedFeatureCache = new FinalizedFeatureCache(brokerFeatures)
 
-  def clusterId(): String = _clusterId
+  def clusterId: String = _clusterId
 
   // Visible for testing
   private[kafka] def zkClient = _zkClient
@@ -195,7 +195,7 @@ class KafkaServer(
 
         /* Get or create cluster_id */
         _clusterId = getOrGenerateClusterId(zkClient)
-        info(s"Cluster ID = ${clusterId()}")
+        info(s"Cluster ID = ${clusterId}")
 
         /* load metadata */
         val (preloadedBrokerMetadataCheckpoint, initialOfflineDirs) =
@@ -208,9 +208,9 @@ class KafkaServer(
         }
 
         /* check cluster id */
-        if (preloadedBrokerMetadataCheckpoint.clusterId.isDefined && preloadedBrokerMetadataCheckpoint.clusterId.get != clusterId())
+        if (preloadedBrokerMetadataCheckpoint.clusterId.isDefined && preloadedBrokerMetadataCheckpoint.clusterId.get != clusterId)
           throw new InconsistentClusterIdException(
-            s"The Cluster ID ${clusterId()} doesn't match stored clusterId ${preloadedBrokerMetadataCheckpoint.clusterId} in meta.properties. " +
+            s"The Cluster ID ${clusterId} doesn't match stored clusterId ${preloadedBrokerMetadataCheckpoint.clusterId} in meta.properties. " +
             s"The broker is trying to join the wrong cluster. Configured zookeeper.connect may be wrong.")
 
         /* generate brokerId */
@@ -229,7 +229,7 @@ class KafkaServer(
         /* create and configure metrics */
         kafkaYammerMetrics = KafkaYammerMetrics.INSTANCE
         kafkaYammerMetrics.configure(config.originals)
-        metrics = Server.initializeMetrics(config, time, clusterId())
+        metrics = Server.initializeMetrics(config, time, clusterId)
 
         /* register broker metrics */
         _brokerTopicStats = new BrokerTopicStats
@@ -282,7 +282,7 @@ class KafkaServer(
         val brokerEpoch = zkClient.registerBroker(brokerInfo)
 
         // Now that the broker is successfully registered, checkpoint its metadata
-        checkpointBrokerMetadata(ZkMetaProperties(clusterId(), config.brokerId))
+        checkpointBrokerMetadata(ZkMetaProperties(clusterId, config.brokerId))
 
         /* start token manager */
         tokenManager = new DelegationTokenManager(config, tokenCache, time , zkClient)
@@ -320,7 +320,7 @@ class KafkaServer(
         authorizer.foreach(_.configure(config.originals))
         val authorizerFutures: Map[Endpoint, CompletableFuture[Void]] = authorizer match {
           case Some(authZ) =>
-            authZ.start(brokerInfo.broker.toServerInfo(clusterId(), config)).asScala.map { case (ep, cs) =>
+            authZ.start(brokerInfo.broker.toServerInfo(clusterId, config)).asScala.map { case (ep, cs) =>
               ep -> cs.toCompletableFuture
             }
           case None =>
@@ -336,7 +336,7 @@ class KafkaServer(
         /* start processing requests */
         dataPlaneRequestProcessor = new KafkaApis(socketServer.dataPlaneRequestChannel, replicaManager, adminManager, groupCoordinator, transactionCoordinator,
           kafkaController, forwardingManager, zkClient, config.brokerId, config, metadataCache, metrics, authorizer, quotaManagers,
-          fetchManager, brokerTopicStats, clusterId(), time, tokenManager, brokerFeatures, featureCache)
+          fetchManager, brokerTopicStats, clusterId, time, tokenManager, brokerFeatures, featureCache)
 
         dataPlaneRequestHandlerPool = new KafkaRequestHandlerPool(config.brokerId, socketServer.dataPlaneRequestChannel, dataPlaneRequestProcessor, time,
           config.numIoThreads, s"${SocketServer.DataPlaneMetricPrefix}RequestHandlerAvgIdlePercent", SocketServer.DataPlaneThreadPrefix)
@@ -344,7 +344,7 @@ class KafkaServer(
         socketServer.controlPlaneRequestChannelOpt.foreach { controlPlaneRequestChannel =>
           controlPlaneRequestProcessor = new KafkaApis(controlPlaneRequestChannel, replicaManager, adminManager, groupCoordinator, transactionCoordinator,
             kafkaController, forwardingManager, zkClient, config.brokerId, config, metadataCache, metrics, authorizer, quotaManagers,
-            fetchManager, brokerTopicStats, clusterId(), time, tokenManager, brokerFeatures, featureCache)
+            fetchManager, brokerTopicStats, clusterId, time, tokenManager, brokerFeatures, featureCache)
 
           controlPlaneRequestHandlerPool = new KafkaRequestHandlerPool(config.brokerId, socketServer.controlPlaneRequestChannelOpt.get, controlPlaneRequestProcessor, time,
             1, s"${SocketServer.ControlPlaneMetricPrefix}RequestHandlerAvgIdlePercent", SocketServer.ControlPlaneThreadPrefix)
@@ -388,11 +388,11 @@ class KafkaServer(
   private[server] def notifyClusterListeners(clusterListeners: Seq[AnyRef]): Unit = {
     val clusterResourceListeners = new ClusterResourceListeners
     clusterResourceListeners.maybeAddAll(clusterListeners.asJava)
-    clusterResourceListeners.onUpdate(new ClusterResource(clusterId()))
+    clusterResourceListeners.onUpdate(new ClusterResource(clusterId))
   }
 
   private[server] def notifyMetricsReporters(metricsReporters: Seq[AnyRef]): Unit = {
-    val metricsContext = Server.createKafkaMetricsContext(config, clusterId())
+    val metricsContext = Server.createKafkaMetricsContext(config, clusterId)
     metricsReporters.foreach {
       case x: MetricsReporter => x.contextChange(metricsContext)
       case _ => //do nothing

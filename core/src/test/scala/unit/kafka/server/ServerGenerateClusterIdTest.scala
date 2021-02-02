@@ -64,7 +64,7 @@ class ServerGenerateClusterIdTest extends ZooKeeperTestHarness {
     servers = Seq(server1)
 
     // Validate the cluster id
-    val clusterIdOnFirstBoot = server1.clusterId()
+    val clusterIdOnFirstBoot = server1.clusterId
     isValidClusterId(clusterIdOnFirstBoot)
 
     server1.shutdown()
@@ -77,7 +77,7 @@ class ServerGenerateClusterIdTest extends ZooKeeperTestHarness {
     server1 = TestUtils.createServer(config1, threadNamePrefix = Option(this.getClass.getName))
     servers = Seq(server1)
 
-    val clusterIdOnSecondBoot = server1.clusterId()
+    val clusterIdOnSecondBoot = server1.clusterId
     assertEquals(clusterIdOnFirstBoot, clusterIdOnSecondBoot)
 
     server1.shutdown()
@@ -92,13 +92,13 @@ class ServerGenerateClusterIdTest extends ZooKeeperTestHarness {
   @Test
   def testAutoGenerateClusterIdForKafkaClusterSequential(): Unit = {
     val server1 = TestUtils.createServer(config1, threadNamePrefix = Option(this.getClass.getName))
-    val clusterIdFromServer1 = server1.clusterId()
+    val clusterIdFromServer1 = server1.clusterId
 
     val server2 = TestUtils.createServer(config2, threadNamePrefix = Option(this.getClass.getName))
-    val clusterIdFromServer2 = server2.clusterId()
+    val clusterIdFromServer2 = server2.clusterId
 
     val server3 = TestUtils.createServer(config3, threadNamePrefix = Option(this.getClass.getName))
-    val clusterIdFromServer3 = server3.clusterId()
+    val clusterIdFromServer3 = server3.clusterId
     servers = Seq(server1, server2, server3)
 
     servers.foreach(_.shutdown())
@@ -108,11 +108,11 @@ class ServerGenerateClusterIdTest extends ZooKeeperTestHarness {
 
     // Check again after reboot
     server1.startup()
-    assertEquals(clusterIdFromServer1, server1.clusterId())
+    assertEquals(clusterIdFromServer1, server1.clusterId)
     server2.startup()
-    assertEquals(clusterIdFromServer2, server2.clusterId())
+    assertEquals(clusterIdFromServer2, server2.clusterId)
     server3.startup()
-    assertEquals(clusterIdFromServer3, server3.clusterId())
+    assertEquals(clusterIdFromServer3, server3.clusterId)
 
     servers.foreach(_.shutdown())
 
@@ -125,9 +125,9 @@ class ServerGenerateClusterIdTest extends ZooKeeperTestHarness {
     servers = Await.result(firstBoot, 100 second)
     val Seq(server1, server2, server3) = servers
 
-    val clusterIdFromServer1 = server1.clusterId()
-    val clusterIdFromServer2 = server2.clusterId()
-    val clusterIdFromServer3 = server3.clusterId()
+    val clusterIdFromServer1 = server1.clusterId
+    val clusterIdFromServer2 = server2.clusterId
+    val clusterIdFromServer3 = server3.clusterId
 
     servers.foreach(_.shutdown())
     isValidClusterId(clusterIdFromServer1)
@@ -139,7 +139,7 @@ class ServerGenerateClusterIdTest extends ZooKeeperTestHarness {
       server
     })
     servers = Await.result(secondBoot, 100 second)
-    servers.foreach(server => assertEquals(clusterIdFromServer1, server.clusterId()))
+    servers.foreach(server => assertEquals(clusterIdFromServer1, server.clusterId))
 
     servers.foreach(_.shutdown())
 
@@ -150,7 +150,7 @@ class ServerGenerateClusterIdTest extends ZooKeeperTestHarness {
   def testConsistentClusterIdFromZookeeperAndFromMetaProps() = {
     // Check at the first boot
     val server = TestUtils.createServer(config1, threadNamePrefix = Option(this.getClass.getName))
-    val clusterId = server.clusterId()
+    val clusterId = server.clusterId
 
     assertTrue(verifyBrokerMetadata(server.config.logDirs, clusterId))
 
@@ -159,8 +159,8 @@ class ServerGenerateClusterIdTest extends ZooKeeperTestHarness {
     // Check again after reboot
     server.startup()
 
-    assertEquals(clusterId, server.clusterId())
-    assertTrue(verifyBrokerMetadata(server.config.logDirs, server.clusterId()))
+    assertEquals(clusterId, server.clusterId)
+    assertTrue(verifyBrokerMetadata(server.config.logDirs, server.clusterId))
 
     server.shutdown()
 

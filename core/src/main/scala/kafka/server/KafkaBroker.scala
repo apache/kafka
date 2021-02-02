@@ -71,14 +71,14 @@ object KafkaBroker {
 
 trait KafkaBroker extends Logging with KafkaMetricsGroup {
   def authorizer: Option[Authorizer]
-  def clusterId(): String
+  def clusterId: String
   def config: KafkaConfig
   def brokerState: BrokerState
   def dataPlaneRequestHandlerPool: KafkaRequestHandlerPool
   def kafkaScheduler: KafkaScheduler
   def kafkaYammerMetrics: KafkaYammerMetrics
   def logManager: LogManager
-  def metrics(): Metrics
+  def metrics: Metrics
   def quotaManagers: QuotaFactory.QuotaManagers
   def replicaManager: ReplicaManager
   def socketServer: SocketServer
@@ -89,7 +89,7 @@ trait KafkaBroker extends Logging with KafkaMetricsGroup {
 
 
   newKafkaServerGauge("BrokerState", () => brokerState.currentState)
-  newKafkaServerGauge("ClusterId", () => clusterId())
+  newKafkaServerGauge("ClusterId", () => clusterId)
   newKafkaServerGauge("yammer-metrics-count", () =>  KafkaYammerMetrics.defaultRegistry.allMetrics.size)
 
   val linuxIoMetricsCollector = new LinuxIoMetricsCollector("/proc", Time.SYSTEM, logger.underlying)

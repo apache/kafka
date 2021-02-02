@@ -735,7 +735,7 @@ class DynamicThreadPool(server: KafkaBroker) extends BrokerReconfigurable {
 class DynamicMetricsReporters(brokerId: Int, server: KafkaBroker) extends Reconfigurable {
 
   private val dynamicConfig = server.config.dynamicConfig
-  private val metrics = server.metrics()
+  private val metrics = server.metrics
   private val propsOverride = Map[String, AnyRef](KafkaConfig.BrokerIdProp -> brokerId.toString)
   private val currentReporters = mutable.Map[String, MetricsReporter]()
 
@@ -796,8 +796,8 @@ class DynamicMetricsReporters(brokerId: Int, server: KafkaBroker) extends Reconf
       metrics.addReporter(reporter)
       currentReporters += reporter.getClass.getName -> reporter
     }
-    KafkaBroker.notifyClusterListeners(server.clusterId(), reporters.asScala)
-    KafkaBroker.notifyMetricsReporters(server.clusterId(), server.config, reporters.asScala)
+    KafkaBroker.notifyClusterListeners(server.clusterId, reporters.asScala)
+    KafkaBroker.notifyMetricsReporters(server.clusterId, server.config, reporters.asScala)
   }
 
   private def removeReporter(className: String): Unit = {
