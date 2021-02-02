@@ -233,7 +233,7 @@ class GssapiAuthenticationTest extends IntegrationTestHarness with SaslSetup {
     val config = new TestSecurityConfig(clientConfig)
     val jaasContexts = Collections.singletonMap("GSSAPI", JaasContext.loadClientContext(config.values()))
     val channelBuilder = new SaslChannelBuilder(Mode.CLIENT, jaasContexts, securityProtocol,
-      null, false, kafkaClientSaslMechanism, true, null, null, time, new LogContext()) {
+      null, false, kafkaClientSaslMechanism, true, null, null, null, time, new LogContext()) {
       override protected def defaultLoginClass(): Class[_ <: Login] = classOf[TestableKerberosLogin]
     }
     channelBuilder.configure(config.values())
