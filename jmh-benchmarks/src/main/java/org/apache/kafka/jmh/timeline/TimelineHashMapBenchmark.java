@@ -76,10 +76,10 @@ public class TimelineHashMapBenchmark {
         for (int i = 0; i < NUM_ENTRIES; i++) {
             int key = (int) (0xffffffff & ((i * 2862933555777941757L) + 3037000493L));
             if (j > 10 && key % 3 == 0) {
-                j = 0;
-            } else {
                 snapshotRegistry.deleteSnapshotsUpTo(epoch - 1000);
                 snapshotRegistry.createSnapshot(epoch);
+                j = 0;
+            } else {
                 j++;
             }
             map.put(key, String.valueOf(key));
