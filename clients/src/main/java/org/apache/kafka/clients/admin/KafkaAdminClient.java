@@ -2514,7 +2514,6 @@ public class KafkaAdminClient extends AdminClient {
                     return new DescribeLogDirsRequest.Builder(new DescribeLogDirsRequestData().setTopics(null));
                 }
 
-                @SuppressWarnings("deprecation")
                 @Override
                 public void handleResponse(AbstractResponse abstractResponse) {
                     DescribeLogDirsResponse response = (DescribeLogDirsResponse) abstractResponse;
