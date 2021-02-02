@@ -331,7 +331,6 @@ public class StateDirectoryTest {
         }
     }
 
-
     @Test
     public void shouldCleanupStateDirectoriesWhenLastModifiedIsLessThanNowMinusCleanupDelay() {
         final File dir = directory.directoryForTask(new TaskId(2, 0));
@@ -649,10 +648,9 @@ public class StateDirectoryTest {
             final long cleanupDelayMs = 0;
             time.sleep(5000);
             directory.cleanRemovedTasks(cleanupDelayMs);
-            assertThat(appender.getMessages(), hasItem(endsWith("ms has elapsed (cleanup delay is " +  cleanupDelayMs + "ms).")));
+            assertThat(appender.getMessages(), hasItem(endsWith("ms has elapsed (cleanup delay is " + cleanupDelayMs + "ms).")));
         }
     }
-
 
     @Test
     public void shouldLogTempDirMessage() {
@@ -671,7 +669,7 @@ public class StateDirectoryTest {
                 appender.getMessages(),
                 hasItem("Using an OS temp directory in the state.dir property can cause failures with writing the" +
                             " checkpoint file due to the fact that this directory can be cleared by the OS." +
-                            " Resolved state.dir: [/tmp/kafka-streams]")
+                            " Resolved state.dir: [" + System.getProperty("java.io.tmpdir") + "/kafka-streams]")
             );
         }
     }
