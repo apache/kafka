@@ -32,10 +32,11 @@ import scala.jdk.CollectionConverters._
 
 object MetadataBroker {
   def apply(record: RegisterBrokerRecord): MetadataBroker = {
-    new MetadataBroker(record.brokerId(), record.rack(),
+    new MetadataBroker(record.brokerId, record.rack,
       record.endPoints().asScala.map {
-        case e => e.name() ->
-          new Node(record.brokerId(), e.host(), e.port(), record.rack())
+        endPoint =>
+          endPoint.name() ->
+            new Node(record.brokerId, endPoint.host, endPoint.port, record.rack)
       }.toMap,
       true)
   }
@@ -46,10 +47,10 @@ case class MetadataBroker(id: Int,
                           endpoints: collection.Map[String, Node],
                           fenced: Boolean) {
   def brokerEndPoint(listenerName: ListenerName): BrokerEndPoint = {
-    endpoints.get(listenerName.value()) match {
+    endpoints.get(listenerName.value) match {
       case None => throw new BrokerEndPointNotAvailableException(
         s"End point with listener name ${listenerName.value} not found for broker $id")
-      case Some(node) => new BrokerEndPoint(node.id(), node.host(), node.port())
+      case Some(node) => new BrokerEndPoint(node.id, node.host, node.port)
     }
   }
 }
@@ -90,14 +91,15 @@ object MetadataBrokers {
     var prevListeners: collection.Set[String] = null
     val _aliveBrokers = new util.ArrayList[MetadataBroker](brokerMap.size())
     brokerMap.values().iterator().asScala.foreach {
-      case broker => if (!broker.fenced) {
-        if (prevListeners == null) {
-          prevListeners = broker.endpoints.keySet
-        } else if (!prevListeners.equals(broker.endpoints.keySet)) {
-          listenersIdenticalAcrossBrokers = false
+      broker =>
+        if (!broker.fenced) {
+          if (prevListeners == null) {
+            prevListeners = broker.endpoints.keySet
+          } else if (!prevListeners.equals(broker.endpoints.keySet)) {
+            listenersIdenticalAcrossBrokers = false
+          }
+          _aliveBrokers.add(broker)
         }
-        _aliveBrokers.add(broker)
-      }
     }
     if (!listenersIdenticalAcrossBrokers) {
       log.error("Listeners are not identical across alive brokers. " +
@@ -108,7 +110,7 @@ object MetadataBrokers {
   }
 }
 
-case class MetadataBrokers(private val _aliveBrokers: util.List[MetadataBroker],
+case class MetadataBrokers(private val aliveBrokersList: util.List[MetadataBroker],
                            private val brokerMap: util.Map[Integer, MetadataBroker]) {
   def size(): Int = brokerMap.size()
 
@@ -120,24 +122,19 @@ case class MetadataBrokers(private val _aliveBrokers: util.List[MetadataBroker],
     result
   }
 
-  def getAlive(id: Int): Option[MetadataBroker] = {
-    val broker = get(id)
-    if (broker.isDefined && !broker.get.fenced) {
-      broker
-    } else {
-      None
-    }
+  def aliveBroker(id: Int): Option[MetadataBroker] = {
+    get(id).filter(!_.fenced)
   }
 
   def randomAliveBrokerId(): Option[Int] = {
-    if (_aliveBrokers.isEmpty()) {
+    if (aliveBrokersList.isEmpty) {
       None
     } else {
-      Some(_aliveBrokers.get(ThreadLocalRandom.current().nextInt(_aliveBrokers.size())).id)
+      Some(aliveBrokersList.get(ThreadLocalRandom.current().nextInt(aliveBrokersList.size())).id)
     }
   }
 
-  def aliveBrokers(): util.List[MetadataBroker] = _aliveBrokers
+  def aliveBrokers(): util.List[MetadataBroker] = aliveBrokersList
 
   def get(id: Int): Option[MetadataBroker] = Option(brokerMap.get(id))
 }

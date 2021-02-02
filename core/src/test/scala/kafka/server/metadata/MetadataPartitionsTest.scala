@@ -17,7 +17,6 @@
 
 package kafka.server.metadata
 
-import java.util
 import java.util.Collections
 import org.apache.kafka.common.Uuid
 import org.junit.jupiter.api.Assertions._
@@ -32,22 +31,22 @@ import scala.jdk.CollectionConverters._
 @Timeout(value = 120000, unit = TimeUnit.MILLISECONDS)
 class MetadataPartitionsTest {
 
-  val log = LoggerFactory.getLogger(classOf[MetadataPartitionsTest])
+  private val log = LoggerFactory.getLogger(classOf[MetadataPartitionsTest])
 
-  val emptyPartitions = new MetadataPartitions(Collections.emptyMap(), Collections.emptyMap())
+  val emptyPartitions = MetadataPartitions(Collections.emptyMap(), Collections.emptyMap())
 
   private def newPartition(topicName: String,
                            partitionIndex: Int,
                            replicas: Option[Seq[Int]] = None,
                            isr: Option[Seq[Int]] = None): MetadataPartition = {
-    val effectiveReplicas = replicas match {
-      case None => util.Arrays.asList(Integer.valueOf(partitionIndex),
-        Integer.valueOf(partitionIndex + 1), Integer.valueOf(partitionIndex + 2))
-      case Some(s) => s.map(Integer.valueOf(_)).toList.asJava
-    }
+    val effectiveReplicas = replicas
+      .getOrElse(List(partitionIndex, partitionIndex + 1, partitionIndex + 2))
+      .map(Int.box)
+      .toList.asJava
+
     val effectiveIsr = isr match {
       case None => effectiveReplicas
-      case Some(s) => s.map(Integer.valueOf(_)).toList.asJava
+      case Some(s) => s.map(Integer.valueOf).toList.asJava
     }
     new MetadataPartition(topicName,
       partitionIndex,
@@ -69,10 +68,10 @@ class MetadataPartitionsTest {
     builder.set(newPartition("foo", 1))
     builder.set(newPartition("bar", 0))
     val partitions = builder.build()
-    assertEquals(Some(newPartition("foo", 0)), partitions.get("foo", 0))
-    assertEquals(Some(newPartition("foo", 1)), partitions.get("foo", 1))
-    assertEquals(None, partitions.get("foo", 2))
-    assertEquals(Some(newPartition("bar", 0)), partitions.get("bar", 0))
+    assertEquals(Some(newPartition("foo", 0)), partitions.topicPartition("foo", 0))
+    assertEquals(Some(newPartition("foo", 1)), partitions.topicPartition("foo", 1))
+    assertEquals(None, partitions.topicPartition("foo", 2))
+    assertEquals(Some(newPartition("bar", 0)), partitions.topicPartition("bar", 0))
   }
 
   @Test
@@ -85,7 +84,7 @@ class MetadataPartitionsTest {
     expected += newPartition("bar", 0)
     expected += newPartition("bar", 1)
     expected += newPartition("baz", 0)
-    expected.foreach { builder.set(_) }
+    expected.foreach { builder.set }
     val partitions = builder.build()
     val found = new mutable.HashSet[MetadataPartition]()
     partitions.allPartitions().foreach { found += _ }

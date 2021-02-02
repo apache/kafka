@@ -39,15 +39,15 @@ case class MetadataImageBuilder(brokerId: Int,
 
   def hasPartitionChanges(): Boolean = _partitionsBuilder != null
 
-  def topicIdToName(uuid: Uuid): Option[String] = {
+  def topicIdToName(topicId: Uuid): Option[String] = {
     if (_partitionsBuilder != null) {
-      _partitionsBuilder.topicIdToName(uuid)
+      _partitionsBuilder.topicIdToName(topicId)
     } else {
-      prevImage.topicIdToName(uuid)
+      prevImage.topicIdToName(topicId)
     }
   }
 
-  def setControllerId(controllerId: Option[Int]) = {
+  def controllerId(controllerId: Option[Int]) = {
     _controllerId = controllerId
   }
 
@@ -68,7 +68,7 @@ case class MetadataImageBuilder(brokerId: Int,
 
   def partition(topicName: String, partitionId: Int): Option[MetadataPartition] = {
     if (_partitionsBuilder == null) {
-      prevImage.partitions.get(topicName, partitionId)
+      prevImage.partitions.topicPartition(topicName, partitionId)
     } else {
       _partitionsBuilder.get(topicName, partitionId)
     }
@@ -105,15 +105,15 @@ case class MetadataImage(partitions: MetadataPartitions,
   }
 
   def contains(partition: TopicPartition): Boolean =
-    partitions.get(partition.topic(), partition.partition()).isDefined
+    partitions.topicPartition(partition.topic(), partition.partition()).isDefined
 
   def contains(topic: String): Boolean = partitions.topicPartitions(topic).hasNext
 
-  def getAliveBroker(id: Int): Option[MetadataBroker] = brokers.getAlive(id)
+  def aliveBroker(id: Int): Option[MetadataBroker] = brokers.aliveBroker(id)
 
   def numAliveBrokers(): Int = brokers.aliveBrokers().size
 
-  def controller(): Option[MetadataBroker] = controllerId.flatMap(id => brokers.getAlive(id))
+  def controller(): Option[MetadataBroker] = controllerId.flatMap(id => brokers.aliveBroker(id))
 
   def topicIdToName(uuid: Uuid): Option[String] = {
     partitions.topicIdToName(uuid)

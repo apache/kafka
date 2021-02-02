@@ -19,7 +19,6 @@ package kafka.server.metadata
 
 import java.util
 import java.util.Collections
-import java.util.function.BiConsumer
 
 import org.apache.kafka.common.message.LeaderAndIsrRequestData
 import org.apache.kafka.common.message.LeaderAndIsrRequestData.LeaderAndIsrPartitionState
@@ -67,7 +66,7 @@ case class MetadataPartition(topicName: String,
                              offlineReplicas: util.List[Integer],
                              addingReplicas: util.List[Integer],
                              removingReplicas: util.List[Integer]) {
-  def toTopicPartition(): TopicPartition = new TopicPartition(topicName, partitionIndex)
+  def toTopicPartition: TopicPartition = new TopicPartition(topicName, partitionIndex)
 
   def toLeaderAndIsrPartitionState(isNew: Boolean): LeaderAndIsrRequestData.LeaderAndIsrPartitionState = {
     new LeaderAndIsrPartitionState().setTopicName(topicName).
@@ -109,7 +108,7 @@ class MetadataPartitionsBuilder(val brokerId: Int,
 
   def removeTopicById(id: Uuid): Iterable[MetadataPartition] = {
     Option(newIdMap.remove(id)) match {
-      case None => throw new RuntimeException(s"Unable to locate topic with ID ${id}")
+      case None => throw new RuntimeException(s"Unable to locate topic with ID $id")
       case Some(name) => newNameMap.remove(name).values().asScala
     }
   }
@@ -118,9 +117,9 @@ class MetadataPartitionsBuilder(val brokerId: Int,
     Option(newIdMap.get(record.topicId())) match {
       case None => throw new RuntimeException(s"Unable to locate topic with ID ${record.topicId()}")
       case Some(name) => Option(newNameMap.get(name)) match {
-        case None => throw new RuntimeException(s"Unable to locate topic with name ${name}")
+        case None => throw new RuntimeException(s"Unable to locate topic with name $name")
         case Some(partitionMap) => Option(partitionMap.get(record.partitionId())) match {
-          case None => throw new RuntimeException(s"Unable to locate ${name}-${record.partitionId}")
+          case None => throw new RuntimeException(s"Unable to locate $name-${record.partitionId}")
           case Some(partition) => set(partition.copyWithIsrChanges(record))
         }
       }
@@ -176,12 +175,11 @@ class MetadataPartitionsBuilder(val brokerId: Int,
             _localRemoved.add(prevPartition)
           }
           val newPartitionMap = new util.HashMap[Int, MetadataPartition](prevPartitionMap.size() - 1)
-          prevPartitionMap.forEach(new BiConsumer[Int, MetadataPartition]() {
-            override def accept(key: Int, value: MetadataPartition): Unit =
-              if (!key.equals(partitionId)) {
-                newPartitionMap.put(key, value)
-              }
-          })
+          prevPartitionMap.forEach { (prevPartitionId, prevPartition) =>
+            if (!prevPartitionId.equals(partitionId)) {
+              newPartitionMap.put(prevPartitionId, prevPartition)
+            }
+          }
           changed.put(newPartitionMap, true)
           newNameMap.put(topicName, newPartitionMap)
         }
@@ -190,7 +188,7 @@ class MetadataPartitionsBuilder(val brokerId: Int,
   }
 
   def build(): MetadataPartitions = {
-    val result = new MetadataPartitions(newNameMap, newIdMap)
+    val result = MetadataPartitions(newNameMap, newIdMap)
     newNameMap = Collections.unmodifiableMap(newNameMap)
     newIdMap = Collections.unmodifiableMap(newIdMap)
     result
@@ -239,7 +237,7 @@ case class MetadataPartitions(private val nameMap: util.Map[String, util.Map[Int
     }
   }
 
-  def get(topicName: String, partitionId: Int): Option[MetadataPartition] = {
+  def topicPartition(topicName: String, partitionId: Int): Option[MetadataPartition] = {
     Option(nameMap.get(topicName)).flatMap(m => Option(m.get(partitionId)))
   }
 
@@ -249,11 +247,11 @@ case class MetadataPartitions(private val nameMap: util.Map[String, util.Map[Int
 class AllPartitionsIterator(nameMap: util.Map[String, util.Map[Int, MetadataPartition]])
     extends util.Iterator[MetadataPartition] {
 
-  val outerIterator = nameMap.values().iterator()
+  val outerIterator: util.Iterator[util.Map[Int, MetadataPartition]] = nameMap.values().iterator()
 
   var innerIterator: util.Iterator[MetadataPartition] = Collections.emptyIterator()
 
-  var _next: MetadataPartition = null
+  var _next: MetadataPartition = _
 
   override def hasNext: Boolean = {
     if (_next != null) {

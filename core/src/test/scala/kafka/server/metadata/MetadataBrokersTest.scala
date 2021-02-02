@@ -31,7 +31,7 @@ import scala.jdk.CollectionConverters._
 @Timeout(value = 120000, unit = TimeUnit.MILLISECONDS)
 class MetadataBrokersTest {
 
-  val log = LoggerFactory.getLogger(classOf[MetadataBrokersTest])
+  private val log = LoggerFactory.getLogger(classOf[MetadataBrokersTest])
 
   val emptyBrokers = new MetadataBrokers(Collections.emptyList(), Collections.emptyMap())
 
@@ -62,6 +62,8 @@ class MetadataBrokersTest {
     assertTrue(builder.get(0).get.fenced)
     builder.changeFencing(0, false)
     assertFalse(builder.get(0).get.fenced)
+    val brokers = builder.build()
+    assertTrue(brokers.aliveBroker(0).isDefined)
   }
 
   @Test
@@ -73,17 +75,17 @@ class MetadataBrokersTest {
     builder.changeFencing(1, true)
     val brokers = builder.build()
     assertEquals(2, brokers.aliveBrokers().size())
-    assertTrue(brokers.aliveBrokers().asScala.filter(_.id == 0).nonEmpty)
-    assertTrue(brokers.aliveBrokers().asScala.filter(_.id == 1).isEmpty)
-    assertTrue(brokers.aliveBrokers().asScala.filter(_.id == 2).nonEmpty)
-    while (!brokers.randomAliveBrokerId().equals(Some(0))) { }
-    while (!brokers.randomAliveBrokerId().equals(Some(2))) { }
+    assertTrue(brokers.aliveBrokers().asScala.exists(_.id == 0))
+    assertTrue(!brokers.aliveBrokers().asScala.exists(_.id == 1))
+    assertTrue(brokers.aliveBrokers().asScala.exists(_.id == 2))
+    while (!brokers.randomAliveBrokerId().contains(0)) { }
+    while (!brokers.randomAliveBrokerId().contains(2)) { }
     assertEquals(3, brokers.size())
     assertEquals(Some(TestUtils.createMetadataBroker(0)), brokers.get(0))
     assertEquals(Some(TestUtils.createMetadataBroker(1, fenced = true)), brokers.get(1))
     assertEquals(Some(TestUtils.createMetadataBroker(2)), brokers.get(2))
     assertEquals(None, brokers.get(3))
-    assertEquals(Some(TestUtils.createMetadataBroker(0)), brokers.getAlive(0))
-    assertEquals(None, brokers.getAlive(1))
+    assertEquals(Some(TestUtils.createMetadataBroker(0)), brokers.aliveBroker(0))
+    assertEquals(None, brokers.aliveBroker(1))
   }
 }
