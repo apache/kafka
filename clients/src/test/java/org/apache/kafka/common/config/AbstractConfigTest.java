@@ -277,7 +277,7 @@ public class AbstractConfigTest {
         ClassLoader restrictedClassLoader = new RestrictedClassLoader();
         ClassLoader defaultClassLoader = AbstractConfig.class.getClassLoader();
 
-        ClassLoader origin = Thread.currentThread().getContextClassLoader();
+        ClassLoader originClassLoader = Thread.currentThread().getContextClassLoader();
         try {
 
             // Test default classloading where all classes are visible to thread context classloader
@@ -319,7 +319,7 @@ public class AbstractConfigTest {
             assertThrows(KafkaException.class, () -> config2.getConfiguredInstances("list.prop", MetricsReporter.class),
                 "Should have failed to load class");
         } finally {
-            Thread.currentThread().setContextClassLoader(origin);
+            Thread.currentThread().setContextClassLoader(originClassLoader);
         }
     }
 
