@@ -589,9 +589,6 @@ public class IncrementalCooperativeAssignor implements ConnectAssignor {
                     w -> new ConnectorsAndTasks.Builder().build());
                 resources.connectors().add(connectors.next());
             }
-            if (numToRevoke == 0) {
-                break;
-            }
         }
 
         for (WorkerLoad existing : existingWorkers) {
