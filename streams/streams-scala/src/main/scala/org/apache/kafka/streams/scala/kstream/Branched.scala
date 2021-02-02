@@ -18,8 +18,6 @@ package org.apache.kafka.streams.scala.kstream
 
 import org.apache.kafka.streams.kstream.{Branched => BranchedJ, KStream => KStreamJ}
 
-import scala.jdk.FunctionConverters._
-
 object Branched {
 
   /**
@@ -48,9 +46,7 @@ object Branched {
    * @see `org.apache.kafka.streams.kstream.Branched#withFunction(java.util.function.Function, java.lang.String)`
    */
   def withFunction[K, V](chain: KStream[K, V] => KStream[K, V], name: String = null): BranchedJ[K, V] =
-    BranchedJ.withFunction({ s: KStreamJ[K, V] =>
-      chain.apply(new KStream[K, V](s)).inner
-    }.asJava, name)
+    BranchedJ.withFunction((f: KStreamJ[K, V]) => chain.apply(new KStream[K, V](f)).inner, name)
 
   /**
    * Create an instance of `Branched` with provided chain consumer and branch name suffix.
@@ -67,7 +63,5 @@ object Branched {
    * @see `org.apache.kafka.streams.kstream.Branched#withConsumer(java.util.function.Consumer, java.lang.String)`
    */
   def withConsumer[K, V](chain: KStream[K, V] => Unit, name: String = null): BranchedJ[K, V] =
-    BranchedJ.withConsumer({ s: KStreamJ[K, V] =>
-      chain.apply(new KStream[K, V](s))
-    }.asJava, name)
+    BranchedJ.withConsumer((c: KStreamJ[K, V]) => chain.apply(new KStream[K, V](c)), name)
 }
