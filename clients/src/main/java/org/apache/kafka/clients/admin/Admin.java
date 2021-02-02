@@ -1486,9 +1486,9 @@ public interface Admin extends AutoCloseable {
     UpdateFeaturesResult updateFeatures(Map<String, FeatureUpdate> featureUpdates, UpdateFeaturesOptions options);
 
     /**
-     * Unregisters a broker.
+     * Permanently remove a broker and reassign any partitions on the broker.
      * <p>
-     * This operation is supported only on self-managed Kafka clusters.
+     * This operation is supported only on self-managed Kafka clusters (i.e. brokers which do not rely on Zookeeper).
      *
      * @param brokerId  the broker id to unregister.
      *
@@ -1501,9 +1501,9 @@ public interface Admin extends AutoCloseable {
     }
 
     /**
-     * Unregisters a broker.
+     * Permanently remove a broker and reassign any partitions on the broker.
      * <p>
-     * This operation is supported only on self-managed Kafka clusters.
+     * This operation is supported only on self-managed Kafka clusters (i.e. brokers which do not rely on Zookeeper).
      *
      * The following exceptions can be anticipated when calling {@code get()} on the future from the
      * returned {@link DescribeFeaturesResult}:

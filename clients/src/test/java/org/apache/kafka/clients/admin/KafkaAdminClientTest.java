@@ -5193,40 +5193,13 @@ public class KafkaAdminClientTest {
         try (AdminClientUnitTestEnv env = mockClientEnv()) {
             env.kafkaClient().setNodeApiVersions(
                     NodeApiVersions.create(ApiKeys.DECOMMISSION_BROKER.id, (short) 0, (short) 0));
-            env.kafkaClient().prepareResponse(prepareDecommissionBrokerResponse(Errors.BROKER_NOT_AVAILABLE, 0));
+            env.kafkaClient().prepareResponse(prepareDecommissionBrokerResponse(Errors.UNKNOWN_SERVER_ERROR, 0));
 
             DecommissionBrokerResult result = env.adminClient().decommissionBroker(decommissionedBrokerNode);
 
             // Validate response
             assertNotNull(result.all());
-            TestUtils.assertFutureThrows(result.all(), Errors.BROKER_NOT_AVAILABLE.exception().getClass());
-        }
-    }
-
-    @Test
-    public void testDecommissionBrokerNotControllerHandler() throws ExecutionException, InterruptedException {
-        int decommissionedBrokerNode = 1;
-        try (AdminClientUnitTestEnv env = mockClientEnv()) {
-            env.kafkaClient().setNodeApiVersions(
-                    NodeApiVersions.create(ApiKeys.DECOMMISSION_BROKER.id, (short) 0, (short) 0));
-
-            DecommissionBrokerResponseData notControllerErrResponseData = new DecommissionBrokerResponseData()
-                    .setErrorCode(Errors.NOT_CONTROLLER.code())
-                    .setErrorMessage(Errors.NOT_CONTROLLER.message());
-            MetadataResponse controllerNodeResponse = RequestTestUtils.metadataResponse(env.cluster().nodes(),
-                    env.cluster().clusterResource().clusterId(), 1, Collections.emptyList());
-            DecommissionBrokerResponseData normalResponseData = new DecommissionBrokerResponseData();
-
-            // Queue responses
-            env.kafkaClient().prepareResponse(new DecommissionBrokerResponse(notControllerErrResponseData));
-            env.kafkaClient().prepareResponse(controllerNodeResponse);
-            env.kafkaClient().prepareResponse(new DecommissionBrokerResponse(normalResponseData));
-
-            DecommissionBrokerResult result = env.adminClient().decommissionBroker(decommissionedBrokerNode);
-
-            // Validate response
-            assertNotNull(result.all());
-            result.all().get();
+            TestUtils.assertFutureThrows(result.all(), Errors.UNKNOWN_SERVER_ERROR.exception().getClass());
         }
     }
 

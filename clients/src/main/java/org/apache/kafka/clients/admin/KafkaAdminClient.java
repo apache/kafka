@@ -4631,9 +4631,6 @@ public class KafkaAdminClient extends AdminClient {
                     case NONE:
                         future.complete(null);
                         break;
-                    case NOT_CONTROLLER:
-                        handleNotControllerError(error);
-                        break;
                     default:
                         future.completeExceptionally(error.exception());
                         break;

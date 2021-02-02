@@ -104,6 +104,7 @@ public enum ApiKeys {
     BROKER_HEARTBEAT(ApiMessageType.BROKER_HEARTBEAT, true, RecordBatch.MAGIC_VALUE_V0, false, true),
 
     // Once we have the controller integration for supporting broker decommissioning, we will support forwarding from the broker
+    // This is a short-term workaround to avoid advertizing the API on Zookeeper-based brokers
     DECOMMISSION_BROKER(ApiMessageType.DECOMMISSION_BROKER, false, RecordBatch.MAGIC_VALUE_V0, true, true);
 
     // The generator ensures every `ApiMessageType` has a unique id
