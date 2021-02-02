@@ -58,6 +58,11 @@ private[kafka] object AppendOrigin {
    * The log append came from the client, which implies full validation.
    */
   case object Client extends AppendOrigin
+
+  /**
+   * The log append come from the raft leader, which implies the offsets has been assigned
+   */
+  case object RaftLeader extends AppendOrigin
 }
 
 private[log] object LogValidator extends Logging {
