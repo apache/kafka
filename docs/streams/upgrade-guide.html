@@ -114,6 +114,13 @@
         <code>StreamsUncaughtExceptionHandler</code> return <code>REPLACE_THREAD</code>.
         When all stream threads are dead there is no automatic transition to ERROR as a new stream thread can be added.
     </p>
+    <p>
+        The <code>TimeWindowedDeserializer</code> constructor <code>TimeWindowedDeserializer(final Deserializer inner)</code>
+        was deprecated to encourage users to properly set their window size through <code>TimeWindowedDeserializer(final Deserializer inner, Long windowSize)</code>.
+        An additional streams config, <code>window.size.ms</code>, was added for users that cannot set the window size through
+        the constructor, such as when using the console consumer. <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-659%3A+Improve+TimeWindowedDeserializer+and+TimeWindowedSerde+to+handle+window+size">KIP-659</a>
+        has more details.
+    </p>
 
     <h3><a id="streams_api_changes_270" href="#streams_api_changes_270">Streams API changes in 2.7.0</a></h3>
     <p>
