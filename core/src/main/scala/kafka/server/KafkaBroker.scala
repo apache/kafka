@@ -23,7 +23,7 @@ import com.yammer.metrics.{core => yammer}
 import kafka.log.LogManager
 import kafka.metrics.{KafkaMetricsGroup, KafkaYammerMetrics, LinuxIoMetricsCollector}
 import kafka.network.SocketServer
-import kafka.utils.{KafkaScheduler, Logging}
+import kafka.utils.KafkaScheduler
 import org.apache.kafka.clients.CommonClientConfigs
 import org.apache.kafka.common.ClusterResource
 import org.apache.kafka.common.internals.ClusterResourceListeners
@@ -67,7 +67,7 @@ object KafkaBroker {
   }
 }
 
-trait KafkaBroker extends Logging with KafkaMetricsGroup {
+trait KafkaBroker extends KafkaMetricsGroup {
   def authorizer: Option[Authorizer]
   def clusterId: String
   def config: KafkaConfig
