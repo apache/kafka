@@ -18,11 +18,10 @@ package kafka.common
 
 import java.util.Map.Entry
 import java.util.{ArrayDeque, ArrayList, Collection, Collections, HashMap, Iterator}
-
 import kafka.utils.ShutdownableThread
 import org.apache.kafka.clients.{ClientRequest, ClientResponse, KafkaClient, RequestCompletionHandler}
 import org.apache.kafka.common.Node
-import org.apache.kafka.common.errors.AuthenticationException
+import org.apache.kafka.common.errors.{AuthenticationException, DisconnectException}
 import org.apache.kafka.common.internals.FatalExitError
 import org.apache.kafka.common.requests.AbstractRequest
 import org.apache.kafka.common.utils.Time
@@ -78,6 +77,9 @@ abstract class InterBrokerSendThread(
       failExpiredRequests(now)
       unsentRequests.clean()
     } catch {
+      case _: DisconnectException if isShutdownInitiated =>
+        // DisconnectException is caused by NetworkClient#ensureActive
+        // this thread is closing so this error is acceptable
       case e: FatalExitError => throw e
       case t: Throwable =>
         error(s"unhandled exception caught in InterBrokerSendThread", t)
