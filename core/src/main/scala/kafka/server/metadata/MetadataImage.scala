@@ -37,7 +37,7 @@ case class MetadataImageBuilder(brokerId: Int,
     _partitionsBuilder
   }
 
-  def hasPartitionChanges(): Boolean = _partitionsBuilder != null
+  def hasPartitionChanges: Boolean = _partitionsBuilder != null
 
   def topicIdToName(topicId: Uuid): Option[String] = {
     if (_partitionsBuilder != null) {
@@ -47,7 +47,7 @@ case class MetadataImageBuilder(brokerId: Int,
     }
   }
 
-  def controllerId(controllerId: Option[Int]) = {
+  def controllerId(controllerId: Option[Int]): Unit = {
     _controllerId = controllerId
   }
 
@@ -74,7 +74,7 @@ case class MetadataImageBuilder(brokerId: Int,
     }
   }
 
-  def hasChanges(): Boolean = {
+  def hasChanges: Boolean = {
     _partitionsBuilder != null ||
       !_controllerId.equals(prevImage.controllerId) ||
       _brokersBuilder != null
@@ -99,7 +99,7 @@ case class MetadataImage(partitions: MetadataPartitions,
                          controllerId: Option[Int],
                          brokers: MetadataBrokers) {
   def this() = {
-    this(new MetadataPartitions(Collections.emptyMap(), Collections.emptyMap()),
+    this(MetadataPartitions(Collections.emptyMap(), Collections.emptyMap()),
       None,
       new MetadataBrokers(Collections.emptyList(), new util.HashMap[Integer, MetadataBroker]()))
   }
