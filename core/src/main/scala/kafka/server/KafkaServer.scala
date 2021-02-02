@@ -35,9 +35,8 @@ import kafka.security.CredentialProvider
 import kafka.utils._
 import kafka.zk.{BrokerInfo, KafkaZkClient}
 import org.apache.kafka.clients.{ApiVersions, ClientDnsLookup, ManualMetadataUpdater, NetworkClient, NetworkClientUtils}
-import org.apache.kafka.common.internals.ClusterResourceListeners
 import org.apache.kafka.common.message.ControlledShutdownRequestData
-import org.apache.kafka.common.metrics.{Metrics, MetricsReporter}
+import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.network._
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests.{ControlledShutdownRequest, ControlledShutdownResponse}
@@ -45,7 +44,7 @@ import org.apache.kafka.common.security.scram.internals.ScramMechanism
 import org.apache.kafka.common.security.token.delegation.internals.DelegationTokenCache
 import org.apache.kafka.common.security.{JaasContext, JaasUtils}
 import org.apache.kafka.common.utils.{AppInfoParser, LogContext, Time}
-import org.apache.kafka.common.{ClusterResource, Endpoint, Node}
+import org.apache.kafka.common.{Endpoint, Node}
 import org.apache.kafka.server.authorizer.Authorizer
 import org.apache.zookeeper.client.ZKClientConfig
 
@@ -235,7 +234,7 @@ class KafkaServer(
         _brokerTopicStats = new BrokerTopicStats
 
         quotaManagers = QuotaFactory.instantiate(config, metrics, time, threadNamePrefix.getOrElse(""))
-        notifyClusterListeners(kafkaMetricsReporters ++ metrics.reporters.asScala)
+        KafkaBroker.notifyClusterListeners(clusterId, kafkaMetricsReporters ++ metrics.reporters.asScala)
 
         logDirFailureChannel = new LogDirFailureChannel(config.logDirs.size)
 
@@ -382,20 +381,6 @@ class KafkaServer(
         isStartingUp.set(false)
         shutdown()
         throw e
-    }
-  }
-
-  private[server] def notifyClusterListeners(clusterListeners: Seq[AnyRef]): Unit = {
-    val clusterResourceListeners = new ClusterResourceListeners
-    clusterResourceListeners.maybeAddAll(clusterListeners.asJava)
-    clusterResourceListeners.onUpdate(new ClusterResource(clusterId))
-  }
-
-  private[server] def notifyMetricsReporters(metricsReporters: Seq[AnyRef]): Unit = {
-    val metricsContext = Server.createKafkaMetricsContext(config, clusterId)
-    metricsReporters.foreach {
-      case x: MetricsReporter => x.contextChange(metricsContext)
-      case _ => //do nothing
     }
   }
 
