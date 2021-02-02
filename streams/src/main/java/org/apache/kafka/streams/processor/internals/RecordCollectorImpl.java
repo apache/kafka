@@ -113,7 +113,7 @@ public class RecordCollectorImpl implements RecordCollector {
             try {
                 partitions = streamsProducer.partitionsFor(topic);
             } catch (final TimeoutException timeoutException) {
-                log.debug("Could not get partitions for topic {}, will retry", topic);
+                log.warn("Could not get partitions for topic {}, will retry", topic);
 
                 // re-throw to trigger `task.timeout.ms`
                 throw timeoutException;
@@ -121,7 +121,9 @@ public class RecordCollectorImpl implements RecordCollector {
                 // here we cannot drop the message on the floor even if it is a transient timeout exception,
                 // so we treat everything the same as a fatal exception
                 throw new StreamsException("Could not determine the number of partitions for topic '" + topic +
-                    "' for task " + taskId + " due to " + fatal.toString());
+                    "' for task " + taskId + " due to " + fatal.toString(),
+                    fatal
+                );
             }
             if (partitions.size() > 0) {
                 partition = partitioner.partition(topic, key, value, partitions.size());
