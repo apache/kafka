@@ -155,10 +155,18 @@ case class FetchPartitionData(error: Errors = Errors.NONE,
 
 /**
  * Trait to represent the state of hosted partitions. We create a concrete (active) Partition
- * instance when the broker receives a LeaderAndIsr request from the controller indicating
- * that it should be either a leader or follower of a partition.
+ * instance when the broker receives a LeaderAndIsr request from the controller or a metadata
+ * log record from the Quorum controller indicating that the broker should be either a leader
+ * or follower of a partition.
  */
 sealed trait HostedPartition
+
+/**
+ * Trait to represent a partition that isn't Offline -- i.e. it is either Online or it is Deferred
+ */
+sealed trait NonOffline extends HostedPartition {
+  val partition: Partition
+}
 object HostedPartition {
   /**
    * This broker does not have any state for this partition locally.
@@ -168,7 +176,7 @@ object HostedPartition {
   /**
    * This broker hosts the partition and it is online.
    */
-  final case class Online(partition: Partition) extends HostedPartition
+  final case class Online(partition: Partition) extends NonOffline
 
   /**
    * This broker hosted the partition but it is deferring metadata changes
@@ -176,7 +184,7 @@ object HostedPartition {
    * This state only applies to brokers that are using a Raft-based metadata
    * quorum; it never happens when using ZooKeeper.
    */
-  final case class Deferred(partition: Partition) extends HostedPartition
+  final case class Deferred(partition: Partition) extends NonOffline
 
   /**
    * This broker hosts the partition, but it is in an offline log directory.
@@ -352,11 +360,11 @@ class ReplicaManager(val config: KafkaConfig,
   }
 
   private def maybeRemoveTopicMetrics(topic: String): Unit = {
-    val topicHasOnlinePartition = allPartitions.values.exists {
-      case HostedPartition.Online(partition) => topic == partition.topic
+    val topicHasNonOfflinePartition = allPartitions.values.exists {
+      case nonOffline: NonOffline => topic == nonOffline.partition.topic
       case _ => false
     }
-    if (!topicHasOnlinePartition)
+    if (!topicHasNonOfflinePartition) // nothing online or deferred
       brokerTopicStats.removeMetrics(topic)
   }
 
