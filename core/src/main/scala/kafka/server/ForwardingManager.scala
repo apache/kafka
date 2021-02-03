@@ -52,8 +52,10 @@ object ForwardingManager {
     metrics: Metrics,
     threadNamePrefix: Option[String]
   ): ForwardingManager = {
+    val nodeProvider = MetadataCacheControllerNodeProvider(config, metadataCache)
+
     val channelManager = new BrokerToControllerChannelManager(
-      metadataCache = metadataCache,
+      controllerNodeProvider = nodeProvider,
       time = time,
       metrics = metrics,
       config = config,

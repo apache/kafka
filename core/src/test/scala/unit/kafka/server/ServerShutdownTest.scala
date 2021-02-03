@@ -101,7 +101,7 @@ class ServerShutdownTest extends ZooKeeperTestHarness {
     server.startup()
 
     // wait for the broker to receive the update metadata request after startup
-    TestUtils.waitUntilMetadataIsPropagated(Seq(server), topic, 0)
+    TestUtils.waitForPartitionMetadata(Seq(server), topic, 0)
 
     producer = createProducer(server)
     val consumer = createConsumer(server)

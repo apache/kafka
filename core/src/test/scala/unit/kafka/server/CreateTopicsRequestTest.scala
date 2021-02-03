@@ -112,9 +112,9 @@ class CreateTopicsRequestTest extends AbstractCreateTopicsRequestTest {
       topicReq("error-timeout-negative", numPartitions = 10, replicationFactor = 3)), timeout = -1),
       Map("error-timeout-negative" -> error(Errors.REQUEST_TIMED_OUT)), checkErrorMessage = false)
     // The topics should still get created eventually
-    TestUtils.waitUntilMetadataIsPropagated(servers, "error-timeout", 0)
-    TestUtils.waitUntilMetadataIsPropagated(servers, "error-timeout-zero", 0)
-    TestUtils.waitUntilMetadataIsPropagated(servers, "error-timeout-negative", 0)
+    TestUtils.waitForPartitionMetadata(servers, "error-timeout", 0)
+    TestUtils.waitForPartitionMetadata(servers, "error-timeout-zero", 0)
+    TestUtils.waitForPartitionMetadata(servers, "error-timeout-negative", 0)
     validateTopicExists("error-timeout")
     validateTopicExists("error-timeout-zero")
     validateTopicExists("error-timeout-negative")
