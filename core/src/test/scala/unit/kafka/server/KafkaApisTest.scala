@@ -131,13 +131,10 @@ class KafkaApisTest {
       None
 
     new KafkaApis(requestChannel,
+      ZkSupport(adminManager, controller, zkClient, forwardingManagerOpt),
       replicaManager,
-      adminManager,
       groupCoordinator,
       txnCoordinator,
-      controller,
-      forwardingManagerOpt,
-      zkClient,
       brokerId,
       new KafkaConfig(properties),
       metadataCache,

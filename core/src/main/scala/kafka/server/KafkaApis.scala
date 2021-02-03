@@ -28,7 +28,7 @@ import java.util.concurrent.atomic.AtomicInteger
 import kafka.admin.{AdminUtils, RackAwareMode}
 import kafka.api.{ApiVersion, ElectLeadersRequestOps, KAFKA_0_11_0_IV0, KAFKA_2_3_IV0}
 import kafka.common.OffsetAndMetadata
-import kafka.controller.{KafkaController, ReplicaAssignment}
+import kafka.controller.ReplicaAssignment
 import kafka.coordinator.group.{GroupCoordinator, JoinGroupResult, LeaveGroupResult, SyncGroupResult}
 import kafka.coordinator.transaction.{InitProducerIdResult, TransactionCoordinator}
 import kafka.log.AppendOrigin
@@ -38,7 +38,6 @@ import kafka.security.authorizer.AuthorizerUtils
 import kafka.server.QuotaFactory.{QuotaManagers, UnboundedQuota}
 import kafka.utils.{CoreUtils, Logging}
 import kafka.utils.Implicits._
-import kafka.zk.{AdminZkClient, KafkaZkClient}
 import org.apache.kafka.clients.admin.{AlterConfigOp, ConfigEntry}
 import org.apache.kafka.clients.admin.AlterConfigOp.OpType
 import org.apache.kafka.common.acl.{AclBinding, AclOperation}
@@ -96,13 +95,10 @@ import scala.annotation.nowarn
  * Logic to handle the various Kafka requests
  */
 class KafkaApis(val requestChannel: RequestChannel,
+                val metadataSupport: MetadataSupport,
                 val replicaManager: ReplicaManager,
-                val adminManager: ZkAdminManager,
                 val groupCoordinator: GroupCoordinator,
                 val txnCoordinator: TransactionCoordinator,
-                val controller: KafkaController,
-                val forwardingManager: Option[ForwardingManager],
-                val zkClient: KafkaZkClient,
                 val brokerId: Int,
                 val config: KafkaConfig,
                 val metadataCache: MetadataCache,
@@ -117,9 +113,17 @@ class KafkaApis(val requestChannel: RequestChannel,
                 val brokerFeatures: BrokerFeatures,
                 val finalizedFeatureCache: FinalizedFeatureCache) extends ApiRequestHandler with Logging {
 
+  metadataSupport match {
+    case ZkSupport(_, _, _, _) if !config.requiresZookeeper =>
+      throw new IllegalStateException("Config specifies Raft but metadata support instance is for ZooKeeper")
+    case RaftSupport(_) if config.requiresZookeeper =>
+      throw new IllegalStateException("Config specifies ZooKeeper but metadata support instance is for Raft")
+    case _ => // consistent configs and metadata support instance
+  }
+
+  val configHelper = new ConfigHelper() // FIXME
   type FetchResponseStats = Map[TopicPartition, RecordConversionStats]
   this.logIdent = "[KafkaApi-%d] ".format(brokerId)
-  val adminZkClient = new AdminZkClient(zkClient)
   private val alterAclsPurgatory = new DelayedFuturePurgatory(purgatoryName = "AlterAcls", brokerId = config.brokerId)
 
   val authHelper = new AuthHelper(authorizer)
@@ -131,7 +135,7 @@ class KafkaApis(val requestChannel: RequestChannel,
   }
 
   private def isForwardingEnabled(request: RequestChannel.Request): Boolean = {
-    forwardingManager.isDefined && request.context.principalSerde.isPresent
+    metadataSupport.forwardingManager.isDefined && request.context.principalSerde.isPresent
   }
 
   private def maybeForwardToController(
@@ -149,12 +153,23 @@ class KafkaApis(val requestChannel: RequestChannel,
       }
     }
 
-    forwardingManager match {
-      case Some(mgr) if !request.isForwarded && !controller.isActive =>
-        mgr.forwardRequest(request, responseCallback)
+    metadataSupport match {
+      // ZooKeeper
+      case zkSupport@ZkSupport(_, _, _, forwardingManager) =>
+        forwardingManager match {
+          case Some(mgr) if !request.isForwarded && !zkSupport.controller.isActive =>
+            mgr.forwardRequest(request, responseCallback)
 
-      case _ =>
-        handler(request)
+          case _ =>
+            handler(request)
+        }
+      // Raft
+      case RaftSupport(fwdMgr) =>
+        if (!request.isForwarded) {
+          fwdMgr.forwardRequest(request, responseCallback)
+        } else {
+          handler(request) // will reject
+        }
     }
   }
 
@@ -252,6 +267,7 @@ class KafkaApis(val requestChannel: RequestChannel,
   }
 
   def handleLeaderAndIsrRequest(request: RequestChannel.Request): Unit = {
+    val zkSupport = metadataSupport.requireZk(shouldNeverReceive(request))
     // ensureTopicExists is only for client facing requests
     // We can't have the ensureTopicExists check here since the controller sends it as an advisory to all brokers so they
     // stop serving data to clients for the topic being deleted
@@ -259,11 +275,11 @@ class KafkaApis(val requestChannel: RequestChannel,
     val leaderAndIsrRequest = request.body[LeaderAndIsrRequest]
 
     authHelper.authorizeClusterOperation(request, CLUSTER_ACTION)
-    if (isBrokerEpochStale(leaderAndIsrRequest.brokerEpoch)) {
+    if (isBrokerEpochStale(zkSupport, leaderAndIsrRequest.brokerEpoch)) {
       // When the broker restarts very quickly, it is possible for this broker to receive request intended
       // for its previous generation so the broker should skip the stale request.
       info("Received LeaderAndIsr request with broker epoch " +
-        s"${leaderAndIsrRequest.brokerEpoch} smaller than the current broker epoch ${controller.brokerEpoch}")
+        s"${leaderAndIsrRequest.brokerEpoch} smaller than the current broker epoch ${zkSupport.controller.brokerEpoch}")
       requestHelper.sendResponseExemptThrottle(request, leaderAndIsrRequest.getErrorResponse(0, Errors.STALE_BROKER_EPOCH.exception))
     } else {
       val response = replicaManager.becomeLeaderOrFollower(correlationId, leaderAndIsrRequest,
@@ -273,16 +289,17 @@ class KafkaApis(val requestChannel: RequestChannel,
   }
 
   def handleStopReplicaRequest(request: RequestChannel.Request): Unit = {
+    val zkSupport = metadataSupport.requireZk(shouldNeverReceive(request))
     // ensureTopicExists is only for client facing requests
     // We can't have the ensureTopicExists check here since the controller sends it as an advisory to all brokers so they
     // stop serving data to clients for the topic being deleted
     val stopReplicaRequest = request.body[StopReplicaRequest]
     authHelper.authorizeClusterOperation(request, CLUSTER_ACTION)
-    if (isBrokerEpochStale(stopReplicaRequest.brokerEpoch)) {
+    if (isBrokerEpochStale(zkSupport, stopReplicaRequest.brokerEpoch)) {
       // When the broker restarts very quickly, it is possible for this broker to receive request intended
       // for its previous generation so the broker should skip the stale request.
       info("Received StopReplica request with broker epoch " +
-        s"${stopReplicaRequest.brokerEpoch} smaller than the current broker epoch ${controller.brokerEpoch}")
+        s"${stopReplicaRequest.brokerEpoch} smaller than the current broker epoch ${zkSupport.controller.brokerEpoch}")
       requestHelper.sendResponseExemptThrottle(request, new StopReplicaResponse(
         new StopReplicaResponseData().setErrorCode(Errors.STALE_BROKER_EPOCH.code)))
     } else {
@@ -329,15 +346,16 @@ class KafkaApis(val requestChannel: RequestChannel,
   }
 
   def handleUpdateMetadataRequest(request: RequestChannel.Request): Unit = {
+    val zkSupport = metadataSupport.requireZk(shouldNeverReceive(request))
     val correlationId = request.header.correlationId
     val updateMetadataRequest = request.body[UpdateMetadataRequest]
 
     authHelper.authorizeClusterOperation(request, CLUSTER_ACTION)
-    if (isBrokerEpochStale(updateMetadataRequest.brokerEpoch)) {
+    if (isBrokerEpochStale(zkSupport, updateMetadataRequest.brokerEpoch)) {
       // When the broker restarts very quickly, it is possible for this broker to receive request intended
       // for its previous generation so the broker should skip the stale request.
       info("Received update metadata request with broker epoch " +
-        s"${updateMetadataRequest.brokerEpoch} smaller than the current broker epoch ${controller.brokerEpoch}")
+        s"${updateMetadataRequest.brokerEpoch} smaller than the current broker epoch ${zkSupport.controller.brokerEpoch}")
       requestHelper.sendResponseExemptThrottle(request,
         new UpdateMetadataResponse(new UpdateMetadataResponseData().setErrorCode(Errors.STALE_BROKER_EPOCH.code)))
     } else {
@@ -345,9 +363,9 @@ class KafkaApis(val requestChannel: RequestChannel,
       if (deletedPartitions.nonEmpty)
         groupCoordinator.handleDeletedPartitions(deletedPartitions)
 
-      if (adminManager.hasDelayedTopicOperations) {
+      if (zkSupport.adminManager.hasDelayedTopicOperations) {
         updateMetadataRequest.partitionStates.forEach { partitionState =>
-          adminManager.tryCompleteDelayedTopicOperations(partitionState.topicName)
+          zkSupport.adminManager.tryCompleteDelayedTopicOperations(partitionState.topicName)
         }
       }
       quotas.clientQuotaCallback.foreach { callback =>
@@ -370,6 +388,7 @@ class KafkaApis(val requestChannel: RequestChannel,
   }
 
   def handleControlledShutdownRequest(request: RequestChannel.Request): Unit = {
+    val zkSupport = metadataSupport.requireZk(shouldNeverReceive(request))
     // ensureTopicExists is only for client facing requests
     // We can't have the ensureTopicExists check here since the controller sends it as an advisory to all brokers so they
     // stop serving data to clients for the topic being deleted
@@ -386,7 +405,7 @@ class KafkaApis(val requestChannel: RequestChannel,
       }
       requestHelper.sendResponseExemptThrottle(request, response)
     }
-    controller.controlledShutdown(controlledShutdownRequest.data.brokerId, controlledShutdownRequest.data.brokerEpoch, controlledShutdownCallback)
+    zkSupport.controller.controlledShutdown(controlledShutdownRequest.data.brokerId, controlledShutdownRequest.data.brokerEpoch, controlledShutdownCallback)
   }
 
   /**
@@ -459,6 +478,7 @@ class KafkaApis(val requestChannel: RequestChannel,
         sendResponseCallback(Map.empty)
       else if (header.apiVersion == 0) {
         // for version 0 always store offsets to ZK
+        val zkSupport = metadataSupport.requireZk(unsupported("Version 0 offset commit requests"))
         val responseInfo = authorizedTopicRequestInfo.map {
           case (topicPartition, partitionData) =>
             try {
@@ -466,7 +486,7 @@ class KafkaApis(val requestChannel: RequestChannel,
                 && partitionData.committedMetadata().length > config.offsetMetadataMaxSize)
                 (topicPartition, Errors.OFFSET_METADATA_TOO_LARGE)
               else {
-                zkClient.setOrCreateConsumerOffset(
+                zkSupport.zkClient.setOrCreateConsumerOffset(
                   offsetCommitRequest.data.groupId,
                   topicPartition,
                   partitionData.committedOffset)
@@ -1092,8 +1112,10 @@ class KafkaApis(val requestChannel: RequestChannel,
                           numPartitions: Int,
                           replicationFactor: Int,
                           properties: util.Properties = new util.Properties()): MetadataResponseTopic = {
+    // the below will be replaced once KAFKA-9751 is implemented
+    val zkSupport = metadataSupport.requireZk(notYetSupported("Auto topic creation"))
     try {
-      adminZkClient.createTopic(topic, numPartitions, replicationFactor, properties, RackAwareMode.Safe, config.usesTopicId)
+      zkSupport.adminZkClient.createTopic(topic, numPartitions, replicationFactor, properties, RackAwareMode.Safe, config.usesTopicId)
       info("Auto creation of topic %s with %d partitions and replication factor %d is successful"
         .format(topic, numPartitions, replicationFactor))
       metadataResponseTopic(Errors.LEADER_NOT_AVAILABLE, topic, isInternal(topic), util.Collections.emptyList())
@@ -1305,6 +1327,7 @@ class KafkaApis(val requestChannel: RequestChannel,
           offsetFetchRequest.getErrorResponse(requestThrottleMs, Errors.GROUP_AUTHORIZATION_FAILED)
         else {
           if (header.apiVersion == 0) {
+            val zkSupport = metadataSupport.requireZk(unsupported("Version 0 offset fetch requests"))
             val (authorizedPartitions, unauthorizedPartitions) = partitionByAuthorized(
               offsetFetchRequest.partitions.asScala)
 
@@ -1314,7 +1337,7 @@ class KafkaApis(val requestChannel: RequestChannel,
                 if (!metadataCache.contains(topicPartition))
                   (topicPartition, OffsetFetchResponse.UNKNOWN_PARTITION)
                 else {
-                  val payloadOpt = zkClient.getConsumerOffset(offsetFetchRequest.groupId, topicPartition)
+                  val payloadOpt = zkSupport.zkClient.getConsumerOffset(offsetFetchRequest.groupId, topicPartition)
                   payloadOpt match {
                     case Some(payload) =>
                       (topicPartition, new OffsetFetchResponse.PartitionData(payload.toLong,
@@ -1748,7 +1771,7 @@ class KafkaApis(val requestChannel: RequestChannel,
       else {
         val supportedFeatures = brokerFeatures.supportedFeatures
         val finalizedFeaturesOpt = finalizedFeatureCache.get
-        val controllerApiVersions = forwardingManager.flatMap(_.controllerApiVersions)
+        val controllerApiVersions = metadataSupport.forwardingManager.flatMap(_.controllerApiVersions)
 
         val apiVersionsResponse =
           finalizedFeaturesOpt match {
@@ -1780,6 +1803,7 @@ class KafkaApis(val requestChannel: RequestChannel,
   }
 
   def handleCreateTopicsRequest(request: RequestChannel.Request): Unit = {
+    val zkSupport = metadataSupport.requireZk(shouldAlwaysBeForwarded(request))
     val controllerMutationQuota = quotas.controllerMutation.newQuotaFor(request, strictSinceVersion = 6)
 
     def sendResponseCallback(results: CreatableTopicResultCollection): Unit = {
@@ -1797,7 +1821,7 @@ class KafkaApis(val requestChannel: RequestChannel,
 
     val createTopicsRequest = request.body[CreateTopicsRequest]
     val results = new CreatableTopicResultCollection(createTopicsRequest.data.topics.size)
-    if (!controller.isActive) {
+    if (!zkSupport.controller.isActive) {
       createTopicsRequest.data.topics.forEach { topic =>
         results.add(new CreatableTopicResult().setName(topic.name)
           .setErrorCode(Errors.NOT_CONTROLLER.code))
@@ -1849,7 +1873,7 @@ class KafkaApis(val requestChannel: RequestChannel,
         }
         sendResponseCallback(results)
       }
-      adminManager.createTopics(
+      zkSupport.adminManager.createTopics(
         createTopicsRequest.data.timeoutMs,
         createTopicsRequest.data.validateOnly,
         toCreate,
@@ -1860,6 +1884,7 @@ class KafkaApis(val requestChannel: RequestChannel,
   }
 
   def handleCreatePartitionsRequest(request: RequestChannel.Request): Unit = {
+    val zkSupport = metadataSupport.requireZk(shouldAlwaysBeForwarded(request))
     val createPartitionsRequest = request.body[CreatePartitionsRequest]
     val controllerMutationQuota = quotas.controllerMutation.newQuotaFor(request, strictSinceVersion = 3)
 
@@ -1881,7 +1906,7 @@ class KafkaApis(val requestChannel: RequestChannel,
       requestHelper.sendResponseMaybeThrottleWithControllerQuota(controllerMutationQuota, request, createResponse)
     }
 
-    if (!controller.isActive) {
+    if (!zkSupport.controller.isActive) {
       val result = createPartitionsRequest.data.topics.asScala.map { topic =>
         (topic.name, new ApiError(Errors.NOT_CONTROLLER, null))
       }.toMap
@@ -1897,14 +1922,14 @@ class KafkaApis(val requestChannel: RequestChannel,
         notDuped)(_.name)
 
       val (queuedForDeletion, valid) = authorized.partition { topic =>
-        controller.topicDeletionManager.isTopicQueuedUpForDeletion(topic.name)
+        zkSupport.controller.topicDeletionManager.isTopicQueuedUpForDeletion(topic.name)
       }
 
       val errors = dupes.map(_ -> new ApiError(Errors.INVALID_REQUEST, "Duplicate topic in request.")) ++
         unauthorized.map(_.name -> new ApiError(Errors.TOPIC_AUTHORIZATION_FAILED, "The topic authorization is failed.")) ++
         queuedForDeletion.map(_.name -> new ApiError(Errors.INVALID_TOPIC_EXCEPTION, "The topic is queued for deletion."))
 
-      adminManager.createPartitions(
+      zkSupport.adminManager.createPartitions(
         createPartitionsRequest.data.timeoutMs,
         valid,
         createPartitionsRequest.data.validateOnly,
@@ -1914,6 +1939,7 @@ class KafkaApis(val requestChannel: RequestChannel,
   }
 
   def handleDeleteTopicsRequest(request: RequestChannel.Request): Unit = {
+    val zkSupport = metadataSupport.requireZk(shouldAlwaysBeForwarded(request))
     val controllerMutationQuota = quotas.controllerMutation.newQuotaFor(request, strictSinceVersion = 5)
 
     def sendResponseCallback(results: DeletableTopicResultCollection): Unit = {
@@ -1931,7 +1957,7 @@ class KafkaApis(val requestChannel: RequestChannel,
     val deleteTopicRequest = request.body[DeleteTopicsRequest]
     val results = new DeletableTopicResultCollection(deleteTopicRequest.data.topicNames.size)
     val toDelete = mutable.Set[String]()
-    if (!controller.isActive) {
+    if (!zkSupport.controller.isActive) {
       deleteTopicRequest.topics().forEach { topic =>
         results.add(new DeletableTopicResult()
           .setName(topic.name())
@@ -1954,7 +1980,7 @@ class KafkaApis(val requestChannel: RequestChannel,
         if (topic.name() != null && topic.topicId() != Uuid.ZERO_UUID)
           throw new InvalidRequestException("Topic name and topic ID can not both be specified.")
         val name = if (topic.topicId() == Uuid.ZERO_UUID) topic.name()
-        else controller.controllerContext.topicNames.getOrElse(topic.topicId(), null)
+        else zkSupport.controller.controllerContext.topicNames.getOrElse(topic.topicId(), null)
         results.add(new DeletableTopicResult()
           .setName(name)
           .setTopicId(topic.topicId()))
@@ -1992,7 +2018,7 @@ class KafkaApis(val requestChannel: RequestChannel,
           sendResponseCallback(results)
         }
 
-        adminManager.deleteTopics(
+        zkSupport.adminManager.deleteTopics(
           deleteTopicRequest.data.timeoutMs,
           toDelete,
           controllerMutationQuota,
@@ -2488,6 +2514,7 @@ class KafkaApis(val requestChannel: RequestChannel,
   }
 
   def handleCreateAcls(request: RequestChannel.Request): Unit = {
+    metadataSupport.requireZk(shouldAlwaysBeForwarded(request))
     authHelper.authorizeClusterOperation(request, ALTER)
     val createAclsRequest = request.body[CreateAclsRequest]
 
@@ -2539,6 +2566,7 @@ class KafkaApis(val requestChannel: RequestChannel,
   }
 
   def handleDeleteAcls(request: RequestChannel.Request): Unit = {
+    metadataSupport.requireZk(shouldAlwaysBeForwarded(request))
     authHelper.authorizeClusterOperation(request, ALTER)
     val deleteAclsRequest = request.body[DeleteAclsRequest]
     authorizer match {
@@ -2600,6 +2628,7 @@ class KafkaApis(val requestChannel: RequestChannel,
   }
 
   def handleAlterConfigsRequest(request: RequestChannel.Request): Unit = {
+    val zkSupport = metadataSupport.requireZk(shouldAlwaysBeForwarded(request))
     val alterConfigsRequest = request.body[AlterConfigsRequest]
     val (authorizedResources, unauthorizedResources) = alterConfigsRequest.configs.asScala.toMap.partition { case (resource, _) =>
       resource.`type` match {
@@ -2612,7 +2641,7 @@ class KafkaApis(val requestChannel: RequestChannel,
         case rt => throw new InvalidRequestException(s"Unexpected resource type $rt")
       }
     }
-    val authorizedResult = adminManager.alterConfigs(authorizedResources, alterConfigsRequest.validateOnly)
+    val authorizedResult = zkSupport.adminManager.alterConfigs(authorizedResources, alterConfigsRequest.validateOnly)
     val unauthorizedResult = unauthorizedResources.keys.map { resource =>
       resource -> configsAuthorizationApiError(resource)
     }
@@ -2632,6 +2661,7 @@ class KafkaApis(val requestChannel: RequestChannel,
   }
 
   def handleAlterPartitionReassignmentsRequest(request: RequestChannel.Request): Unit = {
+    val zkSupport = metadataSupport.requireZk(shouldAlwaysBeForwarded(request))
     authHelper.authorizeClusterOperation(request, ALTER)
     val alterPartitionReassignmentsRequest = request.body[AlterPartitionReassignmentsRequest]
 
@@ -2669,10 +2699,11 @@ class KafkaApis(val requestChannel: RequestChannel,
       }
     }.toMap
 
-    controller.alterPartitionReassignments(reassignments, sendResponseCallback)
+    zkSupport.controller.alterPartitionReassignments(reassignments, sendResponseCallback)
   }
 
   def handleListPartitionReassignmentsRequest(request: RequestChannel.Request): Unit = {
+    val zkSupport = metadataSupport.requireZk(notYetSupported(request))
     authHelper.authorizeClusterOperation(request, DESCRIBE)
     val listPartitionReassignmentsRequest = request.body[ListPartitionReassignmentsRequest]
 
@@ -2713,7 +2744,7 @@ class KafkaApis(val requestChannel: RequestChannel,
       case _ => None
     }
 
-    controller.listPartitionReassignments(partitionsOpt, sendResponseCallback)
+    zkSupport.controller.listPartitionReassignments(partitionsOpt, sendResponseCallback)
   }
 
   private def configsAuthorizationApiError(resource: ConfigResource): ApiError = {
@@ -2726,6 +2757,7 @@ class KafkaApis(val requestChannel: RequestChannel,
   }
 
   def handleIncrementalAlterConfigsRequest(request: RequestChannel.Request): Unit = {
+    val zkSupport = metadataSupport.requireZk(shouldAlwaysBeForwarded(request))
     val alterConfigsRequest = request.body[IncrementalAlterConfigsRequest]
 
     val configs = alterConfigsRequest.data.resources.iterator.asScala.map { alterConfigResource =>
@@ -2747,7 +2779,7 @@ class KafkaApis(val requestChannel: RequestChannel,
       }
     }
 
-    val authorizedResult = adminManager.incrementalAlterConfigs(authorizedResources, alterConfigsRequest.data.validateOnly)
+    val authorizedResult = zkSupport.adminManager.incrementalAlterConfigs(authorizedResources, alterConfigsRequest.data.validateOnly)
     val unauthorizedResult = unauthorizedResources.keys.map { resource =>
       resource -> configsAuthorizationApiError(resource)
     }
@@ -2767,7 +2799,7 @@ class KafkaApis(val requestChannel: RequestChannel,
         case rt => throw new InvalidRequestException(s"Unexpected resource type $rt for resource ${resource.resourceName}")
       }
     }
-    val authorizedConfigs = adminManager.describeConfigs(authorizedResources.toList, describeConfigsRequest.data.includeSynonyms, describeConfigsRequest.data.includeDocumentation)
+    val authorizedConfigs = configHelper.describeConfigs(authorizedResources.toList, describeConfigsRequest.data.includeSynonyms, describeConfigsRequest.data.includeDocumentation)
     val unauthorizedConfigs = unauthorizedResources.map { resource =>
       val error = ConfigResource.Type.forId(resource.resourceType) match {
         case ConfigResource.Type.BROKER | ConfigResource.Type.BROKER_LOGGER => Errors.CLUSTER_AUTHORIZATION_FAILED
@@ -2831,6 +2863,7 @@ class KafkaApis(val requestChannel: RequestChannel,
   }
 
   def handleCreateTokenRequest(request: RequestChannel.Request): Unit = {
+    metadataSupport.requireZk(shouldAlwaysBeForwarded(request))
     val createTokenRequest = request.body[CreateDelegationTokenRequest]
 
     // the callback for sending a create token response
@@ -2865,6 +2898,7 @@ class KafkaApis(val requestChannel: RequestChannel,
   }
 
   def handleRenewTokenRequest(request: RequestChannel.Request): Unit = {
+    metadataSupport.requireZk(shouldAlwaysBeForwarded(request))
     val renewTokenRequest = request.body[RenewDelegationTokenRequest]
 
     // the callback for sending a renew token response
@@ -2892,6 +2926,7 @@ class KafkaApis(val requestChannel: RequestChannel,
   }
 
   def handleExpireTokenRequest(request: RequestChannel.Request): Unit = {
+    metadataSupport.requireZk(shouldAlwaysBeForwarded(request))
     val expireTokenRequest = request.body[ExpireDelegationTokenRequest]
 
     // the callback for sending a expire token response
@@ -2964,6 +2999,7 @@ class KafkaApis(val requestChannel: RequestChannel,
   }
 
   def handleElectReplicaLeader(request: RequestChannel.Request): Unit = {
+    val zkSupport = metadataSupport.requireZk(notYetSupported(request))
 
     val electionRequest = request.body[ElectLeadersRequest]
 
@@ -3025,7 +3061,7 @@ class KafkaApis(val requestChannel: RequestChannel,
       }
 
       replicaManager.electLeaders(
-        controller,
+        zkSupport.controller,
         partitions,
         electionRequest.electionType,
         sendResponseCallback(ApiError.NONE),
@@ -3093,10 +3129,11 @@ class KafkaApis(val requestChannel: RequestChannel,
   }
 
   def handleDescribeClientQuotasRequest(request: RequestChannel.Request): Unit = {
+    val zkSupport = metadataSupport.requireZk(notYetSupported(request))
     val describeClientQuotasRequest = request.body[DescribeClientQuotasRequest]
 
     if (authHelper.authorize(request.context, DESCRIBE_CONFIGS, CLUSTER, CLUSTER_NAME)) {
-      val result = adminManager.describeClientQuotas(describeClientQuotasRequest.filter)
+      val result = zkSupport.adminManager.describeClientQuotas(describeClientQuotasRequest.filter)
 
       val entriesData = result.iterator.map { case (quotaEntity, quotaValues) =>
         val entityData = quotaEntity.entries.asScala.iterator.map { case (entityType, entityName) =>
@@ -3127,10 +3164,11 @@ class KafkaApis(val requestChannel: RequestChannel,
   }
 
   def handleAlterClientQuotasRequest(request: RequestChannel.Request): Unit = {
+    val zkSupport = metadataSupport.requireZk(shouldAlwaysBeForwarded(request))
     val alterClientQuotasRequest = request.body[AlterClientQuotasRequest]
 
     if (authHelper.authorize(request.context, ALTER_CONFIGS, CLUSTER, CLUSTER_NAME)) {
-      val result = adminManager.alterClientQuotas(alterClientQuotasRequest.entries.asScala,
+      val result = zkSupport.adminManager.alterClientQuotas(alterClientQuotasRequest.entries.asScala,
         alterClientQuotasRequest.validateOnly)
 
       val entriesData = result.iterator.map { case (quotaEntity, apiError) =>
@@ -3157,10 +3195,11 @@ class KafkaApis(val requestChannel: RequestChannel,
   }
 
   def handleDescribeUserScramCredentialsRequest(request: RequestChannel.Request): Unit = {
+    val zkSupport = metadataSupport.requireZk(notYetSupported(request))
     val describeUserScramCredentialsRequest = request.body[DescribeUserScramCredentialsRequest]
 
     if (authHelper.authorize(request.context, DESCRIBE, CLUSTER, CLUSTER_NAME)) {
-      val result = adminManager.describeUserScramCredentials(
+      val result = zkSupport.adminManager.describeUserScramCredentials(
         Option(describeUserScramCredentialsRequest.data.users).map(_.asScala.map(_.name).toList))
       requestHelper.sendResponseMaybeThrottle(request, requestThrottleMs =>
         new DescribeUserScramCredentialsResponse(result.setThrottleTimeMs(requestThrottleMs)))
@@ -3171,13 +3210,14 @@ class KafkaApis(val requestChannel: RequestChannel,
   }
 
   def handleAlterUserScramCredentialsRequest(request: RequestChannel.Request): Unit = {
+    val zkSupport = metadataSupport.requireZk(shouldAlwaysBeForwarded(request))
     val alterUserScramCredentialsRequest = request.body[AlterUserScramCredentialsRequest]
 
-    if (!controller.isActive) {
+    if (!zkSupport.controller.isActive) {
       requestHelper.sendResponseMaybeThrottle(request, requestThrottleMs =>
         alterUserScramCredentialsRequest.getErrorResponse(requestThrottleMs, Errors.NOT_CONTROLLER.exception))
     } else if (authHelper.authorize(request.context, ALTER, CLUSTER, CLUSTER_NAME)) {
-      val result = adminManager.alterUserScramCredentials(
+      val result = zkSupport.adminManager.alterUserScramCredentials(
         alterUserScramCredentialsRequest.data.upsertions().asScala, alterUserScramCredentialsRequest.data.deletions().asScala)
       requestHelper.sendResponseMaybeThrottle(request, requestThrottleMs =>
         new AlterUserScramCredentialsResponse(result.setThrottleTimeMs(requestThrottleMs)))
@@ -3188,19 +3228,21 @@ class KafkaApis(val requestChannel: RequestChannel,
   }
 
   def handleAlterIsrRequest(request: RequestChannel.Request): Unit = {
+    val zkSupport = metadataSupport.requireZk(shouldNeverReceive(request))
     val alterIsrRequest = request.body[AlterIsrRequest]
     authHelper.authorizeClusterOperation(request, CLUSTER_ACTION)
 
-    if (!controller.isActive)
+    if (!zkSupport.controller.isActive)
       requestHelper.sendResponseExemptThrottle(request, alterIsrRequest.getErrorResponse(
         AbstractResponse.DEFAULT_THROTTLE_TIME, Errors.NOT_CONTROLLER.exception))
     else
-      controller.alterIsrs(alterIsrRequest.data, alterIsrResp =>
+      zkSupport.controller.alterIsrs(alterIsrRequest.data, alterIsrResp =>
         requestHelper.sendResponseExemptThrottle(request, new AlterIsrResponse(alterIsrResp))
       )
   }
 
   def handleUpdateFeatures(request: RequestChannel.Request): Unit = {
+    val zkSupport = metadataSupport.requireZk(shouldAlwaysBeForwarded(request))
     val updateFeaturesRequest = request.body[UpdateFeaturesRequest]
 
     def sendResponseCallback(errors: Either[ApiError, Map[String, ApiError]]): Unit = {
@@ -3223,12 +3265,12 @@ class KafkaApis(val requestChannel: RequestChannel,
 
     if (!authHelper.authorize(request.context, ALTER, CLUSTER, CLUSTER_NAME)) {
       sendResponseCallback(Left(new ApiError(Errors.CLUSTER_AUTHORIZATION_FAILED)))
-    } else if (!controller.isActive) {
+    } else if (!zkSupport.controller.isActive) {
       sendResponseCallback(Left(new ApiError(Errors.NOT_CONTROLLER)))
     } else if (!config.isFeatureVersioningSupported) {
       sendResponseCallback(Left(new ApiError(Errors.INVALID_REQUEST, "Feature versioning system is disabled.")))
     } else {
-      controller.updateFeatures(updateFeaturesRequest, sendResponseCallback)
+      zkSupport.controller.updateFeatures(updateFeaturesRequest, sendResponseCallback)
     }
   }
 
@@ -3267,6 +3309,7 @@ class KafkaApis(val requestChannel: RequestChannel,
   }
 
   def handleEnvelope(request: RequestChannel.Request): Unit = {
+    val zkSupport = metadataSupport.requireZk(shouldNeverReceive(request))
     val envelope = request.body[EnvelopeRequest]
 
     // If forwarding is not yet enabled or this request has been received on an invalid endpoint,
@@ -3286,7 +3329,7 @@ class KafkaApis(val requestChannel: RequestChannel,
       requestHelper.sendErrorResponseMaybeThrottle(request, new ClusterAuthorizationException(
         s"Principal ${request.context.principal} does not have required CLUSTER_ACTION for envelope"))
       return
-    } else if (!controller.isActive) {
+    } else if (!zkSupport.controller.isActive) {
       requestHelper.sendErrorResponseMaybeThrottle(request, new NotControllerException(
         s"Broker $brokerId is not the active controller"))
       return
@@ -3443,17 +3486,36 @@ class KafkaApis(val requestChannel: RequestChannel,
     request.temporaryMemoryBytes = conversionStats.temporaryMemoryBytes
   }
 
-  private def isBrokerEpochStale(brokerEpochInRequest: Long): Boolean = {
+  private def isBrokerEpochStale(zkSupport: ZkSupport, brokerEpochInRequest: Long): Boolean = {
     // Broker epoch in LeaderAndIsr/UpdateMetadata/StopReplica request is unknown
     // if the controller hasn't been upgraded to use KIP-380
     if (brokerEpochInRequest == AbstractControlRequest.UNKNOWN_BROKER_EPOCH) false
     else {
       // brokerEpochInRequest > controller.brokerEpoch is possible in rare scenarios where the controller gets notified
       // about the new broker epoch and sends a control request with this epoch before the broker learns about it
-      brokerEpochInRequest < controller.brokerEpoch
+      brokerEpochInRequest < zkSupport.controller.brokerEpoch
     }
   }
 
+  private def shouldNeverReceive(request: RequestChannel.Request): () => Exception = {
+    () => new UnsupportedVersionException(s"Should never receive when using a Raft-based metadata quorum: $request")
+  }
+
+  private def unsupported(text: String): () => Exception = {
+    () => new UnsupportedVersionException(s"Unsupported when using a Raft-based metadata quorum: $text")
+  }
+
+  private def notYetSupported(request: RequestChannel.Request): () => Exception = {
+    notYetSupported(request.toString)
+  }
+
+  private def notYetSupported(text: String): () => Exception = {
+    () => new UnsupportedVersionException(s"Not yet supported when using a Raft-based metadata quorum: $text")
+  }
+
+  private def shouldAlwaysBeForwarded(request: RequestChannel.Request): () => Exception = {
+    () => new UnsupportedVersionException(s"Should always be forwarded to the Active Controller when using a Raft-based metadata quorum: $request")
+  }
 }
 
 object KafkaApis {
