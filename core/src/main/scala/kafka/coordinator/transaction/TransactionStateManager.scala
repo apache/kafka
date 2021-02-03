@@ -95,7 +95,7 @@ class TransactionStateManager(brokerId: Int,
 
   /** number of partitions for the transaction log topic */
   private var retrieveTransactionTopicPartitionCount: () => Int = _
-  private var transactionTopicPartitionCount: Int = _
+  @volatile private var transactionTopicPartitionCount: Int = _
 
   /** setup metrics*/
   private val partitionLoadSensor = metrics.sensor(TransactionStateManager.LoadTimeSensor)
