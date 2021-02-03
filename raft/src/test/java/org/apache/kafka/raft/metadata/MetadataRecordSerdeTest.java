@@ -14,12 +14,14 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.metadata;
+package org.apache.kafka.raft.metadata;
 
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.metadata.TopicRecord;
 import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.ObjectSerializationCache;
+import org.apache.kafka.metadata.ApiMessageAndVersion;
+import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 
 import java.nio.ByteBuffer;
@@ -50,7 +52,7 @@ class MetadataRecordSerdeTest {
 
             assertEquals(size, buffer.remaining());
             ApiMessageAndVersion readMessageAndVersion = serde.read(bufferAccessor, size);
-            assertEquals(messageAndVersion, readMessageAndVersion);
+            Assertions.assertEquals(messageAndVersion, readMessageAndVersion);
         }
 
     }
