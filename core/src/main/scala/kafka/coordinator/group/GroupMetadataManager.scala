@@ -35,7 +35,6 @@ import kafka.server.{FetchLogEnd, ReplicaManager}
 import kafka.utils.CoreUtils.inLock
 import kafka.utils.Implicits._
 import kafka.utils._
-import kafka.zk.KafkaZkClient
 import org.apache.kafka.clients.consumer.ConsumerRecord
 import org.apache.kafka.clients.consumer.internals.ConsumerProtocol
 import org.apache.kafka.common.internals.Topic
@@ -57,7 +56,6 @@ class GroupMetadataManager(brokerId: Int,
                            interBrokerProtocolVersion: ApiVersion,
                            config: OffsetConfig,
                            val replicaManager: ReplicaManager,
-                           offsetsTopicPartitionCountFunc: () => Int,
                            time: Time,
                            metrics: Metrics) extends Logging with KafkaMetricsGroup {
 
@@ -78,20 +76,7 @@ class GroupMetadataManager(brokerId: Int,
   private val shuttingDown = new AtomicBoolean(false)
 
   /* number of partitions for the consumer metadata topic */
-  private var _groupMetadataTopicPartitionCount: Option[Int] = Option.empty // lazy, once-only evaluation
-  private def groupMetadataTopicPartitionCount: Int = {
-    _groupMetadataTopicPartitionCount match {
-      case Some(partitionCount) => partitionCount
-      case None => synchronized { // make sure we only invoke the function once
-        _groupMetadataTopicPartitionCount match {
-          case Some(partitionCount) => partitionCount // another thread beat us to it
-          case None =>
-            _groupMetadataTopicPartitionCount = Some(offsetsTopicPartitionCountFunc())
-            _groupMetadataTopicPartitionCount.get
-        }
-      }
-    }
-  }
+  private var groupMetadataTopicPartitionCount: Int = _
 
   /* single-thread scheduler to handle offset/group metadata cache loading and unloading */
   private val scheduler = new KafkaScheduler(threads = 1, threadNamePrefix = "group-metadata-manager-")
@@ -183,7 +168,8 @@ class GroupMetadataManager(brokerId: Int,
       }
     })
 
-  def startup(enableMetadataExpiration: Boolean): Unit = {
+  def startup(retrieveGroupMetadataTopicPartitionCount: () => Int, enableMetadataExpiration: Boolean): Unit = {
+    groupMetadataTopicPartitionCount = retrieveGroupMetadataTopicPartitionCount()
     scheduler.startup()
     if (enableMetadataExpiration) {
       scheduler.schedule(name = "delete-expired-group-metadata",
@@ -997,19 +983,6 @@ class GroupMetadataManager(brokerId: Int,
  *    -> value version 0:       [protocol_type, generation, protocol, leader, members]
  */
 object GroupMetadataManager {
-
-  def apply(brokerId: Int,
-            interBrokerProtocolVersion: ApiVersion,
-            config: OffsetConfig,
-            replicaManager: ReplicaManager,
-            zkClient: KafkaZkClient,
-            time: Time,
-            metrics: Metrics): GroupMetadataManager = {
-    new GroupMetadataManager(brokerId, interBrokerProtocolVersion, config, replicaManager,
-      () => zkClient.getTopicPartitionCount(Topic.GROUP_METADATA_TOPIC_NAME).getOrElse(config.offsetsTopicNumPartitions),
-      time, metrics)
-  }
-
   // Metrics names
   val MetricsGroup: String = "group-coordinator-metrics"
   val LoadTimeSensor: String = "GroupPartitionLoadTime"

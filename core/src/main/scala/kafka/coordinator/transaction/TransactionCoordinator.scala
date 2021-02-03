@@ -39,19 +39,6 @@ object TransactionCoordinator {
             metrics: Metrics,
             metadataCache: MetadataCache,
             time: Time): TransactionCoordinator = {
-    TransactionCoordinator(config, replicaManager, scheduler,
-      () => zkClient.getTopicPartitionCount(Topic.TRANSACTION_STATE_TOPIC_NAME).getOrElse(config.transactionTopicPartitions),
-      zkClient, metrics, metadataCache, time)
-  }
-
-  def apply(config: KafkaConfig,
-            replicaManager: ReplicaManager,
-            scheduler: Scheduler,
-            transactionTopicPartitionCountFunc: () => Int,
-            zkClient: KafkaZkClient,
-            metrics: Metrics,
-            metadataCache: MetadataCache,
-            time: Time): TransactionCoordinator = {
     val txnConfig = TransactionConfig(config.transactionalIdExpirationMs,
       config.transactionMaxTimeoutMs,
       config.transactionTopicPartitions,
@@ -64,8 +51,7 @@ object TransactionCoordinator {
       config.requestTimeoutMs)
 
     val producerIdManager = new ProducerIdManager(config.brokerId, zkClient)
-    val txnStateManager = new TransactionStateManager(config.brokerId, transactionTopicPartitionCountFunc,
-      scheduler, replicaManager, txnConfig, time, metrics)
+    val txnStateManager = new TransactionStateManager(config.brokerId, scheduler, replicaManager, txnConfig, time, metrics)
 
     val logContext = new LogContext(s"[TransactionCoordinator id=${config.brokerId}] ")
     val txnMarkerChannelManager = TransactionMarkerChannelManager(config, metrics, metadataCache, txnStateManager,
@@ -603,7 +589,7 @@ class TransactionCoordinator(brokerId: Int,
   /**
    * Startup logic executed at the same time when the server starts up.
    */
-  def startup(enableTransactionalIdExpiration: Boolean = true): Unit = {
+  def startup(transactionTopicPartitionCountFunc: () => Int, enableTransactionalIdExpiration: Boolean = true): Unit = {
     info("Starting up.")
     scheduler.startup()
     scheduler.schedule("transaction-abort",
@@ -611,8 +597,7 @@ class TransactionCoordinator(brokerId: Int,
       txnConfig.abortTimedOutTransactionsIntervalMs,
       txnConfig.abortTimedOutTransactionsIntervalMs
     )
-    if (enableTransactionalIdExpiration)
-      txnManager.enableTransactionalIdExpiration()
+    txnManager.startup(transactionTopicPartitionCountFunc, enableTransactionalIdExpiration)
     txnMarkerChannelManager.start()
     isActive.set(true)
 

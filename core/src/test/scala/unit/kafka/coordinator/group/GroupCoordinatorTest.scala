@@ -116,8 +116,9 @@ class GroupCoordinatorTest {
     val heartbeatPurgatory = new DelayedOperationPurgatory[DelayedHeartbeat]("Heartbeat", timer, config.brokerId, reaperEnabled = false)
     val joinPurgatory = new DelayedOperationPurgatory[DelayedJoin]("Rebalance", timer, config.brokerId, reaperEnabled = false)
 
-    groupCoordinator = GroupCoordinator(config, zkClient, replicaManager, heartbeatPurgatory, joinPurgatory, timer.time, new Metrics())
-    groupCoordinator.startup(enableMetadataExpiration = false)
+    groupCoordinator = GroupCoordinator(config, replicaManager, heartbeatPurgatory, joinPurgatory, timer.time, new Metrics())
+    groupCoordinator.startup(() => zkClient.getTopicPartitionCount(Topic.GROUP_METADATA_TOPIC_NAME).getOrElse(config.offsetsTopicPartitions),
+      enableMetadataExpiration = false)
 
     // add the partition into the owned partition list
     groupPartitionId = groupCoordinator.partitionFor(groupId)

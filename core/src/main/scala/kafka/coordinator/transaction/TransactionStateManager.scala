@@ -28,7 +28,6 @@ import kafka.server.{Defaults, FetchLogEnd, ReplicaManager}
 import kafka.utils.CoreUtils.{inReadLock, inWriteLock}
 import kafka.utils.{Logging, Pool, Scheduler}
 import kafka.utils.Implicits._
-import kafka.zk.KafkaZkClient
 import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.metrics.stats.{Avg, Max}
@@ -52,18 +51,6 @@ object TransactionStateManager {
 
   val MetricsGroup: String = "transaction-coordinator-metrics"
   val LoadTimeSensor: String = "TransactionsPartitionLoadTime"
-
-  def apply(brokerId: Int,
-            zkClient: KafkaZkClient,
-            scheduler: Scheduler,
-            replicaManager: ReplicaManager,
-            config: TransactionConfig,
-            time: Time,
-            metrics: Metrics) = {
-    new TransactionStateManager(brokerId,
-      () => zkClient.getTopicPartitionCount(Topic.TRANSACTION_STATE_TOPIC_NAME).getOrElse(config.transactionLogNumPartitions),
-      scheduler, replicaManager, config, time, metrics)
-  }
 }
 
 /**
@@ -84,7 +71,6 @@ object TransactionStateManager {
  * </ul>
  */
 class TransactionStateManager(brokerId: Int,
-                              transactionTopicPartitionCountFunc: () => Int,
                               scheduler: Scheduler,
                               replicaManager: ReplicaManager,
                               config: TransactionConfig,
@@ -108,20 +94,8 @@ class TransactionStateManager(brokerId: Int,
   private[transaction] val transactionMetadataCache: mutable.Map[Int, TxnMetadataCacheEntry] = mutable.Map()
 
   /** number of partitions for the transaction log topic */
-  private var _transactionTopicPartitionCount: Option[Int] = Option.empty // lazy, once-only evaluation
-  private def transactionTopicPartitionCount: Int = {
-    _transactionTopicPartitionCount match {
-      case Some(partitionCount) => partitionCount
-      case None => synchronized { // make sure we only invoke the function once
-        _transactionTopicPartitionCount match {
-          case Some(partitionCount) => partitionCount // another thread beat us to it
-          case None =>
-            _transactionTopicPartitionCount = Some(transactionTopicPartitionCountFunc())
-            _transactionTopicPartitionCount.get
-        }
-      }
-    }
-  }
+  private var retrieveTransactionTopicPartitionCount: () => Int = _
+  private var transactionTopicPartitionCount: Int = _
 
   /** setup metrics*/
   private val partitionLoadSensor = metrics.sensor(TransactionStateManager.LoadTimeSensor)
@@ -489,10 +463,10 @@ class TransactionStateManager(brokerId: Int,
   }
 
   private def validateTransactionTopicPartitionCountIsStable(): Unit = {
-    val alreadyDeterminedPartitionCount = transactionTopicPartitionCount
-    val curTransactionTopicPartitionCount = transactionTopicPartitionCountFunc()
-    if (curTransactionTopicPartitionCount != alreadyDeterminedPartitionCount)
-      throw new KafkaException(s"Transaction topic number of partitions has changed from $alreadyDeterminedPartitionCount to $curTransactionTopicPartitionCount")
+    val previouslyDeterminedPartitionCount = transactionTopicPartitionCount
+    val curTransactionTopicPartitionCount = retrieveTransactionTopicPartitionCount()
+    if (previouslyDeterminedPartitionCount != curTransactionTopicPartitionCount)
+      throw new KafkaException(s"Transaction topic number of partitions has changed from $previouslyDeterminedPartitionCount to $curTransactionTopicPartitionCount")
   }
 
   def appendTransactionToLog(transactionalId: String,
@@ -658,6 +632,13 @@ class TransactionStateManager(brokerId: Int,
           }
       }
     }
+  }
+
+  def startup(retrieveTransactionTopicPartitionCount: () => Int, enableTransactionalIdExpiration: Boolean = true): Unit = {
+    this.retrieveTransactionTopicPartitionCount = retrieveTransactionTopicPartitionCount
+    transactionTopicPartitionCount = retrieveTransactionTopicPartitionCount()
+    if (enableTransactionalIdExpiration)
+      this.enableTransactionalIdExpiration()
   }
 
   def shutdown(): Unit = {
