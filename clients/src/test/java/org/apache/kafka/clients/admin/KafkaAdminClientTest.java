@@ -5174,7 +5174,7 @@ public class KafkaAdminClientTest {
     @Test
     public void testDecommissionBrokerSuccess() throws InterruptedException, ExecutionException {
         int decommissionedBrokerNode = 1;
-        try (AdminClientUnitTestEnv env = mockClientEnv()) {
+        try (final AdminClientUnitTestEnv env = mockClientEnv()) {
             env.kafkaClient().setNodeApiVersions(
                     NodeApiVersions.create(ApiKeys.DECOMMISSION_BROKER.id, (short) 0, (short) 0));
             env.kafkaClient().prepareResponse(prepareDecommissionBrokerResponse(Errors.NONE, 0));
@@ -5190,7 +5190,7 @@ public class KafkaAdminClientTest {
     @Test
     public void testDecommissionBrokerFailure() {
         int decommissionedBrokerNode = 1;
-        try (AdminClientUnitTestEnv env = mockClientEnv()) {
+        try (final AdminClientUnitTestEnv env = mockClientEnv()) {
             env.kafkaClient().setNodeApiVersions(
                     NodeApiVersions.create(ApiKeys.DECOMMISSION_BROKER.id, (short) 0, (short) 0));
             env.kafkaClient().prepareResponse(prepareDecommissionBrokerResponse(Errors.UNKNOWN_SERVER_ERROR, 0));
@@ -5200,6 +5200,74 @@ public class KafkaAdminClientTest {
             // Validate response
             assertNotNull(result.all());
             TestUtils.assertFutureThrows(result.all(), Errors.UNKNOWN_SERVER_ERROR.exception().getClass());
+        }
+    }
+
+    @Test
+    public void testDecommissionBrokerTimeoutAndSuccessRetry() throws ExecutionException, InterruptedException {
+        int decommissionedBrokerNode = 1;
+        try (final AdminClientUnitTestEnv env = mockClientEnv()) {
+            env.kafkaClient().setNodeApiVersions(
+                    NodeApiVersions.create(ApiKeys.DECOMMISSION_BROKER.id, (short) 0, (short) 0));
+            env.kafkaClient().prepareResponse(prepareDecommissionBrokerResponse(Errors.REQUEST_TIMED_OUT, 0));
+            env.kafkaClient().prepareResponse(prepareDecommissionBrokerResponse(Errors.NONE, 0));
+
+            DecommissionBrokerResult result = env.adminClient().decommissionBroker(decommissionedBrokerNode);
+
+            // Validate response
+            assertNotNull(result.all());
+            result.all().get();
+        }
+    }
+
+    @Test
+    public void testDecommissionBrokerTimeoutAndFailureRetry() {
+        int decommissionedBrokerNode = 1;
+        try (final AdminClientUnitTestEnv env = mockClientEnv()) {
+            env.kafkaClient().setNodeApiVersions(
+                    NodeApiVersions.create(ApiKeys.DECOMMISSION_BROKER.id, (short) 0, (short) 0));
+            env.kafkaClient().prepareResponse(prepareDecommissionBrokerResponse(Errors.REQUEST_TIMED_OUT, 0));
+            env.kafkaClient().prepareResponse(prepareDecommissionBrokerResponse(Errors.UNKNOWN_SERVER_ERROR, 0));
+
+            DecommissionBrokerResult result = env.adminClient().decommissionBroker(decommissionedBrokerNode);
+
+            // Validate response
+            assertNotNull(result.all());
+            TestUtils.assertFutureThrows(result.all(), Errors.UNKNOWN_SERVER_ERROR.exception().getClass());
+        }
+    }
+
+    @Test
+    public void testDecommissionBrokerTimeoutMaxRetry() {
+        int decommissionedBrokerNode = 1;
+        try (final AdminClientUnitTestEnv env = mockClientEnv(Time.SYSTEM, AdminClientConfig.RETRIES_CONFIG, "1")) {
+            env.kafkaClient().setNodeApiVersions(
+                    NodeApiVersions.create(ApiKeys.DECOMMISSION_BROKER.id, (short) 0, (short) 0));
+            env.kafkaClient().prepareResponse(prepareDecommissionBrokerResponse(Errors.REQUEST_TIMED_OUT, 0));
+            env.kafkaClient().prepareResponse(prepareDecommissionBrokerResponse(Errors.REQUEST_TIMED_OUT, 0));
+
+            DecommissionBrokerResult result = env.adminClient().decommissionBroker(decommissionedBrokerNode);
+
+            // Validate response
+            assertNotNull(result.all());
+            TestUtils.assertFutureThrows(result.all(), Errors.REQUEST_TIMED_OUT.exception().getClass());
+        }
+    }
+
+    @Test
+    public void testDecommissionBrokerTimeoutMaxWait() {
+        int decommissionedBrokerNode = 1;
+        try (final AdminClientUnitTestEnv env = mockClientEnv()) {
+            env.kafkaClient().setNodeApiVersions(
+                    NodeApiVersions.create(ApiKeys.DECOMMISSION_BROKER.id, (short) 0, (short) 0));
+
+            DecommissionBrokerOptions options = new DecommissionBrokerOptions();
+            options.timeoutMs = 10;
+            DecommissionBrokerResult result = env.adminClient().decommissionBroker(decommissionedBrokerNode, options);
+
+            // Validate response
+            assertNotNull(result.all());
+            TestUtils.assertFutureThrows(result.all(), Errors.REQUEST_TIMED_OUT.exception().getClass());
         }
     }
 
