@@ -3318,13 +3318,6 @@ class KafkaApis(val requestChannel: RequestChannel,
     handle(forwardedRequest)
   }
 
-  def handleDecommissionBrokerRequest(request: RequestChannel.Request): Unit = {
-    val decommissionBrokerRequest = request.body[DecommissionBrokerRequest]
-    requestHelper.sendResponseMaybeThrottle(request, requestThrottleMs =>
-      decommissionBrokerRequest.getErrorResponse(requestThrottleMs,
-        Errors.UNSUPPORTED_VERSION.exception))
-  }
-
   private def parseForwardedClientAddress(
     address: Array[Byte]
   ): InetAddress = {
