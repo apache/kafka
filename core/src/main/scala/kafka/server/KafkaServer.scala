@@ -32,8 +32,9 @@ import kafka.log.LogManager
 import kafka.metrics.{KafkaMetricsGroup, KafkaMetricsReporter, KafkaYammerMetrics, LinuxIoMetricsCollector}
 import kafka.network.SocketServer
 import kafka.security.CredentialProvider
+import kafka.server.metadata.ZkConfigRepository
 import kafka.utils._
-import kafka.zk.{BrokerInfo, KafkaZkClient}
+import kafka.zk.{AdminZkClient, BrokerInfo, KafkaZkClient}
 import org.apache.kafka.clients.{ApiVersions, ClientDnsLookup, ManualMetadataUpdater, NetworkClient, NetworkClientUtils}
 import org.apache.kafka.common.internals.ClusterResourceListeners
 import org.apache.kafka.common.message.ControlledShutdownRequestData
@@ -251,8 +252,10 @@ class KafkaServer(
         logDirFailureChannel = new LogDirFailureChannel(config.logDirs.size)
 
         /* start log manager */
-        logManager = LogManager(config, initialOfflineDirs, zkClient, brokerState, kafkaScheduler, time, brokerTopicStats, logDirFailureChannel)
-        logManager.startup()
+        logManager = LogManager(config, initialOfflineDirs,
+          new ZkConfigRepository(new AdminZkClient(zkClient)),
+          brokerState, kafkaScheduler, time, brokerTopicStats, logDirFailureChannel)
+        logManager.startup(() => zkClient.getAllTopicsInCluster())
 
         metadataCache = new MetadataCache(config.brokerId)
         // Enable delegation token cache for all SCRAM mechanisms to simplify dynamic update.

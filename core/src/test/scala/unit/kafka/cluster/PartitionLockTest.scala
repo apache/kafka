@@ -255,7 +255,7 @@ class PartitionLockTest extends Logging {
     val offsetCheckpoints: OffsetCheckpoints = mock(classOf[OffsetCheckpoints])
     val alterIsrManager: AlterIsrManager = mock(classOf[AlterIsrManager])
 
-    logManager.startup()
+    logManager.startup(() => Set.empty)
     val partition = new Partition(topicPartition,
       replicaLagTimeMaxMs = kafka.server.Defaults.ReplicaLagTimeMaxMs,
       interBrokerProtocolVersion = ApiVersion.latestVersion,

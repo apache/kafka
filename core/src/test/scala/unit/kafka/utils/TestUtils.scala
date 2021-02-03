@@ -37,6 +37,7 @@ import kafka.server.checkpoints.OffsetCheckpointFile
 import com.yammer.metrics.core.Meter
 import kafka.controller.LeaderIsrAndControllerEpoch
 import kafka.metrics.KafkaYammerMetrics
+import kafka.server.metadata.LocalConfigRepository
 import kafka.utils.Implicits._
 import kafka.zk._
 import org.apache.kafka.clients.CommonClientConfigs
@@ -1065,7 +1066,7 @@ object TestUtils extends Logging {
                        time: MockTime = new MockTime()): LogManager = {
     new LogManager(logDirs = logDirs.map(_.getAbsoluteFile),
                    initialOfflineDirs = Array.empty[File],
-                   topicConfigs = Map(),
+                   configRepository = new LocalConfigRepository(),
                    initialDefaultConfig = defaultConfig,
                    cleanerConfig = cleanerConfig,
                    recoveryThreadsPerDataDir = 4,

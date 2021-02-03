@@ -61,7 +61,7 @@ class LogManagerTest {
   def setUp(): Unit = {
     logDir = TestUtils.tempDir()
     logManager = createLogManager()
-    logManager.startup()
+    logManager.startup(() => Set.empty)
   }
 
   @AfterEach
@@ -102,7 +102,7 @@ class LogManagerTest {
       logManagerForTest = Some(createLogManager(Seq(logDir1, logDir2)))
 
       assertEquals(2, logManagerForTest.get.liveLogDirs.size)
-      logManagerForTest.get.startup()
+      logManagerForTest.get.startup(() => Set.empty)
 
       val log1 = logManagerForTest.get.getOrCreateLog(new TopicPartition(name, 0), () => logConfig)
       val log2 = logManagerForTest.get.getOrCreateLog(new TopicPartition(name, 1), () => logConfig)
@@ -145,7 +145,7 @@ class LogManagerTest {
 
     logManager.shutdown()
     logManager = createLogManager(dirs)
-    logManager.startup()
+    logManager.startup(() => Set.empty)
 
     val log = logManager.getOrCreateLog(new TopicPartition(name, 0), () => logConfig, isNew = true)
     val logFile = new File(logDir, name + "-0")
@@ -175,7 +175,7 @@ class LogManagerTest {
         invocation.callRealMethod().asInstanceOf[Try[File]]
       }
     }.when(logManager).createLogDirectory(any(), any())
-    logManager.startup()
+    logManager.startup(() => Set.empty)
 
     // Request creating a new log.
     // LogManager should try using all configured log directories until one succeeds.
@@ -251,7 +251,7 @@ class LogManagerTest {
     val config = LogConfig.fromProps(logConfig.originals, logProps)
 
     logManager = createLogManager()
-    logManager.startup()
+    logManager.startup(() => Set.empty)
 
     // create a log
     val log = logManager.getOrCreateLog(new TopicPartition(name, 0), () => config)
@@ -331,7 +331,7 @@ class LogManagerTest {
     val config = LogConfig.fromProps(logConfig.originals, logProps)
 
     logManager = createLogManager()
-    logManager.startup()
+    logManager.startup(() => Set.empty)
     val log = logManager.getOrCreateLog(new TopicPartition(name, 0), () => config)
     val lastFlush = log.lastFlushTime
     for (_ <- 0 until 200) {
@@ -386,7 +386,7 @@ class LogManagerTest {
   def testRecoveryDirectoryMappingWithTrailingSlash(): Unit = {
     logManager.shutdown()
     logManager = TestUtils.createLogManager(logDirs = Seq(new File(TestUtils.tempDir().getAbsolutePath + File.separator)))
-    logManager.startup()
+    logManager.startup(() => Set.empty)
     verifyCheckpointRecovery(Seq(new TopicPartition("test-a", 1)), logManager, logManager.liveLogDirs.head)
   }
 
@@ -397,7 +397,7 @@ class LogManagerTest {
   def testRecoveryDirectoryMappingWithRelativeDirectory(): Unit = {
     logManager.shutdown()
     logManager = createLogManager(Seq(new File("data", logDir.getName).getAbsoluteFile))
-    logManager.startup()
+    logManager.startup(() => Set.empty)
     verifyCheckpointRecovery(Seq(new TopicPartition("test-a", 1)), logManager, logManager.liveLogDirs.head)
   }
 
@@ -636,7 +636,7 @@ class LogManagerTest {
     val dir1 = TestUtils.tempDir()
     val dir2 = TestUtils.tempDir()
     logManager = createLogManager(Seq(dir1, dir2))
-    logManager.startup()
+    logManager.startup(() => Set.empty)
 
     val topicName = "future-log"
     def logMetrics: mutable.Set[MetricName] = KafkaYammerMetrics.defaultRegistry.allMetrics.keySet.asScala.

@@ -32,6 +32,7 @@ import kafka.server.LogDirFailureChannel;
 import kafka.server.LogOffsetMetadata;
 import kafka.server.MetadataCache;
 import kafka.server.checkpoints.OffsetCheckpoints;
+import kafka.server.metadata.LocalConfigRepository;
 import kafka.utils.KafkaScheduler;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.message.LeaderAndIsrRequestData.LeaderAndIsrPartitionState;
@@ -83,7 +84,7 @@ public class UpdateFollowerFetchStateBenchmark {
         List<File> logDirs = Collections.singletonList(logDir);
         logManager = new LogManager(JavaConverters.asScalaIteratorConverter(logDirs.iterator()).asScala().toSeq(),
                 JavaConverters.asScalaIteratorConverter(new ArrayList<File>().iterator()).asScala().toSeq(),
-                new scala.collection.mutable.HashMap<>(),
+                new LocalConfigRepository(),
                 logConfig,
                 new CleanerConfig(0, 0, 0, 0, 0, 0.0, 0, false, "MD5"),
                 1,
