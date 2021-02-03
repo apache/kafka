@@ -37,7 +37,7 @@ object MetadataPartition {
       record.leaderEpoch(),
       record.replicas(),
       record.isr(),
-      Collections.emptyList(), // TODO: handle offline replicas
+      Collections.emptyList(), // TODO KAFKA-12285 handle offline replicas
       Collections.emptyList(),
       Collections.emptyList())
   }
