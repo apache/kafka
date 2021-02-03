@@ -286,6 +286,25 @@ public class ThreadCacheTest {
     }
 
     @Test
+    public void shouldSkipToEntryWhentoInclusiveIsFalseInRange() {
+        final ThreadCache cache = new ThreadCache(logContext, 10000L, new MockStreamsMetrics(new Metrics()));
+        final byte[][] bytes = {{0}, {1}, {2}, {3}, {4}, {5}, {6}, {7}, {8}, {9}, {10}};
+        for (final byte[] aByte : bytes) {
+            cache.put(namespace, Bytes.wrap(aByte), dirtyEntry(aByte));
+        }
+        final ThreadCache.MemoryLRUCacheBytesIterator iterator = cache.range(namespace, Bytes.wrap(new byte[]{1}), Bytes.wrap(new byte[]{4}), false);
+        int bytesIndex = 1;
+        while (iterator.hasNext()) {
+            final Bytes peekedKey = iterator.peekNextKey();
+            final KeyValue<Bytes, LRUCacheEntry> next = iterator.next();
+            assertArrayEquals(bytes[bytesIndex], peekedKey.get());
+            assertArrayEquals(bytes[bytesIndex], next.key.get());
+            bytesIndex++;
+        }
+        assertEquals(4, bytesIndex);
+    }
+
+    @Test
     public void shouldSkipEntriesWhereValueHasBeenEvictedFromCache() {
         final int entrySize = memoryCacheEntrySize(new byte[1], new byte[1], "");
         final ThreadCache cache = new ThreadCache(logContext, entrySize * 5, new MockStreamsMetrics(new Metrics()));

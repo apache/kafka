@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.state.internals;
 
+import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.processor.ProcessorContext;
@@ -31,6 +32,7 @@ import java.util.NavigableMap;
 import java.util.Set;
 import java.util.TreeMap;
 import java.util.TreeSet;
+import java.util.Objects;
 
 public class InMemoryKeyValueStore implements KeyValueStore<Bytes, byte[]> {
 
@@ -101,6 +103,20 @@ public class InMemoryKeyValueStore implements KeyValueStore<Bytes, byte[]> {
         for (final KeyValue<Bytes, byte[]> entry : entries) {
             put(entry.key, entry.value);
         }
+    }
+
+    @Override
+    public <PS extends Serializer<P>, P> KeyValueIterator<Bytes, byte[]> prefixScan(final P prefix, final PS prefixKeySerializer) {
+        Objects.requireNonNull(prefix, "prefix cannot be null");
+        Objects.requireNonNull(prefixKeySerializer, "prefixKeySerializer cannot be null");
+
+        final Bytes from = Bytes.wrap(prefixKeySerializer.serialize(null, prefix));
+        final Bytes to = Bytes.increment(from);
+
+        return new DelegatingPeekingKeyValueIterator<>(
+            name,
+            new InMemoryKeyValueIterator(map.subMap(from, true, to, false).keySet(), true)
+        );
     }
 
     @Override
