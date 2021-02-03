@@ -22,9 +22,37 @@ fi
 
 base_dir=$(dirname $0)
 
+###
+### Classpath additions for Confluent Platform releases (LSB-style layout)
+###
+#cd -P deals with symlink from /bin to /usr/bin
+java_base_dir=$( cd -P "$base_dir/../share/java" && pwd )
+
+# confluent-common: required by kafka-serde-tools
+# kafka-serde-tools (e.g. Avro serializer): bundled with confluent-schema-registry package
+for library in "kafka" "confluent-common" "kafka-serde-tools" "monitoring-interceptors"; do
+  dir="$java_base_dir/$library"
+  if [ -d "$dir" ]; then
+    classpath_prefix="$CLASSPATH:"
+    if [ "x$CLASSPATH" = "x" ]; then
+      classpath_prefix=""
+    fi
+    CLASSPATH="$classpath_prefix$dir/*"
+  fi
+done
+
 if [ "x$KAFKA_LOG4J_OPTS" = "x" ]; then
-    export KAFKA_LOG4J_OPTS="-Dlog4j.configuration=file:$base_dir/../config/connect-log4j.properties"
+  LOG4J_CONFIG_NORMAL_INSTALL="/etc/kafka/connect-log4j.properties"
+  LOG4J_CONFIG_ZIP_INSTALL="$base_dir/../etc/kafka/connect-log4j.properties"
+  if [ -e "$LOG4J_CONFIG_NORMAL_INSTALL" ]; then # Normal install layout
+    KAFKA_LOG4J_OPTS="-Dlog4j.configuration=file:${LOG4J_CONFIG_NORMAL_INSTALL}"
+  elif [ -e "${LOG4J_CONFIG_ZIP_INSTALL}" ]; then # Simple zip file layout
+    KAFKA_LOG4J_OPTS="-Dlog4j.configuration=file:${LOG4J_CONFIG_ZIP_INSTALL}"
+  else # Fallback to normal default
+    KAFKA_LOG4J_OPTS="-Dlog4j.configuration=file:$base_dir/../config/connect-log4j.properties"
+  fi
 fi
+export KAFKA_LOG4J_OPTS
 
 if [ "x$KAFKA_HEAP_OPTS" = "x" ]; then
   export KAFKA_HEAP_OPTS="-Xms256M -Xmx2G"
@@ -42,4 +70,5 @@ case $COMMAND in
     ;;
 esac
 
+export CLASSPATH
 exec $(dirname $0)/kafka-run-class.sh $EXTRA_ARGS org.apache.kafka.connect.cli.ConnectStandalone "$@"
