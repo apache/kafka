@@ -60,6 +60,60 @@ import java.util.stream.Collectors;
  */
 public class TopicAdmin implements AutoCloseable {
 
+    public static final TopicCreationResponse EMPTY_CREATION = new TopicCreationResponse(Collections.emptySet(), Collections.emptySet());
+
+    public static class TopicCreationResponse {
+
+        private final Set<String> created;
+        private final Set<String> existing;
+
+        public TopicCreationResponse(Set<String> createdTopicNames, Set<String> existingTopicNames) {
+            this.created = Collections.unmodifiableSet(createdTopicNames);
+            this.existing = Collections.unmodifiableSet(existingTopicNames);
+        }
+
+        public Set<String> createdTopics() {
+            return created;
+        }
+
+        public Set<String> existingTopics() {
+            return existing;
+        }
+
+        public boolean isCreated(String topicName) {
+            return created.contains(topicName);
+        }
+
+        public boolean isExisting(String topicName) {
+            return existing.contains(topicName);
+        }
+
+        public boolean isCreatedOrExisting(String topicName) {
+            return isCreated(topicName) || isExisting(topicName);
+        }
+
+        public int createdTopicsCount() {
+            return created.size();
+        }
+
+        public int existingTopicsCount() {
+            return existing.size();
+        }
+
+        public int createdOrExistingTopicsCount() {
+            return createdTopicsCount() + existingTopicsCount();
+        }
+
+        public boolean isEmpty() {
+            return createdOrExistingTopicsCount() == 0;
+        }
+
+        @Override
+        public String toString() {
+            return "TopicCreationResponse{" + "created=" + created + ", existing=" + existing + '}';
+        }
+    }
+
     public static final int NO_PARTITIONS = -1;
     public static final short NO_REPLICATION_FACTOR = -1;
 
@@ -228,7 +282,7 @@ public class TopicAdmin implements AutoCloseable {
         this.logCreation = logCreation;
     }
 
-   /**
+    /**
      * Attempt to create the topic described by the given definition, returning true if the topic was created or false
      * if the topic already existed.
      *
@@ -260,13 +314,48 @@ public class TopicAdmin implements AutoCloseable {
      *                                     attempting to perform this operation
      */
     public Set<String> createTopics(NewTopic... topics) {
+        return createOrFindTopics(topics).createdTopics();
+    }
+
+    /**
+     * Attempt to find or create the topic described by the given definition, returning true if the topic was created or had
+     * already existed, or false if the topic did not exist and could not be created.
+     *
+     * @param topic the specification of the topic
+     * @return true if the topic was created or existed, or false if the topic could not already existed.
+     * @throws ConnectException            if an error occurs, the operation takes too long, or the thread is interrupted while
+     *                                     attempting to perform this operation
+     * @throws UnsupportedVersionException if the broker does not support the necessary APIs to perform this request
+     */
+    public boolean createOrFindTopic(NewTopic topic) {
+        if (topic == null) return false;
+        return createOrFindTopics(topic).isCreatedOrExisting(topic.name());
+    }
+
+    /**
+     * Attempt to create the topics described by the given definitions, returning all of the names of those topics that
+     * were created by this request. Any existing topics with the same name are unchanged, and the names of such topics
+     * are excluded from the result.
+     * <p>
+     * If multiple topic definitions have the same topic name, the last one with that name will be used.
+     * <p>
+     * Apache Kafka added support for creating topics in 0.10.1.0, so this method works as expected with that and later versions.
+     * With brokers older than 0.10.1.0, this method is unable to create topics and always returns an empty set.
+     *
+     * @param topics the specifications of the topics
+     * @return the {@link TopicCreationResponse} with the names of the newly created and existing topics;
+     *         never null but possibly empty
+     * @throws ConnectException if an error occurs, the operation takes too long, or the thread is interrupted while
+     *                          attempting to perform this operation
+     */
+    public TopicCreationResponse createOrFindTopics(NewTopic... topics) {
         Map<String, NewTopic> topicsByName = new HashMap<>();
         if (topics != null) {
             for (NewTopic topic : topics) {
                 if (topic != null) topicsByName.put(topic.name(), topic);
             }
         }
-        if (topicsByName.isEmpty()) return Collections.emptySet();
+        if (topicsByName.isEmpty()) return EMPTY_CREATION;
         String bootstrapServers = bootstrapServers();
         String topicNameList = Utils.join(topicsByName.keySet(), "', '");
 
@@ -276,6 +365,7 @@ public class TopicAdmin implements AutoCloseable {
 
         // Iterate over each future so that we can handle individual failures like when some topics already exist
         Set<String> newlyCreatedTopicNames = new HashSet<>();
+        Set<String> existingTopicNames = new HashSet<>();
         for (Map.Entry<String, KafkaFuture<Void>> entry : newResults.entrySet()) {
             String topic = entry.getKey();
             try {
@@ -288,25 +378,26 @@ public class TopicAdmin implements AutoCloseable {
                 Throwable cause = e.getCause();
                 if (cause instanceof TopicExistsException) {
                     log.debug("Found existing topic '{}' on the brokers at {}", topic, bootstrapServers);
+                    existingTopicNames.add(topic);
                     continue;
                 }
                 if (cause instanceof UnsupportedVersionException) {
                     log.debug("Unable to create topic(s) '{}' since the brokers at {} do not support the CreateTopics API." +
                             " Falling back to assume topic(s) exist or will be auto-created by the broker.",
                             topicNameList, bootstrapServers);
-                    return Collections.emptySet();
+                    return EMPTY_CREATION;
                 }
                 if (cause instanceof ClusterAuthorizationException) {
                     log.debug("Not authorized to create topic(s) '{}' upon the brokers {}." +
                             " Falling back to assume topic(s) exist or will be auto-created by the broker.",
                             topicNameList, bootstrapServers);
-                    return Collections.emptySet();
+                    return EMPTY_CREATION;
                 }
                 if (cause instanceof TopicAuthorizationException) {
                     log.debug("Not authorized to create topic(s) '{}' upon the brokers {}." +
                                     " Falling back to assume topic(s) exist or will be auto-created by the broker.",
                             topicNameList, bootstrapServers);
-                    return Collections.emptySet();
+                    return EMPTY_CREATION;
                 }
                 if (cause instanceof InvalidConfigurationException) {
                     throw new ConnectException("Unable to create topic(s) '" + topicNameList + "': " + cause.getMessage(),
@@ -324,7 +415,7 @@ public class TopicAdmin implements AutoCloseable {
                 throw new ConnectException("Interrupted while attempting to create/find topic(s) '" + topicNameList + "'", e);
             }
         }
-        return newlyCreatedTopicNames;
+        return new TopicCreationResponse(newlyCreatedTopicNames, existingTopicNames);
     }
 
     /**
