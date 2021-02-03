@@ -469,6 +469,7 @@
         <allow class="javax.servlet.http.HttpServletResponse" />
         <allow class="javax.ws.rs.core.Response" />
         <allow pkg="com.fasterxml.jackson.core.type" />
+        <allow pkg="org.apache.kafka.metadata" />
       </subpackage>
     </subpackage>
 

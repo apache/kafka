@@ -20,7 +20,7 @@ package kafka.server
 import java.io.{File, IOException}
 import java.net.{InetAddress, SocketTimeoutException}
 import java.util.concurrent._
-import java.util.concurrent.atomic.{AtomicBoolean, AtomicInteger}
+import java.util.concurrent.atomic.{AtomicBoolean, AtomicInteger, AtomicReference}
 
 import kafka.api.{KAFKA_0_9_0, KAFKA_2_2_IV0, KAFKA_2_4_IV1}
 import kafka.cluster.Broker
@@ -46,6 +46,7 @@ import org.apache.kafka.common.security.token.delegation.internals.DelegationTok
 import org.apache.kafka.common.security.{JaasContext, JaasUtils}
 import org.apache.kafka.common.utils.{AppInfoParser, LogContext, Time}
 import org.apache.kafka.common.{ClusterResource, Endpoint, Node}
+import org.apache.kafka.metadata.BrokerState
 import org.apache.kafka.server.authorizer.Authorizer
 import org.apache.zookeeper.client.ZKClientConfig
 
@@ -102,7 +103,7 @@ class KafkaServer(
   var kafkaYammerMetrics: KafkaYammerMetrics = null
   var metrics: Metrics = null
 
-  val brokerState: BrokerState = new BrokerState
+  val brokerState = new AtomicReference[BrokerState](BrokerState.NOT_RUNNING)
 
   var dataPlaneRequestProcessor: KafkaApis = null
   var controlPlaneRequestProcessor: KafkaApis = null
@@ -166,7 +167,7 @@ class KafkaServer(
 
   private[kafka] def featureChangeListener = _featureChangeListener
 
-  newGauge("BrokerState", () => brokerState.currentState)
+  newGauge("BrokerState", () => brokerState.get().value())
   newGauge("ClusterId", () => clusterId)
   newGauge("yammer-metrics-count", () =>  KafkaYammerMetrics.defaultRegistry.allMetrics.size)
 
@@ -193,7 +194,7 @@ class KafkaServer(
 
       val canStartup = isStartingUp.compareAndSet(false, true)
       if (canStartup) {
-        brokerState.newState(Starting)
+        brokerState.set(BrokerState.STARTING)
 
         /* setup zookeeper */
         initZkClient(time)
@@ -380,7 +381,7 @@ class KafkaServer(
 
         socketServer.startProcessingRequests(authorizerFutures)
 
-        brokerState.newState(RunningAsBroker)
+        brokerState.set(BrokerState.RUNNING)
         shutdownLatch = new CountDownLatch(1)
         startupComplete.set(true)
         isStartingUp.set(false)
@@ -632,7 +633,7 @@ class KafkaServer(
       // the shutdown.
       info("Starting controlled shutdown")
 
-      brokerState.newState(PendingControlledShutdown)
+      brokerState.set(BrokerState.PENDING_CONTROLLED_SHUTDOWN)
 
       val shutdownSucceeded = doControlledShutdown(config.controlledShutdownMaxRetries.intValue)
 
@@ -657,7 +658,7 @@ class KafkaServer(
       // `true` at the end of this method.
       if (shutdownLatch.getCount > 0 && isShuttingDown.compareAndSet(false, true)) {
         CoreUtils.swallow(controlledShutdown(), this)
-        brokerState.newState(BrokerShuttingDown)
+        brokerState.set(BrokerState.SHUTTING_DOWN)
 
         if (dynamicConfigManager != null)
           CoreUtils.swallow(dynamicConfigManager.shutdown(), this)
@@ -726,7 +727,7 @@ class KafkaServer(
         // Clear all reconfigurable instances stored in DynamicBrokerConfig
         config.dynamicConfig.clear()
 
-        brokerState.newState(NotRunning)
+        brokerState.set(BrokerState.NOT_RUNNING)
 
         startupComplete.set(false)
         isShuttingDown.set(false)
