@@ -18,184 +18,190 @@
 package kafka.tools
 
 import org.apache.kafka.common.PartitionInfo
-import org.junit.Assert.{assertFalse, assertTrue, assertEquals}
-import org.junit.Test
-import org.junit.runner.RunWith
-import org.junit.runners.Parameterized
-import org.junit.runners.Parameterized.Parameters
+import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertThrows, assertTrue}
+import org.junit.jupiter.api.Test
+import org.junit.jupiter.params.ParameterizedTest
+import org.junit.jupiter.params.provider.ValueSource
 
-import java.util
-
-@RunWith(classOf[Parameterized])
-class GetOffsetShellParsingTest(excludeInternal: Boolean) {
-  @Test
-  def testTopicPartitionFilterForTopicName(): Unit = {
+class GetOffsetShellParsingTest {
+  @ParameterizedTest
+  @ValueSource(booleans = Array(true, false))
+  def testTopicPartitionFilterForTopicName(excludeInternal: Boolean): Unit = {
     val filter = GetOffsetShell.createTopicPartitionFilterWithPatternList("test", excludeInternal)
-    assertTrue(filter.apply(new PartitionInfo("test", 0, null, null, null)))
-    assertTrue(filter.apply(new PartitionInfo("test", 1, null, null, null)))
-    assertFalse(filter.apply(new PartitionInfo("test1", 0, null, null, null)))
-    assertFalse(filter.apply(new PartitionInfo("__consumer_offsets", 0, null, null, null)))
+    assertTrue(filter.apply(partitionInfo("test", 0)))
+    assertTrue(filter.apply(partitionInfo("test", 1)))
+    assertFalse(filter.apply(partitionInfo("test1", 0)))
+    assertFalse(filter.apply(partitionInfo("__consumer_offsets", 0)))
   }
 
-  @Test
-  def testTopicPartitionFilterForInternalTopicName(): Unit = {
+  @ParameterizedTest
+  @ValueSource(booleans = Array(true, false))
+  def testTopicPartitionFilterForInternalTopicName(excludeInternal: Boolean): Unit = {
     val filter = GetOffsetShell.createTopicPartitionFilterWithPatternList("__consumer_offsets", excludeInternal)
-    assertEquals(!excludeInternal, filter.apply(new PartitionInfo("__consumer_offsets", 0, null, null, null)))
-    assertEquals(!excludeInternal, filter.apply(new PartitionInfo("__consumer_offsets", 1, null, null, null)))
-    assertFalse(filter.apply(new PartitionInfo("test1", 0, null, null, null)))
-    assertFalse(filter.apply(new PartitionInfo("test2", 0, null, null, null)))
+    assertEquals(!excludeInternal, filter.apply(partitionInfo("__consumer_offsets", 0)))
+    assertEquals(!excludeInternal, filter.apply(partitionInfo("__consumer_offsets", 1)))
+    assertFalse(filter.apply(partitionInfo("test1", 0)))
+    assertFalse(filter.apply(partitionInfo("test2", 0)))
   }
 
-  @Test
-  def testTopicPartitionFilterForTopicNameList(): Unit = {
+  @ParameterizedTest
+  @ValueSource(booleans = Array(true, false))
+  def testTopicPartitionFilterForTopicNameList(excludeInternal: Boolean): Unit = {
     val filter = GetOffsetShell.createTopicPartitionFilterWithPatternList("test,test1,__consumer_offsets", excludeInternal)
-    assertTrue(filter.apply(new PartitionInfo("test", 0, null, null, null)))
-    assertTrue(filter.apply(new PartitionInfo("test1", 1, null, null, null)))
-    assertFalse(filter.apply(new PartitionInfo("test2", 0, null, null, null)))
+    assertTrue(filter.apply(partitionInfo("test", 0)))
+    assertTrue(filter.apply(partitionInfo("test1", 1)))
+    assertFalse(filter.apply(partitionInfo("test2", 0)))
 
-    assertEquals(!excludeInternal, filter.apply(new PartitionInfo("__consumer_offsets", 0, null, null, null)))
+    assertEquals(!excludeInternal, filter.apply(partitionInfo("__consumer_offsets", 0)))
   }
 
-  @Test
-  def testTopicPartitionFilterForRegex(): Unit = {
+  @ParameterizedTest
+  @ValueSource(booleans = Array(true, false))
+  def testTopicPartitionFilterForRegex(excludeInternal: Boolean): Unit = {
     val filter = GetOffsetShell.createTopicPartitionFilterWithPatternList("test.*", excludeInternal)
-    assertTrue(filter.apply(new PartitionInfo("test", 0, null, null, null)))
-    assertTrue(filter.apply(new PartitionInfo("test1", 1, null, null, null)))
-    assertTrue(filter.apply(new PartitionInfo("test2", 0, null, null, null)))
-    assertFalse(filter.apply(new PartitionInfo("__consumer_offsets", 0, null, null, null)))
+    assertTrue(filter.apply(partitionInfo("test", 0)))
+    assertTrue(filter.apply(partitionInfo("test1", 1)))
+    assertTrue(filter.apply(partitionInfo("test2", 0)))
+    assertFalse(filter.apply(partitionInfo("__consumer_offsets", 0)))
   }
 
-  @Test
-  def testTopicPartitionFilterForPartitionIndexSpec(): Unit = {
+  @ParameterizedTest
+  @ValueSource(booleans = Array(true, false))
+  def testTopicPartitionFilterForPartitionIndexSpec(excludeInternal: Boolean): Unit = {
     val filter = GetOffsetShell.createTopicPartitionFilterWithPatternList(":0", excludeInternal)
-    assertTrue(filter.apply(new PartitionInfo("test", 0, null, null, null)))
-    assertTrue(filter.apply(new PartitionInfo("test1", 0, null, null, null)))
-    assertFalse(filter.apply(new PartitionInfo("test2", 1, null, null, null)))
+    assertTrue(filter.apply(partitionInfo("test", 0)))
+    assertTrue(filter.apply(partitionInfo("test1", 0)))
+    assertFalse(filter.apply(partitionInfo("test2", 1)))
 
-    assertEquals(!excludeInternal, filter.apply(new PartitionInfo("__consumer_offsets", 0, null, null, null)))
-    assertFalse(filter.apply(new PartitionInfo("__consumer_offsets", 1, null, null, null)))
+    assertEquals(!excludeInternal, filter.apply(partitionInfo("__consumer_offsets", 0)))
+    assertFalse(filter.apply(partitionInfo("__consumer_offsets", 1)))
   }
 
-  @Test
-  def testTopicPartitionFilterForPartitionRangeSpec(): Unit = {
+  @ParameterizedTest
+  @ValueSource(booleans = Array(true, false))
+  def testTopicPartitionFilterForPartitionRangeSpec(excludeInternal: Boolean): Unit = {
     val filter = GetOffsetShell.createTopicPartitionFilterWithPatternList(":1-3", excludeInternal)
-    assertTrue(filter.apply(new PartitionInfo("test", 1, null, null, null)))
-    assertTrue(filter.apply(new PartitionInfo("test1", 2, null, null, null)))
-    assertFalse(filter.apply(new PartitionInfo("test2", 0, null, null, null)))
-    assertFalse(filter.apply(new PartitionInfo("test2", 3, null, null, null)))
+    assertTrue(filter.apply(partitionInfo("test", 1)))
+    assertTrue(filter.apply(partitionInfo("test1", 2)))
+    assertFalse(filter.apply(partitionInfo("test2", 0)))
+    assertFalse(filter.apply(partitionInfo("test2", 3)))
 
-    assertEquals(!excludeInternal, filter.apply(new PartitionInfo("__consumer_offsets", 2, null, null, null)))
-    assertFalse(filter.apply(new PartitionInfo("__consumer_offsets", 3, null, null, null)))
+    assertEquals(!excludeInternal, filter.apply(partitionInfo("__consumer_offsets", 2)))
+    assertFalse(filter.apply(partitionInfo("__consumer_offsets", 3)))
   }
 
-  @Test
-  def testTopicPartitionFilterForPartitionLowerBoundSpec(): Unit = {
+  @ParameterizedTest
+  @ValueSource(booleans = Array(true, false))
+  def testTopicPartitionFilterForPartitionLowerBoundSpec(excludeInternal: Boolean): Unit = {
     val filter = GetOffsetShell.createTopicPartitionFilterWithPatternList(":1-", excludeInternal)
-    assertTrue(filter.apply(new PartitionInfo("test", 1, null, null, null)))
-    assertTrue(filter.apply(new PartitionInfo("test1", 2, null, null, null)))
-    assertFalse(filter.apply(new PartitionInfo("test2", 0, null, null, null)))
+    assertTrue(filter.apply(partitionInfo("test", 1)))
+    assertTrue(filter.apply(partitionInfo("test1", 2)))
+    assertFalse(filter.apply(partitionInfo("test2", 0)))
 
-    assertEquals(!excludeInternal, filter.apply(new PartitionInfo("__consumer_offsets", 2, null, null, null)))
-    assertFalse(filter.apply(new PartitionInfo("__consumer_offsets", 0, null, null, null)))
+    assertEquals(!excludeInternal, filter.apply(partitionInfo("__consumer_offsets", 2)))
+    assertFalse(filter.apply(partitionInfo("__consumer_offsets", 0)))
   }
 
-  @Test
-  def testTopicPartitionFilterForPartitionUpperBoundSpec(): Unit = {
+  @ParameterizedTest
+  @ValueSource(booleans = Array(true, false))
+  def testTopicPartitionFilterForPartitionUpperBoundSpec(excludeInternal: Boolean): Unit = {
     val filter = GetOffsetShell.createTopicPartitionFilterWithPatternList(":-3", excludeInternal)
-    assertTrue(filter.apply(new PartitionInfo("test", 0, null, null, null)))
-    assertTrue(filter.apply(new PartitionInfo("test1", 1, null, null, null)))
-    assertTrue(filter.apply(new PartitionInfo("test2", 2, null, null, null)))
-    assertFalse(filter.apply(new PartitionInfo("test3", 3, null, null, null)))
+    assertTrue(filter.apply(partitionInfo("test", 0)))
+    assertTrue(filter.apply(partitionInfo("test1", 1)))
+    assertTrue(filter.apply(partitionInfo("test2", 2)))
+    assertFalse(filter.apply(partitionInfo("test3", 3)))
 
-    assertEquals(!excludeInternal, filter.apply(new PartitionInfo("__consumer_offsets", 2, null, null, null)))
-    assertFalse(filter.apply(new PartitionInfo("__consumer_offsets", 3, null, null, null)))
+    assertEquals(!excludeInternal, filter.apply(partitionInfo("__consumer_offsets", 2)))
+    assertFalse(filter.apply(partitionInfo("__consumer_offsets", 3)))
   }
 
-  @Test
-  def testTopicPartitionFilterComplex(): Unit = {
+  @ParameterizedTest
+  @ValueSource(booleans = Array(true, false))
+  def testTopicPartitionFilterComplex(excludeInternal: Boolean): Unit = {
     val filter = GetOffsetShell.createTopicPartitionFilterWithPatternList("test.*:0,__consumer_offsets:1-2,.*:3", excludeInternal)
-    assertTrue(filter.apply(new PartitionInfo("test", 0, null, null, null)))
-    assertTrue(filter.apply(new PartitionInfo("test", 3, null, null, null)))
-    assertFalse(filter.apply(new PartitionInfo("test", 1, null, null, null)))
+    assertTrue(filter.apply(partitionInfo("test", 0)))
+    assertTrue(filter.apply(partitionInfo("test", 3)))
+    assertFalse(filter.apply(partitionInfo("test", 1)))
 
-    assertTrue(filter.apply(new PartitionInfo("test1", 0, null, null, null)))
-    assertTrue(filter.apply(new PartitionInfo("test1", 3, null, null, null)))
-    assertFalse(filter.apply(new PartitionInfo("test1", 1, null, null, null)))
+    assertTrue(filter.apply(partitionInfo("test1", 0)))
+    assertTrue(filter.apply(partitionInfo("test1", 3)))
+    assertFalse(filter.apply(partitionInfo("test1", 1)))
 
-    assertTrue(filter.apply(new PartitionInfo("custom", 3, null, null, null)))
-    assertFalse(filter.apply(new PartitionInfo("custom", 0, null, null, null)))
+    assertTrue(filter.apply(partitionInfo("custom", 3)))
+    assertFalse(filter.apply(partitionInfo("custom", 0)))
 
-    assertEquals(!excludeInternal, filter.apply(new PartitionInfo("__consumer_offsets", 1, null, null, null)))
-    assertEquals(!excludeInternal, filter.apply(new PartitionInfo("__consumer_offsets", 3, null, null, null)))
-    assertFalse(filter.apply(new PartitionInfo("__consumer_offsets", 0, null, null, null)))
-    assertFalse(filter.apply(new PartitionInfo("__consumer_offsets", 2, null, null, null)))
+    assertEquals(!excludeInternal, filter.apply(partitionInfo("__consumer_offsets", 1)))
+    assertEquals(!excludeInternal, filter.apply(partitionInfo("__consumer_offsets", 3)))
+    assertFalse(filter.apply(partitionInfo("__consumer_offsets", 0)))
+    assertFalse(filter.apply(partitionInfo("__consumer_offsets", 2)))
   }
 
   @Test
   def testPartitionFilterForSingleIndex(): Unit = {
-    val filter = GetOffsetShell.createPartitionFilter("1")
-    assertTrue(filter.apply(1))
-    assertFalse(filter.apply(0))
-    assertFalse(filter.apply(2))
+    val filter = GetOffsetShell.createTopicPartitionFilterWithPatternList(":1", excludeInternalTopics = false)
+    assertTrue(filter.apply(partitionInfo("test", 1)))
+    assertFalse(filter.apply(partitionInfo("test", 0)))
+    assertFalse(filter.apply(partitionInfo("test", 2)))
   }
 
   @Test
   def testPartitionFilterForRange(): Unit = {
-    val filter = GetOffsetShell.createPartitionFilter("1-3")
-    assertFalse(filter.apply(0))
-    assertTrue(filter.apply(1))
-    assertTrue(filter.apply(2))
-    assertFalse(filter.apply(3))
-    assertFalse(filter.apply(4))
-    assertFalse(filter.apply(5))
+    val filter = GetOffsetShell.createTopicPartitionFilterWithPatternList(":1-3", excludeInternalTopics = false)
+    assertFalse(filter.apply(partitionInfo("test", 0)))
+    assertTrue(filter.apply(partitionInfo("test", 1)))
+    assertTrue(filter.apply(partitionInfo("test", 2)))
+    assertFalse(filter.apply(partitionInfo("test", 3)))
+    assertFalse(filter.apply(partitionInfo("test", 4)))
+    assertFalse(filter.apply(partitionInfo("test", 5)))
   }
 
   @Test
   def testPartitionFilterForLowerBound(): Unit = {
-    val filter = GetOffsetShell.createPartitionFilter("3-")
-    assertFalse(filter.apply(0))
-    assertFalse(filter.apply(1))
-    assertFalse(filter.apply(2))
-    assertTrue(filter.apply(3))
-    assertTrue(filter.apply(4))
-    assertTrue(filter.apply(5))
+    val filter = GetOffsetShell.createTopicPartitionFilterWithPatternList(":3-", excludeInternalTopics = false)
+    assertFalse(filter.apply(partitionInfo("test", 0)))
+    assertFalse(filter.apply(partitionInfo("test", 1)))
+    assertFalse(filter.apply(partitionInfo("test", 2)))
+    assertTrue(filter.apply(partitionInfo("test", 3)))
+    assertTrue(filter.apply(partitionInfo("test", 4)))
+    assertTrue(filter.apply(partitionInfo("test", 5)))
   }
 
   @Test
   def testPartitionFilterForUpperBound(): Unit = {
-    val filter = GetOffsetShell.createPartitionFilter("-3")
-    assertTrue(filter.apply(0))
-    assertTrue(filter.apply(1))
-    assertTrue(filter.apply(2))
-    assertFalse(filter.apply(3))
-    assertFalse(filter.apply(4))
-    assertFalse(filter.apply(5))
+    val filter = GetOffsetShell.createTopicPartitionFilterWithPatternList(":-3", excludeInternalTopics = false)
+    assertTrue(filter.apply(partitionInfo("test", 0)))
+    assertTrue(filter.apply(partitionInfo("test", 1)))
+    assertTrue(filter.apply(partitionInfo("test", 2)))
+    assertFalse(filter.apply(partitionInfo("test", 3)))
+    assertFalse(filter.apply(partitionInfo("test", 4)))
+    assertFalse(filter.apply(partitionInfo("test", 5)))
   }
 
-  @Test(expected = classOf[IllegalArgumentException])
+  @Test
   def testPartitionFilterForInvalidSingleIndex(): Unit = {
-    GetOffsetShell.createPartitionFilter("a")
+    assertThrows(classOf[IllegalArgumentException],
+      () => GetOffsetShell.createTopicPartitionFilterWithPatternList(":a", excludeInternalTopics = false))
   }
 
-  @Test(expected = classOf[IllegalArgumentException])
+  @Test
   def testPartitionFilterForInvalidRange(): Unit = {
-    GetOffsetShell.createPartitionFilter("a-b")
+    assertThrows(classOf[IllegalArgumentException],
+      () => GetOffsetShell.createTopicPartitionFilterWithPatternList(":a-b", excludeInternalTopics = false))
   }
 
-  @Test(expected = classOf[IllegalArgumentException])
+  @Test
   def testPartitionFilterForInvalidLowerBound(): Unit = {
-    GetOffsetShell.createPartitionFilter("a-")
+    assertThrows(classOf[IllegalArgumentException],
+      () => GetOffsetShell.createTopicPartitionFilterWithPatternList(":a-", excludeInternalTopics = false))
   }
 
-  @Test(expected = classOf[IllegalArgumentException])
+  @Test
   def testPartitionFilterForInvalidUpperBound(): Unit = {
-    GetOffsetShell.createPartitionFilter("-b")
+    assertThrows(classOf[IllegalArgumentException],
+      () => GetOffsetShell.createTopicPartitionFilterWithPatternList(":-b", excludeInternalTopics = false))
   }
-}
 
-object GetOffsetShellParsingTest {
-  @Parameters
-  def parameters: util.Collection[Boolean] = {
-    util.Arrays.asList(true, false)
+  private def partitionInfo(topic: String, partition: Int): PartitionInfo = {
+    new PartitionInfo(topic, partition, null, null, null)
   }
 }

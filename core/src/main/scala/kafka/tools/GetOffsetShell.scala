@@ -20,19 +20,30 @@ package kafka.tools
 
 import java.util.Properties
 import joptsimple._
-import kafka.utils.{CommandLineUtils, Exit, ToolsUtils, IncludeList}
+import kafka.utils.{CommandLineUtils, Exit, IncludeList, ToolsUtils}
 import org.apache.kafka.clients.consumer.{ConsumerConfig, KafkaConsumer}
 import org.apache.kafka.common.requests.ListOffsetsRequest
 import org.apache.kafka.common.{PartitionInfo, TopicPartition}
 import org.apache.kafka.common.serialization.ByteArrayDeserializer
 import org.apache.kafka.common.utils.Utils
 
+import java.util.regex.Pattern
 import scala.jdk.CollectionConverters._
 import scala.collection.Seq
+import scala.math.Ordering.Implicits.infixOrderingOps
 
 object GetOffsetShell {
+  private val topicPartitionPattern = Pattern.compile( "([^:,]*)(?::([0-9]*)(?:-([0-9]*))?)?")
 
   def main(args: Array[String]): Unit = {
+    try {
+      fetchOffsets(args)
+    } catch {
+      case e: Exception => Exit.exit(1, Some(e.getMessage))
+    }
+  }
+
+  private def fetchOffsets(args: Array[String]): Unit = {
     val parser = new OptionParser(false)
     val brokerListOpt = parser.accepts("broker-list", "DEPRECATED, use --bootstrap-server instead; ignored if --bootstrap-server is specified. The server(s) to connect to in the form HOST1:PORT1,HOST2:PORT2.")
                            .withRequiredArg
@@ -43,10 +54,11 @@ object GetOffsetShell {
                            .withRequiredArg
                            .describedAs("HOST1:PORT1,...,HOST3:PORT3")
                            .ofType(classOf[String])
-    val topicPartitionsOpt = parser.accepts("topic-partitions", "Comma separated list of topic-partition specifications to get the offsets for, with the format of topic:partition. The 'topic' part can be a regex or may be omitted to only specify the partitions, and query all authorized topics." +
-                                            " The 'partition' part can be: a number, a range in the format of 'NUMBER-NUMBER' (lower inclusive, upper exclusive), an inclusive lower bound in the format of 'NUMBER-', an exclusive upper bound in the format of '-NUMBER' or may be omitted to accept all partitions of the specified topic.")
+    val topicPartitionsOpt = parser.accepts("topic-partitions", s"Comma separated list of topic-partition patterns to get the offsets for, with the format of '$topicPartitionPattern'." +
+                                            " The first group is an optional regex for the topic name, if omitted, it matches any topic name." +
+                                            " The section after ':' describes a 'partition' pattern, which can be: a number, a range in the format of 'NUMBER-NUMBER' (lower inclusive, upper exclusive), an inclusive lower bound in the format of 'NUMBER-', an exclusive upper bound in the format of '-NUMBER' or may be omitted to accept all partitions.")
                            .withRequiredArg
-                           .describedAs("topic:partition,...,topic:partition")
+                           .describedAs("topic1:1,topic2:0-3,topic3,topic4:5-,topic5:-3")
                            .ofType(classOf[String])
     val topicOpt = parser.accepts("topic", s"The topic to get the offsets for. It also accepts a regular expression. If not present, all authorized topics are queried. Cannot be used if --topic-partitions is present.")
                            .withRequiredArg
@@ -86,29 +98,29 @@ object GetOffsetShell {
     val excludeInternalTopics = options.has(excludeInternalTopicsOpt)
 
     if (options.has(topicPartitionsOpt) && (options.has(topicOpt) || options.has(partitionsOpt))) {
-      System.err.println(s"--topic-partitions cannot be used with --topic or --partitions")
-      Exit.exit(1)
+      throw new IllegalArgumentException("--topic-partitions cannot be used with --topic or --partitions")
     }
 
-    val partitionIdsRequested: Set[Int] = {
-      val partitionsString = options.valueOf(partitionsOpt)
-      if (partitionsString == null || partitionsString.isEmpty)
-        Set.empty
-      else
-        partitionsString.split(",").map { partitionString =>
-          try partitionString.toInt
-          catch {
-            case _: NumberFormatException =>
-              System.err.println(s"--partitions expects a comma separated list of numeric partition ids, but received: $partitionsString")
-              Exit.exit(1)
-          }
-        }.toSet
-    }
     val listOffsetsTimestamp = options.valueOf(timeOpt).longValue
 
     val topicPartitionFilter = if (options.has(topicPartitionsOpt)) {
       createTopicPartitionFilterWithPatternList(options.valueOf(topicPartitionsOpt), excludeInternalTopics)
     } else {
+      val partitionIdsRequested: Set[Int] = {
+        val partitionsString = options.valueOf(partitionsOpt)
+        if (partitionsString == null || partitionsString.isEmpty)
+          Set.empty
+        else
+          partitionsString.split(",").map { partitionString =>
+            try partitionString.toInt
+            catch {
+              case _: NumberFormatException =>
+                throw new IllegalArgumentException(s"--partitions expects a comma separated list of numeric " +
+                  s"partition ids, but received: $partitionsString")
+            }
+          }.toSet
+      }
+
       createTopicPartitionFilterWithTopicAndPartitionPattern(
         if (options.has(topicOpt)) Some(options.valueOf(topicOpt)) else None,
         excludeInternalTopics,
@@ -127,8 +139,7 @@ object GetOffsetShell {
     val partitionInfos = listPartitionInfos(consumer, topicPartitionFilter)
 
     if (partitionInfos.isEmpty) {
-      System.err.println(s"Could not match any topic-partitions with the specified filters")
-      Exit.exit(1)
+      throw new IllegalArgumentException("Could not match any topic-partitions with the specified filters")
     }
 
     val topicPartitions = partitionInfos.flatMap { p =>
@@ -150,15 +161,13 @@ object GetOffsetShell {
         }
     }
 
-    partitionOffsets.toSeq.sortWith((tp1, tp2) => {
-      val topicComp = tp1._1.topic.compareTo(tp2._1.topic)
-      if (topicComp == 0)
-        tp1._1.partition < tp2._1.partition
-      else
-        topicComp < 0
-    }).foreach { case (tp, offset) =>
-      println(s"${tp.topic}:${tp.partition}:${Option(offset).getOrElse("")}")
+    partitionOffsets.toSeq.sortWith((tp1, tp2) => compareTopicPartitions(tp1._1, tp2._1)).foreach {
+      case (tp, offset) => println(s"${tp.topic}:${tp.partition}:${Option(offset).getOrElse("")}")
     }
+  }
+
+  def compareTopicPartitions(a: TopicPartition, b: TopicPartition): Boolean = {
+    (a.topic(), a.partition()) < (b.topic(), b.partition())
   }
 
   /**
@@ -171,67 +180,50 @@ object GetOffsetShell {
    */
   def createTopicPartitionFilterWithPatternList(topicPartitions: String, excludeInternalTopics: Boolean): PartitionInfo => Boolean = {
     val ruleSpecs = topicPartitions.split(",")
-    val rules = ruleSpecs.map { ruleSpec =>
-      val parts = ruleSpec.split(":")
-      if (parts.length == 1) {
-        val includeList = IncludeList(parts(0))
-        tp: PartitionInfo => includeList.isTopicAllowed(tp.topic, excludeInternalTopics)
-      } else if (parts.length == 2) {
-        try {
-          val partitionFilter = createPartitionFilter(parts(1))
-          val includeList = if (parts(0).trim().isEmpty) IncludeList(".*") else IncludeList(parts(0))
-
-          tp: PartitionInfo => includeList.isTopicAllowed(tp.topic, excludeInternalTopics) && partitionFilter.apply(tp.partition)
-        } catch {
-          case e: IllegalArgumentException =>
-            throw new IllegalArgumentException(s"Invalid rule '$ruleSpec'; Issue: ${e.getMessage}")
-        }
-
-      } else {
-        throw new IllegalArgumentException(s"Invalid topic-partition rule: $ruleSpec")
-      }
-    }
-
+    val rules = ruleSpecs.map { ruleSpec => parseRuleSpec(ruleSpec, excludeInternalTopics) }
     tp => rules.exists(rule => rule.apply(tp))
   }
 
-  /**
-   * Creates a partition filter based on a single id or a range.
-   * Expected format:
-   * PartitionPattern: NUMBER | NUMBER-(NUMBER)? | -NUMBER
-   */
-  def createPartitionFilter(spec: String): Int => Boolean = {
-    try {
-      if (spec.indexOf('-') != -1) {
-        val rangeParts = spec.split("-", -1)
-        if (rangeParts.length != 2 || rangeParts(0).isEmpty && rangeParts(1).isEmpty) {
-          throw new IllegalArgumentException(s"Invalid range specification: $spec")
-        }
-
-        if (rangeParts(0).isEmpty) {
-          val max = rangeParts(1).toInt
-          partition: Int => partition < max
-        } else if (rangeParts(1).isEmpty) {
-          val min = rangeParts(0).toInt
-          partition: Int => partition >= min
-        } else {
-          val min = rangeParts(0).toInt
-          val max = rangeParts(1).toInt
-
-          if (min > max) {
-            throw new IllegalArgumentException(s"Range lower bound cannot be greater than upper bound: $spec")
-          }
-
-          partition: Int => partition >= min && partition < max
-        }
-      } else {
-        val number = spec.toInt
-        partition: Int => partition == number
-      }
-    } catch {
-      case _: NumberFormatException =>
-        throw new IllegalArgumentException(s"Expected a number in partition specification: $spec")
+  def parseRuleSpec(ruleSpec: String, excludeInternalTopics: Boolean): PartitionInfo => Boolean = {
+    def wrapNullOrEmpty(s: String): Option[String] = {
+      if (s == null || s.isEmpty)
+        None
+      else
+        Some(s)
     }
+
+    val matcher = topicPartitionPattern.matcher(ruleSpec)
+    if (!matcher.matches() || matcher.groupCount() == 0)
+      throw new IllegalArgumentException(s"Invalid rule specification: $ruleSpec")
+
+    val topicPattern = wrapNullOrEmpty(matcher.group(1))
+    val lowerRange = if (matcher.groupCount() >= 2) wrapNullOrEmpty(matcher.group(2)) else None
+    val upperRangeSection = if (matcher.groupCount() >= 3) matcher.group(3) else null
+    val upperRange = wrapNullOrEmpty(upperRangeSection)
+    val isRange = upperRangeSection != null
+
+    val includeList = IncludeList(topicPattern.getOrElse(".*"))
+
+    val partitionFilter: Int => Boolean = if (lowerRange.isEmpty && upperRange.isEmpty) {
+      _ => true
+    } else if (lowerRange.isEmpty) {
+      val upperBound = upperRange.get.toInt
+      p => p < upperBound
+    } else if (upperRange.isEmpty) {
+      val lowerBound = lowerRange.get.toInt
+      if (isRange) {
+        p => p >= lowerBound
+      }
+      else {
+        p => p == lowerBound
+      }
+    } else {
+      val upperBound = upperRange.get.toInt
+      val lowerBound = lowerRange.get.toInt
+      p => p >= lowerBound && p < upperBound
+    }
+
+    tp => includeList.isTopicAllowed(tp.topic(), excludeInternalTopics) && partitionFilter.apply(tp.partition())
   }
 
   /**

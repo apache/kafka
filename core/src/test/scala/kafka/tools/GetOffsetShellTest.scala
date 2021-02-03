@@ -24,8 +24,8 @@ import kafka.utils.{Exit, Logging, TestUtils}
 import org.apache.kafka.clients.CommonClientConfigs
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerConfig, ProducerRecord}
 import org.apache.kafka.common.serialization.StringSerializer
-import org.junit.Assert.assertEquals
-import org.junit.{Before, Test}
+import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.{BeforeEach, Test}
 
 class GetOffsetShellTest extends KafkaServerTestHarness with Logging {
   private val topicCount = 4
@@ -37,7 +37,7 @@ class GetOffsetShellTest extends KafkaServerTestHarness with Logging {
       p
     }.map(KafkaConfig.fromProps)
 
-  @Before
+  @BeforeEach
   def createTestAndInternalTopics(): Unit = {
     Range(1, topicCount + 1).foreach(i => createTopic(topicName(i), i))
 
@@ -71,7 +71,7 @@ class GetOffsetShellTest extends KafkaServerTestHarness with Logging {
   def testTopicNameArg(): Unit = {
     Range(1, topicCount + 1).foreach(i => {
       val offsets = executeAndParse(Array("--topic", topicName(i)))
-      assertEquals("Offset output did not match for " + topicName(i), expectedOffsetsForTopic(i), offsets)
+      assertEquals(expectedOffsetsForTopic(i), offsets, () => "Offset output did not match for " + topicName(i))
     })
   }
 
@@ -186,12 +186,12 @@ class GetOffsetShellTest extends KafkaServerTestHarness with Logging {
     output.split(System.lineSeparator())
       .map(_.split(":"))
       .filter(_.length >= 2)
-      .map(line => {
+      .map { line =>
         val topic = line(0)
         val partition = line(1).toInt
         val timestamp = if (line.length == 2 || line(2).isEmpty) None else Some(line(2).toLong)
         (topic, partition, timestamp)
-      })
+      }
       .toList
   }
 
