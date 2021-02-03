@@ -20,6 +20,7 @@ package kafka.server
 import java.net.InetAddress
 
 import org.apache.kafka.clients.admin.{ScramCredentialInfo, ScramMechanism, UserScramCredentialUpsertion}
+import org.apache.kafka.common.config.internals.QuotaConfigs
 import org.apache.kafka.common.errors.{InvalidRequestException, UnsupportedVersionException}
 import org.apache.kafka.common.internals.KafkaFutureImpl
 import org.apache.kafka.common.quota.{ClientQuotaAlteration, ClientQuotaEntity, ClientQuotaFilter, ClientQuotaFilterComponent}
@@ -34,10 +35,10 @@ import kafka.utils.TestUtils
 import scala.jdk.CollectionConverters._
 
 class ClientQuotasRequestTest extends BaseRequestTest {
-  private val ConsumerByteRateProp = DynamicConfig.Client.ConsumerByteRateOverrideProp
-  private val ProducerByteRateProp = DynamicConfig.Client.ProducerByteRateOverrideProp
-  private val RequestPercentageProp = DynamicConfig.Client.RequestPercentageOverrideProp
-  private val IpConnectionRateProp = DynamicConfig.Ip.IpConnectionRateOverrideProp
+  private val ConsumerByteRateProp = QuotaConfigs.CONSUMER_BYTE_RATE_OVERRIDE_CONFIG
+  private val ProducerByteRateProp = QuotaConfigs.PRODUCER_BYTE_RATE_OVERRIDE_CONFIG
+  private val RequestPercentageProp = QuotaConfigs.REQUEST_PERCENTAGE_OVERRIDE_CONFIG
+  private val IpConnectionRateProp = QuotaConfigs.IP_CONNECTION_RATE_OVERRIDE_CONFIG
 
   override val brokerCount = 1
 
