@@ -15,11 +15,7 @@
  * limitations under the License.
  */
 
-package org.apache.kafka.common.utils;
-
-import org.apache.kafka.common.errors.TimeoutException;
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.Timeout;
+package org.apache.kafka.queue;
 
 import java.util.Arrays;
 import java.util.List;
@@ -29,10 +25,17 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Supplier;
+import org.apache.kafka.common.errors.TimeoutException;
+import org.apache.kafka.common.utils.LogContext;
+import org.apache.kafka.common.utils.MockTime;
+import org.apache.kafka.common.utils.Time;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.Timeout;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+
 
 @Timeout(value = 60)
 public class KafkaEventQueueTest {
@@ -205,7 +208,7 @@ public class KafkaEventQueueTest {
         final AtomicInteger count = new AtomicInteger(0);
         CompletableFuture<Integer> future = new CompletableFuture<>();
         queue.scheduleDeferred("myDeferred",
-            __ -> SystemTime.SYSTEM.nanoseconds() + TimeUnit.HOURS.toNanos(1),
+            __ -> Time.SYSTEM.nanoseconds() + TimeUnit.HOURS.toNanos(1),
             new FutureEvent<>(future, () -> count.getAndAdd(1)));
         queue.beginShutdown("testShutdownBeforeDeferred");
         assertThrows(ExecutionException.class, () -> future.get());

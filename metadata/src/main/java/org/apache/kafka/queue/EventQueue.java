@@ -15,12 +15,13 @@
  * limitations under the License.
  */
 
-package org.apache.kafka.common.utils;
+package org.apache.kafka.queue;
 
 import org.slf4j.Logger;
 
 import java.util.concurrent.TimeUnit;
 import java.util.function.Function;
+
 
 public interface EventQueue extends AutoCloseable {
     interface Event {

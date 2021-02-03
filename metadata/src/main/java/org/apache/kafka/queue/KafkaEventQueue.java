@@ -15,10 +15,7 @@
  * limitations under the License.
  */
 
-package org.apache.kafka.common.utils;
-
-import org.apache.kafka.common.errors.TimeoutException;
-import org.slf4j.Logger;
+package org.apache.kafka.queue;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -28,6 +25,11 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.locks.Condition;
 import java.util.concurrent.locks.ReentrantLock;
 import java.util.function.Function;
+import org.apache.kafka.common.errors.TimeoutException;
+import org.apache.kafka.common.utils.KafkaThread;
+import org.apache.kafka.common.utils.LogContext;
+import org.apache.kafka.common.utils.Time;
+import org.slf4j.Logger;
 
 
 public final class KafkaEventQueue implements EventQueue {
