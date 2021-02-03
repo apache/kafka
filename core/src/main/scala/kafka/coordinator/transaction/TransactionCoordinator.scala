@@ -589,7 +589,7 @@ class TransactionCoordinator(brokerId: Int,
   /**
    * Startup logic executed at the same time when the server starts up.
    */
-  def startup(transactionTopicPartitionCountFunc: () => Int, enableTransactionalIdExpiration: Boolean = true): Unit = {
+  def startup(retrieveTransactionTopicPartitionCount: () => Int, enableTransactionalIdExpiration: Boolean = true): Unit = {
     info("Starting up.")
     scheduler.startup()
     scheduler.schedule("transaction-abort",
@@ -597,7 +597,7 @@ class TransactionCoordinator(brokerId: Int,
       txnConfig.abortTimedOutTransactionsIntervalMs,
       txnConfig.abortTimedOutTransactionsIntervalMs
     )
-    txnManager.startup(transactionTopicPartitionCountFunc, enableTransactionalIdExpiration)
+    txnManager.startup(retrieveTransactionTopicPartitionCount, enableTransactionalIdExpiration)
     txnMarkerChannelManager.start()
     isActive.set(true)
 
