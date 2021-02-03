@@ -169,7 +169,7 @@
       <p> Each instance of RocksDB allocates off-heap memory for a block cache, index and filter blocks, and memtable (write buffer). Critical configs (for RocksDB version 4.1.0) include
         <code class="docutils literal"><span class="pre">block_cache_size</span></code>, <code class="docutils literal"><span class="pre">write_buffer_size</span></code> and <code class="docutils literal"><span class="pre">max_write_buffer_number</span></code>.  These can be specified through the
         <code class="docutils literal"><span class="pre">rocksdb.config.setter</span></code> configuration.</p>
-      <p>We further recommend, to change RocksDB's default memory allocator, because the default allocator may lead to increased memory consumption.
+      <p>Also, we recommend changing RocksDB's default memory allocator, because the default allocator may lead to increased memory consumption.
         To change the memory allocator to <code>jemalloc</code>, you need to set the an environment variable before you start your Kafka Streams application:</p>
       <pre>
 # example: install jemalloc (on Debian)
