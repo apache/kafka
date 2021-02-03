@@ -74,7 +74,7 @@ object AlterIsrManager {
   ): AlterIsrManager = {
     val nodeProvider = MetadataCacheControllerNodeProvider(config, metadataCache)
 
-    val channelManager = new BrokerToControllerChannelManager(
+    val channelManager = BrokerToControllerChannelManager(
       controllerNodeProvider = nodeProvider,
       time = time,
       metrics = metrics,

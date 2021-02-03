@@ -30,6 +30,7 @@ import org.apache.kafka.test.TestCondition;
 import org.apache.kafka.test.TestUtils;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
@@ -83,6 +84,10 @@ public class MockClient implements KafkaClient {
     private volatile NodeApiVersions nodeApiVersions = NodeApiVersions.create();
     private volatile int numBlockingWakeups = 0;
     private volatile boolean active = true;
+
+    public MockClient(Time time) {
+        this(time, new NoOpMetadataUpdater());
+    }
 
     public MockClient(Time time, Metadata metadata) {
         this(time, new DefaultMockMetadataUpdater(metadata));
@@ -606,6 +611,23 @@ public class MockClient implements KafkaClient {
         default void updateWithCurrentMetadata(Time time) {}
 
         default void close() {}
+    }
+
+    private static class NoOpMetadataUpdater implements MockMetadataUpdater {
+        @Override
+        public List<Node> fetchNodes() {
+            return Collections.emptyList();
+        }
+
+        @Override
+        public boolean isUpdateNeeded() {
+            return false;
+        }
+
+        @Override
+        public void update(Time time, MetadataUpdate update) {
+            throw new UnsupportedOperationException();
+        }
     }
 
     private static class DefaultMockMetadataUpdater implements MockMetadataUpdater {

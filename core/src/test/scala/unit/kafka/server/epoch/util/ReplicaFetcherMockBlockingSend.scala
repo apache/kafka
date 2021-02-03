@@ -18,11 +18,9 @@ package kafka.server.epoch.util
 
 import java.net.SocketTimeoutException
 import java.util
-import java.util.Collections
 
 import kafka.cluster.BrokerEndPoint
 import kafka.server.BlockingSend
-import org.apache.kafka.clients.MockClient.MockMetadataUpdater
 import org.apache.kafka.clients.{ClientRequest, ClientResponse, MockClient, NetworkClientUtils}
 import org.apache.kafka.common.message.OffsetForLeaderEpochResponseData
 import org.apache.kafka.common.message.OffsetForLeaderEpochResponseData.{OffsetForLeaderTopicResult, EpochEndOffset}
@@ -48,11 +46,7 @@ class ReplicaFetcherMockBlockingSend(offsets: java.util.Map[TopicPartition, Epoc
                                      time: Time)
   extends BlockingSend {
 
-  private val client = new MockClient(new SystemTime, new MockMetadataUpdater {
-    override def fetchNodes(): util.List[Node] = Collections.emptyList()
-    override def isUpdateNeeded: Boolean = false
-    override def update(time: Time, update: MockClient.MetadataUpdate): Unit = {}
-  })
+  private val client = new MockClient(new SystemTime)
   var fetchCount = 0
   var epochFetchCount = 0
   var lastUsedOffsetForLeaderEpochVersion = -1
