@@ -240,7 +240,7 @@ public class EmbeddedKafkaCluster {
     }
 
     /**
-     * Get the brokers that have a {@link BrokerState.RUNNING} state.
+     * Get the brokers that have a {@link BrokerState#RUNNING} state.
      *
      * @return the list of {@link KafkaServer} instances that are running;
      *         never null but  possibly empty
