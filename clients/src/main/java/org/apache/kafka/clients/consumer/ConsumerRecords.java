@@ -125,7 +125,7 @@ public class ConsumerRecords<K, V> implements Iterable<ConsumerRecord<K, V>> {
         this.metadata = metadata;
     }
 
-    public ConsumerRecords(final FetchedRecords<K, V> fetchedRecords) {
+    ConsumerRecords(final FetchedRecords<K, V> fetchedRecords) {
         this(fetchedRecords.records(), extractMetadata(fetchedRecords));
     }
 
