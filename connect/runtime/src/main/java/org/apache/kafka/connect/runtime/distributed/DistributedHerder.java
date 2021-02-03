@@ -746,8 +746,8 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
     }
 
     @Override
-    protected Map<String, String> config(String connName) {
-        return configState.connectorConfig(connName);
+    protected Map<String, String> rawConfig(String connName) {
+        return configState.rawConnectorConfig(connName);
     }
 
     @Override
