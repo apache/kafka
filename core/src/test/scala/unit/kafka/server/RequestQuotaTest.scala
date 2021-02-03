@@ -626,6 +626,12 @@ class RequestQuotaTest extends BaseRequestTest {
               .setName("test-topic")
               .setPartitionIndexes(List(1, 2, 3).map(Int.box).asJava)).asJava))
 
+        case ApiKeys.BROKER_REGISTRATION =>
+          new BrokerRegistrationRequest.Builder(new BrokerRegistrationRequestData())
+
+        case ApiKeys.BROKER_HEARTBEAT =>
+          new BrokerHeartbeatRequest.Builder(new BrokerHeartbeatRequestData())
+
         case _ =>
           throw new IllegalArgumentException("Unsupported API key " + apiKey)
     }
