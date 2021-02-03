@@ -1486,6 +1486,43 @@ public interface Admin extends AutoCloseable {
     UpdateFeaturesResult updateFeatures(Map<String, FeatureUpdate> featureUpdates, UpdateFeaturesOptions options);
 
     /**
+     * Permanently remove a broker and reassign any partitions on the broker.
+     * <p>
+     * This operation is supported only on self-managed Kafka clusters (i.e. brokers which do not rely on Zookeeper).
+     *
+     * @param brokerId  the broker id to unregister.
+     *
+     * <p>This is a convenience method for {@link #decommissionBroker(int, DecommissionBrokerOptions)}
+     *
+     * @return the {@link DecommissionBrokerResult} containing the result
+     */
+    default DecommissionBrokerResult decommissionBroker(int brokerId) {
+        return decommissionBroker(brokerId, new DecommissionBrokerOptions());
+    }
+
+    /**
+     * Permanently remove a broker and reassign any partitions on the broker.
+     * <p>
+     * This operation is supported only on self-managed Kafka clusters (i.e. brokers which do not rely on Zookeeper).
+     *
+     * The following exceptions can be anticipated when calling {@code get()} on the future from the
+     * returned {@link DescribeFeaturesResult}:
+     * <ul>
+     *   <li>{@link org.apache.kafka.common.errors.TimeoutException}
+     *   If the request timed out before the describe operation could finish.</li>
+     *   <li>{@link org.apache.kafka.common.errors.UnsupportedVersionException}
+     *   If the software is too old to support decommissioning.
+     * </ul>
+     * <p>
+     *
+     * @param brokerId  the broker id to unregister.
+     * @param options   the options to use.
+     *
+     * @return the {@link DecommissionBrokerResult} containing the result
+     */
+    DecommissionBrokerResult decommissionBroker(int brokerId, DecommissionBrokerOptions options);
+
+    /**
      * Get the metrics kept by the adminClient
      */
     Map<MetricName, ? extends Metric> metrics();

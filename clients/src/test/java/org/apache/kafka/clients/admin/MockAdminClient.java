@@ -888,6 +888,11 @@ public class MockAdminClient extends AdminClient {
     }
 
     @Override
+    public DecommissionBrokerResult decommissionBroker(int brokerId, DecommissionBrokerOptions options) {
+        throw new UnsupportedOperationException("Not implemented yet");
+    }
+
+    @Override
     synchronized public void close(Duration timeout) {}
 
     public synchronized void updateBeginningOffsets(Map<TopicPartition, Long> newOffsets) {

@@ -239,6 +239,8 @@ public abstract class AbstractResponse implements AbstractRequestResponse {
                 return BrokerRegistrationResponse.parse(responseBuffer, version);
             case BROKER_HEARTBEAT:
                 return BrokerHeartbeatResponse.parse(responseBuffer, version);
+            case DECOMMISSION_BROKER:
+                return DecommissionBrokerResponse.parse(responseBuffer, version);
             default:
                 throw new AssertionError(String.format("ApiKey %s is not currently handled in `parseResponse`, the " +
                         "code should be updated to do so.", apiKey));
