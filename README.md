@@ -37,9 +37,11 @@ Once the release tag is created, a test job will be triggered to run the necessa
 will be published to [the bintray hosting LinkedIn projects](https://dl.bintray.com/linkedin/maven/com/linkedin/kafka/kafka_2.12/).
 
 Currently we've configured the CI flow to run only unit tests for 'clients' and 'core' when a pull request is created or updated:
-    ./gradlew :clients:unitTest :core:unitTest
-In contrast, all tests for `cliests' and `core' are run when creating a release, which may be significantly longer than running the unit tests:
-    ./gradlew :clients:test :core:test
+```./gradlew :clients:unitTest :core:unitTest```
+    
+In contrast, all tests for 'cliests' and 'core' are run when creating a release, which may be significantly longer than running the unit tests:
+```./gradlew :clients:test :core:test```
+
 The reason for this mixed approach is to get faster feedback from CI during code reviews
 and still gain the more through test coverage when publishing a release.
 
