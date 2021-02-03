@@ -91,11 +91,10 @@ class PartitionMetadataFile(val file: File,
   private val lock = new Object()
   private val logDir = file.getParentFile.getParent
 
-
-  try Files.createFile(file.toPath) // create the file if it doesn't exist
-  catch { case _: FileAlreadyExistsException => }
-
   def write(topicId: Uuid): Unit = {
+    try Files.createFile(file.toPath) // create the file if it doesn't exist
+    catch { case _: FileAlreadyExistsException => }
+
     lock synchronized {
       try {
         // write to temp file and then swap with the existing file
@@ -138,7 +137,7 @@ class PartitionMetadataFile(val file: File,
     }
   }
 
-  def isEmpty(): Boolean = {
-    file.length() == 0
+  def exists(): Boolean = {
+    file.exists()
   }
 }

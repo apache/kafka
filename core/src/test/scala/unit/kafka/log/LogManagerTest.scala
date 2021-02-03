@@ -25,7 +25,7 @@ import kafka.utils._
 import org.apache.directory.api.util.FileUtils
 import org.apache.kafka.common.errors.OffsetOutOfRangeException
 import org.apache.kafka.common.utils.Utils
-import org.apache.kafka.common.{KafkaException, TopicPartition}
+import org.apache.kafka.common.{KafkaException, TopicPartition, Uuid}
 import org.easymock.EasyMock
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
@@ -217,6 +217,7 @@ class LogManagerTest {
     }
     assertTrue(log.numberOfSegments > 1, "There should be more than one segment now.")
     log.updateHighWatermark(log.logEndOffset)
+    log.partitionMetadataFile.get.write(Uuid.randomUuid())
 
     log.logSegments.foreach(_.log.file.setLastModified(time.milliseconds))
 
@@ -266,6 +267,7 @@ class LogManagerTest {
     }
 
     log.updateHighWatermark(log.logEndOffset)
+    log.partitionMetadataFile.get.write(Uuid.randomUuid())
     assertEquals(numMessages * setSize / config.segmentSize, log.numberOfSegments, "Check we have the expected number of segments.")
 
     // this cleanup shouldn't find any expired segments but should delete some to reduce size

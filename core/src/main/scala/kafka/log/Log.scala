@@ -341,7 +341,7 @@ class Log(@volatile private var _dir: File,
 
     // Recover topic ID if present
     partitionMetadataFile.foreach { file =>
-      if (!file.isEmpty())
+      if (file.exists())
         topicId = file.read().topicId
     }
   }
