@@ -35,6 +35,7 @@ import org.apache.kafka.clients.consumer.OffsetAndTimestamp;
 import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.annotation.InterfaceStability;
+import org.apache.kafka.common.requests.ListOffsetsResponse;
 import org.apache.kafka.common.serialization.ByteArrayDeserializer;
 import org.apache.kafka.common.utils.Exit;
 import org.apache.kafka.common.utils.Utils;
@@ -52,6 +53,7 @@ import java.util.HashSet;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Properties;
 import java.util.Set;
 import java.util.concurrent.ExecutionException;
@@ -492,9 +494,10 @@ public class StreamsResetter {
         resetToDatetime(client, inputTopicPartitions, Instant.now().minus(duration).toEpochMilli());
     }
 
-    private void resetToDatetime(final Consumer<byte[], byte[]> client,
-                                 final Set<TopicPartition> inputTopicPartitions,
-                                 final Long timestamp) {
+    // visible for testing
+    public void resetToDatetime(final Consumer<byte[], byte[]> client,
+                                final Set<TopicPartition> inputTopicPartitions,
+                                final Long timestamp) {
         final Map<TopicPartition, Long> topicPartitionsAndTimes = new HashMap<>(inputTopicPartitions.size());
         for (final TopicPartition topicPartition : inputTopicPartitions) {
             topicPartitionsAndTimes.put(topicPartition, timestamp);
@@ -503,7 +506,16 @@ public class StreamsResetter {
         final Map<TopicPartition, OffsetAndTimestamp> topicPartitionsAndOffset = client.offsetsForTimes(topicPartitionsAndTimes);
 
         for (final TopicPartition topicPartition : inputTopicPartitions) {
-            client.seek(topicPartition, topicPartitionsAndOffset.get(topicPartition).offset());
+            final Optional<Long> partitionOffset = Optional.ofNullable(topicPartitionsAndOffset.get(topicPartition))
+                    .map(OffsetAndTimestamp::offset)
+                    .filter(offset -> offset != ListOffsetsResponse.UNKNOWN_OFFSET);
+            if (partitionOffset.isPresent()) {
+                client.seek(topicPartition, partitionOffset.get());
+            } else {
+                client.seekToEnd(Collections.singletonList(topicPartition));
+                System.out.println("Partition " + topicPartition.partition() + " from topic " + topicPartition.topic() +
+                        " is empty, without a committed record. Falling back to latest known offset.");
+            }
         }
     }
 
