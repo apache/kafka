@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.raft.metadata;
 
+import org.apache.kafka.common.errors.SerializationException;
 import org.apache.kafka.common.metadata.MetadataRecordType;
 import org.apache.kafka.common.protocol.ApiMessage;
 import org.apache.kafka.common.protocol.ObjectSerializationCache;
@@ -26,10 +27,13 @@ import org.apache.kafka.metadata.ApiMessageAndVersion;
 import org.apache.kafka.raft.RecordSerde;
 
 public class MetadataRecordSerde implements RecordSerde<ApiMessageAndVersion> {
+    private static final short DEFAULT_FRAME_VERSION = 0;
+    private static final int DEFAULT_FRAME_VERSION_SIZE = ByteUtils.sizeOfUnsignedVarint(DEFAULT_FRAME_VERSION);
 
     @Override
     public int recordSize(ApiMessageAndVersion data, ObjectSerializationCache serializationCache) {
-        int size = ByteUtils.sizeOfUnsignedVarint(data.message().apiKey());
+        int size = DEFAULT_FRAME_VERSION_SIZE;
+        size += ByteUtils.sizeOfUnsignedVarint(data.message().apiKey());
         size += ByteUtils.sizeOfUnsignedVarint(data.version());
         size += data.message().size(serializationCache, data.version());
         return size;
@@ -37,6 +41,7 @@ public class MetadataRecordSerde implements RecordSerde<ApiMessageAndVersion> {
 
     @Override
     public void write(ApiMessageAndVersion data, ObjectSerializationCache serializationCache, Writable out) {
+        out.writeUnsignedVarint(DEFAULT_FRAME_VERSION);
         out.writeUnsignedVarint(data.message().apiKey());
         out.writeUnsignedVarint(data.version());
         data.message().write(out, serializationCache, data.version());
@@ -44,6 +49,12 @@ public class MetadataRecordSerde implements RecordSerde<ApiMessageAndVersion> {
 
     @Override
     public ApiMessageAndVersion read(Readable input, int size) {
+        short frameVersion = (short) input.readUnsignedVarint();
+        if (frameVersion != DEFAULT_FRAME_VERSION) {
+            throw new SerializationException("Could not deserialize metadata record due to unknown frame version "
+                + frameVersion + "(only frame version " + DEFAULT_FRAME_VERSION + " is supported)");
+        }
+
         short apiKey = (short) input.readUnsignedVarint();
         short version = (short) input.readUnsignedVarint();
         MetadataRecordType recordType = MetadataRecordType.fromId(apiKey);

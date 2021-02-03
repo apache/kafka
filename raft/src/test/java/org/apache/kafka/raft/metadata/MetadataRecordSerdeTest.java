@@ -17,9 +17,11 @@
 package org.apache.kafka.raft.metadata;
 
 import org.apache.kafka.common.Uuid;
+import org.apache.kafka.common.errors.SerializationException;
 import org.apache.kafka.common.metadata.TopicRecord;
 import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.ObjectSerializationCache;
+import org.apache.kafka.common.utils.ByteUtils;
 import org.apache.kafka.metadata.ApiMessageAndVersion;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
@@ -27,6 +29,7 @@ import org.junit.jupiter.api.Test;
 import java.nio.ByteBuffer;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 class MetadataRecordSerdeTest {
 
@@ -54,7 +57,17 @@ class MetadataRecordSerdeTest {
             ApiMessageAndVersion readMessageAndVersion = serde.read(bufferAccessor, size);
             Assertions.assertEquals(messageAndVersion, readMessageAndVersion);
         }
+    }
 
+    @Test
+    public void testDeserializeWithUnhandledFrameVersion() {
+        ByteBuffer buffer = ByteBuffer.allocate(16);
+        ByteUtils.writeUnsignedVarint(15, buffer);
+        buffer.flip();
+
+        MetadataRecordSerde serde = new MetadataRecordSerde();
+        assertThrows(SerializationException.class,
+            () -> serde.read(new ByteBufferAccessor(buffer), 16));
     }
 
 }
