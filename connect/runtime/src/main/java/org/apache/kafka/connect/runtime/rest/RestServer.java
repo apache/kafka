@@ -25,6 +25,7 @@ import org.apache.kafka.connect.runtime.Herder;
 import org.apache.kafka.connect.runtime.WorkerConfig;
 import org.apache.kafka.connect.runtime.health.ConnectClusterStateImpl;
 import org.apache.kafka.connect.runtime.rest.errors.ConnectExceptionMapper;
+import org.apache.kafka.connect.runtime.rest.errors.HardenedConnectExceptionMapper;
 import org.apache.kafka.connect.runtime.rest.resources.ConnectorPluginsResource;
 import org.apache.kafka.connect.runtime.rest.resources.ConnectorsResource;
 import org.apache.kafka.connect.runtime.rest.resources.RootResource;
@@ -190,7 +191,11 @@ public class RestServer {
         resourceConfig.register(new ConnectorsResource(herder, config));
         resourceConfig.register(new ConnectorPluginsResource(herder));
 
-        resourceConfig.register(ConnectExceptionMapper.class);
+        if (this.config.getBoolean(WorkerConfig.ERROR_REST_RESPONSE_MESSAGE_DETAIL_ENABLED_CONFIG)) {
+            resourceConfig.register(ConnectExceptionMapper.class);
+        } else {
+            resourceConfig.register(HardenedConnectExceptionMapper.class);
+        }
         resourceConfig.property(ServerProperties.WADL_FEATURE_DISABLE, true);
 
         registerRestExtensions(herder, resourceConfig);
