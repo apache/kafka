@@ -39,7 +39,7 @@ class MetadataRecordSerdeTest {
         for (short version = TopicRecord.LOWEST_SUPPORTED_VERSION; version <= TopicRecord.HIGHEST_SUPPORTED_VERSION; version++) {
             ApiMessageAndVersion messageAndVersion = new ApiMessageAndVersion(topicRecord, version);
 
-            ObjectSerializationCache cache = serde.newWriteContext();
+            ObjectSerializationCache cache = new ObjectSerializationCache();
             int size = serde.recordSize(messageAndVersion, cache);
 
             ByteBuffer buffer = ByteBuffer.allocate(size);

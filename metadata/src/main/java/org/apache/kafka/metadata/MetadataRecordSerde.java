@@ -27,23 +27,15 @@ import org.apache.kafka.raft.RecordSerde;
 public class MetadataRecordSerde implements RecordSerde<ApiMessageAndVersion> {
 
     @Override
-    public ObjectSerializationCache newWriteContext() {
-        return new ObjectSerializationCache();
-    }
-
-    @Override
-    public int recordSize(ApiMessageAndVersion data, Object context) {
-        ObjectSerializationCache serializationCache = (ObjectSerializationCache) context;
-        int size = 0;
-        size += ByteUtils.sizeOfUnsignedVarint(data.message().apiKey());
+    public int recordSize(ApiMessageAndVersion data, ObjectSerializationCache serializationCache) {
+        int size = ByteUtils.sizeOfUnsignedVarint(data.message().apiKey());
         size += ByteUtils.sizeOfUnsignedVarint(data.version());
         size += data.message().size(serializationCache, data.version());
         return size;
     }
 
     @Override
-    public void write(ApiMessageAndVersion data, Object context, Writable out) {
-        ObjectSerializationCache serializationCache = (ObjectSerializationCache) context;
+    public void write(ApiMessageAndVersion data, ObjectSerializationCache serializationCache, Writable out) {
         out.writeUnsignedVarint(data.message().apiKey());
         out.writeUnsignedVarint(data.version());
         data.message().write(out, serializationCache, data.version());
