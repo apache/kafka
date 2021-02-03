@@ -19,7 +19,7 @@ package kafka.server
 
 import java.util
 
-import com.yammer.metrics.{core => yammer}
+import com.yammer.metrics.core.MetricName
 import kafka.log.LogManager
 import kafka.metrics.{KafkaMetricsGroup, KafkaYammerMetrics, LinuxIoMetricsCollector}
 import kafka.network.SocketServer
@@ -37,6 +37,7 @@ import scala.jdk.CollectionConverters._
 object KafkaBroker {
   //properties for MetricsContext
   val metricsPrefix: String = "kafka.server"
+  val metricsTypeName: String = "KafkaServer"
   private val KAFKA_CLUSTER_ID: String = "kafka.cluster.id"
   private val KAFKA_BROKER_ID: String = "kafka.broker.id"
 
@@ -81,26 +82,20 @@ trait KafkaBroker extends KafkaMetricsGroup {
   def replicaManager: ReplicaManager
   def socketServer: SocketServer
 
-  newKafkaServerGauge("BrokerState", () => brokerState.currentState)
-  newKafkaServerGauge("ClusterId", () => clusterId)
-  newKafkaServerGauge("yammer-metrics-count", () =>  KafkaYammerMetrics.defaultRegistry.allMetrics.size)
+  // For backwards compatibility, we need to keep older metrics tied
+  // to their original name when this class was named `KafkaServer`
+  override def metricName(name: String, metricTags: scala.collection.Map[String, String]): MetricName = {
+    explicitMetricName(KafkaBroker.metricsPrefix, KafkaBroker.metricsTypeName, name, metricTags)
+  }
+
+  newGauge("BrokerState", () => brokerState.currentState)
+  newGauge("ClusterId", () => clusterId)
+  newGauge("yammer-metrics-count", () =>  KafkaYammerMetrics.defaultRegistry.allMetrics.size)
 
   private val linuxIoMetricsCollector = new LinuxIoMetricsCollector("/proc", Time.SYSTEM, logger.underlying)
 
   if (linuxIoMetricsCollector.usable()) {
     newGauge("linux-disk-read-bytes", () => linuxIoMetricsCollector.readBytes())
     newGauge("linux-disk-write-bytes", () => linuxIoMetricsCollector.writeBytes())
-  }
-
-  // For backwards compatibility, we need to keep older metrics tied
-  // to their original name when this class was named `KafkaServer`
-  private def newKafkaServerGauge[T](metricName: String, gauge: yammer.Gauge[T]): yammer.Gauge[T] = {
-    val explicitName = explicitMetricName(
-      group = "kafka.server",
-      typeName = "KafkaServer",
-      name = metricName,
-      tags = Map.empty
-    )
-    KafkaYammerMetrics.defaultRegistry().newGauge(explicitName, gauge)
   }
 }
