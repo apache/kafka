@@ -23,7 +23,6 @@ import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.ObjectSerializationCache;
 import org.apache.kafka.common.utils.ByteUtils;
 import org.apache.kafka.metadata.ApiMessageAndVersion;
-import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 
 import java.nio.ByteBuffer;
@@ -55,7 +54,7 @@ class MetadataRecordSerdeTest {
 
             assertEquals(size, buffer.remaining());
             ApiMessageAndVersion readMessageAndVersion = serde.read(bufferAccessor, size);
-            Assertions.assertEquals(messageAndVersion, readMessageAndVersion);
+            assertEquals(messageAndVersion, readMessageAndVersion);
         }
     }
 
