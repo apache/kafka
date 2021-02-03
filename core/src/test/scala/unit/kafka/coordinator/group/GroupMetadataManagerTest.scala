@@ -111,13 +111,17 @@ class GroupMetadataManagerTest {
       override def info(msg: => String): Unit = infoCount += 1
     }
     gmm.startup(() => numOffsetsPartitions, false)
-    // if there are no offsets to expire, we skip to log
-    gmm.cleanupGroupMetadata()
-    assertEquals(0, infoCount)
-    // if there are offsets to expire, we should log info
-    expiredOffsets = 100
-    gmm.cleanupGroupMetadata()
-    assertEquals(1, infoCount)
+    try {
+      // if there are no offsets to expire, we skip to log
+      gmm.cleanupGroupMetadata()
+      assertEquals(0, infoCount)
+      // if there are offsets to expire, we should log info
+      expiredOffsets = 100
+      gmm.cleanupGroupMetadata()
+      assertEquals(1, infoCount)
+    } finally {
+      gmm.shutdown()
+    }
   }
 
   @Test
