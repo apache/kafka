@@ -18,8 +18,12 @@ package org.apache.kafka.raft;
 
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.utils.LogContext;
+import org.apache.kafka.snapshot.SnapshotReader;
 import org.slf4j.Logger;
 
+import java.io.IOException;
+import java.util.Iterator;
+import java.util.List;
 import java.util.Optional;
 
 import static java.util.Collections.singletonList;
@@ -75,8 +79,14 @@ public class ReplicatedCounter implements RaftClient.Listener<Integer> {
                     batch.records(), batch.baseOffset());
                 for (Integer value : batch.records()) {
                     if (value != this.committed + 1) {
-                        throw new AssertionError("Expected next committed value to be " +
-                            (this.committed + 1) + ", but instead found " + value + " on node " + nodeId);
+                        throw new AssertionError(
+                            String.format(
+                                "Expected next committed value to be %s, but instead found %s on node %s",
+                                this.committed + 1,
+                                value,
+                                nodeId
+                            )
+                        );
                     }
                     this.committed = value;
                 }
@@ -84,6 +94,26 @@ public class ReplicatedCounter implements RaftClient.Listener<Integer> {
             log.debug("Counter incremented from {} to {}", initialValue, committed);
         } finally {
             reader.close();
+        }
+    }
+
+    @Override
+    public synchronized void handleSnapshot(SnapshotReader<Integer> reader) {
+        try {
+            try (SnapshotReader<Integer> snapshot = reader) {
+                log.debug("Loading snapshot {}", snapshot.snapshotId());
+                Iterator<List<Integer>> batches = snapshot.iterator();
+                while (batches.hasNext()) {
+                    for (Integer value : batches.next()) {
+                        log.debug("Setting value: {}", value);
+                        this.committed = value;
+                        this.uncommitted = value;
+                    }
+                }
+                log.debug("Finished loading snapshot. Set value: {}", this.committed);
+            }
+        } catch (IOException e) {
+            log.error(String.format("Unable to read snapshot %s", reader.snapshotId()), e);
         }
     }
 
@@ -101,5 +131,4 @@ public class ReplicatedCounter implements RaftClient.Listener<Integer> {
         this.uncommitted = -1;
         this.claimedEpoch = Optional.empty();
     }
-
 }

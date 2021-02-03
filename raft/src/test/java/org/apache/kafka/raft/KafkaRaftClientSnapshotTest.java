@@ -48,6 +48,50 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 final public class KafkaRaftClientSnapshotTest {
     @Test
+    public void testLeaderListernerNotified() throws Exception {
+        int localId = 0;
+        int otherNodeId = localId + 1;
+        Set<Integer> voters = Utils.mkSet(localId, otherNodeId);
+        OffsetAndEpoch oldestSnapshotId = new OffsetAndEpoch(3, 1);
+
+        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
+            .appendToLog(oldestSnapshotId.offset, oldestSnapshotId.epoch, Arrays.asList("a", "b", "c"))
+            .withSnapshot(oldestSnapshotId)
+            .build();
+
+        context.becomeLeader();
+        int epoch = context.currentEpoch();
+        context.client.poll();
+        context.client.poll();
+
+        assertEquals(oldestSnapshotId, context.listener.takeSnapshot().get().snapshotId());
+
+        /*
+        List<String> appendRecords = Arrays.asList("a", "b", "c");
+        context.client.scheduleAppend(epoch, appendRecords);
+        context.client.poll();
+        
+        // Advance the highWatermark
+        context.deliverRequest(context.fetchRequest(epoch, otherNodeId, localLogEndOffset, epoch, 0));
+        context.pollUntilResponse();
+        context.assertSentFetchResponse(Errors.NONE, epoch, OptionalInt.of(localId));
+        assertEquals(localLogEndOffset, context.client.highWatermark().getAsLong());
+        */
+    }
+
+    @Test
+    public void testFollowerListenerNotified() {
+    }
+
+    @Test
+    public void testSecondListenerNotified() {
+    }
+
+    @Test
+    public void testListenerRenotified() {
+    }
+
+    @Test
     public void testFetchRequestOffsetLessThanLogStart() throws Exception {
         int localId = 0;
         int otherNodeId = localId + 1;
@@ -85,7 +129,7 @@ final public class KafkaRaftClientSnapshotTest {
         context.client.poll();
 
         assertEquals(snapshotId.offset, context.log.startOffset());
-
+        
         // Send Fetch request less than start offset
         context.deliverRequest(context.fetchRequest(epoch, otherNodeId, 0, epoch, 0));
         context.pollUntilResponse();

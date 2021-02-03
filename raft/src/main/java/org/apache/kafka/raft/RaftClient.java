@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.raft;
 
+import org.apache.kafka.snapshot.SnapshotReader;
 import org.apache.kafka.snapshot.SnapshotWriter;
 
 import java.io.Closeable;
@@ -41,6 +42,11 @@ public interface RaftClient<T> extends Closeable {
          * @param reader reader instance which must be iterated and closed
          */
         void handleCommit(BatchReader<T> reader);
+
+        /**
+         * TOOD: Write documentation
+         */
+        void handleSnapshot(SnapshotReader<T> reader);
 
         /**
          * Invoked after this node has become a leader. This is only called after

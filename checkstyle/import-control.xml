@@ -352,6 +352,7 @@
   </subpackage>
 
   <subpackage name="snapshot">
+    <allow pkg="org.apache.kafka.common.protocol" />
     <allow pkg="org.apache.kafka.common.record" />
     <allow pkg="org.apache.kafka.raft" />
     <allow pkg="org.apache.kafka.test"/>

@@ -71,6 +71,7 @@ import org.apache.kafka.raft.internals.RecordsBatchReader;
 import org.apache.kafka.raft.internals.ThresholdPurgatory;
 import org.apache.kafka.snapshot.RawSnapshotReader;
 import org.apache.kafka.snapshot.RawSnapshotWriter;
+import org.apache.kafka.snapshot.SnapshotReader;
 import org.apache.kafka.snapshot.SnapshotWriter;
 import org.slf4j.Logger;
 
@@ -129,6 +130,8 @@ import static org.apache.kafka.raft.RaftUtil.hasValidTopicPartition;
  * 4) {@link FetchRequestData}: This is the same as the usual Fetch API in Kafka, but we piggyback
  *    some additional metadata on responses (i.e. current leader and epoch). Unlike partition replication,
  *    we also piggyback truncation detection on this API rather than through a separate truncation state.
+ *
+ * 5) TODO: Talk about FetchSnapshotRequestData
  *
  */
 public class KafkaRaftClient<T> implements RaftClient<T> {
@@ -300,7 +303,16 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
         for (ListenerContext listenerContext : listenerContexts) {
             listenerContext.nextExpectedOffset().ifPresent(nextExpectedOffset -> {
                 if (nextExpectedOffset < log.startOffset()) {
-                    listenerContext.fireHandleSnapshot(log.startOffset());
+                    SnapshotReader<T> snapshot = oldestSnapshot().orElseThrow(() -> {
+                        return new IllegalStateException(
+                            String.format(
+                                "Snapshot expected when next offset is %s and log start offset is %s",
+                                nextExpectedOffset,
+                                log.startOffset()
+                            )
+                        );
+                    });
+                    listenerContext.fireHandleSnapshot(snapshot);
                 }
             });
 
@@ -312,6 +324,23 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
                 }
             });
         }
+    }
+
+    private Optional<SnapshotReader<T>> oldestSnapshot() {
+        if (log.oldestSnapshotId().isPresent()) {
+            try {
+                return log
+                    .readSnapshot(log.oldestSnapshotId().get())
+                    .map(reader -> new SnapshotReader<>(reader, serde));
+            } catch (IOException e) {
+                logger.error(
+                    String.format("Unable to read snapshot: %s", log.oldestSnapshotId().get()),
+                    e
+                );
+            }
+        }
+
+        return Optional.empty();
     }
 
     private void maybeFireHandleCommit(long baseOffset, int epoch, List<T> records) {
@@ -2304,14 +2333,16 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
         }
 
         /**
-         * This API is used when the Listener needs to be notified of a new Snapshot. This happens
-         * when the context last acked end offset is less that then log start offset.
+         * This API is used when the Listener needs to be notified of a new snapshot. This happens
+         * when the context's next offset is less that then log start offset.
          */
-        public void fireHandleSnapshot(long logStartOffset) {
+        public void fireHandleSnapshot(SnapshotReader<T> reader) {
             synchronized (this) {
-                nextOffset = logStartOffset;
+                nextOffset = reader.snapshotId().offset;
                 lastSent = null;
             }
+
+            listener.handleSnapshot(reader);
         }
 
         /**

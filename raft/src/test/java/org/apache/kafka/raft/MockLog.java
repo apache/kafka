@@ -431,47 +431,37 @@ public class MockLog implements ReplicatedLog {
 
     @Override
     public boolean deleteBeforeSnapshot(OffsetAndEpoch logStartSnapshotId) {
-        if (logStartOffset() > logStartSnapshotId.offset ||
-            highWatermark.offset < logStartSnapshotId.offset) {
-
-            throw new OffsetOutOfRangeException(
-                String.format(
-                    "New log start (%s) is less than start offset (%s) or is greater than the high watermark (%s)",
-                    logStartSnapshotId,
-                    logStartOffset(),
-                    highWatermark.offset
-                )
-            );
-        }
-
         boolean updated = false;
-        Optional<OffsetAndEpoch> snapshotIdOpt = latestSnapshotId();
-        if (snapshotIdOpt.isPresent()) {
-            OffsetAndEpoch snapshotId = snapshotIdOpt.get();
-            if (logStartOffset() < logStartSnapshotId.offset &&
-                highWatermark.offset >= logStartSnapshotId.offset &&
-                snapshotId.offset >= logStartSnapshotId.offset) {
+        if (snapshots.containsKey(logStartSnapshotId) &&
+            logStartOffset() < logStartSnapshotId.offset) {
 
-                oldestSnapshotId = Optional.of(logStartSnapshotId);
+            oldestSnapshotId = Optional.of(logStartSnapshotId);
 
-                batches.removeIf(entry -> entry.lastOffset() < logStartSnapshotId.offset);
-
-                AtomicReference<Optional<EpochStartOffset>> last = new AtomicReference<>(Optional.empty());
-                epochStartOffsets.removeIf(epochStartOffset -> {
-                    if (epochStartOffset.startOffset <= logStartSnapshotId.offset) {
-                        last.set(Optional.of(epochStartOffset));
-                        return true;
-                    }
-
-                    return false;
-                });
-
-                last.get().ifPresent(epochStartOffset -> {
-                    epochStartOffsets.add(0, new EpochStartOffset(epochStartOffset.epoch, logStartSnapshotId.offset));
-                });
-
-                updated = true;
+            // Update the high watermark if it is less than the new log start offset
+            if (logStartSnapshotId.offset > highWatermark.offset) {
+                updateHighWatermark(new LogOffsetMetadata(logStartSnapshotId.offset));
             }
+
+            batches.removeIf(entry -> entry.lastOffset() < logStartSnapshotId.offset);
+
+            AtomicReference<Optional<EpochStartOffset>> last = new AtomicReference<>(Optional.empty());
+            epochStartOffsets.removeIf(epochStartOffset -> {
+                if (epochStartOffset.startOffset <= logStartSnapshotId.offset) {
+                    last.set(Optional.of(epochStartOffset));
+                    return true;
+                }
+
+                return false;
+            });
+
+            last.get().ifPresent(epochStartOffset -> {
+                epochStartOffsets.add(
+                    0,
+                    new EpochStartOffset(epochStartOffset.epoch, logStartSnapshotId.offset)
+                );
+            });
+
+            updated = true;
         }
 
         return updated;

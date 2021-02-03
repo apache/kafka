@@ -20,15 +20,15 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.memory.MemoryPool;
 import org.apache.kafka.common.message.BeginQuorumEpochRequestData;
 import org.apache.kafka.common.message.BeginQuorumEpochResponseData;
-import org.apache.kafka.common.message.DescribeQuorumResponseData;
 import org.apache.kafka.common.message.DescribeQuorumResponseData.ReplicaState;
+import org.apache.kafka.common.message.DescribeQuorumResponseData;
 import org.apache.kafka.common.message.EndQuorumEpochRequestData;
 import org.apache.kafka.common.message.EndQuorumEpochResponseData;
 import org.apache.kafka.common.message.FetchRequestData;
 import org.apache.kafka.common.message.FetchResponseData;
 import org.apache.kafka.common.message.FetchSnapshotResponseData;
-import org.apache.kafka.common.message.LeaderChangeMessage;
 import org.apache.kafka.common.message.LeaderChangeMessage.Voter;
+import org.apache.kafka.common.message.LeaderChangeMessage;
 import org.apache.kafka.common.message.VoteRequestData;
 import org.apache.kafka.common.message.VoteResponseData;
 import org.apache.kafka.common.metrics.Metrics;
@@ -54,6 +54,8 @@ import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.raft.internals.BatchBuilder;
 import org.apache.kafka.raft.internals.StringSerde;
+import org.apache.kafka.snapshot.RawSnapshotWriter;
+import org.apache.kafka.snapshot.SnapshotReader;
 import org.apache.kafka.test.TestCondition;
 import org.apache.kafka.test.TestUtils;
 import org.mockito.Mockito;
@@ -78,6 +80,7 @@ import java.util.function.Consumer;
 import java.util.stream.Collectors;
 
 import static org.apache.kafka.raft.RaftUtil.hasValidTopicPartition;
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -174,6 +177,13 @@ public final class RaftClientTestContext {
         Builder appendToLog(long baseOffset, int epoch, List<String> records) {
             MemoryRecords batch = buildBatch(time.milliseconds(), baseOffset, epoch, records);
             log.appendAsLeader(batch, epoch);
+            return this;
+        }
+
+        Builder withSnapshot(OffsetAndEpoch snapshotId) throws IOException {
+            try (RawSnapshotWriter snapshot = log.createSnapshot(snapshotId)) {
+                snapshot.freeze();
+            }
             return this;
         }
 
@@ -918,6 +928,7 @@ public final class RaftClientTestContext {
         private final List<BatchReader.Batch<String>> commits = new ArrayList<>();
         private final Map<Integer, Long> claimedEpochStartOffsets = new HashMap<>();
         private OptionalInt currentClaimedEpoch = OptionalInt.empty();
+        private Optional<SnapshotReader<String>> snapshot = Optional.empty();
 
         int numCommittedBatches() {
             return commits.size();
@@ -963,6 +974,12 @@ public final class RaftClientTestContext {
                 .orElse(null);
         }
 
+        Optional<SnapshotReader<String>> takeSnapshot() {
+            Optional<SnapshotReader<String>> temp = snapshot;
+            snapshot = Optional.empty();
+            return temp;
+        }
+
         @Override
         public void handleClaim(int epoch) {
             // We record the next expected offset as the claimed epoch's start
@@ -996,6 +1013,15 @@ public final class RaftClientTestContext {
             } finally {
                 reader.close();
             }
+        }
+
+        @Override
+        public void handleSnapshot(SnapshotReader<String> reader) {
+            if (snapshot.isPresent()) {
+                assertDoesNotThrow(() -> snapshot.get().close());
+            }
+
+            snapshot = Optional.of(reader);
         }
     }
 
