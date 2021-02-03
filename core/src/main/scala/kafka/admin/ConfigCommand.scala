@@ -368,12 +368,12 @@ object ConfigCommand extends Config {
         adminClient.incrementalAlterConfigs(Map(configResource -> alterLogLevelEntries).asJava, alterOptions).all().get(60, TimeUnit.SECONDS)
 
       case ConfigType.User | ConfigType.Client =>
-        val hasQuotaConfigsToAdd = configsToBeAdded.keys.exists(QuotaConfigs.isQuotaConfig)
+        val hasQuotaConfigsToAdd = configsToBeAdded.keys.exists(QuotaConfigs.isClientOrUserQuotaConfig)
         val scramConfigsToAddMap = configsToBeAdded.filter(entry => ScramMechanism.isScram(entry._1))
-        val unknownConfigsToAdd = configsToBeAdded.keys.filterNot(key => ScramMechanism.isScram(key) || QuotaConfigs.isQuotaConfig(key))
-        val hasQuotaConfigsToDelete = configsToBeDeleted.exists(QuotaConfigs.isQuotaConfig)
+        val unknownConfigsToAdd = configsToBeAdded.keys.filterNot(key => ScramMechanism.isScram(key) || QuotaConfigs.isClientOrUserQuotaConfig(key))
+        val hasQuotaConfigsToDelete = configsToBeDeleted.exists(QuotaConfigs.isClientOrUserQuotaConfig)
         val scramConfigsToDelete = configsToBeDeleted.filter(ScramMechanism.isScram)
-        val unknownConfigsToDelete = configsToBeDeleted.filterNot(key => ScramMechanism.isScram(key) || QuotaConfigs.isQuotaConfig(key))
+        val unknownConfigsToDelete = configsToBeDeleted.filterNot(key => ScramMechanism.isScram(key) || QuotaConfigs.isClientOrUserQuotaConfig(key))
         if (entityTypeHead == ConfigType.Client || entityTypes.size == 2) { // size==2 for case where users is specified first on the command line, before clients
           // either just a client or both a user and a client
           if (unknownConfigsToAdd.nonEmpty || scramConfigsToAddMap.nonEmpty)

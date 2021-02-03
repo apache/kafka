@@ -20,12 +20,13 @@ import java.util.{Collections, HashMap, Properties}
 import com.yammer.metrics.core.{Histogram, Meter}
 import kafka.api.QuotaTestClients._
 import kafka.metrics.KafkaYammerMetrics
-import kafka.server.{ClientQuotaManager, ClientQuotaManagerConfig, DynamicConfig, KafkaConfig, KafkaServer, QuotaType}
+import kafka.server.{ClientQuotaManager, ClientQuotaManagerConfig, KafkaConfig, KafkaServer, QuotaType}
 import kafka.utils.TestUtils
 import org.apache.kafka.clients.admin.Admin
 import org.apache.kafka.clients.consumer.{ConsumerConfig, KafkaConsumer}
 import org.apache.kafka.clients.producer._
 import org.apache.kafka.clients.producer.internals.ErrorLoggingCallback
+import org.apache.kafka.common.config.internals.QuotaConfigs
 import org.apache.kafka.common.{Metric, MetricName, TopicPartition}
 import org.apache.kafka.common.metrics.{KafkaMetric, Quota}
 import org.apache.kafka.common.protocol.ApiKeys
@@ -98,8 +99,8 @@ abstract class BaseQuotaTest extends IntegrationTestHarness {
   def testProducerConsumerOverrideUnthrottled(): Unit = {
     // Give effectively unlimited quota for producer and consumer
     val props = new Properties()
-    props.put(DynamicConfig.Client.ProducerByteRateOverrideProp, Long.MaxValue.toString)
-    props.put(DynamicConfig.Client.ConsumerByteRateOverrideProp, Long.MaxValue.toString)
+    props.put(QuotaConfigs.PRODUCER_BYTE_RATE_OVERRIDE_CONFIG, Long.MaxValue.toString)
+    props.put(QuotaConfigs.CONSUMER_BYTE_RATE_OVERRIDE_CONFIG, Long.MaxValue.toString)
 
     quotaTestClients.overrideQuotas(Long.MaxValue, Long.MaxValue, Long.MaxValue.toDouble)
     quotaTestClients.waitForQuotaUpdate(Long.MaxValue, Long.MaxValue, Long.MaxValue.toDouble)
@@ -355,9 +356,9 @@ abstract class QuotaTestClients(topic: String,
     def addOp(key: String, value: Option[Double]): Unit = {
       ops = ops ++ Seq(new ClientQuotaAlteration.Op(key, value.map(Double.box).orNull))
     }
-    addOp(DynamicConfig.Client.ProducerByteRateOverrideProp, producerQuota.map(_.toDouble))
-    addOp(DynamicConfig.Client.ConsumerByteRateOverrideProp, consumerQuota.map(_.toDouble))
-    addOp(DynamicConfig.Client.RequestPercentageOverrideProp, requestQuota)
+    addOp(QuotaConfigs.PRODUCER_BYTE_RATE_OVERRIDE_CONFIG, producerQuota.map(_.toDouble))
+    addOp(QuotaConfigs.CONSUMER_BYTE_RATE_OVERRIDE_CONFIG, consumerQuota.map(_.toDouble))
+    addOp(QuotaConfigs.REQUEST_PERCENTAGE_OVERRIDE_CONFIG, requestQuota)
     new ClientQuotaAlteration(quotaEntity, ops.asJava)
   }
 

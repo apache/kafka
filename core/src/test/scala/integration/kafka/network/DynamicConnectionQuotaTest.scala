@@ -22,10 +22,10 @@ import java.io.IOException
 import java.net.{InetAddress, Socket}
 import java.util.concurrent._
 import java.util.{Collections, Properties}
-
-import kafka.server.{BaseRequestTest, DynamicConfig, KafkaConfig}
+import kafka.server.{BaseRequestTest, KafkaConfig}
 import kafka.utils.TestUtils
 import org.apache.kafka.clients.admin.{Admin, AdminClientConfig}
+import org.apache.kafka.common.config.internals.QuotaConfigs
 import org.apache.kafka.common.message.ProduceRequestData
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.protocol.Errors
@@ -267,7 +267,7 @@ class DynamicConnectionQuotaTest extends BaseRequestTest {
     val adminClient = createAdminClient()
     try {
       val entity = new ClientQuotaEntity(Map(ClientQuotaEntity.IP -> ip.orNull).asJava)
-      val request = Map(entity -> Map(DynamicConfig.Ip.IpConnectionRateOverrideProp -> Some(updatedRate.toDouble)))
+      val request = Map(entity -> Map(QuotaConfigs.IP_CONNECTION_RATE_OVERRIDE_CONFIG -> Some(updatedRate.toDouble)))
       TestUtils.alterClientQuotas(adminClient, request).all.get()
       // use a random throwaway address if ip isn't specified to get the default value
       TestUtils.waitUntilTrue(() => servers.head.socketServer.connectionQuotas.

@@ -18,6 +18,7 @@ import java.net.Socket
 import java.util.{Collections, Properties}
 
 import kafka.utils.TestUtils
+import org.apache.kafka.common.config.internals.QuotaConfigs
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.requests.{ListGroupsRequest, ListGroupsResponse}
 import org.apache.kafka.common.metrics.MetricsReporter
@@ -48,7 +49,7 @@ class KafkaMetricReporterExceptionHandlingTest extends BaseRequestTest {
 
     // need a quota prop to register a "throttle-time" metrics after server startup
     val quotaProps = new Properties()
-    quotaProps.put(DynamicConfig.Client.RequestPercentageOverrideProp, "0.1")
+    quotaProps.put(QuotaConfigs.REQUEST_PERCENTAGE_OVERRIDE_CONFIG, "0.1")
     adminZkClient.changeClientIdConfig("<default>", quotaProps)
   }
 

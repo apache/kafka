@@ -21,13 +21,13 @@ import java.net.InetAddress
 import java.util
 import java.util.concurrent.{Callable, ExecutorService, Executors, TimeUnit}
 import java.util.{Collections, Properties}
-
 import com.yammer.metrics.core.Meter
 import kafka.metrics.KafkaMetricsGroup
 import kafka.network.Processor.ListenerMetricTag
-import kafka.server.{DynamicConfig, KafkaConfig}
+import kafka.server.KafkaConfig
 import kafka.utils.{MockTime, TestUtils}
 import org.apache.kafka.common.config.ConfigException
+import org.apache.kafka.common.config.internals.QuotaConfigs
 import org.apache.kafka.common.metrics.internals.MetricsUtils
 import org.apache.kafka.common.metrics.{KafkaMetric, MetricConfig, Metrics}
 import org.apache.kafka.common.network._
@@ -650,12 +650,12 @@ class ConnectionQuotasTest {
 
     // remove default connection rate quota
     connectionQuotas.updateIpConnectionRateQuota(None, None)
-    verifyIpConnectionQuota(adminListener.defaultIp, DynamicConfig.Ip.DefaultConnectionCreationRate)
+    verifyIpConnectionQuota(adminListener.defaultIp, QuotaConfigs.IP_CONNECTION_RATE_DEFAULT)
     verifyIpConnectionQuota(externalListener.defaultIp, overrideIpRate)
 
     // remove override for external listener IP
     connectionQuotas.updateIpConnectionRateQuota(Some(externalListener.defaultIp), None)
-    verifyIpConnectionQuota(externalListener.defaultIp, DynamicConfig.Ip.DefaultConnectionCreationRate)
+    verifyIpConnectionQuota(externalListener.defaultIp, QuotaConfigs.IP_CONNECTION_RATE_DEFAULT)
   }
 
   @Test
