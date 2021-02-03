@@ -34,7 +34,6 @@ import org.apache.kafka.clients.admin.ListOffsetsResult.ListOffsetsResultInfo;
 import org.apache.kafka.clients.admin.OffsetSpec.TimestampSpec;
 import org.apache.kafka.clients.admin.internals.AdminMetadataManager;
 import org.apache.kafka.clients.admin.internals.ConsumerGroupOperationContext;
-import org.apache.kafka.clients.admin.internals.DecommissionBrokerOperationContext;
 import org.apache.kafka.clients.admin.internals.MetadataOperationContext;
 import org.apache.kafka.clients.consumer.ConsumerPartitionAssignor.Assignment;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
@@ -4609,14 +4608,17 @@ public class KafkaAdminClient extends AdminClient {
         return new UpdateFeaturesResult(new HashMap<>(updateFutures));
     }
 
-    private Call getDecommissionBrokerCall(DecommissionBrokerOperationContext<Void> context) {
-        return new Call("decommissionBroker", context.deadline(),
+    @Override
+    public DecommissionBrokerResult decommissionBroker(int brokerId, DecommissionBrokerOptions options) {
+        final KafkaFutureImpl<Void> future = new KafkaFutureImpl<>();
+        final long now = time.milliseconds();
+        final Call call = new Call("decommissionBroker", calcDeadlineMs(now, options.timeoutMs()),
                 new LeastLoadedNodeProvider()) {
 
             @Override
             DecommissionBrokerRequest.Builder createRequest(int timeoutMs) {
                 DecommissionBrokerRequestData data =
-                        new DecommissionBrokerRequestData().setBrokerId(context.brokerId());
+                        new DecommissionBrokerRequestData().setBrokerId(brokerId);
                 return new DecommissionBrokerRequest.Builder(data);
             }
 
@@ -4627,34 +4629,22 @@ public class KafkaAdminClient extends AdminClient {
                 Errors error = Errors.forCode(response.data().errorCode());
                 switch (error) {
                     case NONE:
-                        context.future().complete(null);
+                        future.complete(null);
                         break;
                     case REQUEST_TIMED_OUT:
-                        Call nextCall = getDecommissionBrokerCall(context);
-                        nextCall.tries = super.tries + 1;
-                        nextCall.nextAllowedTryMs = calculateNextAllowedRetryMs();
-                        runnable.call(nextCall, time.milliseconds());
-                        break;
+                        throw error.exception();
                     default:
-                        context.future().completeExceptionally(error.exception());
+                        log.error("Decommission Broker request for broker ID {} failed: {}", brokerId, error.message());
+                        future.completeExceptionally(error.exception());
                         break;
                 }
             }
 
             @Override
             void handleFailure(Throwable throwable) {
-                context.future().completeExceptionally(throwable);
+                future.completeExceptionally(throwable);
             }
         };
-    }
-
-    @Override
-    public DecommissionBrokerResult decommissionBroker(int brokerId, DecommissionBrokerOptions options) {
-        final KafkaFutureImpl<Void> future = new KafkaFutureImpl<>();
-        final long now = time.milliseconds();
-        DecommissionBrokerOperationContext<Void> context = new DecommissionBrokerOperationContext<>(options,
-                calcDeadlineMs(now, options.timeoutMs()), brokerId, future);
-        final Call call = getDecommissionBrokerCall(context);
         runnable.call(call, now);
         return new DecommissionBrokerResult(future);
     }
