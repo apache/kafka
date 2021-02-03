@@ -28,7 +28,6 @@ import kafka.log.LogAppendInfo;
 import kafka.log.LogConfig;
 import kafka.log.LogManager;
 import kafka.server.AlterIsrManager;
-import kafka.server.BrokerState;
 import kafka.server.BrokerTopicStats;
 import kafka.server.FailedPartitions;
 import kafka.server.InitialFetchState;
@@ -56,6 +55,7 @@ import org.apache.kafka.common.requests.FetchRequest;
 import org.apache.kafka.common.requests.FetchResponse;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.metadata.BrokerState;
 import org.mockito.Mockito;
 import org.openjdk.jmh.annotations.Benchmark;
 import org.openjdk.jmh.annotations.BenchmarkMode;
@@ -88,6 +88,7 @@ import java.util.Optional;
 import java.util.Properties;
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicReference;
 
 @State(Scope.Benchmark)
 @Fork(value = 1)
@@ -132,7 +133,7 @@ public class ReplicaFetcherThreadBenchmark {
                 1000L,
                 60000,
                 scheduler,
-                new BrokerState(),
+                new AtomicReference<>(BrokerState.NOT_RUNNING),
                 brokerTopicStats,
                 logDirFailureChannel,
                 Time.SYSTEM);
