@@ -149,8 +149,8 @@ public class StandaloneHerder extends AbstractHerder {
     }
 
     @Override
-    protected synchronized Map<String, String> config(String connName) {
-        return configState.connectorConfig(connName);
+    protected synchronized Map<String, String> rawConfig(String connName) {
+        return configState.rawConnectorConfig(connName);
     }
 
     @Override
