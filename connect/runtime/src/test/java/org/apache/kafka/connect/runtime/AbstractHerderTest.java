@@ -183,7 +183,7 @@ public class AbstractHerderTest {
             .createMock();
 
         EasyMock.expect(herder.generation()).andStubReturn(generation);
-        EasyMock.expect(herder.config(connector)).andReturn(null);
+        EasyMock.expect(configStore.snapshot()).andReturn(SNAPSHOT);
         EasyMock.expect(statusStore.get(connector))
             .andReturn(new ConnectorStatus(connector, AbstractStatus.State.RUNNING, workerId, generation));
         EasyMock.expect(statusStore.getAll(connector))
@@ -207,7 +207,7 @@ public class AbstractHerderTest {
                 .createMock();
 
         EasyMock.expect(herder.generation()).andStubReturn(generation);
-        EasyMock.expect(herder.config(connector)).andReturn(null);
+        EasyMock.expect(configStore.snapshot()).andReturn(SNAPSHOT);
 
         EasyMock.expect(statusStore.get(connector))
                 .andReturn(new ConnectorStatus(connector, AbstractStatus.State.RUNNING, workerId, generation));
