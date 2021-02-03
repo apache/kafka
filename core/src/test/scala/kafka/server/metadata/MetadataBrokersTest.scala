@@ -25,7 +25,6 @@ import org.slf4j.LoggerFactory
 
 import java.util.concurrent.TimeUnit
 import scala.collection.mutable
-import scala.jdk.CollectionConverters._
 
 
 @Timeout(value = 120000, unit = TimeUnit.MILLISECONDS)
@@ -74,10 +73,10 @@ class MetadataBrokersTest {
     builder.add(TestUtils.createMetadataBroker(2))
     builder.changeFencing(1, true)
     val brokers = builder.build()
-    assertEquals(2, brokers.aliveBrokers().size())
-    assertTrue(brokers.aliveBrokers().asScala.exists(_.id == 0))
-    assertTrue(!brokers.aliveBrokers().asScala.exists(_.id == 1))
-    assertTrue(brokers.aliveBrokers().asScala.exists(_.id == 2))
+    assertEquals(2, brokers.aliveBrokers().size)
+    assertTrue(brokers.aliveBrokers().exists(_.id == 0))
+    assertTrue(!brokers.aliveBrokers().exists(_.id == 1))
+    assertTrue(brokers.aliveBrokers().exists(_.id == 2))
     while (!brokers.randomAliveBrokerId().contains(0)) { }
     while (!brokers.randomAliveBrokerId().contains(2)) { }
     assertEquals(3, brokers.size())

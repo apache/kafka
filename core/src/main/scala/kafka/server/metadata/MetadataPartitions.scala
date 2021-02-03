@@ -217,7 +217,7 @@ case class MetadataPartitions(private val nameMap: util.Map[String, util.Map[Int
 
   def allPartitions(): Iterator[MetadataPartition] = new AllPartitionsIterator(nameMap).asScala
 
-  def allTopicNames(): Set[String] = nameMap.keySet().asScala.toSet
+  def allTopicNames(): collection.Set[String] = nameMap.keySet().asScala
 
   def numTopicPartitions(topicName: String): Option[Int] = {
     val partitionMap = nameMap.get(topicName)

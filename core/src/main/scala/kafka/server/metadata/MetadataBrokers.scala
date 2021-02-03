@@ -132,7 +132,7 @@ case class MetadataBrokers(private val aliveBrokersList: util.List[MetadataBroke
     }
   }
 
-  def aliveBrokers(): util.List[MetadataBroker] = aliveBrokersList
+  def aliveBrokers(): collection.Seq[MetadataBroker] = aliveBrokersList.asScala
 
   def get(id: Int): Option[MetadataBroker] = Option(brokerMap.get(id))
 }

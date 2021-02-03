@@ -21,7 +21,6 @@ import java.util.Collections
 import org.apache.kafka.common.Uuid
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{Test, Timeout}
-import org.slf4j.LoggerFactory
 
 import java.util.concurrent.TimeUnit
 import scala.collection.mutable
@@ -30,8 +29,6 @@ import scala.jdk.CollectionConverters._
 
 @Timeout(value = 120000, unit = TimeUnit.MILLISECONDS)
 class MetadataPartitionsTest {
-
-  private val log = LoggerFactory.getLogger(classOf[MetadataPartitionsTest])
 
   val emptyPartitions = MetadataPartitions(Collections.emptyMap(), Collections.emptyMap())
 
