@@ -413,8 +413,12 @@ class LogManager(logDirs: Seq[File],
     val defaultProps = currentDefaultConfig.originals()
     retrieveTopicNames().foreach { topicName =>
       val overrides = configRepository.topicConfigs(topicName)
-      val logConfig = LogConfig.fromProps(defaultProps, overrides)
-      topicLogConfigs(topicName) = logConfig
+      // Later on we grab the default configs if a topic doesn't appear in the map,
+      // so save memory by only putting the log configs into the map when there is the potential for overrides
+      if (!overrides.isEmpty()) {
+        val logConfig = LogConfig.fromProps(defaultProps, overrides)
+        topicLogConfigs(topicName) = logConfig
+      }
     }
     topicLogConfigs
   }
