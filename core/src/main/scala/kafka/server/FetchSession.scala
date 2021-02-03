@@ -39,7 +39,7 @@ object FetchSession {
   type CACHE_MAP = ImplicitLinkedHashCollection[CachedPartition]
   type RESP_MAP_ITER = util.Iterator[util.Map.Entry[TopicPartition, FetchResponse.PartitionData[Records]]]
 
-  val NUM_INCREMENTAL_FETCH_SESSISONS = "NumIncrementalFetchSessions"
+  val NUM_INCREMENTAL_FETCH_SESSIONS = "NumIncrementalFetchSessions"
   val NUM_INCREMENTAL_FETCH_PARTITIONS_CACHED = "NumIncrementalFetchPartitionsCached"
   val INCREMENTAL_FETCH_SESSIONS_EVICTIONS_PER_SEC = "IncrementalFetchSessionEvictionsPerSec"
   val EVICTIONS = "evictions"
@@ -542,8 +542,8 @@ class FetchSessionCache(private val maxEntries: Int,
   private val evictableByPrivileged = new util.TreeMap[EvictableKey, FetchSession]
 
   // Set up metrics.
-  removeMetric(FetchSession.NUM_INCREMENTAL_FETCH_SESSISONS)
-  newGauge(FetchSession.NUM_INCREMENTAL_FETCH_SESSISONS, () => FetchSessionCache.this.size)
+  removeMetric(FetchSession.NUM_INCREMENTAL_FETCH_SESSIONS)
+  newGauge(FetchSession.NUM_INCREMENTAL_FETCH_SESSIONS, () => FetchSessionCache.this.size)
   removeMetric(FetchSession.NUM_INCREMENTAL_FETCH_PARTITIONS_CACHED)
   newGauge(FetchSession.NUM_INCREMENTAL_FETCH_PARTITIONS_CACHED, () => FetchSessionCache.this.totalPartitions)
   removeMetric(FetchSession.INCREMENTAL_FETCH_SESSIONS_EVICTIONS_PER_SEC)
