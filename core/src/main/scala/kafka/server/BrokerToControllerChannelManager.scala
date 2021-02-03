@@ -29,9 +29,47 @@ import org.apache.kafka.common.network._
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests.AbstractRequest
 import org.apache.kafka.common.security.JaasContext
+import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.common.utils.{LogContext, Time}
 
 import scala.jdk.CollectionConverters._
+
+trait ControllerNodeProvider {
+  def get(): Option[Node]
+  def listenerName: ListenerName
+  def securityProtocol: SecurityProtocol
+}
+
+object MetadataCacheControllerNodeProvider {
+  def apply(
+    config: KafkaConfig,
+    metadataCache: kafka.server.MetadataCache
+  ): MetadataCacheControllerNodeProvider = {
+    val listenerName = config.controlPlaneListenerName
+      .getOrElse(config.interBrokerListenerName)
+
+    val securityProtocol = config.controlPlaneSecurityProtocol
+      .getOrElse(config.interBrokerSecurityProtocol)
+
+    new MetadataCacheControllerNodeProvider(
+      metadataCache,
+      listenerName,
+      securityProtocol
+    )
+  }
+}
+
+class MetadataCacheControllerNodeProvider(
+  val metadataCache: kafka.server.MetadataCache,
+  val listenerName: ListenerName,
+  val securityProtocol: SecurityProtocol
+) extends ControllerNodeProvider {
+  override def get(): Option[Node] = {
+    metadataCache.getControllerId
+      .flatMap(metadataCache.getAliveBroker)
+      .map(_.node(listenerName))
+  }
+}
 
 /**
  * This class manages the connection between a broker and the controller. It runs a single
@@ -41,7 +79,7 @@ import scala.jdk.CollectionConverters._
  * care must be taken to not block on outstanding requests for too long.
  */
 class BrokerToControllerChannelManager(
-  metadataCache: kafka.server.MetadataCache,
+  controllerNodeProvider: ControllerNodeProvider,
   time: Time,
   metrics: Metrics,
   config: KafkaConfig,
@@ -66,15 +104,12 @@ class BrokerToControllerChannelManager(
   }
 
   private[server] def newRequestThread = {
-    val brokerToControllerListenerName = config.controlPlaneListenerName.getOrElse(config.interBrokerListenerName)
-    val brokerToControllerSecurityProtocol = config.controlPlaneSecurityProtocol.getOrElse(config.interBrokerSecurityProtocol)
-
     val networkClient = {
       val channelBuilder = ChannelBuilders.clientChannelBuilder(
-        brokerToControllerSecurityProtocol,
+        controllerNodeProvider.securityProtocol,
         JaasContext.Type.SERVER,
         config,
-        brokerToControllerListenerName,
+        controllerNodeProvider.listenerName,
         config.saslMechanismInterBrokerProtocol,
         time,
         config.saslInterBrokerHandshakeRequestEnable,
@@ -118,9 +153,8 @@ class BrokerToControllerChannelManager(
     new BrokerToControllerRequestThread(
       networkClient,
       manualMetadataUpdater,
-      metadataCache,
+      controllerNodeProvider,
       config,
-      brokerToControllerListenerName,
       time,
       threadName,
       retryTimeoutMs
@@ -171,9 +205,8 @@ case class BrokerToControllerQueueItem(
 class BrokerToControllerRequestThread(
   networkClient: KafkaClient,
   metadataUpdater: ManualMetadataUpdater,
-  metadataCache: kafka.server.MetadataCache,
+  controllerNodeProvider: ControllerNodeProvider,
   config: KafkaConfig,
-  listenerName: ListenerName,
   time: Time,
   threadName: String,
   retryTimeoutMs: Long
@@ -247,11 +280,9 @@ class BrokerToControllerRequestThread(
       super.pollOnce(Long.MaxValue)
     } else {
       debug("Controller isn't cached, looking for local metadata changes")
-      val controllerOpt = metadataCache.getControllerId.flatMap(metadataCache.getAliveBroker)
-      controllerOpt match {
-        case Some(controller) =>
-          info(s"Recorded new controller, from now on will use broker $controller")
-          val controllerNode = controller.node(listenerName)
+      controllerNodeProvider.get() match {
+        case Some(controllerNode) =>
+          info(s"Recorded new controller, from now on will use broker $controllerNode")
           updateControllerAddress(controllerNode)
           metadataUpdater.setNodes(Seq(controllerNode).asJava)
         case None =>
