@@ -98,6 +98,7 @@ import org.apache.kafka.common.message.CreateTopicsRequestData;
 import org.apache.kafka.common.message.CreateTopicsRequestData.CreatableTopicCollection;
 import org.apache.kafka.common.message.CreateTopicsResponseData.CreatableTopicConfigs;
 import org.apache.kafka.common.message.CreateTopicsResponseData.CreatableTopicResult;
+import org.apache.kafka.common.message.DecommissionBrokerRequestData;
 import org.apache.kafka.common.message.DeleteAclsRequestData;
 import org.apache.kafka.common.message.DeleteAclsRequestData.DeleteAclsFilter;
 import org.apache.kafka.common.message.DeleteAclsResponseData;
@@ -184,6 +185,8 @@ import org.apache.kafka.common.requests.CreatePartitionsRequest;
 import org.apache.kafka.common.requests.CreatePartitionsResponse;
 import org.apache.kafka.common.requests.CreateTopicsRequest;
 import org.apache.kafka.common.requests.CreateTopicsResponse;
+import org.apache.kafka.common.requests.DecommissionBrokerRequest;
+import org.apache.kafka.common.requests.DecommissionBrokerResponse;
 import org.apache.kafka.common.requests.DeleteAclsRequest;
 import org.apache.kafka.common.requests.DeleteAclsResponse;
 import org.apache.kafka.common.requests.DeleteGroupsRequest;
@@ -4602,6 +4605,47 @@ public class KafkaAdminClient extends AdminClient {
 
         runnable.call(call, now);
         return new UpdateFeaturesResult(new HashMap<>(updateFutures));
+    }
+
+    @Override
+    public DecommissionBrokerResult decommissionBroker(int brokerId, DecommissionBrokerOptions options) {
+        final KafkaFutureImpl<Void> future = new KafkaFutureImpl<>();
+        final long now = time.milliseconds();
+        final Call call = new Call("decommissionBroker", calcDeadlineMs(now, options.timeoutMs()),
+                new LeastLoadedNodeProvider()) {
+
+            @Override
+            DecommissionBrokerRequest.Builder createRequest(int timeoutMs) {
+                DecommissionBrokerRequestData data =
+                        new DecommissionBrokerRequestData().setBrokerId(brokerId);
+                return new DecommissionBrokerRequest.Builder(data);
+            }
+
+            @Override
+            void handleResponse(AbstractResponse abstractResponse) {
+                final DecommissionBrokerResponse response =
+                        (DecommissionBrokerResponse) abstractResponse;
+                Errors error = Errors.forCode(response.data().errorCode());
+                switch (error) {
+                    case NONE:
+                        future.complete(null);
+                        break;
+                    case REQUEST_TIMED_OUT:
+                        throw error.exception();
+                    default:
+                        log.error("Decommission Broker request for broker ID {} failed: {}", brokerId, error.message());
+                        future.completeExceptionally(error.exception());
+                        break;
+                }
+            }
+
+            @Override
+            void handleFailure(Throwable throwable) {
+                future.completeExceptionally(throwable);
+            }
+        };
+        runnable.call(call, now);
+        return new DecommissionBrokerResult(future);
     }
 
     /**
