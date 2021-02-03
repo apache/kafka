@@ -301,7 +301,9 @@ public class AbstractConfig {
             return null;
         Object o = Utils.newInstance(c);
         if (!t.isInstance(o))
-            throw new KafkaException(c.getName() + " is not an instance of " + t.getName());
+            throw new KafkaException(c.getName() + " is not an instance of " + t.getName()
+                +((o.getClass().getClassLoader() != t.getClass().getClassLoader())
+                    ?" possibly because the two classes have different classloaders":""));
         if (o instanceof Configurable)
             ((Configurable) o).configure(originals());
         return t.cast(o);
