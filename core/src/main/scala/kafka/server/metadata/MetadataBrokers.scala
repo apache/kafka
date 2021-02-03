@@ -33,10 +33,9 @@ import scala.jdk.CollectionConverters._
 object MetadataBroker {
   def apply(record: RegisterBrokerRecord): MetadataBroker = {
     new MetadataBroker(record.brokerId, record.rack,
-      record.endPoints().asScala.map {
-        endPoint =>
-          endPoint.name() ->
-            new Node(record.brokerId, endPoint.host, endPoint.port, record.rack)
+      record.endPoints().asScala.map { endPoint =>
+        endPoint.name() ->
+          new Node(record.brokerId, endPoint.host, endPoint.port, record.rack)
       }.toMap,
       true)
   }
@@ -90,16 +89,15 @@ object MetadataBrokers {
     var listenersIdenticalAcrossBrokers = true
     var prevListeners: collection.Set[String] = null
     val _aliveBrokers = new util.ArrayList[MetadataBroker](brokerMap.size())
-    brokerMap.values().iterator().asScala.foreach {
-      broker =>
-        if (!broker.fenced) {
-          if (prevListeners == null) {
-            prevListeners = broker.endpoints.keySet
-          } else if (!prevListeners.equals(broker.endpoints.keySet)) {
-            listenersIdenticalAcrossBrokers = false
-          }
-          _aliveBrokers.add(broker)
+    brokerMap.values().iterator().asScala.foreach { broker =>
+      if (!broker.fenced) {
+        if (prevListeners == null) {
+          prevListeners = broker.endpoints.keySet
+        } else if (!prevListeners.equals(broker.endpoints.keySet)) {
+          listenersIdenticalAcrossBrokers = false
         }
+        _aliveBrokers.add(broker)
+      }
     }
     if (!listenersIdenticalAcrossBrokers) {
       log.error("Listeners are not identical across alive brokers. " +

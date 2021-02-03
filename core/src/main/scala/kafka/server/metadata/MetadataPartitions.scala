@@ -100,7 +100,7 @@ class MetadataPartitionsBuilder(val brokerId: Int,
                                 val prevPartitions: MetadataPartitions) {
   private var newNameMap = prevPartitions.copyNameMap()
   private var newIdMap = prevPartitions.copyIdMap()
-  private val changed = new util.IdentityHashMap[Any, Boolean]()
+  private val changed = Collections.newSetFromMap[Any](new util.IdentityHashMap())
   private val _localChanged = new util.HashSet[MetadataPartition]
   private val _localRemoved = new util.HashSet[MetadataPartition]
 
@@ -142,14 +142,14 @@ class MetadataPartitionsBuilder(val brokerId: Int,
     val prevPartitionMap = newNameMap.get(partition.topicName)
     val newPartitionMap = if (prevPartitionMap == null) {
       val m = new util.HashMap[Int, MetadataPartition](1)
-      changed.put(m, true)
+      changed.add(m)
       m
-    } else if (changed.containsKey(prevPartitionMap)) {
+    } else if (changed.contains(prevPartitionMap)) {
       prevPartitionMap
     } else {
       val m = new util.HashMap[Int, MetadataPartition](prevPartitionMap.size() + 1)
       m.putAll(prevPartitionMap)
-      changed.put(m, true)
+      changed.add(m)
       m
     }
     val prevPartition = newPartitionMap.put(partition.partitionIndex, partition)
@@ -164,7 +164,7 @@ class MetadataPartitionsBuilder(val brokerId: Int,
   def remove(topicName: String, partitionId: Int): Unit = {
     val prevPartitionMap = newNameMap.get(topicName)
     if (prevPartitionMap != null) {
-      if (changed.containsKey(prevPartitionMap)) {
+      if (changed.contains(prevPartitionMap)) {
         val prevPartition = prevPartitionMap.remove(partitionId)
         if (prevPartition.isReplicaFor(brokerId)) {
           _localRemoved.add(prevPartition)
@@ -180,7 +180,7 @@ class MetadataPartitionsBuilder(val brokerId: Int,
               newPartitionMap.put(prevPartitionId, prevPartition)
             }
           }
-          changed.put(newPartitionMap, true)
+          changed.add(newPartitionMap)
           newNameMap.put(topicName, newPartitionMap)
         }
       }
@@ -194,9 +194,9 @@ class MetadataPartitionsBuilder(val brokerId: Int,
     result
   }
 
-  def localChanged(): Set[MetadataPartition] = _localChanged.asScala.toSet
+  def localChanged(): collection.Set[MetadataPartition] = _localChanged.asScala
 
-  def localRemoved(): Set[MetadataPartition] = _localRemoved.asScala.toSet
+  def localRemoved(): collection.Set[MetadataPartition] = _localRemoved.asScala
 }
 
 case class MetadataPartitions(private val nameMap: util.Map[String, util.Map[Int, MetadataPartition]],
