@@ -308,12 +308,11 @@ class MetadataRequestTest extends BaseRequestTest {
       !response.brokers.asScala.exists(_.id == downNode.dataPlaneRequestProcessor.brokerId)
     }, "Replica was not found down", 5000)
 
-
     // Validate version 0 still filters unavailable replicas and contains error
     val v0MetadataResponse = sendMetadataRequest(new MetadataRequest(requestData(List(replicaDownTopic), true), 0.toShort))
     val v0BrokerIds = v0MetadataResponse.brokers().asScala.map(_.id).toSeq
     assertTrue(v0MetadataResponse.errors.isEmpty, "Response should have no errors")
-    assertFalse(v0BrokerIds.contains(downNode), s"The downed broker should not be in the brokers list")
+    assertFalse(v0BrokerIds.contains(downNode.config.brokerId), s"The downed broker should not be in the brokers list")
     assertTrue(v0MetadataResponse.topicMetadata.size == 1, "Response should have one topic")
     val v0PartitionMetadata = v0MetadataResponse.topicMetadata.asScala.head.partitionMetadata.asScala.head
     assertTrue(v0PartitionMetadata.error == Errors.REPLICA_NOT_AVAILABLE, "PartitionMetadata should have an error")
@@ -323,7 +322,7 @@ class MetadataRequestTest extends BaseRequestTest {
     val v1MetadataResponse = sendMetadataRequest(new MetadataRequest.Builder(List(replicaDownTopic).asJava, true).build(1))
     val v1BrokerIds = v1MetadataResponse.brokers().asScala.map(_.id).toSeq
     assertTrue(v1MetadataResponse.errors.isEmpty, "Response should have no errors")
-    assertFalse(v1BrokerIds.contains(downNode), s"The downed broker should not be in the brokers list")
+    assertFalse(v1BrokerIds.contains(downNode.config.brokerId), s"The downed broker should not be in the brokers list")
     assertEquals(1, v1MetadataResponse.topicMetadata.size, "Response should have one topic")
     val v1PartitionMetadata = v1MetadataResponse.topicMetadata.asScala.head.partitionMetadata.asScala.head
     assertEquals(Errors.NONE, v1PartitionMetadata.error, "PartitionMetadata should have no errors")
