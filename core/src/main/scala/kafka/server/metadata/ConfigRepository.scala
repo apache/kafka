@@ -20,7 +20,19 @@ package kafka.server.metadata
 import java.util.Properties
 
 trait ConfigRepository {
-  def topicConfigs(name: String): Properties
+  /**
+   * Return topic configs for the given topic
+   *
+   * @param topicName the name of the topic for which topic configs will be returned
+   * @return (a copy of) the topic configs for the given topic
+   */
+  def topicConfigs(topicName: String): Properties
 
-  def brokerConfigs(id: Int): Properties
+  /**
+   * Return broker configs for the given topic
+   *
+   * @param brokerId the id of the broker for which broker configs will be returned
+   * @return (a copy of) the broker configs for the given broker
+   */
+  def brokerConfigs(brokerId: Int): Properties
 }

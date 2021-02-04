@@ -83,11 +83,11 @@ class LocalConfigRepository extends ConfigRepository {
     properties
   }
 
-  override def topicConfigs(topic: String): Properties = {
-    config(new ConfigResource(Type.TOPIC, topic))
+  override def topicConfigs(topicName: String): Properties = {
+    config(new ConfigResource(Type.TOPIC, topicName))
   }
 
-  override def brokerConfigs(id: Int): Properties = {
-    config(new ConfigResource(Type.BROKER, id.toString()))
+  override def brokerConfigs(brokerId: Int): Properties = {
+    config(new ConfigResource(Type.BROKER, brokerId.toString()))
   }
 }

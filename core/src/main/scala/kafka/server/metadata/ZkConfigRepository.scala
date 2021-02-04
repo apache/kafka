@@ -29,11 +29,11 @@ object ZkConfigRepository {
 }
 
 class ZkConfigRepository(adminZkClient: AdminZkClient) extends ConfigRepository {
-  override def topicConfigs(topic: String): Properties = synchronized {
-    adminZkClient.fetchEntityConfig(ConfigType.Topic, topic)
+  override def topicConfigs(topicName: String): Properties = synchronized {
+    adminZkClient.fetchEntityConfig(ConfigType.Topic, topicName)
   }
 
-  override def brokerConfigs(id: Int): Properties = synchronized {
-    adminZkClient.fetchEntityConfig(ConfigType.Broker, id.toString)
+  override def brokerConfigs(brokerId: Int): Properties = synchronized {
+    adminZkClient.fetchEntityConfig(ConfigType.Broker, brokerId.toString)
   }
 }
