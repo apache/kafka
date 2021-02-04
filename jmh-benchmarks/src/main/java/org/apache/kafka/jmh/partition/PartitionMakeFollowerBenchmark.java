@@ -110,7 +110,6 @@ public class PartitionMakeFollowerBenchmark {
             1000L,
             60000,
             scheduler,
-            new AtomicReference<>(BrokerState.NOT_RUNNING),
             brokerTopicStats,
             logDirFailureChannel,
             Time.SYSTEM);

@@ -255,7 +255,8 @@ class KafkaServer(
         /* start log manager */
         logManager = LogManager(config, initialOfflineDirs,
           new ZkConfigRepository(new AdminZkClient(zkClient)),
-          brokerState, kafkaScheduler, time, brokerTopicStats, logDirFailureChannel)
+          kafkaScheduler, time, brokerTopicStats, logDirFailureChannel)
+        brokerState.set(BrokerState.RECOVERY)
         logManager.startup(() => zkClient.getAllTopicsInCluster())
 
         metadataCache = new MetadataCache(config.brokerId)
