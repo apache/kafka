@@ -235,7 +235,7 @@ public class MirrorCheckpointTask extends SourceTask {
                 if (consumerGroupState.equals(ConsumerGroupState.EMPTY)) {
                     idleConsumerGroupsOffset.put(group, targetAdminClient.listConsumerGroupOffsets(group)
                         .partitionsToOffsetAndMetadata().get().entrySet().stream().collect(
-                            Collectors.toMap(e -> e.getKey(), e -> e.getValue())));
+                            Collectors.toMap(Entry::getKey, Entry::getValue)));
                 }
                 // new consumer upstream has state "DEAD" and will be identified during the offset sync-up
             } catch (InterruptedException | ExecutionException e) {

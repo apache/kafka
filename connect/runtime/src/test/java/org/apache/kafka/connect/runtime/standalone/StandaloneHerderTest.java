@@ -59,7 +59,6 @@ import org.apache.kafka.connect.util.ConnectorTaskId;
 import org.apache.kafka.connect.util.FutureCallback;
 import org.easymock.Capture;
 import org.easymock.EasyMock;
-import org.easymock.IAnswer;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -288,12 +287,9 @@ public class StandaloneHerderTest {
         Capture<Callback<TargetState>> onStart = EasyMock.newCapture();
         worker.startConnector(EasyMock.eq(CONNECTOR_NAME), EasyMock.eq(config), EasyMock.anyObject(HerderConnectorContext.class),
             EasyMock.eq(herder), EasyMock.eq(TargetState.STARTED), EasyMock.capture(onStart));
-        EasyMock.expectLastCall().andAnswer(new IAnswer<Boolean>() {
-            @Override
-            public Boolean answer() throws Throwable {
-                onStart.getValue().onCompletion(null, TargetState.STARTED);
-                return true;
-            }
+        EasyMock.expectLastCall().andAnswer(() -> {
+            onStart.getValue().onCompletion(null, TargetState.STARTED);
+            return true;
         });
 
         PowerMock.replayAll();
@@ -324,12 +320,9 @@ public class StandaloneHerderTest {
         worker.startConnector(EasyMock.eq(CONNECTOR_NAME), EasyMock.eq(config), EasyMock.anyObject(HerderConnectorContext.class),
             EasyMock.eq(herder), EasyMock.eq(TargetState.STARTED), EasyMock.capture(onStart));
         Exception exception = new ConnectException("Failed to start connector");
-        EasyMock.expectLastCall().andAnswer(new IAnswer<Boolean>() {
-            @Override
-            public Boolean answer() throws Throwable {
-                onStart.getValue().onCompletion(exception, null);
-                return true;
-            }
+        EasyMock.expectLastCall().andAnswer(() -> {
+            onStart.getValue().onCompletion(exception, null);
+            return true;
         });
 
         PowerMock.replayAll();
@@ -551,12 +544,9 @@ public class StandaloneHerderTest {
         Capture<Callback<TargetState>> onStart = EasyMock.newCapture();
         worker.startConnector(EasyMock.eq(CONNECTOR_NAME), EasyMock.capture(capturedConfig), EasyMock.<CloseableConnectorContext>anyObject(),
                 EasyMock.eq(herder), EasyMock.eq(TargetState.STARTED), EasyMock.capture(onStart));
-        EasyMock.expectLastCall().andAnswer(new IAnswer<Boolean>() {
-            @Override
-            public Boolean answer() throws Throwable {
-                onStart.getValue().onCompletion(null, TargetState.STARTED);
-                return true;
-            }
+        EasyMock.expectLastCall().andAnswer(() -> {
+            onStart.getValue().onCompletion(null, TargetState.STARTED);
+            return true;
         });
         EasyMock.expect(worker.isRunning(CONNECTOR_NAME)).andReturn(true);
         EasyMock.expect(worker.isTopicCreationEnabled()).andReturn(true);
@@ -661,12 +651,9 @@ public class StandaloneHerderTest {
         worker.startConnector(EasyMock.eq(CONNECTOR_NAME), EasyMock.eq(connectorProps), EasyMock.anyObject(HerderConnectorContext.class),
                 EasyMock.eq(herder), EasyMock.eq(TargetState.STARTED), EasyMock.capture(onStart));
         // EasyMock.expectLastCall().andReturn(true);
-        EasyMock.expectLastCall().andAnswer(new IAnswer<Boolean>() {
-            @Override
-            public Boolean answer() throws Throwable {
-                onStart.getValue().onCompletion(null, TargetState.STARTED);
-                return true;
-            }
+        EasyMock.expectLastCall().andAnswer(() -> {
+            onStart.getValue().onCompletion(null, TargetState.STARTED);
+            return true;
         });
         EasyMock.expect(worker.isRunning(CONNECTOR_NAME)).andReturn(true);
         if (sourceSink == SourceSink.SOURCE) {

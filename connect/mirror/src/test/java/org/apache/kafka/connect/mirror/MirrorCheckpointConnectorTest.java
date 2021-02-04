@@ -90,7 +90,7 @@ public class MirrorCheckpointConnectorTest {
         doReturn(true).when(connector).shouldReplicate(anyString());
         List<String> groupFound = connector.findConsumerGroups();
 
-        Set<String> expectedGroups = groups.stream().map(g -> g.groupId()).collect(Collectors.toSet());
+        Set<String> expectedGroups = groups.stream().map(ConsumerGroupListing::groupId).collect(Collectors.toSet());
         assertEquals(expectedGroups, new HashSet<>(groupFound));
     }
 
