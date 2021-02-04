@@ -18,7 +18,9 @@
 package kafka.server
 
 import kafka.controller.KafkaController
+import kafka.network.RequestChannel
 import kafka.zk.{AdminZkClient, KafkaZkClient}
+import org.apache.kafka.common.requests.AbstractResponse
 
 sealed trait MetadataSupport {
   /**
@@ -52,6 +54,10 @@ sealed trait MetadataSupport {
    * @throws IllegalStateException if there is an inconsistency (Raft for a ZooKeeper config or vice-versa)
    */
   def confirmConsistentWith(config: KafkaConfig): Unit
+
+  def maybeForward(request: RequestChannel.Request,
+                   handler: RequestChannel.Request => Unit,
+                   responseCallback: Option[AbstractResponse] => Unit): Unit
 }
 
 case class ZkSupport(adminManager: ZkAdminManager,
@@ -68,6 +74,16 @@ case class ZkSupport(adminManager: ZkAdminManager,
       throw new IllegalStateException("Config specifies Raft but metadata support instance is for ZooKeeper")
     }
   }
+
+  override def maybeForward(request: RequestChannel.Request,
+                            handler: RequestChannel.Request => Unit,
+                            responseCallback: Option[AbstractResponse] => Unit): Unit = {
+    if (forwardingManager.isDefined && !request.isForwarded && !controller.isActive) {
+      forwardingManager.get.forwardRequest(request, responseCallback)
+    } else {
+      handler(request)
+    }
+  }
 }
 
 case class RaftSupport(fwdMgr: ForwardingManager) extends MetadataSupport {
@@ -78,6 +94,16 @@ case class RaftSupport(fwdMgr: ForwardingManager) extends MetadataSupport {
   override def confirmConsistentWith(config: KafkaConfig): Unit = {
     if (config.requiresZookeeper) {
       throw new IllegalStateException("Config specifies ZooKeeper but metadata support instance is for Raft")
+    }
+  }
+
+  override def maybeForward(request: RequestChannel.Request,
+                            handler: RequestChannel.Request => Unit,
+                            responseCallback: Option[AbstractResponse] => Unit): Unit = {
+    if (!request.isForwarded) {
+      fwdMgr.forwardRequest(request, responseCallback)
+    } else {
+      handler(request) // will reject
     }
   }
 }

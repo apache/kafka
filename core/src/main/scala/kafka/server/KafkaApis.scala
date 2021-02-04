@@ -147,24 +147,7 @@ class KafkaApis(val requestChannel: RequestChannel,
       }
     }
 
-    metadataSupport match {
-      // ZooKeeper
-      case zkSupport@ZkSupport(_, _, _, forwardingManager) =>
-        forwardingManager match {
-          case Some(mgr) if !request.isForwarded && !zkSupport.controller.isActive =>
-            mgr.forwardRequest(request, responseCallback)
-
-          case _ =>
-            handler(request)
-        }
-      // Raft
-      case RaftSupport(fwdMgr) =>
-        if (!request.isForwarded) {
-          fwdMgr.forwardRequest(request, responseCallback)
-        } else {
-          handler(request) // will reject
-        }
-    }
+    metadataSupport.maybeForward(request, handler, responseCallback)
   }
 
   /**
