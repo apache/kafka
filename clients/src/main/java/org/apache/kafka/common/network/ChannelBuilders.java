@@ -21,6 +21,7 @@ import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.SslClientAuth;
 import org.apache.kafka.common.config.internals.BrokerSecurityConfigs;
 import org.apache.kafka.common.errors.InvalidConfigurationException;
+import org.apache.kafka.common.requests.ApiVersionsResponse;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.apache.kafka.common.security.JaasContext;
 import org.apache.kafka.common.security.authenticator.DefaultKafkaPrincipalBuilder;
@@ -40,6 +41,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.function.Supplier;
 
 public class ChannelBuilders {
     private static final Logger log = LoggerFactory.getLogger(ChannelBuilders.class);
@@ -77,7 +79,7 @@ public class ChannelBuilders {
                 throw new IllegalArgumentException("`clientSaslMechanism` must be non-null in client mode if `securityProtocol` is `" + securityProtocol + "`");
         }
         return create(securityProtocol, Mode.CLIENT, contextType, config, listenerName, false, clientSaslMechanism,
-                saslHandshakeRequestEnable, null, null, time, logContext);
+                saslHandshakeRequestEnable, null, null, time, logContext, null);
     }
 
     /**
@@ -89,6 +91,7 @@ public class ChannelBuilders {
      * @param tokenCache Delegation token cache
      * @param time the time instance
      * @param logContext the log context instance
+     * @param apiVersionSupplier supplier for ApiVersions responses sent prior to authentication
      *
      * @return the configured `ChannelBuilder`
      */
@@ -99,10 +102,11 @@ public class ChannelBuilders {
                                                       CredentialCache credentialCache,
                                                       DelegationTokenCache tokenCache,
                                                       Time time,
-                                                      LogContext logContext) {
+                                                      LogContext logContext,
+                                                      Supplier<ApiVersionsResponse> apiVersionSupplier) {
         return create(securityProtocol, Mode.SERVER, JaasContext.Type.SERVER, config, listenerName,
                 isInterBrokerListener, null, true, credentialCache,
-                tokenCache, time, logContext);
+                tokenCache, time, logContext, apiVersionSupplier);
     }
 
     private static ChannelBuilder create(SecurityProtocol securityProtocol,
@@ -116,7 +120,8 @@ public class ChannelBuilders {
                                          CredentialCache credentialCache,
                                          DelegationTokenCache tokenCache,
                                          Time time,
-                                         LogContext logContext) {
+                                         LogContext logContext,
+                                         Supplier<ApiVersionsResponse> apiVersionSupplier) {
         Map<String, Object> configs = channelBuilderConfigs(config, listenerName);
 
         ChannelBuilder channelBuilder;
@@ -174,7 +179,8 @@ public class ChannelBuilders {
                         tokenCache,
                         sslClientAuthOverride,
                         time,
-                        logContext);
+                        logContext,
+                        apiVersionSupplier);
                 break;
             case PLAINTEXT:
                 channelBuilder = new PlaintextChannelBuilder(listenerName);

@@ -48,6 +48,7 @@ import org.apache.kafka.common.errors.TopicAuthorizationException;
 import org.apache.kafka.common.header.Header;
 import org.apache.kafka.common.header.internals.RecordHeader;
 import org.apache.kafka.common.internals.ClusterResourceListeners;
+import org.apache.kafka.common.message.ApiMessageType;
 import org.apache.kafka.common.message.ListOffsetsRequestData.ListOffsetsPartition;
 import org.apache.kafka.common.message.ListOffsetsRequestData.ListOffsetsTopic;
 import org.apache.kafka.common.message.ListOffsetsResponseData;
@@ -2074,8 +2075,9 @@ public class FetcherTest {
                 1000, 1000, 64 * 1024, 64 * 1024, 1000, 10 * 1000, 127 * 1000, ClientDnsLookup.USE_ALL_DNS_IPS,
                 time, true, new ApiVersions(), throttleTimeSensor, new LogContext());
 
-        ByteBuffer buffer = RequestTestUtils.serializeResponseWithHeader(ApiVersionsResponse.createApiVersionsResponse(
-            400, RecordBatch.CURRENT_MAGIC_VALUE), ApiKeys.API_VERSIONS.latestVersion(), 0);
+        ApiVersionsResponse apiVersionsResponse = ApiVersionsResponse.defaultApiVersionsResponse(
+            400, ApiMessageType.ListenerType.ZK_BROKER);
+        ByteBuffer buffer = RequestTestUtils.serializeResponseWithHeader(apiVersionsResponse, ApiKeys.API_VERSIONS.latestVersion(), 0);
 
         selector.delayedReceive(new DelayedReceive(node.idString(), new NetworkReceive(node.idString(), buffer)));
         while (!client.ready(node, time.milliseconds())) {

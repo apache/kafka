@@ -21,10 +21,9 @@ import org.apache.kafka.clients.NodeApiVersions
 import org.apache.kafka.common.config.ConfigDef.Validator
 import org.apache.kafka.common.config.ConfigException
 import org.apache.kafka.common.feature.{Features, FinalizedVersionRange, SupportedVersionRange}
-import org.apache.kafka.common.protocol.Errors
-import org.apache.kafka.common.record.{RecordBatch, RecordVersion}
-import org.apache.kafka.common.requests.{AbstractResponse, ApiVersionsResponse}
-import org.apache.kafka.common.requests.ApiVersionsResponse.DEFAULT_API_VERSIONS_RESPONSE
+import org.apache.kafka.common.message.ApiMessageType.ListenerType
+import org.apache.kafka.common.record.RecordVersion
+import org.apache.kafka.common.requests.ApiVersionsResponse
 
 /**
  * This class contains the different Kafka versions.
@@ -147,52 +146,46 @@ object ApiVersion {
     }
   }
 
-  def apiVersionsResponse(throttleTimeMs: Int,
-                          maxMagic: Byte,
-                          latestSupportedFeatures: Features[SupportedVersionRange],
-                          controllerApiVersions: Option[NodeApiVersions]): ApiVersionsResponse = {
+  def apiVersionsResponse(
+    throttleTimeMs: Int,
+    minRecordVersion: RecordVersion,
+    latestSupportedFeatures: Features[SupportedVersionRange],
+    controllerApiVersions: Option[NodeApiVersions],
+    listenerType: ListenerType
+  ): ApiVersionsResponse = {
     apiVersionsResponse(
       throttleTimeMs,
-      maxMagic,
+      minRecordVersion,
       latestSupportedFeatures,
       Features.emptyFinalizedFeatures,
       ApiVersionsResponse.UNKNOWN_FINALIZED_FEATURES_EPOCH,
-      controllerApiVersions
+      controllerApiVersions,
+      listenerType
     )
   }
 
-  def apiVersionsResponse(throttleTimeMs: Int,
-                          maxMagic: Byte,
-                          latestSupportedFeatures: Features[SupportedVersionRange],
-                          finalizedFeatures: Features[FinalizedVersionRange],
-                          finalizedFeaturesEpoch: Long,
-                          controllerApiVersions: Option[NodeApiVersions]): ApiVersionsResponse = {
+  def apiVersionsResponse(
+    throttleTimeMs: Int,
+    minRecordVersion: RecordVersion,
+    latestSupportedFeatures: Features[SupportedVersionRange],
+    finalizedFeatures: Features[FinalizedVersionRange],
+    finalizedFeaturesEpoch: Long,
+    controllerApiVersions: Option[NodeApiVersions],
+    listenerType: ListenerType
+  ): ApiVersionsResponse = {
     val apiKeys = controllerApiVersions match {
-      case None => ApiVersionsResponse.defaultApiKeys(maxMagic)
-      case Some(controllerApiVersion) => ApiVersionsResponse.intersectControllerApiVersions(
-        maxMagic, controllerApiVersion.allSupportedApiVersions())
+      case None => ApiVersionsResponse.filterApis(minRecordVersion, listenerType)
+      case Some(controllerApiVersion) => ApiVersionsResponse.intersectForwardableApis(
+        listenerType, minRecordVersion, controllerApiVersion.allSupportedApiVersions())
     }
 
-    if (maxMagic == RecordBatch.CURRENT_MAGIC_VALUE &&
-      throttleTimeMs == AbstractResponse.DEFAULT_THROTTLE_TIME) {
-      new ApiVersionsResponse(
-        ApiVersionsResponse.createApiVersionsResponseData(
-          DEFAULT_API_VERSIONS_RESPONSE.throttleTimeMs,
-          Errors.forCode(DEFAULT_API_VERSIONS_RESPONSE.data.errorCode),
-          apiKeys,
-          latestSupportedFeatures,
-          finalizedFeatures,
-          finalizedFeaturesEpoch))
-    } else {
-      new ApiVersionsResponse(
-        ApiVersionsResponse.createApiVersionsResponseData(
-          throttleTimeMs,
-          Errors.NONE,
-          apiKeys,
-          latestSupportedFeatures,
-          finalizedFeatures,
-          finalizedFeaturesEpoch))
-    }
+    ApiVersionsResponse.createApiVersionsResponse(
+      throttleTimeMs,
+      apiKeys,
+      latestSupportedFeatures,
+      finalizedFeatures,
+      finalizedFeaturesEpoch
+    )
   }
 }
 

@@ -21,7 +21,10 @@ import org.apache.kafka.common.protocol.types.Schema;
 import org.apache.kafka.common.protocol.types.Type;
 import org.apache.kafka.common.record.RecordBatch;
 
+import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.EnumMap;
+import java.util.EnumSet;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -90,19 +93,28 @@ public enum ApiKeys {
     ALTER_CLIENT_QUOTAS(ApiMessageType.ALTER_CLIENT_QUOTAS, false, true),
     DESCRIBE_USER_SCRAM_CREDENTIALS(ApiMessageType.DESCRIBE_USER_SCRAM_CREDENTIALS),
     ALTER_USER_SCRAM_CREDENTIALS(ApiMessageType.ALTER_USER_SCRAM_CREDENTIALS, false, true),
-    VOTE(ApiMessageType.VOTE, true, RecordBatch.MAGIC_VALUE_V0, false, true),
-    BEGIN_QUORUM_EPOCH(ApiMessageType.BEGIN_QUORUM_EPOCH, true, RecordBatch.MAGIC_VALUE_V0, false, true),
-    END_QUORUM_EPOCH(ApiMessageType.END_QUORUM_EPOCH, true, RecordBatch.MAGIC_VALUE_V0, false, true),
-    DESCRIBE_QUORUM(ApiMessageType.DESCRIBE_QUORUM, true, RecordBatch.MAGIC_VALUE_V0, false, true),
+    VOTE(ApiMessageType.VOTE, true, RecordBatch.MAGIC_VALUE_V0, false),
+    BEGIN_QUORUM_EPOCH(ApiMessageType.BEGIN_QUORUM_EPOCH, true, RecordBatch.MAGIC_VALUE_V0, false),
+    END_QUORUM_EPOCH(ApiMessageType.END_QUORUM_EPOCH, true, RecordBatch.MAGIC_VALUE_V0, false),
+    DESCRIBE_QUORUM(ApiMessageType.DESCRIBE_QUORUM, true, RecordBatch.MAGIC_VALUE_V0, false),
     ALTER_ISR(ApiMessageType.ALTER_ISR, true),
     UPDATE_FEATURES(ApiMessageType.UPDATE_FEATURES, false, true),
-    ENVELOPE(ApiMessageType.ENVELOPE, true, RecordBatch.MAGIC_VALUE_V0, false, true),
-    FETCH_SNAPSHOT(ApiMessageType.FETCH_SNAPSHOT, false, RecordBatch.MAGIC_VALUE_V0, false, true),
+    ENVELOPE(ApiMessageType.ENVELOPE, true, RecordBatch.MAGIC_VALUE_V0, false),
+    FETCH_SNAPSHOT(ApiMessageType.FETCH_SNAPSHOT, false, RecordBatch.MAGIC_VALUE_V0, false),
     DESCRIBE_CLUSTER(ApiMessageType.DESCRIBE_CLUSTER),
     DESCRIBE_PRODUCERS(ApiMessageType.DESCRIBE_PRODUCERS),
-    BROKER_REGISTRATION(ApiMessageType.BROKER_REGISTRATION, true, RecordBatch.MAGIC_VALUE_V0, false, true),
-    BROKER_HEARTBEAT(ApiMessageType.BROKER_HEARTBEAT, true, RecordBatch.MAGIC_VALUE_V0, false, true),
-    UNREGISTER_BROKER(ApiMessageType.UNREGISTER_BROKER, false, RecordBatch.MAGIC_VALUE_V0, true, false);
+    BROKER_REGISTRATION(ApiMessageType.BROKER_REGISTRATION, true, RecordBatch.MAGIC_VALUE_V0, false),
+    BROKER_HEARTBEAT(ApiMessageType.BROKER_HEARTBEAT, true, RecordBatch.MAGIC_VALUE_V0, false),
+    UNREGISTER_BROKER(ApiMessageType.UNREGISTER_BROKER, false, RecordBatch.MAGIC_VALUE_V0, true);
+
+    private static final Map<ApiMessageType.ListenerType, EnumSet<ApiKeys>> APIS_BY_LISTENER =
+        new EnumMap<>(ApiMessageType.ListenerType.class);
+
+    static {
+        for (ApiMessageType.ListenerType listenerType : ApiMessageType.ListenerType.values()) {
+            APIS_BY_LISTENER.put(listenerType, filterApisForListener(listenerType));
+        }
+    }
 
     // The generator ensures every `ApiMessageType` has a unique id
     private static final Map<Integer, ApiKeys> ID_TO_TYPE = Arrays.stream(ApiKeys.values())
@@ -119,9 +131,6 @@ public enum ApiKeys {
 
     /** indicates the minimum required inter broker magic required to support the API */
     public final byte minRequiredInterBrokerMagic;
-
-    /** indicates whether this is an API which is only exposed by the KIP-500 controller **/
-    public final boolean isControllerOnlyApi;
 
     /** indicates whether the API is enabled for forwarding **/
     public final boolean forwardable;
@@ -142,24 +151,17 @@ public enum ApiKeys {
         this(messageType, clusterAction, RecordBatch.MAGIC_VALUE_V0, forwardable);
     }
 
-    ApiKeys(ApiMessageType messageType, boolean clusterAction, byte minRequiredInterBrokerMagic, boolean forwardable) {
-        this(messageType, clusterAction, minRequiredInterBrokerMagic, forwardable, false);
-    }
-
     ApiKeys(
         ApiMessageType messageType,
         boolean clusterAction,
         byte minRequiredInterBrokerMagic,
-        boolean forwardable,
-        boolean isControllerOnlyApi
+        boolean forwardable
     ) {
         this.messageType = messageType;
         this.id = messageType.apiKey();
         this.name = messageType.name;
         this.clusterAction = clusterAction;
         this.minRequiredInterBrokerMagic = minRequiredInterBrokerMagic;
-        this.isControllerOnlyApi = isControllerOnlyApi;
-
         this.requiresDelayedAllocation = forwardable || shouldRetainsBufferReference(messageType.requestSchemas());
         this.forwardable = forwardable;
     }
@@ -195,6 +197,14 @@ public enum ApiKeys {
         return messageType.lowestSupportedVersion();
     }
 
+    public List<Short> allVersions() {
+        List<Short> versions = new ArrayList<>(latestVersion() - oldestVersion() + 1);
+        for (short version = oldestVersion(); version < latestVersion(); version++) {
+            versions.add(version);
+        }
+        return versions;
+    }
+
     public boolean isVersionSupported(short apiVersion) {
         return apiVersion >= oldestVersion() && apiVersion <= latestVersion();
     }
@@ -207,6 +217,10 @@ public enum ApiKeys {
         return messageType.responseHeaderVersion(apiVersion);
     }
 
+    public boolean inScope(ApiMessageType.ListenerType listener) {
+        return messageType.listeners().contains(listener);
+    }
+
     private static String toHtml() {
         final StringBuilder b = new StringBuilder();
         b.append("<table class=\"data-table\"><tbody>\n");
@@ -214,7 +228,7 @@ public enum ApiKeys {
         b.append("<th>Name</th>\n");
         b.append("<th>Key</th>\n");
         b.append("</tr>");
-        for (ApiKeys key : ApiKeys.brokerApis()) {
+        for (ApiKeys key : zkBrokerApis()) {
             b.append("<tr>\n");
             b.append("<td>");
             b.append("<a href=\"#The_Messages_" + key.name + "\">" + key.name + "</a>");
@@ -246,10 +260,19 @@ public enum ApiKeys {
         return hasBuffer.get();
     }
 
-    public static List<ApiKeys> brokerApis() {
-        return Arrays.stream(values())
-            .filter(api -> !api.isControllerOnlyApi)
+    public static EnumSet<ApiKeys> zkBrokerApis() {
+        return apisForListener(ApiMessageType.ListenerType.ZK_BROKER);
+    }
+
+    public static EnumSet<ApiKeys> apisForListener(ApiMessageType.ListenerType listener) {
+        return APIS_BY_LISTENER.get(listener);
+    }
+
+    private static EnumSet<ApiKeys> filterApisForListener(ApiMessageType.ListenerType listener) {
+        List<ApiKeys> controllerApis = Arrays.stream(ApiKeys.values())
+            .filter(apiKey -> apiKey.messageType.listeners().contains(listener))
             .collect(Collectors.toList());
+        return EnumSet.copyOf(controllerApis);
     }
 
 }

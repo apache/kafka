@@ -19,6 +19,7 @@ package org.apache.kafka.common.requests;
 import org.apache.kafka.common.feature.Features;
 import org.apache.kafka.common.feature.FinalizedVersionRange;
 import org.apache.kafka.common.feature.SupportedVersionRange;
+import org.apache.kafka.common.message.ApiMessageType;
 import org.apache.kafka.common.message.ApiVersionsResponseData;
 import org.apache.kafka.common.message.ApiVersionsResponseData.ApiVersion;
 import org.apache.kafka.common.message.ApiVersionsResponseData.ApiVersionCollection;
@@ -29,11 +30,12 @@ import org.apache.kafka.common.message.ApiVersionsResponseData.SupportedFeatureK
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.record.RecordBatch;
+import org.apache.kafka.common.record.RecordVersion;
 
 import java.nio.ByteBuffer;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 
 /**
  * Possible error codes:
@@ -43,9 +45,6 @@ import java.util.Optional;
 public class ApiVersionsResponse extends AbstractResponse {
 
     public static final long UNKNOWN_FINALIZED_FEATURES_EPOCH = -1L;
-
-    public static final ApiVersionsResponse DEFAULT_API_VERSIONS_RESPONSE = createApiVersionsResponse(
-            DEFAULT_THROTTLE_TIME, RecordBatch.CURRENT_MAGIC_VALUE);
 
     private final ApiVersionsResponseData data;
 
@@ -96,49 +95,89 @@ public class ApiVersionsResponse extends AbstractResponse {
         }
     }
 
-    public static ApiVersionsResponse createApiVersionsResponse(final int throttleTimeMs, final byte minMagic) {
-        return createApiVersionsResponse(throttleTimeMs, minMagic, Features.emptySupportedFeatures(),
-            Features.emptyFinalizedFeatures(), UNKNOWN_FINALIZED_FEATURES_EPOCH);
+    public static ApiVersionsResponse defaultApiVersionsResponse(
+        ApiMessageType.ListenerType listenerType
+    ) {
+        return defaultApiVersionsResponse(0, listenerType);
     }
 
-    private static ApiVersionsResponse createApiVersionsResponse(
-        final int throttleTimeMs,
-        final byte minMagic,
-        final Features<SupportedVersionRange> latestSupportedFeatures,
-        final Features<FinalizedVersionRange> finalizedFeatures,
-        final long finalizedFeaturesEpoch) {
+    public static ApiVersionsResponse defaultApiVersionsResponse(
+        int throttleTimeMs,
+        ApiMessageType.ListenerType listenerType
+    ) {
+        return createApiVersionsResponse(throttleTimeMs, filterApis(RecordVersion.current(), listenerType));
+    }
+
+    public static ApiVersionsResponse createApiVersionsResponse(
+        int throttleTimeMs,
+        ApiVersionCollection apiVersions
+    ) {
+        return createApiVersionsResponse(
+            throttleTimeMs,
+            apiVersions,
+            Features.emptySupportedFeatures(),
+            Features.emptyFinalizedFeatures(),
+            UNKNOWN_FINALIZED_FEATURES_EPOCH
+        );
+    }
+
+    public static ApiVersionsResponse createApiVersionsResponse(
+        int throttleTimeMs,
+        ApiVersionCollection apiVersions,
+        Features<SupportedVersionRange> latestSupportedFeatures,
+        Features<FinalizedVersionRange> finalizedFeatures,
+        long finalizedFeaturesEpoch
+    ) {
         return new ApiVersionsResponse(
             createApiVersionsResponseData(
                 throttleTimeMs,
                 Errors.NONE,
-                defaultApiKeys(minMagic),
+                apiVersions,
                 latestSupportedFeatures,
                 finalizedFeatures,
-                finalizedFeaturesEpoch));
+                finalizedFeaturesEpoch
+            )
+        );
     }
 
-    public static ApiVersionCollection defaultApiKeys(final byte minMagic) {
+    public static ApiVersionCollection filterApis(
+        RecordVersion minRecordVersion,
+        ApiMessageType.ListenerType listenerType
+    ) {
         ApiVersionCollection apiKeys = new ApiVersionCollection();
-        for (ApiKeys apiKey : ApiKeys.brokerApis()) {
-            if (apiKey.minRequiredInterBrokerMagic <= minMagic) {
+        for (ApiKeys apiKey : ApiKeys.apisForListener(listenerType)) {
+            if (apiKey.minRequiredInterBrokerMagic <= minRecordVersion.value) {
                 apiKeys.add(ApiVersionsResponse.toApiVersion(apiKey));
             }
         }
         return apiKeys;
     }
 
+    public static ApiVersionCollection collectApis(Set<ApiKeys> apiKeys) {
+        ApiVersionCollection res = new ApiVersionCollection();
+        for (ApiKeys apiKey : apiKeys) {
+            res.add(ApiVersionsResponse.toApiVersion(apiKey));
+        }
+        return res;
+    }
+
     /**
-     * Find the commonly agreed ApiVersions between local software and the controller.
+     * Find the common range of supported API versions between the locally
+     * known range and that of another set.
      *
-     * @param minMagic min inter broker magic
+     * @param listenerType the listener type which constrains the set of exposed APIs
+     * @param minRecordVersion min inter broker magic
      * @param activeControllerApiVersions controller ApiVersions
      * @return commonly agreed ApiVersion collection
      */
-    public static ApiVersionCollection intersectControllerApiVersions(final byte minMagic,
-                                                                      final Map<ApiKeys, ApiVersion> activeControllerApiVersions) {
+    public static ApiVersionCollection intersectForwardableApis(
+        final ApiMessageType.ListenerType listenerType,
+        final RecordVersion minRecordVersion,
+        final Map<ApiKeys, ApiVersion> activeControllerApiVersions
+    ) {
         ApiVersionCollection apiKeys = new ApiVersionCollection();
-        for (ApiKeys apiKey : ApiKeys.brokerApis()) {
-            if (apiKey.minRequiredInterBrokerMagic <= minMagic) {
+        for (ApiKeys apiKey : ApiKeys.apisForListener(listenerType)) {
+            if (apiKey.minRequiredInterBrokerMagic <= minRecordVersion.value) {
                 ApiVersion brokerApiVersion = toApiVersion(apiKey);
 
                 final ApiVersion finalApiVersion;
@@ -161,7 +200,7 @@ public class ApiVersionsResponse extends AbstractResponse {
         return apiKeys;
     }
 
-    public static ApiVersionsResponseData createApiVersionsResponseData(
+    private static ApiVersionsResponseData createApiVersionsResponseData(
         final int throttleTimeMs,
         final Errors error,
         final ApiVersionCollection apiKeys,

@@ -16,6 +16,7 @@
 {
   "apiKey": 61,
   "type": "request",
+  "listeners": ["zkBroker", "broker"],
   "name": "DescribeProducersRequest",
   "validVersions": "0",
   "flexibleVersions": "0+",

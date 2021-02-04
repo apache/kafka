@@ -17,17 +17,17 @@
 
 package org.apache.kafka.common.requests;
 
+import org.apache.kafka.common.message.ApiMessageType;
 import org.apache.kafka.common.message.ApiVersionsResponseData.ApiVersion;
 import org.apache.kafka.common.message.ApiVersionsResponseData.ApiVersionCollection;
 import org.apache.kafka.common.protocol.ApiKeys;
-import org.apache.kafka.common.record.RecordBatch;
+import org.apache.kafka.common.record.RecordVersion;
 import org.apache.kafka.common.utils.Utils;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
 
-import java.util.Collection;
-import java.util.HashSet;
 import java.util.Map;
-import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -38,21 +38,15 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class ApiVersionsResponseTest {
 
-    @Test
-    public void shouldCreateApiResponseThatHasAllApiKeysSupportedByBroker() {
-        assertEquals(apiKeysInResponse(ApiVersionsResponse.DEFAULT_API_VERSIONS_RESPONSE), new HashSet<>(ApiKeys.brokerApis()));
-        assertTrue(ApiVersionsResponse.DEFAULT_API_VERSIONS_RESPONSE.data().supportedFeatures().isEmpty());
-        assertTrue(ApiVersionsResponse.DEFAULT_API_VERSIONS_RESPONSE.data().finalizedFeatures().isEmpty());
-        assertEquals(ApiVersionsResponse.UNKNOWN_FINALIZED_FEATURES_EPOCH, ApiVersionsResponse.DEFAULT_API_VERSIONS_RESPONSE.data().finalizedFeaturesEpoch());
-    }
+    @ParameterizedTest
+    @EnumSource(ApiMessageType.ListenerType.class)
+    public void shouldHaveCorrectDefaultApiVersionsResponse(ApiMessageType.ListenerType scope) {
+        ApiVersionsResponse defaultResponse = ApiVersionsResponse.defaultApiVersionsResponse(scope);
+        assertEquals(ApiKeys.apisForListener(scope).size(), defaultResponse.data().apiKeys().size(),
+            "API versions for all API keys must be maintained.");
 
-    @Test
-    public void shouldHaveCorrectDefaultApiVersionsResponse() {
-        Collection<ApiVersion> apiVersions = ApiVersionsResponse.DEFAULT_API_VERSIONS_RESPONSE.data().apiKeys();
-        assertEquals(apiVersions.size(), ApiKeys.brokerApis().size(), "API versions for all API keys must be maintained.");
-
-        for (ApiKeys key : ApiKeys.brokerApis()) {
-            ApiVersion version = ApiVersionsResponse.DEFAULT_API_VERSIONS_RESPONSE.apiVersion(key.id);
+        for (ApiKeys key : ApiKeys.apisForListener(scope)) {
+            ApiVersion version = defaultResponse.apiVersion(key.id);
             assertNotNull(version, "Could not find ApiVersion for API " + key.name);
             assertEquals(version.minVersion(), key.oldestVersion(), "Incorrect min version for Api " + key.name);
             assertEquals(version.maxVersion(), key.latestVersion(), "Incorrect max version for Api " + key.name);
@@ -74,9 +68,9 @@ public class ApiVersionsResponseTest {
             }
         }
 
-        assertTrue(ApiVersionsResponse.DEFAULT_API_VERSIONS_RESPONSE.data().supportedFeatures().isEmpty());
-        assertTrue(ApiVersionsResponse.DEFAULT_API_VERSIONS_RESPONSE.data().finalizedFeatures().isEmpty());
-        assertEquals(ApiVersionsResponse.UNKNOWN_FINALIZED_FEATURES_EPOCH, ApiVersionsResponse.DEFAULT_API_VERSIONS_RESPONSE.data().finalizedFeaturesEpoch());
+        assertTrue(defaultResponse.data().supportedFeatures().isEmpty());
+        assertTrue(defaultResponse.data().finalizedFeatures().isEmpty());
+        assertEquals(ApiVersionsResponse.UNKNOWN_FINALIZED_FEATURES_EPOCH, defaultResponse.data().finalizedFeaturesEpoch());
     }
 
     @Test
@@ -96,9 +90,11 @@ public class ApiVersionsResponseTest {
                 .setMaxVersion(maxVersion))
         );
 
-        ApiVersionCollection commonResponse = ApiVersionsResponse.intersectControllerApiVersions(
-            RecordBatch.CURRENT_MAGIC_VALUE,
-            activeControllerApiVersions);
+        ApiVersionCollection commonResponse = ApiVersionsResponse.intersectForwardableApis(
+            ApiMessageType.ListenerType.ZK_BROKER,
+            RecordVersion.current(),
+            activeControllerApiVersions
+        );
 
         verifyVersions(forwardableAPIKey.id, minVersion, maxVersion, commonResponse);
 
@@ -149,11 +145,4 @@ public class ApiVersionsResponseTest {
         assertEquals(expectedVersionsForForwardableAPI, commonResponse.find(forwardableAPIKey));
     }
 
-    private Set<ApiKeys> apiKeysInResponse(final ApiVersionsResponse apiVersions) {
-        final Set<ApiKeys> apiKeys = new HashSet<>();
-        for (final ApiVersion version : apiVersions.data().apiKeys()) {
-            apiKeys.add(ApiKeys.forId(version.apiKey()));
-        }
-        return apiKeys;
-    }
 }

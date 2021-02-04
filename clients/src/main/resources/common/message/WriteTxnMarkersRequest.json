@@ -16,6 +16,7 @@
 {
   "apiKey": 27,
   "type": "request",
+  "listeners": ["zkBroker", "broker"],
   "name": "WriteTxnMarkersRequest",
   // Version 1 enables flexible versions.
   "validVersions": "0-1",

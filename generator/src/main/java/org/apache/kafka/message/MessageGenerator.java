@@ -51,6 +51,8 @@ public final class MessageGenerator {
 
     static final String API_MESSAGE_TYPE_JAVA = "ApiMessageType.java";
 
+    static final String API_SCOPE_JAVA = "ApiScope.java";
+
     static final String METADATA_RECORD_TYPE_JAVA = "MetadataRecordType.java";
 
     static final String METADATA_JSON_CONVERTERS_JAVA = "MetadataJsonConverters.java";
@@ -84,6 +86,8 @@ public final class MessageGenerator {
 
     static final String ITERATOR_CLASS = "java.util.Iterator";
 
+    static final String ENUM_SET_CLASS = "java.util.EnumSet";
+
     static final String TYPE_CLASS = "org.apache.kafka.common.protocol.types.Type";
 
     static final String FIELD_CLASS = "org.apache.kafka.common.protocol.types.Field";
@@ -93,8 +97,6 @@ public final class MessageGenerator {
     static final String ARRAYOF_CLASS = "org.apache.kafka.common.protocol.types.ArrayOf";
 
     static final String COMPACT_ARRAYOF_CLASS = "org.apache.kafka.common.protocol.types.CompactArrayOf";
-
-    static final String STRUCT_CLASS = "org.apache.kafka.common.protocol.types.Struct";
 
     static final String BYTES_CLASS = "org.apache.kafka.common.utils.Bytes";
 

@@ -40,14 +40,14 @@ class ApiVersionsRequestTest(cluster: ClusterInstance) extends AbstractApiVersio
   def testApiVersionsRequest(): Unit = {
     val request = new ApiVersionsRequest.Builder().build()
     val apiVersionsResponse = sendApiVersionsRequest(request, cluster.clientListener())
-    validateApiVersionsResponse(apiVersionsResponse, cluster.clientListener())
+    validateApiVersionsResponse(apiVersionsResponse)
   }
 
   @ClusterTest
   def testApiVersionsRequestThroughControlPlaneListener(): Unit = {
     val request = new ApiVersionsRequest.Builder().build()
     val apiVersionsResponse = sendApiVersionsRequest(request, super.controlPlaneListenerName)
-    validateApiVersionsResponse(apiVersionsResponse, super.controlPlaneListenerName)
+    validateApiVersionsResponse(apiVersionsResponse)
   }
 
   @ClusterTest
@@ -66,14 +66,14 @@ class ApiVersionsRequestTest(cluster: ClusterInstance) extends AbstractApiVersio
   def testApiVersionsRequestValidationV0(): Unit = {
     val apiVersionsRequest = new ApiVersionsRequest.Builder().build(0.asInstanceOf[Short])
     val apiVersionsResponse = sendApiVersionsRequest(apiVersionsRequest, cluster.clientListener())
-    validateApiVersionsResponse(apiVersionsResponse, cluster.clientListener())
+    validateApiVersionsResponse(apiVersionsResponse)
   }
 
   @ClusterTest
   def testApiVersionsRequestValidationV0ThroughControlPlaneListener(): Unit = {
     val apiVersionsRequest = new ApiVersionsRequest.Builder().build(0.asInstanceOf[Short])
     val apiVersionsResponse = sendApiVersionsRequest(apiVersionsRequest, super.controlPlaneListenerName)
-    validateApiVersionsResponse(apiVersionsResponse, super.controlPlaneListenerName)
+    validateApiVersionsResponse(apiVersionsResponse)
   }
 
   @ClusterTest

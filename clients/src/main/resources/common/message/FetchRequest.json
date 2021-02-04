@@ -16,6 +16,7 @@
 {
   "apiKey": 1,
   "type": "request",
+  "listeners": ["zkBroker", "broker", "controller"],
   "name": "FetchRequest",
   //
   // Version 1 is the same as version 0.

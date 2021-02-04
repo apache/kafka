@@ -16,6 +16,7 @@
 {
   "apiKey": 59,
   "type": "request",
+  "listeners": ["controller"],
   "name": "FetchSnapshotRequest",
   "validVersions": "0",
   "flexibleVersions": "0+",

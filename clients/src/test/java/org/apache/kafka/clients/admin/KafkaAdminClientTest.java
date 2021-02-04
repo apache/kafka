@@ -74,6 +74,7 @@ import org.apache.kafka.common.message.AlterReplicaLogDirsResponseData;
 import org.apache.kafka.common.message.AlterReplicaLogDirsResponseData.AlterReplicaLogDirPartitionResult;
 import org.apache.kafka.common.message.AlterReplicaLogDirsResponseData.AlterReplicaLogDirTopicResult;
 import org.apache.kafka.common.message.AlterUserScramCredentialsResponseData;
+import org.apache.kafka.common.message.ApiMessageType;
 import org.apache.kafka.common.message.ApiVersionsResponseData;
 import org.apache.kafka.common.message.ApiVersionsResponseData.ApiVersion;
 import org.apache.kafka.common.message.CreateAclsResponseData;
@@ -126,6 +127,7 @@ import org.apache.kafka.common.quota.ClientQuotaAlteration;
 import org.apache.kafka.common.quota.ClientQuotaEntity;
 import org.apache.kafka.common.quota.ClientQuotaFilter;
 import org.apache.kafka.common.quota.ClientQuotaFilterComponent;
+import org.apache.kafka.common.record.RecordVersion;
 import org.apache.kafka.common.requests.AbstractResponse;
 import org.apache.kafka.common.requests.AlterClientQuotasResponse;
 import org.apache.kafka.common.requests.AlterPartitionReassignmentsResponse;
@@ -541,17 +543,17 @@ public class KafkaAdminClientTest {
 
     private static ApiVersionsResponse prepareApiVersionsResponseForDescribeFeatures(Errors error) {
         if (error == Errors.NONE) {
-            return new ApiVersionsResponse(ApiVersionsResponse.createApiVersionsResponseData(
-                ApiVersionsResponse.DEFAULT_API_VERSIONS_RESPONSE.throttleTimeMs(),
-                error,
-                ApiVersionsResponse.DEFAULT_API_VERSIONS_RESPONSE.data().apiKeys(),
+            return ApiVersionsResponse.createApiVersionsResponse(
+                0,
+                ApiVersionsResponse.filterApis(RecordVersion.current(), ApiMessageType.ListenerType.ZK_BROKER),
                 convertSupportedFeaturesMap(defaultFeatureMetadata().supportedFeatures()),
                 convertFinalizedFeaturesMap(defaultFeatureMetadata().finalizedFeatures()),
-                defaultFeatureMetadata().finalizedFeaturesEpoch().get()));
+                defaultFeatureMetadata().finalizedFeaturesEpoch().get()
+            );
         }
         return new ApiVersionsResponse(
             new ApiVersionsResponseData()
-                .setThrottleTimeMs(ApiVersionsResponse.DEFAULT_API_VERSIONS_RESPONSE.throttleTimeMs())
+                .setThrottleTimeMs(0)
                 .setErrorCode(error.code()));
     }
 

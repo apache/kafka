@@ -16,6 +16,7 @@
 {
   "apiKey": 35,
   "type": "request",
+  "listeners": ["zkBroker", "broker"],
   "name": "DescribeLogDirsRequest",
   // Version 1 is the same as version 0.
   "validVersions": "0-2",
