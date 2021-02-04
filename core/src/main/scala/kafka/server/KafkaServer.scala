@@ -245,7 +245,7 @@ class KafkaServer(
           new ZkConfigRepository(new AdminZkClient(zkClient)),
           kafkaScheduler, time, brokerTopicStats, logDirFailureChannel)
         brokerState.set(BrokerState.RECOVERY)
-        logManager.startup(() => zkClient.getAllTopicsInCluster())
+        logManager.startup(zkClient.getAllTopicsInCluster())
 
         metadataCache = new MetadataCache(config.brokerId)
         // Enable delegation token cache for all SCRAM mechanisms to simplify dynamic update.

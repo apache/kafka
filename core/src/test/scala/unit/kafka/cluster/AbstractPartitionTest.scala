@@ -63,7 +63,7 @@ class AbstractPartitionTest {
     logDir2 = TestUtils.randomPartitionLogDir(tmpDir)
     logManager = TestUtils.createLogManager(
       logDirs = Seq(logDir1, logDir2), defaultConfig = logConfig, CleanerConfig(enableCleaner = false), time)
-    logManager.startup(() => Set.empty)
+    logManager.startup(Set.empty)
 
     alterIsrManager = TestUtils.createAlterIsrManager()
     isrChangeListener = TestUtils.createIsrChangeListener()

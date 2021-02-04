@@ -133,23 +133,23 @@ class LogTest {
     // Load logs after a clean shutdown
     Files.createFile(cleanShutdownFile.toPath)
     cleanShutdownInterceptedValue = false
-    logManager.loadLogs(logManager.generateTopicLogConfigs(() => Set.empty))
+    logManager.loadLogs(logManager.generateTopicLogConfigs(Set.empty))
     assertTrue(cleanShutdownInterceptedValue, "Unexpected value intercepted for clean shutdown flag")
     assertFalse(cleanShutdownFile.exists(), "Clean shutdown file must not exist after loadLogs has completed")
     // Load logs without clean shutdown file
     cleanShutdownInterceptedValue = true
-    logManager.loadLogs(logManager.generateTopicLogConfigs(() => Set.empty))
+    logManager.loadLogs(logManager.generateTopicLogConfigs(Set.empty))
     assertFalse(cleanShutdownInterceptedValue, "Unexpected value intercepted for clean shutdown flag")
     assertFalse(cleanShutdownFile.exists(), "Clean shutdown file must not exist after loadLogs has completed")
     // Create clean shutdown file and then simulate error while loading logs such that log loading does not complete.
     Files.createFile(cleanShutdownFile.toPath)
     simulateError = true
-    assertThrows(classOf[RuntimeException], () => logManager.loadLogs(logManager.generateTopicLogConfigs(() => Set.empty)))
+    assertThrows(classOf[RuntimeException], () => logManager.loadLogs(logManager.generateTopicLogConfigs(Set.empty)))
     assertFalse(cleanShutdownFile.exists(), "Clean shutdown file must not have existed")
     // Do not simulate error on next call to LogManager#loadLogs. LogManager must understand that log had unclean shutdown the last time.
     simulateError = false
     cleanShutdownInterceptedValue = true
-    logManager.loadLogs(logManager.generateTopicLogConfigs(() => Set.empty))
+    logManager.loadLogs(logManager.generateTopicLogConfigs(Set.empty))
     assertFalse(cleanShutdownInterceptedValue, "Unexpected value for clean shutdown flag")
   }
 

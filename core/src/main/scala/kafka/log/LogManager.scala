@@ -251,12 +251,12 @@ class LogManager(logDirs: Seq[File],
   private[log] def hasLogsToBeDeleted: Boolean = !logsToBeDeleted.isEmpty
 
   private[log] def loadLog(logDir: File,
-                      hadCleanShutdown: Boolean,
-                      recoveryPoints: Map[TopicPartition, Long],
-                      logStartOffsets: Map[TopicPartition, Long],
-                      topicLogConfigs: Map[String, LogConfig]): Log = {
+                           hadCleanShutdown: Boolean,
+                           recoveryPoints: Map[TopicPartition, Long],
+                           logStartOffsets: Map[TopicPartition, Long],
+                           topicLogConfigOverrides: Map[String, LogConfig]): Log = {
     val topicPartition = Log.parseTopicPartitionName(logDir)
-    val config = topicLogConfigs.getOrElse(topicPartition.topic, currentDefaultConfig)
+    val config = topicLogConfigOverrides.getOrElse(topicPartition.topic, currentDefaultConfig)
     val logRecoveryPoint = recoveryPoints.getOrElse(topicPartition, 0L)
     val logStartOffset = logStartOffsets.getOrElse(topicPartition, 0L)
 
@@ -299,7 +299,7 @@ class LogManager(logDirs: Seq[File],
   /**
    * Recover and load all logs in the given data directories
    */
-  private[log] def loadLogs(topicLogConfigs: Map[String, LogConfig]): Unit = {
+  private[log] def loadLogs(topicLogConfigOverrides: Map[String, LogConfig]): Unit = {
     info(s"Loading logs from log dirs $liveLogDirs")
     val startMs = time.hiResClockMs()
     val threadPools = ArrayBuffer.empty[ExecutorService]
@@ -356,7 +356,7 @@ class LogManager(logDirs: Seq[File],
               debug(s"Loading log $logDir")
 
               val logLoadStartMs = time.hiResClockMs()
-              val log = loadLog(logDir, hadCleanShutdown, recoveryPoints, logStartOffsets, topicLogConfigs)
+              val log = loadLog(logDir, hadCleanShutdown, recoveryPoints, logStartOffsets, topicLogConfigOverrides)
               val logLoadDurationMs = time.hiResClockMs() - logLoadStartMs
               val currentNumLoaded = numLogsLoaded.incrementAndGet()
 
@@ -401,15 +401,15 @@ class LogManager(logDirs: Seq[File],
   /**
    *  Start the background threads to flush logs and do log cleanup
    */
-  def startup(retrieveTopicNames: () => Set[String]): Unit = {
-    startup(generateTopicLogConfigs(retrieveTopicNames))
+  def startup(retrieveTopicNames: => Set[String]): Unit = {
+    startupWithTopicLogConfigOverrides(generateTopicLogConfigs(retrieveTopicNames))
   }
 
   // visible for testing
-  private[log] def generateTopicLogConfigs(retrieveTopicNames: () => Set[String]): Map[String, LogConfig] = {
+  private[log] def generateTopicLogConfigs(topicNames: Set[String]): Map[String, LogConfig] = {
     val topicLogConfigs: mutable.Map[String, LogConfig] = mutable.Map()
     val defaultProps = currentDefaultConfig.originals()
-    retrieveTopicNames().foreach { topicName =>
+    topicNames.foreach { topicName =>
       val overrides = configRepository.topicConfig(topicName)
       // Later on we grab the default configs if a topic doesn't appear in the map,
       // so save memory by only putting the log configs into the map when there is the potential for overrides
@@ -422,8 +422,8 @@ class LogManager(logDirs: Seq[File],
   }
 
   // visible for testing
-  private[log] def startup(topicLogConfigs: Map[String, LogConfig]): Unit = {
-    loadLogs(topicLogConfigs) // this could take a while if shutdown was not clean
+  private[log] def startupWithTopicLogConfigOverrides(topicLogConfigOverrides: Map[String, LogConfig]): Unit = {
+    loadLogs(topicLogConfigOverrides) // this could take a while if shutdown was not clean
 
     /* Schedule the cleanup task to delete old logs */
     if (scheduler != null) {
