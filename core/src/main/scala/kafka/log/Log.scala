@@ -256,7 +256,8 @@ class Log(@volatile private var _dir: File,
           val topicPartition: TopicPartition,
           val producerStateManager: ProducerStateManager,
           logDirFailureChannel: LogDirFailureChannel,
-          private val hadCleanShutdown: Boolean = true) extends Logging with KafkaMetricsGroup {
+          private val hadCleanShutdown: Boolean = true,
+          val usesTopicId: Boolean = true) extends Logging with KafkaMetricsGroup {
 
   import kafka.log.Log._
 
@@ -341,10 +342,15 @@ class Log(@volatile private var _dir: File,
     producerStateManager.removeStraySnapshots(segments.values().asScala.map(_.baseOffset).toSeq)
     loadProducerState(logEndOffset, reloadFromCleanShutdown = hadCleanShutdown)
 
-    // Recover topic ID if present
+    // Delete partition metadata file if the version does not support topic IDs.
+    // Recover topic ID if present and topic IDs are supported
     partitionMetadataFile.foreach { file =>
-      if (file.exists())
-        topicId = file.read().topicId
+      if (file.exists()) {
+        if (!usesTopicId)
+          file.delete()
+        else
+          topicId = file.read().topicId
+      }
     }
   }
 
@@ -2563,11 +2569,12 @@ object Log {
             maxProducerIdExpirationMs: Int,
             producerIdExpirationCheckIntervalMs: Int,
             logDirFailureChannel: LogDirFailureChannel,
-            lastShutdownClean: Boolean = true): Log = {
+            lastShutdownClean: Boolean = true,
+            usesTopicId: Boolean = true): Log = {
     val topicPartition = Log.parseTopicPartitionName(dir)
     val producerStateManager = new ProducerStateManager(topicPartition, dir, maxProducerIdExpirationMs)
     new Log(dir, config, logStartOffset, recoveryPoint, scheduler, brokerTopicStats, time, maxProducerIdExpirationMs,
-      producerIdExpirationCheckIntervalMs, topicPartition, producerStateManager, logDirFailureChannel, lastShutdownClean)
+      producerIdExpirationCheckIntervalMs, topicPartition, producerStateManager, logDirFailureChannel, lastShutdownClean, usesTopicId)
   }
 
   /**

@@ -140,4 +140,8 @@ class PartitionMetadataFile(val file: File,
   def exists(): Boolean = {
     file.exists()
   }
+
+  def delete(): Boolean = {
+    file.delete()
+  }
 }
