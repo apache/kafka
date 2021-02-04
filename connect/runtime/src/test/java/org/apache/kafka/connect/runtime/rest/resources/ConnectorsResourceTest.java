@@ -916,9 +916,8 @@ public class ConnectorsResourceTest {
 
         PowerMock.replayAll();
 
-        ConnectRestException e = assertThrows(ConnectRestException.class, () -> {
-            connectorsResource.destroyConnector(CONNECTOR_NAME, NULL_HEADERS, FORWARD);
-        });
+        ConnectRestException e = assertThrows(ConnectRestException.class, () ->
+            connectorsResource.destroyConnector(CONNECTOR_NAME, NULL_HEADERS, FORWARD));
         assertTrue(e.getMessage().contains("no known leader URL"));
         PowerMock.verifyAll();
     }
@@ -928,12 +927,9 @@ public class ConnectorsResourceTest {
     }
 
     private  <T> void expectAndCallbackResult(final Capture<Callback<T>> cb, final T value) {
-        PowerMock.expectLastCall().andAnswer(new IAnswer<Void>() {
-            @Override
-            public Void answer() throws Throwable {
-                cb.getValue().onCompletion(null, value);
-                return null;
-            }
+        PowerMock.expectLastCall().andAnswer(() -> {
+            cb.getValue().onCompletion(null, value);
+            return null;
         });
     }
 

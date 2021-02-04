@@ -19,6 +19,7 @@ package org.apache.kafka.streams.state.internals;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.StringDeserializer;
+import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.streams.KeyValue;
@@ -45,6 +46,7 @@ import java.util.List;
 
 import static org.apache.kafka.streams.state.internals.ThreadCacheTest.memoryCacheEntrySize;
 import static org.hamcrest.CoreMatchers.equalTo;
+import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
@@ -357,6 +359,60 @@ public class CachingInMemoryKeyValueStoreTest extends AbstractKeyValueStoreTest 
             Bytes.wrap("1".getBytes()),
             Bytes.wrap("0".getBytes())
         ), results);
+    }
+
+    @Test
+    public void shouldGetRecordsWithPrefixKey() {
+        final List<KeyValue<Bytes, byte[]>> entries = new ArrayList<>();
+        entries.add(new KeyValue<>(bytesKey("p11"), bytesValue("2")));
+        entries.add(new KeyValue<>(bytesKey("k1"), bytesValue("1")));
+        entries.add(new KeyValue<>(bytesKey("k2"), bytesValue("2")));
+        entries.add(new KeyValue<>(bytesKey("p2"), bytesValue("2")));
+        entries.add(new KeyValue<>(bytesKey("p1"), bytesValue("2")));
+        entries.add(new KeyValue<>(bytesKey("p0"), bytesValue("2")));
+
+        store.putAll(entries);
+
+        final KeyValueIterator<Bytes, byte[]> keysWithPrefix = store.prefixScan("p1", new StringSerializer());
+        final List<String> keys = new ArrayList<>();
+        final List<String> values = new ArrayList<>();
+        int numberOfKeysReturned = 0;
+
+        while (keysWithPrefix.hasNext()) {
+            final KeyValue<Bytes, byte[]> next = keysWithPrefix.next();
+            keys.add(next.key.toString());
+            values.add(new String(next.value));
+            numberOfKeysReturned++;
+        }
+        assertThat(numberOfKeysReturned, is(2));
+        assertThat(keys, is(Arrays.asList("p1", "p11")));
+        assertThat(values, is(Arrays.asList("2", "2")));
+    }
+
+    @Test
+    public void shouldGetRecordsWithPrefixKeyExcludingNextLargestKey() {
+        final List<KeyValue<Bytes, byte[]>> entries = new ArrayList<>();
+        entries.add(new KeyValue<>(bytesKey("abcd"), bytesValue("2")));
+        entries.add(new KeyValue<>(bytesKey("abcdd"), bytesValue("1")));
+        entries.add(new KeyValue<>(bytesKey("abce"), bytesValue("2")));
+        entries.add(new KeyValue<>(bytesKey("abc"), bytesValue("2")));
+
+        store.putAll(entries);
+
+        final KeyValueIterator<Bytes, byte[]> keysWithPrefix = store.prefixScan("abcd", new StringSerializer());
+        final List<String> keys = new ArrayList<>();
+        final List<String> values = new ArrayList<>();
+        int numberOfKeysReturned = 0;
+
+        while (keysWithPrefix.hasNext()) {
+            final KeyValue<Bytes, byte[]> next = keysWithPrefix.next();
+            keys.add(next.key.toString());
+            values.add(new String(next.value));
+            numberOfKeysReturned++;
+        }
+        assertThat(numberOfKeysReturned, is(2));
+        assertThat(keys, is(Arrays.asList("abcd", "abcdd")));
+        assertThat(values, is(Arrays.asList("2", "1")));
     }
 
     @Test

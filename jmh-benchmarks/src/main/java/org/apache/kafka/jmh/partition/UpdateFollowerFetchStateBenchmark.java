@@ -26,16 +26,17 @@ import kafka.log.Defaults;
 import kafka.log.LogConfig;
 import kafka.log.LogManager;
 import kafka.server.AlterIsrManager;
-import kafka.server.BrokerState;
 import kafka.server.BrokerTopicStats;
 import kafka.server.LogDirFailureChannel;
 import kafka.server.LogOffsetMetadata;
 import kafka.server.MetadataCache;
 import kafka.server.checkpoints.OffsetCheckpoints;
+import kafka.server.metadata.CachedConfigRepository;
 import kafka.utils.KafkaScheduler;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.message.LeaderAndIsrRequestData.LeaderAndIsrPartitionState;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.metadata.BrokerState;
 import org.mockito.Mockito;
 import org.openjdk.jmh.annotations.Benchmark;
 import org.openjdk.jmh.annotations.BenchmarkMode;
@@ -59,6 +60,7 @@ import java.util.List;
 import java.util.Properties;
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicReference;
 
 @State(Scope.Benchmark)
 @Fork(value = 1)
@@ -93,7 +95,7 @@ public class UpdateFollowerFetchStateBenchmark {
                 1000L,
                 60000,
                 scheduler,
-                new BrokerState(),
+                new AtomicReference<>(BrokerState.NOT_RUNNING),
                 brokerTopicStats,
                 logDirFailureChannel,
                 Time.SYSTEM);
@@ -118,7 +120,7 @@ public class UpdateFollowerFetchStateBenchmark {
         AlterIsrManager alterIsrManager = Mockito.mock(AlterIsrManager.class);
         partition = new Partition(topicPartition, 100,
                 ApiVersion$.MODULE$.latestVersion(), 0, Time.SYSTEM,
-                Properties::new, isrChangeListener, delayedOperations,
+                new CachedConfigRepository(), isrChangeListener, delayedOperations,
                 Mockito.mock(MetadataCache.class), logManager, alterIsrManager);
         partition.makeLeader(partitionState, offsetCheckpoints);
     }

@@ -27,7 +27,6 @@ import org.apache.kafka.common.message.JoinGroupResponseData;
 import org.apache.kafka.common.message.SyncGroupResponseData;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.requests.AbstractRequest;
 import org.apache.kafka.common.requests.FindCoordinatorResponse;
 import org.apache.kafka.common.requests.JoinGroupResponse;
 import org.apache.kafka.common.requests.RequestTestUtils;
@@ -253,14 +252,11 @@ public class WorkerCoordinatorTest {
         memberConfigOffsets.put("leader", 1L);
         memberConfigOffsets.put("member", 1L);
         client.prepareResponse(joinGroupLeaderResponse(1, consumerId, memberConfigOffsets, Errors.NONE));
-        client.prepareResponse(new MockClient.RequestMatcher() {
-            @Override
-            public boolean matches(AbstractRequest body) {
-                SyncGroupRequest sync = (SyncGroupRequest) body;
-                return sync.data().memberId().equals(consumerId) &&
-                        sync.data().generationId() == 1 &&
-                        sync.groupAssignments().containsKey(consumerId);
-            }
+        client.prepareResponse(body -> {
+            SyncGroupRequest sync = (SyncGroupRequest) body;
+            return sync.data().memberId().equals(consumerId) &&
+                    sync.data().generationId() == 1 &&
+                    sync.groupAssignments().containsKey(consumerId);
         }, syncGroupResponse(ConnectProtocol.Assignment.NO_ERROR, "leader", 1L, Collections.singletonList(connectorId1),
                 Collections.<ConnectorTaskId>emptyList(), Errors.NONE));
         coordinator.ensureActiveGroup();
@@ -290,14 +286,11 @@ public class WorkerCoordinatorTest {
 
         // normal join group
         client.prepareResponse(joinGroupFollowerResponse(1, memberId, "leader", Errors.NONE));
-        client.prepareResponse(new MockClient.RequestMatcher() {
-            @Override
-            public boolean matches(AbstractRequest body) {
-                SyncGroupRequest sync = (SyncGroupRequest) body;
-                return sync.data().memberId().equals(memberId) &&
-                        sync.data().generationId() == 1 &&
-                        sync.data().assignments().isEmpty();
-            }
+        client.prepareResponse(body -> {
+            SyncGroupRequest sync = (SyncGroupRequest) body;
+            return sync.data().memberId().equals(memberId) &&
+                    sync.data().generationId() == 1 &&
+                    sync.data().assignments().isEmpty();
         }, syncGroupResponse(ConnectProtocol.Assignment.NO_ERROR, "leader", 1L, Collections.<String>emptyList(),
                 Collections.singletonList(taskId1x0), Errors.NONE));
         coordinator.ensureActiveGroup();
@@ -331,14 +324,11 @@ public class WorkerCoordinatorTest {
 
         // config mismatch results in assignment error
         client.prepareResponse(joinGroupFollowerResponse(1, memberId, "leader", Errors.NONE));
-        MockClient.RequestMatcher matcher = new MockClient.RequestMatcher() {
-            @Override
-            public boolean matches(AbstractRequest body) {
-                SyncGroupRequest sync = (SyncGroupRequest) body;
-                return sync.data().memberId().equals(memberId) &&
-                        sync.data().generationId() == 1 &&
-                        sync.data().assignments().isEmpty();
-            }
+        MockClient.RequestMatcher matcher = body -> {
+            SyncGroupRequest sync = (SyncGroupRequest) body;
+            return sync.data().memberId().equals(memberId) &&
+                    sync.data().generationId() == 1 &&
+                    sync.data().assignments().isEmpty();
         };
         client.prepareResponse(matcher, syncGroupResponse(ConnectProtocol.Assignment.CONFIG_MISMATCH, "leader", 10L,
                 Collections.<String>emptyList(), Collections.<ConnectorTaskId>emptyList(), Errors.NONE));

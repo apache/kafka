@@ -149,8 +149,8 @@ public class StandaloneHerder extends AbstractHerder {
     }
 
     @Override
-    protected synchronized Map<String, String> config(String connName) {
-        return configState.connectorConfig(connName);
+    protected synchronized Map<String, String> rawConfig(String connName) {
+        return configState.rawConnectorConfig(connName);
     }
 
     @Override
@@ -392,9 +392,7 @@ public class StandaloneHerder extends AbstractHerder {
                     }
 
                     if (newState == TargetState.STARTED) {
-                        requestExecutorService.submit(() -> {
-                            updateConnectorTasks(connector);
-                        });
+                        requestExecutorService.submit(() -> updateConnectorTasks(connector));
                     }
                 });
             }

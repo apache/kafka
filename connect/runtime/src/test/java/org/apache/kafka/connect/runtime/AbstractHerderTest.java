@@ -48,7 +48,6 @@ import org.apache.kafka.connect.transforms.predicates.Predicate;
 import org.apache.kafka.connect.util.ConnectorTaskId;
 import org.easymock.Capture;
 import org.easymock.EasyMock;
-import org.easymock.IAnswer;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.powermock.api.easymock.PowerMock;
@@ -159,7 +158,7 @@ public class AbstractHerderTest {
             .createMock();
 
         EasyMock.expect(herder.generation()).andStubReturn(generation);
-        EasyMock.expect(herder.config(connector)).andReturn(null);
+        EasyMock.expect(herder.rawConfig(connector)).andReturn(null);
         EasyMock.expect(configStore.snapshot()).andReturn(SNAPSHOT);
         replayAll();
         assertEquals(Collections.singleton(CONN1), new HashSet<>(herder.connectors()));
@@ -183,7 +182,7 @@ public class AbstractHerderTest {
             .createMock();
 
         EasyMock.expect(herder.generation()).andStubReturn(generation);
-        EasyMock.expect(herder.config(connector)).andReturn(null);
+        EasyMock.expect(herder.rawConfig(connector)).andReturn(null);
         EasyMock.expect(statusStore.get(connector))
             .andReturn(new ConnectorStatus(connector, AbstractStatus.State.RUNNING, workerId, generation));
         EasyMock.expect(statusStore.getAll(connector))
@@ -207,7 +206,7 @@ public class AbstractHerderTest {
                 .createMock();
 
         EasyMock.expect(herder.generation()).andStubReturn(generation);
-        EasyMock.expect(herder.config(connector)).andReturn(null);
+        EasyMock.expect(herder.rawConfig(connector)).andReturn(null);
 
         EasyMock.expect(statusStore.get(connector))
                 .andReturn(new ConnectorStatus(connector, AbstractStatus.State.RUNNING, workerId, generation));
@@ -253,12 +252,7 @@ public class AbstractHerderTest {
         statusStore.putSafe(EasyMock.capture(statusCapture));
         EasyMock.expectLastCall();
 
-        EasyMock.expect(statusStore.get(taskId)).andAnswer(new IAnswer<TaskStatus>() {
-            @Override
-            public TaskStatus answer() throws Throwable {
-                return statusCapture.getValue();
-            }
-        });
+        EasyMock.expect(statusStore.get(taskId)).andAnswer(statusCapture::getValue);
 
         replayAll();
 

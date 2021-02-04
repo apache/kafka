@@ -27,6 +27,7 @@ import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.message.MetadataRequestData
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests.{MetadataRequest, MetadataResponse}
+import org.apache.kafka.metadata.BrokerState
 import org.apache.kafka.test.TestUtils.isValidClusterId
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{BeforeEach, Test}
@@ -307,12 +308,11 @@ class MetadataRequestTest extends BaseRequestTest {
       !response.brokers.asScala.exists(_.id == downNode.dataPlaneRequestProcessor.brokerId)
     }, "Replica was not found down", 5000)
 
-
     // Validate version 0 still filters unavailable replicas and contains error
     val v0MetadataResponse = sendMetadataRequest(new MetadataRequest(requestData(List(replicaDownTopic), true), 0.toShort))
     val v0BrokerIds = v0MetadataResponse.brokers().asScala.map(_.id).toSeq
     assertTrue(v0MetadataResponse.errors.isEmpty, "Response should have no errors")
-    assertFalse(v0BrokerIds.contains(downNode), s"The downed broker should not be in the brokers list")
+    assertFalse(v0BrokerIds.contains(downNode.config.brokerId), s"The downed broker should not be in the brokers list")
     assertTrue(v0MetadataResponse.topicMetadata.size == 1, "Response should have one topic")
     val v0PartitionMetadata = v0MetadataResponse.topicMetadata.asScala.head.partitionMetadata.asScala.head
     assertTrue(v0PartitionMetadata.error == Errors.REPLICA_NOT_AVAILABLE, "PartitionMetadata should have an error")
@@ -322,7 +322,7 @@ class MetadataRequestTest extends BaseRequestTest {
     val v1MetadataResponse = sendMetadataRequest(new MetadataRequest.Builder(List(replicaDownTopic).asJava, true).build(1))
     val v1BrokerIds = v1MetadataResponse.brokers().asScala.map(_.id).toSeq
     assertTrue(v1MetadataResponse.errors.isEmpty, "Response should have no errors")
-    assertFalse(v1BrokerIds.contains(downNode), s"The downed broker should not be in the brokers list")
+    assertFalse(v1BrokerIds.contains(downNode.config.brokerId), s"The downed broker should not be in the brokers list")
     assertEquals(1, v1MetadataResponse.topicMetadata.size, "Response should have one topic")
     val v1PartitionMetadata = v1MetadataResponse.topicMetadata.asScala.head.partitionMetadata.asScala.head
     assertEquals(Errors.NONE, v1PartitionMetadata.error, "PartitionMetadata should have no errors")
@@ -332,7 +332,7 @@ class MetadataRequestTest extends BaseRequestTest {
   @Test
   def testIsrAfterBrokerShutDownAndJoinsBack(): Unit = {
     def checkIsr(servers: Seq[KafkaServer], topic: String): Unit = {
-      val activeBrokers = servers.filter(_.brokerState.currentState != NotRunning.state)
+      val activeBrokers = servers.filter(_.brokerState.get() != BrokerState.NOT_RUNNING)
       val expectedIsr = activeBrokers.map(_.config.brokerId).toSet
 
       // Assert that topic metadata at new brokers is updated correctly
@@ -378,7 +378,7 @@ class MetadataRequestTest extends BaseRequestTest {
       val brokersInController = controllerMetadataResponse.get.brokers.asScala.toSeq.sortBy(_.id)
 
       // Assert that metadata is propagated correctly
-      servers.filter(_.brokerState.currentState != NotRunning.state).foreach { broker =>
+      servers.filter(_.brokerState.get() != BrokerState.NOT_RUNNING).foreach { broker =>
         TestUtils.waitUntilTrue(() => {
           val metadataResponse = sendMetadataRequest(MetadataRequest.Builder.allTopics.build,
             Some(brokerSocketServer(broker.config.brokerId)))
