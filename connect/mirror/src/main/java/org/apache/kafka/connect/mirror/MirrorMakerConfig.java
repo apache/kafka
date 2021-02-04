@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.connect.mirror;
 
+import java.util.Map.Entry;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.ConfigDef;
@@ -266,7 +267,7 @@ public class MirrorMakerConfig extends AbstractConfig {
     private Map<String, String> stringsWithPrefixStripped(String prefix) {
         return originalsStrings().entrySet().stream()
             .filter(x -> x.getKey().startsWith(prefix))
-            .collect(Collectors.toMap(x -> x.getKey().substring(prefix.length()), x -> x.getValue()));
+            .collect(Collectors.toMap(x -> x.getKey().substring(prefix.length()), Entry::getValue));
     }
 
     private Map<String, String> stringsWithPrefix(String prefix) {
@@ -278,12 +279,12 @@ public class MirrorMakerConfig extends AbstractConfig {
     static Map<String, String> clusterConfigsWithPrefix(String prefix, Map<String, String> props) {
         return props.entrySet().stream()
                 .filter(x -> !x.getKey().matches("(^consumer.*|^producer.*|^admin.*)"))
-                .collect(Collectors.toMap(x -> prefix + x.getKey(), x -> x.getValue()));
+                .collect(Collectors.toMap(x -> prefix + x.getKey(), Entry::getValue));
     }
 
     static Map<String, String> clientConfigsWithPrefix(String prefix, Map<String, String> props) {
         return props.entrySet().stream()
                 .filter(x -> x.getKey().matches("(^consumer.*|^producer.*|^admin.*)"))
-                .collect(Collectors.toMap(x -> prefix + x.getKey(), x -> x.getValue()));
+                .collect(Collectors.toMap(x -> prefix + x.getKey(), Entry::getValue));
     }
 }
