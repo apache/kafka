@@ -69,6 +69,7 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.fail;
 
 public class NetworkClientTest {
 
@@ -85,18 +86,25 @@ public class NetworkClientTest {
     private final NetworkClient clientWithNoExponentialBackoff = createNetworkClient(reconnectBackoffMsTest);
     private final NetworkClient clientWithStaticNodes = createNetworkClientWithStaticNodes();
     private final NetworkClient clientWithNoVersionDiscovery = createNetworkClientWithNoVersionDiscovery();
-    private ArrayList<InetAddress> initialAddresses = new ArrayList<>(Arrays.asList(
-            InetAddress.getByName("10.200.20.100"),
-            InetAddress.getByName("10.200.20.101"),
-            InetAddress.getByName("10.200.20.102")
-    ));
-    private ArrayList<InetAddress> newAddresses = new ArrayList<>(Arrays.asList(
-            InetAddress.getByName("10.200.20.103"),
-            InetAddress.getByName("10.200.20.104"),
-            InetAddress.getByName("10.200.20.105")
-    ));
 
-    public NetworkClientTest() throws UnknownHostException {
+    private static ArrayList<InetAddress> initialAddresses;
+    private static ArrayList<InetAddress> newAddresses;
+
+    static {
+        try {
+            initialAddresses = new ArrayList<>(Arrays.asList(
+                    InetAddress.getByName("10.200.20.100"),
+                    InetAddress.getByName("10.200.20.101"),
+                    InetAddress.getByName("10.200.20.102")
+            ));
+            newAddresses = new ArrayList<>(Arrays.asList(
+                    InetAddress.getByName("10.200.20.103"),
+                    InetAddress.getByName("10.200.20.104"),
+                    InetAddress.getByName("10.200.20.105")
+            ));
+        } catch (UnknownHostException e) {
+            fail("Attempted to create an invalid InetAddress, this should not happen");
+        }
     }
 
     private NetworkClient createNetworkClient(long reconnectBackoffMaxMs) {
@@ -926,7 +934,8 @@ public class NetworkClientTest {
 
     @Test
     public void testReconnectAfterAddressChange() {
-        AddressChangeHostResolver mockHostResolver = new AddressChangeHostResolver();
+        AddressChangeHostResolver mockHostResolver = new AddressChangeHostResolver(
+                initialAddresses.toArray(new InetAddress[0]), newAddresses.toArray(new InetAddress[0]));
         AtomicInteger initialAddressConns = new AtomicInteger();
         AtomicInteger newAddressConns = new AtomicInteger();
         MockSelector selector = new MockSelector(this.time, inetSocketAddress -> {
@@ -950,7 +959,7 @@ public class NetworkClientTest {
         client.poll(0, time.milliseconds());
         assertTrue(client.isReady(node, time.milliseconds()));
 
-        mockHostResolver.setUseNewAddresses();
+        mockHostResolver.changeAddresses();
         selector.serverDisconnect(node.idString());
         client.poll(0, time.milliseconds());
         assertFalse(client.isReady(node, time.milliseconds()));
@@ -969,7 +978,8 @@ public class NetworkClientTest {
 
     @Test
     public void testFailedConnectionToFirstAddress() {
-        AddressChangeHostResolver mockHostResolver = new AddressChangeHostResolver();
+        AddressChangeHostResolver mockHostResolver = new AddressChangeHostResolver(
+                initialAddresses.toArray(new InetAddress[0]), newAddresses.toArray(new InetAddress[0]));
         AtomicInteger initialAddressConns = new AtomicInteger();
         AtomicInteger newAddressConns = new AtomicInteger();
         MockSelector selector = new MockSelector(this.time, inetSocketAddress -> {
@@ -1009,7 +1019,8 @@ public class NetworkClientTest {
 
     @Test
     public void testFailedConnectionToFirstAddressAfterReconnect() {
-        AddressChangeHostResolver mockHostResolver = new AddressChangeHostResolver();
+        AddressChangeHostResolver mockHostResolver = new AddressChangeHostResolver(
+                initialAddresses.toArray(new InetAddress[0]), newAddresses.toArray(new InetAddress[0]));
         AtomicInteger initialAddressConns = new AtomicInteger();
         AtomicInteger newAddressConns = new AtomicInteger();
         MockSelector selector = new MockSelector(this.time, inetSocketAddress -> {
@@ -1033,7 +1044,7 @@ public class NetworkClientTest {
         client.poll(0, time.milliseconds());
         assertTrue(client.isReady(node, time.milliseconds()));
 
-        mockHostResolver.setUseNewAddresses();
+        mockHostResolver.changeAddresses();
         selector.serverDisconnect(node.idString());
         client.poll(0, time.milliseconds());
         assertFalse(client.isReady(node, time.milliseconds()));
@@ -1110,31 +1121,6 @@ public class NetworkClientTest {
             KafkaException failure = this.failure;
             this.failure = null;
             return failure;
-        }
-    }
-
-    private class AddressChangeHostResolver implements HostResolver {
-        private boolean useNewAddresses;
-        private InetAddress[] initialAddressArray = initialAddresses.toArray(new InetAddress[0]);
-        private InetAddress[] newAddressArray = newAddresses.toArray(new InetAddress[0]);
-        private int resolutionCount = 0;
-
-        @Override
-        public InetAddress[] resolve(String host) {
-            ++resolutionCount;
-            return useNewAddresses ? newAddressArray : initialAddressArray;
-        }
-
-        public void setUseNewAddresses() {
-            useNewAddresses = true;
-        }
-
-        public boolean useNewAddresses() {
-            return useNewAddresses;
-        }
-
-        public int resolutionCount() {
-            return resolutionCount;
         }
     }
 }

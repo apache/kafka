@@ -14,16 +14,36 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package org.apache.kafka.clients;
 
 import java.net.InetAddress;
-import java.net.UnknownHostException;
 
-public class DefaultHostResolver implements HostResolver {
+class AddressChangeHostResolver implements HostResolver {
+    private boolean useNewAddresses;
+    private InetAddress[] initialAddresses;
+    private InetAddress[] newAddresses;
+    private int resolutionCount = 0;
+
+    public AddressChangeHostResolver(InetAddress[] initialAddresses, InetAddress[] newAddresses) {
+        this.initialAddresses = initialAddresses;
+        this.newAddresses = newAddresses;
+    }
 
     @Override
-    public InetAddress[] resolve(String host) throws UnknownHostException {
-        return InetAddress.getAllByName(host);
+    public InetAddress[] resolve(String host) {
+        ++resolutionCount;
+        return useNewAddresses ? newAddresses : initialAddresses;
+    }
+
+    public void changeAddresses() {
+        useNewAddresses = true;
+    }
+
+    public boolean useNewAddresses() {
+        return useNewAddresses;
+    }
+
+    public int resolutionCount() {
+        return resolutionCount;
     }
 }
