@@ -32,6 +32,7 @@ import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.function.Predicate;
 
 /**
  * A fake selector to use for testing
@@ -46,14 +47,22 @@ public class MockSelector implements Selectable {
     private final Map<String, ChannelState> disconnected = new HashMap<>();
     private final List<String> connected = new ArrayList<>();
     private final List<DelayedReceive> delayedReceives = new ArrayList<>();
+    private final Predicate<InetSocketAddress> canConnect;
 
     public MockSelector(Time time) {
+        this(time, null);
+    }
+
+    public MockSelector(Time time, Predicate<InetSocketAddress> canConnect) {
         this.time = time;
+        this.canConnect = canConnect;
     }
 
     @Override
     public void connect(String id, InetSocketAddress address, int sendBufferSize, int receiveBufferSize) throws IOException {
-        this.connected.add(id);
+        if (canConnect == null || canConnect.test(address)) {
+            this.connected.add(id);
+        }
     }
 
     @Override
