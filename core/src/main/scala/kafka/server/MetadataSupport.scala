@@ -36,7 +36,7 @@ sealed trait MetadataSupport {
    * @return this instance downcast for use with ZooKeeper
    * @throws Exception if this instance is not for ZooKeeper
    */
-  def requireZk(createException: => Exception): ZkSupport
+  def requireZkOrThrow(createException: => Exception): ZkSupport
 
   /**
    * Return this instance downcast for use with Raft
@@ -45,7 +45,7 @@ sealed trait MetadataSupport {
    * @return this instance downcast for use with Raft
    * @throws Exception if this instance is not for Raft
    */
-  def requireRaft(createException: => Exception): RaftSupport
+  def requireRaftOrThrow(createException: => Exception): RaftSupport
 
   /**
    * Confirm that this instance is consistent with the given config
@@ -66,8 +66,8 @@ case class ZkSupport(adminManager: ZkAdminManager,
                      forwardingManager: Option[ForwardingManager]) extends MetadataSupport {
   val adminZkClient = new AdminZkClient(zkClient)
 
-  override def requireZk(createException: => Exception): ZkSupport = this
-  override def requireRaft(createException: => Exception): RaftSupport = throw createException
+  override def requireZkOrThrow(createException: => Exception): ZkSupport = this
+  override def requireRaftOrThrow(createException: => Exception): RaftSupport = throw createException
 
   override def confirmConsistentWith(config: KafkaConfig): Unit = {
     if (!config.requiresZookeeper) {
@@ -88,8 +88,8 @@ case class ZkSupport(adminManager: ZkAdminManager,
 
 case class RaftSupport(fwdMgr: ForwardingManager) extends MetadataSupport {
   override val forwardingManager: Option[ForwardingManager] = Some(fwdMgr)
-  override def requireZk(createException: => Exception): ZkSupport = throw createException
-  override def requireRaft(createException: => Exception): RaftSupport = this
+  override def requireZkOrThrow(createException: => Exception): ZkSupport = throw createException
+  override def requireRaftOrThrow(createException: => Exception): RaftSupport = this
 
   override def confirmConsistentWith(config: KafkaConfig): Unit = {
     if (config.requiresZookeeper) {

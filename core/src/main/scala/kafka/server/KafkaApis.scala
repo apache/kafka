@@ -244,7 +244,7 @@ class KafkaApis(val requestChannel: RequestChannel,
   }
 
   def handleLeaderAndIsrRequest(request: RequestChannel.Request): Unit = {
-    val zkSupport = metadataSupport.requireZk(shouldNeverReceive(request))
+    val zkSupport = metadataSupport.requireZkOrThrow(shouldNeverReceive(request))
     // ensureTopicExists is only for client facing requests
     // We can't have the ensureTopicExists check here since the controller sends it as an advisory to all brokers so they
     // stop serving data to clients for the topic being deleted
@@ -266,7 +266,7 @@ class KafkaApis(val requestChannel: RequestChannel,
   }
 
   def handleStopReplicaRequest(request: RequestChannel.Request): Unit = {
-    val zkSupport = metadataSupport.requireZk(shouldNeverReceive(request))
+    val zkSupport = metadataSupport.requireZkOrThrow(shouldNeverReceive(request))
     // ensureTopicExists is only for client facing requests
     // We can't have the ensureTopicExists check here since the controller sends it as an advisory to all brokers so they
     // stop serving data to clients for the topic being deleted
@@ -323,7 +323,7 @@ class KafkaApis(val requestChannel: RequestChannel,
   }
 
   def handleUpdateMetadataRequest(request: RequestChannel.Request): Unit = {
-    val zkSupport = metadataSupport.requireZk(shouldNeverReceive(request))
+    val zkSupport = metadataSupport.requireZkOrThrow(shouldNeverReceive(request))
     val correlationId = request.header.correlationId
     val updateMetadataRequest = request.body[UpdateMetadataRequest]
 
@@ -365,7 +365,7 @@ class KafkaApis(val requestChannel: RequestChannel,
   }
 
   def handleControlledShutdownRequest(request: RequestChannel.Request): Unit = {
-    val zkSupport = metadataSupport.requireZk(shouldNeverReceive(request))
+    val zkSupport = metadataSupport.requireZkOrThrow(shouldNeverReceive(request))
     // ensureTopicExists is only for client facing requests
     // We can't have the ensureTopicExists check here since the controller sends it as an advisory to all brokers so they
     // stop serving data to clients for the topic being deleted
@@ -455,7 +455,7 @@ class KafkaApis(val requestChannel: RequestChannel,
         sendResponseCallback(Map.empty)
       else if (header.apiVersion == 0) {
         // for version 0 always store offsets to ZK
-        val zkSupport = metadataSupport.requireZk(unsupported("Version 0 offset commit requests"))
+        val zkSupport = metadataSupport.requireZkOrThrow(unsupported("Version 0 offset commit requests"))
         val responseInfo = authorizedTopicRequestInfo.map {
           case (topicPartition, partitionData) =>
             try {
@@ -1090,7 +1090,7 @@ class KafkaApis(val requestChannel: RequestChannel,
                           replicationFactor: Int,
                           properties: util.Properties = new util.Properties()): MetadataResponseTopic = {
     // the below will be replaced once KAFKA-9751 is implemented
-    val zkSupport = metadataSupport.requireZk(notYetSupported("Auto topic creation"))
+    val zkSupport = metadataSupport.requireZkOrThrow(notYetSupported("Auto topic creation"))
     try {
       zkSupport.adminZkClient.createTopic(topic, numPartitions, replicationFactor, properties, RackAwareMode.Safe, config.usesTopicId)
       info("Auto creation of topic %s with %d partitions and replication factor %d is successful"
@@ -1304,7 +1304,7 @@ class KafkaApis(val requestChannel: RequestChannel,
           offsetFetchRequest.getErrorResponse(requestThrottleMs, Errors.GROUP_AUTHORIZATION_FAILED)
         else {
           if (header.apiVersion == 0) {
-            val zkSupport = metadataSupport.requireZk(unsupported("Version 0 offset fetch requests"))
+            val zkSupport = metadataSupport.requireZkOrThrow(unsupported("Version 0 offset fetch requests"))
             val (authorizedPartitions, unauthorizedPartitions) = partitionByAuthorized(
               offsetFetchRequest.partitions.asScala)
 
@@ -1780,7 +1780,7 @@ class KafkaApis(val requestChannel: RequestChannel,
   }
 
   def handleCreateTopicsRequest(request: RequestChannel.Request): Unit = {
-    val zkSupport = metadataSupport.requireZk(shouldAlwaysBeForwarded(request))
+    val zkSupport = metadataSupport.requireZkOrThrow(shouldAlwaysBeForwarded(request))
     val controllerMutationQuota = quotas.controllerMutation.newQuotaFor(request, strictSinceVersion = 6)
 
     def sendResponseCallback(results: CreatableTopicResultCollection): Unit = {
@@ -1861,7 +1861,7 @@ class KafkaApis(val requestChannel: RequestChannel,
   }
 
   def handleCreatePartitionsRequest(request: RequestChannel.Request): Unit = {
-    val zkSupport = metadataSupport.requireZk(shouldAlwaysBeForwarded(request))
+    val zkSupport = metadataSupport.requireZkOrThrow(shouldAlwaysBeForwarded(request))
     val createPartitionsRequest = request.body[CreatePartitionsRequest]
     val controllerMutationQuota = quotas.controllerMutation.newQuotaFor(request, strictSinceVersion = 3)
 
@@ -1916,7 +1916,7 @@ class KafkaApis(val requestChannel: RequestChannel,
   }
 
   def handleDeleteTopicsRequest(request: RequestChannel.Request): Unit = {
-    val zkSupport = metadataSupport.requireZk(shouldAlwaysBeForwarded(request))
+    val zkSupport = metadataSupport.requireZkOrThrow(shouldAlwaysBeForwarded(request))
     val controllerMutationQuota = quotas.controllerMutation.newQuotaFor(request, strictSinceVersion = 5)
 
     def sendResponseCallback(results: DeletableTopicResultCollection): Unit = {
@@ -2491,7 +2491,7 @@ class KafkaApis(val requestChannel: RequestChannel,
   }
 
   def handleCreateAcls(request: RequestChannel.Request): Unit = {
-    metadataSupport.requireZk(shouldAlwaysBeForwarded(request))
+    metadataSupport.requireZkOrThrow(shouldAlwaysBeForwarded(request))
     authHelper.authorizeClusterOperation(request, ALTER)
     val createAclsRequest = request.body[CreateAclsRequest]
 
@@ -2543,7 +2543,7 @@ class KafkaApis(val requestChannel: RequestChannel,
   }
 
   def handleDeleteAcls(request: RequestChannel.Request): Unit = {
-    metadataSupport.requireZk(shouldAlwaysBeForwarded(request))
+    metadataSupport.requireZkOrThrow(shouldAlwaysBeForwarded(request))
     authHelper.authorizeClusterOperation(request, ALTER)
     val deleteAclsRequest = request.body[DeleteAclsRequest]
     authorizer match {
@@ -2605,7 +2605,7 @@ class KafkaApis(val requestChannel: RequestChannel,
   }
 
   def handleAlterConfigsRequest(request: RequestChannel.Request): Unit = {
-    val zkSupport = metadataSupport.requireZk(shouldAlwaysBeForwarded(request))
+    val zkSupport = metadataSupport.requireZkOrThrow(shouldAlwaysBeForwarded(request))
     val alterConfigsRequest = request.body[AlterConfigsRequest]
     val (authorizedResources, unauthorizedResources) = alterConfigsRequest.configs.asScala.toMap.partition { case (resource, _) =>
       resource.`type` match {
@@ -2638,7 +2638,7 @@ class KafkaApis(val requestChannel: RequestChannel,
   }
 
   def handleAlterPartitionReassignmentsRequest(request: RequestChannel.Request): Unit = {
-    val zkSupport = metadataSupport.requireZk(shouldAlwaysBeForwarded(request))
+    val zkSupport = metadataSupport.requireZkOrThrow(shouldAlwaysBeForwarded(request))
     authHelper.authorizeClusterOperation(request, ALTER)
     val alterPartitionReassignmentsRequest = request.body[AlterPartitionReassignmentsRequest]
 
@@ -2680,7 +2680,7 @@ class KafkaApis(val requestChannel: RequestChannel,
   }
 
   def handleListPartitionReassignmentsRequest(request: RequestChannel.Request): Unit = {
-    val zkSupport = metadataSupport.requireZk(notYetSupported(request))
+    val zkSupport = metadataSupport.requireZkOrThrow(notYetSupported(request))
     authHelper.authorizeClusterOperation(request, DESCRIBE)
     val listPartitionReassignmentsRequest = request.body[ListPartitionReassignmentsRequest]
 
@@ -2734,7 +2734,7 @@ class KafkaApis(val requestChannel: RequestChannel,
   }
 
   def handleIncrementalAlterConfigsRequest(request: RequestChannel.Request): Unit = {
-    val zkSupport = metadataSupport.requireZk(shouldAlwaysBeForwarded(request))
+    val zkSupport = metadataSupport.requireZkOrThrow(shouldAlwaysBeForwarded(request))
     val alterConfigsRequest = request.body[IncrementalAlterConfigsRequest]
 
     val configs = alterConfigsRequest.data.resources.iterator.asScala.map { alterConfigResource =>
@@ -2840,7 +2840,7 @@ class KafkaApis(val requestChannel: RequestChannel,
   }
 
   def handleCreateTokenRequest(request: RequestChannel.Request): Unit = {
-    metadataSupport.requireZk(shouldAlwaysBeForwarded(request))
+    metadataSupport.requireZkOrThrow(shouldAlwaysBeForwarded(request))
     val createTokenRequest = request.body[CreateDelegationTokenRequest]
 
     // the callback for sending a create token response
@@ -2875,7 +2875,7 @@ class KafkaApis(val requestChannel: RequestChannel,
   }
 
   def handleRenewTokenRequest(request: RequestChannel.Request): Unit = {
-    metadataSupport.requireZk(shouldAlwaysBeForwarded(request))
+    metadataSupport.requireZkOrThrow(shouldAlwaysBeForwarded(request))
     val renewTokenRequest = request.body[RenewDelegationTokenRequest]
 
     // the callback for sending a renew token response
@@ -2903,7 +2903,7 @@ class KafkaApis(val requestChannel: RequestChannel,
   }
 
   def handleExpireTokenRequest(request: RequestChannel.Request): Unit = {
-    metadataSupport.requireZk(shouldAlwaysBeForwarded(request))
+    metadataSupport.requireZkOrThrow(shouldAlwaysBeForwarded(request))
     val expireTokenRequest = request.body[ExpireDelegationTokenRequest]
 
     // the callback for sending a expire token response
@@ -2976,7 +2976,7 @@ class KafkaApis(val requestChannel: RequestChannel,
   }
 
   def handleElectReplicaLeader(request: RequestChannel.Request): Unit = {
-    val zkSupport = metadataSupport.requireZk(notYetSupported(request))
+    val zkSupport = metadataSupport.requireZkOrThrow(notYetSupported(request))
 
     val electionRequest = request.body[ElectLeadersRequest]
 
@@ -3106,7 +3106,7 @@ class KafkaApis(val requestChannel: RequestChannel,
   }
 
   def handleDescribeClientQuotasRequest(request: RequestChannel.Request): Unit = {
-    val zkSupport = metadataSupport.requireZk(notYetSupported(request))
+    val zkSupport = metadataSupport.requireZkOrThrow(notYetSupported(request))
     val describeClientQuotasRequest = request.body[DescribeClientQuotasRequest]
 
     if (authHelper.authorize(request.context, DESCRIBE_CONFIGS, CLUSTER, CLUSTER_NAME)) {
@@ -3141,7 +3141,7 @@ class KafkaApis(val requestChannel: RequestChannel,
   }
 
   def handleAlterClientQuotasRequest(request: RequestChannel.Request): Unit = {
-    val zkSupport = metadataSupport.requireZk(shouldAlwaysBeForwarded(request))
+    val zkSupport = metadataSupport.requireZkOrThrow(shouldAlwaysBeForwarded(request))
     val alterClientQuotasRequest = request.body[AlterClientQuotasRequest]
 
     if (authHelper.authorize(request.context, ALTER_CONFIGS, CLUSTER, CLUSTER_NAME)) {
@@ -3172,7 +3172,7 @@ class KafkaApis(val requestChannel: RequestChannel,
   }
 
   def handleDescribeUserScramCredentialsRequest(request: RequestChannel.Request): Unit = {
-    val zkSupport = metadataSupport.requireZk(notYetSupported(request))
+    val zkSupport = metadataSupport.requireZkOrThrow(notYetSupported(request))
     val describeUserScramCredentialsRequest = request.body[DescribeUserScramCredentialsRequest]
 
     if (authHelper.authorize(request.context, DESCRIBE, CLUSTER, CLUSTER_NAME)) {
@@ -3187,7 +3187,7 @@ class KafkaApis(val requestChannel: RequestChannel,
   }
 
   def handleAlterUserScramCredentialsRequest(request: RequestChannel.Request): Unit = {
-    val zkSupport = metadataSupport.requireZk(shouldAlwaysBeForwarded(request))
+    val zkSupport = metadataSupport.requireZkOrThrow(shouldAlwaysBeForwarded(request))
     val alterUserScramCredentialsRequest = request.body[AlterUserScramCredentialsRequest]
 
     if (!zkSupport.controller.isActive) {
@@ -3205,7 +3205,7 @@ class KafkaApis(val requestChannel: RequestChannel,
   }
 
   def handleAlterIsrRequest(request: RequestChannel.Request): Unit = {
-    val zkSupport = metadataSupport.requireZk(shouldNeverReceive(request))
+    val zkSupport = metadataSupport.requireZkOrThrow(shouldNeverReceive(request))
     val alterIsrRequest = request.body[AlterIsrRequest]
     authHelper.authorizeClusterOperation(request, CLUSTER_ACTION)
 
@@ -3219,7 +3219,7 @@ class KafkaApis(val requestChannel: RequestChannel,
   }
 
   def handleUpdateFeatures(request: RequestChannel.Request): Unit = {
-    val zkSupport = metadataSupport.requireZk(shouldAlwaysBeForwarded(request))
+    val zkSupport = metadataSupport.requireZkOrThrow(shouldAlwaysBeForwarded(request))
     val updateFeaturesRequest = request.body[UpdateFeaturesRequest]
 
     def sendResponseCallback(errors: Either[ApiError, Map[String, ApiError]]): Unit = {
@@ -3286,7 +3286,7 @@ class KafkaApis(val requestChannel: RequestChannel,
   }
 
   def handleEnvelope(request: RequestChannel.Request): Unit = {
-    val zkSupport = metadataSupport.requireZk(shouldNeverReceive(request))
+    val zkSupport = metadataSupport.requireZkOrThrow(shouldNeverReceive(request))
     val envelope = request.body[EnvelopeRequest]
 
     // If forwarding is not yet enabled or this request has been received on an invalid endpoint,
