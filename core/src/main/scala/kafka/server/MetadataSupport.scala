@@ -60,8 +60,7 @@ case class ZkSupport(adminManager: ZkAdminManager,
                      controller: KafkaController,
                      zkClient: KafkaZkClient,
                      forwardingManager: Option[ForwardingManager]) extends MetadataSupport {
-  private val _adminZkClient = new AdminZkClient(zkClient)
-  def adminZkClient: AdminZkClient = _adminZkClient
+  val adminZkClient = new AdminZkClient(zkClient)
 }
 
 case class RaftSupport(fwdMgr: ForwardingManager) extends MetadataSupport {
