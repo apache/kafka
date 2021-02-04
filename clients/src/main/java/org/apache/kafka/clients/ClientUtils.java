@@ -100,8 +100,8 @@ public final class ClientUtils {
                 clientSaslMechanism, time, true);
     }
 
-    static List<InetAddress> resolve(String host, ClientDnsLookup clientDnsLookup) throws UnknownHostException {
-        InetAddress[] addresses = InetAddress.getAllByName(host);
+    static List<InetAddress> resolve(String host, ClientDnsLookup clientDnsLookup, HostResolver hostResolver) throws UnknownHostException {
+        InetAddress[] addresses = hostResolver.resolve(host);
         if (ClientDnsLookup.USE_ALL_DNS_IPS == clientDnsLookup) {
             return filterPreferredAddresses(addresses);
         } else {
