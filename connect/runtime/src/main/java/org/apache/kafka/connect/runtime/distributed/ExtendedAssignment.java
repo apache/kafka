@@ -16,9 +16,14 @@
  */
 package org.apache.kafka.connect.runtime.distributed;
 
-import org.apache.kafka.common.protocol.types.Struct;
+import org.apache.kafka.common.protocol.ByteBufferAccessor;
+import org.apache.kafka.common.protocol.MessageUtil;
+import org.apache.kafka.common.protocol.types.SchemaException;
+import org.apache.kafka.connect.internals.generated.ExtendedConnectAssignment;
 import org.apache.kafka.connect.util.ConnectorTaskId;
 
+import java.nio.ByteBuffer;
+import java.util.AbstractMap;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
@@ -30,32 +35,83 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.stream.Collectors;
 
-import static org.apache.kafka.connect.runtime.distributed.ConnectProtocol.ASSIGNMENT_KEY_NAME;
-import static org.apache.kafka.connect.runtime.distributed.ConnectProtocol.CONFIG_OFFSET_KEY_NAME;
-import static org.apache.kafka.connect.runtime.distributed.ConnectProtocol.CONNECTOR_KEY_NAME;
 import static org.apache.kafka.connect.runtime.distributed.ConnectProtocol.CONNECTOR_TASK;
-import static org.apache.kafka.connect.runtime.distributed.ConnectProtocol.ERROR_KEY_NAME;
-import static org.apache.kafka.connect.runtime.distributed.ConnectProtocol.LEADER_KEY_NAME;
-import static org.apache.kafka.connect.runtime.distributed.ConnectProtocol.LEADER_URL_KEY_NAME;
-import static org.apache.kafka.connect.runtime.distributed.ConnectProtocol.TASKS_KEY_NAME;
-import static org.apache.kafka.connect.runtime.distributed.IncrementalCooperativeConnectProtocol.ASSIGNMENT_V1;
-import static org.apache.kafka.connect.runtime.distributed.IncrementalCooperativeConnectProtocol.CONNECTOR_ASSIGNMENT_V1;
-import static org.apache.kafka.connect.runtime.distributed.IncrementalCooperativeConnectProtocol.CONNECT_PROTOCOL_V1;
-import static org.apache.kafka.connect.runtime.distributed.IncrementalCooperativeConnectProtocol.REVOKED_KEY_NAME;
-import static org.apache.kafka.connect.runtime.distributed.IncrementalCooperativeConnectProtocol.SCHEDULED_DELAY_KEY_NAME;
 
 /**
  * The extended assignment of connectors and tasks that includes revoked connectors and tasks
  * as well as a scheduled rebalancing delay.
  */
-public class ExtendedAssignment extends ConnectProtocol.Assignment {
+public class ExtendedAssignment extends Assignment {
+
+    public static ByteBuffer toByteBuffer(ExtendedAssignment assignment) {
+        if (assignment == null || ExtendedAssignment.empty().equals(assignment)) return null;
+        return MessageUtil.toVersionPrefixedByteBuffer(ExtendedConnectAssignment.HIGHEST_SUPPORTED_VERSION, new ExtendedConnectAssignment()
+                .setError(assignment.error())
+                .setLeader(assignment.leader())
+                .setLeaderUrl(assignment.leaderUrl())
+                .setConfigOffset(assignment.offset())
+                .setConnectorTasks(to(assignment.asMap()))
+                .setRevokedTasks(to(assignment.revokedAsMap()))
+                .setDelayMs(assignment.delay()));
+    }
+
+    private static List<ExtendedConnectAssignment.ConnectorTask> to(Map<String, List<Integer>> map) {
+        return map == null ? null : map.entrySet().stream().map(entry -> new ExtendedConnectAssignment.ConnectorTask()
+                .setConnector(entry.getKey())
+                .setTaskIds(entry.getValue()))
+                .collect(Collectors.toList());
+    }
+
+    /**
+     * Given a byte buffer that contains an assignment as defined by this protocol, return the
+     * deserialized form of the assignment.
+     *
+     * @param buffer the buffer containing a serialized assignment
+     * @return the deserialized assignment
+     * @throws SchemaException on incompatible Connect protocol version
+     */
+    public static ExtendedAssignment of(ByteBuffer buffer) {
+        if (buffer == null) return null;
+        short version = buffer.getShort();
+        if (version >= ExtendedConnectAssignment.LOWEST_SUPPORTED_VERSION && version <= ExtendedConnectAssignment.HIGHEST_SUPPORTED_VERSION) {
+            ExtendedConnectAssignment assignment = new ExtendedConnectAssignment(new ByteBufferAccessor(buffer), version);
+            AbstractMap.SimpleEntry<Collection<String>, Collection<ConnectorTaskId>> newConnectors =
+                    extract(assignment.connectorTasks());
+            AbstractMap.SimpleEntry<Collection<String>, Collection<ConnectorTaskId>> revokedConnectors =
+                    extract(assignment.revokedTasks());
+            return new ExtendedAssignment(
+                    version,
+                    assignment.error(),
+                    assignment.leader(),
+                    assignment.leaderUrl(),
+                    assignment.configOffset(),
+                    newConnectors.getKey(),
+                    newConnectors.getValue(),
+                    revokedConnectors.getKey(),
+                    revokedConnectors.getValue(),
+                    assignment.delayMs());
+        } else throw new SchemaException("Unsupported subscription version: " + version);
+    }
+
+    static AbstractMap.SimpleEntry<Collection<String>, Collection<ConnectorTaskId>> extract(
+            Collection<ExtendedConnectAssignment.ConnectorTask> tasks) {
+        if (tasks == null) return new AbstractMap.SimpleEntry<>(Collections.emptyList(), Collections.emptyList());
+        List<String> connectorIds = new ArrayList<>();
+        List<ConnectorTaskId> taskIds = new ArrayList<>();
+        tasks.forEach(connectorTask -> connectorTask.taskIds().forEach(id -> {
+            if (id == CONNECTOR_TASK) connectorIds.add(connectorTask.connector());
+            else taskIds.add(new ConnectorTaskId(connectorTask.connector(), id));
+        }));
+        return new AbstractMap.SimpleEntry<>(connectorIds, taskIds);
+    }
+
     private final short version;
     private final Collection<String> revokedConnectorIds;
     private final Collection<ConnectorTaskId> revokedTaskIds;
     private final int delay;
 
     private static final ExtendedAssignment EMPTY = new ExtendedAssignment(
-            CONNECT_PROTOCOL_V1, ConnectProtocol.Assignment.NO_ERROR, null, null, -1,
+            ConnectProtocolCompatibility.COMPATIBLE.protocolVersion(), Assignment.NO_ERROR, null, null, -1,
             Collections.emptyList(), Collections.emptyList(), Collections.emptyList(), Collections.emptyList(), 0);
 
     /**
@@ -160,12 +216,12 @@ public class ExtendedAssignment extends ConnectProtocol.Assignment {
                 '}';
     }
 
-    private Map<String, Collection<Integer>> revokedAsMap() {
+    private Map<String, List<Integer>> revokedAsMap() {
         if (revokedConnectorIds == null && revokedTaskIds == null) {
             return null;
         }
         // Using LinkedHashMap preserves the ordering, which is helpful for tests and debugging
-        Map<String, Collection<Integer>> taskMap = new LinkedHashMap<>();
+        Map<String, List<Integer>> taskMap = new LinkedHashMap<>();
         Optional.ofNullable(revokedConnectorIds)
                 .orElseGet(Collections::emptyList)
                 .stream()
@@ -186,99 +242,4 @@ public class ExtendedAssignment extends ConnectProtocol.Assignment {
                 });
         return taskMap;
     }
-
-    /**
-     * Return the {@code Struct} that corresponds to this assignment.
-     *
-     * @return the assignment struct
-     */
-    public Struct toStruct() {
-        Collection<Struct> assigned = taskAssignments(asMap());
-        Collection<Struct> revoked = taskAssignments(revokedAsMap());
-        return new Struct(ASSIGNMENT_V1)
-                .set(ERROR_KEY_NAME, error())
-                .set(LEADER_KEY_NAME, leader())
-                .set(LEADER_URL_KEY_NAME, leaderUrl())
-                .set(CONFIG_OFFSET_KEY_NAME, offset())
-                .set(ASSIGNMENT_KEY_NAME, assigned != null ? assigned.toArray() : null)
-                .set(REVOKED_KEY_NAME, revoked != null ? revoked.toArray() : null)
-                .set(SCHEDULED_DELAY_KEY_NAME, delay);
-    }
-
-    /**
-     * Given a {@code Struct} that encodes an assignment return the assignment object.
-     *
-     * @param struct a struct representing an assignment
-     * @return the assignment
-     */
-    public static ExtendedAssignment fromStruct(short version, Struct struct) {
-        return struct == null
-               ? null
-               : new ExtendedAssignment(
-                       version,
-                       struct.getShort(ERROR_KEY_NAME),
-                       struct.getString(LEADER_KEY_NAME),
-                       struct.getString(LEADER_URL_KEY_NAME),
-                       struct.getLong(CONFIG_OFFSET_KEY_NAME),
-                       extractConnectors(struct, ASSIGNMENT_KEY_NAME),
-                       extractTasks(struct, ASSIGNMENT_KEY_NAME),
-                       extractConnectors(struct, REVOKED_KEY_NAME),
-                       extractTasks(struct, REVOKED_KEY_NAME),
-                       struct.getInt(SCHEDULED_DELAY_KEY_NAME));
-    }
-
-    private static Collection<Struct> taskAssignments(Map<String, Collection<Integer>> assignments) {
-        return assignments == null
-               ? null
-               : assignments.entrySet().stream()
-                       .map(connectorEntry -> {
-                           Struct taskAssignment = new Struct(CONNECTOR_ASSIGNMENT_V1);
-                           taskAssignment.set(CONNECTOR_KEY_NAME, connectorEntry.getKey());
-                           taskAssignment.set(TASKS_KEY_NAME, connectorEntry.getValue().toArray());
-                           return taskAssignment;
-                       }).collect(Collectors.toList());
-    }
-
-    private static Collection<String> extractConnectors(Struct struct, String key) {
-        assert REVOKED_KEY_NAME.equals(key) || ASSIGNMENT_KEY_NAME.equals(key);
-
-        Object[] connectors = struct.getArray(key);
-        if (connectors == null) {
-            return Collections.emptyList();
-        }
-        List<String> connectorIds = new ArrayList<>();
-        for (Object structObj : connectors) {
-            Struct assignment = (Struct) structObj;
-            String connector = assignment.getString(CONNECTOR_KEY_NAME);
-            for (Object taskIdObj : assignment.getArray(TASKS_KEY_NAME)) {
-                Integer taskId = (Integer) taskIdObj;
-                if (taskId == CONNECTOR_TASK) {
-                    connectorIds.add(connector);
-                }
-            }
-        }
-        return connectorIds;
-    }
-
-    private static Collection<ConnectorTaskId> extractTasks(Struct struct, String key) {
-        assert REVOKED_KEY_NAME.equals(key) || ASSIGNMENT_KEY_NAME.equals(key);
-
-        Object[] tasks = struct.getArray(key);
-        if (tasks == null) {
-            return Collections.emptyList();
-        }
-        List<ConnectorTaskId> tasksIds = new ArrayList<>();
-        for (Object structObj : tasks) {
-            Struct assignment = (Struct) structObj;
-            String connector = assignment.getString(CONNECTOR_KEY_NAME);
-            for (Object taskIdObj : assignment.getArray(TASKS_KEY_NAME)) {
-                Integer taskId = (Integer) taskIdObj;
-                if (taskId != CONNECTOR_TASK) {
-                    tasksIds.add(new ConnectorTaskId(connector, taskId));
-                }
-            }
-        }
-        return tasksIds;
-    }
-
 }

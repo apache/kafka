@@ -343,7 +343,7 @@ public class DistributedConfig extends WorkerConfig {
                     ConfigDef.LambdaValidator.with(
                         (name, value) -> {
                             try {
-                                ConnectProtocolCompatibility.compatibility((String) value);
+                                ConnectProtocolCompatibility.fromName((String) value);
                             } catch (Throwable t) {
                                 throw new ConfigException(name, value, "Invalid Connect protocol "
                                         + "compatibility");

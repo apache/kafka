@@ -16,12 +16,7 @@
  */
 package org.apache.kafka.connect.runtime.distributed;
 
-import java.util.Arrays;
 import java.util.Locale;
-
-import static org.apache.kafka.connect.runtime.distributed.ConnectProtocol.CONNECT_PROTOCOL_V0;
-import static org.apache.kafka.connect.runtime.distributed.IncrementalCooperativeConnectProtocol.CONNECT_PROTOCOL_V1;
-import static org.apache.kafka.connect.runtime.distributed.IncrementalCooperativeConnectProtocol.CONNECT_PROTOCOL_V2;
 
 /**
  * An enumeration of the modes available to the worker to signal which Connect protocols are
@@ -47,7 +42,7 @@ public enum ConnectProtocolCompatibility {
 
         @Override
         public short protocolVersion() {
-            return CONNECT_PROTOCOL_V0;
+            return 0;
         }
     },
 
@@ -59,7 +54,7 @@ public enum ConnectProtocolCompatibility {
 
         @Override
         public short protocolVersion() {
-            return CONNECT_PROTOCOL_V1;
+            return 1;
         }
     },
 
@@ -71,7 +66,7 @@ public enum ConnectProtocolCompatibility {
 
         @Override
         public short protocolVersion() {
-            return CONNECT_PROTOCOL_V2;
+            return 2;
         }
     };
 
@@ -82,33 +77,25 @@ public enum ConnectProtocolCompatibility {
      * @param name the name of the protocol compatibility mode
      * @return the enum that corresponds to the protocol compatibility mode
      */
-    public static ConnectProtocolCompatibility compatibility(String name) {
-        return Arrays.stream(ConnectProtocolCompatibility.values())
-                .filter(mode -> mode.name().equalsIgnoreCase(name))
-                .findFirst()
-                .orElseThrow(() -> new IllegalArgumentException(
-                        "Unknown Connect protocol compatibility mode: " + name));
+    public static ConnectProtocolCompatibility fromName(String name) {
+        if (EAGER.name().equalsIgnoreCase(name)) return EAGER;
+        if (COMPATIBLE.name().equalsIgnoreCase(name)) return COMPATIBLE;
+        if (SESSIONED.name().equalsIgnoreCase(name)) return SESSIONED;
+        throw new IllegalArgumentException("Unknown Connect protocol compatibility mode: " + name);
     }
 
     /**
      * Return the enum that corresponds to the Connect protocol version that is given as an argument;
      * if no mapping is found {@code IllegalArgumentException} is thrown.
      *
-     * @param protocolVersion the version of the protocol; for example,
-     * {@link ConnectProtocol#CONNECT_PROTOCOL_V0 CONNECT_PROTOCOL_V0}. May not be null
+     * @param protocolVersion the version of the protocol;
      * @return the enum that corresponds to the protocol compatibility mode
      */
     public static ConnectProtocolCompatibility fromProtocolVersion(short protocolVersion) {
-        switch (protocolVersion) {
-            case CONNECT_PROTOCOL_V0:
-                return EAGER;
-            case CONNECT_PROTOCOL_V1:
-                return COMPATIBLE;
-            case CONNECT_PROTOCOL_V2:
-                return SESSIONED;
-            default:
-                throw new IllegalArgumentException("Unknown Connect protocol version: " + protocolVersion);
-        }
+        if (EAGER.protocolVersion() == protocolVersion) return EAGER;
+        if (COMPATIBLE.protocolVersion() == protocolVersion) return COMPATIBLE;
+        if (SESSIONED.protocolVersion() == protocolVersion) return SESSIONED;
+        throw new IllegalArgumentException("Unknown Connect protocol version: " + protocolVersion);
     }
 
     @Override
@@ -139,10 +126,9 @@ public enum ConnectProtocolCompatibility {
      * given protocol
      */
     public static ConnectProtocolCompatibility fromProtocol(String protocolName) {
-        return Arrays.stream(ConnectProtocolCompatibility.values())
-                .filter(mode -> mode.protocol().equalsIgnoreCase(protocolName))
-                .findFirst()
-                .orElseThrow(() -> new IllegalArgumentException(
-                        "Not found Connect protocol compatibility mode for protocol: " + protocolName));
+        if (EAGER.protocol().equalsIgnoreCase(protocolName)) return EAGER;
+        if (COMPATIBLE.protocol().equalsIgnoreCase(protocolName)) return COMPATIBLE;
+        if (SESSIONED.protocol().equalsIgnoreCase(protocolName)) return SESSIONED;
+        throw new IllegalArgumentException("Not found Connect protocol compatibility mode for protocol: " + protocolName);
     }
 }

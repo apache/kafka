@@ -26,17 +26,15 @@ import java.nio.ByteBuffer;
 /**
  * A class that captures the deserialized form of a worker's metadata.
  */
-public class ExtendedWorkerState extends WorkerState {
+public class WorkerState {
 
-    public static ByteBuffer toByteBuffer(ExtendedWorkerState workerState, boolean sessioned) {
-        short version = sessioned
-                ? ConnectProtocolCompatibility.SESSIONED.protocolVersion()
-                : ConnectProtocolCompatibility.COMPATIBLE.protocolVersion();
-        return MessageUtil.toVersionPrefixedByteBuffer(version, new ExtendedWorkerMetadata()
-                .setUrl(workerState.url())
-                .setConfigOffset(workerState.offset())
-                .setAssignmentByteBuffer(ExtendedAssignment.toByteBuffer(workerState.assignment())));
+    public static ByteBuffer toByteBuffer(WorkerState workerState) {
+        return MessageUtil.toVersionPrefixedByteBuffer(ExtendedWorkerMetadata.LOWEST_SUPPORTED_VERSION,
+                new ExtendedWorkerMetadata()
+                        .setUrl(workerState.url())
+                        .setConfigOffset(workerState.offset()));
     }
+
     /**
      * Given a byte buffer that contains protocol metadata return the deserialized form of the
      * metadata.
@@ -45,42 +43,40 @@ public class ExtendedWorkerState extends WorkerState {
      * @return the deserialized metadata
      * @throws SchemaException on incompatible Connect protocol version
      */
-    public static ExtendedWorkerState of(ByteBuffer buffer) {
-        if (buffer == null) return null;
+    static WorkerState of(ByteBuffer buffer) {
         short version = buffer.getShort();
         if (version >= ExtendedWorkerMetadata.LOWEST_SUPPORTED_VERSION && version <= ExtendedWorkerMetadata.HIGHEST_SUPPORTED_VERSION) {
             ExtendedWorkerMetadata metadata = new ExtendedWorkerMetadata(new ByteBufferAccessor(buffer), version);
-            return new ExtendedWorkerState(
-                    metadata.url(),
-                    metadata.configOffset(),
-                    // Protocol version is embedded with the assignment in the metadata
-                    ExtendedAssignment.of(metadata.assignmentByteBuffer()));
+            return new WorkerState(metadata.url(), metadata.configOffset());
         } else throw new SchemaException("Unsupported subscription version: " + version);
     }
 
-    private final ExtendedAssignment assignment;
+    private final String url;
+    private final long offset;
 
-    public ExtendedWorkerState(String url, long offset, ExtendedAssignment assignment) {
-        super(url, offset);
-        this.assignment = assignment != null ? assignment : ExtendedAssignment.empty();
+    public WorkerState(String url, long offset) {
+        this.url = url;
+        this.offset = offset;
+    }
+
+    public String url() {
+        return url;
     }
 
     /**
-     * This method returns which was the assignment of connectors and tasks on a worker at the
-     * moment that its state was captured by this class.
+     * The most up-to-date (maximum) configuration offset according known to this worker.
      *
-     * @return the assignment of connectors and tasks
+     * @return the configuration offset
      */
-    public ExtendedAssignment assignment() {
-        return assignment;
+    public long offset() {
+        return offset;
     }
 
     @Override
     public String toString() {
         return "WorkerState{" +
-                "url='" + url() + '\'' +
-                ", offset=" + offset() +
-                ", " + assignment +
+                "url='" + url + '\'' +
+                ", offset=" + offset +
                 '}';
     }
 }
