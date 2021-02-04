@@ -213,7 +213,7 @@ class ReplicaManager(val config: KafkaConfig,
                      val delayedDeleteRecordsPurgatory: DelayedOperationPurgatory[DelayedDeleteRecords],
                      val delayedElectLeaderPurgatory: DelayedOperationPurgatory[DelayedElectLeader],
                      threadNamePrefix: Option[String],
-                     val configRepository: ConfigRepository,
+                     configRepository: ConfigRepository,
                      val alterIsrManager: AlterIsrManager) extends Logging with KafkaMetricsGroup {
 
   def this(config: KafkaConfig,
@@ -250,7 +250,7 @@ class ReplicaManager(val config: KafkaConfig,
   @volatile var controllerEpoch: Int = KafkaController.InitialControllerEpoch
   private val localBrokerId = config.brokerId
   private val allPartitions = new Pool[TopicPartition, HostedPartition](
-    valueFactory = Some(tp => HostedPartition.Online(Partition(tp, time, this)))
+    valueFactory = Some(tp => HostedPartition.Online(Partition(tp, time, configRepository, this)))
   )
   private val replicaStateChangeLock = new Object
   val replicaFetcherManager = createReplicaFetcherManager(metrics, time, threadNamePrefix, quotaManagers.follower)
@@ -517,7 +517,7 @@ class ReplicaManager(val config: KafkaConfig,
 
   // Visible for testing
   def createPartition(topicPartition: TopicPartition): Partition = {
-    val partition = Partition(topicPartition, time, this)
+    val partition = Partition(topicPartition, time, configRepository, this)
     allPartitions.put(topicPartition, HostedPartition.Online(partition))
     partition
   }
@@ -1372,7 +1372,7 @@ class ReplicaManager(val config: KafkaConfig,
                 Some(partition)
 
               case HostedPartition.None =>
-                val partition = Partition(topicPartition, time, this)
+                val partition = Partition(topicPartition, time, configRepository, this)
                 allPartitions.putIfNotExists(topicPartition, HostedPartition.Online(partition))
                 Some(partition)
             }

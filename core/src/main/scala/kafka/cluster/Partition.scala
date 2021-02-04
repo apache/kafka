@@ -69,6 +69,7 @@ class DelayedOperations(topicPartition: TopicPartition,
 object Partition extends KafkaMetricsGroup {
   def apply(topicPartition: TopicPartition,
             time: Time,
+            configRepository: ConfigRepository,
             replicaManager: ReplicaManager): Partition = {
 
     val isrChangeListener = new IsrChangeListener {
@@ -94,7 +95,7 @@ object Partition extends KafkaMetricsGroup {
       interBrokerProtocolVersion = replicaManager.config.interBrokerProtocolVersion,
       localBrokerId = replicaManager.config.brokerId,
       time = time,
-      configRepository = replicaManager.configRepository,
+      configRepository = configRepository,
       isrChangeListener = isrChangeListener,
       delayedOperations = delayedOperations,
       metadataCache = replicaManager.metadataCache,
