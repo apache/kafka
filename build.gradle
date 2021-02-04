@@ -1228,6 +1228,7 @@ project(':raft') {
 
   dependencies {
     compile project(':clients')
+    compile project(':metadata')
     compile libs.slf4jApi
     compile libs.jacksonDatabind
 

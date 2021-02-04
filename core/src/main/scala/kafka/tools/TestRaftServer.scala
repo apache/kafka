@@ -29,7 +29,7 @@ import kafka.utils.{CommandDefaultOptions, CommandLineUtils, CoreUtils, Exit, Lo
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.metrics.stats.Percentiles.BucketSizing
 import org.apache.kafka.common.metrics.stats.{Meter, Percentile, Percentiles}
-import org.apache.kafka.common.protocol.Writable
+import org.apache.kafka.common.protocol.{ObjectSerializationCache, Writable}
 import org.apache.kafka.common.security.scram.internals.ScramMechanism
 import org.apache.kafka.common.security.token.delegation.internals.DelegationTokenCache
 import org.apache.kafka.common.utils.{Time, Utils}
@@ -268,11 +268,11 @@ object TestRaftServer extends Logging {
   }
 
   private class ByteArraySerde extends RecordSerde[Array[Byte]] {
-    override def recordSize(data: Array[Byte], context: Any): Int = {
+    override def recordSize(data: Array[Byte], serializationCache: ObjectSerializationCache): Int = {
       data.length
     }
 
-    override def write(data: Array[Byte], context: Any, out: Writable): Unit = {
+    override def write(data: Array[Byte], serializationCache: ObjectSerializationCache, out: Writable): Unit = {
       out.writeByteArray(data)
     }
 

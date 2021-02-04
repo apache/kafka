@@ -17,6 +17,7 @@
 package org.apache.kafka.raft.internals;
 
 import org.apache.kafka.common.protocol.DataOutputStreamWritable;
+import org.apache.kafka.common.protocol.ObjectSerializationCache;
 import org.apache.kafka.common.protocol.Writable;
 import org.apache.kafka.common.record.AbstractRecords;
 import org.apache.kafka.common.record.CompressionType;
@@ -36,7 +37,7 @@ import java.util.List;
 
 /**
  * Collect a set of records into a single batch. New records are added
- * through {@link #appendRecord(Object, Object)}, but the caller must first
+ * through {@link #appendRecord(Object, ObjectSerializationCache)}, but the caller must first
  * check whether there is room using {@link #hasRoomFor(int)}. Once the
  * batch is ready, then {@link #build()} should be used to get the resulting
  * {@link MemoryRecords} instance.
@@ -97,10 +98,10 @@ public class BatchBuilder<T> {
      * using {@link #hasRoomFor(int)}.
      *
      * @param record the record to append
-     * @param serdeContext serialization context for use in {@link RecordSerde#write(Object, Object, Writable)}
+     * @param serializationCache serialization cache for use in {@link RecordSerde#write(Object, ObjectSerializationCache, Writable)}
      * @return the offset of the appended batch
      */
-    public long appendRecord(T record, Object serdeContext) {
+    public long appendRecord(T record, ObjectSerializationCache serializationCache) {
         if (!isOpenForAppends) {
             throw new IllegalArgumentException("Cannot append new records after the batch has been built");
         }
@@ -114,7 +115,7 @@ public class BatchBuilder<T> {
         int recordSizeInBytes = writeRecord(
             offset,
             record,
-            serdeContext
+            serializationCache
         );
         unflushedBytes += recordSizeInBytes;
         records.add(record);
@@ -273,12 +274,12 @@ public class BatchBuilder<T> {
     public int writeRecord(
         long offset,
         T payload,
-        Object serdeContext
+        ObjectSerializationCache serializationCache
     ) {
         int offsetDelta = (int) (offset - baseOffset);
         long timestampDelta = 0;
 
-        int payloadSize = serde.recordSize(payload, serdeContext);
+        int payloadSize = serde.recordSize(payload, serializationCache);
         int sizeInBytes = DefaultRecord.sizeOfBodyInBytes(
             offsetDelta,
             timestampDelta,
@@ -300,7 +301,7 @@ public class BatchBuilder<T> {
 
         // Write value
         recordOutput.writeVarint(payloadSize);
-        serde.write(payload, serdeContext, recordOutput);
+        serde.write(payload, serializationCache, recordOutput);
 
         // Write headers (currently unused)
         recordOutput.writeVarint(0);

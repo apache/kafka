@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.raft.internals;
 
+import org.apache.kafka.common.protocol.ObjectSerializationCache;
 import org.apache.kafka.common.protocol.Readable;
 import org.apache.kafka.common.protocol.Writable;
 import org.apache.kafka.common.utils.Utils;
@@ -24,7 +25,7 @@ import org.apache.kafka.raft.RecordSerde;
 public class StringSerde implements RecordSerde<String> {
 
     @Override
-    public int recordSize(String data, Object context) {
+    public int recordSize(String data, ObjectSerializationCache serializationCache) {
         return recordSize(data);
     }
 
@@ -33,7 +34,7 @@ public class StringSerde implements RecordSerde<String> {
     }
 
     @Override
-    public void write(String data, Object context, Writable out) {
+    public void write(String data, ObjectSerializationCache serializationCache, Writable out) {
         out.writeByteArray(Utils.utf8(data));
     }
 

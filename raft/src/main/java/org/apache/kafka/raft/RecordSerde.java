@@ -16,39 +16,36 @@
  */
 package org.apache.kafka.raft;
 
+import org.apache.kafka.common.protocol.ObjectSerializationCache;
 import org.apache.kafka.common.protocol.Readable;
 import org.apache.kafka.common.protocol.Writable;
 
+/**
+ * Serde interface for records written to the Raft log. This class assumes
+ * a two-pass serialization, with the first pass used to compute the size of the
+ * serialized record, and the second pass to write the object.
+ */
 public interface RecordSerde<T> {
     /**
-     * Create a new context object for to be used when serializing a batch of records.
-     * This allows for state to be shared between {@link #recordSize(Object, Object)}
-     * and {@link #write(Object, Object, Writable)}, which is useful in order to avoid
-     * redundant work (see e.g. {@link org.apache.kafka.common.protocol.ObjectSerializationCache}).
-     *
-     * @return context object or null if none is needed
-     */
-    default Object newWriteContext() {
-        return null;
-    }
-
-    /**
-     * Get the size of a record.
+     * Get the size of a record. This must be called first before writing
+     * the data through {@link #write(Object, ObjectSerializationCache, Writable)}.
      *
      * @param data the record that will be serialized
-     * @param context context object created by {@link #newWriteContext()}
+     * @param serializationCache serialization cache
      * @return the size in bytes of the serialized record
      */
-    int recordSize(T data, Object context);
+    int recordSize(T data, ObjectSerializationCache serializationCache);
 
     /**
-     * Write the record to the output stream.
+     * Write the record to the output stream. This must be called after
+     * computing the size with {@link #recordSize(Object, ObjectSerializationCache)}.
+     * The same {@link ObjectSerializationCache} instance must be used in both calls.
      *
      * @param data the record to serialize and write
-     * @param context context object created by {@link #newWriteContext()}
+     * @param serializationCache serialization cache
      * @param out the output stream to write the record to
      */
-    void write(T data, Object context, Writable out);
+    void write(T data, ObjectSerializationCache serializationCache, Writable out);
 
     /**
      * Read a record from a {@link Readable} input.

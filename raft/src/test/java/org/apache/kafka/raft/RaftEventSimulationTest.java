@@ -19,6 +19,7 @@ package org.apache.kafka.raft;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.memory.MemoryPool;
 import org.apache.kafka.common.metrics.Metrics;
+import org.apache.kafka.common.protocol.ObjectSerializationCache;
 import org.apache.kafka.common.protocol.Readable;
 import org.apache.kafka.common.protocol.Writable;
 import org.apache.kafka.common.protocol.types.Type;
@@ -1124,12 +1125,12 @@ public class RaftEventSimulationTest {
 
     private static class IntSerde implements RecordSerde<Integer> {
         @Override
-        public int recordSize(Integer data, Object context) {
+        public int recordSize(Integer data, ObjectSerializationCache serializationCache) {
             return Type.INT32.sizeOf(data);
         }
 
         @Override
-        public void write(Integer data, Object context, Writable out) {
+        public void write(Integer data, ObjectSerializationCache serializationCache, Writable out) {
             out.writeInt(data);
         }
 
