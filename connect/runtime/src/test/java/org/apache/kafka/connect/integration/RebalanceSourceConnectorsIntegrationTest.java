@@ -36,6 +36,7 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.Properties;
 import java.util.concurrent.TimeUnit;
+import java.util.function.Predicate;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
@@ -310,8 +311,13 @@ public class RebalanceSourceConnectorsIntegrationTest {
             connect.assertions().assertConnectorAndAtLeastNumTasksAreRunning(CONNECTOR_NAME + i, NUM_TASKS, "Connector tasks did not start in time.");
         }
 
-        waitForCondition(this::assertConnectorAndTasksAreUniqueAndBalanced,
-                WORKER_SETUP_DURATION_MS, "Connect and tasks are imbalanced between the workers.");
+        waitForCondition(() -> assertConnectorAndTasksAreUniqueAndBalanced(diffTasks -> diffTasks == 1
+            // this result is valid on condition that:
+            // 1) all tasks are assigned to (single) alive worker before we re-add workers
+            // 2) rebalance is triggered by first re-added worker only (rebalance revokes 8 tasks from alive worker).
+            // Finally, the 8 revoked tasks are reassigned to re-added workers
+            || diffTasks == 4),
+            WORKER_SETUP_DURATION_MS, "Connect and tasks are imbalanced between the workers.");
     }
 
     private Map<String, String> defaultSourceConnectorProps(String topic) {
@@ -330,6 +336,10 @@ public class RebalanceSourceConnectorsIntegrationTest {
     }
 
     private boolean assertConnectorAndTasksAreUniqueAndBalanced() {
+        return assertConnectorAndTasksAreUniqueAndBalanced(diffTasks -> diffTasks < 2);
+    }
+
+    private boolean assertConnectorAndTasksAreUniqueAndBalanced(Predicate<Integer> predicateForDiffTasks) {
         try {
             Map<String, Collection<String>> connectors = new HashMap<>();
             Map<String, Collection<String>> tasks = new HashMap<>();
@@ -359,7 +369,7 @@ public class RebalanceSourceConnectorsIntegrationTest {
                     tasks.values().size(),
                     tasks.values().stream().distinct().collect(Collectors.toList()).size());
             assertTrue("Connectors are imbalanced: " + formatAssignment(connectors), maxConnectors - minConnectors < 2);
-            assertTrue("Tasks are imbalanced: " + formatAssignment(tasks), maxTasks - minTasks < 2);
+            assertTrue("Tasks are imbalanced: " + formatAssignment(tasks), predicateForDiffTasks.test(maxTasks - minTasks));
             return true;
         } catch (Exception e) {
             log.error("Could not check connector state info.", e);
