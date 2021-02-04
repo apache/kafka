@@ -160,9 +160,8 @@ public interface EventQueue extends AutoCloseable {
      *                              event has no tag, or if there is none such), and
      *                              produces the deadline to use for this event.
      *                              Once the deadline has arrived, the event will be
-     *                              prepended to the queue.  Events whose deadlines are
-     *                              only a few nanoseconds apart may be executed in any
-     *                              order.
+     *                              run.  Events whose deadlines are only a few nanoseconds
+     *                              apart may be executed in any order.
      * @param event                 The event to schedule.
      */
     default void scheduleDeferred(String tag,
