@@ -248,7 +248,7 @@ public class SaslChannelBuilder implements ChannelBuilder, ListenerReconfigurabl
                                                  ChannelMetadataRegistry metadataRegistry) throws IOException {
         if (this.securityProtocol == SecurityProtocol.SASL_SSL) {
             return SslTransportLayer.create(id, key,
-                sslFactory.createSslEngine(socketChannel.socket().getInetAddress().getHostName(),
+                sslFactory.createSslEngine(ChannelBuilderUtils.peerHost(key),
                     socketChannel.socket().getPort()),
                 metadataRegistry);
         } else {
