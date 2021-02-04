@@ -34,12 +34,7 @@ sealed trait MetadataSupport {
    * @return this instance downcast for use with ZooKeeper
    * @throws Exception if this instance is not for ZooKeeper
    */
-  def requireZk(createException: () => Exception): ZkSupport = {
-    this match {
-      case zkSupport@ZkSupport(_, _, _, _) => zkSupport
-      case RaftSupport(_) => throw createException()
-    }
-  }
+  def requireZk(createException: => Exception): ZkSupport
 
   /**
    * Return this instance downcast for use with Raft
@@ -48,12 +43,7 @@ sealed trait MetadataSupport {
    * @return this instance downcast for use with Raft
    * @throws Exception if this instance is not for Raft
    */
-  def requireRaft(createException: () => Exception): RaftSupport = {
-    this match {
-      case raftSupport@RaftSupport(_) => raftSupport
-      case ZkSupport(_, _, _, _) => throw createException()
-    }
-  }
+  def requireRaft(createException: => Exception): RaftSupport
 }
 
 case class ZkSupport(adminManager: ZkAdminManager,
@@ -61,8 +51,13 @@ case class ZkSupport(adminManager: ZkAdminManager,
                      zkClient: KafkaZkClient,
                      forwardingManager: Option[ForwardingManager]) extends MetadataSupport {
   val adminZkClient = new AdminZkClient(zkClient)
+
+  override def requireZk(createException: => Exception): ZkSupport = this
+  override def requireRaft(createException: => Exception): RaftSupport = throw createException
 }
 
 case class RaftSupport(fwdMgr: ForwardingManager) extends MetadataSupport {
   override val forwardingManager: Option[ForwardingManager] = Some(fwdMgr)
+  override def requireZk(createException: => Exception): ZkSupport = throw createException
+  override def requireRaft(createException: => Exception): RaftSupport = this
 }

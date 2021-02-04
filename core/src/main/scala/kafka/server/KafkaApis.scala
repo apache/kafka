@@ -3497,24 +3497,29 @@ class KafkaApis(val requestChannel: RequestChannel,
     }
   }
 
-  private def shouldNeverReceive(request: RequestChannel.Request): () => Exception = {
-    () => new UnsupportedVersionException(s"Should never receive when using a Raft-based metadata quorum: $request")
+  // visible for testing
+  private[server] def shouldNeverReceive(request: RequestChannel.Request): Exception = {
+    new UnsupportedVersionException(s"Should never receive when using a Raft-based metadata quorum: $request")
   }
 
-  private def unsupported(text: String): () => Exception = {
-    () => new UnsupportedVersionException(s"Unsupported when using a Raft-based metadata quorum: $text")
+  // visible for testing
+  private[server] def unsupported(text: String): Exception = {
+    new UnsupportedVersionException(s"Unsupported when using a Raft-based metadata quorum: $text")
   }
 
-  private def notYetSupported(request: RequestChannel.Request): () => Exception = {
+  // visible for testing
+  private[server] def notYetSupported(request: RequestChannel.Request): Exception = {
     notYetSupported(request.toString)
   }
 
-  private def notYetSupported(text: String): () => Exception = {
-    () => new UnsupportedVersionException(s"Not yet supported when using a Raft-based metadata quorum: $text")
+  // visible for testing
+  private[server] def notYetSupported(text: String): Exception = {
+    new UnsupportedVersionException(s"Not yet supported when using a Raft-based metadata quorum: $text")
   }
 
-  private def shouldAlwaysBeForwarded(request: RequestChannel.Request): () => Exception = {
-    () => new UnsupportedVersionException(s"Should always be forwarded to the Active Controller when using a Raft-based metadata quorum: $request")
+  // visible for testing
+  private[server] def shouldAlwaysBeForwarded(request: RequestChannel.Request): Exception = {
+    new UnsupportedVersionException(s"Should always be forwarded to the Active Controller when using a Raft-based metadata quorum: $request")
   }
 }
 
