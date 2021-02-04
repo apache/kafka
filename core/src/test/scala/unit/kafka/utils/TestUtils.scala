@@ -173,7 +173,7 @@ object TestUtils extends Logging {
     server.boundPort(ListenerName.forSecurityProtocol(securityProtocol))
 
   def createBroker(id: Int, host: String, port: Int, securityProtocol: SecurityProtocol = SecurityProtocol.PLAINTEXT): MetadataBroker = {
-    MetadataBroker(id, "", Map(securityProtocol.name -> new Node(id, host, port)), false)
+    MetadataBroker(id, null, Map(securityProtocol.name -> new Node(id, host, port)), false)
   }
 
   def createMetadataBroker(id: Int,

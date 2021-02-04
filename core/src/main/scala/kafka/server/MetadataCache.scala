@@ -280,7 +280,7 @@ class MetadataCache(val brokerId: Int) extends Logging {
     }
 
     def node(id: Integer): Node = {
-      Some(nodes.get(id)).getOrElse(Node.noNode())
+      Option(nodes.get(id)).getOrElse(new Node(id, "", -1))
     }
 
     val partitionInfos = new util.ArrayList[PartitionInfo]
