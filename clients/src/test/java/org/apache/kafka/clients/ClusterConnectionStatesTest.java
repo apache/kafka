@@ -29,7 +29,11 @@ import java.lang.reflect.Method;
 import java.net.InetAddress;
 import java.net.UnknownHostException;
 
+import java.util.Collections;
+import java.util.IdentityHashMap;
 import java.util.List;
+import java.util.Set;
+
 import org.apache.kafka.common.errors.AuthenticationException;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
@@ -273,16 +277,17 @@ public class ClusterConnectionStatesTest {
 
     @Test
     public void testMultipleIPsWithUseAll() throws UnknownHostException {
-        assertTrue(ClientUtils.resolve(hostTwoIps, ClientDnsLookup.USE_ALL_DNS_IPS).size() > 1);
+        int numberOfAddress = ClientUtils.resolve(hostTwoIps, ClientDnsLookup.USE_ALL_DNS_IPS).size();
+        assertTrue(numberOfAddress >= 1);
 
-        connectionStates.connecting(nodeId1, time.milliseconds(), hostTwoIps, ClientDnsLookup.USE_ALL_DNS_IPS);
-        InetAddress addr1 = connectionStates.currentAddress(nodeId1);
-        connectionStates.connecting(nodeId1, time.milliseconds(), hostTwoIps, ClientDnsLookup.USE_ALL_DNS_IPS);
-        InetAddress addr2 = connectionStates.currentAddress(nodeId1);
-        assertNotSame(addr1, addr2);
-        connectionStates.connecting(nodeId1, time.milliseconds(), hostTwoIps, ClientDnsLookup.USE_ALL_DNS_IPS);
-        InetAddress addr3 = connectionStates.currentAddress(nodeId1);
-        assertNotSame(addr1, addr3);
+        Set<InetAddress> actualAddresses = Collections.newSetFromMap(new IdentityHashMap<>());
+
+        // build extra connections (numberOfAddress + 3) to see whether all addresses we get are equal to dns results
+        for (int index = 0; index < numberOfAddress + 3; ++index) {
+            connectionStates.connecting(nodeId1, time.milliseconds(), hostTwoIps, ClientDnsLookup.USE_ALL_DNS_IPS);
+            actualAddresses.add(connectionStates.currentAddress(nodeId1));
+        }
+        assertEquals(numberOfAddress, actualAddresses.size());
     }
 
     @Test
