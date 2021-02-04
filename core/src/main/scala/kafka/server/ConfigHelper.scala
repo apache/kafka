@@ -65,7 +65,7 @@ class ConfigHelper(metadataCache: MetadataCache, config: KafkaConfig, configRepo
             val topic = resource.resourceName
             Topic.validate(topic)
             if (metadataCache.contains(topic)) {
-              val topicProps = configRepository.topicConfigs(topic)
+              val topicProps = configRepository.topicConfig(topic)
               val logConfig = LogConfig.fromProps(LogConfig.extractLogConfigMap(config), topicProps)
               createResponseConfig(allConfigs(logConfig), createTopicConfigEntry(logConfig, topicProps, includeSynonyms, includeDocumentation))
             } else {

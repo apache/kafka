@@ -38,7 +38,7 @@ class ZkConfigRepositoryTest {
     topicProps.put("c", "d")
     when(zkClient.getEntityConfigs(ConfigType.Broker, brokerId.toString)).thenReturn(brokerProps)
     when(zkClient.getEntityConfigs(ConfigType.Topic, topic)).thenReturn(topicProps)
-    assertEquals(brokerProps, zkConfigRepository.brokerConfigs(brokerId))
-    assertEquals(topicProps, zkConfigRepository.topicConfigs(topic))
+    assertEquals(brokerProps, zkConfigRepository.brokerConfig(brokerId))
+    assertEquals(topicProps, zkConfigRepository.topicConfig(topic))
   }
 }

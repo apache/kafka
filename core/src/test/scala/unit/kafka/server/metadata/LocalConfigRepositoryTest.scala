@@ -26,8 +26,8 @@ class LocalConfigRepositoryTest {
   @Test
   def testEmptyRepository(): Unit = {
     val repository = new LocalConfigRepository()
-    assertEquals(new Properties(), repository.brokerConfigs(0))
-    assertEquals(new Properties(), repository.topicConfigs("foo"))
+    assertEquals(new Properties(), repository.brokerConfig(0))
+    assertEquals(new Properties(), repository.topicConfig("foo"))
   }
 
   @Test
@@ -35,26 +35,26 @@ class LocalConfigRepositoryTest {
     val repository = new LocalConfigRepository()
     val brokerId0 = 0
     repository.setBrokerConfig(brokerId0, "foo", null)
-    assertEquals(new Properties(), repository.brokerConfigs(0))
+    assertEquals(new Properties(), repository.brokerConfig(0))
 
     val brokerId1 = 1
     repository.setBrokerConfig(brokerId1, "foo", "bar")
     val brokerProperties = new Properties()
     brokerProperties.put("foo", "bar")
-    assertEquals(brokerProperties, repository.brokerConfigs(brokerId1))
+    assertEquals(brokerProperties, repository.brokerConfig(brokerId1))
 
     val brokerProperties2 = new Properties()
     brokerProperties2.put("foo", "bar")
     brokerProperties2.put("foo2", "baz")
     repository.setBrokerConfig(brokerId1, "foo2", "baz") // add another prop
-    assertEquals(brokerProperties2, repository.brokerConfigs(brokerId1)) // should get both props
+    assertEquals(brokerProperties2, repository.brokerConfig(brokerId1)) // should get both props
 
     repository.setBrokerConfig(brokerId1, "foo2", null)
-    assertEquals(brokerProperties, repository.brokerConfigs(brokerId1))
+    assertEquals(brokerProperties, repository.brokerConfig(brokerId1))
     repository.setBrokerConfig(brokerId1, "foo2", "notnull")
-    assertNotEquals(brokerProperties, repository.brokerConfigs(brokerId1))
+    assertNotEquals(brokerProperties, repository.brokerConfig(brokerId1))
     repository.removeBrokerConfig(brokerId1, "foo2")
-    assertEquals(brokerProperties, repository.brokerConfigs(brokerId1))
+    assertEquals(brokerProperties, repository.brokerConfig(brokerId1))
   }
 
   @Test
@@ -62,25 +62,25 @@ class LocalConfigRepositoryTest {
     val repository = new LocalConfigRepository()
     val topic0 = "topic0"
     repository.setTopicConfig(topic0, "foo", null)
-    assertEquals(new Properties(), repository.brokerConfigs(0))
+    assertEquals(new Properties(), repository.brokerConfig(0))
 
     val topic1 = "topic1"
     repository.setTopicConfig(topic1, "foo", "bar")
     val topicProperties = new Properties()
     topicProperties.put("foo", "bar")
-    assertEquals(topicProperties, repository.topicConfigs(topic1))
+    assertEquals(topicProperties, repository.topicConfig(topic1))
 
     val topicProperties2 = new Properties()
     topicProperties2.put("foo", "bar")
     topicProperties2.put("foo2", "baz")
     repository.setTopicConfig(topic1, "foo2", "baz") // add another prop
-    assertEquals(topicProperties2, repository.topicConfigs(topic1)) // should get both props
+    assertEquals(topicProperties2, repository.topicConfig(topic1)) // should get both props
 
     repository.setTopicConfig(topic1, "foo2", null)
-    assertEquals(topicProperties, repository.topicConfigs(topic1))
+    assertEquals(topicProperties, repository.topicConfig(topic1))
     repository.setTopicConfig(topic1, "foo2", "notnull")
-    assertNotEquals(topicProperties, repository.topicConfigs(topic1))
+    assertNotEquals(topicProperties, repository.topicConfig(topic1))
     repository.removeTopicConfig(topic1, "foo2")
-    assertEquals(topicProperties, repository.topicConfigs(topic1))
+    assertEquals(topicProperties, repository.topicConfig(topic1))
   }
 }

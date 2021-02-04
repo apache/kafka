@@ -1746,7 +1746,7 @@ class PartitionTest extends AbstractPartitionTest {
       ArgumentMatchers.any()) // This doesn't get evaluated, but needed to satisfy compilation
 
     // We should retrieve configs only once
-    verify(spyConfigRepository, times(1)).topicConfigs(topicPartition.topic())
+    verify(spyConfigRepository, times(1)).topicConfig(topicPartition.topic())
   }
 
   /**
@@ -1784,7 +1784,7 @@ class PartitionTest extends AbstractPartitionTest {
 
     // We should retrieve configs twice, once before log is created, and second time once
     // we find log config is dirty and refresh it.
-    verify(spyConfigRepository, times(2)).topicConfigs(topicPartition.topic())
+    verify(spyConfigRepository, times(2)).topicConfig(topicPartition.topic())
   }
 
   /**
@@ -1822,7 +1822,7 @@ class PartitionTest extends AbstractPartitionTest {
 
     // We should get configs twice, once before log is created, and second time once
     // we find log config is dirty and refresh it.
-    verify(spyConfigRepository, times(2)).topicConfigs(topicPartition.topic())
+    verify(spyConfigRepository, times(2)).topicConfig(topicPartition.topic())
   }
 
   private def seedLogData(log: Log, numRecords: Int, leaderEpoch: Int): Unit = {

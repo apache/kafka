@@ -95,36 +95,36 @@ class LocalConfigRepository extends ConfigRepository {
   def setConfig(configResource: ConfigResource, key: String, value: String): Unit = {
     configMap.compute(configResource, new BiFunction[ConfigResource, util.HashMap[String, String], util.HashMap[String, String]] {
       override def apply(resource: ConfigResource,
-                         curConfigs: util.HashMap[String, String]): util.HashMap[String, String] = {
+                         curConfig: util.HashMap[String, String]): util.HashMap[String, String] = {
         if (value == null) {
-          if (curConfigs == null) {
+          if (curConfig == null) {
             null
           } else {
-            val newConfigs = new util.HashMap[String, String](curConfigs)
-            newConfigs.remove(key)
-            if (newConfigs.isEmpty) {
+            val newConfig = new util.HashMap[String, String](curConfig)
+            newConfig.remove(key)
+            if (newConfig.isEmpty) {
               null
             } else {
-              newConfigs
+              newConfig
             }
           }
         } else {
-          if (curConfigs == null) {
-            val newConfigs = new util.HashMap[String, String](1)
-            newConfigs.put(key, value)
-            newConfigs
+          if (curConfig == null) {
+            val newConfig = new util.HashMap[String, String](1)
+            newConfig.put(key, value)
+            newConfig
           } else {
-            val newConfigs = new util.HashMap[String, String](curConfigs.size() + 1)
-            newConfigs.putAll(curConfigs)
-            newConfigs.put(key, value)
-            newConfigs
+            val newConfig = new util.HashMap[String, String](curConfig.size() + 1)
+            newConfig.putAll(curConfig)
+            newConfig.put(key, value)
+            newConfig
           }
         }
       }
     })
   }
 
-  def config(configResource: ConfigResource): Properties = {
+  override def config(configResource: ConfigResource): Properties = {
     val properties = new Properties()
     Option(configMap.get(configResource)).foreach {
       _.entrySet().iterator().asScala.foreach { case e =>
@@ -132,13 +132,5 @@ class LocalConfigRepository extends ConfigRepository {
       }
     }
     properties
-  }
-
-  override def topicConfigs(topicName: String): Properties = {
-    config(new ConfigResource(Type.TOPIC, topicName))
-  }
-
-  override def brokerConfigs(brokerId: Int): Properties = {
-    config(new ConfigResource(Type.BROKER, brokerId.toString()))
   }
 }

@@ -21,6 +21,8 @@ import java.util.Properties
 
 import kafka.server.ConfigType
 import kafka.zk.{AdminZkClient, KafkaZkClient}
+import org.apache.kafka.common.config.ConfigResource
+import org.apache.kafka.common.config.ConfigResource.Type
 
 
 object ZkConfigRepository {
@@ -29,11 +31,9 @@ object ZkConfigRepository {
 }
 
 class ZkConfigRepository(adminZkClient: AdminZkClient) extends ConfigRepository {
-  override def topicConfigs(topicName: String): Properties = synchronized {
-    adminZkClient.fetchEntityConfig(ConfigType.Topic, topicName)
-  }
-
-  override def brokerConfigs(brokerId: Int): Properties = synchronized {
-    adminZkClient.fetchEntityConfig(ConfigType.Broker, brokerId.toString)
+  override def config(configResource: ConfigResource): Properties = {
+     adminZkClient.fetchEntityConfig(
+       if (configResource.`type`() == Type.TOPIC) ConfigType.Topic else ConfigType.Broker,
+       configResource.name())
   }
 }

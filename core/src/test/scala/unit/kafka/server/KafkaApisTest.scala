@@ -184,7 +184,7 @@ class KafkaApisTest {
     val propName = "min.insync.replicas"
     val propValue = "3"
     topicConfigs.put(propName, propValue)
-    EasyMock.expect(configRepository.topicConfigs(resourceName)).andReturn(topicConfigs)
+    EasyMock.expect(configRepository.topicConfig(resourceName)).andReturn(topicConfigs)
 
     metadataCache =
       EasyMock.partialMockBuilder(classOf[MetadataCache])
