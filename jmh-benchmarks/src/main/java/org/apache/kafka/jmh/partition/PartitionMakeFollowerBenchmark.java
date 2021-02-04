@@ -111,7 +111,8 @@ public class PartitionMakeFollowerBenchmark {
             new BrokerState(),
             brokerTopicStats,
             logDirFailureChannel,
-            Time.SYSTEM);
+            Time.SYSTEM,
+            true);
 
         TopicPartition tp = new TopicPartition("topic", 0);
 

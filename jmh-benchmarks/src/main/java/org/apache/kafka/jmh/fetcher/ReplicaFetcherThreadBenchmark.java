@@ -135,7 +135,8 @@ public class ReplicaFetcherThreadBenchmark {
                 new BrokerState(),
                 brokerTopicStats,
                 logDirFailureChannel,
-                Time.SYSTEM);
+                Time.SYSTEM,
+                true);
 
         LinkedHashMap<TopicPartition, FetchResponse.PartitionData<BaseRecords>> initialFetched = new LinkedHashMap<>();
         scala.collection.mutable.Map<TopicPartition, InitialFetchState> initialFetchStates = new scala.collection.mutable.HashMap<>();

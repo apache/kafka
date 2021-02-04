@@ -1032,7 +1032,8 @@ object TestUtils extends Logging {
                    time = time,
                    brokerState = BrokerState(),
                    brokerTopicStats = new BrokerTopicStats,
-                   logDirFailureChannel = new LogDirFailureChannel(logDirs.size))
+                   logDirFailureChannel = new LogDirFailureChannel(logDirs.size),
+                   usesTopicId = true)
   }
 
   class MockAlterIsrManager extends AlterIsrManager {

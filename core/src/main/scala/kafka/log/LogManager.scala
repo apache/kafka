@@ -63,7 +63,8 @@ class LogManager(logDirs: Seq[File],
                  val brokerState: BrokerState,
                  brokerTopicStats: BrokerTopicStats,
                  logDirFailureChannel: LogDirFailureChannel,
-                 time: Time) extends Logging with KafkaMetricsGroup {
+                 time: Time,
+                 val usesTopicId: Boolean) extends Logging with KafkaMetricsGroup {
 
   import LogManager._
 
@@ -273,7 +274,8 @@ class LogManager(logDirs: Seq[File],
       time = time,
       brokerTopicStats = brokerTopicStats,
       logDirFailureChannel = logDirFailureChannel,
-      lastShutdownClean = hadCleanShutdown)
+      lastShutdownClean = hadCleanShutdown,
+      usesTopicId = usesTopicId)
 
     if (logDir.getName.endsWith(Log.DeleteDirSuffix)) {
       addLogToBeDeleted(log)
@@ -801,7 +803,8 @@ class LogManager(logDirs: Seq[File],
           scheduler = scheduler,
           time = time,
           brokerTopicStats = brokerTopicStats,
-          logDirFailureChannel = logDirFailureChannel)
+          logDirFailureChannel = logDirFailureChannel,
+          usesTopicId = usesTopicId)
 
         if (isFuture)
           futureLogs.put(topicPartition, log)
@@ -1186,7 +1189,8 @@ object LogManager {
             kafkaScheduler: KafkaScheduler,
             time: Time,
             brokerTopicStats: BrokerTopicStats,
-            logDirFailureChannel: LogDirFailureChannel): LogManager = {
+            logDirFailureChannel: LogDirFailureChannel,
+            usesTopicId: Boolean): LogManager = {
     val defaultProps = LogConfig.extractLogConfigMap(config)
 
     LogConfig.validateValues(defaultProps)
@@ -1216,6 +1220,7 @@ object LogManager {
       brokerState = brokerState,
       brokerTopicStats = brokerTopicStats,
       logDirFailureChannel = logDirFailureChannel,
-      time = time)
+      time = time,
+      usesTopicId = usesTopicId)
   }
 }
