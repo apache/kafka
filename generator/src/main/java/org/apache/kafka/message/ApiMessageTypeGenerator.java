@@ -19,14 +19,23 @@ package org.apache.kafka.message;
 
 import java.io.BufferedWriter;
 import java.io.IOException;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collection;
+import java.util.Collections;
+import java.util.EnumMap;
+import java.util.Iterator;
+import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.TreeMap;
+import java.util.stream.Collectors;
 
 public final class ApiMessageTypeGenerator implements TypeClassGenerator {
     private final HeaderGenerator headerGenerator;
     private final CodeBuffer buffer;
     private final TreeMap<Short, ApiData> apis;
+    private final EnumMap<RequestApiScope, List<ApiData>> apisByScope = new EnumMap<>(RequestApiScope.class);
 
     private static final class ApiData {
         short apiKey;
@@ -93,6 +102,13 @@ public final class ApiMessageTypeGenerator implements TypeClassGenerator {
                         "API key " + spec.apiKey().get());
                 }
                 data.requestSpec = spec;
+
+                if (spec.scope() != null) {
+                    for (RequestApiScope scope : spec.scope()) {
+                        apisByScope.putIfAbsent(scope, new ArrayList<>());
+                        apisByScope.get(scope).add(data);
+                    }
+                }
                 break;
             }
             case RESPONSE: {
@@ -140,6 +156,8 @@ public final class ApiMessageTypeGenerator implements TypeClassGenerator {
         buffer.printf("%n");
         generateAccessor("highestSupportedVersion", "short");
         buffer.printf("%n");
+        generateAccessor("scope", "EnumSet<ApiScope>");
+        buffer.printf("%n");
         generateAccessor("apiKey", "short");
         buffer.printf("%n");
         generateAccessor("requestSchemas", "Schema[]");
@@ -151,9 +169,29 @@ public final class ApiMessageTypeGenerator implements TypeClassGenerator {
         generateHeaderVersion("request");
         buffer.printf("%n");
         generateHeaderVersion("response");
+        buffer.printf("%n");
+        generateApiScopeEnum();
+        buffer.printf("%n");
         buffer.decrementIndent();
         buffer.printf("}%n");
         headerGenerator.generate();
+    }
+
+    private String generateApiScopeEnumSet(Collection<String> values) {
+        if (values.isEmpty()) {
+            return "EnumSet.noneOf(ApiScope.class)";
+        }
+        StringBuilder bldr = new StringBuilder("EnumSet.of(");
+        Iterator<String> iter = values.iterator();
+        while (iter.hasNext()) {
+            bldr.append("ApiScope.");
+            bldr.append(iter.next());
+            if (iter.hasNext()) {
+                bldr.append(", ");
+            }
+        }
+        bldr.append(")");
+        return bldr.toString();
     }
 
     private void generateEnumValues() {
@@ -162,7 +200,17 @@ public final class ApiMessageTypeGenerator implements TypeClassGenerator {
             ApiData apiData = entry.getValue();
             String name = apiData.name();
             numProcessed++;
-            buffer.printf("%s(\"%s\", (short) %d, %s, %s, (short) %d, (short) %d)%s%n",
+
+            final Collection<String> scopes;
+            if (apiData.requestSpec.scope() == null) {
+                scopes = Collections.emptyList();
+            } else {
+                scopes = apiData.requestSpec.scope().stream()
+                    .map(RequestApiScope::name)
+                    .collect(Collectors.toList());
+            }
+
+            buffer.printf("%s(\"%s\", (short) %d, %s, %s, (short) %d, (short) %d, %s)%s%n",
                 MessageGenerator.toSnakeCase(name).toUpperCase(Locale.ROOT),
                 MessageGenerator.capitalizeFirst(name),
                 entry.getKey(),
@@ -170,6 +218,7 @@ public final class ApiMessageTypeGenerator implements TypeClassGenerator {
                 apiData.responseSchema(),
                 apiData.requestSpec.struct().versions().lowest(),
                 apiData.requestSpec.struct().versions().highest(),
+                generateApiScopeEnumSet(scopes),
                 (numProcessed == apis.size()) ? ";" : ",");
         }
     }
@@ -181,13 +230,16 @@ public final class ApiMessageTypeGenerator implements TypeClassGenerator {
         buffer.printf("private final Schema[] responseSchemas;%n");
         buffer.printf("private final short lowestSupportedVersion;%n");
         buffer.printf("private final short highestSupportedVersion;%n");
+        buffer.printf("private final EnumSet<ApiScope> scope;%n");
         headerGenerator.addImport(MessageGenerator.SCHEMA_CLASS);
+        headerGenerator.addImport(MessageGenerator.ENUM_SET_CLASS);
     }
 
     private void generateEnumConstructor() {
         buffer.printf("ApiMessageType(String name, short apiKey, " +
             "Schema[] requestSchemas, Schema[] responseSchemas, " +
-            "short lowestSupportedVersion, short highestSupportedVersion) {%n");
+            "short lowestSupportedVersion, short highestSupportedVersion, " +
+            "EnumSet<ApiScope> scope) {%n");
         buffer.incrementIndent();
         buffer.printf("this.name = name;%n");
         buffer.printf("this.apiKey = apiKey;%n");
@@ -195,6 +247,7 @@ public final class ApiMessageTypeGenerator implements TypeClassGenerator {
         buffer.printf("this.responseSchemas = responseSchemas;%n");
         buffer.printf("this.lowestSupportedVersion = lowestSupportedVersion;%n");
         buffer.printf("this.highestSupportedVersion = highestSupportedVersion;%n");
+        buffer.printf("this.scope = scope;%n");
         buffer.decrementIndent();
         buffer.printf("}%n");
     }
@@ -334,6 +387,18 @@ public final class ApiMessageTypeGenerator implements TypeClassGenerator {
         buffer.decrementIndent();
         buffer.decrementIndent();
         buffer.printf("}%n");
+        buffer.decrementIndent();
+        buffer.printf("}%n");
+    }
+
+    private void generateApiScopeEnum() {
+        buffer.printf("public enum ApiScope {%n");
+        buffer.incrementIndent();
+        Iterator<RequestApiScope> scopeIterator = Arrays.stream(RequestApiScope.values()).iterator();
+        while (scopeIterator.hasNext()) {
+            RequestApiScope scope = scopeIterator.next();
+            buffer.printf("%s%s%n", scope.name(), scopeIterator.hasNext() ? "," : ";");
+        }
         buffer.decrementIndent();
         buffer.printf("}%n");
     }

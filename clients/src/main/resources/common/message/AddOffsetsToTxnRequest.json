@@ -16,6 +16,7 @@
 {
   "apiKey": 25,
   "type": "request",
+  "scope": ["zkBroker", "broker"],
   "name": "AddOffsetsToTxnRequest",
   // Version 1 is the same as version 0.
   //

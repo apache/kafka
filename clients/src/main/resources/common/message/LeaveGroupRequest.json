@@ -16,6 +16,7 @@
 {
   "apiKey": 13,
   "type": "request",
+  "scope": ["zkBroker", "broker"],
   "name": "LeaveGroupRequest",
   // Version 1 and 2 are the same as version 0.
   //

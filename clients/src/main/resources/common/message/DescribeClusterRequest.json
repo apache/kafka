@@ -16,6 +16,7 @@
 {
   "apiKey": 60,
   "type": "request",
+  "scope": ["zkBroker", "broker"],
   "name": "DescribeClusterRequest",
   "validVersions": "0",
   "flexibleVersions": "0+",

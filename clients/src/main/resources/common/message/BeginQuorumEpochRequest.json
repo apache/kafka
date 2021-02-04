@@ -16,6 +16,7 @@
 {
   "apiKey": 53,
   "type": "request",
+  "scope": ["controller", "raft"],
   "name": "BeginQuorumEpochRequest",
   "validVersions": "0",
   "fields": [
