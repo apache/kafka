@@ -392,9 +392,7 @@ public class StandaloneHerder extends AbstractHerder {
                     }
 
                     if (newState == TargetState.STARTED) {
-                        requestExecutorService.submit(() -> {
-                            updateConnectorTasks(connector);
-                        });
+                        requestExecutorService.submit(() -> updateConnectorTasks(connector));
                     }
                 });
             }

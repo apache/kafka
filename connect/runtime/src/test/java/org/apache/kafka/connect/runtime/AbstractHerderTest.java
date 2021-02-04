@@ -48,7 +48,6 @@ import org.apache.kafka.connect.transforms.predicates.Predicate;
 import org.apache.kafka.connect.util.ConnectorTaskId;
 import org.easymock.Capture;
 import org.easymock.EasyMock;
-import org.easymock.IAnswer;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.powermock.api.easymock.PowerMock;
@@ -253,12 +252,7 @@ public class AbstractHerderTest {
         statusStore.putSafe(EasyMock.capture(statusCapture));
         EasyMock.expectLastCall();
 
-        EasyMock.expect(statusStore.get(taskId)).andAnswer(new IAnswer<TaskStatus>() {
-            @Override
-            public TaskStatus answer() throws Throwable {
-                return statusCapture.getValue();
-            }
-        });
+        EasyMock.expect(statusStore.get(taskId)).andAnswer(statusCapture::getValue);
 
         replayAll();
 
