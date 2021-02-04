@@ -17,7 +17,7 @@
 package kafka.cluster
 
 import java.util.concurrent.locks.ReentrantReadWriteLock
-import java.util.{Optional, Properties}
+import java.util.Optional
 
 import kafka.api.{ApiVersion, LeaderAndIsr}
 import kafka.common.UnexpectedAppendOffsetException
@@ -26,6 +26,7 @@ import kafka.log._
 import kafka.metrics.KafkaMetricsGroup
 import kafka.server._
 import kafka.server.checkpoints.OffsetCheckpoints
+import kafka.server.metadata.ConfigRepository
 import kafka.utils.CoreUtils.{inReadLock, inWriteLock}
 import kafka.utils._
 import kafka.zookeeper.ZooKeeperClientException
@@ -48,10 +49,6 @@ trait IsrChangeListener {
   def markExpand(): Unit
   def markShrink(): Unit
   def markFailed(): Unit
-}
-
-trait TopicConfigFetcher {
-  def fetch(): Properties
 }
 
 class DelayedOperations(topicPartition: TopicPartition,
@@ -86,12 +83,6 @@ object Partition extends KafkaMetricsGroup {
       override def markFailed(): Unit = replicaManager.failedIsrUpdatesRate.mark()
     }
 
-    val configProvider = new TopicConfigFetcher {
-      override def fetch(): Properties = {
-        replicaManager.configRepository.topicConfigs(topicPartition.topic())
-      }
-    }
-
     val delayedOperations = new DelayedOperations(
       topicPartition,
       replicaManager.delayedProducePurgatory,
@@ -103,7 +94,7 @@ object Partition extends KafkaMetricsGroup {
       interBrokerProtocolVersion = replicaManager.config.interBrokerProtocolVersion,
       localBrokerId = replicaManager.config.brokerId,
       time = time,
-      topicConfigProvider = configProvider,
+      configRepository = replicaManager.configRepository,
       isrChangeListener = isrChangeListener,
       delayedOperations = delayedOperations,
       metadataCache = replicaManager.metadataCache,
@@ -226,7 +217,7 @@ class Partition(val topicPartition: TopicPartition,
                 interBrokerProtocolVersion: ApiVersion,
                 localBrokerId: Int,
                 time: Time,
-                topicConfigProvider: TopicConfigFetcher,
+                configRepository: ConfigRepository,
                 isrChangeListener: IsrChangeListener,
                 delayedOperations: DelayedOperations,
                 metadataCache: MetadataCache,
@@ -340,7 +331,7 @@ class Partition(val topicPartition: TopicPartition,
   // Visible for testing
   private[cluster] def createLog(isNew: Boolean, isFutureReplica: Boolean, offsetCheckpoints: OffsetCheckpoints): Log = {
     def fetchLogConfig: LogConfig = {
-      val props = topicConfigProvider.fetch()
+      val props = configRepository.topicConfigs(topicPartition.topic())
       LogConfig.fromProps(logManager.currentDefaultConfig.originals, props)
     }
 

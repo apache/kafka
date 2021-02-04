@@ -31,6 +31,7 @@ import kafka.server.BrokerTopicStats;
 import kafka.server.LogDirFailureChannel;
 import kafka.server.MetadataCache;
 import kafka.server.checkpoints.OffsetCheckpoints;
+import kafka.server.metadata.LocalConfigRepository;
 import kafka.utils.KafkaScheduler;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.message.LeaderAndIsrRequestData;
@@ -120,7 +121,7 @@ public class PartitionMakeFollowerBenchmark {
         AlterIsrManager alterIsrManager = Mockito.mock(AlterIsrManager.class);
         partition = new Partition(tp, 100,
             ApiVersion$.MODULE$.latestVersion(), 0, Time.SYSTEM,
-            Properties::new, isrChangeListener, delayedOperations,
+            new LocalConfigRepository(), isrChangeListener, delayedOperations,
             Mockito.mock(MetadataCache.class), logManager, alterIsrManager);
         partition.createLogIfNotExists(true, false, offsetCheckpoints);
         executorService.submit((Runnable) () -> {
