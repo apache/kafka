@@ -20,7 +20,9 @@ import java.util.Properties
 
 import kafka.server.metadata.ZkConfigRepository
 import kafka.zk.KafkaZkClient
-import org.junit.jupiter.api.Assertions.assertEquals
+import org.apache.kafka.common.config.ConfigResource
+import org.apache.kafka.common.config.ConfigResource.Type
+import org.junit.jupiter.api.Assertions.{assertEquals, assertThrows}
 import org.junit.jupiter.api.Test
 import org.mockito.Mockito.{mock, when}
 
@@ -40,5 +42,13 @@ class ZkConfigRepositoryTest {
     when(zkClient.getEntityConfigs(ConfigType.Topic, topic)).thenReturn(topicProps)
     assertEquals(brokerProps, zkConfigRepository.brokerConfig(brokerId))
     assertEquals(topicProps, zkConfigRepository.topicConfig(topic))
+  }
+
+  @Test
+  def testUnsupportedTypes(): Unit = {
+    val zkClient: KafkaZkClient = mock(classOf[KafkaZkClient])
+    val zkConfigRepository = ZkConfigRepository(zkClient)
+    Type.values().foreach(value => if (value != Type.BROKER && value != Type.TOPIC)
+      assertThrows(classOf[IllegalArgumentException], () => zkConfigRepository.config(new ConfigResource(value, value.toString))))
   }
 }

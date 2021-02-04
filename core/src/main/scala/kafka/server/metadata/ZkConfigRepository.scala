@@ -32,8 +32,14 @@ object ZkConfigRepository {
 
 class ZkConfigRepository(adminZkClient: AdminZkClient) extends ConfigRepository {
   override def config(configResource: ConfigResource): Properties = {
-     adminZkClient.fetchEntityConfig(
-       if (configResource.`type`() == Type.TOPIC) ConfigType.Topic else ConfigType.Broker,
-       configResource.name())
+    val configResourceType = configResource.`type`()
+    val configTypeForZk = if (configResourceType == Type.TOPIC) {
+      ConfigType.Topic
+    } else if (configResourceType == Type.BROKER) {
+      ConfigType.Broker
+    } else {
+      throw new IllegalArgumentException(s"Unsupported config type: $configResourceType")
+    }
+    adminZkClient.fetchEntityConfig(configTypeForZk, configResource.name())
   }
 }
