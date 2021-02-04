@@ -127,6 +127,11 @@
         into the constructor, it is no longer required to set mandatory configuration parameters
         (cf. <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-680%3A+TopologyTestDriver+should+not+require+a+Properties+argument">KIP-680</a>).
     </p>
+    <p>
+        We added method <code>prefixScan()</code> to interface <code>ReadOnlyKeyValueStore</code>.
+        Method <code>prefixScan()</code> allows fetching all values whose keys start with a given prefix.
+        See <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-614%3A+Add+Prefix+Scan+support+for+State+Stores">KIP-614</a> for more details.
+    </p>
 
     <h3><a id="streams_api_changes_270" href="#streams_api_changes_270">Streams API changes in 2.7.0</a></h3>
     <p>
