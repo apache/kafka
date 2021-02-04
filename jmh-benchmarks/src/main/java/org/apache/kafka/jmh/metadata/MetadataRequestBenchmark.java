@@ -37,6 +37,7 @@ import kafka.server.QuotaFactory;
 import kafka.server.ReplicaManager;
 import kafka.server.ReplicationQuotaManager;
 import kafka.server.ZkAdminManager;
+import kafka.server.metadata.CachedConfigRepository;
 import kafka.zk.KafkaZkClient;
 import org.apache.kafka.common.memory.MemoryPool;
 import org.apache.kafka.common.message.UpdateMetadataRequestData.UpdateMetadataBroker;
@@ -178,6 +179,7 @@ public class MetadataRequestBenchmark {
             kafkaZkClient,
             brokerId,
             new KafkaConfig(kafkaProps),
+            new CachedConfigRepository(),
             metadataCache,
             metrics,
             Option.empty(),

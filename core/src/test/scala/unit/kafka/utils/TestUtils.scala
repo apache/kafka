@@ -29,7 +29,7 @@ import java.util.concurrent.{Callable, ExecutionException, Executors, TimeUnit}
 
 import javax.net.ssl.X509TrustManager
 import kafka.api._
-import kafka.cluster.{Broker, EndPoint, IsrChangeListener, TopicConfigFetcher}
+import kafka.cluster.{Broker, EndPoint, IsrChangeListener}
 import kafka.log._
 import kafka.security.auth.{Acl, Resource, Authorizer => LegacyAuthorizer}
 import kafka.server._
@@ -37,7 +37,7 @@ import kafka.server.checkpoints.OffsetCheckpointFile
 import com.yammer.metrics.core.Meter
 import kafka.controller.LeaderIsrAndControllerEpoch
 import kafka.metrics.KafkaYammerMetrics
-import kafka.server.metadata.MetadataBroker
+import kafka.server.metadata.{ConfigRepository, CachedConfigRepository, MetadataBroker}
 import kafka.utils.Implicits._
 import kafka.zk._
 import org.apache.kafka.clients.CommonClientConfigs
@@ -1155,12 +1155,10 @@ object TestUtils extends Logging {
     new MockIsrChangeListener()
   }
 
-  class MockTopicConfigFetcher(var props: Properties) extends TopicConfigFetcher {
-    override def fetch(): Properties = props
-  }
-
-  def createTopicConfigProvider(props: Properties): MockTopicConfigFetcher = {
-    new MockTopicConfigFetcher(props)
+  def createConfigRepository(topic: String, props: Properties): ConfigRepository = {
+    val configRepository = new CachedConfigRepository()
+    props.entrySet().forEach(e => configRepository.setTopicConfig(topic, e.getKey.toString, e.getValue.toString))
+    configRepository
   }
 
   def produceMessages(servers: Seq[KafkaServer],
