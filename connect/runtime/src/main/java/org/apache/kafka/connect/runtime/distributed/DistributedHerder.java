@@ -236,7 +236,7 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
 
         this.herderExecutor = new ThreadPoolExecutor(1, 1, 0L,
                 TimeUnit.MILLISECONDS,
-            new LinkedBlockingDeque<>(1),
+                new LinkedBlockingDeque<>(1),
                 ThreadUtils.createThreadFactory(
                         this.getClass().getSimpleName() + "-" + clientId + "-%d", false));
 
