@@ -33,14 +33,65 @@ import scala.jdk.CollectionConverters._
 class LocalConfigRepository extends ConfigRepository {
   val configMap = new ConcurrentHashMap[ConfigResource, util.HashMap[String, String]]
 
+  /**
+   * Remove the topic config for the given topic name and the given key.
+   *
+   * @param topicName the name of the topic for which the config will be removed
+   * @param key the key identifying the topic config to remove
+   */
+  def removeTopicConfig(topicName: String, key: String): Unit = {
+    setTopicConfig(topicName, key, null)
+  }
+
+  /**
+   * Set the topic config for the given topic name and the given key to the given value.
+   *
+   * @param topicName the name of the topic for which the config will be set
+   * @param key the key identifying the topic config to set
+   * @param value the value to set for the topic config with null implying a removal
+   */
   def setTopicConfig(topicName: String, key: String, value: String): Unit = {
     setConfig(new ConfigResource(Type.TOPIC, topicName), key, value)
   }
 
+  /**
+   * Remove the broker config for the given broker ID and the given key.
+   *
+   * @param brokerId the ID of the broker for which the config will be removed
+   * @param key the key identifying the topic config to remove
+   */
+  def removeBrokerConfig(brokerId: Int, key: String): Unit = {
+    setBrokerConfig(brokerId, key, null)
+  }
+
+  /**
+   * Set the broker config for the given broker ID and the given key to the given value.
+   *
+   * @param brokerId the ID of the broker for which the config will be set
+   * @param key the key identifying the broker config to set
+   * @param value the value to set for the broker config with null implying a removal
+   */
   def setBrokerConfig(brokerId: Int, key: String, value: String): Unit = {
     setConfig(new ConfigResource(Type.BROKER, brokerId.toString()), key, value)
   }
 
+  /**
+   * Remove the config for the given resource and the given key.
+   *
+   * @param configResource the resource for which the config will be removed
+   * @param key the key identifying the resource config to remove
+   */
+  def removeConfig(configResource: ConfigResource, key: String): Unit = {
+    setConfig(configResource, key, null)
+  }
+
+  /**
+   * Set the config for the given resource and the given key to the given value.
+   *
+   * @param configResource the resource for which the config will be set
+   * @param key the key identifying the resource config to set
+   * @param value the value to set for the resource config with null implying a removal
+   */
   def setConfig(configResource: ConfigResource, key: String, value: String): Unit = {
     configMap.compute(configResource, new BiFunction[ConfigResource, util.HashMap[String, String], util.HashMap[String, String]] {
       override def apply(resource: ConfigResource,
