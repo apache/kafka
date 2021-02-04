@@ -26,7 +26,6 @@ import org.apache.kafka.clients.admin.TopicDescription;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.Node;
-import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartitionInfo;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.config.ConfigResource;
@@ -160,7 +159,7 @@ public class TopicAdminTest {
         NewTopic newTopic = TopicAdmin.defineTopic("myTopic").partitions(1).compacted().build();
         Cluster cluster = createCluster(1);
         try (MockAdminClient mockAdminClient = new MockAdminClient(cluster.nodes(), cluster.nodeById(0))) {
-            TopicPartitionInfo topicPartitionInfo = new TopicPartitionInfo(0, cluster.nodeById(0), cluster.nodes(), Collections.<Node>emptyList());
+            TopicPartitionInfo topicPartitionInfo = new TopicPartitionInfo(0, cluster.nodeById(0), cluster.nodes(), Collections.emptyList());
             mockAdminClient.addTopic(false, "myTopic", Collections.singletonList(topicPartitionInfo), null);
             TopicAdmin admin = new TopicAdmin(null, mockAdminClient);
             assertFalse(admin.createTopic(newTopic));
@@ -272,7 +271,7 @@ public class TopicAdminTest {
         NewTopic newTopic = TopicAdmin.defineTopic(topicName).partitions(1).compacted().build();
         Cluster cluster = createCluster(1);
         try (MockAdminClient mockAdminClient = new MockAdminClient(cluster.nodes(), cluster.nodeById(0))) {
-            TopicPartitionInfo topicPartitionInfo = new TopicPartitionInfo(0, cluster.nodeById(0), cluster.nodes(), Collections.<Node>emptyList());
+            TopicPartitionInfo topicPartitionInfo = new TopicPartitionInfo(0, cluster.nodeById(0), cluster.nodes(), Collections.emptyList());
             mockAdminClient.addTopic(false, topicName, Collections.singletonList(topicPartitionInfo), null);
             TopicAdmin admin = new TopicAdmin(null, mockAdminClient);
             Map<String, TopicDescription> desc = admin.describeTopics(newTopic.name());
@@ -352,7 +351,7 @@ public class TopicAdminTest {
                                       .build();
         Cluster cluster = createCluster(1);
         try (MockAdminClient mockAdminClient = new MockAdminClient(cluster.nodes(), cluster.nodeById(0))) {
-            TopicPartitionInfo topicPartitionInfo = new TopicPartitionInfo(0, cluster.nodeById(0), cluster.nodes(), Collections.<Node>emptyList());
+            TopicPartitionInfo topicPartitionInfo = new TopicPartitionInfo(0, cluster.nodeById(0), cluster.nodes(), Collections.emptyList());
             mockAdminClient.addTopic(false, topicName, Collections.singletonList(topicPartitionInfo), null);
             TopicAdmin admin = new TopicAdmin(null, mockAdminClient);
             Map<String, Config> result = admin.describeTopicConfigs(newTopic.name());
@@ -406,7 +405,7 @@ public class TopicAdminTest {
         Map<String, String> topicConfigs = Collections.singletonMap("cleanup.policy", "compact");
         Cluster cluster = createCluster(1);
         try (MockAdminClient mockAdminClient = new MockAdminClient(cluster.nodes(), cluster.nodeById(0))) {
-            TopicPartitionInfo topicPartitionInfo = new TopicPartitionInfo(0, cluster.nodeById(0), cluster.nodes(), Collections.<Node>emptyList());
+            TopicPartitionInfo topicPartitionInfo = new TopicPartitionInfo(0, cluster.nodeById(0), cluster.nodes(), Collections.emptyList());
             mockAdminClient.addTopic(false, topicName, Collections.singletonList(topicPartitionInfo), topicConfigs);
             TopicAdmin admin = new TopicAdmin(null, mockAdminClient);
             boolean result = admin.verifyTopicCleanupPolicyOnlyCompact("myTopic", "worker.topic", "purpose");
@@ -420,7 +419,7 @@ public class TopicAdminTest {
         Map<String, String> topicConfigs = Collections.singletonMap("cleanup.policy", "delete");
         Cluster cluster = createCluster(1);
         try (MockAdminClient mockAdminClient = new MockAdminClient(cluster.nodes(), cluster.nodeById(0))) {
-            TopicPartitionInfo topicPartitionInfo = new TopicPartitionInfo(0, cluster.nodeById(0), cluster.nodes(), Collections.<Node>emptyList());
+            TopicPartitionInfo topicPartitionInfo = new TopicPartitionInfo(0, cluster.nodeById(0), cluster.nodes(), Collections.emptyList());
             mockAdminClient.addTopic(false, topicName, Collections.singletonList(topicPartitionInfo), topicConfigs);
             TopicAdmin admin = new TopicAdmin(null, mockAdminClient);
             ConfigException e = assertThrows(ConfigException.class, () -> admin.verifyTopicCleanupPolicyOnlyCompact("myTopic", "worker.topic", "purpose"));
@@ -434,7 +433,7 @@ public class TopicAdminTest {
         Map<String, String> topicConfigs = Collections.singletonMap("cleanup.policy", "delete,compact");
         Cluster cluster = createCluster(1);
         try (MockAdminClient mockAdminClient = new MockAdminClient(cluster.nodes(), cluster.nodeById(0))) {
-            TopicPartitionInfo topicPartitionInfo = new TopicPartitionInfo(0, cluster.nodeById(0), cluster.nodes(), Collections.<Node>emptyList());
+            TopicPartitionInfo topicPartitionInfo = new TopicPartitionInfo(0, cluster.nodeById(0), cluster.nodes(), Collections.emptyList());
             mockAdminClient.addTopic(false, topicName, Collections.singletonList(topicPartitionInfo), topicConfigs);
             TopicAdmin admin = new TopicAdmin(null, mockAdminClient);
             ConfigException e = assertThrows(ConfigException.class, () -> admin.verifyTopicCleanupPolicyOnlyCompact("myTopic", "worker.topic", "purpose"));
@@ -448,7 +447,7 @@ public class TopicAdminTest {
         Map<String, String> topicConfigs = Collections.singletonMap("cleanup.policy", "compact");
         Cluster cluster = createCluster(1);
         try (MockAdminClient mockAdminClient = new MockAdminClient(cluster.nodes(), cluster.nodeById(0))) {
-            TopicPartitionInfo topicPartitionInfo = new TopicPartitionInfo(0, cluster.nodeById(0), cluster.nodes(), Collections.<Node>emptyList());
+            TopicPartitionInfo topicPartitionInfo = new TopicPartitionInfo(0, cluster.nodeById(0), cluster.nodes(), Collections.emptyList());
             mockAdminClient.addTopic(false, topicName, Collections.singletonList(topicPartitionInfo), topicConfigs);
             TopicAdmin admin = new TopicAdmin(null, mockAdminClient);
             Set<String> policies = admin.topicCleanupPolicy("myTopic");
@@ -463,8 +462,8 @@ public class TopicAdminTest {
             nodes.put(i, new Node(i, "localhost", 8121 + i));
         }
         Cluster cluster = new Cluster("mockClusterId", nodes.values(),
-                Collections.<PartitionInfo>emptySet(), Collections.<String>emptySet(),
-                Collections.<String>emptySet(), nodes.get(0));
+                Collections.emptySet(), Collections.emptySet(),
+                Collections.emptySet(), nodes.get(0));
         return cluster;
     }
 
@@ -506,7 +505,7 @@ public class TopicAdminTest {
             clientBuilder.defaultPartitions(defaultPartitions.shortValue());
         }
         if (defaultReplicationFactor != null) {
-            clientBuilder.defaultReplicationFactor(defaultReplicationFactor.intValue());
+            clientBuilder.defaultReplicationFactor(defaultReplicationFactor);
         }
         clientBuilder.brokers(cluster.nodes());
         clientBuilder.controller(0);

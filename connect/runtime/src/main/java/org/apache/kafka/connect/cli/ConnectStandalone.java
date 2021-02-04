@@ -72,7 +72,7 @@ public class ConnectStandalone {
 
             String workerPropsFile = args[0];
             Map<String, String> workerProps = !workerPropsFile.isEmpty() ?
-                    Utils.propsToStringMap(Utils.loadProps(workerPropsFile)) : Collections.<String, String>emptyMap();
+                    Utils.propsToStringMap(Utils.loadProps(workerPropsFile)) : Collections.emptyMap();
 
             log.info("Scanning for plugin classes. This might take a moment ...");
             Plugins plugins = new Plugins(workerProps);

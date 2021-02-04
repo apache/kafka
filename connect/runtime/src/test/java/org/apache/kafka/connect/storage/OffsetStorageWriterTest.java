@@ -258,7 +258,7 @@ public class OffsetStorageWriterTest {
             );
         if (callback != null) {
             if (fail) {
-                callback.onCompletion(EasyMock.eq(exception), EasyMock.eq((Void) null));
+                callback.onCompletion(EasyMock.eq(exception), EasyMock.eq(null));
             } else {
                 callback.onCompletion(null, null);
             }
