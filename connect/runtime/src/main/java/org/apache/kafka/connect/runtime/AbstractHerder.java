@@ -269,7 +269,7 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
         final ClusterConfigState configState = configBackingStore.snapshot();
 
         if (!configState.contains(connector))
-            return null;
+            return Collections.emptyMap();
 
         Map<ConnectorTaskId, Map<String, String>> configs = new HashMap<>();
         for (ConnectorTaskId cti : configState.tasks(connector)) {
