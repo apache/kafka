@@ -20,16 +20,17 @@ package kafka.log
 import java.io._
 import java.nio.file.Files
 import java.util.concurrent._
-import java.util.concurrent.atomic.AtomicInteger
+import java.util.concurrent.atomic.{AtomicInteger, AtomicReference}
 
 import kafka.metrics.KafkaMetricsGroup
 import kafka.server.checkpoints.OffsetCheckpointFile
 import kafka.server.metadata.ConfigRepository
-import kafka.server.{BrokerState, RecoveringFromUncleanShutdown, _}
+import kafka.server._
 import kafka.utils._
 import org.apache.kafka.common.{KafkaException, TopicPartition}
 import org.apache.kafka.common.utils.Time
 import org.apache.kafka.common.errors.{KafkaStorageException, LogDirNotFoundException}
+import org.apache.kafka.metadata.BrokerState
 
 import scala.jdk.CollectionConverters._
 import scala.collection._
@@ -60,7 +61,7 @@ class LogManager(logDirs: Seq[File],
                  val retentionCheckMs: Long,
                  val maxPidExpirationMs: Int,
                  scheduler: Scheduler,
-                 val brokerState: BrokerState,
+                 val brokerState: AtomicReference[BrokerState],
                  brokerTopicStats: BrokerTopicStats,
                  logDirFailureChannel: LogDirFailureChannel,
                  time: Time) extends Logging with KafkaMetricsGroup {
@@ -325,7 +326,7 @@ class LogManager(logDirs: Seq[File],
         } else {
           // log recovery itself is being performed by `Log` class during initialization
           info(s"Attempting recovery for all logs in $logDirAbsolutePath since no clean shutdown file was found")
-          brokerState.newState(RecoveringFromUncleanShutdown)
+          brokerState.set(BrokerState.RECOVERY)
         }
 
         var recoveryPoints = Map[TopicPartition, Long]()
@@ -412,7 +413,7 @@ class LogManager(logDirs: Seq[File],
     val topicLogConfigs: mutable.Map[String, LogConfig] = mutable.Map()
     val defaultProps = currentDefaultConfig.originals()
     retrieveTopicNames().foreach { topicName =>
-      val overrides = configRepository.topicConfigs(topicName)
+      val overrides = configRepository.topicConfig(topicName)
       // Later on we grab the default configs if a topic doesn't appear in the map,
       // so save memory by only putting the log configs into the map when there is the potential for overrides
       if (!overrides.isEmpty()) {
@@ -1206,7 +1207,7 @@ object LogManager {
   def apply(config: KafkaConfig,
             initialOfflineDirs: Seq[String],
             configRepository: ConfigRepository,
-            brokerState: BrokerState,
+            brokerState: AtomicReference[BrokerState],
             kafkaScheduler: KafkaScheduler,
             time: Time,
             brokerTopicStats: BrokerTopicStats,
