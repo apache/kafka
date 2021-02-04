@@ -20,12 +20,13 @@ package kafka.server
 import java.net.InetAddress
 
 import org.apache.kafka.clients.admin.{ScramCredentialInfo, ScramMechanism, UserScramCredentialUpsertion}
+import org.apache.kafka.common.config.internals.QuotaConfigs
 import org.apache.kafka.common.errors.{InvalidRequestException, UnsupportedVersionException}
 import org.apache.kafka.common.internals.KafkaFutureImpl
 import org.apache.kafka.common.quota.{ClientQuotaAlteration, ClientQuotaEntity, ClientQuotaFilter, ClientQuotaFilterComponent}
 import org.apache.kafka.common.requests.{AlterClientQuotasRequest, AlterClientQuotasResponse, DescribeClientQuotasRequest, DescribeClientQuotasResponse}
-import org.junit.Assert._
-import org.junit.Test
+import org.junit.jupiter.api.Assertions._
+import org.junit.jupiter.api.Test
 import java.util
 import java.util.concurrent.{ExecutionException, TimeUnit}
 
@@ -34,10 +35,10 @@ import kafka.utils.TestUtils
 import scala.jdk.CollectionConverters._
 
 class ClientQuotasRequestTest extends BaseRequestTest {
-  private val ConsumerByteRateProp = DynamicConfig.Client.ConsumerByteRateOverrideProp
-  private val ProducerByteRateProp = DynamicConfig.Client.ProducerByteRateOverrideProp
-  private val RequestPercentageProp = DynamicConfig.Client.RequestPercentageOverrideProp
-  private val IpConnectionRateProp = DynamicConfig.Ip.IpConnectionRateOverrideProp
+  private val ConsumerByteRateProp = QuotaConfigs.CONSUMER_BYTE_RATE_OVERRIDE_CONFIG
+  private val ProducerByteRateProp = QuotaConfigs.PRODUCER_BYTE_RATE_OVERRIDE_CONFIG
+  private val RequestPercentageProp = QuotaConfigs.REQUEST_PERCENTAGE_OVERRIDE_CONFIG
+  private val IpConnectionRateProp = QuotaConfigs.IP_CONNECTION_RATE_OVERRIDE_CONFIG
 
   override val brokerCount = 1
 
@@ -288,7 +289,7 @@ class ClientQuotasRequestTest extends BaseRequestTest {
 
   private def expectInvalidRequestWithMessage(runnable: => Unit, expectedMessage: String): Unit = {
     val exception = assertThrows(classOf[InvalidRequestException], () => runnable)
-    assertTrue(s"Expected message $exception to contain $expectedMessage", exception.getMessage.contains(expectedMessage))
+    assertTrue(exception.getMessage.contains(expectedMessage), s"Expected message $exception to contain $expectedMessage")
   }
 
   @Test
@@ -376,7 +377,7 @@ class ClientQuotasRequestTest extends BaseRequestTest {
       assertEquals(1, result.size)
       assertTrue(result.get(e) != null)
       val value = result.get(e).get(RequestPercentageProp)
-      assertTrue(value != null)
+      assertNotNull(value)
       assertEquals(value, v, 1e-6)
     }
 
@@ -554,11 +555,11 @@ class ClientQuotasRequestTest extends BaseRequestTest {
     } else {
       assertEquals(1, describe.size)
       val configs = describe.get(entity)
-      assertTrue(configs != null)
+      assertNotNull(configs)
       assertEquals(quotas.size, configs.size)
       quotas.foreach { case (k, v) =>
         val value = configs.get(k)
-        assertTrue(value != null)
+        assertNotNull(value)
         assertEquals(v, value, 1e-6)
       }
     }

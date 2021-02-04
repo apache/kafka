@@ -15,7 +15,7 @@ package kafka.api
 import java.io.File
 
 import kafka.server.KafkaConfig
-import org.junit.{After, Before, Test}
+import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
 import kafka.utils.JaasTestUtils
 import org.apache.kafka.common.security.auth.SecurityProtocol
 
@@ -30,14 +30,14 @@ class SaslMultiMechanismConsumerTest extends BaseConsumerTest with SaslSetup {
   override protected val serverSaslProperties = Some(kafkaServerSaslProperties(kafkaServerSaslMechanisms, kafkaClientSaslMechanism))
   override protected val clientSaslProperties = Some(kafkaClientSaslProperties(kafkaClientSaslMechanism))
 
-  @Before
+  @BeforeEach
   override def setUp(): Unit = {
     startSasl(jaasSections(kafkaServerSaslMechanisms, Some(kafkaClientSaslMechanism), Both,
       JaasTestUtils.KafkaServerContextName))
     super.setUp()
   }
 
-  @After
+  @AfterEach
   override def tearDown(): Unit = {
     super.tearDown()
     closeSasl()
@@ -55,33 +55,41 @@ class SaslMultiMechanismConsumerTest extends BaseConsumerTest with SaslSetup {
     var startingOffset = 0
 
     // Test SASL/PLAIN producer and consumer
-    sendRecords(plainSaslProducer, numRecords, tp)
+    var startingTimestamp = System.currentTimeMillis()
+    sendRecords(plainSaslProducer, numRecords, tp, startingTimestamp = startingTimestamp)
     plainSaslConsumer.assign(List(tp).asJava)
     plainSaslConsumer.seek(tp, 0)
-    consumeAndVerifyRecords(consumer = plainSaslConsumer, numRecords = numRecords, startingOffset = startingOffset)
+    consumeAndVerifyRecords(consumer = plainSaslConsumer, numRecords = numRecords, startingOffset = startingOffset,
+      startingTimestamp = startingTimestamp)
     sendAndAwaitAsyncCommit(plainSaslConsumer)
     startingOffset += numRecords
 
     // Test SASL/GSSAPI producer and consumer
-    sendRecords(gssapiSaslProducer, numRecords, tp)
+    startingTimestamp = System.currentTimeMillis()
+    sendRecords(gssapiSaslProducer, numRecords, tp, startingTimestamp = startingTimestamp)
     gssapiSaslConsumer.assign(List(tp).asJava)
     gssapiSaslConsumer.seek(tp, startingOffset)
-    consumeAndVerifyRecords(consumer = gssapiSaslConsumer, numRecords = numRecords, startingOffset = startingOffset)
+    consumeAndVerifyRecords(consumer = gssapiSaslConsumer, numRecords = numRecords, startingOffset = startingOffset,
+      startingTimestamp = startingTimestamp)
     sendAndAwaitAsyncCommit(gssapiSaslConsumer)
     startingOffset += numRecords
 
     // Test SASL/PLAIN producer and SASL/GSSAPI consumer
-    sendRecords(plainSaslProducer, numRecords, tp)
+    startingTimestamp = System.currentTimeMillis()
+    sendRecords(plainSaslProducer, numRecords, tp, startingTimestamp = startingTimestamp)
     gssapiSaslConsumer.assign(List(tp).asJava)
     gssapiSaslConsumer.seek(tp, startingOffset)
-    consumeAndVerifyRecords(consumer = gssapiSaslConsumer, numRecords = numRecords, startingOffset = startingOffset)
+    consumeAndVerifyRecords(consumer = gssapiSaslConsumer, numRecords = numRecords, startingOffset = startingOffset,
+      startingTimestamp = startingTimestamp)
     startingOffset += numRecords
 
     // Test SASL/GSSAPI producer and SASL/PLAIN consumer
-    sendRecords(gssapiSaslProducer, numRecords, tp)
+    startingTimestamp = System.currentTimeMillis()
+    sendRecords(gssapiSaslProducer, numRecords, tp, startingTimestamp = startingTimestamp)
     plainSaslConsumer.assign(List(tp).asJava)
     plainSaslConsumer.seek(tp, startingOffset)
-    consumeAndVerifyRecords(consumer = plainSaslConsumer, numRecords = numRecords, startingOffset = startingOffset)
+    consumeAndVerifyRecords(consumer = plainSaslConsumer, numRecords = numRecords, startingOffset = startingOffset,
+      startingTimestamp = startingTimestamp)
   }
 
 }

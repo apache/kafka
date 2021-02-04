@@ -26,6 +26,7 @@ import org.apache.kafka.common.utils.ByteBufferOutputStream;
 import org.apache.kafka.common.utils.CloseableIterator;
 import org.apache.kafka.common.utils.Time;
 
+import org.apache.kafka.common.utils.Utils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -71,11 +72,7 @@ public class MemoryRecords extends AbstractRecords {
             throw new IllegalArgumentException("position+length should not be greater than buffer.limit(), position: "
                     + position + ", length: " + length + ", buffer.limit(): " + buffer.limit());
 
-        int pos = (int) position;
-        ByteBuffer dup = buffer.duplicate();
-        dup.position(pos);
-        dup.limit(pos + length);
-        return channel.write(dup);
+        return Utils.tryWriteTo(channel, (int) position, length, buffer);
     }
 
     /**

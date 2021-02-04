@@ -30,6 +30,7 @@ import kafka.utils.Implicits._
 import kafka.zk.{AdminZkClient, KafkaZkClient}
 import org.apache.kafka.clients.admin.{AlterConfigOp, ScramMechanism}
 import org.apache.kafka.clients.admin.AlterConfigOp.OpType
+import org.apache.kafka.common.Uuid
 import org.apache.kafka.common.config.ConfigDef.ConfigKey
 import org.apache.kafka.common.config.{AbstractConfig, ConfigDef, ConfigException, ConfigResource, LogLevelConfig}
 import org.apache.kafka.common.errors.ThrottlingQuotaExceededException
@@ -57,7 +58,7 @@ import org.apache.kafka.common.utils.Sanitizer
 import scala.collection.{Map, mutable, _}
 import scala.jdk.CollectionConverters._
 
-class AdminManager(val config: KafkaConfig,
+class ZkAdminManager(val config: KafkaConfig,
                    val metrics: Metrics,
                    val metadataCache: MetadataCache,
                    val zkClient: KafkaZkClient) extends Logging with KafkaMetricsGroup {
@@ -116,7 +117,7 @@ class AdminManager(val config: KafkaConfig,
                                               configs: Properties,
                                               assignments: Map[Int, Seq[Int]]): Unit = {
     metadataAndConfigs.get(topicName).foreach { result =>
-      val logConfig = LogConfig.fromProps(KafkaServer.copyKafkaConfigToLog(config), configs)
+      val logConfig = LogConfig.fromProps(LogConfig.extractLogConfigMap(config), configs)
       val createEntry = createTopicConfigEntry(logConfig, configs, includeSynonyms = false, includeDocumentation = false)(_, _)
       val topicConfigs = logConfig.values.asScala.map { case (k, v) =>
         val entry = createEntry(k, v)
@@ -130,6 +131,13 @@ class AdminManager(val config: KafkaConfig,
       result.setConfigs(topicConfigs)
       result.setNumPartitions(assignments.size)
       result.setReplicationFactor(assignments(0).size.toShort)
+    }
+  }
+
+  private def populateIds(metadataAndConfigs: Map[String, CreatableTopicResult],
+                                              topicName: String) : Unit = {
+    metadataAndConfigs.get(topicName).foreach { result =>
+        result.setTopicId(zkClient.getTopicIdsForTopics(Predef.Set(result.name())).getOrElse(result.name(), Uuid.ZERO_UUID))
     }
   }
 
@@ -194,7 +202,8 @@ class AdminManager(val config: KafkaConfig,
           CreatePartitionsMetadata(topic.name, assignments.keySet)
         } else {
           controllerMutationQuota.record(assignments.size)
-          adminZkClient.createTopicWithAssignment(topic.name, configs, assignments, validate = false)
+          adminZkClient.createTopicWithAssignment(topic.name, configs, assignments, validate = false, config.usesTopicId)
+          populateIds(includeConfigsAndMetadata, topic.name)
           CreatePartitionsMetadata(topic.name, assignments.keySet)
         }
       } catch {
@@ -410,7 +419,7 @@ class AdminManager(val config: KafkaConfig,
             if (metadataCache.contains(topic)) {
               // Consider optimizing this by caching the configs or retrieving them from the `Log` when possible
               val topicProps = adminZkClient.fetchEntityConfig(ConfigType.Topic, topic)
-              val logConfig = LogConfig.fromProps(KafkaServer.copyKafkaConfigToLog(config), topicProps)
+              val logConfig = LogConfig.fromProps(LogConfig.extractLogConfigMap(config), topicProps)
               createResponseConfig(allConfigs(logConfig), createTopicConfigEntry(logConfig, topicProps, includeSynonyms, includeDocumentation))
             } else {
               new DescribeConfigsResponseData.DescribeConfigsResult().setErrorCode(Errors.UNKNOWN_TOPIC_OR_PARTITION.code)
@@ -971,7 +980,7 @@ class AdminManager(val config: KafkaConfig,
     }
 
     (userEntries ++ clientIdEntries ++ bothEntries).flatMap { case ((u, c), p) =>
-      val quotaProps = p.asScala.filter { case (key, _) => QuotaConfigs.isQuotaConfig(key) }
+      val quotaProps = p.asScala.filter { case (key, _) => QuotaConfigs.isClientOrUserQuotaConfig(key) }
       if (quotaProps.nonEmpty && matches(userComponent, u) && matches(clientIdComponent, c))
         Some(userClientIdToEntity(u, c) -> fromProps(quotaProps))
       else

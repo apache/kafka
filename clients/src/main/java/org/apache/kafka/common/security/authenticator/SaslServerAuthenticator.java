@@ -36,6 +36,7 @@ import org.apache.kafka.common.network.ListenerName;
 import org.apache.kafka.common.network.NetworkReceive;
 import org.apache.kafka.common.network.ReauthenticationContext;
 import org.apache.kafka.common.network.Send;
+import org.apache.kafka.common.network.SslTransportLayer;
 import org.apache.kafka.common.network.TransportLayer;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
@@ -65,6 +66,7 @@ import org.apache.kafka.common.utils.Utils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import javax.net.ssl.SSLSession;
 import javax.security.auth.Subject;
 import javax.security.sasl.Sasl;
 import javax.security.sasl.SaslException;
@@ -293,7 +295,10 @@ public class SaslServerAuthenticator implements Authenticator {
 
     @Override
     public KafkaPrincipal principal() {
-        SaslAuthenticationContext context = new SaslAuthenticationContext(saslServer, securityProtocol, clientAddress(), listenerName.value());
+        Optional<SSLSession> sslSession = transportLayer instanceof SslTransportLayer ?
+                Optional.of(((SslTransportLayer) transportLayer).sslSession()) : Optional.empty();
+        SaslAuthenticationContext context = new SaslAuthenticationContext(saslServer, securityProtocol,
+                clientAddress(), listenerName.value(), sslSession);
         KafkaPrincipal principal = principalBuilder.build(context);
         if (ScramMechanism.isScram(saslMechanism) && Boolean.parseBoolean((String) saslServer.getNegotiatedProperty(ScramLoginModule.TOKEN_AUTH_CONFIG))) {
             principal.tokenAuthenticated(true);

@@ -17,7 +17,7 @@
 
 package kafka.tools
 
-import java.io.{ByteArrayOutputStream, File}
+import java.io.{ByteArrayOutputStream, File, PrintWriter}
 import java.util.Properties
 
 import kafka.log.{Log, LogConfig, LogManager}
@@ -26,8 +26,8 @@ import kafka.tools.DumpLogSegments.TimeIndexDumpErrors
 import kafka.utils.{MockTime, TestUtils}
 import org.apache.kafka.common.record.{CompressionType, MemoryRecords, SimpleRecord}
 import org.apache.kafka.common.utils.Utils
-import org.junit.Assert._
-import org.junit.{After, Before, Test}
+import org.junit.jupiter.api.Assertions._
+import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
 
 import scala.collection.mutable
 import scala.collection.mutable.ArrayBuffer
@@ -47,7 +47,7 @@ class DumpLogSegmentsTest {
   val batches = new ArrayBuffer[BatchInfo]
   var log: Log = _
 
-  @Before
+  @BeforeEach
   def setUp(): Unit = {
     val props = new Properties
     props.setProperty(LogConfig.IndexIntervalBytesProp, "128")
@@ -74,7 +74,7 @@ class DumpLogSegmentsTest {
     log.flush()
   }
 
-  @After
+  @AfterEach
   def tearDown(): Unit = {
     log.close()
     Utils.delete(tmpDir)
@@ -103,7 +103,7 @@ class DumpLogSegmentsTest {
 
       val output = runDumpLogSegments(args)
       val lines = output.split("\n")
-      assertTrue(s"Data not printed: $output", lines.length > 2)
+      assertTrue(lines.length > 2, s"Data not printed: $output")
       val totalRecords = batches.map(_.records.size).sum
       var offset = 0
       val batchIterator = batches.iterator
@@ -113,17 +113,17 @@ class DumpLogSegmentsTest {
         // The base offset of the batch is the offset of the first record in the batch, so we
         // only increment the offset if it's not a batch
         if (isBatch(index)) {
-          assertTrue(s"Not a valid batch-level message record: $line", line.startsWith(s"baseOffset: $offset lastOffset: "))
+          assertTrue(line.startsWith(s"baseOffset: $offset lastOffset: "), s"Not a valid batch-level message record: $line")
           batch = batchIterator.next()
         } else {
-          assertTrue(s"Not a valid message record: $line", line.startsWith(s"${DumpLogSegments.RecordIndent} offset: $offset"))
+          assertTrue(line.startsWith(s"${DumpLogSegments.RecordIndent} offset: $offset"), s"Not a valid message record: $line")
           if (checkKeysAndValues) {
             var suffix = "headerKeys: []"
             if (batch.hasKeys)
               suffix += s" key: message key $offset"
             if (batch.hasValues)
               suffix += s" payload: message value $offset"
-            assertTrue(s"Message record missing key or value: $line", line.endsWith(suffix))
+            assertTrue(line.endsWith(suffix), s"Message record missing key or value: $line")
           }
           offset += 1
         }
@@ -132,7 +132,7 @@ class DumpLogSegmentsTest {
 
     def verifyNoRecordsInOutput(args: Array[String]): Unit = {
       val output = runDumpLogSegments(args)
-      assertFalse(s"Data should not have been printed: $output", output.matches("(?s).*offset: [0-9]* isvalid.*"))
+      assertFalse(output.matches("(?s).*offset: [0-9]* isvalid.*"), s"Data should not have been printed: $output")
     }
 
     // Verify that records are printed with --print-data-log even if --deep-iteration is not specified
@@ -166,6 +166,19 @@ class DumpLogSegmentsTest {
     assertEquals(Map.empty, errors.misMatchesForTimeIndexFilesMap)
     assertEquals(Map.empty, errors.outOfOrderTimestamp)
     assertEquals(Map.empty, errors.shallowOffsetNotFound)
+  }
+
+  @Test
+  def testDumpEmptyIndex(): Unit = {
+    val indexFile = new File(indexFilePath)
+    new PrintWriter(indexFile).close()
+    val expectOutput = s"$indexFile is empty.\n"
+    val outContent = new ByteArrayOutputStream()
+    Console.withOut(outContent) {
+      DumpLogSegments.dumpIndex(indexFile, indexSanityOnly = false, verifyOnly = true,
+        misMatchesForIndexFilesMap = mutable.Map[String, List[(Long, Long)]](), Int.MaxValue)
+    }
+    assertEquals(expectOutput, outContent.toString)
   }
 
   private def runDumpLogSegments(args: Array[String]): String = {

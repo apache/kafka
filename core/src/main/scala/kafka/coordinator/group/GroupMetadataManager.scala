@@ -819,7 +819,7 @@ class GroupMetadataManager(brokerId: Int,
         val timestampType = TimestampType.CREATE_TIME
         val timestamp = time.milliseconds()
 
-          replicaManager.nonOfflinePartition(appendPartition).foreach { partition =>
+          replicaManager.onlinePartition(appendPartition).foreach { partition =>
             val tombstones = ArrayBuffer.empty[SimpleRecord]
             removedOffsets.forKeyValue { (topicPartition, offsetAndMetadata) =>
               trace(s"Removing expired/deleted offset and metadata for $groupId, $topicPartition: $offsetAndMetadata")
@@ -1147,7 +1147,6 @@ object GroupMetadataManager {
         val members = value.members.asScala.map { memberMetadata =>
           new MemberMetadata(
             memberId = memberMetadata.memberId,
-            groupId = groupId,
             groupInstanceId = Option(memberMetadata.groupInstanceId),
             clientId = memberMetadata.clientId,
             clientHost = memberMetadata.clientHost,

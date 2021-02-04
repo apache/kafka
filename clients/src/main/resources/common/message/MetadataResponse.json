@@ -36,8 +36,12 @@
   // Starting in version 8, brokers can send authorized operations for topic and cluster.
   //
   // Version 9 is the first flexible version.
-  // Version 10 add topicId
-  "validVersions": "0-10",
+  //
+  // Version 10 adds topicId.
+  //
+  // Version 11 deprecates ClusterAuthorizedOperations. This is now exposed
+  // by the DescribeCluster API (KIP-700).
+  "validVersions": "0-11",
   "flexibleVersions": "9+",
   "fields": [
     { "name": "ThrottleTimeMs", "type": "int32", "versions": "3+", "ignorable": true,
@@ -86,7 +90,7 @@
       { "name": "TopicAuthorizedOperations", "type": "int32", "versions": "8+", "default": "-2147483648",
         "about": "32-bit bitfield to represent authorized operations for this topic." }
     ]},
-    { "name": "ClusterAuthorizedOperations", "type": "int32", "versions": "8+", "default": "-2147483648",
+    { "name": "ClusterAuthorizedOperations", "type": "int32", "versions": "8-10", "default": "-2147483648",
       "about": "32-bit bitfield to represent authorized operations for this cluster." }
   ]
 }

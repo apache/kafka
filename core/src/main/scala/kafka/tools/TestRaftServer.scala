@@ -24,16 +24,16 @@ import joptsimple.OptionException
 import kafka.network.SocketServer
 import kafka.raft.{KafkaRaftManager, RaftManager}
 import kafka.security.CredentialProvider
-import kafka.server.{KafkaConfig, KafkaRequestHandlerPool}
+import kafka.server.{KafkaConfig, KafkaRequestHandlerPool, MetaProperties}
 import kafka.utils.{CommandDefaultOptions, CommandLineUtils, CoreUtils, Exit, Logging, ShutdownableThread}
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.metrics.stats.Percentiles.BucketSizing
 import org.apache.kafka.common.metrics.stats.{Meter, Percentile, Percentiles}
-import org.apache.kafka.common.protocol.Writable
+import org.apache.kafka.common.protocol.{ObjectSerializationCache, Writable}
 import org.apache.kafka.common.security.scram.internals.ScramMechanism
 import org.apache.kafka.common.security.token.delegation.internals.DelegationTokenCache
 import org.apache.kafka.common.utils.{Time, Utils}
-import org.apache.kafka.common.{TopicPartition, protocol}
+import org.apache.kafka.common.{TopicPartition, Uuid, protocol}
 import org.apache.kafka.raft.BatchReader.Batch
 import org.apache.kafka.raft.{BatchReader, RaftClient, RecordSerde}
 
@@ -54,6 +54,7 @@ class TestRaftServer(
   private val time = Time.SYSTEM
   private val metrics = new Metrics(time)
   private val shutdownLatch = new CountDownLatch(1)
+  private val threadNamePrefix = "test-raft"
 
   var socketServer: SocketServer = _
   var credentialProvider: CredentialProvider = _
@@ -66,17 +67,22 @@ class TestRaftServer(
     tokenCache = new DelegationTokenCache(ScramMechanism.mechanismNames)
     credentialProvider = new CredentialProvider(ScramMechanism.mechanismNames, tokenCache)
 
-    socketServer = new SocketServer(config, metrics, time, credentialProvider, allowDisabledApis = true)
+    socketServer = new SocketServer(config, metrics, time, credentialProvider, allowControllerOnlyApis = true)
     socketServer.startup(startProcessingRequests = false)
 
+    val metaProperties = MetaProperties(
+      clusterId = Uuid.ZERO_UUID,
+      nodeId = config.nodeId
+    )
+
     raftManager = new KafkaRaftManager[Array[Byte]](
-      config.brokerId,
-      config.logDirs.head,
+      metaProperties,
+      config,
       new ByteArraySerde,
       partition,
-      config,
       time,
-      metrics
+      metrics,
+      Some(threadNamePrefix)
     )
 
     workloadGenerator = new RaftWorkloadGenerator(
@@ -262,11 +268,11 @@ object TestRaftServer extends Logging {
   }
 
   private class ByteArraySerde extends RecordSerde[Array[Byte]] {
-    override def recordSize(data: Array[Byte], context: Any): Int = {
+    override def recordSize(data: Array[Byte], serializationCache: ObjectSerializationCache): Int = {
       data.length
     }
 
-    override def write(data: Array[Byte], context: Any, out: Writable): Unit = {
+    override def write(data: Array[Byte], serializationCache: ObjectSerializationCache, out: Writable): Unit = {
       out.writeByteArray(data)
     }
 
@@ -414,6 +420,11 @@ object TestRaftServer extends Logging {
 
       val configFile = opts.options.valueOf(opts.configOpt)
       val serverProps = Utils.loadProps(configFile)
+
+      // KafkaConfig requires either `process.roles` or `zookeeper.connect`. Neither are
+      // actually used by the test server, so we fill in `process.roles` with an arbitrary value.
+      serverProps.put(KafkaConfig.ProcessRolesProp, "controller")
+
       val config = KafkaConfig.fromProps(serverProps, doLog = false)
       val throughput = opts.options.valueOf(opts.throughputOpt)
       val recordSize = opts.options.valueOf(opts.recordSizeOpt)

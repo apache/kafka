@@ -134,6 +134,28 @@ public class FileRecords extends AbstractRecords implements Closeable {
      * @return A sliced wrapper on this message set limited based on the given position and size
      */
     public FileRecords slice(int position, int size) throws IOException {
+        int availableBytes = availableBytes(position, size);
+        int startPosition = this.start + position;
+        return new FileRecords(file, channel, startPosition, startPosition + availableBytes, true);
+    }
+
+    /**
+     * Return a slice of records from this instance, the difference with {@link FileRecords#slice(int, int)} is
+     * that the position is not necessarily on an offset boundary.
+     *
+     * This method is reserved for cases where offset alignment is not necessary, such as in the replication of raft
+     * snapshots.
+     *
+     * @param position The start position to begin the read from
+     * @param size The number of bytes after the start position to include
+     * @return A unaligned slice of records on this message set limited based on the given position and size
+     */
+    public UnalignedFileRecords sliceUnaligned(int position, int size) {
+        int availableBytes = availableBytes(position, size);
+        return new UnalignedFileRecords(channel, this.start + position, availableBytes);
+    }
+
+    private int availableBytes(int position, int size) {
         // Cache current size in case concurrent write changes it
         int currentSizeInBytes = sizeInBytes();
 
@@ -145,10 +167,10 @@ public class FileRecords extends AbstractRecords implements Closeable {
             throw new IllegalArgumentException("Invalid size: " + size + " in read from " + this);
 
         int end = this.start + position + size;
-        // handle integer overflow or if end is beyond the end of the file
+        // Handle integer overflow or if end is beyond the end of the file
         if (end < 0 || end > start + currentSizeInBytes)
-            end = start + currentSizeInBytes;
-        return new FileRecords(file, channel, this.start + position, end, true);
+            end = this.start + currentSizeInBytes;
+        return end - (this.start + position);
     }
 
     /**
@@ -278,7 +300,7 @@ public class FileRecords extends AbstractRecords implements Closeable {
                     file.getAbsolutePath(), oldSize, newSize));
 
         long position = start + offset;
-        int count = Math.min(length, oldSize);
+        long count = Math.min(length, oldSize - offset);
         return destChannel.transferFrom(channel, position, count);
     }
 
