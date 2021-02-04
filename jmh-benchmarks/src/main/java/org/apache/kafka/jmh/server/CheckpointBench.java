@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.jmh.server;
 
-import java.util.Properties;
 import kafka.cluster.Partition;
 import kafka.log.CleanerConfig;
 import kafka.log.LogConfig;
@@ -34,10 +33,8 @@ import kafka.utils.KafkaScheduler;
 import kafka.utils.MockTime;
 import kafka.utils.Scheduler;
 import kafka.utils.TestUtils;
-import kafka.zk.KafkaZkClient;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.metrics.Metrics;
-import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.openjdk.jmh.annotations.Benchmark;
 import org.openjdk.jmh.annotations.Fork;
@@ -119,18 +116,12 @@ public class CheckpointBench {
                         this.metrics,
                         this.time, "");
 
-        KafkaZkClient zkClient = new KafkaZkClient(null, false, Time.SYSTEM) {
-            @Override
-            public Properties getEntityConfigs(String rootEntityType, String sanitizedEntityName) {
-                return new Properties();
-            }
-        };
         this.alterIsrManager = TestUtils.createAlterIsrManager();
         this.replicaManager = new ReplicaManager(
                 this.brokerProperties,
                 this.metrics,
                 this.time,
-                zkClient,
+                Option.empty(),
                 this.scheduler,
                 this.logManager,
                 new AtomicBoolean(false),

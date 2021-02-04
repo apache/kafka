@@ -200,7 +200,7 @@ object ReplicaManager {
 class ReplicaManager(val config: KafkaConfig,
                      metrics: Metrics,
                      time: Time,
-                     val zkClient: KafkaZkClient,
+                     val zkClient: Option[KafkaZkClient],
                      scheduler: Scheduler,
                      val logManager: LogManager,
                      val isShuttingDown: AtomicBoolean,
@@ -219,7 +219,7 @@ class ReplicaManager(val config: KafkaConfig,
   def this(config: KafkaConfig,
            metrics: Metrics,
            time: Time,
-           zkClient: KafkaZkClient,
+           zkClient: Option[KafkaZkClient],
            scheduler: Scheduler,
            logManager: LogManager,
            isShuttingDown: AtomicBoolean,
@@ -1884,10 +1884,10 @@ class ReplicaManager(val config: KafkaConfig,
     logManager.handleLogDirFailure(dir)
 
     if (sendZkNotification)
-      if (zkClient == null) {
+      if (zkClient.isEmpty) {
         warn("Unable to propagate log dir failure via Zookeeper in KIP-500 mode") // will be handled via KIP-589
       } else {
-        zkClient.propagateLogDirEvent(localBrokerId)
+        zkClient.get.propagateLogDirEvent(localBrokerId)
       }
     warn(s"Stopped serving replicas in dir $dir")
   }

@@ -63,7 +63,7 @@ class HighwatermarkPersistenceTest {
     val time = new MockTime
     val quotaManager = QuotaFactory.instantiate(configs.head, metrics, time, "")
     // create replica manager
-    val replicaManager = new ReplicaManager(configs.head, metrics, time, null, scheduler,
+    val replicaManager = new ReplicaManager(configs.head, metrics, time, None, scheduler,
       logManagers.head, new AtomicBoolean(false), quotaManager,
       new BrokerTopicStats, new MetadataCache(configs.head.brokerId), logDirFailureChannels.head, alterIsrManager,
       configRepository)
@@ -113,7 +113,7 @@ class HighwatermarkPersistenceTest {
     val time = new MockTime
     val quotaManager = QuotaFactory.instantiate(configs.head, metrics, time, "")
     // create replica manager
-    val replicaManager = new ReplicaManager(configs.head, metrics, time, null,
+    val replicaManager = new ReplicaManager(configs.head, metrics, time, None,
       scheduler, logManagers.head, new AtomicBoolean(false), quotaManager,
       new BrokerTopicStats, new MetadataCache(configs.head.brokerId), logDirFailureChannels.head, alterIsrManager, configRepository)
     replicaManager.startup()
