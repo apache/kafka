@@ -34,16 +34,6 @@ class CachedConfigRepository extends ConfigRepository {
   val configMap = new ConcurrentHashMap[ConfigResource, util.HashMap[String, String]]
 
   /**
-   * Remove the topic config for the given topic name and the given key.
-   *
-   * @param topicName the name of the topic for which the config will be removed
-   * @param key the key identifying the topic config to remove
-   */
-  def removeTopicConfig(topicName: String, key: String): Unit = {
-    setTopicConfig(topicName, key, null)
-  }
-
-  /**
    * Set the topic config for the given topic name and the given key to the given value.
    *
    * @param topicName the name of the topic for which the config will be set
@@ -55,16 +45,6 @@ class CachedConfigRepository extends ConfigRepository {
   }
 
   /**
-   * Remove the broker config for the given broker ID and the given key.
-   *
-   * @param brokerId the ID of the broker for which the config will be removed
-   * @param key the key identifying the topic config to remove
-   */
-  def removeBrokerConfig(brokerId: Int, key: String): Unit = {
-    setBrokerConfig(brokerId, key, null)
-  }
-
-  /**
    * Set the broker config for the given broker ID and the given key to the given value.
    *
    * @param brokerId the ID of the broker for which the config will be set
@@ -73,16 +53,6 @@ class CachedConfigRepository extends ConfigRepository {
    */
   def setBrokerConfig(brokerId: Int, key: String, value: String): Unit = {
     setConfig(new ConfigResource(Type.BROKER, brokerId.toString()), key, value)
-  }
-
-  /**
-   * Remove the config for the given resource and the given key.
-   *
-   * @param configResource the resource for which the config will be removed
-   * @param key the key identifying the resource config to remove
-   */
-  def removeConfig(configResource: ConfigResource, key: String): Unit = {
-    setConfig(configResource, key, null)
   }
 
   /**

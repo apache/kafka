@@ -19,7 +19,7 @@ package kafka.server.metadata
 
 import java.util.Properties
 
-import org.junit.jupiter.api.Assertions.{assertEquals, assertNotEquals}
+import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Test
 
 class CachedConfigRepositoryTest {
@@ -51,10 +51,6 @@ class CachedConfigRepositoryTest {
 
     repository.setBrokerConfig(brokerId1, "foo2", null)
     assertEquals(brokerProperties, repository.brokerConfig(brokerId1))
-    repository.setBrokerConfig(brokerId1, "foo2", "notnull")
-    assertNotEquals(brokerProperties, repository.brokerConfig(brokerId1))
-    repository.removeBrokerConfig(brokerId1, "foo2")
-    assertEquals(brokerProperties, repository.brokerConfig(brokerId1))
   }
 
   @Test
@@ -77,10 +73,6 @@ class CachedConfigRepositoryTest {
     assertEquals(topicProperties2, repository.topicConfig(topic1)) // should get both props
 
     repository.setTopicConfig(topic1, "foo2", null)
-    assertEquals(topicProperties, repository.topicConfig(topic1))
-    repository.setTopicConfig(topic1, "foo2", "notnull")
-    assertNotEquals(topicProperties, repository.topicConfig(topic1))
-    repository.removeTopicConfig(topic1, "foo2")
     assertEquals(topicProperties, repository.topicConfig(topic1))
   }
 }
