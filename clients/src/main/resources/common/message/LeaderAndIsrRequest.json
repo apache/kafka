@@ -16,6 +16,7 @@
 {
   "apiKey": 4,
   "type": "request",
+  "listeners": ["zkBroker"],
   "name": "LeaderAndIsrRequest",
   // Version 1 adds IsNew.
   //
