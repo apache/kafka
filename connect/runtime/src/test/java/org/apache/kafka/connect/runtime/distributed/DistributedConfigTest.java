@@ -214,7 +214,7 @@ public class DistributedConfigTest {
         topicSettings.put("bar", "bar value");
         topicSettings.put("baz.bim", "100");
         Map<String, String> settings = configs();
-        topicSettings.entrySet().forEach(e -> settings.put(DistributedConfig.CONFIG_STORAGE_PREFIX + e.getKey(), e.getValue()));
+        topicSettings.forEach((k, v) -> settings.put(DistributedConfig.CONFIG_STORAGE_PREFIX + k, v));
         DistributedConfig config = new DistributedConfig(settings);
         assertEquals(topicSettings, config.configStorageTopicSettings());
     }
@@ -226,7 +226,7 @@ public class DistributedConfigTest {
         topicSettings.put("bar", "bar value");
         topicSettings.put("baz.bim", "100");
         Map<String, String> settings = configs();
-        topicSettings.entrySet().forEach(e -> settings.put(DistributedConfig.OFFSET_STORAGE_PREFIX + e.getKey(), e.getValue()));
+        topicSettings.forEach((k, v) -> settings.put(DistributedConfig.OFFSET_STORAGE_PREFIX + k, v));
         DistributedConfig config = new DistributedConfig(settings);
         assertEquals(topicSettings, config.offsetStorageTopicSettings());
     }
@@ -238,7 +238,7 @@ public class DistributedConfigTest {
         topicSettings.put("bar", "bar value");
         topicSettings.put("baz.bim", "100");
         Map<String, String> settings = configs();
-        topicSettings.entrySet().forEach(e -> settings.put(DistributedConfig.STATUS_STORAGE_PREFIX + e.getKey(), e.getValue()));
+        topicSettings.forEach((k, v) -> settings.put(DistributedConfig.STATUS_STORAGE_PREFIX + k, v));
         DistributedConfig config = new DistributedConfig(settings);
         assertEquals(topicSettings, config.statusStorageTopicSettings());
     }
