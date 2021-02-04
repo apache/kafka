@@ -120,7 +120,8 @@ class KafkaApisTest {
 
   def createKafkaApis(interBrokerProtocolVersion: ApiVersion = ApiVersion.latestVersion,
                       authorizer: Option[Authorizer] = None,
-                      enableForwarding: Boolean = false): KafkaApis = {
+                      enableForwarding: Boolean = false,
+                      configRepository: ConfigRepository = new LocalConfigRepository()): KafkaApis = {
     val brokerFeatures = BrokerFeatures.createDefault()
     val cache = new FinalizedFeatureCache(brokerFeatures)
     val properties = TestUtils.createBrokerConfig(brokerId, "zk")
@@ -142,6 +143,7 @@ class KafkaApisTest {
       zkClient,
       brokerId,
       new KafkaConfig(properties),
+      configRepository,
       metadataCache,
       metrics,
       authorizer,
@@ -193,8 +195,6 @@ class KafkaApisTest {
 
     expect(metadataCache.contains(resourceName)).andReturn(true)
 
-    expect(replicaManager.configRepository).andReturn(configRepository)
-
     EasyMock.replay(metadataCache, replicaManager, clientRequestQuotaManager, requestChannel, authorizer, configRepository, adminManager)
 
     val describeConfigsRequest = new DescribeConfigsRequest.Builder(new DescribeConfigsRequestData()
@@ -205,7 +205,7 @@ class KafkaApisTest {
       .build(requestHeader.apiVersion)
     val request = buildRequest(describeConfigsRequest,
       requestHeader = Option(requestHeader))
-    createKafkaApis(authorizer = Some(authorizer)).handleDescribeConfigsRequest(request)
+    createKafkaApis(authorizer = Some(authorizer), configRepository = configRepository).handleDescribeConfigsRequest(request)
 
     verify(authorizer, replicaManager)
 
@@ -2067,8 +2067,6 @@ class KafkaApisTest {
 
     val requestChannelRequest = buildRequest(joinGroupRequest)
 
-    EasyMock.expect(replicaManager.configRepository).andReturn(new LocalConfigRepository())
-
     EasyMock.replay(groupCoordinator, clientRequestQuotaManager, requestChannel, replicaManager)
 
     createKafkaApis().handleJoinGroupRequest(requestChannelRequest)
@@ -2141,8 +2139,6 @@ class KafkaApisTest {
     ).build(version)
 
     val requestChannelRequest = buildRequest(joinGroupRequest)
-
-    EasyMock.expect(replicaManager.configRepository).andReturn(new LocalConfigRepository())
 
     EasyMock.replay(groupCoordinator, clientRequestQuotaManager, requestChannel, replicaManager)
 
@@ -2220,7 +2216,6 @@ class KafkaApisTest {
 
     val requestChannelRequest = buildRequest(syncGroupRequest)
 
-    EasyMock.expect(replicaManager.configRepository).andReturn(new LocalConfigRepository())
     EasyMock.replay(groupCoordinator, clientRequestQuotaManager, requestChannel, replicaManager)
 
     createKafkaApis().handleSyncGroupRequest(requestChannelRequest)
@@ -2289,8 +2284,6 @@ class KafkaApisTest {
     ).build(version)
 
     val requestChannelRequest = buildRequest(syncGroupRequest)
-
-    EasyMock.expect(replicaManager.configRepository).andReturn(new LocalConfigRepository())
 
     EasyMock.replay(groupCoordinator, clientRequestQuotaManager, requestChannel, replicaManager)
 
