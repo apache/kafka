@@ -562,17 +562,15 @@ public class DistributedHerderTest {
         EasyMock.expect(member.memberId()).andStubReturn("member");
         EasyMock.expect(member.currentProtocolVersion()).andStubReturn(connectProtocolVersion);
         EasyMock.expect(worker.getPlugins()).andReturn(plugins);
-        expectRebalance(configOffset, Arrays.asList(CONN1), Arrays.asList(TASK1));
+        // The lists need to be mutable because assignments might be removed
+        expectRebalance(configOffset, new ArrayList<>(singletonList(CONN1)), new ArrayList<>(singletonList(TASK1)));
         expectPostRebalanceCatchup(SNAPSHOT);
         Capture<Callback<TargetState>> onFirstStart = newCapture();
         worker.startConnector(EasyMock.eq(CONN1), EasyMock.<Map<String, String>>anyObject(), EasyMock.<CloseableConnectorContext>anyObject(),
             EasyMock.eq(herder), EasyMock.eq(TargetState.STARTED), capture(onFirstStart));
-        PowerMock.expectLastCall().andAnswer(new IAnswer<Boolean>() {
-            @Override
-            public Boolean answer() throws Throwable {
-                onFirstStart.getValue().onCompletion(null, TargetState.STARTED);
-                return true;
-            }
+        PowerMock.expectLastCall().andAnswer(() -> {
+            onFirstStart.getValue().onCompletion(null, TargetState.STARTED);
+            return true;
         });
         member.wakeup();
         PowerMock.expectLastCall();
@@ -623,12 +621,9 @@ public class DistributedHerderTest {
         worker.startConnector(EasyMock.eq(CONN1), EasyMock.<Map<String, String>>anyObject(),
             EasyMock.<CloseableConnectorContext>anyObject(),
             EasyMock.eq(herder), EasyMock.eq(TargetState.STARTED), capture(onSecondStart));
-        PowerMock.expectLastCall().andAnswer(new IAnswer<Boolean>() {
-            @Override
-            public Boolean answer() throws Throwable {
-                onSecondStart.getValue().onCompletion(null, TargetState.STARTED);
-                return true;
-            }
+        PowerMock.expectLastCall().andAnswer(() -> {
+            onSecondStart.getValue().onCompletion(null, TargetState.STARTED);
+            return true;
         });
         member.wakeup();
         PowerMock.expectLastCall();
