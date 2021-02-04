@@ -33,12 +33,12 @@ import scala.jdk.CollectionConverters._
 class LocalConfigRepository extends ConfigRepository {
   val configMap = new ConcurrentHashMap[ConfigResource, util.HashMap[String, String]]
 
-  def setTopicConfig(topic: String, key: String, value: String): Unit = {
-    setConfig(new ConfigResource(Type.TOPIC, topic), key, value)
+  def setTopicConfig(topicName: String, key: String, value: String): Unit = {
+    setConfig(new ConfigResource(Type.TOPIC, topicName), key, value)
   }
 
-  def setBrokerConfig(id: Int, key: String, value: String): Unit = {
-    setConfig(new ConfigResource(Type.BROKER, id.toString()), key, value)
+  def setBrokerConfig(brokerId: Int, key: String, value: String): Unit = {
+    setConfig(new ConfigResource(Type.BROKER, brokerId.toString()), key, value)
   }
 
   def setConfig(configResource: ConfigResource, key: String, value: String): Unit = {
