@@ -44,6 +44,14 @@ sealed trait MetadataSupport {
    * @throws Exception if this instance is not for Raft
    */
   def requireRaft(createException: => Exception): RaftSupport
+
+  /**
+   * Confirm that this instance is consistent with the given config
+   *
+   * @param config the config to check for consistency with this instance
+   * @throws IllegalStateException if there is an inconsistency (Raft for a ZooKeeper config or vice-versa)
+   */
+  def confirmConsistentWith(config: KafkaConfig): Unit
 }
 
 case class ZkSupport(adminManager: ZkAdminManager,
@@ -54,10 +62,22 @@ case class ZkSupport(adminManager: ZkAdminManager,
 
   override def requireZk(createException: => Exception): ZkSupport = this
   override def requireRaft(createException: => Exception): RaftSupport = throw createException
+
+  override def confirmConsistentWith(config: KafkaConfig): Unit = {
+    if (!config.requiresZookeeper) {
+      throw new IllegalStateException("Config specifies Raft but metadata support instance is for ZooKeeper")
+    }
+  }
 }
 
 case class RaftSupport(fwdMgr: ForwardingManager) extends MetadataSupport {
   override val forwardingManager: Option[ForwardingManager] = Some(fwdMgr)
   override def requireZk(createException: => Exception): ZkSupport = throw createException
   override def requireRaft(createException: => Exception): RaftSupport = this
+
+  override def confirmConsistentWith(config: KafkaConfig): Unit = {
+    if (config.requiresZookeeper) {
+      throw new IllegalStateException("Config specifies ZooKeeper but metadata support instance is for Raft")
+    }
+  }
 }

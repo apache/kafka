@@ -113,13 +113,7 @@ class KafkaApis(val requestChannel: RequestChannel,
                 val brokerFeatures: BrokerFeatures,
                 val finalizedFeatureCache: FinalizedFeatureCache) extends ApiRequestHandler with Logging {
 
-  metadataSupport match {
-    case ZkSupport(_, _, _, _) if !config.requiresZookeeper =>
-      throw new IllegalStateException("Config specifies Raft but metadata support instance is for ZooKeeper")
-    case RaftSupport(_) if config.requiresZookeeper =>
-      throw new IllegalStateException("Config specifies ZooKeeper but metadata support instance is for Raft")
-    case _ => // consistent configs and metadata support instance
-  }
+  metadataSupport.confirmConsistentWith(config)
 
   val configHelper = new ConfigHelper() // FIXME
   type FetchResponseStats = Map[TopicPartition, RecordConversionStats]
