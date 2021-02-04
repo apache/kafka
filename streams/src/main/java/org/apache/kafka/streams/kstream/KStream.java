@@ -1384,8 +1384,8 @@ public interface KStream<K, V> {
      * @param <VR>        the value type of the result stream
      * @return a {@code KStream} that contains join-records for each key and values computed by the given
      * {@link ValueJoiner}, one for each matched record-pair with the same key and within the joining window intervals
-     * @see #leftJoin(KStream, ValueJoiner, JoinWindows)
-     * @see #outerJoin(KStream, ValueJoiner, JoinWindows)
+     * @see #leftJoin(KStream, ValueJoinerWithKey, JoinWindows)
+     * @see #outerJoin(KStream, ValueJoinerWithKey, JoinWindows)
      */
     <VO, VR> KStream<K, VR> join(final KStream<K, VO> otherStream,
                                  final ValueJoinerWithKey<? super K, ? super V, ? super VO, ? extends VR> joiner,
