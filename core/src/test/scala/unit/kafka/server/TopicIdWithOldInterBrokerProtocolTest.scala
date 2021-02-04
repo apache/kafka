@@ -21,7 +21,6 @@ import java.util.{Arrays, Properties}
 
 import kafka.api.KAFKA_2_7_IV0
 import kafka.network.SocketServer
-import kafka.server.{BaseRequestTest, KafkaConfig}
 import kafka.utils.TestUtils
 import org.apache.kafka.common.Uuid
 import org.apache.kafka.common.message.DeleteTopicsRequestData
