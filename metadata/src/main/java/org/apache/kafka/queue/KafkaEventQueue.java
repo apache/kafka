@@ -216,7 +216,7 @@ public final class KafkaEventQueue implements EventQueue {
                                 // queue.  (The value for deferred events is a schedule time
                                 // rather than a timeout.)
                                 remove(eventContext);
-                                head.insertAfter(eventContext);
+                                toRun = eventContext;
                             } else {
                                 // not a deferred event, so it is a deadline, and it is timed out.
                                 remove(eventContext);
