@@ -357,6 +357,15 @@ For a detailed description of spotbugs bug categories, see https://spotbugs.read
     </Match>
 
     <Match>
+        <!-- Suppress a warning about ignoring the return value of await.
+             This is done intentionally because we use other clues to determine
+             if the wait was cut short.  -->
+        <Package name="org.apache.kafka.queue"/>
+        <Source name="KafkaEventQueue.java"/>
+        <Bug pattern="RV_RETURN_VALUE_IGNORED,RV_RETURN_VALUE_IGNORED_BAD_PRACTICE"/>
+    </Match>
+
+    <Match>
         <!-- Suppress warnings about implementing compareTo but not equals. -->
         <Class name="org.apache.kafka.streams.processor.internals.Stamped"/>
         <Bug pattern="EQ_COMPARETO_USE_OBJECT_EQUALS"/>
