@@ -29,6 +29,7 @@ import kafka.server.MetadataCache;
 import kafka.server.QuotaFactory;
 import kafka.server.ReplicaManager;
 import kafka.server.checkpoints.OffsetCheckpoints;
+import kafka.server.metadata.CachedConfigRepository;
 import kafka.utils.KafkaScheduler;
 import kafka.utils.MockTime;
 import kafka.utils.Scheduler;
@@ -89,6 +90,7 @@ public class CheckpointBench {
     private LogDirFailureChannel failureChannel;
     private LogManager logManager;
     private AlterIsrManager alterIsrManager;
+    private final CachedConfigRepository configRepository = new CachedConfigRepository();
 
 
     @SuppressWarnings("deprecation")
@@ -137,6 +139,7 @@ public class CheckpointBench {
                 metadataCache,
                 this.failureChannel,
                 alterIsrManager,
+                configRepository,
                 Option.empty());
         replicaManager.startup();
 

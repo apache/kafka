@@ -33,10 +33,10 @@ import kafka.server.{FetchMetadata => SFetchMetadata}
 import kafka.server.HostedPartition.Online
 import kafka.server.QuotaFactory.QuotaManagers
 import kafka.server.checkpoints.{LazyOffsetCheckpoints, OffsetCheckpointFile, OffsetCheckpoints}
-import kafka.server.metadata.{ConfigRepository, ZkConfigRepository}
+import kafka.server.metadata.ConfigRepository
 import kafka.utils._
 import kafka.utils.Implicits._
-import kafka.zk.{AdminZkClient, KafkaZkClient}
+import kafka.zk.KafkaZkClient
 import org.apache.kafka.common.{ElectionType, IsolationLevel, Node, TopicPartition, Uuid}
 import org.apache.kafka.common.errors._
 import org.apache.kafka.common.internals.Topic
@@ -228,6 +228,7 @@ class ReplicaManager(val config: KafkaConfig,
            metadataCache: MetadataCache,
            logDirFailureChannel: LogDirFailureChannel,
            alterIsrManager: AlterIsrManager,
+           configRepository: ConfigRepository,
            threadNamePrefix: Option[String] = None) = {
     this(config, metrics, time, zkClient, scheduler, logManager, isShuttingDown,
       quotaManagers, brokerTopicStats, metadataCache, logDirFailureChannel,
@@ -242,7 +243,7 @@ class ReplicaManager(val config: KafkaConfig,
         purgeInterval = config.deleteRecordsPurgatoryPurgeIntervalRequests),
       DelayedOperationPurgatory[DelayedElectLeader](
         purgatoryName = "ElectLeader", brokerId = config.brokerId),
-      threadNamePrefix, new ZkConfigRepository(new AdminZkClient(zkClient)), alterIsrManager)
+      threadNamePrefix, configRepository, alterIsrManager)
   }
 
   /* epoch of the controller that last changed the leader */
