@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.connect.runtime.distributed;
 
+import java.util.Map.Entry;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.connect.runtime.distributed.WorkerCoordinator.ConnectorsAndTasks;
@@ -368,7 +369,7 @@ public class IncrementalCooperativeAssignor implements ConnectAssignor {
                 .collect(Collectors.groupingBy(Function.identity(), Collectors.counting()))
                 .entrySet().stream()
                 .filter(entry -> entry.getValue() > 1L)
-                .map(entry -> entry.getKey())
+                .map(Entry::getKey)
                 .collect(Collectors.toSet());
 
         Set<ConnectorTaskId> tasks = memberConfigs.values().stream()
@@ -376,7 +377,7 @@ public class IncrementalCooperativeAssignor implements ConnectAssignor {
                 .collect(Collectors.groupingBy(Function.identity(), Collectors.counting()))
                 .entrySet().stream()
                 .filter(entry -> entry.getValue() > 1L)
-                .map(entry -> entry.getKey())
+                .map(Entry::getKey)
                 .collect(Collectors.toSet());
         return new ConnectorsAndTasks.Builder().with(connectors, tasks).build();
     }
