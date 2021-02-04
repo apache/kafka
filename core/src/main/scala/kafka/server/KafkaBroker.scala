@@ -18,6 +18,7 @@
 package kafka.server
 
 import java.util
+import java.util.concurrent.atomic.AtomicReference
 
 import com.yammer.metrics.core.MetricName
 import kafka.log.LogManager
@@ -29,6 +30,7 @@ import org.apache.kafka.common.ClusterResource
 import org.apache.kafka.common.internals.ClusterResourceListeners
 import org.apache.kafka.common.metrics.{KafkaMetricsContext, Metrics, MetricsReporter}
 import org.apache.kafka.common.utils.Time
+import org.apache.kafka.metadata.BrokerState
 import org.apache.kafka.server.authorizer.Authorizer
 
 import scala.collection.Seq
@@ -70,9 +72,9 @@ object KafkaBroker {
 
 trait KafkaBroker extends KafkaMetricsGroup {
   def authorizer: Option[Authorizer]
+  val brokerState = new AtomicReference[BrokerState](BrokerState.NOT_RUNNING)
   def clusterId: String
   def config: KafkaConfig
-  def brokerState: BrokerState
   def dataPlaneRequestHandlerPool: KafkaRequestHandlerPool
   def kafkaScheduler: KafkaScheduler
   def kafkaYammerMetrics: KafkaYammerMetrics
@@ -88,7 +90,7 @@ trait KafkaBroker extends KafkaMetricsGroup {
     explicitMetricName(KafkaBroker.metricsPrefix, KafkaBroker.metricsTypeName, name, metricTags)
   }
 
-  newGauge("BrokerState", () => brokerState.currentState)
+  newGauge("BrokerState", () => brokerState.get.value())
   newGauge("ClusterId", () => clusterId)
   newGauge("yammer-metrics-count", () =>  KafkaYammerMetrics.defaultRegistry.allMetrics.size)
 

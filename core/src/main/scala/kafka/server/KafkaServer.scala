@@ -27,7 +27,7 @@ import kafka.cluster.Broker
 import kafka.common.{GenerateBrokerIdException, InconsistentBrokerIdException, InconsistentClusterIdException}
 import kafka.controller.KafkaController
 import kafka.coordinator.group.GroupCoordinator
-import kafka.coordinator.transaction.TransactionCoordinator
+import kafka.coordinator.transaction.{ProducerIdManager, TransactionCoordinator}
 import kafka.log.LogManager
 import kafka.metrics.{KafkaMetricsReporter, KafkaYammerMetrics}
 import kafka.network.SocketServer
@@ -45,6 +45,7 @@ import org.apache.kafka.common.security.token.delegation.internals.DelegationTok
 import org.apache.kafka.common.security.{JaasContext, JaasUtils}
 import org.apache.kafka.common.utils.{AppInfoParser, LogContext, Time}
 import org.apache.kafka.common.{Endpoint, Node}
+import org.apache.kafka.metadata.BrokerState
 import org.apache.kafka.server.authorizer.Authorizer
 import org.apache.zookeeper.client.ZKClientConfig
 
@@ -100,8 +101,6 @@ class KafkaServer(
     KafkaMetricsReporter.startReporters(VerifiableProperties(config.originals))
   var kafkaYammerMetrics: KafkaYammerMetrics = null
   var metrics: Metrics = null
-
-  val brokerState: BrokerState = new BrokerState
 
   var dataPlaneRequestProcessor: KafkaApis = null
   var controlPlaneRequestProcessor: KafkaApis = null
@@ -181,7 +180,7 @@ class KafkaServer(
 
       val canStartup = isStartingUp.compareAndSet(false, true)
       if (canStartup) {
-        brokerState.newState(Starting)
+        brokerState.set(BrokerState.STARTING)
 
         /* setup zookeeper */
         initZkClient(time)
@@ -311,7 +310,8 @@ class KafkaServer(
 
         /* start transaction coordinator, with a separate background thread scheduler for transaction expiration and log loading */
         // Hardcode Time.SYSTEM for now as some Streams tests fail otherwise, it would be good to fix the underlying issue
-        transactionCoordinator = TransactionCoordinator(config, replicaManager, new KafkaScheduler(threads = 1, threadNamePrefix = "transaction-log-manager-"), zkClient, metrics, metadataCache, Time.SYSTEM)
+        transactionCoordinator = TransactionCoordinator(config, replicaManager, new KafkaScheduler(threads = 1, threadNamePrefix = "transaction-log-manager-"),
+          () => new ProducerIdManager(config.brokerId, zkClient), zkClient, metrics, metadataCache, Time.SYSTEM)
         transactionCoordinator.startup()
 
         /* Get the authorizer and initialize it if one is specified.*/
@@ -367,7 +367,7 @@ class KafkaServer(
 
         socketServer.startProcessingRequests(authorizerFutures)
 
-        brokerState.newState(RunningAsBroker)
+        brokerState.set(BrokerState.RUNNING)
         shutdownLatch = new CountDownLatch(1)
         startupComplete.set(true)
         isStartingUp.set(false)
@@ -605,7 +605,7 @@ class KafkaServer(
       // the shutdown.
       info("Starting controlled shutdown")
 
-      brokerState.newState(PendingControlledShutdown)
+      brokerState.set(BrokerState.PENDING_CONTROLLED_SHUTDOWN)
 
       val shutdownSucceeded = doControlledShutdown(config.controlledShutdownMaxRetries.intValue)
 
@@ -630,7 +630,7 @@ class KafkaServer(
       // `true` at the end of this method.
       if (shutdownLatch.getCount > 0 && isShuttingDown.compareAndSet(false, true)) {
         CoreUtils.swallow(controlledShutdown(), this)
-        brokerState.newState(BrokerShuttingDown)
+        brokerState.set(BrokerState.SHUTTING_DOWN)
 
         if (dynamicConfigManager != null)
           CoreUtils.swallow(dynamicConfigManager.shutdown(), this)
@@ -699,7 +699,7 @@ class KafkaServer(
         // Clear all reconfigurable instances stored in DynamicBrokerConfig
         config.dynamicConfig.clear()
 
-        brokerState.newState(NotRunning)
+        brokerState.set(BrokerState.NOT_RUNNING)
 
         startupComplete.set(false)
         isShuttingDown.set(false)

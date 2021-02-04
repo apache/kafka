@@ -31,15 +31,18 @@ class RocksDBRangeIterator extends RocksDbIterator {
     private final Comparator<byte[]> comparator = Bytes.BYTES_LEXICO_COMPARATOR;
     private final byte[] rawLastKey;
     private final boolean forward;
+    private final boolean toInclusive;
 
     RocksDBRangeIterator(final String storeName,
                          final RocksIterator iter,
                          final Set<KeyValueIterator<Bytes, byte[]>> openIterators,
                          final Bytes from,
                          final Bytes to,
-                         final boolean forward) {
+                         final boolean forward,
+                         final boolean toInclusive) {
         super(storeName, iter, openIterators, forward);
         this.forward = forward;
+        this.toInclusive = toInclusive;
         if (forward) {
             iter.seek(from.get());
             rawLastKey = to.get();
@@ -62,8 +65,10 @@ class RocksDBRangeIterator extends RocksDbIterator {
             return allDone();
         } else {
             if (forward) {
-                if (comparator.compare(next.key.get(), rawLastKey) <= 0) {
+                if (comparator.compare(next.key.get(), rawLastKey) < 0) {
                     return next;
+                } else if (comparator.compare(next.key.get(), rawLastKey) == 0) {
+                    return toInclusive ? next : allDone();
                 } else {
                     return allDone();
                 }

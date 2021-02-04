@@ -2383,7 +2383,7 @@ class GroupMetadataManagerTest {
 
   private def mockGetPartition(): Unit = {
     EasyMock.expect(replicaManager.getPartition(groupTopicPartition)).andStubReturn(HostedPartition.Online(partition))
-    EasyMock.expect(replicaManager.nonOfflinePartition(groupTopicPartition)).andStubReturn(Some(partition))
+    EasyMock.expect(replicaManager.onlinePartition(groupTopicPartition)).andStubReturn(Some(partition))
   }
 
   private def getGauge(manager: GroupMetadataManager, name: String): Gauge[Int]  = {

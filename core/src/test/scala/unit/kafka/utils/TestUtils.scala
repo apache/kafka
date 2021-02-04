@@ -23,7 +23,7 @@ import java.nio.charset.{Charset, StandardCharsets}
 import java.nio.file.{Files, StandardOpenOption}
 import java.security.cert.X509Certificate
 import java.time.Duration
-import java.util.concurrent.atomic.{AtomicBoolean, AtomicInteger}
+import java.util.concurrent.atomic.{AtomicBoolean, AtomicInteger, AtomicReference}
 import java.util.{Arrays, Collections, Properties}
 import java.util.concurrent.{Callable, ExecutionException, Executors, TimeUnit}
 
@@ -37,6 +37,7 @@ import kafka.server.checkpoints.OffsetCheckpointFile
 import com.yammer.metrics.core.Meter
 import kafka.controller.LeaderIsrAndControllerEpoch
 import kafka.metrics.KafkaYammerMetrics
+import kafka.server.metadata.MetadataBroker
 import kafka.utils.Implicits._
 import kafka.zk._
 import org.apache.kafka.clients.CommonClientConfigs
@@ -59,7 +60,8 @@ import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.common.serialization.{ByteArrayDeserializer, ByteArraySerializer, Deserializer, IntegerSerializer, Serializer}
 import org.apache.kafka.common.utils.{Time, Utils}
 import org.apache.kafka.common.utils.Utils._
-import org.apache.kafka.common.{KafkaFuture, TopicPartition}
+import org.apache.kafka.common.{KafkaFuture, Node, TopicPartition}
+import org.apache.kafka.metadata.BrokerState
 import org.apache.kafka.server.authorizer.{Authorizer => JAuthorizer}
 import org.apache.kafka.test.{TestSslUtils, TestUtils => JTestUtils}
 import org.apache.zookeeper.KeeperException.SessionExpiredException
@@ -172,6 +174,16 @@ object TestUtils extends Logging {
 
   def createBroker(id: Int, host: String, port: Int, securityProtocol: SecurityProtocol = SecurityProtocol.PLAINTEXT): Broker =
     new Broker(id, host, port, ListenerName.forSecurityProtocol(securityProtocol), securityProtocol)
+
+  def createMetadataBroker(id: Int,
+                           host: String = "localhost",
+                           port: Int = 9092,
+                           securityProtocol: SecurityProtocol = SecurityProtocol.PLAINTEXT,
+                           rack: Option[String] = None,
+                           fenced: Boolean = false): MetadataBroker = {
+    MetadataBroker(id, rack.getOrElse(null),
+      Map(securityProtocol.name -> new Node(id, host, port, rack.getOrElse(null))), fenced)
+  }
 
   def createBrokerAndEpoch(id: Int, host: String, port: Int, securityProtocol: SecurityProtocol = SecurityProtocol.PLAINTEXT,
                            epoch: Long = 0): (Broker, Long) = {
@@ -537,16 +549,32 @@ object TestUtils extends Logging {
     builder.toString
   }
 
+  /**
+   * Returns security configuration options for broker or clients
+   *
+   * @param mode Client or server mode
+   * @param securityProtocol Security protocol which indicates if SASL or SSL or both configs are included
+   * @param trustStoreFile Trust store file must be provided for SSL and SASL_SSL
+   * @param certAlias Alias of certificate in SSL key store
+   * @param certCn CN for certificate
+   * @param saslProperties SASL configs if security protocol is SASL_SSL or SASL_PLAINTEXT
+   * @param tlsProtocol TLS version
+   * @param needsClientCert If not empty, a flag which indicates if client certificates are required. By default
+   *                        client certificates are generated only if securityProtocol is SSL (not for SASL_SSL).
+   */
   def securityConfigs(mode: Mode,
                       securityProtocol: SecurityProtocol,
                       trustStoreFile: Option[File],
                       certAlias: String,
                       certCn: String,
                       saslProperties: Option[Properties],
-                      tlsProtocol: String = TestSslUtils.DEFAULT_TLS_PROTOCOL_FOR_TESTS): Properties = {
+                      tlsProtocol: String = TestSslUtils.DEFAULT_TLS_PROTOCOL_FOR_TESTS,
+                      needsClientCert: Option[Boolean] = None): Properties = {
     val props = new Properties
-    if (usesSslTransportLayer(securityProtocol))
-      props ++= sslConfigs(mode, securityProtocol == SecurityProtocol.SSL, trustStoreFile, certAlias, certCn, tlsProtocol)
+    if (usesSslTransportLayer(securityProtocol)) {
+      val addClientCert = needsClientCert.getOrElse(securityProtocol == SecurityProtocol.SSL)
+      props ++= sslConfigs(mode, addClientCert, trustStoreFile, certAlias, certCn, tlsProtocol)
+    }
 
     if (usesSaslAuthentication(securityProtocol))
       props ++= JaasTestUtils.saslConfigs(saslProperties)
@@ -852,14 +880,14 @@ object TestUtils extends Logging {
   }
 
   def isLeaderLocalOnBroker(topic: String, partitionId: Int, server: KafkaServer): Boolean = {
-    server.replicaManager.nonOfflinePartition(new TopicPartition(topic, partitionId)).exists(_.leaderLogIfLocal.isDefined)
+    server.replicaManager.onlinePartition(new TopicPartition(topic, partitionId)).exists(_.leaderLogIfLocal.isDefined)
   }
 
   def findLeaderEpoch(brokerId: Int,
                       topicPartition: TopicPartition,
                       servers: Iterable[KafkaServer]): Int = {
     val leaderServer = servers.find(_.config.brokerId == brokerId)
-    val leaderPartition = leaderServer.flatMap(_.replicaManager.nonOfflinePartition(topicPartition))
+    val leaderPartition = leaderServer.flatMap(_.replicaManager.onlinePartition(topicPartition))
       .getOrElse(throw new AssertionError(s"Failed to find expected replica on broker $brokerId"))
     leaderPartition.getLeaderEpoch
   }
@@ -867,7 +895,7 @@ object TestUtils extends Logging {
   def findFollowerId(topicPartition: TopicPartition,
                      servers: Iterable[KafkaServer]): Int = {
     val followerOpt = servers.find { server =>
-      server.replicaManager.nonOfflinePartition(topicPartition) match {
+      server.replicaManager.onlinePartition(topicPartition) match {
         case Some(partition) => !partition.leaderReplicaIdOpt.contains(server.config.brokerId)
         case None => false
       }
@@ -955,7 +983,7 @@ object TestUtils extends Logging {
     def newLeaderExists: Option[Int] = {
       servers.find { server =>
         server.config.brokerId != oldLeader &&
-          server.replicaManager.nonOfflinePartition(tp).exists(_.leaderLogIfLocal.isDefined)
+          server.replicaManager.onlinePartition(tp).exists(_.leaderLogIfLocal.isDefined)
       }.map(_.config.brokerId)
     }
 
@@ -970,7 +998,7 @@ object TestUtils extends Logging {
                              timeout: Long = JTestUtils.DEFAULT_MAX_WAIT_MS): Int = {
     def leaderIfExists: Option[Int] = {
       servers.find { server =>
-        server.replicaManager.nonOfflinePartition(tp).exists(_.leaderLogIfLocal.isDefined)
+        server.replicaManager.onlinePartition(tp).exists(_.leaderLogIfLocal.isDefined)
       }.map(_.config.brokerId)
     }
 
@@ -1060,7 +1088,7 @@ object TestUtils extends Logging {
                    maxPidExpirationMs = 60 * 60 * 1000,
                    scheduler = time.scheduler,
                    time = time,
-                   brokerState = BrokerState(),
+                   brokerState = new AtomicReference[BrokerState](BrokerState.NOT_RUNNING),
                    brokerTopicStats = new BrokerTopicStats,
                    logDirFailureChannel = new LogDirFailureChannel(logDirs.size))
   }
@@ -1183,7 +1211,7 @@ object TestUtils extends Logging {
       "Topic path /brokers/topics/%s not deleted after /admin/delete_topics/%s path is deleted".format(topic, topic))
     // ensure that the topic-partition has been deleted from all brokers' replica managers
     waitUntilTrue(() =>
-      servers.forall(server => topicPartitions.forall(tp => server.replicaManager.nonOfflinePartition(tp).isEmpty)),
+      servers.forall(server => topicPartitions.forall(tp => server.replicaManager.onlinePartition(tp).isEmpty)),
       "Replica manager's should have deleted all of this topic's partitions")
     // ensure that logs from all replicas are deleted if delete topic is marked successful in ZooKeeper
     assertTrue(servers.forall(server => topicPartitions.forall(tp => server.getLogManager.getLog(tp).isEmpty)),
