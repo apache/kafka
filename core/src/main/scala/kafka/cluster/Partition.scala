@@ -331,7 +331,7 @@ class Partition(val topicPartition: TopicPartition,
   // Visible for testing
   private[cluster] def createLog(isNew: Boolean, isFutureReplica: Boolean, offsetCheckpoints: OffsetCheckpoints): Log = {
     def fetchLogConfig: LogConfig = {
-      val props = configRepository.topicConfig(topicPartition.topic())
+      val props = configRepository.topicConfig(topic)
       LogConfig.fromProps(logManager.currentDefaultConfig.originals, props)
     }
 
