@@ -21,18 +21,18 @@ import java.util.Properties
 
 trait ConfigRepository {
   /**
-   * Return topic configs for the given topic
+   * Return a copy of the topic configs for the given topic.  Future changes will not be reflected.
    *
    * @param topicName the name of the topic for which topic configs will be returned
-   * @return (a copy of) the topic configs for the given topic
+   * @return a copy of the topic configs for the given topic
    */
   def topicConfigs(topicName: String): Properties
 
   /**
-   * Return broker configs for the given topic
+   * Return a copy of the broker configs for the given topic.  Future changes will not be reflected.
    *
    * @param brokerId the id of the broker for which broker configs will be returned
-   * @return (a copy of) the broker configs for the given broker
+   * @return a copy of the broker configs for the given broker
    */
   def brokerConfigs(brokerId: Int): Properties
 }
