@@ -3016,7 +3016,7 @@ class KafkaApisTest {
       .setLeaderEpoch(1)
       .setReplicas(replicas)
       .setZkVersion(0)
-      .setReplicas(replicas)
+      .setIsr(replicas)
 
     val plaintextListener = ListenerName.forSecurityProtocol(SecurityProtocol.PLAINTEXT)
     val broker = new UpdateMetadataBroker()
