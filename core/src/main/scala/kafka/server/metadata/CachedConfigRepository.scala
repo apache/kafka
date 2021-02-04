@@ -30,7 +30,7 @@ import scala.jdk.CollectionConverters._
 /**
  * A ConfigRepository that stores configurations locally.
  */
-class LocalConfigRepository extends ConfigRepository {
+class CachedConfigRepository extends ConfigRepository {
   val configMap = new ConcurrentHashMap[ConfigResource, util.HashMap[String, String]]
 
   /**

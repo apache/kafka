@@ -22,17 +22,17 @@ import java.util.Properties
 import org.junit.jupiter.api.Assertions.{assertEquals, assertNotEquals}
 import org.junit.jupiter.api.Test
 
-class LocalConfigRepositoryTest {
+class CachedConfigRepositoryTest {
   @Test
   def testEmptyRepository(): Unit = {
-    val repository = new LocalConfigRepository()
+    val repository = new CachedConfigRepository()
     assertEquals(new Properties(), repository.brokerConfig(0))
     assertEquals(new Properties(), repository.topicConfig("foo"))
   }
 
   @Test
   def testSetBrokerConfig(): Unit = {
-    val repository = new LocalConfigRepository()
+    val repository = new CachedConfigRepository()
     val brokerId0 = 0
     repository.setBrokerConfig(brokerId0, "foo", null)
     assertEquals(new Properties(), repository.brokerConfig(0))
@@ -59,7 +59,7 @@ class LocalConfigRepositoryTest {
 
   @Test
   def testSetTopicConfig(): Unit = {
-    val repository = new LocalConfigRepository()
+    val repository = new CachedConfigRepository()
     val topic0 = "topic0"
     repository.setTopicConfig(topic0, "foo", null)
     assertEquals(new Properties(), repository.brokerConfig(0))

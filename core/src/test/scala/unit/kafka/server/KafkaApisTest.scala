@@ -34,7 +34,7 @@ import kafka.log.AppendOrigin
 import kafka.network.RequestChannel
 import kafka.network.RequestChannel.{CloseConnectionResponse, SendResponse}
 import kafka.server.QuotaFactory.QuotaManagers
-import kafka.server.metadata.{ConfigRepository, LocalConfigRepository}
+import kafka.server.metadata.{ConfigRepository, CachedConfigRepository}
 import kafka.utils.{MockTime, TestUtils}
 import kafka.zk.KafkaZkClient
 import org.apache.kafka.clients.NodeApiVersions
@@ -121,7 +121,7 @@ class KafkaApisTest {
   def createKafkaApis(interBrokerProtocolVersion: ApiVersion = ApiVersion.latestVersion,
                       authorizer: Option[Authorizer] = None,
                       enableForwarding: Boolean = false,
-                      configRepository: ConfigRepository = new LocalConfigRepository()): KafkaApis = {
+                      configRepository: ConfigRepository = new CachedConfigRepository()): KafkaApis = {
     val brokerFeatures = BrokerFeatures.createDefault()
     val cache = new FinalizedFeatureCache(brokerFeatures)
     val properties = TestUtils.createBrokerConfig(brokerId, "zk")

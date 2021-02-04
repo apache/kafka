@@ -37,7 +37,7 @@ import kafka.server.checkpoints.OffsetCheckpointFile
 import com.yammer.metrics.core.Meter
 import kafka.controller.LeaderIsrAndControllerEpoch
 import kafka.metrics.KafkaYammerMetrics
-import kafka.server.metadata.{ConfigRepository, LocalConfigRepository, MetadataBroker}
+import kafka.server.metadata.{ConfigRepository, CachedConfigRepository, MetadataBroker}
 import kafka.utils.Implicits._
 import kafka.zk._
 import org.apache.kafka.clients.CommonClientConfigs
@@ -1156,7 +1156,7 @@ object TestUtils extends Logging {
   }
 
   def createConfigRepository(topic: String, props: Properties): ConfigRepository = {
-    val configRepository = new LocalConfigRepository()
+    val configRepository = new CachedConfigRepository()
     props.entrySet().forEach(e => configRepository.setTopicConfig(topic, e.getKey.toString, e.getValue.toString))
     configRepository
   }
