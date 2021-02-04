@@ -104,6 +104,9 @@ public interface ReadOnlyKeyValueStore<K, V> {
      * prefix into the format in which the keys are stored in the stores needs to be passed to this method.
      * The returned iterator must be safe from {@link java.util.ConcurrentModificationException}s
      * and must not return null values.
+     * Order is not guaranteed as bytes lexicographical ordering might not represent key order.
+     * For example, if the key type is Integer, and the store contains keys [1, 2, 11, 13],
+     * then running store.prefixScan(1, new IntegerSerializer()) would return [1] and not [1,11,13].
      *
      * @param prefix The prefix.
      * @param prefixKeySerializer Serializer for the Prefix key type
