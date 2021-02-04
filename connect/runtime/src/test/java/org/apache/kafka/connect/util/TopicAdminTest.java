@@ -74,15 +74,14 @@ public class TopicAdminTest {
      * create no topics, and return false.
      */
     @Test
-    public void returnNullWithApiVersionMismatchOnCreate() {
+    public void returnEmptyWithApiVersionMismatchOnCreate() {
         final NewTopic newTopic = TopicAdmin.defineTopic("myTopic").partitions(1).compacted().build();
         Cluster cluster = createCluster(1);
         try (AdminClientUnitTestEnv env = new AdminClientUnitTestEnv(new MockTime(), cluster)) {
             env.kafkaClient().setNodeApiVersions(NodeApiVersions.create());
             env.kafkaClient().prepareResponse(createTopicResponseWithUnsupportedVersion(newTopic));
             TopicAdmin admin = new TopicAdmin(null, env.adminClient());
-            boolean created = admin.createTopic(newTopic);
-            assertFalse(created);
+            assertTrue(admin.createOrFindTopics(newTopic).isEmpty());
         }
     }
 
@@ -105,14 +104,16 @@ public class TopicAdminTest {
     }
 
     @Test
-    public void returnNullWithClusterAuthorizationFailureOnCreate() {
+    public void returnEmptyWithClusterAuthorizationFailureOnCreate() {
         final NewTopic newTopic = TopicAdmin.defineTopic("myTopic").partitions(1).compacted().build();
         Cluster cluster = createCluster(1);
         try (AdminClientUnitTestEnv env = new AdminClientUnitTestEnv(new MockTime(), cluster)) {
             env.kafkaClient().prepareResponse(createTopicResponseWithClusterAuthorizationException(newTopic));
             TopicAdmin admin = new TopicAdmin(null, env.adminClient());
-            boolean created = admin.createTopic(newTopic);
-            assertFalse(created);
+            assertFalse(admin.createTopic(newTopic));
+
+            env.kafkaClient().prepareResponse(createTopicResponseWithClusterAuthorizationException(newTopic));
+            assertTrue(admin.createOrFindTopics(newTopic).isEmpty());
         }
     }
 
@@ -129,14 +130,16 @@ public class TopicAdminTest {
     }
 
     @Test
-    public void returnNullWithTopicAuthorizationFailureOnCreate() {
+    public void returnEmptyWithTopicAuthorizationFailureOnCreate() {
         final NewTopic newTopic = TopicAdmin.defineTopic("myTopic").partitions(1).compacted().build();
         Cluster cluster = createCluster(1);
         try (AdminClientUnitTestEnv env = new AdminClientUnitTestEnv(new MockTime(), cluster)) {
             env.kafkaClient().prepareResponse(createTopicResponseWithTopicAuthorizationException(newTopic));
             TopicAdmin admin = new TopicAdmin(null, env.adminClient());
-            boolean created = admin.createTopic(newTopic);
-            assertFalse(created);
+            assertFalse(admin.createTopic(newTopic));
+
+            env.kafkaClient().prepareResponse(createTopicResponseWithTopicAuthorizationException(newTopic));
+            assertTrue(admin.createOrFindTopics(newTopic).isEmpty());
         }
     }
 
@@ -161,6 +164,12 @@ public class TopicAdminTest {
             mockAdminClient.addTopic(false, "myTopic", Collections.singletonList(topicPartitionInfo), null);
             TopicAdmin admin = new TopicAdmin(null, mockAdminClient);
             assertFalse(admin.createTopic(newTopic));
+            assertTrue(admin.createTopics(newTopic).isEmpty());
+            assertTrue(admin.createOrFindTopic(newTopic));
+            TopicAdmin.TopicCreationResponse response = admin.createOrFindTopics(newTopic);
+            assertTrue(response.isCreatedOrExisting(newTopic.name()));
+            assertTrue(response.isExisting(newTopic.name()));
+            assertFalse(response.isCreated(newTopic.name()));
         }
     }
 
@@ -509,7 +518,9 @@ public class TopicAdminTest {
         clientBuilder.controller(0);
         try (MockAdminClient admin = clientBuilder.build()) {
             TopicAdmin topicClient = new TopicAdmin(null, admin, false);
-            assertTrue(topicClient.createTopic(newTopic));
+            TopicAdmin.TopicCreationResponse response = topicClient.createOrFindTopics(newTopic);
+            assertTrue(response.isCreated(newTopic.name()));
+            assertFalse(response.isExisting(newTopic.name()));
             assertTopic(admin, newTopic.name(), expectedPartitions, expectedReplicas);
         }
     }
