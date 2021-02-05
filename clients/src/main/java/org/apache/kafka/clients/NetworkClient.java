@@ -864,7 +864,7 @@ public class NetworkClient implements KafkaClient {
                     parseResponse(req.header.apiKey(), responseStruct, req.header.apiVersion());
             maybeThrottle(body, req.header.apiVersion(), req.destination, now);
             if (req.isInternalRequest && body instanceof MetadataResponse)
-                metadataUpdater.handleSuccessfulResponse(req.header, now, (MetadataResponse) body);
+                metadataUpdater.handleSuccessfulResponse(req.header, now, (MetadataResponse) body, req.destination);
             else if (req.isInternalRequest && body instanceof ApiVersionsResponse)
                 handleApiVersionsResponse(responses, req, now, (ApiVersionsResponse) body);
             else
@@ -1077,7 +1077,7 @@ public class NetworkClient implements KafkaClient {
         }
 
         @Override
-        public void handleSuccessfulResponse(RequestHeader requestHeader, long now, MetadataResponse response) {
+        public void handleSuccessfulResponse(RequestHeader requestHeader, long now, MetadataResponse response, String destination) {
             // If any partition has leader with missing listeners, log up to ten of these partitions
             // for diagnosing broker configuration issues.
             // This could be a transient issue if listeners were added dynamically to brokers.
@@ -1094,8 +1094,10 @@ public class NetworkClient implements KafkaClient {
 
             // Check if any topic's metadata failed to get updated
             Map<String, Errors> errors = response.errors();
-            if (!errors.isEmpty())
-                log.warn("Error while fetching metadata with correlation id {} : {}", requestHeader.correlationId(), errors);
+            if (!errors.isEmpty()) {
+                log.warn("Error while fetching metadata with from source {} with correlation id {} : {}", destination,
+                    requestHeader.correlationId(), errors);
+            }
 
             // Don't update the cluster if there are no valid nodes...the topic we want may still be in the process of being
             // created which means we will get errors and no nodes until it exists
