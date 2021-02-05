@@ -245,6 +245,7 @@ class ActiveTaskCreator {
             context,
             logContext
         );
+        taskId.setTask(task);
 
         log.trace("Created task {} with assigned partitions {}", taskId, inputPartitions);
         createTaskSensor.record();

@@ -40,6 +40,7 @@ import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.LockException;
 import org.apache.kafka.streams.errors.StreamsException;
+import org.apache.kafka.streams.errors.TaskCorruptedException;
 import org.apache.kafka.streams.errors.TaskMigratedException;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.TaskId;
@@ -2718,19 +2719,18 @@ public class TaskManagerTest {
         task00.setCommitNeeded();
         task01.setCommitNeeded();
 
-        assertThat(taskManager.commit(mkSet(task00, task01, task02)), equalTo(1));
-        assertThat(task00.timeout, equalTo(time.milliseconds()));
-        assertNull(task01.timeout);
-        assertNull(task02.timeout);
-
-        assertThat(taskManager.commit(mkSet(task00, task01, task02)), equalTo(1));
-        assertNull(task00.timeout);
-        assertNull(task01.timeout);
-        assertNull(task02.timeout);
+        final TaskCorruptedException exception = assertThrows(
+            TaskCorruptedException.class,
+            () -> taskManager.commit(mkSet(task00, task01, task02))
+        );
+        assertThat(
+            exception.corruptedTaskWithChangelogs(),
+            equalTo(Collections.singletonMap(taskId00, Collections.emptySet()))
+        );
     }
 
     @Test
-    public void shouldNotFailForTimeoutExceptionOnCommitWithEosBeta() {
+    public void shouldThrowTaskCorruptedExceptionForTimeoutExceptionOnCommitWithEosBeta() {
         setUpTaskManager(ProcessingMode.EXACTLY_ONCE_BETA);
 
         final StreamsProducer producer = mock(StreamsProducer.class);
@@ -2760,15 +2760,14 @@ public class TaskManagerTest {
         task00.setCommitNeeded();
         task01.setCommitNeeded();
 
-        assertThat(taskManager.commit(mkSet(task00, task01, task02)), equalTo(0));
-        assertThat(task00.timeout, equalTo(time.milliseconds()));
-        assertThat(task01.timeout, equalTo(time.milliseconds()));
-        assertNull(task02.timeout);
-
-        assertThat(taskManager.commit(mkSet(task00, task01, task02)), equalTo(2));
-        assertNull(task00.timeout);
-        assertNull(task01.timeout);
-        assertNull(task02.timeout);
+        final TaskCorruptedException exception = assertThrows(
+            TaskCorruptedException.class,
+            () -> taskManager.commit(mkSet(task00, task01, task02))
+        );
+        assertThat(
+            exception.corruptedTaskWithChangelogs(),
+            equalTo(mkMap(mkEntry(taskId00, Collections.emptySet()), mkEntry(taskId01, Collections.emptySet())))
+        );
     }
 
     @Test
