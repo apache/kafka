@@ -53,6 +53,7 @@ import org.junit.Test;
 
 public class TimeWindowedCogroupedKStreamImplTest {
 
+    private static final Long WINDOW_SIZE = 500L;
     private static final String TOPIC = "topic";
     private static final String TOPIC2 = "topic2";
     private static final String OUTPUT = "output";
@@ -77,7 +78,7 @@ public class TimeWindowedCogroupedKStreamImplTest {
         groupedStream2 = stream2.groupByKey(Grouped.with(Serdes.String(), Serdes.String()));
         cogroupedStream = groupedStream.cogroup(MockAggregator.TOSTRING_ADDER)
                 .cogroup(groupedStream2, MockAggregator.TOSTRING_REMOVER);
-        windowedCogroupedStream = cogroupedStream.windowedBy(TimeWindows.of(ofMillis(500L)));
+        windowedCogroupedStream = cogroupedStream.windowedBy(TimeWindows.of(ofMillis(WINDOW_SIZE)));
     }
 
     @Test
@@ -128,7 +129,7 @@ public class TimeWindowedCogroupedKStreamImplTest {
                 .with(Serdes.String(), Serdes.String()));
         groupedStream = stream.groupByKey(Grouped.with(Serdes.String(), Serdes.String()));
         groupedStream.cogroup(MockAggregator.TOSTRING_ADDER)
-                .windowedBy(TimeWindows.of(ofMillis(500L)))
+                .windowedBy(TimeWindows.of(ofMillis(WINDOW_SIZE)))
                 .aggregate(MockInitializer.STRING_INIT, Named.as("foo"));
 
         assertThat(builder.build().describe().toString(), equalTo(
@@ -155,7 +156,7 @@ public class TimeWindowedCogroupedKStreamImplTest {
             final TestInputTopic<String, String> testInputTopic = driver.createInputTopic(
                     TOPIC, new StringSerializer(), new StringSerializer());
             final TestOutputTopic<Windowed<String>, String> testOutputTopic = driver.createOutputTopic(
-                    OUTPUT, new TimeWindowedDeserializer<>(new StringDeserializer()), new StringDeserializer());
+                    OUTPUT, new TimeWindowedDeserializer<>(new StringDeserializer(), WINDOW_SIZE), new StringDeserializer());
 
             testInputTopic.pipeInput("k1", "A", 0);
             testInputTopic.pipeInput("k2", "A", 0);
@@ -191,7 +192,7 @@ public class TimeWindowedCogroupedKStreamImplTest {
             final TestInputTopic<String, String> testInputTopic2 = driver.createInputTopic(
                     TOPIC2, new StringSerializer(), new StringSerializer());
             final TestOutputTopic<Windowed<String>, String> testOutputTopic = driver.createOutputTopic(
-                    OUTPUT, new TimeWindowedDeserializer<>(new StringDeserializer()), new StringDeserializer());
+                    OUTPUT, new TimeWindowedDeserializer<>(new StringDeserializer(), WINDOW_SIZE), new StringDeserializer());
 
             testInputTopic.pipeInput("k1", "A", 0);
             testInputTopic.pipeInput("k2", "A", 0);
@@ -226,7 +227,7 @@ public class TimeWindowedCogroupedKStreamImplTest {
             final TestInputTopic<String, String> testInputTopic = driver.createInputTopic(
                     TOPIC, new StringSerializer(), new StringSerializer());
             final TestOutputTopic<Windowed<String>, String> testOutputTopic = driver.createOutputTopic(
-                    OUTPUT, new TimeWindowedDeserializer<>(new StringDeserializer()), new StringDeserializer());
+                    OUTPUT, new TimeWindowedDeserializer<>(new StringDeserializer(), WINDOW_SIZE), new StringDeserializer());
 
             testInputTopic.pipeInput("k1", "A", 0);
             testInputTopic.pipeInput("k2", "A", 499);
@@ -252,7 +253,7 @@ public class TimeWindowedCogroupedKStreamImplTest {
             final TestInputTopic<String, String> testInputTopic = driver.createInputTopic(
                     TOPIC, new StringSerializer(), new StringSerializer());
             final TestOutputTopic<Windowed<String>, String> testOutputTopic = driver.createOutputTopic(
-                    OUTPUT, new TimeWindowedDeserializer<>(new StringDeserializer()), new StringDeserializer());
+                    OUTPUT, new TimeWindowedDeserializer<>(new StringDeserializer(), WINDOW_SIZE), new StringDeserializer());
 
             testInputTopic.pipeInput("k1", "A", 0);
             testInputTopic.pipeInput("k2", "A", 0);
@@ -287,7 +288,7 @@ public class TimeWindowedCogroupedKStreamImplTest {
             final TestInputTopic<String, String> testInputTopic2 = driver.createInputTopic(
                     TOPIC2, new StringSerializer(), new StringSerializer());
             final TestOutputTopic<Windowed<String>, String> testOutputTopic = driver.createOutputTopic(
-                    OUTPUT, new TimeWindowedDeserializer<>(new StringDeserializer()), new StringDeserializer());
+                    OUTPUT, new TimeWindowedDeserializer<>(new StringDeserializer(), WINDOW_SIZE), new StringDeserializer());
 
             testInputTopic.pipeInput("k1", "A", 0);
             testInputTopic.pipeInput("k2", "A", 0);

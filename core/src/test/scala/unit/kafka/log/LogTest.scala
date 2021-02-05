@@ -20,6 +20,7 @@ package kafka.log
 import java.io._
 import java.nio.ByteBuffer
 import java.nio.file.{Files, Paths}
+import java.util.concurrent.atomic.AtomicReference
 import java.util.concurrent.{Callable, Executors}
 import java.util.regex.Pattern
 import java.util.{Collections, Optional, Properties}
@@ -30,7 +31,7 @@ import kafka.log.Log.DeleteDirSuffix
 import kafka.metrics.KafkaYammerMetrics
 import kafka.server.checkpoints.LeaderEpochCheckpointFile
 import kafka.server.epoch.{EpochEntry, LeaderEpochFileCache}
-import kafka.server.{BrokerState, BrokerTopicStats, FetchDataInfo, FetchHighWatermark, FetchIsolation, FetchLogEnd, FetchTxnCommitted, KafkaConfig, LogDirFailureChannel, LogOffsetMetadata, PartitionMetadataFile}
+import kafka.server.{BrokerTopicStats, FetchDataInfo, FetchHighWatermark, FetchIsolation, FetchLogEnd, FetchTxnCommitted, KafkaConfig, LogDirFailureChannel, LogOffsetMetadata, PartitionMetadataFile}
 import kafka.utils._
 import org.apache.kafka.common.{InvalidRecordException, KafkaException, TopicPartition, Uuid}
 import org.apache.kafka.common.errors._
@@ -41,6 +42,7 @@ import org.apache.kafka.common.record._
 import org.apache.kafka.common.requests.FetchResponse.AbortedTransaction
 import org.apache.kafka.common.requests.{ListOffsetsRequest, ListOffsetsResponse}
 import org.apache.kafka.common.utils.{Time, Utils}
+import org.apache.kafka.metadata.BrokerState
 import org.easymock.EasyMock
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
@@ -96,7 +98,8 @@ class LogTest {
       new LogManager(logDirs = logDirs.map(_.getAbsoluteFile), initialOfflineDirs = Array.empty[File], topicConfigs = Map(),
         initialDefaultConfig = logConfig, cleanerConfig = CleanerConfig(enableCleaner = false), recoveryThreadsPerDataDir = 4,
         flushCheckMs = 1000L, flushRecoveryOffsetCheckpointMs = 10000L, flushStartOffsetCheckpointMs = 10000L,
-        retentionCheckMs = 1000L, maxPidExpirationMs = 60 * 60 * 1000, scheduler = time.scheduler, time = time, brokerState = BrokerState(),
+        retentionCheckMs = 1000L, maxPidExpirationMs = 60 * 60 * 1000, scheduler = time.scheduler, time = time,
+        brokerState = new AtomicReference[BrokerState](BrokerState.NOT_RUNNING),
         brokerTopicStats = new BrokerTopicStats, logDirFailureChannel = new LogDirFailureChannel(logDirs.size)) {
 
          override def loadLog(logDir: File, hadCleanShutdown: Boolean, recoveryPoints: Map[TopicPartition, Long],
@@ -186,6 +189,58 @@ class LogTest {
 
     log.appendAsLeader(records, leaderEpoch = 0)
     assertFetchSizeAndOffsets(fetchOffset = 3L, 0, Seq())
+  }
+
+  @Test
+  def testAppendAsLeaderWithRaftLeader(): Unit = {
+    val logConfig = LogTest.createLogConfig(segmentBytes = 1024 * 1024)
+    val log = createLog(logDir, logConfig)
+    val leaderEpoch = 0
+
+    def records(offset: Long): MemoryRecords = TestUtils.records(List(
+      new SimpleRecord(mockTime.milliseconds, "a".getBytes, "value".getBytes),
+      new SimpleRecord(mockTime.milliseconds, "b".getBytes, "value".getBytes),
+      new SimpleRecord(mockTime.milliseconds, "c".getBytes, "value".getBytes)
+    ), baseOffset = offset, partitionLeaderEpoch = leaderEpoch)
+
+    log.appendAsLeader(records(0), leaderEpoch, AppendOrigin.RaftLeader)
+    assertEquals(0, log.logStartOffset)
+    assertEquals(3L, log.logEndOffset)
+
+    // Since raft leader is responsible for assigning offsets, and the LogValidator is bypassed from the performance perspective,
+    // so the first offset of the MemoryRecords to be append should equal to the next offset in the log
+    assertThrows(classOf[UnexpectedAppendOffsetException], () => (log.appendAsLeader(records(1), leaderEpoch, AppendOrigin.RaftLeader)))
+
+    // When the first offset of the MemoryRecords to be append equals to the next offset in the log, append will succeed
+    log.appendAsLeader(records(3), leaderEpoch, AppendOrigin.RaftLeader)
+    assertEquals(6, log.logEndOffset)
+  }
+
+  @Test
+  def testAppendInfoFirstOffset(): Unit = {
+    val logConfig = LogTest.createLogConfig(segmentBytes = 1024 * 1024)
+    val log = createLog(logDir, logConfig)
+
+    val simpleRecords = List(
+      new SimpleRecord(mockTime.milliseconds, "a".getBytes, "value".getBytes),
+      new SimpleRecord(mockTime.milliseconds, "b".getBytes, "value".getBytes),
+      new SimpleRecord(mockTime.milliseconds, "c".getBytes, "value".getBytes)
+    )
+
+    val records = TestUtils.records(simpleRecords)
+
+    val firstAppendInfo = log.appendAsLeader(records, leaderEpoch = 0)
+    assertEquals(LogOffsetMetadata(0, 0, 0), firstAppendInfo.firstOffset.get)
+
+    val secondAppendInfo = log.appendAsLeader(
+      TestUtils.records(simpleRecords),
+      leaderEpoch = 0
+    )
+    assertEquals(LogOffsetMetadata(simpleRecords.size, 0, records.sizeInBytes), secondAppendInfo.firstOffset.get)
+
+    log.roll()
+    val afterRollAppendInfo =  log.appendAsLeader(TestUtils.records(simpleRecords), leaderEpoch = 0)
+    assertEquals(LogOffsetMetadata(simpleRecords.size * 2, simpleRecords.size * 2, 0), afterRollAppendInfo.firstOffset.get)
   }
 
   @Test
@@ -379,6 +434,64 @@ class LogTest {
 
     log.updateHighWatermark(5L)
     assertHighWatermarkBoundedFetches()
+  }
+
+  @Test
+  def testActiveProducers(): Unit = {
+    val logConfig = LogTest.createLogConfig(segmentBytes = 1024 * 1024)
+    val log = createLog(logDir, logConfig)
+
+    def assertProducerState(
+      producerId: Long,
+      producerEpoch: Short,
+      lastSequence: Int,
+      currentTxnStartOffset: Option[Long],
+      coordinatorEpoch: Option[Int]
+    ): Unit = {
+      val producerStateOpt = log.activeProducers.find(_.producerId == producerId)
+      assertTrue(producerStateOpt.isDefined)
+
+      val producerState = producerStateOpt.get
+      assertEquals(producerEpoch, producerState.producerEpoch)
+      assertEquals(lastSequence, producerState.lastSequence)
+      assertEquals(currentTxnStartOffset.getOrElse(-1L), producerState.currentTxnStartOffset)
+      assertEquals(coordinatorEpoch.getOrElse(-1), producerState.coordinatorEpoch)
+    }
+
+    // Test transactional producer state (open transaction)
+    val producer1Epoch = 5.toShort
+    val producerId1 = 1L
+    appendTransactionalAsLeader(log, producerId1, producer1Epoch)(5)
+    assertProducerState(
+      producerId1,
+      producer1Epoch,
+      lastSequence = 4,
+      currentTxnStartOffset = Some(0L),
+      coordinatorEpoch = None
+    )
+
+    // Test transactional producer state (closed transaction)
+    val coordinatorEpoch = 15
+    appendEndTxnMarkerAsLeader(log, producerId1, producer1Epoch, ControlRecordType.COMMIT, coordinatorEpoch)
+    assertProducerState(
+      producerId1,
+      producer1Epoch,
+      lastSequence = 4,
+      currentTxnStartOffset = None,
+      coordinatorEpoch = Some(coordinatorEpoch)
+    )
+
+    // Test idempotent producer state
+    val producer2Epoch = 5.toShort
+    val producerId2 = 2L
+    appendIdempotentAsLeader(log, producerId2, producer2Epoch)(3)
+    assertProducerState(
+      producerId2,
+      producer2Epoch,
+      lastSequence = 2,
+      currentTxnStartOffset = None,
+      coordinatorEpoch = None
+    )
   }
 
   @Test
@@ -1742,13 +1855,19 @@ class LogTest {
       new SimpleRecord(mockTime.milliseconds, s"key-$seq".getBytes, s"value-$seq".getBytes)
     ), producerId = pid, producerEpoch = epoch, sequence = seq)
     val multiEntryAppendInfo = log.appendAsLeader(createRecords, leaderEpoch = 0)
-    assertEquals(multiEntryAppendInfo.lastOffset - multiEntryAppendInfo.firstOffset.get + 1, 3,
-      "should have appended 3 entries")
+    assertEquals(
+      multiEntryAppendInfo.lastOffset - multiEntryAppendInfo.firstOffset.get.messageOffset + 1,
+      3,
+      "should have appended 3 entries"
+    )
 
     // Append a Duplicate of the tail, when the entry at the tail has multiple records.
     val dupMultiEntryAppendInfo = log.appendAsLeader(createRecords, leaderEpoch = 0)
-    assertEquals(multiEntryAppendInfo.firstOffset.get, dupMultiEntryAppendInfo.firstOffset.get,
-      "Somehow appended a duplicate entry with multiple log records to the tail")
+    assertEquals(
+      multiEntryAppendInfo.firstOffset.get.messageOffset,
+      dupMultiEntryAppendInfo.firstOffset.get.messageOffset,
+      "Somehow appended a duplicate entry with multiple log records to the tail"
+    )
     assertEquals(multiEntryAppendInfo.lastOffset, dupMultiEntryAppendInfo.lastOffset,
       "Somehow appended a duplicate entry with multiple log records to the tail")
 
@@ -1781,8 +1900,11 @@ class LogTest {
       producerId = pid, producerEpoch = epoch, sequence = seq)
     val origAppendInfo = log.appendAsLeader(createRecordsWithDuplicate, leaderEpoch = 0)
     val newAppendInfo = log.appendAsLeader(createRecordsWithDuplicate, leaderEpoch = 0)
-    assertEquals(origAppendInfo.firstOffset.get, newAppendInfo.firstOffset.get,
-      "Inserted a duplicate records into the log")
+    assertEquals(
+      origAppendInfo.firstOffset.get.messageOffset,
+      newAppendInfo.firstOffset.get.messageOffset,
+      "Inserted a duplicate records into the log"
+    )
     assertEquals(origAppendInfo.lastOffset, newAppendInfo.lastOffset,
       "Inserted a duplicate records into the log")
   }
@@ -2240,8 +2362,12 @@ class LogTest {
       assertEquals(1, log.numberOfSegments, "We should still have one segment left")
       assertEquals(0, log.deleteOldSegments(), "Further collection shouldn't delete anything")
       assertEquals(currOffset, log.logEndOffset, "Still no change in the logEndOffset")
-      assertEquals(currOffset, 
-        log.appendAsLeader(TestUtils.singletonRecords(value = "hello".getBytes, timestamp = mockTime.milliseconds), leaderEpoch = 0).firstOffset.get,
+      assertEquals(
+        currOffset, 
+        log.appendAsLeader(
+          TestUtils.singletonRecords(value = "hello".getBytes, timestamp = mockTime.milliseconds),
+          leaderEpoch = 0
+        ).firstOffset.get.messageOffset,
         "Should still be able to append and should get the logEndOffset assigned to the new append")
 
       // cleanup the log
@@ -3724,7 +3850,7 @@ class LogTest {
     //Given this partition is on leader epoch 72
     val epoch = 72
     val log = createLog(logDir, LogConfig())
-    log.maybeAssignEpochStartOffset(epoch, records.size)
+    log.maybeAssignEpochStartOffset(epoch, records.length)
 
     //When appending messages as a leader (i.e. assignOffsets = true)
     for (record <- records)
@@ -3947,7 +4073,7 @@ class LogTest {
       new SimpleRecord("baz".getBytes))
 
     val firstAppendInfo = log.appendAsLeader(records, leaderEpoch = 0)
-    assertEquals(firstAppendInfo.firstOffset, log.firstUnstableOffset)
+    assertEquals(firstAppendInfo.firstOffset.map(_.messageOffset), log.firstUnstableOffset)
 
     // add more transactional records
     seq += 3
@@ -3955,13 +4081,13 @@ class LogTest {
       new SimpleRecord("blah".getBytes)), leaderEpoch = 0)
 
     // LSO should not have changed
-    assertEquals(firstAppendInfo.firstOffset, log.firstUnstableOffset)
+    assertEquals(firstAppendInfo.firstOffset.map(_.messageOffset), log.firstUnstableOffset)
 
     // now transaction is committed
     val commitAppendInfo = appendEndTxnMarkerAsLeader(log, pid, epoch, ControlRecordType.COMMIT)
 
     // first unstable offset is not updated until the high watermark is advanced
-    assertEquals(firstAppendInfo.firstOffset, log.firstUnstableOffset)
+    assertEquals(firstAppendInfo.firstOffset.map(_.messageOffset), log.firstUnstableOffset)
     log.updateHighWatermark(commitAppendInfo.lastOffset + 1)
 
     // now there should be no first unstable offset
@@ -4507,7 +4633,7 @@ class LogTest {
       new SimpleRecord("a".getBytes),
       new SimpleRecord("b".getBytes),
       new SimpleRecord("c".getBytes)), leaderEpoch = 0)
-    assertEquals(firstAppendInfo.firstOffset, log.firstUnstableOffset)
+    assertEquals(firstAppendInfo.firstOffset.map(_.messageOffset), log.firstUnstableOffset)
 
     // mix in some non-transactional data
     log.appendAsLeader(MemoryRecords.withRecords(CompressionType.NONE,
@@ -4522,14 +4648,14 @@ class LogTest {
       new SimpleRecord("f".getBytes)), leaderEpoch = 0)
 
     // LSO should not have changed
-    assertEquals(firstAppendInfo.firstOffset, log.firstUnstableOffset)
+    assertEquals(firstAppendInfo.firstOffset.map(_.messageOffset), log.firstUnstableOffset)
 
     // now first producer's transaction is aborted
     val abortAppendInfo = appendEndTxnMarkerAsLeader(log, pid1, epoch, ControlRecordType.ABORT)
     log.updateHighWatermark(abortAppendInfo.lastOffset + 1)
 
     // LSO should now point to one less than the first offset of the second transaction
-    assertEquals(secondAppendInfo.firstOffset, log.firstUnstableOffset)
+    assertEquals(secondAppendInfo.firstOffset.map(_.messageOffset), log.firstUnstableOffset)
 
     // commit the second transaction
     val commitAppendInfo = appendEndTxnMarkerAsLeader(log, pid2, epoch, ControlRecordType.COMMIT)
@@ -4554,7 +4680,7 @@ class LogTest {
     val log = createLog(logDir, logConfig)
 
     val firstAppendInfo = log.appendAsLeader(records, leaderEpoch = 0)
-    assertEquals(firstAppendInfo.firstOffset, log.firstUnstableOffset)
+    assertEquals(firstAppendInfo.firstOffset.map(_.messageOffset), log.firstUnstableOffset)
 
     // this write should spill to the second segment
     seq = 3
@@ -4562,7 +4688,7 @@ class LogTest {
       new SimpleRecord("d".getBytes),
       new SimpleRecord("e".getBytes),
       new SimpleRecord("f".getBytes)), leaderEpoch = 0)
-    assertEquals(firstAppendInfo.firstOffset, log.firstUnstableOffset)
+    assertEquals(firstAppendInfo.firstOffset.map(_.messageOffset), log.firstUnstableOffset)
     assertEquals(3L, log.logEndOffsetMetadata.segmentBaseOffset)
 
     // now abort the transaction
@@ -4593,14 +4719,34 @@ class LogTest {
 
   private def allAbortedTransactions(log: Log) = log.logSegments.flatMap(_.txnIndex.allAbortedTxns)
 
-  private def appendTransactionalAsLeader(log: Log, producerId: Long, producerEpoch: Short): Int => Unit = {
+  private def appendTransactionalAsLeader(
+    log: Log,
+    producerId: Long,
+    producerEpoch: Short
+  ): Int => Unit = {
+    appendIdempotentAsLeader(log, producerId, producerEpoch, isTransactional = true)
+  }
+
+  private def appendIdempotentAsLeader(
+    log: Log,
+    producerId: Long,
+    producerEpoch: Short,
+    isTransactional: Boolean = false
+  ): Int => Unit = {
     var sequence = 0
     numRecords: Int => {
       val simpleRecords = (sequence until sequence + numRecords).map { seq =>
         new SimpleRecord(mockTime.milliseconds(), s"$seq".getBytes)
       }
-      val records = MemoryRecords.withTransactionalRecords(CompressionType.NONE, producerId,
-        producerEpoch, sequence, simpleRecords: _*)
+
+      val records = if (isTransactional) {
+        MemoryRecords.withTransactionalRecords(CompressionType.NONE, producerId,
+          producerEpoch, sequence, simpleRecords: _*)
+      } else {
+        MemoryRecords.withIdempotentRecords(CompressionType.NONE, producerId,
+          producerEpoch, sequence, simpleRecords: _*)
+      }
+
       log.appendAsLeader(records, leaderEpoch = 0)
       sequence += numRecords
     }

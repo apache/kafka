@@ -262,9 +262,8 @@ public class Fetcher<K, V> implements Closeable {
                     .toForget(data.toForget())
                     .rackId(clientRackId);
 
-            if (log.isDebugEnabled()) {
-                log.debug("Sending {} {} to broker {}", isolationLevel, data.toString(), fetchTarget);
-            }
+            log.debug("Sending {} {} to broker {}", isolationLevel, data, fetchTarget);
+
             RequestFuture<ClientResponse> future = client.send(fetchTarget, request);
             // We add the node to the set of nodes with pending fetch requests before adding the
             // listener because the future may have been fulfilled on another thread (e.g. during a
@@ -319,7 +318,7 @@ public class Fetcher<K, V> implements Closeable {
                                     short responseVersion = resp.requestHeader().apiVersion();
 
                                     completedFetches.add(new CompletedFetch(partition, partitionData,
-                                            metricAggregator, batches, fetchOffset, responseVersion));
+                                            metricAggregator, batches, fetchOffset, responseVersion, resp.receivedTimeMs()));
                                 }
                             }
 
@@ -598,8 +597,8 @@ public class Fetcher<K, V> implements Closeable {
      *         the defaultResetPolicy is NONE
      * @throws TopicAuthorizationException If there is TopicAuthorization error in fetchResponse.
      */
-    public Map<TopicPartition, List<ConsumerRecord<K, V>>> fetchedRecords() {
-        Map<TopicPartition, List<ConsumerRecord<K, V>>> fetched = new HashMap<>();
+    public FetchedRecords<K, V> fetchedRecords() {
+        FetchedRecords<K, V> fetched = new FetchedRecords<>();
         Queue<CompletedFetch> pausedCompletedFetches = new ArrayDeque<>();
         int recordsRemaining = maxPollRecords;
 
@@ -637,20 +636,28 @@ public class Fetcher<K, V> implements Closeable {
                 } else {
                     List<ConsumerRecord<K, V>> records = fetchRecords(nextInLineFetch, recordsRemaining);
 
+                    TopicPartition partition = nextInLineFetch.partition;
+
+                    // This can be false when a rebalance happened before fetched records
+                    // are returned to the consumer's poll call
+                    if (subscriptions.isAssigned(partition)) {
+
+                        // initializeCompletedFetch, above, has already persisted the metadata from the fetch in the
+                        // SubscriptionState, so we can just read it out, which in particular lets us re-use the logic
+                        // for determining the end offset
+                        final long receivedTimestamp = nextInLineFetch.receivedTimestamp;
+                        final Long endOffset = subscriptions.logEndOffset(partition, isolationLevel);
+                        final FetchPosition fetchPosition = subscriptions.position(partition);
+
+                        final FetchedRecords.FetchMetadata metadata =
+                            new FetchedRecords.FetchMetadata(receivedTimestamp, fetchPosition, endOffset);
+
+                        fetched.addMetadata(partition, metadata);
+
+                    }
+
                     if (!records.isEmpty()) {
-                        TopicPartition partition = nextInLineFetch.partition;
-                        List<ConsumerRecord<K, V>> currentRecords = fetched.get(partition);
-                        if (currentRecords == null) {
-                            fetched.put(partition, records);
-                        } else {
-                            // this case shouldn't usually happen because we only send one fetch at a time per partition,
-                            // but it might conceivably happen in some rare cases (such as partition leader changes).
-                            // we have to copy to a new list because the old one may be immutable
-                            List<ConsumerRecord<K, V>> newRecords = new ArrayList<>(records.size() + currentRecords.size());
-                            newRecords.addAll(currentRecords);
-                            newRecords.addAll(records);
-                            fetched.put(partition, newRecords);
-                        }
+                        fetched.addRecords(partition, records);
                         recordsRemaining -= records.size();
                     }
                 }
@@ -1459,6 +1466,7 @@ public class Fetcher<K, V> implements Closeable {
         private final FetchResponse.PartitionData<Records> partitionData;
         private final FetchResponseMetricAggregator metricAggregator;
         private final short responseVersion;
+        private final long receivedTimestamp;
 
         private int recordsRead;
         private int bytesRead;
@@ -1477,13 +1485,15 @@ public class Fetcher<K, V> implements Closeable {
                                FetchResponseMetricAggregator metricAggregator,
                                Iterator<? extends RecordBatch> batches,
                                Long fetchOffset,
-                               short responseVersion) {
+                               short responseVersion,
+                               final long receivedTimestamp) {
             this.partition = partition;
             this.partitionData = partitionData;
             this.metricAggregator = metricAggregator;
             this.batches = batches;
             this.nextFetchOffset = fetchOffset;
             this.responseVersion = responseVersion;
+            this.receivedTimestamp = receivedTimestamp;
             this.lastEpoch = Optional.empty();
             this.abortedProducerIds = new HashSet<>();
             this.abortedTransactions = abortedTransactions(partitionData);

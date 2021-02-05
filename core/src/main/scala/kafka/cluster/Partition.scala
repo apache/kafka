@@ -17,7 +17,7 @@
 package kafka.cluster
 
 import java.util.concurrent.locks.ReentrantReadWriteLock
-import java.util.{Optional, Properties}
+import java.util.Optional
 
 import kafka.api.{ApiVersion, LeaderAndIsr}
 import kafka.common.UnexpectedAppendOffsetException
@@ -26,12 +26,12 @@ import kafka.log._
 import kafka.metrics.KafkaMetricsGroup
 import kafka.server._
 import kafka.server.checkpoints.OffsetCheckpoints
+import kafka.server.metadata.ConfigRepository
 import kafka.utils.CoreUtils.{inReadLock, inWriteLock}
 import kafka.utils._
-import kafka.zk.AdminZkClient
 import kafka.zookeeper.ZooKeeperClientException
 import org.apache.kafka.common.errors._
-import org.apache.kafka.common.message.FetchResponseData
+import org.apache.kafka.common.message.{DescribeProducersResponseData, FetchResponseData}
 import org.apache.kafka.common.message.LeaderAndIsrRequestData.LeaderAndIsrPartitionState
 import org.apache.kafka.common.message.OffsetForLeaderEpochResponseData.EpochEndOffset
 import org.apache.kafka.common.protocol.Errors
@@ -49,10 +49,6 @@ trait IsrChangeListener {
   def markExpand(): Unit
   def markShrink(): Unit
   def markFailed(): Unit
-}
-
-trait TopicConfigFetcher {
-  def fetch(): Properties
 }
 
 class DelayedOperations(topicPartition: TopicPartition,
@@ -73,6 +69,7 @@ class DelayedOperations(topicPartition: TopicPartition,
 object Partition extends KafkaMetricsGroup {
   def apply(topicPartition: TopicPartition,
             time: Time,
+            configRepository: ConfigRepository,
             replicaManager: ReplicaManager): Partition = {
 
     val isrChangeListener = new IsrChangeListener {
@@ -87,13 +84,6 @@ object Partition extends KafkaMetricsGroup {
       override def markFailed(): Unit = replicaManager.failedIsrUpdatesRate.mark()
     }
 
-    val configProvider = new TopicConfigFetcher {
-      override def fetch(): Properties = {
-        val adminZkClient = new AdminZkClient(replicaManager.zkClient)
-        adminZkClient.fetchEntityConfig(ConfigType.Topic, topicPartition.topic)
-      }
-    }
-
     val delayedOperations = new DelayedOperations(
       topicPartition,
       replicaManager.delayedProducePurgatory,
@@ -105,7 +95,7 @@ object Partition extends KafkaMetricsGroup {
       interBrokerProtocolVersion = replicaManager.config.interBrokerProtocolVersion,
       localBrokerId = replicaManager.config.brokerId,
       time = time,
-      topicConfigProvider = configProvider,
+      configRepository = configRepository,
       isrChangeListener = isrChangeListener,
       delayedOperations = delayedOperations,
       metadataCache = replicaManager.metadataCache,
@@ -228,7 +218,7 @@ class Partition(val topicPartition: TopicPartition,
                 interBrokerProtocolVersion: ApiVersion,
                 localBrokerId: Int,
                 time: Time,
-                topicConfigProvider: TopicConfigFetcher,
+                configRepository: ConfigRepository,
                 isrChangeListener: IsrChangeListener,
                 delayedOperations: DelayedOperations,
                 metadataCache: MetadataCache,
@@ -342,7 +332,7 @@ class Partition(val topicPartition: TopicPartition,
   // Visible for testing
   private[cluster] def createLog(isNew: Boolean, isFutureReplica: Boolean, offsetCheckpoints: OffsetCheckpoints): Log = {
     def fetchLogConfig: LogConfig = {
-      val props = topicConfigProvider.fetch()
+      val props = configRepository.topicConfig(topic)
       LogConfig.fromProps(logManager.currentDefaultConfig.originals, props)
     }
 
@@ -1164,6 +1154,23 @@ class Partition(val topicPartition: TopicPartition,
         getOffsetByTimestamp.filter(timestampAndOffset => timestampAndOffset.offset < lastFetchableOffset)
           .orElse(maybeOffsetsError.map(e => throw e))
     }
+  }
+
+  def activeProducerState: DescribeProducersResponseData.PartitionResponse = {
+    val producerState = new DescribeProducersResponseData.PartitionResponse()
+      .setPartitionIndex(topicPartition.partition())
+
+    log.map(_.activeProducers) match {
+      case Some(producers) =>
+        producerState
+          .setErrorCode(Errors.NONE.code)
+          .setActiveProducers(producers.asJava)
+      case None =>
+        producerState
+          .setErrorCode(Errors.NOT_LEADER_OR_FOLLOWER.code)
+    }
+
+    producerState
   }
 
   def fetchOffsetSnapshot(currentLeaderEpoch: Optional[Integer],

@@ -345,24 +345,16 @@ public class ConnectHeadersTest {
     }
 
     protected HeaderTransform appendToKey(final String suffix) {
-        return new HeaderTransform() {
-            @Override
-            public Header apply(Header header) {
-                return header.rename(header.key() + suffix);
-            }
-        };
+        return header -> header.rename(header.key() + suffix);
     }
 
     protected HeaderTransform removeHeadersOfType(final Type type) {
-        return new HeaderTransform() {
-            @Override
-            public Header apply(Header header) {
-                Schema schema = header.schema();
-                if (schema != null && schema.type() == type) {
-                    return null;
-                }
-                return header;
+        return header -> {
+            Schema schema = header.schema();
+            if (schema != null && schema.type() == type) {
+                return null;
             }
+            return header;
         };
     }
 

@@ -634,7 +634,7 @@ public class ConsumerNetworkClient implements Closeable {
     /*
      * A thread-safe helper class to hold requests per node that have not been sent yet
      */
-    private final static class UnsentRequests {
+    private static final class UnsentRequests {
         private final ConcurrentMap<Node, ConcurrentLinkedQueue<ClientRequest>> unsent;
 
         private UnsentRequests() {
@@ -644,11 +644,7 @@ public class ConsumerNetworkClient implements Closeable {
         public void put(Node node, ClientRequest request) {
             // the lock protects the put from a concurrent removal of the queue for the node
             synchronized (unsent) {
-                ConcurrentLinkedQueue<ClientRequest> requests = unsent.get(node);
-                if (requests == null) {
-                    requests = new ConcurrentLinkedQueue<>();
-                    unsent.put(node, requests);
-                }
+                ConcurrentLinkedQueue<ClientRequest> requests = unsent.computeIfAbsent(node, key -> new ConcurrentLinkedQueue<>());
                 requests.add(request);
             }
         }

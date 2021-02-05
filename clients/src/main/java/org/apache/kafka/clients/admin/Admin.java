@@ -33,6 +33,7 @@ import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.Metric;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.TopicPartitionReplica;
 import org.apache.kafka.common.acl.AclBinding;
 import org.apache.kafka.common.acl.AclBindingFilter;
@@ -251,6 +252,41 @@ public interface Admin extends AutoCloseable {
      * @return The DeleteTopicsResult.
      */
     DeleteTopicsResult deleteTopics(Collection<String> topics, DeleteTopicsOptions options);
+    
+    /**
+     * This is a convenience method for {@link #deleteTopicsWithIds(Collection, DeleteTopicsOptions)}
+     * with default options. See the overload for more details.
+     * <p>
+     * This operation is supported by brokers with version 2.8.0 or higher.
+     *
+     * @param topics The topic IDs for the topics to delete.
+     * @return The DeleteTopicsWithIdsResult.
+     */
+    default DeleteTopicsWithIdsResult deleteTopicsWithIds(Collection<Uuid> topics) {
+        return deleteTopicsWithIds(topics, new DeleteTopicsOptions());
+    }
+
+    /**
+     * Delete a batch of topics.
+     * <p>
+     * This operation is not transactional so it may succeed for some topics while fail for others.
+     * <p>
+     * It may take several seconds after the {@link DeleteTopicsWithIdsResult} returns
+     * success for all the brokers to become aware that the topics are gone.
+     * During this time, {@link #listTopics()} and {@link #describeTopics(Collection)}
+     * may continue to return information about the deleted topics.
+     * <p>
+     * If delete.topic.enable is false on the brokers, deleteTopicsWithIds will mark
+     * the topics for deletion, but not actually delete them. The futures will
+     * return successfully in this case.
+     * <p>
+     * This operation is supported by brokers with version 2.8.0 or higher.
+     *
+     * @param topics  The topic IDs for the topics to delete.
+     * @param options The options to use when deleting the topics.
+     * @return The DeleteTopicsWithIdsResult.
+     */
+    DeleteTopicsWithIdsResult deleteTopicsWithIds(Collection<Uuid> topics, DeleteTopicsOptions options);
 
     /**
      * List the topics available in the cluster with the default options.
@@ -1448,6 +1484,43 @@ public interface Admin extends AutoCloseable {
      * @return the {@link UpdateFeaturesResult} containing the result
      */
     UpdateFeaturesResult updateFeatures(Map<String, FeatureUpdate> featureUpdates, UpdateFeaturesOptions options);
+
+    /**
+     * Permanently remove a broker and reassign any partitions on the broker.
+     * <p>
+     * This operation is supported only on self-managed Kafka clusters (i.e. brokers which do not rely on Zookeeper).
+     *
+     * @param brokerId  the broker id to unregister.
+     *
+     * <p>This is a convenience method for {@link #decommissionBroker(int, DecommissionBrokerOptions)}
+     *
+     * @return the {@link DecommissionBrokerResult} containing the result
+     */
+    default DecommissionBrokerResult decommissionBroker(int brokerId) {
+        return decommissionBroker(brokerId, new DecommissionBrokerOptions());
+    }
+
+    /**
+     * Permanently remove a broker and reassign any partitions on the broker.
+     * <p>
+     * This operation is supported only on self-managed Kafka clusters (i.e. brokers which do not rely on Zookeeper).
+     *
+     * The following exceptions can be anticipated when calling {@code get()} on the future from the
+     * returned {@link DescribeFeaturesResult}:
+     * <ul>
+     *   <li>{@link org.apache.kafka.common.errors.TimeoutException}
+     *   If the request timed out before the describe operation could finish.</li>
+     *   <li>{@link org.apache.kafka.common.errors.UnsupportedVersionException}
+     *   If the software is too old to support decommissioning.
+     * </ul>
+     * <p>
+     *
+     * @param brokerId  the broker id to unregister.
+     * @param options   the options to use.
+     *
+     * @return the {@link DecommissionBrokerResult} containing the result
+     */
+    DecommissionBrokerResult decommissionBroker(int brokerId, DecommissionBrokerOptions options);
 
     /**
      * Get the metrics kept by the adminClient
