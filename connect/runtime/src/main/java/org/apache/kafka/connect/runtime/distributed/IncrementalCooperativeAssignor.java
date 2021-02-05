@@ -461,7 +461,7 @@ public class IncrementalCooperativeAssignor implements ConnectAssignor {
             }
 
             if (!candidateWorkerLoad.isEmpty()) {
-                System.out.println("Assigning " + lostAssignments.tasks().size() + " tasks to " + candidateWorkerLoad.size() + " worker");
+                System.out.println("Assigning:" + lostAssignments.tasks().size() + " tasks to " + candidateWorkerLoad.size() + " worker");
                 Iterator<WorkerLoad> candidateWorkerIterator = candidateWorkerLoad.iterator();
                 for (String connector : lostAssignments.connectors()) {
                     // Loop over the the candidate workers as many times as it takes
