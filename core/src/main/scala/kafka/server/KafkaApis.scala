@@ -457,7 +457,7 @@ class KafkaApis(val requestChannel: RequestChannel,
         sendResponseCallback(Map.empty)
       else if (header.apiVersion == 0) {
         // for version 0 always store offsets to ZK
-        val zkSupport = metadataSupport.requireZkOrThrow(unsupported("Version 0 offset commit requests"))
+        val zkSupport = metadataSupport.requireZkOrThrow(KafkaApis.unsupported("Version 0 offset commit requests"))
         val responseInfo = authorizedTopicRequestInfo.map {
           case (topicPartition, partitionData) =>
             try {
@@ -1092,7 +1092,7 @@ class KafkaApis(val requestChannel: RequestChannel,
                           replicationFactor: Int,
                           properties: util.Properties = new util.Properties()): MetadataResponseTopic = {
     // the below will be replaced once KAFKA-9751 is implemented
-    val zkSupport = metadataSupport.requireZkOrThrow(notYetSupported("Auto topic creation"))
+    val zkSupport = metadataSupport.requireZkOrThrow(KafkaApis.notYetSupported("Auto topic creation"))
     try {
       zkSupport.adminZkClient.createTopic(topic, numPartitions, replicationFactor, properties, RackAwareMode.Safe, config.usesTopicId)
       info("Auto creation of topic %s with %d partitions and replication factor %d is successful"
@@ -1306,7 +1306,7 @@ class KafkaApis(val requestChannel: RequestChannel,
           offsetFetchRequest.getErrorResponse(requestThrottleMs, Errors.GROUP_AUTHORIZATION_FAILED)
         else {
           if (header.apiVersion == 0) {
-            val zkSupport = metadataSupport.requireZkOrThrow(unsupported("Version 0 offset fetch requests"))
+            val zkSupport = metadataSupport.requireZkOrThrow(KafkaApis.unsupported("Version 0 offset fetch requests"))
             val (authorizedPartitions, unauthorizedPartitions) = partitionByAuthorized(
               offsetFetchRequest.partitions.asScala)
 
@@ -2682,7 +2682,7 @@ class KafkaApis(val requestChannel: RequestChannel,
   }
 
   def handleListPartitionReassignmentsRequest(request: RequestChannel.Request): Unit = {
-    val zkSupport = metadataSupport.requireZkOrThrow(notYetSupported(request))
+    val zkSupport = metadataSupport.requireZkOrThrow(KafkaApis.notYetSupported(request))
     authHelper.authorizeClusterOperation(request, DESCRIBE)
     val listPartitionReassignmentsRequest = request.body[ListPartitionReassignmentsRequest]
 
@@ -2978,7 +2978,7 @@ class KafkaApis(val requestChannel: RequestChannel,
   }
 
   def handleElectReplicaLeader(request: RequestChannel.Request): Unit = {
-    val zkSupport = metadataSupport.requireZkOrThrow(notYetSupported(request))
+    val zkSupport = metadataSupport.requireZkOrThrow(KafkaApis.notYetSupported(request))
 
     val electionRequest = request.body[ElectLeadersRequest]
 
@@ -3108,7 +3108,7 @@ class KafkaApis(val requestChannel: RequestChannel,
   }
 
   def handleDescribeClientQuotasRequest(request: RequestChannel.Request): Unit = {
-    val zkSupport = metadataSupport.requireZkOrThrow(notYetSupported(request))
+    val zkSupport = metadataSupport.requireZkOrThrow(KafkaApis.notYetSupported(request))
     val describeClientQuotasRequest = request.body[DescribeClientQuotasRequest]
 
     if (authHelper.authorize(request.context, DESCRIBE_CONFIGS, CLUSTER, CLUSTER_NAME)) {
@@ -3174,7 +3174,7 @@ class KafkaApis(val requestChannel: RequestChannel,
   }
 
   def handleDescribeUserScramCredentialsRequest(request: RequestChannel.Request): Unit = {
-    val zkSupport = metadataSupport.requireZkOrThrow(notYetSupported(request))
+    val zkSupport = metadataSupport.requireZkOrThrow(KafkaApis.notYetSupported(request))
     val describeUserScramCredentialsRequest = request.body[DescribeUserScramCredentialsRequest]
 
     if (authHelper.authorize(request.context, DESCRIBE, CLUSTER, CLUSTER_NAME)) {
@@ -3475,21 +3475,6 @@ class KafkaApis(val requestChannel: RequestChannel,
       brokerEpochInRequest < zkSupport.controller.brokerEpoch
     }
   }
-
-  // visible for testing
-  private[server] def unsupported(text: String): Exception = {
-    new UnsupportedVersionException(s"Unsupported when using a Raft-based metadata quorum: $text")
-  }
-
-  // visible for testing
-  private[server] def notYetSupported(request: RequestChannel.Request): Exception = {
-    notYetSupported(request.toString)
-  }
-
-  // visible for testing
-  private[server] def notYetSupported(text: String): Exception = {
-    new UnsupportedVersionException(s"Not yet supported when using a Raft-based metadata quorum: $text")
-  }
 }
 
 object KafkaApis {
@@ -3510,5 +3495,17 @@ object KafkaApis {
   // visible for testing
   private[server] def shouldAlwaysForward(request: RequestChannel.Request): Exception = {
     new UnsupportedVersionException(s"Should always be forwarded to the Active Controller when using a Raft-based metadata quorum: ${request.header.apiKey}")
+  }
+
+  private def unsupported(text: String): Exception = {
+    new UnsupportedVersionException(s"Unsupported when using a Raft-based metadata quorum: $text")
+  }
+
+  private def notYetSupported(request: RequestChannel.Request): Exception = {
+    notYetSupported(request.header.apiKey().toString)
+  }
+
+  private def notYetSupported(text: String): Exception = {
+    new UnsupportedVersionException(s"Not yet supported when using a Raft-based metadata quorum: $text")
   }
 }
