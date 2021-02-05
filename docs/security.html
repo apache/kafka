@@ -677,7 +677,7 @@ keyUsage               = digitalSignature, keyEncipherment</code></pre>
             <li>Configure the JAAS configuration property for each client in producer.properties or consumer.properties.
                 The login module describes how the clients like producer and consumer can connect to the Kafka Broker.
                 The following is an example configuration for a client for the PLAIN mechanism:
-                <pre class="line-numbers"><code class="language-text">    sasl.jaas.config=org.apache.kafka.common.security.plain.PlainLoginModule required \
+                <pre class="line-numbers"><code class="producerconfig">    sasl.jaas.config=org.apache.kafka.common.security.plain.PlainLoginModule required \
         username="alice" \
         password="alice-secret";</code></pre>
                 <p>The options <tt>username</tt> and <tt>password</tt> are used by clients to configure
