@@ -322,7 +322,7 @@ public class IncrementalCooperativeAssignor implements ConnectAssignor {
                                 incrementalTaskAssignments, toRevoke, delay, protocolVersion);
         previousAssignment = computePreviousAssignment(toRevoke, connectorAssignments, taskAssignments, lostAssignments);
         if (exRevoke) {
-            System.out.println("ass:" + assignments + ", pre:" + previousAssignment + ", mem:" + memberConfigs.keySet().size() + ", cur:" + currentWorkerAssignment + ",tas:" + taskAssignments);
+            System.out.println("ass:" + assignments + ",pre:" + previousAssignment + ", mem:" + memberConfigs.keySet().size() + ", cur:" + currentWorkerAssignment + ",tas:" + taskAssignments);
         }
         previousGenerationId = coordinator.generationId();
         previousMembers = memberConfigs.keySet();
