@@ -276,6 +276,8 @@ public class StandbyTaskEOSIntegrationTest {
             2
         );
 
+        streamInstanceOneRecovery = buildWithDeduplicationTopology(base + "-1");
+
         // "restart" first client and wait for standby recovery
         // (could actually also be active, but it does not matter as long as we enable "state stores"
         startApplicationAndWaitUntilRunning(
