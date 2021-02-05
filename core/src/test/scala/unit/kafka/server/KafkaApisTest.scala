@@ -127,7 +127,10 @@ class KafkaApisTest {
     val brokerFeatures = BrokerFeatures.createDefault()
     val cache = new FinalizedFeatureCache(brokerFeatures)
     val properties = if (raftSupport) {
-      TestUtils.createBrokerConfig(brokerId, "", processRoles="broker")
+      val properties = TestUtils.createBrokerConfig(brokerId, "")
+      properties.put(KafkaConfig.NodeIdProp, brokerId.toString)
+      properties.put(KafkaConfig.ProcessRolesProp, "broker")
+      properties
     } else {
       TestUtils.createBrokerConfig(brokerId, "zk")
     }

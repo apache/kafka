@@ -273,8 +273,7 @@ object TestUtils extends Logging {
                          logDirCount: Int = 1,
                          enableToken: Boolean = false,
                          numPartitions: Int = 1,
-                         defaultReplicationFactor: Short = 1,
-                         processRoles: String = ""): Properties = {
+                         defaultReplicationFactor: Short = 1): Properties = {
     def shouldEnable(protocol: SecurityProtocol) = interBrokerSecurityProtocol.fold(false)(_ == protocol)
 
     val protocolAndPorts = ArrayBuffer[(SecurityProtocol, Int)]()
@@ -292,7 +291,7 @@ object TestUtils extends Logging {
     }.mkString(",")
 
     val props = new Properties
-    if (nodeId >= 0) props.put(if (processRoles.isEmpty) KafkaConfig.BrokerIdProp else KafkaConfig.NodeIdProp, nodeId.toString)
+    if (nodeId >= 0) props.put(KafkaConfig.BrokerIdProp, nodeId.toString)
     props.put(KafkaConfig.ListenersProp, listeners)
     if (logDirCount > 1) {
       val logDirs = (1 to logDirCount).toList.map(i =>
@@ -304,12 +303,8 @@ object TestUtils extends Logging {
     } else {
       props.put(KafkaConfig.LogDirProp, tempDir().getAbsolutePath)
     }
-    if (processRoles.isEmpty) {
-      props.put(KafkaConfig.ZkConnectProp, zkConnect)
-      props.put(KafkaConfig.ZkConnectionTimeoutMsProp, "10000")
-    } else {
-      props.put(KafkaConfig.ProcessRolesProp, processRoles)
-    }
+    props.put(KafkaConfig.ZkConnectProp, zkConnect)
+    props.put(KafkaConfig.ZkConnectionTimeoutMsProp, "10000")
     props.put(KafkaConfig.ReplicaSocketTimeoutMsProp, "1500")
     props.put(KafkaConfig.ControllerSocketTimeoutMsProp, "1500")
     props.put(KafkaConfig.ControlledShutdownEnableProp, enableControlledShutdown.toString)
