@@ -254,7 +254,7 @@ public class IncrementalCooperativeAssignor implements ConnectAssignor {
 
         // Recompute the complete assignment excluding the deleted connectors-and-tasks
 //        log.error("!!! before recompute complete assignment:" + completeWorkerAssignment);
-        completeWorkerAssignment = workerAssignment(memberConfigs, deleted);//2
+        completeWorkerAssignment = workerAssignment(memberConfigs, deleted); //2
 //        log.error("!!! recompute complete assignment:" + completeWorkerAssignment);
         connectorAssignments =
                 completeWorkerAssignment.stream().collect(Collectors.toMap(WorkerLoad::worker, WorkerLoad::connectors));
@@ -461,7 +461,7 @@ public class IncrementalCooperativeAssignor implements ConnectAssignor {
             }
 
             if (!candidateWorkerLoad.isEmpty()) {
-                System.out.println("Assigning " + lostAssignments.tasks().size() + " tasks to "+ candidateWorkerLoad.size() + " worker");
+                System.out.println("Assigning " + lostAssignments.tasks().size() + " tasks to " + candidateWorkerLoad.size() + " worker");
                 Iterator<WorkerLoad> candidateWorkerIterator = candidateWorkerLoad.iterator();
                 for (String connector : lostAssignments.connectors()) {
                     // Loop over the the candidate workers as many times as it takes
