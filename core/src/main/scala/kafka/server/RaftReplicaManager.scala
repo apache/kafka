@@ -187,86 +187,98 @@ class RaftReplicaManager(config: KafkaConfig,
           stateChangeLogger.trace(s"Metadata batch $metadataOffset: locally removed: ${state}")
         }
       }
-      // First create the partition if it doesn't exist already
-      // partitionChangesToBeDeferred maps each partition to be deferred to its (current state, previous deferred state if any)
-      val partitionChangesToBeDeferred = mutable.HashMap[Partition, (MetadataPartition, Option[HostedPartition.Deferred])]()
-      val partitionsToBeLeader = mutable.HashMap[Partition, MetadataPartition]()
-      val partitionsToBeFollower = mutable.HashMap[Partition, MetadataPartition]()
-      builder.localChanged().foreach { state =>
-        val topicPartition = new TopicPartition(state.topicName, state.partitionIndex)
-        val (partition, priorDeferredMetadata) = getPartition(topicPartition) match {
-          case HostedPartition.Offline =>
-            stateChangeLogger.warn(s"Ignoring handlePartitionChanges at $metadataOffset " +
-              s"for partition $topicPartition as the local replica for the partition is " +
-              "in an offline log directory")
-            (None, None)
+      if (deferringMetadataChanges) {
+        // partitionChangesToBeDeferred maps each partition to be deferred to its (current state, previous deferred state if any)
+        val partitionChangesToBeDeferred = mutable.HashMap[Partition, (MetadataPartition, Option[HostedPartition.Deferred])]()
+        builder.localChanged().foreach { currentState =>
+          val topicPartition = new TopicPartition(currentState.topicName, currentState.partitionIndex)
+          val (partition, priorDeferredMetadata) = getPartition(topicPartition) match {
+            case HostedPartition.Offline =>
+              stateChangeLogger.warn(s"Ignoring handlePartitionChanges at $metadataOffset " +
+                s"for partition $topicPartition as the local replica for the partition is " +
+                "in an offline log directory")
+              (None, None)
 
-          case HostedPartition.Online(partition) => (Some(partition), None)
-          case deferred@HostedPartition.Deferred(partition, _, _, _, _) => (Some(partition), Some(deferred))
+            case HostedPartition.Online(partition) => (Some(partition), None)
+            case deferred@HostedPartition.Deferred(partition, _, _, _, _) => (Some(partition), Some(deferred))
 
-          case HostedPartition.None =>
-            val partition = Partition(topicPartition, time, configRepository, this)
-            if (!deferringMetadataChanges) {
-              allPartitions.putIfNotExists(topicPartition, HostedPartition.Online(partition))
-            }
-            (Some(partition), None)
+            case HostedPartition.None =>
+              // Create the partition instance since it does not yet exist
+              (Some(Partition(topicPartition, time, configRepository, this)), None)
+          }
+          partition.foreach(partition => partitionChangesToBeDeferred.put(partition, (currentState, priorDeferredMetadata)))
         }
-        partition.foreach { partition =>
-          val alreadyDeferred = priorDeferredMetadata.nonEmpty
-          if (alreadyDeferred || deferringMetadataChanges && partition.getLeaderEpoch != state.leaderEpoch) {
-            partitionChangesToBeDeferred.put(partition, (state, priorDeferredMetadata))
-          } else if (state.leaderId == localBrokerId) {
-            partitionsToBeLeader.put(partition, state)
-          } else {
-            partitionsToBeFollower.put(partition, state)
+        stateChangeLogger.info(s"Deferring metadata changes for ${partitionChangesToBeDeferred.size} partition(s)")
+        if (partitionChangesToBeDeferred.nonEmpty) {
+          makeDeferred(imageBuilder, partitionChangesToBeDeferred, metadataOffset, onLeadershipChange)
+        }
+      } else { // not deferring changes, so make leaders/followers accordingly
+        val partitionsToBeLeader = mutable.HashMap[Partition, MetadataPartition]()
+        val partitionsToBeFollower = mutable.HashMap[Partition, MetadataPartition]()
+        builder.localChanged().foreach { state =>
+          val topicPartition = new TopicPartition(state.topicName, state.partitionIndex)
+          val partition = getPartition(topicPartition) match {
+            case HostedPartition.Offline =>
+              stateChangeLogger.warn(s"Ignoring handlePartitionChanges at $metadataOffset " +
+                s"for partition $topicPartition as the local replica for the partition is " +
+                "in an offline log directory")
+              None
+
+            case HostedPartition.Online(partition) => Some(partition)
+            case HostedPartition.Deferred(_, _, _, _, _) => throw new IllegalStateException(
+              s"There should never be deferred partition metadata when we aren't deferring changes: $topicPartition")
+
+            case HostedPartition.None =>
+              val partition = Partition(topicPartition, time, configRepository, this)
+              allPartitions.putIfNotExists(topicPartition, HostedPartition.Online(partition))
+              Some(partition)
+          }
+          partition.foreach { partition =>
+            if (state.leaderId == localBrokerId) {
+              partitionsToBeLeader.put(partition, state)
+            } else {
+              partitionsToBeFollower.put(partition, state)
+            }
           }
         }
-      }
-      val prevPartitions = imageBuilder.prevImage.partitions
-      val changedPartitionsPreviouslyExisting = mutable.Set[MetadataPartition]()
-      builder.localChanged().foreach(metadataPartition =>
-        prevPartitions.topicPartition(metadataPartition.topicName, metadataPartition.partitionIndex).foreach(
-          changedPartitionsPreviouslyExisting.add))
-      val nextBrokers = imageBuilder.nextBrokers()
-      val highWatermarkCheckpoints = new LazyOffsetCheckpoints(this.highWatermarkCheckpoints)
-      val partitionsBecomeLeader = if (partitionsToBeLeader.nonEmpty)
-        makeLeaders(changedPartitionsPreviouslyExisting, partitionsToBeLeader,
-          highWatermarkCheckpoints, metadataOffset)
-      else
-        Set.empty[Partition]
-      val partitionsBecomeFollower = if (partitionsToBeFollower.nonEmpty)
-        makeFollowers(changedPartitionsPreviouslyExisting, nextBrokers, partitionsToBeFollower, highWatermarkCheckpoints,
-          metadataOffset)
-      else {
-        Set.empty[Partition]
-      }
-      stateChangeLogger.info(s"Deferring metadata changes for ${partitionChangesToBeDeferred.size} partition(s)")
-      if (partitionChangesToBeDeferred.nonEmpty) {
-        makeDeferred(imageBuilder, partitionChangesToBeDeferred, metadataOffset, onLeadershipChange)
-      }
+        val prevPartitions = imageBuilder.prevImage.partitions
+        val changedPartitionsPreviouslyExisting = mutable.Set[MetadataPartition]()
+        builder.localChanged().foreach(metadataPartition =>
+          prevPartitions.topicPartition(metadataPartition.topicName, metadataPartition.partitionIndex).foreach(
+            changedPartitionsPreviouslyExisting.add))
+        val nextBrokers = imageBuilder.nextBrokers()
+        val highWatermarkCheckpoints = new LazyOffsetCheckpoints(this.highWatermarkCheckpoints)
+        val partitionsBecomeLeader = if (partitionsToBeLeader.nonEmpty)
+          makeLeaders(changedPartitionsPreviouslyExisting, partitionsToBeLeader,
+            highWatermarkCheckpoints, metadataOffset)
+        else
+          Set.empty[Partition]
+        val partitionsBecomeFollower = if (partitionsToBeFollower.nonEmpty)
+          makeFollowers(changedPartitionsPreviouslyExisting, nextBrokers, partitionsToBeFollower, highWatermarkCheckpoints,
+            metadataOffset)
+        else
+          Set.empty[Partition]
+        updateLeaderAndFollowerMetrics(partitionsBecomeFollower.map(_.topic).toSet)
 
-      updateLeaderAndFollowerMetrics(partitionsBecomeFollower.map(_.topic).toSet)
-
-      builder.localChanged().foreach { state =>
-        val topicPartition = new TopicPartition(state.topicName, state.partitionIndex)
-        /*
-         * If there is offline log directory, a Partition object may have been created by getOrCreatePartition()
-         * before getOrCreateReplica() failed to create local replica due to KafkaStorageException.
-         * In this case ReplicaManager.allPartitions will map this topic-partition to an empty Partition object.
-         * we need to map this topic-partition to OfflinePartition instead.
-         */
-        // only mark it offline if it isn't deferred
-        if (localLog(topicPartition).isEmpty && !isDeferred(topicPartition)) {
-          markPartitionOffline(topicPartition)
+        builder.localChanged().foreach { state =>
+          val topicPartition = new TopicPartition(state.topicName, state.partitionIndex)
+          /*
+          * If there is offline log directory, a Partition object may have been created by getOrCreatePartition()
+          * before getOrCreateReplica() failed to create local replica due to KafkaStorageException.
+          * In this case ReplicaManager.allPartitions will map this topic-partition to an empty Partition object.
+          * we need to map this topic-partition to OfflinePartition instead.
+          */
+          if (localLog(topicPartition).isEmpty) {
+            markPartitionOffline(topicPartition)
+          }
         }
+
+        maybeAddLogDirFetchers(partitionsBecomeFollower, highWatermarkCheckpoints)
+
+        replicaFetcherManager.shutdownIdleFetcherThreads()
+        replicaAlterLogDirsManager.shutdownIdleFetcherThreads()
+        onLeadershipChange(partitionsBecomeLeader, partitionsBecomeFollower)
       }
-
-      maybeAddLogDirFetchers(partitionsBecomeFollower, highWatermarkCheckpoints)
-
-      replicaFetcherManager.shutdownIdleFetcherThreads()
-      replicaAlterLogDirsManager.shutdownIdleFetcherThreads()
-      onLeadershipChange(partitionsBecomeLeader, partitionsBecomeFollower)
-
       // TODO: we should move aside log directories which have been deleted rather than
       // purging them from the disk immediately.
       if (builder.localRemoved().nonEmpty) {
@@ -518,13 +530,6 @@ class RaftReplicaManager(config: KafkaConfig,
       }
 
     partitionsMadeFollower
-  }
-
-  private def isDeferred(topicPartition: TopicPartition): Boolean = {
-    getPartition(topicPartition) match {
-      case HostedPartition.Deferred(_, _, _, _, _) => true
-      case _ => false
-    }
   }
 
   // An iterator over all deferred partitions. This is a weakly consistent iterator; a partition made off/online
