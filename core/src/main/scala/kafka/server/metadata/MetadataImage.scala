@@ -120,7 +120,6 @@ case class MetadataImage(partitions: MetadataPartitions,
   }
 
   def topicNameToId(name: String): Option[Uuid] = {
-
     partitions.topicNameToId(name)
   }
 }

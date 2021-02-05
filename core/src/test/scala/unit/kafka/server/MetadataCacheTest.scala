@@ -27,7 +27,6 @@ import org.apache.kafka.common.record.RecordBatch
 import org.apache.kafka.common.requests.UpdateMetadataRequest
 import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.junit.jupiter.api.Assertions._
-import org.junit.jupiter.api.Test
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.MethodSource
 
@@ -492,9 +491,9 @@ class MetadataCacheTest {
     assertEquals(initialBrokerIds.toSet, aliveBrokersFromCache.map(_.id).toSet)
   }
 
-  @Test
-  def testGetClusterMetadataWithOfflineReplicas(): Unit = {
-    val cache = MetadataCache.zkMetadataCache(1)
+  @ParameterizedTest
+  @MethodSource(Array("cacheProvider"))
+  def testGetClusterMetadataWithOfflineReplicas(cache: MetadataCache): Unit = {
     val topic = "topic"
     val topicPartition = new TopicPartition(topic, 0)
     val securityProtocol = SecurityProtocol.PLAINTEXT

@@ -57,7 +57,7 @@ object RaftMetadataCache {
 
 
 class RaftMetadataCache(val brokerId: Int) extends MetadataCache with Logging {
-  this.logIdent = s"[MetadataCache brokerId=${brokerId}] "
+  this.logIdent = s"[MetadataCache brokerId=$brokerId] "
 
   private val lock = new ReentrantLock()
 
@@ -264,9 +264,10 @@ class RaftMetadataCache(val brokerId: Int) extends MetadataCache with Logging {
   override def getClusterMetadata(clusterId: String, listenerName: ListenerName): Cluster = {
     val image = _currentImage
     val nodes = new util.HashMap[Integer, Node]
-    image.brokers.aliveBrokers().foreach { node => if (!node.fenced) {
-      node.endpoints.get(listenerName.value()).foreach { nodes.put(node.id, _) }
-    }
+    image.brokers.aliveBrokers().foreach { node =>
+      if (!node.fenced) {
+        node.endpoints.get(listenerName.value()).foreach { nodes.put(node.id, _) }
+      }
     }
 
     def node(id: Integer): Node = {
@@ -311,7 +312,7 @@ class RaftMetadataCache(val brokerId: Int) extends MetadataCache with Logging {
       // Compare the new brokers with the existing ones.
       def toMetadataBroker(broker: UpdateMetadataBroker): MetadataBroker = {
         val endpoints = broker.endpoints().asScala.map { endpoint =>
-          endpoint.listener -> new Node(broker.id(), endpoint.host(), endpoint.port(), broker.rack())
+          endpoint.listener -> new Node(broker.id(), endpoint.host(), endpoint.port())
         }.toMap
         MetadataBroker(broker.id(), broker.rack(), endpoints, fenced = false)
       }
