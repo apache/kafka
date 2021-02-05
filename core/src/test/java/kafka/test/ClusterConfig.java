@@ -135,7 +135,7 @@ public class ClusterConfig {
     }
 
     public static Builder defaultClusterBuilder() {
-        return new Builder(Type.Zk, 1, 1, true, SecurityProtocol.PLAINTEXT.name);
+        return new Builder(Type.ZK, 1, 1, true, SecurityProtocol.PLAINTEXT.name);
     }
 
     public static Builder clusterBuilder(Type type, int brokers, int controllers, boolean autoStart, String securityProtocol) {

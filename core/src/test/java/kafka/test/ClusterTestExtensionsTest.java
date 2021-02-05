@@ -31,7 +31,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.extension.ExtendWith;
 
 
-@ClusterTestDefaults(clusterType = Type.Zk)   // Set defaults for a few params in @ClusterTest(s)
+@ClusterTestDefaults(clusterType = Type.ZK)   // Set defaults for a few params in @ClusterTest(s)
 @ExtendWith(ClusterTestExtensions.class)
 public class ClusterTestExtensionsTest {
 
@@ -66,14 +66,14 @@ public class ClusterTestExtensionsTest {
     public void testClusterTest(ClusterConfig config, ClusterInstance clusterInstance) {
         Assertions.assertSame(this.config, config, "Injected objects should be the same");
         Assertions.assertSame(this.clusterInstance, clusterInstance, "Injected objects should be the same");
-        Assertions.assertEquals(clusterInstance.clusterType(), ClusterInstance.ClusterType.Zk); // From the class level default
+        Assertions.assertEquals(clusterInstance.clusterType(), ClusterInstance.ClusterType.ZK); // From the class level default
         Assertions.assertEquals(clusterInstance.config().serverProperties().getProperty("before"), "each");
     }
 
     // generate1 is a template method which generates any number of cluster configs
     @ClusterTemplate("generate1")
     public void testClusterTemplate() {
-        Assertions.assertEquals(clusterInstance.clusterType(), ClusterInstance.ClusterType.Zk,
+        Assertions.assertEquals(clusterInstance.clusterType(), ClusterInstance.ClusterType.ZK,
             "generate1 provided a Zk cluster, so we should see that here");
         Assertions.assertEquals(clusterInstance.config().name().orElse(""), "Generated Test",
             "generate 1 named this cluster config, so we should see that here");
@@ -82,11 +82,11 @@ public class ClusterTestExtensionsTest {
 
     // Multiple @ClusterTest can be used with @ClusterTests
     @ClusterTests({
-        @ClusterTest(name = "cluster-tests-1", clusterType = Type.Zk, serverProperties = {
+        @ClusterTest(name = "cluster-tests-1", clusterType = Type.ZK, serverProperties = {
             @ClusterConfigProperty(key = "foo", value = "bar"),
             @ClusterConfigProperty(key = "spam", value = "eggs")
         }),
-        @ClusterTest(name = "cluster-tests-2", clusterType = Type.Zk, serverProperties = {
+        @ClusterTest(name = "cluster-tests-2", clusterType = Type.ZK, serverProperties = {
             @ClusterConfigProperty(key = "foo", value = "baz"),
             @ClusterConfigProperty(key = "spam", value = "eggz")
         })
@@ -105,8 +105,8 @@ public class ClusterTestExtensionsTest {
 
     @ClusterTest(autoStart = AutoStart.No)
     public void testNoAutoStart() {
-        Assertions.assertFalse(clusterInstance.anyBroker().isPresent());
+        Assertions.assertFalse(clusterInstance.anyBrokerSocketServer().isPresent());
         clusterInstance.start();
-        Assertions.assertTrue(clusterInstance.anyBroker().isPresent());
+        Assertions.assertTrue(clusterInstance.anyBrokerSocketServer().isPresent());
     }
 }

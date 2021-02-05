@@ -53,9 +53,9 @@ class SaslApiVersionsRequestTest(helper: IntegrationTestHelper,
     super.brokerPropertyOverrides(config.serverProperties())
   }
 
-  @ClusterTest(securityProtocol = "SASL_PLAINTEXT", clusterType = Type.Zk)
+  @ClusterTest(securityProtocol = "SASL_PLAINTEXT", clusterType = Type.ZK)
   def testApiVersionsRequestBeforeSaslHandshakeRequest(): Unit = {
-    val socket = helper.connect(cluster.brokers().asScala.head, cluster.listener())
+    val socket = helper.connect(cluster.brokerSocketServers().asScala.head, cluster.listener())
     try {
       val apiVersionsResponse = helper.sendAndReceive[ApiVersionsResponse](
         new ApiVersionsRequest.Builder().build(0), socket)
@@ -66,9 +66,9 @@ class SaslApiVersionsRequestTest(helper: IntegrationTestHelper,
     }
   }
 
-  @ClusterTest(securityProtocol = "SASL_PLAINTEXT", clusterType = Type.Zk)
+  @ClusterTest(securityProtocol = "SASL_PLAINTEXT", clusterType = Type.ZK)
   def testApiVersionsRequestAfterSaslHandshakeRequest(): Unit = {
-    val socket = helper.connect(cluster.brokers().asScala.head, cluster.listener())
+    val socket = helper.connect(cluster.brokerSocketServers().asScala.head, cluster.listener())
     try {
       sendSaslHandshakeRequestValidateResponse(socket)
       val response = helper.sendAndReceive[ApiVersionsResponse](
@@ -79,9 +79,9 @@ class SaslApiVersionsRequestTest(helper: IntegrationTestHelper,
     }
   }
 
-  @ClusterTest(securityProtocol = "SASL_PLAINTEXT", clusterType = Type.Zk)
+  @ClusterTest(securityProtocol = "SASL_PLAINTEXT", clusterType = Type.ZK)
   def testApiVersionsRequestWithUnsupportedVersion(): Unit = {
-    val socket = helper.connect(cluster.brokers().asScala.head, cluster.listener())
+    val socket = helper.connect(cluster.brokerSocketServers().asScala.head, cluster.listener())
     try {
       val apiVersionsRequest = new ApiVersionsRequest.Builder().build(0)
       val apiVersionsResponse = sendUnsupportedApiVersionRequest(apiVersionsRequest)

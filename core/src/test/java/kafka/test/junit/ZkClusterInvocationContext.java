@@ -179,7 +179,7 @@ public class ZkClusterInvocationContext implements TestTemplateInvocationContext
         }
 
         @Override
-        public Collection<SocketServer> brokers() {
+        public Collection<SocketServer> brokerSocketServers() {
             return JavaConverters.asJavaCollection(clusterReference.get().servers()).stream()
                     .map(KafkaServer::socketServer)
                     .collect(Collectors.toList());
@@ -191,7 +191,7 @@ public class ZkClusterInvocationContext implements TestTemplateInvocationContext
         }
 
         @Override
-        public Collection<SocketServer> controllers() {
+        public Collection<SocketServer> controllerSocketServers() {
             return JavaConverters.asJavaCollection(clusterReference.get().servers()).stream()
                 .filter(broker -> broker.kafkaController().isActive())
                 .map(KafkaServer::socketServer)
@@ -199,14 +199,14 @@ public class ZkClusterInvocationContext implements TestTemplateInvocationContext
         }
 
         @Override
-        public Optional<SocketServer> anyBroker() {
+        public Optional<SocketServer> anyBrokerSocketServer() {
             return JavaConverters.asJavaCollection(clusterReference.get().servers()).stream()
                 .map(KafkaServer::socketServer)
                 .findFirst();
         }
 
         @Override
-        public Optional<SocketServer> anyController() {
+        public Optional<SocketServer> anyControllerSocketServer() {
             return JavaConverters.asJavaCollection(clusterReference.get().servers()).stream()
                 .filter(broker -> broker.kafkaController().isActive())
                 .map(KafkaServer::socketServer)
@@ -215,7 +215,7 @@ public class ZkClusterInvocationContext implements TestTemplateInvocationContext
 
         @Override
         public ClusterType clusterType() {
-            return ClusterType.Zk;
+            return ClusterType.ZK;
         }
 
         @Override

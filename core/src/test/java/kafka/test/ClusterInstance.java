@@ -29,7 +29,7 @@ import java.util.Properties;
 public interface ClusterInstance {
 
     enum ClusterType {
-        Zk,
+        ZK,
         // Raft
     }
 
@@ -59,23 +59,23 @@ public interface ClusterInstance {
      * A collection of all brokers in the cluster. In ZK-based clusters this will also include the broker which is
      * acting as the controller (since ZK controllers serve both broker and controller roles).
      */
-    Collection<SocketServer> brokers();
+    Collection<SocketServer> brokerSocketServers();
 
     /**
      * A collection of all controllers in the cluster. For ZK-based clusters, this will return the broker which is also
      * currently the active controller. For Raft-based clusters, this will return all controller servers.
      */
-    Collection<SocketServer> controllers();
+    Collection<SocketServer> controllerSocketServers();
 
     /**
      * Any one of the broker servers.
      */
-    Optional<SocketServer> anyBroker();
+    Optional<SocketServer> anyBrokerSocketServer();
 
     /**
      * Any one of the controller servers.
      */
-    Optional<SocketServer> anyController();
+    Optional<SocketServer> anyControllerSocketServer();
 
     /**
      * The underlying object which is responsible for setting up and tearing down the cluster.

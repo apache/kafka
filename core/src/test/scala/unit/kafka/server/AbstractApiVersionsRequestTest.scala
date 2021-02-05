@@ -31,7 +31,7 @@ abstract class AbstractApiVersionsRequestTest(helper: IntegrationTestHelper,
                                               cluster: ClusterInstance) {
 
   def sendApiVersionsRequest(request: ApiVersionsRequest, listenerName: ListenerName): ApiVersionsResponse = {
-    helper.connectAndReceive[ApiVersionsResponse](request, cluster.brokers().asScala.head, listenerName)
+    helper.connectAndReceive[ApiVersionsResponse](request, cluster.brokerSocketServers().asScala.head, listenerName)
   }
 
   def controlPlaneListenerName = new ListenerName("CONTROLLER")
@@ -47,7 +47,7 @@ abstract class AbstractApiVersionsRequestTest(helper: IntegrationTestHelper,
 
   def sendUnsupportedApiVersionRequest(request: ApiVersionsRequest): ApiVersionsResponse = {
     val overrideHeader = helper.nextRequestHeader(ApiKeys.API_VERSIONS, Short.MaxValue)
-    val socket = helper.connect(cluster.brokers().asScala.head, cluster.listener())
+    val socket = helper.connect(cluster.brokerSocketServers().asScala.head, cluster.listener())
     try {
       helper.sendWithHeader(request, overrideHeader, socket)
       helper.receive[ApiVersionsResponse](socket, ApiKeys.API_VERSIONS, 0.toShort)

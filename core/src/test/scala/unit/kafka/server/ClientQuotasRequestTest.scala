@@ -38,7 +38,7 @@ import kafka.test.junit.ClusterTestExtensions
 
 import scala.jdk.CollectionConverters._
 
-@ClusterTestDefaults(clusterType = Type.Zk)
+@ClusterTestDefaults(clusterType = Type.ZK)
 @ExtendWith(value = Array(classOf[ClusterTestExtensions]))
 class ClientQuotasRequestTest(cluster: ClusterInstance,
                               helper: IntegrationTestHelper) {
@@ -223,7 +223,7 @@ class ClientQuotasRequestTest(cluster: ClusterInstance,
         var currentServerQuota = 0
         TestUtils.waitUntilTrue(
           () => {
-            currentServerQuota = cluster.brokers().asScala.head.connectionQuotas.connectionRateForIp(entityIp)
+            currentServerQuota = cluster.brokerSocketServers().asScala.head.connectionQuotas.connectionRateForIp(entityIp)
             Math.abs(expectedMatches(entity) - currentServerQuota) < 0.01
           }, s"Connection quota of $entity is not ${expectedMatches(entity)} but $currentServerQuota")
       }
@@ -571,7 +571,7 @@ class ClientQuotasRequestTest(cluster: ClusterInstance,
   private def sendDescribeClientQuotasRequest(filter: ClientQuotaFilter): DescribeClientQuotasResponse = {
     val request = new DescribeClientQuotasRequest.Builder(filter).build()
     helper.connectAndReceive[DescribeClientQuotasResponse](request,
-      destination = cluster.anyController().orElseThrow(() => new IllegalStateException("No controller is available")),
+      destination = cluster.anyControllerSocketServer().orElseThrow(() => new IllegalStateException("No controller is available")),
       listenerName = cluster.listener())
   }
 
@@ -599,7 +599,7 @@ class ClientQuotasRequestTest(cluster: ClusterInstance,
   private def sendAlterClientQuotasRequest(entries: Iterable[ClientQuotaAlteration], validateOnly: Boolean): AlterClientQuotasResponse = {
     val request = new AlterClientQuotasRequest.Builder(entries.asJavaCollection, validateOnly).build()
     helper.connectAndReceive[AlterClientQuotasResponse](request,
-      destination = cluster.anyController().orElseThrow(() => new IllegalStateException("No controller is available")),
+      destination = cluster.anyControllerSocketServer().orElseThrow(() => new IllegalStateException("No controller is available")),
       listenerName = cluster.listener())
   }
 

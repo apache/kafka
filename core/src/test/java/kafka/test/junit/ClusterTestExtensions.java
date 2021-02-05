@@ -129,7 +129,7 @@ public class ClusterTestExtensions implements TestTemplateInvocationContextProvi
         }
 
         generatedClusterConfigs.forEach(config -> {
-            if (config.clusterType() == Type.Zk) {
+            if (config.clusterType() == Type.ZK) {
                 testInvocations.accept(new ZkClusterInvocationContext(config.copyOf()));
             } else {
                 throw new IllegalStateException("Unknown cluster type " + config.clusterType());
@@ -146,7 +146,7 @@ public class ClusterTestExtensions implements TestTemplateInvocationContextProvi
     private void processClusterTest(ClusterTest annot, ClusterTestDefaults defaults,
                                     Consumer<TestTemplateInvocationContext> testInvocations) {
         final Type type;
-        if (annot.clusterType() == Type.Default) {
+        if (annot.clusterType() == Type.DEFAULT) {
             type = defaults.clusterType();
         } else {
             type = annot.clusterType();
@@ -199,8 +199,8 @@ public class ClusterTestExtensions implements TestTemplateInvocationContextProvi
         }
 
         switch (type) {
-            case Zk:
-            case Both:
+            case ZK:
+            case BOTH:
                 ClusterConfig config = builder.build();
                 config.serverProperties().putAll(properties);
                 testInvocations.accept(new ZkClusterInvocationContext(config));
