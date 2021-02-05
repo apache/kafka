@@ -732,7 +732,6 @@ public class KafkaStreams implements AutoCloseable {
         // create the stream thread, global update thread, and cleanup thread
         threads = new StreamThread[numStreamThreads];
 
-
         if (numStreamThreads == 0 && !hasGlobalTopology) {
             log.error("Topology with no input topics will create no stream threads and no global thread.");
             throw new TopologyException("Topology has no stream threads and no global threads, " +
