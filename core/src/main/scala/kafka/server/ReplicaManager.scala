@@ -416,7 +416,7 @@ class ReplicaManager(val config: KafkaConfig,
                 responseMap.put(topicPartition, Errors.FENCED_LEADER_EPOCH)
               }
 
-            case HostedPartition.Deferred(_, _, _, _, _) =>
+            case _: HostedPartition.Deferred =>
               throw new IllegalStateException("We should never be deferring partition metadata changes and stopping a replica when using ZooKeeper")
 
             case HostedPartition.None =>
@@ -560,7 +560,7 @@ class ReplicaManager(val config: KafkaConfig,
         // the local replica has been deleted.
         Left(Errors.NOT_LEADER_OR_FOLLOWER)
 
-      case HostedPartition.Deferred(_, _, _, _, _) =>
+      case _: HostedPartition.Deferred =>
         // The topic exists, but this broker is deferring metadata changes for it, so we return NOT_LEADER_OR_FOLLOWER
         // which forces clients to refresh metadata.
         Left(Errors.NOT_LEADER_OR_FOLLOWER)
@@ -757,7 +757,7 @@ class ReplicaManager(val config: KafkaConfig,
             case HostedPartition.Offline =>
               throw new KafkaStorageException(s"Partition $topicPartition is offline")
 
-            case HostedPartition.Deferred(_, _, _, _, _) =>
+            case _: HostedPartition.Deferred =>
               throw new IllegalStateException(s"Partition $topicPartition is deferred")
 
             case HostedPartition.None => // Do nothing
@@ -1356,7 +1356,7 @@ class ReplicaManager(val config: KafkaConfig,
                 responseMap.put(topicPartition, Errors.KAFKA_STORAGE_ERROR)
                 None
 
-              case HostedPartition.Deferred(_, _, _, _, _) =>
+              case _: HostedPartition.Deferred =>
                 throw new IllegalStateException("We should never be deferring partition metadata changes and becoming a leader or follower when using ZooKeeper")
 
               case HostedPartition.Online(partition) =>
@@ -1959,7 +1959,7 @@ class ReplicaManager(val config: KafkaConfig,
               .setPartition(offsetForLeaderPartition.partition)
               .setErrorCode(Errors.NOT_LEADER_OR_FOLLOWER.code)
 
-          case HostedPartition.Deferred(_, _, _, _, _) =>
+          case _: HostedPartition.Deferred =>
             new EpochEndOffset()
               .setPartition(offsetForLeaderPartition.partition)
               .setErrorCode(Errors.NOT_LEADER_OR_FOLLOWER.code)

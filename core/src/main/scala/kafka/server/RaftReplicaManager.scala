@@ -225,7 +225,7 @@ class RaftReplicaManager(config: KafkaConfig,
               None
 
             case HostedPartition.Online(partition) => Some(partition)
-            case HostedPartition.Deferred(_, _, _, _, _) => throw new IllegalStateException(
+            case _: HostedPartition.Deferred => throw new IllegalStateException(
               s"There should never be deferred partition metadata when we aren't deferring changes: $topicPartition")
 
             case HostedPartition.None =>
@@ -536,7 +536,7 @@ class RaftReplicaManager(config: KafkaConfig,
   // after the iterator has been constructed could still be returned by this iterator.
   private def deferredPartitionsIterator: Iterator[HostedPartition.Deferred] = {
     allPartitions.values.iterator.flatMap {
-      case deferred@HostedPartition.Deferred(_, _, _, _, _) => Some(deferred)
+      case deferred: HostedPartition.Deferred => Some(deferred)
       case _ => None
     }
   }
