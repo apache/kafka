@@ -345,6 +345,8 @@ public class RebalanceSourceConnectorsIntegrationTest {
 
         Thread.sleep(TimeUnit.SECONDS.toMillis(10));
 
+        System.out.println("add works");
+
         connect.addWorker();
 
         connect.addWorker();
@@ -391,6 +393,7 @@ public class RebalanceSourceConnectorsIntegrationTest {
             "Connect workers did not stop in time.");
 
         Thread.sleep(TimeUnit.SECONDS.toMillis(10));
+        System.out.println("add works");
 
         connect.addWorker();
 
@@ -438,7 +441,7 @@ public class RebalanceSourceConnectorsIntegrationTest {
             "Connect workers did not stop in time.");
 
         Thread.sleep(TimeUnit.SECONDS.toMillis(10));
-
+        System.out.println("add works");
         connect.addWorker();
 
         connect.addWorker();
@@ -485,7 +488,7 @@ public class RebalanceSourceConnectorsIntegrationTest {
             "Connect workers did not stop in time.");
 
         Thread.sleep(TimeUnit.SECONDS.toMillis(10));
-
+        System.out.println("add works");
         connect.addWorker();
 
         connect.addWorker();
@@ -532,7 +535,7 @@ public class RebalanceSourceConnectorsIntegrationTest {
             "Connect workers did not stop in time.");
 
         Thread.sleep(TimeUnit.SECONDS.toMillis(10));
-
+        System.out.println("add works");
         connect.addWorker();
 
         connect.addWorker();
@@ -579,7 +582,7 @@ public class RebalanceSourceConnectorsIntegrationTest {
             "Connect workers did not stop in time.");
 
         Thread.sleep(TimeUnit.SECONDS.toMillis(10));
-
+        System.out.println("add works");
         connect.addWorker();
 
         connect.addWorker();
@@ -626,7 +629,7 @@ public class RebalanceSourceConnectorsIntegrationTest {
             "Connect workers did not stop in time.");
 
         Thread.sleep(TimeUnit.SECONDS.toMillis(10));
-
+        System.out.println("add works");
         connect.addWorker();
 
         connect.addWorker();
@@ -673,7 +676,7 @@ public class RebalanceSourceConnectorsIntegrationTest {
             "Connect workers did not stop in time.");
 
         Thread.sleep(TimeUnit.SECONDS.toMillis(10));
-
+        System.out.println("add works");
         connect.addWorker();
 
         connect.addWorker();
@@ -720,7 +723,7 @@ public class RebalanceSourceConnectorsIntegrationTest {
             "Connect workers did not stop in time.");
 
         Thread.sleep(TimeUnit.SECONDS.toMillis(10));
-
+        System.out.println("add works");
         connect.addWorker();
 
         connect.addWorker();
@@ -767,7 +770,7 @@ public class RebalanceSourceConnectorsIntegrationTest {
             "Connect workers did not stop in time.");
 
         Thread.sleep(TimeUnit.SECONDS.toMillis(10));
-
+        System.out.println("add works");
         connect.addWorker();
 
         connect.addWorker();
