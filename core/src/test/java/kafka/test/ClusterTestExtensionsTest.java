@@ -18,7 +18,7 @@
 package kafka.test;
 
 import kafka.test.annotation.AutoStart;
-import kafka.test.annotation.ClusterProperty;
+import kafka.test.annotation.ClusterConfigProperty;
 import kafka.test.annotation.ClusterTemplate;
 import kafka.test.annotation.ClusterTest;
 import kafka.test.annotation.ClusterTestDefaults;
@@ -83,12 +83,12 @@ public class ClusterTestExtensionsTest {
     // Multiple @ClusterTest can be used with @ClusterTests
     @ClusterTests({
         @ClusterTest(name = "cluster-tests-1", clusterType = Type.Zk, serverProperties = {
-            @ClusterProperty(key = "foo", value = "bar"),
-            @ClusterProperty(key = "spam", value = "eggs")
+            @ClusterConfigProperty(key = "foo", value = "bar"),
+            @ClusterConfigProperty(key = "spam", value = "eggs")
         }),
         @ClusterTest(name = "cluster-tests-2", clusterType = Type.Zk, serverProperties = {
-            @ClusterProperty(key = "foo", value = "baz"),
-            @ClusterProperty(key = "spam", value = "eggz")
+            @ClusterConfigProperty(key = "foo", value = "baz"),
+            @ClusterConfigProperty(key = "spam", value = "eggz")
         })
     })
     public void testClusterTests() {

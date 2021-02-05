@@ -26,7 +26,7 @@ import java.lang.annotation.Target;
 @Documented
 @Target({ElementType.ANNOTATION_TYPE})
 @Retention(RetentionPolicy.RUNTIME)
-public @interface ClusterProperty {
+public @interface ClusterConfigProperty {
     String key();
     String value();
 }

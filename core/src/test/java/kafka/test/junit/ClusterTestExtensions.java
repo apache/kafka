@@ -20,7 +20,7 @@ package kafka.test.junit;
 import kafka.test.ClusterConfig;
 import kafka.test.ClusterGenerator;
 import kafka.test.annotation.ClusterTestDefaults;
-import kafka.test.annotation.ClusterProperty;
+import kafka.test.annotation.ClusterConfigProperty;
 import kafka.test.annotation.ClusterTemplate;
 import kafka.test.annotation.ClusterTest;
 import kafka.test.annotation.ClusterTests;
@@ -110,7 +110,8 @@ public class ClusterTestExtensions implements TestTemplateInvocationContextProvi
         }
 
         if (generatedContexts.size() == 0) {
-            throw new IllegalStateException("Please annotate test methods with @ClusterTemplate, @ClusterTest, or @ClusterTests when using the ClusterForEach provider");
+            throw new IllegalStateException("Please annotate test methods with @ClusterTemplate, @ClusterTest, or " +
+                    "@ClusterTests when using the ClusterTestExtensions provider");
         }
 
         return generatedContexts.stream();
@@ -193,7 +194,7 @@ public class ClusterTestExtensions implements TestTemplateInvocationContextProvi
         }
 
         Properties properties = new Properties();
-        for (ClusterProperty property : annot.serverProperties()) {
+        for (ClusterConfigProperty property : annot.serverProperties()) {
             properties.put(property.key(), property.value());
         }
 

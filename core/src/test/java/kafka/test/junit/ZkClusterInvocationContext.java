@@ -149,7 +149,6 @@ public class ZkClusterInvocationContext implements TestTemplateInvocationContext
                     }
                 };
 
-                // TODO consumer and producer configs
                 clusterReference.set(cluster);
                 if (clusterConfig.isAutoStart()) {
                     clusterShim.start();

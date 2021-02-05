@@ -18,6 +18,7 @@
 package kafka.test;
 
 import kafka.network.SocketServer;
+import kafka.test.annotation.ClusterTest;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.common.network.ListenerName;
 
@@ -32,22 +33,53 @@ public interface ClusterInstance {
         // Raft
     }
 
+    /**
+     * Cluster type. For now, only ZK is supported.
+     */
     ClusterType clusterType();
 
+    /**
+     * The cluster configuration used to create this cluster. Changing data in this instance through this accessor will
+     * have no affect on the cluster since it is already provisioned.
+     */
     ClusterConfig config();
 
+    /**
+     * The listener for this cluster as configured by {@link ClusterTest} or by {@link ClusterConfig}. If
+     * unspecified by those sources, this will return the listener for the default security protocol PLAINTEXT
+     */
     ListenerName listener();
 
+    /**
+     * The broker connect string which can be used by clients for bootstrapping
+     */
     String brokerList();
 
+    /**
+     * A collection of all brokers in the cluster. In ZK-based clusters this will also include the broker which is
+     * acting as the controller (since ZK controllers serve both broker and controller roles).
+     */
     Collection<SocketServer> brokers();
 
+    /**
+     * A collection of all controllers in the cluster. For ZK-based clusters, this will return the broker which is also
+     * currently the active controller. For Raft-based clusters, this will return all controller servers.
+     */
     Collection<SocketServer> controllers();
 
+    /**
+     * Any one of the broker servers.
+     */
     Optional<SocketServer> anyBroker();
 
+    /**
+     * Any one of the controller servers.
+     */
     Optional<SocketServer> anyController();
 
+    /**
+     * The underlying object which is responsible for setting up and tearing down the cluster.
+     */
     Object getUnderlying();
 
     default <T> T getUnderlying(Class<T> asClass) {
