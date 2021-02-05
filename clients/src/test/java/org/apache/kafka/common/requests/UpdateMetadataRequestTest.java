@@ -61,7 +61,7 @@ public class UpdateMetadataRequestTest {
 
     @Test
     public void testGetErrorResponse() {
-        for (short version = UPDATE_METADATA.oldestVersion(); version <= UPDATE_METADATA.latestVersion(); version++) {
+        for (short version = UPDATE_METADATA.oldestVersion(); version < UPDATE_METADATA.latestVersion(); version++) {
             UpdateMetadataRequest.Builder builder = new UpdateMetadataRequest.Builder(
                     version, 0, 0, 0, Collections.emptyList(), Collections.emptyList(), Collections.emptyMap());
             UpdateMetadataRequest request = builder.build();
