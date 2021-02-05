@@ -214,9 +214,8 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
      * @throws StreamsException fatal error, should close the thread
      */
     @Override
-    public void initializeIfNeeded(final java.util.function.Consumer<Set<TopicPartition>> offsetResetter) {
+    public void initializeIfNeeded() {
         if (state() == State.CREATED) {
-            initOffsetsIfNeeded(offsetResetter);
             recordCollector.initialize();
 
             StateManagerUtil.registerStateStores(log, logPrefix, topology, stateMgr, stateDirectory, processorContext);
@@ -232,22 +231,6 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
         }
     }
 
-    private void initOffsetsIfNeeded(final java.util.function.Consumer<Set<TopicPartition>> offsetResetter) {
-        final Map<TopicPartition, OffsetAndMetadata> committed = mainConsumer.committed(resetOffsetsForPartitions);
-        for (final Map.Entry<TopicPartition, OffsetAndMetadata> committedEntry : committed.entrySet()) {
-            final OffsetAndMetadata offsetAndMetadata = committedEntry.getValue();
-            if (offsetAndMetadata != null) {
-                mainConsumer.seek(committedEntry.getKey(), offsetAndMetadata);
-                resetOffsetsForPartitions.remove(committedEntry.getKey());
-            }
-        }
-
-        if (!resetOffsetsForPartitions.isEmpty()) {
-            offsetResetter.accept(resetOffsetsForPartitions);
-            resetOffsetsForPartitions.clear();
-        }
-    }
-
     public void addPartitionsForOffsetReset(final Set<TopicPartition> partitionsForOffsetReset) {
         mainConsumer.pause(partitionsForOffsetReset);
         resetOffsetsForPartitions.addAll(partitionsForOffsetReset);
@@ -257,13 +240,13 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
      * @throws TimeoutException if fetching committed offsets timed out
      */
     @Override
-    public void completeRestoration() {
+    public void completeRestoration(final java.util.function.Consumer<Set<TopicPartition>> offsetResetter) {
         switch (state()) {
             case RUNNING:
                 return;
 
             case RESTORING:
-                initializeMetadata();
+                resetOffsetsIfNeededAndInitializeMetadata(offsetResetter);
                 initializeTopology();
                 processorContext.initialize();
 
@@ -856,12 +839,27 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
         return checkpointableOffsets;
     }
 
-    private void initializeMetadata() {
+    private void resetOffsetsIfNeededAndInitializeMetadata(final java.util.function.Consumer<Set<TopicPartition>> offsetResetter) {
         try {
-            final Map<TopicPartition, OffsetAndMetadata> offsetsAndMetadata = mainConsumer.committed(inputPartitions()).entrySet().stream()
-                    .filter(e -> e.getValue() != null)
-                    .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
-            initializeTaskTime(offsetsAndMetadata);
+            final Map<TopicPartition, OffsetAndMetadata> offsetsAndMetadata = mainConsumer.committed(inputPartitions());
+
+            for (final Map.Entry<TopicPartition, OffsetAndMetadata> committedEntry : offsetsAndMetadata.entrySet()) {
+                if (resetOffsetsForPartitions.contains(committedEntry.getKey())) {
+                    final OffsetAndMetadata offsetAndMetadata = committedEntry.getValue();
+                    if (offsetAndMetadata != null) {
+                        mainConsumer.seek(committedEntry.getKey(), offsetAndMetadata);
+                        resetOffsetsForPartitions.remove(committedEntry.getKey());
+                    }
+                }
+            }
+
+            offsetResetter.accept(resetOffsetsForPartitions);
+            resetOffsetsForPartitions.clear();
+
+            initializeTaskTime(offsetsAndMetadata.entrySet().stream()
+                .filter(e -> e.getValue() != null)
+                .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue))
+            );
         } catch (final TimeoutException timeoutException) {
             log.warn(
                 "Encountered {} while trying to fetch committed offsets, will retry initializing the metadata in the next loop." +

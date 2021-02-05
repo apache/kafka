@@ -413,7 +413,7 @@ public class TaskManager {
         final List<Task> activeTasks = new LinkedList<>();
         for (final Task task : tasks.allTasks()) {
             try {
-                task.initializeIfNeeded(offsetResetter);
+                task.initializeIfNeeded();
                 task.clearTaskTimeout();
             } catch (final LockException retriableException) {
                 // it is possible that if there are multiple threads within the instance that one thread
@@ -441,7 +441,7 @@ public class TaskManager {
             for (final Task task : activeTasks) {
                 if (restored.containsAll(task.changelogPartitions())) {
                     try {
-                        task.completeRestoration();
+                        task.completeRestoration(offsetResetter);
                         task.clearTaskTimeout();
                     } catch (final TimeoutException timeoutException) {
                         task.maybeInitTaskTimeoutOrThrow(now, timeoutException);

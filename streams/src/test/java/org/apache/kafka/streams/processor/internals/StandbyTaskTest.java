@@ -167,7 +167,7 @@ public class StandbyTaskTest {
 
         task = createStandbyTask();
 
-        assertThrows(LockException.class, () -> task.initializeIfNeeded(null));
+        assertThrows(LockException.class, () -> task.initializeIfNeeded());
         task = null;
     }
 
@@ -182,12 +182,12 @@ public class StandbyTaskTest {
 
         assertEquals(CREATED, task.state());
 
-        task.initializeIfNeeded(null);
+        task.initializeIfNeeded();
 
         assertEquals(RUNNING, task.state());
 
         // initialize should be idempotent
-        task.initializeIfNeeded(null);
+        task.initializeIfNeeded();
 
         assertEquals(RUNNING, task.state());
 
@@ -219,7 +219,7 @@ public class StandbyTaskTest {
         EasyMock.replay(stateManager);
 
         task = createStandbyTask();
-        task.initializeIfNeeded(null);
+        task.initializeIfNeeded();
         task.prepareCommit();
         task.postCommit(false);  // this should not checkpoint
 
@@ -258,7 +258,7 @@ public class StandbyTaskTest {
         final MetricName metricName = setupCloseTaskMetric();
 
         task = createStandbyTask();
-        task.initializeIfNeeded(null);
+        task.initializeIfNeeded();
         task.suspend();
         task.closeDirty();
 
@@ -278,7 +278,7 @@ public class StandbyTaskTest {
         EasyMock.replay(stateManager);
 
         task = createStandbyTask();
-        task.initializeIfNeeded(null);
+        task.initializeIfNeeded();
 
         task.suspend();
         task.closeDirty();
@@ -299,7 +299,7 @@ public class StandbyTaskTest {
         final MetricName metricName = setupCloseTaskMetric();
 
         task = createStandbyTask();
-        task.initializeIfNeeded(null);
+        task.initializeIfNeeded();
         task.suspend();
         task.prepareCommit();
         task.postCommit(true);
@@ -337,7 +337,7 @@ public class StandbyTaskTest {
         EasyMock.replay(stateManager);
 
         task = createStandbyTask();
-        task.initializeIfNeeded(null);
+        task.initializeIfNeeded();
 
         // no need to commit if we've just initialized and offset not advanced much
         assertFalse(task.commitNeeded());
@@ -361,7 +361,7 @@ public class StandbyTaskTest {
         final MetricName metricName = setupCloseTaskMetric();
 
         task = createStandbyTask();
-        task.initializeIfNeeded(null);
+        task.initializeIfNeeded();
 
         task.suspend();
         assertThrows(RuntimeException.class, () -> task.closeClean());
@@ -386,7 +386,7 @@ public class StandbyTaskTest {
         final MetricName metricName = setupCloseTaskMetric();
 
         task = createStandbyTask();
-        task.initializeIfNeeded(null);
+        task.initializeIfNeeded();
 
         task.prepareCommit();
         assertThrows(RuntimeException.class, () -> task.postCommit(true));
@@ -409,7 +409,7 @@ public class StandbyTaskTest {
         EasyMock.replay(stateManager);
 
         task = createStandbyTask();
-        task.initializeIfNeeded(null);
+        task.initializeIfNeeded();
 
         task.suspend();
         task.closeClean();
@@ -425,7 +425,7 @@ public class StandbyTaskTest {
         EasyMock.replay(stateManager);
 
         task = createStandbyTask();
-        task.initializeIfNeeded(null);
+        task.initializeIfNeeded();
 
         task.suspend();
         task.closeDirty();
@@ -526,7 +526,7 @@ public class StandbyTaskTest {
         task = createStandbyTask();
         assertThrows(IllegalStateException.class, () -> task.closeCleanAndRecycleState()); // CREATED
 
-        task.initializeIfNeeded(null);
+        task.initializeIfNeeded();
         assertThrows(IllegalStateException.class, () -> task.closeCleanAndRecycleState()); // RUNNING
 
         task.suspend();
@@ -553,7 +553,7 @@ public class StandbyTaskTest {
         EasyMock.expect(stateManager.changelogOffsets()).andStubReturn(Collections.emptyMap());
         EasyMock.replay(stateManager);
         task = createStandbyTask();
-        task.initializeIfNeeded(null);
+        task.initializeIfNeeded();
         assertThat(task.state(), equalTo(RUNNING));
         task.suspend();
         assertThat(task.state(), equalTo(SUSPENDED));

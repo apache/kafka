@@ -894,7 +894,7 @@ public class TaskManagerTest {
 
         assertThat(task00.state(), is(Task.State.CREATED));
 
-        taskManager.tryToCompleteRestoration(time.milliseconds(), null);
+        taskManager.tryToCompleteRestoration(time.milliseconds(), noOpResetter -> { });
 
         assertThat(task00.state(), is(Task.State.RUNNING));
         assertThat(taskManager.activeTaskMap(), Matchers.equalTo(singletonMap(taskId00, task00)));
@@ -910,13 +910,13 @@ public class TaskManagerTest {
         );
         final Task task00 = new StateMachineTask(taskId00, taskId00Partitions, true) {
             @Override
-            public void initializeIfNeeded(final java.util.function.Consumer<Set<TopicPartition>> offsetResetter) {
+            public void initializeIfNeeded() {
                 throw new LockException("can't lock");
             }
         };
         final Task task01 = new StateMachineTask(taskId01, taskId01Partitions, true) {
             @Override
-            public void initializeIfNeeded(final java.util.function.Consumer<Set<TopicPartition>> offsetResetter) {
+            public void initializeIfNeeded() {
                 throw new TimeoutException("timed out");
             }
         };
@@ -957,7 +957,7 @@ public class TaskManagerTest {
         );
         final Task task00 = new StateMachineTask(taskId00, taskId00Partitions, true) {
             @Override
-            public void completeRestoration() {
+            public void completeRestoration(final java.util.function.Consumer<Set<TopicPartition>> offsetResetter) {
                 throw new TimeoutException("timeout!");
             }
         };
@@ -2946,7 +2946,7 @@ public class TaskManagerTest {
         }
 
         @Override
-        public void initializeIfNeeded(final java.util.function.Consumer<Set<TopicPartition>> offsetResetter) {
+        public void initializeIfNeeded() {
             if (state() == State.CREATED) {
                 transitionTo(State.RESTORING);
                 if (!active) {
@@ -2961,7 +2961,7 @@ public class TaskManagerTest {
         }
 
         @Override
-        public void completeRestoration() {
+        public void completeRestoration(final java.util.function.Consumer<Set<TopicPartition>> offsetResetter) {
             if (state() == State.RUNNING) {
                 return;
             }

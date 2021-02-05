@@ -528,8 +528,8 @@ public class TopologyTestDriver implements Closeable {
                 recordCollector,
                 context,
                 logContext);
-            task.initializeIfNeeded(null);
-            task.completeRestoration();
+            task.initializeIfNeeded();
+            task.completeRestoration(noOpResetter -> { });
             task.processorContext().setRecordContext(null);
 
             // initialize the task metadata so that all topics have zero lag
