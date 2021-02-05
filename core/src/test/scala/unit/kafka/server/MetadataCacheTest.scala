@@ -28,27 +28,37 @@ import org.apache.kafka.common.requests.UpdateMetadataRequest
 import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.params.ParameterizedTest
+import org.junit.jupiter.params.provider.MethodSource
 
 import java.util.Collections
 import scala.jdk.CollectionConverters._
 
+object MetadataCacheTest {
+  def cacheProvider(): util.stream.Stream[MetadataCache] = {
+    util.stream.Stream.of(
+      MetadataCache.zkMetadataCache(1),
+      MetadataCache.raftMetadataCache(1)
+    )
+  }
+}
+
 class MetadataCacheTest {
   val brokerEpoch = 0L
 
-  @Test
-  def getTopicMetadataNonExistingTopics(): Unit = {
+  @ParameterizedTest
+  @MethodSource(Array("cacheProvider"))
+  def getTopicMetadataNonExistingTopics(cache: MetadataCache): Unit = {
     val topic = "topic"
-    val cache = MetadataCache.zkMetadataCache(1)
     val topicMetadata = cache.getTopicMetadata(Set(topic), ListenerName.forSecurityProtocol(SecurityProtocol.PLAINTEXT))
     assertTrue(topicMetadata.isEmpty)
   }
 
-  @Test
-  def getTopicMetadata(): Unit = {
+  @ParameterizedTest
+  @MethodSource(Array("cacheProvider"))
+  def getTopicMetadata(cache: MetadataCache): Unit = {
     val topic0 = "topic-0"
     val topic1 = "topic-1"
-
-    val cache = MetadataCache.zkMetadataCache(1)
 
     val zkVersion = 3
     val controllerId = 2
@@ -149,8 +159,9 @@ class MetadataCacheTest {
 
   }
 
-  @Test
-  def getTopicMetadataPartitionLeaderNotAvailable(): Unit = {
+  @ParameterizedTest
+  @MethodSource(Array("cacheProvider"))
+  def getTopicMetadataPartitionLeaderNotAvailable(cache: MetadataCache): Unit = {
     val securityProtocol = SecurityProtocol.PLAINTEXT
     val listenerName = ListenerName.forSecurityProtocol(securityProtocol)
     val brokers = Seq(new UpdateMetadataBroker()
@@ -162,14 +173,15 @@ class MetadataCacheTest {
         .setListener(listenerName.value)).asJava))
     val metadataCacheBrokerId = 0
     // leader is not available. expect LEADER_NOT_AVAILABLE for any metadata version.
-    verifyTopicMetadataPartitionLeaderOrEndpointNotAvailable(metadataCacheBrokerId, brokers, listenerName,
+    verifyTopicMetadataPartitionLeaderOrEndpointNotAvailable(cache, metadataCacheBrokerId, brokers, listenerName,
       leader = 1, Errors.LEADER_NOT_AVAILABLE, errorUnavailableListeners = false)
-    verifyTopicMetadataPartitionLeaderOrEndpointNotAvailable(metadataCacheBrokerId, brokers, listenerName,
+    verifyTopicMetadataPartitionLeaderOrEndpointNotAvailable(cache, metadataCacheBrokerId, brokers, listenerName,
       leader = 1, Errors.LEADER_NOT_AVAILABLE, errorUnavailableListeners = true)
   }
 
-  @Test
-  def getTopicMetadataPartitionListenerNotAvailableOnLeader(): Unit = {
+  @ParameterizedTest
+  @MethodSource(Array("cacheProvider"))
+  def getTopicMetadataPartitionListenerNotAvailableOnLeader(cache: MetadataCache): Unit = {
     // when listener name is not present in the metadata cache for a broker, getTopicMetadata should
     // return LEADER_NOT_AVAILABLE or LISTENER_NOT_FOUND errors for old and new versions respectively.
     val plaintextListenerName = ListenerName.forSecurityProtocol(SecurityProtocol.PLAINTEXT)
@@ -199,22 +211,21 @@ class MetadataCacheTest {
         .setEndpoints(broker1Endpoints.asJava))
     val metadataCacheBrokerId = 0
     // leader available in cache but listener name not present. expect LISTENER_NOT_FOUND error for new metadata version
-    verifyTopicMetadataPartitionLeaderOrEndpointNotAvailable(metadataCacheBrokerId, brokers, sslListenerName,
+    verifyTopicMetadataPartitionLeaderOrEndpointNotAvailable(cache, metadataCacheBrokerId, brokers, sslListenerName,
       leader = 1, Errors.LISTENER_NOT_FOUND, errorUnavailableListeners = true)
     // leader available in cache but listener name not present. expect LEADER_NOT_AVAILABLE error for old metadata version
-    verifyTopicMetadataPartitionLeaderOrEndpointNotAvailable(metadataCacheBrokerId, brokers, sslListenerName,
+    verifyTopicMetadataPartitionLeaderOrEndpointNotAvailable(cache, metadataCacheBrokerId, brokers, sslListenerName,
       leader = 1, Errors.LEADER_NOT_AVAILABLE, errorUnavailableListeners = false)
   }
 
-  private def verifyTopicMetadataPartitionLeaderOrEndpointNotAvailable(metadataCacheBrokerId: Int,
+  private def verifyTopicMetadataPartitionLeaderOrEndpointNotAvailable(cache: MetadataCache,
+                                                                       metadataCacheBrokerId: Int,
                                                                        brokers: Seq[UpdateMetadataBroker],
                                                                        listenerName: ListenerName,
                                                                        leader: Int,
                                                                        expectedError: Errors,
                                                                        errorUnavailableListeners: Boolean): Unit = {
     val topic = "topic"
-
-    val cache = MetadataCache.zkMetadataCache(metadataCacheBrokerId)
 
     val zkVersion = 3
     val controllerId = 2
@@ -252,11 +263,10 @@ class MetadataCacheTest {
     assertEquals(List(0), partitionMetadata.replicaNodes.asScala)
   }
 
-  @Test
-  def getTopicMetadataReplicaNotAvailable(): Unit = {
+  @ParameterizedTest
+  @MethodSource(Array("cacheProvider"))
+  def getTopicMetadataReplicaNotAvailable(cache: MetadataCache): Unit = {
     val topic = "topic"
-
-    val cache = MetadataCache.zkMetadataCache(1)
 
     val zkVersion = 3
     val controllerId = 2
@@ -326,11 +336,10 @@ class MetadataCacheTest {
     assertEquals(Set(0), partitionMetadataWithError.isrNodes.asScala.toSet)
   }
 
-  @Test
-  def getTopicMetadataIsrNotAvailable(): Unit = {
+  @ParameterizedTest
+  @MethodSource(Array("cacheProvider"))
+  def getTopicMetadataIsrNotAvailable(cache: MetadataCache): Unit = {
     val topic = "topic"
-
-    val cache = MetadataCache.zkMetadataCache(1)
 
     val zkVersion = 3
     val controllerId = 2
@@ -400,10 +409,10 @@ class MetadataCacheTest {
     assertEquals(Set(0), partitionMetadataWithError.isrNodes.asScala.toSet)
   }
 
-  @Test
-  def getTopicMetadataWithNonSupportedSecurityProtocol(): Unit = {
+  @ParameterizedTest
+  @MethodSource(Array("cacheProvider"))
+  def getTopicMetadataWithNonSupportedSecurityProtocol(cache: MetadataCache): Unit = {
     val topic = "topic"
-    val cache = MetadataCache.zkMetadataCache(1)
     val securityProtocol = SecurityProtocol.PLAINTEXT
     val brokers = Seq(new UpdateMetadataBroker()
       .setId(0)
@@ -438,10 +447,10 @@ class MetadataCacheTest {
     assertEquals(RecordBatch.NO_PARTITION_LEADER_EPOCH, topicMetadata.head.partitions.get(0).leaderId)
   }
 
-  @Test
-  def getAliveBrokersShouldNotBeMutatedByUpdateCache(): Unit = {
+  @ParameterizedTest
+  @MethodSource(Array("cacheProvider"))
+  def getAliveBrokersShouldNotBeMutatedByUpdateCache(cache: MetadataCache): Unit = {
     val topic = "topic"
-    val cache = MetadataCache.zkMetadataCache(1)
 
     def updateCache(brokerIds: Seq[Int]): Unit = {
       val brokers = brokerIds.map { brokerId =>
