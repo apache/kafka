@@ -2653,7 +2653,6 @@ public class RequestResponseTest {
 
     private BrokerHeartbeatResponse createBrokerHeartbeatResponse() {
         BrokerHeartbeatResponseData data = new BrokerHeartbeatResponseData()
-                .setIsCaughtUp(true)
                 .setIsFenced(false)
                 .setShouldShutDown(false)
                 .setThrottleTimeMs(0);
