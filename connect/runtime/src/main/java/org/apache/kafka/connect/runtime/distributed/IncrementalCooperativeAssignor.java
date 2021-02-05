@@ -270,12 +270,16 @@ public class IncrementalCooperativeAssignor implements ConnectAssignor {
         // Compute the connectors-and-tasks to be revoked for load balancing without taking into
         // account the deleted ones.
 //        log.error("!!! Can leader revoke tasks in this assignment? {} (delay: {})", canRevoke, delay);
+        boolean exRevoke = false;
         if (canRevoke) {
             Map<String, ConnectorsAndTasks> toExplicitlyRevoke =
                     performTaskRevocation(activeAssignments, currentWorkerAssignment);
 
             if (toExplicitlyRevoke.keySet().size() > 0) {
                 System.out.println("revoke assignments:" + toExplicitlyRevoke);
+            }
+            if (toExplicitlyRevoke.keySet().size() == 8) {
+                exRevoke = true;
             }
 
             toExplicitlyRevoke.forEach(
@@ -317,6 +321,9 @@ public class IncrementalCooperativeAssignor implements ConnectAssignor {
                                 memberConfigs.get(leaderId).url(), maxOffset, incrementalConnectorAssignments,
                                 incrementalTaskAssignments, toRevoke, delay, protocolVersion);
         previousAssignment = computePreviousAssignment(toRevoke, connectorAssignments, taskAssignments, lostAssignments);
+        if (exRevoke) {
+            System.out.println("ass:" + assignments + ", pre:" + previousAssignment + ", mem:" + memberConfigs.keySet().size() + ", cur:" + currentWorkerAssignment + ",tas:" + taskAssignments);
+        }
         previousGenerationId = coordinator.generationId();
         previousMembers = memberConfigs.keySet();
         log.debug("Actual assignments: {}", assignments);
