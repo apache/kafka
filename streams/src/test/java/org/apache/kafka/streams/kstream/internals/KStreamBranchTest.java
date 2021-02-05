@@ -40,7 +40,7 @@ public class KStreamBranchTest {
     private final String topicName = "topic";
     private final Properties props = StreamsTestUtils.getStreamsConfig(Serdes.String(), Serdes.String());
 
-    @SuppressWarnings("unchecked")
+    @SuppressWarnings({"unchecked", "deprecation"})
     @Test
     public void testKStreamBranch() {
         final StreamsBuilder builder = new StreamsBuilder();
@@ -77,7 +77,7 @@ public class KStreamBranchTest {
         assertEquals(2, processors.get(2).processed().size());
     }
 
-    @SuppressWarnings("unchecked")
+    @SuppressWarnings({"unchecked", "deprecation"})
     @Test
     public void testTypeVariance() {
         final Predicate<Number, Object> positive = (key, value) -> key.doubleValue() > 0;

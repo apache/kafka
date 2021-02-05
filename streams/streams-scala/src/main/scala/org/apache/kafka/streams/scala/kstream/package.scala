@@ -27,4 +27,5 @@ package object kstream {
   type Joined[K, V, VO] = org.apache.kafka.streams.kstream.Joined[K, V, VO]
   type StreamJoined[K, V, VO] = org.apache.kafka.streams.kstream.StreamJoined[K, V, VO]
   type Named = org.apache.kafka.streams.kstream.Named
+  type Branched[K, V] = org.apache.kafka.streams.kstream.Branched[K, V]
 }

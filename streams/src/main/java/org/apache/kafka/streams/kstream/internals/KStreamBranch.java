@@ -22,13 +22,15 @@ import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.ProcessorSupplier;
 import org.apache.kafka.streams.processor.To;
 
+import java.util.List;
+
 class KStreamBranch<K, V> implements ProcessorSupplier<K, V> {
 
-    private final Predicate<K, V>[] predicates;
-    private final String[] childNodes;
+    private final List<Predicate<? super K, ? super V>> predicates;
+    private final List<String> childNodes;
 
-    KStreamBranch(final Predicate<K, V>[] predicates,
-                  final String[] childNodes) {
+    KStreamBranch(final List<Predicate<? super K, ? super V>> predicates,
+                  final List<String> childNodes) {
         this.predicates = predicates;
         this.childNodes = childNodes;
     }
@@ -41,13 +43,17 @@ class KStreamBranch<K, V> implements ProcessorSupplier<K, V> {
     private class KStreamBranchProcessor extends AbstractProcessor<K, V> {
         @Override
         public void process(final K key, final V value) {
-            for (int i = 0; i < predicates.length; i++) {
-                if (predicates[i].test(key, value)) {
+            for (int i = 0; i < predicates.size(); i++) {
+                if (predicates.get(i).test(key, value)) {
                     // use forward with child here and then break the loop
                     // so that no record is going to be piped to multiple streams
-                    context().forward(key, value, To.child(childNodes[i]));
-                    break;
+                    context().forward(key, value, To.child(childNodes.get(i)));
+                    return;
                 }
+            }
+            // using default child node if supplied
+            if (childNodes.size() > predicates.size()) {
+                context().forward(key, value, To.child(childNodes.get(predicates.size())));
             }
         }
     }
