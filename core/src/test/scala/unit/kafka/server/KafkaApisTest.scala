@@ -121,10 +121,19 @@ class KafkaApisTest {
   def createKafkaApis(interBrokerProtocolVersion: ApiVersion = ApiVersion.latestVersion,
                       authorizer: Option[Authorizer] = None,
                       enableForwarding: Boolean = false,
-                      configRepository: ConfigRepository = new CachedConfigRepository()): KafkaApis = {
+                      configRepository: ConfigRepository = new CachedConfigRepository(),
+                      raftSupport: Boolean = false): KafkaApis = {
+
     val brokerFeatures = BrokerFeatures.createDefault()
     val cache = new FinalizedFeatureCache(brokerFeatures)
-    val properties = TestUtils.createBrokerConfig(brokerId, "zk")
+    val properties = if (raftSupport) {
+      val properties = TestUtils.createBrokerConfig(brokerId, "")
+      properties.put(KafkaConfig.NodeIdProp, brokerId.toString)
+      properties.put(KafkaConfig.ProcessRolesProp, "broker")
+      properties
+    } else {
+      TestUtils.createBrokerConfig(brokerId, "zk")
+    }
     properties.put(KafkaConfig.InterBrokerProtocolVersionProp, interBrokerProtocolVersion.toString)
     properties.put(KafkaConfig.LogMessageFormatVersionProp, interBrokerProtocolVersion.toString)
 
@@ -134,13 +143,10 @@ class KafkaApisTest {
       None
 
     new KafkaApis(requestChannel,
+      if (raftSupport) RaftSupport(forwardingManager) else ZkSupport(adminManager, controller, zkClient, forwardingManagerOpt),
       replicaManager,
-      adminManager,
       groupCoordinator,
       txnCoordinator,
-      controller,
-      forwardingManagerOpt,
-      zkClient,
       brokerId,
       new KafkaConfig(properties),
       configRepository,
@@ -3197,4 +3203,124 @@ class KafkaApisTest {
 
   }
 
+  private def createMockRequest(): RequestChannel.Request = {
+    val request: RequestChannel.Request = EasyMock.createNiceMock(classOf[RequestChannel.Request])
+    val requestHeader: RequestHeader = EasyMock.createNiceMock(classOf[RequestHeader])
+    expect(request.header).andReturn(requestHeader).anyTimes()
+    expect(requestHeader.apiKey()).andReturn(ApiKeys.values().head).anyTimes()
+    EasyMock.replay(request, requestHeader)
+    request
+  }
+
+  private def verifyShouldNeverHandle(handler: RequestChannel.Request => Unit): Unit = {
+    val request = createMockRequest()
+    val e = assertThrows(classOf[UnsupportedVersionException], () => handler(request))
+    assertEquals(KafkaApis.shouldNeverReceive(request).getMessage, e.getMessage)
+  }
+
+  private def verifyShouldAlwaysForward(handler: RequestChannel.Request => Unit): Unit = {
+    val request = createMockRequest()
+    val e = assertThrows(classOf[UnsupportedVersionException], () => handler(request))
+    assertEquals(KafkaApis.shouldAlwaysForward(request).getMessage, e.getMessage)
+  }
+
+  @Test
+  def testRaftShouldNeverHandleLeaderAndIsrRequest(): Unit = {
+    verifyShouldNeverHandle(createKafkaApis(raftSupport = true).handleLeaderAndIsrRequest)
+  }
+
+  @Test
+  def testRaftShouldNeverHandleStopReplicaRequest(): Unit = {
+    verifyShouldNeverHandle(createKafkaApis(raftSupport = true).handleStopReplicaRequest)
+  }
+
+  @Test
+  def testRaftShouldNeverHandleUpdateMetadataRequest(): Unit = {
+    verifyShouldNeverHandle(createKafkaApis(raftSupport = true).handleUpdateMetadataRequest)
+  }
+
+  @Test
+  def testRaftShouldNeverHandleControlledShutdownRequest(): Unit = {
+    verifyShouldNeverHandle(createKafkaApis(raftSupport = true).handleControlledShutdownRequest)
+  }
+
+  @Test
+  def testRaftShouldNeverHandleAlterIsrRequest(): Unit = {
+    verifyShouldNeverHandle(createKafkaApis(raftSupport = true).handleAlterIsrRequest)
+  }
+
+  @Test
+  def testRaftShouldNeverHandleEnvelope(): Unit = {
+    verifyShouldNeverHandle(createKafkaApis(raftSupport = true).handleEnvelope)
+  }
+
+  @Test
+  def testRaftShouldAlwaysForwardCreateTopicsRequest(): Unit = {
+    verifyShouldAlwaysForward(createKafkaApis(raftSupport = true).handleCreateTopicsRequest)
+  }
+
+  @Test
+  def testRaftShouldAlwaysForwardCreatePartitionsRequest(): Unit = {
+    verifyShouldAlwaysForward(createKafkaApis(raftSupport = true).handleCreatePartitionsRequest)
+  }
+
+  @Test
+  def testRaftShouldAlwaysForwardDeleteTopicsRequest(): Unit = {
+    verifyShouldAlwaysForward(createKafkaApis(raftSupport = true).handleDeleteTopicsRequest)
+  }
+
+  @Test
+  def testRaftShouldAlwaysForwardCreateAcls(): Unit = {
+    verifyShouldAlwaysForward(createKafkaApis(raftSupport = true).handleCreateAcls)
+  }
+
+  @Test
+  def testRaftShouldAlwaysForwardDeleteAcls(): Unit = {
+    verifyShouldAlwaysForward(createKafkaApis(raftSupport = true).handleDeleteAcls)
+  }
+
+  @Test
+  def testRaftShouldAlwaysForwardAlterConfigsRequest(): Unit = {
+    verifyShouldAlwaysForward(createKafkaApis(raftSupport = true).handleAlterConfigsRequest)
+  }
+
+  @Test
+  def testRaftShouldAlwaysForwardAlterPartitionReassignmentsRequest(): Unit = {
+    verifyShouldAlwaysForward(createKafkaApis(raftSupport = true).handleAlterPartitionReassignmentsRequest)
+  }
+
+  @Test
+  def testRaftShouldAlwaysForwardIncrementalAlterConfigsRequest(): Unit = {
+    verifyShouldAlwaysForward(createKafkaApis(raftSupport = true).handleIncrementalAlterConfigsRequest)
+  }
+
+  @Test
+  def testRaftShouldAlwaysForwardCreateTokenRequest(): Unit = {
+    verifyShouldAlwaysForward(createKafkaApis(raftSupport = true).handleCreateTokenRequest)
+  }
+
+  @Test
+  def testRaftShouldAlwaysForwardRenewTokenRequest(): Unit = {
+    verifyShouldAlwaysForward(createKafkaApis(raftSupport = true).handleRenewTokenRequest)
+  }
+
+  @Test
+  def testRaftShouldAlwaysForwardExpireTokenRequest(): Unit = {
+    verifyShouldAlwaysForward(createKafkaApis(raftSupport = true).handleExpireTokenRequest)
+  }
+
+  @Test
+  def testRaftShouldAlwaysForwardAlterClientQuotasRequest(): Unit = {
+    verifyShouldAlwaysForward(createKafkaApis(raftSupport = true).handleAlterClientQuotasRequest)
+  }
+
+  @Test
+  def testRaftShouldAlwaysForwardAlterUserScramCredentialsRequest(): Unit = {
+    verifyShouldAlwaysForward(createKafkaApis(raftSupport = true).handleAlterUserScramCredentialsRequest)
+  }
+
+  @Test
+  def testRaftShouldAlwaysForwardUpdateFeatures(): Unit = {
+    verifyShouldAlwaysForward(createKafkaApis(raftSupport = true).handleUpdateFeatures)
+  }
 }
