@@ -22,6 +22,7 @@ import java.io._
 import kafka.coordinator.group.GroupMetadataManager
 import kafka.coordinator.transaction.TransactionLog
 import kafka.log._
+import kafka.log.remote.RemoteMetadataLog
 import kafka.serializer.Decoder
 import kafka.utils._
 import kafka.utils.Implicits._
@@ -377,6 +378,12 @@ object DumpLogSegments {
     }
   }
 
+  private class RemoteLogMetadataMessageParser extends MessageParser[String, String] {
+    override def parse(record: Record): (Option[String], Option[String]) = {
+      RemoteMetadataLog.formatRecordKeyAndValue(record)
+    }
+  }
+
   private class DumpLogSegmentsOptions(args: Array[String]) extends CommandDefaultOptions(args) {
     val printOpt = parser.accepts("print-data-log", "if set, printing the messages content when dumping data logs. Automatically set if any decoder option is specified.")
     val verifyOpt = parser.accepts("verify-index-only", "if set, just verify the index log without printing its content.")
@@ -404,6 +411,8 @@ object DumpLogSegments {
       "__consumer_offsets topic.")
     val transactionLogOpt = parser.accepts("transaction-log-decoder", "if set, log data will be parsed as " +
       "transaction metadata from the __transaction_state topic.")
+    val remoteMetadataLogOpt = parser.accepts("remote-metadata-log-decoder", "if set, log data will be parsed as " +
+      "remote metadata from the __remote_log_segment_metadata topic.")
     options = parser.parse(args : _*)
 
     def messageParser: MessageParser[_, _] =
@@ -411,6 +420,8 @@ object DumpLogSegments {
         new OffsetsMessageParser
       } else if (options.has(transactionLogOpt)) {
         new TransactionLogMessageParser
+      } else if (options.has(remoteMetadataLogOpt)) {
+        new RemoteLogMetadataMessageParser
       } else {
         val valueDecoder: Decoder[_] = CoreUtils.createObject[Decoder[_]](options.valueOf(valueDecoderOpt), new VerifiableProperties)
         val keyDecoder: Decoder[_] = CoreUtils.createObject[Decoder[_]](options.valueOf(keyDecoderOpt), new VerifiableProperties)
