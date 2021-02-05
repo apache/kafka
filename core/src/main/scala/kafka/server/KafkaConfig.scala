@@ -70,6 +70,9 @@ object Defaults {
   val BackgroundThreads = 10
   val QueuedMaxRequests = 500
   val QueuedMaxRequestBytes = -1
+  val InitialBrokerRegistrationTimeoutMs = 60000
+  val BrokerHeartbeatIntervalMs = 2000
+  val BrokerSessionTimeoutMs = 18000
 
   /** KIP-500 Configuration */
   val EmptyNodeId: Int = -1
@@ -369,6 +372,9 @@ object KafkaConfig {
 
   /** KIP-500 Configuration */
   val ProcessRolesProp = "process.roles"
+  val InitialBrokerRegistrationTimeoutMs = "initial.broker.registration.timeout.ms"
+  val BrokerHeartbeatIntervalMsProp = "broker.heartbeat.interval.ms"
+  val BrokerSessionTimeoutMsProp = "broker.session.timeout.ms"
   val NodeIdProp = "node.id"
   val MetadataLogDirProp = "metadata.log.dir"
 
@@ -1064,6 +1070,9 @@ object KafkaConfig {
        */
       .defineInternal(ProcessRolesProp, LIST, Collections.emptyList(), ValidList.in("broker", "controller"), HIGH, ProcessRolesDoc)
       .defineInternal(NodeIdProp, INT, Defaults.EmptyNodeId, null, HIGH, NodeIdDoc)
+      .defineInternal(InitialBrokerRegistrationTimeoutMs, INT, Defaults.InitialBrokerRegistrationTimeoutMs, MEDIUM, InitialBrokerRegistrationTimeoutMsDoc)
+      .defineInternal(BrokerHeartbeatIntervalMsProp, INT, Defaults.BrokerHeartbeatIntervalMs, MEDIUM, BrokerHeartbeatIntervalMsDoc)
+      .defineInternal(BrokerSessionTimeoutMsProp, INT, Defaults.BrokerSessionTimeoutMs, MEDIUM, BrokerSessionTimeoutMsDoc)
       .defineInternal(MetadataLogDirProp, STRING, null, null, HIGH, MetadataLogDirDoc)
 
       /************* Authorizer Configuration ***********/
@@ -1497,6 +1506,9 @@ class KafkaConfig(val props: java.util.Map[_, _], doLog: Boolean, dynamicConfigO
   var brokerId: Int = getInt(KafkaConfig.BrokerIdProp)
   val nodeId: Int = getInt(KafkaConfig.NodeIdProp)
   val processRoles: Set[ProcessRole] = parseProcessRoles()
+  val initialRegistrationTimeoutMs = getInt(KafkaConfig.InitialBrokerRegistrationTimeoutMs)
+  val brokerHeartbeatIntervalMs = getInt(KafkaConfig.BrokerHeartbeatIntervalMsProp)
+  val brokerSessionTimeoutMs = getInt(KafkaConfig.BrokerSessionTimeoutMsProp)
 
   def requiresZookeeper: Boolean = processRoles.isEmpty
   def usesSelfManagedQuorum: Boolean = processRoles.nonEmpty
