@@ -42,12 +42,23 @@ import org.apache.kafka.common.security.auth.SecurityProtocol
 
 trait MetadataCache {
 
-  // errorUnavailableEndpoints exists to support v0 MetadataResponses
+  /**
+   * Return topic metadata for a given set of topics and listener. See KafkaApis#handleTopicMetadataRequest for details
+   * on the use of the two boolean flags.
+   *
+   * @param topics                      The set of topics.
+   * @param listenerName                The listener name.
+   * @param errorUnavailableEndpoints   If true, we return an error on unavailable brokers. This is used to support
+   *                                    MetadataResponse version 0.
+   * @param errorUnavailableListeners   If true, return LEADER_NOT_AVAILABLE if the listener is not found on the leader.
+   *                                    This is used for MetadataResponse versions 0-5.
+   * @return                            A collection of topic metadata.
+   */
   def getTopicMetadata(
-                        topics: collection.Set[String],
-                        listenerName: ListenerName,
-                        errorUnavailableEndpoints: Boolean = false,
-                        errorUnavailableListeners: Boolean = false): collection.Seq[MetadataResponseData.MetadataResponseTopic]
+    topics: collection.Set[String],
+    listenerName: ListenerName,
+    errorUnavailableEndpoints: Boolean = false,
+    errorUnavailableListeners: Boolean = false): collection.Seq[MetadataResponseData.MetadataResponseTopic]
 
   def getAllTopics(): collection.Set[String]
 
@@ -63,9 +74,13 @@ trait MetadataCache {
 
   def numPartitions(topic: String): Option[Int]
 
-  // if the leader is not known, return None;
-  // if the leader is known and corresponding node is available, return Some(node)
-  // if the leader is known but corresponding node with the listener name is not available, return Some(NO_NODE)
+  /**
+   * Get a partition leader's endpoint
+   *
+   * @return  If the leader is known, and the listener name is available, return Some(node). If the the leader is known,
+   *          but the listener is unavailable, return Some(Node.NO_NODE). Otherwise, if the leader is not known,
+   *          return None
+   */
   def getPartitionLeaderEndpoint(topic: String, partitionId: Int, listenerName: ListenerName): Option[Node]
 
   def getPartitionReplicaEndpoints(tp: TopicPartition, listenerName: ListenerName): Map[Int, Node]
@@ -74,7 +89,11 @@ trait MetadataCache {
 
   def getClusterMetadata(clusterId: String, listenerName: ListenerName): Cluster
 
-  // This method returns the deleted TopicPartitions received from UpdateMetadataRequest
+  /**
+   * Update the metadata cache with a given UpdateMetadataRequest.
+   *
+   * @return  The deleted topics from the given UpdateMetadataRequest.
+   */
   def updateMetadata(correlationId: Int, request: UpdateMetadataRequest): collection.Seq[TopicPartition]
 
   def contains(topic: String): Boolean
