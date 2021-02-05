@@ -22,9 +22,29 @@ import org.apache.kafka.common.message.ApiMessageType.ApiScope
 import org.apache.kafka.common.protocol.ApiKeys
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.Assertions._
+import org.junit.jupiter.params.ParameterizedTest
+import org.junit.jupiter.params.provider.EnumSource
 import org.mockito.Mockito
 
+import scala.jdk.CollectionConverters._
+
 class ApiVersionManagerTest {
+  private val brokerFeatures = BrokerFeatures.createDefault()
+  private val featureCache = new FinalizedFeatureCache(brokerFeatures)
+
+  @ParameterizedTest
+  @EnumSource(classOf[ApiScope])
+  def testApiScope(apiScope: ApiScope): Unit = {
+    val versionManager = new DefaultApiVersionManager(
+      apiScope = apiScope,
+      interBrokerProtocolVersion = ApiVersion.latestVersion,
+      forwardingManager = None,
+      features = brokerFeatures,
+      featureCache = featureCache
+    )
+    assertEquals(ApiKeys.apisInScope(apiScope).asScala, versionManager.enabledApis)
+    assertTrue(ApiKeys.apisInScope(apiScope).asScala.forall(versionManager.isApiEnabled))
+  }
 
   @Test
   def testControllerApiIntersection(): Unit = {
@@ -38,9 +58,6 @@ class ApiVersionManagerTest {
       controllerMinVersion,
       controllerMaxVersion
     )))
-
-    val brokerFeatures = BrokerFeatures.createDefault()
-    val featureCache = new FinalizedFeatureCache(brokerFeatures)
 
     val versionManager = new DefaultApiVersionManager(
       apiScope = ApiScope.ZK_BROKER,
@@ -62,9 +79,6 @@ class ApiVersionManagerTest {
     val forwardingManager = Mockito.mock(classOf[ForwardingManager])
     Mockito.when(forwardingManager.controllerApiVersions).thenReturn(None)
 
-    val brokerFeatures = BrokerFeatures.createDefault()
-    val featureCache = new FinalizedFeatureCache(brokerFeatures)
-
     val versionManager = new DefaultApiVersionManager(
       apiScope = ApiScope.ZK_BROKER,
       interBrokerProtocolVersion = ApiVersion.latestVersion,
@@ -84,9 +98,6 @@ class ApiVersionManagerTest {
 
   @Test
   def testEnvelopeDisabledWhenForwardingManagerEmpty(): Unit = {
-    val brokerFeatures = BrokerFeatures.createDefault()
-    val featureCache = new FinalizedFeatureCache(brokerFeatures)
-
     val versionManager = new DefaultApiVersionManager(
       apiScope = ApiScope.ZK_BROKER,
       interBrokerProtocolVersion = ApiVersion.latestVersion,

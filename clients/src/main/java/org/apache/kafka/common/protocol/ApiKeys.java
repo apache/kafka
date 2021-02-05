@@ -207,6 +207,10 @@ public enum ApiKeys {
         return messageType.responseHeaderVersion(apiVersion);
     }
 
+    public boolean inScope(ApiMessageType.ApiScope scope) {
+        return messageType.scope().contains(scope);
+    }
+
     private static String toHtml() {
         final StringBuilder b = new StringBuilder();
         b.append("<table class=\"data-table\"><tbody>\n");

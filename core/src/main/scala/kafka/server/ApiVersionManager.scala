@@ -118,4 +118,8 @@ class DefaultApiVersionManager(
       case None => ApiKeys.apisInScope(apiScope).asScala
     }
   }
+
+  override def isApiEnabled(apiKey: ApiKeys): Boolean = {
+    apiKey.inScope(apiScope) || (apiKey == ApiKeys.ENVELOPE && forwardingManager.isDefined)
+  }
 }
