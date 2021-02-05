@@ -53,7 +53,7 @@ sealed trait MetadataSupport {
    * @param config the config to check for consistency with this instance
    * @throws IllegalStateException if there is an inconsistency (Raft for a ZooKeeper config or vice-versa)
    */
-  def confirmConsistentWith(config: KafkaConfig): Unit
+  def ensureConsistentWith(config: KafkaConfig): Unit
 
   def maybeForward(request: RequestChannel.Request,
                    handler: RequestChannel.Request => Unit,
@@ -69,7 +69,7 @@ case class ZkSupport(adminManager: ZkAdminManager,
   override def requireZkOrThrow(createException: => Exception): ZkSupport = this
   override def requireRaftOrThrow(createException: => Exception): RaftSupport = throw createException
 
-  override def confirmConsistentWith(config: KafkaConfig): Unit = {
+  override def ensureConsistentWith(config: KafkaConfig): Unit = {
     if (!config.requiresZookeeper) {
       throw new IllegalStateException("Config specifies Raft but metadata support instance is for ZooKeeper")
     }
@@ -78,10 +78,9 @@ case class ZkSupport(adminManager: ZkAdminManager,
   override def maybeForward(request: RequestChannel.Request,
                             handler: RequestChannel.Request => Unit,
                             responseCallback: Option[AbstractResponse] => Unit): Unit = {
-    if (forwardingManager.isDefined && !request.isForwarded && !controller.isActive) {
-      forwardingManager.get.forwardRequest(request, responseCallback)
-    } else {
-      handler(request)
+    forwardingManager match {
+      case Some(mgr) if !request.isForwarded && !controller.isActive => mgr.forwardRequest(request, responseCallback)
+      case _ => handler(request)
     }
   }
 }
@@ -91,7 +90,7 @@ case class RaftSupport(fwdMgr: ForwardingManager) extends MetadataSupport {
   override def requireZkOrThrow(createException: => Exception): ZkSupport = throw createException
   override def requireRaftOrThrow(createException: => Exception): RaftSupport = this
 
-  override def confirmConsistentWith(config: KafkaConfig): Unit = {
+  override def ensureConsistentWith(config: KafkaConfig): Unit = {
     if (config.requiresZookeeper) {
       throw new IllegalStateException("Config specifies ZooKeeper but metadata support instance is for Raft")
     }

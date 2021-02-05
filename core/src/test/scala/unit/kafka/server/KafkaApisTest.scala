@@ -3200,192 +3200,124 @@ class KafkaApisTest {
 
   }
 
-  @Test
-  def testRaftHandleLeaderAndIsrRequest(): Unit = {
+  private def createMockRequest(): RequestChannel.Request = {
     val request: RequestChannel.Request = EasyMock.createNiceMock(classOf[RequestChannel.Request])
-    val kafkaApis = createKafkaApis(raftSupport = true)
-    val e = assertThrows(classOf[UnsupportedVersionException],
-      () => kafkaApis.handleLeaderAndIsrRequest(request))
-    assertEquals(kafkaApis.shouldNeverReceive(request).getMessage, e.getMessage)
+    val requestHeader: RequestHeader = EasyMock.createNiceMock(classOf[RequestHeader])
+    expect(request.header).andReturn(requestHeader).anyTimes()
+    expect(requestHeader.apiKey()).andReturn(ApiKeys.values().head).anyTimes()
+    EasyMock.replay(request, requestHeader)
+    request
+  }
+
+  private def verifyShouldNeverHandle(handler: RequestChannel.Request => Unit): Unit = {
+    val request = createMockRequest()
+    val e = assertThrows(classOf[UnsupportedVersionException], () => handler(request))
+    assertEquals(KafkaApis.shouldNeverReceive(request).getMessage, e.getMessage)
+  }
+
+  private def verifyShouldAlwaysForward(handler: RequestChannel.Request => Unit): Unit = {
+    val request = createMockRequest()
+    val e = assertThrows(classOf[UnsupportedVersionException], () => handler(request))
+    assertEquals(KafkaApis.shouldAlwaysForward(request).getMessage, e.getMessage)
   }
 
   @Test
-  def testRaftHandleStopReplicaRequest(): Unit = {
-    val request: RequestChannel.Request = EasyMock.createNiceMock(classOf[RequestChannel.Request])
-    val kafkaApis = createKafkaApis(raftSupport = true)
-    val e = assertThrows(classOf[UnsupportedVersionException],
-      () => kafkaApis.handleStopReplicaRequest(request))
-    assertEquals(kafkaApis.shouldNeverReceive(request).getMessage, e.getMessage)
-    //    handleUpdateMetadataRequest
-    //    handleControlledShutdownRequest
-    //    handleAlterIsrRequest
-    //    handleEnvelope
+  def testRaftShouldNeverHandleLeaderAndIsrRequest(): Unit = {
+    verifyShouldNeverHandle(createKafkaApis(raftSupport = true).handleLeaderAndIsrRequest)
   }
 
   @Test
-  def testRaftHandleUpdateMetadataRequest(): Unit = {
-    val request: RequestChannel.Request = EasyMock.createNiceMock(classOf[RequestChannel.Request])
-    val kafkaApis = createKafkaApis(raftSupport = true)
-    val e = assertThrows(classOf[UnsupportedVersionException],
-      () => kafkaApis.handleUpdateMetadataRequest(request))
-    assertEquals(kafkaApis.shouldNeverReceive(request).getMessage, e.getMessage)
-    //    handleControlledShutdownRequest
-    //    handleAlterIsrRequest
-    //    handleEnvelope
+  def testRaftShouldNeverHandleStopReplicaRequest(): Unit = {
+    verifyShouldNeverHandle(createKafkaApis(raftSupport = true).handleStopReplicaRequest)
   }
 
   @Test
-  def testRaftHandleControlledShutdownRequest(): Unit = {
-    val request: RequestChannel.Request = EasyMock.createNiceMock(classOf[RequestChannel.Request])
-    val kafkaApis = createKafkaApis(raftSupport = true)
-    val e = assertThrows(classOf[UnsupportedVersionException],
-      () => kafkaApis.handleControlledShutdownRequest(request))
-    assertEquals(kafkaApis.shouldNeverReceive(request).getMessage, e.getMessage)
-    //    handleAlterIsrRequest
-    //    handleEnvelope
+  def testRaftShouldNeverHandleUpdateMetadataRequest(): Unit = {
+    verifyShouldNeverHandle(createKafkaApis(raftSupport = true).handleUpdateMetadataRequest)
   }
 
   @Test
-  def testRaftHandleAlterIsrRequest(): Unit = {
-    val request: RequestChannel.Request = EasyMock.createNiceMock(classOf[RequestChannel.Request])
-    val kafkaApis = createKafkaApis(raftSupport = true)
-    val e = assertThrows(classOf[UnsupportedVersionException],
-      () => kafkaApis.handleAlterIsrRequest(request))
-    assertEquals(kafkaApis.shouldNeverReceive(request).getMessage, e.getMessage)
+  def testRaftShouldNeverHandleControlledShutdownRequest(): Unit = {
+    verifyShouldNeverHandle(createKafkaApis(raftSupport = true).handleControlledShutdownRequest)
   }
 
   @Test
-  def testRaftHandleEnvelope(): Unit = {
-    val request: RequestChannel.Request = EasyMock.createNiceMock(classOf[RequestChannel.Request])
-    val kafkaApis = createKafkaApis(raftSupport = true)
-    val e = assertThrows(classOf[UnsupportedVersionException],
-      () => kafkaApis.handleEnvelope(request))
-    assertEquals(kafkaApis.shouldNeverReceive(request).getMessage, e.getMessage)
+  def testRaftShouldNeverHandleAlterIsrRequest(): Unit = {
+    verifyShouldNeverHandle(createKafkaApis(raftSupport = true).handleAlterIsrRequest)
   }
 
   @Test
-  def testRaftHandleCreateTopicsRequest(): Unit = {
-    val request: RequestChannel.Request = EasyMock.createNiceMock(classOf[RequestChannel.Request])
-    val kafkaApis = createKafkaApis(raftSupport = true)
-    val e = assertThrows(classOf[UnsupportedVersionException],
-      () => kafkaApis.handleCreateTopicsRequest(request))
-    assertEquals(kafkaApis.shouldAlwaysBeForwarded(request).getMessage, e.getMessage)
+  def testRaftShouldNeverHandleEnvelope(): Unit = {
+    verifyShouldNeverHandle(createKafkaApis(raftSupport = true).handleEnvelope)
   }
 
   @Test
-  def testRaftHandleCreatePartitionsRequest(): Unit = {
-    val request: RequestChannel.Request = EasyMock.createNiceMock(classOf[RequestChannel.Request])
-    val kafkaApis = createKafkaApis(raftSupport = true)
-    val e = assertThrows(classOf[UnsupportedVersionException],
-      () => kafkaApis.handleCreatePartitionsRequest(request))
-    assertEquals(kafkaApis.shouldAlwaysBeForwarded(request).getMessage, e.getMessage)
+  def testRaftShouldAlwaysForwardCreateTopicsRequest(): Unit = {
+    verifyShouldAlwaysForward(createKafkaApis(raftSupport = true).handleCreateTopicsRequest)
   }
 
   @Test
-  def testRaftHandleDeleteTopicsRequest(): Unit = {
-    val request: RequestChannel.Request = EasyMock.createNiceMock(classOf[RequestChannel.Request])
-    val kafkaApis = createKafkaApis(raftSupport = true)
-    val e = assertThrows(classOf[UnsupportedVersionException],
-      () => kafkaApis.handleDeleteTopicsRequest(request))
-    assertEquals(kafkaApis.shouldAlwaysBeForwarded(request).getMessage, e.getMessage)
+  def testRaftShouldAlwaysForwardCreatePartitionsRequest(): Unit = {
+    verifyShouldAlwaysForward(createKafkaApis(raftSupport = true).handleCreatePartitionsRequest)
   }
 
   @Test
-  def testRaftHandleCreateAcls(): Unit = {
-    val request: RequestChannel.Request = EasyMock.createNiceMock(classOf[RequestChannel.Request])
-    val kafkaApis = createKafkaApis(raftSupport = true)
-    val e = assertThrows(classOf[UnsupportedVersionException],
-      () => kafkaApis.handleCreateAcls(request))
-    assertEquals(kafkaApis.shouldAlwaysBeForwarded(request).getMessage, e.getMessage)
+  def testRaftShouldAlwaysForwardDeleteTopicsRequest(): Unit = {
+    verifyShouldAlwaysForward(createKafkaApis(raftSupport = true).handleDeleteTopicsRequest)
   }
 
   @Test
-  def testRaftHandleDeleteAcls(): Unit = {
-    val request: RequestChannel.Request = EasyMock.createNiceMock(classOf[RequestChannel.Request])
-    val kafkaApis = createKafkaApis(raftSupport = true)
-    val e = assertThrows(classOf[UnsupportedVersionException],
-      () => kafkaApis.handleDeleteAcls(request))
-    assertEquals(kafkaApis.shouldAlwaysBeForwarded(request).getMessage, e.getMessage)
+  def testRaftShouldAlwaysForwardCreateAcls(): Unit = {
+    verifyShouldAlwaysForward(createKafkaApis(raftSupport = true).handleCreateAcls)
   }
 
   @Test
-  def testRaftHandleAlterConfigsRequest(): Unit = {
-    val request: RequestChannel.Request = EasyMock.createNiceMock(classOf[RequestChannel.Request])
-    val kafkaApis = createKafkaApis(raftSupport = true)
-    val e = assertThrows(classOf[UnsupportedVersionException],
-      () => kafkaApis.handleAlterConfigsRequest(request))
-    assertEquals(kafkaApis.shouldAlwaysBeForwarded(request).getMessage, e.getMessage)
+  def testRaftShouldAlwaysForwardDeleteAcls(): Unit = {
+    verifyShouldAlwaysForward(createKafkaApis(raftSupport = true).handleDeleteAcls)
   }
 
   @Test
-  def testRaftHandleAlterPartitionReassignmentsRequest(): Unit = {
-    val request: RequestChannel.Request = EasyMock.createNiceMock(classOf[RequestChannel.Request])
-    val kafkaApis = createKafkaApis(raftSupport = true)
-    val e = assertThrows(classOf[UnsupportedVersionException],
-      () => kafkaApis.handleAlterPartitionReassignmentsRequest(request))
-    assertEquals(kafkaApis.shouldAlwaysBeForwarded(request).getMessage, e.getMessage)
+  def testRaftShouldAlwaysForwardAlterConfigsRequest(): Unit = {
+    verifyShouldAlwaysForward(createKafkaApis(raftSupport = true).handleAlterConfigsRequest)
   }
 
   @Test
-  def testRaftHandleIncrementalAlterConfigsRequest(): Unit = {
-    val request: RequestChannel.Request = EasyMock.createNiceMock(classOf[RequestChannel.Request])
-    val kafkaApis = createKafkaApis(raftSupport = true)
-    val e = assertThrows(classOf[UnsupportedVersionException],
-      () => kafkaApis.handleIncrementalAlterConfigsRequest(request))
-    assertEquals(kafkaApis.shouldAlwaysBeForwarded(request).getMessage, e.getMessage)
+  def testRaftShouldAlwaysForwardAlterPartitionReassignmentsRequest(): Unit = {
+    verifyShouldAlwaysForward(createKafkaApis(raftSupport = true).handleAlterPartitionReassignmentsRequest)
   }
 
   @Test
-  def testRaftHandleCreateTokenRequest(): Unit = {
-    val request: RequestChannel.Request = EasyMock.createNiceMock(classOf[RequestChannel.Request])
-    val kafkaApis = createKafkaApis(raftSupport = true)
-    val e = assertThrows(classOf[UnsupportedVersionException],
-      () => kafkaApis.handleCreateTokenRequest(request))
-    assertEquals(kafkaApis.shouldAlwaysBeForwarded(request).getMessage, e.getMessage)
+  def testRaftShouldAlwaysForwardIncrementalAlterConfigsRequest(): Unit = {
+    verifyShouldAlwaysForward(createKafkaApis(raftSupport = true).handleIncrementalAlterConfigsRequest)
   }
 
   @Test
-  def testRaftHandleRenewTokenRequest(): Unit = {
-    val request: RequestChannel.Request = EasyMock.createNiceMock(classOf[RequestChannel.Request])
-    val kafkaApis = createKafkaApis(raftSupport = true)
-    val e = assertThrows(classOf[UnsupportedVersionException],
-      () => kafkaApis.handleRenewTokenRequest(request))
-    assertEquals(kafkaApis.shouldAlwaysBeForwarded(request).getMessage, e.getMessage)
+  def testRaftShouldAlwaysForwardCreateTokenRequest(): Unit = {
+    verifyShouldAlwaysForward(createKafkaApis(raftSupport = true).handleCreateTokenRequest)
   }
 
   @Test
-  def testRaftHandleExpireTokenRequest(): Unit = {
-    val request: RequestChannel.Request = EasyMock.createNiceMock(classOf[RequestChannel.Request])
-    val kafkaApis = createKafkaApis(raftSupport = true)
-    val e = assertThrows(classOf[UnsupportedVersionException],
-      () => kafkaApis.handleExpireTokenRequest(request))
-    assertEquals(kafkaApis.shouldAlwaysBeForwarded(request).getMessage, e.getMessage)
+  def testRaftShouldAlwaysForwardRenewTokenRequest(): Unit = {
+    verifyShouldAlwaysForward(createKafkaApis(raftSupport = true).handleRenewTokenRequest)
   }
 
   @Test
-  def testRaftHandleAlterClientQuotasRequest(): Unit = {
-    val request: RequestChannel.Request = EasyMock.createNiceMock(classOf[RequestChannel.Request])
-    val kafkaApis = createKafkaApis(raftSupport = true)
-    val e = assertThrows(classOf[UnsupportedVersionException],
-      () => kafkaApis.handleAlterClientQuotasRequest(request))
-    assertEquals(kafkaApis.shouldAlwaysBeForwarded(request).getMessage, e.getMessage)
+  def testRaftShouldAlwaysForwardExpireTokenRequest(): Unit = {
+    verifyShouldAlwaysForward(createKafkaApis(raftSupport = true).handleExpireTokenRequest)
   }
 
   @Test
-  def testRaftHandleAlterUserScramCredentialsRequest(): Unit = {
-    val request: RequestChannel.Request = EasyMock.createNiceMock(classOf[RequestChannel.Request])
-    val kafkaApis = createKafkaApis(raftSupport = true)
-    val e = assertThrows(classOf[UnsupportedVersionException],
-      () => kafkaApis.handleAlterUserScramCredentialsRequest(request))
-    assertEquals(kafkaApis.shouldAlwaysBeForwarded(request).getMessage, e.getMessage)
+  def testRaftShouldAlwaysForwardAlterClientQuotasRequest(): Unit = {
+    verifyShouldAlwaysForward(createKafkaApis(raftSupport = true).handleAlterClientQuotasRequest)
   }
 
   @Test
-  def testRaftHandleUpdateFeatures(): Unit = {
-    val request: RequestChannel.Request = EasyMock.createNiceMock(classOf[RequestChannel.Request])
-    val kafkaApis = createKafkaApis(raftSupport = true)
-    val e = assertThrows(classOf[UnsupportedVersionException],
-      () => kafkaApis.handleUpdateFeatures(request))
-    assertEquals(kafkaApis.shouldAlwaysBeForwarded(request).getMessage, e.getMessage)
+  def testRaftShouldAlwaysForwardAlterUserScramCredentialsRequest(): Unit = {
+    verifyShouldAlwaysForward(createKafkaApis(raftSupport = true).handleAlterUserScramCredentialsRequest)
+  }
+
+  @Test
+  def testRaftShouldAlwaysForwardUpdateFeatures(): Unit = {
+    verifyShouldAlwaysForward(createKafkaApis(raftSupport = true).handleUpdateFeatures)
   }
 }
