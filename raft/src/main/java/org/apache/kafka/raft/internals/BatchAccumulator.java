@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.raft.internals;
 
+import org.apache.kafka.common.errors.RecordBatchTooLargeException;
 import org.apache.kafka.common.memory.MemoryPool;
 import org.apache.kafka.common.protocol.ObjectSerializationCache;
 import org.apache.kafka.common.record.CompressionType;
@@ -79,24 +80,69 @@ public class BatchAccumulator<T> implements Closeable {
     }
 
     /**
-     * Append a list of records into an atomic batch. We guarantee all records
-     * are included in the same underlying record batch so that either all of
-     * the records become committed or none of them do.
+     * Append a list of records into as many batches as necessary.
      *
-     * @param epoch the expected leader epoch. If this does not match, then
-     *              {@link Long#MAX_VALUE} will be returned as an offset which
-     *              cannot become committed.
-     * @param records the list of records to include in a batch
-     * @return the expected offset of the last record (which will be
-     *         {@link Long#MAX_VALUE} if the epoch does not match), or null if
-     *         no memory could be allocated for the batch at this time
+     * The order of the elements in the records argument will match the order in the batches.
+     * This method will use as many batches as necessary to serialize all of the records. Since
+     * this method can split the records into multiple batches it is possible that some of the
+     * recors will get committed while other will not when the leader fails.
+     *
+     * @param epoch the expected leader epoch. If this does not match, then {@link Long#MAX_VALUE}
+     *              will be returned as an offset which cannot become committed
+     * @param records the list of records to include in the batches
+     * @return the expected offset of the last record; {@link Long#MAX_VALUE} if the epoch does not
+     *         match; null if no memory could be allocated for the batch at this time
+     * @throws RecordBatchTooLargeException if the size of one record T is greater than the maximum
+     *         batch size; if this exception is throw some of the elements in records may have
+     *         been committed
      */
     public Long append(int epoch, List<T> records) {
         if (epoch != this.epoch) {
-            // If the epoch does not match, then the state machine probably
-            // has not gotten the notification about the latest epoch change.
-            // In this case, ignore the append and return a large offset value
-            // which will never be committed.
+            return Long.MAX_VALUE;
+        }
+
+        ObjectSerializationCache serializationCache = new ObjectSerializationCache();
+
+        appendLock.lock();
+        try {
+            maybeCompleteDrain();
+
+            for (T record : records) {
+                BatchBuilder<T> batch = maybeAllocateBatch(
+                    serde.recordSize(record, serializationCache)
+                );
+                if (batch == null) {
+                    return null;
+                }
+
+                batch.appendRecord(record, serializationCache);
+                nextOffset += 1;
+            }
+
+            maybeResetLinger();
+
+            return nextOffset - 1;
+        } finally {
+            appendLock.unlock();
+        }
+    }
+
+    /**
+     * Append a list of records into an atomic batch. We guarantee all records are included in the
+     * same underlying record batch so that either all of the records become committed or none of
+     * them do.
+     *
+     * @param epoch the expected leader epoch. If this does not match, then {@link Long#MAX_VALUE}
+     *              will be returned as an offset which cannot become committed
+     * @param records the list of records to include in a batch
+     * @return the expected offset of the last record; {@link Long#MAX_VALUE} if the epoch does not
+     *         match; null if no memory could be allocated for the batch at this time
+     * @throws RecordBatchTooLargeException if the size of the records is greater than the maximum
+     *         batch size; if this exception is throw none of the elements in records were
+     *         committed
+     */
+    public Long appendAtomic(int epoch, List<T> records) {
+        if (epoch != this.epoch) {
             return Long.MAX_VALUE;
         }
 
@@ -104,11 +150,6 @@ public class BatchAccumulator<T> implements Closeable {
         int batchSize = 0;
         for (T record : records) {
             batchSize += serde.recordSize(record, serializationCache);
-        }
-
-        if (batchSize > maxBatchSize) {
-            throw new IllegalArgumentException("The total size of " + records + " is " + batchSize +
-                ", which exceeds the maximum allowed batch size of " + maxBatchSize);
         }
 
         appendLock.lock();
@@ -120,15 +161,12 @@ public class BatchAccumulator<T> implements Closeable {
                 return null;
             }
 
-            // Restart the linger timer if necessary
-            if (!lingerTimer.isRunning()) {
-                lingerTimer.reset(time.milliseconds() + lingerMs);
-            }
-
             for (T record : records) {
                 batch.appendRecord(record, serializationCache);
                 nextOffset += 1;
             }
+
+            maybeResetLinger();
 
             return nextOffset - 1;
         } finally {
@@ -136,8 +174,22 @@ public class BatchAccumulator<T> implements Closeable {
         }
     }
 
+    private void maybeResetLinger() {
+        if (!lingerTimer.isRunning()) {
+            lingerTimer.reset(time.milliseconds() + lingerMs);
+        }
+    }
+
     private BatchBuilder<T> maybeAllocateBatch(int batchSize) {
-        if (currentBatch == null) {
+        if (batchSize > maxBatchSize) {
+            throw new RecordBatchTooLargeException(
+                String.format(
+                    "The total record(s) size of %s exceeds the maximum allowed batch size of %s",
+                    batchSize,
+                    maxBatchSize
+                )
+            );
+        } else if (currentBatch == null) {
             startNewBatch();
         } else if (!currentBatch.hasRoomFor(batchSize)) {
             completeCurrentBatch();

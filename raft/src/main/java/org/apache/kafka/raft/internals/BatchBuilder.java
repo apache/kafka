@@ -144,15 +144,16 @@ public class BatchBuilder<T> {
             sizeInBytes,
             DefaultRecord.EMPTY_HEADERS
         );
+        int bytesNeeded = ByteUtils.sizeOfVarint(recordSizeInBytes) + recordSizeInBytes;
+        int approxUnusedSizeInBytes = maxBytes - approximateSizeInBytes();
 
-        int unusedSizeInBytes = maxBytes - approximateSizeInBytes();
-        if (unusedSizeInBytes >= recordSizeInBytes) {
+        if (approxUnusedSizeInBytes >= bytesNeeded) {
             return true;
         } else if (unflushedBytes > 0) {
             recordOutput.flush();
             unflushedBytes = 0;
-            unusedSizeInBytes = maxBytes - flushedSizeInBytes();
-            return unusedSizeInBytes >= recordSizeInBytes;
+            int unusedSizeInBytes = maxBytes - flushedSizeInBytes();
+            return unusedSizeInBytes >= bytesNeeded;
         } else {
             return false;
         }
