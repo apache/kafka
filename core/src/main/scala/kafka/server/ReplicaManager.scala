@@ -186,9 +186,8 @@ object HostedPartition {
    * quorum; it never happens when using ZooKeeper.
    */
   final case class Deferred(partition: Partition,
-                            metadata: MetadataPartition,
+                            metadata: MetadataPartition, // should get from metadata cache instead
                             isNew: Boolean,
-                            mostRecentMetadataOffset: Long,
                             onLeadershipChange: (Iterable[Partition], Iterable[Partition]) => Unit) extends NonOffline
 
   /**

@@ -65,7 +65,9 @@ case class MetadataPartition(topicName: String,
                              isr: util.List[Integer],
                              offlineReplicas: util.List[Integer],
                              addingReplicas: util.List[Integer],
-                             removingReplicas: util.List[Integer]) {
+                             removingReplicas: util.List[Integer],
+                             largestDeferredOffsetEverSeen: Long = 0,
+                             isCurrentlyDeferringChanges: Boolean = false) {
   def toTopicPartition: TopicPartition = new TopicPartition(topicName, partitionIndex)
 
   def toLeaderAndIsrPartitionState(isNew: Boolean): LeaderAndIsrRequestData.LeaderAndIsrPartitionState = {
