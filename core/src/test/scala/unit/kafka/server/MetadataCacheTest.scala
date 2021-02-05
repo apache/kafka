@@ -38,7 +38,7 @@ class MetadataCacheTest {
   @Test
   def getTopicMetadataNonExistingTopics(): Unit = {
     val topic = "topic"
-    val cache = new MetadataCache(1)
+    val cache = MetadataCache.zkMetadataCache(1)
     val topicMetadata = cache.getTopicMetadata(Set(topic), ListenerName.forSecurityProtocol(SecurityProtocol.PLAINTEXT))
     assertTrue(topicMetadata.isEmpty)
   }
@@ -48,7 +48,7 @@ class MetadataCacheTest {
     val topic0 = "topic-0"
     val topic1 = "topic-1"
 
-    val cache = new MetadataCache(1)
+    val cache = MetadataCache.zkMetadataCache(1)
 
     val zkVersion = 3
     val controllerId = 2
@@ -214,7 +214,7 @@ class MetadataCacheTest {
                                                                        errorUnavailableListeners: Boolean): Unit = {
     val topic = "topic"
 
-    val cache = new MetadataCache(metadataCacheBrokerId)
+    val cache = MetadataCache.zkMetadataCache(metadataCacheBrokerId)
 
     val zkVersion = 3
     val controllerId = 2
@@ -256,7 +256,7 @@ class MetadataCacheTest {
   def getTopicMetadataReplicaNotAvailable(): Unit = {
     val topic = "topic"
 
-    val cache = new MetadataCache(1)
+    val cache = MetadataCache.zkMetadataCache(1)
 
     val zkVersion = 3
     val controllerId = 2
@@ -330,7 +330,7 @@ class MetadataCacheTest {
   def getTopicMetadataIsrNotAvailable(): Unit = {
     val topic = "topic"
 
-    val cache = new MetadataCache(1)
+    val cache = MetadataCache.zkMetadataCache(1)
 
     val zkVersion = 3
     val controllerId = 2
@@ -403,7 +403,7 @@ class MetadataCacheTest {
   @Test
   def getTopicMetadataWithNonSupportedSecurityProtocol(): Unit = {
     val topic = "topic"
-    val cache = new MetadataCache(1)
+    val cache = MetadataCache.zkMetadataCache(1)
     val securityProtocol = SecurityProtocol.PLAINTEXT
     val brokers = Seq(new UpdateMetadataBroker()
       .setId(0)
@@ -441,7 +441,7 @@ class MetadataCacheTest {
   @Test
   def getAliveBrokersShouldNotBeMutatedByUpdateCache(): Unit = {
     val topic = "topic"
-    val cache = new MetadataCache(1)
+    val cache = MetadataCache.zkMetadataCache(1)
 
     def updateCache(brokerIds: Seq[Int]): Unit = {
       val brokers = brokerIds.map { brokerId =>
@@ -485,7 +485,7 @@ class MetadataCacheTest {
 
   @Test
   def testGetClusterMetadataWithOfflineReplicas(): Unit = {
-    val cache = new MetadataCache(1)
+    val cache = MetadataCache.zkMetadataCache(1)
     val topic = "topic"
     val topicPartition = new TopicPartition(topic, 0)
     val securityProtocol = SecurityProtocol.PLAINTEXT
@@ -525,7 +525,7 @@ class MetadataCacheTest {
       brokers.asJava, Collections.emptyMap()).build()
     cache.updateMetadata(15, updateMetadataRequest)
 
-    val expectedNode0 = new Node(0, "foo", 9092, "")
+    val expectedNode0 = new Node(0, "foo", 9092)
     val expectedNode1 = new Node(1, "", -1)
 
     val cluster = cache.getClusterMetadata("clusterId", listenerName)

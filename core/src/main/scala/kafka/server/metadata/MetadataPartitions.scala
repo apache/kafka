@@ -203,6 +203,9 @@ case class MetadataPartitions(private val nameMap: util.Map[String, util.Map[Int
                               private val idMap: util.Map[Uuid, String]) {
   def topicIdToName(uuid: Uuid): Option[String] = Option(idMap.get(uuid))
 
+  def topicNameToId(name: String): Option[Uuid] = Option(idMap.entrySet().stream()
+    .filter(entry => entry.getValue.equals(name)).map(entry => entry.getKey).findFirst().orElseGet(null))
+
   def copyNameMap(): util.Map[String, util.Map[Int, MetadataPartition]] = {
     val copy = new util.HashMap[String, util.Map[Int, MetadataPartition]](nameMap.size())
     copy.putAll(nameMap)
