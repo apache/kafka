@@ -83,7 +83,8 @@ public interface MetadataUpdater extends Closeable {
      * This provides a mechanism for the `MetadataUpdater` implementation to use the NetworkClient instance for its own
      * requests with special handling for completed receives of such requests.
      */
-    void handleSuccessfulResponse(RequestHeader requestHeader, long now, MetadataResponse metadataResponse);
+    void handleSuccessfulResponse(RequestHeader requestHeader, long now, MetadataResponse metadataResponse,
+        String destination);
 
     /**
      * Close this updater.

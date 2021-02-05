@@ -112,7 +112,8 @@ public class AdminMetadataManager {
         }
 
         @Override
-        public void handleSuccessfulResponse(RequestHeader requestHeader, long now, MetadataResponse metadataResponse) {
+        public void handleSuccessfulResponse(RequestHeader requestHeader, long now, MetadataResponse metadataResponse,
+            String destination) {
             // Do nothing
         }
 

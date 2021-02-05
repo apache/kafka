@@ -77,7 +77,8 @@ public class ManualMetadataUpdater implements MetadataUpdater {
     }
 
     @Override
-    public void handleSuccessfulResponse(RequestHeader requestHeader, long now, MetadataResponse response) {
+    public void handleSuccessfulResponse(RequestHeader requestHeader, long now, MetadataResponse response,
+        String destination) {
         // Do nothing
     }
 
