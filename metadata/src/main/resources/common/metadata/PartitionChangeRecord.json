@@ -16,7 +16,7 @@
 {
   "apiKey": 5,
   "type": "metadata",
-  "name": "IsrChangeRecord",
+  "name": "PartitionChangeRecord",
   "validVersions": "0",
   "fields": [
     { "name": "PartitionId", "type": "int32", "versions": "0+", "default": "-1",
@@ -28,7 +28,7 @@
     { "name": "Leader", "type": "int32", "versions": "0+", "default": "-1",
       "about": "The lead replica, or -1 if there is no leader." },
     { "name": "LeaderEpoch", "type": "int32", "versions": "0+", "default": "-1",
-      "about": "An epoch that gets incremented each time we change the partition leader." },
+      "about": "An epoch that gets incremented each time we change the ISR." },
     { "name": "PartitionEpoch", "type": "int32", "versions": "0+", "default": "-1",
       "about": "An epoch that gets incremented each time we change anything in the partition." }
   ]
