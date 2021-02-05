@@ -152,8 +152,8 @@ class BrokerMetadataListener(brokerId: Int,
       case PARTITION_RECORD => handlePartitionRecord(imageBuilder,
         record.asInstanceOf[PartitionRecord])
       case CONFIG_RECORD => handleConfigRecord(record.asInstanceOf[ConfigRecord])
-      case ISR_CHANGE_RECORD => handleIsrChangeRecord(imageBuilder,
-        record.asInstanceOf[IsrChangeRecord])
+      case PARTITION_CHANGE_RECORD => handlePartitionChangeRecord(imageBuilder,
+        record.asInstanceOf[PartitionChangeRecord])
       case FENCE_BROKER_RECORD => handleFenceBrokerRecord(imageBuilder,
         record.asInstanceOf[FenceBrokerRecord])
       case UNFENCE_BROKER_RECORD => handleUnfenceBrokerRecord(imageBuilder,
@@ -203,9 +203,9 @@ class BrokerMetadataListener(brokerId: Int,
     configRepository.setConfig(resource, record.name(), record.value())
   }
 
-  def handleIsrChangeRecord(imageBuilder: MetadataImageBuilder,
-                            record: IsrChangeRecord): Unit = {
-    imageBuilder.partitionsBuilder().handleIsrChange(record)
+  def handlePartitionChangeRecord(imageBuilder: MetadataImageBuilder,
+                                  record: PartitionChangeRecord): Unit = {
+    imageBuilder.partitionsBuilder().handleChange(record)
   }
 
   def handleFenceBrokerRecord(imageBuilder: MetadataImageBuilder,
