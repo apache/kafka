@@ -21,6 +21,12 @@
 
 <h5><a id="upgrade_280_notable" href="#upgrade_280_notable">Notable changes in 2.8.0</a></h5>
 
+<ul>
+    <li>Kafka Streams introduce a type-safe <code>split()</code> operator as a substitution for deprecated <code>KStream#branch()</code> method
+        (cf. <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-418%3A+A+method-chaining+way+to+branch+KStream">KIP-418</a>).
+    </li>
+</ul>
+
 <h4><a id="upgrade_2_7_0" href="#upgrade_2_7_0">Upgrading to 2.7.0 from any version 0.8.x through 2.6.x</a></h4>
 
 <p><b>If you are upgrading from a version prior to 2.1.x, please see the note below about the change to the schema used to store consumer offsets.
