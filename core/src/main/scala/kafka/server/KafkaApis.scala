@@ -89,6 +89,7 @@ import scala.collection.mutable.ArrayBuffer
 import scala.collection.{Map, Seq, Set, immutable, mutable}
 import scala.util.{Failure, Success, Try}
 import kafka.coordinator.group.GroupOverview
+import kafka.server.metadata.ConfigRepository
 
 import scala.annotation.nowarn
 
@@ -105,6 +106,7 @@ class KafkaApis(val requestChannel: RequestChannel,
                 val zkClient: KafkaZkClient,
                 val brokerId: Int,
                 val config: KafkaConfig,
+                val configRepository: ConfigRepository,
                 val metadataCache: MetadataCache,
                 val metrics: Metrics,
                 val authorizer: Option[Authorizer],
@@ -120,6 +122,7 @@ class KafkaApis(val requestChannel: RequestChannel,
   type FetchResponseStats = Map[TopicPartition, RecordConversionStats]
   this.logIdent = "[KafkaApi-%d] ".format(brokerId)
   val adminZkClient = new AdminZkClient(zkClient)
+  val configHelper = new ConfigHelper(metadataCache, config, configRepository)
   private val alterAclsPurgatory = new DelayedFuturePurgatory(purgatoryName = "AlterAcls", brokerId = config.brokerId)
 
   val authHelper = new AuthHelper(authorizer)
@@ -2767,7 +2770,7 @@ class KafkaApis(val requestChannel: RequestChannel,
         case rt => throw new InvalidRequestException(s"Unexpected resource type $rt for resource ${resource.resourceName}")
       }
     }
-    val authorizedConfigs = adminManager.describeConfigs(authorizedResources.toList, describeConfigsRequest.data.includeSynonyms, describeConfigsRequest.data.includeDocumentation)
+    val authorizedConfigs = configHelper.describeConfigs(authorizedResources.toList, describeConfigsRequest.data.includeSynonyms, describeConfigsRequest.data.includeDocumentation)
     val unauthorizedConfigs = unauthorizedResources.map { resource =>
       val error = ConfigResource.Type.forId(resource.resourceType) match {
         case ConfigResource.Type.BROKER | ConfigResource.Type.BROKER_LOGGER => Errors.CLUSTER_AUTHORIZATION_FAILED

@@ -34,6 +34,7 @@ import kafka.log.AppendOrigin
 import kafka.network.RequestChannel
 import kafka.network.RequestChannel.{CloseConnectionResponse, SendResponse}
 import kafka.server.QuotaFactory.QuotaManagers
+import kafka.server.metadata.{ConfigRepository, CachedConfigRepository}
 import kafka.utils.{MockTime, TestUtils}
 import kafka.zk.KafkaZkClient
 import org.apache.kafka.clients.NodeApiVersions
@@ -45,6 +46,7 @@ import org.apache.kafka.common.errors.UnsupportedVersionException
 import org.apache.kafka.common.internals.{KafkaFutureImpl, Topic}
 import org.apache.kafka.common.memory.MemoryPool
 import org.apache.kafka.common.message.CreateTopicsRequestData.{CreatableTopic, CreatableTopicCollection}
+import org.apache.kafka.common.message.DescribeConfigsResponseData.DescribeConfigsResult
 import org.apache.kafka.common.message.JoinGroupRequestData.JoinGroupRequestProtocol
 import org.apache.kafka.common.message.LeaveGroupRequestData.MemberIdentity
 import org.apache.kafka.common.message.ListOffsetsRequestData.{ListOffsetsPartition, ListOffsetsTopic}
@@ -118,7 +120,8 @@ class KafkaApisTest {
 
   def createKafkaApis(interBrokerProtocolVersion: ApiVersion = ApiVersion.latestVersion,
                       authorizer: Option[Authorizer] = None,
-                      enableForwarding: Boolean = false): KafkaApis = {
+                      enableForwarding: Boolean = false,
+                      configRepository: ConfigRepository = new CachedConfigRepository()): KafkaApis = {
     val brokerFeatures = BrokerFeatures.createDefault()
     val cache = new FinalizedFeatureCache(brokerFeatures)
     val properties = TestUtils.createBrokerConfig(brokerId, "zk")
@@ -140,6 +143,7 @@ class KafkaApisTest {
       zkClient,
       brokerId,
       new KafkaConfig(properties),
+      configRepository,
       metadataCache,
       metrics,
       authorizer,
@@ -173,30 +177,50 @@ class KafkaApisTest {
       .andReturn(Seq(AuthorizationResult.ALLOWED).asJava)
       .once()
 
-    expectNoThrottling()
+    val capturedResponse = expectNoThrottling()
 
-    val configResource = new ConfigResource(ConfigResource.Type.TOPIC, resourceName)
-    EasyMock.expect(adminManager.describeConfigs(anyObject(), EasyMock.eq(true), EasyMock.eq(false)))
-        .andReturn(
-          List(new DescribeConfigsResponseData.DescribeConfigsResult()
-            .setResourceName(configResource.name)
-            .setResourceType(configResource.`type`.id)
-            .setErrorCode(Errors.NONE.code)
-            .setConfigs(Collections.emptyList())))
+    val configRepository: ConfigRepository = EasyMock.strictMock(classOf[ConfigRepository])
+    val topicConfigs = new Properties()
+    val propName = "min.insync.replicas"
+    val propValue = "3"
+    topicConfigs.put(propName, propValue)
+    EasyMock.expect(configRepository.topicConfig(resourceName)).andReturn(topicConfigs)
 
-    EasyMock.replay(replicaManager, clientRequestQuotaManager, requestChannel, authorizer,
-      adminManager)
+    metadataCache =
+      EasyMock.partialMockBuilder(classOf[MetadataCache])
+        .withConstructor(classOf[Int])
+        .withArgs(Int.box(brokerId))  // Need to box it for Scala 2.12 and before
+        .addMockedMethod("contains", classOf[String])
+        .createMock()
 
-    val request = buildRequest(new DescribeConfigsRequest.Builder(new DescribeConfigsRequestData()
+    expect(metadataCache.contains(resourceName)).andReturn(true)
+
+    EasyMock.replay(metadataCache, replicaManager, clientRequestQuotaManager, requestChannel, authorizer, configRepository, adminManager)
+
+    val describeConfigsRequest = new DescribeConfigsRequest.Builder(new DescribeConfigsRequestData()
       .setIncludeSynonyms(true)
       .setResources(List(new DescribeConfigsRequestData.DescribeConfigsResource()
-        .setResourceName("topic-1")
+        .setResourceName(resourceName)
         .setResourceType(ConfigResource.Type.TOPIC.id)).asJava))
-      .build(requestHeader.apiVersion),
+      .build(requestHeader.apiVersion)
+    val request = buildRequest(describeConfigsRequest,
       requestHeader = Option(requestHeader))
-    createKafkaApis(authorizer = Some(authorizer)).handleDescribeConfigsRequest(request)
+    createKafkaApis(authorizer = Some(authorizer), configRepository = configRepository).handleDescribeConfigsRequest(request)
 
-    verify(authorizer, adminManager)
+    verify(authorizer, replicaManager)
+
+    val response = readResponse(describeConfigsRequest, capturedResponse)
+      .asInstanceOf[DescribeConfigsResponse]
+    val results = response.data().results()
+    assertEquals(1, results.size())
+    val describeConfigsResult: DescribeConfigsResult = results.get(0)
+    assertEquals(ConfigResource.Type.TOPIC.id, describeConfigsResult.resourceType())
+    assertEquals(resourceName, describeConfigsResult.resourceName())
+    val configs = describeConfigsResult.configs().asScala.filter(_.name() == propName)
+    assertEquals(1, configs.length)
+    val describeConfigsResponseData = configs(0)
+    assertEquals(propName, describeConfigsResponseData.name())
+    assertEquals(propValue, describeConfigsResponseData.value())
   }
 
   @Test
@@ -2006,7 +2030,7 @@ class KafkaApisTest {
   }
 
   def testJoinGroupWhenAnErrorOccurs(version: Short): Unit = {
-    EasyMock.reset(groupCoordinator, clientRequestQuotaManager, requestChannel)
+    EasyMock.reset(groupCoordinator, clientRequestQuotaManager, requestChannel, replicaManager)
 
     val capturedResponse = expectNoThrottling()
 
@@ -2043,7 +2067,7 @@ class KafkaApisTest {
 
     val requestChannelRequest = buildRequest(joinGroupRequest)
 
-    EasyMock.replay(groupCoordinator, clientRequestQuotaManager, requestChannel)
+    EasyMock.replay(groupCoordinator, clientRequestQuotaManager, requestChannel, replicaManager)
 
     createKafkaApis().handleJoinGroupRequest(requestChannelRequest)
 
@@ -2078,7 +2102,7 @@ class KafkaApisTest {
   }
 
   def testJoinGroupProtocolType(version: Short): Unit = {
-    EasyMock.reset(groupCoordinator, clientRequestQuotaManager, requestChannel)
+    EasyMock.reset(groupCoordinator, clientRequestQuotaManager, requestChannel, replicaManager)
 
     val capturedResponse = expectNoThrottling()
 
@@ -2116,7 +2140,7 @@ class KafkaApisTest {
 
     val requestChannelRequest = buildRequest(joinGroupRequest)
 
-    EasyMock.replay(groupCoordinator, clientRequestQuotaManager, requestChannel)
+    EasyMock.replay(groupCoordinator, clientRequestQuotaManager, requestChannel, replicaManager)
 
     createKafkaApis().handleJoinGroupRequest(requestChannelRequest)
 
@@ -2159,7 +2183,7 @@ class KafkaApisTest {
   }
 
   def testSyncGroupProtocolTypeAndName(version: Short): Unit = {
-    EasyMock.reset(groupCoordinator, clientRequestQuotaManager, requestChannel)
+    EasyMock.reset(groupCoordinator, clientRequestQuotaManager, requestChannel, replicaManager)
 
     val capturedResponse = expectNoThrottling()
 
@@ -2192,7 +2216,7 @@ class KafkaApisTest {
 
     val requestChannelRequest = buildRequest(syncGroupRequest)
 
-    EasyMock.replay(groupCoordinator, clientRequestQuotaManager, requestChannel)
+    EasyMock.replay(groupCoordinator, clientRequestQuotaManager, requestChannel, replicaManager)
 
     createKafkaApis().handleSyncGroupRequest(requestChannelRequest)
 
@@ -2228,7 +2252,7 @@ class KafkaApisTest {
   }
 
   def testSyncGroupProtocolTypeAndNameAreMandatorySinceV5(version: Short): Unit = {
-    EasyMock.reset(groupCoordinator, clientRequestQuotaManager, requestChannel)
+    EasyMock.reset(groupCoordinator, clientRequestQuotaManager, requestChannel, replicaManager)
 
     val capturedResponse = expectNoThrottling()
 
@@ -2261,7 +2285,7 @@ class KafkaApisTest {
 
     val requestChannelRequest = buildRequest(syncGroupRequest)
 
-    EasyMock.replay(groupCoordinator, clientRequestQuotaManager, requestChannel)
+    EasyMock.replay(groupCoordinator, clientRequestQuotaManager, requestChannel, replicaManager)
 
     createKafkaApis().handleSyncGroupRequest(requestChannelRequest)
 

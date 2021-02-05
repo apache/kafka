@@ -133,7 +133,7 @@ public class MirrorMaker {
         if (herderPairs.isEmpty()) {
             throw new IllegalArgumentException("No source->target replication flows.");
         }
-        this.herderPairs.forEach(x -> addHerder(x));
+        this.herderPairs.forEach(this::addHerder);
         shutdownHook = new ShutdownHook();
     }
 
@@ -173,7 +173,7 @@ public class MirrorMaker {
             }
         }
         log.info("Configuring connectors...");
-        herderPairs.forEach(x -> configureConnectors(x));
+        herderPairs.forEach(this::configureConnectors);
         log.info("Kafka MirrorMaker started");
     }
 
@@ -281,7 +281,7 @@ public class MirrorMaker {
             Exit.exit(-1);
             return;
         }
-        File configFile = (File) ns.get("config");
+        File configFile = ns.get("config");
         List<String> clusters = ns.getList("clusters");
         try {
             log.info("Kafka MirrorMaker initializing ...");
