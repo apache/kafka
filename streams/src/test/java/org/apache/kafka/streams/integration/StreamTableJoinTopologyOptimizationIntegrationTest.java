@@ -75,6 +75,7 @@ public class StreamTableJoinTopologyOptimizationIntegrationTest {
     private String inputTopic;
     private String outputTopic;
     private String applicationId;
+    private KafkaStreams kafkaStreams;
 
     private Properties streamsConfiguration;
 
@@ -119,6 +120,9 @@ public class StreamTableJoinTopologyOptimizationIntegrationTest {
 
     @After
     public void whenShuttingDown() throws IOException {
+        if (kafkaStreams != null) {
+            kafkaStreams.close();
+        }
         IntegrationTestUtils.purgeLocalStreamsState(streamsConfiguration);
     }
 
@@ -137,7 +141,7 @@ public class StreamTableJoinTopologyOptimizationIntegrationTest {
             .join(table, (value1, value2) -> value2)
             .to(outputTopic);
 
-        startStreams(streamsBuilder);
+        kafkaStreams = startStreams(streamsBuilder);
 
         final long timestamp = System.currentTimeMillis();
 
@@ -148,8 +152,6 @@ public class StreamTableJoinTopologyOptimizationIntegrationTest {
 
         sendEvents(inputTopic, timestamp, expectedRecords);
         sendEvents(outputTopic, timestamp, expectedRecords);
-
-        startStreams(streamsBuilder);
 
         validateReceivedMessages(
             outputTopic,

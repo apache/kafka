@@ -664,8 +664,25 @@ public class KafkaStreams implements AutoCloseable {
         this.config = config;
         this.time = time;
 
-        // The application ID is a required config and hence should always have value
-        final UUID processId = UUID.randomUUID();
+        // re-write the physical topology according to the config
+        internalTopologyBuilder.rewriteTopology(config);
+
+        // sanity check to fail-fast in case we cannot build a ProcessorTopology due to an exception
+        taskTopology = internalTopologyBuilder.buildTopology();
+        globalTaskTopology = internalTopologyBuilder.buildGlobalStateTopology();
+
+        final boolean hasGlobalTopology = globalTaskTopology != null;
+        final boolean hasPersistentStores = taskTopology.hasPersistentLocalStore() ||
+            (hasGlobalTopology && globalTaskTopology.hasPersistentGlobalStore());
+
+        final UUID processId;
+        try {
+            stateDirectory = new StateDirectory(config, time, hasPersistentStores);
+            processId = stateDirectory.initializeProcessId();
+        } catch (final ProcessorStateException fatal) {
+            throw new StreamsException(fatal);
+        }
+
         final String userClientId = config.getString(StreamsConfig.CLIENT_ID_CONFIG);
         final String applicationId = config.getString(StreamsConfig.APPLICATION_ID_CONFIG);
         if (userClientId.length() <= 0) {
@@ -702,12 +719,6 @@ public class KafkaStreams implements AutoCloseable {
         log.info("Kafka Streams version: {}", ClientMetrics.version());
         log.info("Kafka Streams commit ID: {}", ClientMetrics.commitId());
 
-        // re-write the physical topology according to the config
-        internalTopologyBuilder.rewriteTopology(config);
-
-        // sanity check to fail-fast in case we cannot build a ProcessorTopology due to an exception
-        taskTopology = internalTopologyBuilder.buildTopology();
-
         streamsMetadataState = new StreamsMetadataState(
                 internalTopologyBuilder,
                 parseHostInfo(config.getString(StreamsConfig.APPLICATION_SERVER_CONFIG)));
@@ -723,9 +734,6 @@ public class KafkaStreams implements AutoCloseable {
         // create the stream thread, global update thread, and cleanup thread
         threads = new StreamThread[numStreamThreads];
 
-        globalTaskTopology = internalTopologyBuilder.buildGlobalStateTopology();
-        final boolean hasGlobalTopology = globalTaskTopology != null;
-
         if (numStreamThreads == 0 && !hasGlobalTopology) {
             log.error("Topology with no input topics will create no stream threads and no global thread.");
             throw new TopologyException("Topology has no stream threads and no global threads, " +
@@ -738,14 +746,6 @@ public class KafkaStreams implements AutoCloseable {
             log.warn("Negative cache size passed in. Reverting to cache size of 0 bytes.");
         }
         final long cacheSizePerThread = totalCacheSize / (threads.length + (hasGlobalTopology ? 1 : 0));
-        final boolean hasPersistentStores = taskTopology.hasPersistentLocalStore() ||
-                (hasGlobalTopology && globalTaskTopology.hasPersistentGlobalStore());
-
-        try {
-            stateDirectory = new StateDirectory(config, time, hasPersistentStores);
-        } catch (final ProcessorStateException fatal) {
-            throw new StreamsException(fatal);
-        }
 
         final StateRestoreListener delegatingStateRestoreListener = new DelegatingStateRestoreListener();
         GlobalStreamThread.State globalThreadState = null;
@@ -979,6 +979,7 @@ public class KafkaStreams implements AutoCloseable {
                     globalStreamThread = null;
                 }
 
+                stateDirectory.close();
                 adminClient.close();
 
                 streamsMetrics.removeAllClientLevelMetrics();
