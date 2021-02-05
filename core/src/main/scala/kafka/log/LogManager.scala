@@ -401,19 +401,19 @@ class LogManager(logDirs: Seq[File],
   /**
    *  Start the background threads to flush logs and do log cleanup
    */
-  def startup(retrieveTopicNames: => Set[String]): Unit = {
-    startupWithTopicLogConfigOverrides(generateTopicLogConfigs(retrieveTopicNames))
+  def startup(retrieveTopicsForLogConfigOverrideCheck: => Set[String]): Unit = {
+    startupWithTopicLogConfigOverrides(generateTopicLogConfigs(retrieveTopicsForLogConfigOverrideCheck))
   }
 
   // visible for testing
   private[log] def generateTopicLogConfigs(topicNames: Set[String]): Map[String, LogConfig] = {
-    val topicLogConfigs: mutable.Map[String, LogConfig] = mutable.Map()
+    val topicLogConfigs = mutable.Map[String, LogConfig]()
     val defaultProps = currentDefaultConfig.originals()
     topicNames.foreach { topicName =>
       val overrides = configRepository.topicConfig(topicName)
       // Later on we grab the default configs if a topic doesn't appear in the map,
       // so save memory by only putting the log configs into the map when there is the potential for overrides
-      if (!overrides.isEmpty()) {
+      if (!overrides.isEmpty) {
         val logConfig = LogConfig.fromProps(defaultProps, overrides)
         topicLogConfigs(topicName) = logConfig
       }
