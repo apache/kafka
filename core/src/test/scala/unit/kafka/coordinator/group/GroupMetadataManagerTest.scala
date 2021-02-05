@@ -31,7 +31,6 @@ import kafka.log.{AppendOrigin, Log, LogAppendInfo}
 import kafka.metrics.KafkaYammerMetrics
 import kafka.server.{FetchDataInfo, FetchLogEnd, HostedPartition, KafkaConfig, LogOffsetMetadata, ReplicaManager}
 import kafka.utils.{KafkaScheduler, MockTime, TestUtils}
-import kafka.zk.KafkaZkClient
 import org.apache.kafka.clients.consumer.ConsumerPartitionAssignor
 import org.apache.kafka.clients.consumer.ConsumerPartitionAssignor.Subscription
 import org.apache.kafka.clients.consumer.internals.ConsumerProtocol
@@ -45,7 +44,7 @@ import org.apache.kafka.common.requests.ProduceResponse.PartitionResponse
 import org.apache.kafka.common.utils.Utils
 import org.easymock.{Capture, EasyMock, IAnswer}
 import org.junit.jupiter.api.Assertions._
-import org.junit.jupiter.api.{BeforeEach, Test}
+import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
 
 import scala.jdk.CollectionConverters._
 import scala.collection._
@@ -68,6 +67,7 @@ class GroupMetadataManagerTest {
   val rebalanceTimeout = 60000
   val sessionTimeout = 10000
   val defaultRequireStable = false
+  val numOffsetsPartitions = 2
 
   private val offsetConfig = {
     val config = KafkaConfig.fromProps(TestUtils.createBrokerConfig(nodeId = 0, zkConnect = ""))
@@ -83,14 +83,6 @@ class GroupMetadataManagerTest {
       offsetCommitRequiredAcks = config.offsetCommitRequiredAcks)
   }
 
-  private def mockKafkaZkClient: KafkaZkClient = {
-    // make two partitions of the group topic to make sure some partitions are not owned by the coordinator
-    val zkClient: KafkaZkClient = EasyMock.createNiceMock(classOf[KafkaZkClient])
-    EasyMock.expect(zkClient.getTopicPartitionCount(Topic.GROUP_METADATA_TOPIC_NAME)).andReturn(Some(2))
-    EasyMock.replay(zkClient)
-    zkClient
-  }
-
   @BeforeEach
   def setUp(): Unit = {
     defaultOffsetRetentionMs = offsetConfig.offsetsRetentionMs
@@ -98,28 +90,38 @@ class GroupMetadataManagerTest {
     time = new MockTime
     replicaManager = EasyMock.createNiceMock(classOf[ReplicaManager])
     groupMetadataManager = new GroupMetadataManager(0, ApiVersion.latestVersion, offsetConfig, replicaManager,
-      mockKafkaZkClient, time, metrics)
+      time, metrics)
+    groupMetadataManager.startup(() => numOffsetsPartitions, false)
     partition = EasyMock.niceMock(classOf[Partition])
+  }
+
+  @AfterEach
+  def tearDown(): Unit = {
+    groupMetadataManager.shutdown()
   }
 
   @Test
   def testLogInfoFromCleanupGroupMetadata(): Unit = {
     var expiredOffsets: Int = 0
     var infoCount = 0
-    val gmm = new GroupMetadataManager(0, ApiVersion.latestVersion, offsetConfig, replicaManager, mockKafkaZkClient, time, metrics) {
+    val gmm = new GroupMetadataManager(0, ApiVersion.latestVersion, offsetConfig, replicaManager, time, metrics) {
       override def cleanupGroupMetadata(groups: Iterable[GroupMetadata],
                                         selector: GroupMetadata => Map[TopicPartition, OffsetAndMetadata]): Int = expiredOffsets
 
       override def info(msg: => String): Unit = infoCount += 1
     }
-
-    // if there are no offsets to expire, we skip to log
-    gmm.cleanupGroupMetadata()
-    assertEquals(0, infoCount)
-    // if there are offsets to expire, we should log info
-    expiredOffsets = 100
-    gmm.cleanupGroupMetadata()
-    assertEquals(1, infoCount)
+    gmm.startup(() => numOffsetsPartitions, false)
+    try {
+      // if there are no offsets to expire, we skip to log
+      gmm.cleanupGroupMetadata()
+      assertEquals(0, infoCount)
+      // if there are offsets to expire, we should log info
+      expiredOffsets = 100
+      gmm.cleanupGroupMetadata()
+      assertEquals(1, infoCount)
+    } finally {
+      gmm.shutdown()
+    }
   }
 
   @Test

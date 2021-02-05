@@ -28,7 +28,6 @@ import kafka.server.{Defaults, FetchLogEnd, ReplicaManager}
 import kafka.utils.CoreUtils.{inReadLock, inWriteLock}
 import kafka.utils.{Logging, Pool, Scheduler}
 import kafka.utils.Implicits._
-import kafka.zk.KafkaZkClient
 import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.metrics.stats.{Avg, Max}
@@ -72,7 +71,6 @@ object TransactionStateManager {
  * </ul>
  */
 class TransactionStateManager(brokerId: Int,
-                              zkClient: KafkaZkClient,
                               scheduler: Scheduler,
                               replicaManager: ReplicaManager,
                               config: TransactionConfig,
@@ -96,7 +94,8 @@ class TransactionStateManager(brokerId: Int,
   private[transaction] val transactionMetadataCache: mutable.Map[Int, TxnMetadataCacheEntry] = mutable.Map()
 
   /** number of partitions for the transaction log topic */
-  private val transactionTopicPartitionCount = getTransactionTopicPartitionCount
+  private var retrieveTransactionTopicPartitionCount: () => Int = _
+  @volatile private var transactionTopicPartitionCount: Int = _
 
   /** setup metrics*/
   private val partitionLoadSensor = metrics.sensor(TransactionStateManager.LoadTimeSensor)
@@ -275,14 +274,6 @@ class TransactionStateManager(brokerId: Int,
   }
 
   def partitionFor(transactionalId: String): Int = Utils.abs(transactionalId.hashCode) % transactionTopicPartitionCount
-
-  /**
-   * Gets the partition count of the transaction log topic from ZooKeeper.
-   * If the topic does not exist, the default partition count is returned.
-   */
-  private def getTransactionTopicPartitionCount: Int = {
-    zkClient.getTopicPartitionCount(Topic.TRANSACTION_STATE_TOPIC_NAME).getOrElse(config.transactionLogNumPartitions)
-  }
 
   private def loadTransactionMetadata(topicPartition: TopicPartition, coordinatorEpoch: Int): Pool[String, TransactionMetadata] =  {
     def logEndOffset = replicaManager.getLogEndOffset(topicPartition).getOrElse(-1L)
@@ -472,9 +463,10 @@ class TransactionStateManager(brokerId: Int,
   }
 
   private def validateTransactionTopicPartitionCountIsStable(): Unit = {
-    val curTransactionTopicPartitionCount = getTransactionTopicPartitionCount
-    if (transactionTopicPartitionCount != curTransactionTopicPartitionCount)
-      throw new KafkaException(s"Transaction topic number of partitions has changed from $transactionTopicPartitionCount to $curTransactionTopicPartitionCount")
+    val previouslyDeterminedPartitionCount = transactionTopicPartitionCount
+    val curTransactionTopicPartitionCount = retrieveTransactionTopicPartitionCount()
+    if (previouslyDeterminedPartitionCount != curTransactionTopicPartitionCount)
+      throw new KafkaException(s"Transaction topic number of partitions has changed from $previouslyDeterminedPartitionCount to $curTransactionTopicPartitionCount")
   }
 
   def appendTransactionToLog(transactionalId: String,
@@ -640,6 +632,13 @@ class TransactionStateManager(brokerId: Int,
           }
       }
     }
+  }
+
+  def startup(retrieveTransactionTopicPartitionCount: () => Int, enableTransactionalIdExpiration: Boolean = true): Unit = {
+    this.retrieveTransactionTopicPartitionCount = retrieveTransactionTopicPartitionCount
+    transactionTopicPartitionCount = retrieveTransactionTopicPartitionCount()
+    if (enableTransactionalIdExpiration)
+      this.enableTransactionalIdExpiration()
   }
 
   def shutdown(): Unit = {
