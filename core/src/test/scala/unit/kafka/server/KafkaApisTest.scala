@@ -187,7 +187,7 @@ class KafkaApisTest {
     EasyMock.expect(configRepository.topicConfig(resourceName)).andReturn(topicConfigs)
 
     metadataCache =
-      EasyMock.partialMockBuilder(classOf[MetadataCache])
+      EasyMock.partialMockBuilder(classOf[ZkMetadataCache])
         .withConstructor(classOf[Int])
         .withArgs(Int.box(brokerId))  // Need to box it for Scala 2.12 and before
         .addMockedMethod("contains", classOf[String])
@@ -1851,7 +1851,7 @@ class KafkaApisTest {
   def getAllTopicMetadataShouldNotCreateTopicOrReturnUnknownTopicPartition(): Unit = {
     // Setup: authorizer authorizes 2 topics, but one got deleted in metadata cache
     metadataCache =
-      EasyMock.partialMockBuilder(classOf[MetadataCache])
+      EasyMock.partialMockBuilder(classOf[ZkMetadataCache])
         .withConstructor(classOf[Int])
         .withArgs(Int.box(brokerId))  // Need to box it for Scala 2.12 and before
         .addMockedMethod("getAllTopics")
