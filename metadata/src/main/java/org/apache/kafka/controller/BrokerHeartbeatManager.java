@@ -33,6 +33,7 @@ import java.util.NoSuchElementException;
 import java.util.Optional;
 import java.util.TreeSet;
 import java.util.function.Function;
+import java.util.function.Supplier;
 
 import static org.apache.kafka.controller.BrokerControlState.FENCED;
 import static org.apache.kafka.controller.BrokerControlState.CONTROLLED_SHUTDOWN;
@@ -509,14 +510,15 @@ public class BrokerHeartbeatManager {
      * @param brokerId              The broker id.
      * @param request               The incoming heartbeat request.
      * @param lastCommittedOffset   The last committed offset of the quorum controller.
-     * @param hasLeaderships        True if the broker leads at least one partition.
+     * @param hasLeaderships        A callback which evaluates to true if the broker leads
+     *                              at least one partition.
      *
      * @return                      The current and next broker states.
      */
     BrokerControlStates calculateNextBrokerState(int brokerId,
                                                  BrokerHeartbeatRequestData request,
                                                  long lastCommittedOffset,
-                                                 boolean hasLeaderships) {
+                                                 Supplier<Boolean> hasLeaderships) {
         BrokerHeartbeatState broker = brokers.getOrDefault(brokerId,
             new BrokerHeartbeatState(brokerId));
         BrokerControlState currentState = currentBrokerState(broker);
@@ -546,7 +548,7 @@ public class BrokerHeartbeatManager {
 
             case UNFENCED:
                 if (request.wantShutDown()) {
-                    if (hasLeaderships) {
+                    if (hasLeaderships.get()) {
                         log.info("Unfenced broker {} has requested and been granted a " +
                             "controlled shutdown.", brokerId);
                         return new BrokerControlStates(currentState, CONTROLLED_SHUTDOWN);
@@ -559,7 +561,7 @@ public class BrokerHeartbeatManager {
                 return new BrokerControlStates(currentState, UNFENCED);
 
             case CONTROLLED_SHUTDOWN:
-                if (hasLeaderships) {
+                if (hasLeaderships.get()) {
                     log.debug("Broker {} is in controlled shutdown state, but can not " +
                         "shut down because more leaders still need to be moved.", brokerId);
                     return new BrokerControlStates(currentState, CONTROLLED_SHUTDOWN);

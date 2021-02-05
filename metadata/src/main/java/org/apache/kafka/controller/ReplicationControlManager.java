@@ -846,7 +846,7 @@ public class ReplicationControlManager {
         clusterControl.checkBrokerEpoch(brokerId, brokerEpoch);
         BrokerHeartbeatManager heartbeatManager = clusterControl.heartbeatManager();
         BrokerControlStates states = heartbeatManager.calculateNextBrokerState(brokerId,
-            request, lastCommittedOffset, brokersToIsrs.hasLeaderships(brokerId));
+            request, lastCommittedOffset, () -> brokersToIsrs.hasLeaderships(brokerId));
         List<ApiMessageAndVersion> records = new ArrayList<>();
         if (states.current() != states.next()) {
             switch (states.next()) {

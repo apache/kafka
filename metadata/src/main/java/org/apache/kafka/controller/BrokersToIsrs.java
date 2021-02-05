@@ -307,6 +307,6 @@ public class BrokersToIsrs {
     }
 
     boolean hasLeaderships(int brokerId) {
-        return isrMembers.containsKey(brokerId);
+        return iterator(brokerId, true).hasNext();
     }
 }
