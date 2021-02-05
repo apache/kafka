@@ -92,7 +92,7 @@ class AutoTopicCreationManagerTest {
                               isInternal: Boolean,
                               numPartitions: Int = 1,
                               replicationFactor: Short = 1): Unit = {
-    autoTopicCreationManager = new AutoTopicCreationManagerImpl(
+    autoTopicCreationManager = new DefaultAutoTopicCreationManager(
       config,
       metadataCache,
       Some(brokerToController),
@@ -121,7 +121,7 @@ class AutoTopicCreationManagerTest {
 
   @Test
   def testCreateTopicsWithForwardingDisabled(): Unit = {
-    autoTopicCreationManager = new AutoTopicCreationManagerImpl(
+    autoTopicCreationManager = new DefaultAutoTopicCreationManager(
       config,
       metadataCache,
       None,
@@ -137,7 +137,7 @@ class AutoTopicCreationManagerTest {
     createTopicAndVerifyResult(Errors.UNKNOWN_TOPIC_OR_PARTITION, topicName, false)
 
     Mockito.verify(adminManager).createTopics(
-      ArgumentMatchers.eq(requestTimeout),
+      ArgumentMatchers.eq(0),
       ArgumentMatchers.eq(false),
       ArgumentMatchers.eq(Map(topicName -> getNewTopic(topicName))),
       ArgumentMatchers.eq(Map.empty),
@@ -151,7 +151,7 @@ class AutoTopicCreationManagerTest {
     props.setProperty(KafkaConfig.DefaultReplicationFactorProp, 3.toString)
     config = KafkaConfig.fromProps(props)
 
-    autoTopicCreationManager = new AutoTopicCreationManagerImpl(
+    autoTopicCreationManager = new DefaultAutoTopicCreationManager(
       config,
       metadataCache,
       Some(brokerToController),

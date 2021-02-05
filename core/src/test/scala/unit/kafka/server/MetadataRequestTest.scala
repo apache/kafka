@@ -163,8 +163,8 @@ class MetadataRequestTest extends AbstractMetadataRequestTest {
 
   @Test
   def testAutoCreateOfCollidingTopics(): Unit = {
-    val topic1 = "testAutoCreate_Topic"
-    val topic2 = "testAutoCreate.Topic"
+    val topic1 = "testAutoCreate.Topic"
+    val topic2 = "testAutoCreate_Topic"
     val response1 = sendMetadataRequest(new MetadataRequest.Builder(Seq(topic1, topic2).asJava, true).build)
     assertEquals(2, response1.topicMetadata.size)
     var topicMetadata1 = response1.topicMetadata.asScala.head

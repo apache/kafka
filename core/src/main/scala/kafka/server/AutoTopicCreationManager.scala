@@ -17,7 +17,6 @@
 
 package kafka.server
 
-import java.util
 import java.util.Properties
 import java.util.concurrent.ConcurrentHashMap
 
@@ -31,13 +30,13 @@ import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.internals.Topic.{GROUP_METADATA_TOPIC_NAME, TRANSACTION_STATE_TOPIC_NAME}
 import org.apache.kafka.common.message.CreateTopicsRequestData
 import org.apache.kafka.common.message.CreateTopicsRequestData.{CreatableTopic, CreateableTopicConfig, CreateableTopicConfigCollection}
-import org.apache.kafka.common.message.MetadataResponseData.{MetadataResponsePartition, MetadataResponseTopic}
+import org.apache.kafka.common.message.MetadataResponseData.MetadataResponseTopic
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.protocol.Errors
-import org.apache.kafka.common.requests.CreateTopicsRequest
+import org.apache.kafka.common.requests.{ApiError, CreateTopicsRequest}
 import org.apache.kafka.common.utils.Time
 
-import scala.collection.{Map, Seq, Set}
+import scala.collection.{Map, Seq, Set, mutable}
 
 trait AutoTopicCreationManager {
 
@@ -80,12 +79,12 @@ object AutoTopicCreationManager {
         ))
       else
         None
-    new AutoTopicCreationManagerImpl(config, metadataCache, channelManager, adminManager,
+    new DefaultAutoTopicCreationManager(config, metadataCache, channelManager, adminManager,
       controller, groupCoordinator, txnCoordinator)
   }
 }
 
-class AutoTopicCreationManagerImpl(
+class DefaultAutoTopicCreationManager(
   config: KafkaConfig,
   metadataCache: MetadataCache,
   channelManager: Option[BrokerToControllerChannelManager],
@@ -95,7 +94,7 @@ class AutoTopicCreationManagerImpl(
   txnCoordinator: TransactionCoordinator
 ) extends AutoTopicCreationManager with Logging {
 
-  private val inflightTopics = new ConcurrentHashMap[String, CreatableTopic]()
+  private val inflightTopics = new ConcurrentHashMap[String, Boolean]()
 
   override def start(): Unit = {
     channelManager.foreach(_.start())
@@ -106,28 +105,16 @@ class AutoTopicCreationManagerImpl(
     inflightTopics.clear()
   }
 
-  override def createTopics(topics: Set[String],
-                            controllerMutationQuota: ControllerMutationQuota): Seq[MetadataResponseTopic] = {
-    val topicResponses = topics.map(topic =>
-      metadataResponseTopic(
-      if (!hasEnoughAliveBrokers(topic))
-        Errors.INVALID_REPLICATION_FACTOR
-      else
-        Errors.UNKNOWN_TOPIC_OR_PARTITION,
-      topic, Topic.isInternal(topic), util.Collections.emptyList()))
+  override def createTopics(
+    topics: Set[String],
+    controllerMutationQuota: ControllerMutationQuota
+  ): Seq[MetadataResponseTopic] = {
+    val (topicResponses, creatableTopics) = filterCreatableTopics(topics)
 
-    val topicConfigs = topicResponses
-      .filter(topicResponse => shouldCreate(topicResponse))
-      .map(topicResponse => getTopicConfigs(topicResponse.name()))
-      .map(topic => (topic.name, topic)).toMap
-
-    if (topicConfigs.nonEmpty) {
+    if (creatableTopics.nonEmpty) {
       if (!controller.isActive && channelManager.isDefined) {
-        // Mark the topics as inflight during auto creation through forwarding.
-        topicConfigs.foreach(config => inflightTopics.put(config._1, config._2))
-
         val topicsToCreate = new CreateTopicsRequestData.CreatableTopicCollection
-        topicConfigs.foreach(config => topicsToCreate.add(config._2))
+        creatableTopics.foreach(config => topicsToCreate.add(config._2))
         val createTopicsRequest = new CreateTopicsRequest.Builder(
           new CreateTopicsRequestData()
             .setTimeoutMs(config.requestTimeoutMs)
@@ -137,40 +124,44 @@ class AutoTopicCreationManagerImpl(
         channelManager.get.sendRequest(createTopicsRequest, new ControllerRequestCompletionHandler {
           override def onTimeout(): Unit = {
             debug(s"Auto topic creation timed out for $topics.")
-            clearInflightRequests(topicConfigs)
+            clearInflightRequests(creatableTopics)
           }
 
           override def onComplete(response: ClientResponse): Unit = {
             debug(s"Auto topic creation completed for $topics.")
-            clearInflightRequests(topicConfigs)
+            clearInflightRequests(creatableTopics)
           }
         })
-        info(s"Sent $topics to the active controller for auto creation.")
+        info(s"Sent auto-creation request for $topics to the active controller.")
       } else {
-        adminManager.createTopics(
-          config.requestTimeoutMs,
-          validateOnly = false,
-          topicConfigs,
-          Map.empty,
-          controllerMutationQuota,
-          _ => ())
-        info(s"Topics $topics are being created asynchronously.")
+        try {
+          def creationCallback(topicErrors: Map[String, ApiError]): Unit = {
+            info(s"Auto-creation of topics $topics returned with errors: $topicErrors")
+          }
+
+          // Note that we use timeout = 0 since we do not need to wait for metadata propagation
+          adminManager.createTopics(
+            timeout = 0,
+            validateOnly = false,
+            creatableTopics,
+            Map.empty,
+            controllerMutationQuota,
+            creationCallback
+          )
+        } finally {
+          clearInflightRequests(creatableTopics)
+        }
       }
     }
-    topicResponses.toSeq
+    topicResponses
   }
 
-  private def shouldCreate(topicResponse: MetadataResponseTopic): Boolean = {
-    Errors.forCode(topicResponse.errorCode()) == Errors.UNKNOWN_TOPIC_OR_PARTITION &&
-      !inflightTopics.containsKey(topicResponse.name)
+  private def clearInflightRequests(creatableTopics: Map[String, CreatableTopic]): Unit = {
+    creatableTopics.keySet.foreach(inflightTopics.remove)
+    debug(s"Cleared inflight topic creation state for $creatableTopics")
   }
 
-  private def clearInflightRequests(topicConfigs: Map[String, CreatableTopic]): Unit = {
-    topicConfigs.foreach(config => inflightTopics.remove(config._1))
-    debug(s"Cleared pending topic creation states for $topicConfigs")
-  }
-
-  private def getTopicConfigs(topic: String): CreatableTopic = {
+  private def creatableTopic(topic: String): CreatableTopic = {
     topic match {
       case GROUP_METADATA_TOPIC_NAME =>
         new CreatableTopic()
@@ -204,48 +195,56 @@ class AutoTopicCreationManagerImpl(
     topicConfigs
   }
 
-  private def hasEnoughAliveBrokers(topic: String): Boolean = {
-    if (topic == null)
-      throw new IllegalArgumentException("topic must not be null")
+  private def filterCreatableTopics(
+    topics: Set[String]
+  ): (Seq[MetadataResponseTopic], Map[String, CreatableTopic]) = {
 
     val aliveBrokers = metadataCache.getAliveBrokers
+    val creatableTopics = mutable.Map.empty[String, CreatableTopic]
+    val topicResponses = topics.toSeq.map { topic =>
+      val error = if (hasEnoughLiveBrokers(topic, aliveBrokers)) {
+        val alreadyPresent = inflightTopics.putIfAbsent(topic, true)
+        if (!alreadyPresent) {
+          creatableTopics.put(topic, creatableTopic(topic))
+        }
 
-    topic match {
+        Errors.UNKNOWN_TOPIC_OR_PARTITION
+      } else {
+        Errors.INVALID_REPLICATION_FACTOR
+      }
+
+      new MetadataResponseTopic()
+        .setErrorCode(error.code)
+        .setName(topic)
+        .setIsInternal(Topic.isInternal(topic))
+    }
+
+    (topicResponses, creatableTopics)
+  }
+
+  private def hasEnoughLiveBrokers(
+    topicName: String,
+    aliveBrokers: Seq[Broker],
+  ): Boolean = {
+    val (replicationFactor, replicationFactorConfig) = topicName match {
       case GROUP_METADATA_TOPIC_NAME =>
-        checkEnoughLiveBrokers(aliveBrokers, config.offsetsTopicReplicationFactor.intValue(), topic, None)
+        (config.offsetsTopicReplicationFactor.intValue, KafkaConfig.OffsetsTopicReplicationFactorProp)
+
       case TRANSACTION_STATE_TOPIC_NAME =>
-        checkEnoughLiveBrokers(aliveBrokers, config.transactionTopicReplicationFactor.intValue(), topic, None)
+        (config.transactionTopicReplicationFactor.intValue, KafkaConfig.TransactionsTopicReplicationFactorProp)
+
       case _ =>
-        checkEnoughLiveBrokers(aliveBrokers, config.defaultReplicationFactor, topic, None)
+        (config.defaultReplicationFactor, KafkaConfig.DefaultReplicationFactorProp)
+    }
+
+    if (aliveBrokers.size < replicationFactor) {
+      error(s"Number of alive brokers '${aliveBrokers.size}' does not meet the required replication factor " +
+        s"'$replicationFactor' for auto creation of topic '$topicName' which is configured by $replicationFactorConfig. " +
+        "This error can be ignored if the cluster is starting up and not all brokers are up yet.")
+      false
+    } else {
+      true
     }
   }
 
-  private def checkEnoughLiveBrokers(aliveBrokers: Seq[Broker],
-                                     replicationFactor: Int,
-                                     topicName: String,
-                                     configName: Option[String]): Boolean = {
-    if (aliveBrokers.size < replicationFactor) {
-      val configHint = configName match {
-        case Some(config) => s", whose replication factor is configured via $config"
-        case None => ""
-      }
-      error(s"Number of alive brokers '${aliveBrokers.size}' does not meet the required replication factor " +
-        s"'$replicationFactor' for auto creation of topic '$topicName'$configHint. " +
-        s"This error can be ignored if the cluster is starting up " +
-        s"and not all brokers are up yet.")
-      false
-    } else
-      true
-  }
-
-  private def metadataResponseTopic(error: Errors,
-                                    topic: String,
-                                    isInternal: Boolean,
-                                    partitionData: util.List[MetadataResponsePartition]): MetadataResponseTopic = {
-    new MetadataResponseTopic()
-      .setErrorCode(error.code)
-      .setName(topic)
-      .setIsInternal(isInternal)
-      .setPartitions(partitionData)
-  }
 }

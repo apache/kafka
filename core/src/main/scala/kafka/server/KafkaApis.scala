@@ -1097,20 +1097,36 @@ class KafkaApis(val requestChannel: RequestChannel,
       .setPartitions(partitionData)
   }
 
-  private def getTopicMetadata(isFetchAllMetadata: Boolean,
-                               topics: Set[String],
-                               listenerName: ListenerName,
-                               errorUnavailableEndpoints: Boolean,
-                               errorUnavailableListeners: Boolean): (Seq[MetadataResponseTopic], Set[String]) = {
+  private def getTopicMetadata(
+    request: RequestChannel.Request,
+    allowAutoTopicCreation: Boolean,
+    topics: Set[String],
+    listenerName: ListenerName,
+    errorUnavailableEndpoints: Boolean,
+    errorUnavailableListeners: Boolean
+  ): Seq[MetadataResponseTopic] = {
     val topicResponses = metadataCache.getTopicMetadata(topics, listenerName,
-        errorUnavailableEndpoints, errorUnavailableListeners)
+      errorUnavailableEndpoints, errorUnavailableListeners)
 
-    // A metadata request for all topics should never result in topic auto creation, but a topic may be deleted
-    // in between the creation of the topics parameter and topicResponses, so make sure to return None for this case.
-    if (isFetchAllMetadata || topics.isEmpty || topicResponses.size == topics.size) {
-      (topicResponses, Set.empty[String])
+    if (topics.isEmpty || topicResponses.size == topics.size) {
+      topicResponses
     } else {
-      (topicResponses, topics.diff(topicResponses.map(_.name).toSet))
+      val nonExistingTopics = topics.diff(topicResponses.map(_.name).toSet)
+      val nonExistingTopicResponses = if (allowAutoTopicCreation) {
+        val controllerMutationQuota = quotas.controllerMutation.newPermissiveQuotaFor(request)
+        autoTopicCreationManager.createTopics(nonExistingTopics, controllerMutationQuota)
+      } else {
+        nonExistingTopics.map { topic =>
+          metadataResponseTopic(
+            Errors.UNKNOWN_TOPIC_OR_PARTITION,
+            topic,
+            Topic.isInternal(topic),
+            util.Collections.emptyList()
+          )
+        }
+      }
+
+      topicResponses ++ nonExistingTopicResponses
     }
   }
 
@@ -1158,20 +1174,10 @@ class KafkaApis(val requestChannel: RequestChannel,
     // In versions 5 and below, we returned LEADER_NOT_AVAILABLE if a matching listener was not found on the leader.
     // From version 6 onwards, we return LISTENER_NOT_FOUND to enable diagnosis of configuration errors.
     val errorUnavailableListeners = requestVersion >= 6
-    val (topicMetadata, nonExistTopics) =
-      if (authorizedTopics.isEmpty)
-        (Seq.empty[MetadataResponseTopic], Set.empty[String])
-      else
-        getTopicMetadata(metadataRequest.isAllTopics, authorizedTopics,
-          request.context.listenerName, errorUnavailableEndpoints, errorUnavailableListeners)
 
-    val nonExistTopicMetadata =
-      if (nonExistTopics.nonEmpty && metadataRequest.allowAutoTopicCreation && config.autoCreateTopicsEnable) {
-        val controllerMutationQuota = quotas.controllerMutation.newQuotaFor(request, strictSinceVersion = 6)
-        autoTopicCreationManager.createTopics(
-          nonExistTopics.toSet, controllerMutationQuota)
-      } else
-        Seq.empty[MetadataResponseTopic]
+    val allowAutoCreation = metadataRequest.allowAutoTopicCreation && !metadataRequest.isAllTopics
+    val topicMetadata = getTopicMetadata(request, allowAutoCreation, authorizedTopics,
+      request.context.listenerName, errorUnavailableEndpoints, errorUnavailableListeners)
 
     var clusterAuthorizedOperations = Int.MinValue // Default value in the schema
     if (requestVersion >= 8) {
@@ -1193,11 +1199,10 @@ class KafkaApis(val requestChannel: RequestChannel,
           }
         }
         setTopicAuthorizedOperations(topicMetadata)
-        setTopicAuthorizedOperations(nonExistTopicMetadata)
       }
     }
 
-    val completeTopicMetadata = topicMetadata ++ nonExistTopicMetadata ++ unauthorizedForCreateTopicMetadata ++ unauthorizedForDescribeTopicMetadata
+    val completeTopicMetadata = topicMetadata ++ unauthorizedForCreateTopicMetadata ++ unauthorizedForDescribeTopicMetadata
 
     val brokers = metadataCache.getAliveBrokers
 
@@ -1328,7 +1333,7 @@ class KafkaApis(val requestChannel: RequestChannel,
       }
 
       if (topicMetadata.headOption.isEmpty) {
-        val controllerMutationQuota = quotas.controllerMutation.newQuotaFor(request, strictSinceVersion = 6)
+        val controllerMutationQuota = quotas.controllerMutation.newPermissiveQuotaFor(request)
         autoTopicCreationManager.createTopics(Seq(internalTopicName).toSet, controllerMutationQuota)
         requestHelper.sendResponseMaybeThrottle(request, requestThrottleMs => createFindCoordinatorResponse(
           Errors.COORDINATOR_NOT_AVAILABLE, Node.noNode, requestThrottleMs))
