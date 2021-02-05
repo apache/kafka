@@ -281,7 +281,7 @@ public class MirrorMaker {
             Exit.exit(-1);
             return;
         }
-        File configFile = (File) ns.get("config");
+        File configFile = ns.get("config");
         List<String> clusters = ns.getList("clusters");
         try {
             log.info("Kafka MirrorMaker initializing ...");

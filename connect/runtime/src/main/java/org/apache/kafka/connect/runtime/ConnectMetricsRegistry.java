@@ -115,7 +115,7 @@ public class ConnectMetricsRegistry {
     public Map<MetricNameTemplate, TaskStatus.State> connectorStatusMetrics;
 
     public ConnectMetricsRegistry() {
-        this(new LinkedHashSet<String>());
+        this(new LinkedHashSet<>());
     }
 
     public ConnectMetricsRegistry(Set<String> tags) {

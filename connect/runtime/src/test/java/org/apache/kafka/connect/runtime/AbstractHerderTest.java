@@ -124,10 +124,10 @@ public class AbstractHerderTest {
     }
     private static final ClusterConfigState SNAPSHOT = new ClusterConfigState(1, null, Collections.singletonMap(CONN1, 3),
             Collections.singletonMap(CONN1, CONN1_CONFIG), Collections.singletonMap(CONN1, TargetState.STARTED),
-            TASK_CONFIGS_MAP, Collections.<String>emptySet());
+            TASK_CONFIGS_MAP, Collections.emptySet());
     private static final ClusterConfigState SNAPSHOT_NO_TASKS = new ClusterConfigState(1, null, Collections.singletonMap(CONN1, 3),
             Collections.singletonMap(CONN1, CONN1_CONFIG), Collections.singletonMap(CONN1, TargetState.STARTED),
-            Collections.emptyMap(), Collections.<String>emptySet());
+            Collections.emptyMap(), Collections.emptySet());
 
     private final String workerId = "workerId";
     private final String kafkaClusterId = "I4ZmrWqfT2e-upky_4fdPA";
@@ -358,7 +358,7 @@ public class AbstractHerderTest {
 
         // 2 transform aliases defined -> 2 plugin lookups
         Set<PluginDesc<Transformation>> transformations = new HashSet<>();
-        transformations.add(new PluginDesc<Transformation>(SampleTransformation.class, "1.0", classLoader));
+        transformations.add(new PluginDesc<>(SampleTransformation.class, "1.0", classLoader));
         EasyMock.expect(plugins.transformations()).andReturn(transformations).times(2);
 
         replayAll();
@@ -410,11 +410,11 @@ public class AbstractHerderTest {
 
         // 2 transform aliases defined -> 2 plugin lookups
         Set<PluginDesc<Transformation>> transformations = new HashSet<>();
-        transformations.add(new PluginDesc<Transformation>(SampleTransformation.class, "1.0", classLoader));
+        transformations.add(new PluginDesc<>(SampleTransformation.class, "1.0", classLoader));
         EasyMock.expect(plugins.transformations()).andReturn(transformations).times(1);
 
         Set<PluginDesc<Predicate>> predicates = new HashSet<>();
-        predicates.add(new PluginDesc<Predicate>(SamplePredicate.class, "1.0", classLoader));
+        predicates.add(new PluginDesc<>(SamplePredicate.class, "1.0", classLoader));
         EasyMock.expect(plugins.predicates()).andReturn(predicates).times(2);
 
         replayAll();

@@ -135,8 +135,8 @@ public class FlattenTest {
         supportedTypes.put("string", "stringy");
         supportedTypes.put("bytes", "bytes".getBytes());
 
-        Map<String, Object> oneLevelNestedMap = Collections.singletonMap("B", (Object) supportedTypes);
-        Map<String, Object> twoLevelNestedMap = Collections.singletonMap("A", (Object) oneLevelNestedMap);
+        Map<String, Object> oneLevelNestedMap = Collections.singletonMap("B", supportedTypes);
+        Map<String, Object> twoLevelNestedMap = Collections.singletonMap("A", oneLevelNestedMap);
 
         SourceRecord transformed = xformValue.apply(new SourceRecord(null, null,
                 "topic", 0,
@@ -232,7 +232,7 @@ public class FlattenTest {
         Map<String, Object> supportedTypes = new HashMap<>();
         supportedTypes.put("opt_int32", null);
 
-        Map<String, Object> oneLevelNestedMap = Collections.singletonMap("B", (Object) supportedTypes);
+        Map<String, Object> oneLevelNestedMap = Collections.singletonMap("B", supportedTypes);
 
         SourceRecord transformed = xformValue.apply(new SourceRecord(null, null,
                 "topic", 0,

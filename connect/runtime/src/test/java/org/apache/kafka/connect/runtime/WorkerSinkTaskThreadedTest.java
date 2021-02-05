@@ -527,7 +527,7 @@ public class WorkerSinkTaskThreadedTest extends ThreadedTest {
         EasyMock.expect(consumer.position(TOPIC_PARTITION2)).andReturn(FIRST_OFFSET);
         EasyMock.expect(consumer.position(TOPIC_PARTITION3)).andReturn(FIRST_OFFSET);
 
-        sinkTask.put(Collections.<SinkRecord>emptyList());
+        sinkTask.put(Collections.emptyList());
         EasyMock.expectLastCall();
     }
 

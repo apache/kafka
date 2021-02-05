@@ -278,7 +278,7 @@ public class TopicAdmin implements AutoCloseable {
     // visible for testing
     TopicAdmin(Map<String, Object> adminConfig, Admin adminClient, boolean logCreation) {
         this.admin = adminClient;
-        this.adminConfig = adminConfig != null ? adminConfig : Collections.<String, Object>emptyMap();
+        this.adminConfig = adminConfig != null ? adminConfig : Collections.emptyMap();
         this.logCreation = logCreation;
     }
 
