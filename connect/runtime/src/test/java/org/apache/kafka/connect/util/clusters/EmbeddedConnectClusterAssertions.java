@@ -382,7 +382,7 @@ public class EmbeddedConnectClusterAssertions {
         } catch (ConnectRestException e) {
             return e.statusCode() == Response.Status.NOT_FOUND.getStatusCode();
         } catch (Exception e) {
-            log.error("Could not check connector state info.", e);
+//            log.error("Could not check connector state info.", e);
             return false;
         }
         if (info == null) {
@@ -417,7 +417,7 @@ public class EmbeddedConnectClusterAssertions {
                     && info.tasks().stream().allMatch(s -> s.state().equals(tasksState.toString()));
             return Optional.of(result);
         } catch (Exception e) {
-            log.error("Could not check connector state info.", e);
+//            log.error("Could not check connector state info.", e);
             return Optional.empty();
         }
     }

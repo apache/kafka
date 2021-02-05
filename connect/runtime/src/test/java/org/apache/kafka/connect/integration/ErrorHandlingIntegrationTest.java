@@ -264,7 +264,7 @@ public class ErrorHandlingIntegrationTest {
                     && connectorHandle.taskHandle(TASK_ID).partitionsAssigned() == 1;
         }  catch (Exception e) {
             // Log the exception and return that the partitions were not assigned
-            log.error("Could not check connector state info.", e);
+//            log.error("Could not check connector state info.", e);
             return false;
         }
     }
