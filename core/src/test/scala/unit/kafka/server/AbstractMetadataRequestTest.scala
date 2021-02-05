@@ -53,7 +53,7 @@ abstract class AbstractMetadataRequestTest extends BaseRequestTest {
   }
 
   protected def checkAutoCreatedTopic(autoCreatedTopic: String, response: MetadataResponse): Unit = {
-    assertEquals(Errors.UNKNOWN_TOPIC_OR_PARTITION, response.errors.get(autoCreatedTopic))
+    assertEquals(Errors.LEADER_NOT_AVAILABLE, response.errors.get(autoCreatedTopic))
     assertEquals(Some(servers.head.config.numPartitions), zkClient.getTopicPartitionCount(autoCreatedTopic))
     for (i <- 0 until servers.head.config.numPartitions)
       TestUtils.waitForPartitionMetadata(servers, autoCreatedTopic, i)
