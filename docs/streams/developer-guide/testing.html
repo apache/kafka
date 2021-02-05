@@ -82,11 +82,8 @@ StreamsBuilder builder = new StreamsBuilder();
 builder.stream("input-topic").filter(...).to("output-topic");
 Topology topology = builder.build();
 
-// setup test driver
-Properties props = new Properties();
-props.put(StreamsConfig.APPLICATION_ID_CONFIG, "test");
-props.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "dummy:1234");
-TopologyTestDriver testDriver = new TopologyTestDriver(topology, props);</code></pre>
+// create test driver
+TopologyTestDriver testDriver = new TopologyTestDriver(topology);</code></pre>
             <p>
                 With the test driver you can create <code>TestInputTopic</code> giving topic name and the corresponding serializers.
                 <code>TestInputTopic</code> provides various methods to pipe new message values, keys and values, or list of KeyValue objects.
@@ -151,8 +148,6 @@ public void setup() {
 
     // setup test driver
     Properties props = new Properties();
-    props.setProperty(StreamsConfig.APPLICATION_ID_CONFIG, "maxAggregation");
-    props.setProperty(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "dummy:1234");
     props.setProperty(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.String().getClass().getName());
     props.setProperty(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.Long().getClass().getName());
     testDriver = new TopologyTestDriver(topology, props);
@@ -286,8 +281,6 @@ processorUnderTest.init(context);</code></pre>
             If you need to pass configuration to your processor or set the default serdes, you can create the mock with
             config:
             <pre class="line-numbers"><code class="language-text">final Properties props = new Properties();
-props.put(StreamsConfig.APPLICATION_ID_CONFIG, "unit-test");
-props.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "");
 props.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.String().getClass());
 props.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.Long().getClass());
 props.put("some.other.config", "some config value");
