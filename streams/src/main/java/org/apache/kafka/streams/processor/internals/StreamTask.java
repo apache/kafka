@@ -85,7 +85,6 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
     private final RecordCollector recordCollector;
     private final PartitionGroup.RecordInfo recordInfo;
     private final Map<TopicPartition, Long> consumedOffsets;
-    private final Set<TopicPartition> resetOffsetsForPartitions;
     private final PunctuationQueue streamTimePunctuationQueue;
     private final PunctuationQueue systemTimePunctuationQueue;
     private final StreamsMetricsImpl streamsMetrics;
@@ -168,7 +167,6 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
 
         // initialize the consumed and committed offset cache
         consumedOffsets = new HashMap<>();
-        resetOffsetsForPartitions = new HashSet<>();
 
         recordQueueCreator = new RecordQueueCreator(this.logContext, config.defaultTimestampExtractor(), config.defaultDeserializationExceptionHandler());
 
@@ -231,22 +229,17 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
         }
     }
 
-    public void addPartitionsForOffsetReset(final Set<TopicPartition> partitionsForOffsetReset) {
-        mainConsumer.pause(partitionsForOffsetReset);
-        resetOffsetsForPartitions.addAll(partitionsForOffsetReset);
-    }
-
     /**
      * @throws TimeoutException if fetching committed offsets timed out
      */
     @Override
-    public void completeRestoration(final java.util.function.Consumer<Set<TopicPartition>> offsetResetter) {
+    public void completeRestoration() {
         switch (state()) {
             case RUNNING:
                 return;
 
             case RESTORING:
-                resetOffsetsIfNeededAndInitializeMetadata(offsetResetter);
+                initializeMetadata();
                 initializeTopology();
                 processorContext.initialize();
 
@@ -839,27 +832,12 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
         return checkpointableOffsets;
     }
 
-    private void resetOffsetsIfNeededAndInitializeMetadata(final java.util.function.Consumer<Set<TopicPartition>> offsetResetter) {
+    private void initializeMetadata() {
         try {
-            final Map<TopicPartition, OffsetAndMetadata> offsetsAndMetadata = mainConsumer.committed(inputPartitions());
-
-            for (final Map.Entry<TopicPartition, OffsetAndMetadata> committedEntry : offsetsAndMetadata.entrySet()) {
-                if (resetOffsetsForPartitions.contains(committedEntry.getKey())) {
-                    final OffsetAndMetadata offsetAndMetadata = committedEntry.getValue();
-                    if (offsetAndMetadata != null) {
-                        mainConsumer.seek(committedEntry.getKey(), offsetAndMetadata);
-                        resetOffsetsForPartitions.remove(committedEntry.getKey());
-                    }
-                }
-            }
-
-            offsetResetter.accept(resetOffsetsForPartitions);
-            resetOffsetsForPartitions.clear();
-
-            initializeTaskTime(offsetsAndMetadata.entrySet().stream()
-                .filter(e -> e.getValue() != null)
-                .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue))
-            );
+            final Map<TopicPartition, OffsetAndMetadata> offsetsAndMetadata = mainConsumer.committed(inputPartitions()).entrySet().stream()
+                    .filter(e -> e.getValue() != null)
+                    .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
+            initializeTaskTime(offsetsAndMetadata);
         } catch (final TimeoutException timeoutException) {
             log.warn(
                 "Encountered {} while trying to fetch committed offsets, will retry initializing the metadata in the next loop." +

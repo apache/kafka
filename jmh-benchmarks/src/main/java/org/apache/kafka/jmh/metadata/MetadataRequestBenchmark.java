@@ -22,6 +22,7 @@ import kafka.coordinator.group.GroupCoordinator;
 import kafka.coordinator.transaction.TransactionCoordinator;
 import kafka.network.RequestChannel;
 import kafka.network.RequestConvertToJson;
+import kafka.server.AutoTopicCreationManager;
 import kafka.server.BrokerFeatures;
 import kafka.server.BrokerTopicStats;
 import kafka.server.ClientQuotaManager;
@@ -100,6 +101,7 @@ public class MetadataRequestBenchmark {
     private ZkAdminManager adminManager = Mockito.mock(ZkAdminManager.class);
     private TransactionCoordinator transactionCoordinator = Mockito.mock(TransactionCoordinator.class);
     private KafkaController kafkaController = Mockito.mock(KafkaController.class);
+    private AutoTopicCreationManager autoTopicCreationManager = Mockito.mock(AutoTopicCreationManager.class);
     private KafkaZkClient kafkaZkClient = Mockito.mock(KafkaZkClient.class);
     private Metrics metrics = new Metrics();
     private int brokerId = 1;
@@ -175,6 +177,7 @@ public class MetadataRequestBenchmark {
             replicaManager,
             groupCoordinator,
             transactionCoordinator,
+            autoTopicCreationManager,
             brokerId,
             new KafkaConfig(kafkaProps),
             new CachedConfigRepository(),
