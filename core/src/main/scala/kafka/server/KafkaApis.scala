@@ -1099,6 +1099,7 @@ class KafkaApis(val requestChannel: RequestChannel,
 
   private def getTopicMetadata(
     request: RequestChannel.Request,
+    fetchAllTopics: Boolean,
     allowAutoTopicCreation: Boolean,
     topics: Set[String],
     listenerName: ListenerName,
@@ -1108,7 +1109,7 @@ class KafkaApis(val requestChannel: RequestChannel,
     val topicResponses = metadataCache.getTopicMetadata(topics, listenerName,
       errorUnavailableEndpoints, errorUnavailableListeners)
 
-    if (topics.isEmpty || topicResponses.size == topics.size) {
+    if (topics.isEmpty || topicResponses.size == topics.size || fetchAllTopics) {
       topicResponses
     } else {
       val nonExistingTopics = topics.diff(topicResponses.map(_.name).toSet)
@@ -1175,8 +1176,8 @@ class KafkaApis(val requestChannel: RequestChannel,
     // From version 6 onwards, we return LISTENER_NOT_FOUND to enable diagnosis of configuration errors.
     val errorUnavailableListeners = requestVersion >= 6
 
-    val allowAutoCreation = metadataRequest.allowAutoTopicCreation && !metadataRequest.isAllTopics
-    val topicMetadata = getTopicMetadata(request, allowAutoCreation, authorizedTopics,
+    val allowAutoCreation = config.autoCreateTopicsEnable && metadataRequest.allowAutoTopicCreation && !metadataRequest.isAllTopics
+    val topicMetadata = getTopicMetadata(request, metadataRequest.isAllTopics, allowAutoCreation, authorizedTopics,
       request.context.listenerName, errorUnavailableEndpoints, errorUnavailableListeners)
 
     var clusterAuthorizedOperations = Int.MinValue // Default value in the schema

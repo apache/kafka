@@ -1072,18 +1072,14 @@ class KafkaApisTest {
     val response = readResponse(metadataRequest, capturedResponse)
       .asInstanceOf[MetadataResponse]
 
-    if (enableAutoTopicCreation) {
-      val expectedMetadataResponse = util.Collections.singletonList(new TopicMetadata(
-        expectedError,
-        topicName,
-        isInternal,
-        util.Collections.emptyList()
-      ))
+    val expectedMetadataResponse = util.Collections.singletonList(new TopicMetadata(
+      expectedError,
+      topicName,
+      isInternal,
+      util.Collections.emptyList()
+    ))
 
-      assertEquals(expectedMetadataResponse, response.topicMetadata())
-    } else {
-      assertEquals(Collections.emptyList(), response.topicMetadata())
-    }
+    assertEquals(expectedMetadataResponse, response.topicMetadata())
 
     verify(authorizer, autoTopicCreationManager)
   }
@@ -1093,8 +1089,8 @@ class KafkaApisTest {
                                   isInternal: Boolean,
                                   request: RequestChannel.Request) = {
     if (enableAutoTopicCreation) {
-      EasyMock.expect(clientControllerQuotaManager.newQuotaFor(
-        EasyMock.eq(request), EasyMock.eq(6))).andReturn(UnboundedControllerMutationQuota)
+      EasyMock.expect(clientControllerQuotaManager.newPermissiveQuotaFor(EasyMock.eq(request)))
+        .andReturn(UnboundedControllerMutationQuota)
 
       EasyMock.expect(autoTopicCreationManager.createTopics(
         EasyMock.eq(Set(topicName)),

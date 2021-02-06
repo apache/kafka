@@ -21,10 +21,10 @@ import java.util.{Collections, Properties}
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicReference
 
-import kafka.cluster.Broker
 import kafka.controller.KafkaController
 import kafka.coordinator.group.GroupCoordinator
 import kafka.coordinator.transaction.TransactionCoordinator
+import kafka.server.metadata.MetadataBroker
 import kafka.utils.Logging
 import org.apache.kafka.clients.ClientResponse
 import org.apache.kafka.common.errors.InvalidTopicException
@@ -293,7 +293,7 @@ class DefaultAutoTopicCreationManager(
 
   private def hasEnoughLiveBrokers(
     topicName: String,
-    aliveBrokers: Seq[Broker]
+    aliveBrokers: Seq[MetadataBroker]
   ): Boolean = {
     val (replicationFactor, replicationFactorConfig) = topicName match {
       case GROUP_METADATA_TOPIC_NAME =>

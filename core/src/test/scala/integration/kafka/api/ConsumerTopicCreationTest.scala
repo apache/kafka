@@ -60,6 +60,8 @@ object ConsumerTopicCreationTest {
     extends TestCase(brokerAutoTopicCreationEnable, consumerAllowAutoCreateTopics) {
 
     override protected def brokerCount: Int = 3
+
+    override def enableForwarding: Boolean = true
   }
 
   private class TestCase(brokerAutoTopicCreationEnable: JBoolean, consumerAllowAutoCreateTopics: JBoolean) extends IntegrationTestHarness {
@@ -67,8 +69,6 @@ object ConsumerTopicCreationTest {
     private val topic_2 = "topic-2"
     private val producerClientId = "ConsumerTestProducer"
     private val consumerClientId = "ConsumerTestConsumer"
-
-    override def enableForwarding: Boolean = true
 
     // configure server properties
     this.serverConfig.setProperty(KafkaConfig.ControlledShutdownEnableProp, "false") // speed up shutdown
