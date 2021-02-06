@@ -276,7 +276,7 @@ public class IncrementalCooperativeAssignor implements ConnectAssignor {
                     performTaskRevocation(activeAssignments, currentWorkerAssignment);
 
             if (toExplicitlyRevoke.keySet().size() > 0) {
-                System.out.println("revoke assignments:" + toExplicitlyRevoke);
+                System.out.println("revoke:" + toExplicitlyRevoke);
                 exRevoke = true;
             }
 
