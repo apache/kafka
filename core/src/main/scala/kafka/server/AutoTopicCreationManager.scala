@@ -130,48 +130,49 @@ class DefaultAutoTopicCreationManager(
     controllerMutationQuota: ControllerMutationQuota
   ): Seq[MetadataResponseTopic] = {
     val topicErrors = new AtomicReference[Map[String, ApiError]]()
+    try {
+      // Note that we use timeout = 0 since we do not need to wait for metadata propagation
+      // and we want to get the response error immediately.
+      adminManager.createTopics(
+        timeout = 0,
+        validateOnly = false,
+        creatableTopics,
+        Map.empty,
+        controllerMutationQuota,
+        topicErrors.set
+      )
 
-    // Note that we use timeout = 0 since we do not need to wait for metadata propagation
-    // and we want to get the response error immediately.
-    adminManager.createTopics(
-      timeout = 0,
-      validateOnly = false,
-      creatableTopics,
-      Map.empty,
-      controllerMutationQuota,
-      topicErrors.set
-    )
+      val creatableTopicResponses = Option(topicErrors.get) match {
+        case Some(errors) =>
+          errors.toSeq.map { case (topic, apiError) =>
+            val error = apiError.error match {
+              case Errors.TOPIC_ALREADY_EXISTS | Errors.REQUEST_TIMED_OUT =>
+                // The timeout error is expected because we set timeout=0. This
+                // nevertheless indicates that the topic metadata was created
+                // successfully, so we return LEADER_NOT_AVAILABLE.
+                Errors.LEADER_NOT_AVAILABLE
+              case error => error
+            }
 
-    val creatableTopicResponses = Option(topicErrors.get) match {
-      case Some(errors) =>
-        errors.toSeq.map { case (topic, apiError) =>
-          val error = apiError.error match {
-            case Errors.TOPIC_ALREADY_EXISTS | Errors.REQUEST_TIMED_OUT =>
-              // The timeout error is expected because we set timeout=0. This
-              // nevertheless indicates that the topic metadata was created
-              // successfully, so we return LEADER_NOT_AVAILABLE.
-              Errors.LEADER_NOT_AVAILABLE
-            case error => error
+            new MetadataResponseTopic()
+              .setErrorCode(error.code)
+              .setName(topic)
+              .setIsInternal(Topic.isInternal(topic))
           }
 
-          new MetadataResponseTopic()
-            .setErrorCode(error.code)
-            .setName(topic)
-            .setIsInternal(Topic.isInternal(topic))
-        }
+        case None =>
+          creatableTopics.keySet.toSeq.map { topic =>
+            new MetadataResponseTopic()
+              .setErrorCode(Errors.UNKNOWN_TOPIC_OR_PARTITION.code)
+              .setName(topic)
+              .setIsInternal(Topic.isInternal(topic))
+          }
+      }
 
-      case None =>
-        creatableTopics.keySet.toSeq.map { topic =>
-          new MetadataResponseTopic()
-            .setErrorCode(Errors.UNKNOWN_TOPIC_OR_PARTITION.code)
-            .setName(topic)
-            .setIsInternal(Topic.isInternal(topic))
-        }
+      creatableTopicResponses
+    } finally {
+      clearInflightRequests(creatableTopics)
     }
-
-    clearInflightRequests(creatableTopics)
-
-    creatableTopicResponses
   }
 
   private def sendCreateTopicRequest(
@@ -253,7 +254,7 @@ class DefaultAutoTopicCreationManager(
       Topic.validate(topic)
       true
     } catch {
-      case e: InvalidTopicException =>
+      case _: InvalidTopicException =>
         false
     }
   }
