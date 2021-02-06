@@ -665,9 +665,9 @@ sasl.kerberos.service.name=kafka</code></pre></li>
                 <pre>-Djava.security.auth.login.config=/etc/kafka/kafka_server_jaas.conf</code></pre></li>
             <li>Configure SASL port and SASL mechanisms in server.properties as described <a href="#security_sasl_brokerconfig">here</a>. For example:
                 <pre>listeners=SASL_SSL://host.name:port
-        security.inter.broker.protocol=SASL_SSL
-        sasl.mechanism.inter.broker.protocol=PLAIN
-        sasl.enabled.mechanisms=PLAIN</code></pre></li>
+security.inter.broker.protocol=SASL_SSL
+sasl.mechanism.inter.broker.protocol=PLAIN
+sasl.enabled.mechanisms=PLAIN</code></pre></li>
             </ol>
         </li>
 
