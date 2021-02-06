@@ -665,6 +665,9 @@ object KafkaConfig {
   val ProcessRolesDoc = "The roles that this process plays: 'broker', 'controller', or 'broker,controller' if it is both. " +
     "This configuration is only for clusters upgraded for KIP-500, which replaces the dependence on Zookeeper with " +
     "a self-managed Raft quorum. Leave this config undefined or empty for Zookeeper clusters."
+  val InitialBrokerRegistrationTimeoutMsDoc = "When initially registering with the controller quorum, the number of milliseconds to wait before declaring failure and exiting the broker process."
+  val BrokerHeartbeatIntervalMsDoc = "The length of time in milliseconds between broker heartbeats. Used when running in KIP-500 mode."
+  val BrokerSessionTimeoutMsDoc = "The length of time in milliseconds that a broker lease lasts if no heartbeats are made. Used when running in KIP-500 mode."
   val NodeIdDoc = "The node ID associated with the roles this process is playing when `process.roles` is non-empty. " +
     "This is required configuration when the self-managed quorum is enabled."
   val MetadataLogDirDoc = "This configuration determines where we put the metadata log for clusters upgraded to " +
@@ -1070,9 +1073,9 @@ object KafkaConfig {
        */
       .defineInternal(ProcessRolesProp, LIST, Collections.emptyList(), ValidList.in("broker", "controller"), HIGH, ProcessRolesDoc)
       .defineInternal(NodeIdProp, INT, Defaults.EmptyNodeId, null, HIGH, NodeIdDoc)
-      .defineInternal(InitialBrokerRegistrationTimeoutMs, INT, Defaults.InitialBrokerRegistrationTimeoutMs, MEDIUM, InitialBrokerRegistrationTimeoutMsDoc)
-      .defineInternal(BrokerHeartbeatIntervalMsProp, INT, Defaults.BrokerHeartbeatIntervalMs, MEDIUM, BrokerHeartbeatIntervalMsDoc)
-      .defineInternal(BrokerSessionTimeoutMsProp, INT, Defaults.BrokerSessionTimeoutMs, MEDIUM, BrokerSessionTimeoutMsDoc)
+      .defineInternal(InitialBrokerRegistrationTimeoutMs, INT, Defaults.InitialBrokerRegistrationTimeoutMs, null, MEDIUM, InitialBrokerRegistrationTimeoutMsDoc)
+      .defineInternal(BrokerHeartbeatIntervalMsProp, INT, Defaults.BrokerHeartbeatIntervalMs, null, MEDIUM, BrokerHeartbeatIntervalMsDoc)
+      .defineInternal(BrokerSessionTimeoutMsProp, INT, Defaults.BrokerSessionTimeoutMs, null, MEDIUM, BrokerSessionTimeoutMsDoc)
       .defineInternal(MetadataLogDirProp, STRING, null, null, HIGH, MetadataLogDirDoc)
 
       /************* Authorizer Configuration ***********/

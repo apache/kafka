@@ -20,7 +20,7 @@ import java.util
 import java.util.concurrent.TimeUnit.{MILLISECONDS, NANOSECONDS}
 import java.util.concurrent.{CompletableFuture, TimeUnit}
 import kafka.utils.Logging
-import org.apache.kafka.clients.{ClientResponse, RequestCompletionHandler}
+import org.apache.kafka.clients.ClientResponse
 import org.apache.kafka.common.Uuid
 import org.apache.kafka.common.message.BrokerRegistrationRequestData.ListenerCollection
 import org.apache.kafka.common.message.{BrokerHeartbeatRequestData, BrokerRegistrationRequestData}
@@ -36,14 +36,14 @@ import scala.jdk.CollectionConverters._
 class BrokerLifecycleManager(val config: KafkaConfig,
                              val time: Time,
                              val threadNamePrefix: Option[String]) extends Logging {
-  val logContext = new LogContext(s"[BrokerLifecycleManager id=${config.brokerId}] ")
+  val logContext = new LogContext(s"[BrokerLifecycleManager id=${config.nodeId}] ")
 
   this.logIdent = logContext.logPrefix()
 
   /**
    * The broker id.
    */
-  private val brokerId = config.brokerId
+  private val nodeId = config.nodeId
 
   /**
    * The broker rack, or null if there is no configured rack.
@@ -239,7 +239,7 @@ class BrokerLifecycleManager(val config: KafkaConfig,
         new DeadlineFunction(time.nanoseconds() + initialTimeoutNs),
         new RegistrationTimeoutEvent())
       sendBrokerRegistration()
-      info(s"Incarnation ${incarnationId} of broker ${brokerId} in cluster ${clusterId} " +
+      info(s"Incarnation ${incarnationId} of broker ${nodeId} in cluster ${clusterId} " +
         "is now STARTING.")
     }
   }
@@ -253,7 +253,7 @@ class BrokerLifecycleManager(val config: KafkaConfig,
         setMaxSupportedVersion(range.max()))
     }
     val data = new BrokerRegistrationRequestData().
-        setBrokerId(brokerId).
+        setBrokerId(nodeId).
         setClusterId(_clusterId).
         setFeatures(features).
         setIncarnationId(incarnationId).
@@ -266,21 +266,21 @@ class BrokerLifecycleManager(val config: KafkaConfig,
       new BrokerRegistrationResponseHandler())
   }
 
-  class BrokerRegistrationResponseHandler extends RequestCompletionHandler {
+  class BrokerRegistrationResponseHandler extends ControllerRequestCompletionHandler {
     override def onComplete(response: ClientResponse): Unit = {
       if (response.authenticationException() != null) {
-        error(s"Unable to register broker ${brokerId} because of an authentication exception.",
+        error(s"Unable to register broker ${nodeId} because of an authentication exception.",
           response.authenticationException());
         scheduleNextCommunicationAfterFailure()
       } else if (response.versionMismatch() != null) {
-        error(s"Unable to register broker ${brokerId} because of an API version problem.",
+        error(s"Unable to register broker ${nodeId} because of an API version problem.",
           response.versionMismatch());
         scheduleNextCommunicationAfterFailure()
       } else if (response.responseBody() == null) {
-        warn(s"Unable to register broker ${brokerId}.")
+        warn(s"Unable to register broker ${nodeId}.")
         scheduleNextCommunicationAfterFailure()
       } else if (!response.responseBody().isInstanceOf[BrokerRegistrationResponse]) {
-        error(s"Unable to register broker ${brokerId} because the controller returned an " +
+        error(s"Unable to register broker ${nodeId} because the controller returned an " +
           "invalid response type.")
         scheduleNextCommunicationAfterFailure()
       } else {
@@ -291,14 +291,19 @@ class BrokerLifecycleManager(val config: KafkaConfig,
           _brokerEpoch = message.data().brokerEpoch()
           registered = true
           initialRegistrationSucceeded = true
-          info(s"Successfully registered broker ${brokerId} with broker epoch ${_brokerEpoch}")
+          info(s"Successfully registered broker ${nodeId} with broker epoch ${_brokerEpoch}")
           scheduleNextCommunicationImmediately() // Immediately send a heartbeat
         } else {
-          info(s"Unable to register broker ${brokerId} because the controller returned " +
+          info(s"Unable to register broker ${nodeId} because the controller returned " +
             s"error ${errorCode}")
           scheduleNextCommunicationAfterFailure()
         }
       }
+    }
+
+    override def onTimeout(): Unit = {
+      info(s"Unable to register the broker because the RPC got timed out before it could be sent.")
+      scheduleNextCommunicationAfterFailure()
     }
   }
 
@@ -306,7 +311,7 @@ class BrokerLifecycleManager(val config: KafkaConfig,
     val metadataOffset = _highestMetadataOffsetProvider()
     val data = new BrokerHeartbeatRequestData().
       setBrokerEpoch(_brokerEpoch).
-      setBrokerId(brokerId).
+      setBrokerId(nodeId).
       setCurrentMetadataOffset(metadataOffset).
       setWantFence(!readyToUnfence).
       setWantShutDown(_state == BrokerState.PENDING_CONTROLLED_SHUTDOWN)
@@ -317,21 +322,21 @@ class BrokerLifecycleManager(val config: KafkaConfig,
       new BrokerHeartbeatResponseHandler())
   }
 
-  class BrokerHeartbeatResponseHandler extends RequestCompletionHandler {
+  class BrokerHeartbeatResponseHandler extends ControllerRequestCompletionHandler {
     override def onComplete(response: ClientResponse): Unit = {
       if (response.authenticationException() != null) {
-        error(s"Unable to send broker heartbeat for ${brokerId} because of an " +
+        error(s"Unable to send broker heartbeat for ${nodeId} because of an " +
           "authentication exception.", response.authenticationException());
         scheduleNextCommunicationAfterFailure()
       } else if (response.versionMismatch() != null) {
-        error(s"Unable to send broker heartbeat for ${brokerId} because of an API " +
+        error(s"Unable to send broker heartbeat for ${nodeId} because of an API " +
           "version problem.", response.versionMismatch());
         scheduleNextCommunicationAfterFailure()
       } else if (response.responseBody() == null) {
-        warn(s"Unable to send broker heartbeat for ${brokerId}. Retrying.")
+        warn(s"Unable to send broker heartbeat for ${nodeId}. Retrying.")
         scheduleNextCommunicationAfterFailure()
       } else if (!response.responseBody().isInstanceOf[BrokerHeartbeatResponse]) {
-        error(s"Unable to send broker heartbeat for ${brokerId} because the controller " +
+        error(s"Unable to send broker heartbeat for ${nodeId} because the controller " +
           "returned an invalid response type.")
         scheduleNextCommunicationAfterFailure()
       } else {
@@ -387,10 +392,15 @@ class BrokerLifecycleManager(val config: KafkaConfig,
               scheduleNextCommunicationAfterSuccess()
           }
         } else {
-          warn(s"Broker ${brokerId} sent a heartbeat request but received error ${errorCode}.")
+          warn(s"Broker ${nodeId} sent a heartbeat request but received error ${errorCode}.")
           scheduleNextCommunicationAfterFailure()
         }
       }
+    }
+
+    override def onTimeout(): Unit = {
+      info("Unable to send a heartbeat because the RPC got timed out before it could be sent.")
+      scheduleNextCommunicationAfterFailure()
     }
   }
 
