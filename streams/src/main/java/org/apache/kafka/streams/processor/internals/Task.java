@@ -109,10 +109,14 @@ public interface Task {
      */
     void initializeIfNeeded();
 
+    default void addPartitionsForOffsetReset(final Set<TopicPartition> partitionsForOffsetReset) {
+        throw new UnsupportedOperationException();
+    }
+
     /**
      * @throws StreamsException fatal error, should close the thread
      */
-    void completeRestoration();
+    void completeRestoration(final java.util.function.Consumer<Set<TopicPartition>> offsetResetter);
 
     void suspend();
 
