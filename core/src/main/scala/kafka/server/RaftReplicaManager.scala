@@ -92,6 +92,7 @@ class RaftReplicaManager(config: KafkaConfig,
         deferredPartitionsIterator.foreach { deferredPartition =>
           val partition = deferredPartition.partition
           val state = cachedState(metadataImage, partition)
+          sanityCheckStateWasButIsNoLongerDeferred(state.toTopicPartition, state)
           if (state.leaderId == localBrokerId) {
             leaderPartitionStates.put(partition, state)
           } else {
@@ -103,10 +104,10 @@ class RaftReplicaManager(config: KafkaConfig,
         }
 
         val partitionsMadeLeader = makeLeaders(partitionsAlreadyExisting, leaderPartitionStates,
-          highWatermarkCheckpoints, 0)
+          highWatermarkCheckpoints, MetadataPartition.OffsetNeverDeferred)
         val partitionsMadeFollower = makeFollowers(partitionsAlreadyExisting,
           brokers, followerPartitionStates,
-          highWatermarkCheckpoints, 0)
+          highWatermarkCheckpoints, MetadataPartition.OffsetNeverDeferred)
 
         // We need to transition anything that hasn't transitioned from Deferred to Offline to the Online state.
         // We also need to identify the leadership change callback(s) to invoke
@@ -240,6 +241,7 @@ class RaftReplicaManager(config: KafkaConfig,
               s"There should never be deferred partition metadata when we aren't deferring changes: $topicPartition")
 
             case HostedPartition.None =>
+              // it's a partition that we don't know about yet, so create it and mark it online
               val partition = Partition(topicPartition, time, configRepository, this)
               allPartitions.putIfNotExists(topicPartition, HostedPartition.Online(partition))
               Some(partition)
@@ -328,6 +330,7 @@ class RaftReplicaManager(config: KafkaConfig,
     replicaFetcherManager.removeFetcherForPartitions(partitionStates.keySet.map(_.topicPartition))
     stateChangeLogger.info(s"Metadata batch $metadataOffset: as part of become-deferred request, " +
       s"stopped any fetchers for ${partitionStates.size} partitions")
+    // mark all the partitions as deferred
     partitionStates.forKeyValue((partition, isNew) => allPartitions.put(partition.topicPartition,
       HostedPartition.Deferred(partition, isNew, onLeadershipChange)))
 
@@ -344,14 +347,14 @@ class RaftReplicaManager(config: KafkaConfig,
   private def makeLeaders(prevPartitionsAlreadyExisting: Set[MetadataPartition],
                           partitionStates: Map[Partition, MetadataPartition],
                           highWatermarkCheckpoints: OffsetCheckpoints,
-                          defaultMetadataOffset: Long): Set[Partition] = {
+                          metadataOffset: Long): Set[Partition] = {
     val partitionsMadeLeaders = mutable.Set[Partition]()
     val traceLoggingEnabled = stateChangeLogger.isTraceEnabled
-    val deferredBatches = defaultMetadataOffset > 0
+    val deferredBatches = metadataOffset == MetadataPartition.OffsetNeverDeferred
     val topLevelLogPrefix = if (deferredBatches)
       "Metadata batch <multiple deferred>"
     else
-      s"Metadata batch $defaultMetadataOffset"
+      s"Metadata batch $metadataOffset"
     try {
       // First stop fetchers for all the partitions
       replicaFetcherManager.removeFetcherForPartitions(partitionStates.keySet.map(_.topicPartition))
@@ -359,12 +362,8 @@ class RaftReplicaManager(config: KafkaConfig,
       // Update the partition information to be the leader
       partitionStates.forKeyValue { (partition, state) =>
         val topicPartition = partition.topicPartition
-        if (deferredBatches) {
-          sanityCheckStateWasButIsNoLongerDeferred(topicPartition, state)
-        }
-        val metadataOffset = if (deferredBatches) state.largestDeferredOffsetEverSeen else defaultMetadataOffset
         val partitionLogMsgPrefix = if (deferredBatches)
-          s"Apply deferred leader partition $topicPartition last seen in metadata batch $metadataOffset"
+          s"Apply deferred leader partition $topicPartition last seen in metadata batch ${state.largestDeferredOffsetEverSeen}"
         else
           s"Metadata batch $metadataOffset $topicPartition"
         try {
@@ -401,22 +400,18 @@ class RaftReplicaManager(config: KafkaConfig,
                             currentBrokers: MetadataBrokers,
                             partitionStates: Map[Partition, MetadataPartition],
                             highWatermarkCheckpoints: OffsetCheckpoints,
-                            defaultMetadataOffset: Long): Set[Partition] = {
+                            metadataOffset: Long): Set[Partition] = {
     val traceLoggingEnabled = stateChangeLogger.isTraceEnabled
-    val deferredBatches = defaultMetadataOffset > 0
+    val deferredBatches = metadataOffset == MetadataPartition.OffsetNeverDeferred
     val topLevelLogPrefix = if (deferredBatches)
       "Metadata batch <multiple deferred>"
     else
-      s"Metadata batch $defaultMetadataOffset"
+      s"Metadata batch $metadataOffset"
     if (traceLoggingEnabled) {
       partitionStates.forKeyValue { (partition, state) =>
         val topicPartition = partition.topicPartition
-        if (deferredBatches) {
-          sanityCheckStateWasButIsNoLongerDeferred(topicPartition, state)
-        }
-        val metadataOffset = if (deferredBatches) state.largestDeferredOffsetEverSeen else defaultMetadataOffset
         val partitionLogMsgPrefix = if (deferredBatches)
-          s"Apply deferred follower partition $topicPartition last seen in metadata batch $metadataOffset"
+          s"Apply deferred follower partition $topicPartition last seen in metadata batch ${state.largestDeferredOffsetEverSeen}"
         else
           s"Metadata batch $metadataOffset $topicPartition"
         stateChangeLogger.trace(s"$partitionLogMsgPrefix: starting the " +
@@ -431,12 +426,8 @@ class RaftReplicaManager(config: KafkaConfig,
     try {
       partitionStates.forKeyValue { (partition, state) =>
         val topicPartition = partition.topicPartition
-        if (deferredBatches) {
-          sanityCheckStateWasButIsNoLongerDeferred(topicPartition, state)
-        }
-        val metadataOffset = if (deferredBatches) state.largestDeferredOffsetEverSeen else defaultMetadataOffset
         val partitionLogMsgPrefix = if (deferredBatches)
-          s"Apply deferred follower partition $topicPartition last seen in metadata batch $metadataOffset"
+          s"Apply deferred follower partition $topicPartition last seen in metadata batch ${state.largestDeferredOffsetEverSeen}"
         else
           s"Metadata batch $metadataOffset $topicPartition"
         try {
@@ -487,9 +478,8 @@ class RaftReplicaManager(config: KafkaConfig,
             partitionsMadeFollower.foreach { partition =>
               val topicPartition = partition.topicPartition
               val state = partitionStates(partition)
-              val metadataOffset = if (deferredBatches) state.largestDeferredOffsetEverSeen else defaultMetadataOffset
               val partitionLogMsgPrefix = if (deferredBatches)
-                s"Apply deferred follower partition $topicPartition last seen in metadata batch $metadataOffset"
+                s"Apply deferred follower partition $topicPartition last seen in metadata batch ${state.largestDeferredOffsetEverSeen}"
               else
                 s"Metadata batch $metadataOffset $topicPartition"
               stateChangeLogger.trace(s"$partitionLogMsgPrefix: skipped the " +
@@ -520,9 +510,8 @@ class RaftReplicaManager(config: KafkaConfig,
       partitionsMadeFollower.foreach { partition =>
         val topicPartition = partition.topicPartition
         val state = partitionStates(partition)
-        val metadataOffset = if (deferredBatches) state.largestDeferredOffsetEverSeen else defaultMetadataOffset
         val partitionLogMsgPrefix = if (deferredBatches)
-          s"Apply deferred follower partition $topicPartition last seen in metadata batch $metadataOffset"
+          s"Apply deferred follower partition $topicPartition last seen in metadata batch ${state.largestDeferredOffsetEverSeen}"
         else
           s"Metadata batch $metadataOffset $topicPartition"
         stateChangeLogger.trace(s"$partitionLogMsgPrefix: completed become-follower " +

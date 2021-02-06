@@ -30,6 +30,7 @@ import scala.jdk.CollectionConverters._
 
 
 object MetadataPartition {
+  val OffsetNeverDeferred = 0 // must not be a valid offset we could see (i.e. must not be positive)
   def apply(name: String, record: PartitionRecord): MetadataPartition = {
     MetadataPartition(name,
       record.partitionId(),
