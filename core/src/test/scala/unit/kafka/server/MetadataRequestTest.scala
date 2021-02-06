@@ -167,8 +167,15 @@ class MetadataRequestTest extends AbstractMetadataRequestTest {
     val topic2 = "testAutoCreate_Topic"
     val response1 = sendMetadataRequest(new MetadataRequest.Builder(Seq(topic1, topic2).asJava, true).build)
     assertEquals(2, response1.topicMetadata.size)
-    var topicMetadata1 = response1.topicMetadata.asScala.head
-    val topicMetadata2 = response1.topicMetadata.asScala.toSeq(1)
+
+    val responseMap = response1.topicMetadata.asScala.map(metadata => (metadata.topic(), metadata)).toMap
+
+    assertTrue(responseMap.contains(topic1))
+    var topicMetadata1 = responseMap.get(topic1).head
+
+    assertTrue(responseMap.contains(topic1))
+    val topicMetadata2 = responseMap.get(topic2).head
+
     assertEquals(Errors.LEADER_NOT_AVAILABLE, topicMetadata1.error)
     assertEquals(topic1, topicMetadata1.topic)
     // The topic creation will be delayed, and the name collision error will be swallowed.
