@@ -98,7 +98,7 @@ class KafkaApisTest {
   private val zkClient: KafkaZkClient = EasyMock.createNiceMock(classOf[KafkaZkClient])
   private val metrics = new Metrics()
   private val brokerId = 1
-  private var metadataCache: MetadataCache = new MetadataCache(brokerId)
+  private var metadataCache: MetadataCache = MetadataCache.zkMetadataCache(brokerId)
   private val clientQuotaManager: ClientQuotaManager = EasyMock.createNiceMock(classOf[ClientQuotaManager])
   private val clientRequestQuotaManager: ClientRequestQuotaManager = EasyMock.createNiceMock(classOf[ClientRequestQuotaManager])
   private val clientControllerQuotaManager: ControllerMutationQuotaManager = EasyMock.createNiceMock(classOf[ControllerMutationQuotaManager])
@@ -193,7 +193,7 @@ class KafkaApisTest {
     EasyMock.expect(configRepository.topicConfig(resourceName)).andReturn(topicConfigs)
 
     metadataCache =
-      EasyMock.partialMockBuilder(classOf[MetadataCache])
+      EasyMock.partialMockBuilder(classOf[ZkMetadataCache])
         .withConstructor(classOf[Int])
         .withArgs(Int.box(brokerId))  // Need to box it for Scala 2.12 and before
         .addMockedMethod("contains", classOf[String])
@@ -1857,7 +1857,7 @@ class KafkaApisTest {
   def getAllTopicMetadataShouldNotCreateTopicOrReturnUnknownTopicPartition(): Unit = {
     // Setup: authorizer authorizes 2 topics, but one got deleted in metadata cache
     metadataCache =
-      EasyMock.partialMockBuilder(classOf[MetadataCache])
+      EasyMock.partialMockBuilder(classOf[ZkMetadataCache])
         .withConstructor(classOf[Int])
         .withArgs(Int.box(brokerId))  // Need to box it for Scala 2.12 and before
         .addMockedMethod("getAllTopics")
@@ -2843,7 +2843,7 @@ class KafkaApisTest {
     assertEquals(metadataCache.getControllerId.get, describeClusterResponse.data.controllerId)
     assertEquals(clusterId, describeClusterResponse.data.clusterId)
     assertEquals(8096, describeClusterResponse.data.clusterAuthorizedOperations)
-    assertEquals(metadataCache.getAliveBrokers.map(_.node(plaintextListener)).toSet,
+    assertEquals(metadataCache.getAliveBrokers.map(_.endpoints(plaintextListener.value())).toSet,
       describeClusterResponse.nodes.asScala.values.toSet)
   }
 
