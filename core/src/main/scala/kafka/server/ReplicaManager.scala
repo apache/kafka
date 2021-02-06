@@ -249,16 +249,16 @@ class ReplicaManager(val config: KafkaConfig,
   }
 
   /* epoch of the controller that last changed the leader */
-  @volatile var controllerEpoch: Int = KafkaController.InitialControllerEpoch
+  @volatile private[server] var controllerEpoch: Int = KafkaController.InitialControllerEpoch
   protected val localBrokerId = config.brokerId
   protected val allPartitions = new Pool[TopicPartition, HostedPartition](
     valueFactory = Some(tp => HostedPartition.Online(Partition(tp, time, configRepository, this)))
   )
   protected val replicaStateChangeLock = new Object
   val replicaFetcherManager = createReplicaFetcherManager(metrics, time, threadNamePrefix, quotaManagers.follower)
-  val replicaAlterLogDirsManager = createReplicaAlterLogDirsManager(quotaManagers.alterLogDirs, brokerTopicStats)
+  private[server] val replicaAlterLogDirsManager = createReplicaAlterLogDirsManager(quotaManagers.alterLogDirs, brokerTopicStats)
   private val highWatermarkCheckPointThreadStarted = new AtomicBoolean(false)
-  @volatile var highWatermarkCheckpoints: Map[String, OffsetCheckpointFile] = logManager.liveLogDirs.map(dir =>
+  @volatile private[server] var highWatermarkCheckpoints: Map[String, OffsetCheckpointFile] = logManager.liveLogDirs.map(dir =>
     (dir.getAbsolutePath, new OffsetCheckpointFile(new File(dir, ReplicaManager.HighWatermarkFilename), logDirFailureChannel))).toMap
 
   this.logIdent = s"[ReplicaManager broker=$localBrokerId] "
