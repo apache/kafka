@@ -279,9 +279,6 @@ public class IncrementalCooperativeAssignor implements ConnectAssignor {
                 System.out.println("revoke assignments:" + toExplicitlyRevoke);
                 exRevoke = true;
             }
-            //if (toExplicitlyRevoke.keySet().size() == 8) {
-                
-            //}
 
             toExplicitlyRevoke.forEach(
                 (worker, assignment) -> {
@@ -321,6 +318,9 @@ public class IncrementalCooperativeAssignor implements ConnectAssignor {
                 fillAssignments(memberConfigs.keySet(), Assignment.NO_ERROR, leaderId,
                                 memberConfigs.get(leaderId).url(), maxOffset, incrementalConnectorAssignments,
                                 incrementalTaskAssignments, toRevoke, delay, protocolVersion);
+        if (exRevoke) {
+            System.out.println("pre:" + previousAssignment);
+        }
         previousAssignment = computePreviousAssignment(toRevoke, connectorAssignments, taskAssignments, lostAssignments);
         if (exRevoke) {
             System.out.println("ass:" + assignments + ",pre:" + previousAssignment + ", mem:" + memberConfigs.keySet().size() + ", cur:" + currentWorkerAssignment + ",tas:" + taskAssignments);
