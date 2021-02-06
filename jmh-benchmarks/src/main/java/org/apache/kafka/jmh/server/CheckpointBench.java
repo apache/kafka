@@ -110,7 +110,7 @@ public class CheckpointBench {
         scheduler.startup();
         final BrokerTopicStats brokerTopicStats = new BrokerTopicStats();
         final MetadataCache metadataCache =
-                new MetadataCache(this.brokerProperties.brokerId());
+                MetadataCache.zkMetadataCache(this.brokerProperties.brokerId());
         this.quotaManagers =
                 QuotaFactory.instantiate(this.brokerProperties,
                         this.metrics,

@@ -67,7 +67,7 @@ class MetadataCacheControllerNodeProvider(
   override def get(): Option[Node] = {
     metadataCache.getControllerId
       .flatMap(metadataCache.getAliveBroker)
-      .map(_.node(listenerName))
+      .map(_.endpoints(listenerName.value))
   }
 }
 
