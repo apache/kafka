@@ -118,5 +118,9 @@ case class MetadataImage(partitions: MetadataPartitions,
   def topicIdToName(uuid: Uuid): Option[String] = {
     partitions.topicIdToName(uuid)
   }
+
+  def topicNameToId(name: String): Option[Uuid] = {
+    partitions.topicNameToId(name)
+  }
 }
 

@@ -172,8 +172,9 @@ object TestUtils extends Logging {
   def boundPort(server: KafkaServer, securityProtocol: SecurityProtocol = SecurityProtocol.PLAINTEXT): Int =
     server.boundPort(ListenerName.forSecurityProtocol(securityProtocol))
 
-  def createBroker(id: Int, host: String, port: Int, securityProtocol: SecurityProtocol = SecurityProtocol.PLAINTEXT): Broker =
-    new Broker(id, host, port, ListenerName.forSecurityProtocol(securityProtocol), securityProtocol)
+  def createBroker(id: Int, host: String, port: Int, securityProtocol: SecurityProtocol = SecurityProtocol.PLAINTEXT): MetadataBroker = {
+    MetadataBroker(id, null, Map(securityProtocol.name -> new Node(id, host, port)), false)
+  }
 
   def createMetadataBroker(id: Int,
                            host: String = "localhost",
@@ -678,7 +679,7 @@ object TestUtils extends Logging {
     brokers
   }
 
-  def deleteBrokersInZk(zkClient: KafkaZkClient, ids: Seq[Int]): Seq[Broker] = {
+  def deleteBrokersInZk(zkClient: KafkaZkClient, ids: Seq[Int]): Seq[MetadataBroker] = {
     val brokers = ids.map(createBroker(_, "localhost", 6667, SecurityProtocol.PLAINTEXT))
     ids.foreach(b => zkClient.deletePath(BrokerIdsZNode.path + "/" + b))
     brokers

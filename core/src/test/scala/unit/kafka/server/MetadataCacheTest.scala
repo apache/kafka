@@ -16,39 +16,48 @@
   */
 package kafka.server
 
-import java.util
-import java.util.Collections
-import util.Arrays.asList
-
 import org.apache.kafka.common.{Node, TopicPartition, Uuid}
+
+import java.util
+import util.Arrays.asList
 import org.apache.kafka.common.message.UpdateMetadataRequestData.{UpdateMetadataBroker, UpdateMetadataEndpoint, UpdateMetadataPartitionState}
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.record.RecordBatch
 import org.apache.kafka.common.requests.UpdateMetadataRequest
 import org.apache.kafka.common.security.auth.SecurityProtocol
-import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.Assertions._
+import org.junit.jupiter.params.ParameterizedTest
+import org.junit.jupiter.params.provider.MethodSource
 
+import java.util.Collections
 import scala.jdk.CollectionConverters._
+
+object MetadataCacheTest {
+  def cacheProvider(): util.stream.Stream[MetadataCache] = {
+    util.stream.Stream.of(
+      MetadataCache.zkMetadataCache(1),
+      MetadataCache.raftMetadataCache(1)
+    )
+  }
+}
 
 class MetadataCacheTest {
   val brokerEpoch = 0L
 
-  @Test
-  def getTopicMetadataNonExistingTopics(): Unit = {
+  @ParameterizedTest
+  @MethodSource(Array("cacheProvider"))
+  def getTopicMetadataNonExistingTopics(cache: MetadataCache): Unit = {
     val topic = "topic"
-    val cache = new MetadataCache(1)
     val topicMetadata = cache.getTopicMetadata(Set(topic), ListenerName.forSecurityProtocol(SecurityProtocol.PLAINTEXT))
     assertTrue(topicMetadata.isEmpty)
   }
 
-  @Test
-  def getTopicMetadata(): Unit = {
+  @ParameterizedTest
+  @MethodSource(Array("cacheProvider"))
+  def getTopicMetadata(cache: MetadataCache): Unit = {
     val topic0 = "topic-0"
     val topic1 = "topic-1"
-
-    val cache = new MetadataCache(1)
 
     val zkVersion = 3
     val controllerId = 2
@@ -135,7 +144,7 @@ class MetadataCacheTest {
           assertEquals(Errors.NONE.code, partitionMetadata.errorCode)
           assertEquals(partitionId, partitionMetadata.partitionIndex)
           val partitionState = topicPartitionStates.find(_.partitionIndex == partitionId).getOrElse(
-            throw new AssertionError(s"Unable to find partition state for partition $partitionId"))
+            fail(s"Unable to find partition state for partition $partitionId"))
           assertEquals(partitionState.leader, partitionMetadata.leaderId)
           assertEquals(partitionState.leaderEpoch, partitionMetadata.leaderEpoch)
           assertEquals(partitionState.isr, partitionMetadata.isrNodes)
@@ -149,8 +158,9 @@ class MetadataCacheTest {
 
   }
 
-  @Test
-  def getTopicMetadataPartitionLeaderNotAvailable(): Unit = {
+  @ParameterizedTest
+  @MethodSource(Array("cacheProvider"))
+  def getTopicMetadataPartitionLeaderNotAvailable(cache: MetadataCache): Unit = {
     val securityProtocol = SecurityProtocol.PLAINTEXT
     val listenerName = ListenerName.forSecurityProtocol(securityProtocol)
     val brokers = Seq(new UpdateMetadataBroker()
@@ -162,14 +172,15 @@ class MetadataCacheTest {
         .setListener(listenerName.value)).asJava))
     val metadataCacheBrokerId = 0
     // leader is not available. expect LEADER_NOT_AVAILABLE for any metadata version.
-    verifyTopicMetadataPartitionLeaderOrEndpointNotAvailable(metadataCacheBrokerId, brokers, listenerName,
+    verifyTopicMetadataPartitionLeaderOrEndpointNotAvailable(cache, metadataCacheBrokerId, brokers, listenerName,
       leader = 1, Errors.LEADER_NOT_AVAILABLE, errorUnavailableListeners = false)
-    verifyTopicMetadataPartitionLeaderOrEndpointNotAvailable(metadataCacheBrokerId, brokers, listenerName,
+    verifyTopicMetadataPartitionLeaderOrEndpointNotAvailable(cache, metadataCacheBrokerId, brokers, listenerName,
       leader = 1, Errors.LEADER_NOT_AVAILABLE, errorUnavailableListeners = true)
   }
 
-  @Test
-  def getTopicMetadataPartitionListenerNotAvailableOnLeader(): Unit = {
+  @ParameterizedTest
+  @MethodSource(Array("cacheProvider"))
+  def getTopicMetadataPartitionListenerNotAvailableOnLeader(cache: MetadataCache): Unit = {
     // when listener name is not present in the metadata cache for a broker, getTopicMetadata should
     // return LEADER_NOT_AVAILABLE or LISTENER_NOT_FOUND errors for old and new versions respectively.
     val plaintextListenerName = ListenerName.forSecurityProtocol(SecurityProtocol.PLAINTEXT)
@@ -199,22 +210,21 @@ class MetadataCacheTest {
         .setEndpoints(broker1Endpoints.asJava))
     val metadataCacheBrokerId = 0
     // leader available in cache but listener name not present. expect LISTENER_NOT_FOUND error for new metadata version
-    verifyTopicMetadataPartitionLeaderOrEndpointNotAvailable(metadataCacheBrokerId, brokers, sslListenerName,
+    verifyTopicMetadataPartitionLeaderOrEndpointNotAvailable(cache, metadataCacheBrokerId, brokers, sslListenerName,
       leader = 1, Errors.LISTENER_NOT_FOUND, errorUnavailableListeners = true)
     // leader available in cache but listener name not present. expect LEADER_NOT_AVAILABLE error for old metadata version
-    verifyTopicMetadataPartitionLeaderOrEndpointNotAvailable(metadataCacheBrokerId, brokers, sslListenerName,
+    verifyTopicMetadataPartitionLeaderOrEndpointNotAvailable(cache, metadataCacheBrokerId, brokers, sslListenerName,
       leader = 1, Errors.LEADER_NOT_AVAILABLE, errorUnavailableListeners = false)
   }
 
-  private def verifyTopicMetadataPartitionLeaderOrEndpointNotAvailable(metadataCacheBrokerId: Int,
+  private def verifyTopicMetadataPartitionLeaderOrEndpointNotAvailable(cache: MetadataCache,
+                                                                       metadataCacheBrokerId: Int,
                                                                        brokers: Seq[UpdateMetadataBroker],
                                                                        listenerName: ListenerName,
                                                                        leader: Int,
                                                                        expectedError: Errors,
                                                                        errorUnavailableListeners: Boolean): Unit = {
     val topic = "topic"
-
-    val cache = new MetadataCache(metadataCacheBrokerId)
 
     val zkVersion = 3
     val controllerId = 2
@@ -233,7 +243,7 @@ class MetadataCacheTest {
 
     val version = ApiKeys.UPDATE_METADATA.latestVersion
     val updateMetadataRequest = new UpdateMetadataRequest.Builder(version, controllerId, controllerEpoch, brokerEpoch,
-      partitionStates.asJava, brokers.asJava, Collections.emptyMap()).build()
+      partitionStates.asJava, brokers.asJava, util.Collections.emptyMap()).build()
     cache.updateMetadata(15, updateMetadataRequest)
 
     val topicMetadatas = cache.getTopicMetadata(Set(topic), listenerName, errorUnavailableListeners = errorUnavailableListeners)
@@ -252,11 +262,10 @@ class MetadataCacheTest {
     assertEquals(List(0), partitionMetadata.replicaNodes.asScala)
   }
 
-  @Test
-  def getTopicMetadataReplicaNotAvailable(): Unit = {
+  @ParameterizedTest
+  @MethodSource(Array("cacheProvider"))
+  def getTopicMetadataReplicaNotAvailable(cache: MetadataCache): Unit = {
     val topic = "topic"
-
-    val cache = new MetadataCache(1)
 
     val zkVersion = 3
     val controllerId = 2
@@ -290,7 +299,7 @@ class MetadataCacheTest {
 
     val version = ApiKeys.UPDATE_METADATA.latestVersion
     val updateMetadataRequest = new UpdateMetadataRequest.Builder(version, controllerId, controllerEpoch, brokerEpoch,
-      partitionStates.asJava, brokers.asJava, Collections.emptyMap()).build()
+      partitionStates.asJava, brokers.asJava, util.Collections.emptyMap()).build()
     cache.updateMetadata(15, updateMetadataRequest)
 
     // Validate errorUnavailableEndpoints = false
@@ -326,11 +335,10 @@ class MetadataCacheTest {
     assertEquals(Set(0), partitionMetadataWithError.isrNodes.asScala.toSet)
   }
 
-  @Test
-  def getTopicMetadataIsrNotAvailable(): Unit = {
+  @ParameterizedTest
+  @MethodSource(Array("cacheProvider"))
+  def getTopicMetadataIsrNotAvailable(cache: MetadataCache): Unit = {
     val topic = "topic"
-
-    val cache = new MetadataCache(1)
 
     val zkVersion = 3
     val controllerId = 2
@@ -364,7 +372,7 @@ class MetadataCacheTest {
 
     val version = ApiKeys.UPDATE_METADATA.latestVersion
     val updateMetadataRequest = new UpdateMetadataRequest.Builder(version, controllerId, controllerEpoch, brokerEpoch,
-      partitionStates.asJava, brokers.asJava, Collections.emptyMap()).build()
+      partitionStates.asJava, brokers.asJava, util.Collections.emptyMap()).build()
     cache.updateMetadata(15, updateMetadataRequest)
 
     // Validate errorUnavailableEndpoints = false
@@ -400,10 +408,10 @@ class MetadataCacheTest {
     assertEquals(Set(0), partitionMetadataWithError.isrNodes.asScala.toSet)
   }
 
-  @Test
-  def getTopicMetadataWithNonSupportedSecurityProtocol(): Unit = {
+  @ParameterizedTest
+  @MethodSource(Array("cacheProvider"))
+  def getTopicMetadataWithNonSupportedSecurityProtocol(cache: MetadataCache): Unit = {
     val topic = "topic"
-    val cache = new MetadataCache(1)
     val securityProtocol = SecurityProtocol.PLAINTEXT
     val brokers = Seq(new UpdateMetadataBroker()
       .setId(0)
@@ -416,7 +424,7 @@ class MetadataCacheTest {
     val controllerEpoch = 1
     val leader = 0
     val leaderEpoch = 0
-    val replicas = asList[Integer](0, 1)
+    val replicas = asList[Integer](0)
     val isr = asList[Integer](0, 1)
     val partitionStates = Seq(new UpdateMetadataPartitionState()
       .setTopicName(topic)
@@ -429,7 +437,7 @@ class MetadataCacheTest {
       .setReplicas(replicas))
     val version = ApiKeys.UPDATE_METADATA.latestVersion
     val updateMetadataRequest = new UpdateMetadataRequest.Builder(version, 2, controllerEpoch, brokerEpoch, partitionStates.asJava,
-      brokers.asJava, Collections.emptyMap()).build()
+      brokers.asJava, util.Collections.emptyMap()).build()
     cache.updateMetadata(15, updateMetadataRequest)
 
     val topicMetadata = cache.getTopicMetadata(Set(topic), ListenerName.forSecurityProtocol(SecurityProtocol.SSL))
@@ -438,10 +446,10 @@ class MetadataCacheTest {
     assertEquals(RecordBatch.NO_PARTITION_LEADER_EPOCH, topicMetadata.head.partitions.get(0).leaderId)
   }
 
-  @Test
-  def getAliveBrokersShouldNotBeMutatedByUpdateCache(): Unit = {
+  @ParameterizedTest
+  @MethodSource(Array("cacheProvider"))
+  def getAliveBrokersShouldNotBeMutatedByUpdateCache(cache: MetadataCache): Unit = {
     val topic = "topic"
-    val cache = new MetadataCache(1)
 
     def updateCache(brokerIds: Seq[Int]): Unit = {
       val brokers = brokerIds.map { brokerId =>
@@ -458,7 +466,7 @@ class MetadataCacheTest {
       val controllerEpoch = 1
       val leader = 0
       val leaderEpoch = 0
-      val replicas = asList[Integer](0, 1)
+      val replicas = asList[Integer](0)
       val isr = asList[Integer](0, 1)
       val partitionStates = Seq(new UpdateMetadataPartitionState()
         .setTopicName(topic)
@@ -471,7 +479,7 @@ class MetadataCacheTest {
         .setReplicas(replicas))
       val version = ApiKeys.UPDATE_METADATA.latestVersion
       val updateMetadataRequest = new UpdateMetadataRequest.Builder(version, 2, controllerEpoch, brokerEpoch, partitionStates.asJava,
-        brokers.asJava, Collections.emptyMap()).build()
+        brokers.asJava, util.Collections.emptyMap()).build()
       cache.updateMetadata(15, updateMetadataRequest)
     }
 
@@ -483,9 +491,9 @@ class MetadataCacheTest {
     assertEquals(initialBrokerIds.toSet, aliveBrokersFromCache.map(_.id).toSet)
   }
 
-  @Test
-  def testGetClusterMetadataWithOfflineReplicas(): Unit = {
-    val cache = new MetadataCache(1)
+  @ParameterizedTest
+  @MethodSource(Array("cacheProvider"))
+  def testGetClusterMetadataWithOfflineReplicas(cache: MetadataCache): Unit = {
     val topic = "topic"
     val topicPartition = new TopicPartition(topic, 0)
     val securityProtocol = SecurityProtocol.PLAINTEXT
@@ -539,5 +547,4 @@ class MetadataCacheTest {
     assertEquals(Seq(expectedNode0, expectedNode1), partitionInfo.inSyncReplicas.toSeq)
     assertEquals(Seq(expectedNode1), partitionInfo.offlineReplicas.toSeq)
   }
-
 }

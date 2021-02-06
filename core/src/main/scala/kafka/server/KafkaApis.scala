@@ -1281,7 +1281,7 @@ class KafkaApis(val requestChannel: RequestChannel,
        MetadataResponse.prepareResponse(
          requestVersion,
          requestThrottleMs,
-         brokers.flatMap(_.getNode(request.context.listenerName)).asJava,
+         brokers.flatMap(_.endpoints.get(request.context.listenerName.value())).toList.asJava,
          clusterId,
          metadataCache.getControllerId.getOrElse(MetadataResponse.NO_CONTROLLER_ID),
          completeTopicMetadata.asJava,
@@ -1412,7 +1412,7 @@ class KafkaApis(val requestChannel: RequestChannel,
             .find(_.partitionIndex == partition)
             .filter(_.leaderId != MetadataResponse.NO_LEADER_ID)
             .flatMap(metadata => metadataCache.getAliveBroker(metadata.leaderId))
-            .flatMap(_.getNode(request.context.listenerName))
+            .flatMap(_.endpoints.get(request.context.listenerName.value()))
             .filterNot(_.isEmpty)
 
           coordinatorEndpoint match {
@@ -3275,7 +3275,8 @@ class KafkaApis(val requestChannel: RequestChannel,
         .setControllerId(controllerId)
         .setClusterAuthorizedOperations(clusterAuthorizedOperations);
 
-      brokers.flatMap(_.getNode(request.context.listenerName)).foreach { broker =>
+
+      brokers.flatMap(_.endpoints.get(request.context.listenerName.value())).foreach { broker =>
         data.brokers.add(new DescribeClusterResponseData.DescribeClusterBroker()
           .setBrokerId(broker.id)
           .setHost(broker.host)

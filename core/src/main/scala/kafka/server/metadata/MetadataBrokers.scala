@@ -20,8 +20,7 @@ package kafka.server.metadata
 import java.util
 import java.util.Collections
 import java.util.concurrent.ThreadLocalRandom
-
-import kafka.cluster.BrokerEndPoint
+import kafka.cluster.{Broker, BrokerEndPoint}
 import kafka.common.BrokerEndPointNotAvailableException
 import org.apache.kafka.common.Node
 import org.apache.kafka.common.metadata.RegisterBrokerRecord
@@ -37,7 +36,15 @@ object MetadataBroker {
         endPoint.name() ->
           new Node(record.brokerId, endPoint.host, endPoint.port, record.rack)
       }.toMap,
-      true)
+      fenced = true)
+  }
+
+  def apply(broker: Broker): MetadataBroker = {
+    new MetadataBroker(broker.id, broker.rack.orNull,
+      broker.endPoints.map { endpoint =>
+        endpoint.listenerName.value -> new Node(broker.id, endpoint.host, endpoint.port, broker.rack.orNull)
+      }.toMap,
+      fenced = false)
   }
 }
 
