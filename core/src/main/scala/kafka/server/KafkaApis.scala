@@ -1118,8 +1118,16 @@ class KafkaApis(val requestChannel: RequestChannel,
         autoTopicCreationManager.createTopics(nonExistingTopics, controllerMutationQuota)
       } else {
         nonExistingTopics.map { topic =>
+          val error = try {
+            Topic.validate(topic)
+            Errors.UNKNOWN_TOPIC_OR_PARTITION
+          } catch {
+            case _: InvalidTopicException =>
+              Errors.INVALID_TOPIC_EXCEPTION
+          }
+
           metadataResponseTopic(
-            Errors.UNKNOWN_TOPIC_OR_PARTITION,
+            error,
             topic,
             Topic.isInternal(topic),
             util.Collections.emptyList()
@@ -1340,10 +1348,10 @@ class KafkaApis(val requestChannel: RequestChannel,
           Errors.COORDINATOR_NOT_AVAILABLE, Node.noNode, requestThrottleMs))
       } else {
         def createResponse(requestThrottleMs: Int): AbstractResponse = {
-          val responseBody = if (topicMetadata.errorCode != Errors.NONE.code) {
-            createFindCoordinatorResponse(Errors.COORDINATOR_NOT_AVAILABLE, Node.noNode)
+          val responseBody = if (topicMetadata.head.errorCode != Errors.NONE.code) {
+            createFindCoordinatorResponse(Errors.COORDINATOR_NOT_AVAILABLE, Node.noNode, requestThrottleMs)
           } else {
-            val coordinatorEndpoint = topicMetadata.partitions.asScala
+            val coordinatorEndpoint = topicMetadata.head.partitions.asScala
               .find(_.partitionIndex == partition)
               .filter(_.leaderId != MetadataResponse.NO_LEADER_ID)
               .flatMap(metadata => metadataCache.getAliveBroker(metadata.leaderId))
@@ -1352,14 +1360,14 @@ class KafkaApis(val requestChannel: RequestChannel,
 
             coordinatorEndpoint match {
               case Some(endpoint) =>
-                createFindCoordinatorResponse(Errors.NONE, endpoint)
+                createFindCoordinatorResponse(Errors.NONE, endpoint, requestThrottleMs)
               case _ =>
-                createFindCoordinatorResponse(Errors.COORDINATOR_NOT_AVAILABLE, Node.noNode)
+                createFindCoordinatorResponse(Errors.COORDINATOR_NOT_AVAILABLE, Node.noNode, requestThrottleMs)
             }
-            trace("Sending FindCoordinator response %s for correlation id %d to client %s."
-              .format(responseBody, request.header.correlationId, request.header.clientId))
-            responseBody
           }
+          trace("Sending FindCoordinator response %s for correlation id %d to client %s."
+            .format(responseBody, request.header.correlationId, request.header.clientId))
+          responseBody
         }
         requestHelper.sendResponseMaybeThrottle(request, createResponse)
       }
