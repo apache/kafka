@@ -85,20 +85,20 @@ class MetadataRequestWithForwardingTest extends AbstractMetadataRequestTest {
     val topic2 = "testAutoCreate_Topic"
     val response1 = sendMetadataRequest(new MetadataRequest.Builder(Seq(topic1, topic2).asJava, true).build)
     assertEquals(2, response1.topicMetadata.size)
-    var topicMetadata1 = response1.topicMetadata.asScala.head
-    val topicMetadata2 = response1.topicMetadata.asScala.toSeq(1)
-    assertEquals(Errors.LEADER_NOT_AVAILABLE, topicMetadata1.error)
-    assertEquals(topic1, topicMetadata1.topic)
-    // The topic creation will be delayed, and the name collision error will be swallowed.
-    assertEquals(Errors.INVALID_TOPIC_EXCEPTION, topicMetadata2.error)
-    assertEquals(topic2, topicMetadata2.topic)
 
-    TestUtils.waitUntilLeaderIsElectedOrChanged(zkClient, topic1, 0)
-    TestUtils.waitForPartitionMetadata(servers, topic1, 0)
+    val responseMap = response1.topicMetadata.asScala.map(metadata => (metadata.topic(), metadata.error)).toMap
+
+    assertEquals(Set(topic1, topic2), responseMap.keySet)
+    // The topic creation will be delayed, and the name collision error will be swallowed.
+    assertEquals(Set(Errors.LEADER_NOT_AVAILABLE, Errors.INVALID_TOPIC_EXCEPTION), responseMap.values.toSet)
+
+    val topicCreated = responseMap.head._1
+    TestUtils.waitUntilLeaderIsElectedOrChanged(zkClient, topicCreated, 0)
+    TestUtils.waitForPartitionMetadata(servers, topicCreated, 0)
 
     // retry the metadata for the first auto created topic
-    val response2 = sendMetadataRequest(new MetadataRequest.Builder(Seq(topic1).asJava, true).build)
-    topicMetadata1 = response2.topicMetadata.asScala.head
+    val response2 = sendMetadataRequest(new MetadataRequest.Builder(Seq(topicCreated).asJava, true).build)
+    val topicMetadata1 = response2.topicMetadata.asScala.head
     assertEquals(Errors.NONE, topicMetadata1.error)
     assertEquals(Seq(Errors.NONE), topicMetadata1.partitionMetadata.asScala.map(_.error))
     assertEquals(1, topicMetadata1.partitionMetadata.size)

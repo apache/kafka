@@ -168,26 +168,19 @@ class MetadataRequestTest extends AbstractMetadataRequestTest {
     val response1 = sendMetadataRequest(new MetadataRequest.Builder(Seq(topic1, topic2).asJava, true).build)
     assertEquals(2, response1.topicMetadata.size)
 
-    val responseMap = response1.topicMetadata.asScala.map(metadata => (metadata.topic(), metadata)).toMap
+    val responseMap = response1.topicMetadata.asScala.map(metadata => (metadata.topic(), metadata.error)).toMap
 
-    assertTrue(responseMap.contains(topic1))
-    var topicMetadata1 = responseMap.get(topic1).head
-
-    assertTrue(responseMap.contains(topic1))
-    val topicMetadata2 = responseMap.get(topic2).head
-
-    assertEquals(Errors.LEADER_NOT_AVAILABLE, topicMetadata1.error)
-    assertEquals(topic1, topicMetadata1.topic)
+    assertEquals(Set(topic1, topic2), responseMap.keySet)
     // The topic creation will be delayed, and the name collision error will be swallowed.
-    assertEquals(Errors.INVALID_TOPIC_EXCEPTION, topicMetadata2.error)
-    assertEquals(topic2, topicMetadata2.topic)
+    assertEquals(Set(Errors.LEADER_NOT_AVAILABLE, Errors.INVALID_TOPIC_EXCEPTION), responseMap.values.toSet)
 
-    TestUtils.waitUntilLeaderIsElectedOrChanged(zkClient, topic1, 0)
-    TestUtils.waitForPartitionMetadata(servers, topic1, 0)
+    val topicCreated = responseMap.head._1
+    TestUtils.waitUntilLeaderIsElectedOrChanged(zkClient, topicCreated, 0)
+    TestUtils.waitForPartitionMetadata(servers, topicCreated, 0)
 
     // retry the metadata for the first auto created topic
-    val response2 = sendMetadataRequest(new MetadataRequest.Builder(Seq(topic1).asJava, true).build)
-    topicMetadata1 = response2.topicMetadata.asScala.head
+    val response2 = sendMetadataRequest(new MetadataRequest.Builder(Seq(topicCreated).asJava, true).build)
+    val topicMetadata1 = response2.topicMetadata.asScala.head
     assertEquals(Errors.NONE, topicMetadata1.error)
     assertEquals(Seq(Errors.NONE), topicMetadata1.partitionMetadata.asScala.map(_.error))
     assertEquals(1, topicMetadata1.partitionMetadata.size)
