@@ -20,6 +20,7 @@ package kafka.server.metadata
 import java.util
 import java.util.Collections
 
+import kafka.server.metadata.MetadataPartition.OffsetNeverDeferred
 import org.apache.kafka.common.message.LeaderAndIsrRequestData
 import org.apache.kafka.common.message.LeaderAndIsrRequestData.LeaderAndIsrPartitionState
 import org.apache.kafka.common.message.UpdateMetadataRequestData.UpdateMetadataPartitionState
@@ -67,7 +68,7 @@ case class MetadataPartition(topicName: String,
                              offlineReplicas: util.List[Integer],
                              addingReplicas: util.List[Integer],
                              removingReplicas: util.List[Integer],
-                             largestDeferredOffsetEverSeen: Long = 0,
+                             largestDeferredOffsetEverSeen: Long = OffsetNeverDeferred,
                              isCurrentlyDeferringChanges: Boolean = false) {
   def toTopicPartition: TopicPartition = new TopicPartition(topicName, partitionIndex)
 
