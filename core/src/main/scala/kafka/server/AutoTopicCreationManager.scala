@@ -169,6 +169,8 @@ class DefaultAutoTopicCreationManager(
         }
     }
 
+    clearInflightRequests(creatableTopics)
+
     creatableTopicResponses
   }
 
