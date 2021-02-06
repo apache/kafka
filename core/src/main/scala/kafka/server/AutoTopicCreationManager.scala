@@ -278,11 +278,10 @@ class DefaultAutoTopicCreationManager(
 
       validationError match {
         case Some(error) =>
-          uncreatableTopics.addOne(new MetadataResponseTopic()
+          uncreatableTopics += new MetadataResponseTopic()
             .setErrorCode(error.code)
             .setName(topic)
             .setIsInternal(Topic.isInternal(topic))
-          )
         case None =>
           creatableTopics.put(topic, creatableTopic(topic))
       }
