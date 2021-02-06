@@ -100,7 +100,7 @@ abstract class AbstractCreateTopicsRequestTest extends BaseRequestTest {
     request.data.topics.forEach { topic =>
       def verifyMetadata(socketServer: SocketServer) = {
         val metadata = sendMetadataRequest(
-          new MetadataRequest.Builder(List(topic.name()).asJava, true).build()).topicMetadata.asScala
+          new MetadataRequest.Builder(List(topic.name()).asJava, false).build()).topicMetadata.asScala
         val metadataForTopic = metadata.filter(_.topic == topic.name()).head
 
         val partitions = if (!topic.assignments().isEmpty)

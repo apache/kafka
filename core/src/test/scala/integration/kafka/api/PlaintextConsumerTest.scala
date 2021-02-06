@@ -557,6 +557,8 @@ class PlaintextConsumerTest extends BaseConsumerTest {
   @Test
   def testPartitionsForAutoCreate(): Unit = {
     val consumer = createConsumer()
+    // First call would create the topic
+    consumer.partitionsFor("non-exist-topic")
     val partitions = consumer.partitionsFor("non-exist-topic")
     assertFalse(partitions.isEmpty)
   }

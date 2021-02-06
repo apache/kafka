@@ -132,6 +132,8 @@ class KafkaServer(
 
   var forwardingManager: Option[ForwardingManager] = None
 
+  var autoTopicCreationManager: AutoTopicCreationManager = null
+
   var alterIsrManager: AlterIsrManager = null
 
   var kafkaScheduler: KafkaScheduler = null
@@ -294,6 +296,7 @@ class KafkaServer(
         kafkaController = new KafkaController(config, zkClient, time, metrics, brokerInfo, brokerEpoch, tokenManager, brokerFeatures, featureCache, threadNamePrefix)
         kafkaController.startup()
 
+        /* start forwarding manager */
         if (enableForwarding) {
           this.forwardingManager = Some(ForwardingManager(
             config,
@@ -319,6 +322,21 @@ class KafkaServer(
         transactionCoordinator.startup(
           () => zkClient.getTopicPartitionCount(Topic.TRANSACTION_STATE_TOPIC_NAME).getOrElse(config.transactionTopicPartitions))
 
+        /* start auto topic creation manager */
+        this.autoTopicCreationManager = AutoTopicCreationManager(
+          config,
+          metadataCache,
+          time,
+          metrics,
+          threadNamePrefix,
+          adminManager,
+          kafkaController,
+          groupCoordinator,
+          transactionCoordinator,
+          enableForwarding
+        )
+        autoTopicCreationManager.start()
+
         /* Get the authorizer and initialize it if one is specified.*/
         authorizer = config.authorizer
         authorizer.foreach(_.configure(config.originals))
@@ -340,7 +358,7 @@ class KafkaServer(
         /* start processing requests */
         val zkSupport = ZkSupport(adminManager, kafkaController, zkClient, forwardingManager)
         dataPlaneRequestProcessor = new KafkaApis(socketServer.dataPlaneRequestChannel, zkSupport, replicaManager, groupCoordinator, transactionCoordinator,
-          config.brokerId, config, configRepository, metadataCache, metrics, authorizer, quotaManagers,
+          autoTopicCreationManager, config.brokerId, config, configRepository, metadataCache, metrics, authorizer, quotaManagers,
           fetchManager, brokerTopicStats, clusterId, time, tokenManager, brokerFeatures, featureCache)
 
         dataPlaneRequestHandlerPool = new KafkaRequestHandlerPool(config.brokerId, socketServer.dataPlaneRequestChannel, dataPlaneRequestProcessor, time,
@@ -348,7 +366,7 @@ class KafkaServer(
 
         socketServer.controlPlaneRequestChannelOpt.foreach { controlPlaneRequestChannel =>
           controlPlaneRequestProcessor = new KafkaApis(controlPlaneRequestChannel, zkSupport, replicaManager, groupCoordinator, transactionCoordinator,
-            config.brokerId, config, configRepository, metadataCache, metrics, authorizer, quotaManagers,
+            autoTopicCreationManager, config.brokerId, config, configRepository, metadataCache, metrics, authorizer, quotaManagers,
             fetchManager, brokerTopicStats, clusterId, time, tokenManager, brokerFeatures, featureCache)
 
           controlPlaneRequestHandlerPool = new KafkaRequestHandlerPool(config.brokerId, socketServer.controlPlaneRequestChannelOpt.get, controlPlaneRequestProcessor, time,
@@ -674,8 +692,10 @@ class KafkaServer(
         if (alterIsrManager != null)
           CoreUtils.swallow(alterIsrManager.shutdown(), this)
 
-        if (forwardingManager != null)
-          CoreUtils.swallow(forwardingManager.foreach(_.shutdown()), this)
+        CoreUtils.swallow(forwardingManager.foreach(_.shutdown()), this)
+
+        if (autoTopicCreationManager != null)
+          CoreUtils.swallow(autoTopicCreationManager.shutdown(), this)
 
         if (logManager != null)
           CoreUtils.swallow(logManager.shutdown(), this)
