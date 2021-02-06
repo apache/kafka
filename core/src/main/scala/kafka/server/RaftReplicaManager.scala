@@ -41,7 +41,7 @@ class RaftReplicaManager(config: KafkaConfig,
                          isShuttingDown: AtomicBoolean,
                          quotaManagers: QuotaManagers,
                          brokerTopicStats: BrokerTopicStats,
-                         metadataCache: MetadataCache,
+                         raftMetadataCache: RaftMetadataCache,
                          logDirFailureChannel: LogDirFailureChannel,
                          delayedProducePurgatory: DelayedOperationPurgatory[DelayedProduce],
                          delayedFetchPurgatory: DelayedOperationPurgatory[DelayedFetch],
@@ -49,10 +49,9 @@ class RaftReplicaManager(config: KafkaConfig,
                          delayedElectLeaderPurgatory: DelayedOperationPurgatory[DelayedElectLeader],
                          threadNamePrefix: Option[String],
                          configRepository: ConfigRepository,
-                         alterIsrManager: AlterIsrManager,
-                         raftMetadataCache: RaftMetadataCache) extends ReplicaManager(
+                         alterIsrManager: AlterIsrManager) extends ReplicaManager(
   config, metrics, time, None, scheduler, logManager, isShuttingDown, quotaManagers,
-  brokerTopicStats, metadataCache, logDirFailureChannel, delayedProducePurgatory, delayedFetchPurgatory,
+  brokerTopicStats, raftMetadataCache, logDirFailureChannel, delayedProducePurgatory, delayedFetchPurgatory,
   delayedDeleteRecordsPurgatory, delayedElectLeaderPurgatory, threadNamePrefix, configRepository, alterIsrManager) {
 
   if (config.requiresZookeeper) {
