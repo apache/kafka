@@ -262,11 +262,10 @@ public class FlattenTest {
     }
 
     @Test
-    public void testUnsupportedTypeInMap() {
+    public void testArray() {
         xformValue.configure(Collections.<String, String>emptyMap());
         Object value = Collections.singletonMap("foo", Arrays.asList("bar", "baz"));
-        assertThrows(DataException.class, () -> xformValue.apply(new SourceRecord(null, null,
-                "topic", 0, null, value)));
+        assertEquals(value, xformValue.apply(new SourceRecord(null, null, "topic", null, null, null, value)).value());
     }
 
     @Test
