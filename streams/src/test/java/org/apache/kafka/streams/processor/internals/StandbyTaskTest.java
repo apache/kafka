@@ -167,7 +167,7 @@ public class StandbyTaskTest {
 
         task = createStandbyTask();
 
-        assertThrows(LockException.class, task::initializeIfNeeded);
+        assertThrows(LockException.class, () -> task.initializeIfNeeded());
         task = null;
     }
 
