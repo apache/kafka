@@ -33,7 +33,7 @@ import kafka.server.{FetchMetadata => SFetchMetadata}
 import kafka.server.HostedPartition.Online
 import kafka.server.QuotaFactory.QuotaManagers
 import kafka.server.checkpoints.{LazyOffsetCheckpoints, OffsetCheckpointFile, OffsetCheckpoints}
-import kafka.server.metadata.{ConfigRepository, MetadataPartition}
+import kafka.server.metadata.ConfigRepository
 import kafka.utils._
 import kafka.utils.Implicits._
 import kafka.zk.KafkaZkClient
@@ -186,7 +186,6 @@ object HostedPartition {
    * quorum; it never happens when using ZooKeeper.
    */
   final case class Deferred(partition: Partition,
-                            metadata: MetadataPartition, // should get from metadata cache instead
                             isNew: Boolean,
                             onLeadershipChange: (Iterable[Partition], Iterable[Partition]) => Unit) extends NonOffline
 
