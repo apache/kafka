@@ -1834,7 +1834,6 @@ class ReplicaManager(val config: KafkaConfig,
     }
   }
 
-  // Used only by test
   def markPartitionOffline(tp: TopicPartition): Unit = replicaStateChangeLock synchronized {
     allPartitions.put(tp, HostedPartition.Offline)
     Partition.removeMetrics(tp)
