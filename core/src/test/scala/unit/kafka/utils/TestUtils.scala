@@ -23,10 +23,9 @@ import java.nio.charset.{Charset, StandardCharsets}
 import java.nio.file.{Files, StandardOpenOption}
 import java.security.cert.X509Certificate
 import java.time.Duration
-import java.util.concurrent.atomic.{AtomicBoolean, AtomicInteger, AtomicReference}
+import java.util.concurrent.atomic.{AtomicBoolean, AtomicInteger}
 import java.util.{Arrays, Collections, Properties}
 import java.util.concurrent.{Callable, ExecutionException, Executors, TimeUnit}
-
 import javax.net.ssl.X509TrustManager
 import kafka.api._
 import kafka.cluster.{Broker, EndPoint, IsrChangeListener}
@@ -37,7 +36,7 @@ import kafka.server.checkpoints.OffsetCheckpointFile
 import com.yammer.metrics.core.Meter
 import kafka.controller.LeaderIsrAndControllerEpoch
 import kafka.metrics.KafkaYammerMetrics
-import kafka.server.metadata.{ConfigRepository, CachedConfigRepository, MetadataBroker}
+import kafka.server.metadata.{CachedConfigRepository, ConfigRepository, MetadataBroker}
 import kafka.utils.Implicits._
 import kafka.zk._
 import org.apache.kafka.clients.CommonClientConfigs
@@ -61,7 +60,6 @@ import org.apache.kafka.common.serialization.{ByteArrayDeserializer, ByteArraySe
 import org.apache.kafka.common.utils.{Time, Utils}
 import org.apache.kafka.common.utils.Utils._
 import org.apache.kafka.common.{KafkaFuture, Node, TopicPartition}
-import org.apache.kafka.metadata.BrokerState
 import org.apache.kafka.server.authorizer.{Authorizer => JAuthorizer}
 import org.apache.kafka.test.{TestSslUtils, TestUtils => JTestUtils}
 import org.apache.zookeeper.KeeperException.SessionExpiredException
@@ -1074,11 +1072,12 @@ object TestUtils extends Logging {
    */
   def createLogManager(logDirs: Seq[File] = Seq.empty[File],
                        defaultConfig: LogConfig = LogConfig(),
+                       configRepository: ConfigRepository = new CachedConfigRepository,
                        cleanerConfig: CleanerConfig = CleanerConfig(enableCleaner = false),
                        time: MockTime = new MockTime()): LogManager = {
     new LogManager(logDirs = logDirs.map(_.getAbsoluteFile),
                    initialOfflineDirs = Array.empty[File],
-                   topicConfigs = Map(),
+                   configRepository = configRepository,
                    initialDefaultConfig = defaultConfig,
                    cleanerConfig = cleanerConfig,
                    recoveryThreadsPerDataDir = 4,
@@ -1089,7 +1088,6 @@ object TestUtils extends Logging {
                    maxPidExpirationMs = 60 * 60 * 1000,
                    scheduler = time.scheduler,
                    time = time,
-                   brokerState = new AtomicReference[BrokerState](BrokerState.NOT_RUNNING),
                    brokerTopicStats = new BrokerTopicStats,
                    logDirFailureChannel = new LogDirFailureChannel(logDirs.size))
   }
@@ -1156,7 +1154,7 @@ object TestUtils extends Logging {
     new MockIsrChangeListener()
   }
 
-  def createConfigRepository(topic: String, props: Properties): ConfigRepository = {
+  def createConfigRepository(topic: String, props: Properties): CachedConfigRepository = {
     val configRepository = new CachedConfigRepository()
     props.entrySet().forEach(e => configRepository.setTopicConfig(topic, e.getKey.toString, e.getValue.toString))
     configRepository

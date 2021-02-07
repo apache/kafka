@@ -23,7 +23,8 @@ import org.junit.jupiter.params.provider.{Arguments, MethodSource}
 
 import scala.jdk.CollectionConverters._
 
-object AssignmentStateTest extends AbstractPartitionTest {
+object AssignmentStateTest {
+  import AbstractPartitionTest._
 
   def parameters: java.util.stream.Stream[Arguments] = Seq[Arguments](
     Arguments.of(

@@ -31,7 +31,7 @@ import scala.jdk.CollectionConverters._
  * A ConfigRepository that stores configurations locally.
  */
 class CachedConfigRepository extends ConfigRepository {
-  val configMap = new ConcurrentHashMap[ConfigResource, util.HashMap[String, String]]
+  private val configMap = new ConcurrentHashMap[ConfigResource, util.HashMap[String, String]]
 
   /**
    * Set the topic config for the given topic name and the given key to the given value.
