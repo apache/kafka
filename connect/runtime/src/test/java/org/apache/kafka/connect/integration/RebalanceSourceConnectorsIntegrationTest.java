@@ -359,7 +359,9 @@ public class RebalanceSourceConnectorsIntegrationTest {
                     tasks.values().size(),
                     tasks.values().stream().distinct().collect(Collectors.toList()).size());
             assertTrue("Connectors are imbalanced: " + formatAssignment(connectors), maxConnectors - minConnectors < 2);
+            if (minConnectors > 1) assertEquals("Some workers have no connectors", connectors.size(), connect.workers().size());
             assertTrue("Tasks are imbalanced: " + formatAssignment(tasks), maxTasks - minTasks < 2);
+            if (minTasks > 1) assertEquals("Some workers have no tasks", tasks.size(), connect.workers().size());
             return true;
         } catch (Exception e) {
             log.error("Could not check connector state info.", e);
