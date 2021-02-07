@@ -66,7 +66,7 @@ public class StopReplicaRequestTest {
             }
         }
 
-        for (short version = STOP_REPLICA.oldestVersion(); version < STOP_REPLICA.latestVersion(); version++) {
+        for (short version = STOP_REPLICA.oldestVersion(); version <= STOP_REPLICA.latestVersion(); version++) {
             StopReplicaRequest.Builder builder = new StopReplicaRequest.Builder(version,
                     0, 0, 0L, false, topicStates);
             StopReplicaRequest request = builder.build();
@@ -93,7 +93,7 @@ public class StopReplicaRequestTest {
         Map<TopicPartition, StopReplicaPartitionState> expectedPartitionStates =
             StopReplicaRequestTest.partitionStates(topicStates);
 
-        for (short version = STOP_REPLICA.oldestVersion(); version < STOP_REPLICA.latestVersion(); version++) {
+        for (short version = STOP_REPLICA.oldestVersion(); version <= STOP_REPLICA.latestVersion(); version++) {
             StopReplicaRequest request = new StopReplicaRequest.Builder(version, 0, 1, 0,
                 deletePartitions, topicStates).build(version);
             StopReplicaRequestData data = request.data();
@@ -128,7 +128,7 @@ public class StopReplicaRequestTest {
     public void testTopicStatesNormalization() {
         List<StopReplicaTopicState> topicStates = topicStates(true);
 
-        for (short version = STOP_REPLICA.oldestVersion(); version < STOP_REPLICA.latestVersion(); version++) {
+        for (short version = STOP_REPLICA.oldestVersion(); version <= STOP_REPLICA.latestVersion(); version++) {
             // Create a request for version to get its serialized form
             StopReplicaRequest baseRequest = new StopReplicaRequest.Builder(version, 0, 1, 0,
                 true, topicStates).build(version);
@@ -163,7 +163,7 @@ public class StopReplicaRequestTest {
     public void testPartitionStatesNormalization() {
         List<StopReplicaTopicState> topicStates = topicStates(true);
 
-        for (short version = STOP_REPLICA.oldestVersion(); version < STOP_REPLICA.latestVersion(); version++) {
+        for (short version = STOP_REPLICA.oldestVersion(); version <= STOP_REPLICA.latestVersion(); version++) {
             // Create a request for version to get its serialized form
             StopReplicaRequest baseRequest = new StopReplicaRequest.Builder(version, 0, 1, 0,
                 true, topicStates).build(version);
