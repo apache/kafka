@@ -113,4 +113,9 @@ public interface InternalProcessorContext
                    final long timestamp);
 
     String changelogFor(final String storeName);
+
+    /**
+     * @param timeMs current wall-clock system timestamp in milliseconds
+     */
+    void setSystemTimeMs(long timeMs);
 }

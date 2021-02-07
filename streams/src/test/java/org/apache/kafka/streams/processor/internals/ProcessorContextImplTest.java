@@ -148,7 +148,6 @@ public class ProcessorContextImplTest {
         );
 
         final StreamTask task = mock(StreamTask.class);
-        expect(task.currentSystemTimeMs()).andReturn(TIMESTAMP);
         expect(task.streamTime()).andReturn(STREAM_TIME);
         EasyMock.expect(task.recordCollector()).andStubReturn(recordCollector);
         replay(task);
@@ -557,11 +556,6 @@ public class ProcessorContextImplTest {
             UnsupportedOperationException.class,
             () -> context.recordContext()
         );
-    }
-
-    @Test
-    public void shouldMatchSystemTime() {
-        assertEquals(TIMESTAMP, context.currentSystemTimeMs());
     }
 
     @Test

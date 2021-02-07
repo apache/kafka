@@ -793,6 +793,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
                                         final ProcessorRecordContext recordContext) {
         processorContext.setRecordContext(recordContext);
         processorContext.setCurrentNode(currNode);
+        processorContext.setSystemTimeMs(wallClockTime);
     }
 
     /**
@@ -1110,17 +1111,13 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
         return recordCollector;
     }
 
-    long streamTime() {
-        return partitionGroup.streamTime();
-    }
-
-    long currentSystemTimeMs() {
-        return time.milliseconds(); 
-    }
-
     // below are visible for testing only
     int numBuffered() {
         return partitionGroup.numBuffered();
+    }
+
+    long streamTime() {
+        return partitionGroup.streamTime();
     }
 
     private class RecordQueueCreator {

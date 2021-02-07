@@ -45,7 +45,7 @@ public abstract class AbstractProcessorContext implements InternalProcessorConte
     private boolean initialized;
     protected ProcessorRecordContext recordContext;
     protected ProcessorNode<?, ?, ?, ?> currentNode;
-
+    private long cachedSystemTimeMs;
     protected ThreadCache cache;
 
     public AbstractProcessorContext(final TaskId taskId,
@@ -229,5 +229,15 @@ public abstract class AbstractProcessorContext implements InternalProcessorConte
     @Override
     public String changelogFor(final String storeName) {
         return stateManager().changelogFor(storeName);
+    }
+
+    @Override
+    public void setSystemTimeMs(final long timeMs) {
+        cachedSystemTimeMs = timeMs;
+    }
+
+    @Override
+    public long currentSystemTimeMs() {
+        return cachedSystemTimeMs;
     }
 }

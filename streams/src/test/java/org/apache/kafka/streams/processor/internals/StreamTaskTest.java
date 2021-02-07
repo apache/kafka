@@ -494,8 +494,7 @@ public class StreamTaskTest {
 
         // e2e latency = 10
         task.addRecords(partition1, singletonList(getConsumerRecord(0, 0L)));
-        time.sleep(10L);
-        task.process(time.milliseconds());
+        task.process(10L);
 
         assertThat(sourceAvg.metricValue(), equalTo(10.0));
         assertThat(sourceMin.metricValue(), equalTo(10.0));
@@ -508,9 +507,8 @@ public class StreamTaskTest {
 
 
         // e2e latency = 15
-        time.sleep(5L);
         task.addRecords(partition1, singletonList(getConsumerRecord(1, 0L)));
-        task.process(time.milliseconds());
+        task.process(15L);
 
         assertThat(sourceAvg.metricValue(), equalTo(12.5));
         assertThat(sourceMin.metricValue(), equalTo(10.0));
@@ -523,9 +521,8 @@ public class StreamTaskTest {
 
 
         // e2e latency = 23
-        time.sleep(8L);
         task.addRecords(partition1, singletonList(getConsumerRecord(2, 0L)));
-        task.process(time.milliseconds());
+        task.process(23L);
 
         assertThat(sourceAvg.metricValue(), equalTo(16.0));
         assertThat(sourceMin.metricValue(), equalTo(10.0));
@@ -538,9 +535,8 @@ public class StreamTaskTest {
 
 
         // e2e latency = 5
-        time = new MockTime(0L, 5L, 0L);
         task.addRecords(partition1, singletonList(getConsumerRecord(3, 0L)));
-        task.process(time.milliseconds());
+        task.process(5L);
 
         assertThat(sourceAvg.metricValue(), equalTo(13.25));
         assertThat(sourceMin.metricValue(), equalTo(5.0));
@@ -2099,12 +2095,6 @@ public class StreamTaskTest {
         task.maybeInitTaskTimeoutOrThrow(0L, null);
         task.clearTaskTimeout();
         task.maybeInitTaskTimeoutOrThrow(Duration.ofMinutes(5).plus(Duration.ofMillis(1L)).toMillis(), null);
-    }
-
-    @Test
-    public void shouldMatchSystemTime() {
-        task = createStatelessTask(createConfig(false, "0"), StreamsConfig.METRICS_LATEST);
-        assertEquals(time.milliseconds(), task.currentSystemTimeMs());
     }
 
     private List<MetricName> getTaskMetrics() {
