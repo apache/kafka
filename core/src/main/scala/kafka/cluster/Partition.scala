@@ -95,7 +95,6 @@ object Partition extends KafkaMetricsGroup {
       interBrokerProtocolVersion = replicaManager.config.interBrokerProtocolVersion,
       localBrokerId = replicaManager.config.brokerId,
       time = time,
-      configRepository = configRepository,
       isrChangeListener = isrChangeListener,
       delayedOperations = delayedOperations,
       metadataCache = replicaManager.metadataCache,
@@ -218,7 +217,6 @@ class Partition(val topicPartition: TopicPartition,
                 interBrokerProtocolVersion: ApiVersion,
                 localBrokerId: Int,
                 time: Time,
-                configRepository: ConfigRepository,
                 isrChangeListener: IsrChangeListener,
                 delayedOperations: DelayedOperations,
                 metadataCache: MetadataCache,
@@ -331,11 +329,6 @@ class Partition(val topicPartition: TopicPartition,
 
   // Visible for testing
   private[cluster] def createLog(isNew: Boolean, isFutureReplica: Boolean, offsetCheckpoints: OffsetCheckpoints): Log = {
-    def fetchLogConfig: LogConfig = {
-      val props = configRepository.topicConfig(topic)
-      LogConfig.fromProps(logManager.currentDefaultConfig.originals, props)
-    }
-
     def updateHighWatermark(log: Log) = {
       val checkpointHighWatermark = offsetCheckpoints.fetch(log.parentDir, topicPartition).getOrElse {
         info(s"No checkpointed highwatermark is found for partition $topicPartition")
@@ -348,12 +341,12 @@ class Partition(val topicPartition: TopicPartition,
     logManager.initializingLog(topicPartition)
     var maybeLog: Option[Log] = None
     try {
-      val log = logManager.getOrCreateLog(topicPartition, () => fetchLogConfig, isNew, isFutureReplica)
+      val log = logManager.getOrCreateLog(topicPartition, isNew, isFutureReplica)
       maybeLog = Some(log)
       updateHighWatermark(log)
       log
     } finally {
-      logManager.finishedInitializingLog(topicPartition, maybeLog, () => fetchLogConfig)
+      logManager.finishedInitializingLog(topicPartition, maybeLog)
     }
   }
 
