@@ -63,12 +63,15 @@ class PartitionLockTest extends Logging {
   var logManager: LogManager = _
   var partition: Partition = _
 
+  private val topicPartition = new TopicPartition("test-topic", 0)
+
   @BeforeEach
   def setUp(): Unit = {
     val logConfig = new LogConfig(new Properties)
-    logManager = TestUtils.createLogManager(Seq(logDir), logConfig, cleanerConfig = CleanerConfig(enableCleaner = false),
-      time = mockTime)
-    partition = setupPartitionWithMocks(logManager, logConfig)
+    val configRepository = TestUtils.createConfigRepository(topicPartition.topic, createLogProperties(Map.empty))
+    logManager = TestUtils.createLogManager(Seq(logDir), logConfig, configRepository,
+      CleanerConfig(enableCleaner = false), mockTime)
+    partition = setupPartitionWithMocks(logManager)
   }
 
   @AfterEach
@@ -245,10 +248,9 @@ class PartitionLockTest extends Logging {
     }): Runnable)
   }
 
-  private def setupPartitionWithMocks(logManager: LogManager, logConfig: LogConfig): Partition = {
+  private def setupPartitionWithMocks(logManager: LogManager): Partition = {
     val leaderEpoch = 1
     val brokerId = 0
-    val topicPartition = new TopicPartition("test-topic", 0)
     val isrChangeListener: IsrChangeListener = mock(classOf[IsrChangeListener])
     val delayedOperations: DelayedOperations = mock(classOf[DelayedOperations])
     val metadataCache: MetadataCache = mock(classOf[MetadataCache])
@@ -302,6 +304,15 @@ class PartitionLockTest extends Logging {
       .setIsNew(true), offsetCheckpoints), "Expected become leader transition to succeed")
 
     partition
+  }
+
+  private def createLogProperties(overrides: Map[String, String]): Properties = {
+    val logProps = new Properties()
+    logProps.put(LogConfig.SegmentBytesProp, 512: java.lang.Integer)
+    logProps.put(LogConfig.SegmentIndexBytesProp, 1000: java.lang.Integer)
+    logProps.put(LogConfig.RetentionMsProp, 999: java.lang.Integer)
+    overrides.foreach { case (k, v) => logProps.put(k, v) }
+    logProps
   }
 
   private def append(partition: Partition, numRecords: Int, followerQueues: Seq[ArrayBlockingQueue[MemoryRecords]]): Unit = {
