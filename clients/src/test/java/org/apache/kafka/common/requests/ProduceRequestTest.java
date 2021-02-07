@@ -18,6 +18,7 @@
 package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.InvalidRecordException;
+import org.apache.kafka.common.errors.UnsupportedCompressionTypeException;
 import org.apache.kafka.common.message.ProduceRequestData;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.record.CompressionType;
@@ -35,8 +36,8 @@ import java.util.Collections;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.junit.jupiter.api.Assertions.fail;
 
 public class ProduceRequestTest {
 
@@ -151,7 +152,7 @@ public class ProduceRequestTest {
                                     .setRecords(MemoryRecords.readableRecords(buffer))))).iterator()))
                 .setAcks((short) 1)
                 .setTimeoutMs(5000));
-        assertThrowsInvalidRecordExceptionForAllVersions(requestBuilder);
+        assertThrowsInvalidRecordExceptionForAllVersions(requestBuilder, InvalidRecordException.class);
     }
 
     @Test
@@ -166,7 +167,7 @@ public class ProduceRequestTest {
                                                 .setRecords(MemoryRecords.EMPTY)))).iterator()))
                 .setAcks((short) 1)
                 .setTimeoutMs(5000));
-        assertThrowsInvalidRecordExceptionForAllVersions(requestBuilder);
+        assertThrowsInvalidRecordExceptionForAllVersions(requestBuilder, InvalidRecordException.class);
     }
 
     @Test
@@ -186,7 +187,7 @@ public class ProduceRequestTest {
                                                 .setRecords(builder.build())))).iterator()))
                 .setAcks((short) 1)
                 .setTimeoutMs(5000));
-        assertThrowsInvalidRecordExceptionForAllVersions(requestBuilder);
+        assertThrowsInvalidRecordExceptionForAllVersions(requestBuilder, InvalidRecordException.class);
     }
 
     @Test
@@ -206,7 +207,7 @@ public class ProduceRequestTest {
                         .iterator()))
                 .setAcks((short) 1)
                 .setTimeoutMs(5000));
-        assertThrowsInvalidRecordExceptionForAllVersions(requestBuilder);
+        assertThrowsInvalidRecordExceptionForAllVersions(requestBuilder, InvalidRecordException.class);
     }
 
     @Test
@@ -230,7 +231,7 @@ public class ProduceRequestTest {
         for (short version = 3; version < 7; version++) {
 
             ProduceRequest.Builder requestBuilder = new ProduceRequest.Builder(version, version, produceData);
-            assertThrowsInvalidRecordExceptionForAllVersions(requestBuilder);
+            assertThrowsInvalidRecordExceptionForAllVersions(requestBuilder, UnsupportedCompressionTypeException.class);
         }
 
         // Works fine with current version (>= 7)
@@ -291,19 +292,11 @@ public class ProduceRequestTest {
         assertTrue(RequestTestUtils.hasIdempotentRecords(request));
     }
 
-    private void assertThrowsInvalidRecordExceptionForAllVersions(ProduceRequest.Builder builder) {
-        for (short version = builder.oldestAllowedVersion(); version < builder.latestAllowedVersion(); version++) {
-            assertThrowsInvalidRecordException(builder, version);
-        }
-    }
-
-    private void assertThrowsInvalidRecordException(ProduceRequest.Builder builder, short version) {
-        try {
-            builder.build(version).serialize();
-            fail("Builder did not raise " + InvalidRecordException.class.getName() + " as expected");
-        } catch (RuntimeException e) {
-            assertTrue(InvalidRecordException.class.isAssignableFrom(e.getClass()),
-                "Unexpected exception type " + e.getClass().getName());
+    private static <T extends Throwable> void assertThrowsInvalidRecordExceptionForAllVersions(ProduceRequest.Builder builder,
+                                                                                               Class<T> expectedType) {
+        for (short version = builder.oldestAllowedVersion(); version <= builder.latestAllowedVersion(); version++) {
+            short v = version;
+            assertThrows(expectedType, () -> builder.build(v).serialize());
         }
     }
 

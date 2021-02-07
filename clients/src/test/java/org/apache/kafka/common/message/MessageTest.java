@@ -484,7 +484,7 @@ public final class MessageTest {
             if (version == 1) {
                 testEquivalentMessageRoundTrip(version, requestData);
             } else if (version >= 2 && version <= 4) {
-                testAllMessageRoundTripsBetweenVersions(version, (short) 4, requestData, requestData);
+                testAllMessageRoundTripsBetweenVersions(version, (short) 5, requestData, requestData);
             } else {
                 testAllMessageRoundTripsFromVersion(version, requestData);
             }
@@ -740,9 +740,9 @@ public final class MessageTest {
             }
 
             if (version >= 3 && version <= 4) {
-                testAllMessageRoundTripsBetweenVersions(version, (short) 4, responseData, responseData);
+                testAllMessageRoundTripsBetweenVersions(version, (short) 5, responseData, responseData);
             } else if (version >= 6 && version <= 7) {
-                testAllMessageRoundTripsBetweenVersions(version, (short) 7, responseData, responseData);
+                testAllMessageRoundTripsBetweenVersions(version, (short) 8, responseData, responseData);
             } else {
                 testEquivalentMessageRoundTrip(version, responseData);
             }

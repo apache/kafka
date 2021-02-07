@@ -289,7 +289,7 @@ public class RequestResponseTest {
         checkRequest(createDeleteGroupsRequest(), true);
         checkErrorResponse(createDeleteGroupsRequest(), unknownServerException, true);
         checkResponse(createDeleteGroupsResponse(), 0, true);
-        for (int i = 0; i < ApiKeys.LIST_OFFSETS.latestVersion(); i++) {
+        for (int i = 0; i <= ApiKeys.LIST_OFFSETS.latestVersion(); i++) {
             checkRequest(createListOffsetRequest(i), true);
             checkErrorResponse(createListOffsetRequest(i), unknownServerException, true);
             checkResponse(createListOffsetResponse(i), i, true);
@@ -644,7 +644,7 @@ public class RequestResponseTest {
     }
 
     private void checkDescribeConfigsResponseVersions() {
-        for (int version = ApiKeys.DESCRIBE_CONFIGS.oldestVersion(); version < ApiKeys.DESCRIBE_CONFIGS.latestVersion(); ++version) {
+        for (int version = ApiKeys.DESCRIBE_CONFIGS.oldestVersion(); version <= ApiKeys.DESCRIBE_CONFIGS.latestVersion(); ++version) {
             short apiVersion = (short) version;
             DescribeConfigsResponse response = createDescribeConfigsResponse(apiVersion);
             DescribeConfigsResponse deserialized0 = (DescribeConfigsResponse) AbstractResponse.parseResponse(ApiKeys.DESCRIBE_CONFIGS,
