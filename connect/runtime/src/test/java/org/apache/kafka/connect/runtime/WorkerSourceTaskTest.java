@@ -91,6 +91,7 @@ import static org.apache.kafka.connect.runtime.WorkerConfig.TOPIC_CREATION_ENABL
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 
 @PowerMockIgnore({"javax.management.*",
@@ -206,12 +207,9 @@ public class WorkerSourceTaskTest extends ThreadedTest {
         createWorkerTask(TargetState.PAUSED);
 
         statusListener.onPause(taskId);
-        EasyMock.expectLastCall().andAnswer(new IAnswer<Void>() {
-            @Override
-            public Void answer() throws Throwable {
-                pauseLatch.countDown();
-                return null;
-            }
+        EasyMock.expectLastCall().andAnswer(() -> {
+            pauseLatch.countDown();
+            return null;
         });
 
         expectClose();
@@ -337,12 +335,9 @@ public class WorkerSourceTaskTest extends ThreadedTest {
 
         final CountDownLatch pollLatch = new CountDownLatch(1);
         final RuntimeException exception = new RuntimeException();
-        EasyMock.expect(sourceTask.poll()).andAnswer(new IAnswer<List<SourceRecord>>() {
-            @Override
-            public List<SourceRecord> answer() throws Throwable {
-                pollLatch.countDown();
-                throw exception;
-            }
+        EasyMock.expect(sourceTask.poll()).andAnswer(() -> {
+            pollLatch.countDown();
+            throw exception;
         });
 
         statusListener.onFailure(taskId, exception);
@@ -541,7 +536,7 @@ public class WorkerSourceTaskTest extends ThreadedTest {
         PowerMock.verifyAll();
     }
 
-    @Test(expected = InvalidRecordException.class)
+    @Test
     public void testSendRecordsCorruptTimestamp() throws Exception {
         final Long timestamp = -3L;
         createWorkerTask();
@@ -555,8 +550,8 @@ public class WorkerSourceTaskTest extends ThreadedTest {
         PowerMock.replayAll();
 
         Whitebox.setInternalState(workerTask, "toSend", records);
-        Whitebox.invokeMethod(workerTask, "sendRecords");
-        assertEquals(null, sent.getValue().timestamp());
+        assertThrows(InvalidRecordException.class, () -> Whitebox.invokeMethod(workerTask, "sendRecords"));
+        assertFalse(sent.hasCaptured());
 
         PowerMock.verifyAll();
     }
@@ -578,7 +573,7 @@ public class WorkerSourceTaskTest extends ThreadedTest {
 
         Whitebox.setInternalState(workerTask, "toSend", records);
         Whitebox.invokeMethod(workerTask, "sendRecords");
-        assertEquals(null, sent.getValue().timestamp());
+        assertNull(sent.getValue().timestamp());
 
         PowerMock.verifyAll();
     }
@@ -619,7 +614,7 @@ public class WorkerSourceTaskTest extends ThreadedTest {
         PowerMock.verifyAll();
     }
 
-    @Test(expected = ConnectException.class)
+    @Test
     public void testSendRecordsProducerCallbackFail() throws Exception {
         createWorkerTask();
 
@@ -633,7 +628,7 @@ public class WorkerSourceTaskTest extends ThreadedTest {
         PowerMock.replayAll();
 
         Whitebox.setInternalState(workerTask, "toSend", Arrays.asList(record1, record2));
-        Whitebox.invokeMethod(workerTask, "sendRecords");
+        assertThrows(ConnectException.class, () -> Whitebox.invokeMethod(workerTask, "sendRecords"));
     }
 
     @Test
@@ -672,13 +667,10 @@ public class WorkerSourceTaskTest extends ThreadedTest {
         sourceTask.initialize(EasyMock.anyObject(SourceTaskContext.class));
         EasyMock.expectLastCall();
         sourceTask.start(TASK_PROPS);
-        EasyMock.expectLastCall().andAnswer(new IAnswer<Object>() {
-            @Override
-            public Object answer() throws Throwable {
-                startupLatch.countDown();
-                assertTrue(awaitLatch(finishStartupLatch));
-                return null;
-            }
+        EasyMock.expectLastCall().andAnswer(() -> {
+            startupLatch.countDown();
+            assertTrue(awaitLatch(finishStartupLatch));
+            return null;
         });
 
         statusListener.onStartup(taskId);
@@ -855,14 +847,11 @@ public class WorkerSourceTaskTest extends ThreadedTest {
         // run. The count passed in + latch returned just makes sure we get *at least* that number of
         // calls
         EasyMock.expect(sourceTask.poll())
-                .andStubAnswer(new IAnswer<List<SourceRecord>>() {
-                    @Override
-                    public List<SourceRecord> answer() throws Throwable {
-                        count.incrementAndGet();
-                        latch.countDown();
-                        Thread.sleep(10);
-                        return Collections.emptyList();
-                    }
+                .andStubAnswer(() -> {
+                    count.incrementAndGet();
+                    latch.countDown();
+                    Thread.sleep(10);
+                    return Collections.emptyList();
                 });
         return latch;
     }
@@ -873,14 +862,11 @@ public class WorkerSourceTaskTest extends ThreadedTest {
         // run. The count passed in + latch returned just makes sure we get *at least* that number of
         // calls
         EasyMock.expect(sourceTask.poll())
-                .andStubAnswer(new IAnswer<List<SourceRecord>>() {
-                    @Override
-                    public List<SourceRecord> answer() throws Throwable {
-                        count.incrementAndGet();
-                        latch.countDown();
-                        Thread.sleep(10);
-                        return RECORDS;
-                    }
+                .andStubAnswer(() -> {
+                    count.incrementAndGet();
+                    latch.countDown();
+                    Thread.sleep(10);
+                    return RECORDS;
                 });
         // Fallout of the poll() call
         expectSendRecordAnyTimes();
@@ -958,22 +944,19 @@ public class WorkerSourceTaskTest extends ThreadedTest {
         IExpectationSetters<Future<RecordMetadata>> expect = EasyMock.expect(
             producer.send(EasyMock.capture(sent),
                 EasyMock.capture(producerCallbacks)));
-        IAnswer<Future<RecordMetadata>> expectResponse = new IAnswer<Future<RecordMetadata>>() {
-            @Override
-            public Future<RecordMetadata> answer() throws Throwable {
-                synchronized (producerCallbacks) {
-                    for (org.apache.kafka.clients.producer.Callback cb : producerCallbacks.getValues()) {
-                        if (sendSuccess) {
-                            cb.onCompletion(new RecordMetadata(new TopicPartition("foo", 0), 0, 0,
-                                0L, 0L, 0, 0), null);
-                        } else {
-                            cb.onCompletion(null, new TopicAuthorizationException("foo"));
-                        }
+        IAnswer<Future<RecordMetadata>> expectResponse = () -> {
+            synchronized (producerCallbacks) {
+                for (org.apache.kafka.clients.producer.Callback cb : producerCallbacks.getValues()) {
+                    if (sendSuccess) {
+                        cb.onCompletion(new RecordMetadata(new TopicPartition("foo", 0), 0, 0,
+                            0L, 0L, 0, 0), null);
+                    } else {
+                        cb.onCompletion(null, new TopicAuthorizationException("foo"));
                     }
-                    producerCallbacks.reset();
                 }
-                return sendFuture;
+                producerCallbacks.reset();
             }
+            return sendFuture;
         };
         if (anyTimes)
             expect.andStubAnswer(expectResponse);
@@ -1017,19 +1000,9 @@ public class WorkerSourceTaskTest extends ThreadedTest {
         final Capture<SourceRecord> recordCapture = EasyMock.newCapture();
         IExpectationSetters<SourceRecord> convertKeyExpect = EasyMock.expect(transformationChain.apply(EasyMock.capture(recordCapture)));
         if (anyTimes)
-            convertKeyExpect.andStubAnswer(new IAnswer<SourceRecord>() {
-                @Override
-                public SourceRecord answer() {
-                    return recordCapture.getValue();
-                }
-            });
+            convertKeyExpect.andStubAnswer(recordCapture::getValue);
         else
-            convertKeyExpect.andAnswer(new IAnswer<SourceRecord>() {
-                @Override
-                public SourceRecord answer() {
-                    return recordCapture.getValue();
-                }
-            });
+            convertKeyExpect.andAnswer(recordCapture::getValue);
     }
 
     private void expectTaskCommitRecordWithOffset(boolean anyTimes, boolean succeed) throws InterruptedException {

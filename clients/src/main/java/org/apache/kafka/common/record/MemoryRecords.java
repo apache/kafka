@@ -19,11 +19,14 @@ package org.apache.kafka.common.record;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.CorruptRecordException;
 import org.apache.kafka.common.message.LeaderChangeMessage;
+import org.apache.kafka.common.network.TransferableChannel;
 import org.apache.kafka.common.record.MemoryRecords.RecordFilter.BatchRetention;
 import org.apache.kafka.common.utils.AbstractIterator;
 import org.apache.kafka.common.utils.ByteBufferOutputStream;
 import org.apache.kafka.common.utils.CloseableIterator;
 import org.apache.kafka.common.utils.Time;
+
+import org.apache.kafka.common.utils.Utils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -62,18 +65,14 @@ public class MemoryRecords extends AbstractRecords {
     }
 
     @Override
-    public long writeTo(GatheringByteChannel channel, long position, int length) throws IOException {
+    public long writeTo(TransferableChannel channel, long position, int length) throws IOException {
         if (position > Integer.MAX_VALUE)
             throw new IllegalArgumentException("position should not be greater than Integer.MAX_VALUE: " + position);
         if (position + length > buffer.limit())
             throw new IllegalArgumentException("position+length should not be greater than buffer.limit(), position: "
                     + position + ", length: " + length + ", buffer.limit(): " + buffer.limit());
 
-        int pos = (int) position;
-        ByteBuffer dup = buffer.duplicate();
-        dup.position(pos);
-        dup.limit(pos + length);
-        return channel.write(dup);
+        return Utils.tryWriteTo(channel, (int) position, length, buffer);
     }
 
     /**

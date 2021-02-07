@@ -17,11 +17,11 @@
 
 package kafka.server
 
-import org.junit.Assert._
+import org.junit.jupiter.api.Assertions._
 import kafka.utils.TestUtils
 import kafka.zk.ZooKeeperTestHarness
 import org.apache.kafka.common.security.auth.SecurityProtocol
-import org.junit.{After, Test}
+import org.junit.jupiter.api.{AfterEach, Test}
 
 import scala.collection.mutable.ArrayBuffer
 
@@ -30,7 +30,7 @@ class AdvertiseBrokerTest extends ZooKeeperTestHarness {
 
   val brokerId = 0
 
-  @After
+  @AfterEach
   override def tearDown(): Unit = {
     TestUtils.shutdownServers(servers)
     super.tearDown()

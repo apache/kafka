@@ -90,12 +90,9 @@ public class WorkerConfigTransformer implements AutoCloseable {
             }
         }
         log.info("Scheduling a restart of connector {} in {} ms", connectorName, ttl);
-        Callback<Void> cb = new Callback<Void>() {
-            @Override
-            public void onCompletion(Throwable error, Void result) {
-                if (error != null) {
-                    log.error("Unexpected error during connector restart: ", error);
-                }
+        Callback<Void> cb = (error, result) -> {
+            if (error != null) {
+                log.error("Unexpected error during connector restart: ", error);
             }
         };
         HerderRequest request = worker.herder().restartConnector(ttl, connectorName, cb);

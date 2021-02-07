@@ -20,14 +20,14 @@ package kafka.network
 import java.net.InetAddress
 import java.nio.ByteBuffer
 import java.util.concurrent._
+
+import com.fasterxml.jackson.databind.JsonNode
 import com.typesafe.scalalogging.Logger
 import com.yammer.metrics.core.Meter
-import kafka.log.LogConfig
 import kafka.metrics.KafkaMetricsGroup
 import kafka.server.KafkaConfig
 import kafka.utils.{Logging, NotNothing, Pool}
 import kafka.utils.Implicits._
-import org.apache.kafka.common.config.types.Password
 import org.apache.kafka.common.config.ConfigResource
 import org.apache.kafka.common.memory.MemoryPool
 import org.apache.kafka.common.message.IncrementalAlterConfigsRequestData
@@ -59,11 +59,11 @@ object RequestChannel extends Logging {
     val sanitizedUser: String = Sanitizer.sanitize(principal.getName)
   }
 
-  class Metrics(allowDisabledApis: Boolean = false) {
+  class Metrics(allowControllerOnlyApis: Boolean = false) {
 
     private val metricsMap = mutable.Map[String, RequestMetrics]()
 
-    (ApiKeys.values.toSeq.filter(_.isEnabled || allowDisabledApis).map(_.name) ++
+    (ApiKeys.values.toSeq.filter(!_.isControllerOnlyApi || allowControllerOnlyApis).map(_.name) ++
         Seq(RequestMetrics.consumerFetchMetricName, RequestMetrics.followFetchMetricName)).foreach { name =>
       metricsMap.put(name, new RequestMetrics(name))
     }
@@ -78,7 +78,7 @@ object RequestChannel extends Logging {
   class Request(val processor: Int,
                 val context: RequestContext,
                 val startTimeNanos: Long,
-                memoryPool: MemoryPool,
+                val memoryPool: MemoryPool,
                 @volatile var buffer: ByteBuffer,
                 metrics: RequestChannel.Metrics,
                 val envelope: Option[RequestChannel.Request] = None) extends BaseRequest {
@@ -96,6 +96,12 @@ object RequestChannel extends Logging {
     val session = Session(context.principal, context.clientAddress)
 
     private val bodyAndSize: RequestAndSize = context.parseRequest(buffer)
+
+    // This is constructed on creation of a Request so that the JSON representation is computed before the request is
+    // processed by the api layer. Otherwise, a ProduceRequest can occur without its data (ie. it goes into purgatory).
+    val requestLog: Option[JsonNode] =
+      if (RequestChannel.isRequestLoggingEnabled) Some(RequestConvertToJson.request(loggableRequest))
+      else None
 
     def header: RequestHeader = context.header
 
@@ -123,9 +129,9 @@ object RequestChannel extends Logging {
       }
     }
 
-    def responseString(response: AbstractResponse): Option[String] = {
+    def responseNode(response: AbstractResponse): Option[JsonNode] = {
       if (RequestChannel.isRequestLoggingEnabled)
-        Some(response.toString)
+        Some(RequestConvertToJson.response(response, context.apiVersion))
       else
         None
     }
@@ -156,21 +162,11 @@ object RequestChannel extends Logging {
 
     def loggableRequest: AbstractRequest = {
 
-      def loggableValue(resourceType: ConfigResource.Type, name: String, value: String): String = {
-        val maybeSensitive = resourceType match {
-          case ConfigResource.Type.BROKER => KafkaConfig.maybeSensitive(KafkaConfig.configType(name))
-          case ConfigResource.Type.TOPIC => KafkaConfig.maybeSensitive(LogConfig.configType(name))
-          case ConfigResource.Type.BROKER_LOGGER => false
-          case _ => true
-        }
-        if (maybeSensitive) Password.HIDDEN else value
-      }
-
       bodyAndSize.request match {
         case alterConfigs: AlterConfigsRequest =>
           val loggableConfigs = alterConfigs.configs().asScala.map { case (resource, config) =>
             val loggableEntries = new AlterConfigsRequest.Config(config.entries.asScala.map { entry =>
-                new AlterConfigsRequest.ConfigEntry(entry.name, loggableValue(resource.`type`, entry.name, entry.value))
+                new AlterConfigsRequest.ConfigEntry(entry.name, KafkaConfig.loggableValue(resource.`type`, entry.name, entry.value))
             }.asJavaCollection)
             (resource, loggableEntries)
           }.asJava
@@ -185,7 +181,7 @@ object RequestChannel extends Logging {
             resource.configs.forEach { config =>
               newResource.configs.add(new AlterableConfig()
                 .setName(config.name)
-                .setValue(loggableValue(ConfigResource.Type.forId(resource.resourceType), config.name, config.value))
+                .setValue(KafkaConfig.loggableValue(ConfigResource.Type.forId(resource.resourceType), config.name, config.value))
                 .setConfigOperation(config.configOperation))
             }
             resources.add(newResource)
@@ -261,30 +257,13 @@ object RequestChannel extends Logging {
       recordNetworkThreadTimeCallback.foreach(record => record(networkThreadTimeNanos))
 
       if (isRequestLoggingEnabled) {
-        val detailsEnabled = requestLogger.underlying.isTraceEnabled
-        val responseString = response.responseString.getOrElse(
-          throw new IllegalStateException("responseAsString should always be defined if request logging is enabled"))
-        val builder = new StringBuilder(256)
-        builder.append("Completed request:").append(requestDesc(detailsEnabled))
-          .append(",response:").append(responseString)
-          .append(" from connection ").append(context.connectionId)
-          .append(";totalTime:").append(totalTimeMs)
-          .append(",requestQueueTime:").append(requestQueueTimeMs)
-          .append(",localTime:").append(apiLocalTimeMs)
-          .append(",remoteTime:").append(apiRemoteTimeMs)
-          .append(",throttleTime:").append(apiThrottleTimeMs)
-          .append(",responseQueueTime:").append(responseQueueTimeMs)
-          .append(",sendTime:").append(responseSendTimeMs)
-          .append(",securityProtocol:").append(context.securityProtocol)
-          .append(",principal:").append(session.principal)
-          .append(",listener:").append(context.listenerName.value)
-          .append(",clientInformation:").append(context.clientInformation)
-          .append(",forwarded:").append(isForwarded)
-        if (temporaryMemoryBytes > 0)
-          builder.append(",temporaryMemoryBytes:").append(temporaryMemoryBytes)
-        if (messageConversionsTimeMs > 0)
-          builder.append(",messageConversionsTime:").append(messageConversionsTimeMs)
-        requestLogger.debug(builder.toString)
+        val desc = RequestConvertToJson.requestDescMetrics(header, requestLog, response.responseLog,
+          context, session, isForwarded,
+          totalTimeMs, requestQueueTimeMs, apiLocalTimeMs,
+          apiRemoteTimeMs, apiThrottleTimeMs, responseQueueTimeMs,
+          responseSendTimeMs, temporaryMemoryBytes,
+          messageConversionsTimeMs)
+        requestLogger.debug("Completed request:" + desc.toString)
       }
     }
 
@@ -314,24 +293,24 @@ object RequestChannel extends Logging {
 
     def processor: Int = request.processor
 
-    def responseString: Option[String] = Some("")
+    def responseLog: Option[JsonNode] = None
 
     def onComplete: Option[Send => Unit] = None
 
     override def toString: String
   }
 
-  /** responseAsString should only be defined if request logging is enabled */
+  /** responseLogValue should only be defined if request logging is enabled */
   class SendResponse(request: Request,
                      val responseSend: Send,
-                     val responseAsString: Option[String],
+                     val responseLogValue: Option[JsonNode],
                      val onCompleteCallback: Option[Send => Unit]) extends Response(request) {
-    override def responseString: Option[String] = responseAsString
+    override def responseLog: Option[JsonNode] = responseLogValue
 
     override def onComplete: Option[Send => Unit] = onCompleteCallback
 
     override def toString: String =
-      s"Response(type=Send, request=$request, send=$responseSend, asString=$responseAsString)"
+      s"Response(type=Send, request=$request, send=$responseSend, asString=$responseLogValue)"
   }
 
   class NoOpResponse(request: Request) extends Response(request) {
@@ -358,9 +337,9 @@ object RequestChannel extends Logging {
 class RequestChannel(val queueSize: Int,
                      val metricNamePrefix: String,
                      time: Time,
-                     allowDisabledApis: Boolean = false) extends KafkaMetricsGroup {
+                     allowControllerOnlyApis: Boolean = false) extends KafkaMetricsGroup {
   import RequestChannel._
-  val metrics = new RequestChannel.Metrics(allowDisabledApis)
+  val metrics = new RequestChannel.Metrics(allowControllerOnlyApis)
   private val requestQueue = new ArrayBlockingQueue[BaseRequest](queueSize)
   private val processors = new ConcurrentHashMap[Int, Processor]()
   val requestQueueSizeMetricName = metricNamePrefix.concat(RequestQueueSizeMetric)

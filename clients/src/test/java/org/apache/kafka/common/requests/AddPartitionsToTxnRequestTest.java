@@ -19,14 +19,14 @@ package org.apache.kafka.common.requests;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
-import org.junit.Test;
+import org.junit.jupiter.api.Test;
 
 import java.util.ArrayList;
 
 import java.util.Collections;
 import java.util.List;
 
-import static org.junit.Assert.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 
 public class AddPartitionsToTxnRequestTest {
 
@@ -46,9 +46,9 @@ public class AddPartitionsToTxnRequestTest {
         for (short version = 0; version <= ApiKeys.ADD_PARTITIONS_TO_TXN.latestVersion(); version++) {
             AddPartitionsToTxnRequest request = builder.build(version);
 
-            assertEquals(transactionalId, request.data.transactionalId());
-            assertEquals(producerId, request.data.producerId());
-            assertEquals(producerEpoch, request.data.producerEpoch());
+            assertEquals(transactionalId, request.data().transactionalId());
+            assertEquals(producerId, request.data().producerId());
+            assertEquals(producerEpoch, request.data().producerEpoch());
             assertEquals(partitions, request.partitions());
 
             AddPartitionsToTxnResponse response = request.getErrorResponse(throttleTimeMs, Errors.UNKNOWN_TOPIC_OR_PARTITION.exception());

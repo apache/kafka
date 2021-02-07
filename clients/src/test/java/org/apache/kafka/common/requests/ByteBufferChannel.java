@@ -16,10 +16,13 @@
  */
 package org.apache.kafka.common.requests;
 
-import java.nio.ByteBuffer;
-import java.nio.channels.GatheringByteChannel;
+import org.apache.kafka.common.network.TransferableChannel;
 
-public class ByteBufferChannel implements GatheringByteChannel {
+import java.io.IOException;
+import java.nio.ByteBuffer;
+import java.nio.channels.FileChannel;
+
+public class ByteBufferChannel implements TransferableChannel {
     private final ByteBuffer buf;
     private boolean closed = false;
 
@@ -31,14 +34,11 @@ public class ByteBufferChannel implements GatheringByteChannel {
 
     @Override
     public long write(ByteBuffer[] srcs, int offset, int length) {
+        if ((offset < 0) || (length < 0) || (offset > srcs.length - length))
+            throw new IndexOutOfBoundsException();
         int position = buf.position();
-        for (int i = 0; i < length; i++) {
-            ByteBuffer src = srcs[i].duplicate();
-            if (i == 0) {
-                src.position(src.position() + offset);
-            }
-            buf.put(src);
-        }
+        int count = offset + length;
+        for (int i = offset; i < count; i++) buf.put(srcs[i].duplicate());
         return buf.position() - position;
     }
 
@@ -49,9 +49,7 @@ public class ByteBufferChannel implements GatheringByteChannel {
 
     @Override
     public int write(ByteBuffer src) {
-        int position = buf.position();
-        buf.put(src);
-        return buf.position() - position;
+        return (int) write(new ByteBuffer[]{src});
     }
 
     @Override
@@ -67,5 +65,15 @@ public class ByteBufferChannel implements GatheringByteChannel {
 
     public ByteBuffer buffer() {
         return buf;
+    }
+
+    @Override
+    public boolean hasPendingWrites() {
+        return false;
+    }
+
+    @Override
+    public long transferFrom(FileChannel fileChannel, long position, long count) throws IOException {
+        return fileChannel.transferTo(position, count, this);
     }
 }

@@ -37,7 +37,7 @@ import org.apache.kafka.common.network.{NetworkReceive, Selectable, Selector}
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.record.MemoryRecords
 import org.apache.kafka.common.requests.AbstractRequest.Builder
-import org.apache.kafka.common.requests.{AbstractRequest, FetchResponse, ListOffsetRequest, FetchRequest => JFetchRequest}
+import org.apache.kafka.common.requests.{AbstractRequest, FetchResponse, ListOffsetsRequest, FetchRequest => JFetchRequest}
 import org.apache.kafka.common.serialization.StringDeserializer
 import org.apache.kafka.common.utils.{LogContext, Time}
 import org.apache.kafka.common.{Node, TopicPartition}
@@ -228,9 +228,9 @@ object ReplicaVerificationTool extends Logging {
                              initialOffsetTime: Long): collection.Map[TopicPartition, Long] = {
     val consumer = createConsumer(consumerConfig)
     try {
-      if (ListOffsetRequest.LATEST_TIMESTAMP == initialOffsetTime)
+      if (ListOffsetsRequest.LATEST_TIMESTAMP == initialOffsetTime)
         consumer.endOffsets(topicPartitions.asJava).asScala.map { case (k, v) => k -> v.longValue }
-      else if (ListOffsetRequest.EARLIEST_TIMESTAMP == initialOffsetTime)
+      else if (ListOffsetsRequest.EARLIEST_TIMESTAMP == initialOffsetTime)
         consumer.beginningOffsets(topicPartitions.asJava).asScala.map { case (k, v) => k -> v.longValue }
       else {
         val timestampsToSearch = topicPartitions.map(tp => tp -> (initialOffsetTime: java.lang.Long)).toMap

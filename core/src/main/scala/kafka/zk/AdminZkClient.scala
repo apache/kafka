@@ -47,15 +47,17 @@ class AdminZkClient(zkClient: KafkaZkClient) extends Logging {
    * @param replicationFactor Replication factor
    * @param topicConfig  topic configs
    * @param rackAwareMode
+   * @param usesTopicId Boolean indicating whether the topic ID will be created
    */
   def createTopic(topic: String,
                   partitions: Int,
                   replicationFactor: Int,
                   topicConfig: Properties = new Properties,
-                  rackAwareMode: RackAwareMode = RackAwareMode.Enforced): Unit = {
+                  rackAwareMode: RackAwareMode = RackAwareMode.Enforced,
+                  usesTopicId: Boolean = false): Unit = {
     val brokerMetadatas = getBrokerMetadatas(rackAwareMode)
     val replicaAssignment = AdminUtils.assignReplicasToBrokers(brokerMetadatas, partitions, replicationFactor)
-    createTopicWithAssignment(topic, topicConfig, replicaAssignment)
+    createTopicWithAssignment(topic, topicConfig, replicaAssignment, usesTopicId = usesTopicId)
   }
 
   /**
@@ -90,11 +92,13 @@ class AdminZkClient(zkClient: KafkaZkClient) extends Logging {
    * @param config The config of the topic
    * @param partitionReplicaAssignment The assignments of the topic
    * @param validate Boolean indicating if parameters must be validated or not (true by default)
+   * @param usesTopicId Boolean indicating whether the topic ID will be created
    */
   def createTopicWithAssignment(topic: String,
                                 config: Properties,
                                 partitionReplicaAssignment: Map[Int, Seq[Int]],
-                                validate: Boolean = true): Unit = {
+                                validate: Boolean = true,
+                                usesTopicId: Boolean = false): Unit = {
     if (validate)
       validateTopicCreate(topic, partitionReplicaAssignment, config)
 
@@ -106,7 +110,7 @@ class AdminZkClient(zkClient: KafkaZkClient) extends Logging {
 
     // create the partition assignment
     writeTopicPartitionAssignment(topic, partitionReplicaAssignment.map { case (k, v) => k -> ReplicaAssignment(v) },
-      isUpdate = false)
+      isUpdate = false, usesTopicId)
   }
 
   /**
@@ -153,16 +157,17 @@ class AdminZkClient(zkClient: KafkaZkClient) extends Logging {
     LogConfig.validate(config)
   }
 
-  private def writeTopicPartitionAssignment(topic: String, replicaAssignment: Map[Int, ReplicaAssignment], isUpdate: Boolean): Unit = {
+  private def writeTopicPartitionAssignment(topic: String, replicaAssignment: Map[Int, ReplicaAssignment],
+                                            isUpdate: Boolean, usesTopicId: Boolean = false): Unit = {
     try {
       val assignment = replicaAssignment.map { case (partitionId, replicas) => (new TopicPartition(topic,partitionId), replicas) }.toMap
 
       if (!isUpdate) {
-        val topicId = Uuid.randomUuid()
-        zkClient.createTopicAssignment(topic, topicId, assignment.map { case (k, v) => k -> v.replicas })
+        val topicIdOpt = if (usesTopicId) Some(Uuid.randomUuid()) else None
+        zkClient.createTopicAssignment(topic, topicIdOpt, assignment.map { case (k, v) => k -> v.replicas })
       } else {
         val topicIds = zkClient.getTopicIdsForTopics(Set(topic))
-        zkClient.setTopicAssignment(topic, topicIds(topic), assignment)
+        zkClient.setTopicAssignment(topic, topicIds.get(topic), assignment)
       }
       debug("Updated path %s with %s for replica assignment".format(TopicZNode.path(topic), assignment))
     } catch {

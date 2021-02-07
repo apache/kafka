@@ -22,7 +22,7 @@ if [[ "$OSNAME" == "OS/390" ]]; then
     fi
     PIDS=$(ps -A -o pid,jobname,comm | grep -i $JOBNAME | grep java | grep -v grep | awk '{print $1}')
 elif [[ "$OSNAME" == "OS400" ]]; then
-    PIDS=$(ps -af | grep -i 'kafka\.Kafka' | grep java | grep -v grep | awk '{print $2}')
+    PIDS=$(ps -Af | grep -i 'kafka\.Kafka' | grep java | grep -v grep | awk '{print $2}')
 else
     PIDS=$(ps ax | grep ' kafka\.Kafka ' | grep java | grep -v grep | awk '{print $1}')
 fi

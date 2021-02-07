@@ -18,6 +18,7 @@ package org.apache.kafka.common.network;
 
 import org.apache.kafka.common.Configurable;
 import org.apache.kafka.common.config.AbstractConfig;
+import org.apache.kafka.common.config.SslClientAuth;
 import org.apache.kafka.common.config.internals.BrokerSecurityConfigs;
 import org.apache.kafka.common.errors.InvalidConfigurationException;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
@@ -31,13 +32,18 @@ import org.apache.kafka.common.security.token.delegation.internals.DelegationTok
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 
 public class ChannelBuilders {
+    private static final Logger log = LoggerFactory.getLogger(ChannelBuilders.class);
+
     private ChannelBuilders() { }
 
     /**
@@ -123,12 +129,34 @@ public class ChannelBuilders {
             case SASL_PLAINTEXT:
                 requireNonNullMode(mode, securityProtocol);
                 Map<String, JaasContext> jaasContexts;
+                String sslClientAuthOverride = null;
                 if (mode == Mode.SERVER) {
                     @SuppressWarnings("unchecked")
                     List<String> enabledMechanisms = (List<String>) configs.get(BrokerSecurityConfigs.SASL_ENABLED_MECHANISMS_CONFIG);
                     jaasContexts = new HashMap<>(enabledMechanisms.size());
                     for (String mechanism : enabledMechanisms)
                         jaasContexts.put(mechanism, JaasContext.loadServerContext(listenerName, mechanism, configs));
+
+                    // SSL client authentication is enabled in brokers for SASL_SSL only if listener-prefixed config is specified.
+                    if (listenerName != null && securityProtocol == SecurityProtocol.SASL_SSL) {
+                        String configuredClientAuth = (String) configs.get(BrokerSecurityConfigs.SSL_CLIENT_AUTH_CONFIG);
+                        String listenerClientAuth = (String) config.originalsWithPrefix(listenerName.configPrefix(), true)
+                                .get(BrokerSecurityConfigs.SSL_CLIENT_AUTH_CONFIG);
+
+                        // If `ssl.client.auth` is configured at the listener-level, we don't set an override and SslFactory
+                        // uses the value from `configs`. If not, we propagate `sslClientAuthOverride=NONE` to SslFactory and
+                        // it applies the override to the latest configs when it is configured or reconfigured. `Note that
+                        // ssl.client.auth` cannot be dynamically altered.
+                        if (listenerClientAuth == null) {
+                            sslClientAuthOverride = SslClientAuth.NONE.name().toLowerCase(Locale.ROOT);
+                            if (configuredClientAuth != null && !configuredClientAuth.equalsIgnoreCase(SslClientAuth.NONE.name())) {
+                                log.warn("Broker configuration '{}' is applied only to SSL listeners. Listener-prefixed configuration can be used" +
+                                        " to enable SSL client authentication for SASL_SSL listeners. In future releases, broker-wide option without" +
+                                        " listener prefix may be applied to SASL_SSL listeners as well. All configuration options intended for specific" +
+                                        " listeners should be listener-prefixed.", BrokerSecurityConfigs.SSL_CLIENT_AUTH_CONFIG);
+                            }
+                        }
+                    }
                 } else {
                     // Use server context for inter-broker client connections and client context for other clients
                     JaasContext jaasContext = contextType == JaasContext.Type.CLIENT ? JaasContext.loadClientContext(configs) :
@@ -144,6 +172,7 @@ public class ChannelBuilders {
                         saslHandshakeRequestEnable,
                         credentialCache,
                         tokenCache,
+                        sslClientAuthOverride,
                         time,
                         logContext);
                 break;

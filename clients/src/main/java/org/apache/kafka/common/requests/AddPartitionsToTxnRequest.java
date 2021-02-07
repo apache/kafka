@@ -32,7 +32,7 @@ import java.util.Map;
 
 public class AddPartitionsToTxnRequest extends AbstractRequest {
 
-    public final AddPartitionsToTxnRequestData data;
+    private final AddPartitionsToTxnRequestData data;
 
     private List<TopicPartition> cachedPartitions = null;
 
@@ -112,7 +112,7 @@ public class AddPartitionsToTxnRequest extends AbstractRequest {
     }
 
     @Override
-    protected AddPartitionsToTxnRequestData data() {
+    public AddPartitionsToTxnRequestData data() {
         return data;
     }
 

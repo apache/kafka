@@ -24,7 +24,6 @@ import kafka.log.LogConfig
 import kafka.message.ProducerCompressionCodec
 import kafka.server._
 import kafka.utils.Logging
-import kafka.zk.KafkaZkClient
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.message.JoinGroupResponseData.JoinGroupResponseMember
@@ -104,9 +103,9 @@ class GroupCoordinator(val brokerId: Int,
   /**
    * Startup logic executed at the same time when the server starts up.
    */
-  def startup(enableMetadataExpiration: Boolean = true): Unit = {
+  def startup(retrieveGroupMetadataTopicPartitionCount: () => Int, enableMetadataExpiration: Boolean = true): Unit = {
     info("Starting up.")
-    groupManager.startup(enableMetadataExpiration)
+    groupManager.startup(retrieveGroupMetadataTopicPartitionCount, enableMetadataExpiration)
     isActive.set(true)
     info("Startup complete.")
   }
@@ -183,7 +182,6 @@ class GroupCoordinator(val brokerId: Int,
           group.inLock {
             if (!acceptJoiningMember(group, memberId)) {
               group.remove(memberId)
-              group.removeStaticMember(groupInstanceId)
               responseCallback(JoinGroupResult(JoinGroupRequest.UNKNOWN_MEMBER_ID, Errors.GROUP_MAX_SIZE_REACHED))
             } else if (isUnknownMember) {
               doUnknownJoinGroup(group, groupInstanceId, requireKnownMemberId, clientId, clientHost, rebalanceTimeoutMs, sessionTimeoutMs, protocolType, protocols, responseCallback)
@@ -884,7 +882,7 @@ class GroupCoordinator(val brokerId: Int,
         case Stable | CompletingRebalance =>
           for (member <- group.allMemberMetadata) {
             group.maybeInvokeSyncCallback(member, SyncGroupResult(Errors.NOT_COORDINATOR))
-            heartbeatPurgatory.checkAndComplete(MemberKey(member.groupId, member.memberId))
+            heartbeatPurgatory.checkAndComplete(MemberKey(group.groupId, member.memberId))
           }
       }
     }
@@ -962,7 +960,7 @@ class GroupCoordinator(val brokerId: Int,
   }
 
   private def completeAndScheduleNextExpiration(group: GroupMetadata, member: MemberMetadata, timeoutMs: Long): Unit = {
-    val memberKey = MemberKey(member.groupId, member.memberId)
+    val memberKey = MemberKey(group.groupId, member.memberId)
 
     // complete current heartbeat expectation
     member.heartbeatSatisfied = true
@@ -985,7 +983,7 @@ class GroupCoordinator(val brokerId: Int,
 
   private def removeHeartbeatForLeavingMember(group: GroupMetadata, member: MemberMetadata): Unit = {
     member.isLeaving = true
-    val memberKey = MemberKey(member.groupId, member.memberId)
+    val memberKey = MemberKey(group.groupId, member.memberId)
     heartbeatPurgatory.checkAndComplete(memberKey)
   }
 
@@ -999,9 +997,8 @@ class GroupCoordinator(val brokerId: Int,
                                     protocols: List[(String, Array[Byte])],
                                     group: GroupMetadata,
                                     callback: JoinCallback): Unit = {
-    val member = new MemberMetadata(memberId, group.groupId, groupInstanceId,
-      clientId, clientHost, rebalanceTimeoutMs,
-      sessionTimeoutMs, protocolType, protocols)
+    val member = new MemberMetadata(memberId, groupInstanceId, clientId, clientHost,
+      rebalanceTimeoutMs, sessionTimeoutMs, protocolType, protocols)
 
     member.isNew = true
 
@@ -1151,9 +1148,7 @@ class GroupCoordinator(val brokerId: Int,
     // to invoke the callback before removing the member. We return UNKNOWN_MEMBER_ID so that the consumer
     // will retry the JoinGroup request if is still active.
     group.maybeInvokeJoinCallback(member, JoinGroupResult(JoinGroupRequest.UNKNOWN_MEMBER_ID, Errors.UNKNOWN_MEMBER_ID))
-
     group.remove(member.memberId)
-    group.removeStaticMember(member.groupInstanceId)
 
     group.currentState match {
       case Dead | Empty =>
@@ -1178,10 +1173,6 @@ class GroupCoordinator(val brokerId: Int,
     }
   }
 
-  def onExpireJoin(): Unit = {
-    // TODO: add metrics for restabilize timeouts
-  }
-
   def onCompleteJoin(group: GroupMetadata): Unit = {
     group.inLock {
       val notYetRejoinedDynamicMembers = group.notYetRejoinedMembers.filterNot(_._2.isStaticMember)
@@ -1192,7 +1183,6 @@ class GroupCoordinator(val brokerId: Int,
         notYetRejoinedDynamicMembers.values foreach { failedMember =>
           removeHeartbeatForLeavingMember(group, failedMember)
           group.remove(failedMember.memberId)
-          // TODO: cut the socket connection to the client
         }
       }
 
@@ -1296,10 +1286,6 @@ class GroupCoordinator(val brokerId: Int,
     }
   }
 
-  def onCompleteHeartbeat(): Unit = {
-    // TODO: add metrics for complete heartbeats
-  }
-
   def partitionFor(group: String): Int = groupManager.partitionFor(group)
 
   private def groupIsOverCapacity(group: GroupMetadata): Boolean = {
@@ -1324,13 +1310,12 @@ object GroupCoordinator {
   val NewMemberJoinTimeoutMs: Int = 5 * 60 * 1000
 
   def apply(config: KafkaConfig,
-            zkClient: KafkaZkClient,
             replicaManager: ReplicaManager,
             time: Time,
             metrics: Metrics): GroupCoordinator = {
     val heartbeatPurgatory = DelayedOperationPurgatory[DelayedHeartbeat]("Heartbeat", config.brokerId)
     val joinPurgatory = DelayedOperationPurgatory[DelayedJoin]("Rebalance", config.brokerId)
-    apply(config, zkClient, replicaManager, heartbeatPurgatory, joinPurgatory, time, metrics)
+    GroupCoordinator(config, replicaManager, heartbeatPurgatory, joinPurgatory, time, metrics)
   }
 
   private[group] def offsetConfig(config: KafkaConfig) = OffsetConfig(
@@ -1347,7 +1332,6 @@ object GroupCoordinator {
   )
 
   def apply(config: KafkaConfig,
-            zkClient: KafkaZkClient,
             replicaManager: ReplicaManager,
             heartbeatPurgatory: DelayedOperationPurgatory[DelayedHeartbeat],
             joinPurgatory: DelayedOperationPurgatory[DelayedJoin],
@@ -1360,7 +1344,7 @@ object GroupCoordinator {
       groupInitialRebalanceDelayMs = config.groupInitialRebalanceDelay)
 
     val groupMetadataManager = new GroupMetadataManager(config.brokerId, config.interBrokerProtocolVersion,
-      offsetConfig, replicaManager, zkClient, time, metrics)
+      offsetConfig, replicaManager, time, metrics)
     new GroupCoordinator(config.brokerId, groupConfig, offsetConfig, groupMetadataManager, heartbeatPurgatory, joinPurgatory, time, metrics)
   }
 

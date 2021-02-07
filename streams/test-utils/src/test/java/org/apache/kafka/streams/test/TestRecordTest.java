@@ -23,7 +23,7 @@ import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.header.internals.RecordHeader;
 import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.record.TimestampType;
-import org.junit.Test;
+import org.junit.jupiter.api.Test;
 
 import java.time.Instant;
 
@@ -31,8 +31,9 @@ import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.allOf;
 import static org.hamcrest.Matchers.hasProperty;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 public class TestRecordTest {
     private final String key = "testKey";
@@ -132,9 +133,10 @@ public class TestRecordTest {
         assertThat(record4, equalTo(new TestRecord<>(key, value, null, recordMs)));
     }
 
-    @Test(expected = IllegalArgumentException.class)
+    @Test
     public void testInvalidRecords() {
-        new TestRecord<>(key, value, headers,  -1L);
+        assertThrows(IllegalArgumentException.class,
+            () -> new TestRecord<>(key, value, headers,  -1L));
     }
 
     @Test

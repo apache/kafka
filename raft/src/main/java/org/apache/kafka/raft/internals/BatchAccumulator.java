@@ -17,9 +17,9 @@
 package org.apache.kafka.raft.internals;
 
 import org.apache.kafka.common.memory.MemoryPool;
+import org.apache.kafka.common.protocol.ObjectSerializationCache;
 import org.apache.kafka.common.record.CompressionType;
 import org.apache.kafka.common.record.MemoryRecords;
-import org.apache.kafka.common.record.RecordBatch;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.raft.RecordSerde;
 
@@ -100,10 +100,10 @@ public class BatchAccumulator<T> implements Closeable {
             return Long.MAX_VALUE;
         }
 
-        Object serdeContext = serde.newWriteContext();
+        ObjectSerializationCache serializationCache = new ObjectSerializationCache();
         int batchSize = 0;
         for (T record : records) {
-            batchSize += serde.recordSize(record, serdeContext);
+            batchSize += serde.recordSize(record, serializationCache);
         }
 
         if (batchSize > maxBatchSize) {
@@ -126,7 +126,7 @@ public class BatchAccumulator<T> implements Closeable {
             }
 
             for (T record : records) {
-                batch.appendRecord(record, serdeContext);
+                batch.appendRecord(record, serializationCache);
                 nextOffset += 1;
             }
 
@@ -180,7 +180,7 @@ public class BatchAccumulator<T> implements Closeable {
                 nextOffset,
                 time.milliseconds(),
                 false,
-                RecordBatch.NO_PARTITION_LEADER_EPOCH,
+                epoch,
                 maxBatchSize
             );
         }

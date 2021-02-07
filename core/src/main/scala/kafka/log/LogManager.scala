@@ -20,21 +20,23 @@ package kafka.log
 import java.io._
 import java.nio.file.Files
 import java.util.concurrent._
-import java.util.concurrent.atomic.AtomicInteger
+import java.util.concurrent.atomic.{AtomicInteger, AtomicReference}
 
 import kafka.metrics.KafkaMetricsGroup
 import kafka.server.checkpoints.OffsetCheckpointFile
-import kafka.server.{BrokerState, RecoveringFromUncleanShutdown, _}
+import kafka.server._
 import kafka.utils._
 import kafka.zk.KafkaZkClient
 import org.apache.kafka.common.{KafkaException, TopicPartition}
 import org.apache.kafka.common.utils.Time
 import org.apache.kafka.common.errors.{KafkaStorageException, LogDirNotFoundException}
+import org.apache.kafka.metadata.BrokerState
 
 import scala.jdk.CollectionConverters._
 import scala.collection._
 import scala.collection.mutable.ArrayBuffer
 import scala.util.{Failure, Success, Try}
+import kafka.utils.Implicits._
 
 /**
  * The entry point to the kafka log management subsystem. The log manager is responsible for log creation, retrieval, and cleaning.
@@ -59,7 +61,7 @@ class LogManager(logDirs: Seq[File],
                  val retentionCheckMs: Long,
                  val maxPidExpirationMs: Int,
                  scheduler: Scheduler,
-                 val brokerState: BrokerState,
+                 val brokerState: AtomicReference[BrokerState],
                  brokerTopicStats: BrokerTopicStats,
                  logDirFailureChannel: LogDirFailureChannel,
                  time: Time) extends Logging with KafkaMetricsGroup {
@@ -325,7 +327,7 @@ class LogManager(logDirs: Seq[File],
         } else {
           // log recovery itself is being performed by `Log` class during initialization
           info(s"Attempting recovery for all logs in $logDirAbsolutePath since no clean shutdown file was found")
-          brokerState.newState(RecoveringFromUncleanShutdown)
+          brokerState.set(BrokerState.RECOVERY)
         }
 
         var recoveryPoints = Map[TopicPartition, Long]()
@@ -478,17 +480,9 @@ class LogManager(logDirs: Seq[File],
     }
 
     try {
-      for ((dir, dirJobs) <- jobs) {
-        val hasErrors = dirJobs.exists  { future =>
-          Try(future.get) match {
-            case Success(_) => false
-            case Failure(e) =>
-              warn(s"There was an error in one of the threads during LogManager shutdown: ${e.getCause}")
-              true
-          }
-        }
-
-        if (!hasErrors) {
+      jobs.forKeyValue { (dir, dirJobs) =>
+        if (waitForAllToComplete(dirJobs,
+          e => warn(s"There was an error in one of the threads during LogManager shutdown: ${e.getCause}"))) {
           val logs = logsInDir(localLogsByDir, dir)
 
           // update the last flush point
@@ -1167,6 +1161,21 @@ class LogManager(logDirs: Seq[File],
 
 object LogManager {
 
+  /**
+   * Wait all jobs to complete
+   * @param jobs jobs
+   * @param callback this will be called to handle the exception caused by each Future#get
+   * @return true if all pass. Otherwise, false
+   */
+  private[log] def waitForAllToComplete(jobs: Seq[Future[_]], callback: Throwable => Unit): Boolean = {
+    jobs.count(future => Try(future.get) match {
+      case Success(_) => false
+      case Failure(e) =>
+        callback(e)
+        true
+    }) == 0
+  }
+
   val RecoveryPointCheckpointFile = "recovery-point-offset-checkpoint"
   val LogStartOffsetCheckpointFile = "log-start-offset-checkpoint"
   val ProducerIdExpirationCheckIntervalMs = 10 * 60 * 1000
@@ -1174,12 +1183,12 @@ object LogManager {
   def apply(config: KafkaConfig,
             initialOfflineDirs: Seq[String],
             zkClient: KafkaZkClient,
-            brokerState: BrokerState,
+            brokerState: AtomicReference[BrokerState],
             kafkaScheduler: KafkaScheduler,
             time: Time,
             brokerTopicStats: BrokerTopicStats,
             logDirFailureChannel: LogDirFailureChannel): LogManager = {
-    val defaultProps = KafkaServer.copyKafkaConfigToLog(config)
+    val defaultProps = LogConfig.extractLogConfigMap(config)
 
     LogConfig.validateValues(defaultProps)
     val defaultLogConfig = LogConfig(defaultProps)

@@ -40,8 +40,8 @@ import org.apache.kafka.common.security.token.delegation.internals.DelegationTok
 import org.apache.kafka.common.security.token.delegation.{DelegationToken, TokenInformation}
 import org.apache.kafka.common.utils.{MockTime, SecurityUtils, Time}
 import org.apache.kafka.server.authorizer._
-import org.junit.Assert._
-import org.junit.{After, Before, Test}
+import org.junit.jupiter.api.Assertions._
+import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
 
 import scala.jdk.CollectionConverters._
 import scala.collection.mutable.Buffer
@@ -63,7 +63,7 @@ class DelegationTokenManagerTest extends ZooKeeperTestHarness  {
   var error: Errors = Errors.NONE
   var expiryTimeStamp: Long = 0
 
-  @Before
+  @BeforeEach
   override def setUp(): Unit = {
     super.setUp()
     props = TestUtils.createBrokerConfig(0, zkConnect, enableToken = true)
@@ -72,7 +72,7 @@ class DelegationTokenManagerTest extends ZooKeeperTestHarness  {
     tokenCache = new DelegationTokenCache(ScramMechanism.mechanismNames())
   }
 
-  @After
+  @AfterEach
   override def tearDown(): Unit = {
     tokenManagers.foreach(_.shutdown())
     super.tearDown()
@@ -108,7 +108,7 @@ class DelegationTokenManagerTest extends ZooKeeperTestHarness  {
     assertEquals(CreateTokenResult(issueTime, issueTime + renewTimeMsDefault,  issueTime + maxLifeTimeMsDefault, tokenId, password, Errors.NONE), createTokenResult)
 
     val token = tokenManager.getToken(tokenId)
-    assertTrue(!token.isEmpty )
+    assertFalse(token.isEmpty )
     assertTrue(password sameElements token.get.hmac)
   }
 
