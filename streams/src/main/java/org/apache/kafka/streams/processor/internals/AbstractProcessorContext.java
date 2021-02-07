@@ -64,6 +64,16 @@ public abstract class AbstractProcessorContext implements InternalProcessorConte
     protected abstract StateManager stateManager();
 
     @Override
+    public void setSystemTimeMs(final long timeMs) {
+        cachedSystemTimeMs = timeMs;
+    }
+
+    @Override
+    public long currentSystemTimeMs() {
+        return cachedSystemTimeMs;
+    }
+
+    @Override
     public String applicationId() {
         return applicationId;
     }
@@ -229,15 +239,5 @@ public abstract class AbstractProcessorContext implements InternalProcessorConte
     @Override
     public String changelogFor(final String storeName) {
         return stateManager().changelogFor(storeName);
-    }
-
-    @Override
-    public void setSystemTimeMs(final long timeMs) {
-        cachedSystemTimeMs = timeMs;
-    }
-
-    @Override
-    public long currentSystemTimeMs() {
-        return cachedSystemTimeMs;
     }
 }
