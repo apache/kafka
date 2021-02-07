@@ -571,7 +571,6 @@ public class IncrementalCooperativeAssignor implements ConnectAssignor {
                     wl.worker(), wl.connectorsSize(), wl.tasksSize()));
         }
 
-        Map<String, ConnectorsAndTasks> revoking = new HashMap<>();
         // If there are no new workers, or no existing workers to revoke tasks from return early
         // after logging the status
         if (!(newWorkersNum > 0 && existingWorkersNum > 0)) {
@@ -580,50 +579,63 @@ public class IncrementalCooperativeAssignor implements ConnectAssignor {
                     existingWorkersNum, newWorkersNum, totalWorkersNum);
             // This is intentionally empty but mutable, because the map is used to include deleted
             // connectors and tasks as well
-            return revoking;
+            return Collections.emptyMap();
         }
 
 //        log.error("!!! Task revocation is required; workers with existing load: {} workers with "
 //                + "no load {} total workers {}",
 //                existingWorkersNum, newWorkersNum, totalWorkersNum);
 
+        Map<String, ConnectorsAndTasks> revoking = new HashMap<>();
         // We have at least one worker assignment (the leader itself) so totalWorkersNum can't be 0
         log.debug("Previous rounded down (floor) average number of connectors per worker {}", totalActiveConnectorsNum / existingWorkersNum);
-        int floorConnectors = totalActiveConnectorsNum / totalWorkersNum;
-        int ceilConnectors = floorConnectors + ((totalActiveConnectorsNum % totalWorkersNum == 0) ? 0 : 1);
-        log.debug("New average number of connectors per worker rounded down (floor) {} and rounded up (ceil) {}", floorConnectors, ceilConnectors);
-
+        computeRevoked(
+            revoking,
+            existingWorkers,
+            totalWorkersNum,
+            totalActiveConnectorsNum,
+            false
+        );
 
         log.debug("Previous rounded down (floor) average number of tasks per worker {}", totalActiveTasksNum / existingWorkersNum);
-        int floorTasks = totalActiveTasksNum / totalWorkersNum;
-        int ceilTasks = floorTasks + ((totalActiveTasksNum % totalWorkersNum == 0) ? 0 : 1);
-        log.debug("New average number of tasks per worker rounded down (floor) {} and rounded up (ceil) {}", floorTasks, ceilTasks);
-        int numToRevoke;
-
-        for (WorkerLoad existing : existingWorkers) {
-            Iterator<String> connectors = existing.connectors().iterator();
-            numToRevoke = existing.connectorsSize() - ceilConnectors;
-            for (int i = existing.connectorsSize(); i > floorConnectors && numToRevoke > 0; --i, --numToRevoke) {
-                ConnectorsAndTasks resources = revoking.computeIfAbsent(
-                    existing.worker(),
-                    w -> new ConnectorsAndTasks.Builder().build());
-                resources.connectors().add(connectors.next());
-            }
-        }
-
-        for (WorkerLoad existing : existingWorkers) {
-            Iterator<ConnectorTaskId> tasks = existing.tasks().iterator();
-            numToRevoke = existing.tasksSize() - ceilTasks;
-//            log.error("!!! Tasks on worker {} is higher than ceiling, so revoking {} tasks", existing, numToRevoke);
-            for (int i = existing.tasksSize(); i > floorTasks && numToRevoke > 0; --i, --numToRevoke) {
-                ConnectorsAndTasks resources = revoking.computeIfAbsent(
-                    existing.worker(),
-                    w -> new ConnectorsAndTasks.Builder().build());
-                resources.tasks().add(tasks.next());
-            }
-        }
+        computeRevoked(
+            revoking,
+            existingWorkers,
+            totalWorkersNum,
+            totalActiveTasksNum,
+            true
+        );
 
         return revoking;
+    }
+
+    static void computeRevoked(Map<String, ConnectorsAndTasks> revoking,
+                               Collection<WorkerLoad> existingWorkers,
+                               int numberOfTotalWorks,
+                               int numberOfActives,
+                               boolean forTask) {
+        int floor = numberOfActives / numberOfTotalWorks;
+        int numberOfBiggers = numberOfActives % numberOfTotalWorks;
+        int ceil = numberOfBiggers == 0 ? floor : floor + 1;
+        for (WorkerLoad existing : existingWorkers) {
+            int currentSize = forTask ? existing.tasksSize() : existing.connectorsSize();
+            int expectedSize;
+            if (existingWorkers.size() == 1 || currentSize == 1) expectedSize = ceil;
+            else if (currentSize >= ceil && numberOfBiggers > 0) {
+                expectedSize = ceil;
+                numberOfBiggers--;
+            } else expectedSize = floor;
+            Iterator<?> elements = forTask ? existing.tasks().iterator() : existing.connectors().iterator();
+            int numToRevoke = currentSize - expectedSize;
+            while (elements.hasNext() && numToRevoke > 0) {
+                ConnectorsAndTasks resources = revoking.computeIfAbsent(
+                    existing.worker(),
+                    w -> new ConnectorsAndTasks.Builder().build());
+                if (forTask) resources.tasks().add((ConnectorTaskId) elements.next());
+                else resources.connectors().add((String) elements.next());
+                numToRevoke--;
+            }
+        }
     }
 
     private Map<String, ExtendedAssignment> fillAssignments(Collection<String> members, short error,
