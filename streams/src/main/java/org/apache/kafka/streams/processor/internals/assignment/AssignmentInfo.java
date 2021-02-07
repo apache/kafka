@@ -52,6 +52,7 @@ public class AssignmentInfo {
     private Map<TaskId, Set<TopicPartition>> standbyTasks;
     private Map<HostInfo, Set<TopicPartition>> partitionsByHost;
     private Map<HostInfo, Set<TopicPartition>> standbyPartitionsByHost;
+    private Map<String, StreamConsumerFeatureVersion> featureVersionMap;
     private int errCode;
     private Long nextRebalanceMs = Long.MAX_VALUE;
 
@@ -64,6 +65,7 @@ public class AssignmentInfo {
              Collections.emptyMap(),
              Collections.emptyMap(),
              Collections.emptyMap(),
+             Collections.emptyMap(),
              0);
     }
 
@@ -72,8 +74,9 @@ public class AssignmentInfo {
                           final Map<TaskId, Set<TopicPartition>> standbyTasks,
                           final Map<HostInfo, Set<TopicPartition>> partitionsByHost,
                           final Map<HostInfo, Set<TopicPartition>> standbyPartitionsByHost,
+                          final Map<String, StreamConsumerFeatureVersion> featureVersionMap,
                           final int errCode) {
-        this(version, LATEST_SUPPORTED_VERSION, activeTasks, standbyTasks, partitionsByHost, standbyPartitionsByHost, errCode);
+        this(version, LATEST_SUPPORTED_VERSION, activeTasks, standbyTasks, partitionsByHost, standbyPartitionsByHost, featureVersionMap, errCode);
     }
 
     public AssignmentInfo(final int version,
@@ -82,6 +85,7 @@ public class AssignmentInfo {
                           final Map<TaskId, Set<TopicPartition>> standbyTasks,
                           final Map<HostInfo, Set<TopicPartition>> partitionsByHost,
                           final Map<HostInfo, Set<TopicPartition>> standbyPartitionsByHost,
+                          final Map<String, StreamConsumerFeatureVersion> featureVersionMap,
                           final int errCode) {
         this.usedVersion = version;
         this.commonlySupportedVersion = commonlySupportedVersion;
@@ -89,6 +93,7 @@ public class AssignmentInfo {
         this.standbyTasks = standbyTasks;
         this.partitionsByHost = partitionsByHost;
         this.standbyPartitionsByHost = standbyPartitionsByHost;
+        this.featureVersionMap = featureVersionMap;
         this.errCode = errCode;
 
         if (version < 1 || version > LATEST_SUPPORTED_VERSION) {
@@ -127,6 +132,10 @@ public class AssignmentInfo {
 
     public Map<HostInfo, Set<TopicPartition>> standbyPartitionByHost() {
         return standbyPartitionsByHost;
+    }
+
+    public Map<String, StreamConsumerFeatureVersion> featureVersionMap() {
+        return featureVersionMap;
     }
 
     public long nextRebalanceMs() {
@@ -187,6 +196,15 @@ public class AssignmentInfo {
                     encodeActiveAndStandbyHostPartitions(out);
                     out.writeInt(errCode);
                     out.writeLong(nextRebalanceMs);
+                    break;
+                case 10:
+                    out.writeInt(usedVersion);
+                    out.writeInt(commonlySupportedVersion);
+                    encodeActiveAndStandbyTaskAssignment(out);
+                    encodeActiveAndStandbyHostPartitions(out);
+                    out.writeInt(errCode);
+                    out.writeLong(nextRebalanceMs);
+                    encodeFeatureVersionByConsumer(out);
                     break;
                 default:
                     throw new IllegalStateException("Unknown metadata version: " + usedVersion
@@ -283,6 +301,15 @@ public class AssignmentInfo {
         encodeHostPartitionMapUsingDictionary(out, topicNameDict, standbyPartitionsByHost);
     }
 
+    private void encodeFeatureVersionByConsumer(final DataOutputStream out) throws IOException {
+        out.writeInt(featureVersionMap.size());
+        for (final Map.Entry<String, StreamConsumerFeatureVersion> entry : featureVersionMap.entrySet()) {
+            out.writeUTF(entry.getKey());
+            out.writeInt(entry.getValue().currentlyUsedFeatureVersion());
+            out.writeInt(entry.getValue().leaderSuggestedFeatureVersion());
+        }
+    }
+
     private void writeHostInfo(final DataOutputStream out, final HostInfo hostInfo) throws IOException {
         out.writeUTF(hostInfo.host());
         out.writeInt(hostInfo.port());
@@ -363,6 +390,16 @@ public class AssignmentInfo {
                     decodeActiveAndStandbyHostPartitions(assignmentInfo, in);
                     assignmentInfo.errCode = in.readInt();
                     assignmentInfo.nextRebalanceMs = in.readLong();
+                    break;
+                case 10:
+                    commonlySupportedVersion = in.readInt();
+                    assignmentInfo = new AssignmentInfo(usedVersion, commonlySupportedVersion);
+                    decodeActiveTasks(assignmentInfo, in);
+                    decodeStandbyTasks(assignmentInfo, in);
+                    decodeActiveAndStandbyHostPartitions(assignmentInfo, in);
+                    assignmentInfo.errCode = in.readInt();
+                    assignmentInfo.nextRebalanceMs = in.readLong();
+                    decodeFeatureVersionMap(assignmentInfo, in);
                     break;
                 default:
                     final TaskAssignmentException fatalException = new TaskAssignmentException("Unable to decode assignment data: " +
@@ -448,6 +485,17 @@ public class AssignmentInfo {
         assignmentInfo.standbyPartitionsByHost = decodeHostPartitionMapUsingDictionary(in, topicIndexDict);
     }
 
+    private static void decodeFeatureVersionMap(final AssignmentInfo assignmentInfo, final DataInputStream in) throws IOException {
+        final Map<String, StreamConsumerFeatureVersion> featureVersionMap = new HashMap<>();
+        final int numEntries = in.readInt();
+        for (int i = 0; i < numEntries; i++) {
+            final String featureName = in.readUTF();
+            final StreamConsumerFeatureVersion featureVersion = new StreamConsumerFeatureVersion(in.readInt(), in.readInt());
+            featureVersionMap.put(featureName, featureVersion);
+        }
+        assignmentInfo.featureVersionMap = featureVersionMap;
+    }
+
     private static Set<TopicPartition> readTopicPartitions(final DataInputStream in,
                                                            final Map<Integer, String> topicIndexDict) throws IOException {
         final int numPartitions = in.readInt();
@@ -460,9 +508,10 @@ public class AssignmentInfo {
 
     @Override
     public int hashCode() {
+        final int tasksHashCode = activeTasks.hashCode() ^ standbyTasks.hashCode();
         final int hostMapHashCode = partitionsByHost.hashCode() ^ standbyPartitionsByHost.hashCode();
-        return usedVersion ^ commonlySupportedVersion ^ activeTasks.hashCode() ^ standbyTasks.hashCode()
-                ^ hostMapHashCode ^ errCode;
+        return usedVersion ^ commonlySupportedVersion ^ tasksHashCode
+                ^ hostMapHashCode ^ featureVersionMap.hashCode() ^ errCode;
     }
 
     @Override
@@ -475,7 +524,8 @@ public class AssignmentInfo {
                    activeTasks.equals(other.activeTasks) &&
                    standbyTasks.equals(other.standbyTasks) &&
                    partitionsByHost.equals(other.partitionsByHost) &&
-                   standbyPartitionsByHost.equals(other.standbyPartitionsByHost);
+                   standbyPartitionsByHost.equals(other.standbyPartitionsByHost) &&
+                   featureVersionMap.equals(other.featureVersionMap);
         } else {
             return false;
         }
@@ -489,6 +539,7 @@ public class AssignmentInfo {
             + ", standby tasks=" + standbyTasks
             + ", partitions by host=" + partitionsByHost
             + ", standbyPartitions by host=" + standbyPartitionsByHost
+            + ", featureVersionMap=" + featureVersionMap
             + "]";
     }
 }

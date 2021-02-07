@@ -170,7 +170,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         this.pendingAsyncCommits = new AtomicInteger();
         this.asyncCommitFenced = new AtomicBoolean(false);
         this.groupMetadata = new ConsumerGroupMetadata(rebalanceConfig.groupId,
-            JoinGroupRequest.UNKNOWN_GENERATION_ID, JoinGroupRequest.UNKNOWN_MEMBER_ID, rebalanceConfig.groupInstanceId);
+            JoinGroupRequest.UNKNOWN_GENERATION_ID, JoinGroupRequest.UNKNOWN_MEMBER_ID, rebalanceConfig.groupInstanceId, false);
         this.throwOnFetchStableOffsetsUnsupported = throwOnFetchStableOffsetsUnsupported;
 
         if (autoCommitEnabled)
@@ -357,7 +357,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
             throw new IllegalStateException("Coordinator selected invalid assignment protocol: " + assignmentStrategy);
 
         // Give the assignor a chance to update internal state based on the received assignment
-        groupMetadata = new ConsumerGroupMetadata(rebalanceConfig.groupId, generation, memberId, rebalanceConfig.groupInstanceId);
+        groupMetadata = new ConsumerGroupMetadata(rebalanceConfig.groupId, generation, memberId, rebalanceConfig.groupInstanceId, isLeader);
 
         Set<TopicPartition> ownedPartitions = new HashSet<>(subscriptions.assignedPartitions());
 

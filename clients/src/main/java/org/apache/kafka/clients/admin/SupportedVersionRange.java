@@ -35,7 +35,7 @@ public class SupportedVersionRange {
      *
      * @throws IllegalArgumentException   Raised when the condition described above is not met.
      */
-    SupportedVersionRange(final short minVersion, final short maxVersion) {
+    public SupportedVersionRange(final short minVersion, final short maxVersion) {
         if (minVersion < 1 || maxVersion < 1 || maxVersion < minVersion) {
             throw new IllegalArgumentException(
                 String.format(

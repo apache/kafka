@@ -15,7 +15,7 @@
 
 {
   "name": "SubscriptionInfoData",
-  "validVersions": "1-9",
+  "validVersions": "1-10",
   "fields": [
     {
       "name": "version",
@@ -62,6 +62,11 @@
       "name": "errorCode",
       "versions": "9+",
       "type": "int32"
+    },
+    {
+      "name": "consumerFeatureMetaDataMap",
+      "versions": "10+",
+      "type": "[]ConsumerFeatureMetaDataMap"
     }
   ],
   "commonStructs": [
@@ -110,6 +115,38 @@
           "name": "offsetSum",
           "versions": "7+",
           "type": "int64"
+        }
+      ]
+    },
+    {
+      "name": "ConsumerFeatureMetaDataMap",
+      "versions": "10+",
+      "fields": [
+        {
+          "name": "feature",
+          "versions": "10+",
+          "type": "string"
+        },
+        {
+          "name": "consumerFeatureMetadata",
+          "versions": "10+",
+          "type": "ConsumerFeatureMetadata"
+        }
+      ]
+    },
+    {
+      "name": "ConsumerFeatureMetadata",
+      "versions": "10+",
+      "fields": [
+        {
+          "name": "currentlyUsedFeatureVersion",
+          "versions": "10+",
+          "type": "int32"
+        },
+        {
+          "name": "suggestedFeatureVersion",
+          "versions": "10+",
+          "type": "int32"
         }
       ]
     }

@@ -80,12 +80,13 @@ public class SubscriptionInfo {
     }
 
     public SubscriptionInfo(final int version,
-                            final int latestSupportedVersion,
-                            final UUID processId,
-                            final String userEndPoint,
-                            final Map<TaskId, Long> taskOffsetSums,
-                            final byte uniqueField,
-                            final int errorCode) {
+                                   final int latestSupportedVersion,
+                                   final UUID processId,
+                                   final String userEndPoint,
+                                   final Map<TaskId, Long> taskOffsetSums,
+                                   final byte uniqueField,
+                                   final int errorCode,
+                                   final Map<String, StreamConsumerFeatureVersion> featureMetadataMap) {
         validateVersions(version, latestSupportedVersion);
         final SubscriptionInfoData data = new SubscriptionInfoData();
         data.setVersion(version);
@@ -106,6 +107,9 @@ public class SubscriptionInfo {
         if (version >= 9) {
             data.setErrorCode(errorCode);
         }
+        if (version >= 10) {
+            setFeatureMetadataMap(featureMetadataMap, data);
+        }
 
         this.data = data;
 
@@ -114,6 +118,17 @@ public class SubscriptionInfo {
         } else {
             setPrevAndStandbySetsFromParsedTaskOffsetSumMap(taskOffsetSums);
         }
+
+    }
+
+    public SubscriptionInfo(final int version,
+                            final int latestSupportedVersion,
+                            final UUID processId,
+                            final String userEndPoint,
+                            final Map<TaskId, Long> taskOffsetSums,
+                            final byte uniqueField,
+                            final int errorCode) {
+        this(version, latestSupportedVersion, processId, userEndPoint, taskOffsetSums, uniqueField, errorCode, Collections.emptyMap());
     }
 
     private SubscriptionInfo(final SubscriptionInfoData subscriptionInfoData) {
@@ -140,6 +155,19 @@ public class SubscriptionInfo {
             taskOffsetSum.setTopicGroupId(t.getKey());
             taskOffsetSum.setPartitionToOffsetSum(t.getValue());
             return taskOffsetSum;
+        }).collect(Collectors.toList()));
+    }
+
+    private void setFeatureMetadataMap(final Map<String, StreamConsumerFeatureVersion> featureMetadataMap,
+                                       final SubscriptionInfoData data) {
+        data.setConsumerFeatureMetaDataMap(featureMetadataMap.entrySet().stream().map(entry -> {
+            final SubscriptionInfoData.ConsumerFeatureMetaDataMap featureMetaDataMap = new SubscriptionInfoData.ConsumerFeatureMetaDataMap();
+            featureMetaDataMap.setFeature(entry.getKey());
+            final SubscriptionInfoData.ConsumerFeatureMetadata consumerFeatureMetadata = new SubscriptionInfoData.ConsumerFeatureMetadata();
+            consumerFeatureMetadata.setCurrentlyUsedFeatureVersion(entry.getValue().currentlyUsedFeatureVersion());
+            consumerFeatureMetadata.setSuggestedFeatureVersion(entry.getValue().leaderSuggestedFeatureVersion());
+            featureMetaDataMap.setConsumerFeatureMetadata(consumerFeatureMetadata);
+            return featureMetaDataMap;
         }).collect(Collectors.toList()));
     }
 
@@ -171,6 +199,15 @@ public class SubscriptionInfo {
 
     public int version() {
         return data.version();
+    }
+
+    public Map<String, StreamConsumerFeatureVersion> featureMetaMap() {
+        final Map<String, StreamConsumerFeatureVersion> featureMetadataMap = new HashMap<>();
+        for (final SubscriptionInfoData.ConsumerFeatureMetaDataMap a: data.consumerFeatureMetaDataMap()) {
+            featureMetadataMap.put(a.feature(), new StreamConsumerFeatureVersion(a.consumerFeatureMetadata().currentlyUsedFeatureVersion(),
+                    a.consumerFeatureMetadata().suggestedFeatureVersion()));
+        }
+        return featureMetadataMap;
     }
 
     public int latestSupportedVersion() {
