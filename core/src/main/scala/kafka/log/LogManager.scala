@@ -116,11 +116,8 @@ class LogManager(logDirs: Seq[File],
     logDirsSet
   }
 
-  private[kafka] val cleaner: LogCleaner =
-    if (cleanerConfig.enableCleaner)
-      new LogCleaner(cleanerConfig, liveLogDirs, currentLogs, logDirFailureChannel, time = time)
-    else
-      null
+  @volatile private var _cleaner: LogCleaner = _
+  private[kafka] def cleaner: LogCleaner = _cleaner
 
   newGauge("OfflineLogDirectoryCount", () => offlineLogDirs.size)
 
@@ -254,9 +251,9 @@ class LogManager(logDirs: Seq[File],
                            hadCleanShutdown: Boolean,
                            recoveryPoints: Map[TopicPartition, Long],
                            logStartOffsets: Map[TopicPartition, Long],
-                           topicLogConfigOverrides: Map[String, LogConfig]): Log = {
+                           topicConfigOverrides: Map[String, LogConfig]): Log = {
     val topicPartition = Log.parseTopicPartitionName(logDir)
-    val config = topicLogConfigOverrides.getOrElse(topicPartition.topic, currentDefaultConfig)
+    val config = topicConfigOverrides.getOrElse(topicPartition.topic, currentDefaultConfig)
     val logRecoveryPoint = recoveryPoints.getOrElse(topicPartition, 0L)
     val logStartOffset = logStartOffsets.getOrElse(topicPartition, 0L)
 
@@ -299,7 +296,7 @@ class LogManager(logDirs: Seq[File],
   /**
    * Recover and load all logs in the given data directories
    */
-  private[log] def loadLogs(topicLogConfigOverrides: Map[String, LogConfig]): Unit = {
+  private[log] def loadLogs(topicConfigOverrides: Map[String, LogConfig]): Unit = {
     info(s"Loading logs from log dirs $liveLogDirs")
     val startMs = time.hiResClockMs()
     val threadPools = ArrayBuffer.empty[ExecutorService]
@@ -344,19 +341,18 @@ class LogManager(logDirs: Seq[File],
               s"$logDirAbsolutePath, resetting to the base offset of the first segment", e)
         }
 
-        val logsToLoad = Option(dir.listFiles).getOrElse(Array.empty).filter(_.isDirectory)
+        val logsToLoad = Option(dir.listFiles).getOrElse(Array.empty).filter(logDir =>
+          logDir.isDirectory && Log.parseTopicPartitionName(logDir).topic != KafkaRaftServer.MetadataTopic)
         val numLogsLoaded = new AtomicInteger(0)
         numTotalLogs += logsToLoad.length
 
-        val jobsForDir = logsToLoad
-          .filter(logDir => Log.parseTopicPartitionName(logDir).topic != KafkaRaftServer.MetadataTopic)
-          .map { logDir =>
+        val jobsForDir = logsToLoad.map { logDir =>
           val runnable: Runnable = () => {
             try {
               debug(s"Loading log $logDir")
 
               val logLoadStartMs = time.hiResClockMs()
-              val log = loadLog(logDir, hadCleanShutdown, recoveryPoints, logStartOffsets, topicLogConfigOverrides)
+              val log = loadLog(logDir, hadCleanShutdown, recoveryPoints, logStartOffsets, topicConfigOverrides)
               val logLoadDurationMs = time.hiResClockMs() - logLoadStartMs
               val currentNumLoaded = numLogsLoaded.incrementAndGet()
 
@@ -401,29 +397,28 @@ class LogManager(logDirs: Seq[File],
   /**
    *  Start the background threads to flush logs and do log cleanup
    */
-  def startup(retrieveTopicsForLogConfigOverrideCheck: => Set[String]): Unit = {
-    startupWithTopicLogConfigOverrides(generateTopicLogConfigs(retrieveTopicsForLogConfigOverrideCheck))
+  def startup(topicNames: Set[String]): Unit = {
+    startupWithConfigOverrides(fetchTopicConfigOverrides(topicNames))
   }
 
   // visible for testing
-  private[log] def generateTopicLogConfigs(topicNames: Set[String]): Map[String, LogConfig] = {
-    val topicLogConfigs = mutable.Map[String, LogConfig]()
+  private[log] def fetchTopicConfigOverrides(topicNames: Set[String]): Map[String, LogConfig] = {
+    val topicConfigOverrides = mutable.Map[String, LogConfig]()
     val defaultProps = currentDefaultConfig.originals()
     topicNames.foreach { topicName =>
       val overrides = configRepository.topicConfig(topicName)
-      // Later on we grab the default configs if a topic doesn't appear in the map,
-      // so save memory by only putting the log configs into the map when there is the potential for overrides
+      // save memory by only including configs for topics with overrides
       if (!overrides.isEmpty) {
         val logConfig = LogConfig.fromProps(defaultProps, overrides)
-        topicLogConfigs(topicName) = logConfig
+        topicConfigOverrides(topicName) = logConfig
       }
     }
-    topicLogConfigs
+    topicConfigOverrides
   }
 
   // visible for testing
-  private[log] def startupWithTopicLogConfigOverrides(topicLogConfigOverrides: Map[String, LogConfig]): Unit = {
-    loadLogs(topicLogConfigOverrides) // this could take a while if shutdown was not clean
+  private[log] def startupWithConfigOverrides(topicConfigOverrides: Map[String, LogConfig]): Unit = {
+    loadLogs(topicConfigOverrides) // this could take a while if shutdown was not clean
 
     /* Schedule the cleanup task to delete old logs */
     if (scheduler != null) {
@@ -454,8 +449,10 @@ class LogManager(logDirs: Seq[File],
                          delay = InitialTaskDelayMs,
                          unit = TimeUnit.MILLISECONDS)
     }
-    if (cleanerConfig.enableCleaner)
-      cleaner.startup()
+    if (cleanerConfig.enableCleaner) {
+      _cleaner = new LogCleaner(cleanerConfig, liveLogDirs, currentLogs, logDirFailureChannel, time = time)
+      _cleaner.startup()
+    }
   }
 
   /**
@@ -757,11 +754,15 @@ class LogManager(logDirs: Seq[File],
    * relevant log was being loaded.
    */
   def finishedInitializingLog(topicPartition: TopicPartition,
-                              maybeLog: Option[Log],
-                              fetchLogConfig: () => LogConfig): Unit = {
+                              maybeLog: Option[Log]): Unit = {
     val removedValue = partitionsInitializing.remove(topicPartition)
     if (removedValue.contains(true))
-      maybeLog.foreach(_.updateConfig(fetchLogConfig()))
+      maybeLog.foreach(_.updateConfig(fetchLogConfig(topicPartition.topic)))
+  }
+
+  private def fetchLogConfig(topicName: String): LogConfig = {
+    val props = configRepository.topicConfig(topicName)
+    LogConfig.fromProps(currentDefaultConfig.originals, props)
   }
 
   /**
@@ -775,7 +776,7 @@ class LogManager(logDirs: Seq[File],
    * @param isFuture True if the future log of the specified partition should be returned or created
    * @throws KafkaStorageException if isNew=false, log is not found in the cache and there is offline log directory on the broker
    */
-  def getOrCreateLog(topicPartition: TopicPartition, loadConfig: () => LogConfig, isNew: Boolean = false, isFuture: Boolean = false): Log = {
+  def getOrCreateLog(topicPartition: TopicPartition, isNew: Boolean = false, isFuture: Boolean = false): Log = {
     logCreationOrDeletionLock synchronized {
       getLog(topicPartition, isFuture).getOrElse {
         // create the log if it has not already been created in another thread
@@ -812,7 +813,7 @@ class LogManager(logDirs: Seq[File],
           .getOrElse(Failure(new KafkaStorageException("No log directories available. Tried " + logDirs.map(_.getAbsolutePath).mkString(", "))))
           .get // If Failure, will throw
 
-        val config = loadConfig()
+        val config = fetchLogConfig(topicPartition.topic)
         val log = Log(
           dir = logDir,
           config = config,
@@ -1231,4 +1232,5 @@ object LogManager {
       logDirFailureChannel = logDirFailureChannel,
       time = time)
   }
+
 }

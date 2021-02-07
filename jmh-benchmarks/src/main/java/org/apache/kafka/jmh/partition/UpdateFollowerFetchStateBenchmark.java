@@ -117,7 +117,7 @@ public class UpdateFollowerFetchStateBenchmark {
         AlterIsrManager alterIsrManager = Mockito.mock(AlterIsrManager.class);
         partition = new Partition(topicPartition, 100,
                 ApiVersion$.MODULE$.latestVersion(), 0, Time.SYSTEM,
-                new CachedConfigRepository(), isrChangeListener, delayedOperations,
+                isrChangeListener, delayedOperations,
                 Mockito.mock(MetadataCache.class), logManager, alterIsrManager);
         partition.makeLeader(partitionState, offsetCheckpoints);
     }
