@@ -28,8 +28,8 @@ import org.apache.kafka.connect.data.Timestamp;
 import org.apache.kafka.connect.data.Values;
 import org.apache.kafka.connect.errors.DataException;
 import org.apache.kafka.connect.header.Headers.HeaderTransform;
-import org.junit.Before;
-import org.junit.Test;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
@@ -42,15 +42,15 @@ import java.util.HashMap;
 import java.util.Iterator;
 import java.util.TimeZone;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertNotEquals;
-import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.assertNotSame;
-import static org.junit.Assert.assertSame;
-import static org.junit.Assert.assertThrows;
-import static org.junit.Assert.assertTrue;
-import static org.junit.Assert.fail;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNotSame;
+import static org.junit.jupiter.api.Assertions.assertSame;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.fail;
 
 public class ConnectHeadersTest {
 
@@ -72,7 +72,7 @@ public class ConnectHeadersTest {
     private String key;
     private String other;
 
-    @Before
+    @BeforeEach
     public void beforeEach() {
         headers = new ConnectHeaders();
         key = "k1";
@@ -345,24 +345,16 @@ public class ConnectHeadersTest {
     }
 
     protected HeaderTransform appendToKey(final String suffix) {
-        return new HeaderTransform() {
-            @Override
-            public Header apply(Header header) {
-                return header.rename(header.key() + suffix);
-            }
-        };
+        return header -> header.rename(header.key() + suffix);
     }
 
     protected HeaderTransform removeHeadersOfType(final Type type) {
-        return new HeaderTransform() {
-            @Override
-            public Header apply(Header header) {
-                Schema schema = header.schema();
-                if (schema != null && schema.type() == type) {
-                    return null;
-                }
-                return header;
+        return header -> {
+            Schema schema = header.schema();
+            if (schema != null && schema.type() == type) {
+                return null;
             }
+            return header;
         };
     }
 

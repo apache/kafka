@@ -93,8 +93,8 @@ public class WordCountDemoTest {
     @Test
     public void testCountListOfWords() {
         final List<String> inputValues = Arrays.asList(
-                "Apache Kafka Streams Example",
-                "Using Kafka Streams Test Utils",
+                "Apache   Kafka Streams   Example",
+                "Using  \t\t Kafka   Streams\tTest Utils",
                 "Reading and Writing Kafka Topic"
         );
         final Map<String, Long> expectedWordCounts = new HashMap<>();

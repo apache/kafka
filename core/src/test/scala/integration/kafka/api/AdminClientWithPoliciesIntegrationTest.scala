@@ -16,7 +16,6 @@ package kafka.api
 import java.util
 import java.util.Properties
 import java.util.concurrent.ExecutionException
-
 import kafka.integration.KafkaServerTestHarness
 import kafka.log.LogConfig
 import kafka.server.{Defaults, KafkaConfig}
@@ -26,9 +25,8 @@ import org.apache.kafka.common.config.{ConfigResource, TopicConfig}
 import org.apache.kafka.common.errors.{InvalidRequestException, PolicyViolationException}
 import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.server.policy.AlterConfigPolicy
-import org.junit.Assert.{assertEquals, assertNull, assertTrue, assertThrows}
-import org.junit.{After, Before, Rule, Test}
-import org.junit.rules.Timeout
+import org.junit.jupiter.api.Assertions.{assertEquals, assertNull, assertThrows, assertTrue}
+import org.junit.jupiter.api.{AfterEach, BeforeEach, Test, Timeout}
 
 import scala.annotation.nowarn
 import scala.jdk.CollectionConverters._
@@ -36,6 +34,7 @@ import scala.jdk.CollectionConverters._
 /**
   * Tests AdminClient calls when the broker is configured with policies like AlterConfigPolicy, CreateTopicPolicy, etc.
   */
+@Timeout(120)
 class AdminClientWithPoliciesIntegrationTest extends KafkaServerTestHarness with Logging {
 
   import AdminClientWithPoliciesIntegrationTest._
@@ -43,16 +42,13 @@ class AdminClientWithPoliciesIntegrationTest extends KafkaServerTestHarness with
   var client: Admin = null
   val brokerCount = 3
 
-  @Rule
-  def globalTimeout = Timeout.millis(120000)
-
-  @Before
+  @BeforeEach
   override def setUp(): Unit = {
     super.setUp()
     TestUtils.waitUntilBrokerMetadataIsPropagated(servers)
   }
 
-  @After
+  @AfterEach
   override def tearDown(): Unit = {
     if (client != null)
       Utils.closeQuietly(client, "AdminClient")
@@ -141,10 +137,8 @@ class AdminClientWithPoliciesIntegrationTest extends KafkaServerTestHarness with
     var configs = describeResult.all.get
     assertEquals(4, configs.size)
 
-    assertEquals(Defaults.LogCleanerMinCleanRatio.toString,
-      configs.get(topicResource1).get(LogConfig.MinCleanableDirtyRatioProp).value)
-    assertEquals(Defaults.MinInSyncReplicas.toString,
-      configs.get(topicResource1).get(LogConfig.MinInSyncReplicasProp).value)
+    assertEquals(Defaults.LogCleanerMinCleanRatio.toString, configs.get(topicResource1).get(LogConfig.MinCleanableDirtyRatioProp).value)
+    assertEquals(Defaults.MinInSyncReplicas.toString, configs.get(topicResource1).get(LogConfig.MinInSyncReplicasProp).value)
 
     assertEquals("0.8", configs.get(topicResource2).get(LogConfig.MinCleanableDirtyRatioProp).value)
 
@@ -171,10 +165,8 @@ class AdminClientWithPoliciesIntegrationTest extends KafkaServerTestHarness with
     configs = describeResult.all.get
     assertEquals(4, configs.size)
 
-    assertEquals(Defaults.LogCleanerMinCleanRatio.toString,
-      configs.get(topicResource1).get(LogConfig.MinCleanableDirtyRatioProp).value)
-    assertEquals(Defaults.MinInSyncReplicas.toString,
-      configs.get(topicResource1).get(LogConfig.MinInSyncReplicasProp).value)
+    assertEquals(Defaults.LogCleanerMinCleanRatio.toString, configs.get(topicResource1).get(LogConfig.MinCleanableDirtyRatioProp).value)
+    assertEquals(Defaults.MinInSyncReplicas.toString, configs.get(topicResource1).get(LogConfig.MinInSyncReplicasProp).value)
 
     assertEquals("0.8", configs.get(topicResource2).get(LogConfig.MinCleanableDirtyRatioProp).value)
 

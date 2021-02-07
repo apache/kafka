@@ -34,8 +34,8 @@ import org.apache.kafka.common.requests.ProduceResponse.PartitionResponse
 import org.apache.kafka.common.requests.TransactionResult
 import org.apache.kafka.common.utils.MockTime
 import org.easymock.{Capture, EasyMock, IAnswer}
-import org.junit.Assert.{assertEquals, assertFalse, assertThrows, assertTrue, fail}
-import org.junit.{After, Before, Test}
+import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertThrows, assertTrue, fail}
+import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
 
 import scala.jdk.CollectionConverters._
 import scala.collection.{Map, mutable}
@@ -63,7 +63,7 @@ class TransactionStateManagerTest {
   val metrics = new Metrics()
 
   val txnConfig = TransactionConfig()
-  val transactionManager: TransactionStateManager = new TransactionStateManager(0, zkClient, scheduler,
+  val transactionManager: TransactionStateManager = new TransactionStateManager(0, scheduler,
     replicaManager, txnConfig, time, metrics)
 
   val transactionalId1: String = "one"
@@ -76,14 +76,15 @@ class TransactionStateManagerTest {
 
   var expectedError: Errors = Errors.NONE
 
-  @Before
+  @BeforeEach
   def setUp(): Unit = {
+    transactionManager.startup(() => numPartitions, false)
     // make sure the transactional id hashes to the assigning partition id
     assertEquals(partitionId, transactionManager.partitionFor(transactionalId1))
     assertEquals(partitionId, transactionManager.partitionFor(transactionalId2))
   }
 
-  @After
+  @AfterEach
   def tearDown(): Unit = {
     EasyMock.reset(zkClient, replicaManager)
     transactionManager.shutdown()
@@ -619,7 +620,7 @@ class TransactionStateManagerTest {
       case Left(_) => fail("shouldn't have been any errors")
       case Right(None) => fail("metadata should have been removed")
       case Right(Some(metadata)) =>
-        assertTrue("metadata shouldn't be in a pending state", metadata.transactionMetadata.pendingState.isEmpty)
+        assertTrue(metadata.transactionMetadata.pendingState.isEmpty, "metadata shouldn't be in a pending state")
     }
   }
 

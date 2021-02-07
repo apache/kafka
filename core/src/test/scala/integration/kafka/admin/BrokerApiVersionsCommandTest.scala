@@ -19,16 +19,15 @@ package kafka.admin
 
 import java.io.{ByteArrayOutputStream, PrintStream}
 import java.nio.charset.StandardCharsets
-
 import scala.collection.Seq
-
 import kafka.integration.KafkaServerTestHarness
 import kafka.server.KafkaConfig
 import kafka.utils.TestUtils
 import org.apache.kafka.clients.NodeApiVersions
 import org.apache.kafka.common.protocol.ApiKeys
-import org.junit.Assert.{assertEquals, assertFalse, assertNotNull, assertTrue}
-import org.junit.Test
+import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertNotNull, assertTrue}
+import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.Timeout
 
 import scala.jdk.CollectionConverters._
 
@@ -45,7 +44,8 @@ class BrokerApiVersionsCommandTest extends KafkaServerTestHarness {
       props
     }).map(KafkaConfig.fromProps)
 
-  @Test(timeout=120000)
+  @Timeout(120)
+  @Test
   def checkBrokerApiVersionCommandOutput(): Unit = {
     val byteArrayOutputStream = new ByteArrayOutputStream
     val printStream = new PrintStream(byteArrayOutputStream, false, StandardCharsets.UTF_8.name())
@@ -55,7 +55,7 @@ class BrokerApiVersionsCommandTest extends KafkaServerTestHarness {
     assertTrue(lineIter.hasNext)
     assertEquals(s"$brokerList (id: 0 rack: null) -> (", lineIter.next())
     val nodeApiVersions = NodeApiVersions.create
-    val enabledApis = ApiKeys.enabledApis.asScala
+    val enabledApis = ApiKeys.brokerApis.asScala
     for (apiKey <- enabledApis) {
       val apiVersion = nodeApiVersions.apiVersion(apiKey)
       assertNotNull(apiVersion)

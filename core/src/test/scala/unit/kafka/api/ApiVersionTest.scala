@@ -24,8 +24,8 @@ import org.apache.kafka.common.protocol.ApiKeys
 import org.apache.kafka.common.record.{RecordBatch, RecordVersion}
 import org.apache.kafka.common.requests.{AbstractResponse, ApiVersionsResponse}
 import org.apache.kafka.common.utils.Utils
-import org.junit.Assert._
-import org.junit.Test
+import org.junit.jupiter.api.Assertions._
+import org.junit.jupiter.api.Test
 
 import scala.jdk.CollectionConverters._
 
@@ -232,7 +232,7 @@ class ApiVersionTest {
       Features.emptySupportedFeatures,
       None
     )
-    assertEquals(new util.HashSet[ApiKeys](ApiKeys.enabledApis), apiKeysInResponse(response))
+    assertEquals(new util.HashSet[ApiKeys](ApiKeys.brokerApis), apiKeysInResponse(response))
     assertEquals(AbstractResponse.DEFAULT_THROTTLE_TIME, response.throttleTimeMs)
     assertTrue(response.data.supportedFeatures.isEmpty)
     assertTrue(response.data.finalizedFeatures.isEmpty)

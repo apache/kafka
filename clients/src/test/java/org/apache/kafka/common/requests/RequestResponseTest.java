@@ -46,8 +46,12 @@ import org.apache.kafka.common.message.AlterReplicaLogDirsRequestData.AlterRepli
 import org.apache.kafka.common.message.AlterReplicaLogDirsResponseData;
 import org.apache.kafka.common.message.ApiVersionsRequestData;
 import org.apache.kafka.common.message.ApiVersionsResponseData;
-import org.apache.kafka.common.message.ApiVersionsResponseData.ApiVersionsResponseKey;
-import org.apache.kafka.common.message.ApiVersionsResponseData.ApiVersionsResponseKeyCollection;
+import org.apache.kafka.common.message.ApiVersionsResponseData.ApiVersion;
+import org.apache.kafka.common.message.ApiVersionsResponseData.ApiVersionCollection;
+import org.apache.kafka.common.message.BrokerHeartbeatRequestData;
+import org.apache.kafka.common.message.BrokerHeartbeatResponseData;
+import org.apache.kafka.common.message.BrokerRegistrationRequestData;
+import org.apache.kafka.common.message.BrokerRegistrationResponseData;
 import org.apache.kafka.common.message.ControlledShutdownRequestData;
 import org.apache.kafka.common.message.ControlledShutdownResponseData;
 import org.apache.kafka.common.message.ControlledShutdownResponseData.RemainingPartition;
@@ -70,6 +74,8 @@ import org.apache.kafka.common.message.CreateTopicsRequestData.CreateableTopicCo
 import org.apache.kafka.common.message.CreateTopicsResponseData;
 import org.apache.kafka.common.message.CreateTopicsResponseData.CreatableTopicConfigs;
 import org.apache.kafka.common.message.CreateTopicsResponseData.CreatableTopicResult;
+import org.apache.kafka.common.message.DecommissionBrokerRequestData;
+import org.apache.kafka.common.message.DecommissionBrokerResponseData;
 import org.apache.kafka.common.message.DeleteAclsRequestData;
 import org.apache.kafka.common.message.DeleteAclsResponseData;
 import org.apache.kafka.common.message.DeleteGroupsRequestData;
@@ -83,6 +89,10 @@ import org.apache.kafka.common.message.DescribeAclsResponseData;
 import org.apache.kafka.common.message.DescribeAclsResponseData.AclDescription;
 import org.apache.kafka.common.message.DescribeAclsResponseData.DescribeAclsResource;
 import org.apache.kafka.common.message.DescribeClientQuotasResponseData;
+import org.apache.kafka.common.message.DescribeClusterRequestData;
+import org.apache.kafka.common.message.DescribeClusterResponseData;
+import org.apache.kafka.common.message.DescribeClusterResponseData.DescribeClusterBroker;
+import org.apache.kafka.common.message.DescribeClusterResponseData.DescribeClusterBrokerCollection;
 import org.apache.kafka.common.message.DescribeConfigsRequestData;
 import org.apache.kafka.common.message.DescribeConfigsResponseData;
 import org.apache.kafka.common.message.DescribeConfigsResponseData.DescribeConfigsResourceResult;
@@ -90,6 +100,8 @@ import org.apache.kafka.common.message.DescribeConfigsResponseData.DescribeConfi
 import org.apache.kafka.common.message.DescribeGroupsRequestData;
 import org.apache.kafka.common.message.DescribeGroupsResponseData;
 import org.apache.kafka.common.message.DescribeGroupsResponseData.DescribedGroup;
+import org.apache.kafka.common.message.DescribeProducersRequestData;
+import org.apache.kafka.common.message.DescribeProducersResponseData;
 import org.apache.kafka.common.message.ElectLeadersResponseData.PartitionResult;
 import org.apache.kafka.common.message.ElectLeadersResponseData.ReplicaElectionResult;
 import org.apache.kafka.common.message.EndTxnRequestData;
@@ -507,6 +519,72 @@ public class RequestResponseTest {
         checkRequest(createAlterClientQuotasRequest(), true);
         checkErrorResponse(createAlterClientQuotasRequest(), unknownServerException, true);
         checkResponse(createAlterClientQuotasResponse(), 0, true);
+    }
+
+    @Test
+    public void testBrokerHeartbeatSerialization() {
+        for (short v = ApiKeys.BROKER_HEARTBEAT.oldestVersion(); v <= ApiKeys.BROKER_HEARTBEAT.latestVersion(); v++) {
+            checkRequest(createBrokerHeartbeatRequest(v), true);
+            checkErrorResponse(createBrokerHeartbeatRequest(v), unknownServerException, true);
+            checkResponse(createBrokerHeartbeatResponse(), v, true);
+        }
+    }
+
+    @Test
+    public void testBrokerRegistrationSerialization() {
+        for (short v = ApiKeys.BROKER_REGISTRATION.oldestVersion(); v <= ApiKeys.BROKER_REGISTRATION.latestVersion(); v++) {
+            checkRequest(createBrokerRegistrationRequest(v), true);
+            checkErrorResponse(createBrokerRegistrationRequest(v), unknownServerException, true);
+            checkResponse(createBrokerRegistrationResponse(), 0, true);
+        }
+    }
+
+    @Test
+    public void testDescribeProducersSerialization() throws Exception {
+        for (short v = ApiKeys.DESCRIBE_PRODUCERS.oldestVersion(); v <= ApiKeys.DESCRIBE_PRODUCERS.latestVersion(); v++) {
+            checkRequest(createDescribeProducersRequest(v), true);
+            checkErrorResponse(createDescribeProducersRequest(v), unknownServerException, true);
+            checkResponse(createDescribeProducersResponse(), v, true);
+        }
+    }
+
+    @Test
+    public void testDescribeClusterSerialization() throws Exception {
+        for (short v = ApiKeys.DESCRIBE_CLUSTER.oldestVersion(); v <= ApiKeys.DESCRIBE_CLUSTER.latestVersion(); v++) {
+            checkRequest(createDescribeClusterRequest(v), true);
+            checkErrorResponse(createDescribeClusterRequest(v), unknownServerException, true);
+            checkResponse(createDescribeClusterResponse(), v, true);
+        }
+    }
+
+    @Test
+    public void testDecommissionBrokerSerialization() {
+        for (short v = ApiKeys.DECOMMISSION_BROKER.oldestVersion(); v <= ApiKeys.DECOMMISSION_BROKER.latestVersion(); v++) {
+            checkRequest(createDecommissionBrokerRequest(v), true);
+            checkErrorResponse(createDecommissionBrokerRequest(v), unknownServerException, true);
+            checkResponse(createDecommissionBrokerResponse(), v, true);
+        }
+    }
+
+    private DescribeClusterRequest createDescribeClusterRequest(short version) {
+        return new DescribeClusterRequest.Builder(
+            new DescribeClusterRequestData()
+                .setIncludeClusterAuthorizedOperations(true))
+            .build(version);
+    }
+
+    private DescribeClusterResponse createDescribeClusterResponse() {
+        return new DescribeClusterResponse(
+            new DescribeClusterResponseData()
+                .setBrokers(new DescribeClusterBrokerCollection(
+                    Collections.singletonList(new DescribeClusterBroker()
+                        .setBrokerId(1)
+                        .setHost("localhost")
+                        .setPort(9092)
+                        .setRack("rack1")).iterator()))
+                .setClusterId("clusterId")
+                .setControllerId(1)
+                .setClusterAuthorizedOperations(10));
     }
 
     @Test
@@ -940,7 +1018,7 @@ public class RequestResponseTest {
 
         assertEquals(Errors.UNSUPPORTED_VERSION.code(), response.data().errorCode());
 
-        ApiVersionsResponseKey apiVersion = response.data().apiKeys().find(ApiKeys.API_VERSIONS.id);
+        ApiVersion apiVersion = response.data().apiKeys().find(ApiKeys.API_VERSIONS.id);
         assertNotNull(apiVersion);
         assertEquals(ApiKeys.API_VERSIONS.id, apiVersion.apiKey());
         assertEquals(ApiKeys.API_VERSIONS.oldestVersion(), apiVersion.minVersion());
@@ -1700,8 +1778,8 @@ public class RequestResponseTest {
     }
 
     private ApiVersionsResponse createApiVersionResponse() {
-        ApiVersionsResponseKeyCollection apiVersions = new ApiVersionsResponseKeyCollection();
-        apiVersions.add(new ApiVersionsResponseKey()
+        ApiVersionCollection apiVersions = new ApiVersionCollection();
+        apiVersions.add(new ApiVersion()
             .setApiKey((short) 0)
             .setMinVersion((short) 0)
             .setMaxVersion((short) 2));
@@ -2532,6 +2610,85 @@ public class RequestResponseTest {
         return new AlterClientQuotasResponse(data);
     }
 
+    private DescribeProducersRequest createDescribeProducersRequest(short version) {
+        DescribeProducersRequestData data = new DescribeProducersRequestData();
+        DescribeProducersRequestData.TopicRequest topicRequest = new DescribeProducersRequestData.TopicRequest();
+        topicRequest.partitionIndexes().add(0);
+        topicRequest.partitionIndexes().add(1);
+        data.topics().add(topicRequest);
+        return new DescribeProducersRequest.Builder(data).build(version);
+    }
+
+    private DescribeProducersResponse createDescribeProducersResponse() {
+        DescribeProducersResponseData data = new DescribeProducersResponseData();
+        DescribeProducersResponseData.TopicResponse topicResponse = new DescribeProducersResponseData.TopicResponse();
+        topicResponse.partitions().add(new DescribeProducersResponseData.PartitionResponse()
+            .setErrorCode(Errors.NONE.code())
+            .setPartitionIndex(0)
+            .setActiveProducers(Arrays.asList(
+                new DescribeProducersResponseData.ProducerState()
+                    .setProducerId(1234L)
+                    .setProducerEpoch(15)
+                    .setLastTimestamp(13490218304L)
+                    .setCurrentTxnStartOffset(5000),
+                new DescribeProducersResponseData.ProducerState()
+                    .setProducerId(9876L)
+                    .setProducerEpoch(32)
+                    .setLastTimestamp(13490218399L)
+            ))
+        );
+        data.topics().add(topicResponse);
+        return new DescribeProducersResponse(data);
+    }
+
+    private BrokerHeartbeatRequest createBrokerHeartbeatRequest(short v) {
+        BrokerHeartbeatRequestData data = new BrokerHeartbeatRequestData()
+                .setBrokerId(1)
+                .setBrokerEpoch(1)
+                .setCurrentMetadataOffset(1)
+                .setWantFence(false)
+                .setWantShutDown(false);
+        return new BrokerHeartbeatRequest.Builder(data).build(v);
+    }
+
+    private BrokerHeartbeatResponse createBrokerHeartbeatResponse() {
+        BrokerHeartbeatResponseData data = new BrokerHeartbeatResponseData()
+                .setIsCaughtUp(true)
+                .setIsFenced(false)
+                .setShouldShutDown(false)
+                .setThrottleTimeMs(0);
+        return new BrokerHeartbeatResponse(data);
+    }
+
+    private BrokerRegistrationRequest createBrokerRegistrationRequest(short v) {
+        BrokerRegistrationRequestData data = new BrokerRegistrationRequestData()
+                .setBrokerId(1)
+                .setClusterId(Uuid.randomUuid())
+                .setRack("1")
+                .setFeatures(new BrokerRegistrationRequestData.FeatureCollection(singletonList(
+                        new BrokerRegistrationRequestData.Feature()).iterator()))
+                .setListeners(new BrokerRegistrationRequestData.ListenerCollection(singletonList(
+                        new BrokerRegistrationRequestData.Listener()).iterator()))
+                .setIncarnationId(Uuid.randomUuid());
+        return new BrokerRegistrationRequest.Builder(data).build(v);
+    }
+
+    private BrokerRegistrationResponse createBrokerRegistrationResponse() {
+        BrokerRegistrationResponseData data = new BrokerRegistrationResponseData()
+                .setBrokerEpoch(1)
+                .setThrottleTimeMs(0);
+        return new BrokerRegistrationResponse(data);
+    }
+
+    private DecommissionBrokerRequest createDecommissionBrokerRequest(short version) {
+        DecommissionBrokerRequestData data = new DecommissionBrokerRequestData().setBrokerId(1);
+        return new DecommissionBrokerRequest.Builder(data).build(version);
+    }
+
+    private DecommissionBrokerResponse createDecommissionBrokerResponse() {
+        return new DecommissionBrokerResponse(new DecommissionBrokerResponseData());
+    }
+
     /**
      * Check that all error codes in the response get included in {@link AbstractResponse#errorCounts()}.
      */
@@ -2544,6 +2701,8 @@ public class RequestResponseTest {
         assertEquals(Integer.valueOf(2), createAlterPartitionReassignmentsResponse().errorCounts().get(Errors.NONE));
         assertEquals(Integer.valueOf(1), createAlterReplicaLogDirsResponse().errorCounts().get(Errors.NONE));
         assertEquals(Integer.valueOf(1), createApiVersionResponse().errorCounts().get(Errors.NONE));
+        assertEquals(Integer.valueOf(1), createBrokerHeartbeatResponse().errorCounts().get(Errors.NONE));
+        assertEquals(Integer.valueOf(1), createBrokerRegistrationResponse().errorCounts().get(Errors.NONE));
         assertEquals(Integer.valueOf(1), createControlledShutdownResponse().errorCounts().get(Errors.NONE));
         assertEquals(Integer.valueOf(2), createCreateAclsResponse().errorCounts().get(Errors.NONE));
         assertEquals(Integer.valueOf(1), createCreatePartitionsResponse().errorCounts().get(Errors.NONE));

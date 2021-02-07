@@ -73,6 +73,10 @@ public final class MetadataRecordTypeGenerator implements TypeClassGenerator {
         buffer.printf("%n");
         generateAccessor("id", "short");
         buffer.printf("%n");
+        generateAccessor("lowestSupportedVersion", "short");
+        buffer.printf("%n");
+        generateAccessor("highestSupportedVersion", "short");
+        buffer.printf("%n");
         generateToString();
         buffer.decrementIndent();
         buffer.printf("}%n");
@@ -85,10 +89,12 @@ public final class MetadataRecordTypeGenerator implements TypeClassGenerator {
             MessageSpec spec = entry.getValue();
             String name = spec.name();
             numProcessed++;
-            buffer.printf("%s(\"%s\", (short) %d)%s%n",
+            buffer.printf("%s(\"%s\", (short) %d, (short) %d, (short) %d)%s%n",
                 MessageGenerator.toSnakeCase(name).toUpperCase(Locale.ROOT),
                 MessageGenerator.capitalizeFirst(name),
                 entry.getKey(),
+                entry.getValue().validVersions().lowest(),
+                entry.getValue().validVersions().highest(),
                 (numProcessed == apis.size()) ? ";" : ",");
         }
     }
@@ -96,13 +102,17 @@ public final class MetadataRecordTypeGenerator implements TypeClassGenerator {
     private void generateInstanceVariables() {
         buffer.printf("private final String name;%n");
         buffer.printf("private final short id;%n");
+        buffer.printf("private final short lowestSupportedVersion;%n");
+        buffer.printf("private final short highestSupportedVersion;%n");
     }
 
     private void generateEnumConstructor() {
-        buffer.printf("MetadataRecordType(String name, short id) {%n");
+        buffer.printf("MetadataRecordType(String name, short id, short lowestSupportedVersion, short highestSupportedVersion) {%n");
         buffer.incrementIndent();
         buffer.printf("this.name = name;%n");
         buffer.printf("this.id = id;%n");
+        buffer.printf("this.lowestSupportedVersion = lowestSupportedVersion;%n");
+        buffer.printf("this.highestSupportedVersion = highestSupportedVersion;%n");
         buffer.decrementIndent();
         buffer.printf("}%n");
     }

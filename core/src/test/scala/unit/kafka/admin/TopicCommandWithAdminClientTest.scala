@@ -30,9 +30,8 @@ import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.security.auth.SecurityProtocol
-import org.junit.Assert._
-import org.junit.rules.TestName
-import org.junit.{After, Before, Rule, Test}
+import org.junit.jupiter.api.Assertions._
+import org.junit.jupiter.api.{AfterEach, BeforeEach, Test, TestInfo}
 import org.mockito.ArgumentMatcher
 import org.mockito.ArgumentMatchers.{eq => eqThat, _}
 import org.mockito.Mockito._
@@ -70,29 +69,26 @@ class TopicCommandWithAdminClientTest extends KafkaServerTestHarness with Loggin
   private var adminClient: Admin = _
   private var testTopicName: String = _
 
-  private val _testName = new TestName
-  @Rule def testName: TestName = _testName
-
   private[this] def createAndWaitTopic(opts: TopicCommandOptions): Unit = {
     topicService.createTopic(opts)
     waitForTopicCreated(opts.topic.get)
   }
 
   private[this] def waitForTopicCreated(topicName: String, timeout: Int = 10000): Unit = {
-    TestUtils.waitUntilMetadataIsPropagated(servers, topicName, partition = 0, timeout)
+    TestUtils.waitForPartitionMetadata(servers, topicName, partition = 0, timeout)
   }
 
-  @Before
-  def setup(): Unit = {
+  @BeforeEach
+  def setup(info: TestInfo): Unit = {
     // create adminClient
     val props = new Properties()
     props.put(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, brokerList)
     adminClient = Admin.create(props)
     topicService = AdminClientTopicService(adminClient)
-    testTopicName = s"${testName.getMethodName}-${Random.alphanumeric.take(10).mkString}"
+    testTopicName = s"${info.getTestMethod.get().getName}-${Random.alphanumeric.take(10).mkString}"
   }
 
-  @After
+  @AfterEach
   def close(): Unit = {
     // adminClient is closed by topicService
     if (topicService != null)
@@ -397,8 +393,8 @@ class TopicCommandWithAdminClientTest extends KafkaServerTestHarness with Loggin
       "--topic", testTopicName))
     createAndWaitTopic(createOpts)
     val props = adminZkClient.fetchEntityConfig(ConfigType.Topic, testTopicName)
-    assertTrue("Properties after creation don't contain " + cleanupKey, props.containsKey(cleanupKey))
-    assertTrue("Properties after creation have incorrect value", props.getProperty(cleanupKey).equals(cleanupVal))
+    assertTrue(props.containsKey(cleanupKey), "Properties after creation don't contain " + cleanupKey)
+    assertTrue(props.getProperty(cleanupKey).equals(cleanupVal), "Properties after creation have incorrect value")
 
     // pre-create the topic config changes path to avoid a NoNodeException
     zkClient.makeSurePersistentPathExists(ConfigEntityChangeNotificationZNode.path)
@@ -408,8 +404,8 @@ class TopicCommandWithAdminClientTest extends KafkaServerTestHarness with Loggin
     val alterOpts = new TopicCommandOptions(Array("--partitions", numPartitionsModified.toString, "--topic", testTopicName))
     topicService.alterTopic(alterOpts)
     val newProps = adminZkClient.fetchEntityConfig(ConfigType.Topic, testTopicName)
-    assertTrue("Updated properties do not contain " + cleanupKey, newProps.containsKey(cleanupKey))
-    assertTrue("Updated properties have incorrect value", newProps.getProperty(cleanupKey).equals(cleanupVal))
+    assertTrue(newProps.containsKey(cleanupKey), "Updated properties do not contain " + cleanupKey)
+    assertTrue(newProps.getProperty(cleanupKey).equals(cleanupVal), "Updated properties have incorrect value")
   }
 
   @Test
@@ -424,7 +420,7 @@ class TopicCommandWithAdminClientTest extends KafkaServerTestHarness with Loggin
     val deleteOpts = new TopicCommandOptions(Array("--topic", testTopicName))
 
     val deletePath = DeleteTopicsTopicZNode.path(testTopicName)
-    assertFalse("Delete path for topic shouldn't exist before deletion.", zkClient.pathExists(deletePath))
+    assertFalse(zkClient.pathExists(deletePath), "Delete path for topic shouldn't exist before deletion.")
     topicService.deleteTopic(deleteOpts)
     TestUtils.verifyTopicDeletion(zkClient, testTopicName, 1, servers)
   }
@@ -442,7 +438,7 @@ class TopicCommandWithAdminClientTest extends KafkaServerTestHarness with Loggin
     // If deleting internal topics is not desired, ACLS should be used to control it.
     val deleteOffsetTopicOpts = new TopicCommandOptions(Array("--topic", Topic.GROUP_METADATA_TOPIC_NAME))
     val deleteOffsetTopicPath = DeleteTopicsTopicZNode.path(Topic.GROUP_METADATA_TOPIC_NAME)
-    assertFalse("Delete path for topic shouldn't exist before deletion.", zkClient.pathExists(deleteOffsetTopicPath))
+    assertFalse(zkClient.pathExists(deleteOffsetTopicPath), "Delete path for topic shouldn't exist before deletion.")
     topicService.deleteTopic(deleteOffsetTopicOpts)
     TestUtils.verifyTopicDeletion(zkClient, Topic.GROUP_METADATA_TOPIC_NAME, 1, servers)
   }
@@ -534,7 +530,7 @@ class TopicCommandWithAdminClientTest extends KafkaServerTestHarness with Loggin
     try {
       killBroker(0)
       val aliveServers = servers.filterNot(_.config.brokerId == 0)
-      TestUtils.waitUntilMetadataIsPropagated(aliveServers, testTopicName, 0)
+      TestUtils.waitForPartitionMetadata(aliveServers, testTopicName, 0)
       val output = TestUtils.grabConsoleOutput(
         topicService.describeTopic(new TopicCommandOptions(Array("--under-replicated-partitions"))))
       val rows = output.split("\n")
@@ -556,7 +552,7 @@ class TopicCommandWithAdminClientTest extends KafkaServerTestHarness with Loggin
     try {
       killBroker(0)
       val aliveServers = servers.filterNot(_.config.brokerId == 0)
-      TestUtils.waitUntilMetadataIsPropagated(aliveServers, testTopicName, 0)
+      TestUtils.waitForPartitionMetadata(aliveServers, testTopicName, 0)
       val output = TestUtils.grabConsoleOutput(
         topicService.describeTopic(new TopicCommandOptions(Array("--under-min-isr-partitions"))))
       val rows = output.split("\n")
@@ -610,7 +606,7 @@ class TopicCommandWithAdminClientTest extends KafkaServerTestHarness with Loggin
 
     val underReplicatedOutput = TestUtils.grabConsoleOutput(
       topicService.describeTopic(new TopicCommandOptions(Array("--under-replicated-partitions"))))
-    assertEquals(s"--under-replicated-partitions shouldn't return anything: '$underReplicatedOutput'", "", underReplicatedOutput)
+    assertEquals("", underReplicatedOutput, s"--under-replicated-partitions shouldn't return anything: '$underReplicatedOutput'")
 
     // Verify reassignment is still ongoing.
     val reassignments = adminClient.listPartitionReassignments(Collections.singleton(tp)).reassignments.get().get(tp)
@@ -676,7 +672,7 @@ class TopicCommandWithAdminClientTest extends KafkaServerTestHarness with Loggin
     try {
       killBroker(0)
       val aliveServers = servers.filterNot(_.config.brokerId == 0)
-      TestUtils.waitUntilMetadataIsPropagated(aliveServers, underMinIsrTopic, 0)
+      TestUtils.waitForPartitionMetadata(aliveServers, underMinIsrTopic, 0)
       val output = TestUtils.grabConsoleOutput(
         topicService.describeTopic(new TopicCommandOptions(Array("--under-min-isr-partitions"))))
       val rows = output.split("\n")
@@ -695,7 +691,7 @@ class TopicCommandWithAdminClientTest extends KafkaServerTestHarness with Loggin
       Array("--partitions", "2", "--replication-factor", "2", "--topic", testTopicName, "--config", config)))
     val output = TestUtils.grabConsoleOutput(
       topicService.describeTopic(new TopicCommandOptions(Array())))
-    assertTrue(s"Describe output should have contained $config", output.contains(config))
+    assertTrue(output.contains(config), s"Describe output should have contained $config")
   }
 
   @Test
@@ -708,7 +704,7 @@ class TopicCommandWithAdminClientTest extends KafkaServerTestHarness with Loggin
 
     // test describe
     var output = TestUtils.grabConsoleOutput(topicService.describeTopic(new TopicCommandOptions(Array("--describe", "--exclude-internal"))))
-    assertTrue(s"Output should have contained $testTopicName", output.contains(testTopicName))
+    assertTrue(output.contains(testTopicName), s"Output should have contained $testTopicName")
     assertFalse(output.contains(Topic.GROUP_METADATA_TOPIC_NAME))
 
     // test list

@@ -22,13 +22,13 @@ import java.nio.ByteBuffer
 import kafka.network.RequestChannel
 import kafka.utils.Logging
 import org.apache.kafka.clients.{ClientResponse, NodeApiVersions}
+import org.apache.kafka.common.errors.TimeoutException
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests.{AbstractRequest, AbstractResponse, EnvelopeRequest, EnvelopeResponse, RequestHeader}
 import org.apache.kafka.common.utils.Time
 
 import scala.compat.java8.OptionConverters._
-import scala.concurrent.TimeoutException
 
 trait ForwardingManager {
   def forwardRequest(
@@ -36,7 +36,7 @@ trait ForwardingManager {
     responseCallback: Option[AbstractResponse] => Unit
   ): Unit
 
-  def controllerApiVersions(): Option[NodeApiVersions]
+  def controllerApiVersions: Option[NodeApiVersions]
 
   def start(): Unit = {}
 
@@ -52,8 +52,10 @@ object ForwardingManager {
     metrics: Metrics,
     threadNamePrefix: Option[String]
   ): ForwardingManager = {
-    val channelManager = new BrokerToControllerChannelManager(
-      metadataCache = metadataCache,
+    val nodeProvider = MetadataCacheControllerNodeProvider(config, metadataCache)
+
+    val channelManager = BrokerToControllerChannelManager(
+      controllerNodeProvider = nodeProvider,
       time = time,
       metrics = metrics,
       config = config,
@@ -132,7 +134,7 @@ class ForwardingManagerImpl(
 
       override def onTimeout(): Unit = {
         debug(s"Forwarding of the request $request failed due to timeout exception")
-        val response = request.body[AbstractRequest].getErrorResponse(new TimeoutException)
+        val response = request.body[AbstractRequest].getErrorResponse(new TimeoutException())
         responseCallback(Option(response))
       }
     }
@@ -140,7 +142,7 @@ class ForwardingManagerImpl(
     channelManager.sendRequest(envelopeRequest, new ForwardingResponseHandler)
   }
 
-  override def controllerApiVersions(): Option[NodeApiVersions] =
+  override def controllerApiVersions: Option[NodeApiVersions] =
     channelManager.controllerApiVersions()
 
   private def parseResponse(
@@ -156,5 +158,4 @@ class ForwardingManagerImpl(
         request.getErrorResponse(Errors.UNKNOWN_SERVER_ERROR.exception)
     }
   }
-
 }
