@@ -67,11 +67,9 @@ public class MemoryRecordsBuilderTest {
 
         @Override
         public String toString() {
-            return "Args{" +
-                    "bufferOffset=" + bufferOffset +
-                    ", compressionType=" + compressionType +
-                    ", magic=" + magic +
-                    '}';
+            return "magic=" + magic +
+                ", bufferOffset=" + bufferOffset +
+                ", compressionType=" + compressionType;
         }
     }
 
