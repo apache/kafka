@@ -158,8 +158,11 @@ object StorageTool extends Logging {
       0
     } else {
       if (foundDirectories.nonEmpty) {
-        stream.println("Found log director%s:".format(
-          if (foundDirectories.size == 1) "y" else "ies"))
+        if (foundDirectories.size == 1) {
+          stream.println("Found log directory:")
+        } else {
+          stream.println("Found log directories:")
+        }
         foundDirectories.foreach(d => stream.println("  %s".format(d)))
         stream.println("")
       }
@@ -170,8 +173,11 @@ object StorageTool extends Logging {
       }
 
       if (problems.nonEmpty) {
-        stream.println("Found problem%s:".format(
-          if (problems.size == 1) "" else "s"))
+        if (problems.size == 1) {
+          stream.println("Found problem:")
+        } else {
+          stream.println("Found problems:")
+        }
         problems.foreach(d => stream.println("  %s".format(d)))
         stream.println("")
         1
