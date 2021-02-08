@@ -42,28 +42,28 @@ trait RaftReplicaChangeDelegateHelper {
 }
 
 class RaftReplicaChangeDelegate(helper: RaftReplicaChangeDelegateHelper) {
-  def makeDeferred(partitionStates: Map[Partition, Boolean],
+  def makeDeferred(partitionsNewMap: Map[Partition, Boolean],
                    metadataOffset: Long,
                    onLeadershipChange: (Iterable[Partition], Iterable[Partition]) => Unit): Unit = {
     val traceLoggingEnabled = helper.stateChangeLogger.isTraceEnabled
     if (traceLoggingEnabled)
-      partitionStates.forKeyValue { (partition, stateAndMetadata) =>
+      partitionsNewMap.forKeyValue { (partition, isNew) =>
         helper.stateChangeLogger.trace(s"Metadata batch $metadataOffset: starting the " +
-          s"become-deferred transition for partition ${partition.topicPartition}")
+          s"become-deferred transition for partition ${partition.topicPartition} isNew=$isNew")
       }
 
     // Stop fetchers for all the partitions
-    helper.replicaFetcherManager.removeFetcherForPartitions(partitionStates.keySet.map(_.topicPartition))
+    helper.replicaFetcherManager.removeFetcherForPartitions(partitionsNewMap.keySet.map(_.topicPartition))
     helper.stateChangeLogger.info(s"Metadata batch $metadataOffset: as part of become-deferred request, " +
-      s"stopped any fetchers for ${partitionStates.size} partitions")
+      s"stopped any fetchers for ${partitionsNewMap.size} partitions")
     // mark all the partitions as deferred
-    partitionStates.forKeyValue((partition, isNew) => helper.markDeferred(HostedPartition.Deferred(partition, isNew, onLeadershipChange)))
+    partitionsNewMap.forKeyValue((partition, isNew) => helper.markDeferred(HostedPartition.Deferred(partition, isNew, onLeadershipChange)))
 
     helper.replicaFetcherManager.shutdownIdleFetcherThreads()
     helper.replicaAlterLogDirsManager.shutdownIdleFetcherThreads()
 
     if (traceLoggingEnabled)
-      partitionStates.keys.foreach { partition =>
+      partitionsNewMap.keys.foreach { partition =>
         helper.stateChangeLogger.trace(s"Completed batch $metadataOffset become-deferred " +
           s"transition for partition ${partition.topicPartition}")
       }

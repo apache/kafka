@@ -50,8 +50,7 @@ class RaftReplicaManager(config: KafkaConfig,
                          delayedElectLeaderPurgatory: DelayedOperationPurgatory[DelayedElectLeader],
                          threadNamePrefix: Option[String],
                          configRepository: ConfigRepository,
-                         alterIsrManager: AlterIsrManager,
-                         delegateOverride: Option[RaftReplicaChangeDelegate]) extends ReplicaManager(
+                         alterIsrManager: AlterIsrManager) extends ReplicaManager(
   config, metrics, time, None, scheduler, logManager, isShuttingDown, quotaManagers,
   brokerTopicStats, metadataCache, logDirFailureChannel, delayedProducePurgatory, delayedFetchPurgatory,
   delayedDeleteRecordsPurgatory, delayedElectLeaderPurgatory, threadNamePrefix, configRepository, alterIsrManager) {
@@ -68,8 +67,7 @@ class RaftReplicaManager(config: KafkaConfig,
            logDirFailureChannel: LogDirFailureChannel,
            alterIsrManager: AlterIsrManager,
            configRepository: ConfigRepository,
-           threadNamePrefix: Option[String] = None,
-           delegateOverride: Option[RaftReplicaChangeDelegate] = None) = {
+           threadNamePrefix: Option[String] = None) = {
     this(config, metrics, time, scheduler, logManager, isShuttingDown,
       quotaManagers, brokerTopicStats, metadataCache, logDirFailureChannel,
       DelayedOperationPurgatory[DelayedProduce](
@@ -83,7 +81,7 @@ class RaftReplicaManager(config: KafkaConfig,
         purgeInterval = config.deleteRecordsPurgatoryPurgeIntervalRequests),
       DelayedOperationPurgatory[DelayedElectLeader](
         purgatoryName = "ElectLeader", brokerId = config.brokerId),
-      threadNamePrefix, configRepository, alterIsrManager, delegateOverride)
+      threadNamePrefix, configRepository, alterIsrManager)
   }
 
   if (config.requiresZookeeper) {
@@ -103,7 +101,7 @@ class RaftReplicaManager(config: KafkaConfig,
 
     override def isShuttingDown: Boolean = raftReplicaManager.isShuttingDown.get
 
-    override def markDeferred(state: HostedPartition.Deferred): Unit = raftReplicaManager.allPartitions.put(state.partition.topicPartition, state)
+    override def markDeferred(state: HostedPartition.Deferred): Unit = raftReplicaManager.markPartitionDeferred(state)
 
     override def markOffline(topicPartition: TopicPartition): Unit = raftReplicaManager.markPartitionOffline(topicPartition)
 
@@ -114,8 +112,8 @@ class RaftReplicaManager(config: KafkaConfig,
     override def stateChangeLogger: StateChangeLogger = raftReplicaManager.stateChangeLogger
   }
 
-  val delegate = delegateOverride.getOrElse(
-    new RaftReplicaChangeDelegate(new RaftReplicaManagerChangeDelegateHelper(this)))
+  // visible/overwriteable for testing, generally will not change otherwise
+  private[server] var delegate = new RaftReplicaChangeDelegate(new RaftReplicaManagerChangeDelegateHelper(this))
 
   // Changes are initially deferred when using a Raft-based metadata quorum, and they may flip-flop to not
   // being deferred and being deferred again thereafter as the broker (re)acquires/loses its lease.
@@ -372,6 +370,16 @@ class RaftReplicaManager(config: KafkaConfig,
     val elapsedMs = endMs - startMs
     stateChangeLogger.info(s"Metadata batch $metadataOffset: handled replica changes " +
       s"in ${elapsedMs} ms")
+  }
+
+  def markPartitionDeferred(partition: Partition,
+                            isNew: Boolean,
+                            onLeadershipChange: (Iterable[Partition], Iterable[Partition]) => Unit): Unit = {
+    markPartitionDeferred(HostedPartition.Deferred(partition, isNew, onLeadershipChange))
+  }
+
+  private def markPartitionDeferred(state: HostedPartition.Deferred): Unit = replicaStateChangeLock synchronized {
+    allPartitions.put(state.partition.topicPartition, state)
   }
 
   // An iterator over all deferred partitions. This is a weakly consistent iterator; a partition made off/online

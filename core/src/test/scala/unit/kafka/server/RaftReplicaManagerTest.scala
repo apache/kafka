@@ -23,16 +23,16 @@ import java.util.concurrent.atomic.AtomicBoolean
 
 import kafka.cluster.Partition
 import kafka.server.QuotaFactory.QuotaManagers
-import kafka.server.metadata.{CachedConfigRepository, MetadataImage, MetadataImageBuilder, MetadataPartition, RaftMetadataCache}
+import kafka.server.metadata.{CachedConfigRepository, MetadataBroker, MetadataBrokers, MetadataImage, MetadataImageBuilder, MetadataPartition, RaftMetadataCache}
 import kafka.utils.{MockScheduler, MockTime, TestUtils}
 import org.apache.kafka.common.{TopicPartition, Uuid}
 import org.apache.kafka.common.metadata.PartitionRecord
 import org.apache.kafka.common.metrics.Metrics
 import org.junit.jupiter.api.Assertions.{assertEquals, assertThrows, assertTrue}
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
-import org.mockito.{ArgumentCaptor, ArgumentMatchers}
+import org.mockito.{ArgumentCaptor, ArgumentMatchers, Mockito}
 import org.mockito.ArgumentMatchers.{any, anyLong}
-import org.mockito.Mockito.{mock, never, verify}
+import org.mockito.Mockito.{mock, never, verify, when}
 import org.slf4j.Logger
 
 import scala.collection.mutable
@@ -50,21 +50,39 @@ class RaftReplicaManagerTest {
   val time = new MockTime
   var mockDelegate: RaftReplicaChangeDelegate = _
   var imageBuilder: MetadataImageBuilder = _
-  val brokerId = 1
+  val brokerId0 = 0
+  val metadataBroker0 = new MetadataBroker(brokerId0, null, Map.empty, false)
+  val brokerId1 = 1
+  val metadataBroker1 = new MetadataBroker(brokerId1, null, Map.empty, false)
   val topicName = "topicName"
   val topicId = Uuid.randomUuid()
-  val partitionId = 0
-  val topicPartition = new TopicPartition(topicName, partitionId)
-  val topicPartitionRecord = new PartitionRecord().setPartitionId(partitionId).setTopicId(topicId).setReplicas(util.Arrays.asList(brokerId))
+  val partitionId0 = 0
+  val partitionId1 = 1
+  val topicPartition0 = new TopicPartition(topicName, partitionId0)
+  val topicPartition1 = new TopicPartition(topicName, partitionId1)
+  val topicPartitionRecord0 = new PartitionRecord()
+    .setPartitionId(partitionId0)
+    .setTopicId(topicId)
+    .setReplicas(util.Arrays.asList(brokerId0, brokerId1))
+    .setLeader(brokerId0)
+    .setLeaderEpoch(0)
+  val topicPartitionRecord1 = new PartitionRecord()
+    .setPartitionId(partitionId1)
+    .setTopicId(topicId)
+    .setReplicas(util.Arrays.asList(brokerId0, brokerId1))
+    .setLeader(brokerId1)
+    .setLeaderEpoch(0)
+  val offset1 = 1L
+  val metadataPartition0 = MetadataPartition(topicName, topicPartitionRecord0, Some(offset1))
+  val metadataPartition1 = MetadataPartition(topicName, topicPartitionRecord1, Some(offset1))
   val onLeadershipChange = mock(classOf[LeadershipChangeHandler]).onLeadershipChange _
   var metadataCache: RaftMetadataCache = _
-  val offset1 = 1L
 
   @BeforeEach
   def setUp(): Unit = {
     alterIsrManager = mock(classOf[AlterIsrManager])
     config = KafkaConfig.fromProps({
-      val nodeId = brokerId
+      val nodeId = brokerId0
       val props = TestUtils.createBrokerConfig(nodeId, "")
       props.put(KafkaConfig.ProcessRolesProp, "broker")
       props.put(KafkaConfig.NodeIdProp, nodeId.toString)
@@ -73,7 +91,7 @@ class RaftReplicaManagerTest {
     metadataCache = new RaftMetadataCache(config.brokerId)
     quotaManager = QuotaFactory.instantiate(config, metrics, time, "")
     mockDelegate = mock(classOf[RaftReplicaChangeDelegate])
-    imageBuilder = MetadataImageBuilder(brokerId, mock(classOf[Logger]), new MetadataImage())
+    imageBuilder = MetadataImageBuilder(brokerId0, mock(classOf[Logger]), new MetadataImage())
   }
 
   @AfterEach
@@ -87,8 +105,8 @@ class RaftReplicaManagerTest {
     val mockLogMgr = TestUtils.createLogManager(config.logDirs.map(new File(_)))
     new RaftReplicaManager(config, metrics, time, new MockScheduler(time), mockLogMgr,
       new AtomicBoolean(false), quotaManager, new BrokerTopicStats,
-      new RaftMetadataCache(config.brokerId), new LogDirFailureChannel(config.logDirs.size), alterIsrManager,
-      configRepository, None, Some(mockDelegate))
+      metadataCache, new LogDirFailureChannel(config.logDirs.size), alterIsrManager,
+      configRepository, None)
   }
 
   @Test
@@ -104,27 +122,66 @@ class RaftReplicaManagerTest {
   }
 
   @Test
-  def testDefersChangesImmediately(): Unit = {
+  def testDefersChangesImmediatelyThenAppliesChanges(): Unit = {
+    val rrm = createRaftReplicaManager()
+    rrm.delegate = mockDelegate
+
+    processTopicPartitionMetadata(rrm)
+    // verify changes would have been deferred
+    val partitionsNewMapCaptor: ArgumentCaptor[mutable.Map[Partition, Boolean]] =
+      ArgumentCaptor.forClass(classOf[mutable.Map[Partition, Boolean]])
+    verify(mockDelegate).makeDeferred(partitionsNewMapCaptor.capture(), ArgumentMatchers.eq(offset1), ArgumentMatchers.eq(onLeadershipChange))
+    val partitionsDeferredMap = partitionsNewMapCaptor.getValue
+    assertEquals(2, partitionsDeferredMap.size)
+    val partition0 = partitionsDeferredMap.keys.filter(partition => partition.topicPartition == topicPartition0).head
+    assertTrue(partitionsDeferredMap(partition0))
+    val partition1 = partitionsDeferredMap.keys.filter(partition => partition.topicPartition == topicPartition1).head
+    assertTrue(partitionsDeferredMap(partition1))
+    verify(mockDelegate, never()).makeLeaders(any(), any(), any(), anyLong())
+    verify(mockDelegate, never()).makeFollowers(any(), any(), any(), any(), any())
+    Mockito.reset(mockDelegate)
+    // now mark those topic partitions as being deferred so we can later apply the changes
+    rrm.markPartitionDeferred(partition0, isNew = true, onLeadershipChange)
+    rrm.markPartitionDeferred(partition1, isNew = true, onLeadershipChange)
+
+    // apply the changes
+    // first update the partitions in the metadata cache so they aren't marked as being deferred
+    val imageBuilder2 = MetadataImageBuilder(brokerId0, mock(classOf[Logger]), metadataCache.currentImage())
+    imageBuilder2.partitionsBuilder().set(MetadataPartition(metadataPartition0))
+    imageBuilder2.partitionsBuilder().set(MetadataPartition(metadataPartition1))
+    metadataCache.image(imageBuilder2.build())
+    // define some return values to avoid NPE
+    when(mockDelegate.makeLeaders(any(), any(), any(), anyLong())).thenReturn(Set.empty)
+    when(mockDelegate.makeFollowers(any(), any(), any(), any(), anyLong())).thenReturn(Set.empty)
+    rrm.endMetadataChangeDeferral()
+    // verify that the deferred changes would have been applied
+    val leaderPartitionStatesCaptor: ArgumentCaptor[mutable.Map[Partition, MetadataPartition]] =
+      ArgumentCaptor.forClass(classOf[mutable.Map[Partition, MetadataPartition]])
+    verify(mockDelegate).makeLeaders(ArgumentMatchers.eq(mutable.Set()), leaderPartitionStatesCaptor.capture(), any(),
+      ArgumentMatchers.eq(MetadataPartition.OffsetNeverDeferred))
+    val followerPartitionStatesCaptor: ArgumentCaptor[mutable.Map[Partition, MetadataPartition]] =
+      ArgumentCaptor.forClass(classOf[mutable.Map[Partition, MetadataPartition]])
+    val brokersCaptor: ArgumentCaptor[MetadataBrokers] = ArgumentCaptor.forClass(classOf[MetadataBrokers])
+    verify(mockDelegate).makeFollowers(ArgumentMatchers.eq(mutable.Set()), brokersCaptor.capture(),
+      followerPartitionStatesCaptor.capture(), any(), ArgumentMatchers.eq(MetadataPartition.OffsetNeverDeferred))
+    val brokers = brokersCaptor.getValue
+    assertEquals(2, brokers.size())
+    assertTrue(brokers.aliveBroker(brokerId0).isDefined)
+    assertTrue(brokers.aliveBroker(brokerId1).isDefined)
+  }
+
+  private def processTopicPartitionMetadata(raftReplicaManager: RaftReplicaManager): Unit = {
+    // create brokers
+    imageBuilder.brokersBuilder().add(metadataBroker0)
+    imageBuilder.brokersBuilder().add(metadataBroker1)
     // create topic
     imageBuilder.partitionsBuilder().addUuidMapping(topicName, topicId)
-    // create partition deferred at offset 1
-    val metadataPartition = MetadataPartition(topicName, topicPartitionRecord, Some(offset1))
-    imageBuilder.partitionsBuilder().set(metadataPartition)
+    // create deferred partitions
+    imageBuilder.partitionsBuilder().set(metadataPartition0)
+    imageBuilder.partitionsBuilder().set(metadataPartition1)
     // apply the changes to metadata cache
     metadataCache.image(imageBuilder.build())
     // apply the changes to replica manager
-    val rrm = createRaftReplicaManager()
-    rrm.handleMetadataRecords(imageBuilder, 1, onLeadershipChange)
-    // verify changes were deferred
-    val mapCaptor: ArgumentCaptor[mutable.Map[Partition, Boolean]] =
-      ArgumentCaptor.forClass(classOf[mutable.Map[Partition, Boolean]])
-    verify(mockDelegate).makeDeferred(mapCaptor.capture(), ArgumentMatchers.eq(offset1), ArgumentMatchers.eq(onLeadershipChange))
-    val partitionsDeferredMap = mapCaptor.getValue
-    assertEquals(1, partitionsDeferredMap.size)
-    val (partition, isNew) = partitionsDeferredMap.head
-    assertEquals(topicPartition, partition.topicPartition)
-    assertTrue(isNew)
-    verify(mockDelegate, never()).makeLeaders(any(), any(), any(), anyLong())
-    verify(mockDelegate, never()).makeFollowers(any(), any(), any(), any(), any())
+    raftReplicaManager.handleMetadataRecords(imageBuilder, offset1, onLeadershipChange)
   }
 }

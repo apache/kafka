@@ -31,7 +31,7 @@ import scala.jdk.CollectionConverters._
 
 
 object MetadataPartition {
-  val OffsetNeverDeferred = 0 // must not be a valid offset we could see (i.e. must not be positive)
+  val OffsetNeverDeferred = 0L // must not be a valid offset we could see (i.e. must not be positive)
   def apply(name: String, record: PartitionRecord, deferredAtOffset: Option[Long]): MetadataPartition = {
     MetadataPartition(name,
       record.partitionId(),
@@ -44,6 +44,22 @@ object MetadataPartition {
       Collections.emptyList(),
       largestDeferredOffsetEverSeen = deferredAtOffset.getOrElse(OffsetNeverDeferred),
       isCurrentlyDeferringChanges = deferredAtOffset.isDefined)
+  }
+
+  // mark as no longer deferred
+  def apply(prevPartition: MetadataPartition): MetadataPartition = {
+    new MetadataPartition(prevPartition.topicName,
+      prevPartition.partitionIndex,
+      prevPartition.leaderId,
+      prevPartition.leaderEpoch,
+      prevPartition.replicas,
+      prevPartition.isr,
+      prevPartition.offlineReplicas,
+      prevPartition.addingReplicas,
+      prevPartition.removingReplicas,
+      largestDeferredOffsetEverSeen = prevPartition.largestDeferredOffsetEverSeen,
+      isCurrentlyDeferringChanges = false
+    )
   }
 
   def apply(prevPartition: Option[MetadataPartition],
