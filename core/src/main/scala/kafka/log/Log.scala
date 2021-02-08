@@ -257,7 +257,7 @@ class Log(@volatile private var _dir: File,
           val producerStateManager: ProducerStateManager,
           logDirFailureChannel: LogDirFailureChannel,
           private val hadCleanShutdown: Boolean = true,
-          val usesTopicId: Boolean = true) extends Logging with KafkaMetricsGroup {
+          val keepPartitionMetadataFile: Boolean = true) extends Logging with KafkaMetricsGroup {
 
   import kafka.log.Log._
 
@@ -308,7 +308,7 @@ class Log(@volatile private var _dir: File,
   // Visible for testing
   @volatile var leaderEpochCache: Option[LeaderEpochFileCache] = None
 
-  @volatile var partitionMetadataFile : Option[PartitionMetadataFile] = None
+  @volatile var partitionMetadataFile : PartitionMetadataFile = null
 
   @volatile var topicId : Uuid = Uuid.ZERO_UUID
 
@@ -344,13 +344,11 @@ class Log(@volatile private var _dir: File,
 
     // Delete partition metadata file if the version does not support topic IDs.
     // Recover topic ID if present and topic IDs are supported
-    partitionMetadataFile.foreach { file =>
-      if (file.exists()) {
-        if (!usesTopicId)
-          file.delete()
+    if (partitionMetadataFile.exists()) {
+        if (!keepPartitionMetadataFile)
+          partitionMetadataFile.delete()
         else
-          topicId = file.read().topicId
-      }
+          topicId = partitionMetadataFile.read().topicId
     }
   }
 
@@ -570,7 +568,7 @@ class Log(@volatile private var _dir: File,
 
   private def initializePartitionMetadata(): Unit = lock synchronized {
     val partitionMetadata = PartitionMetadataFile.newFile(dir)
-    partitionMetadataFile = Some(new PartitionMetadataFile(partitionMetadata, logDirFailureChannel))
+    partitionMetadataFile = new PartitionMetadataFile(partitionMetadata, logDirFailureChannel)
   }
 
   private def initializeLeaderEpochCache(): Unit = lock synchronized {
@@ -2570,11 +2568,11 @@ object Log {
             producerIdExpirationCheckIntervalMs: Int,
             logDirFailureChannel: LogDirFailureChannel,
             lastShutdownClean: Boolean = true,
-            usesTopicId: Boolean = true): Log = {
+            keepPartitionMetadataFile: Boolean = true): Log = {
     val topicPartition = Log.parseTopicPartitionName(dir)
     val producerStateManager = new ProducerStateManager(topicPartition, dir, maxProducerIdExpirationMs)
     new Log(dir, config, logStartOffset, recoveryPoint, scheduler, brokerTopicStats, time, maxProducerIdExpirationMs,
-      producerIdExpirationCheckIntervalMs, topicPartition, producerStateManager, logDirFailureChannel, lastShutdownClean, usesTopicId)
+      producerIdExpirationCheckIntervalMs, topicPartition, producerStateManager, logDirFailureChannel, lastShutdownClean, keepPartitionMetadataFile)
   }
 
   /**

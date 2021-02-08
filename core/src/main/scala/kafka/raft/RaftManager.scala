@@ -231,7 +231,7 @@ class KafkaRaftManager[T](
       maxProducerIdExpirationMs = config.transactionalIdExpirationMs,
       producerIdExpirationCheckIntervalMs = LogManager.ProducerIdExpirationCheckIntervalMs,
       logDirFailureChannel = new LogDirFailureChannel(5),
-      usesTopicId = config.usesTopicId
+      keepPartitionMetadataFile = config.usesTopicId
     )
 
     KafkaMetadataLog(log, topicPartition)
