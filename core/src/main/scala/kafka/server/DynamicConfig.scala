@@ -21,7 +21,6 @@ import java.net.{InetAddress, UnknownHostException}
 import java.util.Properties
 
 import kafka.log.LogConfig
-import kafka.security.CredentialProvider
 import org.apache.kafka.common.config.ConfigDef
 import org.apache.kafka.common.config.ConfigDef.Importance._
 import org.apache.kafka.common.config.ConfigDef.Range._
@@ -69,42 +68,11 @@ object DynamicConfig {
   }
 
   object QuotaConfigs {
-    val ProducerByteRateOverrideProp = "producer_byte_rate"
-    val ConsumerByteRateOverrideProp = "consumer_byte_rate"
-    val RequestPercentageOverrideProp = "request_percentage"
-    val ControllerMutationOverrideProp = "controller_mutation_rate"
-    private val configNames = Set(ProducerByteRateOverrideProp, ConsumerByteRateOverrideProp,
-      RequestPercentageOverrideProp, ControllerMutationOverrideProp)
-
-    def isQuotaConfig(name: String): Boolean = configNames.contains(name)
+    def isClientOrUserQuotaConfig(name: String): Boolean = org.apache.kafka.common.config.internals.QuotaConfigs.isClientOrUserConfig(name)
   }
 
   object Client {
-    // Properties
-    val ProducerByteRateOverrideProp = QuotaConfigs.ProducerByteRateOverrideProp
-    val ConsumerByteRateOverrideProp = QuotaConfigs.ConsumerByteRateOverrideProp
-    val RequestPercentageOverrideProp = QuotaConfigs.RequestPercentageOverrideProp
-    val ControllerMutationOverrideProp = QuotaConfigs.ControllerMutationOverrideProp
-
-    // Defaults
-    val DefaultProducerOverride = ClientQuotaManagerConfig.QuotaDefault
-    val DefaultConsumerOverride = ClientQuotaManagerConfig.QuotaDefault
-    val DefaultRequestOverride = ClientRequestQuotaManager.QuotaRequestPercentDefault
-    val DefaultControllerMutationOverride = ControllerMutationQuotaManager.QuotaControllerMutationDefault
-
-    // Documentation
-    val ProducerOverrideDoc = "A rate representing the upper bound (bytes/sec) for producer traffic."
-    val ConsumerOverrideDoc = "A rate representing the upper bound (bytes/sec) for consumer traffic."
-    val RequestOverrideDoc = "A percentage representing the upper bound of time spent for processing requests."
-    val ControllerMutationOverrideDoc = "The rate at which mutations are accepted for the create topics request, " +
-      "the create partitions request and the delete topics request. The rate is accumulated by the number of partitions created or deleted."
-
-    // Definitions
-    private val clientConfigs = new ConfigDef()
-      .define(ProducerByteRateOverrideProp, LONG, DefaultProducerOverride, MEDIUM, ProducerOverrideDoc)
-      .define(ConsumerByteRateOverrideProp, LONG, DefaultConsumerOverride, MEDIUM, ConsumerOverrideDoc)
-      .define(RequestPercentageOverrideProp, DOUBLE, DefaultRequestOverride, MEDIUM, RequestOverrideDoc)
-      .define(ControllerMutationOverrideProp, DOUBLE, DefaultControllerMutationOverride, MEDIUM, ControllerMutationOverrideDoc)
+    private val clientConfigs = org.apache.kafka.common.config.internals.QuotaConfigs.clientConfigs()
 
     def configKeys = clientConfigs.configKeys
 
@@ -114,12 +82,7 @@ object DynamicConfig {
   }
 
   object User {
-    // Definitions
-    private val userConfigs = CredentialProvider.userCredentialConfigs
-      .define(Client.ProducerByteRateOverrideProp, LONG, Client.DefaultProducerOverride, MEDIUM, Client.ProducerOverrideDoc)
-      .define(Client.ConsumerByteRateOverrideProp, LONG, Client.DefaultConsumerOverride, MEDIUM, Client.ConsumerOverrideDoc)
-      .define(Client.RequestPercentageOverrideProp, DOUBLE, Client.DefaultRequestOverride, MEDIUM, Client.RequestOverrideDoc)
-      .define(Client.ControllerMutationOverrideProp, DOUBLE, Client.DefaultControllerMutationOverride, MEDIUM, Client.ControllerMutationOverrideDoc)
+    private val userConfigs = org.apache.kafka.common.config.internals.QuotaConfigs.userConfigs()
 
     def configKeys = userConfigs.configKeys
 
@@ -129,13 +92,7 @@ object DynamicConfig {
   }
 
   object Ip {
-    val IpConnectionRateOverrideProp = "connection_creation_rate"
-    val UnlimitedConnectionCreationRate = Int.MaxValue
-    val DefaultConnectionCreationRate = UnlimitedConnectionCreationRate
-    val IpOverrideDoc = "An int representing the upper bound of connections accepted for the specified IP."
-
-    private val ipConfigs = new ConfigDef()
-      .define(IpConnectionRateOverrideProp, INT, DefaultConnectionCreationRate, atLeast(0), MEDIUM, IpOverrideDoc)
+    private val ipConfigs = org.apache.kafka.common.config.internals.QuotaConfigs.ipConfigs()
 
     def configKeys = ipConfigs.configKeys
 

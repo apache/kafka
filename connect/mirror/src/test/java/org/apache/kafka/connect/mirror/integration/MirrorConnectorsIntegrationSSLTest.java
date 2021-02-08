@@ -55,10 +55,10 @@ public class MirrorConnectorsIntegrationSSLTest extends MirrorConnectorsIntegrat
             e -> String.valueOf(e.getKey()), e ->  String.valueOf(e.getValue()))));
         
         mm2Props.putAll(sslProps.entrySet().stream().collect(Collectors.toMap(
-            e -> BACKUP_CLUSTER_ALIAS + "." + String.valueOf(e.getKey()), e ->  String.valueOf(e.getValue()))));
+            e -> BACKUP_CLUSTER_ALIAS + "." + e.getKey(), e ->  String.valueOf(e.getValue()))));
         // set SSL config for producer used by source task in MM2
         mm2Props.putAll(sslProps.entrySet().stream().collect(Collectors.toMap(
-            e -> BACKUP_CLUSTER_ALIAS + ".producer." + String.valueOf(e.getKey()), e ->  String.valueOf(e.getValue()))));
+            e -> BACKUP_CLUSTER_ALIAS + ".producer." + e.getKey(), e ->  String.valueOf(e.getValue()))));
         
         super.startClusters();
     }

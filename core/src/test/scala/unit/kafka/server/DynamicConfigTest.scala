@@ -20,6 +20,7 @@ import kafka.admin.AdminOperationException
 import kafka.utils.CoreUtils._
 import kafka.zk.ZooKeeperTestHarness
 import org.apache.kafka.common.config._
+import org.apache.kafka.common.config.internals.QuotaConfigs
 import org.junit.jupiter.api.Assertions.assertThrows
 import org.junit.jupiter.api.Test
 
@@ -54,18 +55,18 @@ class DynamicConfigTest extends ZooKeeperTestHarness {
   @Test
   def shouldFailIpConfigsWithInvalidValues(): Unit = {
     assertThrows(classOf[ConfigException], () => adminZkClient.changeIpConfig("1.2.3.4",
-      propsWith(DynamicConfig.Ip.IpConnectionRateOverrideProp, "-1")))
+      propsWith(QuotaConfigs.IP_CONNECTION_RATE_OVERRIDE_CONFIG, "-1")))
   }
 
   @Test
   def shouldFailIpConfigsWithInvalidIpv4Entity(): Unit = {
     assertThrows(classOf[AdminOperationException], () => adminZkClient.changeIpConfig("1,1.1.1",
-      propsWith(DynamicConfig.Ip.IpConnectionRateOverrideProp, "2")))
+      propsWith(QuotaConfigs.IP_CONNECTION_RATE_OVERRIDE_CONFIG, "2")))
   }
 
   @Test
   def shouldFailIpConfigsWithBadHost(): Unit = {
     assertThrows(classOf[AdminOperationException], () => adminZkClient.changeIpConfig("ip",
-      propsWith(DynamicConfig.Ip.IpConnectionRateOverrideProp, "2")))
+      propsWith(QuotaConfigs.IP_CONNECTION_RATE_OVERRIDE_CONFIG, "2")))
   }
 }

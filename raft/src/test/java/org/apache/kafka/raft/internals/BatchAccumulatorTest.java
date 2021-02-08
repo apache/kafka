@@ -17,6 +17,7 @@
 package org.apache.kafka.raft.internals;
 
 import org.apache.kafka.common.memory.MemoryPool;
+import org.apache.kafka.common.protocol.ObjectSerializationCache;
 import org.apache.kafka.common.protocol.Writable;
 import org.apache.kafka.common.record.CompressionType;
 import org.apache.kafka.common.utils.MockTime;
@@ -277,8 +278,11 @@ class BatchAccumulatorTest {
             releaseLockLatch.await();
             writable.writeByteArray(Utils.utf8("b"));
             return null;
-        }).when(serde)
-            .write(Mockito.eq("b"), Mockito.eq(null), Mockito.any(Writable.class));
+        }).when(serde).write(
+            Mockito.eq("b"),
+            Mockito.any(ObjectSerializationCache.class),
+            Mockito.any(Writable.class)
+        );
 
         Thread appendThread = new Thread(() -> acc.append(leaderEpoch, singletonList("b")));
         appendThread.start();
@@ -296,6 +300,10 @@ class BatchAccumulatorTest {
         List<BatchAccumulator.CompletedBatch<String>> drained = acc.drain();
         assertEquals(1, drained.size());
         assertEquals(Long.MAX_VALUE - time.milliseconds(), acc.timeUntilDrain(time.milliseconds()));
+        drained.stream().forEach(completedBatch -> {
+            completedBatch.data.batches().forEach(recordBatch -> {
+                assertEquals(leaderEpoch, recordBatch.partitionLeaderEpoch()); });
+        });
     }
 
 }

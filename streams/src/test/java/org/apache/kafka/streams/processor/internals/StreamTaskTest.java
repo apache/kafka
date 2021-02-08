@@ -47,6 +47,7 @@ import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.LockException;
 import org.apache.kafka.streams.errors.ProcessorStateException;
 import org.apache.kafka.streams.errors.StreamsException;
+import org.apache.kafka.streams.errors.TaskCorruptedException;
 import org.apache.kafka.streams.errors.TaskMigratedException;
 import org.apache.kafka.streams.errors.TopologyException;
 import org.apache.kafka.streams.processor.PunctuationType;
@@ -145,6 +146,12 @@ public class StreamTaskTest {
         @Override
         public void close() {
             throw new RuntimeException("KABOOM!");
+        }
+    };
+    private final MockSourceNode<Integer, Integer, ?, ?> timeoutSource = new MockSourceNode<Integer, Integer, Object, Object>(intDeserializer, intDeserializer) {
+        @Override
+        public void process(final Record<Integer, Integer> record) {
+            throw new TimeoutException("Kaboom!");
         }
     };
     private final MockProcessorNode<Integer, Integer, ?, ?> processorStreamTime = new MockProcessorNode<>(10L);
@@ -640,6 +647,43 @@ public class StreamTaskTest {
         assertThat(terminalAvg.metricValue(), equalTo(16.5));
         assertThat(terminalMin.metricValue(), equalTo(10.0));
         assertThat(terminalMax.metricValue(), equalTo(23.0));
+    }
+
+    @Test
+    public void shouldThrowOnTimeoutExceptionAndBufferRecordForRetryIfEosDisabled() {
+        createTimeoutTask(AT_LEAST_ONCE);
+
+        task.addRecords(partition1, singletonList(getConsumerRecordWithOffsetAsTimestamp(0, 0L)));
+
+        final TimeoutException exception = assertThrows(
+            TimeoutException.class,
+            () -> task.process(0)
+        );
+        assertThat(exception.getMessage(), equalTo("Kaboom!"));
+
+        // we have only a single record that was not successfully processed
+        // however, the record should not be in the record buffer any longer, but should be cached within the task itself
+        assertThat(task.commitNeeded(), equalTo(false));
+        assertThat(task.hasRecordsQueued(), equalTo(false));
+
+        // -> thus the task should try process the cached record now (that thus throw again)
+        final TimeoutException nextException = assertThrows(
+            TimeoutException.class,
+            () -> task.process(0)
+        );
+        assertThat(nextException.getMessage(), equalTo("Kaboom!"));
+    }
+
+    @Test
+    public void shouldThrowTaskCorruptedExceptionOnTimeoutExceptionIfEosEnabled() {
+        createTimeoutTask(StreamsConfig.EXACTLY_ONCE);
+
+        task.addRecords(partition1, singletonList(getConsumerRecordWithOffsetAsTimestamp(0, 0L)));
+
+        assertThrows(
+            TaskCorruptedException.class,
+            () -> task.process(0)
+        );
     }
 
     @Test
@@ -2138,7 +2182,9 @@ public class StreamTaskTest {
             time,
             stateManager,
             recordCollector,
-            context, logContext);
+            context,
+            logContext
+        );
     }
 
     private StreamTask createDisconnectedTask(final StreamsConfig config) {
@@ -2177,7 +2223,9 @@ public class StreamTaskTest {
             time,
             stateManager,
             recordCollector,
-            context, logContext);
+            context,
+            logContext
+        );
     }
 
     private StreamTask createFaultyStatefulTask(final StreamsConfig config) {
@@ -2185,7 +2233,8 @@ public class StreamTaskTest {
             asList(source1, source3),
             mkMap(mkEntry(topic1, source1), mkEntry(topic2, source3)),
             singletonList(stateStore),
-            emptyMap());
+            emptyMap()
+        );
 
         final InternalProcessorContext context = new ProcessorContextImpl(
             taskId,
@@ -2207,7 +2256,9 @@ public class StreamTaskTest {
             time,
             stateManager,
             recordCollector,
-            context, logContext);
+            context,
+            logContext
+        );
     }
 
     private StreamTask createStatefulTask(final StreamsConfig config, final boolean logged) {
@@ -2243,7 +2294,9 @@ public class StreamTaskTest {
             time,
             stateManager,
             recordCollector,
-            context, logContext);
+            context,
+            logContext
+        );
     }
 
     private StreamTask createSingleSourceStateless(final StreamsConfig config,
@@ -2281,7 +2334,9 @@ public class StreamTaskTest {
             time,
             stateManager,
             recordCollector,
-            context, logContext);
+            context,
+            logContext
+        );
     }
 
     private StreamTask createStatelessTask(final StreamsConfig config,
@@ -2321,7 +2376,9 @@ public class StreamTaskTest {
             time,
             stateManager,
             recordCollector,
-            context, logContext);
+            context,
+            logContext
+        );
     }
 
     private StreamTask createStatelessTaskWithForwardingTopology(final SourceNode<Integer, Integer, Integer, Integer> sourceNode) {
@@ -2358,7 +2415,43 @@ public class StreamTaskTest {
             time,
             stateManager,
             recordCollector,
-            context, logContext);
+            context,
+            logContext
+        );
+    }
+
+    private void createTimeoutTask(final String eosConfig) {
+        EasyMock.replay(stateManager);
+
+        final ProcessorTopology topology = withSources(
+            singletonList(timeoutSource),
+            mkMap(mkEntry(topic1, timeoutSource))
+        );
+
+        final StreamsConfig config = createConfig(eosConfig, "0");
+        final InternalProcessorContext context = new ProcessorContextImpl(
+            taskId,
+            config,
+            stateManager,
+            streamsMetrics,
+            null
+        );
+
+        task = new StreamTask(
+            taskId,
+            mkSet(partition1),
+            topology,
+            consumer,
+            config,
+            streamsMetrics,
+            stateDirectory,
+            cache,
+            time,
+            stateManager,
+            recordCollector,
+            context,
+            logContext
+        );
     }
 
     private ConsumerRecord<byte[], byte[]> getConsumerRecordWithOffsetAsTimestamp(final TopicPartition topicPartition,

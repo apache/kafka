@@ -29,7 +29,7 @@ class RaftManagerTest {
   @Test
   def testShutdownIoThread(): Unit = {
     val raftClient = mock(classOf[KafkaRaftClient[String]])
-    val ioThread = new RaftIoThread(raftClient)
+    val ioThread = new RaftIoThread(raftClient, threadNamePrefix = "test-raft")
 
     when(raftClient.isRunning).thenReturn(true)
     assertTrue(ioThread.isRunning)
@@ -52,7 +52,7 @@ class RaftManagerTest {
   @Test
   def testUncaughtExceptionInIoThread(): Unit = {
     val raftClient = mock(classOf[KafkaRaftClient[String]])
-    val ioThread = new RaftIoThread(raftClient)
+    val ioThread = new RaftIoThread(raftClient, threadNamePrefix = "test-raft")
 
     when(raftClient.isRunning).thenReturn(true)
     assertTrue(ioThread.isRunning)

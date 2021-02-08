@@ -99,7 +99,7 @@ public class TemperatureDemo {
             .toStream()
             .filter((key, value) -> Integer.parseInt(value) > TEMPERATURE_THRESHOLD);
 
-        final Serde<Windowed<String>> windowedSerde = WindowedSerdes.timeWindowedSerdeFrom(String.class);
+        final Serde<Windowed<String>> windowedSerde = WindowedSerdes.timeWindowedSerdeFrom(String.class, TEMPERATURE_WINDOW_SIZE);
 
         // need to override key serde to Windowed<String> type
         max.to("iot-temperature-max", Produced.with(windowedSerde, Serdes.String()));

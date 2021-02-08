@@ -72,8 +72,10 @@ object AlterIsrManager {
     threadNamePrefix: Option[String],
     brokerEpochSupplier: () => Long
   ): AlterIsrManager = {
-    val channelManager = new BrokerToControllerChannelManager(
-      metadataCache = metadataCache,
+    val nodeProvider = MetadataCacheControllerNodeProvider(config, metadataCache)
+
+    val channelManager = BrokerToControllerChannelManager(
+      controllerNodeProvider = nodeProvider,
       time = time,
       metrics = metrics,
       config = config,
