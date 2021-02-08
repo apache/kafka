@@ -1458,7 +1458,7 @@ class ReplicaManager(val config: KafkaConfig,
                 // Check if topic ID is in memory, if not, it must be new to the broker and does not have a metadata file.
                 // This is because if the broker previously wrote it to file, it would be recovered on restart after failure.
                 if (log.topicId.equals(Uuid.ZERO_UUID)) {
-                  log.partitionMetadataFile.get.write(id)
+                  log.partitionMetadataFile.write(id)
                   log.topicId = id
                   // Warn if the topic ID in the request does not match the log.
                 } else if (!log.topicId.equals(id)) {

@@ -1090,7 +1090,7 @@ object TestUtils extends Logging {
                    time = time,
                    brokerTopicStats = new BrokerTopicStats,
                    logDirFailureChannel = new LogDirFailureChannel(logDirs.size),
-                   usesTopicId = true)
+                   keepPartitionMetadataFile = true)
   }
 
   class MockAlterIsrManager extends AlterIsrManager {
