@@ -26,8 +26,10 @@ import java.util.Optional
 import java.util.concurrent.atomic._
 import java.util.concurrent.{ConcurrentNavigableMap, ConcurrentSkipListMap, TimeUnit}
 import java.util.regex.Pattern
+
 import kafka.api.{ApiVersion, KAFKA_0_10_0_IV0}
 import kafka.common.{LogSegmentOffsetOverflowException, LongRef, OffsetsOutOfOrderException, UnexpectedAppendOffsetException}
+import kafka.log.AppendOrigin.RaftLeader
 import kafka.message.{BrokerCompressionCodec, CompressionCodec, NoCompressionCodec}
 import kafka.metrics.KafkaMetricsGroup
 import kafka.server.checkpoints.LeaderEpochCheckpointFile
@@ -35,7 +37,7 @@ import kafka.server.epoch.LeaderEpochFileCache
 import kafka.server.{BrokerTopicStats, FetchDataInfo, FetchHighWatermark, FetchIsolation, FetchLogEnd, FetchTxnCommitted, LogDirFailureChannel, LogOffsetMetadata, OffsetAndEpoch, PartitionMetadataFile}
 import kafka.utils._
 import org.apache.kafka.common.errors._
-import org.apache.kafka.common.message.FetchResponseData
+import org.apache.kafka.common.message.{DescribeProducersResponseData, FetchResponseData}
 import org.apache.kafka.common.record.FileRecords.TimestampAndOffset
 import org.apache.kafka.common.record._
 import org.apache.kafka.common.requests.FetchResponse.AbortedTransaction
@@ -981,6 +983,20 @@ class Log(@volatile private var _dir: File,
     maybeIncrementFirstUnstableOffset()
   }
 
+  def activeProducers: Seq[DescribeProducersResponseData.ProducerState] = {
+    lock synchronized {
+      producerStateManager.activeProducers.map { case (producerId, state) =>
+        new DescribeProducersResponseData.ProducerState()
+          .setProducerId(producerId)
+          .setProducerEpoch(state.producerEpoch)
+          .setLastSequence(state.lastSeq)
+          .setLastTimestamp(state.lastTimestamp)
+          .setCoordinatorEpoch(state.coordinatorEpoch)
+          .setCurrentTxnStartOffset(state.currentTxnFirstOffset.getOrElse(-1L))
+      }
+    }.toSeq
+  }
+
   private[log] def activeProducersWithLastSequence: Map[Long, Int] = lock synchronized {
     producerStateManager.activeProducers.map { case (producerId, producerIdEntry) =>
       (producerId, producerIdEntry.lastSeq)
@@ -1068,7 +1084,8 @@ class Log(@volatile private var _dir: File,
                      leaderEpoch: Int,
                      origin: AppendOrigin = AppendOrigin.Client,
                      interBrokerProtocolVersion: ApiVersion = ApiVersion.latestVersion): LogAppendInfo = {
-    append(records, origin, interBrokerProtocolVersion, assignOffsets = true, leaderEpoch, ignoreRecordSize = false)
+    val validateAndAssignOffsets = origin != AppendOrigin.RaftLeader
+    append(records, origin, interBrokerProtocolVersion, validateAndAssignOffsets, leaderEpoch, ignoreRecordSize = false)
   }
 
   /**
@@ -1082,7 +1099,7 @@ class Log(@volatile private var _dir: File,
     append(records,
       origin = AppendOrigin.Replication,
       interBrokerProtocolVersion = ApiVersion.latestVersion,
-      assignOffsets = false,
+      validateAndAssignOffsets = false,
       leaderEpoch = -1,
       // disable to check the validation of record size since the record is already accepted by leader.
       ignoreRecordSize = true)
@@ -1097,7 +1114,7 @@ class Log(@volatile private var _dir: File,
    * @param records The log records to append
    * @param origin Declares the origin of the append which affects required validations
    * @param interBrokerProtocolVersion Inter-broker message protocol version
-   * @param assignOffsets Should the log assign offsets to this message set or blindly apply what it is given
+   * @param validateAndAssignOffsets Should the log assign offsets to this message set or blindly apply what it is given
    * @param leaderEpoch The partition's leader epoch which will be applied to messages when offsets are assigned on the leader
    * @param ignoreRecordSize true to skip validation of record size.
    * @throws KafkaStorageException If the append fails due to an I/O error.
@@ -1108,11 +1125,11 @@ class Log(@volatile private var _dir: File,
   private def append(records: MemoryRecords,
                      origin: AppendOrigin,
                      interBrokerProtocolVersion: ApiVersion,
-                     assignOffsets: Boolean,
+                     validateAndAssignOffsets: Boolean,
                      leaderEpoch: Int,
                      ignoreRecordSize: Boolean): LogAppendInfo = {
 
-    val appendInfo = analyzeAndValidateRecords(records, origin, ignoreRecordSize)
+    val appendInfo = analyzeAndValidateRecords(records, origin, ignoreRecordSize, leaderEpoch)
 
     // return if we have no valid messages or if this is a duplicate of the last appended entry
     if (appendInfo.shallowCount == 0) appendInfo
@@ -1125,8 +1142,7 @@ class Log(@volatile private var _dir: File,
       lock synchronized {
         maybeHandleIOException(s"Error while appending records to $topicPartition in dir ${dir.getParent}") {
           checkIfMemoryMappedBufferClosed()
-
-          if (assignOffsets) {
+          if (validateAndAssignOffsets) {
             // assign offsets to the message set
             val offset = new LongRef(nextOffsetMetadata.messageOffset)
             appendInfo.firstOffset = Some(LogOffsetMetadata(offset.value))
@@ -1420,7 +1436,8 @@ class Log(@volatile private var _dir: File,
    */
   private def analyzeAndValidateRecords(records: MemoryRecords,
                                         origin: AppendOrigin,
-                                        ignoreRecordSize: Boolean): LogAppendInfo = {
+                                        ignoreRecordSize: Boolean,
+                                        leaderEpoch: Int): LogAppendInfo = {
     var shallowMessageCount = 0
     var validBytesCount = 0
     var firstOffset: Option[LogOffsetMetadata] = None
@@ -1434,6 +1451,9 @@ class Log(@volatile private var _dir: File,
     var lastOffsetOfFirstBatch = -1L
 
     records.batches.forEach { batch =>
+      if (origin == RaftLeader && batch.partitionLeaderEpoch != leaderEpoch) {
+        throw new InvalidRecordException("Append from Raft leader did not set the batch epoch correctly")
+      }
       // we only validate V2 and higher to avoid potential compatibility issues with older clients
       if (batch.magic >= RecordBatch.MAGIC_VALUE_V2 && origin == AppendOrigin.Client && batch.baseOffset != 0)
         throw new InvalidRecordException(s"The baseOffset of the record batch in the append to $topicPartition should " +

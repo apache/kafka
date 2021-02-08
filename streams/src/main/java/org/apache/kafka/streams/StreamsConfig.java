@@ -541,6 +541,10 @@ public class StreamsConfig extends AbstractConfig {
     public static final String TOPOLOGY_OPTIMIZATION_CONFIG = "topology.optimization";
     private static final String TOPOLOGY_OPTIMIZATION_DOC = "A configuration telling Kafka Streams if it should optimize the topology, disabled by default";
 
+    /** {@code window.size.ms} */
+    public static final String WINDOW_SIZE_MS_CONFIG = "window.size.ms";
+    private static final String WINDOW_SIZE_MS_DOC = "Sets window size for the deserializer in order to calculate window end times.";
+
     /** {@code upgrade.from} */
     @SuppressWarnings("WeakerAccess")
     public static final String UPGRADE_FROM_CONFIG = "upgrade.from";
@@ -857,7 +861,12 @@ public class StreamsConfig extends AbstractConfig {
                     Type.LONG,
                     24 * 60 * 60 * 1000L,
                     Importance.LOW,
-                    WINDOW_STORE_CHANGE_LOG_ADDITIONAL_RETENTION_MS_DOC);
+                    WINDOW_STORE_CHANGE_LOG_ADDITIONAL_RETENTION_MS_DOC)
+            .define(WINDOW_SIZE_MS_CONFIG,
+                    Type.LONG,
+                    null,
+                    Importance.LOW,
+                    WINDOW_SIZE_MS_DOC);
     }
 
     // this is the list of configs for underlying clients

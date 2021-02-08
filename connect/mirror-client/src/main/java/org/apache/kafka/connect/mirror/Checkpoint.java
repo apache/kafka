@@ -180,5 +180,5 @@ public class Checkpoint {
     byte[] recordValue() {
         return serializeValue(VERSION).array();
     }
-};
+}
 

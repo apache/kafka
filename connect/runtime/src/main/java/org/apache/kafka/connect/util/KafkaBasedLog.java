@@ -117,11 +117,7 @@ public class KafkaBasedLog<K, V> {
         this.stopRequested = false;
         this.readLogEndOffsetCallbacks = new ArrayDeque<>();
         this.time = time;
-        this.initializer = initializer != null ? initializer : new Runnable() {
-            @Override
-            public void run() {
-            }
-        };
+        this.initializer = initializer != null ? initializer : () -> { };
     }
 
     public void start() {

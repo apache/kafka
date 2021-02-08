@@ -30,7 +30,8 @@ import kafka.log.Log.DeleteDirSuffix
 import kafka.metrics.KafkaYammerMetrics
 import kafka.server.checkpoints.LeaderEpochCheckpointFile
 import kafka.server.epoch.{EpochEntry, LeaderEpochFileCache}
-import kafka.server.{BrokerState, BrokerTopicStats, FetchDataInfo, FetchHighWatermark, FetchIsolation, FetchLogEnd, FetchTxnCommitted, KafkaConfig, LogDirFailureChannel, LogOffsetMetadata, PartitionMetadataFile}
+import kafka.server.metadata.CachedConfigRepository
+import kafka.server.{BrokerTopicStats, FetchDataInfo, FetchHighWatermark, FetchIsolation, FetchLogEnd, FetchTxnCommitted, KafkaConfig, LogDirFailureChannel, LogOffsetMetadata, PartitionMetadataFile}
 import kafka.utils._
 import org.apache.kafka.common.{InvalidRecordException, KafkaException, TopicPartition, Uuid}
 import org.apache.kafka.common.errors._
@@ -93,14 +94,14 @@ class LogTest {
     // Create a LogManager with some overridden methods to facilitate interception of clean shutdown
     // flag and to inject a runtime error
     def interceptedLogManager(logConfig: LogConfig, logDirs: Seq[File]): LogManager = {
-      new LogManager(logDirs = logDirs.map(_.getAbsoluteFile), initialOfflineDirs = Array.empty[File], topicConfigs = Map(),
+      new LogManager(logDirs = logDirs.map(_.getAbsoluteFile), initialOfflineDirs = Array.empty[File], new CachedConfigRepository(),
         initialDefaultConfig = logConfig, cleanerConfig = CleanerConfig(enableCleaner = false), recoveryThreadsPerDataDir = 4,
         flushCheckMs = 1000L, flushRecoveryOffsetCheckpointMs = 10000L, flushStartOffsetCheckpointMs = 10000L,
-        retentionCheckMs = 1000L, maxPidExpirationMs = 60 * 60 * 1000, scheduler = time.scheduler, time = time, brokerState = BrokerState(),
+        retentionCheckMs = 1000L, maxPidExpirationMs = 60 * 60 * 1000, scheduler = time.scheduler, time = time,
         brokerTopicStats = new BrokerTopicStats, logDirFailureChannel = new LogDirFailureChannel(logDirs.size), usesTopicId = config.usesTopicId) {
 
          override def loadLog(logDir: File, hadCleanShutdown: Boolean, recoveryPoints: Map[TopicPartition, Long],
-                     logStartOffsets: Map[TopicPartition, Long]): Log = {
+                     logStartOffsets: Map[TopicPartition, Long], topicConfigs: Map[String, LogConfig]): Log = {
 
           val topicPartition = Log.parseTopicPartitionName(logDir)
           val config = topicConfigs.getOrElse(topicPartition.topic, currentDefaultConfig)
@@ -127,28 +128,28 @@ class LogTest {
 
     val cleanShutdownFile = new File(logDir, Log.CleanShutdownFile)
     val logManager: LogManager = interceptedLogManager(logConfig, logDirs)
-    log = logManager.getOrCreateLog(topicPartition, () => logConfig, isNew = true)
+    log = logManager.getOrCreateLog(topicPartition, isNew = true)
 
     // Load logs after a clean shutdown
     Files.createFile(cleanShutdownFile.toPath)
     cleanShutdownInterceptedValue = false
-    logManager.loadLogs()
+    logManager.loadLogs(logManager.fetchTopicConfigOverrides(Set.empty))
     assertTrue(cleanShutdownInterceptedValue, "Unexpected value intercepted for clean shutdown flag")
     assertFalse(cleanShutdownFile.exists(), "Clean shutdown file must not exist after loadLogs has completed")
     // Load logs without clean shutdown file
     cleanShutdownInterceptedValue = true
-    logManager.loadLogs()
+    logManager.loadLogs(logManager.fetchTopicConfigOverrides(Set.empty))
     assertFalse(cleanShutdownInterceptedValue, "Unexpected value intercepted for clean shutdown flag")
     assertFalse(cleanShutdownFile.exists(), "Clean shutdown file must not exist after loadLogs has completed")
     // Create clean shutdown file and then simulate error while loading logs such that log loading does not complete.
     Files.createFile(cleanShutdownFile.toPath)
     simulateError = true
-    assertThrows(classOf[RuntimeException], () => logManager.loadLogs())
+    assertThrows(classOf[RuntimeException], () => logManager.loadLogs(logManager.fetchTopicConfigOverrides(Set.empty)))
     assertFalse(cleanShutdownFile.exists(), "Clean shutdown file must not have existed")
     // Do not simulate error on next call to LogManager#loadLogs. LogManager must understand that log had unclean shutdown the last time.
     simulateError = false
     cleanShutdownInterceptedValue = true
-    logManager.loadLogs()
+    logManager.loadLogs(logManager.fetchTopicConfigOverrides(Set.empty))
     assertFalse(cleanShutdownInterceptedValue, "Unexpected value for clean shutdown flag")
   }
 
@@ -186,6 +187,31 @@ class LogTest {
 
     log.appendAsLeader(records, leaderEpoch = 0)
     assertFetchSizeAndOffsets(fetchOffset = 3L, 0, Seq())
+  }
+
+  @Test
+  def testAppendAsLeaderWithRaftLeader(): Unit = {
+    val logConfig = LogTest.createLogConfig(segmentBytes = 1024 * 1024)
+    val log = createLog(logDir, logConfig)
+    val leaderEpoch = 0
+
+    def records(offset: Long): MemoryRecords = TestUtils.records(List(
+      new SimpleRecord(mockTime.milliseconds, "a".getBytes, "value".getBytes),
+      new SimpleRecord(mockTime.milliseconds, "b".getBytes, "value".getBytes),
+      new SimpleRecord(mockTime.milliseconds, "c".getBytes, "value".getBytes)
+    ), baseOffset = offset, partitionLeaderEpoch = leaderEpoch)
+
+    log.appendAsLeader(records(0), leaderEpoch, AppendOrigin.RaftLeader)
+    assertEquals(0, log.logStartOffset)
+    assertEquals(3L, log.logEndOffset)
+
+    // Since raft leader is responsible for assigning offsets, and the LogValidator is bypassed from the performance perspective,
+    // so the first offset of the MemoryRecords to be append should equal to the next offset in the log
+    assertThrows(classOf[UnexpectedAppendOffsetException], () => (log.appendAsLeader(records(1), leaderEpoch, AppendOrigin.RaftLeader)))
+
+    // When the first offset of the MemoryRecords to be append equals to the next offset in the log, append will succeed
+    log.appendAsLeader(records(3), leaderEpoch, AppendOrigin.RaftLeader)
+    assertEquals(6, log.logEndOffset)
   }
 
   @Test
@@ -406,6 +432,64 @@ class LogTest {
 
     log.updateHighWatermark(5L)
     assertHighWatermarkBoundedFetches()
+  }
+
+  @Test
+  def testActiveProducers(): Unit = {
+    val logConfig = LogTest.createLogConfig(segmentBytes = 1024 * 1024)
+    val log = createLog(logDir, logConfig)
+
+    def assertProducerState(
+      producerId: Long,
+      producerEpoch: Short,
+      lastSequence: Int,
+      currentTxnStartOffset: Option[Long],
+      coordinatorEpoch: Option[Int]
+    ): Unit = {
+      val producerStateOpt = log.activeProducers.find(_.producerId == producerId)
+      assertTrue(producerStateOpt.isDefined)
+
+      val producerState = producerStateOpt.get
+      assertEquals(producerEpoch, producerState.producerEpoch)
+      assertEquals(lastSequence, producerState.lastSequence)
+      assertEquals(currentTxnStartOffset.getOrElse(-1L), producerState.currentTxnStartOffset)
+      assertEquals(coordinatorEpoch.getOrElse(-1), producerState.coordinatorEpoch)
+    }
+
+    // Test transactional producer state (open transaction)
+    val producer1Epoch = 5.toShort
+    val producerId1 = 1L
+    appendTransactionalAsLeader(log, producerId1, producer1Epoch)(5)
+    assertProducerState(
+      producerId1,
+      producer1Epoch,
+      lastSequence = 4,
+      currentTxnStartOffset = Some(0L),
+      coordinatorEpoch = None
+    )
+
+    // Test transactional producer state (closed transaction)
+    val coordinatorEpoch = 15
+    appendEndTxnMarkerAsLeader(log, producerId1, producer1Epoch, ControlRecordType.COMMIT, coordinatorEpoch)
+    assertProducerState(
+      producerId1,
+      producer1Epoch,
+      lastSequence = 4,
+      currentTxnStartOffset = None,
+      coordinatorEpoch = Some(coordinatorEpoch)
+    )
+
+    // Test idempotent producer state
+    val producer2Epoch = 5.toShort
+    val producerId2 = 2L
+    appendIdempotentAsLeader(log, producerId2, producer2Epoch)(3)
+    assertProducerState(
+      producerId2,
+      producer2Epoch,
+      lastSequence = 2,
+      currentTxnStartOffset = None,
+      coordinatorEpoch = None
+    )
   }
 
   @Test
@@ -3764,7 +3848,7 @@ class LogTest {
     //Given this partition is on leader epoch 72
     val epoch = 72
     val log = createLog(logDir, LogConfig())
-    log.maybeAssignEpochStartOffset(epoch, records.size)
+    log.maybeAssignEpochStartOffset(epoch, records.length)
 
     //When appending messages as a leader (i.e. assignOffsets = true)
     for (record <- records)
@@ -4633,14 +4717,34 @@ class LogTest {
 
   private def allAbortedTransactions(log: Log) = log.logSegments.flatMap(_.txnIndex.allAbortedTxns)
 
-  private def appendTransactionalAsLeader(log: Log, producerId: Long, producerEpoch: Short): Int => Unit = {
+  private def appendTransactionalAsLeader(
+    log: Log,
+    producerId: Long,
+    producerEpoch: Short
+  ): Int => Unit = {
+    appendIdempotentAsLeader(log, producerId, producerEpoch, isTransactional = true)
+  }
+
+  private def appendIdempotentAsLeader(
+    log: Log,
+    producerId: Long,
+    producerEpoch: Short,
+    isTransactional: Boolean = false
+  ): Int => Unit = {
     var sequence = 0
     numRecords: Int => {
       val simpleRecords = (sequence until sequence + numRecords).map { seq =>
         new SimpleRecord(mockTime.milliseconds(), s"$seq".getBytes)
       }
-      val records = MemoryRecords.withTransactionalRecords(CompressionType.NONE, producerId,
-        producerEpoch, sequence, simpleRecords: _*)
+
+      val records = if (isTransactional) {
+        MemoryRecords.withTransactionalRecords(CompressionType.NONE, producerId,
+          producerEpoch, sequence, simpleRecords: _*)
+      } else {
+        MemoryRecords.withIdempotentRecords(CompressionType.NONE, producerId,
+          producerEpoch, sequence, simpleRecords: _*)
+      }
+
       log.appendAsLeader(records, leaderEpoch = 0)
       sequence += numRecords
     }

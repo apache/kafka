@@ -281,15 +281,11 @@ public abstract class MirrorConnectorsIntegrationBaseTest {
                 "Checkpoints were not emitted upstream to primary cluster.");
         }
 
-        waitForCondition(() -> {
-            return primaryClient.remoteConsumerOffsets(consumerGroupName, BACKUP_CLUSTER_ALIAS,
-                Duration.ofMillis(CHECKPOINT_DURATION_MS)).containsKey(new TopicPartition("backup.test-topic-1", 0));
-        }, CHECKPOINT_DURATION_MS, "Offsets not translated downstream to primary cluster.");
+        waitForCondition(() -> primaryClient.remoteConsumerOffsets(consumerGroupName, BACKUP_CLUSTER_ALIAS,
+            Duration.ofMillis(CHECKPOINT_DURATION_MS)).containsKey(new TopicPartition("backup.test-topic-1", 0)), CHECKPOINT_DURATION_MS, "Offsets not translated downstream to primary cluster.");
 
-        waitForCondition(() -> {
-            return primaryClient.remoteConsumerOffsets(consumerGroupName, BACKUP_CLUSTER_ALIAS,
-                Duration.ofMillis(CHECKPOINT_DURATION_MS)).containsKey(new TopicPartition("test-topic-1", 0));
-        }, CHECKPOINT_DURATION_MS, "Offsets not translated upstream to primary cluster.");
+        waitForCondition(() -> primaryClient.remoteConsumerOffsets(consumerGroupName, BACKUP_CLUSTER_ALIAS,
+            Duration.ofMillis(CHECKPOINT_DURATION_MS)).containsKey(new TopicPartition("test-topic-1", 0)), CHECKPOINT_DURATION_MS, "Offsets not translated upstream to primary cluster.");
 
         Map<TopicPartition, OffsetAndMetadata> primaryOffsets = primaryClient.remoteConsumerOffsets(consumerGroupName, BACKUP_CLUSTER_ALIAS,
                 Duration.ofMillis(CHECKPOINT_DURATION_MS));
@@ -522,7 +518,7 @@ public abstract class MirrorConnectorsIntegrationBaseTest {
             Map<TopicPartition, OffsetAndMetadata> consumerGroupOffsets =
                     adminClient.listConsumerGroupOffsets(consumerGroupId).partitionsToOffsetAndMetadata().get();
             long consumerGroupOffsetTotal = consumerGroupOffsets.values().stream()
-                    .mapToLong(metadata -> metadata.offset()).sum();
+                    .mapToLong(OffsetAndMetadata::offset).sum();
 
             Map<TopicPartition, Long> offsets = consumer.endOffsets(tps, CONSUMER_POLL_TIMEOUT_MS);
             long totalOffsets = offsets.values().stream().mapToLong(l -> l).sum();

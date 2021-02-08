@@ -72,6 +72,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
 
 import static java.util.Arrays.asList;
@@ -2201,6 +2202,69 @@ public class TaskManagerTest {
         // check that if there's no records proccssible, we would stop early
         assertThat(taskManager.process(3, time), is(5));
         assertThat(taskManager.process(3, time), is(0));
+    }
+
+    @Test
+    public void shouldNotFailOnTimeoutException() {
+        final AtomicReference<TimeoutException> timeoutException = new AtomicReference<>();
+        timeoutException.set(new TimeoutException("Skip me!"));
+
+        final StateMachineTask task00 = new StateMachineTask(taskId00, taskId00Partitions, true);
+        task00.transitionTo(State.RESTORING);
+        task00.transitionTo(State.RUNNING);
+        final StateMachineTask task01 = new StateMachineTask(taskId01, taskId01Partitions, true) {
+            @Override
+            public boolean process(final long wallClockTime) {
+                final TimeoutException exception = timeoutException.get();
+                if (exception != null) {
+                    throw exception;
+                }
+                return true;
+            }
+        };
+        task01.transitionTo(State.RESTORING);
+        task01.transitionTo(State.RUNNING);
+        final StateMachineTask task02 = new StateMachineTask(taskId02, taskId02Partitions, true);
+        task02.transitionTo(State.RESTORING);
+        task02.transitionTo(State.RUNNING);
+
+        taskManager.addTask(task00);
+        taskManager.addTask(task01);
+        taskManager.addTask(task02);
+
+        task00.addRecords(
+            t1p0,
+            Arrays.asList(
+                getConsumerRecord(t1p0, 0L),
+                getConsumerRecord(t1p0, 1L)
+            )
+        );
+        task01.addRecords(
+            t1p1,
+            Arrays.asList(
+                getConsumerRecord(t1p1, 0L),
+                getConsumerRecord(t1p1, 1L)
+            )
+        );
+        task02.addRecords(
+            t1p2,
+            Arrays.asList(
+                getConsumerRecord(t1p2, 0L),
+                getConsumerRecord(t1p2, 1L)
+            )
+        );
+
+        // should only process 2 records, because task01 throws TimeoutException
+        assertThat(taskManager.process(1, time), is(2));
+        assertThat(task01.timeout, equalTo(time.milliseconds()));
+
+        //  retry without error
+        timeoutException.set(null);
+        assertThat(taskManager.process(1, time), is(3));
+        assertThat(task01.timeout, equalTo(null));
+
+        // there should still be one record for task01 to be processed
+        assertThat(taskManager.process(1, time), is(1));
     }
 
     @Test

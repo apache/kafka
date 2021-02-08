@@ -34,5 +34,4 @@ class CreateTopicsRequestWithForwardingTest extends AbstractCreateTopicsRequestT
     // With forwarding enabled, request could be forwarded to the active controller.
     assertEquals(Map(Errors.NONE -> 1), response.errorCounts().asScala)
   }
-
 }

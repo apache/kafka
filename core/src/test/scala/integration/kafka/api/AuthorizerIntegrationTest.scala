@@ -18,6 +18,7 @@ import java.util
 import java.util.concurrent.ExecutionException
 import java.util.regex.Pattern
 import java.util.{Collections, Optional, Properties}
+
 import kafka.admin.ConsumerGroupCommand.{ConsumerGroupCommandOptions, ConsumerGroupService}
 import kafka.log.LogConfig
 import kafka.security.authorizer.AclEntry
@@ -35,16 +36,14 @@ import org.apache.kafka.common.config.internals.BrokerSecurityConfigs
 import org.apache.kafka.common.config.{ConfigResource, LogLevelConfig}
 import org.apache.kafka.common.errors._
 import org.apache.kafka.common.internals.Topic.GROUP_METADATA_TOPIC_NAME
-import org.apache.kafka.common.message.{AddOffsetsToTxnRequestData, AlterPartitionReassignmentsRequestData, AlterReplicaLogDirsRequestData, ControlledShutdownRequestData, CreateAclsRequestData, CreatePartitionsRequestData, CreateTopicsRequestData, DeleteAclsRequestData, DeleteGroupsRequestData, DeleteRecordsRequestData, DeleteTopicsRequestData, DescribeConfigsRequestData, DescribeGroupsRequestData, DescribeLogDirsRequestData, FindCoordinatorRequestData, HeartbeatRequestData, IncrementalAlterConfigsRequestData, JoinGroupRequestData, ListPartitionReassignmentsRequestData, OffsetCommitRequestData, ProduceRequestData, SyncGroupRequestData}
+import org.apache.kafka.common.message.{AddOffsetsToTxnRequestData, AlterPartitionReassignmentsRequestData, AlterReplicaLogDirsRequestData, ControlledShutdownRequestData, CreateAclsRequestData, CreatePartitionsRequestData, CreateTopicsRequestData, DeleteAclsRequestData, DeleteGroupsRequestData, DeleteRecordsRequestData, DeleteTopicsRequestData, DescribeClusterRequestData, DescribeConfigsRequestData, DescribeGroupsRequestData, DescribeLogDirsRequestData, DescribeProducersRequestData, FindCoordinatorRequestData, HeartbeatRequestData, IncrementalAlterConfigsRequestData, JoinGroupRequestData, ListPartitionReassignmentsRequestData, MetadataRequestData, OffsetCommitRequestData, ProduceRequestData, SyncGroupRequestData}
 import org.apache.kafka.common.message.CreatePartitionsRequestData.CreatePartitionsTopic
 import org.apache.kafka.common.message.CreateTopicsRequestData.{CreatableTopic, CreatableTopicCollection}
-import org.apache.kafka.common.message.DescribeClusterRequestData
 import org.apache.kafka.common.message.IncrementalAlterConfigsRequestData.{AlterConfigsResource, AlterableConfig, AlterableConfigCollection}
 import org.apache.kafka.common.message.JoinGroupRequestData.JoinGroupRequestProtocolCollection
 import org.apache.kafka.common.message.LeaderAndIsrRequestData.LeaderAndIsrPartitionState
 import org.apache.kafka.common.message.LeaveGroupRequestData.MemberIdentity
 import org.apache.kafka.common.message.ListOffsetsRequestData.{ListOffsetsPartition, ListOffsetsTopic}
-import org.apache.kafka.common.message.MetadataRequestData
 import org.apache.kafka.common.message.OffsetForLeaderEpochRequestData.OffsetForLeaderPartition
 import org.apache.kafka.common.message.OffsetForLeaderEpochRequestData.OffsetForLeaderTopic
 import org.apache.kafka.common.message.OffsetForLeaderEpochRequestData.OffsetForLeaderTopicCollection
@@ -230,6 +229,14 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
           .partitions.asScala.find(_.partitionIndex == part).get
           .errorCode
       )
+    }),
+    ApiKeys.DESCRIBE_PRODUCERS -> ((resp: DescribeProducersResponse) => {
+      Errors.forCode(
+        resp.data
+          .topics.asScala.find(_.name == topic).get
+          .partitions.asScala.find(_.partitionIndex == part).get
+          .errorCode
+      )
     })
   )
 
@@ -277,7 +284,8 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
     ApiKeys.INCREMENTAL_ALTER_CONFIGS -> topicAlterConfigsAcl,
     ApiKeys.ALTER_PARTITION_REASSIGNMENTS -> clusterAlterAcl,
     ApiKeys.LIST_PARTITION_REASSIGNMENTS -> clusterDescribeAcl,
-    ApiKeys.OFFSET_DELETE -> groupReadAcl
+    ApiKeys.OFFSET_DELETE -> groupReadAcl,
+    ApiKeys.DESCRIBE_PRODUCERS -> topicReadAcl
   )
 
   @BeforeEach
@@ -619,6 +627,15 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
     10000
   ).build()
 
+  private def describeProducersRequest: DescribeProducersRequest = new DescribeProducersRequest.Builder(
+    new DescribeProducersRequestData()
+      .setTopics(List(
+        new DescribeProducersRequestData.TopicRequest()
+          .setName(tp.topic)
+          .setPartitionIndexes(List(Int.box(tp.partition)).asJava)
+      ).asJava)
+  ).build()
+
   private def alterPartitionReassignmentsRequest = new AlterPartitionReassignmentsRequest.Builder(
     new AlterPartitionReassignmentsRequestData().setTopics(
       List(new AlterPartitionReassignmentsRequestData.ReassignableTopic()
@@ -694,6 +711,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
       ApiKeys.INCREMENTAL_ALTER_CONFIGS -> incrementalAlterConfigsRequest,
       ApiKeys.ALTER_PARTITION_REASSIGNMENTS -> alterPartitionReassignmentsRequest,
       ApiKeys.LIST_PARTITION_REASSIGNMENTS -> listPartitionReassignmentsRequest,
+      ApiKeys.DESCRIBE_PRODUCERS -> describeProducersRequest,
 
       // Inter-broker APIs use an invalid broker epoch, so does not affect the test case
       ApiKeys.UPDATE_METADATA -> createUpdateMetadataRequest,
@@ -753,7 +771,8 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
       ApiKeys.CREATE_PARTITIONS -> createPartitionsRequest,
       ApiKeys.DELETE_GROUPS -> deleteGroupsRequest,
       ApiKeys.OFFSET_FOR_LEADER_EPOCH -> offsetsForLeaderEpochRequest,
-      ApiKeys.ELECT_LEADERS -> electLeadersRequest
+      ApiKeys.ELECT_LEADERS -> electLeadersRequest,
+      ApiKeys.DESCRIBE_PRODUCERS -> describeProducersRequest
     )
 
     sendRequests(requestKeyToRequest, false)
