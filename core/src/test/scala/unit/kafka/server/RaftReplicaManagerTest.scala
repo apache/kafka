@@ -24,9 +24,9 @@ import kafka.server.QuotaFactory.QuotaManagers
 import kafka.server.metadata.{CachedConfigRepository, RaftMetadataCache}
 import kafka.utils.{MockScheduler, MockTime, TestUtils}
 import org.apache.kafka.common.metrics.Metrics
-import org.easymock.EasyMock
 import org.junit.jupiter.api.Assertions.assertThrows
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
+import org.mockito.Mockito.mock
 
 class RaftReplicaManagerTest {
   var alterIsrManager: AlterIsrManager = _
@@ -38,7 +38,7 @@ class RaftReplicaManagerTest {
 
   @BeforeEach
   def setUp(): Unit = {
-    alterIsrManager = EasyMock.createMock(classOf[AlterIsrManager])
+    alterIsrManager = mock(classOf[AlterIsrManager])
     config = KafkaConfig.fromProps({
       val nodeId = 1
       val props = TestUtils.createBrokerConfig(nodeId, "")
