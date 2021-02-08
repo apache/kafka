@@ -19,96 +19,94 @@ package org.apache.kafka.connect.util;
 import java.time.Duration;
 import java.util.Collections;
 import java.util.Map;
+import java.util.function.Function;
 
 import org.apache.kafka.connect.errors.ConnectException;
-import org.easymock.EasyMock;
+import org.junit.Rule;
+import org.mockito.Mock;
 import org.junit.Before;
 import org.junit.Test;
-import org.powermock.api.easymock.PowerMock;
+import org.mockito.junit.MockitoJUnit;
+import org.mockito.junit.MockitoRule;
 
-import static org.easymock.EasyMock.mock;
-import static org.junit.Assert.assertEquals;
+import static org.apache.kafka.connect.util.SharedTopicAdmin.DEFAULT_CLOSE_DURATION;
 import static org.junit.Assert.assertSame;
 import static org.junit.Assert.assertThrows;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 public class SharedTopicAdminTest {
 
     private static final Map<String, Object> EMPTY_CONFIG = Collections.emptyMap();
 
-    private TopicAdmin mockTopicAdmin;
+    @Rule
+    public MockitoRule rule = MockitoJUnit.rule();
+
+    @Mock private TopicAdmin mockTopicAdmin;
+    @Mock private Function<Map<String, Object>, TopicAdmin> factory;
     private SharedTopicAdmin sharedAdmin;
-    private int created = 0;
 
     @Before
     public void beforeEach() {
-        mockTopicAdmin = mock(TopicAdmin.class);
-        sharedAdmin = new SharedTopicAdmin(EMPTY_CONFIG, this::createAdmin);
+        when(factory.apply(any(Map.class))).thenReturn(mockTopicAdmin);
+        sharedAdmin = new SharedTopicAdmin(EMPTY_CONFIG, factory::apply);
     }
 
     @Test
     public void shouldCloseWithoutBeingUsed() {
-        PowerMock.replayAll();
+        // When closed before being used
         sharedAdmin.close();
-        assertEquals(0, created);
-        PowerMock.verifyAll();
+        // Then should not create or close admin
+        verifyTopicAdminCreatesAndCloses(0);
     }
 
     @Test
     public void shouldCloseAfterTopicAdminUsed() {
-        mockTopicAdmin.close(SharedTopicAdmin.DEFAULT_CLOSE_DURATION);
-        EasyMock.expectLastCall();
-
-        PowerMock.replayAll();
-
+        // When used and then closed
         assertSame(mockTopicAdmin, sharedAdmin.topicAdmin());
         sharedAdmin.close();
-        assertEquals(1, created);
-
-        PowerMock.verifyAll();
+        // Then should have created and closed just one admin
+        verifyTopicAdminCreatesAndCloses(1);
     }
 
     @Test
     public void shouldCloseAfterTopicAdminUsedMultipleTimes() {
-        mockTopicAdmin.close(SharedTopicAdmin.DEFAULT_CLOSE_DURATION);
-        EasyMock.expectLastCall();
-
-        PowerMock.replayAll();
-
+        // When used many times and then closed
         for (int i = 0; i != 10; ++i) {
             assertSame(mockTopicAdmin, sharedAdmin.topicAdmin());
         }
         sharedAdmin.close();
-        assertEquals(1, created);
-
-        PowerMock.verifyAll();
+        // Then should have created and closed just one admin
+        verifyTopicAdminCreatesAndCloses(1);
     }
 
     @Test
     public void shouldCloseWithDurationAfterTopicAdminUsed() {
+        // When used and then closed with a custom timeout
         Duration timeout = Duration.ofSeconds(1);
-        mockTopicAdmin.close(timeout);
-        EasyMock.expectLastCall();
-
-        PowerMock.replayAll();
-
         assertSame(mockTopicAdmin, sharedAdmin.topicAdmin());
         sharedAdmin.close(timeout);
-        assertEquals(1, created);
-
-        PowerMock.verifyAll();
+        // Then should have created and closed just one admin using the supplied timeout
+        verifyTopicAdminCreatesAndCloses(1, timeout);
     }
 
     @Test
     public void shouldFailToGetTopicAdminAfterClose() {
-        PowerMock.replayAll();
+        // When closed
         sharedAdmin.close();
-        assertEquals(0, created);
+        // Then using the admin should fail
         assertThrows(ConnectException.class, () -> sharedAdmin.topicAdmin());
-        PowerMock.verifyAll();
     }
 
-    protected TopicAdmin createAdmin(Map<String, Object> config) {
-        ++created;
-        return mockTopicAdmin;
+    private void verifyTopicAdminCreatesAndCloses(int count) {
+        verifyTopicAdminCreatesAndCloses(count, DEFAULT_CLOSE_DURATION);
+    }
+
+    private void verifyTopicAdminCreatesAndCloses(int count, Duration expectedDuration) {
+        verify(factory, times(count)).apply(any(Map.class));
+        verify(mockTopicAdmin, times(count)).close(eq(expectedDuration));
     }
 }
