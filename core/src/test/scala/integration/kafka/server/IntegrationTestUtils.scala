@@ -32,7 +32,7 @@ import java.util.Properties
 import scala.annotation.nowarn
 import scala.reflect.ClassTag
 
-class IntegrationTestHelper {
+object IntegrationTestUtils {
 
   private def sendRequest(socket: Socket, request: Array[Byte]): Unit = {
     val outgoing = new DataOutputStream(socket.getOutputStream)

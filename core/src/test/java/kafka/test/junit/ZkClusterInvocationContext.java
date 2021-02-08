@@ -17,7 +17,6 @@
 
 package kafka.test.junit;
 
-import integration.kafka.server.IntegrationTestHelper;
 import kafka.api.IntegrationTestHarness;
 import kafka.network.SocketServer;
 import kafka.server.KafkaServer;
@@ -39,7 +38,6 @@ import java.io.File;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.List;
-import java.util.Optional;
 import java.util.Properties;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
@@ -77,6 +75,9 @@ public class ZkClusterInvocationContext implements TestTemplateInvocationContext
 
     @Override
     public List<Extension> getAdditionalExtensions() {
+        if (clusterConfig.numControllers() != 1) {
+            throw new IllegalArgumentException("For ZK clusters, please specify exactly 1 controller.");
+        }
         ClusterInstance clusterShim = new ZkClusterInstance(clusterConfig, clusterReference);
         return Arrays.asList(
             (BeforeTestExecutionCallback) context -> {
@@ -110,7 +111,7 @@ public class ZkClusterInvocationContext implements TestTemplateInvocationContext
 
                     @Override
                     public SecurityProtocol securityProtocol() {
-                        return SecurityProtocol.forName(clusterConfig.securityProtocol());
+                        return clusterConfig.securityProtocol();
                     }
 
                     @Override
@@ -139,8 +140,8 @@ public class ZkClusterInvocationContext implements TestTemplateInvocationContext
 
                     @Override
                     public int brokerCount() {
-                        // Brokers and controllers are the same in zk mode, so just use the max
-                        return Math.max(clusterConfig.brokers(), clusterConfig.controllers());
+                        // Controllers are also brokers in zk mode, so just use broker count
+                        return clusterConfig.numBrokers();
                     }
 
                     @Override
@@ -156,8 +157,7 @@ public class ZkClusterInvocationContext implements TestTemplateInvocationContext
             },
             (AfterTestExecutionCallback) context -> clusterShim.stop(),
             new ClusterInstanceParameterResolver(clusterShim),
-            new GenericParameterResolver<>(clusterConfig, ClusterConfig.class),
-            new GenericParameterResolver<>(new IntegrationTestHelper(), IntegrationTestHelper.class)
+            new GenericParameterResolver<>(clusterConfig, ClusterConfig.class)
         );
     }
 
@@ -174,7 +174,7 @@ public class ZkClusterInvocationContext implements TestTemplateInvocationContext
         }
 
         @Override
-        public String brokerList() {
+        public String bootstrapServers() {
             return TestUtils.bootstrapServers(clusterReference.get().servers(), clusterReference.get().listenerName());
         }
 
@@ -186,7 +186,7 @@ public class ZkClusterInvocationContext implements TestTemplateInvocationContext
         }
 
         @Override
-        public ListenerName listener() {
+        public ListenerName clientListener() {
             return clusterReference.get().listenerName();
         }
 
@@ -199,18 +199,20 @@ public class ZkClusterInvocationContext implements TestTemplateInvocationContext
         }
 
         @Override
-        public Optional<SocketServer> anyBrokerSocketServer() {
+        public SocketServer anyBrokerSocketServer() {
             return JavaConverters.asJavaCollection(clusterReference.get().servers()).stream()
                 .map(KafkaServer::socketServer)
-                .findFirst();
+                .findFirst()
+                .orElseThrow(() -> new RuntimeException("No broker SocketServers found"));
         }
 
         @Override
-        public Optional<SocketServer> anyControllerSocketServer() {
+        public SocketServer anyControllerSocketServer() {
             return JavaConverters.asJavaCollection(clusterReference.get().servers()).stream()
                 .filter(broker -> broker.kafkaController().isActive())
                 .map(KafkaServer::socketServer)
-                .findFirst();
+                .findFirst()
+                .orElseThrow(() -> new RuntimeException("No broker SocketServers found"));
         }
 
         @Override
@@ -224,7 +226,7 @@ public class ZkClusterInvocationContext implements TestTemplateInvocationContext
         }
 
         @Override
-        public Object getUnderlying() {
+        public IntegrationTestHarness getUnderlying() {
             return clusterReference.get();
         }
 

@@ -172,13 +172,13 @@ public class ClusterTestExtensions implements TestTemplateInvocationContextProvi
 
         final boolean autoStart;
         switch (annot.autoStart()) {
-            case Yes:
+            case YES:
                 autoStart = true;
                 break;
-            case No:
+            case NO:
                 autoStart = false;
                 break;
-            case Default:
+            case DEFAULT:
                 autoStart = defaults.autoStart();
                 break;
             default:

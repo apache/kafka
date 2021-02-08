@@ -17,7 +17,7 @@
 
 package kafka.server
 
-import integration.kafka.server.IntegrationTestHelper
+import integration.kafka.server.IntegrationTestUtils
 import kafka.test.ClusterInstance
 
 import java.net.InetAddress
@@ -40,8 +40,7 @@ import scala.jdk.CollectionConverters._
 
 @ClusterTestDefaults(clusterType = Type.ZK)
 @ExtendWith(value = Array(classOf[ClusterTestExtensions]))
-class ClientQuotasRequestTest(cluster: ClusterInstance,
-                              helper: IntegrationTestHelper) {
+class ClientQuotasRequestTest(cluster: ClusterInstance) {
   private val ConsumerByteRateProp = QuotaConfigs.CONSUMER_BYTE_RATE_OVERRIDE_CONFIG
   private val ProducerByteRateProp = QuotaConfigs.PRODUCER_BYTE_RATE_OVERRIDE_CONFIG
   private val RequestPercentageProp = QuotaConfigs.REQUEST_PERCENTAGE_OVERRIDE_CONFIG
@@ -570,9 +569,9 @@ class ClientQuotasRequestTest(cluster: ClusterInstance,
 
   private def sendDescribeClientQuotasRequest(filter: ClientQuotaFilter): DescribeClientQuotasResponse = {
     val request = new DescribeClientQuotasRequest.Builder(filter).build()
-    helper.connectAndReceive[DescribeClientQuotasResponse](request,
-      destination = cluster.anyControllerSocketServer().orElseThrow(() => new IllegalStateException("No controller is available")),
-      listenerName = cluster.listener())
+    IntegrationTestUtils.connectAndReceive[DescribeClientQuotasResponse](request,
+      destination = cluster.anyControllerSocketServer(),
+      listenerName = cluster.clientListener())
   }
 
   private def alterEntityQuotas(entity: ClientQuotaEntity, alter: Map[String, Option[Double]], validateOnly: Boolean) =
@@ -598,9 +597,9 @@ class ClientQuotasRequestTest(cluster: ClusterInstance,
 
   private def sendAlterClientQuotasRequest(entries: Iterable[ClientQuotaAlteration], validateOnly: Boolean): AlterClientQuotasResponse = {
     val request = new AlterClientQuotasRequest.Builder(entries.asJavaCollection, validateOnly).build()
-    helper.connectAndReceive[AlterClientQuotasResponse](request,
-      destination = cluster.anyControllerSocketServer().orElseThrow(() => new IllegalStateException("No controller is available")),
-      listenerName = cluster.listener())
+    IntegrationTestUtils.connectAndReceive[AlterClientQuotasResponse](request,
+      destination = cluster.anyControllerSocketServer(),
+      listenerName = cluster.clientListener())
   }
 
 }

@@ -23,14 +23,13 @@ import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.common.network.ListenerName;
 
 import java.util.Collection;
-import java.util.Optional;
 import java.util.Properties;
 
 public interface ClusterInstance {
 
     enum ClusterType {
         ZK,
-        // Raft
+        // RAFT
     }
 
     /**
@@ -48,12 +47,12 @@ public interface ClusterInstance {
      * The listener for this cluster as configured by {@link ClusterTest} or by {@link ClusterConfig}. If
      * unspecified by those sources, this will return the listener for the default security protocol PLAINTEXT
      */
-    ListenerName listener();
+    ListenerName clientListener();
 
     /**
      * The broker connect string which can be used by clients for bootstrapping
      */
-    String brokerList();
+    String bootstrapServers();
 
     /**
      * A collection of all brokers in the cluster. In ZK-based clusters this will also include the broker which is
@@ -68,14 +67,14 @@ public interface ClusterInstance {
     Collection<SocketServer> controllerSocketServers();
 
     /**
-     * Any one of the broker servers.
+     * Return any one of the broker servers. Throw an error if none are found
      */
-    Optional<SocketServer> anyBrokerSocketServer();
+    SocketServer anyBrokerSocketServer();
 
     /**
-     * Any one of the controller servers.
+     * Return any one of the controller servers. Throw an error if none are found
      */
-    Optional<SocketServer> anyControllerSocketServer();
+    SocketServer anyControllerSocketServer();
 
     /**
      * The underlying object which is responsible for setting up and tearing down the cluster.

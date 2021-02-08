@@ -17,7 +17,7 @@
 
 package kafka.server
 
-import integration.kafka.server.IntegrationTestHelper
+import integration.kafka.server.IntegrationTestUtils
 import kafka.test.{ClusterConfig, ClusterInstance}
 import org.apache.kafka.common.message.ApiVersionsRequestData
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
@@ -30,8 +30,7 @@ import org.junit.jupiter.api.extension.ExtendWith
 
 
 @ExtendWith(value = Array(classOf[ClusterTestExtensions]))
-class ApiVersionsRequestTest(helper: IntegrationTestHelper,
-                             cluster: ClusterInstance) extends AbstractApiVersionsRequestTest(helper, cluster) {
+class ApiVersionsRequestTest(cluster: ClusterInstance) extends AbstractApiVersionsRequestTest(cluster) {
 
   @BeforeEach
   def setup(config: ClusterConfig): Unit = {
@@ -41,8 +40,8 @@ class ApiVersionsRequestTest(helper: IntegrationTestHelper,
   @ClusterTest
   def testApiVersionsRequest(): Unit = {
     val request = new ApiVersionsRequest.Builder().build()
-    val apiVersionsResponse = sendApiVersionsRequest(request, cluster.listener())
-    validateApiVersionsResponse(apiVersionsResponse, cluster.listener())
+    val apiVersionsResponse = sendApiVersionsRequest(request, cluster.clientListener())
+    validateApiVersionsResponse(apiVersionsResponse, cluster.clientListener())
   }
 
   @ClusterTest
@@ -67,8 +66,8 @@ class ApiVersionsRequestTest(helper: IntegrationTestHelper,
   @ClusterTest
   def testApiVersionsRequestValidationV0(): Unit = {
     val apiVersionsRequest = new ApiVersionsRequest.Builder().build(0.asInstanceOf[Short])
-    val apiVersionsResponse = sendApiVersionsRequest(apiVersionsRequest, cluster.listener())
-    validateApiVersionsResponse(apiVersionsResponse, cluster.listener())
+    val apiVersionsResponse = sendApiVersionsRequest(apiVersionsRequest, cluster.clientListener())
+    validateApiVersionsResponse(apiVersionsResponse, cluster.clientListener())
   }
 
   @ClusterTest
@@ -82,7 +81,7 @@ class ApiVersionsRequestTest(helper: IntegrationTestHelper,
   def testApiVersionsRequestValidationV3(): Unit = {
     // Invalid request because Name and Version are empty by default
     val apiVersionsRequest = new ApiVersionsRequest(new ApiVersionsRequestData(), 3.asInstanceOf[Short])
-    val apiVersionsResponse = sendApiVersionsRequest(apiVersionsRequest, cluster.listener())
+    val apiVersionsResponse = sendApiVersionsRequest(apiVersionsRequest, cluster.clientListener())
     assertEquals(Errors.INVALID_REQUEST.code(), apiVersionsResponse.data.errorCode())
   }
 }

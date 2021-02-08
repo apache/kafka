@@ -37,7 +37,7 @@ public class ClusterConfig {
     private final String name;
     private final boolean autoStart;
 
-    private final String securityProtocol;
+    private final SecurityProtocol securityProtocol;
     private final String listenerName;
     private final File trustStoreFile;
 
@@ -49,7 +49,7 @@ public class ClusterConfig {
     private final Properties saslClientProperties = new Properties();
 
     ClusterConfig(Type type, int brokers, int controllers, String name, boolean autoStart,
-                  String securityProtocol, String listenerName, File trustStoreFile) {
+                  SecurityProtocol securityProtocol, String listenerName, File trustStoreFile) {
         this.type = type;
         this.brokers = brokers;
         this.controllers = controllers;
@@ -64,11 +64,11 @@ public class ClusterConfig {
         return type;
     }
 
-    public int brokers() {
+    public int numBrokers() {
         return brokers;
     }
 
-    public int controllers() {
+    public int numControllers() {
         return controllers;
     }
 
@@ -104,7 +104,7 @@ public class ClusterConfig {
         return saslClientProperties;
     }
 
-    public String securityProtocol() {
+    public SecurityProtocol securityProtocol() {
         return securityProtocol;
     }
 
@@ -119,7 +119,7 @@ public class ClusterConfig {
     public Map<String, String> nameTags() {
         Map<String, String> tags = new LinkedHashMap<>(3);
         name().ifPresent(name -> tags.put("Name", name));
-        tags.put("security", securityProtocol);
+        tags.put("security", securityProtocol.name());
         listenerName().ifPresent(listener -> tags.put("listener", listener));
         return tags;
     }
@@ -135,10 +135,10 @@ public class ClusterConfig {
     }
 
     public static Builder defaultClusterBuilder() {
-        return new Builder(Type.ZK, 1, 1, true, SecurityProtocol.PLAINTEXT.name);
+        return new Builder(Type.ZK, 1, 1, true, SecurityProtocol.PLAINTEXT);
     }
 
-    public static Builder clusterBuilder(Type type, int brokers, int controllers, boolean autoStart, String securityProtocol) {
+    public static Builder clusterBuilder(Type type, int brokers, int controllers, boolean autoStart, SecurityProtocol securityProtocol) {
         return new Builder(type, brokers, controllers, autoStart, securityProtocol);
     }
 
@@ -148,11 +148,11 @@ public class ClusterConfig {
         private int controllers;
         private String name;
         private boolean autoStart;
-        private String securityProtocol;
+        private SecurityProtocol securityProtocol;
         private String listenerName;
         private File trustStoreFile;
 
-        Builder(Type type, int brokers, int controllers, boolean autoStart, String securityProtocol) {
+        Builder(Type type, int brokers, int controllers, boolean autoStart, SecurityProtocol securityProtocol) {
             this.type = type;
             this.brokers = brokers;
             this.controllers = controllers;
@@ -185,7 +185,7 @@ public class ClusterConfig {
             return this;
         }
 
-        public Builder securityProtocol(String securityProtocol) {
+        public Builder securityProtocol(SecurityProtocol securityProtocol) {
             this.securityProtocol = securityProtocol;
             return this;
         }

@@ -103,10 +103,10 @@ public class ClusterTestExtensionsTest {
         }
     }
 
-    @ClusterTest(autoStart = AutoStart.No)
+    @ClusterTest(autoStart = AutoStart.NO)
     public void testNoAutoStart() {
-        Assertions.assertFalse(clusterInstance.anyBrokerSocketServer().isPresent());
+        Assertions.assertThrows(RuntimeException.class, clusterInstance::anyBrokerSocketServer);
         clusterInstance.start();
-        Assertions.assertTrue(clusterInstance.anyBrokerSocketServer().isPresent());
+        Assertions.assertNotNull(clusterInstance.anyBrokerSocketServer());
     }
 }

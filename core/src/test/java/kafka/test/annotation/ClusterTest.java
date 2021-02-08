@@ -17,6 +17,7 @@
 
 package kafka.test.annotation;
 
+import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.junit.jupiter.api.TestTemplate;
 
 import java.lang.annotation.Documented;
@@ -34,10 +35,10 @@ public @interface ClusterTest {
     Type clusterType() default Type.DEFAULT;
     int brokers() default 0;
     int controllers() default 0;
-    AutoStart autoStart() default AutoStart.Default;
+    AutoStart autoStart() default AutoStart.DEFAULT;
 
     String name() default "";
-    String securityProtocol() default "PLAINTEXT";
+    SecurityProtocol securityProtocol() default SecurityProtocol.PLAINTEXT;
     String listener() default "";
     ClusterConfigProperty[] serverProperties() default {};
 }

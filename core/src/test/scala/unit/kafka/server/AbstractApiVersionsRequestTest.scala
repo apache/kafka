@@ -16,7 +16,7 @@
  */
 package kafka.server
 
-import integration.kafka.server.IntegrationTestHelper
+import integration.kafka.server.IntegrationTestUtils
 import kafka.test.ClusterInstance
 import org.apache.kafka.common.message.ApiVersionsResponseData.ApiVersion
 import org.apache.kafka.common.network.ListenerName
@@ -27,11 +27,10 @@ import org.junit.jupiter.api.Assertions._
 import java.util.Properties
 import scala.jdk.CollectionConverters._
 
-abstract class AbstractApiVersionsRequestTest(helper: IntegrationTestHelper,
-                                              cluster: ClusterInstance) {
+abstract class AbstractApiVersionsRequestTest(cluster: ClusterInstance) {
 
   def sendApiVersionsRequest(request: ApiVersionsRequest, listenerName: ListenerName): ApiVersionsResponse = {
-    helper.connectAndReceive[ApiVersionsResponse](request, cluster.brokerSocketServers().asScala.head, listenerName)
+    IntegrationTestUtils.connectAndReceive[ApiVersionsResponse](request, cluster.brokerSocketServers().asScala.head, listenerName)
   }
 
   def controlPlaneListenerName = new ListenerName("CONTROLLER")
@@ -46,11 +45,11 @@ abstract class AbstractApiVersionsRequestTest(helper: IntegrationTestHelper,
   }
 
   def sendUnsupportedApiVersionRequest(request: ApiVersionsRequest): ApiVersionsResponse = {
-    val overrideHeader = helper.nextRequestHeader(ApiKeys.API_VERSIONS, Short.MaxValue)
-    val socket = helper.connect(cluster.brokerSocketServers().asScala.head, cluster.listener())
+    val overrideHeader = IntegrationTestUtils.nextRequestHeader(ApiKeys.API_VERSIONS, Short.MaxValue)
+    val socket = IntegrationTestUtils.connect(cluster.brokerSocketServers().asScala.head, cluster.clientListener())
     try {
-      helper.sendWithHeader(request, overrideHeader, socket)
-      helper.receive[ApiVersionsResponse](socket, ApiKeys.API_VERSIONS, 0.toShort)
+      IntegrationTestUtils.sendWithHeader(request, overrideHeader, socket)
+      IntegrationTestUtils.receive[ApiVersionsResponse](socket, ApiKeys.API_VERSIONS, 0.toShort)
     } finally socket.close()
   }
 
