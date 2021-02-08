@@ -310,9 +310,6 @@ public class ClusterConnectionStatesTest {
         connectionStates.connecting(nodeId1, time.milliseconds(), hostTwoIps, ClientDnsLookup.USE_ALL_DNS_IPS);
         InetAddress addr2 = connectionStates.currentAddress(nodeId1);
         assertNotSame(addr1, addr2);
-        connectionStates.connecting(nodeId1, time.milliseconds(), hostTwoIps, ClientDnsLookup.USE_ALL_DNS_IPS);
-        InetAddress addr3 = connectionStates.currentAddress(nodeId1);
-        assertNotSame(addr1, addr3);
     }
 
     @Test
