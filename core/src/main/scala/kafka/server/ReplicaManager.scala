@@ -163,7 +163,7 @@ case class FetchPartitionData(error: Errors = Errors.NONE,
 sealed trait HostedPartition
 
 /**
- * Trait to represent a partition that isn't Offline -- i.e. it is either Online or it is Deferred
+ * Trait to represent a partition that isn't Offline -- i.e. it is either Online or it is Deferred.
  */
 sealed trait NonOffline extends HostedPartition {
   val partition: Partition
@@ -466,7 +466,7 @@ class ReplicaManager(val config: KafkaConfig,
     partitionsToStop.forKeyValue { (topicPartition, shouldDelete) =>
       if (shouldDelete) {
         getPartition(topicPartition) match {
-          case hostedPartition: NonOffline => // Online or Deferred (Deferred never occurs when using ZooKeeper)
+          case hostedPartition: NonOffline =>
             if (allPartitions.remove(topicPartition, hostedPartition)) {
               maybeRemoveTopicMetrics(topicPartition.topic)
               // Logs are not deleted here. They are deleted in a single batch later on.
@@ -486,8 +486,7 @@ class ReplicaManager(val config: KafkaConfig,
     // Third delete the logs and checkpoint.
     val errorMap = new mutable.HashMap[TopicPartition, Throwable]()
     if (partitionsToDelete.nonEmpty) {
-      // Delete the logs and checkpoint. Confusingly, this function isn't actually
-      // asynchronous-- it just synchronously schedules the directories to be deleted later.
+      // Delete the logs and checkpoint.
       logManager.asyncDelete(partitionsToDelete, (tp, e) => errorMap.put(tp, e))
     }
     errorMap
