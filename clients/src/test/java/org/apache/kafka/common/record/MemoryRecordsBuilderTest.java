@@ -741,7 +741,7 @@ public class MemoryRecordsBuilderTest {
                     TimestampType.CREATE_TIME, 0L, 0L, RecordBatch.NO_PRODUCER_ID,
                     RecordBatch.NO_PRODUCER_EPOCH, RecordBatch.NO_SEQUENCE, false, false,
                     RecordBatch.NO_PARTITION_LEADER_EPOCH, 0);
-            builder.append(1L, new byte[0], value);
+            builder.append(1L, key, value);
             builder.build();
             builders.add(builder);
 
