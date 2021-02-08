@@ -32,7 +32,7 @@ import scala.jdk.CollectionConverters._
 
 object MetadataPartition {
   val OffsetNeverDeferred = 0 // must not be a valid offset we could see (i.e. must not be positive)
-  def apply(name: String, record: PartitionRecord): MetadataPartition = {
+  def apply(name: String, record: PartitionRecord, deferredAtOffset: Option[Long]): MetadataPartition = {
     MetadataPartition(name,
       record.partitionId(),
       record.leader(),
@@ -41,11 +41,14 @@ object MetadataPartition {
       record.isr(),
       Collections.emptyList(), // TODO KAFKA-12285 handle offline replicas
       Collections.emptyList(),
-      Collections.emptyList())
+      Collections.emptyList(),
+      largestDeferredOffsetEverSeen = deferredAtOffset.getOrElse(OffsetNeverDeferred),
+      isCurrentlyDeferringChanges = deferredAtOffset.isDefined)
   }
 
   def apply(prevPartition: Option[MetadataPartition],
-            partition: UpdateMetadataPartitionState): MetadataPartition = {
+            partition: UpdateMetadataPartitionState,
+            deferredAtOffset: Option[Long]): MetadataPartition = {
     new MetadataPartition(partition.topicName(),
       partition.partitionIndex(),
       partition.leader(),
@@ -54,7 +57,9 @@ object MetadataPartition {
       partition.isr(),
       partition.offlineReplicas(),
       prevPartition.flatMap(p => Some(p.addingReplicas)).getOrElse(Collections.emptyList()),
-      prevPartition.flatMap(p => Some(p.removingReplicas)).getOrElse(Collections.emptyList())
+      prevPartition.flatMap(p => Some(p.removingReplicas)).getOrElse(Collections.emptyList()),
+      largestDeferredOffsetEverSeen = deferredAtOffset.getOrElse(prevPartition.flatMap(p => Some(p.largestDeferredOffsetEverSeen)).getOrElse(OffsetNeverDeferred)),
+      isCurrentlyDeferringChanges = deferredAtOffset.isDefined
     )
   }
 }

@@ -355,7 +355,7 @@ class RaftMetadataCache(val brokerId: Int) extends MetadataCache with Logging {
           numDeleted = numDeleted + 1
         } else {
           val prevPartition = builder.partition(partition.topicName(), partition.partitionIndex())
-          val newPartition = MetadataPartition(prevPartition, partition)
+          val newPartition = MetadataPartition(prevPartition, partition, None)
           if (traceEnabled) {
             stateChangeLogger.trace(s"Cached leader info $newPartition in response to " +
               s"UpdateMetadata request sent by controller $request.controllerId epoch " +

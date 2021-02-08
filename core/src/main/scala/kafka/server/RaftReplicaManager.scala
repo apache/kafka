@@ -50,7 +50,8 @@ class RaftReplicaManager(config: KafkaConfig,
                          delayedElectLeaderPurgatory: DelayedOperationPurgatory[DelayedElectLeader],
                          threadNamePrefix: Option[String],
                          configRepository: ConfigRepository,
-                         alterIsrManager: AlterIsrManager) extends ReplicaManager(
+                         alterIsrManager: AlterIsrManager,
+                         delegateOverride: Option[RaftReplicaChangeDelegate]) extends ReplicaManager(
   config, metrics, time, None, scheduler, logManager, isShuttingDown, quotaManagers,
   brokerTopicStats, metadataCache, logDirFailureChannel, delayedProducePurgatory, delayedFetchPurgatory,
   delayedDeleteRecordsPurgatory, delayedElectLeaderPurgatory, threadNamePrefix, configRepository, alterIsrManager) {
@@ -67,7 +68,8 @@ class RaftReplicaManager(config: KafkaConfig,
            logDirFailureChannel: LogDirFailureChannel,
            alterIsrManager: AlterIsrManager,
            configRepository: ConfigRepository,
-           threadNamePrefix: Option[String] = None) = {
+           threadNamePrefix: Option[String] = None,
+           delegateOverride: Option[RaftReplicaChangeDelegate] = None) = {
     this(config, metrics, time, scheduler, logManager, isShuttingDown,
       quotaManagers, brokerTopicStats, metadataCache, logDirFailureChannel,
       DelayedOperationPurgatory[DelayedProduce](
@@ -81,38 +83,39 @@ class RaftReplicaManager(config: KafkaConfig,
         purgeInterval = config.deleteRecordsPurgatoryPurgeIntervalRequests),
       DelayedOperationPurgatory[DelayedElectLeader](
         purgatoryName = "ElectLeader", brokerId = config.brokerId),
-      threadNamePrefix, configRepository, alterIsrManager)
+      threadNamePrefix, configRepository, alterIsrManager, delegateOverride)
   }
-
-  class RaftReplicaManagerChangeDelegateHelper(raftReplicaManager: RaftReplicaManager) extends RaftReplicaChangeDelegateHelper {
-    override def stateChangeLogger: StateChangeLogger = raftReplicaManager.stateChangeLogger
-
-    override def replicaFetcherManager: ReplicaFetcherManager = raftReplicaManager.replicaFetcherManager
-
-    override def replicaAlterLogDirsManager: ReplicaAlterLogDirsManager = raftReplicaManager.replicaAlterLogDirsManager
-
-    override def markDeferred(state: HostedPartition.Deferred): Unit = raftReplicaManager.allPartitions.put(state.partition.topicPartition, state)
-
-    override def getLogDir(topicPartition: TopicPartition): Option[String] = raftReplicaManager.getLogDir(topicPartition)
-
-    override def error(msg: => String, e: => Throwable): Unit = raftReplicaManager.error(msg, e)
-
-    override def markOffline(topicPartition: TopicPartition): Unit = raftReplicaManager.markPartitionOffline(topicPartition)
-
-    override def completeDelayedFetchOrProduceRequests(topicPartition: TopicPartition): Unit = raftReplicaManager.completeDelayedFetchOrProduceRequests(topicPartition)
-
-    override def isShuttingDown: Boolean = raftReplicaManager.isShuttingDown.get
-
-    override def initialFetchOffset(log: Log): Long = raftReplicaManager.initialFetchOffset(log)
-
-    override def config: KafkaConfig = raftReplicaManager.config
-  }
-
-  val delegate = new RaftReplicaChangeDelegate(new RaftReplicaManagerChangeDelegateHelper(this))
 
   if (config.requiresZookeeper) {
     throw new IllegalStateException(s"Cannot use ${getClass.getSimpleName} when using ZooKeeper")
   }
+
+  class RaftReplicaManagerChangeDelegateHelper(raftReplicaManager: RaftReplicaManager) extends RaftReplicaChangeDelegateHelper {
+    override def completeDelayedFetchOrProduceRequests(topicPartition: TopicPartition): Unit = raftReplicaManager.completeDelayedFetchOrProduceRequests(topicPartition)
+
+    override def config: KafkaConfig = raftReplicaManager.config
+
+    override def error(msg: => String, e: => Throwable): Unit = raftReplicaManager.error(msg, e)
+
+    override def getLogDir(topicPartition: TopicPartition): Option[String] = raftReplicaManager.getLogDir(topicPartition)
+
+    override def initialFetchOffset(log: Log): Long = raftReplicaManager.initialFetchOffset(log)
+
+    override def isShuttingDown: Boolean = raftReplicaManager.isShuttingDown.get
+
+    override def markDeferred(state: HostedPartition.Deferred): Unit = raftReplicaManager.allPartitions.put(state.partition.topicPartition, state)
+
+    override def markOffline(topicPartition: TopicPartition): Unit = raftReplicaManager.markPartitionOffline(topicPartition)
+
+    override def replicaAlterLogDirsManager: ReplicaAlterLogDirsManager = raftReplicaManager.replicaAlterLogDirsManager
+
+    override def replicaFetcherManager: ReplicaFetcherManager = raftReplicaManager.replicaFetcherManager
+
+    override def stateChangeLogger: StateChangeLogger = raftReplicaManager.stateChangeLogger
+  }
+
+  val delegate = delegateOverride.getOrElse(
+    new RaftReplicaChangeDelegate(new RaftReplicaManagerChangeDelegateHelper(this)))
 
   // Changes are initially deferred when using a Raft-based metadata quorum, and they may flip-flop to not
   // being deferred and being deferred again thereafter as the broker (re)acquires/loses its lease.
