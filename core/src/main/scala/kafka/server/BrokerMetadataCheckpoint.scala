@@ -88,9 +88,9 @@ class RawMetaProperties(val props: Properties = new Properties()) {
   }
 
   override def toString: String = {
-    "RawMetaProperties(" + props.keySet().asScala.toList.asInstanceOf[List[String]].sorted.map {
+    "{" + props.keySet().asScala.toList.asInstanceOf[List[String]].sorted.map {
       key => key + "=" + props.get(key)
-    }.mkString(", ") + ")"
+    }.mkString(", ") + "}"
   }
 }
 
@@ -130,7 +130,7 @@ case class ZkMetaProperties(
   }
 
   override def toString: String = {
-    s"LegacyMetaProperties(brokerId=$brokerId, clusterId=$clusterId)"
+    s"ZkMetaProperties(brokerId=$brokerId, clusterId=$clusterId)"
   }
 }
 
