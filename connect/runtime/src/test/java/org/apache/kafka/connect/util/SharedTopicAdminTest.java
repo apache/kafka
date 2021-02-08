@@ -22,36 +22,27 @@ import java.util.Map;
 
 import org.apache.kafka.connect.errors.ConnectException;
 import org.easymock.EasyMock;
-import org.easymock.Mock;
 import org.junit.Before;
 import org.junit.Test;
-import org.junit.runner.RunWith;
 import org.powermock.api.easymock.PowerMock;
-import org.powermock.core.classloader.annotations.PowerMockIgnore;
-import org.powermock.core.classloader.annotations.PrepareForTest;
-import org.powermock.modules.junit4.PowerMockRunner;
 
+import static org.easymock.EasyMock.mock;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertSame;
 import static org.junit.Assert.assertThrows;
 
-@RunWith(PowerMockRunner.class)
-@PrepareForTest(KafkaBasedLog.class)
-@PowerMockIgnore("javax.management.*")
 public class SharedTopicAdminTest {
 
-    private static final Map<String, Object> CONFIG = Collections.emptyMap();
+    private static final Map<String, Object> EMPTY_CONFIG = Collections.emptyMap();
 
-    @Mock private TopicAdmin mockTopicAdmin;
+    private TopicAdmin mockTopicAdmin;
     private SharedTopicAdmin sharedAdmin;
     private int created = 0;
 
     @Before
     public void beforeEach() {
-        sharedAdmin = new SharedTopicAdmin(CONFIG, config -> {
-            ++created;
-            return mockTopicAdmin;
-        });
+        mockTopicAdmin = mock(TopicAdmin.class);
+        sharedAdmin = new SharedTopicAdmin(EMPTY_CONFIG, this::createAdmin);
     }
 
     @Test
@@ -114,5 +105,10 @@ public class SharedTopicAdminTest {
         assertEquals(0, created);
         assertThrows(ConnectException.class, () -> sharedAdmin.topicAdmin());
         PowerMock.verifyAll();
+    }
+
+    protected TopicAdmin createAdmin(Map<String, Object> config) {
+        ++created;
+        return mockTopicAdmin;
     }
 }
