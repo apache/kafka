@@ -67,7 +67,7 @@ class MetadataCacheControllerNodeProvider(
   override def get(): Option[Node] = {
     metadataCache.getControllerId
       .flatMap(metadataCache.getAliveBroker)
-      .map(_.node(listenerName))
+      .map(_.endpoints(listenerName.value))
   }
 }
 
@@ -133,7 +133,6 @@ class BrokerToControllerChannelManagerImpl(
 
   def shutdown(): Unit = {
     requestThread.shutdown()
-    requestThread.awaitShutdown()
     info(s"Broker to controller channel manager for $channelName shutdown")
   }
 

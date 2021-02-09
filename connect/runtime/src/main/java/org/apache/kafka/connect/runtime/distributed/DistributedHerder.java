@@ -236,7 +236,7 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
 
         this.herderExecutor = new ThreadPoolExecutor(1, 1, 0L,
                 TimeUnit.MILLISECONDS,
-                new LinkedBlockingDeque<Runnable>(1),
+                new LinkedBlockingDeque<>(1),
                 ThreadUtils.createThreadFactory(
                         this.getClass().getSimpleName() + "-" + clientId + "-%d", false));
 
@@ -577,7 +577,7 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
     private void processConnectorConfigUpdates(Set<String> connectorConfigUpdates) {
         // If we only have connector config updates, we can just bounce the updated connectors that are
         // currently assigned to this worker.
-        Set<String> localConnectors = assignment == null ? Collections.<String>emptySet() : new HashSet<>(assignment.connectors());
+        Set<String> localConnectors = assignment == null ? Collections.emptySet() : new HashSet<>(assignment.connectors());
         log.trace("Processing connector config updates; "
                 + "currently-owned connectors are {}, and to-be-updated connectors are {}",
                 localConnectors,
@@ -738,6 +738,26 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
     }
 
     @Override
+    public void tasksConfig(String connName, final Callback<Map<ConnectorTaskId, Map<String, String>>> callback) {
+        log.trace("Submitting tasks config request {}", connName);
+
+        addRequest(
+            () -> {
+                if (checkRebalanceNeeded(callback))
+                    return null;
+
+                if (!configState.contains(connName)) {
+                    callback.onCompletion(new NotFoundException("Connector " + connName + " not found"), null);
+                } else {
+                    callback.onCompletion(null, buildTasksConfig(connName));
+                }
+                return null;
+            },
+            forwardErrorCallback(callback)
+        );
+    }
+
+    @Override
     protected Map<String, String> rawConfig(String connName) {
         return configState.rawConnectorConfig(connName);
     }
@@ -763,7 +783,7 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
                 } else {
                     log.trace("Removing connector config {} {}", connName, configState.connectors());
                     configBackingStore.removeConnectorConfig(connName);
-                    callback.onCompletion(null, new Created<ConnectorInfo>(false, null));
+                    callback.onCompletion(null, new Created<>(false, null));
                 }
                 return null;
             },

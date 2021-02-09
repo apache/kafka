@@ -265,6 +265,20 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
         );
     }
 
+    protected Map<ConnectorTaskId, Map<String, String>> buildTasksConfig(String connector) {
+        final ClusterConfigState configState = configBackingStore.snapshot();
+
+        if (!configState.contains(connector))
+            return Collections.emptyMap();
+
+        Map<ConnectorTaskId, Map<String, String>> configs = new HashMap<>();
+        for (ConnectorTaskId cti : configState.tasks(connector)) {
+            configs.put(cti, configState.taskConfig(cti));
+        }
+
+        return configs;
+    }
+
     @Override
     public ConnectorStateInfo connectorStatus(String connName) {
         ConnectorStatus connector = statusBackingStore.get(connName);
@@ -632,7 +646,7 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
         ByteArrayOutputStream output = new ByteArrayOutputStream();
         try {
             t.printStackTrace(new PrintStream(output, false, StandardCharsets.UTF_8.name()));
-            return output.toString("UTF-8");
+            return output.toString(StandardCharsets.UTF_8.name());
         } catch (UnsupportedEncodingException e) {
             return null;
         }

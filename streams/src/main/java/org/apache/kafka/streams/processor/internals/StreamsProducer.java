@@ -20,6 +20,7 @@ import org.apache.kafka.clients.consumer.CommitFailedException;
 import org.apache.kafka.clients.consumer.ConsumerGroupMetadata;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.producer.Callback;
+import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.clients.producer.ProducerRecord;
@@ -300,7 +301,10 @@ public class StreamsProducer {
         }
     }
 
-    List<PartitionInfo> partitionsFor(final String topic) throws TimeoutException {
+    /**
+     * Cf {@link KafkaProducer#partitionsFor(String)}
+     */
+    List<PartitionInfo> partitionsFor(final String topic) {
         return producer.partitionsFor(topic);
     }
 
