@@ -32,7 +32,7 @@ import org.mockito.junit.MockitoRule;
 import static org.apache.kafka.connect.util.SharedTopicAdmin.DEFAULT_CLOSE_DURATION;
 import static org.junit.Assert.assertSame;
 import static org.junit.Assert.assertThrows;
-import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyMap;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -51,7 +51,7 @@ public class SharedTopicAdminTest {
 
     @Before
     public void beforeEach() {
-        when(factory.apply(any(Map.class))).thenReturn(mockTopicAdmin);
+        when(factory.apply(anyMap())).thenReturn(mockTopicAdmin);
         sharedAdmin = new SharedTopicAdmin(EMPTY_CONFIG, factory::apply);
     }
 
@@ -106,7 +106,7 @@ public class SharedTopicAdminTest {
     }
 
     private void verifyTopicAdminCreatesAndCloses(int count, Duration expectedDuration) {
-        verify(factory, times(count)).apply(any(Map.class));
+        verify(factory, times(count)).apply(anyMap());
         verify(mockTopicAdmin, times(count)).close(eq(expectedDuration));
     }
 }
