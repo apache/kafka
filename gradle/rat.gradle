@@ -19,6 +19,8 @@
 
 import org.gradle.api.internal.project.IsolatedAntBuilder
 
+import java.nio.charset.StandardCharsets
+
 apply plugin: RatPlugin
 
 class RatTask extends DefaultTask {
@@ -83,7 +85,7 @@ class RatTask extends DefaultTask {
     }
     def origEncoding = System.getProperty("file.encoding")
     try {
-      System.setProperty("file.encoding", "UTF-8") //affects the output of the ant rat task
+      System.setProperty("file.encoding", StandardCharsets.UTF_8.name()) //affects the output of the ant rat task
       generateXmlReport(reportDir)
       printUnknownFiles()
       generateHtmlReport()

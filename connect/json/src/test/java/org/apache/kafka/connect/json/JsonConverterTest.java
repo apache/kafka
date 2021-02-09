@@ -36,7 +36,6 @@ import org.junit.jupiter.api.Test;
 
 import java.io.File;
 import java.io.IOException;
-import java.io.UnsupportedEncodingException;
 import java.math.BigDecimal;
 import java.math.BigInteger;
 import java.net.URISyntaxException;
@@ -128,8 +127,8 @@ public class JsonConverterTest {
 
 
     @Test
-    public void bytesToConnect() throws UnsupportedEncodingException {
-        ByteBuffer reference = ByteBuffer.wrap("test-string".getBytes("UTF-8"));
+    public void bytesToConnect() {
+        ByteBuffer reference = ByteBuffer.wrap(Utils.utf8("test-string"));
         String msg = "{ \"schema\": { \"type\": \"bytes\" }, \"payload\": \"dGVzdC1zdHJpbmc=\" }";
         SchemaAndValue schemaAndValue = converter.toConnectData(TOPIC, msg.getBytes());
         ByteBuffer converted = ByteBuffer.wrap((byte[]) schemaAndValue.value());

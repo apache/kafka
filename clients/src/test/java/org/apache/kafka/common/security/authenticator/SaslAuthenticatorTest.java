@@ -2096,7 +2096,7 @@ public class SaslAuthenticatorTest {
     private void authenticateUsingSaslPlainAndCheckConnection(String node, boolean enableSaslAuthenticateHeader) throws Exception {
         // Authenticate using PLAIN username/password
         String authString = "\u0000" + TestJaasConfig.USERNAME + "\u0000" + TestJaasConfig.PASSWORD;
-        ByteBuffer authBuf = ByteBuffer.wrap(authString.getBytes("UTF-8"));
+        ByteBuffer authBuf = ByteBuffer.wrap(Utils.utf8(authString));
         if (enableSaslAuthenticateHeader) {
             SaslAuthenticateRequestData data = new SaslAuthenticateRequestData().setAuthBytes(authBuf.array());
             SaslAuthenticateRequest request = new SaslAuthenticateRequest.Builder(data).build();
