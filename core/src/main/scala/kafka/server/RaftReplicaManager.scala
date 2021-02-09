@@ -148,7 +148,6 @@ class RaftReplicaManager(config: KafkaConfig,
         deferredPartitionsIterator.foreach { deferredPartition =>
           val partition = deferredPartition.partition
           val state = cachedState(metadataImage, partition)
-          sanityCheckStateWasButIsNoLongerDeferred(state.toTopicPartition, state)
           if (state.leaderId == localBrokerId) {
             leaderPartitionStates.put(partition, state)
           } else {
@@ -160,13 +159,11 @@ class RaftReplicaManager(config: KafkaConfig,
         }
 
         val partitionsMadeLeader = if (leaderPartitionStates.nonEmpty)
-          delegate.makeLeaders(partitionsAlreadyExisting, leaderPartitionStates, highWatermarkCheckpoints,
-            MetadataPartition.OffsetNeverDeferred)
+          delegate.makeLeaders(partitionsAlreadyExisting, leaderPartitionStates, highWatermarkCheckpoints, None)
         else
           Set.empty[Partition]
         val partitionsMadeFollower = if (followerPartitionStates.nonEmpty)
-          delegate.makeFollowers(partitionsAlreadyExisting, brokers, followerPartitionStates, highWatermarkCheckpoints,
-            MetadataPartition.OffsetNeverDeferred)
+          delegate.makeFollowers(partitionsAlreadyExisting, brokers, followerPartitionStates, highWatermarkCheckpoints, None)
         else
           Set.empty[Partition]
 
@@ -205,10 +202,9 @@ class RaftReplicaManager(config: KafkaConfig,
             val partition = metadata.partition
             val state = cachedState(metadataImage, partition)
             val topicPartition = partition.topicPartition
-            val mostRecentMetadataOffset = state.largestDeferredOffsetEverSeen
             val leader = state.leaderId == localBrokerId
             val leaderOrFollower = if (leader) "leader" else "follower"
-            val partitionLogMsgPrefix = s"Apply deferred $leaderOrFollower partition $topicPartition last seen in metadata batch $mostRecentMetadataOffset"
+            val partitionLogMsgPrefix = s"Apply deferred $leaderOrFollower partition $topicPartition"
             stateChangeLogger.error(s"$partitionLogMsgPrefix: error while applying deferred metadata.", e)
           }
           stateChangeLogger.info(s"Applied ${partitionsMadeLeader.size + partitionsMadeFollower.size} deferred partitions prior to the error: " +
@@ -256,7 +252,6 @@ class RaftReplicaManager(config: KafkaConfig,
         val partitionChangesToBeDeferred = mutable.HashMap[Partition, Boolean]()
         builder.localChanged().foreach { currentState =>
           val topicPartition = currentState.toTopicPartition
-          sanityCheckStateDeferredAtOffset(topicPartition, currentState, metadataOffset)
           val (partition, priorDeferredMetadata) = getPartition(topicPartition) match {
             case HostedPartition.Offline =>
               stateChangeLogger.warn(s"Ignoring handlePartitionChanges at $metadataOffset " +
@@ -289,7 +284,6 @@ class RaftReplicaManager(config: KafkaConfig,
         val partitionsToBeFollower = mutable.HashMap[Partition, MetadataPartition]()
         builder.localChanged().foreach { currentState =>
           val topicPartition = currentState.toTopicPartition
-          sanityCheckStateNotDeferred(topicPartition, currentState)
           val partition = getPartition(topicPartition) match {
             case HostedPartition.Offline =>
               stateChangeLogger.warn(s"Ignoring handlePartitionChanges at $metadataOffset " +
@@ -325,12 +319,12 @@ class RaftReplicaManager(config: KafkaConfig,
         val highWatermarkCheckpoints = new LazyOffsetCheckpoints(this.highWatermarkCheckpoints)
         val partitionsBecomeLeader = if (partitionsToBeLeader.nonEmpty)
           delegate.makeLeaders(changedPartitionsPreviouslyExisting, partitionsToBeLeader, highWatermarkCheckpoints,
-            metadataOffset)
+            Some(metadataOffset))
         else
           Set.empty[Partition]
         val partitionsBecomeFollower = if (partitionsToBeFollower.nonEmpty)
           delegate.makeFollowers(changedPartitionsPreviouslyExisting, nextBrokers, partitionsToBeFollower, highWatermarkCheckpoints,
-            metadataOffset)
+            Some(metadataOffset))
         else
           Set.empty[Partition]
         updateLeaderAndFollowerMetrics(partitionsBecomeFollower.map(_.topic).toSet)
@@ -399,34 +393,5 @@ class RaftReplicaManager(config: KafkaConfig,
   private def cachedState(metadataImage: MetadataImage, partition: Partition): MetadataPartition = {
     metadataImage.partitions.topicPartition(partition.topic, partition.partitionId).getOrElse(
       throw new IllegalStateException(s"Partition has metadata changes but does not exist in the metadata cache: ${partition.topicPartition}"))
-  }
-
-  private def sanityCheckStateNotDeferred(topicPartition: TopicPartition, state: MetadataPartition): Unit = {
-    if (state.isCurrentlyDeferringChanges) {
-      throw new IllegalStateException("We are not deferring partition changes but the metadata cache says " +
-        s"the partition is deferring changes: $topicPartition")
-    }
-  }
-
-  private def sanityCheckStateDeferredAtOffset(topicPartition: TopicPartition, state: MetadataPartition, currentMetadataOffset: Long): Unit = {
-    if (!state.isCurrentlyDeferringChanges) {
-      throw new IllegalStateException("We are deferring partition changes but the metadata cache says " +
-        s"the partition is not deferring changes: $topicPartition")
-    }
-    if (state.largestDeferredOffsetEverSeen != currentMetadataOffset) {
-      throw new IllegalStateException(s"We are deferring partition changes at offset $currentMetadataOffset but the metadata cache says " +
-        s"the most recent offset at which there was a deferral was offset ${state.largestDeferredOffsetEverSeen}: $topicPartition")
-    }
-  }
-
-  private def sanityCheckStateWasButIsNoLongerDeferred(topicPartition: TopicPartition, state: MetadataPartition): Unit = {
-    if (state.isCurrentlyDeferringChanges) {
-      throw new IllegalStateException("We are applying deferred partition changes but the metadata cache says " +
-        s"the partition is still deferring changes: $topicPartition")
-    }
-    if (state.largestDeferredOffsetEverSeen <= 0) {
-      throw new IllegalStateException("We are applying deferred partition changes but the metadata cache says " +
-        s"the partition has never seen a deferred offset: $topicPartition")
-    }
   }
 }

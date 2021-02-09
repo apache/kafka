@@ -20,7 +20,6 @@ package kafka.server.metadata
 import java.util
 import java.util.Collections
 
-import kafka.server.metadata.MetadataPartition.OffsetNeverDeferred
 import org.apache.kafka.common.message.LeaderAndIsrRequestData
 import org.apache.kafka.common.message.LeaderAndIsrRequestData.LeaderAndIsrPartitionState
 import org.apache.kafka.common.message.UpdateMetadataRequestData.UpdateMetadataPartitionState
@@ -31,8 +30,7 @@ import scala.jdk.CollectionConverters._
 
 
 object MetadataPartition {
-  val OffsetNeverDeferred = 0L // must not be a valid offset we could see (i.e. must not be positive)
-  def apply(name: String, record: PartitionRecord, deferredAtOffset: Option[Long]): MetadataPartition = {
+  def apply(name: String, record: PartitionRecord): MetadataPartition = {
     MetadataPartition(name,
       record.partitionId(),
       record.leader(),
@@ -41,30 +39,11 @@ object MetadataPartition {
       record.isr(),
       Collections.emptyList(), // TODO KAFKA-12285 handle offline replicas
       Collections.emptyList(),
-      Collections.emptyList(),
-      largestDeferredOffsetEverSeen = deferredAtOffset.getOrElse(OffsetNeverDeferred),
-      isCurrentlyDeferringChanges = deferredAtOffset.isDefined)
-  }
-
-  // mark as no longer deferred
-  def apply(prevPartition: MetadataPartition): MetadataPartition = {
-    new MetadataPartition(prevPartition.topicName,
-      prevPartition.partitionIndex,
-      prevPartition.leaderId,
-      prevPartition.leaderEpoch,
-      prevPartition.replicas,
-      prevPartition.isr,
-      prevPartition.offlineReplicas,
-      prevPartition.addingReplicas,
-      prevPartition.removingReplicas,
-      largestDeferredOffsetEverSeen = prevPartition.largestDeferredOffsetEverSeen,
-      isCurrentlyDeferringChanges = false
-    )
+      Collections.emptyList())
   }
 
   def apply(prevPartition: Option[MetadataPartition],
-            partition: UpdateMetadataPartitionState,
-            deferredAtOffset: Option[Long]): MetadataPartition = {
+            partition: UpdateMetadataPartitionState): MetadataPartition = {
     new MetadataPartition(partition.topicName(),
       partition.partitionIndex(),
       partition.leader(),
@@ -73,9 +52,7 @@ object MetadataPartition {
       partition.isr(),
       partition.offlineReplicas(),
       prevPartition.flatMap(p => Some(p.addingReplicas)).getOrElse(Collections.emptyList()),
-      prevPartition.flatMap(p => Some(p.removingReplicas)).getOrElse(Collections.emptyList()),
-      largestDeferredOffsetEverSeen = deferredAtOffset.getOrElse(prevPartition.flatMap(p => Some(p.largestDeferredOffsetEverSeen)).getOrElse(OffsetNeverDeferred)),
-      isCurrentlyDeferringChanges = deferredAtOffset.isDefined
+      prevPartition.flatMap(p => Some(p.removingReplicas)).getOrElse(Collections.emptyList())
     )
   }
 }
@@ -88,9 +65,7 @@ case class MetadataPartition(topicName: String,
                              isr: util.List[Integer],
                              offlineReplicas: util.List[Integer],
                              addingReplicas: util.List[Integer],
-                             removingReplicas: util.List[Integer],
-                             largestDeferredOffsetEverSeen: Long = OffsetNeverDeferred,
-                             isCurrentlyDeferringChanges: Boolean = false) {
+                             removingReplicas: util.List[Integer]) {
   def toTopicPartition: TopicPartition = new TopicPartition(topicName, partitionIndex)
 
   def toLeaderAndIsrPartitionState(isNew: Boolean): LeaderAndIsrRequestData.LeaderAndIsrPartitionState = {

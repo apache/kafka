@@ -72,14 +72,14 @@ class RaftReplicaChangeDelegate(helper: RaftReplicaChangeDelegateHelper) {
   def makeLeaders(prevPartitionsAlreadyExisting: Set[MetadataPartition],
                   partitionStates: Map[Partition, MetadataPartition],
                   highWatermarkCheckpoints: OffsetCheckpoints,
-                  metadataOffset: Long): Set[Partition] = {
+                  metadataOffset: Option[Long]): Set[Partition] = {
     val partitionsMadeLeaders = mutable.Set[Partition]()
     val traceLoggingEnabled = helper.stateChangeLogger.isTraceEnabled
-    val deferredBatches = metadataOffset == MetadataPartition.OffsetNeverDeferred
+    val deferredBatches = metadataOffset.isEmpty
     val topLevelLogPrefix = if (deferredBatches)
       "Metadata batch <multiple deferred>"
     else
-      s"Metadata batch $metadataOffset"
+      s"Metadata batch ${metadataOffset.get}"
     try {
       // First stop fetchers for all the partitions
       helper.replicaFetcherManager.removeFetcherForPartitions(partitionStates.keySet.map(_.topicPartition))
@@ -88,9 +88,9 @@ class RaftReplicaChangeDelegate(helper: RaftReplicaChangeDelegateHelper) {
       partitionStates.forKeyValue { (partition, state) =>
         val topicPartition = partition.topicPartition
         val partitionLogMsgPrefix = if (deferredBatches)
-          s"Apply deferred leader partition $topicPartition last seen in metadata batch ${state.largestDeferredOffsetEverSeen}"
+          s"Apply deferred leader partition $topicPartition"
         else
-          s"Metadata batch $metadataOffset $topicPartition"
+          s"Metadata batch ${metadataOffset.get} $topicPartition"
         try {
           val isrState = state.toLeaderAndIsrPartitionState(
             !prevPartitionsAlreadyExisting(state))
@@ -125,20 +125,20 @@ class RaftReplicaChangeDelegate(helper: RaftReplicaChangeDelegateHelper) {
                     currentBrokers: MetadataBrokers,
                     partitionStates: Map[Partition, MetadataPartition],
                     highWatermarkCheckpoints: OffsetCheckpoints,
-                    metadataOffset: Long): Set[Partition] = {
+                    metadataOffset: Option[Long]): Set[Partition] = {
     val traceLoggingEnabled = helper.stateChangeLogger.isTraceEnabled
-    val deferredBatches = metadataOffset == MetadataPartition.OffsetNeverDeferred
+    val deferredBatches = metadataOffset.isEmpty
     val topLevelLogPrefix = if (deferredBatches)
       "Metadata batch <multiple deferred>"
     else
-      s"Metadata batch $metadataOffset"
+      s"Metadata batch ${metadataOffset.get}"
     if (traceLoggingEnabled) {
       partitionStates.forKeyValue { (partition, state) =>
         val topicPartition = partition.topicPartition
         val partitionLogMsgPrefix = if (deferredBatches)
-          s"Apply deferred follower partition $topicPartition last seen in metadata batch ${state.largestDeferredOffsetEverSeen}"
+          s"Apply deferred follower partition $topicPartition"
         else
-          s"Metadata batch $metadataOffset $topicPartition"
+          s"Metadata batch ${metadataOffset.get} $topicPartition"
         helper.stateChangeLogger.trace(s"$partitionLogMsgPrefix: starting the " +
           s"become-follower transition with leader ${state.leaderId}")
       }
@@ -152,9 +152,9 @@ class RaftReplicaChangeDelegate(helper: RaftReplicaChangeDelegateHelper) {
       partitionStates.forKeyValue { (partition, state) =>
         val topicPartition = partition.topicPartition
         val partitionLogMsgPrefix = if (deferredBatches)
-          s"Apply deferred follower partition $topicPartition last seen in metadata batch ${state.largestDeferredOffsetEverSeen}"
+          s"Apply deferred follower partition $topicPartition"
         else
-          s"Metadata batch $metadataOffset $topicPartition"
+          s"Metadata batch ${metadataOffset.get} $topicPartition"
         try {
           val isNew = !prevPartitionsAlreadyExisting(state)
           if (!acceptableLeaderBrokerIds.contains(state.leaderId)) {
@@ -202,11 +202,10 @@ class RaftReplicaChangeDelegate(helper: RaftReplicaChangeDelegateHelper) {
           if (traceLoggingEnabled) {
             partitionsMadeFollower.foreach { partition =>
               val topicPartition = partition.topicPartition
-              val state = partitionStates(partition)
               val partitionLogMsgPrefix = if (deferredBatches)
-                s"Apply deferred follower partition $topicPartition last seen in metadata batch ${state.largestDeferredOffsetEverSeen}"
+                s"Apply deferred follower partition $topicPartition"
               else
-                s"Metadata batch $metadataOffset $topicPartition"
+                s"Metadata batch ${metadataOffset.get} $topicPartition"
               helper.stateChangeLogger.trace(s"$partitionLogMsgPrefix: skipped the " +
                 s"adding-fetcher step of the become-follower state for " +
                 s"$topicPartition since we are shutting down.")
@@ -236,9 +235,9 @@ class RaftReplicaChangeDelegate(helper: RaftReplicaChangeDelegateHelper) {
         val topicPartition = partition.topicPartition
         val state = partitionStates(partition)
         val partitionLogMsgPrefix = if (deferredBatches)
-          s"Apply deferred follower partition $topicPartition last seen in metadata batch ${state.largestDeferredOffsetEverSeen}"
+          s"Apply deferred follower partition $topicPartition"
         else
-          s"Metadata batch $metadataOffset $topicPartition"
+          s"Metadata batch ${metadataOffset.get} $topicPartition"
         helper.stateChangeLogger.trace(s"$partitionLogMsgPrefix: completed become-follower " +
           s"transition for partition $topicPartition with new leader ${state.leaderId}")
       }
