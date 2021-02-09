@@ -35,6 +35,7 @@ import org.apache.kafka.connect.util.ConnectUtils;
 import org.apache.kafka.connect.util.ConnectorTaskId;
 import org.apache.kafka.connect.util.KafkaBasedLog;
 import org.apache.kafka.connect.util.TestFuture;
+import org.apache.kafka.connect.util.TopicAdmin;
 import org.easymock.Capture;
 import org.easymock.EasyMock;
 import org.easymock.IAnswer;
@@ -57,6 +58,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
+import java.util.function.Supplier;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
@@ -142,7 +144,7 @@ public class KafkaConfigBackingStoreTest {
     private Capture<String> capturedTopic = EasyMock.newCapture();
     private Capture<Map<String, Object>> capturedProducerProps = EasyMock.newCapture();
     private Capture<Map<String, Object>> capturedConsumerProps = EasyMock.newCapture();
-    private Capture<Map<String, Object>> capturedAdminProps = EasyMock.newCapture();
+    private Capture<Supplier<TopicAdmin>> capturedAdminSupplier = EasyMock.newCapture();
     private Capture<NewTopic> capturedNewTopic = EasyMock.newCapture();
     private Capture<Callback<ConsumerRecord<String, byte[]>>> capturedConsumedCallback = EasyMock.newCapture();
 
@@ -895,7 +897,7 @@ public class KafkaConfigBackingStoreTest {
         PowerMock.expectPrivate(configStorage, "createKafkaBasedLog",
                 EasyMock.capture(capturedTopic), EasyMock.capture(capturedProducerProps),
                 EasyMock.capture(capturedConsumerProps), EasyMock.capture(capturedConsumedCallback),
-                EasyMock.capture(capturedNewTopic), EasyMock.capture(capturedAdminProps))
+                EasyMock.capture(capturedNewTopic), EasyMock.capture(capturedAdminSupplier))
                 .andReturn(storeLog);
     }
 
