@@ -131,7 +131,7 @@ public class WorkerConfig extends AbstractConfig {
     private static final String TASK_SHUTDOWN_GRACEFUL_TIMEOUT_MS_DOC =
             "Amount of time to wait for tasks to shutdown gracefully. This is the total amount of time,"
                     + " not per task. All task have shutdown triggered, then they are waited on sequentially.";
-    private static final String TASK_SHUTDOWN_GRACEFUL_TIMEOUT_MS_DEFAULT = "3000";
+    private static final String TASK_SHUTDOWN_GRACEFUL_TIMEOUT_MS_DEFAULT = "30000";
 
     public static final String OFFSET_COMMIT_INTERVAL_MS_CONFIG = "offset.flush.interval.ms";
     private static final String OFFSET_COMMIT_INTERVAL_MS_DOC
