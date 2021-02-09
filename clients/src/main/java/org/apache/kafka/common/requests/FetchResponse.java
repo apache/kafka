@@ -302,23 +302,27 @@ public class FetchResponse<T extends BaseRecords> extends AbstractResponse {
     }
 
     /**
-     * From version 3 or later, the 'interesting' entries in `responseData` should be in the same order as the entries in
-     * `FetchRequest.fetchData`.
+     * From version 3 or later, the authorized and existing entries in `FetchRequest.fetchData` should be in the same order in `responseData`.
+     * resolvedPartitionData and unresolvedPartitionData should be disjoint sets.
+     * Thus, a partition in the response will never appear in both resolvedPartitionData and unresolvedPartitionData.
      *
-     * @param error             The top-level error code.
-     * @param responseData      The fetched data grouped by partition.
-     * @param throttleTimeMs    The time in milliseconds that the response was throttled
-     * @param sessionId         The fetch session id.
+     * @param error                      The top-level error code.
+     * @param resolvedPartitionData      The fetched data with resolved topic IDs grouped by partition.
+     * @param unresolvedPartitionData    The fetched data with unresolved topic IDS
+     * @param topicIds                   The map from topic name to topic IDs
+     * @param throttleTimeMs             The time in milliseconds that the response was throttled
+     * @param sessionId                  The fetch session id.
      */
     public FetchResponse(Errors error,
-                         LinkedHashMap<TopicPartition, PartitionData<T>> responseData,
-                         List<TopicIdError> topicIdErrors,
+                         LinkedHashMap<TopicPartition, PartitionData<T>> resolvedPartitionData,
+                         List<TopicIdError> unresolvedPartitionData,
                          Map<String, Uuid> topicIds,
                          int throttleTimeMs,
                          int sessionId) {
         super(ApiKeys.FETCH);
-        this.data = toMessage(throttleTimeMs, error, responseData.entrySet().iterator(), topicIdErrors, topicIds, sessionId);
-        this.responseDataMap = responseData;
+        this.data = toMessage(throttleTimeMs, error, resolvedPartitionData.entrySet().iterator(), unresolvedPartitionData,
+                topicIds, sessionId);
+        this.responseDataMap = resolvedPartitionData;
     }
 
     public FetchResponse(FetchResponseData fetchResponseData) {
@@ -395,10 +399,10 @@ public class FetchResponse<T extends BaseRecords> extends AbstractResponse {
 
     @SuppressWarnings("unchecked")
     private static <T extends BaseRecords> LinkedHashMap<TopicPartition, PartitionData<T>> toResponseDataMap(
-            FetchResponseData message, Map<Uuid, String> topicNames) {
+            FetchResponseData message, Map<Uuid, String> topicIdToNameMap) {
         LinkedHashMap<TopicPartition, PartitionData<T>> responseMap = new LinkedHashMap<>();
         message.responses().forEach(topicResponse -> {
-            String name = topicNames.get(topicResponse.topicId());
+            String name = topicIdToNameMap.get(topicResponse.topicId());
             if (name != null) {
                 topicResponse.partitionResponses().forEach(partition ->
                         responseMap.put(new TopicPartition(name, partition.partition()),

@@ -266,9 +266,9 @@ public class FetchSessionHandler {
         /**
          * Mark that we want data from this partition in the upcoming fetch.
          */
-        public void add(TopicPartition topicPartition, Uuid id, PartitionData data) {
+        public void add(TopicPartition topicPartition, Uuid topicId, PartitionData data) {
             if (next.put(topicPartition, data) == null) {
-                addPartitionsAndIds(partitionsPerTopic, topicPartition, id, topicIds, topicNames);
+                addPartitionsAndIds(partitionsPerTopic, topicPartition, topicId, topicIds, topicNames);
             }
         }
 

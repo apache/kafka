@@ -89,7 +89,7 @@ class ReplicaAlterLogDirsThread(name: String,
       }
     }
 
-    val fetchData = request.fetchData(replicaMgr.metadataCache.getTopicNames().asJava)
+    val fetchData = request.fetchData(replicaMgr.metadataCache.topicIdsToNames().asJava)
 
     replicaMgr.fetchMessages(
       0L, // timeout is 0 so that the callback will be executed immediately
@@ -257,7 +257,7 @@ class ReplicaAlterLogDirsThread(name: String,
     val requestMap = new util.LinkedHashMap[TopicPartition, FetchRequest.PartitionData]
     val partitionsWithError = mutable.Set[TopicPartition]()
     val topics = new util.HashSet[String]()
-    val topicIds = replicaMgr.metadataCache.getTopicIds().asJava
+    val topicIds = replicaMgr.metadataCache.topicNamesToIds().asJava
     val topicIdsInRequest = new util.HashSet[String]()
 
     try {

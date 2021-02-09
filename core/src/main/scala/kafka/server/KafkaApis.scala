@@ -662,8 +662,8 @@ class KafkaApis(val requestChannel: RequestChannel,
     val versionId = request.header.apiVersion
     val clientId = request.header.clientId
     val fetchRequest = request.body[FetchRequest]
-    val topicNames = if (fetchRequest.version() >= 13) metadataCache.getTopicNames().asJava else Collections.emptyMap[Uuid, String]()
-    val topicIds = if (fetchRequest.version() >= 13) metadataCache.getTopicIds().asJava else Collections.emptyMap[String, Uuid]()
+    val topicNames = if (fetchRequest.version() >= 13) metadataCache.topicIdsToNames().asJava else Collections.emptyMap[Uuid, String]()
+    val topicIds = if (fetchRequest.version() >= 13) metadataCache.topicNamesToIds().asJava else Collections.emptyMap[String, Uuid]()
 
     val fetchContext = fetchManager.newContext(
       fetchRequest,
@@ -854,7 +854,7 @@ class KafkaApis(val requestChannel: RequestChannel,
       if (fetchRequest.isFromFollower) {
         // We've already evaluated against the quota and are good to go. Just need to record it now.
         unconvertedFetchResponse = fetchContext.updateAndGenerateResponseData(partitions)
-        val responseSize = KafkaApis.sizeOfThrottledPartitions(versionId, unconvertedFetchResponse, quotas.leader, fetchContext.getIdErrors().asScala.toList, topicNames, topicIds)
+        val responseSize = KafkaApis.sizeOfThrottledPartitions(versionId, unconvertedFetchResponse, quotas.leader, fetchContext.getIdErrors().asScala.toList, topicIds)
         quotas.leader.record(responseSize)
         trace(s"Sending Fetch response with partitions.size=${unconvertedFetchResponse.resolvedResponseData.size}, " +
           s"metadata=${unconvertedFetchResponse.sessionId}")
@@ -3426,7 +3426,6 @@ object KafkaApis {
                                                 unconvertedResponse: FetchResponse[Records],
                                                 quota: ReplicationQuotaManager,
                                                 topicIdErrors: List[FetchResponse.TopicIdError],
-                                                topicNames: util.Map[Uuid, String],
                                                 topicIds: util.Map[String, Uuid]): Int = {
     FetchResponse.sizeOf(versionId, unconvertedResponse.resolvedResponseData.entrySet
       .iterator.asScala.filter(element => quota.isThrottled(element.getKey)).asJava, topicIdErrors.asJava, topicIds)

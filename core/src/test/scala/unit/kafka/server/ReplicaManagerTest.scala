@@ -1542,9 +1542,9 @@ class ReplicaManagerTest {
       )
       .anyTimes()
     EasyMock
-      .expect(metadataCache.getTopicIds()).andStubReturn(topicIds)
+      .expect(metadataCache.topicNamesToIds()).andStubReturn(topicIds)
     EasyMock
-      .expect(metadataCache.getTopicNames()).andStubReturn(topicNames)
+      .expect(metadataCache.topicIdsToNames()).andStubReturn(topicNames)
     EasyMock.replay(metadataCache)
 
     val mockProducePurgatory = new DelayedOperationPurgatory[DelayedProduce](
@@ -1727,8 +1727,8 @@ class ReplicaManagerTest {
 
     val metadataCache: MetadataCache = Mockito.mock(classOf[MetadataCache])
     Mockito.when(metadataCache.getAliveBrokers).thenReturn(aliveBrokers)
-    Mockito.when(metadataCache.getTopicIds()).thenReturn(topicIds)
-    Mockito.when(metadataCache.getTopicNames()).thenReturn(topicNames)
+    Mockito.when(metadataCache.topicNamesToIds()).thenReturn(topicIds)
+    Mockito.when(metadataCache.topicIdsToNames()).thenReturn(topicNames)
 
     aliveBrokerIds.foreach { brokerId =>
       Mockito.when(metadataCache.getAliveBroker(brokerId))

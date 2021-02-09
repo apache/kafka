@@ -40,7 +40,7 @@ object FetchSession {
   type CACHE_MAP = ImplicitLinkedHashCollection[CachedPartition]
   type UNRESOLVED_CACHE = util.HashSet[CachedUnresolvedPartition]
   type RESP_MAP_ITER = util.Iterator[util.Map.Entry[TopicPartition, FetchResponse.PartitionData[Records]]]
-  type TOPIC_ID_MAP = util.Map[String,Uuid]
+  type TOPIC_ID_MAP = util.Map[String, Uuid]
   type ID_ERRORS = util.List[FetchResponse.TopicIdError]
 
   val NUM_INCREMENTAL_FETCH_SESSISONS = "NumIncrementalFetchSessions"
@@ -232,15 +232,6 @@ class CachedUnresolvedPartition(val topicId: Uuid,
 
   def reqData = new FetchRequest.PartitionData(fetchOffset, fetcherLogStartOffset, maxBytes, leaderEpoch, lastFetchedEpoch)
 
-  def updateRequestParams(reqData: FetchRequest.PartitionData): Unit = {
-    // Update our cached request parameters.
-    maxBytes = reqData.maxBytes
-    fetchOffset = reqData.fetchOffset
-    fetcherLogStartOffset = reqData.logStartOffset
-    leaderEpoch = reqData.currentLeaderEpoch
-    lastFetchedEpoch = reqData.lastFetchedEpoch
-  }
-
   override def hashCode: Int = (31 * partition) + topicId.hashCode
 
   def canEqual(that: Any) = that.isInstanceOf[CachedUnresolvedPartition]
@@ -327,7 +318,7 @@ class FetchSession(val id: Int,
     val updated = new TL
     val removed = new TL
 
-    // Only make changes to topic IDs if we have a new request version.
+    // Only make changes to unresolvedPartitions if we have a new request version.
     // If we receive an old request version, ignore all topic ID code, keep IDs that are there.
     if (version >= 13) {
       val error = if (topicNames.isEmpty) Errors.UNSUPPORTED_VERSION else Errors.UNKNOWN_TOPIC_ID
@@ -339,10 +330,9 @@ class FetchSession(val id: Int,
         val forgetPartitions = toForgetAndIds.toForgetIds.get(partition.topicId)
         if (forgetPartitions != null && forgetPartitions.contains(partition.partition))
           unresolvedIterator.remove()
-
-        // Try to resolve ID, if there is a name for the given ID, place a CachedPartition in partitionMap
-        // and remove from unresolvedPartitions.
         else if (topicNames.get(partition.topicId) != null) {
+          // Try to resolve ID, if there is a name for the given ID, place a CachedPartition in partitionMap
+          // and remove from unresolvedPartitions.
           val newTp = new TopicPartition(topicNames.get(partition.topicId), partition.partition)
           val newCp = new CachedPartition(newTp, partition.topicId, partition.reqData)
           partitionMap.add(newCp)
@@ -508,7 +498,7 @@ class FullFetchContext(private val time: Time,
   }
 
   override def updateAndGenerateResponseData(updates: FetchSession.RESP_MAP): FetchResponse[Records] = {
-    def createNewSession: FetchSession.CACHE_MAP = {
+    def generateResolvedPartitions: FetchSession.CACHE_MAP = {
       val cachedPartitions = new FetchSession.CACHE_MAP(updates.size)
       updates.forEach { (part, respData) =>
         val reqData = fetchDataAndError.fetchData.get(part)
@@ -516,7 +506,7 @@ class FullFetchContext(private val time: Time,
       }
       cachedPartitions
     }
-    def createNewSessionIdErrors: FetchSession.UNRESOLVED_CACHE = {
+    def generateUnresolvedPartitions: FetchSession.UNRESOLVED_CACHE = {
       val unresolvedPartitions = new FetchSession.UNRESOLVED_CACHE()
       fetchDataAndError.unresolvedPartitions.forEach { idAndData =>
         idAndData.partitionData.forEach { (part, reqData) =>
@@ -526,7 +516,7 @@ class FullFetchContext(private val time: Time,
       unresolvedPartitions
     }
     val responseSessionId = cache.maybeCreateSession(time.milliseconds(), isFromFollower,
-        updates.size + fetchDataAndError.unresolvedPartitions().size(), () => createNewSession, () => createNewSessionIdErrors)
+        updates.size + fetchDataAndError.unresolvedPartitions().size(), () => generateResolvedPartitions, () => generateUnresolvedPartitions)
     debug(s"Full fetch context with session id $responseSessionId returning " +
       s"${partitionsToLogString(updates.keySet)}")
     new FetchResponse(Errors.NONE, updates, topicIdErrors, topicIds, 0, responseSessionId)

@@ -1915,7 +1915,7 @@ class KafkaApisTest {
       Optional.empty())).asJava
     val fetchMetadata = new JFetchMetadata(0, 0)
     val fetchContext = new FullFetchContext(time, new FetchSessionCache(1000, 100),
-      fetchMetadata, new FetchRequest.FetchDataAndError(fetchData, emptyUnresolvedPart, emptyIdErrors),  metadataCache.getTopicIds().asJava, false)
+      fetchMetadata, new FetchRequest.FetchDataAndError(fetchData, emptyUnresolvedPart, emptyIdErrors),  metadataCache.topicNamesToIds().asJava, false)
     expect(fetchManager.newContext(anyObject[FetchRequest],
       anyObject[util.Map[Uuid, String]],
       anyObject[util.Map[String, Uuid]])).andReturn(fetchContext)
@@ -1927,14 +1927,14 @@ class KafkaApisTest {
     EasyMock.replay(replicaManager, clientQuotaManager, clientRequestQuotaManager, requestChannel, fetchManager)
 
     val fetchRequest = new FetchRequest.Builder(9, 9, -1, 100, 0, fetchData,
-      metadataCache.getTopicIds().asJava)
+      metadataCache.topicNamesToIds().asJava)
       .build()
     val request = buildRequest(fetchRequest)
     createKafkaApis().handleFetchRequest(request)
 
     val response = readResponse(fetchRequest, capturedResponse)
       .asInstanceOf[FetchResponse[BaseRecords]]
-    val responseData = response.responseData(metadataCache.getTopicNames().asJava)
+    val responseData = response.responseData(metadataCache.topicIdsToNames().asJava)
     assertTrue(responseData.containsKey(tp))
 
     val partitionData = responseData.get(tp)
@@ -2476,7 +2476,7 @@ class KafkaApisTest {
     val fetchData = Collections.singletonMap(tp0, new FetchRequest.PartitionData(0, 0, Int.MaxValue, Optional.of(leaderEpoch)))
     val fetchFromFollower = buildRequest(new FetchRequest.Builder(
       ApiKeys.FETCH.oldestVersion(), ApiKeys.FETCH.latestVersion(), 1, 1000, 0, fetchData,
-        metadataCache.getTopicIds().asJava).build())
+        metadataCache.topicNamesToIds().asJava).build())
 
     val records = MemoryRecords.withRecords(CompressionType.NONE,
       new SimpleRecord(1000, "foo".getBytes(StandardCharsets.UTF_8)))
@@ -2494,7 +2494,7 @@ class KafkaApisTest {
 
     val fetchMetadata = new JFetchMetadata(0, 0)
     val fetchContext = new FullFetchContext(time, new FetchSessionCache(1000, 100),
-      fetchMetadata, new FetchRequest.FetchDataAndError(fetchData, emptyUnresolvedPart, emptyIdErrors),  metadataCache.getTopicIds().asJava, true)
+      fetchMetadata, new FetchRequest.FetchDataAndError(fetchData, emptyUnresolvedPart, emptyIdErrors),  metadataCache.topicNamesToIds().asJava, true)
     expect(fetchManager.newContext(anyObject[FetchRequest],
       anyObject[util.Map[Uuid, String]],
       anyObject[util.Map[String, Uuid]])).andReturn(fetchContext)
@@ -3103,6 +3103,6 @@ class KafkaApisTest {
       .thenAnswer(invocation => throttledPartition == invocation.getArgument(0).asInstanceOf[TopicPartition])
 
     assertEquals(expectedSize, KafkaApis.sizeOfThrottledPartitions(FetchResponseData.HIGHEST_SUPPORTED_VERSION, response, quota,
-      topicIdErrors, topicNames, topicIds))
+      topicIdErrors, topicIds))
   }
 }

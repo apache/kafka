@@ -189,11 +189,11 @@ class MetadataCache(brokerId: Int) extends Logging {
     }.toSet
   }
 
-  def getTopicIds(): Map[String, Uuid] = {
+  def topicNamesToIds(): Map[String, Uuid] = {
     metadataSnapshot.topicIds
   }
 
-  def getTopicNames(): Map[Uuid, String] = {
+  def topicIdsToNames(): Map[Uuid, String] = {
     metadataSnapshot.topicNames
   }
 
