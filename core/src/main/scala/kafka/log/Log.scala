@@ -242,6 +242,12 @@ case object SnapshotGenerated extends LogStartOffsetIncrementReason {
  * @param producerIdExpirationCheckIntervalMs How often to check for producer ids which need to be expired
  * @param hadCleanShutdown boolean flag to indicate if the Log had a clean/graceful shutdown last time. true means
  *                         clean shutdown whereas false means a crash.
+ * @param keepPartitionMetadataFile boolean flag to indicate whether the partition.metadata file should be kept in the
+ *                                  log directory. A partition.metadata file is only created when the controller's
+ *                                  inter-broker protocol version is at least 2.8. This file will persist the topic ID on
+ *                                  the broker. If inter-broker protocol is downgraded below 2.8, a topic ID may be lost
+ *                                  and a new ID generated upon re-upgrade. If the inter-broker protocol version is below
+ *                                  2.8, partition.metadata will be deleted to avoid ID conflicts upon re-upgrade.
  */
 @threadsafe
 class Log(@volatile private var _dir: File,
