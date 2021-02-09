@@ -20,7 +20,7 @@
   "fields": [
     { "name": "PreviousAssignment", "type": "[]TopicPartitions", "versions": "0+",
       "fields": [
-        { "name": "Topic", "type": "string", "versions": "0+" },
+        { "name": "Topic", "type": "string", "mapKey": true, "versions": "0+" },
         { "name": "Partitions", "type": "[]int32", "versions": "0+" }
       ],
       "about": "Used for preserving consumer's previously assigned partitions to make the assignment more sticky during a rebalance"

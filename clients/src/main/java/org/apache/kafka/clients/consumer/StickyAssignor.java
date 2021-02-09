@@ -16,19 +16,18 @@
  */
 package org.apache.kafka.clients.consumer;
 
-import java.nio.ByteBuffer;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.List;
-import java.util.Map;
-import java.util.Optional;
-import java.util.Set;
 import org.apache.kafka.clients.consumer.internals.AbstractStickyAssignor;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.message.StickyAssignorUserData;
 import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.MessageUtil;
-import org.apache.kafka.common.utils.CollectionUtils;
+
+import java.nio.ByteBuffer;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
+import java.util.Optional;
+import java.util.Set;
 
 /**
  * <p>The sticky assignor serves two purposes. First, it guarantees an assignment that is as balanced as possible, meaning either:
@@ -212,12 +211,17 @@ public class StickyAssignor extends AbstractStickyAssignor {
     // visible for testing
     static ByteBuffer serializeTopicPartitionAssignment(MemberData memberData, short version) {
 
-        List<StickyAssignorUserData.TopicPartitions> topicAssignments = new ArrayList<>();
-        for (Map.Entry<String, List<Integer>> topicEntry : CollectionUtils.groupPartitionsByTopic(memberData.partitions).entrySet()) {
-            StickyAssignorUserData.TopicPartitions topicPartition = new StickyAssignorUserData.TopicPartitions()
-                    .setTopic(topicEntry.getKey())
-                    .setPartitions(topicEntry.getValue());
-            topicAssignments.add(topicPartition);
+        StickyAssignorUserData.TopicPartitionsCollection topicAssignments = new StickyAssignorUserData.TopicPartitionsCollection();
+        if (memberData.partitions != null) {
+            memberData.partitions.forEach(partition -> {
+                StickyAssignorUserData.TopicPartitions topicPartitions = topicAssignments.find(partition.topic());
+                if (topicPartitions == null) {
+                    topicPartitions = new StickyAssignorUserData.TopicPartitions()
+                        .setTopic(partition.topic());
+                    topicAssignments.add(topicPartitions);
+                }
+                topicPartitions.partitions().add(partition.partition());
+            });
         }
         StickyAssignorUserData data = new StickyAssignorUserData()
                 .setPreviousAssignment(topicAssignments);
