@@ -609,7 +609,7 @@ public class IntegrationTestUtils {
                 accumData.addAll(readData);
                 assertThat(reason + ",  currently accumulated data is " + accumData, accumData.size(), is(greaterThanOrEqualTo(expectedNumRecords)));
             });
-        } catch (final Exception e) {
+        } catch (final java.lang.AssertionError e) {
             System.err.println("!!! " + reason + ",  currently accumulated data is " + accumData);
         }
         return accumData;
