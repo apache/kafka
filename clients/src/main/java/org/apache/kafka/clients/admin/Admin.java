@@ -1488,12 +1488,16 @@ public interface Admin extends AutoCloseable {
     /**
      * Unregister a broker.
      * <p>
+     * This operation does not have any effect on partition assignments. It is supported
+     * only on Kafka clusters which use Raft to store metadata, rather than ZooKeeper.
+     *
      * This is a convenience method for {@link #unregisterBroker(int, UnregisterBrokerOptions)}
      *
      * @param brokerId  the broker id to unregister.
      *
      * @return the {@link UnregisterBrokerResult} containing the result
      */
+    @InterfaceStability.Unstable
     default UnregisterBrokerResult unregisterBroker(int brokerId) {
         return unregisterBroker(brokerId, new UnregisterBrokerOptions());
     }
@@ -1502,7 +1506,7 @@ public interface Admin extends AutoCloseable {
      * Unregister a broker.
      * <p>
      * This operation does not have any effect on partition assignments. It is supported
-     * only on self-managed Kafka clusters (i.e. brokers which do not rely on Zookeeper).
+     * only on Kafka clusters which use Raft to store metadata, rather than ZooKeeper.
      *
      * The following exceptions can be anticipated when calling {@code get()} on the future from the
      * returned {@link DescribeFeaturesResult}:
@@ -1510,7 +1514,8 @@ public interface Admin extends AutoCloseable {
      *   <li>{@link org.apache.kafka.common.errors.TimeoutException}
      *   If the request timed out before the describe operation could finish.</li>
      *   <li>{@link org.apache.kafka.common.errors.UnsupportedVersionException}
-     *   If the software is too old to support the unregistration API.
+     *   If the software is too old to support the unregistration API, or if the
+     *   cluster is not using Raft to store metadata.
      * </ul>
      * <p>
      *
@@ -1519,6 +1524,7 @@ public interface Admin extends AutoCloseable {
      *
      * @return the {@link UnregisterBrokerResult} containing the result
      */
+    @InterfaceStability.Unstable
     UnregisterBrokerResult unregisterBroker(int brokerId, UnregisterBrokerOptions options);
 
     /**
