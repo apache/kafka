@@ -75,6 +75,7 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
@@ -189,6 +190,7 @@ public class DistributedHerderTest {
     @Mock private Plugins plugins;
     @Mock private PluginClassLoader pluginLoader;
     @Mock private DelegatingClassLoader delegatingLoader;
+    private CountDownLatch shutdownCalled = new CountDownLatch(1);
 
     private ConfigBackingStore.UpdateListener configUpdateListener;
     private WorkerRebalanceListener rebalanceListener;
@@ -206,6 +208,7 @@ public class DistributedHerderTest {
         metrics = new MockConnectMetrics(time);
         worker = PowerMock.createMock(Worker.class);
         EasyMock.expect(worker.isSinkConnector(CONN1)).andStubReturn(Boolean.TRUE);
+        AutoCloseable uponShutdown = () -> shutdownCalled.countDown();
 
         // Default to the old protocol unless specified otherwise
         connectProtocolVersion = CONNECT_PROTOCOL_V0;
@@ -213,7 +216,8 @@ public class DistributedHerderTest {
         herder = PowerMock.createPartialMock(DistributedHerder.class,
                 new String[]{"connectorTypeForClass", "updateDeletedConnectorStatus", "updateDeletedTaskStatus", "validateConnectorConfig"},
                 new DistributedConfig(HERDER_CONFIG), worker, WORKER_ID, KAFKA_CLUSTER_ID,
-                statusBackingStore, configBackingStore, member, MEMBER_URL, metrics, time, noneConnectorClientConfigOverridePolicy);
+                statusBackingStore, configBackingStore, member, MEMBER_URL, metrics, time, noneConnectorClientConfigOverridePolicy,
+                new AutoCloseable[]{uponShutdown});
 
         configUpdateListener = herder.new ConfigUpdateListener();
         rebalanceListener = herder.new RebalanceListener(time);
@@ -2209,6 +2213,13 @@ public class DistributedHerderTest {
 
         assertTrue(Whitebox.<ThreadPoolExecutor>getInternalState(herder, "startAndStopExecutor").
                 getThreadFactory().newThread(EMPTY_RUNNABLE).getName().startsWith("StartAndStopExecutor"));
+    }
+
+    @Test
+    public void testHerderStopServicesClosesUponShutdown() {
+        assertEquals(1, shutdownCalled.getCount());
+        herder.stopServices();
+        assertEquals(0, shutdownCalled.getCount());
     }
 
     private void expectRebalance(final long offset,
