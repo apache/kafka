@@ -442,9 +442,9 @@ public abstract class MirrorConnectorsIntegrationBaseTest {
         produceMessages(backup, "test-topic-1");
         String consumerGroupName = "consumer-group-testReplication";
         Map<String, Object> consumerProps = new HashMap<String, Object>() {{
-            put("group.id", consumerGroupName);
-            put("auto.offset.reset", "latest");
-        }};
+                put("group.id", consumerGroupName);
+                put("auto.offset.reset", "latest");
+            }};
         // warm up consumers before starting the connectors so we don't need to wait for discovery
         warmUpConsumer(consumerProps);
 
@@ -604,9 +604,9 @@ public abstract class MirrorConnectorsIntegrationBaseTest {
         produceMessages(primary, "test-topic-1");
         String consumerGroupName = "consumer-group-testOneWayReplicationWithAutoOffsetSync";
         Map<String, Object> consumerProps  = new HashMap<String, Object>() {{
-            put("group.id", consumerGroupName);
-            put("auto.offset.reset", "earliest");
-        }};
+                put("group.id", consumerGroupName);
+                put("auto.offset.reset", "earliest");
+            }};
         // create consumers before starting the connectors so we don't need to wait for discovery
         try (Consumer<byte[], byte[]> primaryConsumer = primary.kafka().createConsumerAndSubscribeTo(consumerProps,
             "test-topic-1")) {
@@ -670,9 +670,9 @@ public abstract class MirrorConnectorsIntegrationBaseTest {
         produceMessages(backup, "test-topic-1");
         String consumerGroupName = "consumer-group-testReplication";
         Map<String, Object> consumerProps = new HashMap<String, Object>() {{
-            put("group.id", consumerGroupName);
-            put("auto.offset.reset", "latest");
-        }};
+                put("group.id", consumerGroupName);
+                put("auto.offset.reset", "latest");
+            }};
         // warm up consumers before starting the connectors so we don't need to wait for discovery
         warmUpConsumer(consumerProps);
 
@@ -832,9 +832,9 @@ public abstract class MirrorConnectorsIntegrationBaseTest {
         produceMessages(primary, "test-topic-1");
         String consumerGroupName = "consumer-group-testOneWayReplicationWithAutoOffsetSync";
         Map<String, Object> consumerProps  = new HashMap<String, Object>() {{
-            put("group.id", consumerGroupName);
-            put("auto.offset.reset", "earliest");
-        }};
+                put("group.id", consumerGroupName);
+                put("auto.offset.reset", "earliest");
+            }};
         // create consumers before starting the connectors so we don't need to wait for discovery
         try (Consumer<byte[], byte[]> primaryConsumer = primary.kafka().createConsumerAndSubscribeTo(consumerProps,
             "test-topic-1")) {
@@ -898,9 +898,9 @@ public abstract class MirrorConnectorsIntegrationBaseTest {
         produceMessages(backup, "test-topic-1");
         String consumerGroupName = "consumer-group-testReplication";
         Map<String, Object> consumerProps = new HashMap<String, Object>() {{
-            put("group.id", consumerGroupName);
-            put("auto.offset.reset", "latest");
-        }};
+                put("group.id", consumerGroupName);
+                put("auto.offset.reset", "latest");
+            }};
         // warm up consumers before starting the connectors so we don't need to wait for discovery
         warmUpConsumer(consumerProps);
 
@@ -1060,9 +1060,9 @@ public abstract class MirrorConnectorsIntegrationBaseTest {
         produceMessages(primary, "test-topic-1");
         String consumerGroupName = "consumer-group-testOneWayReplicationWithAutoOffsetSync";
         Map<String, Object> consumerProps  = new HashMap<String, Object>() {{
-            put("group.id", consumerGroupName);
-            put("auto.offset.reset", "earliest");
-        }};
+                put("group.id", consumerGroupName);
+                put("auto.offset.reset", "earliest");
+            }};
         // create consumers before starting the connectors so we don't need to wait for discovery
         try (Consumer<byte[], byte[]> primaryConsumer = primary.kafka().createConsumerAndSubscribeTo(consumerProps,
             "test-topic-1")) {
@@ -1126,9 +1126,9 @@ public abstract class MirrorConnectorsIntegrationBaseTest {
         produceMessages(backup, "test-topic-1");
         String consumerGroupName = "consumer-group-testReplication";
         Map<String, Object> consumerProps = new HashMap<String, Object>() {{
-            put("group.id", consumerGroupName);
-            put("auto.offset.reset", "latest");
-        }};
+                put("group.id", consumerGroupName);
+                put("auto.offset.reset", "latest");
+            }};
         // warm up consumers before starting the connectors so we don't need to wait for discovery
         warmUpConsumer(consumerProps);
 
@@ -1288,9 +1288,9 @@ public abstract class MirrorConnectorsIntegrationBaseTest {
         produceMessages(primary, "test-topic-1");
         String consumerGroupName = "consumer-group-testOneWayReplicationWithAutoOffsetSync";
         Map<String, Object> consumerProps  = new HashMap<String, Object>() {{
-            put("group.id", consumerGroupName);
-            put("auto.offset.reset", "earliest");
-        }};
+                put("group.id", consumerGroupName);
+                put("auto.offset.reset", "earliest");
+            }};
         // create consumers before starting the connectors so we don't need to wait for discovery
         try (Consumer<byte[], byte[]> primaryConsumer = primary.kafka().createConsumerAndSubscribeTo(consumerProps,
             "test-topic-1")) {
