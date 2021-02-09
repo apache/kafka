@@ -183,6 +183,78 @@ public class KTableKTableForeignKeyInnerJoinMultiIntegrationTest {
         verifyKTableKTableJoin(JoinType.INNER, expectedOne, true);
     }
 
+    @Test
+    public void shouldInnerJoinMultiPartitionQueryable2() throws Exception {
+        final Set<KeyValue<Integer, String>> expectedOne = new HashSet<>();
+        expectedOne.add(new KeyValue<>(1, "value1=1.33,value2=10,value3=waffle"));
+
+        verifyKTableKTableJoin(JoinType.INNER, expectedOne, true);
+    }
+
+    @Test
+    public void shouldInnerJoinMultiPartitionQueryable3() throws Exception {
+        final Set<KeyValue<Integer, String>> expectedOne = new HashSet<>();
+        expectedOne.add(new KeyValue<>(1, "value1=1.33,value2=10,value3=waffle"));
+
+        verifyKTableKTableJoin(JoinType.INNER, expectedOne, true);
+    }
+
+    @Test
+    public void shouldInnerJoinMultiPartitionQueryable4() throws Exception {
+        final Set<KeyValue<Integer, String>> expectedOne = new HashSet<>();
+        expectedOne.add(new KeyValue<>(1, "value1=1.33,value2=10,value3=waffle"));
+
+        verifyKTableKTableJoin(JoinType.INNER, expectedOne, true);
+    }
+
+    @Test
+    public void shouldInnerJoinMultiPartitionQueryable5() throws Exception {
+        final Set<KeyValue<Integer, String>> expectedOne = new HashSet<>();
+        expectedOne.add(new KeyValue<>(1, "value1=1.33,value2=10,value3=waffle"));
+
+        verifyKTableKTableJoin(JoinType.INNER, expectedOne, true);
+    }
+
+    @Test
+    public void shouldInnerJoinMultiPartitionQueryable6() throws Exception {
+        final Set<KeyValue<Integer, String>> expectedOne = new HashSet<>();
+        expectedOne.add(new KeyValue<>(1, "value1=1.33,value2=10,value3=waffle"));
+
+        verifyKTableKTableJoin(JoinType.INNER, expectedOne, true);
+    }
+
+    @Test
+    public void shouldInnerJoinMultiPartitionQueryable7() throws Exception {
+        final Set<KeyValue<Integer, String>> expectedOne = new HashSet<>();
+        expectedOne.add(new KeyValue<>(1, "value1=1.33,value2=10,value3=waffle"));
+
+        verifyKTableKTableJoin(JoinType.INNER, expectedOne, true);
+    }
+
+    @Test
+    public void shouldInnerJoinMultiPartitionQueryable8() throws Exception {
+        final Set<KeyValue<Integer, String>> expectedOne = new HashSet<>();
+        expectedOne.add(new KeyValue<>(1, "value1=1.33,value2=10,value3=waffle"));
+
+        verifyKTableKTableJoin(JoinType.INNER, expectedOne, true);
+    }
+
+    @Test
+    public void shouldInnerJoinMultiPartitionQueryable9() throws Exception {
+        final Set<KeyValue<Integer, String>> expectedOne = new HashSet<>();
+        expectedOne.add(new KeyValue<>(1, "value1=1.33,value2=10,value3=waffle"));
+
+        verifyKTableKTableJoin(JoinType.INNER, expectedOne, true);
+    }
+
+    @Test
+    public void shouldInnerJoinMultiPartitionQueryable10() throws Exception {
+        final Set<KeyValue<Integer, String>> expectedOne = new HashSet<>();
+        expectedOne.add(new KeyValue<>(1, "value1=1.33,value2=10,value3=waffle"));
+
+        verifyKTableKTableJoin(JoinType.INNER, expectedOne, true);
+    }
+
     private void verifyKTableKTableJoin(final JoinType joinType,
                                         final Set<KeyValue<Integer, String>> expectedResult,
                                         final boolean verifyQueryableState) throws Exception {
@@ -196,10 +268,14 @@ public class KTableKTableForeignKeyInnerJoinMultiIntegrationTest {
         streamsTwo.start();
         streamsThree.start();
 
+        System.err.println("!!! before stream state:" + streams.state() + streamsTwo.state() + streamsThree.state());
+
         final Set<KeyValue<Integer, String>> result = new HashSet<>(IntegrationTestUtils.waitUntilMinKeyValueRecordsReceived(
                 CONSUMER_CONFIG,
                 OUTPUT,
                 expectedResult.size()));
+
+        System.err.println("!!! stream state:" + streams.state() + streamsTwo.state() + streamsThree.state());
 
         assertEquals(expectedResult, result);
     }
