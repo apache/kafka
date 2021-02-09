@@ -851,4 +851,12 @@ public class UtilsTest {
         Utils.getDateTime(formattedCheckpoint);
     }
 
+    @Test
+    void testIsBlank() {
+        assertTrue(Utils.isBlank(null));
+        assertTrue(Utils.isBlank(""));
+        assertTrue(Utils.isBlank(" "));
+        assertFalse(Utils.isBlank("bob"));
+        assertFalse(Utils.isBlank(" bob "));
+    }
 }
