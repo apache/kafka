@@ -1201,6 +1201,9 @@ public class StreamsConfig extends AbstractConfig {
         // disable auto topic creation
         consumerProps.put(ConsumerConfig.ALLOW_AUTO_CREATE_TOPICS_CONFIG, "false");
 
+        // enable early return on metadata
+        consumerProps.put(ConsumerConfig.LONG_POLL_MODE_CONFIG, ConsumerConfig.LONG_POLL_RETURN_ON_RECORDS);
+
         // verify that producer batch config is no larger than segment size, then add topic configs required for creating topics
         final Map<String, Object> topicProps = originalsWithPrefix(TOPIC_PREFIX, false);
         final Map<String, Object> producerProps = getClientPropsWithPrefix(PRODUCER_PREFIX, ProducerConfig.configNames());

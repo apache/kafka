@@ -71,6 +71,21 @@ public class ConsumerConfig extends AbstractConfig {
     /** <code>max.poll.interval.ms</code> */
     public static final String MAX_POLL_INTERVAL_MS_CONFIG = CommonClientConfigs.MAX_POLL_INTERVAL_MS_CONFIG;
     private static final String MAX_POLL_INTERVAL_MS_DOC = CommonClientConfigs.MAX_POLL_INTERVAL_MS_DOC;
+
+    /** <code>long.poll.mode</code> */
+    public static final String LONG_POLL_RETURN_ON_RECORDS = "return_on_records";
+    public static final String LONG_POLL_RETURN_ON_RESPONSE = "return_on_response";
+    public static final String LONG_POLL_MODE_CONFIG = "long.poll.mode";
+    public static final String LONG_POLL_MODE_DOC = "Whether a call to Consumer#poll(...) should block until" +
+        " records are received (return_on_records), or should return early if a metadata-only response is received" +
+        " from the brokers (return_on_metadata). The 'return_on_records' mode is the default, and it matches prior" +
+        " behavior. The 'return_on_response' mode allows callers to witness topic metadata changes via" +
+        " ConsumerRecords#metadata() as soon as they are received in a fetch response, even if there are no records" +
+        " included in the response. Callers who are only interested in seeing records should leave the default in" +
+        " place, and callers who are interested in maintaining fresh local information about the current lag should" +
+        " enable 'return_on_response'." +
+        " Note that the Consumer metrics are always updated upon receipt of the fetch responses.";
+
     /**
      * <code>session.timeout.ms</code>
      */
@@ -519,6 +534,12 @@ public class ConsumerConfig extends AbstractConfig {
                                         atLeast(1),
                                         Importance.MEDIUM,
                                         MAX_POLL_INTERVAL_MS_DOC)
+                                .define(LONG_POLL_MODE_CONFIG,
+                                        Type.STRING,
+                                        LONG_POLL_RETURN_ON_RECORDS,
+                                        in(LONG_POLL_RETURN_ON_RECORDS, LONG_POLL_RETURN_ON_RESPONSE),
+                                        Importance.LOW,
+                                        LONG_POLL_MODE_DOC)
                                 .define(EXCLUDE_INTERNAL_TOPICS_CONFIG,
                                         Type.BOOLEAN,
                                         DEFAULT_EXCLUDE_INTERNAL_TOPICS,

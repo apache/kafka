@@ -586,6 +586,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
     private final long retryBackoffMs;
     private final long requestTimeoutMs;
     private final int defaultApiTimeoutMs;
+    private final boolean longPollExitEarlyOnMetadata;
     private volatile boolean closed = false;
     private List<ConsumerPartitionAssignor> assignors;
 
@@ -810,6 +811,9 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
                     apiVersions);
 
             this.kafkaConsumerMetrics = new KafkaConsumerMetrics(metrics, metricGrpPrefix);
+            this.longPollExitEarlyOnMetadata =
+                config.getString(ConsumerConfig.LONG_POLL_MODE_CONFIG)
+                      .equalsIgnoreCase(ConsumerConfig.LONG_POLL_RETURN_ON_RESPONSE);
 
             config.logUnused();
             AppInfoParser.registerAppInfo(JMX_PREFIX, clientId, metrics, time.milliseconds());
@@ -842,7 +846,8 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
                   long requestTimeoutMs,
                   int defaultApiTimeoutMs,
                   List<ConsumerPartitionAssignor> assignors,
-                  String groupId) {
+                  String groupId,
+                  boolean longPollExitEarlyOnMetadata) {
         this.log = logContext.logger(getClass());
         this.clientId = clientId;
         this.coordinator = coordinator;
@@ -861,6 +866,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
         this.assignors = assignors;
         this.groupId = Optional.ofNullable(groupId);
         this.kafkaConsumerMetrics = new KafkaConsumerMetrics(metrics, "consumer");
+        this.longPollExitEarlyOnMetadata = longPollExitEarlyOnMetadata;
     }
 
     private static Metrics buildMetrics(ConsumerConfig config, Time time, String clientId) {
@@ -1216,6 +1222,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      */
     private ConsumerRecords<K, V> poll(final Timer timer, final boolean includeMetadataInTimeout) {
         acquireAndEnsureOpen();
+        Map<TopicPartition, FetchedRecords.FetchMetadata> nullableSeenMetadata = null;
         try {
             this.kafkaConsumerMetrics.recordPollStart(timer.currentTimeMs());
 
@@ -1236,7 +1243,17 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
                 }
 
                 final FetchedRecords<K, V> records = pollForFetches(timer);
-                if (!records.isEmpty()) {
+
+                // We only need to save off the metadata if we are NOT supposed to return early on metadata-only responses
+                if (!longPollExitEarlyOnMetadata) {
+                    if (nullableSeenMetadata == null) {
+                        nullableSeenMetadata = new HashMap<>(records.metadata());
+                    } else {
+                        nullableSeenMetadata.putAll(records.metadata());
+                    }
+                }
+
+                if (longPollShouldReturn(records)) {
                     // before returning the fetched records, we can send off the next round of fetches
                     // and avoid block waiting for their responses to enable pipelining while the user
                     // is handling the fetched records.
@@ -1247,15 +1264,26 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
                         client.transmitSends();
                     }
 
-                    return this.interceptors.onConsume(new ConsumerRecords<>(records));
+                    return this.interceptors.onConsume(new ConsumerRecords<>(
+                        records.records(),
+                        extractMetadata(nullableSeenMetadata, records.metadata())
+                    ));
                 }
             } while (timer.notExpired());
 
-            return ConsumerRecords.empty();
+            if (nullableSeenMetadata == null) {
+                return ConsumerRecords.empty();
+            } else {
+                return new ConsumerRecords<>(Collections.emptyMap(), extractMetadata(nullableSeenMetadata));
+            }
         } finally {
             release();
             this.kafkaConsumerMetrics.recordPollEnd(timer.currentTimeMs());
         }
+    }
+
+    private boolean longPollShouldReturn(FetchedRecords<K, V> records) {
+        return longPollExitEarlyOnMetadata && !records.isEmpty() || !records.records().isEmpty();
     }
 
     boolean updateAssignmentMetadataIfNeeded(final Timer timer, final boolean waitForJoinGroup) {
@@ -2479,5 +2507,39 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
 
     boolean updateAssignmentMetadataIfNeeded(final Timer timer) {
         return updateAssignmentMetadataIfNeeded(timer, true);
+    }
+
+    /**
+     * Converts the fetched metadata to the public API ConsumerRecords.Metadata.
+     * Also computes overrides from left to the right in the case of multiple args.
+     * Any of the arg maps may be null, in which case, we just skip it.
+     */
+    @SafeVarargs
+    private static Map<TopicPartition, ConsumerRecords.Metadata> extractMetadata(final Map<TopicPartition, FetchedRecords.FetchMetadata>... nullableMetadataMaps) {
+        Map<TopicPartition, ConsumerRecords.Metadata> result = null;
+        for (Map<TopicPartition, FetchedRecords.FetchMetadata> nullableMetadataMap : nullableMetadataMaps) {
+            if (nullableMetadataMap == null || nullableMetadataMap.isEmpty()) {
+                continue;
+            } else {
+                if (result == null) {
+                    result = new HashMap<>(nullableMetadataMap.size());
+                }
+                for (Map.Entry<TopicPartition, FetchedRecords.FetchMetadata> entry : nullableMetadataMap.entrySet()) {
+                    result.put(
+                        entry.getKey(),
+                        new ConsumerRecords.Metadata(
+                            entry.getValue().receivedTimestamp(),
+                            entry.getValue().position() == null ? null : entry.getValue().position().offset,
+                            entry.getValue().endOffset()
+                        )
+                    );
+                }
+            }
+        }
+        if (result == null) {
+            return Collections.emptyMap();
+        } else {
+            return result;
+        }
     }
 }

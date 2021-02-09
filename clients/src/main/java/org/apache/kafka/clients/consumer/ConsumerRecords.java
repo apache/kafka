@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.clients.consumer;
 
-import org.apache.kafka.clients.consumer.internals.FetchedRecords;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.utils.AbstractIterator;
 
@@ -99,21 +98,6 @@ public class ConsumerRecords<K, V> implements Iterable<ConsumerRecord<K, V>> {
         }
     }
 
-    private static <K, V> Map<TopicPartition, Metadata> extractMetadata(final FetchedRecords<K, V> fetchedRecords) {
-        final Map<TopicPartition, Metadata> metadata = new HashMap<>();
-        for (final Map.Entry<TopicPartition, FetchedRecords.FetchMetadata> entry : fetchedRecords.metadata().entrySet()) {
-            metadata.put(
-                entry.getKey(),
-                new Metadata(
-                    entry.getValue().receivedTimestamp(),
-                    entry.getValue().position() == null ? null : entry.getValue().position().offset,
-                    entry.getValue().endOffset()
-                )
-            );
-        }
-        return metadata;
-    }
-
     public ConsumerRecords(final Map<TopicPartition, List<ConsumerRecord<K, V>>> records) {
         this.records = records;
         this.metadata = new HashMap<>();
@@ -123,10 +107,6 @@ public class ConsumerRecords<K, V> implements Iterable<ConsumerRecord<K, V>> {
                            final Map<TopicPartition, Metadata> metadata) {
         this.records = records;
         this.metadata = metadata;
-    }
-
-    ConsumerRecords(final FetchedRecords<K, V> fetchedRecords) {
-        this(fetchedRecords.records(), extractMetadata(fetchedRecords));
     }
 
     /**

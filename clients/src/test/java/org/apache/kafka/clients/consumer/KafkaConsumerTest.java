@@ -134,10 +134,6 @@ import static java.util.Collections.singletonMap;
 import static org.apache.kafka.common.requests.FetchMetadata.INVALID_SESSION_ID;
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
-import static org.hamcrest.CoreMatchers.equalTo;
-import static org.hamcrest.MatcherAssert.assertThat;
-import static org.hamcrest.Matchers.greaterThanOrEqualTo;
-import static org.hamcrest.Matchers.lessThanOrEqualTo;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
@@ -659,7 +655,7 @@ public class KafkaConsumerTest {
         ConsumerPartitionAssignor assignor = new RoundRobinAssignor();
 
         KafkaConsumer<String, String> consumer = newConsumer(time, client, subscription, metadata, assignor,
-                true, groupId, groupInstanceId, false);
+                true, groupId, groupInstanceId, false, false);
         consumer.assign(singletonList(tp0));
 
         client.prepareResponseFrom(FindCoordinatorResponse.prepareResponse(Errors.NONE, node), node);
@@ -683,7 +679,7 @@ public class KafkaConsumerTest {
         ConsumerPartitionAssignor assignor = new RoundRobinAssignor();
 
         KafkaConsumer<String, String> consumer = newConsumer(time, client, subscription, metadata, assignor,
-                true, groupId, groupInstanceId, false);
+                true, groupId, groupInstanceId, false, false);
         consumer.assign(singletonList(tp0));
 
         client.prepareResponseFrom(FindCoordinatorResponse.prepareResponse(Errors.NONE, node), node);
@@ -708,7 +704,7 @@ public class KafkaConsumerTest {
         ConsumerPartitionAssignor assignor = new RoundRobinAssignor();
 
         KafkaConsumer<String, String> consumer = newConsumer(time, client, subscription, metadata, assignor,
-                true, groupId, groupInstanceId, false);
+                true, groupId, groupInstanceId, false, false);
         consumer.assign(singletonList(tp0));
 
         client.prepareResponseFrom(FindCoordinatorResponse.prepareResponse(Errors.NONE, node), node);
@@ -734,7 +730,7 @@ public class KafkaConsumerTest {
         ConsumerPartitionAssignor assignor = new RoundRobinAssignor();
 
         KafkaConsumer<String, String> consumer = newConsumer(time, client, subscription, metadata, assignor,
-                true, groupId, Optional.empty(), false);
+                true, groupId, Optional.empty(), false, false);
         consumer.assign(singletonList(tp0));
         consumer.seek(tp0, 20L);
         consumer.poll(Duration.ZERO);
@@ -813,7 +809,7 @@ public class KafkaConsumerTest {
         ConsumerPartitionAssignor assignor = new RoundRobinAssignor();
 
         KafkaConsumer<String, String> consumer = newConsumer(
-            time, client, subscription, metadata, assignor, true, groupId, groupInstanceId, true);
+            time, client, subscription, metadata, assignor, true, groupId, groupInstanceId, true, false);
         consumer.assign(singletonList(tp0));
 
         client.prepareResponseFrom(FindCoordinatorResponse.prepareResponse(Errors.NONE, node), node);
@@ -1056,7 +1052,7 @@ public class KafkaConsumerTest {
 
         ConsumerRecords<String, String> records = consumer.poll(Duration.ZERO);
         assertEquals(0, records.count());
-        assertThat(records.metadata(), equalTo(emptyMap()));
+        assertEquals(records.metadata(), emptyMap());
         consumer.close(Duration.ofMillis(0));
     }
 
@@ -2141,7 +2137,8 @@ public class KafkaConsumerTest {
         final ConsumerPartitionAssignor assignor = new RoundRobinAssignor();
 
         final KafkaConsumer<String, String> consumer =
-            newConsumer(time, client, subscription, metadata, assignor, true, groupInstanceId);
+            newConsumer(time, client, subscription, metadata, assignor, true, groupId,
+                groupInstanceId, false, true);
 
         consumer.assign(singleton(tp0));
         consumer.seek(tp0, 50L);
@@ -2396,14 +2393,14 @@ public class KafkaConsumerTest {
                                                       ConsumerPartitionAssignor assignor,
                                                       boolean autoCommitEnabled,
                                                       Optional<String> groupInstanceId) {
-        return newConsumer(time, client, subscription, metadata, assignor, autoCommitEnabled, groupId, groupInstanceId, false);
+        return newConsumer(time, client, subscription, metadata, assignor, autoCommitEnabled, groupId, groupInstanceId, false, false);
     }
 
     private KafkaConsumer<String, String> newConsumerNoAutoCommit(Time time,
                                                                   KafkaClient client,
                                                                   SubscriptionState subscription,
                                                                   ConsumerMetadata metadata) {
-        return newConsumer(time, client, subscription, metadata, new RangeAssignor(), false, groupId, groupInstanceId, false);
+        return newConsumer(time, client, subscription, metadata, new RangeAssignor(), false, groupId, groupInstanceId, false, false);
     }
 
     private KafkaConsumer<String, String> newConsumer(Time time,
@@ -2414,7 +2411,8 @@ public class KafkaConsumerTest {
                                                       boolean autoCommitEnabled,
                                                       String groupId,
                                                       Optional<String> groupInstanceId,
-                                                      boolean throwOnStableOffsetNotSupported) {
+                                                      boolean throwOnStableOffsetNotSupported,
+                                                      boolean longPollExitEarlyOnMetadata) {
         String clientId = "mock-consumer";
         String metricGroupPrefix = "consumer";
         long retryBackoffMs = 100;
@@ -2500,7 +2498,8 @@ public class KafkaConsumerTest {
                 requestTimeoutMs,
                 defaultApiTimeoutMs,
                 assignors,
-                groupId);
+                groupId,
+                longPollExitEarlyOnMetadata);
     }
 
     private static class FetchInfo {
@@ -2514,8 +2513,14 @@ public class KafkaConsumerTest {
         }
 
         FetchInfo(long logFirstOffset, long logLastOffset, long offset, int count) {
-            assertThat(logFirstOffset, lessThanOrEqualTo(offset));
-            assertThat(logLastOffset, greaterThanOrEqualTo(offset + count));
+            assertTrue(
+                logFirstOffset <= offset,
+                () -> String.format("expected %d <= %d", logFirstOffset, offset)
+            );
+            assertTrue(
+                logLastOffset >= (offset + count),
+                () -> String.format("expected %d >= %d + %d", logLastOffset, offset, count)
+            );
             this.logFirstOffset = logFirstOffset;
             this.logLastOffset = logLastOffset;
             this.offset = offset;
