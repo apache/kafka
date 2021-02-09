@@ -273,7 +273,7 @@ public class KTableKTableForeignKeyInnerJoinMultiIntegrationTest {
         final Set<KeyValue<Integer, String>> result = new HashSet<>(IntegrationTestUtils.waitUntilMinKeyValueRecordsReceived(
                 CONSUMER_CONFIG,
                 OUTPUT,
-                expectedResult.size()));
+                expectedResult.size(), (45 * 1000L)));
 
         System.err.println("!!! stream state:" + streams.state() + streamsTwo.state() + streamsThree.state());
 
