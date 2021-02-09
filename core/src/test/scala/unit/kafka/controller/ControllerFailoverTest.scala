@@ -25,6 +25,7 @@ import kafka.integration.KafkaServerTestHarness
 import kafka.server.KafkaConfig
 import kafka.utils._
 import org.apache.kafka.common.TopicPartition
+import org.apache.kafka.common.errors.ControllerMovedException
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.log4j.Logger
 import org.junit.jupiter.api.{AfterEach, Test}
@@ -95,5 +96,52 @@ class ControllerFailoverTest extends KafkaServerTestHarness with Logging {
       }
     }, "Failed to find controller")
 
+  }
+
+  @Test
+  def testTopicDeletionOnResignedController(): Unit = {
+    val initialController = servers.find(_.kafkaController.isActive).map(_.kafkaController).getOrElse {
+      fail("Could not find controller")
+    }
+    val initialEpoch = initialController.epoch
+
+    createTopic(topic, 1, 1)
+
+    // halt the initial controller so that it won't detect a controllership switch
+    val latch = new CountDownLatch(1)
+    val haltControllerEvent = new MockEvent(ControllerState.BrokerChange) {
+      override def process(): Unit = {
+        latch.await()
+      }
+      override def preempt(): Unit = {}
+    }
+    initialController.eventManager.put(haltControllerEvent)
+
+    // delete the controller znode so that a new controller can be elected
+    zkClient.deleteController(initialController.controllerContext.epochZkVersion)
+    // wait until a new controller has been elected
+    TestUtils.waitUntilTrue(() => {
+      servers.exists { server =>
+        server.kafkaController.isActive && server.kafkaController.epoch > initialEpoch
+      }
+    }, "Failed to find controller")
+
+    // enqueue a topic for deletion, and verify that the ControllerMovedException will be triggered
+    var receivedControllerMovedException = false
+    try {
+      initialController.topicDeletionManager.enqueueTopicsForDeletion(Set(topic))
+    } catch {
+      case _: ControllerMovedException => {
+        receivedControllerMovedException = true
+      }
+    }
+    assertTrue(receivedControllerMovedException)
+    latch.countDown()
+
+    // verify that the replicaStateMachine's controllerBrokerRequestBatch is empty
+    val controllerBrokerRequestBatch = initialController.replicaStateMachine.asInstanceOf[ZkReplicaStateMachine].controllerBrokerRequestBatch
+    assertTrue(controllerBrokerRequestBatch.stopReplicaRequestMap.isEmpty)
+    assertTrue(controllerBrokerRequestBatch.updateMetadataRequestPartitionInfoMap.isEmpty)
+    assertTrue(controllerBrokerRequestBatch.leaderAndIsrRequestMap.isEmpty)
   }
 }
