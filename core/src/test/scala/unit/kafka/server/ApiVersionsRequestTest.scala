@@ -17,7 +17,6 @@
 
 package kafka.server
 
-import integration.kafka.server.IntegrationTestUtils
 import kafka.test.{ClusterConfig, ClusterInstance}
 import org.apache.kafka.common.message.ApiVersionsRequestData
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
