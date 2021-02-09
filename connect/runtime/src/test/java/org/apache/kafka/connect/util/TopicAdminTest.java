@@ -17,28 +17,43 @@
 package org.apache.kafka.connect.util;
 
 import org.apache.kafka.clients.NodeApiVersions;
-import org.apache.kafka.clients.admin.MockAdminClient;
+import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.AdminClientUnitTestEnv;
+import org.apache.kafka.clients.admin.ListOffsetsResult;
+import org.apache.kafka.clients.admin.ListOffsetsResult.ListOffsetsResultInfo;
+import org.apache.kafka.clients.admin.MockAdminClient;
 import org.apache.kafka.clients.admin.NewTopic;
+import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.message.CreateTopicsResponseData;
 import org.apache.kafka.common.message.CreateTopicsResponseData.CreatableTopicResult;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.PartitionInfo;
+import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.TopicPartitionInfo;
+import org.apache.kafka.common.errors.AuthorizationException;
+import org.apache.kafka.common.errors.TimeoutException;
+import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.ApiError;
 import org.apache.kafka.common.requests.CreateTopicsResponse;
 import org.apache.kafka.common.utils.MockTime;
+import org.apache.kafka.connect.errors.ConnectException;
 import org.junit.Test;
 
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.ExecutionException;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyMap;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 public class TopicAdminTest {
 
@@ -127,6 +142,107 @@ public class TopicAdminTest {
             boolean created = admin.createTopic(null);
             assertFalse(created);
         }
+    }
+
+    @SuppressWarnings("unchecked")
+    private <T> KafkaFuture<T> mockFuture() {
+        return (KafkaFuture<T>) mock(KafkaFuture.class);
+    }
+
+    private Admin expectAdminListOffsetsFailure(Throwable expected) throws Exception {
+        // When the admin client lists offsets
+        Admin mockAdmin = mock(Admin.class);
+        ListOffsetsResult results = mock(ListOffsetsResult.class);
+        when(mockAdmin.listOffsets(anyMap())).thenReturn(results);
+        // and throws an exception via the future.get()
+        ExecutionException execException = new ExecutionException(expected);
+        KafkaFuture<ListOffsetsResultInfo> future = mockFuture();
+        when(future.get()).thenThrow(execException);
+        when(results.partitionResult(any(TopicPartition.class))).thenReturn(future);
+        return mockAdmin;
+    }
+
+    @Test(expected = ConnectException.class)
+    public void endOffsetsShouldFailWithNonRetriableWhenAuthorizationFailureOccurs() throws Exception {
+        String topicName = "myTopic";
+        TopicPartition tp1 = new TopicPartition(topicName, 0);
+        Set<TopicPartition> tps = Collections.singleton(tp1);
+
+        // When the admin client lists offsets throws an exception
+        Admin mockAdmin = expectAdminListOffsetsFailure(new AuthorizationException("failed"));
+
+        // Then the topic admin should throw exception
+        TopicAdmin admin = new TopicAdmin(null, mockAdmin);
+        admin.endOffsets(tps);
+    }
+
+    @Test(expected = ConnectException.class)
+    public void endOffsetsShouldFailWithNonRetriableWhenVersionUnsupportedErrorOccurs() throws Exception {
+        String topicName = "myTopic";
+        TopicPartition tp1 = new TopicPartition(topicName, 0);
+        Set<TopicPartition> tps = Collections.singleton(tp1);
+
+        // When the admin client lists offsets throws an exception
+        Admin mockAdmin = expectAdminListOffsetsFailure(new UnsupportedVersionException("failed"));
+
+        // Then the topic admin should throw exception
+        TopicAdmin admin = new TopicAdmin(null, mockAdmin);
+        admin.endOffsets(tps);
+    }
+
+    @Test(expected = ConnectException.class)
+    public void endOffsetsShouldFailWithRetriableWhenTimeoutErrorOccurs() throws Exception {
+        String topicName = "myTopic";
+        TopicPartition tp1 = new TopicPartition(topicName, 0);
+        Set<TopicPartition> tps = Collections.singleton(tp1);
+
+        // When the admin client lists offsets throws an exception
+        Admin mockAdmin = expectAdminListOffsetsFailure(new TimeoutException("failed"));
+
+        // Then the topic admin should throw exception
+        TopicAdmin admin = new TopicAdmin(null, mockAdmin);
+        admin.endOffsets(tps);
+    }
+
+    @Test(expected = ConnectException.class)
+    public void endOffsetsShouldFailWithNonRetriableWhenUnknownErrorOccurs() throws Exception {
+        String topicName = "myTopic";
+        TopicPartition tp1 = new TopicPartition(topicName, 0);
+        Set<TopicPartition> tps = Collections.singleton(tp1);
+
+        // When the admin client lists offsets throws an exception
+        Admin mockAdmin = expectAdminListOffsetsFailure(new RuntimeException("failed"));
+
+        // Then the topic admin should throw exception
+        TopicAdmin admin = new TopicAdmin(null, mockAdmin);
+        admin.endOffsets(tps);
+    }
+
+    @Test
+    public void endOffsetsShouldReturnEmptyMapWhenPartitionsSetIsNull() throws Exception {
+        String topicName = "myTopic";
+        TopicPartition tp1 = new TopicPartition(topicName, 0);
+        Set<TopicPartition> tps = Collections.singleton(tp1);
+
+        // Then the topic admin should return immediately
+        Admin mockAdmin = mock(Admin.class);
+        TopicAdmin admin = new TopicAdmin(null, mockAdmin);
+        Map<TopicPartition, Long> offsets = admin.endOffsets(Collections.emptySet());
+        assertTrue(offsets.isEmpty());
+    }
+
+    @Test(expected = ConnectException.class)
+    public void endOffsetsShouldFailWhenAnyTopicPartitionHasError() throws Exception {
+        String topicName = "myTopic";
+        TopicPartition tp1 = new TopicPartition(topicName, 0);
+        Set<TopicPartition> tps = Collections.singleton(tp1);
+
+        // When the admin client lists offsets throws an exception
+        Admin mockAdmin = expectAdminListOffsetsFailure(new AuthorizationException("failed"));
+
+        // Then the topic admin should throw exception
+        TopicAdmin admin = new TopicAdmin(null, mockAdmin);
+        admin.endOffsets(tps);
     }
 
     private Cluster createCluster(int numNodes) {

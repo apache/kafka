@@ -38,10 +38,12 @@ import java.nio.ByteBuffer;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Objects;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
+import java.util.function.Supplier;
 
 /**
  * <p>
@@ -58,6 +60,16 @@ public class KafkaOffsetBackingStore implements OffsetBackingStore {
 
     private KafkaBasedLog<byte[], byte[]> offsetLog;
     private HashMap<ByteBuffer, ByteBuffer> data;
+    private final Supplier<TopicAdmin> topicAdminSupplier;
+
+    @Deprecated
+    public KafkaOffsetBackingStore() {
+        this.topicAdminSupplier = null;
+    }
+
+    public KafkaOffsetBackingStore(Supplier<TopicAdmin> topicAdmin) {
+        this.topicAdminSupplier = Objects.requireNonNull(topicAdmin);
+    }
 
     @Override
     public void configure(final WorkerConfig config) {
@@ -78,29 +90,26 @@ public class KafkaOffsetBackingStore implements OffsetBackingStore {
         consumerProps.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, ByteArrayDeserializer.class.getName());
 
         Map<String, Object> adminProps = new HashMap<>(originals);
-        NewTopic topicDescription = TopicAdmin.defineTopic(topic).
-                compacted().
-                partitions(config.getInt(DistributedConfig.OFFSET_STORAGE_PARTITIONS_CONFIG)).
-                replicationFactor(config.getShort(DistributedConfig.OFFSET_STORAGE_REPLICATION_FACTOR_CONFIG)).
-                build();
+        Supplier<TopicAdmin> adminSupplier = topicAdminSupplier != null ? topicAdminSupplier : () -> new TopicAdmin(adminProps);
+        NewTopic topicDescription = TopicAdmin.defineTopic(topic)
+                .compacted()
+                .partitions(config.getInt(DistributedConfig.OFFSET_STORAGE_PARTITIONS_CONFIG))
+                .replicationFactor(config.getShort(DistributedConfig.OFFSET_STORAGE_REPLICATION_FACTOR_CONFIG))
+                .build();
 
-        offsetLog = createKafkaBasedLog(topic, producerProps, consumerProps, consumedCallback, topicDescription, adminProps);
+        offsetLog = createKafkaBasedLog(topic, producerProps, consumerProps, consumedCallback, topicDescription, adminSupplier);
     }
 
     private KafkaBasedLog<byte[], byte[]> createKafkaBasedLog(String topic, Map<String, Object> producerProps,
                                                               Map<String, Object> consumerProps,
                                                               Callback<ConsumerRecord<byte[], byte[]>> consumedCallback,
-                                                              final NewTopic topicDescription, final Map<String, Object> adminProps) {
-        Runnable createTopics = new Runnable() {
-            @Override
-            public void run() {
-                log.debug("Creating admin client to manage Connect internal offset topic");
-                try (TopicAdmin admin = new TopicAdmin(adminProps)) {
-                    admin.createTopics(topicDescription);
-                }
-            }
+                                                              final NewTopic topicDescription, Supplier<TopicAdmin> adminSupplier) {
+        java.util.function.Consumer<TopicAdmin> createTopics = admin -> {
+            log.debug("Creating admin client to manage Connect internal offset topic");
+            // Create the topic if it doesn't exist
+            admin.createTopics(topicDescription);
         };
-        return new KafkaBasedLog<>(topic, producerProps, consumerProps, consumedCallback, Time.SYSTEM, createTopics);
+        return new KafkaBasedLog<>(topic, producerProps, consumerProps, adminSupplier, consumedCallback, Time.SYSTEM, createTopics);
     }
 
     @Override
