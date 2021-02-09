@@ -82,7 +82,7 @@ public class MetadataParserTest {
         PartitionRecord partitionRecord = new PartitionRecord().
             setReplicas(longReplicaList);
         ObjectSerializationCache cache = new ObjectSerializationCache();
-        assertEquals("Event size would be 33554478, but the maximum serialized event " +
+        assertEquals("Event size would be 33554482, but the maximum serialized event " +
             "size is 33554432", assertThrows(RuntimeException.class, () -> {
                 MetadataParser.size(partitionRecord, (short) 0, cache);
             }).getMessage());
