@@ -159,11 +159,16 @@ class RaftReplicaManager(config: KafkaConfig,
           }
         }
 
-        val partitionsMadeLeader = delegate.makeLeaders(partitionsAlreadyExisting, leaderPartitionStates,
-          highWatermarkCheckpoints, MetadataPartition.OffsetNeverDeferred)
-        val partitionsMadeFollower = delegate.makeFollowers(partitionsAlreadyExisting,
-          brokers, followerPartitionStates,
-          highWatermarkCheckpoints, MetadataPartition.OffsetNeverDeferred)
+        val partitionsMadeLeader = if (leaderPartitionStates.nonEmpty)
+          delegate.makeLeaders(partitionsAlreadyExisting, leaderPartitionStates, highWatermarkCheckpoints,
+            MetadataPartition.OffsetNeverDeferred)
+        else
+          Set.empty[Partition]
+        val partitionsMadeFollower = if (followerPartitionStates.nonEmpty)
+          delegate.makeFollowers(partitionsAlreadyExisting, brokers, followerPartitionStates, highWatermarkCheckpoints,
+            MetadataPartition.OffsetNeverDeferred)
+        else
+          Set.empty[Partition]
 
         // We need to transition anything that hasn't transitioned from Deferred to Offline to the Online state.
         // We also need to identify the leadership change callback(s) to invoke
