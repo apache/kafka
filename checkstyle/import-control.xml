@@ -201,6 +201,15 @@
     <allow pkg="org.apache.kafka.test" />
   </subpackage>
 
+  <subpackage name="metalog">
+    <allow pkg="org.apache.kafka.common.metadata" />
+    <allow pkg="org.apache.kafka.common.protocol" />
+    <allow pkg="org.apache.kafka.metadata" />
+    <allow pkg="org.apache.kafka.metalog" />
+    <allow pkg="org.apache.kafka.queue" />
+    <allow pkg="org.apache.kafka.test" />
+  </subpackage>
+
   <subpackage name="clients">
     <allow pkg="org.slf4j" />
     <allow pkg="org.apache.kafka.common" />
@@ -227,6 +236,23 @@
     <allow pkg="org.slf4j" />
     <allow pkg="org.apache.kafka.common" />
     <allow pkg="org.apache.kafka.test" />
+  </subpackage>
+
+  <subpackage name="shell">
+    <allow pkg="com.fasterxml.jackson" />
+    <allow pkg="kafka.raft"/>
+    <allow pkg="kafka.server"/>
+    <allow pkg="kafka.tools"/>
+    <allow pkg="net.sourceforge.argparse4j" />
+    <allow pkg="org.apache.kafka.common"/>
+    <allow pkg="org.apache.kafka.metadata"/>
+    <allow pkg="org.apache.kafka.metalog"/>
+    <allow pkg="org.apache.kafka.queue"/>
+    <allow pkg="org.apache.kafka.raft"/>
+    <allow pkg="org.apache.kafka.shell"/>
+    <allow pkg="org.apache.log4j" />
+    <allow pkg="org.jline"/>
+    <allow pkg="scala.compat"/>
   </subpackage>
 
   <subpackage name="tools">
