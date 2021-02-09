@@ -302,7 +302,7 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
     private void updateListenersProgress(List<ListenerContext> listenerContexts, long highWatermark) {
         for (ListenerContext listenerContext : listenerContexts) {
             listenerContext.nextExpectedOffset().ifPresent(nextExpectedOffset -> {
-                if (nextExpectedOffset < log.startOffset()) {
+                if (nextExpectedOffset < log.startOffset() && nextExpectedOffset < highWatermark) {
                     SnapshotReader<T> snapshot = oldestSnapshot().orElseThrow(() -> {
                         return new IllegalStateException(
                             String.format(
@@ -1137,6 +1137,7 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
                 if (records.sizeInBytes() > 0) {
                     appendAsFollower(records);
                 }
+
                 OptionalLong highWatermark = partitionResponse.highWatermark() < 0 ?
                     OptionalLong.empty() : OptionalLong.of(partitionResponse.highWatermark());
                 updateFollowerHighWatermark(state, highWatermark);

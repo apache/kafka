@@ -115,6 +115,16 @@ public final class FileRawSnapshotWriter implements RawSnapshotWriter {
         }
     }
 
+    @Override
+    public String toString() {
+        return String.format(
+            "FileRawSnapshotWriter(path=%s, snapshotId=%s, frozen=%s)",
+            tempSnapshotPath,
+            snapshotId,
+            frozen
+        );
+    }
+
     /**
      * Create a snapshot writer for topic partition log dir and snapshot id.
      *

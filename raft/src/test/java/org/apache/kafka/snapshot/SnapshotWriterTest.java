@@ -113,4 +113,14 @@ final public class SnapshotWriterTest {
 
         assertEquals(expected, actual);
     }
+
+    public static void assertSnapshot(List<List<String>> batches, SnapshotReader<String> reader) {
+        List<String> expected = new ArrayList<>();
+        batches.forEach(expected::addAll);
+
+        List<String> actual = new ArrayList<>(expected.size());
+        reader.forEach(actual::addAll);
+
+        assertEquals(expected, actual);
+    }
 }

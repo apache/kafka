@@ -524,6 +524,16 @@ public class MockLog implements ReplicatedLog {
         public int hashCode() {
             return Objects.hash(metadata, offset, record);
         }
+
+        @Override
+        public String toString() {
+            return String.format(
+                "LogEntry(metadata=%s, offset=%s, record=%s)",
+                metadata,
+                offset,
+                record
+            );
+        }
     }
 
     static class LogBatch {
