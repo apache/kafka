@@ -127,7 +127,7 @@ import static org.apache.kafka.raft.RaftUtil.hasValidTopicPartition;
  *    begin a new election.
  *
  * 4) {@link FetchRequestData}: This is the same as the usual Fetch API in Kafka, but we add snapshot
- *    check before fetch records, and we also piggyback some additional metadata on responses (i.e. current
+ *    check before responding, and we also piggyback some additional metadata on responses (i.e. current
  *    leader and epoch). Unlike partition replication, we also piggyback truncation detection on this API
  *    rather than through a separate truncation state.
  *
