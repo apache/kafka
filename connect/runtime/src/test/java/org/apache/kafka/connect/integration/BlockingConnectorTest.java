@@ -137,7 +137,7 @@ public class BlockingConnectorTest {
                 CONNECT_WORKER_STARTUP_TIMEOUT,
                 "Worker did not complete startup in time"
             );
-        } catch (final AssertionFailedError e) {
+        } catch (final java.lang.AssertionError e) {
             System.err.println("!!! Worker did not complete startup in time, try again");
         }
 
@@ -147,7 +147,7 @@ public class BlockingConnectorTest {
                 CONNECT_WORKER_STARTUP_TIMEOUT,
                 "Worker did not complete startup in time"
             );
-        } catch (final AssertionFailedError e) {
+        } catch (final java.lang.AssertionError e) {
             System.err.println("!!! failed twice");
             fail("failed twice");
         }
