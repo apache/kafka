@@ -98,7 +98,7 @@ class LogTest {
         initialDefaultConfig = logConfig, cleanerConfig = CleanerConfig(enableCleaner = false), recoveryThreadsPerDataDir = 4,
         flushCheckMs = 1000L, flushRecoveryOffsetCheckpointMs = 10000L, flushStartOffsetCheckpointMs = 10000L,
         retentionCheckMs = 1000L, maxPidExpirationMs = 60 * 60 * 1000, scheduler = time.scheduler, time = time,
-        brokerTopicStats = new BrokerTopicStats, logDirFailureChannel = new LogDirFailureChannel(logDirs.size)) {
+        brokerTopicStats = new BrokerTopicStats, logDirFailureChannel = new LogDirFailureChannel(logDirs.size), keepPartitionMetadataFile = config.usesTopicId) {
 
          override def loadLog(logDir: File, hadCleanShutdown: Boolean, recoveryPoints: Map[TopicPartition, Long],
                      logStartOffsets: Map[TopicPartition, Long], topicConfigs: Map[String, LogConfig]): Log = {
@@ -2530,7 +2530,7 @@ class LogTest {
     var log = createLog(logDir, logConfig)
 
     val topicId = Uuid.randomUuid()
-    log.partitionMetadataFile.get.write(topicId)
+    log.partitionMetadataFile.write(topicId)
     log.close()
 
     // test recovery case
@@ -3100,7 +3100,7 @@ class LogTest {
     // Write a topic ID to the partition metadata file to ensure it is transferred correctly.
     val id = Uuid.randomUuid()
     log.topicId = id
-    log.partitionMetadataFile.get.write(id)
+    log.partitionMetadataFile.write(id)
 
     log.appendAsLeader(TestUtils.records(List(new SimpleRecord("foo".getBytes()))), leaderEpoch = 5)
     assertEquals(Some(5), log.latestEpoch)
@@ -3115,8 +3115,7 @@ class LogTest {
 
     // Check the topic ID remains in memory and was copied correctly.
     assertEquals(id, log.topicId)
-    assertFalse(log.partitionMetadataFile.isEmpty)
-    assertEquals(id, log.partitionMetadataFile.get.read().topicId)
+    assertEquals(id, log.partitionMetadataFile.read().topicId)
   }
 
   @Test

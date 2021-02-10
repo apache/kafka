@@ -1089,7 +1089,8 @@ object TestUtils extends Logging {
                    scheduler = time.scheduler,
                    time = time,
                    brokerTopicStats = new BrokerTopicStats,
-                   logDirFailureChannel = new LogDirFailureChannel(logDirs.size))
+                   logDirFailureChannel = new LogDirFailureChannel(logDirs.size),
+                   keepPartitionMetadataFile = true)
   }
 
   class MockAlterIsrManager extends AlterIsrManager {
