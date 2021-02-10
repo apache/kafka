@@ -899,13 +899,13 @@ public class MockAdminClient extends AdminClient {
     }
 
     @Override
-    public DecommissionBrokerResult decommissionBroker(int brokerId, DecommissionBrokerOptions options) {
+    public UnregisterBrokerResult unregisterBroker(int brokerId, UnregisterBrokerOptions options) {
         if (usingRaftController) {
-            return new DecommissionBrokerResult(KafkaFuture.completedFuture(null));
+            return new UnregisterBrokerResult(KafkaFuture.completedFuture(null));
         } else {
             KafkaFutureImpl<Void> future = new KafkaFutureImpl<>();
             future.completeExceptionally(new UnsupportedVersionException(""));
-            return new DecommissionBrokerResult(future);
+            return new UnregisterBrokerResult(future);
         }
     }
 
