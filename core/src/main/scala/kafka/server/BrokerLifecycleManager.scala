@@ -196,7 +196,7 @@ class BrokerLifecycleManager(val config: KafkaConfig,
 
   def state(): BrokerState = _state
 
-  class BeginControlledShutdownEvent extends EventQueue.Event {
+  private class BeginControlledShutdownEvent extends EventQueue.Event {
     override def run(): Unit = {
       _state match {
         case BrokerState.PENDING_CONTROLLED_SHUTDOWN =>
@@ -235,14 +235,14 @@ class BrokerLifecycleManager(val config: KafkaConfig,
     eventQueue.close()
   }
 
-  class SetReadyToUnfenceEvent() extends EventQueue.Event {
+  private class SetReadyToUnfenceEvent() extends EventQueue.Event {
     override def run(): Unit = {
       readyToUnfence = true
       scheduleNextCommunicationImmediately()
     }
   }
 
-  class StartupEvent(highestMetadataOffsetProvider: () => Long,
+  private class StartupEvent(highestMetadataOffsetProvider: () => Long,
                      channelManager: BrokerToControllerChannelManager,
                      clusterId: Uuid,
                      advertisedListeners: ListenerCollection,
@@ -286,7 +286,7 @@ class BrokerLifecycleManager(val config: KafkaConfig,
       new BrokerRegistrationResponseHandler())
   }
 
-  class BrokerRegistrationResponseHandler extends ControllerRequestCompletionHandler {
+  private class BrokerRegistrationResponseHandler extends ControllerRequestCompletionHandler {
     override def onComplete(response: ClientResponse): Unit = {
       if (response.authenticationException() != null) {
         error(s"Unable to register broker ${nodeId} because of an authentication exception.",
@@ -342,7 +342,7 @@ class BrokerLifecycleManager(val config: KafkaConfig,
       new BrokerHeartbeatResponseHandler())
   }
 
-  class BrokerHeartbeatResponseHandler extends ControllerRequestCompletionHandler {
+  private class BrokerHeartbeatResponseHandler extends ControllerRequestCompletionHandler {
     override def onComplete(response: ClientResponse): Unit = {
       if (response.authenticationException() != null) {
         error(s"Unable to send broker heartbeat for ${nodeId} because of an " +
@@ -446,7 +446,7 @@ class BrokerLifecycleManager(val config: KafkaConfig,
       new CommunicationEvent())
   }
 
-  class RegistrationTimeoutEvent extends EventQueue.Event {
+  private class RegistrationTimeoutEvent extends EventQueue.Event {
     override def run(): Unit = {
       if (!initialRegistrationSucceeded) {
         error("Shutting down because we were unable to register with the controller quorum.")
@@ -455,7 +455,7 @@ class BrokerLifecycleManager(val config: KafkaConfig,
     }
   }
 
-  class CommunicationEvent extends EventQueue.Event {
+  private class CommunicationEvent extends EventQueue.Event {
     override def run(): Unit = {
       if (registered) {
         sendBrokerHeartbeat()
@@ -465,7 +465,7 @@ class BrokerLifecycleManager(val config: KafkaConfig,
     }
   }
 
-  class ShutdownEvent extends EventQueue.Event {
+  private class ShutdownEvent extends EventQueue.Event {
     override def run(): Unit = {
       info(s"Transitioning from ${_state} to ${BrokerState.SHUTTING_DOWN}.")
       _state = BrokerState.SHUTTING_DOWN
