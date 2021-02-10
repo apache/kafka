@@ -1370,7 +1370,6 @@ project(':shell') {
 
     testCompile project(':clients')
     testCompile libs.junitJupiter
-    testCompile project(':clients').sourceSets.test.output
 
     testRuntime libs.slf4jlog4j
   }

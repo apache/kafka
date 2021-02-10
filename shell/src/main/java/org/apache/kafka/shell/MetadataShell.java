@@ -89,7 +89,7 @@ public final class MetadataShell {
                     throw new RuntimeException("If you specify a snapshot path, you " +
                         "must not also specify controllers to connect to.");
                 }
-                return buildWithSnapshotReader();
+                return buildWithSnapshotFileReader();
             } else {
                 return buildWithControllerConnect();
             }
@@ -149,17 +149,17 @@ public final class MetadataShell {
             return new MetadataShell(raftManager, null, nodeManager);
         }
 
-        public MetadataShell buildWithSnapshotReader() throws Exception {
+        public MetadataShell buildWithSnapshotFileReader() throws Exception {
             MetadataNodeManager nodeManager = null;
-            SnapshotReader snapshotReader = null;
+            SnapshotFileReader reader = null;
             try {
                 nodeManager = new MetadataNodeManager();
-                snapshotReader = new SnapshotReader(snapshotPath, nodeManager.logListener());
-                return new MetadataShell(null, snapshotReader, nodeManager);
+                reader = new SnapshotFileReader(snapshotPath, nodeManager.logListener());
+                return new MetadataShell(null, reader, nodeManager);
             } catch (Throwable e) {
                 log.error("Initialization error", e);
-                if (snapshotReader != null) {
-                    snapshotReader.close();
+                if (reader != null) {
+                    reader.close();
                 }
                 if (nodeManager != null) {
                     nodeManager.close();
@@ -171,15 +171,15 @@ public final class MetadataShell {
 
     private final KafkaRaftManager<ApiMessageAndVersion> raftManager;
 
-    private final SnapshotReader snapshotReader;
+    private final SnapshotFileReader reader;
 
     private final MetadataNodeManager nodeManager;
 
     public MetadataShell(KafkaRaftManager<ApiMessageAndVersion> raftManager,
-                        SnapshotReader snapshotReader,
+                        SnapshotFileReader snapshotFileReader,
                         MetadataNodeManager nodeManager) {
         this.raftManager = raftManager;
-        this.snapshotReader = snapshotReader;
+        this.snapshotFileReader = snapshotFileReader;
         this.nodeManager = nodeManager;
     }
 
@@ -188,8 +188,8 @@ public final class MetadataShell {
         if (raftManager != null) {
             raftManager.startup();
             raftManager.register(nodeManager.logListener());
-        } else if (snapshotReader != null) {
-            snapshotReader.startup();
+        } else if (snapshotFileReader != null) {
+            snapshotFileReader.startup();
         } else {
             throw new RuntimeException("Expected either a raft manager or snapshot reader");
         }
@@ -214,8 +214,8 @@ public final class MetadataShell {
         if (raftManager != null) {
             raftManager.shutdown();
         }
-        if (snapshotReader != null) {
-            snapshotReader.close();
+        if (snapshotFileReader != null) {
+            snapshotFileReader.close();
         }
         nodeManager.close();
     }

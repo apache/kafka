@@ -42,10 +42,10 @@ import java.util.concurrent.CompletableFuture;
 
 
 /**
- * The Kafka metadata tool.
+ * Reads Kafka metadata snapshots.
  */
-public final class SnapshotReader implements AutoCloseable {
-    private static final Logger log = LoggerFactory.getLogger(SnapshotReader.class);
+public final class SnapshotFileReader implements AutoCloseable {
+    private static final Logger log = LoggerFactory.getLogger(SnapshotFileReader.class);
 
     private final String snapshotPath;
     private final MetaLogListener listener;
@@ -53,7 +53,7 @@ public final class SnapshotReader implements AutoCloseable {
     private FileRecords fileRecords;
     private Iterator<FileChannelRecordBatch> batchIterator;
 
-    public SnapshotReader(String snapshotPath, MetaLogListener listener) {
+    public SnapshotFileReader(String snapshotPath, MetaLogListener listener) {
         this.snapshotPath = snapshotPath;
         this.listener = listener;
         this.queue = new KafkaEventQueue(Time.SYSTEM,
