@@ -45,7 +45,7 @@ public interface RaftClient<T> extends Closeable {
 
         /**
          * Callback which is invoked when the Listener needs to load a snapshot.
-         * It is the responsibility of this implementation to invoke {@link BatchReader#close()}
+         * It is the responsibility of this implementation to invoke {@link SnapshotReader#close()}
          * after consuming the reader.
          *
          * When handling this call, the implementation must assume that all previous calls

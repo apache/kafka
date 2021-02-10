@@ -2337,7 +2337,7 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
 
         /**
          * This API is used when the Listener needs to be notified of a new snapshot. This happens
-         * when the context's next offset is less that then log start offset.
+         * when the context's next offset is less than then log start offset.
          */
         public void fireHandleSnapshot(SnapshotReader<T> reader) {
             synchronized (this) {

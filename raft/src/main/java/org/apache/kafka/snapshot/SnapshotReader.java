@@ -38,7 +38,7 @@ public final class SnapshotReader<T> implements Closeable, Iterable<List<T>> {
     /**
      * A type for reading an immutable snapshot.
      *
-     * A snapshot reader can be used to scan through all of the objects T in a the snapshot. It
+     * A snapshot reader can be used to scan through all of the objects T in a snapshot. It
      * is assumed that the content of the snapshot represents all of the objects T for the topic
      * partition from offset 0 up to but not including the end offset in the snapshot id.
      */
@@ -111,8 +111,9 @@ public final class SnapshotReader<T> implements Closeable, Iterable<List<T>> {
         private List<T> findNext() {
             RecordBatch batch = null;
             while (iterator.hasNext()) {
-                batch = iterator.next();
-                if (!batch.isControlBatch()) {
+                RecordBatch current = iterator.next();
+                if (!current.isControlBatch()) {
+                    batch = current;
                     break;
                 }
             }

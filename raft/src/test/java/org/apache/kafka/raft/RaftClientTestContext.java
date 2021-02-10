@@ -85,8 +85,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public final class RaftClientTestContext {
-    private static final StringSerde STRING_SERDE = new StringSerde();
-
+    public final RecordSerde<String> serde = Builder.SERDE;
     final TopicPartition metadataPartition = Builder.METADATA_PARTITION;
     final int electionBackoffMaxMs = Builder.ELECTION_BACKOFF_MAX_MS;
     final int electionFetchMaxWaitMs = Builder.FETCH_MAX_WAIT_MS;
@@ -113,6 +112,7 @@ public final class RaftClientTestContext {
     public static final class Builder {
         static final int DEFAULT_ELECTION_TIMEOUT_MS = 10000;
 
+        private static final RecordSerde<String> SERDE = new StringSerde();
         private static final TopicPartition METADATA_PARTITION = new TopicPartition("metadata", 0);
         private static final int ELECTION_BACKOFF_MAX_MS = 100;
         private static final int FETCH_MAX_WAIT_MS = 0;
@@ -208,7 +208,7 @@ public final class RaftClientTestContext {
                     ELECTION_BACKOFF_MAX_MS, FETCH_TIMEOUT_MS, appendLingerMs);
 
             KafkaRaftClient<String> client = new KafkaRaftClient<>(
-                STRING_SERDE,
+                SERDE,
                 channel,
                 messageQueue,
                 log,
@@ -301,7 +301,7 @@ public final class RaftClientTestContext {
         ByteBuffer buffer = ByteBuffer.allocate(512);
         BatchBuilder<String> builder = new BatchBuilder<>(
             buffer,
-            STRING_SERDE,
+            Builder.SERDE,
             CompressionType.NONE,
             baseOffset,
             timestamp,

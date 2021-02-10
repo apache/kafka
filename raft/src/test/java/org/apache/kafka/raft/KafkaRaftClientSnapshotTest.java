@@ -33,7 +33,7 @@ import org.apache.kafka.snapshot.RawSnapshotReader;
 import org.apache.kafka.snapshot.RawSnapshotWriter;
 import org.apache.kafka.snapshot.SnapshotReader;
 import org.apache.kafka.snapshot.SnapshotWriter;
-import org.apache.kafka.snapshot.SnapshotWriterTest;
+import org.apache.kafka.snapshot.SnapshotWriterReaderTest;
 import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
@@ -74,7 +74,7 @@ final public class KafkaRaftClientSnapshotTest {
         // Check that listener was notified of the new snapshot
         try (SnapshotReader<String> snapshot = context.listener.takeSnapshot().get()) {
             assertEquals(snapshotId, snapshot.snapshotId());
-            SnapshotWriterTest.assertSnapshot(Arrays.asList(), snapshot);
+            SnapshotWriterReaderTest.assertSnapshot(Arrays.asList(), snapshot);
         }
     }
 
@@ -110,7 +110,7 @@ final public class KafkaRaftClientSnapshotTest {
         // Check that listener was notified of the new snapshot
         try (SnapshotReader<String> snapshot = context.listener.takeSnapshot().get()) {
             assertEquals(snapshotId, snapshot.snapshotId());
-            SnapshotWriterTest.assertSnapshot(Arrays.asList(), snapshot);
+            SnapshotWriterReaderTest.assertSnapshot(Arrays.asList(), snapshot);
         }
     }
 
@@ -150,7 +150,7 @@ final public class KafkaRaftClientSnapshotTest {
         // Check that the second listener was notified of the new snapshot
         try (SnapshotReader<String> snapshot = secondListener.takeSnapshot().get()) {
             assertEquals(snapshotId, snapshot.snapshotId());
-            SnapshotWriterTest.assertSnapshot(Arrays.asList(), snapshot);
+            SnapshotWriterReaderTest.assertSnapshot(Arrays.asList(), snapshot);
         }
     }
 
@@ -180,7 +180,7 @@ final public class KafkaRaftClientSnapshotTest {
         // Check that listener was notified of the new snapshot
         try (SnapshotReader<String> snapshot = context.listener.takeSnapshot().get()) {
             assertEquals(snapshotId, snapshot.snapshotId());
-            SnapshotWriterTest.assertSnapshot(Arrays.asList(), snapshot);
+            SnapshotWriterReaderTest.assertSnapshot(Arrays.asList(), snapshot);
         }
 
         // Generate a new snapshot
@@ -193,7 +193,7 @@ final public class KafkaRaftClientSnapshotTest {
         // Check that listener was notified of the second snapshot
         try (SnapshotReader<String> snapshot = context.listener.takeSnapshot().get()) {
             assertEquals(secondSnapshot, snapshot.snapshotId());
-            SnapshotWriterTest.assertSnapshot(Arrays.asList(), snapshot);
+            SnapshotWriterReaderTest.assertSnapshot(Arrays.asList(), snapshot);
         }
     }
 
@@ -895,13 +895,13 @@ final public class KafkaRaftClientSnapshotTest {
         // Check that the snapshot was written to the log
         try (RawSnapshotReader snapshot = context.log.readSnapshot(snapshotId).get()) {
             assertEquals(memorySnapshot.buffer().remaining(), snapshot.sizeInBytes());
-            SnapshotWriterTest.assertSnapshot(Arrays.asList(records), snapshot);
+            SnapshotWriterReaderTest.assertSnapshot(Arrays.asList(records), snapshot);
         }
 
         // Check that listener was notified of the new snapshot
         try (SnapshotReader<String> snapshot = context.listener.takeSnapshot().get()) {
             assertEquals(snapshotId, snapshot.snapshotId());
-            SnapshotWriterTest.assertSnapshot(Arrays.asList(records), snapshot);
+            SnapshotWriterReaderTest.assertSnapshot(Arrays.asList(records), snapshot);
         }
     }
 
@@ -999,13 +999,13 @@ final public class KafkaRaftClientSnapshotTest {
         // Check that the snapshot was written to the log
         try (RawSnapshotReader snapshot = context.log.readSnapshot(snapshotId).get()) {
             assertEquals(memorySnapshot.buffer().remaining(), snapshot.sizeInBytes());
-            SnapshotWriterTest.assertSnapshot(Arrays.asList(records), snapshot);
+            SnapshotWriterReaderTest.assertSnapshot(Arrays.asList(records), snapshot);
         }
 
         // Check that listener was notified of the new snapshot
         try (SnapshotReader<String> snapshot = context.listener.takeSnapshot().get()) {
             assertEquals(snapshotId, snapshot.snapshotId());
-            SnapshotWriterTest.assertSnapshot(Arrays.asList(records), snapshot);
+            SnapshotWriterReaderTest.assertSnapshot(Arrays.asList(records), snapshot);
         }
     }
 
