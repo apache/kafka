@@ -66,12 +66,13 @@ class BrokerLifecycleManager(val config: KafkaConfig,
   /**
    * The broker rack, or null if there is no configured rack.
    */
-  private val rack = config.rack.orNull
+  private val rack = config.rack
 
   /**
    * How long to wait for registration to succeed before failing the startup process.
    */
-  private val initialTimeoutNs = MILLISECONDS.toNanos(config.initialRegistrationTimeoutMs.longValue())
+  private val initialTimeoutNs =
+    MILLISECONDS.toNanos(config.initialRegistrationTimeoutMs.longValue())
 
   /**
    * The exponential backoff to use for resending communication.
@@ -80,8 +81,8 @@ class BrokerLifecycleManager(val config: KafkaConfig,
     new ExponentialBackoff(100, 2, config.brokerSessionTimeoutMs.toLong, 0.02)
 
   /**
-   * The number of tries we've tried to communicate.  This variable can only be read or
-   * written from the event queue thread.
+   * The number of times we've tried and failed to communicate.  This variable can only be
+   * read or written from the event queue thread.
    */
   private var failedAttempts = 0L
 
@@ -117,7 +118,7 @@ class BrokerLifecycleManager(val config: KafkaConfig,
    * A thread-safe callback function which gives this manager the current highest metadata
    * offset.  This variable can only be read or written from the event queue thread.
    */
-  private var _highestMetadataOffsetProvider: () => Long = null
+  private var _highestMetadataOffsetProvider: () => Long = _
 
   /**
    * True only if we are ready to unfence the broker.  This variable can only be read or
@@ -132,7 +133,7 @@ class BrokerLifecycleManager(val config: KafkaConfig,
   private var gotControlledShutdownResponse = false
 
   /**
-   * Whether or not we this broker is registered with the controller quorum.
+   * Whether or not this broker is registered with the controller quorum.
    * This variable can only be read or written from the event queue thread.
    */
   private var registered = false
@@ -147,25 +148,25 @@ class BrokerLifecycleManager(val config: KafkaConfig,
    * The cluster ID, or null if this manager has not been started yet.  This variable can
    * only be read or written from the event queue thread.
    */
-  private var _clusterId: Uuid = null
+  private var _clusterId: Uuid = _
 
   /**
    * The listeners which this broker advertises.  This variable can only be read or
    * written from the event queue thread.
    */
-  private var _advertisedListeners: ListenerCollection = null
+  private var _advertisedListeners: ListenerCollection = _
 
   /**
    * The features supported by this broker.  This variable can only be read or written
    * from the event queue thread.
    */
-  private var _supportedFeatures: util.Map[String, VersionRange] = null
+  private var _supportedFeatures: util.Map[String, VersionRange] = _
 
   /**
    * The channel manager, or null if this manager has not been started yet.  This variable
    * can only be read or written from the event queue thread.
    */
-  var _channelManager: BrokerToControllerChannelManager = null
+  var _channelManager: BrokerToControllerChannelManager = _
 
   /**
    * The event queue.
@@ -200,10 +201,10 @@ class BrokerLifecycleManager(val config: KafkaConfig,
     override def run(): Unit = {
       _state match {
         case BrokerState.PENDING_CONTROLLED_SHUTDOWN =>
-          info(s"Attempted to enter controlled shutdown state, but we are already in " +
-            s"that state.")
+          info("Attempted to enter pending controlled shutdown state, but we are " +
+          "already in that state.")
         case BrokerState.RUNNING =>
-          info(s"Beginning controlled shutdown.")
+          info("Beginning controlled shutdown.")
           _state = BrokerState.PENDING_CONTROLLED_SHUTDOWN
         case _ =>
           info(s"Skipping controlled shutdown because we are in state ${_state}.")
@@ -253,8 +254,8 @@ class BrokerLifecycleManager(val config: KafkaConfig,
       _channelManager.start()
       _state = BrokerState.STARTING
       _clusterId = clusterId
-      _advertisedListeners = advertisedListeners
-      _supportedFeatures = supportedFeatures
+      _advertisedListeners = advertisedListeners.duplicate()
+      _supportedFeatures = new util.HashMap[String, VersionRange](supportedFeatures)
       eventQueue.scheduleDeferred("initialRegistrationTimeout",
         new DeadlineFunction(time.nanoseconds() + initialTimeoutNs),
         new RegistrationTimeoutEvent())
@@ -278,7 +279,7 @@ class BrokerLifecycleManager(val config: KafkaConfig,
         setFeatures(features).
         setIncarnationId(incarnationId).
         setListeners(_advertisedListeners).
-        setRack(rack)
+        setRack(rack.orNull)
     if (isTraceEnabled) {
       trace(s"Sending broker registration ${data}")
     }
