@@ -172,10 +172,10 @@ class ServerShutdownTest extends ZooKeeperTestHarness {
       // goes wrong so that awaitShutdown doesn't hang
       case e: Exception =>
         assertTrue(exceptionClassTag.runtimeClass.isInstance(e), s"Unexpected exception $e")
-        assertEquals(BrokerState.NOT_RUNNING, server.brokerState.get())
+        assertEquals(BrokerState.NOT_RUNNING, server.brokerState)
     }
     finally {
-      if (server.brokerState.get() != BrokerState.NOT_RUNNING)
+      if (server.brokerState != BrokerState.NOT_RUNNING)
         server.shutdown()
       server.awaitShutdown()
     }

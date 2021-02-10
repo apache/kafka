@@ -263,7 +263,7 @@ public class EmbeddedKafkaCluster {
 
     protected boolean hasState(KafkaServer server, Predicate<BrokerState> desiredState) {
         try {
-            return desiredState.test(server.brokerState().get());
+            return desiredState.test(server.brokerState());
         } catch (Throwable e) {
             // Broker failed to respond.
             return false;
