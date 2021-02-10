@@ -60,7 +60,7 @@ import java.util.function.Function;
 
 import static java.util.Arrays.asList;
 import static java.util.Collections.singletonList;
-import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.startApplicationAndWaitUntilRunning;
+import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.waitForApplicationState;
 import static org.junit.Assert.assertEquals;
 
 @Category({IntegrationTest.class})
@@ -137,6 +137,7 @@ public class KTableKTableForeignKeyInnerJoinMultiIntegrationTest {
             new KeyValue<>(10, "waffle")
         );
 
+//        System.err.println("!!! MOCK_TIME:" + MOCK_TIME.milliseconds());
         IntegrationTestUtils.produceKeyValuesSynchronously(TABLE_1, table1, PRODUCER_CONFIG_1, MOCK_TIME);
         IntegrationTestUtils.produceKeyValuesSynchronously(TABLE_2, table2, PRODUCER_CONFIG_2, MOCK_TIME);
         IntegrationTestUtils.produceKeyValuesSynchronously(TABLE_3, table3, PRODUCER_CONFIG_3, MOCK_TIME);
@@ -271,12 +272,17 @@ public class KTableKTableForeignKeyInnerJoinMultiIntegrationTest {
         streamsTwo.start();
         streamsThree.start();
 
-        startApplicationAndWaitUntilRunning(singletonList(streams), Duration.ofSeconds(60));
-        startApplicationAndWaitUntilRunning(singletonList(streamsTwo), Duration.ofSeconds(60));
-        startApplicationAndWaitUntilRunning(singletonList(streamsThree), Duration.ofSeconds(60));
+        waitForApplicationState(singletonList(streams), KafkaStreams.State.RUNNING, Duration.ofSeconds(60));
+        waitForApplicationState(singletonList(streamsTwo), KafkaStreams.State.RUNNING, Duration.ofSeconds(60));
+        waitForApplicationState(singletonList(streamsThree), KafkaStreams.State.RUNNING, Duration.ofSeconds(60));
+//        startApplicationAndWaitUntilRunning(singletonList(streams), Duration.ofSeconds(60));
+//        startApplicationAndWaitUntilRunning(singletonList(streamsTwo), Duration.ofSeconds(60));
+//        startApplicationAndWaitUntilRunning(singletonList(streamsThree), Duration.ofSeconds(60));
 
         System.err.println("!!! before stream state:" + streams.state() + streamsTwo.state() + streamsThree.state());
 
+//        Thread.sleep(20000);
+//        System.out.println("sleep done");
         final Set<KeyValue<Integer, String>> result = new HashSet<>(IntegrationTestUtils.waitUntilMinKeyValueRecordsReceived(
                 CONSUMER_CONFIG,
                 OUTPUT,
