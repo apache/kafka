@@ -81,7 +81,7 @@ public class BlockingConnectorTest {
     private static final int NUM_RECORDS_PRODUCED = 100;
     private static final long CONNECT_WORKER_STARTUP_TIMEOUT = TimeUnit.SECONDS.toMillis(30);
     private static final long RECORD_TRANSFER_DURATION_MS = TimeUnit.SECONDS.toMillis(30);
-    private static final long REST_REQUEST_TIMEOUT = Worker.CONNECTOR_GRACEFUL_SHUTDOWN_TIMEOUT_MS * 2;
+    private static final long REST_REQUEST_TIMEOUT = TimeUnit.SECONDS.toMillis(30);
 
     private static final String CONNECTOR_INITIALIZE = "Connector::initialize";
     private static final String CONNECTOR_INITIALIZE_WITH_TASK_CONFIGS = "Connector::initializeWithTaskConfigs";
