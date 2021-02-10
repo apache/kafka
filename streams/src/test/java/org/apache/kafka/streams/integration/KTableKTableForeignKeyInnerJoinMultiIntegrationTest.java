@@ -137,7 +137,6 @@ public class KTableKTableForeignKeyInnerJoinMultiIntegrationTest {
             new KeyValue<>(10, "waffle")
         );
 
-//        System.err.println("!!! MOCK_TIME:" + MOCK_TIME.milliseconds());
         IntegrationTestUtils.produceKeyValuesSynchronously(TABLE_1, table1, PRODUCER_CONFIG_1, MOCK_TIME);
         IntegrationTestUtils.produceKeyValuesSynchronously(TABLE_2, table2, PRODUCER_CONFIG_2, MOCK_TIME);
         IntegrationTestUtils.produceKeyValuesSynchronously(TABLE_3, table3, PRODUCER_CONFIG_3, MOCK_TIME);
@@ -270,6 +269,8 @@ public class KTableKTableForeignKeyInnerJoinMultiIntegrationTest {
         streamsThree = prepareTopology(queryableName, queryableNameTwo, streamsConfigThree);
         streams.start();
         streamsTwo.start();
+//        Thread.sleep(20000);
+//        System.out.println("sleep done");
         streamsThree.start();
 
         waitForApplicationState(singletonList(streams), KafkaStreams.State.RUNNING, Duration.ofSeconds(60));
@@ -281,8 +282,7 @@ public class KTableKTableForeignKeyInnerJoinMultiIntegrationTest {
 
         System.err.println("!!! before stream state:" + streams.state() + streamsTwo.state() + streamsThree.state());
 
-//        Thread.sleep(20000);
-//        System.out.println("sleep done");
+
         final Set<KeyValue<Integer, String>> result = new HashSet<>(IntegrationTestUtils.waitUntilMinKeyValueRecordsReceived(
                 CONSUMER_CONFIG,
                 OUTPUT,
@@ -346,8 +346,12 @@ public class KTableKTableForeignKeyInnerJoinMultiIntegrationTest {
             throw new RuntimeException("Current implementation of joinOnForeignKey requires a materialized store");
         }
 
-        final Function<Float, String> tableOneKeyExtractor = value -> Integer.toString((int) value.floatValue());
+        final Function<Float, String> tableOneKeyExtractor = value -> {
+            System.err.println("!!! tableOneKeyExtractor:" + value);
+            return Integer.toString((int) value.floatValue());
+        };
         final Function<String, Integer> joinedTableKeyExtractor = value -> {
+            System.err.println("!!! joinedTableKeyExtractor:" + value);
             //Hardwired to return the desired foreign key as a test shortcut
             if (value.contains("value2=10"))
                 return 10;

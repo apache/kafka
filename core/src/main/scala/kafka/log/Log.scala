@@ -1866,7 +1866,6 @@ class Log(@volatile private var _dir: File,
     val startMs = time.milliseconds
 
     def shouldDelete(segment: LogSegment, nextSegmentOpt: Option[LogSegment]): Boolean = {
-      System.err.println("!!! config.retentionMs:" + config.retentionMs + ", segment.largestTimestamp:" + segment.largestTimestamp)
       startMs - segment.largestTimestamp > config.retentionMs
     }
 
