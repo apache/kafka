@@ -43,22 +43,35 @@ case object DefaultMatch extends QuotaMatch
 case object TypeMatch extends QuotaMatch
 
 
+/**
+ * Maintains a cache of QuotaEntity and their respective quotas.
+ *
+ * The main cache is structured like:
+ *
+ * <pre>
+ * {
+ *   (user:alice) -> {consumer_byte_rate: 10000},
+ *   (user:alice,client:x) -> {consumer_byte_rate: 8000, producer_byte_rate: 8000}
+ * }
+ * </pre>
+ *
+ * In addition to this cache, this class maintains three indexes for the three supported entity types (user, client,
+ * and IP). These indexes map a part of an entity to the list of all QuotaEntity which contain that entity. For example:
+ *
+ * <pre>
+ * {
+ *   SpecificUser(alice) -> [(user:alice), (user:alice,client:x)],
+ *   DefaultUser -> [(user:default), (user:default, client:x)]
+ * }
+ * </pre>
+ *
+ * These indexes exist to support the flexible lookups needed by DescribeClientQuota RPC
+ */
 class ClientQuotaCache {
   private type QuotaCacheIndex = mutable.HashMap[CacheIndexKey, mutable.HashSet[QuotaEntity]]
 
-  // A mapping of the quota entities to their quotas, for example:
-  // {
-  //   (user:alice) -> {consumer_byte_rate: 10000},
-  //   (user:alice,client:x) -> {consumer_byte_rate: 8000, producer_byte_rate: 8000}
-  // }
   private val quotaCache = new mutable.HashMap[QuotaEntity, mutable.Map[String, Double]]
 
-  // Indexes for the three supported entity types. This is needed for flexible lookups like: "all quotas for user:alice"
-  // The structure of these indexes is a mapping of a specific entity entry to entities in the cache:
-  // {
-  //   SpecificUser(alice) -> [(user:alice), (user:alice,client:x)],
-  //   DefaultUser -> [(user:default), (user:default, client:default), (user:default, client:x), ...]
-  // }
   // We need three separate indexes because we also support wildcard lookups on entity type.
   private val userEntityIndex = new QuotaCacheIndex
   private val clientIdEntityIndex = new QuotaCacheIndex

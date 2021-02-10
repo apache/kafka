@@ -45,7 +45,7 @@ case class DefaultUserExplicitClientIdEntity(clientId: String) extends QuotaEnti
 case object DefaultUserDefaultClientIdEntity extends QuotaEntity
 
 /**
- * Watch for changes to quotas in the metadata log and update quota managers and cache as necessary
+ * Process quota metadata records as they appear in the metadata log and update quota managers and cache as necessary
  */
 class ClientQuotaMetadataManager(private[metadata] val quotaManagers: QuotaManagers,
                                  private[metadata] val connectionQuotas: ConnectionQuotas,
@@ -144,8 +144,6 @@ class ClientQuotaMetadataManager(private[metadata] val quotaManagers: QuotaManag
         return
     }
 
-    quotaCache.updateQuotaCache(quotaEntity, quotaRecord.key, quotaRecord.value, quotaRecord.remove)
-
     // Convert entity into Options with sanitized values for QuotaManagers
     val (sanitizedUser, sanitizedClientId) = quotaEntity match {
       case UserEntity(user) => (Some(Sanitizer.sanitize(user)), None)
@@ -170,5 +168,7 @@ class ClientQuotaMetadataManager(private[metadata] val quotaManagers: QuotaManag
       clientId = sanitizedClientId.map(Sanitizer.desanitize),
       sanitizedClientId = sanitizedClientId,
       quota = quotaValue)
+
+    quotaCache.updateQuotaCache(quotaEntity, quotaRecord.key, quotaRecord.value, quotaRecord.remove)
   }
 }
