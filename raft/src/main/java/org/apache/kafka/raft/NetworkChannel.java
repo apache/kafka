@@ -30,10 +30,8 @@ public interface NetworkChannel extends Closeable {
     int newCorrelationId();
 
     /**
-     * Send an outbound message. This could be either an outbound request
+     * Send an outbound message. This could be an outbound request
      * (i.e. an instance of {@link org.apache.kafka.raft.RaftRequest.Outbound})
-     * or a response to a request that was received through {@link #receive(long)}
-     * (i.e. an instance of {@link org.apache.kafka.raft.RaftResponse.Outbound}).
      */
     void send(RaftRequest.Outbound request);
 
