@@ -40,13 +40,16 @@ final class ClusterConnectionStates {
     private final double reconnectBackoffMaxExp;
     private final Map<String, NodeConnectionState> nodeState;
     private final Logger log;
+    private final HostResolver hostResolver;
 
-    public ClusterConnectionStates(long reconnectBackoffMs, long reconnectBackoffMaxMs, LogContext logContext) {
+    public ClusterConnectionStates(long reconnectBackoffMs, long reconnectBackoffMaxMs,
+                                   LogContext logContext, HostResolver hostResolver) {
         this.log = logContext.logger(ClusterConnectionStates.class);
         this.reconnectBackoffInitMs = reconnectBackoffMs;
         this.reconnectBackoffMaxMs = reconnectBackoffMaxMs;
         this.reconnectBackoffMaxExp = Math.log(this.reconnectBackoffMaxMs / (double) Math.max(reconnectBackoffMs, 1)) / Math.log(RECONNECT_BACKOFF_EXP_BASE);
         this.nodeState = new HashMap<>();
+        this.hostResolver = hostResolver;
     }
 
     /**
@@ -139,7 +142,7 @@ final class ClusterConnectionStates {
         // Create a new NodeConnectionState if nodeState does not already contain one
         // for the specified id or if the hostname associated with the node id changed.
         nodeState.put(id, new NodeConnectionState(ConnectionState.CONNECTING, now,
-            this.reconnectBackoffInitMs, host, clientDnsLookup));
+            this.reconnectBackoffInitMs, host, clientDnsLookup, hostResolver));
     }
 
     /**
@@ -158,9 +161,14 @@ final class ClusterConnectionStates {
      */
     public void disconnected(String id, long now) {
         NodeConnectionState nodeState = nodeState(id);
-        nodeState.state = ConnectionState.DISCONNECTED;
         nodeState.lastConnectAttemptMs = now;
         updateReconnectBackoff(nodeState);
+        if (nodeState.state.isConnected()) {
+            // If a connection had previously been established, clear the addresses to trigger a new DNS resolution
+            // because the node IPs may have changed
+            nodeState.clearAddresses();
+        }
+        nodeState.state = ConnectionState.DISCONNECTED;
     }
 
     /**
@@ -373,9 +381,10 @@ final class ClusterConnectionStates {
         private int addressIndex;
         private final String host;
         private final ClientDnsLookup clientDnsLookup;
+        private final HostResolver hostResolver;
 
         private NodeConnectionState(ConnectionState state, long lastConnectAttempt, long reconnectBackoffMs,
-                String host, ClientDnsLookup clientDnsLookup) {
+                String host, ClientDnsLookup clientDnsLookup, HostResolver hostResolver) {
             this.state = state;
             this.addresses = Collections.emptyList();
             this.addressIndex = -1;
@@ -386,6 +395,7 @@ final class ClusterConnectionStates {
             this.throttleUntilTimeMs = 0;
             this.host = host;
             this.clientDnsLookup = clientDnsLookup;
+            this.hostResolver = hostResolver;
         }
 
         public String host() {
@@ -400,7 +410,7 @@ final class ClusterConnectionStates {
         private InetAddress currentAddress() throws UnknownHostException {
             if (addresses.isEmpty()) {
                 // (Re-)initialize list
-                addresses = ClientUtils.resolve(host, clientDnsLookup);
+                addresses = ClientUtils.resolve(host, clientDnsLookup, hostResolver);
                 addressIndex = 0;
             }
 
@@ -418,6 +428,13 @@ final class ClusterConnectionStates {
             addressIndex = (addressIndex + 1) % addresses.size();
             if (addressIndex == 0)
                 addresses = Collections.emptyList(); // Exhausted list. Re-resolve on next currentAddress() call
+        }
+
+        /**
+         * Clears the resolved addresses in order to trigger re-resolving on the next {@link #currentAddress()} call.
+         */
+        private void clearAddresses() {
+            addresses = Collections.emptyList();
         }
 
         public String toString() {
