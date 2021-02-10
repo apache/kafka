@@ -19,29 +19,37 @@ package org.apache.kafka.snapshot;
 
 import java.io.Closeable;
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
-import java.util.ArrayList;
+import java.util.NoSuchElementException;
 import org.apache.kafka.common.protocol.ByteBufferAccessor;
-import org.apache.kafka.common.record.BufferSupplier.GrowableBufferSupplier;
+import org.apache.kafka.common.record.BufferSupplier;
 import org.apache.kafka.common.record.Record;
 import org.apache.kafka.common.record.RecordBatch;
 import org.apache.kafka.raft.OffsetAndEpoch;
 import org.apache.kafka.raft.RecordSerde;
 
-final public class SnapshotReader<T> implements Closeable, Iterable<List<T>> {
-    final private RawSnapshotReader snapshot;
-    final private RecordSerde<T> serde;
+public final class SnapshotReader<T> implements Closeable, Iterable<List<T>> {
+    private final RawSnapshotReader snapshot;
+    private final RecordSerde<T> serde;
+    private final BufferSupplier bufferSupplier;
 
     /**
-     * TODO: write documentation
+     * A type for reading an immutable snapshot.
+     *
+     * A snapshot reader can be used to scan through all of the objects T in a the snapshot. It
+     * is assumed that the content of the snapshot represents all of the objects T for the topic
+     * partition from offset 0 up to but not including the end offset in the snapshot id.
      */
     public SnapshotReader(
         RawSnapshotReader snapshot,
-        RecordSerde<T> serde
+        RecordSerde<T> serde,
+        BufferSupplier bufferSupplier
     ) {
         this.snapshot = snapshot;
         this.serde = serde;
+        this.bufferSupplier = bufferSupplier;
     }
 
     /**
@@ -53,7 +61,7 @@ final public class SnapshotReader<T> implements Closeable, Iterable<List<T>> {
 
     @Override
     public Iterator<List<T>> iterator() {
-        return new SnapshotReaderIterator<>(snapshot.iterator(), serde);
+        return new SnapshotReaderIterator(snapshot.iterator());
     }
 
     /**
@@ -66,44 +74,76 @@ final public class SnapshotReader<T> implements Closeable, Iterable<List<T>> {
     }
 
 
-    final static class SnapshotReaderIterator<T> implements Iterator<List<T>> {
-        final Iterator<RecordBatch> iterator;
-        final RecordSerde<T> serde;
+    final class SnapshotReaderIterator implements Iterator<List<T>> {
+        private final Iterator<RecordBatch> iterator;
+        private List<T> nextBatch;
 
-        SnapshotReaderIterator(Iterator<RecordBatch> iterator, RecordSerde<T> serde) {
+        SnapshotReaderIterator(Iterator<RecordBatch> iterator) {
             this.iterator = iterator;
-            this.serde = serde;
         }
 
         @Override
         public boolean hasNext() {
-            return iterator.hasNext();
+            if (nextBatch == null) {
+                nextBatch = findNext();
+            }
+
+            return nextBatch != null;
         }
 
         @Override
         public List<T> next() {
-            RecordBatch batch = iterator.next();
+            if (nextBatch == null) {
+                nextBatch = findNext();
+            }
+
+            if (nextBatch == null) {
+                throw new NoSuchElementException(
+                    String.format("Snapshot (%s) doesn't have any more elements", snapshotId())
+                );
+            } else {
+                List<T> result = nextBatch;
+                nextBatch = null;
+                return result;
+            }
+        }
+
+        private List<T> findNext() {
+            RecordBatch batch = null;
+            while (iterator.hasNext()) {
+                batch = iterator.next();
+                if (!batch.isControlBatch()) {
+                    break;
+                }
+            }
+
+            if (batch == null) {
+                return null;
+            }
 
             if (batch.countOrNull() == null) {
                 throw new IllegalStateException(
-                    String.format(
-                        "Expected a record count the the batch (%s)",
-                        batch
-                    )
+                    String.format("Expected a record count the the batch (%s)", batch)
                 );
             }
             List<T> data = new ArrayList<>(batch.countOrNull());
 
-            // TODO: make BufferSupplier configurable
-            Iterator<Record> records = batch.streamingIterator(new GrowableBufferSupplier());
+            Iterator<Record> records = batch.streamingIterator(bufferSupplier);
             while (records.hasNext()) {
                 Record record = records.next();
 
-                // TODO: ignore control records
-                // TODO: verify hasValue is true
-                data.add(
-                    serde.read(new ByteBufferAccessor(record.value()), record.value().remaining())
-                );
+                if (record.hasValue()) {
+                    data.add(
+                        serde.read(new ByteBufferAccessor(record.value()), record.value().remaining())
+                    );
+                } else {
+                    throw new IllegalStateException(
+                        String.format(
+                            "Expected all records in the snapshot (%s) to have a value",
+                            snapshotId()
+                        )
+                    );
+                }
             }
 
             return data;

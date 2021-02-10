@@ -226,7 +226,8 @@ class TestRaftServer(
           }
 
         case HandleSnapshot(reader) =>
-          // TODO: what are we suppose to do here?
+          // Ignore snapshots; only interested on records appended by this leader
+          reader.close()
 
         case Shutdown => // Ignore shutdown command
       }

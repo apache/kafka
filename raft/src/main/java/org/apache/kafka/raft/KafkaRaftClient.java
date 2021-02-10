@@ -131,8 +131,10 @@ import static org.apache.kafka.raft.RaftUtil.hasValidTopicPartition;
  *    some additional metadata on responses (i.e. current leader and epoch). Unlike partition replication,
  *    we also piggyback truncation detection on this API rather than through a separate truncation state.
  *
- * 5) TODO: Talk about FetchSnapshotRequestData
- *
+ * 5) {@link FetchSnapshotRequestData}: Sent by the followers to the epoch leader when fetching a snapshot.
+ *    Followers need to fetch snapshots when the follower's log end offset is less than the leader's log
+ *    start offset. The follower discover this case when the leader replies with a fetch response that
+ *    contains a snapshot id.
  */
 public class KafkaRaftClient<T> implements RaftClient<T> {
     private static final int RETRY_BACKOFF_BASE_MS = 100;
@@ -331,7 +333,7 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
             try {
                 return log
                     .readSnapshot(log.oldestSnapshotId().get())
-                    .map(reader -> new SnapshotReader<>(reader, serde));
+                    .map(reader -> new SnapshotReader<>(reader, serde, BufferSupplier.create()));
             } catch (IOException e) {
                 logger.error(
                     String.format("Unable to read snapshot: %s", log.oldestSnapshotId().get()),

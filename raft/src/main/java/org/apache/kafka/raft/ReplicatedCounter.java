@@ -22,7 +22,6 @@ import org.apache.kafka.snapshot.SnapshotReader;
 import org.slf4j.Logger;
 
 import java.io.IOException;
-import java.util.Iterator;
 import java.util.List;
 import java.util.Optional;
 
@@ -102,9 +101,8 @@ public class ReplicatedCounter implements RaftClient.Listener<Integer> {
         try {
             try (SnapshotReader<Integer> snapshot = reader) {
                 log.debug("Loading snapshot {}", snapshot.snapshotId());
-                Iterator<List<Integer>> batches = snapshot.iterator();
-                while (batches.hasNext()) {
-                    for (Integer value : batches.next()) {
+                for (List<Integer> batch : snapshot) {
+                    for (Integer value : batch) {
                         log.debug("Setting value: {}", value);
                         this.committed = value;
                         this.uncommitted = value;

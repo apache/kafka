@@ -29,7 +29,7 @@ public interface RaftClient<T> extends Closeable {
     interface Listener<T> {
         /**
          * Callback which is invoked for all records committed to the log.
-         * It is the responsibility of the caller to invoke {@link BatchReader#close()}
+         * It is the responsibility of this implementation to invoke {@link BatchReader#close()}
          * after consuming the reader.
          *
          * Note that there is not a one-to-one correspondence between writes through
@@ -44,7 +44,14 @@ public interface RaftClient<T> extends Closeable {
         void handleCommit(BatchReader<T> reader);
 
         /**
-         * TOOD: Write documentation
+         * Callback which is invoked when the Listener needs to load a snapshot.
+         * It is the responsibility of this implementation to invoke {@link BatchReader#close()}
+         * after consuming the reader.
+         *
+         * When handling this call, the implementation must assume that all previous calls
+         * to {@link #handleCommit} contain invalid data.
+         *
+         * @param reader snapshot reader instance which must be iterated and closed
          */
         void handleSnapshot(SnapshotReader<T> reader);
 

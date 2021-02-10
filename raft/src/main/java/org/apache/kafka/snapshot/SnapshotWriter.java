@@ -30,7 +30,7 @@ import java.io.IOException;
 import java.util.List;
 
 /**
- * A type for writing a snapshot fora given end offset and epoch.
+ * A type for writing a snapshot for a given end offset and epoch.
  *
  * A snapshot writer can be used to append objects until freeze is called. When freeze is
  * called the snapshot is validated and marked as immutable. After freeze is called any
