@@ -354,7 +354,7 @@ public enum Errors {
         "Requested position is not greater than or equal to zero, and less than the size of the snapshot.",
         PositionOutOfRangeException::new),
     UNKNOWN_TOPIC_ID(100, "This server does not host this topic ID.", UnknownTopicIdException::new),
-    DUPLICATE_BROKER_REGISTRATION_EXCEPTION(101, "This broker ID is already in use.", DuplicateBrokerRegistrationException::new);
+    DUPLICATE_BROKER_REGISTRATION(101, "This broker ID is already in use.", DuplicateBrokerRegistrationException::new);
 
     private static final Logger log = LoggerFactory.getLogger(Errors.class);
 

@@ -49,26 +49,26 @@ class ClusterToolTest {
   }
 
   @Test
-  def testDecommissionBroker(): Unit = {
+  def testUnregisterBroker(): Unit = {
     val adminClient = new MockAdminClient.Builder().numBrokers(3).
       usingRaftController(true).
       build()
     val stream = new ByteArrayOutputStream()
-    ClusterTool.decommissionCommand(new PrintStream(stream), adminClient, 0)
+    ClusterTool.unregisterCommand(new PrintStream(stream), adminClient, 0)
     assertEquals(
-      s"""Broker 0 is no longer registered. Note that if the broker is still running, or is restarted, it will re-register.
+      s"""Broker 0 is no longer registered.
 """, stream.toString())
   }
 
   @Test
-  def testLegacyModeClusterCannotDecommissionBroker(): Unit = {
+  def testLegacyModeClusterCannotUnregisterBroker(): Unit = {
     val adminClient = new MockAdminClient.Builder().numBrokers(3).
       usingRaftController(false).
       build()
     val stream = new ByteArrayOutputStream()
-    ClusterTool.decommissionCommand(new PrintStream(stream), adminClient, 0)
+    ClusterTool.unregisterCommand(new PrintStream(stream), adminClient, 0)
     assertEquals(
-      s"""The target cluster does not support broker decommissioning.
+      s"""The target cluster does not support the broker unregistration API.
 """, stream.toString())
   }
 }

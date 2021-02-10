@@ -98,7 +98,6 @@ import org.apache.kafka.common.message.CreateTopicsRequestData;
 import org.apache.kafka.common.message.CreateTopicsRequestData.CreatableTopicCollection;
 import org.apache.kafka.common.message.CreateTopicsResponseData.CreatableTopicConfigs;
 import org.apache.kafka.common.message.CreateTopicsResponseData.CreatableTopicResult;
-import org.apache.kafka.common.message.DecommissionBrokerRequestData;
 import org.apache.kafka.common.message.DeleteAclsRequestData;
 import org.apache.kafka.common.message.DeleteAclsRequestData.DeleteAclsFilter;
 import org.apache.kafka.common.message.DeleteAclsResponseData;
@@ -147,6 +146,7 @@ import org.apache.kafka.common.message.OffsetDeleteRequestData.OffsetDeleteReque
 import org.apache.kafka.common.message.OffsetDeleteRequestData.OffsetDeleteRequestTopic;
 import org.apache.kafka.common.message.OffsetDeleteRequestData.OffsetDeleteRequestTopicCollection;
 import org.apache.kafka.common.message.RenewDelegationTokenRequestData;
+import org.apache.kafka.common.message.UnregisterBrokerRequestData;
 import org.apache.kafka.common.message.UpdateFeaturesRequestData;
 import org.apache.kafka.common.message.UpdateFeaturesResponseData.UpdatableFeatureResult;
 import org.apache.kafka.common.metrics.JmxReporter;
@@ -185,8 +185,6 @@ import org.apache.kafka.common.requests.CreatePartitionsRequest;
 import org.apache.kafka.common.requests.CreatePartitionsResponse;
 import org.apache.kafka.common.requests.CreateTopicsRequest;
 import org.apache.kafka.common.requests.CreateTopicsResponse;
-import org.apache.kafka.common.requests.DecommissionBrokerRequest;
-import org.apache.kafka.common.requests.DecommissionBrokerResponse;
 import org.apache.kafka.common.requests.DeleteAclsRequest;
 import org.apache.kafka.common.requests.DeleteAclsResponse;
 import org.apache.kafka.common.requests.DeleteGroupsRequest;
@@ -238,6 +236,8 @@ import org.apache.kafka.common.requests.OffsetFetchRequest;
 import org.apache.kafka.common.requests.OffsetFetchResponse;
 import org.apache.kafka.common.requests.RenewDelegationTokenRequest;
 import org.apache.kafka.common.requests.RenewDelegationTokenResponse;
+import org.apache.kafka.common.requests.UnregisterBrokerRequest;
+import org.apache.kafka.common.requests.UnregisterBrokerResponse;
 import org.apache.kafka.common.requests.UpdateFeaturesRequest;
 import org.apache.kafka.common.requests.UpdateFeaturesResponse;
 import org.apache.kafka.common.security.auth.KafkaPrincipal;
@@ -4608,23 +4608,23 @@ public class KafkaAdminClient extends AdminClient {
     }
 
     @Override
-    public DecommissionBrokerResult decommissionBroker(int brokerId, DecommissionBrokerOptions options) {
+    public UnregisterBrokerResult unregisterBroker(int brokerId, UnregisterBrokerOptions options) {
         final KafkaFutureImpl<Void> future = new KafkaFutureImpl<>();
         final long now = time.milliseconds();
-        final Call call = new Call("decommissionBroker", calcDeadlineMs(now, options.timeoutMs()),
+        final Call call = new Call("unregisterBroker", calcDeadlineMs(now, options.timeoutMs()),
                 new LeastLoadedNodeProvider()) {
 
             @Override
-            DecommissionBrokerRequest.Builder createRequest(int timeoutMs) {
-                DecommissionBrokerRequestData data =
-                        new DecommissionBrokerRequestData().setBrokerId(brokerId);
-                return new DecommissionBrokerRequest.Builder(data);
+            UnregisterBrokerRequest.Builder createRequest(int timeoutMs) {
+                UnregisterBrokerRequestData data =
+                        new UnregisterBrokerRequestData().setBrokerId(brokerId);
+                return new UnregisterBrokerRequest.Builder(data);
             }
 
             @Override
             void handleResponse(AbstractResponse abstractResponse) {
-                final DecommissionBrokerResponse response =
-                        (DecommissionBrokerResponse) abstractResponse;
+                final UnregisterBrokerResponse response =
+                        (UnregisterBrokerResponse) abstractResponse;
                 Errors error = Errors.forCode(response.data().errorCode());
                 switch (error) {
                     case NONE:
@@ -4633,7 +4633,8 @@ public class KafkaAdminClient extends AdminClient {
                     case REQUEST_TIMED_OUT:
                         throw error.exception();
                     default:
-                        log.error("Decommission Broker request for broker ID {} failed: {}", brokerId, error.message());
+                        log.error("Unregister broker request for broker ID {} failed: {}",
+                            brokerId, error.message());
                         future.completeExceptionally(error.exception());
                         break;
                 }
@@ -4645,7 +4646,7 @@ public class KafkaAdminClient extends AdminClient {
             }
         };
         runnable.call(call, now);
-        return new DecommissionBrokerResult(future);
+        return new UnregisterBrokerResult(future);
     }
 
     /**

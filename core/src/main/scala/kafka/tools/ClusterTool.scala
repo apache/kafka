@@ -39,9 +39,9 @@ object ClusterTool extends Logging {
 
       val clusterIdParser = subparsers.addParser("cluster-id").
         help("Get information about the ID of a cluster.")
-      val decommissionParser = subparsers.addParser("decommission").
-        help("Decommission a broker..")
-      List(clusterIdParser, decommissionParser).foreach(parser => {
+      val unregisterParser = subparsers.addParser("unregister").
+        help("Unregister a broker..")
+      List(clusterIdParser, unregisterParser).foreach(parser => {
         parser.addArgument("--bootstrap-server", "-b").
           action(store()).
           help("A list of host/port pairs to use for establishing the connection to the kafka cluster.")
@@ -49,10 +49,10 @@ object ClusterTool extends Logging {
           action(store()).
           help("A property file containing configs to passed to AdminClient.")
       })
-      decommissionParser.addArgument("--id", "-i").
+      unregisterParser.addArgument("--id", "-i").
         `type`(classOf[Integer]).
         action(store()).
-        help("The ID of the broker to decommission.")
+        help("The ID of the broker to unregister.")
 
       val namespace = parser.parseArgsOrFail(args)
       val command = namespace.getString("command")
@@ -77,10 +77,10 @@ object ClusterTool extends Logging {
             adminClient.close()
           }
           Exit.exit(0)
-        case "decommission" =>
+        case "unregister" =>
           val adminClient = Admin.create(properties)
           try {
-            decommissionCommand(System.out, adminClient, namespace.getInt("id"))
+            unregisterCommand(System.out, adminClient, namespace.getInt("id"))
           } finally {
             adminClient.close()
           }
@@ -104,18 +104,17 @@ object ClusterTool extends Logging {
     }
   }
 
-  def decommissionCommand(stream: PrintStream,
+  def unregisterCommand(stream: PrintStream,
                           adminClient: Admin,
                           id: Int): Unit = {
     try {
-      Option(adminClient.decommissionBroker(id).all().get())
-      stream.println(s"Broker ${id} is no longer registered. Note that if the broker " +
-        "is still running, or is restarted, it will re-register.")
+      Option(adminClient.unregisterBroker(id).all().get())
+      stream.println(s"Broker ${id} is no longer registered.")
     } catch {
       case e: ExecutionException => {
         val cause = e.getCause()
         if (cause.isInstanceOf[UnsupportedVersionException]) {
-          stream.println(s"The target cluster does not support broker decommissioning.")
+          stream.println(s"The target cluster does not support the broker unregistration API.")
         } else {
           throw e
         }

@@ -82,7 +82,6 @@ import org.apache.kafka.common.message.CreatePartitionsResponseData.CreatePartit
 import org.apache.kafka.common.message.CreateTopicsResponseData;
 import org.apache.kafka.common.message.CreateTopicsResponseData.CreatableTopicResult;
 import org.apache.kafka.common.message.CreateTopicsResponseData.CreatableTopicResultCollection;
-import org.apache.kafka.common.message.DecommissionBrokerResponseData;
 import org.apache.kafka.common.message.DeleteAclsResponseData;
 import org.apache.kafka.common.message.DeleteGroupsResponseData;
 import org.apache.kafka.common.message.DeleteGroupsResponseData.DeletableGroupResult;
@@ -119,6 +118,7 @@ import org.apache.kafka.common.message.OffsetDeleteResponseData.OffsetDeleteResp
 import org.apache.kafka.common.message.OffsetDeleteResponseData.OffsetDeleteResponsePartitionCollection;
 import org.apache.kafka.common.message.OffsetDeleteResponseData.OffsetDeleteResponseTopic;
 import org.apache.kafka.common.message.OffsetDeleteResponseData.OffsetDeleteResponseTopicCollection;
+import org.apache.kafka.common.message.UnregisterBrokerResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.ApiMessage;
 import org.apache.kafka.common.protocol.Errors;
@@ -139,7 +139,6 @@ import org.apache.kafka.common.requests.CreatePartitionsRequest;
 import org.apache.kafka.common.requests.CreatePartitionsResponse;
 import org.apache.kafka.common.requests.CreateTopicsRequest;
 import org.apache.kafka.common.requests.CreateTopicsResponse;
-import org.apache.kafka.common.requests.DecommissionBrokerResponse;
 import org.apache.kafka.common.requests.DeleteAclsResponse;
 import org.apache.kafka.common.requests.DeleteGroupsResponse;
 import org.apache.kafka.common.requests.DeleteRecordsResponse;
@@ -168,6 +167,7 @@ import org.apache.kafka.common.requests.OffsetCommitResponse;
 import org.apache.kafka.common.requests.OffsetDeleteResponse;
 import org.apache.kafka.common.requests.OffsetFetchResponse;
 import org.apache.kafka.common.requests.RequestTestUtils;
+import org.apache.kafka.common.requests.UnregisterBrokerResponse;
 import org.apache.kafka.common.requests.UpdateFeaturesRequest;
 import org.apache.kafka.common.requests.UpdateFeaturesResponse;
 import org.apache.kafka.common.resource.PatternType;
@@ -5172,15 +5172,13 @@ public class KafkaAdminClientTest {
     }
 
     @Test
-    public void testDecommissionBrokerSuccess() throws InterruptedException, ExecutionException {
-        int decommissionedBrokerNode = 1;
+    public void testUnregisterBrokerSuccess() throws InterruptedException, ExecutionException {
+        int nodeId = 1;
         try (final AdminClientUnitTestEnv env = mockClientEnv()) {
             env.kafkaClient().setNodeApiVersions(
-                    NodeApiVersions.create(ApiKeys.DECOMMISSION_BROKER.id, (short) 0, (short) 0));
-            env.kafkaClient().prepareResponse(prepareDecommissionBrokerResponse(Errors.NONE, 0));
-
-            DecommissionBrokerResult result = env.adminClient().decommissionBroker(decommissionedBrokerNode);
-
+                    NodeApiVersions.create(ApiKeys.UNREGISTER_BROKER.id, (short) 0, (short) 0));
+            env.kafkaClient().prepareResponse(prepareUnregisterBrokerResponse(Errors.NONE, 0));
+            UnregisterBrokerResult result = env.adminClient().unregisterBroker(nodeId);
             // Validate response
             assertNotNull(result.all());
             result.all().get();
@@ -5188,15 +5186,13 @@ public class KafkaAdminClientTest {
     }
 
     @Test
-    public void testDecommissionBrokerFailure() {
-        int decommissionedBrokerNode = 1;
+    public void testUnregisterBrokerFailure() {
+        int nodeId = 1;
         try (final AdminClientUnitTestEnv env = mockClientEnv()) {
             env.kafkaClient().setNodeApiVersions(
-                    NodeApiVersions.create(ApiKeys.DECOMMISSION_BROKER.id, (short) 0, (short) 0));
-            env.kafkaClient().prepareResponse(prepareDecommissionBrokerResponse(Errors.UNKNOWN_SERVER_ERROR, 0));
-
-            DecommissionBrokerResult result = env.adminClient().decommissionBroker(decommissionedBrokerNode);
-
+                    NodeApiVersions.create(ApiKeys.UNREGISTER_BROKER.id, (short) 0, (short) 0));
+            env.kafkaClient().prepareResponse(prepareUnregisterBrokerResponse(Errors.UNKNOWN_SERVER_ERROR, 0));
+            UnregisterBrokerResult result = env.adminClient().unregisterBroker(nodeId);
             // Validate response
             assertNotNull(result.all());
             TestUtils.assertFutureThrows(result.all(), Errors.UNKNOWN_SERVER_ERROR.exception().getClass());
@@ -5204,15 +5200,15 @@ public class KafkaAdminClientTest {
     }
 
     @Test
-    public void testDecommissionBrokerTimeoutAndSuccessRetry() throws ExecutionException, InterruptedException {
-        int decommissionedBrokerNode = 1;
+    public void testUnregisterBrokerTimeoutAndSuccessRetry() throws ExecutionException, InterruptedException {
+        int nodeId = 1;
         try (final AdminClientUnitTestEnv env = mockClientEnv()) {
             env.kafkaClient().setNodeApiVersions(
-                    NodeApiVersions.create(ApiKeys.DECOMMISSION_BROKER.id, (short) 0, (short) 0));
-            env.kafkaClient().prepareResponse(prepareDecommissionBrokerResponse(Errors.REQUEST_TIMED_OUT, 0));
-            env.kafkaClient().prepareResponse(prepareDecommissionBrokerResponse(Errors.NONE, 0));
+                    NodeApiVersions.create(ApiKeys.UNREGISTER_BROKER.id, (short) 0, (short) 0));
+            env.kafkaClient().prepareResponse(prepareUnregisterBrokerResponse(Errors.REQUEST_TIMED_OUT, 0));
+            env.kafkaClient().prepareResponse(prepareUnregisterBrokerResponse(Errors.NONE, 0));
 
-            DecommissionBrokerResult result = env.adminClient().decommissionBroker(decommissionedBrokerNode);
+            UnregisterBrokerResult result = env.adminClient().unregisterBroker(nodeId);
 
             // Validate response
             assertNotNull(result.all());
@@ -5221,15 +5217,15 @@ public class KafkaAdminClientTest {
     }
 
     @Test
-    public void testDecommissionBrokerTimeoutAndFailureRetry() {
-        int decommissionedBrokerNode = 1;
+    public void testUnregisterBrokerTimeoutAndFailureRetry() {
+        int nodeId = 1;
         try (final AdminClientUnitTestEnv env = mockClientEnv()) {
             env.kafkaClient().setNodeApiVersions(
-                    NodeApiVersions.create(ApiKeys.DECOMMISSION_BROKER.id, (short) 0, (short) 0));
-            env.kafkaClient().prepareResponse(prepareDecommissionBrokerResponse(Errors.REQUEST_TIMED_OUT, 0));
-            env.kafkaClient().prepareResponse(prepareDecommissionBrokerResponse(Errors.UNKNOWN_SERVER_ERROR, 0));
+                    NodeApiVersions.create(ApiKeys.UNREGISTER_BROKER.id, (short) 0, (short) 0));
+            env.kafkaClient().prepareResponse(prepareUnregisterBrokerResponse(Errors.REQUEST_TIMED_OUT, 0));
+            env.kafkaClient().prepareResponse(prepareUnregisterBrokerResponse(Errors.UNKNOWN_SERVER_ERROR, 0));
 
-            DecommissionBrokerResult result = env.adminClient().decommissionBroker(decommissionedBrokerNode);
+            UnregisterBrokerResult result = env.adminClient().unregisterBroker(nodeId);
 
             // Validate response
             assertNotNull(result.all());
@@ -5239,14 +5235,14 @@ public class KafkaAdminClientTest {
 
     @Test
     public void testDecommissionBrokerTimeoutMaxRetry() {
-        int decommissionedBrokerNode = 1;
+        int nodeId = 1;
         try (final AdminClientUnitTestEnv env = mockClientEnv(Time.SYSTEM, AdminClientConfig.RETRIES_CONFIG, "1")) {
             env.kafkaClient().setNodeApiVersions(
-                    NodeApiVersions.create(ApiKeys.DECOMMISSION_BROKER.id, (short) 0, (short) 0));
-            env.kafkaClient().prepareResponse(prepareDecommissionBrokerResponse(Errors.REQUEST_TIMED_OUT, 0));
-            env.kafkaClient().prepareResponse(prepareDecommissionBrokerResponse(Errors.REQUEST_TIMED_OUT, 0));
+                    NodeApiVersions.create(ApiKeys.UNREGISTER_BROKER.id, (short) 0, (short) 0));
+            env.kafkaClient().prepareResponse(prepareUnregisterBrokerResponse(Errors.REQUEST_TIMED_OUT, 0));
+            env.kafkaClient().prepareResponse(prepareUnregisterBrokerResponse(Errors.REQUEST_TIMED_OUT, 0));
 
-            DecommissionBrokerResult result = env.adminClient().decommissionBroker(decommissionedBrokerNode);
+            UnregisterBrokerResult result = env.adminClient().unregisterBroker(nodeId);
 
             // Validate response
             assertNotNull(result.all());
@@ -5256,14 +5252,14 @@ public class KafkaAdminClientTest {
 
     @Test
     public void testDecommissionBrokerTimeoutMaxWait() {
-        int decommissionedBrokerNode = 1;
+        int nodeId = 1;
         try (final AdminClientUnitTestEnv env = mockClientEnv()) {
             env.kafkaClient().setNodeApiVersions(
-                    NodeApiVersions.create(ApiKeys.DECOMMISSION_BROKER.id, (short) 0, (short) 0));
+                    NodeApiVersions.create(ApiKeys.UNREGISTER_BROKER.id, (short) 0, (short) 0));
 
-            DecommissionBrokerOptions options = new DecommissionBrokerOptions();
+            UnregisterBrokerOptions options = new UnregisterBrokerOptions();
             options.timeoutMs = 10;
-            DecommissionBrokerResult result = env.adminClient().decommissionBroker(decommissionedBrokerNode, options);
+            UnregisterBrokerResult result = env.adminClient().unregisterBroker(nodeId, options);
 
             // Validate response
             assertNotNull(result.all());
@@ -5271,8 +5267,8 @@ public class KafkaAdminClientTest {
         }
     }
 
-    private DecommissionBrokerResponse prepareDecommissionBrokerResponse(Errors error, int throttleTimeMs) {
-        return new DecommissionBrokerResponse(new DecommissionBrokerResponseData()
+    private UnregisterBrokerResponse prepareUnregisterBrokerResponse(Errors error, int throttleTimeMs) {
+        return new UnregisterBrokerResponse(new UnregisterBrokerResponseData()
                 .setErrorCode(error.code())
                 .setErrorMessage(error.message())
                 .setThrottleTimeMs(throttleTimeMs));

@@ -16,52 +16,52 @@
  */
 package org.apache.kafka.common.requests;
 
-import org.apache.kafka.common.message.DecommissionBrokerRequestData;
-import org.apache.kafka.common.message.DecommissionBrokerResponseData;
+import org.apache.kafka.common.message.UnregisterBrokerRequestData;
+import org.apache.kafka.common.message.UnregisterBrokerResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
 
 import java.nio.ByteBuffer;
 
-public class DecommissionBrokerRequest extends AbstractRequest {
+public class UnregisterBrokerRequest extends AbstractRequest {
 
-    public static class Builder extends AbstractRequest.Builder<DecommissionBrokerRequest> {
-        private final DecommissionBrokerRequestData data;
+    public static class Builder extends AbstractRequest.Builder<UnregisterBrokerRequest> {
+        private final UnregisterBrokerRequestData data;
 
-        public Builder(DecommissionBrokerRequestData data) {
-            super(ApiKeys.DECOMMISSION_BROKER);
+        public Builder(UnregisterBrokerRequestData data) {
+            super(ApiKeys.UNREGISTER_BROKER);
             this.data = data;
         }
 
         @Override
-        public DecommissionBrokerRequest build(short version) {
-            return new DecommissionBrokerRequest(data, version);
+        public UnregisterBrokerRequest build(short version) {
+            return new UnregisterBrokerRequest(data, version);
         }
     }
 
-    private final DecommissionBrokerRequestData data;
+    private final UnregisterBrokerRequestData data;
 
-    public DecommissionBrokerRequest(DecommissionBrokerRequestData data, short version) {
-        super(ApiKeys.DECOMMISSION_BROKER, version);
+    public UnregisterBrokerRequest(UnregisterBrokerRequestData data, short version) {
+        super(ApiKeys.UNREGISTER_BROKER, version);
         this.data = data;
     }
 
     @Override
-    public DecommissionBrokerRequestData data() {
+    public UnregisterBrokerRequestData data() {
         return data;
     }
 
     @Override
-    public DecommissionBrokerResponse getErrorResponse(int throttleTimeMs, Throwable e) {
+    public UnregisterBrokerResponse getErrorResponse(int throttleTimeMs, Throwable e) {
         Errors error = Errors.forException(e);
-        return new DecommissionBrokerResponse(new DecommissionBrokerResponseData()
+        return new UnregisterBrokerResponse(new UnregisterBrokerResponseData()
                 .setThrottleTimeMs(throttleTimeMs)
                 .setErrorCode(error.code()));
     }
 
-    public static DecommissionBrokerRequest parse(ByteBuffer buffer, short version) {
-        return new DecommissionBrokerRequest(new DecommissionBrokerRequestData(new ByteBufferAccessor(buffer), version),
+    public static UnregisterBrokerRequest parse(ByteBuffer buffer, short version) {
+        return new UnregisterBrokerRequest(new UnregisterBrokerRequestData(new ByteBufferAccessor(buffer), version),
                 version);
     }
 }

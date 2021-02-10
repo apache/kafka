@@ -17,13 +17,24 @@
 
 package org.apache.kafka.clients.admin;
 
-import org.apache.kafka.common.annotation.InterfaceStability;
+import org.apache.kafka.common.KafkaFuture;
 
 /**
- * Options for {@link Admin#decommissionBroker(int, DecommissionBrokerOptions)}.
+ * The result of the {@link Admin#unregisterBroker(int, UnregisterBrokerOptions)} call.
  *
- * The API of this class is evolving. See {@link Admin} for details.
+ * The API of this class is evolving, see {@link Admin} for details.
  */
-@InterfaceStability.Evolving
-public class DecommissionBrokerOptions extends AbstractOptions<UpdateFeaturesOptions> {
+public class UnregisterBrokerResult {
+    private final KafkaFuture<Void> future;
+
+    UnregisterBrokerResult(final KafkaFuture<Void> future) {
+        this.future = future;
+    }
+
+    /**
+     * Return a future which succeeds if the operation is successful.
+     */
+    public KafkaFuture<Void> all() {
+        return future;
+    }
 }

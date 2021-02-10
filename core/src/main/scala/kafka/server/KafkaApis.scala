@@ -217,6 +217,7 @@ class KafkaApis(val requestChannel: RequestChannel,
         case ApiKeys.ENVELOPE => handleEnvelope(request)
         case ApiKeys.DESCRIBE_CLUSTER => handleDescribeCluster(request)
         case ApiKeys.DESCRIBE_PRODUCERS => handleDescribeProducersRequest(request)
+        case ApiKeys.UNREGISTER_BROKER => maybeForwardToController(request, handleUnregisterBrokerRequest)
 
         // Handle requests that should have been sent to the KIP-500 controller.
         // Until we are ready to integrate the Raft layer, these APIs are treated as
@@ -228,7 +229,6 @@ class KafkaApis(val requestChannel: RequestChannel,
         case ApiKeys.FETCH_SNAPSHOT => requestHelper.closeConnection(request, util.Collections.emptyMap())
         case ApiKeys.BROKER_REGISTRATION => requestHelper.closeConnection(request, util.Collections.emptyMap())
         case ApiKeys.BROKER_HEARTBEAT => requestHelper.closeConnection(request, util.Collections.emptyMap())
-        case ApiKeys.DECOMMISSION_BROKER => requestHelper.closeConnection(request, util.Collections.emptyMap())
       }
     } catch {
       case e: FatalExitError => throw e
@@ -3388,6 +3388,14 @@ class KafkaApis(val requestChannel: RequestChannel,
 
     requestHelper.sendResponseMaybeThrottle(request, requestThrottleMs =>
       new DescribeProducersResponse(response.setThrottleTimeMs(requestThrottleMs)))
+  }
+
+  def handleUnregisterBrokerRequest(request: RequestChannel.Request): Unit = {
+    // This function will not be called when in self-managed quorum mode, since the
+    // UNREGISTER_BROKER API is marked as forwardable and we will always have a forwarding
+    // manager.
+    throw new UnsupportedVersionException("The broker unregistration API is not available when using " +
+      "Apache ZooKeeper mode.")
   }
 
   private def updateRecordConversionStats(request: RequestChannel.Request,

@@ -16,11 +16,11 @@
 {
   "apiKey": 64,
   "type": "request",
-  "name": "DecommissionBrokerRequest",
+  "name": "UnregisterBrokerRequest",
   "validVersions": "0",
   "flexibleVersions": "0+",
   "fields": [
     { "name": "BrokerId", "type": "int32", "versions": "0+",
-      "about": "The broker ID to decommission" }
+      "about": "The broker ID to unregister." }
   ]
 }
