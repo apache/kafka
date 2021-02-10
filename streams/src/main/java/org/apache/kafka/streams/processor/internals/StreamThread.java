@@ -776,9 +776,10 @@ public class StreamThread extends Thread {
 
                 log.debug("{} punctuators ran.", punctuated);
 
+                final long beforeCommitTs = now;
                 final int committed = maybeCommit();
                 totalCommittedSinceLastSummary += committed;
-                final long commitLatency = advanceNowAndComputeLatency();
+                final long commitLatency = Math.max(now - beforeCommitTs, 0);
                 totalCommitLatency += commitLatency;
                 if (committed > 0) {
                     commitSensor.record(commitLatency / (double) committed, now);
