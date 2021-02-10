@@ -43,8 +43,7 @@ trait RaftReplicaChangeDelegateHelper {
 
 class RaftReplicaChangeDelegate(helper: RaftReplicaChangeDelegateHelper) {
   def makeDeferred(partitionsNewMap: Map[Partition, Boolean],
-                   metadataOffset: Long,
-                   onLeadershipChange: (Iterable[Partition], Iterable[Partition]) => Unit): Unit = {
+                   metadataOffset: Long): Unit = {
     val traceLoggingEnabled = helper.stateChangeLogger.isTraceEnabled
     if (traceLoggingEnabled)
       partitionsNewMap.forKeyValue { (partition, isNew) =>
@@ -57,7 +56,7 @@ class RaftReplicaChangeDelegate(helper: RaftReplicaChangeDelegateHelper) {
     helper.stateChangeLogger.info(s"Metadata batch $metadataOffset: as part of become-deferred request, " +
       s"stopped any fetchers for ${partitionsNewMap.size} partitions")
     // mark all the partitions as deferred
-    partitionsNewMap.forKeyValue((partition, isNew) => helper.markDeferred(HostedPartition.Deferred(partition, isNew, onLeadershipChange)))
+    partitionsNewMap.forKeyValue((partition, isNew) => helper.markDeferred(HostedPartition.Deferred(partition, isNew)))
 
     helper.replicaFetcherManager.shutdownIdleFetcherThreads()
     helper.replicaAlterLogDirsManager.shutdownIdleFetcherThreads()

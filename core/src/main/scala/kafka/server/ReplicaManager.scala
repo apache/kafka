@@ -180,14 +180,13 @@ object HostedPartition {
   final case class Online(partition: Partition) extends NonOffline
 
   /**
-   * This broker hosted the partition but it is deferring metadata changes
-   * until it catches up on the Raft-based metadata log.
-   * This state only applies to brokers that are using a Raft-based metadata
-   * quorum; it never happens when using ZooKeeper.
+   * This broker hosted the partition (or will soon host it if it is new) but
+   * it is deferring metadata changes until it catches up on the Raft-based metadata
+   * log.  This state only applies to brokers that are using a Raft-based metadata
+   * quorum; it never happens when using ZooKeeper.  The isNew value indicates
+   * if the partition needs to be created when we apply the deferred changes.
    */
-  final case class Deferred(partition: Partition,
-                            isNew: Boolean,
-                            onLeadershipChange: (Iterable[Partition], Iterable[Partition]) => Unit) extends NonOffline
+  final case class Deferred(partition: Partition, isNew: Boolean) extends NonOffline
 
   /**
    * This broker hosts the partition, but it is in an offline log directory.

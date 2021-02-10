@@ -75,8 +75,8 @@ class RaftReplicaManagerTest {
   private val offset1 = 1L
   private val metadataPartition0 = MetadataPartition(topicName, topicPartitionRecord0)
   private val metadataPartition1 = MetadataPartition(topicName, topicPartitionRecord1)
-  private val onLeadershipChangeHandler = mock(classOf[LeadershipChangeHandler])
-  private val onLeadershipChange = onLeadershipChangeHandler.onLeadershipChange _
+  private var onLeadershipChangeHandler: LeadershipChangeHandler = _
+  private var onLeadershipChange: (Iterable[Partition], Iterable[Partition]) => Unit = _
   private var metadataCache: RaftMetadataCache = _
 
   @BeforeEach
@@ -93,6 +93,8 @@ class RaftReplicaManagerTest {
     quotaManager = QuotaFactory.instantiate(config, metrics, time, "")
     mockDelegate = mock(classOf[RaftReplicaChangeDelegate])
     imageBuilder = MetadataImageBuilder(brokerId0, mock(classOf[Logger]), new MetadataImage())
+    onLeadershipChangeHandler = mock(classOf[LeadershipChangeHandler])
+    onLeadershipChange = onLeadershipChangeHandler.onLeadershipChange _
   }
 
   @AfterEach
@@ -133,26 +135,20 @@ class RaftReplicaManagerTest {
     // verify changes would have been deferred
     val partitionsNewMapCaptor: ArgumentCaptor[mutable.Map[Partition, Boolean]] =
       ArgumentCaptor.forClass(classOf[mutable.Map[Partition, Boolean]])
-    verify(mockDelegate).makeDeferred(partitionsNewMapCaptor.capture(), ArgumentMatchers.eq(offset1), ArgumentMatchers.eq(onLeadershipChange))
+    verify(mockDelegate).makeDeferred(partitionsNewMapCaptor.capture(), ArgumentMatchers.eq(offset1))
     val partitionsDeferredMap = partitionsNewMapCaptor.getValue
     assertEquals(Map(partition0 -> true, partition1 -> true), partitionsDeferredMap)
-//    assertEquals(2, partitionsDeferredMap.size)
-//    assertTrue(partitionsDeferredMap.keys.exists(_ == partition0))
-//    assertTrue(partitionsDeferredMap(partition0))
-//    assertTrue(partitionsDeferredMap.keys.exists(_ == partition1))
-//    assertTrue(partitionsDeferredMap(partition1))
-//    verify(mockDelegate, never()).makeLeaders(any(), any(), any(), anyLong())
     verify(mockDelegate, never()).makeFollowers(any(), any(), any(), any(), any())
 
     // now mark those topic partitions as being deferred so we can later apply the changes
-    rrm.markPartitionDeferred(partition0, isNew = true, onLeadershipChange)
-    rrm.markPartitionDeferred(partition1, isNew = true, onLeadershipChange)
+    rrm.markPartitionDeferred(partition0, isNew = true)
+    rrm.markPartitionDeferred(partition1, isNew = true)
 
     // apply the changes
     // define some return values to avoid NPE
     when(mockDelegate.makeLeaders(any(), any(), any(), any())).thenReturn(Set(partition0))
     when(mockDelegate.makeFollowers(any(), any(), any(), any(), any())).thenReturn(Set(partition1))
-    rrm.endMetadataChangeDeferral()
+    rrm.endMetadataChangeDeferral(onLeadershipChange)
     // verify that the deferred changes would have been applied
 
     // leaders...
@@ -173,7 +169,7 @@ class RaftReplicaManagerTest {
     rrm.delegate = mockDelegate
     val partition0 = Partition(topicPartition0, time, configRepository, rrm)
     val partition1 = Partition(topicPartition1, time, configRepository, rrm)
-    rrm.endMetadataChangeDeferral()
+    rrm.endMetadataChangeDeferral(onLeadershipChange)
 
     // define some return values to avoid NPE
     when(mockDelegate.makeLeaders(any(), any(), any(), ArgumentMatchers.eq(Some(offset1)))).thenReturn(Set(partition0))

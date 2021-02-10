@@ -25,7 +25,6 @@ import kafka.log.{Log, LogManager}
 import kafka.server.QuotaFactory.QuotaManagers
 import kafka.server.checkpoints.LazyOffsetCheckpoints
 import kafka.server.metadata.{ConfigRepository, MetadataImage, MetadataImageBuilder, MetadataPartition, RaftMetadataCache}
-import kafka.utils.Implicits.MapExtensionMethods
 import kafka.utils.Scheduler
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.errors.KafkaStorageException
@@ -129,16 +128,13 @@ class RaftReplicaManager(config: KafkaConfig,
     }
   }
 
-  def endMetadataChangeDeferral(): Unit = {
+  def endMetadataChangeDeferral(onLeadershipChange: (Iterable[Partition], Iterable[Partition]) => Unit): Unit = {
     val startMs = time.milliseconds()
     val partitionsMadeFollower = mutable.Set[Partition]()
     val partitionsMadeLeader = mutable.Set[Partition]()
     replicaStateChangeLock synchronized {
       stateChangeLogger.info(s"Applying deferred metadata changes")
       val highWatermarkCheckpoints = new LazyOffsetCheckpoints(this.highWatermarkCheckpoints)
-      val leadershipChangeCallbacks = {
-        mutable.Map[(Iterable[Partition], Iterable[Partition]) => Unit, (mutable.Set[Partition], mutable.Set[Partition])]()
-      }
       val metadataImage = metadataCache.currentImage()
       val brokers = metadataImage.brokers
       try {
@@ -168,23 +164,9 @@ class RaftReplicaManager(config: KafkaConfig,
           Set.empty[Partition]
 
         // We need to transition anything that hasn't transitioned from Deferred to Offline to the Online state.
-        // We also need to identify the leadership change callback(s) to invoke
         deferredPartitionsIterator.foreach { deferredPartition =>
           val partition = deferredPartition.partition
-          val state = cachedState(metadataImage, partition)
-          val topicPartition = partition.topicPartition
-          // identify for callback if necessary
-          if (state.leaderId == localBrokerId) {
-            if (partitionsMadeLeader.contains(partition)) {
-              leadershipChangeCallbacks.getOrElseUpdate(
-                deferredPartition.onLeadershipChange, (mutable.Set(), mutable.Set()))._1 += partition
-            }
-          } else if (partitionsMadeFollower.contains(partition)) {
-            leadershipChangeCallbacks.getOrElseUpdate(
-              deferredPartition.onLeadershipChange, (mutable.Set(), mutable.Set()))._2 += partition
-          }
-          // transition from Deferred to Online
-          allPartitions.put(topicPartition, HostedPartition.Online(partition))
+          allPartitions.put(partition.topicPartition, HostedPartition.Online(partition))
         }
 
         updateLeaderAndFollowerMetrics(partitionsMadeFollower.map(_.topic).toSet)
@@ -193,8 +175,8 @@ class RaftReplicaManager(config: KafkaConfig,
 
         replicaFetcherManager.shutdownIdleFetcherThreads()
         replicaAlterLogDirsManager.shutdownIdleFetcherThreads()
-        leadershipChangeCallbacks.forKeyValue { (onLeadershipChange, leaderAndFollowerPartitions) =>
-          onLeadershipChange(leaderAndFollowerPartitions._1, leaderAndFollowerPartitions._2)
+        if (partitionsMadeLeader.nonEmpty || partitionsMadeFollower.nonEmpty) {
+          onLeadershipChange(partitionsMadeLeader, partitionsMadeFollower)
         }
       } catch {
         case e: Throwable =>
@@ -260,7 +242,7 @@ class RaftReplicaManager(config: KafkaConfig,
               (None, None)
 
             case HostedPartition.Online(partition) => (Some(partition), None)
-            case deferred@HostedPartition.Deferred(partition, _, _) => (Some(partition), Some(deferred))
+            case deferred@HostedPartition.Deferred(partition, _) => (Some(partition), Some(deferred))
 
             case HostedPartition.None =>
               // Create the partition instance since it does not yet exist
@@ -277,7 +259,7 @@ class RaftReplicaManager(config: KafkaConfig,
 
         stateChangeLogger.info(s"Deferring metadata changes for ${partitionChangesToBeDeferred.size} partition(s)")
         if (partitionChangesToBeDeferred.nonEmpty) {
-          delegate.makeDeferred(partitionChangesToBeDeferred, metadataOffset, onLeadershipChange)
+          delegate.makeDeferred(partitionChangesToBeDeferred, metadataOffset)
         }
       } else { // not deferring changes, so make leaders/followers accordingly
         val partitionsToBeLeader = mutable.HashMap[Partition, MetadataPartition]()
@@ -371,10 +353,8 @@ class RaftReplicaManager(config: KafkaConfig,
       s"in ${elapsedMs} ms")
   }
 
-  def markPartitionDeferred(partition: Partition,
-                            isNew: Boolean,
-                            onLeadershipChange: (Iterable[Partition], Iterable[Partition]) => Unit): Unit = {
-    markPartitionDeferred(HostedPartition.Deferred(partition, isNew, onLeadershipChange))
+  def markPartitionDeferred(partition: Partition, isNew: Boolean): Unit = {
+    markPartitionDeferred(HostedPartition.Deferred(partition, isNew))
   }
 
   private def markPartitionDeferred(state: HostedPartition.Deferred): Unit = replicaStateChangeLock synchronized {
