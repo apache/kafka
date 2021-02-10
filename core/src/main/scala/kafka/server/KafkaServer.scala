@@ -185,7 +185,7 @@ class KafkaServer(
 
       val canStartup = isStartingUp.compareAndSet(false, true)
       if (canStartup) {
-        brokerState.set(BrokerState.STARTING)
+        brokerState = BrokerState.STARTING
 
         /* setup zookeeper */
         initZkClient(time)
@@ -247,7 +247,7 @@ class KafkaServer(
         logManager = LogManager(config, initialOfflineDirs,
           new ZkConfigRepository(new AdminZkClient(zkClient)),
           kafkaScheduler, time, brokerTopicStats, logDirFailureChannel)
-        brokerState.set(BrokerState.RECOVERY)
+        brokerState = BrokerState.RECOVERY
         logManager.startup(zkClient.getAllTopicsInCluster())
 
         metadataCache = MetadataCache.zkMetadataCache(config.brokerId)
@@ -394,7 +394,7 @@ class KafkaServer(
 
         socketServer.startProcessingRequests(authorizerFutures)
 
-        brokerState.set(BrokerState.RUNNING)
+        brokerState = BrokerState.RUNNING
         shutdownLatch = new CountDownLatch(1)
         startupComplete.set(true)
         isStartingUp.set(false)
@@ -632,7 +632,7 @@ class KafkaServer(
       // the shutdown.
       info("Starting controlled shutdown")
 
-      brokerState.set(BrokerState.PENDING_CONTROLLED_SHUTDOWN)
+      brokerState = BrokerState.PENDING_CONTROLLED_SHUTDOWN
 
       val shutdownSucceeded = doControlledShutdown(config.controlledShutdownMaxRetries.intValue)
 
@@ -657,7 +657,7 @@ class KafkaServer(
       // `true` at the end of this method.
       if (shutdownLatch.getCount > 0 && isShuttingDown.compareAndSet(false, true)) {
         CoreUtils.swallow(controlledShutdown(), this)
-        brokerState.set(BrokerState.SHUTTING_DOWN)
+        brokerState = BrokerState.SHUTTING_DOWN
 
         if (dynamicConfigManager != null)
           CoreUtils.swallow(dynamicConfigManager.shutdown(), this)
@@ -728,7 +728,7 @@ class KafkaServer(
         // Clear all reconfigurable instances stored in DynamicBrokerConfig
         config.dynamicConfig.clear()
 
-        brokerState.set(BrokerState.NOT_RUNNING)
+        brokerState = BrokerState.NOT_RUNNING
 
         startupComplete.set(false)
         isShuttingDown.set(false)
