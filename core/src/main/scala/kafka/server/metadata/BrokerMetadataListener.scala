@@ -46,7 +46,8 @@ class BrokerMetadataListener(val brokerId: Int,
                              val replicaManager: RaftReplicaManager,
                              val txnCoordinator: TransactionCoordinator,
                              val logManager: LogManager,
-                             val threadNamePrefix: Option[String]
+                             val threadNamePrefix: Option[String],
+                             val clientQuotaManager: ClientQuotaMetadataManager
                             ) extends MetaLogListener with KafkaMetricsGroup {
   val logContext = new LogContext(s"[BrokerMetadataListener id=${brokerId}] ")
   val log = logContext.logger(classOf[BrokerMetadataListener])
@@ -159,6 +160,8 @@ class BrokerMetadataListener(val brokerId: Int,
         record.asInstanceOf[UnfenceBrokerRecord])
       case REMOVE_TOPIC_RECORD => handleRemoveTopicRecord(imageBuilder,
         record.asInstanceOf[RemoveTopicRecord])
+      case QUOTA_RECORD => handleQuotaRecord(imageBuilder,
+        record.asInstanceOf[QuotaRecord])
       // TODO: handle FEATURE_LEVEL_RECORD
       case _ => throw new RuntimeException(s"Unsupported record type ${recordType}")
     }
@@ -222,6 +225,12 @@ class BrokerMetadataListener(val brokerId: Int,
     val removedPartitions = imageBuilder.partitionsBuilder().
       removeTopicById(record.topicId())
     groupCoordinator.handleDeletedPartitions(removedPartitions.map(_.toTopicPartition).toSeq)
+  }
+
+  def handleQuotaRecord(imageBuilder: MetadataImageBuilder,
+                        record: QuotaRecord): Unit = {
+    // TODO add quotas to MetadataImageBuilder
+    clientQuotaManager.handleQuotaRecord(record)
   }
 
   class HandleNewLeaderEvent(leader: MetaLogLeader)
