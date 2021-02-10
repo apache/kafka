@@ -471,7 +471,10 @@ class BrokerLifecycleManager(val config: KafkaConfig,
       _state = BrokerState.SHUTTING_DOWN
       controlledShutdownFuture.complete(null)
       initialCatchUpFuture.cancel(false)
-      _channelManager.shutdown()
+      if (_channelManager != null) {
+        _channelManager.shutdown()
+        _channelManager = null
+      }
     }
   }
 }
