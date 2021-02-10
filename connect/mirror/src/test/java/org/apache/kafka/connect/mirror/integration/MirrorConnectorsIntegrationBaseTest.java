@@ -47,6 +47,7 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Properties;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 
@@ -1372,8 +1373,19 @@ public abstract class MirrorConnectorsIntegrationBaseTest {
      * delete all topics of the input kafka cluster
      */
     private static void deleteAllTopics(EmbeddedKafkaCluster cluster) throws Exception {
-        Admin client = cluster.createAdminClient();
-        client.deleteTopics(client.listTopics().names().get());
+//        Admin client = cluster.createAdminClient();
+//        client.deleteTopics(client.listTopics().names().get());
+
+        try (final Admin adminClient = cluster.createAdminClient()) {
+            adminClient.deleteTopics(adminClient.listTopics().names().get()).all().get();
+        } catch (final InterruptedException e) {
+            log.error("Got interrupted while deleting topics in preparation for stopping embedded brokers", e);
+            System.err.println("!!! Got interrupted while deleting topics in preparation for stopping embedded brokers:" + e);
+            throw new RuntimeException(e);
+        } catch (final ExecutionException | RuntimeException e) {
+            log.error("Couldn't delete all topics before stopping brokers", e);
+            System.err.println("!!! Couldn't delete all topics before stopping brokers:" + e);
+        }
     }
     
     /*

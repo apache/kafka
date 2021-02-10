@@ -44,7 +44,6 @@ import org.apache.kafka.test.IntegrationTest;
 import org.apache.kafka.test.TestUtils;
 import org.junit.After;
 import org.junit.Before;
-import org.junit.BeforeClass;
 import org.junit.ClassRule;
 import org.junit.Test;
 import org.junit.experimental.categories.Category;
@@ -86,7 +85,7 @@ public class KTableKTableForeignKeyInnerJoinMultiIntegrationTest {
     private final static Properties PRODUCER_CONFIG_2 = new Properties();
     private final static Properties PRODUCER_CONFIG_3 = new Properties();
 
-    @BeforeClass
+
     public static void beforeTest() throws Exception {
         //Use multiple partitions to ensure distribution of keys.
 
@@ -148,7 +147,8 @@ public class KTableKTableForeignKeyInnerJoinMultiIntegrationTest {
     }
 
     @Before
-    public void before() throws IOException {
+    public void before() throws Exception {
+        beforeTest();
         final String stateDirBasePath = TestUtils.tempDirectory().getPath();
         streamsConfig.put(StreamsConfig.STATE_DIR_CONFIG, stateDirBasePath + "-1");
         streamsConfigTwo.put(StreamsConfig.STATE_DIR_CONFIG, stateDirBasePath + "-2");
@@ -158,7 +158,7 @@ public class KTableKTableForeignKeyInnerJoinMultiIntegrationTest {
     }
 
     @After
-    public void after() throws IOException {
+    public void after() throws IOException, InterruptedException {
         if (streams != null) {
             streams.close();
             streams = null;
@@ -172,6 +172,7 @@ public class KTableKTableForeignKeyInnerJoinMultiIntegrationTest {
             streamsThree = null;
         }
         IntegrationTestUtils.purgeLocalStreamsState(streamsConfig);
+        CLUSTER.deleteAllTopicsAndWait(60000);
     }
 
     private enum JoinType {
