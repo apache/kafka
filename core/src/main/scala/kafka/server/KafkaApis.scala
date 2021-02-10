@@ -3391,6 +3391,9 @@ class KafkaApis(val requestChannel: RequestChannel,
   }
 
   def handleUnregisterBrokerRequest(request: RequestChannel.Request): Unit = {
+    // This function will not be called when in self-managed quorum mode, since the
+    // UNREGISTER_BROKER API is marked as forwardable and we will always have a forwarding
+    // manager.
     throw new UnsupportedVersionException("The broker unregistration API is not available when using " +
       "Apache ZooKeeper mode.")
   }
