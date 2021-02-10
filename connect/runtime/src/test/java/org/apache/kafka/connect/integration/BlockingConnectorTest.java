@@ -65,7 +65,7 @@ import static org.junit.Assert.fail;
 
 /**
  * Tests situations during which certain connector operations, such as start, validation,
- * configuration and others, take longer than expected.
+ * configuration and others, take llonger than expected.
  */
 @Category(IntegrationTest.class)
 public class BlockingConnectorTest {
