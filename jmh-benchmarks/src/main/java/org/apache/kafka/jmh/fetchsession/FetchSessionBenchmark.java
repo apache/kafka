@@ -60,7 +60,7 @@ public class FetchSessionBenchmark {
     @Param(value = {"10", "100", "1000"})
     private int partitionCount;
 
-    @Param(value = {"0", "10", "100", "1000"})
+    @Param(value = {"0", "10", "100"})
     private int updatedPercentage;
 
     @Param(value = {"false", "true"})
@@ -122,7 +122,8 @@ public class FetchSessionBenchmark {
             builder = handler.newBuilder();
 
         for (Map.Entry<TopicPartition, FetchRequest.PartitionData> entry: fetches.entrySet()) {
-            builder.add(entry.getKey(), topicIds.get(entry.getKey().topic()), entry.getValue());
+            TopicPartition topicPartition = entry.getKey();
+            builder.add(topicPartition, topicIds.get(topicPartition.topic()), entry.getValue());
         }
 
         builder.build();
