@@ -100,8 +100,9 @@ public final class ClientUtils {
                 clientSaslMechanism, time, true);
     }
 
-    static List<InetAddress> resolve(String host, ClientDnsLookup clientDnsLookup) throws UnknownHostException {
-        InetAddress[] addresses = InetAddress.getAllByName(host);
+    static List<InetAddress> resolve(String host, ClientDnsLookup clientDnsLookup,
+                                     HostResolver hostResolver) throws UnknownHostException {
+        InetAddress[] addresses = hostResolver.resolve(host);
         if (ClientDnsLookup.USE_ALL_DNS_IPS == clientDnsLookup) {
             return filterPreferredAddresses(addresses);
         } else {
@@ -109,6 +110,13 @@ public final class ClientUtils {
         }
     }
 
+    /**
+     * Return a list containing the first address in `allAddresses` and subsequent addresses
+     * that are a subtype of the first address.
+     *
+     * The outcome is that all returned addresses are either IPv4 or IPv6 (InetAddress has two
+     * subclasses: Inet4Address and Inet6Address).
+     */
     static List<InetAddress> filterPreferredAddresses(InetAddress[] allAddresses) {
         List<InetAddress> preferredAddresses = new ArrayList<>();
         Class<? extends InetAddress> clazz = null;
