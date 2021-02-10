@@ -109,7 +109,7 @@ public abstract class MirrorConnectorsIntegrationBaseTest {
         shuttingDown = false;
         exitProcedure = (code, message) -> {
             if (shuttingDown) {
-                // ignore this since we're shutting down Connect and Kafka and timing isn't always great
+                // ignore  this since we're shutting down Connect and Kafka and timing isn't always great
                 return;
             }
             if (code != 0) {
