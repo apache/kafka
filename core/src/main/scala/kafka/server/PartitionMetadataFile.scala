@@ -19,7 +19,7 @@ package kafka.server
 
 import java.io.{BufferedReader, BufferedWriter, File, FileOutputStream, IOException, OutputStreamWriter}
 import java.nio.charset.StandardCharsets
-import java.nio.file.{FileAlreadyExistsException, Files, Paths}
+import java.nio.file.{Files, Paths}
 import java.util.regex.Pattern
 
 import kafka.utils.Logging
@@ -91,10 +91,6 @@ class PartitionMetadataFile(val file: File,
   private val lock = new Object()
   private val logDir = file.getParentFile.getParent
 
-
-  try Files.createFile(file.toPath) // create the file if it doesn't exist
-  catch { case _: FileAlreadyExistsException => }
-
   def write(topicId: Uuid): Unit = {
     lock synchronized {
       try {
@@ -138,7 +134,11 @@ class PartitionMetadataFile(val file: File,
     }
   }
 
-  def isEmpty(): Boolean = {
-    file.length() == 0
+  def exists(): Boolean = {
+    file.exists()
+  }
+
+  def delete(): Boolean = {
+    file.delete()
   }
 }

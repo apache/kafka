@@ -1424,17 +1424,18 @@ class ReplicaManager(val config: KafkaConfig,
            * In this case ReplicaManager.allPartitions will map this topic-partition to an empty Partition object.
            * we need to map this topic-partition to OfflinePartition instead.
            */
-            if (localLog(topicPartition).isEmpty)
+            val local = localLog(topicPartition)
+            if (local.isEmpty)
               markPartitionOffline(topicPartition)
             else {
               val id = topicIds.get(topicPartition.topic())
               // Ensure we have not received a request from an older protocol
               if (id != null && !id.equals(Uuid.ZERO_UUID)) {
-                val log = localLog(topicPartition).get
+                val log = local.get
                 // Check if topic ID is in memory, if not, it must be new to the broker and does not have a metadata file.
                 // This is because if the broker previously wrote it to file, it would be recovered on restart after failure.
                 if (log.topicId.equals(Uuid.ZERO_UUID)) {
-                  log.partitionMetadataFile.get.write(id)
+                  log.partitionMetadataFile.write(id)
                   log.topicId = id
                   // Warn if the topic ID in the request does not match the log.
                 } else if (!log.topicId.equals(id)) {
