@@ -17,12 +17,9 @@
 package org.apache.kafka.connect.util;
 
 import org.apache.kafka.clients.NodeApiVersions;
-import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.AdminClientUnitTestEnv;
 import org.apache.kafka.clients.admin.Config;
 import org.apache.kafka.clients.admin.DescribeTopicsResult;
-import org.apache.kafka.clients.admin.ListOffsetsResult;
-import org.apache.kafka.clients.admin.ListOffsetsResult.ListOffsetsResultInfo;
 import org.apache.kafka.clients.admin.MockAdminClient;
 import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.clients.admin.TopicDescription;
@@ -30,14 +27,11 @@ import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.PartitionInfo;
-import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.TopicPartitionInfo;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.config.ConfigResource;
 import org.apache.kafka.common.config.TopicConfig;
-import org.apache.kafka.common.errors.AuthorizationException;
 import org.apache.kafka.common.errors.ClusterAuthorizationException;
-import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.errors.TopicAuthorizationException;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.message.CreateTopicsResponseData;
@@ -53,13 +47,10 @@ import org.apache.kafka.connect.errors.ConnectException;
 import org.junit.Test;
 
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.Map;
-import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.ExecutionException;
 
@@ -71,11 +62,6 @@ import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyMap;
-import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.when;
 
 public class TopicAdminTest {
 
@@ -472,175 +458,6 @@ public class TopicAdminTest {
             assertEquals(1, policies.size());
             assertEquals(TopicConfig.CLEANUP_POLICY_COMPACT, policies.iterator().next());
         }
-    }
-
-    @SuppressWarnings("unchecked")
-    private <T> KafkaFuture<T> mockFuture() {
-        return (KafkaFuture<T>) mock(KafkaFuture.class);
-    }
-
-    private Admin expectAdminListOffsetsFailure(Throwable expected) throws Exception {
-        // When the admin client lists offsets
-        Admin mockAdmin = mock(Admin.class);
-        ListOffsetsResult results = mock(ListOffsetsResult.class);
-        when(mockAdmin.listOffsets(anyMap())).thenReturn(results);
-        // and throws an exception via the future.get()
-        ExecutionException execException = new ExecutionException(expected);
-        KafkaFuture<ListOffsetsResultInfo> future = mockFuture();
-        when(future.get()).thenThrow(execException);
-        when(results.partitionResult(any(TopicPartition.class))).thenReturn(future);
-        return mockAdmin;
-    }
-
-    private void expectOffsets(ListOffsetsResult results, TopicPartition tp, long offset) throws Exception {
-        // Then return the offsets for tp2
-        ListOffsetsResultInfo resultsInfo = new ListOffsetsResultInfo(offset, 0L, Optional.empty());
-        KafkaFuture<ListOffsetsResultInfo> future = mockFuture();
-        when(future.get()).thenReturn(resultsInfo);
-        when(results.partitionResult(eq(tp))).thenReturn(future);
-
-    }
-
-    @Test
-    public void endOffsetsShouldFailWithNonRetriableWhenAuthorizationFailureOccurs() throws Exception {
-        String topicName = "myTopic";
-        TopicPartition tp1 = new TopicPartition(topicName, 0);
-        Set<TopicPartition> tps = Collections.singleton(tp1);
-
-        // When the admin client lists offsets throws an exception
-        Admin mockAdmin = expectAdminListOffsetsFailure(new AuthorizationException("failed"));
-
-        // Then the topic admin should throw exception
-        TopicAdmin admin = new TopicAdmin(null, mockAdmin);
-        ConnectException e = assertThrows(ConnectException.class, () -> {
-            admin.endOffsets(tps);
-        });
-        assertTrue(e.getMessage().contains("Not authorized to get the end offsets"));
-    }
-
-    @Test
-    public void endOffsetsShouldFailWithNonRetriableWhenVersionUnsupportedErrorOccurs() throws Exception {
-        String topicName = "myTopic";
-        TopicPartition tp1 = new TopicPartition(topicName, 0);
-        Set<TopicPartition> tps = Collections.singleton(tp1);
-
-        // When the admin client lists offsets throws an exception
-        Admin mockAdmin = expectAdminListOffsetsFailure(new UnsupportedVersionException("failed"));
-
-        // Then the topic admin should throw exception
-        TopicAdmin admin = new TopicAdmin(null, mockAdmin);
-        ConnectException e = assertThrows(ConnectException.class, () -> {
-            admin.endOffsets(tps);
-        });
-        assertTrue(e.getMessage().contains("is unsupported on brokers"));
-    }
-
-    @Test
-    public void endOffsetsShouldFailWithRetriableWhenTimeoutErrorOccurs() throws Exception {
-        String topicName = "myTopic";
-        TopicPartition tp1 = new TopicPartition(topicName, 0);
-        Set<TopicPartition> tps = Collections.singleton(tp1);
-
-        // When the admin client lists offsets throws an exception
-        Admin mockAdmin = expectAdminListOffsetsFailure(new TimeoutException("failed"));
-
-        // Then the topic admin should throw exception
-        TopicAdmin admin = new TopicAdmin(null, mockAdmin);
-        ConnectException e = assertThrows(ConnectException.class, () -> {
-            admin.endOffsets(tps);
-        });
-        assertTrue(e.getMessage().contains("Timed out while waiting"));
-    }
-
-    @Test
-    public void endOffsetsShouldFailWithNonRetriableWhenUnknownErrorOccurs() throws Exception {
-        String topicName = "myTopic";
-        TopicPartition tp1 = new TopicPartition(topicName, 0);
-        Set<TopicPartition> tps = Collections.singleton(tp1);
-
-        // When the admin client lists offsets throws an exception
-        Admin mockAdmin = expectAdminListOffsetsFailure(new RuntimeException("failed"));
-
-        // Then the topic admin should throw exception
-        TopicAdmin admin = new TopicAdmin(null, mockAdmin);
-        ConnectException e = assertThrows(ConnectException.class, () -> {
-            admin.endOffsets(tps);
-        });
-        assertTrue(e.getMessage().contains("Error while getting end offsets for topic"));
-    }
-
-    @Test
-    public void endOffsetsShouldReturnEmptyMapWhenPartitionsSetIsNull() throws Exception {
-        String topicName = "myTopic";
-        TopicPartition tp1 = new TopicPartition(topicName, 0);
-        Set<TopicPartition> tps = Collections.singleton(tp1);
-
-        // Then the topic admin should return immediately
-        Admin mockAdmin = mock(Admin.class);
-        TopicAdmin admin = new TopicAdmin(null, mockAdmin);
-        Map<TopicPartition, Long> offsets = admin.endOffsets(Collections.emptySet());
-        assertTrue(offsets.isEmpty());
-    }
-
-    @Test
-    public void endOffsetsShouldReturnOffsetsForOnePartition() throws Exception {
-        String topicName = "myTopic";
-        long offset = 1L;
-        TopicPartition tp1 = new TopicPartition(topicName, 0);
-        Set<TopicPartition> tps = Collections.singleton(tp1);
-
-        // When the admin client lists offsets is called with one topic partition
-        Admin mockAdmin = mock(Admin.class);
-        ListOffsetsResult results = mock(ListOffsetsResult.class);
-        when(mockAdmin.listOffsets(anyMap())).thenReturn(results);
-        expectOffsets(results, tp1, offset);
-
-        // Then the topic admin should return offsets
-        TopicAdmin admin = new TopicAdmin(null, mockAdmin);
-        Map<TopicPartition, Long> offsets = admin.endOffsets(tps);
-        assertEquals(1, offsets.size());
-        assertEquals(Long.valueOf(offset), offsets.get(tp1));
-    }
-
-    @Test
-    public void endOffsetsShouldReturnOffsetsForMultiplePartitions() throws Exception {
-        long offset1 = 1L;
-        long offset2 = 2L;
-        String topicName = "myTopic";
-        TopicPartition tp1 = new TopicPartition(topicName, 0);
-        TopicPartition tp2 = new TopicPartition(topicName, 1);
-        Set<TopicPartition> tps = new HashSet<>(Arrays.asList(tp1, tp2));
-
-        // When the admin client lists offsets is called with one topic partition
-        Admin mockAdmin = mock(Admin.class);
-        ListOffsetsResult results = mock(ListOffsetsResult.class);
-        when(mockAdmin.listOffsets(anyMap())).thenReturn(results);
-        expectOffsets(results, tp1, offset1);
-        expectOffsets(results, tp2, offset2);
-
-        // Then the topic admin should return offsets
-        TopicAdmin admin = new TopicAdmin(null, mockAdmin);
-        Map<TopicPartition, Long> offsets = admin.endOffsets(tps);
-        assertEquals(2, offsets.size());
-        assertEquals(Long.valueOf(offset1), offsets.get(tp1));
-        assertEquals(Long.valueOf(offset2), offsets.get(tp2));
-    }
-
-    @Test
-    public void endOffsetsShouldFailWhenAnyTopicPartitionHasError() throws Exception {
-        String topicName = "myTopic";
-        TopicPartition tp1 = new TopicPartition(topicName, 0);
-        Set<TopicPartition> tps = Collections.singleton(tp1);
-
-        // When the admin client lists offsets throws an exception
-        Admin mockAdmin = expectAdminListOffsetsFailure(new AuthorizationException("failed"));
-
-        // Then the topic admin should throw exception
-        TopicAdmin admin = new TopicAdmin(null, mockAdmin);
-        ConnectException e = assertThrows(ConnectException.class, () -> {
-            admin.endOffsets(tps);
-        });
-        assertTrue(e.getMessage().contains("Not authorized to get the end offsets"));
     }
 
     private Cluster createCluster(int numNodes) {
