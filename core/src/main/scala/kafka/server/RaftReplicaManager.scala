@@ -297,7 +297,7 @@ class RaftReplicaManager(config: KafkaConfig,
         builder.localChanged().foreach(metadataPartition =>
           prevPartitions.topicPartition(metadataPartition.topicName, metadataPartition.partitionIndex).foreach(
             changedPartitionsPreviouslyExisting.add))
-        val nextBrokers = imageBuilder.nextBrokers()
+        val nextBrokers = imageBuilder.brokers()
         val highWatermarkCheckpoints = new LazyOffsetCheckpoints(this.highWatermarkCheckpoints)
         val partitionsBecomeLeader = if (partitionsToBeLeader.nonEmpty)
           delegate.makeLeaders(changedPartitionsPreviouslyExisting, partitionsToBeLeader, highWatermarkCheckpoints,
