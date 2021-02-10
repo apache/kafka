@@ -262,10 +262,23 @@ public class FlattenTest {
     }
 
     @Test
-    public void testArray() {
-        xformValue.configure(Collections.<String, String>emptyMap());
+    public void testSchemalessArray() {
+        xformValue.configure(Collections.emptyMap());
         Object value = Collections.singletonMap("foo", Arrays.asList("bar", "baz"));
         assertEquals(value, xformValue.apply(new SourceRecord(null, null, "topic", null, null, null, value)).value());
+    }
+
+    @Test
+    public void testArrayWithSchema() {
+        xformValue.configure(Collections.emptyMap());
+        Schema structSchema = SchemaBuilder.struct()
+            .field("foo", SchemaBuilder.array(Schema.STRING_SCHEMA).doc("durk").build())
+            .build();
+        Struct value = new Struct(structSchema);
+        value.put("foo", Arrays.asList("bar", "baz"));
+        SourceRecord transformed = xformValue.apply(new SourceRecord(null, null, "topic", null, null, structSchema, value)); 
+        assertEquals(value, transformed.value());
+        assertEquals(structSchema, transformed.valueSchema());
     }
 
     @Test
