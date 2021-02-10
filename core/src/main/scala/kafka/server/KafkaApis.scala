@@ -1696,7 +1696,13 @@ class KafkaApis(val requestChannel: RequestChannel,
         val finalizedFeaturesOpt = finalizedFeatureCache.get
         val controllerApiVersions = metadataSupport.forwardingManager.flatMap(_.controllerApiVersions)
 
-        val apiVersionsResponse =
+        val apiVersionsResponse = if (apiVersionRequest.version < 3) {
+          ApiVersion.apiVersionsResponse(
+            requestThrottleMs,
+            config.interBrokerProtocolVersion.recordVersion.value,
+            controllerApiVersions
+          )
+        } else {
           finalizedFeaturesOpt match {
             case Some(finalizedFeatures) => ApiVersion.apiVersionsResponse(
               requestThrottleMs,
@@ -1711,6 +1717,7 @@ class KafkaApis(val requestChannel: RequestChannel,
               supportedFeatures,
               controllerApiVersions)
           }
+        }
         if (request.context.fromPrivilegedListener) {
           apiVersionsResponse.data.apiKeys().add(
             new ApiVersionsResponseData.ApiVersion()

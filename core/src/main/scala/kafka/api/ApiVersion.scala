@@ -163,6 +163,17 @@ object ApiVersion {
 
   def apiVersionsResponse(throttleTimeMs: Int,
                           maxMagic: Byte,
+                          controllerApiVersions: Option[NodeApiVersions]): ApiVersionsResponse = {
+    apiVersionsResponse(
+      throttleTimeMs,
+      maxMagic,
+      Features.emptySupportedFeatures(),
+      controllerApiVersions
+    )
+  }
+
+  def apiVersionsResponse(throttleTimeMs: Int,
+                          maxMagic: Byte,
                           latestSupportedFeatures: Features[SupportedVersionRange],
                           finalizedFeatures: Features[FinalizedVersionRange],
                           finalizedFeaturesEpoch: Long,
