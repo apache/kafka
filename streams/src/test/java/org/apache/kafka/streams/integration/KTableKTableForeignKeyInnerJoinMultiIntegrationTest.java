@@ -285,7 +285,6 @@ public class KTableKTableForeignKeyInnerJoinMultiIntegrationTest {
         System.err.println("!!! stream state:" + streams.state() + streamsTwo.state() + streamsThree.state());
 
         assertEquals(expectedResult, result);
-//        assertEquals(result.size(), 5);
     }
 
     private static Properties getStreamsConfig() {
