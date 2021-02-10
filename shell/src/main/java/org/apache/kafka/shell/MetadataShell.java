@@ -171,7 +171,7 @@ public final class MetadataShell {
 
     private final KafkaRaftManager<ApiMessageAndVersion> raftManager;
 
-    private final SnapshotFileReader reader;
+    private final SnapshotFileReader snapshotFileReader;
 
     private final MetadataNodeManager nodeManager;
 
