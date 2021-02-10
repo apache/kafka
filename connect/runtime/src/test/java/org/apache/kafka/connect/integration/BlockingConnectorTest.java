@@ -42,6 +42,7 @@ import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.experimental.categories.Category;
+import org.opentest4j.AssertionFailedError;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -62,6 +63,7 @@ import static org.apache.kafka.connect.runtime.ConnectorConfig.TASKS_MAX_CONFIG;
 import static org.apache.kafka.connect.runtime.SinkConnectorConfig.TOPICS_CONFIG;
 import static org.apache.kafka.test.TestUtils.waitForCondition;
 import static org.junit.Assert.assertThrows;
+import static org.junit.Assert.fail;
 
 /**
  * Tests situations during which certain connector operations, such as start, validation,
@@ -130,11 +132,26 @@ public class BlockingConnectorTest {
         // wait for the Connect REST API to become available. necessary because of the reduced REST
         // request timeout; otherwise, we may get an unexpected 500 with our first real REST request
         // if the worker is still getting on its feet.
-        waitForCondition(
-            () -> connect.requestGet(connect.endpointForResource("connectors/nonexistent")).getStatus() == 404,
-            CONNECT_WORKER_STARTUP_TIMEOUT,
-            "Worker did not complete startup in time"
-        );
+        try {
+            waitForCondition(
+                () -> connect.requestGet(connect.endpointForResource("connectors/nonexistent")).getStatus() == 404,
+                CONNECT_WORKER_STARTUP_TIMEOUT,
+                "Worker did not complete startup in time"
+            );
+        } catch (final AssertionFailedError e) {
+            System.err.println("!!! Worker did not complete startup in time, try again");
+        }
+
+        try {
+            waitForCondition(
+                () -> connect.requestGet(connect.endpointForResource("connectors/nonexistent")).getStatus() == 404,
+                CONNECT_WORKER_STARTUP_TIMEOUT,
+                "Worker did not complete startup in time"
+            );
+        } catch (final AssertionFailedError e) {
+            System.err.println("!!! failed twice");
+            fail("failed twice");
+        }
     }
 
     @After
