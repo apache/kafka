@@ -299,9 +299,9 @@ class Log(@volatile private var _dir: File,
   // Visible for testing
   @volatile var leaderEpochCache: Option[LeaderEpochFileCache] = None
 
-  @volatile private var localLogStartOffset:Long = logStartOffset
+  @volatile private var localLogStartOffset: Long = logStartOffset
 
-  @volatile private var highestOffsetWithRemoteIndex:Long = logStartOffset
+  @volatile private var highestOffsetWithRemoteIndex: Long = -1L
 
   private def remoteLogEnabled() : Boolean = {
     // remote logging is enabled only for non-compact and non-internal topics

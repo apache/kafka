@@ -1356,6 +1356,49 @@ class LogTest {
   }
 
   @Test
+  def testSegmentDeletionDisabledBeforeUploadToRemoteTier(): Unit = {
+    val logConfig = LogTest.createLogConfig(indexIntervalBytes = 1, segmentIndexBytes = 12,
+      retentionBytes = 1, fileDeleteDelayMs = 0)
+    val log = createLog(logDir, logConfig)
+    val pid = 1L
+    val epoch = 0.toShort
+
+    log.appendAsLeader(TestUtils.records(List(new SimpleRecord("a".getBytes)),
+      producerId = pid, producerEpoch = epoch, sequence = 0), leaderEpoch = 0)
+    log.roll()
+    log.appendAsLeader(TestUtils.records(List(new SimpleRecord("b".getBytes)),
+      producerId = pid, producerEpoch = epoch, sequence = 1), leaderEpoch = 0)
+    log.updateHighWatermark(log.logEndOffset)
+    assertEquals(2, log.logSegments.size)
+
+    log.deleteOldSegments()
+    mockTime.sleep(1)
+    assertEquals(2, log.logSegments.size)
+  }
+
+  @Test
+  def testSegmentDeletionEnabledAfterUploadToRemoteTier(): Unit = {
+    val logConfig = LogTest.createLogConfig(indexIntervalBytes = 1, segmentIndexBytes = 12,
+      retentionBytes = 1, fileDeleteDelayMs = 0)
+    val log = createLog(logDir, logConfig)
+    val pid = 1L
+    val epoch = 0.toShort
+
+    log.appendAsLeader(TestUtils.records(List(new SimpleRecord("a".getBytes)),
+      producerId = pid, producerEpoch = epoch, sequence = 0), leaderEpoch = 0)
+    log.roll()
+    log.appendAsLeader(TestUtils.records(List(new SimpleRecord("b".getBytes)),
+      producerId = pid, producerEpoch = epoch, sequence = 1), leaderEpoch = 0)
+    log.updateHighWatermark(log.logEndOffset)
+    assertEquals(2, log.logSegments.size)
+
+    log.updateRemoteIndexHighestOffset(0L)
+    log.deleteOldSegments()
+    mockTime.sleep(1)
+    assertEquals(1, log.logSegments.size)
+  }
+
+  @Test
   def testLogStartOffsetMovementDeletesSnapshots(): Unit = {
     val logConfig = LogTest.createLogConfig(segmentBytes = 2048 * 5, retentionBytes = -1, fileDeleteDelayMs = 0)
     val log = createLog(logDir, logConfig)
