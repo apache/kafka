@@ -838,8 +838,6 @@ public class StreamThreadTest {
 
     @Test
     public void shouldRecordCommitLatency() {
-        final AtomicLong commitLatency = new AtomicLong();
-
         final Consumer<byte[], byte[]> consumer = EasyMock.createNiceMock(Consumer.class);
         final ConsumerGroupMetadata consumerGroupMetadata = mock(ConsumerGroupMetadata.class);
         expect(consumer.groupMetadata()).andStubReturn(consumerGroupMetadata);
@@ -871,7 +869,7 @@ public class StreamThreadTest {
         ) {
             @Override
             int commit(final Collection<Task> tasksToCommit) {
-                mockTime.sleep(commitLatency.get());
+                mockTime.sleep(10L);
                 return 1;
             }
         };
@@ -925,7 +923,6 @@ public class StreamThreadTest {
             )
         );
 
-        commitLatency.set(10L);
         thread.runOnce();
 
         assertThat(
