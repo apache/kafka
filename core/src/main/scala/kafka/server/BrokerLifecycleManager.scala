@@ -18,7 +18,7 @@ package kafka.server
 
 import java.util
 import java.util.concurrent.TimeUnit.{MILLISECONDS, NANOSECONDS}
-import java.util.concurrent.{CompletableFuture, TimeUnit}
+import java.util.concurrent.CompletableFuture
 import kafka.utils.Logging
 import org.apache.kafka.clients.ClientResponse
 import org.apache.kafka.common.Uuid
@@ -33,6 +33,24 @@ import org.apache.kafka.queue.{EventQueue, KafkaEventQueue}
 import scala.jdk.CollectionConverters._
 
 
+/**
+ * The broker lifecycle manager owns the broker state.
+ *
+ * Its inputs are messages passed in from other parts of the broker and from the
+ * controller: requests to start up, or shut down, for example. Its output are the broker
+ * state and various futures that can be used to wait for broker state transitions to
+ * occur.
+ *
+ * The lifecycle manager handles registering the broker with the controller, as described
+ * in KIP-631. After registration is complete, it handles sending periodic broker
+ * heartbeats and processing the responses.
+ *
+ * This code uses an event queue paradigm. Modifications get translated into events, which
+ * are placed on the queue to be processed sequentially. As described in the JavaDoc for
+ * each variable, most mutable state can be accessed only from that event queue thread.
+ * In some cases we expose a volatile variable which can be read from any thread, but only
+ * written from the event queue thread.
+ */
 class BrokerLifecycleManager(val config: KafkaConfig,
                              val time: Time,
                              val threadNamePrefix: Option[String]) extends Logging {
@@ -53,17 +71,17 @@ class BrokerLifecycleManager(val config: KafkaConfig,
   /**
    * How long to wait for registration to succeed before failing the startup process.
    */
-  private val initialTimeoutNs = NANOSECONDS.
-    convert(config.initialRegistrationTimeoutMs.longValue(), TimeUnit.MILLISECONDS)
+  private val initialTimeoutNs = MILLISECONDS.toNanos(config.initialRegistrationTimeoutMs.longValue())
 
   /**
    * The exponential backoff to use for resending communication.
    */
   private val resendExponentialBackoff =
-    new ExponentialBackoff(100, 2, config.brokerSessionTimeoutMs.toLong, 0.1)
+    new ExponentialBackoff(100, 2, config.brokerSessionTimeoutMs.toLong, 0.02)
 
   /**
-   * The number of tries we've tried to communicate.
+   * The number of tries we've tried to communicate.  This variable can only be read or
+   * written from the event queue thread.
    */
   private var failedAttempts = 0L
 
@@ -84,66 +102,68 @@ class BrokerLifecycleManager(val config: KafkaConfig,
   val controlledShutdownFuture = new CompletableFuture[Void]()
 
   /**
-   * The broker epoch, or -1 if the broker has not yet registered.
-   * This variable can only be written from the event queue thread.
+   * The broker epoch, or -1 if the broker has not yet registered.  This variable can only
+   * be written from the event queue thread.
    */
   @volatile private var _brokerEpoch = -1L
 
   /**
-   * The current broker state.
-   * This variable can only be written from the event queue thread.
+   * The current broker state.  This variable can only be written from the event queue
+   * thread.
    */
   @volatile private var _state = BrokerState.NOT_RUNNING
 
   /**
-   * A callback function which gives this manager the current highest metadata offset.
-   * This function must be thread-safe.
+   * A thread-safe callback function which gives this manager the current highest metadata
+   * offset.  This variable can only be read or written from the event queue thread.
    */
   private var _highestMetadataOffsetProvider: () => Long = null
 
   /**
-   * True only if we are ready to unfence the broker.
-   * This variable can only be accessed from the event queue thread.
+   * True only if we are ready to unfence the broker.  This variable can only be read or
+   * written from the event queue thread.
    */
   private var readyToUnfence = false
 
   /**
-   * True if we sent a heartbeat to the active controller requesting controlled
-   * shutdown.
+   * True if we sent a event queue to the active controller requesting controlled
+   * shutdown.  This variable can only be read or written from the event queue thread.
    */
   private var gotControlledShutdownResponse = false
 
   /**
    * Whether or not we this broker is registered with the controller quorum.
-   * This variable can only be accessed from the event queue thread.
+   * This variable can only be read or written from the event queue thread.
    */
   private var registered = false
 
   /**
-   * True if the initial registration succeeded.
-   * This variable can only be accessed from the event queue thread.
+   * True if the initial registration succeeded.  This variable can only be read or
+   * written from the event queue thread.
    */
   private var initialRegistrationSucceeded = false
 
   /**
-   * The cluster ID, or null if this manager has not been started yet.
-   * This variable can only be accessed from the event queue thread.
+   * The cluster ID, or null if this manager has not been started yet.  This variable can
+   * only be read or written from the event queue thread.
    */
   private var _clusterId: Uuid = null
 
   /**
-   * The listeners which this broker advertises.
+   * The listeners which this broker advertises.  This variable can only be read or
+   * written from the event queue thread.
    */
   private var _advertisedListeners: ListenerCollection = null
 
   /**
-   * The features supported by this broker.
+   * The features supported by this broker.  This variable can only be read or written
+   * from the event queue thread.
    */
   private var _supportedFeatures: util.Map[String, VersionRange] = null
 
   /**
-   * The channel manager, or null if this manager has not been started yet.
-   * This variable can only be accessed from the event queue thread.
+   * The channel manager, or null if this manager has not been started yet.  This variable
+   * can only be read or written from the event queue thread.
    */
   var _channelManager: BrokerToControllerChannelManager = null
 
