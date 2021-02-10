@@ -1509,7 +1509,7 @@ public interface Admin extends AutoCloseable {
      * only on Kafka clusters which use Raft to store metadata, rather than ZooKeeper.
      *
      * The following exceptions can be anticipated when calling {@code get()} on the future from the
-     * returned {@link DescribeFeaturesResult}:
+     * returned {@link UnregisterBrokerResult}:
      * <ul>
      *   <li>{@link org.apache.kafka.common.errors.TimeoutException}
      *   If the request timed out before the describe operation could finish.</li>
