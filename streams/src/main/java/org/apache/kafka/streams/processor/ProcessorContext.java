@@ -299,9 +299,6 @@ public interface ProcessorContext {
      * Thus, it may return a different value compared to {@code System.currentTimeMillis()} .
      * <p>
      *
-     * For a global processor, Kafka Streams does not cache system time and thus calling this method will return
-     * the same value as {@code System.currentTimeMillis()}.
-     *
      * @return the current system timestamp in milliseconds
      */
     long currentSystemTimeMs();
