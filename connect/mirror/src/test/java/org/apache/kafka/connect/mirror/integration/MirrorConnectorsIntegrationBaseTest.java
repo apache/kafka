@@ -1376,6 +1376,7 @@ public abstract class MirrorConnectorsIntegrationBaseTest {
 //        Admin client = cluster.createAdminClient();
 //        client.deleteTopics(client.listTopics().names().get());
 
+        System.err.println("!!! delete topics");
         try (final Admin adminClient = cluster.createAdminClient()) {
             adminClient.deleteTopics(adminClient.listTopics().names().get()).all().get();
         } catch (final InterruptedException e) {

@@ -132,6 +132,8 @@ public class BlockingConnectorTest {
         // wait for the Connect REST API to become available. necessary because of the reduced REST
         // request timeout; otherwise, we may get an unexpected 500 with our first real REST request
         // if the worker is still getting on its feet.
+        System.err.println("!!! ready");
+        System.out.println("!!! ready");
         try {
             waitForCondition(
                 () -> connect.requestGet(connect.endpointForResource("connectors/nonexistent")).getStatus() == 404,
@@ -140,6 +142,7 @@ public class BlockingConnectorTest {
             );
         } catch (final AssertionFailedError e) {
             System.err.println("!!! Worker did not complete startup in time, try again");
+            System.out.println("!!! Worker did not complete startup in time, try again");
         }
 
         try {
@@ -149,6 +152,7 @@ public class BlockingConnectorTest {
                 "Worker did not complete startup in time"
             );
         } catch (final AssertionFailedError e) {
+            System.out.println("!!! failed twice");
             System.err.println("!!! failed twice");
             fail("failed twice");
         }

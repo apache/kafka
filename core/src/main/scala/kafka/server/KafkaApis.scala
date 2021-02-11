@@ -1106,6 +1106,7 @@ class KafkaApis(val requestChannel: RequestChannel,
     errorUnavailableEndpoints: Boolean,
     errorUnavailableListeners: Boolean
   ): Seq[MetadataResponseTopic] = {
+//    System.err.println("!!! getTopicMetadata")
     val topicResponses = metadataCache.getTopicMetadata(topics, listenerName,
       errorUnavailableEndpoints, errorUnavailableListeners)
 
