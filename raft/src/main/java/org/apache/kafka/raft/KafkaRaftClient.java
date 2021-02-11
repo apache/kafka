@@ -131,9 +131,11 @@ import static org.apache.kafka.raft.RaftUtil.hasValidTopicPartition;
  *    leader and epoch). Unlike partition replication, we also piggyback truncation detection on this API
  *    rather than through a separate truncation state.
  *
- * 5) {@link FetchSnapshotRequestData}: Sent by the follower when FetchResponse include a snapshot id,
- *    this is similar to the Fetch API since the snapshot is also stored as FileRecords, but we use
- *    {@link UnalignedRecords} in FetchSnapshotResponse because the records is not necessarily offset-aligned.
+ * 5) {@link FetchSnapshotRequestData}: Sent by the follower to the epoch leader to fetch snapshot when
+ *    FetchResponse include a snapshot id, this happens when the follower's log end offset is less than
+ *    the leader's log start offset. This is similar to the Fetch API since the snapshot is also stored
+ *    as FileRecords, but we use {@link UnalignedRecords} in FetchSnapshotResponse because the records is
+ *    not necessarily offset-aligned.
  *
  */
 public class KafkaRaftClient<T> implements RaftClient<T> {
@@ -1364,7 +1366,7 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
             } else {
                 throw new IllegalStateException(
                     String.format(
-                        "Full log trunctation expected but didn't happen. Snapshot of %s, log end offset %s, last fetched %s",
+                        "Full log truncation expected but didn't happen. Snapshot of %s, log end offset %s, last fetched %s",
                         snapshot.snapshotId(),
                         log.endOffset(),
                         log.lastFetchedEpoch()
