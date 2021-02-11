@@ -860,6 +860,7 @@ public class IntegrationTestUtils {
             stateMap.put(streams, streams.state());
             final StateListener prevStateListener = getStateListener(streams);
             final StateListener newStateListener = (newState, oldState) -> {
+                System.err.println("!!! " + streams + "," + oldState + "," + newState);
                 stateLock.lock();
                 try {
                     stateMap.put(streams, newState);

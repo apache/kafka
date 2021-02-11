@@ -1608,7 +1608,7 @@ public class KafkaAdminClient extends AdminClient {
     @Override
     public DeleteTopicsResult deleteTopics(final Collection<String> topicNames,
                                            final DeleteTopicsOptions options) {
-        System.err.println("!!! top:" + topicNames);
+//        System.err.println("!!! top:" + topicNames);
         final Map<String, KafkaFutureImpl<Void>> topicFutures = new HashMap<>(topicNames.size());
         final List<String> validTopicNames = new ArrayList<>(topicNames.size());
         for (String topicName : topicNames) {
