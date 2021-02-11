@@ -657,7 +657,7 @@ public class KafkaAdminClient extends AdminClient {
                 // Wait for the thread to be joined.
                 thread.join(waitTimeMs);
             }
-            log.info("Kafka admin client closed.");
+            log.debug("Kafka admin client closed.");
         } catch (InterruptedException e) {
             log.debug("Interrupted while joining I/O thread", e);
             Thread.currentThread().interrupt();
@@ -756,9 +756,9 @@ public class KafkaAdminClient extends AdminClient {
             return curNode;
         }
 
-        void abortAndFail(Throwable throwable) {
+        void abortAndFail(TimeoutException timeoutException) {
             this.aborted = true;
-            fail(time.milliseconds(), throwable);
+            fail(time.milliseconds(), timeoutException);
         }
 
         /**
