@@ -58,10 +58,7 @@ public final class CommandUtils {
      */
     public static void completeCommand(String commandPrefix, List<Candidate> candidates) {
         String command = Commands.TYPES.ceilingKey(commandPrefix);
-        while (true) {
-            if (command == null || !command.startsWith(commandPrefix)) {
-                return;
-            }
+        while (command != null && command.startsWith(commandPrefix)) {
             candidates.add(new Candidate(command));
             command = Commands.TYPES.higherKey(command);
         }
