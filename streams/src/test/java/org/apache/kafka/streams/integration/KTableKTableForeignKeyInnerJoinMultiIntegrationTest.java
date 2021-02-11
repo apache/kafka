@@ -262,6 +262,8 @@ public class KTableKTableForeignKeyInnerJoinMultiIntegrationTest {
     private void verifyKTableKTableJoin(final JoinType joinType,
                                         final Set<KeyValue<Integer, String>> expectedResult,
                                         final boolean verifyQueryableState) throws Exception {
+        System.err.println("st");
+
         final String queryableName = verifyQueryableState ? joinType + "-store1" : null;
         final String queryableNameTwo = verifyQueryableState ? joinType + "-store2" : null;
 
@@ -277,7 +279,8 @@ public class KTableKTableForeignKeyInnerJoinMultiIntegrationTest {
         waitForApplicationState(singletonList(streamsThree), KafkaStreams.State.RUNNING, Duration.ofSeconds(60));
         waitForApplicationState(singletonList(streamsTwo), KafkaStreams.State.RUNNING, Duration.ofSeconds(60));
         waitForApplicationState(singletonList(streams), KafkaStreams.State.RUNNING, Duration.ofSeconds(60));
-        
+
+
 //        startApplicationAndWaitUntilRunning(singletonList(streams), Duration.ofSeconds(60));
 //        startApplicationAndWaitUntilRunning(singletonList(streamsTwo), Duration.ofSeconds(60));
 //        startApplicationAndWaitUntilRunning(singletonList(streamsThree), Duration.ofSeconds(60));
