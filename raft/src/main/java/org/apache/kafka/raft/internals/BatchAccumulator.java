@@ -32,6 +32,7 @@ import java.util.List;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.locks.ReentrantLock;
+import java.util.stream.IntStream;
 
 public class BatchAccumulator<T> implements Closeable {
     private final int epoch;
@@ -109,7 +110,7 @@ public class BatchAccumulator<T> implements Closeable {
 
             for (T record : records) {
                 BatchBuilder<T> batch = maybeAllocateBatch(
-                    serde.recordSize(record, serializationCache)
+                    new int[] {serde.recordSize(record, serializationCache)}
                 );
                 if (batch == null) {
                     return null;
@@ -147,16 +148,16 @@ public class BatchAccumulator<T> implements Closeable {
         }
 
         ObjectSerializationCache serializationCache = new ObjectSerializationCache();
-        int batchSize = 0;
-        for (T record : records) {
-            batchSize += serde.recordSize(record, serializationCache);
-        }
+        int[] recordSizes = records
+            .stream()
+            .mapToInt(record -> serde.recordSize(record, serializationCache))
+            .toArray();
 
         appendLock.lock();
         try {
             maybeCompleteDrain();
 
-            BatchBuilder<T> batch = maybeAllocateBatch(batchSize);
+            BatchBuilder<T> batch = maybeAllocateBatch(recordSizes);
             if (batch == null) {
                 return null;
             }
@@ -180,7 +181,9 @@ public class BatchAccumulator<T> implements Closeable {
         }
     }
 
-    private BatchBuilder<T> maybeAllocateBatch(int batchSize) {
+    private BatchBuilder<T> maybeAllocateBatch(int[] recordSizes) {
+        // TODO: This is incorrect. Need to look at the batch overhead
+        int batchSize = IntStream.of(recordSizes).sum();
         if (batchSize > maxBatchSize) {
             throw new RecordBatchTooLargeException(
                 String.format(
@@ -191,7 +194,7 @@ public class BatchAccumulator<T> implements Closeable {
             );
         } else if (currentBatch == null) {
             startNewBatch();
-        } else if (!currentBatch.hasRoomFor(batchSize)) {
+        } else if (!currentBatch.hasRoomFor(recordSizes)) {
             completeCurrentBatch();
             startNewBatch();
         }

@@ -69,7 +69,7 @@ class BatchBuilderTest {
 
         records.forEach(record -> builder.appendRecord(record, null));
         MemoryRecords builtRecordSet = builder.build();
-        assertFalse(builder.hasRoomFor(1));
+        assertFalse(builder.hasRoomFor(new int[] {1}));
         assertThrows(IllegalArgumentException.class, () -> builder.appendRecord("a", null));
 
         List<MutableRecordBatch> builtBatches = Utils.toList(builtRecordSet.batchIterator());
@@ -114,7 +114,7 @@ class BatchBuilderTest {
         String record = "i am a record";
         int recordSize = serde.recordSize(record);
 
-        while (builder.hasRoomFor(recordSize)) {
+        while (builder.hasRoomFor(new int[] {recordSize})) {
             builder.appendRecord(record, null);
         }
 

@@ -95,7 +95,7 @@ public class BatchBuilder<T> {
 
     /**
      * Append a record to this patch. The caller must first verify there is room for the batch
-     * using {@link #hasRoomFor(int)}.
+     * using {@link #hasRoomFor(int[])}.
      *
      * @param record the record to append
      * @param serializationCache serialization cache for use in {@link RecordSerde#write(Object, ObjectSerializationCache, Writable)}
@@ -123,12 +123,12 @@ public class BatchBuilder<T> {
     }
 
     /**
-     * Check whether the batch has enough room for a record of the given size in bytes.
+     * Check whether the batch has enough room for all the record values.
      *
-     * @param sizeInBytes the size of the record to be appended
-     * @return true if there is room for the record to be appended, false otherwise
+     * @param recordSizes the sizes of the records to be appended
+     * @return true if there is room for the records to be appended, false otherwise
      */
-    public boolean hasRoomFor(int sizeInBytes) {
+    public boolean hasRoomFor(int[] recordSizes) {
         if (!isOpenForAppends) {
             return false;
         }
@@ -137,14 +137,18 @@ public class BatchBuilder<T> {
             return false;
         }
 
-        int recordSizeInBytes = DefaultRecord.sizeOfBodyInBytes(
-            (int) (nextOffset - baseOffset),
-            0,
-            -1,
-            sizeInBytes,
-            DefaultRecord.EMPTY_HEADERS
-        );
-        int bytesNeeded = ByteUtils.sizeOfVarint(recordSizeInBytes) + recordSizeInBytes;
+        int bytesNeeded = 0;
+        for (int size: recordSizes) {
+            int recordSizeInBytes = DefaultRecord.sizeOfBodyInBytes(
+                (int) (nextOffset - baseOffset),
+                0,
+                -1,
+                size,
+                DefaultRecord.EMPTY_HEADERS
+            );
+
+            bytesNeeded += ByteUtils.sizeOfVarint(recordSizeInBytes) + recordSizeInBytes;
+        }
         int approxUnusedSizeInBytes = maxBytes - approximateSizeInBytes();
 
         if (approxUnusedSizeInBytes >= bytesNeeded) {
