@@ -115,7 +115,7 @@ public class BlockingConnectorTest {
     public void setup() throws Exception {
         // Artificially reduce thae REST request timeout so that these don't take forever
         ConnectorsResource.setRequestTimeout(REST_REQUEST_TIMEOUT);
-        // build a Connect cluster backed by Kafka and Zk
+        // build a Connect cluaster backed by Kafka and Zk
         connect = new EmbeddedConnectCluster.Builder()
                 .name("connect-cluster")
                 .numWorkers(NUM_WORKERS)
