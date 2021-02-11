@@ -18,6 +18,11 @@ Define Kafka configuration property names here.
 """
 
 BROKER_ID = "broker.id"
+NODE_ID = "node.id"
+FIRST_BROKER_PORT = 9092
+FIRST_CONTROLLER_PORT = FIRST_BROKER_PORT + 500
+FIRST_CONTROLLER_ID = 3001
+CLUSTER_ID = "6bd37820-6745-4790-ae98-620300e1f61b"
 PORT = "port"
 ADVERTISED_HOSTNAME = "advertised.host.name"
 
