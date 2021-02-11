@@ -59,7 +59,7 @@ import java.util.function.Function;
 
 import static java.util.Arrays.asList;
 import static java.util.Collections.singletonList;
-import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.startApplicationAndWaitUntilRunning;
+import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.waitForApplicationState;
 import static org.junit.Assert.assertEquals;
 
 @Category({IntegrationTest.class})
@@ -268,18 +268,19 @@ public class KTableKTableForeignKeyInnerJoinMultiIntegrationTest {
         streams = prepareTopology(queryableName, queryableNameTwo, streamsConfig);
         streamsTwo = prepareTopology(queryableName, queryableNameTwo, streamsConfigTwo);
         streamsThree = prepareTopology(queryableName, queryableNameTwo, streamsConfigThree);
-//        streams.start();
-//        streamsTwo.start();
+        streams.start();
+        streamsTwo.start();
 ////        Thread.sleep(20000);
 ////        System.out.println("sleep done");
-//        streamsThree.start();
+        streamsThree.start();
 //
-//        waitForApplicationState(singletonList(streams), KafkaStreams.State.RUNNING, Duration.ofSeconds(60));
-//        waitForApplicationState(singletonList(streamsTwo), KafkaStreams.State.RUNNING, Duration.ofSeconds(60));
-//        waitForApplicationState(singletonList(streamsThree), KafkaStreams.State.RUNNING, Duration.ofSeconds(60));
-        startApplicationAndWaitUntilRunning(singletonList(streams), Duration.ofSeconds(60));
-        startApplicationAndWaitUntilRunning(singletonList(streamsTwo), Duration.ofSeconds(60));
-        startApplicationAndWaitUntilRunning(singletonList(streamsThree), Duration.ofSeconds(60));
+        waitForApplicationState(singletonList(streamsThree), KafkaStreams.State.RUNNING, Duration.ofSeconds(60));
+        waitForApplicationState(singletonList(streamsTwo), KafkaStreams.State.RUNNING, Duration.ofSeconds(60));
+        waitForApplicationState(singletonList(streams), KafkaStreams.State.RUNNING, Duration.ofSeconds(60));
+        
+//        startApplicationAndWaitUntilRunning(singletonList(streams), Duration.ofSeconds(60));
+//        startApplicationAndWaitUntilRunning(singletonList(streamsTwo), Duration.ofSeconds(60));
+//        startApplicationAndWaitUntilRunning(singletonList(streamsThree), Duration.ofSeconds(60));
 
         System.err.println("!!! before stream state:" + streams.state() + streamsTwo.state() + streamsThree.state());
 
