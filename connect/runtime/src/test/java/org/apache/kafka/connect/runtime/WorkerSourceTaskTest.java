@@ -842,124 +842,16 @@ public class WorkerSourceTaskTest extends ThreadedTest {
     }
 
     @Test
-    public void testOffsetCommitIsRetriedWithSameBatchWhenRecordsRemainOutstanding() throws Exception {
-        createWorkerTask();
-
-        EasyMock.makeThreadSafe(sourceTask, false);
-
-        sourceTask.initialize(EasyMock.anyObject(SourceTaskContext.class));
-        EasyMock.expectLastCall();
-        sourceTask.start(TASK_PROPS);
-        EasyMock.expectLastCall();
-        statusListener.onStartup(taskId);
-        EasyMock.expectLastCall();
-
-        sourceTask.commit();
-        EasyMock.expectLastCall().anyTimes();
-        sourceTask.commitRecord(EasyMock.anyObject(), EasyMock.anyObject());
-        EasyMock.expectLastCall().anyTimes();
-        expectConvertHeadersAndKeyValue(true);
-        expectApplyTransformationChain(true);
-        expectTaskGetTopic(true);
-        offsetWriter.offset(PARTITION, OFFSET);
-        PowerMock.expectLastCall().anyTimes();
-        EasyMock.expect(offsetWriter.beginFlush()).andReturn(true).anyTimes();
-        Future<Void> offsetFuture = EasyMock.niceMock(Future.class);
-        EasyMock.expect(offsetWriter.doFlush(EasyMock.anyObject())).andReturn(offsetFuture).anyTimes();
-
-        // We'll wait for some data, then trigger a flush
-        EasyMock.expect(sourceTask.poll()).andAnswer(() -> {
-            Thread.sleep(10);
-            return RECORDS;
-        });
-
-        expectTopicCreation(TOPIC);
-
-        final CountDownLatch initialSendLatch = new CountDownLatch(1);
-        final Capture<org.apache.kafka.clients.producer.Callback> initialSendCallback = EasyMock.newCapture();
-        EasyMock.expect(producer.send(EasyMock.anyObject(), EasyMock.capture(initialSendCallback))).andAnswer(() -> {
-            initialSendLatch.countDown();
-            return null;
-        });
-
-
-        final CountDownLatch blockedPoll = new CountDownLatch(1);
-        EasyMock.expect(sourceTask.poll()).andAnswer(() -> {
-            // Block in poll here until we're ready to return the next record in the next call
-            blockedPoll.await();
-            return null;
-        });
-
-        // Wait for another record before flushing again
-        EasyMock.expect(sourceTask.poll()).andAnswer(() -> {
-            Thread.sleep(10);
-            return RECORDS;
-        });
-        final CountDownLatch subsequentSendLatch = new CountDownLatch(1);
-        final Capture<org.apache.kafka.clients.producer.Callback> subsequentSendCallback = EasyMock.newCapture();
-        EasyMock.expect(producer.send(EasyMock.anyObject(), EasyMock.capture(subsequentSendCallback))).andAnswer(() -> {
-            subsequentSendLatch.countDown();
-            return null;
-        });
-
-        final CountDownLatch finalPoll = new CountDownLatch(1);
-        EasyMock.expect(sourceTask.poll()).andAnswer(() -> {
-            finalPoll.await();
-            return null;
-        });
-
-        sourceTask.stop();
-        EasyMock.expectLastCall();
-
-        statusListener.onShutdown(taskId);
-        EasyMock.expectLastCall();
-
-        expectClose();
-
-        PowerMock.replayAll(offsetFuture);
-
-        workerTask.initialize(TASK_CONFIG);
-        Future<?> taskFuture = executor.submit(workerTask);
-
-        assertTrue(awaitLatch(initialSendLatch));
-        // First offset commit fails as first record has not yet been ack'd
-        assertFalse(workerTask.commitOffsets());
-
-        // Unblock task and let it return the next record from poll
-        blockedPoll.countDown();
-        assertTrue(awaitLatch(subsequentSendLatch));
-
-        // Next offset commit attempt should still fail as first record has not yet been ack'd
-        assertFalse(workerTask.commitOffsets());
-
-        // Ack the first record
-        initialSendCallback.getValue().onCompletion(new RecordMetadata(new TopicPartition("foo", 0), 0, 0, 0L, 0L, 0, 0), null);
-
-        // Next offset commit attempt should succeed now as the first record has been ack'd
-        assertTrue(workerTask.commitOffsets());
-
-        // After a successful offset commit, the task moves onto the next batch of records, which consists solely of the second record.
-        // Since that record hasn't been ack'd yet, this attempt should fail
-        assertFalse(workerTask.commitOffsets());
-
-        // Ack the second record
-        subsequentSendCallback.getValue().onCompletion(new RecordMetadata(new TopicPartition("foo", 0), 0, 0, 0L, 0L, 0, 0), null);
-
-        // Next offset commit should succeed as the record has been ack'd
-        assertTrue(workerTask.commitOffsets());
-
-        workerTask.stop();
-        finalPoll.countDown();
-        assertTrue(workerTask.awaitStop(6000));
-
-        taskFuture.get();
-        assertPollMetrics(2, 2);
-
-        PowerMock.verifyAll();
+    public void testOffsetCommitIsRetriedWithSameBatchWhenRecordsRemainOutstandingWithOffsets() throws Exception {
+        testOffsetCommitIsRetriedWithSameBatchWhenRecordsRemainOutstanding(true);
     }
 
     @Test
-    public void testOffsetCommitIsRetriedWithSameBatchWhenRecordsWithoutOffsetsRemainOutstanding() throws Exception {
+    public void testOffsetCommitIsRetriedWithSameBatchWhenRecordsRemainOutstandingWithoutOffsets() throws Exception {
+        testOffsetCommitIsRetriedWithSameBatchWhenRecordsRemainOutstanding(false);
+    }
+
+    private void testOffsetCommitIsRetriedWithSameBatchWhenRecordsRemainOutstanding(boolean withOffsets) throws Exception {
         createWorkerTask();
 
         EasyMock.makeThreadSafe(sourceTask, false);
@@ -980,7 +872,12 @@ public class WorkerSourceTaskTest extends ThreadedTest {
         expectTaskGetTopic(true);
         offsetWriter.offset(PARTITION, OFFSET);
         PowerMock.expectLastCall().anyTimes();
-        EasyMock.expect(offsetWriter.beginFlush()).andReturn(false).anyTimes();
+        EasyMock.expect(offsetWriter.beginFlush()).andReturn(withOffsets).anyTimes();
+        if (withOffsets) {
+            Future<Void> offsetFuture = EasyMock.niceMock(Future.class);
+            EasyMock.expect(offsetWriter.doFlush(EasyMock.anyObject())).andReturn(offsetFuture).anyTimes();
+            EasyMock.replay(offsetFuture);
+        }
 
         // We'll wait for some data, then trigger a flush
         EasyMock.expect(sourceTask.poll()).andAnswer(() -> {
@@ -996,7 +893,6 @@ public class WorkerSourceTaskTest extends ThreadedTest {
             initialSendLatch.countDown();
             return null;
         });
-
 
         final CountDownLatch blockedPoll = new CountDownLatch(1);
         EasyMock.expect(sourceTask.poll()).andAnswer(() -> {
@@ -1032,6 +928,7 @@ public class WorkerSourceTaskTest extends ThreadedTest {
         expectClose();
 
         PowerMock.replayAll();
+
 
         workerTask.initialize(TASK_CONFIG);
         Future<?> taskFuture = executor.submit(workerTask);
