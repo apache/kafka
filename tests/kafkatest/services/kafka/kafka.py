@@ -1152,16 +1152,24 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
         self.logger.debug("Broker info: %s", broker_info)
         return broker_info is not None
 
-    def get_offset_shell(self, topic, partitions, max_wait_ms, offsets, time):
+    def get_offset_shell(self, time=None, topic=None, partitions=None, topic_partitions=None, exclude_internal_topics=False):
         node = self.nodes[0]
 
         cmd = fix_opts_for_new_jvm(node)
         cmd += self.path.script("kafka-run-class.sh", node)
         cmd += " kafka.tools.GetOffsetShell"
-        cmd += " --topic %s --broker-list %s --max-wait-ms %s --offsets %s --time %s" % (topic, self.bootstrap_servers(self.security_protocol), max_wait_ms, offsets, time)
+        cmd += " --bootstrap-server %s" % self.bootstrap_servers(self.security_protocol)
 
+        if time:
+            cmd += ' --time %s' % time
+        if topic_partitions:
+            cmd += ' --topic-partitions %s' % topic_partitions
+        if topic:
+            cmd += ' --topic %s' % topic
         if partitions:
             cmd += '  --partitions %s' % partitions
+        if exclude_internal_topics:
+            cmd += ' --exclude-internal-topics'
 
         cmd += " 2>> %s/get_offset_shell.log" % KafkaService.PERSISTENT_ROOT
         cmd += " | tee -a %s/get_offset_shell.log &" % KafkaService.PERSISTENT_ROOT
