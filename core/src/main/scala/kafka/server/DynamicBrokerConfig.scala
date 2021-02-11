@@ -207,17 +207,13 @@ class DynamicBrokerConfig(private val kafkaConfig: KafkaConfig) extends Logging 
   private var currentConfig = kafkaConfig
   private val dynamicConfigPasswordEncoder = maybeCreatePasswordEncoder(kafkaConfig.passwordEncoderSecret)
 
-  private[server] def initialize(zkClient: Option[KafkaZkClient]): Unit = {
+  private[server] def initialize(zkClient: KafkaZkClient): Unit = {
     currentConfig = new KafkaConfig(kafkaConfig.props, false, None)
-    zkClient match {
-      case Some(zkClient) =>
-        val adminZkClient = new AdminZkClient(zkClient)
-        updateDefaultConfig(adminZkClient.fetchEntityConfig(ConfigType.Broker, ConfigEntityName.Default))
-        val props = adminZkClient.fetchEntityConfig(ConfigType.Broker, kafkaConfig.brokerId.toString)
-        val brokerConfig = maybeReEncodePasswords(props, adminZkClient)
-        updateBrokerConfig(kafkaConfig.brokerId, brokerConfig)
-      case _ =>
-    }
+    val adminZkClient = new AdminZkClient(zkClient)
+    updateDefaultConfig(adminZkClient.fetchEntityConfig(ConfigType.Broker, ConfigEntityName.Default))
+    val props = adminZkClient.fetchEntityConfig(ConfigType.Broker, kafkaConfig.brokerId.toString)
+    val brokerConfig = maybeReEncodePasswords(props, adminZkClient)
+    updateBrokerConfig(kafkaConfig.brokerId, brokerConfig)
   }
 
   /**
