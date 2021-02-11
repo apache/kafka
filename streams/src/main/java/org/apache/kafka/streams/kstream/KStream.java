@@ -392,6 +392,10 @@ public interface KStream<K, V> {
     <VR> KStream<K, VR> mapValues(final ValueMapperWithKey<? super K, ? super V, ? extends VR> mapper,
                                   final Named named);
 
+    KStream<K, RecordValue<V>> mapToRecordValue();
+
+    KStream<K, RecordValue<V>> mapToRecordValue(final Named named);
+
     /**
      * Transform each record of the input stream into zero or more records in the output stream (both key and value type
      * can be altered arbitrarily).

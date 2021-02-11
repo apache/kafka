@@ -35,6 +35,7 @@ import org.apache.kafka.streams.kstream.Named;
 import org.apache.kafka.streams.kstream.Predicate;
 import org.apache.kafka.streams.kstream.Printed;
 import org.apache.kafka.streams.kstream.Produced;
+import org.apache.kafka.streams.kstream.RecordValue;
 import org.apache.kafka.streams.kstream.Repartitioned;
 import org.apache.kafka.streams.kstream.StreamJoined;
 import org.apache.kafka.streams.kstream.TransformerSupplier;
@@ -310,6 +311,35 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
             name,
             keySerde,
             null,
+            subTopologySourceNodes,
+            repartitionRequired,
+            mapValuesProcessorNode,
+            builder);
+    }
+
+    @Override
+    public KStream<K, RecordValue<V>> mapToRecordValue() {
+        return mapToRecordValue(NamedInternal.empty());
+    }
+
+    @Override
+    public KStream<K, RecordValue<V>> mapToRecordValue(Named named) {
+        Objects.requireNonNull(named, "named can't be null");
+
+        final String name = new NamedInternal(named).orElseGenerateWithPrefix(builder, FLATMAP_NAME);
+        final ProcessorParameters<? super K, ? super V, ?, ?> processorParameters =
+            new ProcessorParameters<>(new KStreamMapToRecordValue<>(), name);
+        final ProcessorGraphNode<? super K, ? super V> mapValuesProcessorNode =
+            new ProcessorGraphNode<>(name, processorParameters);
+        mapValuesProcessorNode.setValueChangingOperation(true);
+
+        builder.addGraphNode(graphNode, mapValuesProcessorNode);
+
+        // value serde cannot be preserved
+        return new KStreamImpl<>(
+            name,
+            keySerde,
+            null, // TODO add new serde
             subTopologySourceNodes,
             repartitionRequired,
             mapValuesProcessorNode,
