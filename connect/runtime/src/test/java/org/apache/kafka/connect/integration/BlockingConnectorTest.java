@@ -132,6 +132,7 @@ public class BlockingConnectorTest {
         // if the worker is still getting on its feet.
         System.err.println("!!! ready");
         System.out.println("!!! ready");
+        boolean fail = false;
         try {
             waitForCondition(
                 () -> connect.requestGet(connect.endpointForResource("connectors/nonexistent")).getStatus() == 404,
@@ -139,6 +140,7 @@ public class BlockingConnectorTest {
                 "Worker did not complete startup in time"
             );
         } catch (final java.lang.AssertionError e) {
+            fail = true;
             System.err.println("!!! Worker did not complete startup in time, try again");
             System.out.println("!!! Worker did not complete startup in time, try again");
         }
@@ -152,6 +154,9 @@ public class BlockingConnectorTest {
         } catch (final java.lang.AssertionError e) {
 //            System.err.println("!!! failed twice");
             fail("failed twice");
+        }
+        if (fail) {
+          fail("failed 1st");
         }
     }
 
