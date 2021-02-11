@@ -632,8 +632,8 @@ class RequestQuotaTest extends BaseRequestTest {
         case ApiKeys.BROKER_HEARTBEAT =>
           new BrokerHeartbeatRequest.Builder(new BrokerHeartbeatRequestData())
 
-        case ApiKeys.DECOMMISSION_BROKER =>
-          new DecommissionBrokerRequest.Builder(new DecommissionBrokerRequestData())
+        case ApiKeys.UNREGISTER_BROKER =>
+          new UnregisterBrokerRequest.Builder(new UnregisterBrokerRequestData())
 
         case _ =>
           throw new IllegalArgumentException("Unsupported API key " + apiKey)

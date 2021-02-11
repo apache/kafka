@@ -20,18 +20,18 @@ package kafka.log
 import com.yammer.metrics.core.MetricName
 import kafka.metrics.KafkaYammerMetrics
 import kafka.server.checkpoints.OffsetCheckpointFile
+import kafka.server.metadata.{CachedConfigRepository, ConfigRepository}
 import kafka.server.{FetchDataInfo, FetchLogEnd}
 import kafka.utils._
 import org.apache.directory.api.util.FileUtils
 import org.apache.kafka.common.errors.OffsetOutOfRangeException
 import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.common.{KafkaException, TopicPartition}
-import org.easymock.EasyMock
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
 import org.mockito.ArgumentMatchers.any
-import org.mockito.Mockito
-import org.mockito.Mockito.{doAnswer, spy}
+import org.mockito.{ArgumentMatchers, Mockito}
+import org.mockito.Mockito.{doAnswer, mock, never, spy, times, verify}
 
 import java.io._
 import java.nio.file.Files
@@ -61,7 +61,7 @@ class LogManagerTest {
   def setUp(): Unit = {
     logDir = TestUtils.tempDir()
     logManager = createLogManager()
-    logManager.startup()
+    logManager.startup(Set.empty)
   }
 
   @AfterEach
@@ -79,7 +79,7 @@ class LogManagerTest {
    */
   @Test
   def testCreateLog(): Unit = {
-    val log = logManager.getOrCreateLog(new TopicPartition(name, 0), () => logConfig)
+    val log = logManager.getOrCreateLog(new TopicPartition(name, 0))
     assertEquals(1, logManager.liveLogDirs.size)
 
     val logFile = new File(logDir, name + "-0")
@@ -102,10 +102,10 @@ class LogManagerTest {
       logManagerForTest = Some(createLogManager(Seq(logDir1, logDir2)))
 
       assertEquals(2, logManagerForTest.get.liveLogDirs.size)
-      logManagerForTest.get.startup()
+      logManagerForTest.get.startup(Set.empty)
 
-      val log1 = logManagerForTest.get.getOrCreateLog(new TopicPartition(name, 0), () => logConfig)
-      val log2 = logManagerForTest.get.getOrCreateLog(new TopicPartition(name, 1), () => logConfig)
+      val log1 = logManagerForTest.get.getOrCreateLog(new TopicPartition(name, 0))
+      val log2 = logManagerForTest.get.getOrCreateLog(new TopicPartition(name, 1))
 
       val logFile1 = new File(logDir1, name + "-0")
       assertTrue(logFile1.exists)
@@ -145,9 +145,9 @@ class LogManagerTest {
 
     logManager.shutdown()
     logManager = createLogManager(dirs)
-    logManager.startup()
+    logManager.startup(Set.empty)
 
-    val log = logManager.getOrCreateLog(new TopicPartition(name, 0), () => logConfig, isNew = true)
+    val log = logManager.getOrCreateLog(new TopicPartition(name, 0), isNew = true)
     val logFile = new File(logDir, name + "-0")
     assertTrue(logFile.exists)
     log.appendAsLeader(TestUtils.singletonRecords("test".getBytes()), leaderEpoch = 0)
@@ -175,11 +175,11 @@ class LogManagerTest {
         invocation.callRealMethod().asInstanceOf[Try[File]]
       }
     }.when(logManager).createLogDirectory(any(), any())
-    logManager.startup()
+    logManager.startup(Set.empty)
 
     // Request creating a new log.
     // LogManager should try using all configured log directories until one succeeds.
-    logManager.getOrCreateLog(new TopicPartition(name, 0), () => logConfig, isNew = true)
+    logManager.getOrCreateLog(new TopicPartition(name, 0), isNew = true)
 
     // Verify that half the directories were considered broken,
     assertEquals(dirs.length / 2, brokenDirs.size)
@@ -208,7 +208,7 @@ class LogManagerTest {
    */
   @Test
   def testCleanupExpiredSegments(): Unit = {
-    val log = logManager.getOrCreateLog(new TopicPartition(name, 0), () => logConfig)
+    val log = logManager.getOrCreateLog(new TopicPartition(name, 0))
     var offset = 0L
     for(_ <- 0 until 200) {
       val set = TestUtils.singletonRecords("test".getBytes())
@@ -229,8 +229,8 @@ class LogManagerTest {
       s.lazyTimeIndex.get
     })
 
-    // there should be a log file, two indexes, one producer snapshot, partition metadata, and the leader epoch checkpoint
-    assertEquals(log.numberOfSegments * 4 + 2, log.dir.list.length, "Files should have been deleted")
+    // there should be a log file, two indexes, one producer snapshot, and the leader epoch checkpoint
+    assertEquals(log.numberOfSegments * 4 + 1, log.dir.list.length, "Files should have been deleted")
     assertEquals(0, readLog(log, offset + 1).records.sizeInBytes, "Should get empty fetch off new log.")
 
     assertThrows(classOf[OffsetOutOfRangeException], () => readLog(log, 0), () => "Should get exception from fetching earlier.")
@@ -245,16 +245,16 @@ class LogManagerTest {
   def testCleanupSegmentsToMaintainSize(): Unit = {
     val setSize = TestUtils.singletonRecords("test".getBytes()).sizeInBytes
     logManager.shutdown()
-    val logProps = new Properties()
-    logProps.put(LogConfig.SegmentBytesProp, 10 * setSize: java.lang.Integer)
-    logProps.put(LogConfig.RetentionBytesProp, 5L * 10L * setSize + 10L: java.lang.Long)
-    val config = LogConfig.fromProps(logConfig.originals, logProps)
+    val configRepository = new CachedConfigRepository
+    val segmentBytes = 10 * setSize
+    configRepository.setTopicConfig(name, LogConfig.SegmentBytesProp, segmentBytes.toString)
+    configRepository.setTopicConfig(name, LogConfig.RetentionBytesProp, (5L * 10L * setSize + 10L).toString)
 
-    logManager = createLogManager()
-    logManager.startup()
+    logManager = createLogManager(configRepository = configRepository)
+    logManager.startup(Set.empty)
 
     // create a log
-    val log = logManager.getOrCreateLog(new TopicPartition(name, 0), () => config)
+    val log = logManager.getOrCreateLog(new TopicPartition(name, 0))
     var offset = 0L
 
     // add a bunch of messages that should be larger than the retentionSize
@@ -266,7 +266,7 @@ class LogManagerTest {
     }
 
     log.updateHighWatermark(log.logEndOffset)
-    assertEquals(numMessages * setSize / config.segmentSize, log.numberOfSegments, "Check we have the expected number of segments.")
+    assertEquals(numMessages * setSize / segmentBytes, log.numberOfSegments, "Check we have the expected number of segments.")
 
     // this cleanup shouldn't find any expired segments but should delete some to reduce size
     time.sleep(logManager.InitialTaskDelayMs)
@@ -274,8 +274,8 @@ class LogManagerTest {
     time.sleep(log.config.fileDeleteDelayMs + 1)
 
     // there should be a log file, two indexes (the txn index is created lazily),
-    // and a producer snapshot file per segment, and the leader epoch checkpoint and partition metadata file.
-    assertEquals(log.numberOfSegments * 4 + 2, log.dir.list.length, "Files should have been deleted")
+    // and a producer snapshot file per segment, and the leader epoch checkpoint.
+    assertEquals(log.numberOfSegments * 4 + 1, log.dir.list.length, "Files should have been deleted")
     assertEquals(0, readLog(log, offset + 1).records.sizeInBytes, "Should get empty fetch off new log.")
     assertThrows(classOf[OffsetOutOfRangeException], () => readLog(log, 0))
     // log should still be appendable
@@ -301,9 +301,12 @@ class LogManagerTest {
   }
 
   private def testDoesntCleanLogs(policy: String): Unit = {
-    val logProps = new Properties()
-    logProps.put(LogConfig.CleanupPolicyProp, policy)
-    val log = logManager.getOrCreateLog(new TopicPartition(name, 0), () => LogConfig.fromProps(logConfig.originals, logProps))
+    logManager.shutdown()
+    val configRepository = new CachedConfigRepository
+    configRepository.setTopicConfig(name, LogConfig.CleanupPolicyProp, policy)
+
+    logManager = createLogManager(configRepository = configRepository)
+    val log = logManager.getOrCreateLog(new TopicPartition(name, 0))
     var offset = 0L
     for (_ <- 0 until 200) {
       val set = TestUtils.singletonRecords("test".getBytes(), key="test".getBytes())
@@ -326,13 +329,12 @@ class LogManagerTest {
   @Test
   def testTimeBasedFlush(): Unit = {
     logManager.shutdown()
-    val logProps = new Properties()
-    logProps.put(LogConfig.FlushMsProp, 1000: java.lang.Integer)
-    val config = LogConfig.fromProps(logConfig.originals, logProps)
+    val configRepository = new CachedConfigRepository
+    configRepository.setTopicConfig(name, LogConfig.FlushMsProp, "1000")
 
-    logManager = createLogManager()
-    logManager.startup()
-    val log = logManager.getOrCreateLog(new TopicPartition(name, 0), () => config)
+    logManager = createLogManager(configRepository = configRepository)
+    logManager.startup(Set.empty)
+    val log = logManager.getOrCreateLog(new TopicPartition(name, 0))
     val lastFlush = log.lastFlushTime
     for (_ <- 0 until 200) {
       val set = TestUtils.singletonRecords("test".getBytes())
@@ -356,7 +358,7 @@ class LogManagerTest {
 
     // verify that logs are always assigned to the least loaded partition
     for(partition <- 0 until 20) {
-      logManager.getOrCreateLog(new TopicPartition("test", partition), () => logConfig)
+      logManager.getOrCreateLog(new TopicPartition("test", partition))
       assertEquals(partition + 1, logManager.allLogs.size, "We should have created the right number of logs")
       val counts = logManager.allLogs.groupBy(_.dir.getParent).values.map(_.size)
       assertTrue(counts.max <= counts.min + 1, "Load should balance evenly")
@@ -386,7 +388,7 @@ class LogManagerTest {
   def testRecoveryDirectoryMappingWithTrailingSlash(): Unit = {
     logManager.shutdown()
     logManager = TestUtils.createLogManager(logDirs = Seq(new File(TestUtils.tempDir().getAbsolutePath + File.separator)))
-    logManager.startup()
+    logManager.startup(Set.empty)
     verifyCheckpointRecovery(Seq(new TopicPartition("test-a", 1)), logManager, logManager.liveLogDirs.head)
   }
 
@@ -397,12 +399,12 @@ class LogManagerTest {
   def testRecoveryDirectoryMappingWithRelativeDirectory(): Unit = {
     logManager.shutdown()
     logManager = createLogManager(Seq(new File("data", logDir.getName).getAbsoluteFile))
-    logManager.startup()
+    logManager.startup(Set.empty)
     verifyCheckpointRecovery(Seq(new TopicPartition("test-a", 1)), logManager, logManager.liveLogDirs.head)
   }
 
   private def verifyCheckpointRecovery(topicPartitions: Seq[TopicPartition], logManager: LogManager, logDir: File): Unit = {
-    val logs = topicPartitions.map(logManager.getOrCreateLog(_, () => logConfig))
+    val logs = topicPartitions.map(logManager.getOrCreateLog(_))
     logs.foreach { log =>
       for (_ <- 0 until 50)
         log.appendAsLeader(TestUtils.singletonRecords("test".getBytes()), leaderEpoch = 0)
@@ -418,16 +420,18 @@ class LogManagerTest {
     }
   }
 
-  private def createLogManager(logDirs: Seq[File] = Seq(this.logDir)): LogManager = {
+  private def createLogManager(logDirs: Seq[File] = Seq(this.logDir),
+                               configRepository: ConfigRepository = new CachedConfigRepository): LogManager = {
     TestUtils.createLogManager(
       defaultConfig = logConfig,
+      configRepository = configRepository,
       logDirs = logDirs,
       time = this.time)
   }
 
   @Test
   def testFileReferencesAfterAsyncDelete(): Unit = {
-    val log = logManager.getOrCreateLog(new TopicPartition(name, 0), () => logConfig)
+    val log = logManager.getOrCreateLog(new TopicPartition(name, 0))
     val activeSegment = log.activeSegment
     val logName = activeSegment.log.file.getName
     val indexName = activeSegment.offsetIndex.file.getName
@@ -464,7 +468,7 @@ class LogManagerTest {
   @Test
   def testCreateAndDeleteOverlyLongTopic(): Unit = {
     val invalidTopicName = String.join("", Collections.nCopies(253, "x"))
-    logManager.getOrCreateLog(new TopicPartition(invalidTopicName, 0), () => logConfig)
+    logManager.getOrCreateLog(new TopicPartition(invalidTopicName, 0))
     logManager.asyncDelete(new TopicPartition(invalidTopicName, 0))
   }
 
@@ -477,7 +481,7 @@ class LogManagerTest {
       new TopicPartition("test-b", 0),
       new TopicPartition("test-b", 1))
 
-    val allLogs = tps.map(logManager.getOrCreateLog(_, () => logConfig))
+    val allLogs = tps.map(logManager.getOrCreateLog(_))
     allLogs.foreach { log =>
       for (_ <- 0 until 50)
         log.appendAsLeader(TestUtils.singletonRecords("test".getBytes), leaderEpoch = 0)
@@ -504,52 +508,53 @@ class LogManagerTest {
    */
   @Test
   def testTopicConfigChangeUpdatesLogConfig(): Unit = {
+    logManager.shutdown()
+    val spyConfigRepository = spy(new CachedConfigRepository)
+    logManager = createLogManager(configRepository = spyConfigRepository)
+    val spyLogManager = spy(logManager)
+    val mockLog = mock(classOf[Log])
+
     val testTopicOne = "test-topic-one"
     val testTopicTwo = "test-topic-two"
-    val testTopicOnePartition: TopicPartition = new TopicPartition(testTopicOne, 1)
-    val testTopicTwoPartition: TopicPartition = new TopicPartition(testTopicTwo, 1)
-    val mockLog: Log = EasyMock.mock(classOf[Log])
+    val testTopicOnePartition = new TopicPartition(testTopicOne, 1)
+    val testTopicTwoPartition = new TopicPartition(testTopicTwo, 1)
 
-    logManager.initializingLog(testTopicOnePartition)
-    logManager.initializingLog(testTopicTwoPartition)
+    spyLogManager.initializingLog(testTopicOnePartition)
+    spyLogManager.initializingLog(testTopicTwoPartition)
 
-    logManager.topicConfigUpdated(testTopicOne)
+    spyLogManager.topicConfigUpdated(testTopicOne)
 
-    val logConfig: LogConfig = null
-    var configUpdated = false
-    logManager.finishedInitializingLog(testTopicOnePartition, Some(mockLog), () => {
-      configUpdated = true
-      logConfig
-    })
-    assertTrue(configUpdated)
+    spyLogManager.finishedInitializingLog(testTopicOnePartition, Some(mockLog))
+    spyLogManager.finishedInitializingLog(testTopicTwoPartition, Some(mockLog))
 
-    var configNotUpdated = true
-    logManager.finishedInitializingLog(testTopicTwoPartition, Some(mockLog), () => {
-      configNotUpdated = false
-      logConfig
-    })
-    assertTrue(configNotUpdated)
+    // testTopicOne configs loaded again due to the update
+    verify(spyLogManager).initializingLog(ArgumentMatchers.eq(testTopicOnePartition))
+    verify(spyLogManager).finishedInitializingLog(ArgumentMatchers.eq(testTopicOnePartition), ArgumentMatchers.any())
+    verify(spyConfigRepository, times(1)).topicConfig(testTopicOne)
+
+    // testTopicTwo configs not loaded again since there was no update
+    verify(spyLogManager).initializingLog(ArgumentMatchers.eq(testTopicTwoPartition))
+    verify(spyLogManager).finishedInitializingLog(ArgumentMatchers.eq(testTopicTwoPartition), ArgumentMatchers.any())
+    verify(spyConfigRepository, never).topicConfig(testTopicTwo)
   }
 
   /**
    * Test if an error occurs when creating log, log manager removes corresponding
-   * topic partition from the list of initializing partitions.
+   * topic partition from the list of initializing partitions and no configs are retrieved.
    */
   @Test
   def testConfigChangeGetsCleanedUp(): Unit = {
-    val testTopicPartition: TopicPartition = new TopicPartition("test-topic", 1)
+    logManager.shutdown()
+    val spyConfigRepository = spy(new CachedConfigRepository)
+    logManager = createLogManager(configRepository = spyConfigRepository)
+    val spyLogManager = spy(logManager)
 
-    logManager.initializingLog(testTopicPartition)
-
-    val logConfig: LogConfig = null
-    var configUpdateNotCalled = true
-    logManager.finishedInitializingLog(testTopicPartition, None, () => {
-      configUpdateNotCalled = false
-      logConfig
-    })
+    val testTopicPartition = new TopicPartition("test-topic", 1)
+    spyLogManager.initializingLog(testTopicPartition)
+    spyLogManager.finishedInitializingLog(testTopicPartition, None)
 
     assertTrue(logManager.partitionsInitializing.isEmpty)
-    assertTrue(configUpdateNotCalled)
+    verify(spyConfigRepository, never).topicConfig(testTopicPartition.topic)
   }
 
   /**
@@ -558,29 +563,27 @@ class LogManagerTest {
    */
   @Test
   def testBrokerConfigChangeDeliveredToAllLogs(): Unit = {
+    logManager.shutdown()
+    val spyConfigRepository = spy(new CachedConfigRepository)
+    logManager = createLogManager(configRepository = spyConfigRepository)
+    val spyLogManager = spy(logManager)
+    val mockLog = mock(classOf[Log])
+
     val testTopicOne = "test-topic-one"
     val testTopicTwo = "test-topic-two"
-    val testTopicOnePartition: TopicPartition = new TopicPartition(testTopicOne, 1)
-    val testTopicTwoPartition: TopicPartition = new TopicPartition(testTopicTwo, 1)
-    val mockLog: Log = EasyMock.mock(classOf[Log])
+    val testTopicOnePartition = new TopicPartition(testTopicOne, 1)
+    val testTopicTwoPartition = new TopicPartition(testTopicTwo, 1)
 
-    logManager.initializingLog(testTopicOnePartition)
-    logManager.initializingLog(testTopicTwoPartition)
+    spyLogManager.initializingLog(testTopicOnePartition)
+    spyLogManager.initializingLog(testTopicTwoPartition)
 
-    logManager.brokerConfigUpdated()
+    spyLogManager.brokerConfigUpdated()
 
-    val logConfig: LogConfig = null
-    var totalChanges = 0
-    logManager.finishedInitializingLog(testTopicOnePartition, Some(mockLog), () => {
-      totalChanges += 1
-      logConfig
-    })
-    logManager.finishedInitializingLog(testTopicTwoPartition, Some(mockLog), () => {
-      totalChanges += 1
-      logConfig
-    })
+    spyLogManager.finishedInitializingLog(testTopicOnePartition, Some(mockLog))
+    spyLogManager.finishedInitializingLog(testTopicTwoPartition, Some(mockLog))
 
-    assertEquals(2, totalChanges)
+    verify(spyConfigRepository, times(1)).topicConfig(testTopicOne)
+    verify(spyConfigRepository, times(1)).topicConfig(testTopicTwo)
   }
 
   /**
@@ -613,7 +616,7 @@ class LogManagerTest {
     }
 
     // Create the Log and assert that the metrics are present
-    logManager.getOrCreateLog(tp, () => logConfig)
+    logManager.getOrCreateLog(tp)
     verifyMetrics()
 
     // Trigger the deletion and assert that the metrics have been removed
@@ -621,7 +624,7 @@ class LogManagerTest {
     assertTrue(logMetrics.isEmpty)
 
     // Recreate the Log and assert that the metrics are present
-    logManager.getOrCreateLog(tp, () => logConfig)
+    logManager.getOrCreateLog(tp)
     verifyMetrics()
 
     // Advance time past the file deletion delay and assert that the removed log has been deleted but the metrics
@@ -636,7 +639,7 @@ class LogManagerTest {
     val dir1 = TestUtils.tempDir()
     val dir2 = TestUtils.tempDir()
     logManager = createLogManager(Seq(dir1, dir2))
-    logManager.startup()
+    logManager.startup(Set.empty)
 
     val topicName = "future-log"
     def logMetrics: mutable.Set[MetricName] = KafkaYammerMetrics.defaultRegistry.allMetrics.keySet.asScala.
@@ -654,9 +657,9 @@ class LogManagerTest {
 
     // Create the current and future logs and verify that metrics are present for both current and future logs
     logManager.maybeUpdatePreferredLogDir(tp, dir1.getAbsolutePath)
-    logManager.getOrCreateLog(tp, () => logConfig)
+    logManager.getOrCreateLog(tp)
     logManager.maybeUpdatePreferredLogDir(tp, dir2.getAbsolutePath)
-    logManager.getOrCreateLog(tp, () => logConfig, isFuture = true)
+    logManager.getOrCreateLog(tp, isFuture = true)
     verifyMetrics(2)
 
     // Replace the current log with the future one and verify that only one set of metrics are present

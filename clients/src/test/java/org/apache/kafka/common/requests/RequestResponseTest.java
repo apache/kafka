@@ -74,8 +74,6 @@ import org.apache.kafka.common.message.CreateTopicsRequestData.CreateableTopicCo
 import org.apache.kafka.common.message.CreateTopicsResponseData;
 import org.apache.kafka.common.message.CreateTopicsResponseData.CreatableTopicConfigs;
 import org.apache.kafka.common.message.CreateTopicsResponseData.CreatableTopicResult;
-import org.apache.kafka.common.message.DecommissionBrokerRequestData;
-import org.apache.kafka.common.message.DecommissionBrokerResponseData;
 import org.apache.kafka.common.message.DeleteAclsRequestData;
 import org.apache.kafka.common.message.DeleteAclsResponseData;
 import org.apache.kafka.common.message.DeleteGroupsRequestData;
@@ -166,6 +164,8 @@ import org.apache.kafka.common.message.StopReplicaResponseData;
 import org.apache.kafka.common.message.SyncGroupRequestData;
 import org.apache.kafka.common.message.SyncGroupRequestData.SyncGroupRequestAssignment;
 import org.apache.kafka.common.message.SyncGroupResponseData;
+import org.apache.kafka.common.message.UnregisterBrokerRequestData;
+import org.apache.kafka.common.message.UnregisterBrokerResponseData;
 import org.apache.kafka.common.message.UpdateMetadataRequestData.UpdateMetadataBroker;
 import org.apache.kafka.common.message.UpdateMetadataRequestData.UpdateMetadataEndpoint;
 import org.apache.kafka.common.message.UpdateMetadataRequestData.UpdateMetadataPartitionState;
@@ -558,11 +558,11 @@ public class RequestResponseTest {
     }
 
     @Test
-    public void testDecommissionBrokerSerialization() {
-        for (short v = ApiKeys.DECOMMISSION_BROKER.oldestVersion(); v <= ApiKeys.DECOMMISSION_BROKER.latestVersion(); v++) {
-            checkRequest(createDecommissionBrokerRequest(v), true);
-            checkErrorResponse(createDecommissionBrokerRequest(v), unknownServerException, true);
-            checkResponse(createDecommissionBrokerResponse(), v, true);
+    public void testUnregisterBrokerSerialization() {
+        for (short v = ApiKeys.UNREGISTER_BROKER.oldestVersion(); v <= ApiKeys.UNREGISTER_BROKER.latestVersion(); v++) {
+            checkRequest(createUnregisterBrokerRequest(v), true);
+            checkErrorResponse(createUnregisterBrokerRequest(v), unknownServerException, true);
+            checkResponse(createUnregisterBrokerResponse(), v, true);
         }
     }
 
@@ -2680,13 +2680,13 @@ public class RequestResponseTest {
         return new BrokerRegistrationResponse(data);
     }
 
-    private DecommissionBrokerRequest createDecommissionBrokerRequest(short version) {
-        DecommissionBrokerRequestData data = new DecommissionBrokerRequestData().setBrokerId(1);
-        return new DecommissionBrokerRequest.Builder(data).build(version);
+    private UnregisterBrokerRequest createUnregisterBrokerRequest(short version) {
+        UnregisterBrokerRequestData data = new UnregisterBrokerRequestData().setBrokerId(1);
+        return new UnregisterBrokerRequest.Builder(data).build(version);
     }
 
-    private DecommissionBrokerResponse createDecommissionBrokerResponse() {
-        return new DecommissionBrokerResponse(new DecommissionBrokerResponseData());
+    private UnregisterBrokerResponse createUnregisterBrokerResponse() {
+        return new UnregisterBrokerResponse(new UnregisterBrokerResponseData());
     }
 
     /**
