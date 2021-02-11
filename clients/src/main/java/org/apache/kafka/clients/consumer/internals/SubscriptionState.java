@@ -537,7 +537,7 @@ public class SubscriptionState {
         return assignedState(tp).position;
     }
 
-    synchronized Long partitionLag(TopicPartition tp, IsolationLevel isolationLevel) {
+    public synchronized Long partitionLag(TopicPartition tp, IsolationLevel isolationLevel) {
         TopicPartitionState topicPartitionState = assignedState(tp);
         if (isolationLevel == IsolationLevel.READ_COMMITTED)
             return topicPartitionState.lastStableOffset == null ? null : topicPartitionState.lastStableOffset - topicPartitionState.position.offset;

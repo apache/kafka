@@ -112,6 +112,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.OptionalLong;
 import java.util.Properties;
 import java.util.Queue;
 import java.util.Set;
@@ -2041,6 +2042,45 @@ public class KafkaConsumerTest {
         assertThrows(IllegalStateException.class, consumer::groupMetadata);
     }
 
+    @Test
+    public void testCurrentLag() {
+        final Time time = new MockTime();
+        final SubscriptionState subscription = new SubscriptionState(new LogContext(), OffsetResetStrategy.EARLIEST);
+        final ConsumerMetadata metadata = createMetadata(subscription);
+        final MockClient client = new MockClient(time, metadata);
+
+        initMetadata(client, singletonMap(topic, 1));
+        final ConsumerPartitionAssignor assignor = new RoundRobinAssignor();
+
+        final KafkaConsumer<String, String> consumer =
+            newConsumer(time, client, subscription, metadata, assignor, true, groupInstanceId);
+
+        // throws for unassigned partition
+        assertThrows(IllegalStateException.class, () -> consumer.currentLag(tp0));
+
+        consumer.assign(singleton(tp0));
+
+        // no error for no current position
+        assertEquals(OptionalLong.empty(), consumer.currentLag(tp0));
+
+        consumer.seek(tp0, 50L);
+
+        // no error for no end offset (so unknown lag)
+        assertEquals(OptionalLong.empty(), consumer.currentLag(tp0));
+
+        final FetchInfo fetchInfo = new FetchInfo(1L, 99L, 50L, 5);
+        client.prepareResponse(fetchResponse(singletonMap(tp0, fetchInfo)));
+
+        final ConsumerRecords<String, String> records = consumer.poll(Duration.ofMillis(1));
+        assertEquals(5, records.count());
+        assertEquals(55L, consumer.position(tp0));
+
+        // correct lag result
+        assertEquals(OptionalLong.of(45L), consumer.currentLag(tp0));
+
+        consumer.close(Duration.ZERO);
+    }
+
     private KafkaConsumer<String, String> consumerWithPendingAuthenticationError() {
         Time time = new MockTime();
         SubscriptionState subscription = new SubscriptionState(new LogContext(), OffsetResetStrategy.EARLIEST);
@@ -2242,6 +2282,8 @@ public class KafkaConsumerTest {
             TopicPartition partition = fetchEntry.getKey();
             long fetchOffset = fetchEntry.getValue().offset;
             int fetchCount = fetchEntry.getValue().count;
+            final long highWatermark = fetchEntry.getValue().logLastOffset + 1;
+            final long logStartOffset = fetchEntry.getValue().logFirstOffset;
             final MemoryRecords records;
             if (fetchCount == 0) {
                 records = MemoryRecords.EMPTY;
@@ -2253,8 +2295,8 @@ public class KafkaConsumerTest {
                 records = builder.build();
             }
             tpResponses.put(partition, new FetchResponse.PartitionData<>(
-                    Errors.NONE, 0, FetchResponse.INVALID_LAST_STABLE_OFFSET,
-                    0L, null, records));
+                    Errors.NONE, highWatermark, FetchResponse.INVALID_LAST_STABLE_OFFSET,
+                    logStartOffset, null, records));
         }
         return new FetchResponse<>(Errors.NONE, tpResponses, 0, INVALID_SESSION_ID);
     }
@@ -2379,10 +2421,18 @@ public class KafkaConsumerTest {
     }
 
     private static class FetchInfo {
+        long logFirstOffset;
+        long logLastOffset;
         long offset;
         int count;
 
         FetchInfo(long offset, int count) {
+            this(0L, offset + count, offset, count);
+        }
+
+        FetchInfo(long logFirstOffset, long logLastOffset, long offset, int count) {
+            this.logFirstOffset = logFirstOffset;
+            this.logLastOffset = logLastOffset;
             this.offset = offset;
             this.count = count;
         }
