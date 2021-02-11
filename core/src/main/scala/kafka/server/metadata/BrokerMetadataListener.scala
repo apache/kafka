@@ -41,7 +41,7 @@ object BrokerMetadataListener{
 class BrokerMetadataListener(val brokerId: Int,
                              val time: Time,
                              val metadataCache: RaftMetadataCache,
-                             val configRepository: LocalConfigRepository,
+                             val configRepository: CachedConfigRepository,
                              val groupCoordinator: GroupCoordinator,
                              val replicaManager: RaftReplicaManager,
                              val txnCoordinator: TransactionCoordinator,
