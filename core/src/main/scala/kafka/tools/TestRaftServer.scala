@@ -160,7 +160,7 @@ class TestRaftServer(
       eventQueue.offer(HandleClaim(epoch))
     }
 
-    override def handleResign(): Unit = {
+    override def handleResign(epoch: Int): Unit = {
       eventQueue.offer(HandleResign)
     }
 

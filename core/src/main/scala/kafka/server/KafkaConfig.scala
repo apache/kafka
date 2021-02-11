@@ -372,7 +372,7 @@ object KafkaConfig {
 
   /** KIP-500 Configuration */
   val ProcessRolesProp = "process.roles"
-  val InitialBrokerRegistrationTimeoutMs = "initial.broker.registration.timeout.ms"
+  val InitialBrokerRegistrationTimeoutMsProp = "initial.broker.registration.timeout.ms"
   val BrokerHeartbeatIntervalMsProp = "broker.heartbeat.interval.ms"
   val BrokerSessionTimeoutMsProp = "broker.session.timeout.ms"
   val NodeIdProp = "node.id"
@@ -389,6 +389,7 @@ object KafkaConfig {
   val AdvertisedListenersProp = "advertised.listeners"
   val ListenerSecurityProtocolMapProp = "listener.security.protocol.map"
   val ControlPlaneListenerNameProp = "control.plane.listener.name"
+  val ControllerListenerNamesProp = "controller.listener.names"
   val SocketSendBufferBytesProp = "socket.send.buffer.bytes"
   val SocketReceiveBufferBytesProp = "socket.receive.buffer.bytes"
   val SocketRequestMaxBytesProp = "socket.request.max.bytes"
@@ -735,6 +736,8 @@ object KafkaConfig {
     "control.plane.listener.name = CONTROLLER\n" +
     "then controller will use \"broker1.example.com:9094\" with security protocol \"SSL\" to connect to the broker.\n" +
     "If not explicitly configured, the default value will be null and there will be no dedicated endpoints for controller connections."
+  val ControllerListenerNamesDoc = "A comma-separated list of the names of the listeners used by the Raft-based controller. This is required " +
+    "if this process is a Raft-based broker or controller. The ZooKeeper-based controller does not use this configuration."
 
   val SocketSendBufferBytesDoc = "The SO_SNDBUF buffer of the socket server sockets. If the value is -1, the OS default will be used."
   val SocketReceiveBufferBytesDoc = "The SO_RCVBUF buffer of the socket server sockets. If the value is -1, the OS default will be used."
@@ -1022,7 +1025,7 @@ object KafkaConfig {
   val PasswordEncoderKeyLengthDoc =  "The key length used for encoding dynamically configured passwords."
   val PasswordEncoderIterationsDoc =  "The iteration count used for encoding dynamically configured passwords."
 
-  private val configDef = {
+  private[server] val configDef = {
     import ConfigDef.Importance._
     import ConfigDef.Range._
     import ConfigDef.Type._
@@ -1073,9 +1076,9 @@ object KafkaConfig {
        */
       .defineInternal(ProcessRolesProp, LIST, Collections.emptyList(), ValidList.in("broker", "controller"), HIGH, ProcessRolesDoc)
       .defineInternal(NodeIdProp, INT, Defaults.EmptyNodeId, null, HIGH, NodeIdDoc)
-      .defineInternal(InitialBrokerRegistrationTimeoutMs, INT, Defaults.InitialBrokerRegistrationTimeoutMs, null, MEDIUM, InitialBrokerRegistrationTimeoutMsDoc)
-      .defineInternal(BrokerHeartbeatIntervalMsProp, INT, Defaults.BrokerHeartbeatIntervalMs, null, MEDIUM, BrokerHeartbeatIntervalMsDoc)
-      .defineInternal(BrokerSessionTimeoutMsProp, INT, Defaults.BrokerSessionTimeoutMs, null, MEDIUM, BrokerSessionTimeoutMsDoc)
+      .defineInternal(InitialBrokerRegistrationTimeoutMsProp, INT, Defaults.InitialBrokerRegistrationTimeoutMs, atLeast(1), MEDIUM, InitialBrokerRegistrationTimeoutMsDoc)
+      .defineInternal(BrokerHeartbeatIntervalMsProp, INT, Defaults.BrokerHeartbeatIntervalMs, atLeast(1), MEDIUM, BrokerHeartbeatIntervalMsDoc)
+      .defineInternal(BrokerSessionTimeoutMsProp, INT, Defaults.BrokerSessionTimeoutMs, atLeast(1), MEDIUM, BrokerSessionTimeoutMsDoc)
       .defineInternal(MetadataLogDirProp, STRING, null, null, HIGH, MetadataLogDirDoc)
 
       /************* Authorizer Configuration ***********/
@@ -1090,6 +1093,7 @@ object KafkaConfig {
       .define(AdvertisedListenersProp, STRING, null, HIGH, AdvertisedListenersDoc)
       .define(ListenerSecurityProtocolMapProp, STRING, Defaults.ListenerSecurityProtocolMap, LOW, ListenerSecurityProtocolMapDoc)
       .define(ControlPlaneListenerNameProp, STRING, null, HIGH, controlPlaneListenerNameDoc)
+      .define(ControllerListenerNamesProp, STRING, null, HIGH, ControllerListenerNamesDoc)
       .define(SocketSendBufferBytesProp, INT, Defaults.SocketSendBufferBytes, HIGH, SocketSendBufferBytesDoc)
       .define(SocketReceiveBufferBytesProp, INT, Defaults.SocketReceiveBufferBytes, HIGH, SocketReceiveBufferBytesDoc)
       .define(SocketRequestMaxBytesProp, INT, Defaults.SocketRequestMaxBytes, atLeast(1), HIGH, SocketRequestMaxBytesDoc)
@@ -1509,7 +1513,7 @@ class KafkaConfig(val props: java.util.Map[_, _], doLog: Boolean, dynamicConfigO
   var brokerId: Int = getInt(KafkaConfig.BrokerIdProp)
   val nodeId: Int = getInt(KafkaConfig.NodeIdProp)
   val processRoles: Set[ProcessRole] = parseProcessRoles()
-  val initialRegistrationTimeoutMs: Int = getInt(KafkaConfig.InitialBrokerRegistrationTimeoutMs)
+  val initialRegistrationTimeoutMs: Int = getInt(KafkaConfig.InitialBrokerRegistrationTimeoutMsProp)
   val brokerHeartbeatIntervalMs: Int = getInt(KafkaConfig.BrokerHeartbeatIntervalMsProp)
   val brokerSessionTimeoutMs: Int = getInt(KafkaConfig.BrokerSessionTimeoutMsProp)
 
@@ -1803,10 +1807,17 @@ class KafkaConfig(val props: java.util.Map[_, _], doLog: Boolean, dynamicConfigO
     }
   }
 
+  def controllerListenerNames: Seq[String] =
+    Option(getString(KafkaConfig.ControllerListenerNamesProp)).getOrElse("").split(",")
+
+  def controllerListeners: Seq[EndPoint] =
+    listeners.filter(l => controllerListenerNames.contains(l.listenerName.value()))
+
   def dataPlaneListeners: Seq[EndPoint] = {
-    Option(getString(KafkaConfig.ControlPlaneListenerNameProp)) match {
-      case Some(controlPlaneListenerName) => listeners.filterNot(_.listenerName.value() == controlPlaneListenerName)
-      case None => listeners
+    listeners.filterNot { listener =>
+      val name = listener.listenerName.value()
+      name.equals(getString(KafkaConfig.ControlPlaneListenerNameProp)) ||
+        controllerListenerNames.contains(name)
     }
   }
 
@@ -1820,7 +1831,7 @@ class KafkaConfig(val props: java.util.Map[_, _], doLog: Boolean, dynamicConfigO
     else if (getString(KafkaConfig.AdvertisedHostNameProp) != null || getInt(KafkaConfig.AdvertisedPortProp) != null)
       CoreUtils.listenerListToEndPoints("PLAINTEXT://" + advertisedHostName + ":" + advertisedPort, listenerSecurityProtocolMap, requireDistinctPorts=false)
     else
-      listeners
+      listeners.filterNot(l => controllerListenerNames.contains(l.listenerName.value()))
   }
 
   private def getInterBrokerListenerNameAndSecurityProtocol: (ListenerName, SecurityProtocol) = {
@@ -1896,14 +1907,19 @@ class KafkaConfig(val props: java.util.Map[_, _], doLog: Boolean, dynamicConfigO
 
     val advertisedListenerNames = advertisedListeners.map(_.listenerName).toSet
     val listenerNames = listeners.map(_.listenerName).toSet
-    require(advertisedListenerNames.contains(interBrokerListenerName),
-      s"${KafkaConfig.InterBrokerListenerNameProp} must be a listener name defined in ${KafkaConfig.AdvertisedListenersProp}. " +
-      s"The valid options based on currently configured listeners are ${advertisedListenerNames.map(_.value).mkString(",")}")
-    require(advertisedListenerNames.subsetOf(listenerNames),
-      s"${KafkaConfig.AdvertisedListenersProp} listener names must be equal to or a subset of the ones defined in ${KafkaConfig.ListenersProp}. " +
-      s"Found ${advertisedListenerNames.map(_.value).mkString(",")}. The valid options based on the current configuration " +
-      s"are ${listenerNames.map(_.value).mkString(",")}"
-    )
+    if (processRoles.isEmpty || processRoles.contains(BrokerRole)) {
+      require(advertisedListenerNames.contains(interBrokerListenerName),
+        s"${KafkaConfig.InterBrokerListenerNameProp} must be a listener name defined in ${KafkaConfig.AdvertisedListenersProp}. " +
+          s"The valid options based on currently configured listeners are ${advertisedListenerNames.map(_.value).mkString(",")}")
+      require(advertisedListenerNames.subsetOf(listenerNames),
+        s"${KafkaConfig.AdvertisedListenersProp} listener names must be equal to or a subset of the ones defined in ${KafkaConfig.ListenersProp}. " +
+          s"Found ${advertisedListenerNames.map(_.value).mkString(",")}. The valid options based on the current configuration " +
+          s"are ${listenerNames.map(_.value).mkString(",")}"
+      )
+    }
+    // Ensure controller listeners are not in the advertised listeners list
+    require(!controllerListeners.exists(advertisedListeners.contains),
+      s"${KafkaConfig.AdvertisedListenersProp} cannot contain any of ${KafkaConfig.ControllerListenerNamesProp}")
     require(!advertisedListeners.exists(endpoint => endpoint.host=="0.0.0.0"),
       s"${KafkaConfig.AdvertisedListenersProp} cannot use the nonroutable meta-address 0.0.0.0. "+
       s"Use a routable IP address.")

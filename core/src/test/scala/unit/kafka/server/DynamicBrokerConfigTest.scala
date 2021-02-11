@@ -373,7 +373,7 @@ class DynamicBrokerConfigTest {
 
     val oldConfig =  KafkaConfig.fromProps(TestUtils.createBrokerConfig(0, TestUtils.MockZkConnect, port = 9092))
     val dynamicBrokerConfig = new DynamicBrokerConfig(oldConfig)
-    dynamicBrokerConfig.initialize(zkClient)
+    dynamicBrokerConfig.initialize(Some(zkClient))
     dynamicBrokerConfig.addBrokerReconfigurable(new TestDynamicThreadPool)
 
     val newprops = new Properties()

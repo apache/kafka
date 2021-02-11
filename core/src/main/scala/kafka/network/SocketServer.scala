@@ -44,15 +44,16 @@ import org.apache.kafka.common.metrics._
 import org.apache.kafka.common.metrics.stats.{Avg, CumulativeSum, Meter, Rate}
 import org.apache.kafka.common.network.KafkaChannel.ChannelMuteEvent
 import org.apache.kafka.common.network.{ChannelBuilder, ChannelBuilders, ClientInformation, KafkaChannel, ListenerName, ListenerReconfigurable, NetworkSend, Selectable, Send, Selector => KSelector}
-import org.apache.kafka.common.protocol.ApiKeys
-import org.apache.kafka.common.requests.{ApiVersionsRequest, RequestContext, RequestHeader}
-import org.apache.kafka.common.security.auth.SecurityProtocol
+import org.apache.kafka.common.protocol.{ApiKeys, Errors}
+import org.apache.kafka.common.requests.{ApiVersionsRequest, EnvelopeRequest, EnvelopeResponse, RequestContext, RequestHeader}
+import org.apache.kafka.common.security.auth.{KafkaPrincipal, KafkaPrincipalSerde, SecurityProtocol}
 import org.apache.kafka.common.utils.{KafkaThread, LogContext, Time}
 import org.apache.kafka.common.{Endpoint, KafkaException, MetricName, Reconfigurable}
 import org.slf4j.event.Level
 
 import scala.collection._
 import scala.collection.mutable.{ArrayBuffer, Buffer}
+import scala.compat.java8.OptionConverters._
 import scala.jdk.CollectionConverters._
 import scala.util.control.ControlThrowable
 
@@ -78,12 +79,17 @@ class SocketServer(val config: KafkaConfig,
                    val metrics: Metrics,
                    val time: Time,
                    val credentialProvider: CredentialProvider,
+                   val configuredNodeId: Option[Int] = None,
+                   val configuredLogContext: Option[LogContext] = None,
                    val allowControllerOnlyApis: Boolean = false)
   extends Logging with KafkaMetricsGroup with BrokerReconfigurable {
 
   private val maxQueuedRequests = config.queuedMaxRequests
 
-  private val logContext = new LogContext(s"[SocketServer brokerId=${config.brokerId}] ")
+  val nodeId = configuredNodeId.getOrElse(config.brokerId)
+
+  val logContext = configuredLogContext.getOrElse(new LogContext(s"[SocketServer brokerId=${nodeId}] "))
+
   this.logIdent = logContext.logPrefix
 
   private val memoryPoolSensor = metrics.sensor("MemoryPoolUtilization")
@@ -117,11 +123,15 @@ class SocketServer(val config: KafkaConfig,
    * when processors start up and invoke [[org.apache.kafka.common.network.Selector#poll]].
    *
    * @param startProcessingRequests Flag indicating whether `Processor`s must be started.
+   * @param controlPlaneListener    The control plane listener, or None if there is none.
+   * @param dataPlaneListeners      The data plane listeners.
    */
-  def startup(startProcessingRequests: Boolean = true): Unit = {
+  def startup(startProcessingRequests: Boolean = true,
+              controlPlaneListener: Option[EndPoint] = config.controlPlaneListener,
+              dataPlaneListeners: Seq[EndPoint] = config.dataPlaneListeners): Unit = {
     this.synchronized {
-      createControlPlaneAcceptorAndProcessor(config.controlPlaneListener)
-      createDataPlaneAcceptorsAndProcessors(config.numNetworkThreads, config.dataPlaneListeners)
+      createControlPlaneAcceptorAndProcessor(controlPlaneListener)
+      createDataPlaneAcceptorsAndProcessors(config.numNetworkThreads, dataPlaneListeners)
       if (startProcessingRequests) {
         this.startProcessingRequests()
       }
@@ -224,9 +234,11 @@ class SocketServer(val config: KafkaConfig,
   private def startDataPlaneProcessorsAndAcceptors(authorizerFutures: Map[Endpoint, CompletableFuture[Void]]): Unit = {
     val interBrokerListener = dataPlaneAcceptors.asScala.keySet
       .find(_.listenerName == config.interBrokerListenerName)
-      .getOrElse(throw new IllegalStateException(s"Inter-broker listener ${config.interBrokerListenerName} not found, endpoints=${dataPlaneAcceptors.keySet}"))
-    val orderedAcceptors = List(dataPlaneAcceptors.get(interBrokerListener)) ++
-      dataPlaneAcceptors.asScala.filter { case (k, _) => k != interBrokerListener }.values
+    val orderedAcceptors = interBrokerListener match {
+      case Some(interBrokerListener) => List(dataPlaneAcceptors.get(interBrokerListener)) ++
+        dataPlaneAcceptors.asScala.filter { case (k, _) => k != interBrokerListener }.values
+      case None => dataPlaneAcceptors.asScala.values
+    }
     orderedAcceptors.foreach { acceptor =>
       val endpoint = acceptor.endPoint
       startAcceptorAndProcessors(DataPlaneThreadPrefix, endpoint, acceptor, authorizerFutures)
@@ -276,8 +288,7 @@ class SocketServer(val config: KafkaConfig,
   private def createAcceptor(endPoint: EndPoint, metricPrefix: String) : Acceptor = {
     val sendBufferSize = config.socketSendBufferBytes
     val recvBufferSize = config.socketReceiveBufferBytes
-    val brokerId = config.brokerId
-    new Acceptor(endPoint, sendBufferSize, recvBufferSize, brokerId, connectionQuotas, metricPrefix, time)
+    new Acceptor(endPoint, sendBufferSize, recvBufferSize, nodeId, connectionQuotas, metricPrefix, time)
   }
 
   private def addDataPlaneProcessors(acceptor: Acceptor, endpoint: EndPoint, newProcessorsPerListener: Int): Unit = {
@@ -540,11 +551,13 @@ private[kafka] abstract class AbstractServerThread(connectionQuotas: ConnectionQ
 private[kafka] class Acceptor(val endPoint: EndPoint,
                               val sendBufferSize: Int,
                               val recvBufferSize: Int,
-                              brokerId: Int,
+                              nodeId: Int,
                               connectionQuotas: ConnectionQuotas,
                               metricPrefix: String,
-                              time: Time) extends AbstractServerThread(connectionQuotas) with KafkaMetricsGroup {
+                              time: Time,
+                              logPrefix: String = "") extends AbstractServerThread(connectionQuotas) with KafkaMetricsGroup {
 
+  this.logIdent = logPrefix
   private val nioSelector = NSelector.open()
   val serverChannel = openServerSocket(endPoint.host, endPoint.port)
   private val processors = new ArrayBuffer[Processor]()
@@ -573,7 +586,7 @@ private[kafka] class Acceptor(val endPoint: EndPoint,
   private def startProcessors(processors: Seq[Processor], processorThreadPrefix: String): Unit = synchronized {
     processors.foreach { processor =>
       KafkaThread.nonDaemon(
-        s"${processorThreadPrefix}-kafka-network-thread-$brokerId-${endPoint.listenerName}-${endPoint.securityProtocol}-${processor.id}",
+        s"${processorThreadPrefix}-kafka-network-thread-$nodeId-${endPoint.listenerName}-${endPoint.securityProtocol}-${processor.id}",
         processor
       ).start()
     }
@@ -1011,22 +1024,39 @@ private[kafka] class Processor(val id: Int,
                   channel.principal, listenerName, securityProtocol,
                   channel.channelMetadataRegistry.clientInformation, isPrivilegedListener, channel.principalSerde)
 
-                val req = new RequestChannel.Request(processor = id, context = context,
+                var req = new RequestChannel.Request(processor = id, context = context,
                   startTimeNanos = nowNanos, memoryPool, receive.payload, requestChannel.metrics, None)
 
-                // KIP-511: ApiVersionsRequest is intercepted here to catch the client software name
-                // and version. It is done here to avoid wiring things up to the api layer.
-                if (header.apiKey == ApiKeys.API_VERSIONS) {
-                  val apiVersionsRequest = req.body[ApiVersionsRequest]
-                  if (apiVersionsRequest.isValid) {
-                    channel.channelMetadataRegistry.registerClientInformation(new ClientInformation(
-                      apiVersionsRequest.data.clientSoftwareName,
-                      apiVersionsRequest.data.clientSoftwareVersion))
+                if (req.header.apiKey == ApiKeys.ENVELOPE) {
+                  // Override the request context with the forwarded request context.
+                  // The envelope's context will be preserved in the forwarded context
+
+                  req = parseForwardedPrincipal(req, channel.principalSerde.asScala) match {
+                    case Some(forwardedPrincipal) =>
+                      buildForwardedRequestContext(req, forwardedPrincipal)
+
+                    case None =>
+                      val envelopeResponse = new EnvelopeResponse(Errors.PRINCIPAL_DESERIALIZATION_FAILURE)
+                      sendEnvelopeResponse(req, envelopeResponse)
+                      null
                   }
                 }
-                requestChannel.sendRequest(req)
-                selector.mute(connectionId)
-                handleChannelMuteEvent(connectionId, ChannelMuteEvent.REQUEST_RECEIVED)
+
+                if (req != null) {
+                  // KIP-511: ApiVersionsRequest is intercepted here to catch the client software name
+                  // and version. It is done here to avoid wiring things up to the api layer.
+                  if (header.apiKey == ApiKeys.API_VERSIONS) {
+                    val apiVersionsRequest = req.body[ApiVersionsRequest]
+                    if (apiVersionsRequest.isValid) {
+                      channel.channelMetadataRegistry.registerClientInformation(new ClientInformation(
+                        apiVersionsRequest.data.clientSoftwareName,
+                        apiVersionsRequest.data.clientSoftwareVersion))
+                    }
+                  }
+                  requestChannel.sendRequest(req)
+                  selector.mute(connectionId)
+                  handleChannelMuteEvent(connectionId, ChannelMuteEvent.REQUEST_RECEIVED)
+                }
               }
             }
           case None =>
@@ -1041,6 +1071,66 @@ private[kafka] class Processor(val id: Int,
       }
     }
     selector.clearCompletedReceives()
+  }
+
+  private def sendEnvelopeResponse(
+    envelopeRequest: RequestChannel.Request,
+    envelopeResponse: EnvelopeResponse
+  ): Unit = {
+    val envelopResponseSend = envelopeRequest.context.buildResponseSend(envelopeResponse)
+    enqueueResponse(new RequestChannel.SendResponse(
+      envelopeRequest,
+      envelopResponseSend,
+      None,
+      None
+    ))
+  }
+
+  private def parseForwardedPrincipal(
+    envelopeRequest: RequestChannel.Request,
+    principalSerde: Option[KafkaPrincipalSerde]
+  ): Option[KafkaPrincipal] = {
+    val envelope = envelopeRequest.body[EnvelopeRequest]
+    try {
+      principalSerde.map { serde =>
+        serde.deserialize(envelope.requestPrincipal())
+      }
+    } catch {
+      case e: Exception =>
+        warn(s"Failed to deserialize principal from envelope request $envelope", e)
+        None
+    }
+  }
+
+  private def buildForwardedRequestContext(
+    envelopeRequest: RequestChannel.Request,
+    forwardedPrincipal: KafkaPrincipal
+  ): RequestChannel.Request = {
+    val envelope = envelopeRequest.body[EnvelopeRequest]
+    val forwardedRequestBuffer = envelope.requestData.duplicate()
+    val forwardedHeader = parseRequestHeader(forwardedRequestBuffer)
+    val forwardedClientAddress = InetAddress.getByAddress(envelope.clientAddress)
+
+    val forwardedContext = new RequestContext(
+      forwardedHeader,
+      envelopeRequest.context.connectionId,
+      forwardedClientAddress,
+      forwardedPrincipal,
+      listenerName,
+      securityProtocol,
+      ClientInformation.EMPTY,
+      isPrivilegedListener
+    )
+
+    new RequestChannel.Request(
+      processor = id,
+      context = forwardedContext,
+      startTimeNanos = envelopeRequest.startTimeNanos,
+      memoryPool,
+      forwardedRequestBuffer,
+      requestChannel.metrics,
+      Some(envelopeRequest)
+    )
   }
 
   private def processCompletedSends(): Unit = {

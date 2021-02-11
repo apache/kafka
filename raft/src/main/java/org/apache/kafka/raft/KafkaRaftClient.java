@@ -336,9 +336,9 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
         }
     }
 
-    private void fireHandleResign() {
+    private void fireHandleResign(int epoch) {
         for (ListenerContext listenerContext : listenerContexts) {
-            listenerContext.fireHandleResign();
+            listenerContext.fireHandleResign(epoch);
         }
     }
 
@@ -368,6 +368,11 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
     public void register(Listener<T> listener) {
         pendingListeners.add(listener);
         wakeup();
+    }
+
+    @Override
+    public LeaderAndEpoch leaderAndEpoch() {
+        return quorum.leaderAndEpoch();
     }
 
     private OffsetAndEpoch endOffset() {
@@ -457,7 +462,7 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
 
     private void maybeResignLeadership() {
         if (quorum.isLeader()) {
-            fireHandleResign();
+            fireHandleResign(quorum.epoch());
         }
 
         if (accumulator != null) {
@@ -2357,8 +2362,8 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
             }
         }
 
-        void fireHandleResign() {
-            listener.handleResign();
+        void fireHandleResign(int epoch) {
+            listener.handleResign(epoch);
         }
 
         public synchronized void onClose(BatchReader<T> reader) {

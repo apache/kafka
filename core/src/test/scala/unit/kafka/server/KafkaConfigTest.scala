@@ -33,9 +33,12 @@ import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.Test
 import java.net.InetSocketAddress
 import java.util
-import java.util.Properties
+import java.util.{Collections, Properties}
 
+import org.apache.kafka.common.Node
 import org.junit.jupiter.api.function.Executable
+
+import scala.jdk.CollectionConverters._
 
 class KafkaConfigTest {
 
@@ -259,6 +262,30 @@ class KafkaConfigTest {
     // interBrokerListener name should be different from control-plane listener name
     val interBrokerListenerName = serverConfig.interBrokerListenerName
     assertFalse(interBrokerListenerName.value().equals(controlEndpoint.listenerName.value()))
+  }
+
+  @Test
+  def testControllerListenerName() = {
+    val props = TestUtils.createBrokerConfig(0, TestUtils.MockZkConnect)
+    props.put(KafkaConfig.ListenersProp, "PLAINTEXT://localhost:0,CONTROLPLANE://localhost:4000,CONTROLLER://localhost:5000")
+    props.put(KafkaConfig.ListenerSecurityProtocolMapProp, "PLAINTEXT:PLAINTEXT,CONTROLPLANE:SSL,CONTROLLER:SASL_SSL")
+    props.put(KafkaConfig.AdvertisedListenersProp, "PLAINTEXT://localhost:0,CONTROLPLANE://localhost:4000")
+    props.put(KafkaConfig.ControlPlaneListenerNameProp, "CONTROLPLANE")
+    props.put(KafkaConfig.ControllerListenerNamesProp, "CONTROLLER")
+    assertTrue(isValidKafkaConfig(props))
+
+    val serverConfig = KafkaConfig.fromProps(props)
+    val controlPlaneEndpoint = serverConfig.controlPlaneListener.get
+    assertEquals("localhost", controlPlaneEndpoint.host)
+    assertEquals(4000, controlPlaneEndpoint.port)
+    assertEquals(SecurityProtocol.SSL, controlPlaneEndpoint.securityProtocol)
+
+    val controllerEndpoints = serverConfig.controllerListeners
+    assertEquals(1, controllerEndpoints.size)
+    val controllerEndpoint = controllerEndpoints.iterator.next()
+    assertEquals("localhost", controllerEndpoint.host)
+    assertEquals(5000, controllerEndpoint.port)
+    assertEquals(SecurityProtocol.SASL_SSL, controllerEndpoint.securityProtocol)
   }
 
   @Test
@@ -620,7 +647,9 @@ class KafkaConfigTest {
 
           // KIP-500 Configurations
         case KafkaConfig.NodeIdProp => assertPropertyInvalid(baseProperties, name, "not_a_number")
+        case KafkaConfig.ControllerListenerNamesProp => // ignore string
         case KafkaConfig.MetadataLogDirProp => // ignore string
+        case KafkaConfig.ProcessRolesProp => // ignore string
 
         case KafkaConfig.AuthorizerClassNameProp => //ignore string
         case KafkaConfig.CreateTopicPolicyClassNameProp => //ignore string
@@ -963,7 +992,60 @@ class KafkaConfigTest {
   }
 
   @Test
-  def testInvalidQuorumVotersConfig(): Unit = {
+  def assertDistinctControllerAndAdvertisedListeners(): Unit = {
+    val props = TestUtils.createBrokerConfig(0, TestUtils.MockZkConnect, port = TestUtils.MockZkPort)
+    val listeners = "PLAINTEXT://A:9092,SSL://B:9093,SASL_SSL://C:9094"
+    props.put(KafkaConfig.ListenersProp, listeners)
+    props.put(KafkaConfig.AdvertisedListenersProp, "PLAINTEXT://A:9092,SSL://B:9093")
+    // Valid now
+    assertTrue(isValidKafkaConfig(props))
+
+    // Still valid
+    val controllerListeners = "SASL_SSL"
+    props.put(KafkaConfig.ControllerListenerNamesProp, controllerListeners)
+    assertTrue(isValidKafkaConfig(props))
+  }
+
+  @Test
+  def assertAllControllerListenerCannotBeAdvertised(): Unit = {
+    val props = TestUtils.createBrokerConfig(0, TestUtils.MockZkConnect, port = TestUtils.MockZkPort)
+    val listeners = "PLAINTEXT://A:9092,SSL://B:9093,SASL_SSL://C:9094"
+    props.put(KafkaConfig.ListenersProp, listeners)
+    props.put(KafkaConfig.AdvertisedListenersProp, listeners)
+    // Valid now
+    assertTrue(isValidKafkaConfig(props))
+
+    // Invalid now
+    props.put(KafkaConfig.ControllerListenerNamesProp, "PLAINTEXT,SSL,SASL_SSL")
+    assertFalse(isValidKafkaConfig(props))
+  }
+
+  @Test
+  def assertEvenOneControllerListenerCannotBeAdvertised(): Unit = {
+    val props = TestUtils.createBrokerConfig(0, TestUtils.MockZkConnect, port = TestUtils.MockZkPort)
+    val listeners = "PLAINTEXT://A:9092,SSL://B:9093,SASL_SSL://C:9094"
+    props.put(KafkaConfig.ListenersProp, listeners)
+    props.put(KafkaConfig.AdvertisedListenersProp, listeners)
+    // Valid now
+    assertTrue(isValidKafkaConfig(props))
+
+    // Invalid now
+    props.put(KafkaConfig.ControllerListenerNamesProp, "PLAINTEXT")
+    assertFalse(isValidKafkaConfig(props))
+  }
+
+  @Test
+  def testControllerQuorumVoterStringsToNodes(): Unit = {
+    assertThrows(classOf[ConfigException], () => RaftConfig.quorumVoterStringsToNodes(Collections.singletonList("")))
+    assertEquals(Seq(new Node(3000, "example.com", 9093)),
+      RaftConfig.quorumVoterStringsToNodes(util.Arrays.asList("3000@example.com:9093")).asScala.toSeq)
+    assertEquals(Seq(new Node(3000, "example.com", 9093),
+      new Node(3001, "example.com", 9094)),
+      RaftConfig.quorumVoterStringsToNodes(util.Arrays.asList("3000@example.com:9093","3001@example.com:9094")).asScala.toSeq)
+  }
+
+  @Test
+  def testInvalidQuorumVoterConfig(): Unit = {
     assertInvalidQuorumVoters("1")
     assertInvalidQuorumVoters("1@")
     assertInvalidQuorumVoters("1:")
@@ -975,6 +1057,7 @@ class KafkaConfigTest {
     assertInvalidQuorumVoters("1@kafka1:9092,2@")
     assertInvalidQuorumVoters("1@kafka1:9092,2@blah")
     assertInvalidQuorumVoters("1@kafka1:9092,2@blah,")
+    assertInvalidQuorumVoters("1@kafka1:9092:1@kafka2:9092")
   }
 
   private def assertInvalidQuorumVoters(value: String): Unit = {
