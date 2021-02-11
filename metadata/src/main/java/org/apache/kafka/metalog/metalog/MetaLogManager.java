@@ -47,13 +47,13 @@ public interface MetaLogManager {
      * The write will be scheduled to happen at some time in the future.  There is no
      * error return or exception thrown if the write fails.  Instead, the listener may
      * regard the write as successful if and only if the MetaLogManager reaches the given
-     * index before renouncing its leadership.  The listener should determine this by
-     * monitoring the committed indexes.
+     * offset before renouncing its leadership.  The listener should determine this by
+     * monitoring the committed offsets.
      *
      * @param epoch         The controller epoch.
      * @param batch         The batch of messages to write.
      *
-     * @return              The index of the message.
+     * @return              The offset of the message.
      */
     long scheduleWrite(long epoch, List<ApiMessageAndVersion> batch);
 

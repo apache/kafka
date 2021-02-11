@@ -38,8 +38,16 @@ class ResultOrError<T> {
     }
 
     public ResultOrError(T result) {
-        this.error = ApiError.NONE;
+        this.error = null;
         this.result = result;
+    }
+
+    public boolean isError() {
+        return error != null;
+    }
+
+    public boolean isResult() {
+        return error == null;
     }
 
     public ApiError error() {

@@ -41,7 +41,7 @@ import java.util.concurrent.CompletableFuture;
 
 public interface Controller extends AutoCloseable {
     /**
-     * Change partition ISRs.
+     * Change the in-sync replica sets for some partitions.
      *
      * @param request       The AlterIsrRequest data.
      *
@@ -60,14 +60,14 @@ public interface Controller extends AutoCloseable {
         createTopics(CreateTopicsRequestData request);
 
     /**
-     * Decommission a broker.
+     * Unregister a broker.
      *
-     * @param brokerId      The broker id to decommission.
+     * @param brokerId      The broker id to unregister.
      *
-     * @return              A future that is completed successfully hwne the broker is
-     *                      decommissioned, or if it is not registered in the first place.
+     * @return              A future that is completed successfully when the broker is
+     *                      unregistered.
      */
-    CompletableFuture<Void> decommissionBroker(int brokerId);
+    CompletableFuture<Void> unregisterBroker(int brokerId);
 
     /**
      * Describe the current configuration of various resources.

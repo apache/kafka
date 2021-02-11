@@ -56,7 +56,7 @@ public class BrokerRegistration {
         }
         this.listeners = Collections.unmodifiableMap(listenersMap);
         Objects.requireNonNull(supportedFeatures);
-        this.supportedFeatures = supportedFeatures;
+        this.supportedFeatures = new HashMap<>(supportedFeatures);
         Objects.requireNonNull(rack);
         this.rack = rack;
         this.fenced = fenced;
@@ -72,8 +72,8 @@ public class BrokerRegistration {
         this.id = id;
         this.epoch = epoch;
         this.incarnationId = incarnationId;
-        this.listeners = listeners;
-        this.supportedFeatures = supportedFeatures;
+        this.listeners = new HashMap<>(listeners);
+        this.supportedFeatures = new HashMap<>(supportedFeatures);
         this.rack = rack;
         this.fenced = fenced;
     }
