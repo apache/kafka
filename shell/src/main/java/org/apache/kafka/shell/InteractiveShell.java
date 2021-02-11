@@ -114,9 +114,7 @@ public final class InteractiveShell implements AutoCloseable {
                 handler.run(Optional.of(this), terminal.writer(), nodeManager);
                 terminal.writer().flush();
             } catch (UserInterruptException eof) {
-                // Handle ths user pressing Control-C.
-                // TODO: how can we print this on the same line as the prompt like
-                // bash does?
+                // Handle the user pressing control-C.
                 terminal.writer().println("^C");
             } catch (EndOfFileException eof) {
                 return;
