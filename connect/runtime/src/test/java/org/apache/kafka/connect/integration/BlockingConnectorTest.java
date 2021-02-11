@@ -25,7 +25,6 @@ import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.connect.connector.Connector;
 import org.apache.kafka.connect.connector.ConnectorContext;
 import org.apache.kafka.connect.connector.Task;
-import org.apache.kafka.connect.runtime.Worker;
 import org.apache.kafka.connect.runtime.rest.errors.ConnectRestException;
 import org.apache.kafka.connect.runtime.rest.resources.ConnectorsResource;
 import org.apache.kafka.connect.sink.SinkConnector;
@@ -42,7 +41,6 @@ import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.experimental.categories.Category;
-import org.opentest4j.AssertionFailedError;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -67,7 +65,7 @@ import static org.junit.Assert.fail;
 
 /**
  * Tests situations during which certain connector operations, such as start, validation,
- * configuration and others, take longer than expected.
+ * configuration and others, take llonger than expected.
  */
 @Category(IntegrationTest.class)
 public class BlockingConnectorTest {
@@ -140,7 +138,7 @@ public class BlockingConnectorTest {
                 CONNECT_WORKER_STARTUP_TIMEOUT,
                 "Worker did not complete startup in time"
             );
-        } catch (final AssertionFailedError e) {
+        } catch (final java.lang.AssertionError e) {
             System.err.println("!!! Worker did not complete startup in time, try again");
             System.out.println("!!! Worker did not complete startup in time, try again");
         }
@@ -151,9 +149,8 @@ public class BlockingConnectorTest {
                 CONNECT_WORKER_STARTUP_TIMEOUT,
                 "Worker did not complete startup in time"
             );
-        } catch (final AssertionFailedError e) {
-            System.out.println("!!! failed twice");
-            System.err.println("!!! failed twice");
+        } catch (final java.lang.AssertionError e) {
+//            System.err.println("!!! failed twice");
             fail("failed twice");
         }
     }
