@@ -26,10 +26,9 @@ import java.time.Duration
 import java.util.concurrent.atomic.{AtomicBoolean, AtomicInteger}
 import java.util.{Arrays, Collections, Properties}
 import java.util.concurrent.{Callable, ExecutionException, Executors, TimeUnit}
-
 import javax.net.ssl.X509TrustManager
 import kafka.api._
-import kafka.cluster.{Broker, EndPoint, IsrChangeListener, TopicConfigFetcher}
+import kafka.cluster.{Broker, EndPoint, IsrChangeListener}
 import kafka.log._
 import kafka.security.auth.{Acl, Resource, Authorizer => LegacyAuthorizer}
 import kafka.server._
@@ -37,6 +36,7 @@ import kafka.server.checkpoints.OffsetCheckpointFile
 import com.yammer.metrics.core.Meter
 import kafka.controller.LeaderIsrAndControllerEpoch
 import kafka.metrics.KafkaYammerMetrics
+import kafka.server.metadata.{CachedConfigRepository, ConfigRepository, MetadataBroker}
 import kafka.utils.Implicits._
 import kafka.zk._
 import org.apache.kafka.clients.CommonClientConfigs
@@ -59,7 +59,7 @@ import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.common.serialization.{ByteArrayDeserializer, ByteArraySerializer, Deserializer, IntegerSerializer, Serializer}
 import org.apache.kafka.common.utils.{Time, Utils}
 import org.apache.kafka.common.utils.Utils._
-import org.apache.kafka.common.{KafkaFuture, TopicPartition}
+import org.apache.kafka.common.{KafkaFuture, Node, TopicPartition}
 import org.apache.kafka.server.authorizer.{Authorizer => JAuthorizer}
 import org.apache.kafka.test.{TestSslUtils, TestUtils => JTestUtils}
 import org.apache.zookeeper.KeeperException.SessionExpiredException
@@ -170,8 +170,19 @@ object TestUtils extends Logging {
   def boundPort(server: KafkaServer, securityProtocol: SecurityProtocol = SecurityProtocol.PLAINTEXT): Int =
     server.boundPort(ListenerName.forSecurityProtocol(securityProtocol))
 
-  def createBroker(id: Int, host: String, port: Int, securityProtocol: SecurityProtocol = SecurityProtocol.PLAINTEXT): Broker =
-    new Broker(id, host, port, ListenerName.forSecurityProtocol(securityProtocol), securityProtocol)
+  def createBroker(id: Int, host: String, port: Int, securityProtocol: SecurityProtocol = SecurityProtocol.PLAINTEXT): MetadataBroker = {
+    MetadataBroker(id, null, Map(securityProtocol.name -> new Node(id, host, port)), false)
+  }
+
+  def createMetadataBroker(id: Int,
+                           host: String = "localhost",
+                           port: Int = 9092,
+                           securityProtocol: SecurityProtocol = SecurityProtocol.PLAINTEXT,
+                           rack: Option[String] = None,
+                           fenced: Boolean = false): MetadataBroker = {
+    MetadataBroker(id, rack.getOrElse(null),
+      Map(securityProtocol.name -> new Node(id, host, port, rack.getOrElse(null))), fenced)
+  }
 
   def createBrokerAndEpoch(id: Int, host: String, port: Int, securityProtocol: SecurityProtocol = SecurityProtocol.PLAINTEXT,
                            epoch: Long = 0): (Broker, Long) = {
@@ -666,7 +677,7 @@ object TestUtils extends Logging {
     brokers
   }
 
-  def deleteBrokersInZk(zkClient: KafkaZkClient, ids: Seq[Int]): Seq[Broker] = {
+  def deleteBrokersInZk(zkClient: KafkaZkClient, ids: Seq[Int]): Seq[MetadataBroker] = {
     val brokers = ids.map(createBroker(_, "localhost", 6667, SecurityProtocol.PLAINTEXT))
     ids.foreach(b => zkClient.deletePath(BrokerIdsZNode.path + "/" + b))
     brokers
@@ -1061,11 +1072,12 @@ object TestUtils extends Logging {
    */
   def createLogManager(logDirs: Seq[File] = Seq.empty[File],
                        defaultConfig: LogConfig = LogConfig(),
+                       configRepository: ConfigRepository = new CachedConfigRepository,
                        cleanerConfig: CleanerConfig = CleanerConfig(enableCleaner = false),
                        time: MockTime = new MockTime()): LogManager = {
     new LogManager(logDirs = logDirs.map(_.getAbsoluteFile),
                    initialOfflineDirs = Array.empty[File],
-                   topicConfigs = Map(),
+                   configRepository = configRepository,
                    initialDefaultConfig = defaultConfig,
                    cleanerConfig = cleanerConfig,
                    recoveryThreadsPerDataDir = 4,
@@ -1076,9 +1088,9 @@ object TestUtils extends Logging {
                    maxPidExpirationMs = 60 * 60 * 1000,
                    scheduler = time.scheduler,
                    time = time,
-                   brokerState = BrokerState(),
                    brokerTopicStats = new BrokerTopicStats,
-                   logDirFailureChannel = new LogDirFailureChannel(logDirs.size))
+                   logDirFailureChannel = new LogDirFailureChannel(logDirs.size),
+                   keepPartitionMetadataFile = true)
   }
 
   class MockAlterIsrManager extends AlterIsrManager {
@@ -1143,12 +1155,10 @@ object TestUtils extends Logging {
     new MockIsrChangeListener()
   }
 
-  class MockTopicConfigFetcher(var props: Properties) extends TopicConfigFetcher {
-    override def fetch(): Properties = props
-  }
-
-  def createTopicConfigProvider(props: Properties): MockTopicConfigFetcher = {
-    new MockTopicConfigFetcher(props)
+  def createConfigRepository(topic: String, props: Properties): CachedConfigRepository = {
+    val configRepository = new CachedConfigRepository()
+    props.entrySet().forEach(e => configRepository.setTopicConfig(topic, e.getKey.toString, e.getValue.toString))
+    configRepository
   }
 
   def produceMessages(servers: Seq[KafkaServer],

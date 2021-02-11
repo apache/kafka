@@ -148,7 +148,7 @@ public class MirrorCheckpointConnector extends SourceConnector {
     List<String> findConsumerGroups()
             throws InterruptedException, ExecutionException {
         return listConsumerGroups().stream()
-                .map(x -> x.groupId())
+                .map(ConsumerGroupListing::groupId)
                 .filter(this::shouldReplicate)
                 .collect(Collectors.toList());
     }

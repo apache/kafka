@@ -15,15 +15,10 @@
  * limitations under the License.
  */
 
-package org.apache.kafka.clients.admin;
+package kafka.test.annotation;
 
-import org.apache.kafka.common.annotation.InterfaceStability;
-
-/**
- * Options for {@link Admin#decommissionBroker(int, DecommissionBrokerOptions)}.
- *
- * The API of this class is evolving. See {@link Admin} for details.
- */
-@InterfaceStability.Evolving
-public class DecommissionBrokerOptions extends AbstractOptions<UpdateFeaturesOptions> {
+public enum AutoStart {
+    YES,
+    NO,
+    DEFAULT
 }

@@ -80,6 +80,7 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -231,12 +232,9 @@ public class WorkerSourceTaskWithTopicCreationTest extends ThreadedTest {
         createWorkerTask(TargetState.PAUSED);
 
         statusListener.onPause(taskId);
-        EasyMock.expectLastCall().andAnswer(new IAnswer<Void>() {
-            @Override
-            public Void answer() throws Throwable {
-                pauseLatch.countDown();
-                return null;
-            }
+        EasyMock.expectLastCall().andAnswer(() -> {
+            pauseLatch.countDown();
+            return null;
         });
 
         expectClose();
@@ -362,12 +360,9 @@ public class WorkerSourceTaskWithTopicCreationTest extends ThreadedTest {
 
         final CountDownLatch pollLatch = new CountDownLatch(1);
         final RuntimeException exception = new RuntimeException();
-        EasyMock.expect(sourceTask.poll()).andAnswer(new IAnswer<List<SourceRecord>>() {
-            @Override
-            public List<SourceRecord> answer() throws Throwable {
-                pollLatch.countDown();
-                throw exception;
-            }
+        EasyMock.expect(sourceTask.poll()).andAnswer(() -> {
+            pollLatch.countDown();
+            throw exception;
         });
 
         statusListener.onFailure(taskId, exception);
@@ -716,13 +711,10 @@ public class WorkerSourceTaskWithTopicCreationTest extends ThreadedTest {
         sourceTask.initialize(EasyMock.anyObject(SourceTaskContext.class));
         EasyMock.expectLastCall();
         sourceTask.start(TASK_PROPS);
-        EasyMock.expectLastCall().andAnswer(new IAnswer<Object>() {
-            @Override
-            public Object answer() throws Throwable {
-                startupLatch.countDown();
-                assertTrue(awaitLatch(finishStartupLatch));
-                return null;
-            }
+        EasyMock.expectLastCall().andAnswer(() -> {
+            startupLatch.countDown();
+            assertTrue(awaitLatch(finishStartupLatch));
+            return null;
         });
 
         statusListener.onStartup(taskId);
@@ -956,7 +948,7 @@ public class WorkerSourceTaskWithTopicCreationTest extends ThreadedTest {
         expectPreliminaryCalls();
         EasyMock.expect(admin.describeTopics(TOPIC)).andReturn(Collections.emptyMap());
         Capture<NewTopic> newTopicCapture = EasyMock.newCapture();
-        EasyMock.expect(admin.createTopic(EasyMock.capture(newTopicCapture)))
+        EasyMock.expect(admin.createOrFindTopics(EasyMock.capture(newTopicCapture)))
                 .andThrow(new RetriableException(new TimeoutException("timeout")));
 
         // Second round
@@ -1034,7 +1026,7 @@ public class WorkerSourceTaskWithTopicCreationTest extends ThreadedTest {
         EasyMock.expect(admin.describeTopics(OTHER_TOPIC)).andReturn(Collections.emptyMap());
         // First call to create the topic times out
         Capture<NewTopic> newTopicCapture = EasyMock.newCapture();
-        EasyMock.expect(admin.createTopic(EasyMock.capture(newTopicCapture)))
+        EasyMock.expect(admin.createOrFindTopics(EasyMock.capture(newTopicCapture)))
                 .andThrow(new RetriableException(new TimeoutException("timeout")));
 
         // Second round
@@ -1085,7 +1077,7 @@ public class WorkerSourceTaskWithTopicCreationTest extends ThreadedTest {
         EasyMock.expect(admin.describeTopics(TOPIC)).andReturn(Collections.emptyMap());
 
         Capture<NewTopic> newTopicCapture = EasyMock.newCapture();
-        EasyMock.expect(admin.createTopic(EasyMock.capture(newTopicCapture)))
+        EasyMock.expect(admin.createOrFindTopics(EasyMock.capture(newTopicCapture)))
                 .andThrow(new ConnectException(new TopicAuthorizationException("unauthorized")));
 
         PowerMock.replayAll();
@@ -1096,7 +1088,7 @@ public class WorkerSourceTaskWithTopicCreationTest extends ThreadedTest {
     }
 
     @Test
-    public void testTopicCreateFailsWithExceptionWhenCreateReturnsFalse() throws Exception {
+    public void testTopicCreateFailsWithExceptionWhenCreateReturnsTopicNotCreatedOrFound() throws Exception {
         createWorkerTask();
 
         SourceRecord record1 = new SourceRecord(PARTITION, OFFSET, TOPIC, 1, KEY_SCHEMA, KEY, RECORD_SCHEMA, RECORD);
@@ -1106,13 +1098,69 @@ public class WorkerSourceTaskWithTopicCreationTest extends ThreadedTest {
         EasyMock.expect(admin.describeTopics(TOPIC)).andReturn(Collections.emptyMap());
 
         Capture<NewTopic> newTopicCapture = EasyMock.newCapture();
-        EasyMock.expect(admin.createTopic(EasyMock.capture(newTopicCapture))).andReturn(false);
+        EasyMock.expect(admin.createOrFindTopics(EasyMock.capture(newTopicCapture))).andReturn(TopicAdmin.EMPTY_CREATION);
 
         PowerMock.replayAll();
 
         Whitebox.setInternalState(workerTask, "toSend", Arrays.asList(record1, record2));
         assertThrows(ConnectException.class, () -> Whitebox.invokeMethod(workerTask, "sendRecords"));
         assertTrue(newTopicCapture.hasCaptured());
+    }
+
+    @Test
+    public void testTopicCreateSucceedsWhenCreateReturnsExistingTopicFound() throws Exception {
+        createWorkerTask();
+
+        SourceRecord record1 = new SourceRecord(PARTITION, OFFSET, TOPIC, 1, KEY_SCHEMA, KEY, RECORD_SCHEMA, RECORD);
+        SourceRecord record2 = new SourceRecord(PARTITION, OFFSET, TOPIC, 2, KEY_SCHEMA, KEY, RECORD_SCHEMA, RECORD);
+
+        expectPreliminaryCalls();
+        EasyMock.expect(admin.describeTopics(TOPIC)).andReturn(Collections.emptyMap());
+
+        Capture<NewTopic> newTopicCapture = EasyMock.newCapture();
+        EasyMock.expect(admin.createOrFindTopics(EasyMock.capture(newTopicCapture))).andReturn(foundTopic(TOPIC));
+
+        expectSendRecordTaskCommitRecordSucceed(false, false);
+        expectSendRecordTaskCommitRecordSucceed(false, false);
+
+        PowerMock.replayAll();
+
+        Whitebox.setInternalState(workerTask, "toSend", Arrays.asList(record1, record2));
+        Whitebox.invokeMethod(workerTask, "sendRecords");
+    }
+
+    @Test
+    public void testTopicCreateSucceedsWhenCreateReturnsNewTopicFound() throws Exception {
+        createWorkerTask();
+
+        SourceRecord record1 = new SourceRecord(PARTITION, OFFSET, TOPIC, 1, KEY_SCHEMA, KEY, RECORD_SCHEMA, RECORD);
+        SourceRecord record2 = new SourceRecord(PARTITION, OFFSET, TOPIC, 2, KEY_SCHEMA, KEY, RECORD_SCHEMA, RECORD);
+
+        expectPreliminaryCalls();
+        EasyMock.expect(admin.describeTopics(TOPIC)).andReturn(Collections.emptyMap());
+
+        Capture<NewTopic> newTopicCapture = EasyMock.newCapture();
+        EasyMock.expect(admin.createOrFindTopics(EasyMock.capture(newTopicCapture))).andReturn(createdTopic(TOPIC));
+
+        expectSendRecordTaskCommitRecordSucceed(false, false);
+        expectSendRecordTaskCommitRecordSucceed(false, false);
+
+        PowerMock.replayAll();
+
+        Whitebox.setInternalState(workerTask, "toSend", Arrays.asList(record1, record2));
+        Whitebox.invokeMethod(workerTask, "sendRecords");
+    }
+
+    private TopicAdmin.TopicCreationResponse createdTopic(String topic) {
+        Set<String> created = Collections.singleton(topic);
+        Set<String> existing = Collections.emptySet();
+        return new TopicAdmin.TopicCreationResponse(created, existing);
+    }
+
+    private TopicAdmin.TopicCreationResponse foundTopic(String topic) {
+        Set<String> created = Collections.emptySet();
+        Set<String> existing = Collections.singleton(topic);
+        return new TopicAdmin.TopicCreationResponse(created, existing);
     }
 
     private void expectPreliminaryCalls() {
@@ -1132,14 +1180,11 @@ public class WorkerSourceTaskWithTopicCreationTest extends ThreadedTest {
         // run. The count passed in + latch returned just makes sure we get *at least* that number of
         // calls
         EasyMock.expect(sourceTask.poll())
-                .andStubAnswer(new IAnswer<List<SourceRecord>>() {
-                    @Override
-                    public List<SourceRecord> answer() throws Throwable {
-                        count.incrementAndGet();
-                        latch.countDown();
-                        Thread.sleep(10);
-                        return Collections.emptyList();
-                    }
+                .andStubAnswer(() -> {
+                    count.incrementAndGet();
+                    latch.countDown();
+                    Thread.sleep(10);
+                    return Collections.emptyList();
                 });
         return latch;
     }
@@ -1150,14 +1195,11 @@ public class WorkerSourceTaskWithTopicCreationTest extends ThreadedTest {
         // run. The count passed in + latch returned just makes sure we get *at least* that number of
         // calls
         EasyMock.expect(sourceTask.poll())
-                .andStubAnswer(new IAnswer<List<SourceRecord>>() {
-                    @Override
-                    public List<SourceRecord> answer() throws Throwable {
-                        count.incrementAndGet();
-                        latch.countDown();
-                        Thread.sleep(10);
-                        return RECORDS;
-                    }
+                .andStubAnswer(() -> {
+                    count.incrementAndGet();
+                    latch.countDown();
+                    Thread.sleep(10);
+                    return RECORDS;
                 });
         // Fallout of the poll() call
         expectSendRecordAnyTimes();
@@ -1236,22 +1278,19 @@ public class WorkerSourceTaskWithTopicCreationTest extends ThreadedTest {
         IExpectationSetters<Future<RecordMetadata>> expect = EasyMock.expect(
             producer.send(EasyMock.capture(sent),
                 EasyMock.capture(producerCallbacks)));
-        IAnswer<Future<RecordMetadata>> expectResponse = new IAnswer<Future<RecordMetadata>>() {
-            @Override
-            public Future<RecordMetadata> answer() throws Throwable {
-                synchronized (producerCallbacks) {
-                    for (org.apache.kafka.clients.producer.Callback cb : producerCallbacks.getValues()) {
-                        if (sendSuccess) {
-                            cb.onCompletion(new RecordMetadata(new TopicPartition("foo", 0), 0, 0,
-                                0L, 0L, 0, 0), null);
-                        } else {
-                            cb.onCompletion(null, new TopicAuthorizationException("foo"));
-                        }
+        IAnswer<Future<RecordMetadata>> expectResponse = () -> {
+            synchronized (producerCallbacks) {
+                for (org.apache.kafka.clients.producer.Callback cb : producerCallbacks.getValues()) {
+                    if (sendSuccess) {
+                        cb.onCompletion(new RecordMetadata(new TopicPartition("foo", 0), 0, 0,
+                            0L, 0L, 0, 0), null);
+                    } else {
+                        cb.onCompletion(null, new TopicAuthorizationException("foo"));
                     }
-                    producerCallbacks.reset();
                 }
-                return sendFuture;
+                producerCallbacks.reset();
             }
+            return sendFuture;
         };
         if (anyTimes)
             expect.andStubAnswer(expectResponse);
@@ -1295,19 +1334,9 @@ public class WorkerSourceTaskWithTopicCreationTest extends ThreadedTest {
         final Capture<SourceRecord> recordCapture = EasyMock.newCapture();
         IExpectationSetters<SourceRecord> convertKeyExpect = EasyMock.expect(transformationChain.apply(EasyMock.capture(recordCapture)));
         if (anyTimes)
-            convertKeyExpect.andStubAnswer(new IAnswer<SourceRecord>() {
-                @Override
-                public SourceRecord answer() {
-                    return recordCapture.getValue();
-                }
-            });
+            convertKeyExpect.andStubAnswer(recordCapture::getValue);
         else
-            convertKeyExpect.andAnswer(new IAnswer<SourceRecord>() {
-                @Override
-                public SourceRecord answer() {
-                    return recordCapture.getValue();
-                }
-            });
+            convertKeyExpect.andAnswer(recordCapture::getValue);
     }
 
     private void expectTaskCommitRecordWithOffset(boolean anyTimes, boolean succeed) throws InterruptedException {
@@ -1431,7 +1460,7 @@ public class WorkerSourceTaskWithTopicCreationTest extends ThreadedTest {
         if (config.topicCreationEnable()) {
             EasyMock.expect(admin.describeTopics(topic)).andReturn(Collections.emptyMap());
             Capture<NewTopic> newTopicCapture = EasyMock.newCapture();
-            EasyMock.expect(admin.createTopic(EasyMock.capture(newTopicCapture))).andReturn(true);
+            EasyMock.expect(admin.createOrFindTopics(EasyMock.capture(newTopicCapture))).andReturn(createdTopic(topic));
         }
     }
 }

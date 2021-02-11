@@ -621,7 +621,10 @@ public class KStreamRepartitionIntegrationTest {
                .to(outputTopic);
 
         startStreams(builder);
-        final KafkaStreams kafkaStreamsToClose = startStreams(builder);
+        final Properties streamsToCloseConfigs = new Properties();
+        streamsToCloseConfigs.putAll(streamsConfiguration);
+        streamsToCloseConfigs.put(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory().getPath() + "-2");
+        final KafkaStreams kafkaStreamsToClose = startStreams(builder, streamsToCloseConfigs);
 
         validateReceivedMessages(
             new StringDeserializer(),
@@ -723,12 +726,24 @@ public class KStreamRepartitionIntegrationTest {
     }
 
     private KafkaStreams startStreams(final StreamsBuilder builder) throws InterruptedException {
-        return startStreams(builder, REBALANCING, RUNNING, null);
+        return startStreams(builder, REBALANCING, RUNNING, streamsConfiguration, null);
+    }
+
+    private KafkaStreams startStreams(final StreamsBuilder builder, final Properties streamsConfiguration) throws InterruptedException {
+        return startStreams(builder, REBALANCING, RUNNING, streamsConfiguration, null);
     }
 
     private KafkaStreams startStreams(final StreamsBuilder builder,
                                       final State expectedOldState,
                                       final State expectedNewState,
+                                      final Thread.UncaughtExceptionHandler uncaughtExceptionHandler) throws InterruptedException {
+        return startStreams(builder, expectedOldState, expectedNewState, streamsConfiguration, uncaughtExceptionHandler);
+    }
+
+    private KafkaStreams startStreams(final StreamsBuilder builder,
+                                      final State expectedOldState,
+                                      final State expectedNewState,
+                                      final Properties streamsConfiguration,
                                       final Thread.UncaughtExceptionHandler uncaughtExceptionHandler) throws InterruptedException {
         final CountDownLatch latch;
         final KafkaStreams kafkaStreams = new KafkaStreams(builder.build(streamsConfiguration), streamsConfiguration);

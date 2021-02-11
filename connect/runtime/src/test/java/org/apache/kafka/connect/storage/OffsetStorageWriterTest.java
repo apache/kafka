@@ -20,7 +20,6 @@ import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.util.Callback;
 import org.easymock.Capture;
 import org.easymock.EasyMock;
-import org.easymock.IAnswer;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
@@ -39,7 +38,6 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.Callable;
 
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertThrows;
@@ -245,28 +243,22 @@ public class OffsetStorageWriterTest {
                 keySerialized == null ? null : ByteBuffer.wrap(keySerialized),
                 valueSerialized == null ? null : ByteBuffer.wrap(valueSerialized));
         EasyMock.expect(store.set(EasyMock.eq(offsetsSerialized), EasyMock.capture(storeCallback)))
-                .andAnswer(new IAnswer<Future<Void>>() {
-                    @Override
-                    public Future<Void> answer() throws Throwable {
-                        return service.submit(new Callable<Void>() {
-                            @Override
-                            public Void call() throws Exception {
-                                if (waitForCompletion != null)
-                                    assertTrue(waitForCompletion.await(10000, TimeUnit.MILLISECONDS));
+            .andAnswer(() ->
+                service.submit(() -> {
+                    if (waitForCompletion != null)
+                        assertTrue(waitForCompletion.await(10000, TimeUnit.MILLISECONDS));
 
-                                if (fail) {
-                                    storeCallback.getValue().onCompletion(exception, null);
-                                } else {
-                                    storeCallback.getValue().onCompletion(null, null);
-                                }
-                                return null;
-                            }
-                        });
+                    if (fail) {
+                        storeCallback.getValue().onCompletion(exception, null);
+                    } else {
+                        storeCallback.getValue().onCompletion(null, null);
                     }
-                });
+                    return null;
+                })
+            );
         if (callback != null) {
             if (fail) {
-                callback.onCompletion(EasyMock.eq(exception), EasyMock.eq((Void) null));
+                callback.onCompletion(EasyMock.eq(exception), EasyMock.eq(null));
             } else {
                 callback.onCompletion(null, null);
             }
