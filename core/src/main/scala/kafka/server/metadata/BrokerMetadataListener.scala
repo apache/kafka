@@ -38,19 +38,19 @@ object BrokerMetadataListener{
   val MetadataBatchSizes = "MetadataBatchSizes"
 }
 
-class BrokerMetadataListener(val brokerId: Int,
-                             val time: Time,
-                             val metadataCache: RaftMetadataCache,
-                             val configRepository: CachedConfigRepository,
-                             val groupCoordinator: GroupCoordinator,
-                             val replicaManager: RaftReplicaManager,
-                             val txnCoordinator: TransactionCoordinator,
-                             val logManager: LogManager,
-                             val threadNamePrefix: Option[String],
-                             val clientQuotaManager: ClientQuotaMetadataManager
+class BrokerMetadataListener(brokerId: Int,
+                             time: Time,
+                             metadataCache: RaftMetadataCache,
+                             configRepository: CachedConfigRepository,
+                             groupCoordinator: GroupCoordinator,
+                             replicaManager: RaftReplicaManager,
+                             txnCoordinator: TransactionCoordinator,
+                             logManager: LogManager,
+                             threadNamePrefix: Option[String],
+                             clientQuotaManager: ClientQuotaMetadataManager
                             ) extends MetaLogListener with KafkaMetricsGroup {
-  val logContext = new LogContext(s"[BrokerMetadataListener id=${brokerId}] ")
-  val log = logContext.logger(classOf[BrokerMetadataListener])
+  private val logContext = new LogContext(s"[BrokerMetadataListener id=${brokerId}] ")
+  private val log = logContext.logger(classOf[BrokerMetadataListener])
   logIdent = logContext.logPrefix()
 
   /**
@@ -91,11 +91,11 @@ class BrokerMetadataListener(val brokerId: Int,
       val startNs = time.nanoseconds()
       var index = 0
       metadataBatchSizeHist.update(records.size())
-      records.iterator().asScala.foreach { case record =>
+      records.iterator().asScala.foreach { record =>
         try {
           if (isTraceEnabled) {
             trace("Metadata batch %d: processing [%d/%d]: %s.".format(lastOffset, index + 1,
-              records.size(), record.toString()))
+              records.size(), record.toString))
           }
           handleMessage(imageBuilder, record, lastOffset)
         } catch {
@@ -211,13 +211,13 @@ class BrokerMetadataListener(val brokerId: Int,
   def handleFenceBrokerRecord(imageBuilder: MetadataImageBuilder,
                               record: FenceBrokerRecord): Unit = {
     // TODO: add broker epoch to metadata cache, and check it here.
-    imageBuilder.brokersBuilder().changeFencing(record.id(), true)
+    imageBuilder.brokersBuilder().changeFencing(record.id(), fenced = true)
   }
 
   def handleUnfenceBrokerRecord(imageBuilder: MetadataImageBuilder,
                                 record: UnfenceBrokerRecord): Unit = {
     // TODO: add broker epoch to metadata cache, and check it here.
-    imageBuilder.brokersBuilder().changeFencing(record.id(), false)
+    imageBuilder.brokersBuilder().changeFencing(record.id(), fenced = false)
   }
 
   def handleRemoveTopicRecord(imageBuilder: MetadataImageBuilder,
