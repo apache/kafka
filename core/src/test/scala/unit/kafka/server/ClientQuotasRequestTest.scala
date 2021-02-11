@@ -17,7 +17,6 @@
 
 package kafka.server
 
-import integration.kafka.server.IntegrationTestUtils
 import kafka.test.ClusterInstance
 
 import java.net.InetAddress

@@ -16,8 +16,6 @@
   */
 package kafka.server
 
-import integration.kafka.server.IntegrationTestUtils
-
 import java.net.Socket
 import java.util.Collections
 import kafka.api.{KafkaSasl, SaslSetup}
