@@ -37,12 +37,16 @@ import kafka.server.LogDirFailureChannel;
 import kafka.server.MetadataCache;
 import kafka.server.OffsetAndEpoch;
 import kafka.server.OffsetTruncationState;
+import kafka.server.QuotaFactory;
 import kafka.server.ReplicaFetcherThread;
 import kafka.server.ReplicaManager;
 import kafka.server.ReplicaQuota;
 import kafka.server.checkpoints.OffsetCheckpoints;
 import kafka.utils.KafkaScheduler;
+import kafka.utils.MockTime;
 import kafka.utils.Pool;
+import kafka.utils.TestUtils;
+import kafka.zk.KafkaZkClient;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.message.LeaderAndIsrRequestData;
@@ -93,6 +97,7 @@ import java.util.Optional;
 import java.util.Properties;
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 @State(Scope.Benchmark)
 @Fork(value = 1)
@@ -110,6 +115,8 @@ public class ReplicaFetcherThreadBenchmark {
     private File logDir = new File(System.getProperty("java.io.tmpdir"), UUID.randomUUID().toString());
     private KafkaScheduler scheduler = new KafkaScheduler(1, "scheduler", true);
     private Pool<TopicPartition, Partition> pool = new Pool<TopicPartition, Partition>(Option.empty());
+    private Metrics metrics = new Metrics();
+    private ReplicaManager replicaManager;
 
     @Setup(Level.Trial)
     public void setup() throws IOException {
@@ -146,6 +153,7 @@ public class ReplicaFetcherThreadBenchmark {
         HashMap<String, Uuid> topicIds = new HashMap<>();
         List<FetchResponse.TopicIdError> topicIdErrors = new LinkedList<>();
         scala.collection.mutable.Map<TopicPartition, InitialFetchState> initialFetchStates = new scala.collection.mutable.HashMap<>();
+        List<UpdateMetadataRequestData.UpdateMetadataPartitionState> updatePartitionState = new ArrayList<>();
         for (int i = 0; i < partitionCount; i++) {
             TopicPartition tp = new TopicPartition("topic", i);
 
@@ -185,27 +193,25 @@ public class ReplicaFetcherThreadBenchmark {
                     new LinkedList<>(), fetched));
             topicIds.putIfAbsent(tp.topic(), Uuid.randomUuid());
 
+            updatePartitionState.add(
+                    new UpdateMetadataRequestData.UpdateMetadataPartitionState()
+                            .setTopicName("topic")
+                            .setPartitionIndex(i)
+                            .setControllerEpoch(0)
+                            .setLeader(0)
+                            .setLeaderEpoch(0)
+                            .setIsr(replicas)
+                            .setZkVersion(1)
+                            .setReplicas(replicas));
         }
-
-        List<Integer> replicas = Arrays.asList(0, 1, 2);
-        List<UpdateMetadataRequestData.UpdateMetadataPartitionState> updatePartitionState = Collections.singletonList(
-                new UpdateMetadataRequestData.UpdateMetadataPartitionState()
-                .setControllerEpoch(0)
-                .setLeader(0)
-                .setLeaderEpoch(0)
-                .setIsr(replicas)
-                .setZkVersion(1)
-                .setReplicas(replicas));
-
         UpdateMetadataRequest updateMetadataRequest = new UpdateMetadataRequest.Builder(ApiKeys.UPDATE_METADATA.latestVersion(),
                 0, 0, 0, updatePartitionState, Collections.emptyList(), topicIds).build();
 
         MetadataCache metadataCache = new MetadataCache(0);
         metadataCache.updateMetadata(0, updateMetadataRequest);
 
-        ReplicaManager replicaManager = Mockito.mock(ReplicaManager.class);
-        Mockito.when(replicaManager.brokerTopicStats()).thenReturn(brokerTopicStats);
-        Mockito.when(replicaManager.metadataCache()).thenReturn(metadataCache);
+        replicaManager = new ReplicaManager(config, metrics, new MockTime(), Mockito.mock(KafkaZkClient.class), scheduler, logManager, new AtomicBoolean(false),
+                Mockito.mock(QuotaFactory.QuotaManagers.class), brokerTopicStats, metadataCache, new LogDirFailureChannel(logDirs.size()), TestUtils.createAlterIsrManager(), Option.empty());
         fetcher = new ReplicaFetcherBenchThread(config, replicaManager, pool);
         fetcher.addPartitions(initialFetchStates);
         // force a pass to move partitions to fetching state. We do this in the setup phase
@@ -217,6 +223,8 @@ public class ReplicaFetcherThreadBenchmark {
 
     @TearDown(Level.Trial)
     public void tearDown() throws IOException {
+        metrics.close();
+        replicaManager.shutdown(false);
         logManager.shutdown();
         scheduler.shutdown();
         Utils.delete(logDir);
