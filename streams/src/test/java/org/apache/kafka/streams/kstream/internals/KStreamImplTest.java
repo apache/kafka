@@ -1430,12 +1430,12 @@ public class KStreamImplTest {
     @Test
     public void shouldNotAllowNullValueJoinerWithKeyOnLeftJoinWithGlobalTableWithNamed() {
         final NullPointerException exception = assertThrows(
-                NullPointerException.class,
-                () -> testStream.leftJoin(
-                        testGlobalTable,
-                        MockMapper.selectValueMapper(),
-                        (ValueJoinerWithKey<? super String, ? super String, ? super String, ?>) null,
-                        Named.as("name")));
+            NullPointerException.class,
+            () -> testStream.leftJoin(
+                    testGlobalTable,
+                    MockMapper.selectValueMapper(),
+                    (ValueJoinerWithKey<? super String, ? super String, ? super String, ?>) null,
+                    Named.as("name")));
         assertThat(exception.getMessage(), equalTo("joiner can't be null"));
     }
 
