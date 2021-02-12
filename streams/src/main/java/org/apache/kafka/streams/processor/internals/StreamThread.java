@@ -776,9 +776,10 @@ public class StreamThread extends Thread {
 
                 log.debug("{} punctuators ran.", punctuated);
 
+                final long beforeCommitMs = now;
                 final int committed = maybeCommit();
                 totalCommittedSinceLastSummary += committed;
-                final long commitLatency = advanceNowAndComputeLatency();
+                final long commitLatency = Math.max(now - beforeCommitMs, 0);
                 totalCommitLatency += commitLatency;
                 if (committed > 0) {
                     commitSensor.record(commitLatency / (double) committed, now);
@@ -1020,7 +1021,7 @@ public class StreamThread extends Thread {
             if (committed == -1) {
                 log.debug("Unable to commit as we are in the middle of a rebalance, will try again when it completes.");
             } else {
-                advanceNowAndComputeLatency();
+                now = time.milliseconds();
                 lastCommitMs = now;
             }
         } else {
