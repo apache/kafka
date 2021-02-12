@@ -264,7 +264,7 @@ public interface ReplicatedLog extends Closeable {
     Optional<OffsetAndEpoch> oldestSnapshotId();
 
     /**
-     * Notifies the replicted log when a new snapshot is available.
+     * Notifies the replicated log when a new snapshot is available.
      */
     void onSnapshotFrozen(OffsetAndEpoch snapshotId);
 
