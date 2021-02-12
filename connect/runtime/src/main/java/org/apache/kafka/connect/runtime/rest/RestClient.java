@@ -17,33 +17,35 @@
 
 package org.apache.kafka.connect.runtime.rest;
 
-import com.fasterxml.jackson.core.type.TypeReference;
-import com.fasterxml.jackson.databind.ObjectMapper;
-
-import javax.crypto.SecretKey;
-import javax.ws.rs.core.HttpHeaders;
-
 import org.apache.kafka.connect.runtime.WorkerConfig;
 import org.apache.kafka.connect.runtime.rest.entities.ErrorMessage;
 import org.apache.kafka.connect.runtime.rest.errors.ConnectRestException;
 import org.apache.kafka.connect.runtime.rest.util.SSLUtils;
+
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.eclipse.jetty.client.HttpClient;
 import org.eclipse.jetty.client.api.ContentResponse;
 import org.eclipse.jetty.client.api.Request;
-import org.eclipse.jetty.client.util.StringContentProvider;
+import org.eclipse.jetty.client.dynamic.HttpClientTransportDynamic;
+import org.eclipse.jetty.client.util.StringRequestContent;
 import org.eclipse.jetty.http.HttpField;
 import org.eclipse.jetty.http.HttpFields;
 import org.eclipse.jetty.http.HttpStatus;
+import org.eclipse.jetty.io.ClientConnector;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import javax.ws.rs.core.Response;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeoutException;
+import javax.crypto.SecretKey;
+
+import jakarta.ws.rs.core.HttpHeaders;
+import jakarta.ws.rs.core.Response;
 
 public class RestClient {
     private static final Logger log = LoggerFactory.getLogger(RestClient.class);
@@ -86,7 +88,9 @@ public class RestClient {
         HttpClient client;
 
         if (url.startsWith("https://")) {
-            client = new HttpClient(SSLUtils.createClientSideSslContextFactory(config));
+            ClientConnector clientConnector = new ClientConnector();
+            clientConnector.setSslContextFactory(SSLUtils.createClientSideSslContextFactory(config));
+            client = new HttpClient(new HttpClientTransportDynamic(clientConnector));
         } else {
             client = new HttpClient();
         }
@@ -111,7 +115,7 @@ public class RestClient {
             addHeadersToRequest(headers, req);
 
             if (serializedBody != null) {
-                req.content(new StringContentProvider(serializedBody, StandardCharsets.UTF_8), "application/json");
+                req.body(new StringRequestContent("application/json", serializedBody, StandardCharsets.UTF_8));
                 if (sessionKey != null && requestSignatureAlgorithm != null) {
                     InternalRequestSignature.addToRequest(
                         sessionKey,
@@ -161,7 +165,7 @@ public class RestClient {
         if (headers != null) {
             String credentialAuthorization = headers.getHeaderString(HttpHeaders.AUTHORIZATION);
             if (credentialAuthorization != null) {
-                req.header(HttpHeaders.AUTHORIZATION, credentialAuthorization);
+                req.headers((HttpFields.Mutable field) -> field.add(HttpHeaders.AUTHORIZATION, credentialAuthorization));
             }
         }
     }

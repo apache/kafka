@@ -18,16 +18,19 @@ package org.apache.kafka.connect.runtime.rest;
 
 import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.runtime.rest.errors.BadRequestException;
+
 import org.eclipse.jetty.client.api.Request;
 
-import javax.crypto.Mac;
-import javax.crypto.SecretKey;
-import javax.ws.rs.core.HttpHeaders;
 import java.security.InvalidKeyException;
 import java.security.NoSuchAlgorithmException;
 import java.util.Arrays;
 import java.util.Base64;
 import java.util.Objects;
+import javax.crypto.Mac;
+import javax.crypto.SecretKey;
+
+import jakarta.ws.rs.core.HttpHeaders;
+import org.eclipse.jetty.http.HttpFields;
 
 public class InternalRequestSignature {
 
@@ -53,8 +56,10 @@ public class InternalRequestSignature {
             throw new ConnectException(e);
         }
         byte[] requestSignature = sign(mac, key, requestBody);
-        request.header(InternalRequestSignature.SIGNATURE_HEADER, Base64.getEncoder().encodeToString(requestSignature))
-               .header(InternalRequestSignature.SIGNATURE_ALGORITHM_HEADER, signatureAlgorithm);
+        request.headers((HttpFields.Mutable field) -> {
+            field.add(InternalRequestSignature.SIGNATURE_HEADER, Base64.getEncoder().encodeToString(requestSignature));
+            field.add(InternalRequestSignature.SIGNATURE_ALGORITHM_HEADER, signatureAlgorithm);
+        });
     }
 
     /**

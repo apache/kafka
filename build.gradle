@@ -1525,11 +1525,20 @@ project(':trogdor') {
     implementation libs.jacksonJaxrsJsonProvider
     implementation libs.jerseyContainerServlet
     implementation libs.jerseyHk2
+    implementation libs.jerseyMediaJsonJackson
     implementation libs.jaxbApi // Jersey dependency that was available in the JDK before Java 9
     implementation libs.activation // Jersey dependency that was available in the JDK before Java 9
-    implementation libs.jettyServer
-    implementation libs.jettyServlet
-    implementation libs.jettyServlets
+    implementation (libs.jettyServer) {
+      exclude group: 'org.slf4j', module: 'slf4j-api'
+    }
+    implementation (libs.jettyServlet) {
+      exclude group: 'org.slf4j', module: 'slf4j-api'
+    }
+    implementation (libs.jettyServlets) {
+      exclude group: 'org.slf4j', module: 'slf4j-api'
+    }
+    implementation libs.jakartaServletApi
+    implementation libs.jsr311Api
 
     testImplementation project(':clients')
     testImplementation libs.junitJupiter
@@ -2120,7 +2129,7 @@ project(':connect:api') {
   dependencies {
     api project(':clients')
     implementation libs.slf4jApi
-    implementation libs.jaxrsApi
+    implementation libs.jakartaRsApi
 
     testImplementation libs.junitJupiter
     testRuntimeOnly libs.slf4jlog4j
@@ -2245,12 +2254,23 @@ project(':connect:runtime') {
     implementation libs.jacksonJaxrsJsonProvider
     implementation libs.jerseyContainerServlet
     implementation libs.jerseyHk2
+    implementation libs.jerseyMediaJsonJackson
     implementation libs.jaxbApi // Jersey dependency that was available in the JDK before Java 9
     implementation libs.activation // Jersey dependency that was available in the JDK before Java 9
-    implementation libs.jettyServer
-    implementation libs.jettyServlet
-    implementation libs.jettyServlets
-    implementation libs.jettyClient
+    implementation (libs.jettyServer) {
+      exclude group: 'org.slf4j', module: 'slf4j-api'
+    }
+    implementation (libs.jettyServlet) {
+      exclude group: 'org.slf4j', module: 'slf4j-api'
+    }
+    implementation (libs.jettyServlets) {
+      exclude group: 'org.slf4j', module: 'slf4j-api'
+    }
+    implementation (libs.jettyClient) {
+      exclude group: 'org.slf4j', module: 'slf4j-api'
+    }
+    implementation libs.jakartaServletApi
+    implementation libs.jsr311Api
     implementation libs.reflections
     implementation libs.mavenArtifact
 
@@ -2377,7 +2397,7 @@ project(':connect:basic-auth-extension') {
   dependencies {
     implementation project(':connect:api')
     implementation libs.slf4jApi
-    implementation libs.jaxrsApi
+    implementation libs.jakartaRsApi
 
     testImplementation libs.bcpkix
     testImplementation libs.easymock

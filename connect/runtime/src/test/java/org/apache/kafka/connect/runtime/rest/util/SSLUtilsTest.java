@@ -79,7 +79,7 @@ public class SSLUtilsTest {
         configMap.put("ssl.trustmanager.algorithm", "PKIX");
 
         DistributedConfig config = new DistributedConfig(configMap);
-        SslContextFactory ssl = SSLUtils.createServerSideSslContextFactory(config);
+        SslContextFactory.Server ssl = SSLUtils.createServerSideSslContextFactory(config);
 
         Assert.assertEquals("file:///path/to/keystore", ssl.getKeyStorePath());
         Assert.assertEquals("file:///path/to/truststore", ssl.getTrustStorePath());
@@ -117,15 +117,13 @@ public class SSLUtilsTest {
         configMap.put("ssl.trustmanager.algorithm", "PKIX");
 
         DistributedConfig config = new DistributedConfig(configMap);
-        SslContextFactory ssl = SSLUtils.createClientSideSslContextFactory(config);
+        SslContextFactory.Client ssl = SSLUtils.createClientSideSslContextFactory(config);
 
         Assert.assertEquals("file:///path/to/keystore", ssl.getKeyStorePath());
         Assert.assertEquals("file:///path/to/truststore", ssl.getTrustStorePath());
         Assert.assertEquals("SunJSSE", ssl.getProvider());
         Assert.assertArrayEquals(new String[] {"SSL_RSA_WITH_RC4_128_SHA", "SSL_RSA_WITH_RC4_128_MD5"}, ssl.getIncludeCipherSuites());
         Assert.assertEquals("SHA1PRNG", ssl.getSecureRandomAlgorithm());
-        Assert.assertFalse(ssl.getNeedClientAuth());
-        Assert.assertFalse(ssl.getWantClientAuth());
         Assert.assertEquals("JKS", ssl.getKeyStoreType());
         Assert.assertEquals("JKS", ssl.getTrustStoreType());
         Assert.assertEquals("TLS", ssl.getProtocol());
@@ -152,7 +150,7 @@ public class SSLUtilsTest {
         configMap.put("ssl.secure.random.implementation", "SHA1PRNG");
 
         DistributedConfig config = new DistributedConfig(configMap);
-        SslContextFactory ssl = SSLUtils.createServerSideSslContextFactory(config);
+        SslContextFactory.Server ssl = SSLUtils.createServerSideSslContextFactory(config);
 
         Assert.assertEquals(SslConfigs.DEFAULT_SSL_KEYSTORE_TYPE, ssl.getKeyStoreType());
         Assert.assertEquals(SslConfigs.DEFAULT_SSL_TRUSTSTORE_TYPE, ssl.getTrustStoreType());
@@ -182,7 +180,7 @@ public class SSLUtilsTest {
         configMap.put("ssl.secure.random.implementation", "SHA1PRNG");
 
         DistributedConfig config = new DistributedConfig(configMap);
-        SslContextFactory ssl = SSLUtils.createClientSideSslContextFactory(config);
+        SslContextFactory.Client ssl = SSLUtils.createClientSideSslContextFactory(config);
 
         Assert.assertEquals(SslConfigs.DEFAULT_SSL_KEYSTORE_TYPE, ssl.getKeyStoreType());
         Assert.assertEquals(SslConfigs.DEFAULT_SSL_TRUSTSTORE_TYPE, ssl.getTrustStoreType());
@@ -190,7 +188,5 @@ public class SSLUtilsTest {
         Assert.assertArrayEquals(Arrays.asList(SslConfigs.DEFAULT_SSL_ENABLED_PROTOCOLS.split("\\s*,\\s*")).toArray(), ssl.getIncludeProtocols());
         Assert.assertEquals(SslConfigs.DEFAULT_SSL_KEYMANGER_ALGORITHM, ssl.getKeyManagerFactoryAlgorithm());
         Assert.assertEquals(SslConfigs.DEFAULT_SSL_TRUSTMANAGER_ALGORITHM, ssl.getTrustManagerFactoryAlgorithm());
-        Assert.assertFalse(ssl.getNeedClientAuth());
-        Assert.assertFalse(ssl.getWantClientAuth());
     }
 }

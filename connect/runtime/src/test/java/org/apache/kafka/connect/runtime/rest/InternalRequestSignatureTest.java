@@ -19,16 +19,17 @@ package org.apache.kafka.connect.runtime.rest;
 
 import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.runtime.rest.errors.BadRequestException;
+
+
+import org.eclipse.jetty.client.HttpClient;
 import org.eclipse.jetty.client.api.Request;
 import org.junit.Test;
-import org.mockito.ArgumentCaptor;
 
+import java.net.URI;
+import java.util.Base64;
 import javax.crypto.Mac;
 import javax.crypto.SecretKey;
 import javax.crypto.spec.SecretKeySpec;
-import javax.ws.rs.core.HttpHeaders;
-
-import java.util.Base64;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
@@ -39,6 +40,8 @@ import static org.junit.Assert.assertTrue;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
+
+import jakarta.ws.rs.core.HttpHeaders;
 
 public class InternalRequestSignatureTest {
 
@@ -94,35 +97,27 @@ public class InternalRequestSignatureTest {
 
     @Test
     public void addToRequestShouldThrowExceptionOnInvalidSignatureAlgorithm() {
-        Request request = mock(Request.class);
+        HttpClient httpClient = new HttpClient();
+        Request request = httpClient.newRequest(URI.create("http://localhost"));
         assertThrows(ConnectException.class, () -> InternalRequestSignature.addToRequest(KEY, REQUEST_BODY, "doesn'texist", request));
     }
 
     @Test
     public void addToRequestShouldAddHeadersOnValidSignatureAlgorithm() {
-        Request request = mock(Request.class);
-        ArgumentCaptor<String> signatureCapture = ArgumentCaptor.forClass(String.class);
-        ArgumentCaptor<String> signatureAlgorithmCapture = ArgumentCaptor.forClass(String.class);
-        when(request.header(
-                eq(InternalRequestSignature.SIGNATURE_HEADER),
-                signatureCapture.capture()
-            )).thenReturn(request);
-        when(request.header(
-                eq(InternalRequestSignature.SIGNATURE_ALGORITHM_HEADER),
-                signatureAlgorithmCapture.capture()
-            )).thenReturn(request);
+        HttpClient httpClient = new HttpClient();
+        Request request = httpClient.newRequest(URI.create("http://localhost"));
 
         InternalRequestSignature.addToRequest(KEY, REQUEST_BODY, SIGNATURE_ALGORITHM, request);
 
         assertEquals(
             "Request should have valid base 64-encoded signature added as header",
             ENCODED_SIGNATURE,
-            signatureCapture.getValue()
+            request.getHeaders().get(InternalRequestSignature.SIGNATURE_HEADER)
         );
         assertEquals(
             "Request should have provided signature algorithm added as header",
             SIGNATURE_ALGORITHM,
-            signatureAlgorithmCapture.getValue()
+            request.getHeaders().get(InternalRequestSignature.SIGNATURE_ALGORITHM_HEADER)
         );
     }
 

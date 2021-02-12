@@ -18,11 +18,17 @@
 package org.apache.kafka.trogdor.rest;
 
 import com.fasterxml.jackson.annotation.JsonCreator;
+import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
+import com.fasterxml.jackson.databind.annotation.JsonSerialize;
+
+
 import org.apache.kafka.trogdor.common.JsonUtil;
 
 /**
  * An empty request or response.
  */
+@JsonSerialize
+@JsonDeserialize
 public class Empty {
     public static final Empty INSTANCE = new Empty();
 

@@ -56,7 +56,7 @@ import java.util.concurrent.TimeUnit;
 public class JsonRestServer {
     private static final Logger log = LoggerFactory.getLogger(JsonRestServer.class);
 
-    private static final long GRACEFUL_SHUTDOWN_TIMEOUT_MS = 100;
+    private static final long GRACEFUL_SHUTDOWN_TIMEOUT_MS = 3000;
 
     private final ScheduledExecutorService shutdownExecutor;
 
