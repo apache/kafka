@@ -889,17 +889,13 @@ public class StreamThread extends Thread {
         final long pollLatency = advanceNowAndComputeLatency();
 
         final int numRecords = records.count();
-
-        log.debug(
-            "Main Consumer poll completed in {} ms and fetched {} records and {} metadata",
-            pollLatency,
-            numRecords,
-            records.metadata().size()
-        );
+        if (numRecords > 0) {
+            log.debug("Main Consumer poll completed in {} ms and fetched {} records", pollLatency, numRecords);
+        }
 
         pollSensor.record(pollLatency, now);
 
-        if (!records.isEmpty() || !records.metadata().isEmpty()) {
+        if (!records.isEmpty()) {
             pollRecordsSensor.record(numRecords, now);
             taskManager.addRecordsToTasks(records);
         }

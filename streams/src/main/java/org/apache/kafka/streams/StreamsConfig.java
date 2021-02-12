@@ -144,7 +144,6 @@ public class StreamsConfig extends AbstractConfig {
     private static final long EOS_DEFAULT_COMMIT_INTERVAL_MS = 100L;
 
     public static final int DUMMY_THREAD_INDEX = 1;
-    public static final long MAX_TASK_IDLE_MS_DISABLED = -1;
 
     /**
      * Prefix used to provide default topic configs to be applied when creating internal topics.

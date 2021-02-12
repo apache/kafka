@@ -447,7 +447,7 @@ public class StreamThreadStateStoreProviderTest {
             new MockTime(),
             stateManager,
             recordCollector,
-            context, logContext);
+            context);
     }
 
     private void mockThread(final boolean initialized) {
