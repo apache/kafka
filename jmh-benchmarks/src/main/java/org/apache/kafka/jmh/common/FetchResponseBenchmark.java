@@ -117,7 +117,7 @@ public class FetchResponseBenchmark {
 
     @Benchmark
     public int testPartitionMapFromData() {
-        return new FetchResponse<>(fetchResponseData).responseData(topicNames).size();
+        return new FetchResponse<>(fetchResponseData).responseData(topicNames, ApiKeys.FETCH.latestVersion()).size();
     }
 
     @Benchmark

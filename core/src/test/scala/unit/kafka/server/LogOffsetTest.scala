@@ -129,7 +129,7 @@ class LogOffsetTest extends BaseRequestTest {
       Map(topicPartition -> new FetchRequest.PartitionData(consumerOffsets.head, FetchRequest.INVALID_LOG_START_OFFSET,
         300 * 1024, Optional.empty())).asJava, topicIds).build()
     val fetchResponse = sendFetchRequest(fetchRequest)
-    assertFalse(fetchResponse.responseData(topicNames).get(topicPartition).records.batches.iterator.hasNext)
+    assertFalse(fetchResponse.responseData(topicNames, ApiKeys.FETCH.latestVersion).get(topicPartition).records.batches.iterator.hasNext)
   }
 
   @Test

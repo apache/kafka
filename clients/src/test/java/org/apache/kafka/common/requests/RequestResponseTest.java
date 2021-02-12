@@ -756,8 +756,8 @@ public class RequestResponseTest {
         FetchResponse<MemoryRecords> v1Deserialized = FetchResponse.parse(v1Response.serialize((short) 1), (short) 1);
         assertEquals(0, v0Deserialized.throttleTimeMs(), "Throttle time must be zero");
         assertEquals(10, v1Deserialized.throttleTimeMs(), "Throttle time must be 10");
-        assertEquals(responseData, v0Deserialized.responseData(topicNames), "Response data does not match");
-        assertEquals(responseData, v1Deserialized .responseData(topicNames), "Response data does not match");
+        assertEquals(responseData, v0Deserialized.responseData(topicNames, (short) 0), "Response data does not match");
+        assertEquals(responseData, v1Deserialized .responseData(topicNames, (short) 1), "Response data does not match");
 
         FetchResponse<MemoryRecords> idTestResponse = new FetchResponse<>(Errors.NONE, responseData, Collections.emptyList(),
                 topicIds, 0, INVALID_SESSION_ID);
@@ -791,7 +791,7 @@ public class RequestResponseTest {
 
         FetchResponse<MemoryRecords> response = new FetchResponse<>(Errors.NONE, responseData, Collections.emptyList(), topicIds, 10, INVALID_SESSION_ID);
         FetchResponse<MemoryRecords> deserialized = FetchResponse.parse(response.serialize((short) 4), (short) 4);
-        assertEquals(responseData, deserialized.responseData(topicNames));
+        assertEquals(responseData, deserialized.responseData(topicNames, (short) 4));
     }
 
     @Test

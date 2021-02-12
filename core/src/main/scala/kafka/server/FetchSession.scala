@@ -331,19 +331,25 @@ class FetchSession(val id: Int,
         if (forgetPartitions != null && forgetPartitions.contains(partition.partition))
           unresolvedIterator.remove()
         else if (topicNames.get(partition.topicId) != null) {
-          // Try to resolve ID, if there is a name for the given ID, place a CachedPartition in partitionMap
+          // Try to resolve ID, if there is a name for the given ID, add or update a CachedPartition in partitionMap
           // and remove from unresolvedPartitions.
           val newTp = new TopicPartition(topicNames.get(partition.topicId), partition.partition)
           val newCp = new CachedPartition(newTp, partition.topicId, partition.reqData)
-          partitionMap.add(newCp)
-          added.add(newTp)
+          val cachedPart = partitionMap.find(newCp)
+          if (cachedPart == null) {
+            partitionMap.mustAdd(newCp)
+            added.add(newTp)
+          } else {
+            cachedPart.updateRequestParams(partition.reqData)
+            updated.add(newTp)
+          }
           unresolvedIterator.remove()
         } else {
           val topicIdError = fetchDataAndError.topicIdErrors.get(partition.topicId)
           if (topicIdError == null) {
             fetchDataAndError.topicIdErrors.put(partition.topicId, new FetchResponse.TopicIdError(partition.topicId, Collections.singletonList(partition.partition), error))
           } else {
-            topicIdError.addPartitions(Collections.singletonList(partition.partition))
+            topicIdError.addPartition(partition.partition)
           }
         }
       }
@@ -888,12 +894,13 @@ class FetchSessionCache(private val maxEntries: Int,
 
 class FetchManager(private val time: Time,
                    private val cache: FetchSessionCache) extends Logging {
-  def newContext(request: FetchRequest,
+  def newContext(reqVersion: Short,
+                 reqMetadata: JFetchMetadata,
+                 isFollower: Boolean,
+                 fetchDataAndError: FetchDataAndError,
+                 toForgetAndIds: ToForgetAndIds,
                  topicNames: util.Map[Uuid, String],
                  topicIds: util.Map[String, Uuid]): FetchContext = {
-    val reqMetadata = request.metadata
-    val isFollower = request.isFromFollower
-    val fetchDataAndError = request.fetchDataAndError(topicNames)
     val context = if (reqMetadata.isFull) {
       var removedFetchSessionStr = ""
       if (reqMetadata.sessionId != INVALID_SESSION_ID) {
@@ -926,8 +933,7 @@ class FetchManager(private val time: Time,
                 s"${session.epoch}, but got ${reqMetadata.epoch} instead.");
               new SessionErrorContext(Errors.INVALID_FETCH_SESSION_EPOCH, reqMetadata)
             } else {
-              val toForgetAndIds = request.toForgetAndIds(topicNames)
-              val (added, updated, removed) = session.update(request.version(), fetchDataAndError, toForgetAndIds, reqMetadata, topicIds, topicNames)
+              val (added, updated, removed) = session.update(reqVersion, fetchDataAndError, toForgetAndIds, reqMetadata, topicIds, topicNames)
               if (session.isEmpty) {
                 debug(s"Created a new sessionless FetchContext and closing session id ${session.id}, " +
                   s"epoch ${session.epoch}: after removing ${partitionsToLogString(removed)}, " +

@@ -262,6 +262,8 @@ public class FetchResponse<T extends BaseRecords> extends AbstractResponse {
         }
     }
 
+    // Class used to keep track of unresolved topic IDs and their partitions. Created in FetchRequest and FetchSession
+    // and used to build the Fetch Response.
     public static final class TopicIdError {
         private final Uuid id;
         private final Set<Integer> partitions;
@@ -283,10 +285,15 @@ public class FetchResponse<T extends BaseRecords> extends AbstractResponse {
             return this.partitions;
         }
 
+        public void addPartition(int partition) {
+            partitions.add(partition);
+        }
+
         public void addPartitions(List<Integer> partitions) {
             partitions.addAll(partitions);
         }
 
+        // Builds the FetchablePartitionResponses using the id, partitions, and error stored in TopicIdError
         private List<FetchResponseData.FetchablePartitionResponse> errorData() {
             return partitions.stream().map(partition -> new FetchResponseData.FetchablePartitionResponse()
                     .setPartition(partition)
@@ -303,7 +310,8 @@ public class FetchResponse<T extends BaseRecords> extends AbstractResponse {
 
     /**
      * From version 3 or later, the authorized and existing entries in `FetchRequest.fetchData` should be in the same order in `responseData`.
-     * resolvedPartitionData and unresolvedPartitionData should be disjoint sets.
+     * Version 13 introduces topic IDs which mean there may be unresolved partitions. Unresolved partitions are partitions
+     * whose topic IDs could not be found on the server. resolvedPartitionData and unresolvedPartitionData should be disjoint sets.
      * Thus, a partition in the response will never appear in both resolvedPartitionData and unresolvedPartitionData.
      *
      * @param error                      The top-level error code.
@@ -328,20 +336,16 @@ public class FetchResponse<T extends BaseRecords> extends AbstractResponse {
     public FetchResponse(FetchResponseData fetchResponseData) {
         super(ApiKeys.FETCH);
         this.data = fetchResponseData;
-        if (!supportsTopicIds()) {
-            this.responseDataMap = toResponseDataMap(fetchResponseData);
-        } else {
-            this.responseDataMap = null;
-        }
+        this.responseDataMap = null;
     }
 
     public Errors error() {
         return Errors.forCode(data.errorCode());
     }
 
-    public LinkedHashMap<TopicPartition, PartitionData<T>> responseData(Map<Uuid, String> topicNames) {
-        if (!supportsTopicIds())
-            return responseDataMap;
+    public LinkedHashMap<TopicPartition, PartitionData<T>> responseData(Map<Uuid, String> topicNames, short version) {
+        if (version < 13)
+            return toResponseDataMap(data);
         return toResponseDataMap(data, topicNames);
 
     }
@@ -366,12 +370,6 @@ public class FetchResponse<T extends BaseRecords> extends AbstractResponse {
     public Map<Errors, Integer> errorCounts() {
         Map<Errors, Integer> errorCounts = new HashMap<>();
         updateErrorCounts(errorCounts, error());
-        if (!supportsTopicIds()) {
-            responseDataMap.values().forEach(response ->
-                    updateErrorCounts(errorCounts, response.error())
-            );
-            return errorCounts;
-        }
         data.responses().forEach(topic ->
                 topic.partitionResponses().forEach(partition ->
                         updateErrorCounts(errorCounts, Errors.forCode(partition.errorCode())))
@@ -383,6 +381,7 @@ public class FetchResponse<T extends BaseRecords> extends AbstractResponse {
         return new FetchResponse<>(new FetchResponseData(new ByteBufferAccessor(buffer), version));
     }
 
+    // Used for Fetch versions < 13.
     @SuppressWarnings("unchecked")
     private static <T extends BaseRecords> LinkedHashMap<TopicPartition, PartitionData<T>> toResponseDataMap(
             FetchResponseData message) {
@@ -397,6 +396,7 @@ public class FetchResponse<T extends BaseRecords> extends AbstractResponse {
         return responseMap;
     }
 
+    // Used for Fetch version 13 and greater.
     @SuppressWarnings("unchecked")
     private static <T extends BaseRecords> LinkedHashMap<TopicPartition, PartitionData<T>> toResponseDataMap(
             FetchResponseData message, Map<Uuid, String> topicIdToNameMap) {
@@ -438,7 +438,7 @@ public class FetchResponse<T extends BaseRecords> extends AbstractResponse {
                         .setPartitionResponses(partitionResponses));
             }
         });
-        // ID errors will be empty unless topic IDs are supported and there were topic ID errors
+        // ID errors will be empty unless topic IDs are supported and there are topic ID errors.
         topicIdErrors.forEach(topicIdError -> {
             List<FetchResponseData.FetchablePartitionResponse> partitionResponses = new ArrayList<>();
             partitionResponses.addAll(topicIdError.errorData());
@@ -454,11 +454,8 @@ public class FetchResponse<T extends BaseRecords> extends AbstractResponse {
                 .setResponses(topicResponseList);
     }
 
-    private Boolean supportsTopicIds() {
-        return data.responses().stream().findFirst().filter(
-            topic -> !topic.topicId().equals(Uuid.ZERO_UUID)).isPresent();
-    }
-
+    // Fetch versions 13 and above should have topic IDs for all topics.
+    // Fetch versions < 13 should return the empty set.
     public Set<Uuid> topicIds() {
         return data.responses().stream().map(resp -> resp.topicId()).filter(id -> !id.equals(Uuid.ZERO_UUID)).collect(Collectors.toSet());
     }

@@ -157,10 +157,10 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
   }
 
   @nowarn("cat=deprecation")
-  val requestKeyToError = (topicNames: Map[Uuid, String]) => Map[ApiKeys, Nothing => Errors](
+  val requestKeyToError = (topicNames: Map[Uuid, String], version: Short) => Map[ApiKeys, Nothing => Errors](
     ApiKeys.METADATA -> ((resp: requests.MetadataResponse) => resp.errors.asScala.find(_._1 == topic).getOrElse(("test", Errors.NONE))._2),
     ApiKeys.PRODUCE -> ((resp: requests.ProduceResponse) => resp.responses.asScala.find(_._1 == tp).get._2.error),
-    ApiKeys.FETCH -> ((resp: requests.FetchResponse[Records]) => resp.responseData(topicNames.asJava).asScala.find(_._1 == tp).get._2.error),
+    ApiKeys.FETCH -> ((resp: requests.FetchResponse[Records]) => resp.responseData(topicNames.asJava, version).asScala.find(_._1 == tp).get._2.error),
     ApiKeys.LIST_OFFSETS -> ((resp: ListOffsetsResponse) => {
       Errors.forCode(
         resp.data
@@ -2074,7 +2074,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
                                                 topicNames: Map[Uuid, String] = getTopicNames()): AbstractResponse = {
     val apiKey = request.apiKey
     val response = connectAndReceive[AbstractResponse](request)
-    val error = requestKeyToError(topicNames)(apiKey).asInstanceOf[AbstractResponse => Errors](response)
+    val error = requestKeyToError(topicNames, request.version())(apiKey).asInstanceOf[AbstractResponse => Errors](response)
 
     val authorizationErrors = resources.flatMap { resourceType =>
       if (resourceType == TOPIC) {

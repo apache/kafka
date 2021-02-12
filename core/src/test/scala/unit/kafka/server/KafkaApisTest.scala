@@ -60,6 +60,7 @@ import org.apache.kafka.common.quota.{ClientQuotaAlteration, ClientQuotaEntity}
 import org.apache.kafka.common.record.FileRecords.TimestampAndOffset
 import org.apache.kafka.common.record._
 import org.apache.kafka.common.replica.ClientMetadata
+import org.apache.kafka.common.requests.FetchRequest.{FetchDataAndError, ToForgetAndIds}
 import org.apache.kafka.common.requests.ProduceResponse.PartitionResponse
 import org.apache.kafka.common.requests.WriteTxnMarkersRequest.TxnMarkerEntry
 import org.apache.kafka.common.requests.{FetchMetadata => JFetchMetadata, _}
@@ -1916,7 +1917,12 @@ class KafkaApisTest {
     val fetchMetadata = new JFetchMetadata(0, 0)
     val fetchContext = new FullFetchContext(time, new FetchSessionCache(1000, 100),
       fetchMetadata, new FetchRequest.FetchDataAndError(fetchData, emptyUnresolvedPart, emptyIdErrors),  metadataCache.topicNamesToIds().asJava, false)
-    expect(fetchManager.newContext(anyObject[FetchRequest],
+    expect(fetchManager.newContext(
+      anyObject[Short],
+      anyObject[JFetchMetadata],
+      anyObject[Boolean],
+      anyObject[FetchDataAndError],
+      anyObject[ToForgetAndIds],
       anyObject[util.Map[Uuid, String]],
       anyObject[util.Map[String, Uuid]])).andReturn(fetchContext)
 
@@ -1934,7 +1940,7 @@ class KafkaApisTest {
 
     val response = readResponse(fetchRequest, capturedResponse)
       .asInstanceOf[FetchResponse[BaseRecords]]
-    val responseData = response.responseData(metadataCache.topicIdsToNames().asJava)
+    val responseData = response.responseData(metadataCache.topicIdsToNames().asJava, 9)
     assertTrue(responseData.containsKey(tp))
 
     val partitionData = responseData.get(tp)
@@ -2495,7 +2501,12 @@ class KafkaApisTest {
     val fetchMetadata = new JFetchMetadata(0, 0)
     val fetchContext = new FullFetchContext(time, new FetchSessionCache(1000, 100),
       fetchMetadata, new FetchRequest.FetchDataAndError(fetchData, emptyUnresolvedPart, emptyIdErrors),  metadataCache.topicNamesToIds().asJava, true)
-    expect(fetchManager.newContext(anyObject[FetchRequest],
+    expect(fetchManager.newContext(
+      anyObject[Short],
+      anyObject[JFetchMetadata],
+      anyObject[Boolean],
+      anyObject[FetchDataAndError],
+      anyObject[ToForgetAndIds],
       anyObject[util.Map[Uuid, String]],
       anyObject[util.Map[String, Uuid]])).andReturn(fetchContext)
 
@@ -3094,7 +3105,7 @@ class KafkaApisTest {
     val throttledPartition = new TopicPartition("throttledData", 0)
     val throttledData = Map(throttledPartition -> "throttledData")
     val expectedSize = FetchResponse.sizeOf(FetchResponseData.HIGHEST_SUPPORTED_VERSION,
-      fetchResponse(throttledData).responseData(topicNames).entrySet.iterator,  topicIdErrors.asJava, topicIds)
+      fetchResponse(throttledData).responseData(topicNames, FetchResponseData.HIGHEST_SUPPORTED_VERSION).entrySet.iterator,  topicIdErrors.asJava, topicIds)
 
     val response = fetchResponse(throttledData ++ Map(new TopicPartition("nonThrottledData", 0) -> "nonThrottledData"))
 

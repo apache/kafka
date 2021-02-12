@@ -419,7 +419,7 @@ private class ReplicaFetcher(name: String, sourceBroker: Node, topicPartitions: 
     }
 
     if (fetchResponse != null) {
-      fetchResponse.responseData(topicNames.asJava).forEach { (tp, partitionData) =>
+      fetchResponse.responseData(topicNames.asJava, ApiKeys.FETCH.latestVersion()).forEach { (tp, partitionData) =>
         replicaBuffer.addFetchedData(tp, sourceBroker.id, partitionData)
       }
     } else {

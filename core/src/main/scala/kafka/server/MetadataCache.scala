@@ -197,6 +197,13 @@ class MetadataCache(brokerId: Int) extends Logging {
     metadataSnapshot.topicNames
   }
 
+  /**
+   * This method returns a map from topic names to IDs and a map from topic IDs to names
+   */
+  def topicIdInfo(): (util.Map[String, Uuid], util.Map[Uuid, String]) = {
+    (metadataSnapshot.topicIds.asJava, metadataSnapshot.topicNames.asJava)
+  }
+
   private def getAllTopics(snapshot: MetadataSnapshot): Set[String] = {
     snapshot.partitionStates.keySet
   }

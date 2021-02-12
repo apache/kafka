@@ -294,7 +294,7 @@ public class Fetcher<K, V> implements Closeable {
                                 return;
                             }
 
-                            Map<TopicPartition, FetchResponse.PartitionData<Records>> responseData = response.responseData(data.topicNames());
+                            Map<TopicPartition, FetchResponse.PartitionData<Records>> responseData = response.responseData(data.topicNames(), maxVersion);
                             Set<TopicPartition> partitions = new HashSet<>(responseData.keySet());
                             FetchResponseMetricAggregator metricAggregator = new FetchResponseMetricAggregator(sensors, partitions);
 

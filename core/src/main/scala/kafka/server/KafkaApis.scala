@@ -662,11 +662,18 @@ class KafkaApis(val requestChannel: RequestChannel,
     val versionId = request.header.apiVersion
     val clientId = request.header.clientId
     val fetchRequest = request.body[FetchRequest]
-    val topicNames = if (fetchRequest.version() >= 13) metadataCache.topicIdsToNames().asJava else Collections.emptyMap[Uuid, String]()
-    val topicIds = if (fetchRequest.version() >= 13) metadataCache.topicNamesToIds().asJava else Collections.emptyMap[String, Uuid]()
+    val (topicIds, topicNames) = metadataCache.topicIdInfo()
+      if (fetchRequest.version() >= 13)
+        metadataCache.topicIdInfo()
+      else
+        (Collections.emptyMap[String, Uuid](), Collections.emptyMap[Uuid, String]())
 
     val fetchContext = fetchManager.newContext(
-      fetchRequest,
+      fetchRequest.version,
+      fetchRequest.metadata,
+      fetchRequest.isFromFollower,
+      fetchRequest.fetchDataAndError(topicNames),
+      fetchRequest.toForgetAndIds(topicNames),
       topicNames,
       topicIds)
 
@@ -856,7 +863,8 @@ class KafkaApis(val requestChannel: RequestChannel,
         unconvertedFetchResponse = fetchContext.updateAndGenerateResponseData(partitions)
         val responseSize = KafkaApis.sizeOfThrottledPartitions(versionId, unconvertedFetchResponse, quotas.leader, fetchContext.getIdErrors().asScala.toList, topicIds)
         quotas.leader.record(responseSize)
-        trace(s"Sending Fetch response with partitions.size=${unconvertedFetchResponse.resolvedResponseData.size}, " +
+        val unresolvedPartitionsSize = fetchContext.getIdErrors().asScala.foldLeft(0)((prev, idError) => prev + idError.partitions().size())
+        trace(s"Sending Fetch response with partitions.size=${unconvertedFetchResponse.resolvedResponseData.size + unresolvedPartitionsSize}, " +
           s"metadata=${unconvertedFetchResponse.sessionId}")
         requestHelper.sendResponseExemptThrottle(request, createResponse(0), Some(updateConversionStats))
       } else {
@@ -888,7 +896,9 @@ class KafkaApis(val requestChannel: RequestChannel,
         } else {
           // Get the actual response. This will update the fetch context.
           unconvertedFetchResponse = fetchContext.updateAndGenerateResponseData(partitions)
-          trace(s"Sending Fetch response with partitions.size=$responseSize, metadata=${unconvertedFetchResponse.sessionId}")
+          val unresolvedPartitionsSize = fetchContext.getIdErrors().asScala.foldLeft(0)((prev, idError) => prev + idError.partitions().size())
+          trace(s"Sending Fetch response with partitions.size=${unconvertedFetchResponse.resolvedResponseData.size + unresolvedPartitionsSize}, " +
+            s"metadata=${unconvertedFetchResponse.sessionId}")
         }
 
         // Send the response immediately.

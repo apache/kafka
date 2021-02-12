@@ -534,7 +534,8 @@ public class FetchSessionHandlerTest {
                         new RespEntry("foo", 1, 10, 20),
                         new RespEntry("bar", 0, 10, 20)),
                 Collections.emptyList(), topicIds, 0, INVALID_SESSION_ID);
-        String issue = handler.verifyFullFetchResponsePartitions(resp1.responseData(topicNames).keySet(), resp1.topicIds(), ApiKeys.FETCH.latestVersion());
+        String issue = handler.verifyFullFetchResponsePartitions(resp1.responseData(topicNames, ApiKeys.FETCH.latestVersion()).keySet(),
+                resp1.topicIds(), ApiKeys.FETCH.latestVersion());
         assertTrue(issue.contains("extra"));
         assertFalse(issue.contains("omitted"));
         FetchSessionHandler.Builder builder = handler.newBuilder();
@@ -550,13 +551,15 @@ public class FetchSessionHandlerTest {
                         new RespEntry("foo", 1, 10, 20),
                         new RespEntry("bar", 0, 10, 20)),
                 Collections.emptyList(), topicIds, 0, INVALID_SESSION_ID);
-        String issue2 = handler.verifyFullFetchResponsePartitions(resp2.responseData(topicNames).keySet(), resp2.topicIds(), ApiKeys.FETCH.latestVersion());
+        String issue2 = handler.verifyFullFetchResponsePartitions(resp2.responseData(topicNames, ApiKeys.FETCH.latestVersion()).keySet(),
+                resp2.topicIds(), ApiKeys.FETCH.latestVersion());
         assertTrue(issue2 == null);
         FetchResponse<MemoryRecords> resp3 = FetchResponse.prepareResponse(Errors.NONE,
                 respMap(new RespEntry("foo", 0, 10, 20),
                         new RespEntry("foo", 1, 10, 20)),
                 Collections.emptyList(), topicIds, 0, INVALID_SESSION_ID);
-        String issue3 = handler.verifyFullFetchResponsePartitions(resp3.responseData(topicNames).keySet(), resp3.topicIds(), ApiKeys.FETCH.latestVersion());
+        String issue3 = handler.verifyFullFetchResponsePartitions(resp3.responseData(topicNames, ApiKeys.FETCH.latestVersion()).keySet(),
+                resp3.topicIds(), ApiKeys.FETCH.latestVersion());
         assertFalse(issue3.contains("extra"));
         assertTrue(issue3.contains("omitted"));
     }
@@ -569,7 +572,7 @@ public class FetchSessionHandlerTest {
                         new RespEntry("foo", 1, 10, 20),
                         new RespEntry("bar", 0, 10, 20)),
                 Collections.emptyList(), EMPTY_IDS, 0, INVALID_SESSION_ID);
-        String issue = handler.verifyFullFetchResponsePartitions(resp1.responseData(topicNames).keySet(), resp1.topicIds(), (short) 12);
+        String issue = handler.verifyFullFetchResponsePartitions(resp1.responseData(topicNames, (short) 12).keySet(), resp1.topicIds(), (short) 12);
         assertTrue(issue.contains("extra"));
         assertFalse(issue.contains("omitted"));
         FetchSessionHandler.Builder builder = handler.newBuilder();
@@ -585,13 +588,13 @@ public class FetchSessionHandlerTest {
                         new RespEntry("foo", 1, 10, 20),
                         new RespEntry("bar", 0, 10, 20)),
                 Collections.emptyList(), EMPTY_IDS, 0, INVALID_SESSION_ID);
-        String issue2 = handler.verifyFullFetchResponsePartitions(resp2.responseData(topicNames).keySet(), resp2.topicIds(), (short) 12);
+        String issue2 = handler.verifyFullFetchResponsePartitions(resp2.responseData(topicNames, (short) 12).keySet(), resp2.topicIds(), (short) 12);
         assertTrue(issue2 == null);
         FetchResponse<MemoryRecords> resp3 = FetchResponse.prepareResponse(Errors.NONE,
                 respMap(new RespEntry("foo", 0, 10, 20),
                         new RespEntry("foo", 1, 10, 20)),
                 Collections.emptyList(), EMPTY_IDS, 0, INVALID_SESSION_ID);
-        String issue3 = handler.verifyFullFetchResponsePartitions(resp3.responseData(topicNames).keySet(), resp3.topicIds(), (short) 12);
+        String issue3 = handler.verifyFullFetchResponsePartitions(resp3.responseData(topicNames, (short) 12).keySet(), resp3.topicIds(), (short) 12);
         assertFalse(issue3.contains("extra"));
         assertTrue(issue3.contains("omitted"));
     }
@@ -609,7 +612,8 @@ public class FetchSessionHandlerTest {
                         new RespEntry("extra", 1, 10, 20),
                         new RespEntry("bar", 0, 10, 20)),
                 Collections.emptyList(), topicIds, 0, INVALID_SESSION_ID);
-        String issue = handler.verifyFullFetchResponsePartitions(resp1.responseData(topicNames).keySet(), resp1.topicIds(), ApiKeys.FETCH.latestVersion());
+        String issue = handler.verifyFullFetchResponsePartitions(resp1.responseData(topicNames, ApiKeys.FETCH.latestVersion()).keySet(),
+                resp1.topicIds(), ApiKeys.FETCH.latestVersion());
         assertTrue(issue.contains("extra="));
         assertTrue(issue.contains("extraIds="));
         assertFalse(issue.contains("omitted"));
@@ -624,7 +628,8 @@ public class FetchSessionHandlerTest {
                         new RespEntry("extra", 1, 10, 20),
                         new RespEntry("bar", 0, 10, 20)),
                 Collections.emptyList(), topicIds, 0, INVALID_SESSION_ID);
-        String issue2 = handler.verifyFullFetchResponsePartitions(resp2.responseData(topicNames).keySet(), resp2.topicIds(), ApiKeys.FETCH.latestVersion());
+        String issue2 = handler.verifyFullFetchResponsePartitions(resp2.responseData(topicNames, ApiKeys.FETCH.latestVersion()).keySet(),
+                resp2.topicIds(), ApiKeys.FETCH.latestVersion());
         assertFalse(issue2.contains("extra="));
         assertTrue(issue2.contains("extraIds="));
         assertFalse(issue2.contains("omitted"));
@@ -633,7 +638,8 @@ public class FetchSessionHandlerTest {
                 respMap(new RespEntry("foo", 0, 10, 20),
                         new RespEntry("bar", 0, 10, 20)),
                 Collections.emptyList(), topicIds, 0, INVALID_SESSION_ID);
-        String issue3 = handler.verifyFullFetchResponsePartitions(resp3.responseData(topicNames).keySet(), resp3.topicIds(), ApiKeys.FETCH.latestVersion());
+        String issue3 = handler.verifyFullFetchResponsePartitions(resp3.responseData(topicNames, ApiKeys.FETCH.latestVersion()).keySet(),
+                resp3.topicIds(), ApiKeys.FETCH.latestVersion());
         assertTrue(issue3 == null);
     }
 

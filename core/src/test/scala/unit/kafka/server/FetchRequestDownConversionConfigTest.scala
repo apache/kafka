@@ -98,7 +98,7 @@ class FetchRequestDownConversionConfigTest extends BaseRequestTest {
     val fetchRequest = FetchRequest.Builder.forConsumer(1, Int.MaxValue, 0, createPartitionMap(1024,
       topicPartitions), topicIds.asJava).build(1)
     val fetchResponse = sendFetchRequest(topicMap.head._2, fetchRequest)
-    topicPartitions.foreach(tp => assertEquals(Errors.UNSUPPORTED_VERSION, fetchResponse.responseData(topicNames.asJava).get(tp).error))
+    topicPartitions.foreach(tp => assertEquals(Errors.UNSUPPORTED_VERSION, fetchResponse.responseData(topicNames.asJava, 1).get(tp).error))
   }
 
   /**
@@ -114,7 +114,7 @@ class FetchRequestDownConversionConfigTest extends BaseRequestTest {
     val fetchRequest = FetchRequest.Builder.forConsumer(ApiKeys.FETCH.latestVersion, Int.MaxValue, 0, createPartitionMap(1024,
       topicPartitions), topicIds.asJava).build()
     val fetchResponse = sendFetchRequest(topicMap.head._2, fetchRequest)
-    topicPartitions.foreach(tp => assertEquals(Errors.NONE, fetchResponse.responseData(topicNames.asJava).get(tp).error))
+    topicPartitions.foreach(tp => assertEquals(Errors.NONE, fetchResponse.responseData(topicNames.asJava, ApiKeys.FETCH.latestVersion).get(tp).error))
   }
 
   /**
@@ -130,7 +130,7 @@ class FetchRequestDownConversionConfigTest extends BaseRequestTest {
     val fetchRequest = FetchRequest.Builder.forConsumer(ApiKeys.FETCH.latestVersion, Int.MaxValue, 0, createPartitionMap(1024,
       topicPartitions), topicIds.asJava).build(12)
     val fetchResponse = sendFetchRequest(topicMap.head._2, fetchRequest)
-    topicPartitions.foreach(tp => assertEquals(Errors.NONE, fetchResponse.responseData(topicNames.asJava).get(tp).error))
+    topicPartitions.foreach(tp => assertEquals(Errors.NONE, fetchResponse.responseData(topicNames.asJava, 12).get(tp).error))
   }
 
   /**
@@ -158,8 +158,8 @@ class FetchRequestDownConversionConfigTest extends BaseRequestTest {
       allTopics), topicIds.asJava).build(1)
     val fetchResponse = sendFetchRequest(leaderId, fetchRequest)
 
-    conversionDisabledTopicPartitions.foreach(tp => assertEquals(Errors.UNSUPPORTED_VERSION, fetchResponse.responseData(topicNames.asJava).get(tp).error))
-    conversionEnabledTopicPartitions.foreach(tp => assertEquals(Errors.NONE, fetchResponse.responseData(topicNames.asJava).get(tp).error))
+    conversionDisabledTopicPartitions.foreach(tp => assertEquals(Errors.UNSUPPORTED_VERSION, fetchResponse.responseData(topicNames.asJava, 1).get(tp).error))
+    conversionEnabledTopicPartitions.foreach(tp => assertEquals(Errors.NONE, fetchResponse.responseData(topicNames.asJava, 1).get(tp).error))
   }
 
   /**
@@ -186,6 +186,6 @@ class FetchRequestDownConversionConfigTest extends BaseRequestTest {
       createPartitionMap(1024, allTopicPartitions), topicIds.asJava).build()
     val fetchResponse = sendFetchRequest(leaderId, fetchRequest)
 
-    allTopicPartitions.foreach(tp => assertEquals(Errors.NONE, fetchResponse.responseData(topicNames.asJava).get(tp).error))
+    allTopicPartitions.foreach(tp => assertEquals(Errors.NONE, fetchResponse.responseData(topicNames.asJava, 1).get(tp).error))
   }
 }

@@ -477,7 +477,7 @@ public class FetcherTest {
     private MockClient.RequestMatcher matchesOffset(final TopicPartition tp, final long offset) {
         return body -> {
             FetchRequest fetch = (FetchRequest) body;
-            Map<TopicPartition, FetchRequest.PartitionData> fetchData =  fetch.fetchData(topicNames);
+            Map<TopicPartition, FetchRequest.PartitionData> fetchData =  fetch.fetchDataAndError(topicNames).fetchData();
             return fetchData.containsKey(tp) &&
                     fetchData.get(tp).fetchOffset == offset;
         };
@@ -1238,7 +1238,7 @@ public class FetcherTest {
         MockClient.RequestMatcher matcher = body -> {
             if (body instanceof FetchRequest) {
                 FetchRequest fetchRequest = (FetchRequest) body;
-                fetchRequest.fetchData(topicNames).values().forEach(partitionData -> {
+                fetchRequest.fetchDataAndError(topicNames).fetchData().values().forEach(partitionData -> {
                     assertTrue(partitionData.currentLeaderEpoch.isPresent(), "Expected Fetcher to set leader epoch in request");
                     assertEquals(99, partitionData.currentLeaderEpoch.get().longValue(), "Expected leader epoch to match epoch from metadata update");
                 });
@@ -3454,7 +3454,7 @@ public class FetcherTest {
                         ClientRequest request = client.requests().peek();
                         FetchRequest fetchRequest = (FetchRequest) request.requestBuilder().build();
                         LinkedHashMap<TopicPartition, FetchResponse.PartitionData<MemoryRecords>> responseMap = new LinkedHashMap<>();
-                        for (Map.Entry<TopicPartition, FetchRequest.PartitionData> entry : fetchRequest.fetchData(topicNames).entrySet()) {
+                        for (Map.Entry<TopicPartition, FetchRequest.PartitionData> entry : fetchRequest.fetchDataAndError(topicNames).fetchData().entrySet()) {
                             TopicPartition tp = entry.getKey();
                             long offset = entry.getValue().fetchOffset;
                             responseMap.put(tp, new FetchResponse.PartitionData<>(Errors.NONE, offset + 2L, offset + 2,

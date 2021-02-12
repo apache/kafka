@@ -487,6 +487,7 @@ public class FetchSessionHandler {
      * Handle the fetch response.
      *
      * @param response  The response.
+     * @param version   The version of the request.
      * @return          True if the response is well-formed; false if it can't be processed
      *                  because of missing or unexpected partitions.
      */
@@ -501,7 +502,7 @@ public class FetchSessionHandler {
             }
             return false;
         }
-        Set<TopicPartition> topicPartitions = response.responseData(sessionTopicNames).keySet();
+        Set<TopicPartition> topicPartitions = response.responseData(sessionTopicNames, version).keySet();
         if (nextMetadata.isFull()) {
             if (topicPartitions.isEmpty() && response.throttleTimeMs() > 0) {
                 // Normally, an empty full fetch response would be invalid.  However, KIP-219

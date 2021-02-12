@@ -645,8 +645,9 @@ public class KafkaConsumerTest {
         client.prepareResponse(
             body -> {
                 FetchRequest request = (FetchRequest) body;
-                return request.fetchData(topicNames).keySet().equals(singleton(tp0)) &&
-                        request.fetchData(topicNames).get(tp0).fetchOffset == 50L;
+                Map<TopicPartition, FetchRequest.PartitionData> fetchData = request.fetchDataAndError(topicNames).fetchData();
+                return fetchData.keySet().equals(singleton(tp0)) &&
+                        fetchData.get(tp0).fetchOffset == 50L;
 
             }, fetchResponse(tp0, 50L, 5));
 
@@ -1696,7 +1697,7 @@ public class KafkaConsumerTest {
         client.prepareResponseFrom(syncGroupResponse(singletonList(tp0), Errors.NONE), coordinator);
 
         client.prepareResponseFrom(body -> body instanceof FetchRequest 
-            && ((FetchRequest) body).fetchData(topicNames).containsKey(tp0), fetchResponse(tp0, 1, 1), node);
+            && ((FetchRequest) body).fetchDataAndError(topicNames).fetchData().containsKey(tp0), fetchResponse(tp0, 1, 1), node);
         time.sleep(heartbeatIntervalMs);
         Thread.sleep(heartbeatIntervalMs);
         consumer.updateAssignmentMetadataIfNeeded(time.timer(Long.MAX_VALUE));
