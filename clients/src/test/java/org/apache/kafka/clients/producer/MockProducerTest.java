@@ -740,18 +740,17 @@ public class MockProducerTest {
     @Test
     public void testMetadataOnException() throws InterruptedException {
         buildMockProducer(false);
-        Future<RecordMetadata> md1 = producer.send(record2, (md, exception) -> {
+        Future<RecordMetadata> metadata = producer.send(record2, (md, exception) -> {
             assertNotNull(md);
             assertEquals(md.offset(), -1L, "Invalid offset");
             assertEquals(md.timestamp(), RecordBatch.NO_TIMESTAMP, "Invalid timestamp");
-            //assertEquals(md.checksum(), -1L, "Invalid checksum");
             assertEquals(md.serializedKeySize(), -1L, "Invalid Serialized Key size");
             assertEquals(md.serializedValueSize(), -1L, "Invalid Serialized value size");
         });
         IllegalArgumentException e = new IllegalArgumentException("dummy exception");
         assertTrue(producer.errorNext(e), "Complete the second request with an error");
         try {
-            md1.get();
+            metadata.get();
             fail("Something went wrong, expected an error");
         } catch (ExecutionException err) {
             assertEquals(e, err.getCause());
