@@ -423,37 +423,6 @@ public class MockAdminClient extends AdminClient {
     }
 
     @Override
-    synchronized public DeleteTopicsWithIdsResult deleteTopicsWithIds(Collection<Uuid> topicsToDelete, DeleteTopicsOptions options) {
-        Map<Uuid, KafkaFuture<Void>> deleteTopicsWithIdsResult = new HashMap<>();
-
-        if (timeoutNextRequests > 0) {
-            for (final Uuid topicId : topicsToDelete) {
-                KafkaFutureImpl<Void> future = new KafkaFutureImpl<>();
-                future.completeExceptionally(new TimeoutException());
-                deleteTopicsWithIdsResult.put(topicId, future);
-            }
-
-            --timeoutNextRequests;
-            return new DeleteTopicsWithIdsResult(deleteTopicsWithIdsResult);
-        }
-
-        for (final Uuid topicId : topicsToDelete) {
-            KafkaFutureImpl<Void> future = new KafkaFutureImpl<>();
-
-            String name = topicNames.remove(topicId);
-            if (name == null || allTopics.remove(name) == null) {
-                future.completeExceptionally(new UnknownTopicOrPartitionException(String.format("Topic %s does not exist.", topicId)));
-            } else {
-                topicIds.remove(name);
-                future.complete(null);
-            }
-            deleteTopicsWithIdsResult.put(topicId, future);
-        }
-
-        return new DeleteTopicsWithIdsResult(deleteTopicsWithIdsResult);
-    }
-
-    @Override
     synchronized public CreatePartitionsResult createPartitions(Map<String, NewPartitions> newPartitions, CreatePartitionsOptions options) {
         throw new UnsupportedOperationException("Not implemented yet");
     }
