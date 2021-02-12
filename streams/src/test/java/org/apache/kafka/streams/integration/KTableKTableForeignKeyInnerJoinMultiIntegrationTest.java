@@ -284,7 +284,6 @@ public class KTableKTableForeignKeyInnerJoinMultiIntegrationTest {
         waitForApplicationState(singletonList(streamsTwo), KafkaStreams.State.RUNNING, Duration.ofSeconds(60));
         waitForApplicationState(singletonList(streams), KafkaStreams.State.RUNNING, Duration.ofSeconds(60));
 
-
 //        startApplicationAndWaitUntilRunning(singletonList(streams), Duration.ofSeconds(60));
 //        startApplicationAndWaitUntilRunning(singletonList(streamsTwo), Duration.ofSeconds(60));
 //        startApplicationAndWaitUntilRunning(singletonList(streamsThree), Duration.ofSeconds(60));
