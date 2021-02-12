@@ -21,14 +21,15 @@ import org.apache.kafka.common.serialization.ByteArraySerializer;
 import org.apache.kafka.common.serialization.IntegerSerializer;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.streams.KeyValue;
-import org.junit.Test;
+import org.junit.jupiter.api.Test;
 
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 
-import static org.junit.Assert.assertArrayEquals;
-import static org.junit.Assert.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 @Deprecated
 public class ConsumerRecordFactoryTest {
@@ -58,69 +59,70 @@ public class ConsumerRecordFactoryTest {
         verifyRecord(topicName, rawKey, rawValue, 5L, factory.create(topicName, rawKey, value));
     }
 
-    @Test(expected = NullPointerException.class)
+    @Test
     public void shouldNotAllowToCreateTopicWithNullTopicName() {
-        factory.create(null, rawKey, value, timestamp);
+        assertThrows(NullPointerException.class, () -> factory.create(null, rawKey, value, timestamp));
     }
 
-    @Test(expected = NullPointerException.class)
+    @Test
     public void shouldNotAllowToCreateTopicWithNullHeaders() {
-        factory.create(topicName, rawKey, value, null, timestamp);
+        assertThrows(NullPointerException.class, () -> factory.create(topicName, rawKey, value, null, timestamp));
     }
 
-    @Test(expected = NullPointerException.class)
+    @Test
     public void shouldNotAllowToCreateTopicWithNullTopicNameWithDefaultTimestamp() {
-        factory.create(null, rawKey, value);
+        assertThrows(NullPointerException.class, () -> factory.create(null, rawKey, value));
     }
 
-    @Test(expected = NullPointerException.class)
+    @Test
     public void shouldNotAllowToCreateTopicWithNullTopicNameWithNullKey() {
-        factory.create((String) null, value, timestamp);
+        assertThrows(NullPointerException.class, () -> factory.create((String) null, value, timestamp));
     }
 
-    @Test(expected = NullPointerException.class)
+    @Test
     public void shouldNotAllowToCreateTopicWithNullTopicNameWithNullKeyAndDefaultTimestamp() {
-        factory.create((String) null, value);
+        assertThrows(NullPointerException.class, () -> factory.create((String) null, value));
     }
 
-    @Test(expected = NullPointerException.class)
+    @Test
     public void shouldNotAllowToCreateTopicWithNullTopicNameWithKeyValuePairs() {
-        factory.create(null, Collections.singletonList(KeyValue.pair(rawKey, value)));
+        assertThrows(NullPointerException.class, () -> factory.create(null, Collections.singletonList(KeyValue.pair(rawKey, value))));
     }
 
-    @Test(expected = NullPointerException.class)
+    @Test
     public void shouldNotAllowToCreateTopicWithNullTopicNameWithKeyValuePairsAndCustomTimestamps() {
-        factory.create(null, Collections.singletonList(KeyValue.pair(rawKey, value)), timestamp, 2L);
+        assertThrows(NullPointerException.class,
+            () -> factory.create(null, Collections.singletonList(KeyValue.pair(rawKey, value)), timestamp, 2L));
     }
 
-    @Test(expected = IllegalStateException.class)
+    @Test
     public void shouldRequireCustomTopicNameIfNotDefaultFactoryTopicName() {
-        defaultFactory.create(rawKey, value, timestamp);
+        assertThrows(IllegalStateException.class, () -> defaultFactory.create(rawKey, value, timestamp));
     }
 
-    @Test(expected = IllegalStateException.class)
+    @Test
     public void shouldRequireCustomTopicNameIfNotDefaultFactoryTopicNameWithDefaultTimestamp() {
-        defaultFactory.create(rawKey, value);
+        assertThrows(IllegalStateException.class, () -> defaultFactory.create(rawKey, value));
     }
 
-    @Test(expected = IllegalStateException.class)
+    @Test
     public void shouldRequireCustomTopicNameIfNotDefaultFactoryTopicNameWithNullKey() {
-        defaultFactory.create(value, timestamp);
+        assertThrows(IllegalStateException.class, () -> defaultFactory.create(value, timestamp));
     }
 
-    @Test(expected = IllegalStateException.class)
+    @Test
     public void shouldRequireCustomTopicNameIfNotDefaultFactoryTopicNameWithNullKeyAndDefaultTimestamp() {
-        defaultFactory.create(value);
+        assertThrows(IllegalStateException.class, () -> defaultFactory.create(value));
     }
 
-    @Test(expected = IllegalStateException.class)
+    @Test
     public void shouldRequireCustomTopicNameIfNotDefaultFactoryTopicNameWithKeyValuePairs() {
-        defaultFactory.create(Collections.singletonList(KeyValue.pair(rawKey, value)));
+        assertThrows(IllegalStateException.class, () -> defaultFactory.create(Collections.singletonList(KeyValue.pair(rawKey, value))));
     }
 
-    @Test(expected = IllegalStateException.class)
+    @Test
     public void shouldRequireCustomTopicNameIfNotDefaultFactoryTopicNameWithKeyValuePairsAndCustomTimestamps() {
-        defaultFactory.create(Collections.singletonList(KeyValue.pair(rawKey, value)), timestamp, 2L);
+        assertThrows(IllegalStateException.class, () -> defaultFactory.create(Collections.singletonList(KeyValue.pair(rawKey, value)), timestamp, 2L));
     }
 
     @Test

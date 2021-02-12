@@ -20,8 +20,8 @@ package kafka.utils
 import java.lang.management.ManagementFactory
 
 import javax.management.ObjectName
-import org.junit.Test
-import org.junit.Assert.{assertEquals, assertTrue}
+import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
 import org.slf4j.LoggerFactory
 
 
@@ -39,7 +39,7 @@ class LoggingTest extends Logging {
   def testLog4jControllerIsRegistered(): Unit = {
     val mbs = ManagementFactory.getPlatformMBeanServer()
     val log4jControllerName = ObjectName.getInstance("kafka:type=kafka.Log4jController")
-    assertTrue("kafka.utils.Log4jController is not registered", mbs.isRegistered(log4jControllerName))
+    assertTrue(mbs.isRegistered(log4jControllerName), "kafka.utils.Log4jController is not registered")
     val instance = mbs.getObjectInstance(log4jControllerName)
     assertEquals("kafka.utils.Log4jController", instance.getClassName)
   }

@@ -23,6 +23,7 @@ import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.Topology.AutoOffsetReset;
 import org.apache.kafka.streams.errors.TopologyException;
+import org.apache.kafka.streams.kstream.Branched;
 import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.kstream.ForeachAction;
 import org.apache.kafka.streams.kstream.Grouped;
@@ -513,16 +514,16 @@ public class StreamsBuilderTest {
             equalTo(Collections.singleton("appId-store-changelog")));
     }
 
-    @Test(expected = TopologyException.class)
+    @Test
     public void shouldThrowExceptionWhenNoTopicPresent() {
         builder.stream(Collections.emptyList());
-        builder.build();
+        assertThrows(TopologyException.class, builder::build);
     }
 
-    @Test(expected = NullPointerException.class)
+    @Test
     public void shouldThrowExceptionWhenTopicNamesAreNull() {
         builder.stream(Arrays.asList(null, null));
-        builder.build();
+        assertThrows(NullPointerException.class, builder::build);
     }
 
     @Test
@@ -644,7 +645,7 @@ public class StreamsBuilderTest {
     }
 
     @Test
-    @SuppressWarnings("unchecked")
+    @SuppressWarnings({"unchecked", "deprecation"})
     public void shouldUseSpecifiedNameForBranchOperation() {
         builder.stream(STREAM_TOPIC)
                .branch(Named.as("branch-processor"), (k, v) -> true, (k, v) -> false);
@@ -656,6 +657,21 @@ public class StreamsBuilderTest {
                                 "branch-processor",
                                 "branch-processor-predicate-0",
                                 "branch-processor-predicate-1");
+    }
+
+    @Test
+    public void shouldUseSpecifiedNameForSplitOperation() {
+        builder.stream(STREAM_TOPIC)
+                .split(Named.as("branch-processor"))
+                .branch((k, v) -> true, Branched.as("-1"))
+                .branch((k, v) -> false, Branched.as("-2"));
+        builder.build();
+        final ProcessorTopology topology = builder.internalTopologyBuilder.rewriteTopology(new StreamsConfig(props)).buildTopology();
+        assertNamesForOperation(topology,
+                "KSTREAM-SOURCE-0000000000",
+                "branch-processor",
+                "branch-processor-1",
+                "branch-processor-2");
     }
 
     @Test

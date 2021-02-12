@@ -14,12 +14,12 @@ package kafka.api
 
 import java.io.File
 import java.util
-
 import kafka.log.LogConfig
 import kafka.server.{Defaults, KafkaConfig}
 import kafka.utils.{CoreUtils, JaasTestUtils, TestUtils}
 import kafka.utils.TestUtils._
 import org.apache.kafka.clients.admin._
+import org.apache.kafka.common.Uuid
 import org.apache.kafka.common.acl._
 import org.apache.kafka.common.acl.AclOperation.{ALTER, ALTER_CONFIGS, CLUSTER_ACTION, CREATE, DELETE, DESCRIBE}
 import org.apache.kafka.common.acl.AclPermissionType.{ALLOW, DENY}
@@ -27,8 +27,8 @@ import org.apache.kafka.common.config.ConfigResource
 import org.apache.kafka.common.errors.{ClusterAuthorizationException, InvalidRequestException, TopicAuthorizationException, UnknownTopicOrPartitionException}
 import org.apache.kafka.common.resource.{PatternType, ResourcePattern, ResourcePatternFilter, ResourceType}
 import org.apache.kafka.common.security.auth.{KafkaPrincipal, SecurityProtocol}
-import org.junit.Assert.{assertEquals, assertTrue}
-import org.junit.{After, Assert, Before, Test}
+import org.junit.jupiter.api.Assertions._
+import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
 
 import scala.annotation.nowarn
 import scala.jdk.CollectionConverters._
@@ -63,7 +63,7 @@ class SaslSslAdminIntegrationTest extends BaseAdminIntegrationTest with SaslSetu
     authorizationAdmin.initializeAcls()
   }
 
-  @Before
+  @BeforeEach
   override def setUp(): Unit = {
     setUpSasl()
     super.setUp()
@@ -73,7 +73,7 @@ class SaslSslAdminIntegrationTest extends BaseAdminIntegrationTest with SaslSetu
     startSasl(jaasSections(Seq("GSSAPI"), Some("GSSAPI"), Both, JaasTestUtils.KafkaServerContextName))
   }
 
-  @After
+  @AfterEach
   override def tearDown(): Unit = {
     super.tearDown()
     closeSasl()
@@ -273,11 +273,7 @@ class SaslSslAdminIntegrationTest extends BaseAdminIntegrationTest with SaslSetu
       AclOperation.DESCRIBE, AclOperation.DESCRIBE_CONFIGS)
   }
 
-  private def verifyCauseIsClusterAuth(e: Throwable): Unit = {
-    if (!e.getCause.isInstanceOf[ClusterAuthorizationException]) {
-      throw e.getCause
-    }
-  }
+  private def verifyCauseIsClusterAuth(e: Throwable): Unit = assertEquals(classOf[ClusterAuthorizationException], e.getCause.getClass)
 
   private def testAclCreateGetDelete(expectAuth: Boolean): Unit = {
     TestUtils.waitUntilTrue(() => {
@@ -427,6 +423,11 @@ class SaslSslAdminIntegrationTest extends BaseAdminIntegrationTest with SaslSetu
     createResult.all.get()
     waitForTopics(client, topics, List())
     validateMetadataAndConfigs(createResult)
+    val topicIds = getTopicIds()
+    assertNotEquals(Uuid.ZERO_UUID, createResult.topicId(topic1).get())
+    assertEquals(topicIds(topic1), createResult.topicId(topic1).get())
+    assertFutureExceptionTypeEquals(createResult.topicId(topic2), classOf[TopicAuthorizationException])
+    
     val createResponseConfig = createResult.config(topic1).get().entries.asScala
 
     val describeResponseConfig = describeConfigs(topic1)
@@ -434,10 +435,10 @@ class SaslSslAdminIntegrationTest extends BaseAdminIntegrationTest with SaslSetu
     describeResponseConfig.foreach { describeEntry =>
       val name = describeEntry.name
       val createEntry = createResponseConfig.find(_.name == name).get
-      assertEquals(s"Value mismatch for $name", describeEntry.value, createEntry.value)
-      assertEquals(s"isReadOnly mismatch for $name", describeEntry.isReadOnly, createEntry.isReadOnly)
-      assertEquals(s"isSensitive mismatch for $name", describeEntry.isSensitive, createEntry.isSensitive)
-      assertEquals(s"Source mismatch for $name", describeEntry.source, createEntry.source)
+      assertEquals(describeEntry.value, createEntry.value, s"Value mismatch for $name")
+      assertEquals(describeEntry.isReadOnly, createEntry.isReadOnly, s"isReadOnly mismatch for $name")
+      assertEquals(describeEntry.isSensitive, createEntry.isSensitive, s"isSensitive mismatch for $name")
+      assertEquals(describeEntry.source, createEntry.source, s"Source mismatch for $name")
     }
   }
 
@@ -515,7 +516,7 @@ class SaslSslAdminIntegrationTest extends BaseAdminIntegrationTest with SaslSetu
       val acls = Set(clusterAcl(permissionType, operation))
       val authorizer = simpleAclAuthorizer
       val prevAcls = authorizer.getAcls(Resource.ClusterResource)
-      Assert.assertTrue(authorizer.removeAcls(acls, Resource.ClusterResource))
+      assertTrue(authorizer.removeAcls(acls, Resource.ClusterResource))
       TestUtils.waitAndVerifyAcls(prevAcls -- acls, authorizer, Resource.ClusterResource)
     }
 

@@ -39,8 +39,9 @@ import org.apache.kafka.common.requests.LeaderAndIsrRequest
 import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.common.serialization.{IntegerDeserializer, IntegerSerializer, StringDeserializer, StringSerializer}
 import org.apache.kafka.common.utils.Time
-import org.junit.{Before, Test}
-import org.junit.Assert._
+import org.apache.kafka.metadata.BrokerState
+import org.junit.jupiter.api.{BeforeEach, Test}
+import org.junit.jupiter.api.Assertions._
 
 import scala.jdk.CollectionConverters._
 import scala.reflect.ClassTag
@@ -52,7 +53,7 @@ class ServerShutdownTest extends ZooKeeperTestHarness {
   val sent1 = List("hello", "there")
   val sent2 = List("more", "messages")
 
-  @Before
+  @BeforeEach
   override def setUp(): Unit = {
     super.setUp()
     val props = TestUtils.createBrokerConfig(0, zkConnect)
@@ -101,7 +102,7 @@ class ServerShutdownTest extends ZooKeeperTestHarness {
     server.startup()
 
     // wait for the broker to receive the update metadata request after startup
-    TestUtils.waitUntilMetadataIsPropagated(Seq(server), topic, 0)
+    TestUtils.waitForPartitionMetadata(Seq(server), topic, 0)
 
     producer = createProducer(server)
     val consumer = createConsumer(server)
@@ -170,11 +171,11 @@ class ServerShutdownTest extends ZooKeeperTestHarness {
       // identify the correct exception, making sure the server was shutdown, and cleaning up if anything
       // goes wrong so that awaitShutdown doesn't hang
       case e: Exception =>
-        assertTrue(s"Unexpected exception $e", exceptionClassTag.runtimeClass.isInstance(e))
-        assertEquals(NotRunning.state, server.brokerState.currentState)
+        assertTrue(exceptionClassTag.runtimeClass.isInstance(e), s"Unexpected exception $e")
+        assertEquals(BrokerState.NOT_RUNNING, server.brokerState)
     }
     finally {
-      if (server.brokerState.currentState != NotRunning.state)
+      if (server.brokerState != BrokerState.NOT_RUNNING)
         server.shutdown()
       server.awaitShutdown()
     }

@@ -23,166 +23,171 @@ import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.utils.Utils;
 
 import java.net.InetSocketAddress;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Properties;
 import java.util.Set;
 
-import static org.apache.kafka.clients.CommonClientConfigs.REQUEST_TIMEOUT_MS_DOC;
-import static org.apache.kafka.common.config.ConfigDef.Range.atLeast;
+/**
+ * RaftConfig encapsulates configuration specific to the Raft quorum voter nodes.
+ * Specifically, this class parses the voter node endpoints into an AddressSpec
+ * for use with the KafkaRaftClient/KafkaNetworkChannel.
+ *
+ * If the voter endpoints are not known at startup, a non-routable address can be provided instead.
+ * For example: `1@0.0.0.0:0,2@0.0.0.0:0,3@0.0.0.0:0`
+ * This will assign an {@link UnknownAddressSpec} to the voter entries
+ *
+ */
+public class RaftConfig {
 
-public class RaftConfig extends AbstractConfig {
-    private static final ConfigDef CONFIG;
+    private static final String QUORUM_PREFIX = "controller.quorum.";
 
-    private static final String QUORUM_PREFIX = "quorum.";
+    // Non-routable address represents an endpoint that does not resolve to any particular node
+    public static final InetSocketAddress NON_ROUTABLE_ADDRESS = new InetSocketAddress("0.0.0.0", 0);
+    public static final UnknownAddressSpec UNKNOWN_ADDRESS_SPEC_INSTANCE = new UnknownAddressSpec();
 
     public static final String QUORUM_VOTERS_CONFIG = QUORUM_PREFIX + "voters";
-    private static final String QUORUM_VOTERS_DOC = "Map of id/endpoint information for " +
+    public static final String QUORUM_VOTERS_DOC = "Map of id/endpoint information for " +
         "the set of voters in a comma-separated list of `{id}@{host}:{port}` entries. " +
         "For example: `1@localhost:9092,2@localhost:9093,3@localhost:9094`";
+    public static final List<String> DEFAULT_QUORUM_VOTERS = Collections.emptyList();
 
     public static final String QUORUM_ELECTION_TIMEOUT_MS_CONFIG = QUORUM_PREFIX + "election.timeout.ms";
-    private static final String QUORUM_ELECTION_TIMEOUT_MS_DOC = "Maximum time in milliseconds to wait " +
+    public static final String QUORUM_ELECTION_TIMEOUT_MS_DOC = "Maximum time in milliseconds to wait " +
         "without being able to fetch from the leader before triggering a new election";
+    public static final int DEFAULT_QUORUM_ELECTION_TIMEOUT_MS = 5_000;
 
     public static final String QUORUM_FETCH_TIMEOUT_MS_CONFIG = QUORUM_PREFIX + "fetch.timeout.ms";
-    private static final String QUORUM_FETCH_TIMEOUT_MS_DOC = "Maximum time without a successful fetch from " +
+    public static final String QUORUM_FETCH_TIMEOUT_MS_DOC = "Maximum time without a successful fetch from " +
         "the current leader before becoming a candidate and triggering a election for voters; Maximum time without " +
         "receiving fetch from a majority of the quorum before asking around to see if there's a new epoch for leader";
+    public static final int DEFAULT_QUORUM_FETCH_TIMEOUT_MS = 15_000;
 
     public static final String QUORUM_ELECTION_BACKOFF_MAX_MS_CONFIG = QUORUM_PREFIX + "election.backoff.max.ms";
-    private static final String QUORUM_ELECTION_BACKOFF_MAX_MS_DOC = "Maximum time in milliseconds before starting new elections. " +
+    public static final String QUORUM_ELECTION_BACKOFF_MAX_MS_DOC = "Maximum time in milliseconds before starting new elections. " +
         "This is used in the binary exponential backoff mechanism that helps prevent gridlocked elections";
+    public static final int DEFAULT_QUORUM_ELECTION_BACKOFF_MAX_MS = 5_000;
 
     public static final String QUORUM_LINGER_MS_CONFIG = QUORUM_PREFIX + "append.linger.ms";
-    private static final String QUORUM_LINGER_MS_DOC = "The duration in milliseconds that the leader will " +
+    public static final String QUORUM_LINGER_MS_DOC = "The duration in milliseconds that the leader will " +
         "wait for writes to accumulate before flushing them to disk.";
+    public static final int DEFAULT_QUORUM_LINGER_MS = 25;
 
-    private static final String QUORUM_REQUEST_TIMEOUT_MS_CONFIG = QUORUM_PREFIX +
+    public static final String QUORUM_REQUEST_TIMEOUT_MS_CONFIG = QUORUM_PREFIX +
         CommonClientConfigs.REQUEST_TIMEOUT_MS_CONFIG;
+    public static final String QUORUM_REQUEST_TIMEOUT_MS_DOC = CommonClientConfigs.REQUEST_TIMEOUT_MS_DOC;
+    public static final int DEFAULT_QUORUM_REQUEST_TIMEOUT_MS = 20_000;
 
-    private static final String QUORUM_RETRY_BACKOFF_MS_CONFIG = QUORUM_PREFIX +
+    public static final String QUORUM_RETRY_BACKOFF_MS_CONFIG = QUORUM_PREFIX +
         CommonClientConfigs.RETRY_BACKOFF_MS_CONFIG;
+    public static final String QUORUM_RETRY_BACKOFF_MS_DOC = CommonClientConfigs.RETRY_BACKOFF_MS_DOC;
+    public static final int DEFAULT_QUORUM_RETRY_BACKOFF_MS = 100;
 
-    static {
-        CONFIG = new ConfigDef()
-            .define(QUORUM_REQUEST_TIMEOUT_MS_CONFIG,
-                ConfigDef.Type.INT,
-                20000,
-                atLeast(0),
-                ConfigDef.Importance.MEDIUM,
-                REQUEST_TIMEOUT_MS_DOC)
-            .define(QUORUM_RETRY_BACKOFF_MS_CONFIG,
-                ConfigDef.Type.INT,
-                100,
-                atLeast(0L),
-                ConfigDef.Importance.LOW,
-                CommonClientConfigs.RETRY_BACKOFF_MS_DOC)
-            .define(QUORUM_VOTERS_CONFIG,
-                ConfigDef.Type.LIST,
-                ConfigDef.NO_DEFAULT_VALUE,
-                new ConfigDef.Validator() {
-                    @Override
-                    public void ensureValid(String name, Object value) {
-                        if (value == null) {
-                            throw new ConfigException(name, null);
-                        }
+    private final int requestTimeoutMs;
+    private final int retryBackoffMs;
+    private final int electionTimeoutMs;
+    private final int electionBackoffMaxMs;
+    private final int fetchTimeoutMs;
+    private final int appendLingerMs;
+    private final Map<Integer, AddressSpec> voterConnections;
 
-                        @SuppressWarnings("unchecked")
-                        Map<Integer, InetSocketAddress> voterConnections = parseVoterConnections((List) value);
-                        if (voterConnections.isEmpty()) {
-                            throw new ConfigException(name, value);
-                        }
-                    }
-
-                    @Override
-                    public String toString() {
-                        return "non-empty list";
-                    }
-                },
-                ConfigDef.Importance.HIGH,
-                QUORUM_VOTERS_DOC)
-            .define(QUORUM_ELECTION_TIMEOUT_MS_CONFIG,
-                ConfigDef.Type.INT,
-                5000,
-                atLeast(0L),
-                ConfigDef.Importance.HIGH,
-                QUORUM_ELECTION_TIMEOUT_MS_DOC)
-            .define(QUORUM_ELECTION_BACKOFF_MAX_MS_CONFIG,
-                ConfigDef.Type.INT,
-                5000,
-                atLeast(0),
-                ConfigDef.Importance.HIGH,
-                QUORUM_ELECTION_BACKOFF_MAX_MS_DOC)
-            .define(QUORUM_FETCH_TIMEOUT_MS_CONFIG,
-                ConfigDef.Type.INT,
-                15000,
-                atLeast(0),
-                ConfigDef.Importance.HIGH,
-                QUORUM_FETCH_TIMEOUT_MS_DOC)
-            .define(QUORUM_LINGER_MS_CONFIG,
-                ConfigDef.Type.INT,
-                25,
-                atLeast(0),
-                ConfigDef.Importance.MEDIUM,
-                QUORUM_LINGER_MS_DOC);
+    public interface AddressSpec {
     }
 
-    public RaftConfig(Properties props) {
-        super(CONFIG, props);
+    public static class InetAddressSpec implements AddressSpec {
+        public final InetSocketAddress address;
+
+        public InetAddressSpec(InetSocketAddress address) {
+            if (address == null || address.equals(NON_ROUTABLE_ADDRESS)) {
+                throw new IllegalArgumentException("Invalid address: " + address);
+            }
+            this.address = address;
+        }
+
+        @Override
+        public int hashCode() {
+            return address.hashCode();
+        }
+
+        @Override
+        public boolean equals(Object obj) {
+            if (this == obj) {
+                return true;
+            }
+
+            if (obj == null || getClass() != obj.getClass()) {
+                return false;
+            }
+
+            final InetAddressSpec that = (InetAddressSpec) obj;
+            return that.address.equals(address);
+        }
     }
 
-    public RaftConfig(Map<String, Object> props) {
-        super(CONFIG, props);
+    public static class UnknownAddressSpec implements AddressSpec {
+        private UnknownAddressSpec() {
+        }
     }
 
-    protected RaftConfig(Map<?, ?> props, boolean doLog) {
-        super(CONFIG, props, doLog);
+    public RaftConfig(AbstractConfig abstractConfig) {
+        this(parseVoterConnections(abstractConfig.getList(QUORUM_VOTERS_CONFIG)),
+            abstractConfig.getInt(QUORUM_REQUEST_TIMEOUT_MS_CONFIG),
+            abstractConfig.getInt(QUORUM_RETRY_BACKOFF_MS_CONFIG),
+            abstractConfig.getInt(QUORUM_ELECTION_TIMEOUT_MS_CONFIG),
+            abstractConfig.getInt(QUORUM_ELECTION_BACKOFF_MAX_MS_CONFIG),
+            abstractConfig.getInt(QUORUM_FETCH_TIMEOUT_MS_CONFIG),
+            abstractConfig.getInt(QUORUM_LINGER_MS_CONFIG));
     }
 
-    public static Set<String> configNames() {
-        return CONFIG.names();
-    }
-
-    public static ConfigDef configDef() {
-        return new ConfigDef(CONFIG);
-    }
-
-    public static void main(String[] args) {
-        System.out.println(CONFIG.toHtml());
+    public RaftConfig(
+        Map<Integer, AddressSpec> voterConnections,
+        int requestTimeoutMs,
+        int retryBackoffMs,
+        int electionTimeoutMs,
+        int electionBackoffMaxMs,
+        int fetchTimeoutMs,
+        int appendLingerMs
+    ) {
+        this.voterConnections = voterConnections;
+        this.requestTimeoutMs = requestTimeoutMs;
+        this.retryBackoffMs = retryBackoffMs;
+        this.electionTimeoutMs = electionTimeoutMs;
+        this.electionBackoffMaxMs = electionBackoffMaxMs;
+        this.fetchTimeoutMs = fetchTimeoutMs;
+        this.appendLingerMs = appendLingerMs;
     }
 
     public int requestTimeoutMs() {
-        return getInt(QUORUM_REQUEST_TIMEOUT_MS_CONFIG);
+        return requestTimeoutMs;
     }
 
     public int retryBackoffMs() {
-        return getInt(QUORUM_RETRY_BACKOFF_MS_CONFIG);
+        return retryBackoffMs;
     }
 
     public int electionTimeoutMs() {
-        return getInt(QUORUM_ELECTION_TIMEOUT_MS_CONFIG);
+        return electionTimeoutMs;
     }
 
     public int electionBackoffMaxMs() {
-        return getInt(QUORUM_ELECTION_BACKOFF_MAX_MS_CONFIG);
+        return electionBackoffMaxMs;
     }
 
     public int fetchTimeoutMs() {
-        return getInt(QUORUM_FETCH_TIMEOUT_MS_CONFIG);
+        return fetchTimeoutMs;
     }
 
     public int appendLingerMs() {
-        return getInt(QUORUM_LINGER_MS_CONFIG);
+        return appendLingerMs;
     }
 
     public Set<Integer> quorumVoterIds() {
         return quorumVoterConnections().keySet();
     }
 
-    public Map<Integer, InetSocketAddress> quorumVoterConnections() {
-        return parseVoterConnections(getList(QUORUM_VOTERS_CONFIG));
+    public Map<Integer, AddressSpec> quorumVoterConnections() {
+        return voterConnections;
     }
 
     private static Integer parseVoterId(String idString) {
@@ -193,9 +198,8 @@ public class RaftConfig extends AbstractConfig {
         }
     }
 
-    private static Map<Integer, InetSocketAddress> parseVoterConnections(List<String> voterEntries) {
-        Map<Integer, InetSocketAddress> voterMap = new HashMap<>();
-
+    public static Map<Integer, AddressSpec> parseVoterConnections(List<String> voterEntries) {
+        Map<Integer, AddressSpec> voterMap = new HashMap<>();
         for (String voterMapEntry : voterEntries) {
             String[] idAndAddress = voterMapEntry.split("@");
             if (idAndAddress.length != 2) {
@@ -218,11 +222,34 @@ public class RaftConfig extends AbstractConfig {
                     + ". Each entry should be in the form `{id}@{host}:{port}`.");
             }
 
-            voterMap.put(voterId, new InetSocketAddress(host, port));
+            InetSocketAddress address = new InetSocketAddress(host, port);
+            if (address.equals(NON_ROUTABLE_ADDRESS)) {
+                voterMap.put(voterId, UNKNOWN_ADDRESS_SPEC_INSTANCE);
+            } else {
+                voterMap.put(voterId, new InetAddressSpec(address));
+            }
         }
 
         return voterMap;
-
     }
 
+    public static class ControllerQuorumVotersValidator implements ConfigDef.Validator {
+        @Override
+        public void ensureValid(String name, Object value) {
+            if (value == null) {
+                throw new ConfigException(name, null);
+            }
+
+            @SuppressWarnings("unchecked")
+            List<String> voterStrings = (List) value;
+
+            // Attempt to parse the connect strings
+            parseVoterConnections(voterStrings);
+        }
+
+        @Override
+        public String toString() {
+            return "non-empty list";
+        }
+    }
 }

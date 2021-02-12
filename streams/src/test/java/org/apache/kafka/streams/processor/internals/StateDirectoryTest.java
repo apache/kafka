@@ -16,6 +16,13 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
+import com.fasterxml.jackson.annotation.JsonProperty;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import java.io.BufferedWriter;
+import java.io.FileOutputStream;
+import java.io.OutputStreamWriter;
+import java.nio.charset.StandardCharsets;
+import java.util.UUID;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Utils;
@@ -35,7 +42,6 @@ import java.nio.channels.FileChannel;
 import java.nio.channels.OverlappingFileLockException;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.Paths;
 import java.nio.file.StandardOpenOption;
 import java.nio.file.attribute.PosixFilePermission;
 import java.time.Duration;
@@ -51,11 +57,15 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
 
+import static org.apache.kafka.common.utils.Utils.mkEntry;
+import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.common.utils.Utils.mkSet;
 import static org.apache.kafka.streams.processor.internals.StateDirectory.LOCK_FILE_NAME;
+import static org.apache.kafka.streams.processor.internals.StateDirectory.PROCESS_FILE_NAME;
 import static org.apache.kafka.streams.processor.internals.StateManagerUtil.CHECKPOINT_FILE_NAME;
 import static org.hamcrest.CoreMatchers.containsString;
 import static org.hamcrest.CoreMatchers.endsWith;
+import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.CoreMatchers.hasItem;
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.CoreMatchers.not;
@@ -67,7 +77,6 @@ import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
-
 
 public class StateDirectoryTest {
 
@@ -114,22 +123,29 @@ public class StateDirectoryTest {
 
     @Test
     public void shouldHaveSecurePermissions() {
-        final Set<PosixFilePermission> expectedPermissions = EnumSet.of(
-            PosixFilePermission.OWNER_EXECUTE,
-            PosixFilePermission.GROUP_READ,
-            PosixFilePermission.OWNER_WRITE,
-            PosixFilePermission.GROUP_EXECUTE,
-            PosixFilePermission.OWNER_READ);
-
-        final Path statePath = Paths.get(stateDir.getPath());
-        final Path basePath = Paths.get(appDir.getPath());
-        try {
-            final Set<PosixFilePermission> baseFilePermissions = Files.getPosixFilePermissions(statePath);
-            final Set<PosixFilePermission> appFilePermissions = Files.getPosixFilePermissions(basePath);
-            assertThat(expectedPermissions.equals(baseFilePermissions), is(true));
-            assertThat(expectedPermissions.equals(appFilePermissions), is(true));
-        } catch (final IOException e) {
-            fail("Should create correct files and set correct permissions");
+        assertPermissions(stateDir);
+        assertPermissions(appDir);
+    }
+    
+    private void assertPermissions(final File file) {
+        final Path path = file.toPath();
+        if (path.getFileSystem().supportedFileAttributeViews().contains("posix")) {
+            final Set<PosixFilePermission> expectedPermissions = EnumSet.of(
+                    PosixFilePermission.OWNER_EXECUTE,
+                    PosixFilePermission.GROUP_READ,
+                    PosixFilePermission.OWNER_WRITE,
+                    PosixFilePermission.GROUP_EXECUTE,
+                    PosixFilePermission.OWNER_READ);
+            try {
+                final Set<PosixFilePermission> filePermissions = Files.getPosixFilePermissions(path);
+                assertThat(expectedPermissions, equalTo(filePermissions));
+            } catch (final IOException e) {
+                fail("Should create correct files and set correct permissions");
+            }
+        } else {
+            assertThat(file.canRead(), is(true));
+            assertThat(file.canWrite(), is(true));
+            assertThat(file.canExecute(), is(true));
         }
     }
 
@@ -314,7 +330,6 @@ public class StateDirectoryTest {
             directory.unlock(task1);
         }
     }
-
 
     @Test
     public void shouldCleanupStateDirectoriesWhenLastModifiedIsLessThanNowMinusCleanupDelay() {
@@ -545,9 +560,13 @@ public class StateDirectoryTest {
 
     @Test
     public void shouldNotCreateBaseDirectory() throws IOException {
-        initializeStateDirectory(false);
-        assertFalse(stateDir.exists());
-        assertFalse(appDir.exists());
+        try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(StateDirectory.class)) {
+            initializeStateDirectory(false);
+            assertThat(stateDir.exists(), is(false));
+            assertThat(appDir.exists(), is(false));
+            assertThat(appender.getMessages(),
+                not(hasItem(containsString("Error changing permissions for the state or base directory"))));
+        }
     }
 
     @Test
@@ -629,7 +648,95 @@ public class StateDirectoryTest {
             final long cleanupDelayMs = 0;
             time.sleep(5000);
             directory.cleanRemovedTasks(cleanupDelayMs);
-            assertThat(appender.getMessages(), hasItem(endsWith("ms has elapsed (cleanup delay is " +  cleanupDelayMs + "ms).")));
+            assertThat(appender.getMessages(), hasItem(endsWith("ms has elapsed (cleanup delay is " + cleanupDelayMs + "ms).")));
+        }
+    }
+
+    @Test
+    public void shouldLogTempDirMessage() {
+        try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(StateDirectory.class)) {
+            new StateDirectory(
+                new StreamsConfig(
+                    mkMap(
+                        mkEntry(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, ""),
+                        mkEntry(StreamsConfig.APPLICATION_ID_CONFIG, "")
+                    )
+                ),
+                new MockTime(),
+                true
+            );
+            assertThat(
+                appender.getMessages(),
+                hasItem("Using an OS temp directory in the state.dir property can cause failures with writing the" +
+                            " checkpoint file due to the fact that this directory can be cleared by the OS." +
+                            " Resolved state.dir: [" + System.getProperty("java.io.tmpdir") + "/kafka-streams]")
+            );
+        }
+    }
+
+    @Test
+    public void shouldPersistProcessIdAcrossRestart() {
+        final UUID processId = directory.initializeProcessId();
+        directory.close();
+        assertThat(directory.initializeProcessId(), equalTo(processId));
+    }
+
+    @Test
+    public void shouldGetFreshProcessIdIfProcessFileDeleted() {
+        final UUID processId = directory.initializeProcessId();
+        directory.close();
+
+        final File processFile = new File(appDir, PROCESS_FILE_NAME);
+        assertThat(processFile.exists(), is(true));
+        assertThat(processFile.delete(), is(true));
+
+        assertThat(directory.initializeProcessId(), not(processId));
+    }
+
+    @Test
+    public void shouldGetFreshProcessIdIfJsonUnreadable() throws Exception {
+        final File processFile = new File(appDir, PROCESS_FILE_NAME);
+        assertThat(processFile.createNewFile(), is(true));
+        final UUID processId = UUID.randomUUID();
+
+        final FileOutputStream fileOutputStream = new FileOutputStream(processFile);
+        try (final BufferedWriter writer = new BufferedWriter(
+            new OutputStreamWriter(fileOutputStream, StandardCharsets.UTF_8))) {
+            writer.write(processId.toString());
+            writer.flush();
+            fileOutputStream.getFD().sync();
+        }
+
+        assertThat(directory.initializeProcessId(), not(processId));
+    }
+
+    @Test
+    public void shouldReadFutureProcessFileFormat() throws Exception {
+        final File processFile = new File(appDir, PROCESS_FILE_NAME);
+        final ObjectMapper mapper = new ObjectMapper();
+        final UUID processId = UUID.randomUUID();
+        mapper.writeValue(processFile, new FutureStateDirectoryProcessFile(processId, "some random junk"));
+
+        assertThat(directory.initializeProcessId(), equalTo(processId));
+    }
+
+    private static class FutureStateDirectoryProcessFile {
+
+        @JsonProperty
+        private final UUID processId;
+
+        @JsonProperty
+        private final String newField;
+
+        public FutureStateDirectoryProcessFile() {
+            this.processId = null;
+            this.newField = null;
+        }
+
+        FutureStateDirectoryProcessFile(final UUID processId, final String newField) {
+            this.processId = processId;
+            this.newField = newField;
+
         }
     }
 

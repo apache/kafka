@@ -27,6 +27,7 @@ import org.apache.kafka.clients.consumer.internals.ConsumerCoordinator;
 import org.apache.kafka.clients.consumer.internals.ConsumerInterceptors;
 import org.apache.kafka.clients.consumer.internals.ConsumerMetadata;
 import org.apache.kafka.clients.consumer.internals.ConsumerNetworkClient;
+import org.apache.kafka.clients.consumer.internals.FetchedRecords;
 import org.apache.kafka.clients.consumer.internals.Fetcher;
 import org.apache.kafka.clients.consumer.internals.FetcherMetricsRegistry;
 import org.apache.kafka.clients.consumer.internals.KafkaConsumerMetrics;
@@ -1234,7 +1235,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
                     }
                 }
 
-                final Map<TopicPartition, List<ConsumerRecord<K, V>>> records = pollForFetches(timer);
+                final FetchedRecords<K, V> records = pollForFetches(timer);
                 if (!records.isEmpty()) {
                     // before returning the fetched records, we can send off the next round of fetches
                     // and avoid block waiting for their responses to enable pipelining while the user
@@ -1268,12 +1269,12 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
     /**
      * @throws KafkaException if the rebalance callback throws exception
      */
-    private Map<TopicPartition, List<ConsumerRecord<K, V>>> pollForFetches(Timer timer) {
+    private FetchedRecords<K, V> pollForFetches(Timer timer) {
         long pollTimeout = coordinator == null ? timer.remainingMs() :
                 Math.min(coordinator.timeToNextPoll(timer.currentTimeMs()), timer.remainingMs());
 
         // if data is available already, return it immediately
-        final Map<TopicPartition, List<ConsumerRecord<K, V>>> records = fetcher.fetchedRecords();
+        final FetchedRecords<K, V> records = fetcher.fetchedRecords();
         if (!records.isEmpty()) {
             return records;
         }

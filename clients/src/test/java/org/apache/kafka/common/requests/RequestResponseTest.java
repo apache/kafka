@@ -46,8 +46,12 @@ import org.apache.kafka.common.message.AlterReplicaLogDirsRequestData.AlterRepli
 import org.apache.kafka.common.message.AlterReplicaLogDirsResponseData;
 import org.apache.kafka.common.message.ApiVersionsRequestData;
 import org.apache.kafka.common.message.ApiVersionsResponseData;
-import org.apache.kafka.common.message.ApiVersionsResponseData.ApiVersionsResponseKey;
-import org.apache.kafka.common.message.ApiVersionsResponseData.ApiVersionsResponseKeyCollection;
+import org.apache.kafka.common.message.ApiVersionsResponseData.ApiVersion;
+import org.apache.kafka.common.message.ApiVersionsResponseData.ApiVersionCollection;
+import org.apache.kafka.common.message.BrokerHeartbeatRequestData;
+import org.apache.kafka.common.message.BrokerHeartbeatResponseData;
+import org.apache.kafka.common.message.BrokerRegistrationRequestData;
+import org.apache.kafka.common.message.BrokerRegistrationResponseData;
 import org.apache.kafka.common.message.ControlledShutdownRequestData;
 import org.apache.kafka.common.message.ControlledShutdownResponseData;
 import org.apache.kafka.common.message.ControlledShutdownResponseData.RemainingPartition;
@@ -83,6 +87,10 @@ import org.apache.kafka.common.message.DescribeAclsResponseData;
 import org.apache.kafka.common.message.DescribeAclsResponseData.AclDescription;
 import org.apache.kafka.common.message.DescribeAclsResponseData.DescribeAclsResource;
 import org.apache.kafka.common.message.DescribeClientQuotasResponseData;
+import org.apache.kafka.common.message.DescribeClusterRequestData;
+import org.apache.kafka.common.message.DescribeClusterResponseData;
+import org.apache.kafka.common.message.DescribeClusterResponseData.DescribeClusterBroker;
+import org.apache.kafka.common.message.DescribeClusterResponseData.DescribeClusterBrokerCollection;
 import org.apache.kafka.common.message.DescribeConfigsRequestData;
 import org.apache.kafka.common.message.DescribeConfigsResponseData;
 import org.apache.kafka.common.message.DescribeConfigsResponseData.DescribeConfigsResourceResult;
@@ -90,6 +98,8 @@ import org.apache.kafka.common.message.DescribeConfigsResponseData.DescribeConfi
 import org.apache.kafka.common.message.DescribeGroupsRequestData;
 import org.apache.kafka.common.message.DescribeGroupsResponseData;
 import org.apache.kafka.common.message.DescribeGroupsResponseData.DescribedGroup;
+import org.apache.kafka.common.message.DescribeProducersRequestData;
+import org.apache.kafka.common.message.DescribeProducersResponseData;
 import org.apache.kafka.common.message.ElectLeadersResponseData.PartitionResult;
 import org.apache.kafka.common.message.ElectLeadersResponseData.ReplicaElectionResult;
 import org.apache.kafka.common.message.EndTxnRequestData;
@@ -154,6 +164,8 @@ import org.apache.kafka.common.message.StopReplicaResponseData;
 import org.apache.kafka.common.message.SyncGroupRequestData;
 import org.apache.kafka.common.message.SyncGroupRequestData.SyncGroupRequestAssignment;
 import org.apache.kafka.common.message.SyncGroupResponseData;
+import org.apache.kafka.common.message.UnregisterBrokerRequestData;
+import org.apache.kafka.common.message.UnregisterBrokerResponseData;
 import org.apache.kafka.common.message.UpdateMetadataRequestData.UpdateMetadataBroker;
 import org.apache.kafka.common.message.UpdateMetadataRequestData.UpdateMetadataEndpoint;
 import org.apache.kafka.common.message.UpdateMetadataRequestData.UpdateMetadataPartitionState;
@@ -184,7 +196,7 @@ import org.apache.kafka.common.security.token.delegation.DelegationToken;
 import org.apache.kafka.common.security.token.delegation.TokenInformation;
 import org.apache.kafka.common.utils.SecurityUtils;
 import org.apache.kafka.common.utils.Utils;
-import org.junit.Test;
+import org.junit.jupiter.api.Test;
 
 import java.nio.BufferUnderflowException;
 import java.nio.ByteBuffer;
@@ -210,13 +222,13 @@ import static org.apache.kafka.common.protocol.ApiKeys.LIST_GROUPS;
 import static org.apache.kafka.common.protocol.ApiKeys.LIST_OFFSETS;
 import static org.apache.kafka.common.protocol.ApiKeys.SYNC_GROUP;
 import static org.apache.kafka.common.requests.FetchMetadata.INVALID_SESSION_ID;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.assertNull;
-import static org.junit.Assert.assertThrows;
-import static org.junit.Assert.assertTrue;
-import static org.junit.Assert.fail;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.fail;
 
 public class RequestResponseTest {
 
@@ -510,6 +522,72 @@ public class RequestResponseTest {
     }
 
     @Test
+    public void testBrokerHeartbeatSerialization() {
+        for (short v = ApiKeys.BROKER_HEARTBEAT.oldestVersion(); v <= ApiKeys.BROKER_HEARTBEAT.latestVersion(); v++) {
+            checkRequest(createBrokerHeartbeatRequest(v), true);
+            checkErrorResponse(createBrokerHeartbeatRequest(v), unknownServerException, true);
+            checkResponse(createBrokerHeartbeatResponse(), v, true);
+        }
+    }
+
+    @Test
+    public void testBrokerRegistrationSerialization() {
+        for (short v = ApiKeys.BROKER_REGISTRATION.oldestVersion(); v <= ApiKeys.BROKER_REGISTRATION.latestVersion(); v++) {
+            checkRequest(createBrokerRegistrationRequest(v), true);
+            checkErrorResponse(createBrokerRegistrationRequest(v), unknownServerException, true);
+            checkResponse(createBrokerRegistrationResponse(), 0, true);
+        }
+    }
+
+    @Test
+    public void testDescribeProducersSerialization() throws Exception {
+        for (short v = ApiKeys.DESCRIBE_PRODUCERS.oldestVersion(); v <= ApiKeys.DESCRIBE_PRODUCERS.latestVersion(); v++) {
+            checkRequest(createDescribeProducersRequest(v), true);
+            checkErrorResponse(createDescribeProducersRequest(v), unknownServerException, true);
+            checkResponse(createDescribeProducersResponse(), v, true);
+        }
+    }
+
+    @Test
+    public void testDescribeClusterSerialization() throws Exception {
+        for (short v = ApiKeys.DESCRIBE_CLUSTER.oldestVersion(); v <= ApiKeys.DESCRIBE_CLUSTER.latestVersion(); v++) {
+            checkRequest(createDescribeClusterRequest(v), true);
+            checkErrorResponse(createDescribeClusterRequest(v), unknownServerException, true);
+            checkResponse(createDescribeClusterResponse(), v, true);
+        }
+    }
+
+    @Test
+    public void testUnregisterBrokerSerialization() {
+        for (short v = ApiKeys.UNREGISTER_BROKER.oldestVersion(); v <= ApiKeys.UNREGISTER_BROKER.latestVersion(); v++) {
+            checkRequest(createUnregisterBrokerRequest(v), true);
+            checkErrorResponse(createUnregisterBrokerRequest(v), unknownServerException, true);
+            checkResponse(createUnregisterBrokerResponse(), v, true);
+        }
+    }
+
+    private DescribeClusterRequest createDescribeClusterRequest(short version) {
+        return new DescribeClusterRequest.Builder(
+            new DescribeClusterRequestData()
+                .setIncludeClusterAuthorizedOperations(true))
+            .build(version);
+    }
+
+    private DescribeClusterResponse createDescribeClusterResponse() {
+        return new DescribeClusterResponse(
+            new DescribeClusterResponseData()
+                .setBrokers(new DescribeClusterBrokerCollection(
+                    Collections.singletonList(new DescribeClusterBroker()
+                        .setBrokerId(1)
+                        .setHost("localhost")
+                        .setPort(9092)
+                        .setRack("rack1")).iterator()))
+                .setClusterId("clusterId")
+                .setControllerId(1)
+                .setClusterAuthorizedOperations(10));
+    }
+
+    @Test
     public void testResponseHeader() {
         ResponseHeader header = createResponseHeader((short) 1);
         ObjectSerializationCache serializationCache = new ObjectSerializationCache();
@@ -541,25 +619,25 @@ public class RequestResponseTest {
                 DescribeConfigsResourceResult actualEntry = actualEntries.get(i);
                 DescribeConfigsResourceResult expectedEntry = expectedEntries.get(i);
                 assertEquals(expectedEntry.name(), actualEntry.name());
-                assertEquals("Non-matching values for " + actualEntry.name() + " in version " + version,
-                        expectedEntry.value(), actualEntry.value());
-                assertEquals("Non-matching readonly for " + actualEntry.name() + " in version " + version,
-                        expectedEntry.readOnly(), actualEntry.readOnly());
-                assertEquals("Non-matching isSensitive for " + actualEntry.name() + " in version " + version,
-                        expectedEntry.isSensitive(), actualEntry.isSensitive());
+                assertEquals(expectedEntry.value(), actualEntry.value(),
+                    "Non-matching values for " + actualEntry.name() + " in version " + version);
+                assertEquals(expectedEntry.readOnly(), actualEntry.readOnly(),
+                    "Non-matching readonly for " + actualEntry.name() + " in version " + version);
+                assertEquals(expectedEntry.isSensitive(), actualEntry.isSensitive(),
+                    "Non-matching isSensitive for " + actualEntry.name() + " in version " + version);
                 if (version < 3) {
-                    assertEquals("Non-matching configType for " + actualEntry.name() + " in version " + version,
-                            ConfigType.UNKNOWN.id(), actualEntry.configType());
+                    assertEquals(ConfigType.UNKNOWN.id(), actualEntry.configType(),
+                        "Non-matching configType for " + actualEntry.name() + " in version " + version);
                 } else {
-                    assertEquals("Non-matching configType for " + actualEntry.name() + " in version " + version,
-                            expectedEntry.configType(), actualEntry.configType());
+                    assertEquals(expectedEntry.configType(), actualEntry.configType(),
+                        "Non-matching configType for " + actualEntry.name() + " in version " + version);
                 }
                 if (version == 0) {
-                    assertEquals("Non matching configSource for " + actualEntry.name() + " in version " + version,
-                            DescribeConfigsResponse.ConfigSource.STATIC_BROKER_CONFIG.id(), actualEntry.configSource());
+                    assertEquals(DescribeConfigsResponse.ConfigSource.STATIC_BROKER_CONFIG.id(), actualEntry.configSource(),
+                        "Non matching configSource for " + actualEntry.name() + " in version " + version);
                 } else {
-                    assertEquals("Non-matching configSource for " + actualEntry.name() + " in version " + version,
-                            expectedEntry.configSource(), actualEntry.configSource());
+                    assertEquals(expectedEntry.configSource(), actualEntry.configSource(),
+                        "Non-matching configSource for " + actualEntry.name() + " in version " + version);
                 }
             }
         }
@@ -580,8 +658,8 @@ public class RequestResponseTest {
         checkResponse(response, req.version(), checkEqualityAndHashCode);
         if (e instanceof UnknownServerException) {
             String responseStr = response.toString();
-            assertFalse(String.format("Unknown message included in response for %s: %s ", req.apiKey(), responseStr),
-                    responseStr.contains(e.getMessage()));
+            assertFalse(responseStr.contains(e.getMessage()),
+                String.format("Unknown message included in response for %s: %s ", req.apiKey(), responseStr));
         }
     }
 
@@ -595,7 +673,7 @@ public class RequestResponseTest {
             ByteBuffer serializedBytes2 = deserialized.serialize();
             serializedBytes.rewind();
             if (checkEquality)
-                assertEquals("Request " + req + "failed equality test", serializedBytes, serializedBytes2);
+                assertEquals(serializedBytes, serializedBytes2, "Request " + req + "failed equality test");
         } catch (Exception e) {
             throw new RuntimeException("Failed to deserialize request " + req + " with type " + req.getClass(), e);
         }
@@ -611,19 +689,19 @@ public class RequestResponseTest {
             ByteBuffer serializedBytes2 = deserialized.serialize((short) version);
             serializedBytes.rewind();
             if (checkEquality)
-                assertEquals("Response " + response + "failed equality test", serializedBytes, serializedBytes2);
+                assertEquals(serializedBytes, serializedBytes2, "Response " + response + "failed equality test");
         } catch (Exception e) {
             throw new RuntimeException("Failed to deserialize response " + response + " with type " + response.getClass(), e);
         }
     }
 
-    @Test(expected = UnsupportedVersionException.class)
+    @Test
     public void cannotUseFindCoordinatorV0ToFindTransactionCoordinator() {
         FindCoordinatorRequest.Builder builder = new FindCoordinatorRequest.Builder(
                 new FindCoordinatorRequestData()
                     .setKeyType(CoordinatorType.TRANSACTION.id)
                     .setKey("foobar"));
-        builder.build((short) 0);
+        assertThrows(UnsupportedVersionException.class, () -> builder.build((short) 0));
     }
 
     @Test
@@ -710,10 +788,10 @@ public class RequestResponseTest {
 
         FetchResponse<MemoryRecords> v0Response = new FetchResponse<>(Errors.NONE, responseData, 0, INVALID_SESSION_ID);
         FetchResponse<MemoryRecords> v1Response = new FetchResponse<>(Errors.NONE, responseData, 10, INVALID_SESSION_ID);
-        assertEquals("Throttle time must be zero", 0, v0Response.throttleTimeMs());
-        assertEquals("Throttle time must be 10", 10, v1Response.throttleTimeMs());
-        assertEquals("Response data does not match", responseData, v0Response.responseData());
-        assertEquals("Response data does not match", responseData, v1Response.responseData());
+        assertEquals(0, v0Response.throttleTimeMs(), "Throttle time must be zero");
+        assertEquals(10, v1Response.throttleTimeMs(), "Throttle time must be 10");
+        assertEquals(responseData, v0Response.responseData(), "Response data does not match");
+        assertEquals(responseData, v1Response.responseData(), "Response data does not match");
     }
 
     @Test
@@ -782,9 +860,10 @@ public class RequestResponseTest {
         assertEquals(response.data().remainingPartitions(), deserialized.data().remainingPartitions());
     }
 
-    @Test(expected = UnsupportedVersionException.class)
+    @Test
     public void testCreateTopicRequestV0FailsIfValidateOnly() {
-        createCreateTopicRequest(0, true);
+        assertThrows(UnsupportedVersionException.class,
+            () -> createCreateTopicRequest(0, true));
     }
 
     @Test
@@ -908,11 +987,11 @@ public class RequestResponseTest {
         assertTrue(request.isValid());
     }
 
-    @Test(expected = UnsupportedVersionException.class)
+    @Test
     public void testListGroupRequestV3FailsWithStates() {
         ListGroupsRequestData data = new ListGroupsRequestData()
                 .setStatesFilter(asList(ConsumerGroupState.STABLE.name()));
-        new ListGroupsRequest.Builder(data).build((short) 3);
+        assertThrows(UnsupportedVersionException.class, () -> new ListGroupsRequest.Builder(data).build((short) 3));
     }
 
     @Test
@@ -939,7 +1018,7 @@ public class RequestResponseTest {
 
         assertEquals(Errors.UNSUPPORTED_VERSION.code(), response.data().errorCode());
 
-        ApiVersionsResponseKey apiVersion = response.data().apiKeys().find(ApiKeys.API_VERSIONS.id);
+        ApiVersion apiVersion = response.data().apiKeys().find(ApiKeys.API_VERSIONS.id);
         assertNotNull(apiVersion);
         assertEquals(ApiKeys.API_VERSIONS.id, apiVersion.apiKey());
         assertEquals(ApiKeys.API_VERSIONS.oldestVersion(), apiVersion.minVersion());
@@ -1699,8 +1778,8 @@ public class RequestResponseTest {
     }
 
     private ApiVersionsResponse createApiVersionResponse() {
-        ApiVersionsResponseKeyCollection apiVersions = new ApiVersionsResponseKeyCollection();
-        apiVersions.add(new ApiVersionsResponseKey()
+        ApiVersionCollection apiVersions = new ApiVersionCollection();
+        apiVersions.add(new ApiVersion()
             .setApiKey((short) 0)
             .setMinVersion((short) 0)
             .setMaxVersion((short) 2));
@@ -2531,6 +2610,85 @@ public class RequestResponseTest {
         return new AlterClientQuotasResponse(data);
     }
 
+    private DescribeProducersRequest createDescribeProducersRequest(short version) {
+        DescribeProducersRequestData data = new DescribeProducersRequestData();
+        DescribeProducersRequestData.TopicRequest topicRequest = new DescribeProducersRequestData.TopicRequest();
+        topicRequest.partitionIndexes().add(0);
+        topicRequest.partitionIndexes().add(1);
+        data.topics().add(topicRequest);
+        return new DescribeProducersRequest.Builder(data).build(version);
+    }
+
+    private DescribeProducersResponse createDescribeProducersResponse() {
+        DescribeProducersResponseData data = new DescribeProducersResponseData();
+        DescribeProducersResponseData.TopicResponse topicResponse = new DescribeProducersResponseData.TopicResponse();
+        topicResponse.partitions().add(new DescribeProducersResponseData.PartitionResponse()
+            .setErrorCode(Errors.NONE.code())
+            .setPartitionIndex(0)
+            .setActiveProducers(Arrays.asList(
+                new DescribeProducersResponseData.ProducerState()
+                    .setProducerId(1234L)
+                    .setProducerEpoch(15)
+                    .setLastTimestamp(13490218304L)
+                    .setCurrentTxnStartOffset(5000),
+                new DescribeProducersResponseData.ProducerState()
+                    .setProducerId(9876L)
+                    .setProducerEpoch(32)
+                    .setLastTimestamp(13490218399L)
+            ))
+        );
+        data.topics().add(topicResponse);
+        return new DescribeProducersResponse(data);
+    }
+
+    private BrokerHeartbeatRequest createBrokerHeartbeatRequest(short v) {
+        BrokerHeartbeatRequestData data = new BrokerHeartbeatRequestData()
+                .setBrokerId(1)
+                .setBrokerEpoch(1)
+                .setCurrentMetadataOffset(1)
+                .setWantFence(false)
+                .setWantShutDown(false);
+        return new BrokerHeartbeatRequest.Builder(data).build(v);
+    }
+
+    private BrokerHeartbeatResponse createBrokerHeartbeatResponse() {
+        BrokerHeartbeatResponseData data = new BrokerHeartbeatResponseData()
+                .setIsCaughtUp(true)
+                .setIsFenced(false)
+                .setShouldShutDown(false)
+                .setThrottleTimeMs(0);
+        return new BrokerHeartbeatResponse(data);
+    }
+
+    private BrokerRegistrationRequest createBrokerRegistrationRequest(short v) {
+        BrokerRegistrationRequestData data = new BrokerRegistrationRequestData()
+                .setBrokerId(1)
+                .setClusterId(Uuid.randomUuid())
+                .setRack("1")
+                .setFeatures(new BrokerRegistrationRequestData.FeatureCollection(singletonList(
+                        new BrokerRegistrationRequestData.Feature()).iterator()))
+                .setListeners(new BrokerRegistrationRequestData.ListenerCollection(singletonList(
+                        new BrokerRegistrationRequestData.Listener()).iterator()))
+                .setIncarnationId(Uuid.randomUuid());
+        return new BrokerRegistrationRequest.Builder(data).build(v);
+    }
+
+    private BrokerRegistrationResponse createBrokerRegistrationResponse() {
+        BrokerRegistrationResponseData data = new BrokerRegistrationResponseData()
+                .setBrokerEpoch(1)
+                .setThrottleTimeMs(0);
+        return new BrokerRegistrationResponse(data);
+    }
+
+    private UnregisterBrokerRequest createUnregisterBrokerRequest(short version) {
+        UnregisterBrokerRequestData data = new UnregisterBrokerRequestData().setBrokerId(1);
+        return new UnregisterBrokerRequest.Builder(data).build(version);
+    }
+
+    private UnregisterBrokerResponse createUnregisterBrokerResponse() {
+        return new UnregisterBrokerResponse(new UnregisterBrokerResponseData());
+    }
+
     /**
      * Check that all error codes in the response get included in {@link AbstractResponse#errorCounts()}.
      */
@@ -2543,6 +2701,8 @@ public class RequestResponseTest {
         assertEquals(Integer.valueOf(2), createAlterPartitionReassignmentsResponse().errorCounts().get(Errors.NONE));
         assertEquals(Integer.valueOf(1), createAlterReplicaLogDirsResponse().errorCounts().get(Errors.NONE));
         assertEquals(Integer.valueOf(1), createApiVersionResponse().errorCounts().get(Errors.NONE));
+        assertEquals(Integer.valueOf(1), createBrokerHeartbeatResponse().errorCounts().get(Errors.NONE));
+        assertEquals(Integer.valueOf(1), createBrokerRegistrationResponse().errorCounts().get(Errors.NONE));
         assertEquals(Integer.valueOf(1), createControlledShutdownResponse().errorCounts().get(Errors.NONE));
         assertEquals(Integer.valueOf(2), createCreateAclsResponse().errorCounts().get(Errors.NONE));
         assertEquals(Integer.valueOf(1), createCreatePartitionsResponse().errorCounts().get(Errors.NONE));

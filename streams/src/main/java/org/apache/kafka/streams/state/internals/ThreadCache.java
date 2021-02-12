@@ -72,7 +72,7 @@ public class ThreadCache {
         return numFlushes;
     }
 
-    public void resize(final long newCacheSizeBytes) {
+    public synchronized void resize(final long newCacheSizeBytes) {
         final boolean shrink = newCacheSizeBytes < maxCacheSizeBytes;
         maxCacheSizeBytes = newCacheSizeBytes;
         if (shrink) {
@@ -82,9 +82,6 @@ public class ThreadCache {
             final CircularIterator<NamedCache> circularIterator = new CircularIterator<>(caches.values());
             while (sizeBytes() > maxCacheSizeBytes) {
                 final NamedCache cache = circularIterator.next();
-                if (cache.isEmpty()) {
-                    circularIterator.remove();
-                }
                 cache.evict();
                 numEvicts++;
             }
@@ -190,11 +187,15 @@ public class ThreadCache {
     }
 
     public MemoryLRUCacheBytesIterator range(final String namespace, final Bytes from, final Bytes to) {
+        return range(namespace, from, to, true);
+    }
+
+    public MemoryLRUCacheBytesIterator range(final String namespace, final Bytes from, final Bytes to, final boolean toInclusive) {
         final NamedCache cache = getCache(namespace);
         if (cache == null) {
             return new MemoryLRUCacheBytesIterator(Collections.emptyIterator(), new NamedCache(namespace, this.metrics));
         }
-        return new MemoryLRUCacheBytesIterator(cache.keyRange(from, to), cache);
+        return new MemoryLRUCacheBytesIterator(cache.keyRange(from, to, toInclusive), cache);
     }
 
     public MemoryLRUCacheBytesIterator reverseRange(final String namespace, final Bytes from, final Bytes to) {

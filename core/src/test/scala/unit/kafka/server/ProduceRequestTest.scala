@@ -29,9 +29,8 @@ import org.apache.kafka.common.message.ProduceRequestData
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.record._
 import org.apache.kafka.common.requests.{ProduceRequest, ProduceResponse}
-import org.junit.Assert._
-import org.junit.Test
-import org.scalatest.Assertions.fail
+import org.junit.jupiter.api.Assertions._
+import org.junit.jupiter.api.Test
 
 import scala.annotation.nowarn
 import scala.jdk.CollectionConverters._
@@ -162,7 +161,7 @@ class ProduceRequestTest extends BaseRequestTest {
     val partitionToLeader = TestUtils.createTopic(zkClient, topic, 3, 2, servers)
     partitionToLeader.collectFirst {
       case (partition, leader) if leader != -1 => (partition, leader)
-    }.getOrElse(fail(s"No leader elected for topic $topic"))
+    }.getOrElse(throw new AssertionError(s"No leader elected for topic $topic"))
   }
 
   @nowarn("cat=deprecation")

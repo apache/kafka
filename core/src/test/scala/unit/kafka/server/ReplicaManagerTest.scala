@@ -31,10 +31,11 @@ import kafka.server.QuotaFactory.{QuotaManagers, UnboundedQuota}
 import kafka.server.checkpoints.LazyOffsetCheckpoints
 import kafka.server.checkpoints.OffsetCheckpointFile
 import kafka.server.epoch.util.ReplicaFetcherMockBlockingSend
+import kafka.server.metadata.CachedConfigRepository
 import kafka.utils.TestUtils.createBroker
 import kafka.utils.timer.MockTimer
 import kafka.utils.{MockScheduler, MockTime, TestUtils}
-import kafka.zk.KafkaZkClient
+import org.apache.kafka.common.message.LeaderAndIsrRequestData
 import org.apache.kafka.common.message.LeaderAndIsrRequestData.LeaderAndIsrPartitionState
 import org.apache.kafka.common.message.OffsetForLeaderEpochResponseData.EpochEndOffset
 import org.apache.kafka.common.message.StopReplicaRequestData.StopReplicaPartitionState
@@ -52,8 +53,8 @@ import org.apache.kafka.common.utils.Time
 import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.common.{IsolationLevel, Node, TopicPartition, Uuid}
 import org.easymock.EasyMock
-import org.junit.Assert._
-import org.junit.{After, Before, Test}
+import org.junit.jupiter.api.Assertions._
+import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
 import org.mockito.Mockito
 
 import scala.collection.mutable
@@ -66,7 +67,7 @@ class ReplicaManagerTest {
   val time = new MockTime
   val scheduler = new MockScheduler(time)
   val metrics = new Metrics
-  var kafkaZkClient: KafkaZkClient = _
+  val configRepository = new CachedConfigRepository()
   var alterIsrManager: AlterIsrManager = _
   var config: KafkaConfig = _
   var quotaManager: QuotaManagers = _
@@ -77,19 +78,15 @@ class ReplicaManagerTest {
   var controllerEpoch = 0
   val brokerEpoch = 0L
 
-  @Before
+  @BeforeEach
   def setUp(): Unit = {
-    kafkaZkClient = EasyMock.createMock(classOf[KafkaZkClient])
-    EasyMock.expect(kafkaZkClient.getEntityConfigs(EasyMock.anyString(), EasyMock.anyString())).andReturn(new Properties()).anyTimes()
-    EasyMock.replay(kafkaZkClient)
-
     val props = TestUtils.createBrokerConfig(1, TestUtils.MockZkConnect)
     config = KafkaConfig.fromProps(props)
     alterIsrManager = EasyMock.createMock(classOf[AlterIsrManager])
     quotaManager = QuotaFactory.instantiate(config, metrics, time, "")
   }
 
-  @After
+  @AfterEach
   def tearDown(): Unit = {
     TestUtils.clearYammerMetrics()
     Option(quotaManager).foreach(_.shutdown())
@@ -99,9 +96,9 @@ class ReplicaManagerTest {
   @Test
   def testHighWaterMarkDirectoryMapping(): Unit = {
     val mockLogMgr = TestUtils.createLogManager(config.logDirs.map(new File(_)))
-    val rm = new ReplicaManager(config, metrics, time, kafkaZkClient, new MockScheduler(time), mockLogMgr,
+    val rm = new ReplicaManager(config, metrics, time, None, new MockScheduler(time), mockLogMgr,
       new AtomicBoolean(false), quotaManager, new BrokerTopicStats,
-      new MetadataCache(config.brokerId), new LogDirFailureChannel(config.logDirs.size), alterIsrManager)
+      MetadataCache.zkMetadataCache(config.brokerId), new LogDirFailureChannel(config.logDirs.size), alterIsrManager, configRepository)
     try {
       val partition = rm.createPartition(new TopicPartition(topic, 1))
       partition.createLogIfNotExists(isNew = false, isFutureReplica = false,
@@ -119,9 +116,9 @@ class ReplicaManagerTest {
     props.put("log.dir", TestUtils.tempRelativeDir("data").getAbsolutePath)
     val config = KafkaConfig.fromProps(props)
     val mockLogMgr = TestUtils.createLogManager(config.logDirs.map(new File(_)))
-    val rm = new ReplicaManager(config, metrics, time, kafkaZkClient, new MockScheduler(time), mockLogMgr,
+    val rm = new ReplicaManager(config, metrics, time, None, new MockScheduler(time), mockLogMgr,
       new AtomicBoolean(false), quotaManager, new BrokerTopicStats,
-      new MetadataCache(config.brokerId), new LogDirFailureChannel(config.logDirs.size), alterIsrManager)
+      MetadataCache.zkMetadataCache(config.brokerId), new LogDirFailureChannel(config.logDirs.size), alterIsrManager, configRepository)
     try {
       val partition = rm.createPartition(new TopicPartition(topic, 1))
       partition.createLogIfNotExists(isNew = false, isFutureReplica = false,
@@ -136,9 +133,9 @@ class ReplicaManagerTest {
   @Test
   def testIllegalRequiredAcks(): Unit = {
     val mockLogMgr = TestUtils.createLogManager(config.logDirs.map(new File(_)))
-    val rm = new ReplicaManager(config, metrics, time, kafkaZkClient, new MockScheduler(time), mockLogMgr,
+    val rm = new ReplicaManager(config, metrics, time, None, new MockScheduler(time), mockLogMgr,
       new AtomicBoolean(false), quotaManager, new BrokerTopicStats,
-      new MetadataCache(config.brokerId), new LogDirFailureChannel(config.logDirs.size), alterIsrManager, Option(this.getClass.getName))
+      MetadataCache.zkMetadataCache(config.brokerId), new LogDirFailureChannel(config.logDirs.size), alterIsrManager, configRepository, Option(this.getClass.getName))
     try {
       def callback(responseStatus: Map[TopicPartition, PartitionResponse]) = {
         assert(responseStatus.values.head.error == Errors.INVALID_REQUIRED_ACKS)
@@ -169,9 +166,9 @@ class ReplicaManagerTest {
     val metadataCache: MetadataCache = EasyMock.createMock(classOf[MetadataCache])
     EasyMock.expect(metadataCache.getAliveBrokers).andReturn(aliveBrokers).anyTimes()
     EasyMock.replay(metadataCache)
-    val rm = new ReplicaManager(config, metrics, time, kafkaZkClient, new MockScheduler(time), mockLogMgr,
+    val rm = new ReplicaManager(config, metrics, time, None, new MockScheduler(time), mockLogMgr,
       new AtomicBoolean(false), quotaManager, new BrokerTopicStats,
-      metadataCache, new LogDirFailureChannel(config.logDirs.size), alterIsrManager)
+      metadataCache, new LogDirFailureChannel(config.logDirs.size), alterIsrManager, configRepository)
 
     try {
       val brokerList = Seq[Integer](0, 1).asJava
@@ -576,8 +573,8 @@ class ReplicaManagerTest {
       val followerFetchResult = fetchAsFollower(rm, new TopicPartition(topic, 0),
         new PartitionData(1, 0, 100000, Optional.empty()))
       val followerFetchData = followerFetchResult.assertFired
-      assertEquals("Should not give an exception", Errors.NONE, followerFetchData.error)
-      assertTrue("Should return some data", followerFetchData.records.batches.iterator.hasNext)
+      assertEquals(Errors.NONE, followerFetchData.error, "Should not give an exception")
+      assertTrue(followerFetchData.records.batches.iterator.hasNext, "Should return some data")
 
       // Consumers are not allowed to consume above the high watermark. However, since the
       // high watermark could be stale at the time of the request, we do not return an out of
@@ -585,8 +582,8 @@ class ReplicaManagerTest {
       val consumerFetchResult = fetchAsConsumer(rm, new TopicPartition(topic, 0),
         new PartitionData(1, 0, 100000, Optional.empty()))
       val consumerFetchData = consumerFetchResult.assertFired
-      assertEquals("Should not give an exception", Errors.NONE, consumerFetchData.error)
-      assertEquals("Should return empty response", MemoryRecords.EMPTY, consumerFetchData.records)
+      assertEquals(Errors.NONE, consumerFetchData.error, "Should not give an exception")
+      assertEquals(MemoryRecords.EMPTY, consumerFetchData.records, "Should return empty response")
     } finally {
       rm.shutdown(checkpointHW = false)
     }
@@ -597,7 +594,8 @@ class ReplicaManagerTest {
     val maxFetchBytes = 1024 * 1024
     val aliveBrokersIds = Seq(0, 1)
     val leaderEpoch = 5
-    val replicaManager = setupReplicaManagerWithMockedPurgatories(new MockTimer(time), aliveBrokersIds)
+    val replicaManager = setupReplicaManagerWithMockedPurgatories(new MockTimer(time),
+      brokerId = 0, aliveBrokersIds)
     try {
       val tp = new TopicPartition(topic, 0)
       val replicas = aliveBrokersIds.toList.map(Int.box).asJava
@@ -621,8 +619,8 @@ class ReplicaManagerTest {
       assertEquals(Errors.NONE, leaderAndIsrResponse.error)
 
       // Follower replica state is initialized, but initial state is not known
-      assertTrue(replicaManager.nonOfflinePartition(tp).isDefined)
-      val partition = replicaManager.nonOfflinePartition(tp).get
+      assertTrue(replicaManager.onlinePartition(tp).isDefined)
+      val partition = replicaManager.onlinePartition(tp).get
 
       assertTrue(partition.getReplica(1).isDefined)
       val followerReplica = partition.getReplica(1).get
@@ -783,12 +781,12 @@ class ReplicaManagerTest {
       )
       val tp0Log = replicaManager.localLog(tp0)
       assertTrue(tp0Log.isDefined)
-      assertEquals("hw should be incremented", 1, tp0Log.get.highWatermark)
+      assertEquals(1, tp0Log.get.highWatermark, "hw should be incremented")
 
       replicaManager.localLog(tp1)
       val tp1Replica = replicaManager.localLog(tp1)
       assertTrue(tp1Replica.isDefined)
-      assertEquals("hw should not be incremented", 0, tp1Replica.get.highWatermark)
+      assertEquals(0, tp1Replica.get.highWatermark, "hw should not be incremented")
 
     } finally {
       replicaManager.shutdown(checkpointHW = false)
@@ -1039,14 +1037,14 @@ class ReplicaManagerTest {
     assertTrue(followerResult.isFired)
     assertEquals(0, followerResult.assertFired.highWatermark)
 
-    assertTrue("Expected producer request to be acked", appendResult.isFired)
+    assertTrue(appendResult.isFired, "Expected producer request to be acked")
 
     // Fetch from the same offset, no new data is expected and hence the fetch request should
     // go to the purgatory
     followerResult = fetchAsFollower(replicaManager, tp0,
       new PartitionData(fetchOffset, 0, 100000, Optional.empty()),
       clientMetadata = None, minBytes = 1000)
-    assertFalse("Request completed immediately unexpectedly", followerResult.isFired)
+    assertFalse(followerResult.isFired, "Request completed immediately unexpectedly")
 
     // Complete the request in the purgatory by advancing the clock
     timer.advanceClock(1001)
@@ -1055,7 +1053,7 @@ class ReplicaManagerTest {
     assertEquals(fetchOffset, followerResult.assertFired.highWatermark)
   }
 
-  @Test(expected = classOf[ClassNotFoundException])
+  @Test
   def testUnknownReplicaSelector(): Unit = {
     val topicPartition = 0
     val followerBrokerId = 0
@@ -1066,9 +1064,9 @@ class ReplicaManagerTest {
 
     val props = new Properties()
     props.put(KafkaConfig.ReplicaSelectorClassProp, "non-a-class")
-    prepareReplicaManagerAndLogManager(new MockTimer(time),
+    assertThrows(classOf[ClassNotFoundException], () => prepareReplicaManagerAndLogManager(new MockTimer(time),
       topicPartition, leaderEpoch + leaderEpochIncrement, followerBrokerId,
-      leaderBrokerId, countDownLatch, expectTruncation = true, extraProps = props)
+      leaderBrokerId, countDownLatch, expectTruncation = true, extraProps = props))
   }
 
   @Test
@@ -1507,8 +1505,7 @@ class ReplicaManagerTest {
     val mockLogMgr: LogManager = EasyMock.createMock(classOf[LogManager])
     EasyMock.expect(mockLogMgr.liveLogDirs).andReturn(config.logDirs.map(new File(_).getAbsoluteFile)).anyTimes
     EasyMock.expect(mockLogMgr.getOrCreateLog(EasyMock.eq(topicPartitionObj),
-      EasyMock.anyObject[() => LogConfig](), isNew = EasyMock.eq(false),
-      isFuture = EasyMock.eq(false))).andReturn(mockLog).anyTimes
+      isNew = EasyMock.eq(false), isFuture = EasyMock.eq(false))).andReturn(mockLog).anyTimes
     if (expectTruncation) {
       EasyMock.expect(mockLogMgr.truncateTo(Map(topicPartitionObj -> offsetFromLeader),
         isFuture = false)).once
@@ -1517,7 +1514,7 @@ class ReplicaManagerTest {
     EasyMock.expect(mockLogMgr.getLog(topicPartitionObj, isFuture = true)).andReturn(None)
 
     EasyMock.expect(mockLogMgr.finishedInitializingLog(
-      EasyMock.eq(topicPartitionObj), EasyMock.anyObject(), EasyMock.anyObject())).anyTimes
+      EasyMock.eq(topicPartitionObj), EasyMock.anyObject())).anyTimes
 
     EasyMock.replay(mockLogMgr)
 
@@ -1558,10 +1555,11 @@ class ReplicaManagerTest {
         .setLeaderEpoch(leaderEpochFromLeader)
         .setEndOffset(offsetFromLeader)).asJava,
       BrokerEndPoint(1, "host1" ,1), time)
-    val replicaManager = new ReplicaManager(config, metrics, time, kafkaZkClient, mockScheduler, mockLogMgr,
+    val replicaManager = new ReplicaManager(config, metrics, time, None, mockScheduler, mockLogMgr,
       new AtomicBoolean(false), quotaManager, mockBrokerTopicStats,
       metadataCache, mockLogDirFailureChannel, mockProducePurgatory, mockFetchPurgatory,
-      mockDeleteRecordsPurgatory, mockElectLeaderPurgatory, Option(this.getClass.getName), alterIsrManager) {
+      mockDeleteRecordsPurgatory, mockElectLeaderPurgatory, Option(this.getClass.getName),
+      configRepository, alterIsrManager) {
 
       override protected def createReplicaFetcherManager(metrics: Metrics,
                                                      time: Time,
@@ -1617,7 +1615,7 @@ class ReplicaManagerTest {
     private var fun: Option[T => Unit] = None
 
     def assertFired: T = {
-      assertTrue("Callback has not been fired", isFired)
+      assertTrue(isFired, "Callback has not been fired")
       value.get
     }
 
@@ -1709,9 +1707,13 @@ class ReplicaManagerTest {
     result
   }
 
-  private def setupReplicaManagerWithMockedPurgatories(timer: MockTimer, aliveBrokerIds: Seq[Int] = Seq(0, 1),
-                                                       propsModifier: Properties => Unit = _ => {}): ReplicaManager = {
-    val props = TestUtils.createBrokerConfig(0, TestUtils.MockZkConnect)
+  private def setupReplicaManagerWithMockedPurgatories(
+    timer: MockTimer,
+    brokerId: Int = 0,
+    aliveBrokerIds: Seq[Int] = Seq(0, 1),
+    propsModifier: Properties => Unit = _ => {}
+  ): ReplicaManager = {
+    val props = TestUtils.createBrokerConfig(brokerId, TestUtils.MockZkConnect)
     props.put("log.dirs", TestUtils.tempRelativeDir("data").getAbsolutePath + "," + TestUtils.tempRelativeDir("data2").getAbsolutePath)
     propsModifier.apply(props)
     val config = KafkaConfig.fromProps(props)
@@ -1736,10 +1738,11 @@ class ReplicaManagerTest {
     val mockDelayedElectLeaderPurgatory = new DelayedOperationPurgatory[DelayedElectLeader](
       purgatoryName = "DelayedElectLeader", timer, reaperEnabled = false)
 
-    new ReplicaManager(config, metrics, time, kafkaZkClient, scheduler, mockLogMgr,
+    new ReplicaManager(config, metrics, time, None, scheduler, mockLogMgr,
       new AtomicBoolean(false), quotaManager, new BrokerTopicStats,
       metadataCache, new LogDirFailureChannel(config.logDirs.size), mockProducePurgatory, mockFetchPurgatory,
-      mockDeleteRecordsPurgatory, mockDelayedElectLeaderPurgatory, Option(this.getClass.getName), alterIsrManager)
+      mockDeleteRecordsPurgatory, mockDelayedElectLeaderPurgatory, Option(this.getClass.getName),
+      configRepository, alterIsrManager)
   }
 
   @Test
@@ -1950,12 +1953,12 @@ class ReplicaManagerTest {
     EasyMock.replay(metadataCache1)
 
     // each replica manager is for a broker
-    val rm0 = new ReplicaManager(config0, metrics, time, kafkaZkClient, new MockScheduler(time), mockLogMgr0,
+    val rm0 = new ReplicaManager(config0, metrics, time, None, new MockScheduler(time), mockLogMgr0,
       new AtomicBoolean(false), quotaManager,
-      brokerTopicStats1, metadataCache0, new LogDirFailureChannel(config0.logDirs.size), alterIsrManager)
-    val rm1 = new ReplicaManager(config1, metrics, time, kafkaZkClient, new MockScheduler(time), mockLogMgr1,
+      brokerTopicStats1, metadataCache0, new LogDirFailureChannel(config0.logDirs.size), alterIsrManager, configRepository)
+    val rm1 = new ReplicaManager(config1, metrics, time, None, new MockScheduler(time), mockLogMgr1,
       new AtomicBoolean(false), quotaManager,
-      brokerTopicStats2, metadataCache1, new LogDirFailureChannel(config1.logDirs.size), alterIsrManager)
+      brokerTopicStats2, metadataCache1, new LogDirFailureChannel(config1.logDirs.size), alterIsrManager, configRepository)
 
     (rm0, rm1)
   }
@@ -2036,7 +2039,7 @@ class ReplicaManagerTest {
     val replicaManager = setupReplicaManagerWithMockedPurgatories(mockTimer, aliveBrokerIds = Seq(0, 1))
 
     val tp0 = new TopicPartition(topic, 0)
-    val log = replicaManager.logManager.getOrCreateLog(tp0, () => LogConfig(), true)
+    val log = replicaManager.logManager.getOrCreateLog(tp0, true)
 
     if (throwIOException) {
       // Delete the underlying directory to trigger an KafkaStorageException
@@ -2196,9 +2199,9 @@ class ReplicaManagerTest {
       val props = TestUtils.createBrokerConfig(1, TestUtils.MockZkConnect)
       val config = KafkaConfig.fromProps(props)
       val mockLogMgr = TestUtils.createLogManager(config.logDirs.map(new File(_)))
-      new ReplicaManager(config, metrics, time, kafkaZkClient, new MockScheduler(time), mockLogMgr,
+      new ReplicaManager(config, metrics, time, None, new MockScheduler(time), mockLogMgr,
         new AtomicBoolean(false), quotaManager, new BrokerTopicStats,
-        new MetadataCache(config.brokerId), new LogDirFailureChannel(config.logDirs.size), alterIsrManager) {
+        MetadataCache.zkMetadataCache(config.brokerId), new LogDirFailureChannel(config.logDirs.size), alterIsrManager, configRepository) {
         override def getPartitionOrException(topicPartition: TopicPartition): Partition = {
           throw Errors.NOT_LEADER_OR_FOLLOWER.exception()
         }
@@ -2245,9 +2248,8 @@ class ReplicaManagerTest {
       assertFalse(replicaManager.localLog(topicPartition).isEmpty)
       val id = topicIds.get(topicPartition.topic())
       val log = replicaManager.localLog(topicPartition).get
-      assertFalse(log.partitionMetadataFile.isEmpty)
-      assertFalse(log.partitionMetadataFile.get.isEmpty())
-      val partitionMetadata = log.partitionMetadataFile.get.read()
+      assertTrue(log.partitionMetadataFile.exists())
+      val partitionMetadata = log.partitionMetadataFile.read()
 
       // Current version of PartitionMetadataFile is 0.
       assertEquals(0, partitionMetadata.version)
@@ -2282,33 +2284,114 @@ class ReplicaManagerTest {
         topicIds,
         Set(new Node(0, "host1", 0), new Node(1, "host2", 1)).asJava).build().serialize(), version)
 
-      // The file has no contents if the topic does not have an associated topic ID.
+      // There is no file if the topic does not have an associated topic ID.
       replicaManager.becomeLeaderOrFollower(0, leaderAndIsrRequest(0, "fakeTopic", ApiKeys.LEADER_AND_ISR.latestVersion), (_, _) => ())
       assertFalse(replicaManager.localLog(topicPartition).isEmpty)
       val log = replicaManager.localLog(topicPartition).get
-      assertFalse(log.partitionMetadataFile.isEmpty)
-      assertTrue(log.partitionMetadataFile.get.isEmpty())
+      assertFalse(log.partitionMetadataFile.exists())
 
-      // The file has no contents if the topic has the default UUID.
+      // There is no file if the topic has the default UUID.
       replicaManager.becomeLeaderOrFollower(0, leaderAndIsrRequest(0, topic, ApiKeys.LEADER_AND_ISR.latestVersion), (_, _) => ())
       assertFalse(replicaManager.localLog(topicPartition).isEmpty)
       val log2 = replicaManager.localLog(topicPartition).get
-      assertFalse(log2.partitionMetadataFile.isEmpty)
-      assertTrue(log2.partitionMetadataFile.get.isEmpty())
+      assertFalse(log2.partitionMetadataFile.exists())
 
-      // The file has no contents if the request is an older version
+      // There is no file if the request an older version
       replicaManager.becomeLeaderOrFollower(0, leaderAndIsrRequest(0, "foo", 0), (_, _) => ())
       assertFalse(replicaManager.localLog(topicPartitionFoo).isEmpty)
       val log3 = replicaManager.localLog(topicPartitionFoo).get
-      assertFalse(log3.partitionMetadataFile.isEmpty)
-      assertTrue(log3.partitionMetadataFile.get.isEmpty())
+      assertFalse(log3.partitionMetadataFile.exists())
 
-      // The file has no contents if the request is an older version
+      // There is no file if the request is an older version
       replicaManager.becomeLeaderOrFollower(0, leaderAndIsrRequest(0, "foo", 4), (_, _) => ())
       assertFalse(replicaManager.localLog(topicPartitionFoo).isEmpty)
       val log4 = replicaManager.localLog(topicPartitionFoo).get
-      assertFalse(log4.partitionMetadataFile.isEmpty)
-      assertTrue(log4.partitionMetadataFile.get.isEmpty())
+      assertFalse(log4.partitionMetadataFile.exists())
     } finally replicaManager.shutdown(checkpointHW = false)
   }
+
+  private def leaderAndIsrRequest(
+    topicId: Uuid,
+    topicPartition: TopicPartition,
+    replicas: Seq[Int],
+    leaderAndIsr: LeaderAndIsr,
+    isNew: Boolean = true,
+    brokerEpoch: Int = 0,
+    controllerId: Int = 0,
+    controllerEpoch: Int = 0,
+    version: Short = LeaderAndIsrRequestData.HIGHEST_SUPPORTED_VERSION
+  ): LeaderAndIsrRequest = {
+    val partitionState = new LeaderAndIsrPartitionState()
+      .setTopicName(topicPartition.topic)
+      .setPartitionIndex(topicPartition.partition)
+      .setControllerEpoch(controllerEpoch)
+      .setLeader(leaderAndIsr.leader)
+      .setLeaderEpoch(leaderAndIsr.leaderEpoch)
+      .setIsr(leaderAndIsr.isr.map(Int.box).asJava)
+      .setZkVersion(leaderAndIsr.zkVersion)
+      .setReplicas(replicas.map(Int.box).asJava)
+      .setIsNew(isNew)
+
+    def mkNode(replicaId: Int): Node = {
+      new Node(replicaId, s"host-$replicaId", 9092)
+    }
+
+    val nodes = Set(mkNode(controllerId)) ++ replicas.map(mkNode).toSet
+
+    new LeaderAndIsrRequest.Builder(
+      version,
+      controllerId,
+      controllerEpoch,
+      brokerEpoch,
+      Seq(partitionState).asJava,
+      Map(topicPartition.topic -> topicId).asJava,
+      nodes.asJava
+    ).build()
+  }
+
+  @Test
+  def testActiveProducerState(): Unit = {
+    val brokerId = 0
+    val replicaManager = setupReplicaManagerWithMockedPurgatories(new MockTimer(time), brokerId)
+    try {
+      val fooPartition = new TopicPartition("foo", 0)
+      Mockito.when(replicaManager.metadataCache.contains(fooPartition)).thenReturn(false)
+      val fooProducerState = replicaManager.activeProducerState(fooPartition)
+      assertEquals(Errors.UNKNOWN_TOPIC_OR_PARTITION, Errors.forCode(fooProducerState.errorCode))
+
+      val oofPartition = new TopicPartition("oof", 0)
+      Mockito.when(replicaManager.metadataCache.contains(oofPartition)).thenReturn(true)
+      val oofProducerState = replicaManager.activeProducerState(oofPartition)
+      assertEquals(Errors.NOT_LEADER_OR_FOLLOWER, Errors.forCode(oofProducerState.errorCode))
+
+      // This API is supported by both leaders and followers
+
+      val barPartition = new TopicPartition("bar", 0)
+      val barLeaderAndIsrRequest = leaderAndIsrRequest(
+        topicId = Uuid.randomUuid(),
+        topicPartition = barPartition,
+        replicas = Seq(brokerId),
+        leaderAndIsr = LeaderAndIsr(brokerId, List(brokerId))
+      )
+      replicaManager.becomeLeaderOrFollower(0, barLeaderAndIsrRequest, (_, _) => ())
+      val barProducerState = replicaManager.activeProducerState(barPartition)
+      assertEquals(Errors.NONE, Errors.forCode(barProducerState.errorCode))
+
+      val otherBrokerId = 1
+      val bazPartition = new TopicPartition("baz", 0)
+      val bazLeaderAndIsrRequest = leaderAndIsrRequest(
+        topicId = Uuid.randomUuid(),
+        topicPartition = bazPartition,
+        replicas = Seq(brokerId, otherBrokerId),
+        leaderAndIsr = LeaderAndIsr(otherBrokerId, List(brokerId, otherBrokerId))
+      )
+      replicaManager.becomeLeaderOrFollower(0, bazLeaderAndIsrRequest, (_, _) => ())
+      val bazProducerState = replicaManager.activeProducerState(bazPartition)
+      assertEquals(Errors.NONE, Errors.forCode(bazProducerState.errorCode))
+    } finally {
+      replicaManager.shutdown(checkpointHW = false)
+    }
+
+  }
+
 }

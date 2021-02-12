@@ -32,8 +32,8 @@ import org.apache.kafka.common.record.MemoryRecords
 import org.apache.kafka.common.requests.{FetchRequest, FetchResponse, ListOffsetsRequest, ListOffsetsResponse}
 import org.apache.kafka.common.{IsolationLevel, TopicPartition}
 import org.easymock.{EasyMock, IAnswer}
-import org.junit.Assert._
-import org.junit.Test
+import org.junit.jupiter.api.Assertions._
+import org.junit.jupiter.api.Test
 
 import scala.jdk.CollectionConverters._
 import scala.collection.mutable.Buffer
@@ -163,7 +163,7 @@ class LogOffsetTest extends BaseRequestTest {
     createTopic(topic, 3, 1)
 
     val logManager = server.getLogManager
-    val log = logManager.getOrCreateLog(topicPartition, () => logManager.initialDefaultConfig)
+    val log = logManager.getOrCreateLog(topicPartition)
 
     for (_ <- 0 until 20)
       log.appendAsLeader(TestUtils.singletonRecords(value = Integer.toString(42).getBytes()), leaderEpoch = 0)
@@ -192,7 +192,7 @@ class LogOffsetTest extends BaseRequestTest {
     createTopic(topic, 3, 1)
 
     val logManager = server.getLogManager
-    val log = logManager.getOrCreateLog(topicPartition, () => logManager.initialDefaultConfig)
+    val log = logManager.getOrCreateLog(topicPartition)
     for (_ <- 0 until 20)
       log.appendAsLeader(TestUtils.singletonRecords(value = Integer.toString(42).getBytes()), leaderEpoch = 0)
     log.flush()

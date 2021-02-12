@@ -231,6 +231,16 @@ public abstract class AbstractResponse implements AbstractRequestResponse {
                 return EnvelopeResponse.parse(responseBuffer, version);
             case FETCH_SNAPSHOT:
                 return FetchSnapshotResponse.parse(responseBuffer, version);
+            case DESCRIBE_CLUSTER:
+                return DescribeClusterResponse.parse(responseBuffer, version);
+            case DESCRIBE_PRODUCERS:
+                return DescribeProducersResponse.parse(responseBuffer, version);
+            case BROKER_REGISTRATION:
+                return BrokerRegistrationResponse.parse(responseBuffer, version);
+            case BROKER_HEARTBEAT:
+                return BrokerHeartbeatResponse.parse(responseBuffer, version);
+            case UNREGISTER_BROKER:
+                return UnregisterBrokerResponse.parse(responseBuffer, version);
             default:
                 throw new AssertionError(String.format("ApiKey %s is not currently handled in `parseResponse`, the " +
                         "code should be updated to do so.", apiKey));

@@ -12,37 +12,30 @@ Below we describe the details to set this up.
     bin/test-raft-server-start.sh config/raft.properties
 
 ### Run Multi Node Quorum ###
-Create 3 separate raft quorum properties as the following
-(note that the `zookeeper.connect` config is required, but unused):
+Create 3 separate raft quorum properties as the following:
 
 `cat << EOF >> config/raft-quorum-1.properties`
     
-    broker.id=1
+    node.id=1
     listeners=PLAINTEXT://localhost:9092
-    quorum.voters=1@localhost:9092,2@localhost:9093,3@localhost:9094
+    controller.quorum.voters=1@localhost:9092,2@localhost:9093,3@localhost:9094
     log.dirs=/tmp/raft-logs-1
-    
-    zookeeper.connect=localhost:2181
     EOF
 
 `cat << EOF >> config/raft-quorum-2.properties`
     
-    broker.id=2
+    node.id=2
     listeners=PLAINTEXT://localhost:9093
-    quorum.voters=1@localhost:9092,2@localhost:9093,3@localhost:9094
+    controller.quorum.voters=1@localhost:9092,2@localhost:9093,3@localhost:9094
     log.dirs=/tmp/raft-logs-2
-    
-    zookeeper.connect=localhost:2181
     EOF
     
 `cat << EOF >> config/raft-quorum-3.properties`
     
-    broker.id=3
+    node.id=3
     listeners=PLAINTEXT://localhost:9094
-    quorum.voters=1@localhost:9092,2@localhost:9093,3@localhost:9094
+    controller.quorum.voters=1@localhost:9092,2@localhost:9093,3@localhost:9094
     log.dirs=/tmp/raft-logs-3
-    
-    zookeeper.connect=localhost:2181
     EOF
  
 Open up 3 separate terminals, and run individual commands:

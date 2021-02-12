@@ -90,14 +90,19 @@ public enum ApiKeys {
     ALTER_CLIENT_QUOTAS(ApiMessageType.ALTER_CLIENT_QUOTAS, false, true),
     DESCRIBE_USER_SCRAM_CREDENTIALS(ApiMessageType.DESCRIBE_USER_SCRAM_CREDENTIALS),
     ALTER_USER_SCRAM_CREDENTIALS(ApiMessageType.ALTER_USER_SCRAM_CREDENTIALS, false, true),
-    VOTE(ApiMessageType.VOTE, true, RecordBatch.MAGIC_VALUE_V0, false, false),
-    BEGIN_QUORUM_EPOCH(ApiMessageType.BEGIN_QUORUM_EPOCH, true, RecordBatch.MAGIC_VALUE_V0, false, false),
-    END_QUORUM_EPOCH(ApiMessageType.END_QUORUM_EPOCH, true, RecordBatch.MAGIC_VALUE_V0, false, false),
-    DESCRIBE_QUORUM(ApiMessageType.DESCRIBE_QUORUM, true, RecordBatch.MAGIC_VALUE_V0, false, false),
+    VOTE(ApiMessageType.VOTE, true, RecordBatch.MAGIC_VALUE_V0, false, true),
+    BEGIN_QUORUM_EPOCH(ApiMessageType.BEGIN_QUORUM_EPOCH, true, RecordBatch.MAGIC_VALUE_V0, false, true),
+    END_QUORUM_EPOCH(ApiMessageType.END_QUORUM_EPOCH, true, RecordBatch.MAGIC_VALUE_V0, false, true),
+    DESCRIBE_QUORUM(ApiMessageType.DESCRIBE_QUORUM, true, RecordBatch.MAGIC_VALUE_V0, false, true),
     ALTER_ISR(ApiMessageType.ALTER_ISR, true),
     UPDATE_FEATURES(ApiMessageType.UPDATE_FEATURES, false, true),
-    ENVELOPE(ApiMessageType.ENVELOPE, true, RecordBatch.MAGIC_VALUE_V0, false, false),
-    FETCH_SNAPSHOT(ApiMessageType.FETCH_SNAPSHOT, false, RecordBatch.MAGIC_VALUE_V0, false, false);
+    ENVELOPE(ApiMessageType.ENVELOPE, true, RecordBatch.MAGIC_VALUE_V0, false, true),
+    FETCH_SNAPSHOT(ApiMessageType.FETCH_SNAPSHOT, false, RecordBatch.MAGIC_VALUE_V0, false, true),
+    DESCRIBE_CLUSTER(ApiMessageType.DESCRIBE_CLUSTER),
+    DESCRIBE_PRODUCERS(ApiMessageType.DESCRIBE_PRODUCERS),
+    BROKER_REGISTRATION(ApiMessageType.BROKER_REGISTRATION, true, RecordBatch.MAGIC_VALUE_V0, false, true),
+    BROKER_HEARTBEAT(ApiMessageType.BROKER_HEARTBEAT, true, RecordBatch.MAGIC_VALUE_V0, false, true),
+    UNREGISTER_BROKER(ApiMessageType.UNREGISTER_BROKER, false, RecordBatch.MAGIC_VALUE_V0, true, false);
 
     // The generator ensures every `ApiMessageType` has a unique id
     private static final Map<Integer, ApiKeys> ID_TO_TYPE = Arrays.stream(ApiKeys.values())
@@ -115,8 +120,8 @@ public enum ApiKeys {
     /** indicates the minimum required inter broker magic required to support the API */
     public final byte minRequiredInterBrokerMagic;
 
-    /** indicates whether the API is enabled and should be exposed in ApiVersions **/
-    public final boolean isEnabled;
+    /** indicates whether this is an API which is only exposed by the KIP-500 controller **/
+    public final boolean isControllerOnlyApi;
 
     /** indicates whether the API is enabled for forwarding **/
     public final boolean forwardable;
@@ -138,7 +143,7 @@ public enum ApiKeys {
     }
 
     ApiKeys(ApiMessageType messageType, boolean clusterAction, byte minRequiredInterBrokerMagic, boolean forwardable) {
-        this(messageType, clusterAction, minRequiredInterBrokerMagic, forwardable, true);
+        this(messageType, clusterAction, minRequiredInterBrokerMagic, forwardable, false);
     }
 
     ApiKeys(
@@ -146,14 +151,14 @@ public enum ApiKeys {
         boolean clusterAction,
         byte minRequiredInterBrokerMagic,
         boolean forwardable,
-        boolean isEnabled
+        boolean isControllerOnlyApi
     ) {
         this.messageType = messageType;
         this.id = messageType.apiKey();
         this.name = messageType.name;
         this.clusterAction = clusterAction;
         this.minRequiredInterBrokerMagic = minRequiredInterBrokerMagic;
-        this.isEnabled = isEnabled;
+        this.isControllerOnlyApi = isControllerOnlyApi;
 
         this.requiresDelayedAllocation = forwardable || shouldRetainsBufferReference(messageType.requestSchemas());
         this.forwardable = forwardable;
@@ -209,7 +214,7 @@ public enum ApiKeys {
         b.append("<th>Name</th>\n");
         b.append("<th>Key</th>\n");
         b.append("</tr>");
-        for (ApiKeys key : ApiKeys.enabledApis()) {
+        for (ApiKeys key : ApiKeys.brokerApis()) {
             b.append("<tr>\n");
             b.append("<td>");
             b.append("<a href=\"#The_Messages_" + key.name + "\">" + key.name + "</a>");
@@ -241,9 +246,9 @@ public enum ApiKeys {
         return hasBuffer.get();
     }
 
-    public static List<ApiKeys> enabledApis() {
+    public static List<ApiKeys> brokerApis() {
         return Arrays.stream(values())
-            .filter(api -> api.isEnabled)
+            .filter(api -> !api.isControllerOnlyApi)
             .collect(Collectors.toList());
     }
 

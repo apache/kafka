@@ -20,7 +20,6 @@ import org.apache.kafka.clients.consumer.internals.AbstractCoordinator;
 import org.apache.kafka.clients.consumer.internals.ConsumerNetworkClient;
 import org.apache.kafka.clients.GroupRebalanceConfig;
 import org.apache.kafka.common.metrics.Measurable;
-import org.apache.kafka.common.metrics.MetricConfig;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.requests.JoinGroupRequest;
 import org.apache.kafka.common.utils.LogContext;
@@ -50,9 +49,6 @@ import static org.apache.kafka.connect.runtime.distributed.ConnectProtocolCompat
  * to workers.
  */
 public class WorkerCoordinator extends AbstractCoordinator implements Closeable {
-    // Currently doesn't support multiple task assignment strategies, so we just fill in a default value
-    public static final String DEFAULT_SUBPROTOCOL = "default";
-
     private final Logger log;
     private final String restUrl;
     private final ConfigBackingStore configStorage;
@@ -350,26 +346,20 @@ public class WorkerCoordinator extends AbstractCoordinator implements Closeable 
         public WorkerCoordinatorMetrics(Metrics metrics, String metricGrpPrefix) {
             this.metricGrpName = metricGrpPrefix + "-coordinator-metrics";
 
-            Measurable numConnectors = new Measurable() {
-                @Override
-                public double measure(MetricConfig config, long now) {
-                    final ExtendedAssignment localAssignmentSnapshot = assignmentSnapshot;
-                    if (localAssignmentSnapshot == null) {
-                        return 0.0;
-                    }
-                    return localAssignmentSnapshot.connectors().size();
+            Measurable numConnectors = (config, now) -> {
+                final ExtendedAssignment localAssignmentSnapshot = assignmentSnapshot;
+                if (localAssignmentSnapshot == null) {
+                    return 0.0;
                 }
+                return localAssignmentSnapshot.connectors().size();
             };
 
-            Measurable numTasks = new Measurable() {
-                @Override
-                public double measure(MetricConfig config, long now) {
-                    final ExtendedAssignment localAssignmentSnapshot = assignmentSnapshot;
-                    if (localAssignmentSnapshot == null) {
-                        return 0.0;
-                    }
-                    return localAssignmentSnapshot.tasks().size();
+            Measurable numTasks = (config, now) -> {
+                final ExtendedAssignment localAssignmentSnapshot = assignmentSnapshot;
+                if (localAssignmentSnapshot == null) {
+                    return 0.0;
                 }
+                return localAssignmentSnapshot.tasks().size();
             };
 
             metrics.addMetric(metrics.metricName("assigned-connectors",

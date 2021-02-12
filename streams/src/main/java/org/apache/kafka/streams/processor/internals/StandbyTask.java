@@ -17,6 +17,7 @@
 package org.apache.kafka.streams.processor.internals;
 
 import org.apache.kafka.clients.consumer.ConsumerRecord;
+import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.metrics.Sensor;
@@ -52,7 +53,7 @@ public class StandbyTask extends AbstractTask implements Task {
      * @param stateDirectory the {@link StateDirectory} created by the thread
      */
     StandbyTask(final TaskId id,
-                final Set<TopicPartition> partitions,
+                final Set<TopicPartition> inputPartitions,
                 final ProcessorTopology topology,
                 final StreamsConfig config,
                 final StreamsMetricsImpl streamsMetrics,
@@ -65,7 +66,7 @@ public class StandbyTask extends AbstractTask implements Task {
             topology,
             stateDirectory,
             stateMgr,
-            partitions,
+            inputPartitions,
             config.getLong(StreamsConfig.TASK_TIMEOUT_MS_CONFIG),
             "standby-task",
             StandbyTask.class
@@ -284,6 +285,11 @@ public class StandbyTask extends AbstractTask implements Task {
     @Override
     public void addRecords(final TopicPartition partition, final Iterable<ConsumerRecord<byte[], byte[]>> records) {
         throw new IllegalStateException("Attempted to add records to task " + id() + " for invalid input partition " + partition);
+    }
+
+    @Override
+    public void addFetchedMetadata(final TopicPartition partition, final ConsumerRecords.Metadata metadata) {
+        throw new IllegalStateException("Attempted to update metadata for standby task " + id());
     }
 
     InternalProcessorContext processorContext() {

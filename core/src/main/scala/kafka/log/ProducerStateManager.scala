@@ -201,8 +201,8 @@ private[log] class ProducerAppendInfo(val topicPartition: TopicPartition,
 
   private def checkProducerEpoch(producerEpoch: Short, offset: Long): Unit = {
     if (producerEpoch < updatedEntry.producerEpoch) {
-      val message = s"Producer's epoch at offset $offset in $topicPartition is $producerEpoch, which is " +
-        s"smaller than the last seen epoch ${updatedEntry.producerEpoch}"
+      val message = s"Epoch of producer $producerId at offset $offset in $topicPartition is $producerEpoch, " +
+        s"which is smaller than the last seen epoch ${updatedEntry.producerEpoch}"
 
       if (origin == AppendOrigin.Replication) {
         warn(message)
@@ -219,8 +219,9 @@ private[log] class ProducerAppendInfo(val topicPartition: TopicPartition,
     if (producerEpoch != updatedEntry.producerEpoch) {
       if (appendFirstSeq != 0) {
         if (updatedEntry.producerEpoch != RecordBatch.NO_PRODUCER_EPOCH) {
-          throw new OutOfOrderSequenceException(s"Invalid sequence number for new epoch at offset $offset in " +
-            s"partition $topicPartition: $producerEpoch (request epoch), $appendFirstSeq (seq. number)")
+          throw new OutOfOrderSequenceException(s"Invalid sequence number for new epoch of producer $producerId " +
+            s"at offset $offset in partition $topicPartition: $producerEpoch (request epoch), $appendFirstSeq (seq. number), " +
+            s"${updatedEntry.producerEpoch} (current producer epoch)")
         }
       }
     } else {
@@ -234,7 +235,7 @@ private[log] class ProducerAppendInfo(val topicPartition: TopicPartition,
       // If there is no current producer epoch (possibly because all producer records have been deleted due to
       // retention or the DeleteRecords API) accept writes with any sequence number
       if (!(currentEntry.producerEpoch == RecordBatch.NO_PRODUCER_EPOCH || inSequence(currentLastSeq, appendFirstSeq))) {
-        throw new OutOfOrderSequenceException(s"Out of order sequence number for producerId $producerId at " +
+        throw new OutOfOrderSequenceException(s"Out of order sequence number for producer $producerId at " +
           s"offset $offset in partition $topicPartition: $appendFirstSeq (incoming seq. number), " +
           s"$currentLastSeq (current end sequence number)")
       }
@@ -770,7 +771,7 @@ class ProducerStateManager(val topicPartition: TopicPartition,
   /**
    * Truncate the producer id mapping and remove all snapshots. This resets the state of the mapping.
    */
-  def truncate(): Unit = {
+  def truncateFullyAndStartAt(offset: Long): Unit = {
     producers.clear()
     ongoingTxns.clear()
     unreplicatedTxns.clear()
@@ -778,7 +779,7 @@ class ProducerStateManager(val topicPartition: TopicPartition,
       removeAndDeleteSnapshot(snapshot.offset)
     }
     lastSnapOffset = 0L
-    lastMapOffset = 0L
+    lastMapOffset = offset
   }
 
   /**

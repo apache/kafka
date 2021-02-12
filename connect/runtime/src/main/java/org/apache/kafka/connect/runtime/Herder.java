@@ -65,7 +65,7 @@ public interface Herder {
      * Get a list of connectors currently running in this cluster. This is a full list of connectors in the cluster gathered
      * from the current configuration. However, note
      *
-     * @returns A list of connector names
+     * @return A list of connector names
      * @throws org.apache.kafka.connect.runtime.distributed.RequestTargetException if this node can not resolve the request
      *         (e.g., because it has not joined the cluster or does not have configs in sync with the group) and it is
      *         not the leader or the task owner (e.g., task restart must be handled by the worker which owns the task)
@@ -85,6 +85,13 @@ public interface Herder {
      * @param callback callback to invoke with the configuration
      */
     void connectorConfig(String connName, Callback<Map<String, String>> callback);
+
+    /**
+     * Get the configuration for all tasks.
+     * @param connName name of the connector
+     * @param callback callback to invoke with the configuration
+     */
+    void tasksConfig(String connName, Callback<Map<ConnectorTaskId, Map<String, String>>> callback);
 
     /**
      * Set the configuration for a connector. This supports creation and updating.
@@ -132,7 +139,7 @@ public interface Herder {
 
     /**
      * Get a list of connectors currently running in this cluster.
-     * @returns A list of connector names
+     * @return A list of connector names
      */
     Collection<String> connectors();
 
@@ -213,7 +220,7 @@ public interface Herder {
      * @param delayMs delay before restart
      * @param connName name of the connector
      * @param cb callback to invoke upon completion
-     * @returns The id of the request
+     * @return The id of the request
      */
     HerderRequest restartConnector(long delayMs, String connName, Callback<Void> cb);
 

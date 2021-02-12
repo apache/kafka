@@ -684,14 +684,14 @@ public class StreamsMetricsImplTest {
         verify(metrics);
     }
 
-    @Test(expected = NullPointerException.class)
+    @Test
     public void testNullMetrics() {
-        new StreamsMetricsImpl(null, "", VERSION, time);
+        assertThrows(NullPointerException.class, () -> new StreamsMetricsImpl(null, "", VERSION, time));
     }
 
-    @Test(expected = NullPointerException.class)
+    @Test
     public void testRemoveNullSensor() {
-        streamsMetrics.removeSensor(null);
+        assertThrows(NullPointerException.class, () -> streamsMetrics.removeSensor(null));
     }
 
     @Test

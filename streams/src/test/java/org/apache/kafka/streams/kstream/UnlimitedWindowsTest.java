@@ -25,6 +25,7 @@ import static java.time.Instant.ofEpochMilli;
 import static org.apache.kafka.streams.EqualityCheck.verifyEquality;
 import static org.apache.kafka.streams.EqualityCheck.verifyInEquality;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
@@ -37,9 +38,9 @@ public class UnlimitedWindowsTest {
         assertEquals(anyStartTime, UnlimitedWindows.of().startOn(ofEpochMilli(anyStartTime)).startMs);
     }
 
-    @Test(expected = IllegalArgumentException.class)
+    @Test
     public void startTimeMustNotBeNegative() {
-        UnlimitedWindows.of().startOn(ofEpochMilli(-1));
+        assertThrows(IllegalArgumentException.class, () -> UnlimitedWindows.of().startOn(ofEpochMilli(-1)));
     }
 
     @SuppressWarnings("deprecation")

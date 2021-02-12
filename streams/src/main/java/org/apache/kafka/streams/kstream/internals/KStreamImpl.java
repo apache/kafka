@@ -20,6 +20,7 @@ import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.internals.ApiUtils;
+import org.apache.kafka.streams.kstream.BranchedKStream;
 import org.apache.kafka.streams.kstream.ForeachAction;
 import org.apache.kafka.streams.kstream.GlobalKTable;
 import org.apache.kafka.streams.kstream.Grouped;
@@ -440,12 +441,14 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
             builder);
     }
 
+    @Deprecated
     @Override
     @SuppressWarnings("unchecked")
     public KStream<K, V>[] branch(final Predicate<? super K, ? super V>... predicates) {
         return doBranch(NamedInternal.empty(), predicates);
     }
 
+    @Deprecated
     @Override
     @SuppressWarnings("unchecked")
     public KStream<K, V>[] branch(final Named named,
@@ -472,7 +475,8 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
         }
 
         final ProcessorParameters processorParameters =
-            new ProcessorParameters<>(new KStreamBranch(predicates.clone(), childNames), branchName);
+            new ProcessorParameters<>(new KStreamBranch(Arrays.asList(predicates.clone()),
+                    Arrays.asList(childNames)), branchName);
         final ProcessorGraphNode<K, V> branchNode =
             new ProcessorGraphNode<>(branchName, processorParameters);
 
@@ -490,6 +494,17 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
         }
 
         return branchChildren;
+    }
+
+    @Override
+    public BranchedKStream<K, V> split() {
+        return new BranchedKStreamImpl<>(this, repartitionRequired, NamedInternal.empty());
+    }
+
+    @Override
+    public BranchedKStream<K, V> split(final Named named) {
+        Objects.requireNonNull(named, "named can't be null");
+        return new BranchedKStreamImpl<>(this, repartitionRequired, new NamedInternal(named));
     }
 
     @Override

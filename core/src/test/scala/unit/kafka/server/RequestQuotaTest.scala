@@ -18,7 +18,6 @@ import java.net.InetAddress
 import java.util
 import java.util.concurrent.{Executors, Future, TimeUnit}
 import java.util.{Collections, Optional, Properties}
-
 import kafka.api.LeaderAndIsr
 import kafka.log.LogConfig
 import kafka.network.RequestChannel.Session
@@ -48,9 +47,10 @@ import org.apache.kafka.common.resource.{PatternType, ResourceType => AdminResou
 import org.apache.kafka.common.security.auth._
 import org.apache.kafka.common.utils.{Sanitizer, SecurityUtils}
 import org.apache.kafka.common._
+import org.apache.kafka.common.config.internals.QuotaConfigs
 import org.apache.kafka.server.authorizer.{Action, AuthorizableRequestContext, AuthorizationResult}
-import org.junit.Assert._
-import org.junit.{After, Before, Test}
+import org.junit.jupiter.api.Assertions._
+import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
 
 import scala.collection.mutable.ListBuffer
 import scala.jdk.CollectionConverters._
@@ -85,7 +85,7 @@ class RequestQuotaTest extends BaseRequestTest {
     properties.put(KafkaConfig.PrincipalBuilderClassProp, classOf[RequestQuotaTest.TestPrincipalBuilder].getName)
   }
 
-  @Before
+  @BeforeEach
   override def setUp(): Unit = {
     RequestQuotaTest.principal = KafkaPrincipal.ANONYMOUS
     super.setUp()
@@ -95,35 +95,35 @@ class RequestQuotaTest extends BaseRequestTest {
 
     // Change default client-id request quota to a small value and a single unthrottledClient with a large quota
     val quotaProps = new Properties()
-    quotaProps.put(DynamicConfig.Client.RequestPercentageOverrideProp, "0.01")
-    quotaProps.put(DynamicConfig.Client.ProducerByteRateOverrideProp, "2000")
-    quotaProps.put(DynamicConfig.Client.ConsumerByteRateOverrideProp, "2000")
+    quotaProps.put(QuotaConfigs.REQUEST_PERCENTAGE_OVERRIDE_CONFIG, "0.01")
+    quotaProps.put(QuotaConfigs.PRODUCER_BYTE_RATE_OVERRIDE_CONFIG, "2000")
+    quotaProps.put(QuotaConfigs.CONSUMER_BYTE_RATE_OVERRIDE_CONFIG, "2000")
     adminZkClient.changeClientIdConfig("<default>", quotaProps)
-    quotaProps.put(DynamicConfig.Client.RequestPercentageOverrideProp, "2000")
+    quotaProps.put(QuotaConfigs.REQUEST_PERCENTAGE_OVERRIDE_CONFIG, "2000")
     adminZkClient.changeClientIdConfig(Sanitizer.sanitize(unthrottledClientId), quotaProps)
 
     // Client ids with small producer and consumer (fetch) quotas. Quota values were picked so that both
     // producer/consumer and request quotas are violated on the first produce/consume operation, and the delay due to
     // producer/consumer quota violation will be longer than the delay due to request quota violation.
-    quotaProps.put(DynamicConfig.Client.ProducerByteRateOverrideProp, "1")
-    quotaProps.put(DynamicConfig.Client.RequestPercentageOverrideProp, "0.01")
+    quotaProps.put(QuotaConfigs.PRODUCER_BYTE_RATE_OVERRIDE_CONFIG, "1")
+    quotaProps.put(QuotaConfigs.REQUEST_PERCENTAGE_OVERRIDE_CONFIG, "0.01")
     adminZkClient.changeClientIdConfig(Sanitizer.sanitize(smallQuotaProducerClientId), quotaProps)
-    quotaProps.put(DynamicConfig.Client.ConsumerByteRateOverrideProp, "1")
-    quotaProps.put(DynamicConfig.Client.RequestPercentageOverrideProp, "0.01")
+    quotaProps.put(QuotaConfigs.CONSUMER_BYTE_RATE_OVERRIDE_CONFIG, "1")
+    quotaProps.put(QuotaConfigs.REQUEST_PERCENTAGE_OVERRIDE_CONFIG, "0.01")
     adminZkClient.changeClientIdConfig(Sanitizer.sanitize(smallQuotaConsumerClientId), quotaProps)
 
     TestUtils.retry(20000) {
       val quotaManager = servers.head.dataPlaneRequestProcessor.quotas.request
-      assertEquals(s"Default request quota not set", Quota.upperBound(0.01), quotaManager.quota("some-user", "some-client"))
-      assertEquals(s"Request quota override not set", Quota.upperBound(2000), quotaManager.quota("some-user", unthrottledClientId))
+      assertEquals(Quota.upperBound(0.01), quotaManager.quota("some-user", "some-client"), s"Default request quota not set")
+      assertEquals(Quota.upperBound(2000), quotaManager.quota("some-user", unthrottledClientId), s"Request quota override not set")
       val produceQuotaManager = servers.head.dataPlaneRequestProcessor.quotas.produce
-      assertEquals(s"Produce quota override not set", Quota.upperBound(1), produceQuotaManager.quota("some-user", smallQuotaProducerClientId))
+      assertEquals(Quota.upperBound(1), produceQuotaManager.quota("some-user", smallQuotaProducerClientId), s"Produce quota override not set")
       val consumeQuotaManager = servers.head.dataPlaneRequestProcessor.quotas.fetch
-      assertEquals(s"Consume quota override not set", Quota.upperBound(1), consumeQuotaManager.quota("some-user", smallQuotaConsumerClientId))
+      assertEquals(Quota.upperBound(1), consumeQuotaManager.quota("some-user", smallQuotaConsumerClientId), s"Consume quota override not set")
     }
   }
 
-  @After
+  @AfterEach
   override def tearDown(): Unit = {
     try executor.shutdownNow()
     finally super.tearDown()
@@ -171,7 +171,7 @@ class RequestQuotaTest extends BaseRequestTest {
   def testUnauthorizedThrottle(): Unit = {
     RequestQuotaTest.principal = RequestQuotaTest.UnauthorizedPrincipal
 
-    for (apiKey <- ApiKeys.enabledApis.asScala) {
+    for (apiKey <- ApiKeys.brokerApis.asScala) {
       submitTest(apiKey, () => checkUnauthorizedRequestThrottle(apiKey))
     }
 
@@ -617,6 +617,24 @@ class RequestQuotaTest extends BaseRequestTest {
           new EnvelopeRequest.Builder(embedRequestData, new Array[Byte](0),
             InetAddress.getByName("192.168.1.1").getAddress)
 
+        case ApiKeys.DESCRIBE_CLUSTER =>
+          new DescribeClusterRequest.Builder(new DescribeClusterRequestData())
+
+        case ApiKeys.DESCRIBE_PRODUCERS =>
+          new DescribeProducersRequest.Builder(new DescribeProducersRequestData()
+            .setTopics(List(new DescribeProducersRequestData.TopicRequest()
+              .setName("test-topic")
+              .setPartitionIndexes(List(1, 2, 3).map(Int.box).asJava)).asJava))
+
+        case ApiKeys.BROKER_REGISTRATION =>
+          new BrokerRegistrationRequest.Builder(new BrokerRegistrationRequestData())
+
+        case ApiKeys.BROKER_HEARTBEAT =>
+          new BrokerHeartbeatRequest.Builder(new BrokerHeartbeatRequestData())
+
+        case ApiKeys.UNREGISTER_BROKER =>
+          new UnregisterBrokerRequest.Builder(new UnregisterBrokerRequestData())
+
         case _ =>
           throw new IllegalArgumentException("Unsupported API key " + apiKey)
     }
@@ -678,8 +696,8 @@ class RequestQuotaTest extends BaseRequestTest {
     val client = Client(clientId, apiKey)
     val throttled = client.runUntil(_.throttleTimeMs > 0)
 
-    assertTrue(s"Response not throttled: $client", throttled)
-    assertTrue(s"Throttle time metrics not updated: $client" , throttleTimeMetricValue(clientId) > 0)
+    assertTrue(throttled, s"Response not throttled: $client")
+    assertTrue(throttleTimeMetricValue(clientId) > 0 , s"Throttle time metrics not updated: $client")
   }
 
   private def checkSmallQuotaProducerRequestThrottleTime(): Unit = {
@@ -688,11 +706,11 @@ class RequestQuotaTest extends BaseRequestTest {
     val smallQuotaProducerClient = Client(smallQuotaProducerClientId, ApiKeys.PRODUCE)
     val throttled = smallQuotaProducerClient.runUntil(_.throttleTimeMs > 0)
 
-    assertTrue(s"Response not throttled: $smallQuotaProducerClient", throttled)
-    assertTrue(s"Throttle time metrics for produce quota not updated: $smallQuotaProducerClient",
-      throttleTimeMetricValueForQuotaType(smallQuotaProducerClientId, QuotaType.Produce) > 0)
-    assertTrue(s"Throttle time metrics for request quota updated: $smallQuotaProducerClient",
-      throttleTimeMetricValueForQuotaType(smallQuotaProducerClientId, QuotaType.Request).isNaN)
+    assertTrue(throttled, s"Response not throttled: $smallQuotaProducerClient")
+    assertTrue(throttleTimeMetricValueForQuotaType(smallQuotaProducerClientId, QuotaType.Produce) > 0,
+      s"Throttle time metrics for produce quota not updated: $smallQuotaProducerClient")
+    assertTrue(throttleTimeMetricValueForQuotaType(smallQuotaProducerClientId, QuotaType.Request).isNaN,
+      s"Throttle time metrics for request quota updated: $smallQuotaProducerClient")
   }
 
   private def checkSmallQuotaConsumerRequestThrottleTime(): Unit = {
@@ -701,11 +719,11 @@ class RequestQuotaTest extends BaseRequestTest {
     val smallQuotaConsumerClient =   Client(smallQuotaConsumerClientId, ApiKeys.FETCH)
     val throttled = smallQuotaConsumerClient.runUntil(_.throttleTimeMs > 0)
 
-    assertTrue(s"Response not throttled: $smallQuotaConsumerClientId", throttled)
-    assertTrue(s"Throttle time metrics for consumer quota not updated: $smallQuotaConsumerClient",
-      throttleTimeMetricValueForQuotaType(smallQuotaConsumerClientId, QuotaType.Fetch) > 0)
-    assertTrue(s"Throttle time metrics for request quota updated: $smallQuotaConsumerClient",
-      throttleTimeMetricValueForQuotaType(smallQuotaConsumerClientId, QuotaType.Request).isNaN)
+    assertTrue(throttled, s"Response not throttled: $smallQuotaConsumerClientId")
+    assertTrue(throttleTimeMetricValueForQuotaType(smallQuotaConsumerClientId, QuotaType.Fetch) > 0,
+      s"Throttle time metrics for consumer quota not updated: $smallQuotaConsumerClient")
+    assertTrue(throttleTimeMetricValueForQuotaType(smallQuotaConsumerClientId, QuotaType.Request).isNaN,
+      s"Throttle time metrics for request quota updated: $smallQuotaConsumerClient")
   }
 
   private def checkUnthrottledClient(apiKey: ApiKeys): Unit = {
@@ -714,7 +732,7 @@ class RequestQuotaTest extends BaseRequestTest {
     val unthrottledClient = Client(unthrottledClientId, apiKey)
     unthrottledClient.runUntil(_.throttleTimeMs <= 0.0)
     assertEquals(1, unthrottledClient.correlationId)
-    assertTrue(s"Client should not have been throttled: $unthrottledClient", throttleTimeMetricValue(unthrottledClientId).isNaN)
+    assertTrue(throttleTimeMetricValue(unthrottledClientId).isNaN, s"Client should not have been throttled: $unthrottledClient")
   }
 
   private def checkExemptRequestMetric(apiKey: ApiKeys): Unit = {
@@ -723,22 +741,22 @@ class RequestQuotaTest extends BaseRequestTest {
     val client = Client(clientId, apiKey)
     val updated = client.runUntil(_ => exemptRequestMetricValue > exemptTarget)
 
-    assertTrue(s"Exempt-request-time metric not updated: $client", updated)
-    assertTrue(s"Client should not have been throttled: $client", throttleTimeMetricValue(clientId).isNaN)
+    assertTrue(updated, s"Exempt-request-time metric not updated: $client")
+    assertTrue(throttleTimeMetricValue(clientId).isNaN, s"Client should not have been throttled: $client")
   }
 
   private def checkUnauthorizedRequestThrottle(apiKey: ApiKeys): Unit = {
     val clientId = "unauthorized-" + apiKey.toString
     val client = Client(clientId, apiKey)
     val throttled = client.runUntil(_ => throttleTimeMetricValue(clientId) > 0.0)
-    assertTrue(s"Unauthorized client should have been throttled: $client", throttled)
+    assertTrue(throttled, s"Unauthorized client should have been throttled: $client")
   }
 }
 
 object RequestQuotaTest {
-  val ClusterActions = ApiKeys.enabledApis.asScala.filter(_.clusterAction).toSet
+  val ClusterActions = ApiKeys.brokerApis.asScala.filter(_.clusterAction).toSet
   val SaslActions = Set(ApiKeys.SASL_HANDSHAKE, ApiKeys.SASL_AUTHENTICATE)
-  val ClientActions = ApiKeys.enabledApis.asScala.toSet -- ClusterActions -- SaslActions
+  val ClientActions = ApiKeys.brokerApis.asScala.toSet -- ClusterActions -- SaslActions
 
   val UnauthorizedPrincipal = new KafkaPrincipal(KafkaPrincipal.USER_TYPE, "Unauthorized")
   // Principal used for all client connections. This is modified by tests which

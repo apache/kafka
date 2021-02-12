@@ -89,6 +89,10 @@ class KafkaVersion(LooseVersion):
         # User SCRAM Credentials (KIP-554)
         return self >= V_2_7_0
 
+    def supports_topic_ids(self):
+        # Supports topic IDs as described by KIP-516
+        return self >= V_2_8_0
+
 def get_version(node=None):
     """Return the version attached to the given node.
     Default to DEV_BRANCH if node or node.version is undefined (aka None)
@@ -99,7 +103,7 @@ def get_version(node=None):
         return DEV_BRANCH
 
 DEV_BRANCH = KafkaVersion("dev")
-DEV_VERSION = KafkaVersion("2.8.0-SNAPSHOT")
+DEV_VERSION = KafkaVersion("2.9.0-SNAPSHOT")
 
 # 0.8.2.x versions
 V_0_8_2_1 = KafkaVersion("0.8.2.1")
@@ -181,8 +185,17 @@ LATEST_2_5 = V_2_5_1
 
 # 2.6.x versions
 V_2_6_0 = KafkaVersion("2.6.0")
-LATEST_2_6 = V_2_6_0
+V_2_6_1 = KafkaVersion("2.6.1")
+LATEST_2_6 = V_2_6_1
 
 # 2.7.x versions
 V_2_7_0 = KafkaVersion("2.7.0")
 LATEST_2_7 = V_2_7_0
+
+# 2.8.x versions
+V_2_8_0 = KafkaVersion("2.8.0")
+LATEST_2_8 = V_2_8_0
+
+# 2.9.x versions
+V_2_9_0 = KafkaVersion("2.9.0")
+LATEST_2_9 = V_2_9_0

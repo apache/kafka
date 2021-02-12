@@ -18,7 +18,6 @@ package kafka.server
 
 import java.util
 import java.util.Properties
-
 import kafka.network.SocketServer
 import kafka.security.authorizer.AclAuthorizer
 import org.apache.kafka.common.message.{DescribeUserScramCredentialsRequestData, DescribeUserScramCredentialsResponseData}
@@ -27,9 +26,8 @@ import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.requests.{DescribeUserScramCredentialsRequest, DescribeUserScramCredentialsResponse}
 import org.apache.kafka.common.security.auth.{AuthenticationContext, KafkaPrincipal, KafkaPrincipalBuilder}
 import org.apache.kafka.server.authorizer.{Action, AuthorizableRequestContext, AuthorizationResult}
-import org.junit.Assert._
-import org.junit.rules.TestName
-import org.junit.{Rule, Test}
+import org.junit.jupiter.api.Assertions._
+import org.junit.jupiter.api.Test
 
 import scala.jdk.CollectionConverters._
 
@@ -39,19 +37,12 @@ import scala.jdk.CollectionConverters._
  * Testing the API for the case where there are actually credentials to describe is performed elsewhere.
  */
 class DescribeUserScramCredentialsRequestTest extends BaseRequestTest {
+
   override def brokerPropertyOverrides(properties: Properties): Unit = {
     properties.put(KafkaConfig.ControlledShutdownEnableProp, "false")
     properties.put(KafkaConfig.AuthorizerClassNameProp, classOf[DescribeCredentialsTest.TestAuthorizer].getName)
-    properties.put(KafkaConfig.PrincipalBuilderClassProp,
-      if (testName.getMethodName.endsWith("NotAuthorized")) {
-        classOf[DescribeCredentialsTest.TestPrincipalBuilderReturningUnauthorized].getName
-      } else {
-        classOf[DescribeCredentialsTest.TestPrincipalBuilderReturningAuthorized].getName
-      })
+    properties.put(KafkaConfig.PrincipalBuilderClassProp, classOf[DescribeCredentialsTest.TestPrincipalBuilderReturningAuthorized].getName)
   }
-
-  private val _testName = new TestName
-  @Rule def testName = _testName
 
   @Test
   def testDescribeNothing(): Unit = {
@@ -60,10 +51,8 @@ class DescribeUserScramCredentialsRequestTest extends BaseRequestTest {
     val response = sendDescribeUserScramCredentialsRequest(request)
 
     val error = response.data.errorCode
-    assertEquals("Expected no error when describing everything and there are no credentials",
-      Errors.NONE.code, error)
-    assertEquals("Expected no credentials when describing everything and there are no credentials",
-      0, response.data.results.size)
+    assertEquals(Errors.NONE.code, error, "Expected no error when describing everything and there are no credentials")
+    assertEquals(0, response.data.results.size, "Expected no credentials when describing everything and there are no credentials")
   }
 
   @Test
@@ -73,10 +62,8 @@ class DescribeUserScramCredentialsRequestTest extends BaseRequestTest {
     val response = sendDescribeUserScramCredentialsRequest(request)
 
     val error = response.data.errorCode
-    assertEquals("Expected no error when describing everything and there are no credentials",
-      Errors.NONE.code, error)
-    assertEquals("Expected no credentials when describing everything and there are no credentials",
-      0, response.data.results.size)
+    assertEquals(Errors.NONE.code, error, "Expected no error when describing everything and there are no credentials")
+    assertEquals(0, response.data.results.size, "Expected no credentials when describing everything and there are no credentials")
   }
 
   @Test
@@ -86,17 +73,7 @@ class DescribeUserScramCredentialsRequestTest extends BaseRequestTest {
     val response = sendDescribeUserScramCredentialsRequest(request, notControllerSocketServer)
 
     val error = response.data.errorCode
-    assertEquals("Did not expect controller error when routed to non-controller", Errors.NONE.code, error)
-  }
-
-  @Test
-  def testDescribeNotAuthorized(): Unit = {
-    val request = new DescribeUserScramCredentialsRequest.Builder(
-      new DescribeUserScramCredentialsRequestData()).build()
-    val response = sendDescribeUserScramCredentialsRequest(request)
-
-    val error = response.data.errorCode
-    assertEquals("Expected not authorized error", Errors.CLUSTER_AUTHORIZATION_FAILED.code, error)
+    assertEquals(Errors.NONE.code, error, "Did not expect controller error when routed to non-controller")
   }
 
   @Test
@@ -107,10 +84,10 @@ class DescribeUserScramCredentialsRequestTest extends BaseRequestTest {
       new DescribeUserScramCredentialsRequestData().setUsers(List(userName, userName).asJava)).build()
     val response = sendDescribeUserScramCredentialsRequest(request)
 
-    assertEquals("Expected no top-level error", Errors.NONE.code, response.data.errorCode)
+    assertEquals(Errors.NONE.code, response.data.errorCode, "Expected no top-level error")
     assertEquals(1, response.data.results.size)
     val result: DescribeUserScramCredentialsResponseData.DescribeUserScramCredentialsResult = response.data.results.get(0)
-    assertEquals(s"Expected duplicate resource error for $user", Errors.DUPLICATE_RESOURCE.code, result.errorCode)
+    assertEquals(Errors.DUPLICATE_RESOURCE.code, result.errorCode, s"Expected duplicate resource error for $user")
     assertEquals(s"Cannot describe SCRAM credentials for the same user twice in a single request: $user", result.errorMessage)
   }
 
@@ -121,10 +98,10 @@ class DescribeUserScramCredentialsRequestTest extends BaseRequestTest {
       new DescribeUserScramCredentialsRequestData().setUsers(List(new UserName().setName(unknownUser)).asJava)).build()
     val response = sendDescribeUserScramCredentialsRequest(request)
 
-    assertEquals("Expected no top-level error", Errors.NONE.code, response.data.errorCode)
+    assertEquals(Errors.NONE.code, response.data.errorCode, "Expected no top-level error")
     assertEquals(1, response.data.results.size)
     val result: DescribeUserScramCredentialsResponseData.DescribeUserScramCredentialsResult = response.data.results.get(0)
-    assertEquals(s"Expected duplicate resource error for $unknownUser", Errors.RESOURCE_NOT_FOUND.code, result.errorCode)
+    assertEquals(Errors.RESOURCE_NOT_FOUND.code, result.errorCode, s"Expected duplicate resource error for $unknownUser")
     assertEquals(s"Attempt to describe a user credential that does not exist: $unknownUser", result.errorMessage)
   }
 
