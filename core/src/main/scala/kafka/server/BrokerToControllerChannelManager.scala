@@ -67,9 +67,43 @@ class MetadataCacheControllerNodeProvider(
   override def get(): Option[Node] = {
     metadataCache.getControllerId
       .flatMap(metadataCache.getAliveBroker)
-      .map(_.node(listenerName))
+      .map(_.endpoints(listenerName.value))
   }
 }
+
+object BrokerToControllerChannelManager {
+  def apply(
+    controllerNodeProvider: ControllerNodeProvider,
+    time: Time,
+    metrics: Metrics,
+    config: KafkaConfig,
+    channelName: String,
+    threadNamePrefix: Option[String],
+    retryTimeoutMs: Long
+  ): BrokerToControllerChannelManager = {
+    new BrokerToControllerChannelManagerImpl(
+      controllerNodeProvider,
+      time,
+      metrics,
+      config,
+      channelName,
+      threadNamePrefix,
+      retryTimeoutMs
+    )
+  }
+}
+
+
+trait BrokerToControllerChannelManager {
+  def start(): Unit
+  def shutdown(): Unit
+  def controllerApiVersions(): Option[NodeApiVersions]
+  def sendRequest(
+    request: AbstractRequest.Builder[_ <: AbstractRequest],
+    callback: ControllerRequestCompletionHandler
+  ): Unit
+}
+
 
 /**
  * This class manages the connection between a broker and the controller. It runs a single
@@ -78,7 +112,7 @@ class MetadataCacheControllerNodeProvider(
  * The maximum number of in-flight requests are set to one to ensure orderly response from the controller, therefore
  * care must be taken to not block on outstanding requests for too long.
  */
-class BrokerToControllerChannelManager(
+class BrokerToControllerChannelManagerImpl(
   controllerNodeProvider: ControllerNodeProvider,
   time: Time,
   metrics: Metrics,
@@ -86,7 +120,7 @@ class BrokerToControllerChannelManager(
   channelName: String,
   threadNamePrefix: Option[String],
   retryTimeoutMs: Long
-) extends Logging {
+) extends BrokerToControllerChannelManager with Logging {
   private val logContext = new LogContext(s"[broker-${config.brokerId}-to-controller] ")
   private val manualMetadataUpdater = new ManualMetadataUpdater()
   private val apiVersions = new ApiVersions()
@@ -99,7 +133,6 @@ class BrokerToControllerChannelManager(
 
   def shutdown(): Unit = {
     requestThread.shutdown()
-    requestThread.awaitShutdown()
     info(s"Broker to controller channel manager for $channelName shutdown")
   }
 

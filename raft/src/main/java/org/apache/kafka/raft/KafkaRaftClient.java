@@ -126,9 +126,16 @@ import static org.apache.kafka.raft.RaftUtil.hasValidTopicPartition;
  *    gracefully resign from the current epoch. This causes remaining voters to immediately
  *    begin a new election.
  *
- * 4) {@link FetchRequestData}: This is the same as the usual Fetch API in Kafka, but we piggyback
- *    some additional metadata on responses (i.e. current leader and epoch). Unlike partition replication,
- *    we also piggyback truncation detection on this API rather than through a separate truncation state.
+ * 4) {@link FetchRequestData}: This is the same as the usual Fetch API in Kafka, but we add snapshot
+ *    check before responding, and we also piggyback some additional metadata on responses (i.e. current
+ *    leader and epoch). Unlike partition replication, we also piggyback truncation detection on this API
+ *    rather than through a separate truncation state.
+ *
+ * 5) {@link FetchSnapshotRequestData}: Sent by the follower to the epoch leader in order to fetch a snapshot.
+ *    This happens when a FetchResponse includes a snapshot ID due to the follower's log end offset being less
+ *    than the leader's log start offset. This API is similar to the Fetch API since the snapshot is stored
+ *    as FileRecords, but we use {@link UnalignedRecords} in FetchSnapshotResponse because the records
+ *    are not necessarily offset-aligned.
  *
  */
 public class KafkaRaftClient<T> implements RaftClient<T> {
@@ -1359,7 +1366,7 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
             } else {
                 throw new IllegalStateException(
                     String.format(
-                        "Full log trunctation expected but didn't happen. Snapshot of %s, log end offset %s, last fetched %s",
+                        "Full log truncation expected but didn't happen. Snapshot of %s, log end offset %s, last fetched %s",
                         snapshot.snapshotId(),
                         log.endOffset(),
                         log.lastFetchedEpoch()

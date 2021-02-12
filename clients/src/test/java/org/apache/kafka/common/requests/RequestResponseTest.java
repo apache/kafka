@@ -164,6 +164,8 @@ import org.apache.kafka.common.message.StopReplicaResponseData;
 import org.apache.kafka.common.message.SyncGroupRequestData;
 import org.apache.kafka.common.message.SyncGroupRequestData.SyncGroupRequestAssignment;
 import org.apache.kafka.common.message.SyncGroupResponseData;
+import org.apache.kafka.common.message.UnregisterBrokerRequestData;
+import org.apache.kafka.common.message.UnregisterBrokerResponseData;
 import org.apache.kafka.common.message.UpdateMetadataRequestData.UpdateMetadataBroker;
 import org.apache.kafka.common.message.UpdateMetadataRequestData.UpdateMetadataEndpoint;
 import org.apache.kafka.common.message.UpdateMetadataRequestData.UpdateMetadataPartitionState;
@@ -517,13 +519,24 @@ public class RequestResponseTest {
         checkRequest(createAlterClientQuotasRequest(), true);
         checkErrorResponse(createAlterClientQuotasRequest(), unknownServerException, true);
         checkResponse(createAlterClientQuotasResponse(), 0, true);
+    }
 
-        checkRequest(createBrokerHeartbeatRequest(), true);
-        checkErrorResponse(createBrokerHeartbeatRequest(), unknownServerException, true);
-        checkResponse(createBrokerHeartbeatResponse(), 0, true);
-        checkRequest(createBrokerRegistrationRequest(), true);
-        checkErrorResponse(createBrokerRegistrationRequest(), unknownServerException, true);
-        checkResponse(createBrokerRegistrationResponse(), 0, true);
+    @Test
+    public void testBrokerHeartbeatSerialization() {
+        for (short v = ApiKeys.BROKER_HEARTBEAT.oldestVersion(); v <= ApiKeys.BROKER_HEARTBEAT.latestVersion(); v++) {
+            checkRequest(createBrokerHeartbeatRequest(v), true);
+            checkErrorResponse(createBrokerHeartbeatRequest(v), unknownServerException, true);
+            checkResponse(createBrokerHeartbeatResponse(), v, true);
+        }
+    }
+
+    @Test
+    public void testBrokerRegistrationSerialization() {
+        for (short v = ApiKeys.BROKER_REGISTRATION.oldestVersion(); v <= ApiKeys.BROKER_REGISTRATION.latestVersion(); v++) {
+            checkRequest(createBrokerRegistrationRequest(v), true);
+            checkErrorResponse(createBrokerRegistrationRequest(v), unknownServerException, true);
+            checkResponse(createBrokerRegistrationResponse(), 0, true);
+        }
     }
 
     @Test
@@ -541,6 +554,15 @@ public class RequestResponseTest {
             checkRequest(createDescribeClusterRequest(v), true);
             checkErrorResponse(createDescribeClusterRequest(v), unknownServerException, true);
             checkResponse(createDescribeClusterResponse(), v, true);
+        }
+    }
+
+    @Test
+    public void testUnregisterBrokerSerialization() {
+        for (short v = ApiKeys.UNREGISTER_BROKER.oldestVersion(); v <= ApiKeys.UNREGISTER_BROKER.latestVersion(); v++) {
+            checkRequest(createUnregisterBrokerRequest(v), true);
+            checkErrorResponse(createUnregisterBrokerRequest(v), unknownServerException, true);
+            checkResponse(createUnregisterBrokerResponse(), v, true);
         }
     }
 
@@ -2669,14 +2691,14 @@ public class RequestResponseTest {
         return new DescribeProducersResponse(data);
     }
 
-    private BrokerHeartbeatRequest createBrokerHeartbeatRequest() {
+    private BrokerHeartbeatRequest createBrokerHeartbeatRequest(short v) {
         BrokerHeartbeatRequestData data = new BrokerHeartbeatRequestData()
                 .setBrokerId(1)
                 .setBrokerEpoch(1)
                 .setCurrentMetadataOffset(1)
                 .setWantFence(false)
                 .setWantShutDown(false);
-        return new BrokerHeartbeatRequest.Builder(data).build((short) 0);
+        return new BrokerHeartbeatRequest.Builder(data).build(v);
     }
 
     private BrokerHeartbeatResponse createBrokerHeartbeatResponse() {
@@ -2688,17 +2710,17 @@ public class RequestResponseTest {
         return new BrokerHeartbeatResponse(data);
     }
 
-    private BrokerRegistrationRequest createBrokerRegistrationRequest() {
+    private BrokerRegistrationRequest createBrokerRegistrationRequest(short v) {
         BrokerRegistrationRequestData data = new BrokerRegistrationRequestData()
                 .setBrokerId(1)
                 .setClusterId(Uuid.randomUuid())
                 .setRack("1")
-                .setFeatures(new BrokerRegistrationRequestData.FeatureCollection(asList(
+                .setFeatures(new BrokerRegistrationRequestData.FeatureCollection(singletonList(
                         new BrokerRegistrationRequestData.Feature()).iterator()))
-                .setListeners(new BrokerRegistrationRequestData.ListenerCollection(asList(
+                .setListeners(new BrokerRegistrationRequestData.ListenerCollection(singletonList(
                         new BrokerRegistrationRequestData.Listener()).iterator()))
                 .setIncarnationId(Uuid.randomUuid());
-        return new BrokerRegistrationRequest.Builder(data).build((short) 0);
+        return new BrokerRegistrationRequest.Builder(data).build(v);
     }
 
     private BrokerRegistrationResponse createBrokerRegistrationResponse() {
@@ -2706,6 +2728,15 @@ public class RequestResponseTest {
                 .setBrokerEpoch(1)
                 .setThrottleTimeMs(0);
         return new BrokerRegistrationResponse(data);
+    }
+
+    private UnregisterBrokerRequest createUnregisterBrokerRequest(short version) {
+        UnregisterBrokerRequestData data = new UnregisterBrokerRequestData().setBrokerId(1);
+        return new UnregisterBrokerRequest.Builder(data).build(version);
+    }
+
+    private UnregisterBrokerResponse createUnregisterBrokerResponse() {
+        return new UnregisterBrokerResponse(new UnregisterBrokerResponseData());
     }
 
     /**

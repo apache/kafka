@@ -333,23 +333,36 @@ class KStream[K, V](val inner: KStreamJ[K, V]) {
    * @param predicates the ordered list of functions that return a Boolean
    * @return multiple distinct substreams of this [[KStream]]
    * @see `org.apache.kafka.streams.kstream.KStream#branch`
+   * @deprecated since 2.8. Use `split` instead.
    */
   //noinspection ScalaUnnecessaryParentheses
+  @deprecated("use `split()` instead", "2.8")
   def branch(predicates: ((K, V) => Boolean)*): Array[KStream[K, V]] =
     inner.branch(predicates.map(_.asPredicate): _*).map(kstream => new KStream(kstream))
 
   /**
-   * Creates an array of `KStream` from this stream by branching the records in the original stream based on
-   * the supplied predicates.
+   * Split this stream. [[BranchedKStream]] can be used for routing the records to different branches depending
+   * on evaluation against the supplied predicates.
+   * Stream branching is a stateless record-by-record operation.
    *
-   * @param named      a [[Named]] config used to name the processor in the topology
-   * @param predicates the ordered list of functions that return a Boolean
-   * @return multiple distinct substreams of this [[KStream]]
-   * @see `org.apache.kafka.streams.kstream.KStream#branch`
+   * @return [[BranchedKStream]] that provides methods for routing the records to different branches.
+   * @see `org.apache.kafka.streams.kstream.KStream#split`
    */
-  //noinspection ScalaUnnecessaryParentheses
-  def branch(named: Named, predicates: ((K, V) => Boolean)*): Array[KStream[K, V]] =
-    inner.branch(named, predicates.map(_.asPredicate): _*).map(kstream => new KStream(kstream))
+  def split(): BranchedKStream[K, V] =
+    new BranchedKStream(inner.split())
+
+  /**
+   * Split this stream. [[BranchedKStream]] can be used for routing the records to different branches depending
+   * on evaluation against the supplied predicates.
+   * Stream branching is a stateless record-by-record operation.
+   *
+   * @param named a [[Named]] config used to name the processor in the topology and also to set the name prefix
+   *              for the resulting branches (see [[BranchedKStream]])
+   * @return [[BranchedKStream]] that provides methods for routing the records to different branches.
+   * @see `org.apache.kafka.streams.kstream.KStream#split`
+   */
+  def split(named: Named): BranchedKStream[K, V] =
+    new BranchedKStream(inner.split(named))
 
   /**
    * Materialize this stream to a topic and creates a new [[KStream]] from the topic using the `Produced` instance for

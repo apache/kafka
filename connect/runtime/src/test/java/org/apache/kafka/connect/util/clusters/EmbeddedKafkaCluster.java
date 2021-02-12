@@ -16,11 +16,9 @@
  */
 package org.apache.kafka.connect.util.clusters;
 
-import kafka.server.BrokerState;
 import kafka.server.KafkaConfig;
 import kafka.server.KafkaConfig$;
 import kafka.server.KafkaServer;
-import kafka.server.RunningAsBroker;
 import kafka.utils.CoreUtils;
 import kafka.utils.TestUtils;
 import kafka.zk.EmbeddedZookeeper;
@@ -47,6 +45,7 @@ import org.apache.kafka.common.network.ListenerName;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.connect.errors.ConnectException;
+import org.apache.kafka.metadata.BrokerState;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -241,13 +240,13 @@ public class EmbeddedKafkaCluster {
     }
 
     /**
-     * Get the brokers that have a {@link RunningAsBroker} state.
+     * Get the brokers that have a {@link BrokerState#RUNNING} state.
      *
      * @return the list of {@link KafkaServer} instances that are running;
      *         never null but  possibly empty
      */
     public Set<KafkaServer> runningBrokers() {
-        return brokersInState(state -> state.currentState() == RunningAsBroker.state());
+        return brokersInState(state -> state == BrokerState.RUNNING);
     }
 
     /**

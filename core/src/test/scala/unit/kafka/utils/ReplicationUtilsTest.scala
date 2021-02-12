@@ -17,15 +17,12 @@
 
 package kafka.utils
 
-import kafka.server.{KafkaConfig, ReplicaFetcherManager, ReplicaManager}
 import kafka.api.LeaderAndIsr
 import kafka.controller.LeaderIsrAndControllerEpoch
-import kafka.log.{Log, LogManager}
 import kafka.zk._
 import org.apache.kafka.common.TopicPartition
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{BeforeEach, Test}
-import org.easymock.EasyMock
 
 class ReplicationUtilsTest extends ZooKeeperTestHarness {
   private val zkVersion = 1
@@ -48,23 +45,6 @@ class ReplicationUtilsTest extends ZooKeeperTestHarness {
 
   @Test
   def testUpdateLeaderAndIsr(): Unit = {
-    val configs = TestUtils.createBrokerConfigs(1, zkConnect).map(KafkaConfig.fromProps)
-    val log: Log = EasyMock.createMock(classOf[Log])
-    EasyMock.expect(log.logEndOffset).andReturn(20).anyTimes()
-    EasyMock.expect(log)
-    EasyMock.replay(log)
-
-    val logManager: LogManager = EasyMock.createMock(classOf[LogManager])
-    EasyMock.expect(logManager.getLog(new TopicPartition(topic, partition), false)).andReturn(Some(log)).anyTimes()
-    EasyMock.replay(logManager)
-
-    val replicaManager: ReplicaManager = EasyMock.createMock(classOf[ReplicaManager])
-    EasyMock.expect(replicaManager.config).andReturn(configs.head)
-    EasyMock.expect(replicaManager.logManager).andReturn(logManager)
-    EasyMock.expect(replicaManager.replicaFetcherManager).andReturn(EasyMock.createMock(classOf[ReplicaFetcherManager]))
-    EasyMock.expect(replicaManager.zkClient).andReturn(zkClient)
-    EasyMock.replay(replicaManager)
-
     zkClient.makeSurePersistentPathExists(IsrChangeNotificationZNode.path)
 
     val replicas = List(0, 1)
