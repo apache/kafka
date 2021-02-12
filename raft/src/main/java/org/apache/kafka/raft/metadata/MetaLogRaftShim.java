@@ -37,10 +37,7 @@ public class MetaLogRaftShim implements MetaLogManager {
     private final RaftClient<ApiMessageAndVersion> client;
     private final int nodeId;
 
-    public MetaLogRaftShim(
-            RaftClient<ApiMessageAndVersion> client,
-            int nodeId
-    ) {
+    public MetaLogRaftShim(RaftClient<ApiMessageAndVersion> client, int nodeId) {
         this.client = client;
         this.nodeId = nodeId;
     }
@@ -92,8 +89,8 @@ public class MetaLogRaftShim implements MetaLogManager {
                 while (reader.hasNext()) {
                     BatchReader.Batch<ApiMessageAndVersion> batch = reader.next();
                     List<ApiMessage> records = batch.records().stream()
-                            .map(ApiMessageAndVersion::message)
-                            .collect(Collectors.toList());
+                        .map(ApiMessageAndVersion::message)
+                        .collect(Collectors.toList());
                     listener.handleCommits(batch.lastOffset(), records);
                 }
             } finally {

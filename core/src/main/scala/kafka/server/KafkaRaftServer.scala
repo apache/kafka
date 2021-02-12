@@ -82,16 +82,6 @@ class KafkaRaftServer(
 
   private val controller: Option[ControllerServer] = if (config.processRoles.contains(ControllerRole)) {
     Some(new ControllerServer())
-//    Some(new ControllerServer(
-//      metaProps,
-//      config,
-//      metaLogShim,
-//      raftManager,
-//      time,
-//      metrics,
-//      threadNamePrefix,
-//      CompletableFuture.completedFuture(config.quorumVoters)
-//    ))
   } else {
     None
   }

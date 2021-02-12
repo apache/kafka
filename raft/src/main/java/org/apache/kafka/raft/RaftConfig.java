@@ -237,13 +237,13 @@ public class RaftConfig {
 
     public static List<Node> quorumVoterStringsToNodes(List<String> voters) {
         return parseVoterConnections(voters).entrySet().stream()
-                .filter(connection -> connection.getValue() instanceof InetAddressSpec)
-                .map(connection -> {
-                    InetAddressSpec inetAddressSpec = InetAddressSpec.class.cast(connection.getValue());
-                    return new Node(connection.getKey(), inetAddressSpec.address.getHostName(),
-                            inetAddressSpec.address.getPort());
-                })
-                .collect(Collectors.toList());
+            .filter(connection -> connection.getValue() instanceof InetAddressSpec)
+            .map(connection -> {
+                InetAddressSpec inetAddressSpec = InetAddressSpec.class.cast(connection.getValue());
+                return new Node(connection.getKey(), inetAddressSpec.address.getHostName(),
+                    inetAddressSpec.address.getPort());
+            })
+            .collect(Collectors.toList());
     }
 
     public static class ControllerQuorumVotersValidator implements ConfigDef.Validator {
