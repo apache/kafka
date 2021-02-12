@@ -235,7 +235,7 @@ public class MirrorMaker {
         DistributedConfig distributedConfig = new DistributedConfig(workerProps);
         String kafkaClusterId = ConnectUtils.lookupKafkaClusterId(distributedConfig);
         // Create the admin client to be shared by all backing stores for this herder
-        Map<String, Object> adminProps = new HashMap<>(config.originals());
+        Map<String, Object> adminProps = new HashMap<>(distributedConfig.originals());
         ConnectUtils.addMetricsContextProperties(adminProps, distributedConfig, kafkaClusterId);
         SharedTopicAdmin sharedAdmin = new SharedTopicAdmin(adminProps);
         KafkaOffsetBackingStore offsetBackingStore = new KafkaOffsetBackingStore(sharedAdmin);
