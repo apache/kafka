@@ -690,6 +690,16 @@ public final class MessageTest {
     }
 
     @Test
+    public void defaultValueShouldBeWritable() {
+        for (short version = 0; version <= SimpleExampleMessageData.SCHEMAS.length - 1; ++version) {
+            ObjectSerializationCache cache = new ObjectSerializationCache();
+            Message message = new SimpleExampleMessageData();
+            ByteBuffer buf = ByteBuffer.allocate(message.size(cache, version));
+            message.write(new ByteBufferAccessor(buf), cache, version);
+        }
+    }
+
+    @Test
     public void testSimpleMessage() throws Exception {
         final SimpleExampleMessageData message = new SimpleExampleMessageData();
         message.setMyStruct(new SimpleExampleMessageData.MyStruct().setStructId(25).setArrayInStruct(

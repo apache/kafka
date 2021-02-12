@@ -1235,7 +1235,7 @@ public final class MessageDataGenerator {
                         field.camelCaseName(), field.camelCaseName());
                 }
             }
-        } else if (field.type().isString() || field.type().isStruct()) {
+        } else if (field.type().isString() || field.type().isStruct() || field.type() instanceof FieldType.UUIDFieldType) {
             if (fieldDefault(field).equals("null")) {
                 buffer.printf("if (%s != null) {%n", field.camelCaseName());
             } else if (nullableVersions.empty()) {
