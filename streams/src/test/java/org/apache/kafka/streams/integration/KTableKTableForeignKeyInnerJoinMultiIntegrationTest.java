@@ -271,7 +271,11 @@ public class KTableKTableForeignKeyInnerJoinMultiIntegrationTest {
         streamsTwo = prepareTopology(queryableName, queryableNameTwo, streamsConfigTwo);
         streamsThree = prepareTopology(queryableName, queryableNameTwo, streamsConfigThree);
         streams.start();
+        waitForApplicationState(singletonList(streams), KafkaStreams.State.RUNNING, Duration.ofSeconds(60));
+
         streamsTwo.start();
+        waitForApplicationState(singletonList(streamsTwo), KafkaStreams.State.RUNNING, Duration.ofSeconds(60));
+        waitForApplicationState(singletonList(streams), KafkaStreams.State.RUNNING, Duration.ofSeconds(60));
 ////        Thread.sleep(20000);
 ////        System.out.println("sleep done");
         streamsThree.start();
