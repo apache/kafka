@@ -30,7 +30,7 @@
       "fields": [
         { "name": "Topic", "type": "string", "versions": "0+", "entityType": "topicName", "mapKey": true,
           "about": "The name of a topic." },
-        { "name": "PartitionId", "type": "[]int32", "versions": "0+",
+        { "name": "Partitions", "type": "[]int32", "versions": "0+",
           "about": "The partitions of this topic whose leader should be elected." }
       ]
     },

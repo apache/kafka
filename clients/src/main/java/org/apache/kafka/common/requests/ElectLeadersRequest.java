@@ -74,7 +74,7 @@ public class ElectLeadersRequest extends AbstractRequest {
                         tps = new ElectLeadersRequestData.TopicPartitions().setTopic(tp.topic());
                         data.topicPartitions().add(tps);
                     }
-                    tps.partitionId().add(tp.partition());
+                    tps.partitions().add(tp.partition());
                 });
             } else {
                 data.setTopicPartitions(null);
@@ -107,7 +107,7 @@ public class ElectLeadersRequest extends AbstractRequest {
             ReplicaElectionResult electionResult = new ReplicaElectionResult();
 
             electionResult.setTopic(topic.topic());
-            for (Integer partitionId : topic.partitionId()) {
+            for (Integer partitionId : topic.partitions()) {
                 PartitionResult partitionResult = new PartitionResult();
                 partitionResult.setPartitionId(partitionId);
                 partitionResult.setErrorCode(apiError.error().code());
