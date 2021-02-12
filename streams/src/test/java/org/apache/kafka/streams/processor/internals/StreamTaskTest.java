@@ -18,7 +18,6 @@ package org.apache.kafka.streams.processor.internals;
 
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
-import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.clients.consumer.MockConsumer;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.consumer.OffsetResetStrategy;
@@ -40,7 +39,6 @@ import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.IntegerSerializer;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.Serializer;
-import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.StreamsConfig;
@@ -126,7 +124,6 @@ public class StreamTaskTest {
     private static final File BASE_DIR = TestUtils.tempDirectory();
     private static final long DEFAULT_TIMESTAMP = 1000;
 
-    private final LogContext logContext = new LogContext("[test] ");
     private final String topic1 = "topic1";
     private final String topic2 = "topic2";
     private final TopicPartition partition1 = new TopicPartition(topic1, 1);
@@ -424,9 +421,6 @@ public class StreamTaskTest {
         assertEquals(asList(101, 102, 103), source1.values);
         assertEquals(singletonList(201), source2.values);
 
-        // tell the task that it doesn't need to wait for more records on partition1
-        task.addFetchedMetadata(partition1, new ConsumerRecords.Metadata(0L, 30L, 30L));
-
         assertTrue(task.process(0L));
         assertEquals(1, task.numBuffered());
         assertEquals(3, source1.numReceived);
@@ -434,8 +428,6 @@ public class StreamTaskTest {
         assertEquals(asList(101, 102, 103), source1.values);
         assertEquals(asList(201, 202), source2.values);
 
-        // tell the task that it doesn't need to wait for more records on partition1
-        task.addFetchedMetadata(partition1, new ConsumerRecords.Metadata(0L, 30L, 30L));
         assertTrue(task.process(0L));
         assertEquals(0, task.numBuffered());
         assertEquals(3, source1.numReceived);
@@ -967,9 +959,6 @@ public class StreamTaskTest {
         assertEquals(3, source2.numReceived);
         assertTrue(task.maybePunctuateStreamTime());
 
-        // tell the task that it doesn't need to wait for new data on partition1
-        task.addFetchedMetadata(partition1, new ConsumerRecords.Metadata(0L, 160L, 160L));
-
         // st: 161
         assertTrue(task.process(0L));
         assertEquals(0, task.numBuffered());
@@ -1093,18 +1082,16 @@ public class StreamTaskTest {
 
     @Test
     public void shouldCommitConsumerPositionIfRecordQueueIsEmpty() {
-        task = createStatelessTask(createConfig(), StreamsConfig.METRICS_LATEST);
+        task = createSingleSourceStateless(createConfig(), StreamsConfig.METRICS_LATEST);
         task.initializeIfNeeded();
         task.completeRestoration();
 
         consumer.addRecord(getConsumerRecordWithOffsetAsTimestamp(partition1, 0L));
         consumer.addRecord(getConsumerRecordWithOffsetAsTimestamp(partition1, 1L));
         consumer.addRecord(getConsumerRecordWithOffsetAsTimestamp(partition1, 2L));
-        consumer.updateEndOffsets(mkMap(mkEntry(partition2, 0L)));
         consumer.poll(Duration.ZERO);
 
         task.addRecords(partition1, singletonList(getConsumerRecordWithOffsetAsTimestamp(partition1, 0L)));
-        task.addRecords(partition2, singletonList(getConsumerRecordWithOffsetAsTimestamp(partition2, 0L)));
         task.process(0L);
         final Map<TopicPartition, OffsetAndMetadata> offsetsAndMetadata = task.prepareCommit();
 
@@ -1176,6 +1163,107 @@ public class StreamTaskTest {
         assertTrue(task.process(0L));
     }
 
+    @Test
+    public void shouldBeProcessableIfWaitedForTooLong() {
+        // max idle time is 100ms
+        task = createStatelessTask(createConfig("100"), StreamsConfig.METRICS_LATEST);
+        task.initializeIfNeeded();
+        task.completeRestoration();
+
+        final MetricName enforcedProcessMetric = metrics.metricName(
+            "enforced-processing-total",
+            "stream-task-metrics",
+            mkMap(mkEntry("thread-id", Thread.currentThread().getName()), mkEntry("task-id", taskId.toString()))
+        );
+
+        assertFalse(task.process(time.milliseconds()));
+        assertEquals(0.0, metrics.metric(enforcedProcessMetric).metricValue());
+
+        final byte[] bytes = ByteBuffer.allocate(4).putInt(1).array();
+
+        task.addRecords(partition1,
+                        asList(
+                            new ConsumerRecord<>(topic1, 1, 0, bytes, bytes),
+                            new ConsumerRecord<>(topic1, 1, 1, bytes, bytes),
+                            new ConsumerRecord<>(topic1, 1, 2, bytes, bytes)
+                        )
+        );
+
+        assertFalse(task.process(time.milliseconds()));
+
+        assertFalse(task.process(time.milliseconds() + 99L));
+
+        assertTrue(task.process(time.milliseconds() + 100L));
+        assertEquals(1.0, metrics.metric(enforcedProcessMetric).metricValue());
+
+        // once decided to enforce, continue doing that
+        assertTrue(task.process(time.milliseconds() + 101L));
+        assertEquals(2.0, metrics.metric(enforcedProcessMetric).metricValue());
+
+        task.addRecords(partition2, Collections.singleton(new ConsumerRecord<>(topic2, 1, 0, bytes, bytes)));
+
+        assertTrue(task.process(time.milliseconds() + 130L));
+        assertEquals(2.0, metrics.metric(enforcedProcessMetric).metricValue());
+
+        // one resumed to normal processing, the timer should be reset
+
+        assertFalse(task.process(time.milliseconds() + 150L));
+        assertEquals(2.0, metrics.metric(enforcedProcessMetric).metricValue());
+
+        assertFalse(task.process(time.milliseconds() + 249L));
+        assertEquals(2.0, metrics.metric(enforcedProcessMetric).metricValue());
+
+        assertTrue(task.process(time.milliseconds() + 250L));
+        assertEquals(3.0, metrics.metric(enforcedProcessMetric).metricValue());
+    }
+
+    @Test
+    public void shouldNotBeProcessableIfNoDataAvailable() {
+        task = createStatelessTask(createConfig("100"), StreamsConfig.METRICS_LATEST);
+        task.initializeIfNeeded();
+        task.completeRestoration();
+
+        final MetricName enforcedProcessMetric = metrics.metricName(
+            "enforced-processing-total",
+            "stream-task-metrics",
+            mkMap(mkEntry("thread-id", Thread.currentThread().getName()), mkEntry("task-id", taskId.toString()))
+        );
+
+        assertFalse(task.process(0L));
+        assertEquals(0.0, metrics.metric(enforcedProcessMetric).metricValue());
+
+        final byte[] bytes = ByteBuffer.allocate(4).putInt(1).array();
+
+        task.addRecords(partition1, Collections.singleton(new ConsumerRecord<>(topic1, 1, 0, bytes, bytes)));
+
+        assertFalse(task.process(time.milliseconds()));
+
+        assertFalse(task.process(time.milliseconds() + 99L));
+
+        assertTrue(task.process(time.milliseconds() + 100L));
+        assertEquals(1.0, metrics.metric(enforcedProcessMetric).metricValue());
+
+        // once the buffer is drained and no new records coming, the timer should be reset
+
+        assertFalse(task.process(time.milliseconds() + 110L));
+        assertEquals(1.0, metrics.metric(enforcedProcessMetric).metricValue());
+
+        // check that after time is reset, we only falls into enforced processing after the
+        // whole timeout has elapsed again
+        task.addRecords(partition1, Collections.singleton(new ConsumerRecord<>(topic1, 1, 0, bytes, bytes)));
+
+        assertFalse(task.process(time.milliseconds() + 150L));
+        assertEquals(1.0, metrics.metric(enforcedProcessMetric).metricValue());
+
+        assertFalse(task.process(time.milliseconds() + 249L));
+        assertEquals(1.0, metrics.metric(enforcedProcessMetric).metricValue());
+
+        assertTrue(task.process(time.milliseconds() + 250L));
+        assertEquals(2.0, metrics.metric(enforcedProcessMetric).metricValue());
+    }
+
+
+    @Test
     public void shouldPunctuateSystemTimeWhenIntervalElapsed() {
         task = createStatelessTask(createConfig("100"), StreamsConfig.METRICS_LATEST);
         task.initializeIfNeeded();
@@ -1550,8 +1638,7 @@ public class StreamTaskTest {
             time,
             stateManager,
             recordCollector,
-            context,
-            logContext);
+            context);
 
         task.initializeIfNeeded();
         task.completeRestoration();
@@ -1560,7 +1647,6 @@ public class StreamTaskTest {
         task.addRecords(repartition, singletonList(getConsumerRecordWithOffsetAsTimestamp(repartition, 10L)));
 
         assertTrue(task.process(0L));
-        task.addFetchedMetadata(partition1, new ConsumerRecords.Metadata(0L, 5L, 5L));
         assertTrue(task.process(0L));
 
         task.prepareCommit();
@@ -1691,7 +1777,6 @@ public class StreamTaskTest {
         task.initializeIfNeeded();
         task.completeRestoration();
         task.addRecords(partition1, singleton(getConsumerRecordWithOffsetAsTimestamp(partition1, 10)));
-        task.addRecords(partition2, singleton(getConsumerRecordWithOffsetAsTimestamp(partition2, 10)));
         task.process(100L);
         assertTrue(task.commitNeeded());
 
@@ -2021,12 +2106,11 @@ public class StreamTaskTest {
 
     @Test
     public void shouldThrowIfRecyclingDirtyTask() {
-        task = createStatelessTask(createConfig(), StreamsConfig.METRICS_LATEST);
+        task = createSingleSourceStateless(createConfig(), StreamsConfig.METRICS_LATEST);
         task.initializeIfNeeded();
         task.completeRestoration();
 
         task.addRecords(partition1, singletonList(getConsumerRecordWithOffsetAsTimestamp(partition1, 0)));
-        task.addRecords(partition2, singletonList(getConsumerRecordWithOffsetAsTimestamp(partition2, 0)));
         task.process(0L);
         assertTrue(task.commitNeeded());
 
@@ -2117,8 +2201,8 @@ public class StreamTaskTest {
                 time,
                 stateManager,
                 recordCollector,
-                context,
-                logContext)
+                context
+            )
         );
 
         assertThat(exception.getMessage(), equalTo("Invalid topology: " +
@@ -2182,8 +2266,7 @@ public class StreamTaskTest {
             time,
             stateManager,
             recordCollector,
-            context,
-            logContext
+            context
         );
     }
 
@@ -2223,8 +2306,7 @@ public class StreamTaskTest {
             time,
             stateManager,
             recordCollector,
-            context,
-            logContext
+            context
         );
     }
 
@@ -2256,8 +2338,7 @@ public class StreamTaskTest {
             time,
             stateManager,
             recordCollector,
-            context,
-            logContext
+            context
         );
     }
 
@@ -2294,8 +2375,7 @@ public class StreamTaskTest {
             time,
             stateManager,
             recordCollector,
-            context,
-            logContext
+            context
         );
     }
 
@@ -2334,8 +2414,7 @@ public class StreamTaskTest {
             time,
             stateManager,
             recordCollector,
-            context,
-            logContext
+            context
         );
     }
 
@@ -2376,8 +2455,7 @@ public class StreamTaskTest {
             time,
             stateManager,
             recordCollector,
-            context,
-            logContext
+            context
         );
     }
 
@@ -2415,8 +2493,7 @@ public class StreamTaskTest {
             time,
             stateManager,
             recordCollector,
-            context,
-            logContext
+            context
         );
     }
 
@@ -2449,8 +2526,7 @@ public class StreamTaskTest {
             time,
             stateManager,
             recordCollector,
-            context,
-            logContext
+            context
         );
     }
 

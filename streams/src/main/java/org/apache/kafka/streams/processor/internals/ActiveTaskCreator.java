@@ -242,8 +242,7 @@ class ActiveTaskCreator {
             time,
             stateManager,
             recordCollector,
-            context,
-            logContext
+            context
         );
 
         log.trace("Created task {} with assigned partitions {}", taskId, inputPartitions);

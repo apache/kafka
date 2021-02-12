@@ -19,7 +19,6 @@ package org.apache.kafka.streams;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerGroupMetadata;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
-import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.clients.consumer.MockConsumer;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.consumer.OffsetResetStrategy;
@@ -526,21 +525,11 @@ public class TopologyTestDriver implements Closeable {
                 mockWallClockTime,
                 stateManager,
                 recordCollector,
-                context,
-                logContext);
+                context
+            );
             task.initializeIfNeeded();
             task.completeRestoration();
             task.processorContext().setRecordContext(null);
-
-            // initialize the task metadata so that all topics have zero lag
-            for (final Map.Entry<TopicPartition, Long> entry : startOffsets.entrySet()) {
-                final ConsumerRecords.Metadata metadata = new ConsumerRecords.Metadata(
-                    mockWallClockTime.milliseconds(),
-                    0L,
-                    0L
-                );
-                task.addFetchedMetadata(entry.getKey(), metadata);
-            }
         } else {
             task = null;
         }
@@ -602,11 +591,10 @@ public class TopologyTestDriver implements Closeable {
                                    final byte[] key,
                                    final byte[] value,
                                    final Headers headers) {
-        final long offset = offsetsByTopicOrPatternPartition.get(topicOrPatternPartition).incrementAndGet() - 1;
         task.addRecords(topicOrPatternPartition, Collections.singleton(new ConsumerRecord<>(
             inputTopic,
             topicOrPatternPartition.partition(),
-            offset,
+            offsetsByTopicOrPatternPartition.get(topicOrPatternPartition).incrementAndGet() - 1,
             timestamp,
             TimestampType.CREATE_TIME,
             (long) ConsumerRecord.NULL_CHECKSUM,
@@ -616,12 +604,6 @@ public class TopologyTestDriver implements Closeable {
             value,
             headers))
         );
-        final ConsumerRecords.Metadata metadata = new ConsumerRecords.Metadata(
-            mockWallClockTime.milliseconds(),
-            offset,
-            offset
-        );
-        task.addFetchedMetadata(topicOrPatternPartition, metadata);
     }
 
     private void completeAllProcessableWork() {
