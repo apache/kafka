@@ -17,7 +17,7 @@
 
 package org.apache.kafka.common.requests;
 
-import org.apache.kafka.common.message.DecommissionBrokerResponseData;
+import org.apache.kafka.common.message.UnregisterBrokerResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
@@ -26,16 +26,16 @@ import java.nio.ByteBuffer;
 import java.util.HashMap;
 import java.util.Map;
 
-public class DecommissionBrokerResponse extends AbstractResponse {
-    private final DecommissionBrokerResponseData data;
+public class UnregisterBrokerResponse extends AbstractResponse {
+    private final UnregisterBrokerResponseData data;
 
-    public DecommissionBrokerResponse(DecommissionBrokerResponseData data) {
-        super(ApiKeys.DECOMMISSION_BROKER);
+    public UnregisterBrokerResponse(UnregisterBrokerResponseData data) {
+        super(ApiKeys.UNREGISTER_BROKER);
         this.data = data;
     }
 
     @Override
-    public DecommissionBrokerResponseData data() {
+    public UnregisterBrokerResponseData data() {
         return data;
     }
 
@@ -53,8 +53,8 @@ public class DecommissionBrokerResponse extends AbstractResponse {
         return errorCounts;
     }
 
-    public static DecommissionBrokerResponse parse(ByteBuffer buffer, short version) {
-        return new DecommissionBrokerResponse(new DecommissionBrokerResponseData(new ByteBufferAccessor(buffer), version));
+    public static UnregisterBrokerResponse parse(ByteBuffer buffer, short version) {
+        return new UnregisterBrokerResponse(new UnregisterBrokerResponseData(new ByteBufferAccessor(buffer), version));
     }
 
     @Override

@@ -1505,8 +1505,7 @@ class ReplicaManagerTest {
     val mockLogMgr: LogManager = EasyMock.createMock(classOf[LogManager])
     EasyMock.expect(mockLogMgr.liveLogDirs).andReturn(config.logDirs.map(new File(_).getAbsoluteFile)).anyTimes
     EasyMock.expect(mockLogMgr.getOrCreateLog(EasyMock.eq(topicPartitionObj),
-      EasyMock.anyObject[() => LogConfig](), isNew = EasyMock.eq(false),
-      isFuture = EasyMock.eq(false))).andReturn(mockLog).anyTimes
+      isNew = EasyMock.eq(false), isFuture = EasyMock.eq(false))).andReturn(mockLog).anyTimes
     if (expectTruncation) {
       EasyMock.expect(mockLogMgr.truncateTo(Map(topicPartitionObj -> offsetFromLeader),
         isFuture = false)).once
@@ -1515,7 +1514,7 @@ class ReplicaManagerTest {
     EasyMock.expect(mockLogMgr.getLog(topicPartitionObj, isFuture = true)).andReturn(None)
 
     EasyMock.expect(mockLogMgr.finishedInitializingLog(
-      EasyMock.eq(topicPartitionObj), EasyMock.anyObject(), EasyMock.anyObject())).anyTimes
+      EasyMock.eq(topicPartitionObj), EasyMock.anyObject())).anyTimes
 
     EasyMock.replay(mockLogMgr)
 
@@ -2040,7 +2039,7 @@ class ReplicaManagerTest {
     val replicaManager = setupReplicaManagerWithMockedPurgatories(mockTimer, aliveBrokerIds = Seq(0, 1))
 
     val tp0 = new TopicPartition(topic, 0)
-    val log = replicaManager.logManager.getOrCreateLog(tp0, () => LogConfig(), true)
+    val log = replicaManager.logManager.getOrCreateLog(tp0, true)
 
     if (throwIOException) {
       // Delete the underlying directory to trigger an KafkaStorageException
@@ -2249,9 +2248,8 @@ class ReplicaManagerTest {
       assertFalse(replicaManager.localLog(topicPartition).isEmpty)
       val id = topicIds.get(topicPartition.topic())
       val log = replicaManager.localLog(topicPartition).get
-      assertFalse(log.partitionMetadataFile.isEmpty)
-      assertFalse(log.partitionMetadataFile.get.isEmpty())
-      val partitionMetadata = log.partitionMetadataFile.get.read()
+      assertTrue(log.partitionMetadataFile.exists())
+      val partitionMetadata = log.partitionMetadataFile.read()
 
       // Current version of PartitionMetadataFile is 0.
       assertEquals(0, partitionMetadata.version)
@@ -2286,33 +2284,29 @@ class ReplicaManagerTest {
         topicIds,
         Set(new Node(0, "host1", 0), new Node(1, "host2", 1)).asJava).build().serialize(), version)
 
-      // The file has no contents if the topic does not have an associated topic ID.
+      // There is no file if the topic does not have an associated topic ID.
       replicaManager.becomeLeaderOrFollower(0, leaderAndIsrRequest(0, "fakeTopic", ApiKeys.LEADER_AND_ISR.latestVersion), (_, _) => ())
       assertFalse(replicaManager.localLog(topicPartition).isEmpty)
       val log = replicaManager.localLog(topicPartition).get
-      assertFalse(log.partitionMetadataFile.isEmpty)
-      assertTrue(log.partitionMetadataFile.get.isEmpty())
+      assertFalse(log.partitionMetadataFile.exists())
 
-      // The file has no contents if the topic has the default UUID.
+      // There is no file if the topic has the default UUID.
       replicaManager.becomeLeaderOrFollower(0, leaderAndIsrRequest(0, topic, ApiKeys.LEADER_AND_ISR.latestVersion), (_, _) => ())
       assertFalse(replicaManager.localLog(topicPartition).isEmpty)
       val log2 = replicaManager.localLog(topicPartition).get
-      assertFalse(log2.partitionMetadataFile.isEmpty)
-      assertTrue(log2.partitionMetadataFile.get.isEmpty())
+      assertFalse(log2.partitionMetadataFile.exists())
 
-      // The file has no contents if the request is an older version
+      // There is no file if the request an older version
       replicaManager.becomeLeaderOrFollower(0, leaderAndIsrRequest(0, "foo", 0), (_, _) => ())
       assertFalse(replicaManager.localLog(topicPartitionFoo).isEmpty)
       val log3 = replicaManager.localLog(topicPartitionFoo).get
-      assertFalse(log3.partitionMetadataFile.isEmpty)
-      assertTrue(log3.partitionMetadataFile.get.isEmpty())
+      assertFalse(log3.partitionMetadataFile.exists())
 
-      // The file has no contents if the request is an older version
+      // There is no file if the request is an older version
       replicaManager.becomeLeaderOrFollower(0, leaderAndIsrRequest(0, "foo", 4), (_, _) => ())
       assertFalse(replicaManager.localLog(topicPartitionFoo).isEmpty)
       val log4 = replicaManager.localLog(topicPartitionFoo).get
-      assertFalse(log4.partitionMetadataFile.isEmpty)
-      assertTrue(log4.partitionMetadataFile.get.isEmpty())
+      assertFalse(log4.partitionMetadataFile.exists())
     } finally replicaManager.shutdown(checkpointHW = false)
   }
 
