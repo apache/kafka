@@ -49,6 +49,7 @@ import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.Message;
+import org.apache.kafka.common.protocol.MessageUtil;
 import org.apache.kafka.common.protocol.ObjectSerializationCache;
 import org.apache.kafka.common.protocol.types.RawTaggedField;
 import org.junit.jupiter.api.Test;
@@ -746,6 +747,13 @@ public final class MessageTest {
             } else {
                 testEquivalentMessageRoundTrip(version, responseData);
             }
+        }
+    }
+
+    @Test
+    public void defaultValueShouldBeWritable() {
+        for (short version = SimpleExampleMessageData.LOWEST_SUPPORTED_VERSION; version <= SimpleExampleMessageData.HIGHEST_SUPPORTED_VERSION; ++version) {
+            MessageUtil.toByteBuffer(new SimpleExampleMessageData(), version);
         }
     }
 
