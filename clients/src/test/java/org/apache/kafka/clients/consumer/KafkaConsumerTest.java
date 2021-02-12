@@ -134,10 +134,6 @@ import static java.util.Collections.singletonMap;
 import static org.apache.kafka.common.requests.FetchMetadata.INVALID_SESSION_ID;
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
-import static org.hamcrest.CoreMatchers.equalTo;
-import static org.hamcrest.MatcherAssert.assertThat;
-import static org.hamcrest.Matchers.greaterThanOrEqualTo;
-import static org.hamcrest.Matchers.lessThanOrEqualTo;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
@@ -1056,7 +1052,6 @@ public class KafkaConsumerTest {
 
         ConsumerRecords<String, String> records = consumer.poll(Duration.ZERO);
         assertEquals(0, records.count());
-        assertThat(records.metadata(), equalTo(emptyMap()));
         consumer.close(Duration.ofMillis(0));
     }
 
@@ -1123,9 +1118,7 @@ public class KafkaConsumerTest {
         // verify that the fetch occurred as expected
         assertEquals(11, records.count());
         assertEquals(1L, consumer.position(tp0));
-        assertEquals(1L, (long) records.metadata().get(tp0).position());
         assertEquals(10L, consumer.position(t2p0));
-        assertEquals(10L, (long) records.metadata().get(t2p0).position());
 
         // subscription change
         consumer.subscribe(asList(topic, topic3), getConsumerRebalanceListener(consumer));
@@ -1156,9 +1149,7 @@ public class KafkaConsumerTest {
         // verify that the fetch occurred as expected
         assertEquals(101, records.count());
         assertEquals(2L, consumer.position(tp0));
-        assertEquals(2L, (long) records.metadata().get(tp0).position());
         assertEquals(100L, consumer.position(t3p0));
-        assertEquals(100L, (long) records.metadata().get(t3p0).position());
 
         // verify that the offset commits occurred as expected
         assertTrue(commitReceived.get());
@@ -2052,118 +2043,6 @@ public class KafkaConsumerTest {
         assertThrows(IllegalStateException.class, consumer::groupMetadata);
     }
 
-    @Test
-    public void testPollMetadata() {
-        final Time time = new MockTime();
-        final SubscriptionState subscription = new SubscriptionState(new LogContext(), OffsetResetStrategy.EARLIEST);
-        final ConsumerMetadata metadata = createMetadata(subscription);
-        final MockClient client = new MockClient(time, metadata);
-
-        initMetadata(client, singletonMap(topic, 1));
-        final ConsumerPartitionAssignor assignor = new RoundRobinAssignor();
-
-        final KafkaConsumer<String, String> consumer =
-            newConsumer(time, client, subscription, metadata, assignor, true, groupInstanceId);
-
-        consumer.assign(singleton(tp0));
-        consumer.seek(tp0, 50L);
-
-        final FetchInfo fetchInfo = new FetchInfo(1L, 99L, 50L, 5);
-        client.prepareResponse(fetchResponse(singletonMap(tp0, fetchInfo)));
-
-        final ConsumerRecords<String, String> records = consumer.poll(Duration.ofMillis(1));
-        assertEquals(5, records.count());
-        assertEquals(55L, consumer.position(tp0));
-
-        // verify that the consumer computes the correct metadata based on the fetch response
-        final ConsumerRecords.Metadata actualMetadata = records.metadata().get(tp0);
-        assertEquals(100L, (long) actualMetadata.endOffset());
-        assertEquals(55L, (long) actualMetadata.position());
-        assertEquals(45L, (long) actualMetadata.lag());
-        consumer.close(Duration.ZERO);
-    }
-
-
-    @Test
-    public void testPollMetadataWithExtraPartitions() {
-        final Time time = new MockTime();
-        final SubscriptionState subscription = new SubscriptionState(new LogContext(), OffsetResetStrategy.EARLIEST);
-        final ConsumerMetadata metadata = createMetadata(subscription);
-        final MockClient client = new MockClient(time, metadata);
-
-        initMetadata(client, singletonMap(topic, 2));
-        final ConsumerPartitionAssignor assignor = new RoundRobinAssignor();
-
-        final KafkaConsumer<String, String> consumer =
-            newConsumer(time, client, subscription, metadata, assignor, true, groupInstanceId);
-
-        consumer.assign(asList(tp0, tp1));
-        consumer.seek(tp0, 50L);
-        consumer.seek(tp1, 10L);
-
-        client.prepareResponse(
-            fetchResponse(
-                mkMap(
-                    mkEntry(tp0, new FetchInfo(1L, 99L, 50L, 5)),
-                    mkEntry(tp1, new FetchInfo(0L, 29L, 10L, 0))
-                )
-            )
-        );
-
-        final ConsumerRecords<String, String> records = consumer.poll(Duration.ofMillis(1));
-        assertEquals(5, records.count());
-        assertEquals(55L, consumer.position(tp0));
-
-        assertEquals(5, records.records(tp0).size());
-        final ConsumerRecords.Metadata tp0Metadata = records.metadata().get(tp0);
-        assertEquals(100L, (long) tp0Metadata.endOffset());
-        assertEquals(55L, (long) tp0Metadata.position());
-        assertEquals(45L, (long) tp0Metadata.lag());
-
-        // we may get back metadata for other assigned partitions even if we don't get records for them
-        assertEquals(0, records.records(tp1).size());
-        final ConsumerRecords.Metadata tp1Metadata = records.metadata().get(tp1);
-        assertEquals(30L, (long) tp1Metadata.endOffset());
-        assertEquals(10L, (long) tp1Metadata.position());
-        assertEquals(20L, (long) tp1Metadata.lag());
-
-        consumer.close(Duration.ZERO);
-    }
-
-    @Test
-    public void testPollMetadataWithNoRecords() {
-        final Time time = new MockTime();
-        final SubscriptionState subscription = new SubscriptionState(new LogContext(), OffsetResetStrategy.EARLIEST);
-        final ConsumerMetadata metadata = createMetadata(subscription);
-        final MockClient client = new MockClient(time, metadata);
-
-        initMetadata(client, singletonMap(topic, 1));
-        final ConsumerPartitionAssignor assignor = new RoundRobinAssignor();
-
-        final KafkaConsumer<String, String> consumer =
-            newConsumer(time, client, subscription, metadata, assignor, true, groupInstanceId);
-
-        consumer.assign(singleton(tp0));
-        consumer.seek(tp0, 50L);
-
-        final FetchInfo fetchInfo = new FetchInfo(1L, 99L, 50L, 0);
-        client.prepareResponse(fetchResponse(singletonMap(tp0, fetchInfo)));
-
-        final ConsumerRecords<String, String> records = consumer.poll(Duration.ofMillis(1));
-
-        // we got no records back ...
-        assertEquals(0, records.count());
-        assertEquals(50L, consumer.position(tp0));
-
-        // ... but we can still get metadata that was in the fetch response
-        final ConsumerRecords.Metadata actualMetadata = records.metadata().get(tp0);
-        assertEquals(100L, (long) actualMetadata.endOffset());
-        assertEquals(50L, (long) actualMetadata.position());
-        assertEquals(50L, (long) actualMetadata.lag());
-
-        consumer.close(Duration.ZERO);
-    }
-
     private KafkaConsumer<String, String> consumerWithPendingAuthenticationError() {
         Time time = new MockTime();
         SubscriptionState subscription = new SubscriptionState(new LogContext(), OffsetResetStrategy.EARLIEST);
@@ -2365,8 +2244,6 @@ public class KafkaConsumerTest {
             TopicPartition partition = fetchEntry.getKey();
             long fetchOffset = fetchEntry.getValue().offset;
             int fetchCount = fetchEntry.getValue().count;
-            final long highWatermark = fetchEntry.getValue().logLastOffset + 1;
-            final long logStartOffset = fetchEntry.getValue().logFirstOffset;
             final MemoryRecords records;
             if (fetchCount == 0) {
                 records = MemoryRecords.EMPTY;
@@ -2378,8 +2255,8 @@ public class KafkaConsumerTest {
                 records = builder.build();
             }
             tpResponses.put(partition, new FetchResponse.PartitionData<>(
-                    Errors.NONE, highWatermark, FetchResponse.INVALID_LAST_STABLE_OFFSET,
-                    logStartOffset, null, records));
+                    Errors.NONE, 0, FetchResponse.INVALID_LAST_STABLE_OFFSET,
+                    0L, null, records));
         }
         return new FetchResponse<>(Errors.NONE, tpResponses, 0, INVALID_SESSION_ID);
     }
@@ -2504,20 +2381,10 @@ public class KafkaConsumerTest {
     }
 
     private static class FetchInfo {
-        long logFirstOffset;
-        long logLastOffset;
         long offset;
         int count;
 
         FetchInfo(long offset, int count) {
-            this(0L, offset + count, offset, count);
-        }
-
-        FetchInfo(long logFirstOffset, long logLastOffset, long offset, int count) {
-            assertThat(logFirstOffset, lessThanOrEqualTo(offset));
-            assertThat(logLastOffset, greaterThanOrEqualTo(offset + count));
-            this.logFirstOffset = logFirstOffset;
-            this.logLastOffset = logLastOffset;
             this.offset = offset;
             this.count = count;
         }
