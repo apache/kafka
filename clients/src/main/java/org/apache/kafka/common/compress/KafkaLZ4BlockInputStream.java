@@ -22,12 +22,17 @@ import net.jpountz.lz4.LZ4SafeDecompressor;
 import net.jpountz.xxhash.XXHash32;
 import net.jpountz.xxhash.XXHashFactory;
 
+import org.apache.kafka.common.compress.KafkaLZ4BlockOutputStream.BD;
+import org.apache.kafka.common.compress.KafkaLZ4BlockOutputStream.FLG;
 import org.apache.kafka.common.utils.BufferSupplier;
 
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
+
+import static org.apache.kafka.common.compress.KafkaLZ4BlockOutputStream.LZ4_FRAME_INCOMPRESSIBLE_MASK;
+import static org.apache.kafka.common.compress.KafkaLZ4BlockOutputStream.MAGIC;
 
 /**
  * A partial implementation of the v1.5.1 LZ4 Frame format.
@@ -52,7 +57,7 @@ public final class KafkaLZ4BlockInputStream extends InputStream {
     private final ByteBuffer decompressionBuffer;
     // `flg` and `maxBlockSize` are effectively final, they are initialised in the `readHeader` method that is only
     // invoked from the constructor
-    private KafkaLZ4BlockOutputStream.FLG flg;
+    private FLG flg;
     private int maxBlockSize;
 
     // If a block is compressed, this is the same as `decompressionBuffer`. If a block is not compressed, this is
@@ -101,14 +106,14 @@ public final class KafkaLZ4BlockInputStream extends InputStream {
             throw new IOException(PREMATURE_EOS);
         }
 
-        if (KafkaLZ4BlockOutputStream.MAGIC != in.getInt()) {
+        if (MAGIC != in.getInt()) {
             throw new IOException(NOT_SUPPORTED);
         }
         // mark start of data to checksum
         in.mark();
 
-        flg = KafkaLZ4BlockOutputStream.FLG.fromByte(in.get());
-        maxBlockSize = KafkaLZ4BlockOutputStream.BD.fromByte(in.get()).getBlockMaximumSize();
+        flg = FLG.fromByte(in.get());
+        maxBlockSize = BD.fromByte(in.get()).getBlockMaximumSize();
 
         if (flg.isContentSizeSet()) {
             if (in.remaining() < 8) {
@@ -149,8 +154,8 @@ public final class KafkaLZ4BlockInputStream extends InputStream {
         }
 
         int blockSize = in.getInt();
-        boolean compressed = (blockSize & KafkaLZ4BlockOutputStream.LZ4_FRAME_INCOMPRESSIBLE_MASK) == 0;
-        blockSize &= ~KafkaLZ4BlockOutputStream.LZ4_FRAME_INCOMPRESSIBLE_MASK;
+        boolean compressed = (blockSize & LZ4_FRAME_INCOMPRESSIBLE_MASK) == 0;
+        blockSize &= ~LZ4_FRAME_INCOMPRESSIBLE_MASK;
 
         // Check for EndMark
         if (blockSize == 0) {
