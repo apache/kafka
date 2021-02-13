@@ -226,9 +226,9 @@ public enum CompressionType {
 
     private static class ZstdConstructors {
         // It's ok to reference `BufferPool` since it doesn't load any native libraries
-        static final MethodHandle INPUT = findConstructor("com.github.luben.zstd.ZstdInputStream",
+        static final MethodHandle INPUT = findConstructor("com.github.luben.zstd.ZstdInputStreamNoFinalizer",
             MethodType.methodType(void.class, InputStream.class, BufferPool.class));
-        static final MethodHandle OUTPUT = findConstructor("com.github.luben.zstd.ZstdOutputStream",
+        static final MethodHandle OUTPUT = findConstructor("com.github.luben.zstd.ZstdOutputStreamNoFinalizer",
             MethodType.methodType(void.class, OutputStream.class, BufferPool.class));
     }
 
