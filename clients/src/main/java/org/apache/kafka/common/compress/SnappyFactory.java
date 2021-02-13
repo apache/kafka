@@ -39,7 +39,6 @@ public class SnappyFactory {
         }
     }
 
-
     public static InputStream wrapForInput(ByteBuffer buffer) {
         try {
             return new SnappyInputStream(new ByteBufferInputStream(buffer));
