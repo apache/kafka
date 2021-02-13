@@ -21,6 +21,7 @@ import org.apache.kafka.common.compress.KafkaLZ4BlockInputStream;
 import org.apache.kafka.common.compress.KafkaLZ4BlockOutputStream;
 import org.apache.kafka.common.compress.SnappyFactory;
 import org.apache.kafka.common.compress.ZstdFactory;
+import org.apache.kafka.common.utils.BufferSupplier;
 import org.apache.kafka.common.utils.ByteBufferInputStream;
 import org.apache.kafka.common.utils.ByteBufferOutputStream;
 

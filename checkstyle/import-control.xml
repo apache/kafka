@@ -70,14 +70,12 @@
     </subpackage>
 
     <!-- Third-party compression libraries should only be references from this package -->
-    <subpackage name="compression">
+    <subpackage name="compress">
       <allow pkg="com.github.luben.zstd" />
       <allow pkg="net.jpountz.lz4" />
       <allow pkg="net.jpountz.xxhash" />
-      <allow pkg="org.apache.kafka.common.compression" />
+      <allow pkg="org.apache.kafka.common.compress" />
       <allow pkg="org.xerial.snappy" />
-      <!-- For testing -->
-      <allow pkg="org.apache.kafka.common.record" />
     </subpackage>
 
     <subpackage name="message">
@@ -155,7 +153,7 @@
     </subpackage>
 
     <subpackage name="record">
-      <allow pkg="org.apache.kafka.common.compression" />
+      <allow pkg="org.apache.kafka.common.compress" />
       <allow pkg="org.apache.kafka.common.header" />
       <allow pkg="org.apache.kafka.common.record" />
       <allow pkg="org.apache.kafka.common.message" />
