@@ -16,8 +16,8 @@
  */
 package org.apache.kafka.common.record;
 
-import org.apache.kafka.common.compression.KafkaLZ4BlockInputStream;
-import org.apache.kafka.common.compression.KafkaLZ4BlockOutputStream;
+import org.apache.kafka.common.compress.KafkaLZ4BlockInputStream;
+import org.apache.kafka.common.compress.KafkaLZ4BlockOutputStream;
 import org.apache.kafka.common.utils.ByteBufferOutputStream;
 import org.junit.jupiter.api.Test;
 
