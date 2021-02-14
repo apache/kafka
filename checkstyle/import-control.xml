@@ -69,6 +69,15 @@
       <allow pkg="org.apache.kafka.common.metrics" />
     </subpackage>
 
+    <!-- Third-party compression libraries should only be references from this package -->
+    <subpackage name="compress">
+      <allow pkg="com.github.luben.zstd" />
+      <allow pkg="net.jpountz.lz4" />
+      <allow pkg="net.jpountz.xxhash" />
+      <allow pkg="org.apache.kafka.common.compress" />
+      <allow pkg="org.xerial.snappy" />
+    </subpackage>
+
     <subpackage name="message">
       <allow pkg="com.fasterxml.jackson" />
       <allow pkg="org.apache.kafka.common.protocol" />
@@ -144,7 +153,7 @@
     </subpackage>
 
     <subpackage name="record">
-      <allow pkg="net.jpountz" />
+      <allow pkg="org.apache.kafka.common.compress" />
       <allow pkg="org.apache.kafka.common.header" />
       <allow pkg="org.apache.kafka.common.record" />
       <allow pkg="org.apache.kafka.common.message" />
@@ -152,7 +161,6 @@
       <allow pkg="org.apache.kafka.common.protocol" />
       <allow pkg="org.apache.kafka.common.protocol.types" />
       <allow pkg="org.apache.kafka.common.errors" />
-      <allow pkg="com.github.luben.zstd" />
     </subpackage>
 
     <subpackage name="header">
