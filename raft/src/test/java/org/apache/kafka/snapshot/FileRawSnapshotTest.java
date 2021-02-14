@@ -16,7 +16,7 @@
  */
 package org.apache.kafka.snapshot;
 
-import org.apache.kafka.common.record.BufferSupplier.GrowableBufferSupplier;
+import org.apache.kafka.common.utils.BufferSupplier.GrowableBufferSupplier;
 import org.apache.kafka.common.record.CompressionType;
 import org.apache.kafka.common.record.MemoryRecords;
 import org.apache.kafka.common.record.Record;
