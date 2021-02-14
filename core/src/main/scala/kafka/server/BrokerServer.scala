@@ -152,10 +152,6 @@ class BrokerServer(
     try {
       info("Starting broker")
 
-      // initialize dynamic broker configs from static config. Any updates will be
-      // applied as we process the metadata log.
-      config.dynamicConfig.initialize(None)
-
       /* start scheduler */
       kafkaScheduler = new KafkaScheduler(config.backgroundThreads)
       kafkaScheduler.startup()
