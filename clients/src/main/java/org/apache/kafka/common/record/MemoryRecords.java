@@ -22,6 +22,7 @@ import org.apache.kafka.common.message.LeaderChangeMessage;
 import org.apache.kafka.common.network.TransferableChannel;
 import org.apache.kafka.common.record.MemoryRecords.RecordFilter.BatchRetention;
 import org.apache.kafka.common.utils.AbstractIterator;
+import org.apache.kafka.common.utils.BufferSupplier;
 import org.apache.kafka.common.utils.ByteBufferOutputStream;
 import org.apache.kafka.common.utils.CloseableIterator;
 import org.apache.kafka.common.utils.Time;
