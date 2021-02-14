@@ -101,9 +101,9 @@ class BrokerServer(
 
   var transactionCoordinator: TransactionCoordinator = null
 
-  var forwardingChannelManager: BrokerToControllerChannelManager = null
+  var forwardingManager: ForwardingManager = null
 
-  var alterIsrChannelManager: BrokerToControllerChannelManager = null
+  var alterIsrManager: AlterIsrManager = null
 
   var autoTopicCreationManager: AutoTopicCreationManager = null
 
@@ -152,6 +152,10 @@ class BrokerServer(
     try {
       info("Starting broker")
 
+      // initialize dynamic broker configs from static config. Any updates will be
+      // applied as we process the metadata log.
+      config.dynamicConfig.initialize(None)
+
       /* start scheduler */
       kafkaScheduler = new KafkaScheduler(config.backgroundThreads)
       kafkaScheduler.startup()
@@ -184,26 +188,26 @@ class BrokerServer(
       val controllerNodes =
         RaftConfig.quorumVoterStringsToNodes(controllerQuorumVotersFuture.get()).asScala
       val controllerNodeProvider = RaftControllerNodeProvider(metaLogManager, config, controllerNodes)
-      alterIsrChannelManager = BrokerToControllerChannelManager(controllerNodeProvider,
+      val alterIsrChannelManager = BrokerToControllerChannelManager(controllerNodeProvider,
         time, metrics, config, "alterisr", threadNamePrefix, 60000)
-      alterIsrChannelManager.start()
-      val alterIsrManager = new DefaultAlterIsrManager(
+      alterIsrManager = new DefaultAlterIsrManager(
         controllerChannelManager = alterIsrChannelManager,
         scheduler = kafkaScheduler,
         time = time,
         brokerId = config.nodeId,
         brokerEpochSupplier = () => lifecycleManager.brokerEpoch()
       )
+      alterIsrManager.start()
 
       this.replicaManager = new RaftReplicaManager(config, metrics, time,
         kafkaScheduler, logManager, isShuttingDown, quotaManagers,
         brokerTopicStats, metadataCache, logDirFailureChannel, alterIsrManager,
         configRepository, threadNamePrefix)
 
-      forwardingChannelManager = BrokerToControllerChannelManager(controllerNodeProvider,
+      val forwardingChannelManager = BrokerToControllerChannelManager(controllerNodeProvider,
         time, metrics, config, "forwarding", threadNamePrefix, 60000)
-      forwardingChannelManager.start()
-      val forwardingManager = new ForwardingManagerImpl(forwardingChannelManager)
+      forwardingManager = new ForwardingManagerImpl(forwardingChannelManager)
+      forwardingManager.start()
 
       val autoTopicCreationChannelManager = BrokerToControllerChannelManager(controllerNodeProvider,
         time, metrics, config, "autocreate", threadNamePrefix, 60000)
@@ -416,11 +420,11 @@ class BrokerServer(
       if (replicaManager != null)
         CoreUtils.swallow(replicaManager.shutdown(), this)
 
-      if (alterIsrChannelManager != null)
-        CoreUtils.swallow(alterIsrChannelManager.shutdown(), this)
+      if (alterIsrManager != null)
+        CoreUtils.swallow(alterIsrManager.shutdown(), this)
 
-      if (forwardingChannelManager != null)
-        CoreUtils.swallow(forwardingChannelManager.shutdown(), this)
+      if (forwardingManager != null)
+        CoreUtils.swallow(forwardingManager.shutdown(), this)
 
       if (autoTopicCreationManager != null)
         CoreUtils.swallow(autoTopicCreationManager.shutdown(), this)
