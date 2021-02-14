@@ -66,7 +66,7 @@ class BrokerServer(
 
   import kafka.server.Server._
 
-  private val logContext: LogContext = new LogContext(s"[Kip500Broker id=${config.nodeId}] ")
+  private val logContext: LogContext = new LogContext(s"[BrokerServer id=${config.nodeId}] ")
 
   this.logIdent = logContext.logPrefix
 
