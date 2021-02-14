@@ -20,13 +20,12 @@ package kafka.server
 import kafka.network._
 import kafka.utils._
 import kafka.metrics.KafkaMetricsGroup
+
 import java.util.concurrent.{CountDownLatch, TimeUnit}
 import java.util.concurrent.atomic.AtomicInteger
-
 import com.yammer.metrics.core.Meter
 import org.apache.kafka.common.internals.FatalExitError
-import org.apache.kafka.common.record.BufferSupplier
-import org.apache.kafka.common.utils.{KafkaThread, Time}
+import org.apache.kafka.common.utils.{BufferSupplier, KafkaThread, Time}
 
 import scala.collection.mutable
 import scala.jdk.CollectionConverters._

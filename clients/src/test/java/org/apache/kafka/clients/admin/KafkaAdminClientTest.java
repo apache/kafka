@@ -65,6 +65,7 @@ import org.apache.kafka.common.errors.TopicDeletionDisabledException;
 import org.apache.kafka.common.errors.TopicExistsException;
 import org.apache.kafka.common.errors.UnknownMemberIdException;
 import org.apache.kafka.common.errors.UnknownServerException;
+import org.apache.kafka.common.errors.UnknownTopicIdException;
 import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.feature.Features;
@@ -117,6 +118,7 @@ import org.apache.kafka.common.message.OffsetDeleteResponseData.OffsetDeleteResp
 import org.apache.kafka.common.message.OffsetDeleteResponseData.OffsetDeleteResponsePartitionCollection;
 import org.apache.kafka.common.message.OffsetDeleteResponseData.OffsetDeleteResponseTopic;
 import org.apache.kafka.common.message.OffsetDeleteResponseData.OffsetDeleteResponseTopicCollection;
+import org.apache.kafka.common.message.UnregisterBrokerResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.ApiMessage;
 import org.apache.kafka.common.protocol.Errors;
@@ -165,6 +167,7 @@ import org.apache.kafka.common.requests.OffsetCommitResponse;
 import org.apache.kafka.common.requests.OffsetDeleteResponse;
 import org.apache.kafka.common.requests.OffsetFetchResponse;
 import org.apache.kafka.common.requests.RequestTestUtils;
+import org.apache.kafka.common.requests.UnregisterBrokerResponse;
 import org.apache.kafka.common.requests.UpdateFeaturesRequest;
 import org.apache.kafka.common.requests.UpdateFeaturesResponse;
 import org.apache.kafka.common.resource.PatternType;
@@ -410,6 +413,12 @@ public class KafkaAdminClientTest {
             .setErrorCode(error.code());
     }
 
+    public static DeletableTopicResult deletableTopicResultWithId(Uuid topicId, Errors error) {
+        return new DeletableTopicResult()
+                .setTopicId(topicId)
+                .setErrorCode(error.code());
+    }
+
     public static CreatePartitionsResponse prepareCreatePartitionsResponse(int throttleTimeMs, CreatePartitionsTopicResult... topics) {
         CreatePartitionsResponseData data = new CreatePartitionsResponseData()
             .setThrottleTimeMs(throttleTimeMs)
@@ -433,6 +442,14 @@ public class KafkaAdminClientTest {
         data.responses().add(new DeletableTopicResult()
             .setName(topicName)
             .setErrorCode(error.code()));
+        return new DeleteTopicsResponse(data);
+    }
+
+    private static DeleteTopicsResponse prepareDeleteTopicsResponseWithTopicId(Uuid id, Errors error) {
+        DeleteTopicsResponseData data = new DeleteTopicsResponseData();
+        data.responses().add(new DeletableTopicResult()
+                .setTopicId(id)
+                .setErrorCode(error.code()));
         return new DeleteTopicsResponse(data);
     }
 
@@ -869,8 +886,33 @@ public class KafkaAdminClientTest {
             future = env.adminClient().deleteTopics(singletonList("myTopic"),
                 new DeleteTopicsOptions()).all();
             TestUtils.assertFutureError(future, UnknownTopicOrPartitionException.class);
+            
+            // With topic IDs
+            Uuid topicId = Uuid.randomUuid();
+
+            env.kafkaClient().prepareResponse(
+                    expectDeleteTopicsRequestWithTopicIds(topicId),
+                    prepareDeleteTopicsResponseWithTopicId(topicId, Errors.NONE));
+            future = env.adminClient().deleteTopicsWithIds(singletonList(topicId),
+                    new DeleteTopicsOptions()).all();
+            assertNull(future.get());
+
+            env.kafkaClient().prepareResponse(
+                    expectDeleteTopicsRequestWithTopicIds(topicId),
+                    prepareDeleteTopicsResponseWithTopicId(topicId, Errors.TOPIC_DELETION_DISABLED));
+            future = env.adminClient().deleteTopicsWithIds(singletonList(topicId),
+                    new DeleteTopicsOptions()).all();
+            TestUtils.assertFutureError(future, TopicDeletionDisabledException.class);
+
+            env.kafkaClient().prepareResponse(
+                    expectDeleteTopicsRequestWithTopicIds(topicId),
+                    prepareDeleteTopicsResponseWithTopicId(topicId, Errors.UNKNOWN_TOPIC_ID));
+            future = env.adminClient().deleteTopicsWithIds(singletonList(topicId),
+                    new DeleteTopicsOptions()).all();
+            TestUtils.assertFutureError(future, UnknownTopicIdException.class);
         }
     }
+    
 
     @Test
     public void testDeleteTopicsPartialResponse() throws Exception {
@@ -887,6 +929,20 @@ public class KafkaAdminClientTest {
 
             result.values().get("myTopic").get();
             TestUtils.assertFutureThrows(result.values().get("myOtherTopic"), ApiException.class);
+            
+            // With topic IDs
+            Uuid topicId1 = Uuid.randomUuid();
+            Uuid topicId2 = Uuid.randomUuid();
+            env.kafkaClient().prepareResponse(
+                    expectDeleteTopicsRequestWithTopicIds(topicId1, topicId2),
+                    prepareDeleteTopicsResponse(1000,
+                            deletableTopicResultWithId(topicId1, Errors.NONE)));
+
+            DeleteTopicsWithIdsResult resultIds = env.adminClient().deleteTopicsWithIds(
+                    asList(topicId1, topicId2), new DeleteTopicsOptions());
+
+            resultIds.values().get(topicId1).get();
+            TestUtils.assertFutureThrows(resultIds.values().get(topicId2), ApiException.class);
         }
     }
 
@@ -919,6 +975,36 @@ public class KafkaAdminClientTest {
             assertNull(result.values().get("topic1").get());
             assertNull(result.values().get("topic2").get());
             TestUtils.assertFutureThrows(result.values().get("topic3"), TopicExistsException.class);
+            
+            // With topic IDs
+            Uuid topicId1 = Uuid.randomUuid();
+            Uuid topicId2 = Uuid.randomUuid();
+            Uuid topicId3 = Uuid.randomUuid();
+            
+            env.kafkaClient().prepareResponse(
+                    expectDeleteTopicsRequestWithTopicIds(topicId1, topicId2, topicId3),
+                    prepareDeleteTopicsResponse(1000,
+                            deletableTopicResultWithId(topicId1, Errors.NONE),
+                            deletableTopicResultWithId(topicId2, Errors.THROTTLING_QUOTA_EXCEEDED),
+                            deletableTopicResultWithId(topicId3, Errors.UNKNOWN_TOPIC_ID)));
+
+            env.kafkaClient().prepareResponse(
+                    expectDeleteTopicsRequestWithTopicIds(topicId2),
+                    prepareDeleteTopicsResponse(1000,
+                            deletableTopicResultWithId(topicId2, Errors.THROTTLING_QUOTA_EXCEEDED)));
+
+            env.kafkaClient().prepareResponse(
+                    expectDeleteTopicsRequestWithTopicIds(topicId2),
+                    prepareDeleteTopicsResponse(0,
+                            deletableTopicResultWithId(topicId2, Errors.NONE)));
+
+            DeleteTopicsWithIdsResult resultIds = env.adminClient().deleteTopicsWithIds(
+                    asList(topicId1, topicId2, topicId3),
+                    new DeleteTopicsOptions().retryOnQuotaViolation(true));
+
+            assertNull(resultIds.values().get(topicId1).get());
+            assertNull(resultIds.values().get(topicId2).get());
+            TestUtils.assertFutureThrows(resultIds.values().get(topicId3), UnknownTopicIdException.class);
         }
     }
 
@@ -964,6 +1050,43 @@ public class KafkaAdminClientTest {
                 ThrottlingQuotaExceededException.class);
             assertEquals(0, e.throttleTimeMs());
             TestUtils.assertFutureThrows(result.values().get("topic3"), TopicExistsException.class);
+            
+            // With topic IDs
+            Uuid topicId1 = Uuid.randomUuid();
+            Uuid topicId2 = Uuid.randomUuid();
+            Uuid topicId3 = Uuid.randomUuid();
+            env.kafkaClient().prepareResponse(
+                    expectDeleteTopicsRequestWithTopicIds(topicId1, topicId2, topicId3),
+                    prepareDeleteTopicsResponse(1000,
+                            deletableTopicResultWithId(topicId1, Errors.NONE),
+                            deletableTopicResultWithId(topicId2, Errors.THROTTLING_QUOTA_EXCEEDED),
+                            deletableTopicResultWithId(topicId3, Errors.UNKNOWN_TOPIC_ID)));
+
+            env.kafkaClient().prepareResponse(
+                    expectDeleteTopicsRequestWithTopicIds(topicId2),
+                    prepareDeleteTopicsResponse(1000,
+                            deletableTopicResultWithId(topicId2, Errors.THROTTLING_QUOTA_EXCEEDED)));
+
+            DeleteTopicsWithIdsResult resultIds = env.adminClient().deleteTopicsWithIds(
+                    asList(topicId1, topicId2, topicId3),
+                    new DeleteTopicsOptions().retryOnQuotaViolation(true));
+
+            // Wait until the prepared attempts have consumed
+            TestUtils.waitForCondition(() -> env.kafkaClient().numAwaitingResponses() == 0,
+                    "Failed awaiting DeleteTopics requests");
+
+            // Wait until the next request is sent out
+            TestUtils.waitForCondition(() -> env.kafkaClient().inFlightRequestCount() == 1,
+                    "Failed awaiting next DeleteTopics request");
+
+            // Advance time past the default api timeout to time out the inflight request
+            time.sleep(defaultApiTimeout + 1);
+
+            assertNull(resultIds.values().get(topicId1).get());
+            e = TestUtils.assertFutureThrows(resultIds.values().get(topicId2),
+                    ThrottlingQuotaExceededException.class);
+            assertEquals(0, e.throttleTimeMs());
+            TestUtils.assertFutureThrows(resultIds.values().get(topicId3), UnknownTopicIdException.class);
         }
     }
 
@@ -988,6 +1111,27 @@ public class KafkaAdminClientTest {
                 ThrottlingQuotaExceededException.class);
             assertEquals(1000, e.throttleTimeMs());
             TestUtils.assertFutureError(result.values().get("topic3"), TopicExistsException.class);
+
+            // With topic IDs
+            Uuid topicId1 = Uuid.randomUuid();
+            Uuid topicId2 = Uuid.randomUuid();
+            Uuid topicId3 = Uuid.randomUuid();
+            env.kafkaClient().prepareResponse(
+                    expectDeleteTopicsRequestWithTopicIds(topicId1, topicId2, topicId3),
+                    prepareDeleteTopicsResponse(1000,
+                            deletableTopicResultWithId(topicId1, Errors.NONE),
+                            deletableTopicResultWithId(topicId2, Errors.THROTTLING_QUOTA_EXCEEDED),
+                            deletableTopicResultWithId(topicId3, Errors.UNKNOWN_TOPIC_ID)));
+
+            DeleteTopicsWithIdsResult resultIds = env.adminClient().deleteTopicsWithIds(
+                    asList(topicId1, topicId2, topicId3),
+                    new DeleteTopicsOptions().retryOnQuotaViolation(false));
+
+            assertNull(resultIds.values().get(topicId1).get());
+            e = TestUtils.assertFutureThrows(resultIds.values().get(topicId2),
+                    ThrottlingQuotaExceededException.class);
+            assertEquals(1000, e.throttleTimeMs());
+            TestUtils.assertFutureError(resultIds.values().get(topicId3), UnknownTopicIdException.class);
         }
     }
 
@@ -995,7 +1139,17 @@ public class KafkaAdminClientTest {
         return body -> {
             if (body instanceof DeleteTopicsRequest) {
                 DeleteTopicsRequest request = (DeleteTopicsRequest) body;
-                return request.data().topicNames().equals(Arrays.asList(topics));
+                return request.topicNames().equals(Arrays.asList(topics));
+            }
+            return false;
+        };
+    }
+
+    private MockClient.RequestMatcher expectDeleteTopicsRequestWithTopicIds(final Uuid... topicIds) {
+        return body -> {
+            if (body instanceof DeleteTopicsRequest) {
+                DeleteTopicsRequest request = (DeleteTopicsRequest) body;
+                return request.topicIds().equals(Arrays.asList(topicIds));
             }
             return false;
         };
@@ -5015,6 +5169,109 @@ public class KafkaAdminClientTest {
         errorCounts.clear();
         errorCounts.put(Errors.COORDINATOR_NOT_AVAILABLE, 1);
         assertTrue(ConsumerGroupOperationContext.shouldRefreshCoordinator(errorCounts));
+    }
+
+    @Test
+    public void testUnregisterBrokerSuccess() throws InterruptedException, ExecutionException {
+        int nodeId = 1;
+        try (final AdminClientUnitTestEnv env = mockClientEnv()) {
+            env.kafkaClient().setNodeApiVersions(
+                    NodeApiVersions.create(ApiKeys.UNREGISTER_BROKER.id, (short) 0, (short) 0));
+            env.kafkaClient().prepareResponse(prepareUnregisterBrokerResponse(Errors.NONE, 0));
+            UnregisterBrokerResult result = env.adminClient().unregisterBroker(nodeId);
+            // Validate response
+            assertNotNull(result.all());
+            result.all().get();
+        }
+    }
+
+    @Test
+    public void testUnregisterBrokerFailure() {
+        int nodeId = 1;
+        try (final AdminClientUnitTestEnv env = mockClientEnv()) {
+            env.kafkaClient().setNodeApiVersions(
+                    NodeApiVersions.create(ApiKeys.UNREGISTER_BROKER.id, (short) 0, (short) 0));
+            env.kafkaClient().prepareResponse(prepareUnregisterBrokerResponse(Errors.UNKNOWN_SERVER_ERROR, 0));
+            UnregisterBrokerResult result = env.adminClient().unregisterBroker(nodeId);
+            // Validate response
+            assertNotNull(result.all());
+            TestUtils.assertFutureThrows(result.all(), Errors.UNKNOWN_SERVER_ERROR.exception().getClass());
+        }
+    }
+
+    @Test
+    public void testUnregisterBrokerTimeoutAndSuccessRetry() throws ExecutionException, InterruptedException {
+        int nodeId = 1;
+        try (final AdminClientUnitTestEnv env = mockClientEnv()) {
+            env.kafkaClient().setNodeApiVersions(
+                    NodeApiVersions.create(ApiKeys.UNREGISTER_BROKER.id, (short) 0, (short) 0));
+            env.kafkaClient().prepareResponse(prepareUnregisterBrokerResponse(Errors.REQUEST_TIMED_OUT, 0));
+            env.kafkaClient().prepareResponse(prepareUnregisterBrokerResponse(Errors.NONE, 0));
+
+            UnregisterBrokerResult result = env.adminClient().unregisterBroker(nodeId);
+
+            // Validate response
+            assertNotNull(result.all());
+            result.all().get();
+        }
+    }
+
+    @Test
+    public void testUnregisterBrokerTimeoutAndFailureRetry() {
+        int nodeId = 1;
+        try (final AdminClientUnitTestEnv env = mockClientEnv()) {
+            env.kafkaClient().setNodeApiVersions(
+                    NodeApiVersions.create(ApiKeys.UNREGISTER_BROKER.id, (short) 0, (short) 0));
+            env.kafkaClient().prepareResponse(prepareUnregisterBrokerResponse(Errors.REQUEST_TIMED_OUT, 0));
+            env.kafkaClient().prepareResponse(prepareUnregisterBrokerResponse(Errors.UNKNOWN_SERVER_ERROR, 0));
+
+            UnregisterBrokerResult result = env.adminClient().unregisterBroker(nodeId);
+
+            // Validate response
+            assertNotNull(result.all());
+            TestUtils.assertFutureThrows(result.all(), Errors.UNKNOWN_SERVER_ERROR.exception().getClass());
+        }
+    }
+
+    @Test
+    public void testDecommissionBrokerTimeoutMaxRetry() {
+        int nodeId = 1;
+        try (final AdminClientUnitTestEnv env = mockClientEnv(Time.SYSTEM, AdminClientConfig.RETRIES_CONFIG, "1")) {
+            env.kafkaClient().setNodeApiVersions(
+                    NodeApiVersions.create(ApiKeys.UNREGISTER_BROKER.id, (short) 0, (short) 0));
+            env.kafkaClient().prepareResponse(prepareUnregisterBrokerResponse(Errors.REQUEST_TIMED_OUT, 0));
+            env.kafkaClient().prepareResponse(prepareUnregisterBrokerResponse(Errors.REQUEST_TIMED_OUT, 0));
+
+            UnregisterBrokerResult result = env.adminClient().unregisterBroker(nodeId);
+
+            // Validate response
+            assertNotNull(result.all());
+            TestUtils.assertFutureThrows(result.all(), Errors.REQUEST_TIMED_OUT.exception().getClass());
+        }
+    }
+
+    @Test
+    public void testDecommissionBrokerTimeoutMaxWait() {
+        int nodeId = 1;
+        try (final AdminClientUnitTestEnv env = mockClientEnv()) {
+            env.kafkaClient().setNodeApiVersions(
+                    NodeApiVersions.create(ApiKeys.UNREGISTER_BROKER.id, (short) 0, (short) 0));
+
+            UnregisterBrokerOptions options = new UnregisterBrokerOptions();
+            options.timeoutMs = 10;
+            UnregisterBrokerResult result = env.adminClient().unregisterBroker(nodeId, options);
+
+            // Validate response
+            assertNotNull(result.all());
+            TestUtils.assertFutureThrows(result.all(), Errors.REQUEST_TIMED_OUT.exception().getClass());
+        }
+    }
+
+    private UnregisterBrokerResponse prepareUnregisterBrokerResponse(Errors error, int throttleTimeMs) {
+        return new UnregisterBrokerResponse(new UnregisterBrokerResponseData()
+                .setErrorCode(error.code())
+                .setErrorMessage(error.message())
+                .setThrottleTimeMs(throttleTimeMs));
     }
 
     private DescribeLogDirsResponse prepareDescribeLogDirsResponse(Errors error, String logDir) {

@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
-import java.util.Map.Entry;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.DeleteRecordsResult;
 import org.apache.kafka.clients.admin.RecordsToDelete;
@@ -55,6 +54,7 @@ import java.util.LinkedHashMap;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
+import java.util.Map.Entry;
 import java.util.Set;
 import java.util.TreeSet;
 import java.util.UUID;
@@ -389,7 +389,6 @@ public class TaskManager {
 
         tasksToRecycle.removeAll(tasksToCloseDirty);
         for (final Task oldTask : tasksToRecycle) {
-            final Task newTask;
             try {
                 if (oldTask.isActive()) {
                     final Set<TopicPartition> partitions = standbyTasksToCreate.remove(oldTask.id());
@@ -971,8 +970,7 @@ public class TaskManager {
      * @param records Records, can be null
      */
     void addRecordsToTasks(final ConsumerRecords<byte[], byte[]> records) {
-        for (final TopicPartition partition : records.partitions()) {
-            // TODO: change type to `StreamTask`
+        for (final TopicPartition partition : union(HashSet::new, records.partitions(), records.metadata().keySet())) {
             final Task activeTask = tasks.activeTasksForInputPartition(partition);
 
             if (activeTask == null) {
@@ -982,6 +980,7 @@ public class TaskManager {
             }
 
             activeTask.addRecords(partition, records.records(partition));
+            activeTask.addFetchedMetadata(partition, records.metadata().get(partition));
         }
     }
 
@@ -1110,15 +1109,21 @@ public class TaskManager {
 
         long now = time.milliseconds();
         for (final Task task : activeTaskIterable()) {
+            int processed = 0;
+            final long then = now;
             try {
-                int processed = 0;
-                final long then = now;
                 while (processed < maxNumRecords && task.process(now)) {
+                    task.clearTaskTimeout();
                     processed++;
                 }
-                now = time.milliseconds();
-                totalProcessed += processed;
-                task.recordProcessBatchTime(now - then);
+            } catch (final TimeoutException timeoutException) {
+                task.maybeInitTaskTimeoutOrThrow(now, timeoutException);
+                log.debug(
+                    String.format(
+                        "Could not complete processing records for %s due to the following exception; will move to next task and retry later",
+                        task.id()),
+                    timeoutException
+                );
             } catch (final TaskMigratedException e) {
                 log.info("Failed to process stream task {} since it got migrated to another thread already. " +
                              "Will trigger a new rebalance and close all tasks as zombies together.", task.id());
@@ -1126,6 +1131,10 @@ public class TaskManager {
             } catch (final RuntimeException e) {
                 log.error("Failed to process stream task {} due to the following error:", task.id(), e);
                 throw e;
+            } finally {
+                now = time.milliseconds();
+                totalProcessed += processed;
+                task.recordProcessBatchTime(now - then);
             }
         }
 

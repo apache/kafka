@@ -23,7 +23,6 @@ import java.util.concurrent.atomic.AtomicBoolean
 import kafka.cluster.Partition
 import kafka.log.{Log, LogManager, LogOffsetSnapshot}
 import kafka.utils._
-import kafka.zk.KafkaZkClient
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.record.{CompressionType, MemoryRecords, SimpleRecord}
@@ -31,6 +30,7 @@ import org.apache.kafka.common.requests.FetchRequest.PartitionData
 import org.easymock.EasyMock
 import EasyMock._
 import kafka.server.QuotaFactory.QuotaManagers
+import kafka.server.metadata.CachedConfigRepository
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, Test}
 
@@ -199,7 +199,7 @@ class ReplicaManagerQuotasTest {
 
   def setUpMocks(fetchInfo: Seq[(TopicPartition, PartitionData)], record: SimpleRecord = this.record,
                  bothReplicasInSync: Boolean = false): Unit = {
-    val zkClient: KafkaZkClient = EasyMock.createMock(classOf[KafkaZkClient])
+    val configRepository = new CachedConfigRepository()
     val scheduler: KafkaScheduler = createNiceMock(classOf[KafkaScheduler])
 
     //Create log which handles both a regular read and a 0 bytes read
@@ -243,9 +243,9 @@ class ReplicaManagerQuotasTest {
 
     val leaderBrokerId = configs.head.brokerId
     quotaManager = QuotaFactory.instantiate(configs.head, metrics, time, "")
-    replicaManager = new ReplicaManager(configs.head, metrics, time, zkClient, scheduler, logManager,
+    replicaManager = new ReplicaManager(configs.head, metrics, time, None, scheduler, logManager,
       new AtomicBoolean(false), quotaManager,
-      new BrokerTopicStats, new MetadataCache(leaderBrokerId), new LogDirFailureChannel(configs.head.logDirs.size), alterIsrManager)
+      new BrokerTopicStats, MetadataCache.zkMetadataCache(leaderBrokerId), new LogDirFailureChannel(configs.head.logDirs.size), alterIsrManager, configRepository)
 
     //create the two replicas
     for ((p, _) <- fetchInfo) {

@@ -20,7 +20,6 @@ package kafka.cluster
 import java.util.Properties
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent._
-
 import kafka.api.ApiVersion
 import kafka.log._
 import kafka.server._
@@ -28,8 +27,8 @@ import kafka.server.checkpoints.OffsetCheckpoints
 import kafka.utils._
 import org.apache.kafka.common.message.LeaderAndIsrRequestData.LeaderAndIsrPartitionState
 import org.apache.kafka.common.TopicPartition
-import org.apache.kafka.common.record.{BufferSupplier, MemoryRecords, SimpleRecord}
-import org.apache.kafka.common.utils.Utils
+import org.apache.kafka.common.record.{MemoryRecords, SimpleRecord}
+import org.apache.kafka.common.utils.{BufferSupplier, Utils}
 import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertTrue}
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
 import org.mockito.ArgumentMatchers
@@ -63,11 +62,15 @@ class PartitionLockTest extends Logging {
   var logManager: LogManager = _
   var partition: Partition = _
 
+  private val topicPartition = new TopicPartition("test-topic", 0)
+
   @BeforeEach
   def setUp(): Unit = {
     val logConfig = new LogConfig(new Properties)
-    logManager = TestUtils.createLogManager(Seq(logDir), logConfig, CleanerConfig(enableCleaner = false), mockTime)
-    partition = setupPartitionWithMocks(logManager, logConfig)
+    val configRepository = TestUtils.createConfigRepository(topicPartition.topic, createLogProperties(Map.empty))
+    logManager = TestUtils.createLogManager(Seq(logDir), logConfig, configRepository,
+      CleanerConfig(enableCleaner = false), mockTime)
+    partition = setupPartitionWithMocks(logManager)
   }
 
   @AfterEach
@@ -244,24 +247,21 @@ class PartitionLockTest extends Logging {
     }): Runnable)
   }
 
-  private def setupPartitionWithMocks(logManager: LogManager, logConfig: LogConfig): Partition = {
+  private def setupPartitionWithMocks(logManager: LogManager): Partition = {
     val leaderEpoch = 1
     val brokerId = 0
-    val topicPartition = new TopicPartition("test-topic", 0)
-    val topicConfigProvider = TestUtils.createTopicConfigProvider(createLogProperties(Map.empty))
     val isrChangeListener: IsrChangeListener = mock(classOf[IsrChangeListener])
     val delayedOperations: DelayedOperations = mock(classOf[DelayedOperations])
     val metadataCache: MetadataCache = mock(classOf[MetadataCache])
     val offsetCheckpoints: OffsetCheckpoints = mock(classOf[OffsetCheckpoints])
     val alterIsrManager: AlterIsrManager = mock(classOf[AlterIsrManager])
 
-    logManager.startup()
+    logManager.startup(Set.empty)
     val partition = new Partition(topicPartition,
       replicaLagTimeMaxMs = kafka.server.Defaults.ReplicaLagTimeMaxMs,
       interBrokerProtocolVersion = ApiVersion.latestVersion,
       localBrokerId = brokerId,
       mockTime,
-      topicConfigProvider,
       isrChangeListener,
       delayedOperations,
       metadataCache,

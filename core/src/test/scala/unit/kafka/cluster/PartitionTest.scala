@@ -33,7 +33,7 @@ import org.apache.kafka.common.record.FileRecords.TimestampAndOffset
 import org.apache.kafka.common.record._
 import org.apache.kafka.common.requests.ListOffsetsRequest
 import org.apache.kafka.common.requests.OffsetsForLeaderEpochResponse.{UNDEFINED_EPOCH, UNDEFINED_EPOCH_OFFSET}
-import org.apache.kafka.common.utils.SystemTime
+import org.apache.kafka.common.utils.{BufferSupplier, SystemTime}
 import org.apache.kafka.common.{IsolationLevel, TopicPartition}
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.Test
@@ -51,7 +51,7 @@ class PartitionTest extends AbstractPartitionTest {
 
   @Test
   def testLastFetchedOffsetValidation(): Unit = {
-    val log = logManager.getOrCreateLog(topicPartition, () => logConfig)
+    val log = logManager.getOrCreateLog(topicPartition)
     def append(leaderEpoch: Int, count: Int): Unit = {
       val recordArray = (1 to count).map { i =>
         new SimpleRecord(s"$i".getBytes)
@@ -130,7 +130,7 @@ class PartitionTest extends AbstractPartitionTest {
   def testMakeLeaderUpdatesEpochCache(): Unit = {
     val leaderEpoch = 8
 
-    val log = logManager.getOrCreateLog(topicPartition, () => logConfig)
+    val log = logManager.getOrCreateLog(topicPartition)
     log.appendAsLeader(MemoryRecords.withRecords(0L, CompressionType.NONE, 0,
       new SimpleRecord("k1".getBytes, "v1".getBytes),
       new SimpleRecord("k2".getBytes, "v2".getBytes)
@@ -154,9 +154,9 @@ class PartitionTest extends AbstractPartitionTest {
   def testMakeLeaderDoesNotUpdateEpochCacheForOldFormats(): Unit = {
     val leaderEpoch = 8
 
-    val logConfig = LogConfig(createLogProperties(Map(
-      LogConfig.MessageFormatVersionProp -> kafka.api.KAFKA_0_10_2_IV0.shortVersion)))
-    val log = logManager.getOrCreateLog(topicPartition, () => logConfig)
+    configRepository.setTopicConfig(topicPartition.topic,
+      LogConfig.MessageFormatVersionProp, kafka.api.KAFKA_0_10_2_IV0.shortVersion)
+    val log = logManager.getOrCreateLog(topicPartition)
     log.appendAsLeader(TestUtils.records(List(
       new SimpleRecord("k1".getBytes, "v1".getBytes),
       new SimpleRecord("k2".getBytes, "v2".getBytes)),
@@ -224,7 +224,6 @@ class PartitionTest extends AbstractPartitionTest {
       interBrokerProtocolVersion = ApiVersion.latestVersion,
       localBrokerId = brokerId,
       time,
-      topicConfigProvider,
       isrChangeListener,
       delayedOperations,
       metadataCache,
@@ -715,7 +714,7 @@ class PartitionTest extends AbstractPartitionTest {
 
   private def setupPartitionWithMocks(leaderEpoch: Int,
                                       isLeader: Boolean,
-                                      log: Log = logManager.getOrCreateLog(topicPartition, () => logConfig)): Partition = {
+                                      log: Log = logManager.getOrCreateLog(topicPartition)): Partition = {
     partition.createLogIfNotExists(isNew = false, isFutureReplica = false, offsetCheckpoints)
 
     val controllerEpoch = 0
@@ -1053,7 +1052,7 @@ class PartitionTest extends AbstractPartitionTest {
 
   @Test
   def testUpdateFollowerFetchState(): Unit = {
-    val log = logManager.getOrCreateLog(topicPartition, () => logConfig)
+    val log = logManager.getOrCreateLog(topicPartition)
     seedLogData(log, numRecords = 6, leaderEpoch = 4)
 
     val controllerEpoch = 0
@@ -1109,7 +1108,7 @@ class PartitionTest extends AbstractPartitionTest {
 
   @Test
   def testIsrExpansion(): Unit = {
-    val log = logManager.getOrCreateLog(topicPartition, () => logConfig)
+    val log = logManager.getOrCreateLog(topicPartition)
     seedLogData(log, numRecords = 10, leaderEpoch = 4)
 
     val controllerEpoch = 0
@@ -1170,7 +1169,7 @@ class PartitionTest extends AbstractPartitionTest {
 
   @Test
   def testIsrNotExpandedIfUpdateFails(): Unit = {
-    val log = logManager.getOrCreateLog(topicPartition, () => logConfig)
+    val log = logManager.getOrCreateLog(topicPartition)
     seedLogData(log, numRecords = 10, leaderEpoch = 4)
 
     val controllerEpoch = 0
@@ -1224,7 +1223,7 @@ class PartitionTest extends AbstractPartitionTest {
 
   @Test
   def testMaybeShrinkIsr(): Unit = {
-    val log = logManager.getOrCreateLog(topicPartition, () => logConfig)
+    val log = logManager.getOrCreateLog(topicPartition)
     seedLogData(log, numRecords = 10, leaderEpoch = 4)
 
     val controllerEpoch = 0
@@ -1271,7 +1270,7 @@ class PartitionTest extends AbstractPartitionTest {
 
   @Test
   def testShouldNotShrinkIsrIfPreviousFetchIsCaughtUp(): Unit = {
-    val log = logManager.getOrCreateLog(topicPartition, () => logConfig)
+    val log = logManager.getOrCreateLog(topicPartition)
     seedLogData(log, numRecords = 10, leaderEpoch = 4)
 
     val controllerEpoch = 0
@@ -1336,7 +1335,7 @@ class PartitionTest extends AbstractPartitionTest {
 
   @Test
   def testShouldNotShrinkIsrIfFollowerCaughtUpToLogEnd(): Unit = {
-    val log = logManager.getOrCreateLog(topicPartition, () => logConfig)
+    val log = logManager.getOrCreateLog(topicPartition)
     seedLogData(log, numRecords = 10, leaderEpoch = 4)
 
     val controllerEpoch = 0
@@ -1387,7 +1386,7 @@ class PartitionTest extends AbstractPartitionTest {
 
   @Test
   def testIsrNotShrunkIfUpdateFails(): Unit = {
-    val log = logManager.getOrCreateLog(topicPartition, () => logConfig)
+    val log = logManager.getOrCreateLog(topicPartition)
     seedLogData(log, numRecords = 10, leaderEpoch = 4)
 
     val controllerEpoch = 0
@@ -1466,7 +1465,7 @@ class PartitionTest extends AbstractPartitionTest {
   }
 
   def handleAlterIsrFailure(error: Errors, callback: (Int, Int, Partition) => Unit): Unit = {
-    val log = logManager.getOrCreateLog(topicPartition, () => logConfig)
+    val log = logManager.getOrCreateLog(topicPartition)
     seedLogData(log, numRecords = 10, leaderEpoch = 4)
 
     val controllerEpoch = 0
@@ -1513,7 +1512,7 @@ class PartitionTest extends AbstractPartitionTest {
 
   @Test
   def testSingleInFlightAlterIsr(): Unit = {
-    val log = logManager.getOrCreateLog(topicPartition, () => logConfig)
+    val log = logManager.getOrCreateLog(topicPartition)
     seedLogData(log, numRecords = 10, leaderEpoch = 4)
 
     val controllerEpoch = 0
@@ -1572,14 +1571,13 @@ class PartitionTest extends AbstractPartitionTest {
       interBrokerProtocolVersion = KAFKA_2_6_IV0, // shouldn't matter, but set this to a ZK isr version
       localBrokerId = brokerId,
       time,
-      topicConfigProvider,
       isrChangeListener,
       delayedOperations,
       metadataCache,
       logManager,
       zkIsrManager)
 
-    val log = logManager.getOrCreateLog(topicPartition, () => logConfig)
+    val log = logManager.getOrCreateLog(topicPartition)
     seedLogData(log, numRecords = 10, leaderEpoch = 4)
 
     val controllerEpoch = 0
@@ -1622,7 +1620,7 @@ class PartitionTest extends AbstractPartitionTest {
 
   @Test
   def testUseCheckpointToInitializeHighWatermark(): Unit = {
-    val log = logManager.getOrCreateLog(topicPartition, () => logConfig)
+    val log = logManager.getOrCreateLog(topicPartition)
     seedLogData(log, numRecords = 6, leaderEpoch = 5)
 
     when(offsetCheckpoints.fetch(logDir1.getAbsolutePath, topicPartition))
@@ -1692,7 +1690,7 @@ class PartitionTest extends AbstractPartitionTest {
     val topicPartition = new TopicPartition("test", 1)
     val partition = new Partition(
       topicPartition, 1000, ApiVersion.latestVersion, 0,
-      new SystemTime(), topicConfigProvider, mock(classOf[IsrChangeListener]), mock(classOf[DelayedOperations]),
+      new SystemTime(), mock(classOf[IsrChangeListener]), mock(classOf[DelayedOperations]),
       mock(classOf[MetadataCache]), mock(classOf[LogManager]), mock(classOf[AlterIsrManager]))
 
     val replicas = Seq(0, 1, 2, 3)
@@ -1726,14 +1724,17 @@ class PartitionTest extends AbstractPartitionTest {
    */
   @Test
   def testLogConfigNotDirty(): Unit = {
+    logManager.shutdown()
+    val spyConfigRepository = spy(configRepository)
+    logManager = TestUtils.createLogManager(
+      logDirs = Seq(logDir1, logDir2), defaultConfig = logConfig, configRepository = spyConfigRepository,
+      cleanerConfig = CleanerConfig(enableCleaner = false), time = time)
     val spyLogManager = spy(logManager)
-    val spyConfigProvider = spy(topicConfigProvider)
     val partition = new Partition(topicPartition,
       replicaLagTimeMaxMs = Defaults.ReplicaLagTimeMaxMs,
       interBrokerProtocolVersion = ApiVersion.latestVersion,
       localBrokerId = brokerId,
       time,
-      spyConfigProvider,
       isrChangeListener,
       delayedOperations,
       metadataCache,
@@ -1744,12 +1745,10 @@ class PartitionTest extends AbstractPartitionTest {
 
     // Validate that initializingLog and finishedInitializingLog was called
     verify(spyLogManager).initializingLog(ArgumentMatchers.eq(topicPartition))
-    verify(spyLogManager).finishedInitializingLog(ArgumentMatchers.eq(topicPartition),
-      ArgumentMatchers.any(),
-      ArgumentMatchers.any()) // This doesn't get evaluated, but needed to satisfy compilation
+    verify(spyLogManager).finishedInitializingLog(ArgumentMatchers.eq(topicPartition), ArgumentMatchers.any())
 
-    // We should get config from ZK only once
-    verify(spyConfigProvider, times(1)).fetch()
+    // We should retrieve configs only once
+    verify(spyConfigRepository, times(1)).topicConfig(topicPartition.topic())
   }
 
   /**
@@ -1758,9 +1757,13 @@ class PartitionTest extends AbstractPartitionTest {
    */
   @Test
   def testLogConfigDirtyAsTopicUpdated(): Unit = {
-    val spyConfigProvider = spy(topicConfigProvider)
+    logManager.shutdown()
+    val spyConfigRepository = spy(configRepository)
+    logManager = TestUtils.createLogManager(
+      logDirs = Seq(logDir1, logDir2), defaultConfig = logConfig, configRepository = spyConfigRepository,
+      cleanerConfig = CleanerConfig(enableCleaner = false), time = time)
     val spyLogManager = spy(logManager)
-    doAnswer((invocation: InvocationOnMock) => {
+    doAnswer((_: InvocationOnMock) => {
       logManager.initializingLog(topicPartition)
       logManager.topicConfigUpdated(topicPartition.topic())
     }).when(spyLogManager).initializingLog(ArgumentMatchers.eq(topicPartition))
@@ -1770,7 +1773,6 @@ class PartitionTest extends AbstractPartitionTest {
       interBrokerProtocolVersion = ApiVersion.latestVersion,
       localBrokerId = brokerId,
       time,
-      spyConfigProvider,
       isrChangeListener,
       delayedOperations,
       metadataCache,
@@ -1781,13 +1783,11 @@ class PartitionTest extends AbstractPartitionTest {
 
     // Validate that initializingLog and finishedInitializingLog was called
     verify(spyLogManager).initializingLog(ArgumentMatchers.eq(topicPartition))
-    verify(spyLogManager).finishedInitializingLog(ArgumentMatchers.eq(topicPartition),
-      ArgumentMatchers.any(),
-      ArgumentMatchers.any()) // This doesn't get evaluated, but needed to satisfy compilation
+    verify(spyLogManager).finishedInitializingLog(ArgumentMatchers.eq(topicPartition), ArgumentMatchers.any())
 
-    // We should get config from ZK twice, once before log is created, and second time once
+    // We should retrieve configs twice, once before log is created, and second time once
     // we find log config is dirty and refresh it.
-    verify(spyConfigProvider, times(2)).fetch()
+    verify(spyConfigRepository, times(2)).topicConfig(topicPartition.topic())
   }
 
   /**
@@ -1796,9 +1796,15 @@ class PartitionTest extends AbstractPartitionTest {
    */
   @Test
   def testLogConfigDirtyAsBrokerUpdated(): Unit = {
-    val spyConfigProvider = spy(topicConfigProvider)
+    logManager.shutdown()
+    val spyConfigRepository = spy(configRepository)
+    logManager = TestUtils.createLogManager(
+      logDirs = Seq(logDir1, logDir2), defaultConfig = logConfig, configRepository = spyConfigRepository,
+      cleanerConfig = CleanerConfig(enableCleaner = false), time = time)
+    logManager.startup(Set.empty)
+
     val spyLogManager = spy(logManager)
-    doAnswer((invocation: InvocationOnMock) => {
+    doAnswer((_: InvocationOnMock) => {
       logManager.initializingLog(topicPartition)
       logManager.brokerConfigUpdated()
     }).when(spyLogManager).initializingLog(ArgumentMatchers.eq(topicPartition))
@@ -1808,7 +1814,6 @@ class PartitionTest extends AbstractPartitionTest {
       interBrokerProtocolVersion = ApiVersion.latestVersion,
       localBrokerId = brokerId,
       time,
-      spyConfigProvider,
       isrChangeListener,
       delayedOperations,
       metadataCache,
@@ -1819,13 +1824,11 @@ class PartitionTest extends AbstractPartitionTest {
 
     // Validate that initializingLog and finishedInitializingLog was called
     verify(spyLogManager).initializingLog(ArgumentMatchers.eq(topicPartition))
-    verify(spyLogManager).finishedInitializingLog(ArgumentMatchers.eq(topicPartition),
-      ArgumentMatchers.any(),
-      ArgumentMatchers.any()) // This doesn't get evaluated, but needed to satisfy compilation
+    verify(spyLogManager).finishedInitializingLog(ArgumentMatchers.eq(topicPartition), ArgumentMatchers.any())
 
-    // We should get config from ZK twice, once before log is created, and second time once
+    // We should get configs twice, once before log is created, and second time once
     // we find log config is dirty and refresh it.
-    verify(spyConfigProvider, times(2)).fetch()
+    verify(spyConfigRepository, times(2)).topicConfig(topicPartition.topic())
   }
 
   private def seedLogData(log: Log, numRecords: Int, leaderEpoch: Int): Unit = {

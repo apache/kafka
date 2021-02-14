@@ -39,6 +39,7 @@ import org.apache.kafka.common.requests.LeaderAndIsrRequest
 import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.common.serialization.{IntegerDeserializer, IntegerSerializer, StringDeserializer, StringSerializer}
 import org.apache.kafka.common.utils.Time
+import org.apache.kafka.metadata.BrokerState
 import org.junit.jupiter.api.{BeforeEach, Test}
 import org.junit.jupiter.api.Assertions._
 
@@ -101,7 +102,7 @@ class ServerShutdownTest extends ZooKeeperTestHarness {
     server.startup()
 
     // wait for the broker to receive the update metadata request after startup
-    TestUtils.waitUntilMetadataIsPropagated(Seq(server), topic, 0)
+    TestUtils.waitForPartitionMetadata(Seq(server), topic, 0)
 
     producer = createProducer(server)
     val consumer = createConsumer(server)
@@ -171,10 +172,10 @@ class ServerShutdownTest extends ZooKeeperTestHarness {
       // goes wrong so that awaitShutdown doesn't hang
       case e: Exception =>
         assertTrue(exceptionClassTag.runtimeClass.isInstance(e), s"Unexpected exception $e")
-        assertEquals(NotRunning.state, server.brokerState.currentState)
+        assertEquals(BrokerState.NOT_RUNNING, server.brokerState)
     }
     finally {
-      if (server.brokerState.currentState != NotRunning.state)
+      if (server.brokerState != BrokerState.NOT_RUNNING)
         server.shutdown()
       server.awaitShutdown()
     }

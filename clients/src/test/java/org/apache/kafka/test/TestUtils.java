@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.test;
 
-import java.io.FileWriter;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.common.Cluster;
@@ -26,6 +25,7 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.network.NetworkReceive;
 import org.apache.kafka.common.network.Send;
 import org.apache.kafka.common.protocol.ApiKeys;
+import org.apache.kafka.common.record.UnalignedRecords;
 import org.apache.kafka.common.requests.ByteBufferChannel;
 import org.apache.kafka.common.requests.RequestHeader;
 import org.apache.kafka.common.utils.Exit;
@@ -34,6 +34,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.File;
+import java.io.FileWriter;
 import java.io.IOException;
 import java.lang.reflect.Field;
 import java.nio.ByteBuffer;
@@ -357,7 +358,7 @@ public class TestUtils {
                 }
             } catch (final Exception e) {
                 if (expectedEnd <= System.currentTimeMillis()) {
-                    throw new AssertionError(e);
+                    throw new AssertionError(String.format("Assertion failed with an exception after %s ms", timeoutMs), e);
                 }
             }
             Thread.sleep(Math.min(pollIntervalMs, timeoutMs));
@@ -435,6 +436,10 @@ public class TestUtils {
         } catch (IOException e) {
             throw new RuntimeException(e);
         }
+    }
+
+    public static ByteBuffer toBuffer(UnalignedRecords records) {
+        return toBuffer(records.toSend());
     }
 
     public static Set<TopicPartition> generateRandomTopicPartitions(int numTopic, int numPartitionPerTopic) {

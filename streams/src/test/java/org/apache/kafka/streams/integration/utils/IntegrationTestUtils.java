@@ -153,6 +153,17 @@ public class IntegrationTestUtils {
         }
     }
 
+    /**
+     * Removes local state stores. Useful to reset state in-between integration test runs.
+     *
+     * @param streamsConfigurations Streams configuration settings
+     */
+    public static void purgeLocalStreamsState(final Collection<Properties> streamsConfigurations) throws IOException {
+        for (final Properties streamsConfig : streamsConfigurations) {
+            purgeLocalStreamsState(streamsConfig);
+        }
+    }
+
     public static void cleanStateBeforeTest(final EmbeddedKafkaCluster cluster, final String... topics) {
         cleanStateBeforeTest(cluster, 1, topics);
     }
@@ -728,7 +739,8 @@ public class IntegrationTestUtils {
                 return finalAccumData.equals(finalExpected);
 
             };
-            final String conditionDetails = "Did not receive all " + expectedRecords + " records from topic " + topic;
+            final String conditionDetails = "Did not receive all " + expectedRecords + " records from topic " +
+                topic + " (got " + accumData + ")";
             TestUtils.waitForCondition(valuesRead, waitTime, conditionDetails);
         }
         return accumData;

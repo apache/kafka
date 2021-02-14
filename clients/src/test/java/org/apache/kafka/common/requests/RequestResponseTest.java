@@ -48,6 +48,10 @@ import org.apache.kafka.common.message.ApiVersionsRequestData;
 import org.apache.kafka.common.message.ApiVersionsResponseData;
 import org.apache.kafka.common.message.ApiVersionsResponseData.ApiVersion;
 import org.apache.kafka.common.message.ApiVersionsResponseData.ApiVersionCollection;
+import org.apache.kafka.common.message.BrokerHeartbeatRequestData;
+import org.apache.kafka.common.message.BrokerHeartbeatResponseData;
+import org.apache.kafka.common.message.BrokerRegistrationRequestData;
+import org.apache.kafka.common.message.BrokerRegistrationResponseData;
 import org.apache.kafka.common.message.ControlledShutdownRequestData;
 import org.apache.kafka.common.message.ControlledShutdownResponseData;
 import org.apache.kafka.common.message.ControlledShutdownResponseData.RemainingPartition;
@@ -94,6 +98,8 @@ import org.apache.kafka.common.message.DescribeConfigsResponseData.DescribeConfi
 import org.apache.kafka.common.message.DescribeGroupsRequestData;
 import org.apache.kafka.common.message.DescribeGroupsResponseData;
 import org.apache.kafka.common.message.DescribeGroupsResponseData.DescribedGroup;
+import org.apache.kafka.common.message.DescribeProducersRequestData;
+import org.apache.kafka.common.message.DescribeProducersResponseData;
 import org.apache.kafka.common.message.ElectLeadersResponseData.PartitionResult;
 import org.apache.kafka.common.message.ElectLeadersResponseData.ReplicaElectionResult;
 import org.apache.kafka.common.message.EndTxnRequestData;
@@ -158,6 +164,8 @@ import org.apache.kafka.common.message.StopReplicaResponseData;
 import org.apache.kafka.common.message.SyncGroupRequestData;
 import org.apache.kafka.common.message.SyncGroupRequestData.SyncGroupRequestAssignment;
 import org.apache.kafka.common.message.SyncGroupResponseData;
+import org.apache.kafka.common.message.UnregisterBrokerRequestData;
+import org.apache.kafka.common.message.UnregisterBrokerResponseData;
 import org.apache.kafka.common.message.UpdateMetadataRequestData.UpdateMetadataBroker;
 import org.apache.kafka.common.message.UpdateMetadataRequestData.UpdateMetadataEndpoint;
 import org.apache.kafka.common.message.UpdateMetadataRequestData.UpdateMetadataPartitionState;
@@ -514,19 +522,55 @@ public class RequestResponseTest {
     }
 
     @Test
+    public void testBrokerHeartbeatSerialization() {
+        for (short v = ApiKeys.BROKER_HEARTBEAT.oldestVersion(); v <= ApiKeys.BROKER_HEARTBEAT.latestVersion(); v++) {
+            checkRequest(createBrokerHeartbeatRequest(v), true);
+            checkErrorResponse(createBrokerHeartbeatRequest(v), unknownServerException, true);
+            checkResponse(createBrokerHeartbeatResponse(), v, true);
+        }
+    }
+
+    @Test
+    public void testBrokerRegistrationSerialization() {
+        for (short v = ApiKeys.BROKER_REGISTRATION.oldestVersion(); v <= ApiKeys.BROKER_REGISTRATION.latestVersion(); v++) {
+            checkRequest(createBrokerRegistrationRequest(v), true);
+            checkErrorResponse(createBrokerRegistrationRequest(v), unknownServerException, true);
+            checkResponse(createBrokerRegistrationResponse(), 0, true);
+        }
+    }
+
+    @Test
+    public void testDescribeProducersSerialization() throws Exception {
+        for (short v = ApiKeys.DESCRIBE_PRODUCERS.oldestVersion(); v <= ApiKeys.DESCRIBE_PRODUCERS.latestVersion(); v++) {
+            checkRequest(createDescribeProducersRequest(v), true);
+            checkErrorResponse(createDescribeProducersRequest(v), unknownServerException, true);
+            checkResponse(createDescribeProducersResponse(), v, true);
+        }
+    }
+
+    @Test
     public void testDescribeClusterSerialization() throws Exception {
-        for (int v = ApiKeys.DESCRIBE_CLUSTER.oldestVersion(); v <= ApiKeys.DESCRIBE_CLUSTER.latestVersion(); v++) {
+        for (short v = ApiKeys.DESCRIBE_CLUSTER.oldestVersion(); v <= ApiKeys.DESCRIBE_CLUSTER.latestVersion(); v++) {
             checkRequest(createDescribeClusterRequest(v), true);
             checkErrorResponse(createDescribeClusterRequest(v), unknownServerException, true);
             checkResponse(createDescribeClusterResponse(), v, true);
         }
     }
 
-    private DescribeClusterRequest createDescribeClusterRequest(int version) {
+    @Test
+    public void testUnregisterBrokerSerialization() {
+        for (short v = ApiKeys.UNREGISTER_BROKER.oldestVersion(); v <= ApiKeys.UNREGISTER_BROKER.latestVersion(); v++) {
+            checkRequest(createUnregisterBrokerRequest(v), true);
+            checkErrorResponse(createUnregisterBrokerRequest(v), unknownServerException, true);
+            checkResponse(createUnregisterBrokerResponse(), v, true);
+        }
+    }
+
+    private DescribeClusterRequest createDescribeClusterRequest(short version) {
         return new DescribeClusterRequest.Builder(
             new DescribeClusterRequestData()
                 .setIncludeClusterAuthorizedOperations(true))
-            .build((short) version);
+            .build(version);
     }
 
     private DescribeClusterResponse createDescribeClusterResponse() {
@@ -2566,6 +2610,85 @@ public class RequestResponseTest {
         return new AlterClientQuotasResponse(data);
     }
 
+    private DescribeProducersRequest createDescribeProducersRequest(short version) {
+        DescribeProducersRequestData data = new DescribeProducersRequestData();
+        DescribeProducersRequestData.TopicRequest topicRequest = new DescribeProducersRequestData.TopicRequest();
+        topicRequest.partitionIndexes().add(0);
+        topicRequest.partitionIndexes().add(1);
+        data.topics().add(topicRequest);
+        return new DescribeProducersRequest.Builder(data).build(version);
+    }
+
+    private DescribeProducersResponse createDescribeProducersResponse() {
+        DescribeProducersResponseData data = new DescribeProducersResponseData();
+        DescribeProducersResponseData.TopicResponse topicResponse = new DescribeProducersResponseData.TopicResponse();
+        topicResponse.partitions().add(new DescribeProducersResponseData.PartitionResponse()
+            .setErrorCode(Errors.NONE.code())
+            .setPartitionIndex(0)
+            .setActiveProducers(Arrays.asList(
+                new DescribeProducersResponseData.ProducerState()
+                    .setProducerId(1234L)
+                    .setProducerEpoch(15)
+                    .setLastTimestamp(13490218304L)
+                    .setCurrentTxnStartOffset(5000),
+                new DescribeProducersResponseData.ProducerState()
+                    .setProducerId(9876L)
+                    .setProducerEpoch(32)
+                    .setLastTimestamp(13490218399L)
+            ))
+        );
+        data.topics().add(topicResponse);
+        return new DescribeProducersResponse(data);
+    }
+
+    private BrokerHeartbeatRequest createBrokerHeartbeatRequest(short v) {
+        BrokerHeartbeatRequestData data = new BrokerHeartbeatRequestData()
+                .setBrokerId(1)
+                .setBrokerEpoch(1)
+                .setCurrentMetadataOffset(1)
+                .setWantFence(false)
+                .setWantShutDown(false);
+        return new BrokerHeartbeatRequest.Builder(data).build(v);
+    }
+
+    private BrokerHeartbeatResponse createBrokerHeartbeatResponse() {
+        BrokerHeartbeatResponseData data = new BrokerHeartbeatResponseData()
+                .setIsCaughtUp(true)
+                .setIsFenced(false)
+                .setShouldShutDown(false)
+                .setThrottleTimeMs(0);
+        return new BrokerHeartbeatResponse(data);
+    }
+
+    private BrokerRegistrationRequest createBrokerRegistrationRequest(short v) {
+        BrokerRegistrationRequestData data = new BrokerRegistrationRequestData()
+                .setBrokerId(1)
+                .setClusterId(Uuid.randomUuid())
+                .setRack("1")
+                .setFeatures(new BrokerRegistrationRequestData.FeatureCollection(singletonList(
+                        new BrokerRegistrationRequestData.Feature()).iterator()))
+                .setListeners(new BrokerRegistrationRequestData.ListenerCollection(singletonList(
+                        new BrokerRegistrationRequestData.Listener()).iterator()))
+                .setIncarnationId(Uuid.randomUuid());
+        return new BrokerRegistrationRequest.Builder(data).build(v);
+    }
+
+    private BrokerRegistrationResponse createBrokerRegistrationResponse() {
+        BrokerRegistrationResponseData data = new BrokerRegistrationResponseData()
+                .setBrokerEpoch(1)
+                .setThrottleTimeMs(0);
+        return new BrokerRegistrationResponse(data);
+    }
+
+    private UnregisterBrokerRequest createUnregisterBrokerRequest(short version) {
+        UnregisterBrokerRequestData data = new UnregisterBrokerRequestData().setBrokerId(1);
+        return new UnregisterBrokerRequest.Builder(data).build(version);
+    }
+
+    private UnregisterBrokerResponse createUnregisterBrokerResponse() {
+        return new UnregisterBrokerResponse(new UnregisterBrokerResponseData());
+    }
+
     /**
      * Check that all error codes in the response get included in {@link AbstractResponse#errorCounts()}.
      */
@@ -2578,6 +2701,8 @@ public class RequestResponseTest {
         assertEquals(Integer.valueOf(2), createAlterPartitionReassignmentsResponse().errorCounts().get(Errors.NONE));
         assertEquals(Integer.valueOf(1), createAlterReplicaLogDirsResponse().errorCounts().get(Errors.NONE));
         assertEquals(Integer.valueOf(1), createApiVersionResponse().errorCounts().get(Errors.NONE));
+        assertEquals(Integer.valueOf(1), createBrokerHeartbeatResponse().errorCounts().get(Errors.NONE));
+        assertEquals(Integer.valueOf(1), createBrokerRegistrationResponse().errorCounts().get(Errors.NONE));
         assertEquals(Integer.valueOf(1), createControlledShutdownResponse().errorCounts().get(Errors.NONE));
         assertEquals(Integer.valueOf(2), createCreateAclsResponse().errorCounts().get(Errors.NONE));
         assertEquals(Integer.valueOf(1), createCreatePartitionsResponse().errorCounts().get(Errors.NONE));

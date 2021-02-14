@@ -21,7 +21,6 @@ import java.util.concurrent.{ConcurrentHashMap, Executors}
 import java.util.{Collections, Random}
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.locks.Lock
-
 import kafka.coordinator.AbstractCoordinatorConcurrencyTest._
 import kafka.log.{AppendOrigin, Log}
 import kafka.server._
@@ -30,8 +29,9 @@ import kafka.utils.timer.MockTimer
 import kafka.zk.KafkaZkClient
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.protocol.Errors
-import org.apache.kafka.common.record.{BufferSupplier, MemoryRecords, RecordBatch, RecordConversionStats}
+import org.apache.kafka.common.record.{MemoryRecords, RecordBatch, RecordConversionStats}
 import org.apache.kafka.common.requests.ProduceResponse.PartitionResponse
+import org.apache.kafka.common.utils.BufferSupplier
 import org.easymock.EasyMock
 import org.junit.jupiter.api.{AfterEach, BeforeEach}
 
@@ -158,7 +158,7 @@ object AbstractCoordinatorConcurrencyTest {
   }
 
   class TestReplicaManager extends ReplicaManager(
-    null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, None, null) {
+    null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, None, null, null) {
 
     var producePurgatory: DelayedOperationPurgatory[DelayedProduce] = _
     var watchKeys: mutable.Set[TopicPartitionOperationKey] = _

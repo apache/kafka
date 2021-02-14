@@ -756,7 +756,9 @@ public interface KStream<K, V> {
      *
      * @param predicates the ordered list of {@link Predicate} instances
      * @return multiple distinct substreams of this {@code KStream}
+     * @deprecated since 2.8. Use {@link #split()} instead.
      */
+    @Deprecated
     @SuppressWarnings("unchecked")
     KStream<K, V>[] branch(final Predicate<? super K, ? super V>... predicates);
 
@@ -773,9 +775,31 @@ public interface KStream<K, V> {
      * @param named  a {@link Named} config used to name the processor in the topology
      * @param predicates the ordered list of {@link Predicate} instances
      * @return multiple distinct substreams of this {@code KStream}
+     * @deprecated since 2.8. Use {@link #split(Named)} instead.
      */
+    @Deprecated
     @SuppressWarnings("unchecked")
     KStream<K, V>[] branch(final Named named, final Predicate<? super K, ? super V>... predicates);
+
+    /**
+     * Split this stream. {@link BranchedKStream} can be used for routing the records to different branches depending
+     * on evaluation against the supplied predicates.
+     * Stream branching is a stateless record-by-record operation.
+     *
+     * @return {@link BranchedKStream} that provides methods for routing the records to different branches.
+     */
+    BranchedKStream<K, V> split();
+
+    /**
+     * Split this stream. {@link BranchedKStream} can be used for routing the records to different branches depending
+     * on evaluation against the supplied predicates.
+     * Stream branching is a stateless record-by-record operation.
+     *
+     * @param named  a {@link Named} config used to name the processor in the topology and also to set the name prefix
+     *               for the resulting branches (see {@link BranchedKStream})
+     * @return {@link BranchedKStream} that provides methods for routing the records to different branches.
+     */
+    BranchedKStream<K, V> split(final Named named);
 
     /**
      * Merge this stream and the given stream into one larger stream.
@@ -817,7 +841,7 @@ public interface KStream<K, V> {
      *
      * @param topic the topic name
      * @return a {@code KStream} that contains the exact same (and potentially repartitioned) records as this {@code KStream}
-     * @deprecated since 2.6; used {@link #repartition()} instead
+     * @deprecated since 2.6; use {@link #repartition()} instead
      */
     // TODO: when removed, update `StreamsResetter` decription of --intermediate-topics
     @Deprecated

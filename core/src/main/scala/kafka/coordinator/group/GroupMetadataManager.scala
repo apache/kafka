@@ -24,7 +24,6 @@ import java.util.Optional
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.locks.ReentrantLock
-
 import com.yammer.metrics.core.Gauge
 import kafka.api.{ApiVersion, KAFKA_0_10_1_IV0, KAFKA_2_1_IV0, KAFKA_2_1_IV1, KAFKA_2_3_IV0}
 import kafka.common.OffsetAndMetadata
@@ -35,7 +34,6 @@ import kafka.server.{FetchLogEnd, ReplicaManager}
 import kafka.utils.CoreUtils.inLock
 import kafka.utils.Implicits._
 import kafka.utils._
-import kafka.zk.KafkaZkClient
 import org.apache.kafka.clients.consumer.ConsumerRecord
 import org.apache.kafka.clients.consumer.internals.ConsumerProtocol
 import org.apache.kafka.common.internals.Topic
@@ -46,7 +44,7 @@ import org.apache.kafka.common.record._
 import org.apache.kafka.common.requests.OffsetFetchResponse.PartitionData
 import org.apache.kafka.common.requests.ProduceResponse.PartitionResponse
 import org.apache.kafka.common.requests.{OffsetCommitRequest, OffsetFetchResponse}
-import org.apache.kafka.common.utils.{Time, Utils}
+import org.apache.kafka.common.utils.{BufferSupplier, Time, Utils}
 import org.apache.kafka.common.{KafkaException, MessageFormatter, TopicPartition}
 
 import scala.collection._
@@ -57,7 +55,6 @@ class GroupMetadataManager(brokerId: Int,
                            interBrokerProtocolVersion: ApiVersion,
                            config: OffsetConfig,
                            val replicaManager: ReplicaManager,
-                           zkClient: KafkaZkClient,
                            time: Time,
                            metrics: Metrics) extends Logging with KafkaMetricsGroup {
 
@@ -78,7 +75,7 @@ class GroupMetadataManager(brokerId: Int,
   private val shuttingDown = new AtomicBoolean(false)
 
   /* number of partitions for the consumer metadata topic */
-  private val groupMetadataTopicPartitionCount = getGroupMetadataTopicPartitionCount
+  @volatile private var groupMetadataTopicPartitionCount: Int = _
 
   /* single-thread scheduler to handle offset/group metadata cache loading and unloading */
   private val scheduler = new KafkaScheduler(threads = 1, threadNamePrefix = "group-metadata-manager-")
@@ -170,7 +167,8 @@ class GroupMetadataManager(brokerId: Int,
       }
     })
 
-  def startup(enableMetadataExpiration: Boolean): Unit = {
+  def startup(retrieveGroupMetadataTopicPartitionCount: () => Int, enableMetadataExpiration: Boolean): Unit = {
+    groupMetadataTopicPartitionCount = retrieveGroupMetadataTopicPartitionCount()
     scheduler.startup()
     if (enableMetadataExpiration) {
       scheduler.schedule(name = "delete-expired-group-metadata",
@@ -823,7 +821,7 @@ class GroupMetadataManager(brokerId: Int,
         val timestampType = TimestampType.CREATE_TIME
         val timestamp = time.milliseconds()
 
-          replicaManager.nonOfflinePartition(appendPartition).foreach { partition =>
+          replicaManager.onlinePartition(appendPartition).foreach { partition =>
             val tombstones = ArrayBuffer.empty[SimpleRecord]
             removedOffsets.forKeyValue { (topicPartition, offsetAndMetadata) =>
               trace(s"Removing expired/deleted offset and metadata for $groupId, $topicPartition: $offsetAndMetadata")
@@ -937,14 +935,6 @@ class GroupMetadataManager(brokerId: Int,
       scheduler.shutdown()
 
     // TODO: clear the caches
-  }
-
-  /**
-   * Gets the partition count of the group metadata topic from ZooKeeper.
-   * If the topic does not exist, the configured partition count is returned.
-   */
-  private def getGroupMetadataTopicPartitionCount: Int = {
-    zkClient.getTopicPartitionCount(Topic.GROUP_METADATA_TOPIC_NAME).getOrElse(config.offsetsTopicNumPartitions)
   }
 
   /**

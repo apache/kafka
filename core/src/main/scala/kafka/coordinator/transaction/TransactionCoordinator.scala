@@ -18,24 +18,22 @@ package kafka.coordinator.transaction
 
 import java.util.Properties
 import java.util.concurrent.atomic.AtomicBoolean
-
 import kafka.server.{KafkaConfig, MetadataCache, ReplicaManager}
 import kafka.utils.{Logging, Scheduler}
-import kafka.zk.KafkaZkClient
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.protocol.Errors
-import org.apache.kafka.common.record.{BufferSupplier, RecordBatch}
+import org.apache.kafka.common.record.RecordBatch
 import org.apache.kafka.common.requests.TransactionResult
-import org.apache.kafka.common.utils.{LogContext, ProducerIdAndEpoch, Time}
+import org.apache.kafka.common.utils.{BufferSupplier, LogContext, ProducerIdAndEpoch, Time}
 
 object TransactionCoordinator {
 
   def apply(config: KafkaConfig,
             replicaManager: ReplicaManager,
             scheduler: Scheduler,
-            zkClient: KafkaZkClient,
+            createProducerIdGenerator: () => ProducerIdGenerator,
             metrics: Metrics,
             metadataCache: MetadataCache,
             time: Time): TransactionCoordinator = {
@@ -51,15 +49,14 @@ object TransactionCoordinator {
       config.transactionRemoveExpiredTransactionalIdCleanupIntervalMs,
       config.requestTimeoutMs)
 
-    val producerIdManager = new ProducerIdManager(config.brokerId, zkClient)
-    val txnStateManager = new TransactionStateManager(config.brokerId, zkClient, scheduler, replicaManager, txnConfig,
+    val txnStateManager = new TransactionStateManager(config.brokerId, scheduler, replicaManager, txnConfig,
       time, metrics)
 
     val logContext = new LogContext(s"[TransactionCoordinator id=${config.brokerId}] ")
     val txnMarkerChannelManager = TransactionMarkerChannelManager(config, metrics, metadataCache, txnStateManager,
       time, logContext)
 
-    new TransactionCoordinator(config.brokerId, txnConfig, scheduler, producerIdManager, txnStateManager, txnMarkerChannelManager,
+    new TransactionCoordinator(config.brokerId, txnConfig, scheduler, createProducerIdGenerator, txnStateManager, txnMarkerChannelManager,
       time, logContext)
   }
 
@@ -83,7 +80,7 @@ object TransactionCoordinator {
 class TransactionCoordinator(brokerId: Int,
                              txnConfig: TransactionConfig,
                              scheduler: Scheduler,
-                             producerIdManager: ProducerIdManager,
+                             createProducerIdGenerator: () => ProducerIdGenerator,
                              txnManager: TransactionStateManager,
                              txnMarkerChannelManager: TransactionMarkerChannelManager,
                              time: Time,
@@ -100,6 +97,8 @@ class TransactionCoordinator(brokerId: Int,
   /* Active flag of the coordinator */
   private val isActive = new AtomicBoolean(false)
 
+  val producerIdGenerator = createProducerIdGenerator()
+
   def handleInitProducerId(transactionalId: String,
                            transactionTimeoutMs: Int,
                            expectedProducerIdAndEpoch: Option[ProducerIdAndEpoch],
@@ -109,7 +108,7 @@ class TransactionCoordinator(brokerId: Int,
     if (transactionalId == null) {
       // if the transactional id is null, then always blindly accept the request
       // and return a new producerId from the producerId manager
-      val producerId = producerIdManager.generateProducerId()
+      val producerId = producerIdGenerator.generateProducerId()
       responseCallback(InitProducerIdResult(producerId, producerEpoch = 0, Errors.NONE))
     } else if (transactionalId.isEmpty) {
       // if transactional id is empty then return error as invalid request. This is
@@ -121,7 +120,7 @@ class TransactionCoordinator(brokerId: Int,
     } else {
       val coordinatorEpochAndMetadata = txnManager.getTransactionState(transactionalId).flatMap {
         case None =>
-          val producerId = producerIdManager.generateProducerId()
+          val producerId = producerIdGenerator.generateProducerId()
           val createdMetadata = new TransactionMetadata(transactionalId = transactionalId,
             producerId = producerId,
             lastProducerId = RecordBatch.NO_PRODUCER_ID,
@@ -227,7 +226,7 @@ class TransactionCoordinator(brokerId: Int,
             // If the epoch is exhausted and the expected epoch (if provided) matches it, generate a new producer ID
             if (txnMetadata.isProducerEpochExhausted &&
                 expectedProducerIdAndEpoch.forall(_.epoch == txnMetadata.producerEpoch)) {
-              val newProducerId = producerIdManager.generateProducerId()
+              val newProducerId = producerIdGenerator.generateProducerId()
               Right(txnMetadata.prepareProducerIdRotation(newProducerId, transactionTimeoutMs, time.milliseconds(),
                 expectedProducerIdAndEpoch.isDefined))
             } else {
@@ -601,7 +600,7 @@ class TransactionCoordinator(brokerId: Int,
   /**
    * Startup logic executed at the same time when the server starts up.
    */
-  def startup(enableTransactionalIdExpiration: Boolean = true): Unit = {
+  def startup(retrieveTransactionTopicPartitionCount: () => Int, enableTransactionalIdExpiration: Boolean = true): Unit = {
     info("Starting up.")
     scheduler.startup()
     scheduler.schedule("transaction-abort",
@@ -609,8 +608,7 @@ class TransactionCoordinator(brokerId: Int,
       txnConfig.abortTimedOutTransactionsIntervalMs,
       txnConfig.abortTimedOutTransactionsIntervalMs
     )
-    if (enableTransactionalIdExpiration)
-      txnManager.enableTransactionalIdExpiration()
+    txnManager.startup(retrieveTransactionTopicPartitionCount, enableTransactionalIdExpiration)
     txnMarkerChannelManager.start()
     isActive.set(true)
 
@@ -625,7 +623,7 @@ class TransactionCoordinator(brokerId: Int,
     info("Shutting down.")
     isActive.set(false)
     scheduler.shutdown()
-    producerIdManager.shutdown()
+    producerIdGenerator.shutdown()
     txnManager.shutdown()
     txnMarkerChannelManager.shutdown()
     info("Shutdown complete.")

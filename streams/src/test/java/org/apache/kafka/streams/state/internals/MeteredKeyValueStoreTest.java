@@ -27,6 +27,7 @@ import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.Serializer;
+import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
@@ -431,6 +432,22 @@ public class MeteredKeyValueStoreTest {
         assertThat(storeMetrics(), not(empty()));
         assertThrows(RuntimeException.class, metered::close);
         assertThat(storeMetrics(), empty());
+        verify(inner);
+    }
+
+    @Test
+    public void shouldGetRecordsWithPrefixKey() {
+        final StringSerializer stringSerializer = new StringSerializer();
+        expect(inner.prefixScan(KEY, stringSerializer))
+            .andReturn(new KeyValueIteratorStub<>(Collections.singletonList(BYTE_KEY_VALUE_PAIR).iterator()));
+        init();
+
+        final KeyValueIterator<String, String> iterator = metered.prefixScan(KEY, stringSerializer);
+        assertThat(iterator.next().value, equalTo(VALUE));
+        iterator.close();
+
+        final KafkaMetric metric = metrics.metric(new MetricName("prefix-scan-rate", STORE_LEVEL_GROUP, "", tags));
+        assertTrue((Double) metric.metricValue() > 0);
         verify(inner);
     }
 

@@ -187,7 +187,7 @@ class ReassignPartitionsIntegrationTest extends ZooKeeperTestHarness {
       VerifyAssignmentResult(finalAssignment))
 
     TestUtils.waitUntilTrue(() => {
-      cluster.servers(3).replicaManager.nonOfflinePartition(part).
+      cluster.servers(3).replicaManager.onlinePartition(part).
         flatMap(_.leaderLogIfLocal).isDefined
       }, "broker 3 should be the new leader", pause = 10L)
     assertEquals(123L, cluster.servers(3).replicaManager.localLogOrException(part).highWatermark,
@@ -694,9 +694,7 @@ class ReassignPartitionsIntegrationTest extends ZooKeeperTestHarness {
       }.toList.asJava).all().get()
       topics.foreach {
         case (topicName, parts) =>
-          parts.indices.foreach {
-            index => TestUtils.waitUntilMetadataIsPropagated(servers, topicName, index)
-          }
+          TestUtils.waitForAllPartitionsMetadata(servers, topicName, parts.size)
       }
     }
 

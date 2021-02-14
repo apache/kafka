@@ -17,15 +17,16 @@
 package org.apache.kafka.clients.admin;
 
 import org.apache.kafka.clients.admin.DescribeReplicaLogDirsResult.ReplicaLogDirInfo;
+import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.Metric;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.common.ElectionType;
 import org.apache.kafka.common.TopicPartitionInfo;
 import org.apache.kafka.common.TopicPartitionReplica;
+import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.acl.AclBinding;
 import org.apache.kafka.common.acl.AclBindingFilter;
 import org.apache.kafka.common.acl.AclOperation;
@@ -37,6 +38,7 @@ import org.apache.kafka.common.errors.ReplicaNotAvailableException;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.errors.TopicExistsException;
 import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
+import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.internals.KafkaFutureImpl;
 import org.apache.kafka.common.requests.DescribeLogDirsResponse;
 import org.apache.kafka.common.quota.ClientQuotaAlteration;
@@ -60,12 +62,15 @@ public class MockAdminClient extends AdminClient {
 
     private final List<Node> brokers;
     private final Map<String, TopicMetadata> allTopics = new HashMap<>();
+    private final Map<String, Uuid> topicIds = new HashMap<>();
+    private final Map<Uuid, String> topicNames = new HashMap<>();
     private final Map<TopicPartition, NewPartitionReassignment> reassignments =
         new HashMap<>();
     private final Map<TopicPartitionReplica, ReplicaLogDirInfo> replicaMoves =
         new HashMap<>();
     private final Map<TopicPartition, Long> beginningOffsets;
     private final Map<TopicPartition, Long> endOffsets;
+    private final boolean usingRaftController;
     private final String clusterId;
     private final List<List<String>> brokerLogDirs;
     private final List<Map<String, String>> brokerConfigs;
@@ -87,6 +92,7 @@ public class MockAdminClient extends AdminClient {
         private Node controller = null;
         private List<List<String>> brokerLogDirs = new ArrayList<>();
         private Short defaultPartitions;
+        private boolean usingRaftController = false;
         private Integer defaultReplicationFactor;
 
         public Builder() {
@@ -132,6 +138,11 @@ public class MockAdminClient extends AdminClient {
             return this;
         }
 
+        public Builder usingRaftController(boolean usingRaftController) {
+            this.usingRaftController = usingRaftController;
+            return this;
+        }
+
         public Builder defaultPartitions(short numPartitions) {
             this.defaultPartitions = numPartitions;
             return this;
@@ -143,7 +154,8 @@ public class MockAdminClient extends AdminClient {
                 clusterId,
                 defaultPartitions != null ? defaultPartitions.shortValue() : 1,
                 defaultReplicationFactor != null ? defaultReplicationFactor.shortValue() : Math.min(brokers.size(), 3),
-                brokerLogDirs);
+                brokerLogDirs,
+                usingRaftController);
         }
     }
 
@@ -153,7 +165,7 @@ public class MockAdminClient extends AdminClient {
 
     public MockAdminClient(List<Node> brokers, Node controller) {
         this(brokers, controller, DEFAULT_CLUSTER_ID, 1, brokers.size(),
-            Collections.nCopies(brokers.size(), DEFAULT_LOG_DIRS));
+            Collections.nCopies(brokers.size(), DEFAULT_LOG_DIRS), false);
     }
 
     private MockAdminClient(List<Node> brokers,
@@ -161,7 +173,8 @@ public class MockAdminClient extends AdminClient {
                             String clusterId,
                             int defaultPartitions,
                             int defaultReplicationFactor,
-                            List<List<String>> brokerLogDirs) {
+                            List<List<String>> brokerLogDirs,
+                            boolean usingRaftController) {
         this.brokers = brokers;
         controller(controller);
         this.clusterId = clusterId;
@@ -174,6 +187,7 @@ public class MockAdminClient extends AdminClient {
         }
         this.beginningOffsets = new HashMap<>();
         this.endOffsets = new HashMap<>();
+        this.usingRaftController = usingRaftController;
     }
 
     synchronized public void controller(Node controller) {
@@ -207,6 +221,9 @@ public class MockAdminClient extends AdminClient {
             }
         }
         allTopics.put(name, new TopicMetadata(internal, partitions, logDirs, configs));
+        Uuid id = Uuid.randomUuid();
+        topicIds.put(name, id);
+        topicNames.put(id, name);
     }
 
     synchronized public void markTopicForDeletion(final String name) {
@@ -298,6 +315,9 @@ public class MockAdminClient extends AdminClient {
                 logDirs.add(brokerLogDirs.get(partitions.get(i).leader().id()).get(0));
             }
             allTopics.put(topicName, new TopicMetadata(false, partitions, logDirs, newTopic.configs()));
+            Uuid id = Uuid.randomUuid();
+            topicIds.put(topicName, id);
+            topicNames.put(id, topicName);
             future.complete(null);
             createTopicResult.put(topicName, future);
         }
@@ -393,12 +413,44 @@ public class MockAdminClient extends AdminClient {
             if (allTopics.remove(topicName) == null) {
                 future.completeExceptionally(new UnknownTopicOrPartitionException(String.format("Topic %s does not exist.", topicName)));
             } else {
+                topicNames.remove(topicIds.remove(topicName));
                 future.complete(null);
             }
             deleteTopicsResult.put(topicName, future);
         }
 
         return new DeleteTopicsResult(deleteTopicsResult);
+    }
+
+    @Override
+    synchronized public DeleteTopicsWithIdsResult deleteTopicsWithIds(Collection<Uuid> topicsToDelete, DeleteTopicsOptions options) {
+        Map<Uuid, KafkaFuture<Void>> deleteTopicsWithIdsResult = new HashMap<>();
+
+        if (timeoutNextRequests > 0) {
+            for (final Uuid topicId : topicsToDelete) {
+                KafkaFutureImpl<Void> future = new KafkaFutureImpl<>();
+                future.completeExceptionally(new TimeoutException());
+                deleteTopicsWithIdsResult.put(topicId, future);
+            }
+
+            --timeoutNextRequests;
+            return new DeleteTopicsWithIdsResult(deleteTopicsWithIdsResult);
+        }
+
+        for (final Uuid topicId : topicsToDelete) {
+            KafkaFutureImpl<Void> future = new KafkaFutureImpl<>();
+
+            String name = topicNames.remove(topicId);
+            if (name == null || allTopics.remove(name) == null) {
+                future.completeExceptionally(new UnknownTopicOrPartitionException(String.format("Topic %s does not exist.", topicId)));
+            } else {
+                topicIds.remove(name);
+                future.complete(null);
+            }
+            deleteTopicsWithIdsResult.put(topicId, future);
+        }
+
+        return new DeleteTopicsWithIdsResult(deleteTopicsWithIdsResult);
     }
 
     @Override
@@ -844,6 +896,17 @@ public class MockAdminClient extends AdminClient {
     @Override
     public UpdateFeaturesResult updateFeatures(Map<String, FeatureUpdate> featureUpdates, UpdateFeaturesOptions options) {
         throw new UnsupportedOperationException("Not implemented yet");
+    }
+
+    @Override
+    public UnregisterBrokerResult unregisterBroker(int brokerId, UnregisterBrokerOptions options) {
+        if (usingRaftController) {
+            return new UnregisterBrokerResult(KafkaFuture.completedFuture(null));
+        } else {
+            KafkaFutureImpl<Void> future = new KafkaFutureImpl<>();
+            future.completeExceptionally(new UnsupportedVersionException(""));
+            return new UnregisterBrokerResult(future);
+        }
     }
 
     @Override

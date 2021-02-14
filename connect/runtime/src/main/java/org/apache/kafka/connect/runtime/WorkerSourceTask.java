@@ -412,10 +412,15 @@ class WorkerSourceTask extends WorkerTask {
         log.debug("Topic '{}' matched topic creation group: {}", topic, topicGroup);
         NewTopic newTopic = topicGroup.newTopic(topic);
 
-        if (admin.createTopic(newTopic)) {
+        TopicAdmin.TopicCreationResponse response = admin.createOrFindTopics(newTopic);
+        if (response.isCreated(newTopic.name())) {
             topicCreation.addTopic(topic);
             log.info("Created topic '{}' using creation group {}", newTopic, topicGroup);
+        } else if (response.isExisting(newTopic.name())) {
+            topicCreation.addTopic(topic);
+            log.info("Found existing topic '{}'", newTopic);
         } else {
+            // The topic still does not exist and could not be created, so treat it as a task failure
             log.warn("Request to create new topic '{}' failed", topic);
             throw new ConnectException("Task failed to create new topic " + newTopic + ". Ensure "
                     + "that the task is authorized to create topics or that the topic exists and "

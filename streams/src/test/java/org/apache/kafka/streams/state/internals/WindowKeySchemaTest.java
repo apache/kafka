@@ -51,7 +51,7 @@ public class WindowKeySchemaTest {
     final private Window window = new TimeWindow(startTime, endTime);
     final private Windowed<String> windowedKey = new Windowed<>(key, window);
     final private WindowKeySchema windowKeySchema = new WindowKeySchema();
-    final private Serde<Windowed<String>> keySerde = new WindowedSerdes.TimeWindowedSerde<>(serde);
+    final private Serde<Windowed<String>> keySerde = new WindowedSerdes.TimeWindowedSerde<>(serde, Long.MAX_VALUE);
     final private StateSerdes<String, byte[]> stateSerdes = new StateSerdes<>("dummy", serde, Serdes.ByteArray());
 
     @Test
