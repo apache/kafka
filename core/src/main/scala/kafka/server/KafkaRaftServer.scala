@@ -81,7 +81,16 @@ class KafkaRaftServer(
   }
 
   private val controller: Option[ControllerServer] = if (config.processRoles.contains(ControllerRole)) {
-    Some(new ControllerServer())
+    Some(new ControllerServer(
+      metaProps,
+      config,
+      metaLogShim,
+      raftManager,
+      time,
+      metrics,
+      threadNamePrefix,
+      CompletableFuture.completedFuture(config.quorumVoters)
+    ))
   } else {
     None
   }
@@ -128,7 +137,7 @@ object KafkaRaftServer {
    *         be consistent across all log dirs) and the offline directories
    */
   def initializeLogDirs(config: KafkaConfig): (MetaProperties, Seq[String]) = {
-    val logDirs = config.logDirs :+ config.metadataLogDir
+    val logDirs = (config.logDirs.toSet + config.metadataLogDir).toSeq
     val (rawMetaProperties, offlineDirs) = BrokerMetadataCheckpoint.
       getBrokerMetadataAndOfflineDirs(logDirs, ignoreMissing = false)
 
