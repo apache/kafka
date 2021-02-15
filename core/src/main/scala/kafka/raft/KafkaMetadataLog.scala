@@ -281,8 +281,7 @@ final class KafkaMetadataLog private (
   }
 
   /**
-   * remove all snapshots whose end offset is less than the giving offset, also delete the corresponding
-   * snapshot files.
+   * Removes all snapshots on the log directory whose epoch and end offset is less than the giving epoch and end offset.
    */
   private def removeSnapshotFileBefore(logStartSnapshotId: OffsetAndEpoch): Unit = {
     val expiredSnapshotIds = snapshotIds.headSet(logStartSnapshotId)
