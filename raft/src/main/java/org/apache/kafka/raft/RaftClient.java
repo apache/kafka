@@ -124,7 +124,6 @@ public interface RaftClient<T> extends Closeable {
      */
     Long scheduleAtomicAppend(int epoch, List<T> records);
 
-
     /**
      * Attempt a graceful shutdown of the client. This allows the leader to proactively
      * resign and help a new leader to get elected rather than forcing the remaining

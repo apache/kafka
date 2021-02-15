@@ -97,34 +97,7 @@ public class BatchAccumulator<T> implements Closeable {
      *         been committed
      */
     public Long append(int epoch, List<T> records) {
-        if (epoch != this.epoch) {
-            return Long.MAX_VALUE;
-        }
-
-        ObjectSerializationCache serializationCache = new ObjectSerializationCache();
-
-        appendLock.lock();
-        try {
-            maybeCompleteDrain();
-
-            for (T record : records) {
-                BatchBuilder<T> batch = maybeAllocateBatch(
-                    new int[] {serde.recordSize(record, serializationCache)}
-                );
-                if (batch == null) {
-                    return null;
-                }
-
-                batch.appendRecord(record, serializationCache);
-                nextOffset += 1;
-            }
-
-            maybeResetLinger();
-
-            return nextOffset - 1;
-        } finally {
-            appendLock.unlock();
-        }
+        return append(epoch, records, false);
     }
 
     /**
@@ -142,6 +115,10 @@ public class BatchAccumulator<T> implements Closeable {
      *         committed
      */
     public Long appendAtomic(int epoch, List<T> records) {
+        return append(epoch, records, true);
+    }
+
+    private Long append(int epoch, List<T> records, boolean isAtomic) {
         if (epoch != this.epoch) {
             return Long.MAX_VALUE;
         }
@@ -156,12 +133,22 @@ public class BatchAccumulator<T> implements Closeable {
         try {
             maybeCompleteDrain();
 
-            BatchBuilder<T> batch = maybeAllocateBatch(recordSizes);
-            if (batch == null) {
-                return null;
+            BatchBuilder<T> batch = null;
+            if (isAtomic) {
+                batch = maybeAllocateBatch(recordSizes);
             }
 
             for (T record : records) {
+                if (!isAtomic) {
+                    batch = maybeAllocateBatch(
+                        new int[] {serde.recordSize(record, serializationCache)}
+                    );
+                }
+
+                if (batch == null) {
+                    return null;
+                }
+
                 batch.appendRecord(record, serializationCache);
                 nextOffset += 1;
             }
@@ -181,7 +168,11 @@ public class BatchAccumulator<T> implements Closeable {
     }
 
     private BatchBuilder<T> maybeAllocateBatch(int[] recordSizes) {
-        int bytesNeeded = BatchBuilder.batchSizeForRecordSizes(compressionType, nextOffset, recordSizes);
+        int bytesNeeded = BatchBuilder.batchSizeForRecordSizes(
+            compressionType,
+            nextOffset,
+            recordSizes
+        );
         if (bytesNeeded > maxBatchSize) {
             throw new RecordBatchTooLargeException(
                 String.format(

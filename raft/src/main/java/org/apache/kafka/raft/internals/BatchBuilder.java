@@ -303,7 +303,7 @@ public class BatchBuilder<T> {
      * @param compressionType the type of compression
      * @param baseOffset the base offset of the batch
      * @param recordSizes the size of the records
-     * @return the bytes required, {@link Integer.MAX_VALUE} when offset delta is too large.
+     * @return the bytes required, {@link Integer#MAX_VALUE} when offset delta is too large.
      */
     public static int batchSizeForRecordSizes(
         CompressionType compressionType,
@@ -337,7 +337,7 @@ public class BatchBuilder<T> {
      * @param baseOffset the base offset for the batch
      * @param startingOffset the offset of the first record
      * @param recordSizes the sizes of all of the records
-     * @return the bytes required to store records with the given sizes, {@link Integer.MAX_VALUE}
+     * @return the bytes required to store records with the given sizes, {@link Integer#MAX_VALUE}
      *         when offset delta is too large.
      */
     static int bytesNeededForRecordSizes(
