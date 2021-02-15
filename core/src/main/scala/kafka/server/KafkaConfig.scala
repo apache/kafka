@@ -1893,8 +1893,10 @@ class KafkaConfig(val props: java.util.Map[_, _], doLog: Boolean, dynamicConfigO
   validateValues()
 
   private def validateValues(): Unit = {
-    if(brokerIdGenerationEnable) {
-      require(brokerId >= -1 && brokerId <= maxReservedBrokerId, "broker.id must be equal or greater than -1 and not greater than reserved.broker.max.id")
+    if (brokerIdGenerationEnable) {
+      if (requiresZookeeper) {
+        require(brokerId >= -1 && brokerId <= maxReservedBrokerId, "broker.id must be equal or greater than -1 and not greater than reserved.broker.max.id")
+      }
     } else {
       require(brokerId >= 0, "broker.id must be equal or greater than 0")
     }

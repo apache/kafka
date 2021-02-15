@@ -1095,6 +1095,45 @@ class KafkaConfigTest {
   }
 
   @Test
+  def testLargeNodeIdForRaftBasedCaseOk(): Unit = {
+    // Generation of Broker IDs is not supported when using Raft-based controller quorums,
+    // so pick a broker ID greater than reserved.broker.max.id, which defaults to 1000,
+    // and make sure it is allowed despite broker.id.generation.enable=true (true is the default)
+    val largeBrokerId = 2000
+    val props = new Properties()
+    props.put(KafkaConfig.ProcessRolesProp, "broker")
+    props.put(KafkaConfig.NodeIdProp, largeBrokerId.toString)
+    assertTrue(isValidKafkaConfig(props))
+
+  }
+
+  @Test
+  def testLargeNodeIdForZkBasedCaseNotOkWithAutoGenEnabled(): Unit = {
+    // Generation of Broker IDs is supported when using ZooKeeper-based controllers,
+    // so pick a broker ID greater than reserved.broker.max.id, which defaults to 1000,
+    // and make sure it is not allowed with broker.id.generation.enable=true (true is the default)
+    val largeBrokerId = 2000
+    val props = TestUtils.createBrokerConfig(largeBrokerId, TestUtils.MockZkConnect, port = TestUtils.MockZkPort)
+    val listeners = "PLAINTEXT://A:9092,SSL://B:9093,SASL_SSL://C:9094"
+    props.put(KafkaConfig.ListenersProp, listeners)
+    props.put(KafkaConfig.AdvertisedListenersProp, listeners)
+    assertFalse(isValidKafkaConfig(props))
+  }
+
+  @Test
+  def testLargeNodeIdForZkBasedCaseOkWithAutoGenDisabled(): Unit = {
+    // Ensure a broker ID greater than reserved.broker.max.id, which defaults to 1000,
+    // is allowed with broker.id.generation.enable=false
+    val largeBrokerId = 2000
+    val props = TestUtils.createBrokerConfig(largeBrokerId, TestUtils.MockZkConnect, port = TestUtils.MockZkPort)
+    val listeners = "PLAINTEXT://A:9092,SSL://B:9093,SASL_SSL://C:9094"
+    props.put(KafkaConfig.ListenersProp, listeners)
+    props.put(KafkaConfig.AdvertisedListenersProp, listeners)
+    props.put(KafkaConfig.BrokerIdGenerationEnableProp, "false")
+    assertTrue(isValidKafkaConfig(props))
+  }
+
+  @Test
   def testZookeeperConnectRequiredIfEmptyProcessRoles(): Unit = {
     val props = new Properties()
     props.put(KafkaConfig.ProcessRolesProp, "")
