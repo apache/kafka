@@ -32,7 +32,6 @@ import java.util.List;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.locks.ReentrantLock;
-import java.util.stream.IntStream;
 
 public class BatchAccumulator<T> implements Closeable {
     private final int epoch;
@@ -182,13 +181,12 @@ public class BatchAccumulator<T> implements Closeable {
     }
 
     private BatchBuilder<T> maybeAllocateBatch(int[] recordSizes) {
-        // TODO: This is incorrect. Need to look at the batch overhead
-        int batchSize = IntStream.of(recordSizes).sum();
-        if (batchSize > maxBatchSize) {
+        int bytesNeeded = BatchBuilder.batchSizeForRecordSizes(compressionType, nextOffset, recordSizes);
+        if (bytesNeeded > maxBatchSize) {
             throw new RecordBatchTooLargeException(
                 String.format(
                     "The total record(s) size of %s exceeds the maximum allowed batch size of %s",
-                    batchSize,
+                    bytesNeeded,
                     maxBatchSize
                 )
             );

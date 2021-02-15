@@ -85,8 +85,7 @@ public class BatchBuilder<T> {
         this.maxBytes = maxBytes;
         this.records = new ArrayList<>();
 
-        int batchHeaderSizeInBytes = AbstractRecords.recordBatchHeaderSizeInBytes(
-            RecordBatch.MAGIC_VALUE_V2, compressionType);
+        int batchHeaderSizeInBytes = batchHeaderSizeInBytes(compressionType);
         batchOutput.position(initialPosition + batchHeaderSizeInBytes);
 
         this.recordOutput = new DataOutputStreamWritable(new DataOutputStream(
@@ -103,7 +102,7 @@ public class BatchBuilder<T> {
      */
     public long appendRecord(T record, ObjectSerializationCache serializationCache) {
         if (!isOpenForAppends) {
-            throw new IllegalArgumentException("Cannot append new records after the batch has been built");
+            throw new IllegalStateException("Cannot append new records after the batch has been built");
         }
 
         if (nextOffset - baseOffset > Integer.MAX_VALUE) {
@@ -133,24 +132,9 @@ public class BatchBuilder<T> {
             return false;
         }
 
-        if (nextOffset - baseOffset >= Integer.MAX_VALUE) {
-            return false;
-        }
+        int bytesNeeded = bytesNeededForRecordSizes(baseOffset, nextOffset, recordSizes);
 
-        int bytesNeeded = 0;
-        for (int size: recordSizes) {
-            int recordSizeInBytes = DefaultRecord.sizeOfBodyInBytes(
-                (int) (nextOffset - baseOffset),
-                0,
-                -1,
-                size,
-                DefaultRecord.EMPTY_HEADERS
-            );
-
-            bytesNeeded += ByteUtils.sizeOfVarint(recordSizeInBytes) + recordSizeInBytes;
-        }
         int approxUnusedSizeInBytes = maxBytes - approximateSizeInBytes();
-
         if (approxUnusedSizeInBytes >= bytesNeeded) {
             return true;
         } else if (unflushedBytes > 0) {
@@ -311,5 +295,76 @@ public class BatchBuilder<T> {
         // Write headers (currently unused)
         recordOutput.writeVarint(0);
         return ByteUtils.sizeOfVarint(sizeInBytes) + sizeInBytes;
+    }
+
+    /**
+     * Computes the bytes required to store records with the given sizes in a new batch.
+     *
+     * @param compressionType the type of compression
+     * @param baseOffset the base offset of the batch
+     * @param recordSizes the size of the records
+     * @return the bytes required, {@link Integer.MAX_VALUE} when offset delta is too large.
+     */
+    public static int batchSizeForRecordSizes(
+        CompressionType compressionType,
+        long baseOffset,
+        int[] recordSizes
+    ) {
+        int bytesNeeded = bytesNeededForRecordSizes(baseOffset, 0, recordSizes);
+        if (bytesNeeded != Integer.MAX_VALUE) {
+            return batchHeaderSizeInBytes(compressionType) + bytesNeeded;
+        } else {
+            return Integer.MAX_VALUE;
+        }
+    }
+
+    /**
+     * Computes the bytes overhead of an empty batch.
+     *
+     * @param compressionType the type of compression
+     * @return the minimal bytes size of a batch
+     */
+    static int batchHeaderSizeInBytes(CompressionType compressionType) {
+        return AbstractRecords.recordBatchHeaderSizeInBytes(
+            RecordBatch.MAGIC_VALUE_V2,
+            compressionType
+        );
+    }
+
+    /**
+     * Compute the number of bytes required to store the give record sizes.
+     *
+     * @param baseOffset the base offset for the batch
+     * @param startingOffset the offset of the first record
+     * @param recordSizes the sizes of all of the records
+     * @return the bytes required to store records with the given sizes, {@link Integer.MAX_VALUE}
+     *         when offset delta is too large.
+     */
+    static int bytesNeededForRecordSizes(
+        long baseOffset,
+        long startingOffset,
+        int[] recordSizes
+    ) {
+        long expectedNextOffset = startingOffset;
+        int bytesNeeded = 0;
+        for (int size: recordSizes) {
+            if (expectedNextOffset - baseOffset >= Integer.MAX_VALUE) {
+                return Integer.MAX_VALUE;
+            }
+
+            int recordSizeInBytes = DefaultRecord.sizeOfBodyInBytes(
+                (int) (expectedNextOffset  - baseOffset),
+                0,
+                -1,
+                size,
+                DefaultRecord.EMPTY_HEADERS
+            );
+
+            bytesNeeded += ByteUtils.sizeOfVarint(recordSizeInBytes) + recordSizeInBytes;
+
+            expectedNextOffset += 1;
+        }
+
+        return bytesNeeded;
     }
 }
