@@ -162,7 +162,7 @@ final class KafkaMetadataLog private (
 
         log.truncateFullyAndStartAt(snapshotId.offset)
         // Delete snapshot after truncating
-        removeSnapshotFileBefore(snapshotId)
+        removeSnapshotFilesBefore(snapshotId)
 
         true
 
@@ -272,7 +272,7 @@ final class KafkaMetadataLog private (
         log.deleteOldSegments()
 
         // Delete snapshot after increasing LogStartOffset
-        removeSnapshotFileBefore(logStartSnapshotId)
+        removeSnapshotFilesBefore(logStartSnapshotId)
 
         true
 
@@ -283,10 +283,15 @@ final class KafkaMetadataLog private (
   /**
    * Removes all snapshots on the log directory whose epoch and end offset is less than the giving epoch and end offset.
    */
-  private def removeSnapshotFileBefore(logStartSnapshotId: OffsetAndEpoch): Unit = {
-    val expiredSnapshotIds = snapshotIds.headSet(logStartSnapshotId)
-    expiredSnapshotIds.forEach(snapshotId => Snapshots.deleteSnapshotIfExists(log.dir.toPath, snapshotId))
-    expiredSnapshotIds.clear()
+  private def removeSnapshotFilesBefore(logStartSnapshotId: OffsetAndEpoch): Unit = {
+    val expiredSnapshotIdsIter = snapshotIds.headSet(logStartSnapshotId).iterator()
+    while (expiredSnapshotIdsIter.hasNext) {
+      val snapshotId = expiredSnapshotIdsIter.next()
+      // If snapshotIds contains a snapshot id, the KafkaRaftClient and Listener can expect that the snapshot exists
+      // on the file system, so we should first remove snapshotId and then delete snapshot file.
+      expiredSnapshotIdsIter.remove()
+      Snapshots.deleteSnapshotIfExists(log.dir.toPath, snapshotId)
+    }
   }
 
   override def close(): Unit = {

@@ -89,12 +89,12 @@ final public class SnapshotsTest {
         Path logDirPath = TestUtils.tempDirectory().toPath();
         try (FileRawSnapshotWriter snapshot = FileRawSnapshotWriter.create(logDirPath, snapshotId, Optional.empty())) {
             snapshot.freeze();
+
+            Path snapshotPath = Snapshots.snapshotPath(logDirPath, snapshotId);
+            assertTrue(Files.exists(snapshotPath));
+
+            Snapshots.deleteSnapshotIfExists(logDirPath, snapshot.snapshotId());
+            assertFalse(Files.exists(snapshotPath));
         }
-
-        Path snapshotPath = Snapshots.snapshotPath(logDirPath, snapshotId);
-        assertTrue(Files.exists(snapshotPath));
-
-        Snapshots.deleteSnapshotIfExists(logDirPath, snapshot.snapshotId());
-        assertFalse(Files.exists(snapshotPath));
     }
 }
