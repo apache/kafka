@@ -104,7 +104,7 @@ public class RebalanceSourceConnectorsIntegrationTest {
 
     @After
     public void close() {
-        // stop all Connect, Kafka and Zk threads.
+        // stop all Connect, Kafka and Zk threads..
         connect.stop();
     }
 
