@@ -262,7 +262,7 @@ public class KTableKTableForeignKeyInnerJoinMultiIntegrationTest {
     private void verifyKTableKTableJoin(final JoinType joinType,
                                         final Set<KeyValue<Integer, String>> expectedResult,
                                         final boolean verifyQueryableState) throws Exception {
-        System.err.println("st");
+        System.err.println("st...");
 
         final String queryableName = verifyQueryableState ? joinType + "-store1" : null;
         final String queryableNameTwo = verifyQueryableState ? joinType + "-store2" : null;
