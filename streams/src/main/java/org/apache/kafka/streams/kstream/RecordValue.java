@@ -1,6 +1,7 @@
 package org.apache.kafka.streams.kstream;
 
-import org.apache.kafka.streams.Headers;
+import org.apache.kafka.streams.header.Headers;
+import org.apache.kafka.streams.header.StreamHeaders;
 
 public class RecordValue<V> {
 
@@ -14,7 +15,7 @@ public class RecordValue<V> {
       long timestamp
   ) {
     this.value = value;
-    this.headers = null; //TODO headers.toArray();
+    this.headers = StreamHeaders.fromRecordHeaders(headers);
     this.timestamp = timestamp;
   }
 

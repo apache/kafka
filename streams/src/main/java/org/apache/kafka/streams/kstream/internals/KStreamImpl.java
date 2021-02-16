@@ -37,6 +37,7 @@ import org.apache.kafka.streams.kstream.Printed;
 import org.apache.kafka.streams.kstream.Produced;
 import org.apache.kafka.streams.kstream.RecordValue;
 import org.apache.kafka.streams.kstream.Repartitioned;
+import org.apache.kafka.streams.kstream.RecordHeadersMapper;
 import org.apache.kafka.streams.kstream.StreamJoined;
 import org.apache.kafka.streams.kstream.TransformerSupplier;
 import org.apache.kafka.streams.kstream.ValueJoiner;
@@ -117,6 +118,10 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
     private static final String MAP_NAME = "KSTREAM-MAP-";
 
     private static final String MAPVALUES_NAME = "KSTREAM-MAPVALUES-";
+
+    private static final String MAPRECORDVALUE_NAME = "KSTREAM-MAPRECORDVALUE-";
+
+    private static final String SETRECORDHEADERS_NAME = "KSTREAM-SETRECORDHEADERS-";
 
     private static final String PROCESSOR_NAME = "KSTREAM-PROCESSOR-";
 
@@ -318,15 +323,15 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
     }
 
     @Override
-    public KStream<K, RecordValue<V>> mapToRecordValue() {
-        return mapToRecordValue(NamedInternal.empty());
+    public KStream<K, RecordValue<V>> mapRecordValue() {
+        return mapRecordValue(NamedInternal.empty());
     }
 
     @Override
-    public KStream<K, RecordValue<V>> mapToRecordValue(Named named) {
+    public KStream<K, RecordValue<V>> mapRecordValue(Named named) {
         Objects.requireNonNull(named, "named can't be null");
 
-        final String name = new NamedInternal(named).orElseGenerateWithPrefix(builder, FLATMAP_NAME);
+        final String name = new NamedInternal(named).orElseGenerateWithPrefix(builder, MAPRECORDVALUE_NAME);
         final ProcessorParameters<? super K, ? super V, ?, ?> processorParameters =
             new ProcessorParameters<>(new KStreamMapToRecordValue<>(), name);
         final ProcessorGraphNode<? super K, ? super V> mapValuesProcessorNode =
@@ -347,8 +352,33 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
     }
 
     @Override
-    public <KR, VR> KStream<KR, VR> flatMap(final KeyValueMapper<? super K, ? super V, ? extends Iterable<? extends KeyValue<? extends KR, ? extends VR>>> mapper) {
-        return flatMap(mapper, NamedInternal.empty());
+    public KStream<K, V> setRecordHeaders(RecordHeadersMapper<? super K, ? super V> mapper,
+        Named named) {
+        Objects.requireNonNull(mapper, "mapper can't be null");
+        Objects.requireNonNull(named, "named can't be null");
+
+        final String name = new NamedInternal(named).orElseGenerateWithPrefix(builder, SETRECORDHEADERS_NAME);
+        final ProcessorParameters<? super K, ? super V, ?, ?> processorParameters =
+            new ProcessorParameters<>(new KStreamSetRecordHeaders<>(mapper), name);
+        final ProcessorGraphNode<? super K, ? super V> setRecordHeadersNode =
+            new ProcessorGraphNode<>(name, processorParameters);
+
+        builder.addGraphNode(graphNode, setRecordHeadersNode);
+
+        // key and value serde cannot be preserved
+        return new KStreamImpl<>(
+            name,
+            keySerde,
+            valueSerde,
+            subTopologySourceNodes,
+            true,
+            setRecordHeadersNode,
+            builder);
+    }
+
+    @Override
+    public KStream<K, V> setRecordHeaders(RecordHeadersMapper<? super K, ? super V> action) {
+        return setRecordHeaders(action, NamedInternal.empty());
     }
 
     @Override
@@ -368,6 +398,11 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
 
         // key and value serde cannot be preserved
         return new KStreamImpl<>(name, null, null, subTopologySourceNodes, true, flatMapNode, builder);
+    }
+
+    @Override
+    public <KR, VR> KStream<KR, VR> flatMap(final KeyValueMapper<? super K, ? super V, ? extends Iterable<? extends KeyValue<? extends KR, ? extends VR>>> mapper) {
+        return flatMap(mapper, NamedInternal.empty());
     }
 
     @Override
