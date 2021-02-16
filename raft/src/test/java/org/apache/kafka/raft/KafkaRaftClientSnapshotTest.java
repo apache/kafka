@@ -59,6 +59,7 @@ final public class KafkaRaftClientSnapshotTest {
             .appendToLog(snapshotId.epoch, Arrays.asList("a", "b", "c"))
             .appendToLog(snapshotId.epoch, Arrays.asList("d", "e", "f"))
             .withSnapshot(snapshotId)
+            .deleteBeforeSnapshot(snapshotId)
             .build();
 
         context.becomeLeader();
@@ -90,6 +91,7 @@ final public class KafkaRaftClientSnapshotTest {
             .appendToLog(snapshotId.epoch, Arrays.asList("a", "b", "c"))
             .appendToLog(snapshotId.epoch, Arrays.asList("d", "e", "f"))
             .withSnapshot(snapshotId)
+            .deleteBeforeSnapshot(snapshotId)
             .withElectedLeader(epoch, leaderId)
             .build();
 
@@ -164,18 +166,24 @@ final public class KafkaRaftClientSnapshotTest {
         RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
             .appendToLog(snapshotId.epoch, Arrays.asList("a", "b", "c"))
             .appendToLog(snapshotId.epoch, Arrays.asList("d", "e", "f"))
+            .appendToLog(snapshotId.epoch, Arrays.asList("g", "h", "i"))
             .withSnapshot(snapshotId)
+            .deleteBeforeSnapshot(snapshotId)
             .build();
 
         context.becomeLeader();
         int epoch = context.currentEpoch();
 
+        // Stop the the listener from reading commit batches
+        context.listener.updateReadCommit(false);
+
         // Advance the highWatermark
-        long localLogEndOffset = context.log.endOffset().offset;
-        context.deliverRequest(context.fetchRequest(epoch, otherNodeId, localLogEndOffset, epoch, 0));
+        context.deliverRequest(
+            context.fetchRequest(epoch, otherNodeId, snapshotId.offset, snapshotId.epoch, 0)
+        );
         context.pollUntilResponse();
         context.assertSentFetchResponse(Errors.NONE, epoch, OptionalInt.of(localId));
-        assertEquals(localLogEndOffset, context.client.highWatermark().getAsLong());
+        assertEquals(snapshotId.offset, context.client.highWatermark().getAsLong());
 
         // Check that listener was notified of the new snapshot
         try (SnapshotReader<String> snapshot = context.listener.takeSnapshot().get()) {

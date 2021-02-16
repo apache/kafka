@@ -484,9 +484,9 @@ public class MockLogTest {
     public void testFailToIncreaseLogStartPastHighWatermark() throws IOException {
         int offset = 10;
         int epoch = 0;
-        OffsetAndEpoch snapshotId = new OffsetAndEpoch(2 * offset, 1 + epoch);
+        OffsetAndEpoch snapshotId = new OffsetAndEpoch(2 * offset, epoch);
 
-        appendBatch(offset, epoch);
+        appendBatch(3 * offset, epoch);
         log.updateHighWatermark(new LogOffsetMetadata(offset));
 
         try (RawSnapshotWriter snapshot = log.createSnapshot(snapshotId)) {

@@ -430,23 +430,34 @@ public class MockLog implements ReplicatedLog {
     public void onSnapshotFrozen(OffsetAndEpoch snapshotId) {}
 
     @Override
-    public boolean deleteBeforeSnapshot(OffsetAndEpoch logStartSnapshotId) {
-        boolean updated = false;
-        if (snapshots.containsKey(logStartSnapshotId) &&
-            logStartOffset() < logStartSnapshotId.offset) {
+    public boolean deleteBeforeSnapshot(OffsetAndEpoch snapshotId) {
+        if (logStartOffset() > snapshotId.offset ||
+            highWatermark.offset < snapshotId.offset) {
 
-            oldestSnapshotId = Optional.of(logStartSnapshotId);
+            throw new OffsetOutOfRangeException(
+                String.format(
+                    "New log start (%s) is less than start offset (%s) or is greater than the high watermark (%s)",
+                    snapshotId,
+                    logStartOffset(),
+                    highWatermark.offset
+                )
+            );
+        }
+
+        boolean updated = false;
+        if (snapshots.containsKey(snapshotId)) {
+            oldestSnapshotId = Optional.of(snapshotId);
 
             // Update the high watermark if it is less than the new log start offset
-            if (logStartSnapshotId.offset > highWatermark.offset) {
-                updateHighWatermark(new LogOffsetMetadata(logStartSnapshotId.offset));
+            if (snapshotId.offset > highWatermark.offset) {
+                updateHighWatermark(new LogOffsetMetadata(snapshotId.offset));
             }
 
-            batches.removeIf(entry -> entry.lastOffset() < logStartSnapshotId.offset);
+            batches.removeIf(entry -> entry.lastOffset() < snapshotId.offset);
 
             AtomicReference<Optional<EpochStartOffset>> last = new AtomicReference<>(Optional.empty());
             epochStartOffsets.removeIf(epochStartOffset -> {
-                if (epochStartOffset.startOffset <= logStartSnapshotId.offset) {
+                if (epochStartOffset.startOffset <= snapshotId.offset) {
                     last.set(Optional.of(epochStartOffset));
                     return true;
                 }
@@ -457,7 +468,7 @@ public class MockLog implements ReplicatedLog {
             last.get().ifPresent(epochStartOffset -> {
                 epochStartOffsets.add(
                     0,
-                    new EpochStartOffset(epochStartOffset.epoch, logStartSnapshotId.offset)
+                    new EpochStartOffset(epochStartOffset.epoch, snapshotId.offset)
                 );
             });
 

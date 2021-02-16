@@ -187,6 +187,15 @@ public final class RaftClientTestContext {
             return this;
         }
 
+        Builder deleteBeforeSnapshot(OffsetAndEpoch snapshotId) throws IOException {
+            if (snapshotId.offset > log.highWatermark().offset) {
+                log.updateHighWatermark(new LogOffsetMetadata(snapshotId.offset));
+            }
+            log.deleteBeforeSnapshot(snapshotId);
+
+            return this;
+        }
+
         Builder withElectionTimeoutMs(int electionTimeoutMs) {
             this.electionTimeoutMs = electionTimeoutMs;
             return this;
@@ -926,9 +935,11 @@ public final class RaftClientTestContext {
 
     static class MockListener implements RaftClient.Listener<String> {
         private final List<BatchReader.Batch<String>> commits = new ArrayList<>();
+        private final List<BatchReader<String>> savedBatches = new ArrayList<>();
         private final Map<Integer, Long> claimedEpochStartOffsets = new HashMap<>();
         private OptionalInt currentClaimedEpoch = OptionalInt.empty();
         private Optional<SnapshotReader<String>> snapshot = Optional.empty();
+        private boolean readCommit = true;
 
         int numCommittedBatches() {
             return commits.size();
@@ -980,24 +991,19 @@ public final class RaftClientTestContext {
             return temp;
         }
 
-        @Override
-        public void handleClaim(int epoch) {
-            // We record the next expected offset as the claimed epoch's start
-            // offset. This is useful to verify that the `handleClaim` callback
-            // was not received early.
-            long claimedEpochStartOffset = lastCommitOffset().isPresent() ?
-                lastCommitOffset().getAsLong() + 1 : 0L;
-            this.currentClaimedEpoch = OptionalInt.of(epoch);
-            this.claimedEpochStartOffsets.put(epoch, claimedEpochStartOffset);
+        void updateReadCommit(boolean readCommit) {
+            this.readCommit = readCommit;
+
+            if (readCommit) {
+                for (BatchReader<String> batch : savedBatches) {
+                    readBatch(batch);
+                }
+
+                savedBatches.clear();
+            }
         }
 
-        @Override
-        public void handleResign() {
-            this.currentClaimedEpoch = OptionalInt.empty();
-        }
-
-        @Override
-        public void handleCommit(BatchReader<String> reader) {
+        void readBatch(BatchReader<String> reader) {
             try {
                 while (reader.hasNext()) {
                     long nextOffset = lastCommitOffset().isPresent() ?
@@ -1016,11 +1022,36 @@ public final class RaftClientTestContext {
         }
 
         @Override
-        public void handleSnapshot(SnapshotReader<String> reader) {
-            if (snapshot.isPresent()) {
-                assertDoesNotThrow(() -> snapshot.get().close());
-            }
+        public void handleClaim(int epoch) {
+            // We record the next expected offset as the claimed epoch's start
+            // offset. This is useful to verify that the `handleClaim` callback
+            // was not received early.
+            long claimedEpochStartOffset = lastCommitOffset().isPresent() ?
+                lastCommitOffset().getAsLong() + 1 : 0L;
+            this.currentClaimedEpoch = OptionalInt.of(epoch);
+            this.claimedEpochStartOffsets.put(epoch, claimedEpochStartOffset);
+        }
 
+        @Override
+        public void handleResign() {
+            this.currentClaimedEpoch = OptionalInt.empty();
+        }
+
+        @Override
+        public void handleCommit(BatchReader<String> reader) {
+            if (readCommit) {
+                readBatch(reader);
+            } else {
+                savedBatches.add(reader);
+            }
+        }
+
+        @Override
+        public void handleSnapshot(SnapshotReader<String> reader) {
+            snapshot.ifPresent(snapshot -> assertDoesNotThrow(() -> snapshot.close()));
+
+            commits.clear();
+            savedBatches.clear();
             snapshot = Optional.of(reader);
         }
     }

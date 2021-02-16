@@ -309,7 +309,7 @@ class MetadataRequestTest extends AbstractMetadataRequestTest {
   @Test
   def testIsrAfterBrokerShutDownAndJoinsBack(): Unit = {
     def checkIsr(servers: Seq[KafkaServer], topic: String): Unit = {
-      val activeBrokers = servers.filter(_.brokerState.get() != BrokerState.NOT_RUNNING)
+      val activeBrokers = servers.filter(_.brokerState != BrokerState.NOT_RUNNING)
       val expectedIsr = activeBrokers.map(_.config.brokerId).toSet
 
       // Assert that topic metadata at new brokers is updated correctly
@@ -355,7 +355,7 @@ class MetadataRequestTest extends AbstractMetadataRequestTest {
       val brokersInController = controllerMetadataResponse.get.brokers.asScala.toSeq.sortBy(_.id)
 
       // Assert that metadata is propagated correctly
-      servers.filter(_.brokerState.get() != BrokerState.NOT_RUNNING).foreach { broker =>
+      servers.filter(_.brokerState != BrokerState.NOT_RUNNING).foreach { broker =>
         TestUtils.waitUntilTrue(() => {
           val metadataResponse = sendMetadataRequest(MetadataRequest.Builder.allTopics.build,
             Some(brokerSocketServer(broker.config.brokerId)))

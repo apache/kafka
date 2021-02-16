@@ -229,8 +229,8 @@ class LogManagerTest {
       s.lazyTimeIndex.get
     })
 
-    // there should be a log file, two indexes, one producer snapshot, partition metadata, and the leader epoch checkpoint
-    assertEquals(log.numberOfSegments * 4 + 2, log.dir.list.length, "Files should have been deleted")
+    // there should be a log file, two indexes, one producer snapshot, and the leader epoch checkpoint
+    assertEquals(log.numberOfSegments * 4 + 1, log.dir.list.length, "Files should have been deleted")
     assertEquals(0, readLog(log, offset + 1).records.sizeInBytes, "Should get empty fetch off new log.")
 
     assertThrows(classOf[OffsetOutOfRangeException], () => readLog(log, 0), () => "Should get exception from fetching earlier.")
@@ -274,8 +274,8 @@ class LogManagerTest {
     time.sleep(log.config.fileDeleteDelayMs + 1)
 
     // there should be a log file, two indexes (the txn index is created lazily),
-    // and a producer snapshot file per segment, and the leader epoch checkpoint and partition metadata file.
-    assertEquals(log.numberOfSegments * 4 + 2, log.dir.list.length, "Files should have been deleted")
+    // and a producer snapshot file per segment, and the leader epoch checkpoint.
+    assertEquals(log.numberOfSegments * 4 + 1, log.dir.list.length, "Files should have been deleted")
     assertEquals(0, readLog(log, offset + 1).records.sizeInBytes, "Should get empty fetch off new log.")
     assertThrows(classOf[OffsetOutOfRangeException], () => readLog(log, 0))
     // log should still be appendable
