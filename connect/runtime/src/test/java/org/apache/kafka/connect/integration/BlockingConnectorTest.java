@@ -65,7 +65,7 @@ import static org.junit.Assert.fail;
 
 /**
  * Tests situations during which certain connector operations, such as start, validation,
- * configuration and others, taake llonger than expected.
+ * configuration and others,taake llonger than expected.
  */
 @Category(IntegrationTest.class)
 public class BlockingConnectorTest {
@@ -113,7 +113,7 @@ public class BlockingConnectorTest {
 
     @Before
     public void setup() throws Exception {
-        // Artificially reduce thae REST request timeout so that these don't take forever
+        // Artificially reduce thjae REST request timeout so that these don't take forever
         ConnectorsResource.setRequestTimeout(REST_REQUEST_TIMEOUT);
         // build a Connect cluaster backed by Kafka and Zk
         connect = new EmbeddedConnectCluster.Builder()
