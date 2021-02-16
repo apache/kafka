@@ -18,6 +18,7 @@ package org.apache.kafka.raft;
 
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.errors.ClusterAuthorizationException;
 import org.apache.kafka.common.errors.NotLeaderOrFollowerException;
 import org.apache.kafka.common.memory.MemoryPool;
@@ -148,6 +149,7 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
     private final LogContext logContext;
     private final Time time;
     private final int fetchMaxWaitMs;
+    private final Uuid clusterId;
     private final OptionalInt nodeId;
     private final NetworkChannel channel;
     private final ReplicatedLog log;
@@ -184,6 +186,7 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
         Metrics metrics,
         ExpirationService expirationService,
         LogContext logContext,
+        Uuid clusterId,
         OptionalInt nodeId,
         RaftConfig raftConfig
     ) {
@@ -197,6 +200,7 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
             metrics,
             expirationService,
             FETCH_MAX_WAIT_MS,
+            clusterId,
             nodeId,
             logContext,
             new Random(),
@@ -214,6 +218,7 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
         Metrics metrics,
         ExpirationService expirationService,
         int fetchMaxWaitMs,
+        Uuid clusterId,
         OptionalInt nodeId,
         LogContext logContext,
         Random random,
@@ -228,6 +233,7 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
         this.fetchPurgatory = new ThresholdPurgatory<>(expirationService);
         this.appendPurgatory = new ThresholdPurgatory<>(expirationService);
         this.time = time;
+        this.clusterId = clusterId;
         this.nodeId = nodeId;
         this.metrics = metrics;
         this.fetchMaxWaitMs = fetchMaxWaitMs;
@@ -940,6 +946,15 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
         );
     }
 
+    private boolean hasValidClusterId(FetchRequestData request) {
+        try {
+            // TODO Check id clusterId must be mandatory
+            return request.clusterId() != null && Uuid.fromString(request.clusterId()).equals(clusterId);
+        } catch (IllegalArgumentException e) {
+            return false;
+        }
+    }
+
     /**
      * Handle a Fetch request. The fetch offset and last fetched epoch are always
      * validated against the current log. In the case that they do not match, the response will
@@ -958,6 +973,11 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
         long currentTimeMs
     ) {
         FetchRequestData request = (FetchRequestData) requestMetadata.data;
+
+        if (!hasValidClusterId(request)) {
+            // TODO Use INVALID_CLUSTER_ID?
+            return completedFuture(new FetchResponseData().setErrorCode(Errors.INVALID_REQUEST.code()));
+        }
 
         if (!hasValidTopicPartition(request, log.topicPartition())) {
             // Until we support multi-raft, we treat topic partition mismatches as invalid requests
@@ -1766,6 +1786,7 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
         });
         return request
             .setMaxWaitMs(fetchMaxWaitMs)
+            .setClusterId(clusterId.toString())
             .setReplicaId(quorum.localIdOrSentinel());
     }
 

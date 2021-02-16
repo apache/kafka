@@ -1099,6 +1099,31 @@ public class KafkaRaftClientTest {
     }
 
     @Test
+    public void testFetchRequestClusterIdValidation() throws Exception {
+        int localId = 0;
+        int otherNodeId = 1;
+        int epoch = 5;
+        Set<Integer> voters = Utils.mkSet(localId, otherNodeId);
+
+        RaftClientTestContext context = RaftClientTestContext.initializeAsLeader(localId, voters, epoch);
+
+        context.deliverRequest(context.fetchRequest(
+            epoch, null, otherNodeId, -5L, 0, 0));
+        context.pollUntilResponse();
+        context.assertSentFetchResponse(Errors.INVALID_REQUEST);
+
+        context.deliverRequest(context.fetchRequest(
+            epoch, "", otherNodeId, -5L, 0, 0));
+        context.pollUntilResponse();
+        context.assertSentFetchResponse(Errors.INVALID_REQUEST);
+
+        context.deliverRequest(context.fetchRequest(
+            epoch, "invalid-uuid", otherNodeId, -5L, 0, 0));
+        context.pollUntilResponse();
+        context.assertSentFetchResponse(Errors.INVALID_REQUEST);
+    }
+
+    @Test
     public void testVoterOnlyRequestValidation() throws Exception {
         int localId = 0;
         int otherNodeId = 1;

@@ -17,6 +17,7 @@
 package org.apache.kafka.raft;
 
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.memory.MemoryPool;
 import org.apache.kafka.common.message.BeginQuorumEpochRequestData;
 import org.apache.kafka.common.message.BeginQuorumEpochResponseData;
@@ -95,6 +96,7 @@ public final class RaftClientTestContext {
     private int appendLingerMs;
 
     private final QuorumStateStore quorumStateStore;
+    private final Uuid clusterId;
     private final OptionalInt localId;
     public final KafkaRaftClient<String> client;
     final Metrics metrics;
@@ -127,6 +129,7 @@ public final class RaftClientTestContext {
         private final Set<Integer> voters;
         private final OptionalInt localId;
 
+        private Uuid clusterId = Uuid.randomUuid();
         private int requestTimeoutMs = DEFAULT_REQUEST_TIMEOUT_MS;
         private int electionTimeoutMs = DEFAULT_ELECTION_TIMEOUT_MS;
         private int appendLingerMs = DEFAULT_APPEND_LINGER_MS;
@@ -192,6 +195,11 @@ public final class RaftClientTestContext {
             return this;
         }
 
+        Builder withClusterId(Uuid clusterId) {
+            this.clusterId = clusterId;
+            return this;
+        }
+
         public RaftClientTestContext build() throws IOException {
             Metrics metrics = new Metrics(time);
             MockNetworkChannel channel = new MockNetworkChannel(voters);
@@ -213,6 +221,7 @@ public final class RaftClientTestContext {
                 metrics,
                 new MockExpirationService(time),
                 FETCH_MAX_WAIT_MS,
+                clusterId,
                 localId,
                 logContext,
                 random,
@@ -223,6 +232,7 @@ public final class RaftClientTestContext {
             client.initialize();
 
             RaftClientTestContext context = new RaftClientTestContext(
+                clusterId,
                 localId,
                 client,
                 log,
@@ -244,6 +254,7 @@ public final class RaftClientTestContext {
     }
 
     private RaftClientTestContext(
+        Uuid clusterId,
         OptionalInt localId,
         KafkaRaftClient<String> client,
         MockLog log,
@@ -255,6 +266,7 @@ public final class RaftClientTestContext {
         Metrics metrics,
         MockListener listener
     ) {
+        this.clusterId = clusterId;
         this.localId = localId;
         this.client = client;
         this.log = log;
@@ -609,6 +621,16 @@ public final class RaftClientTestContext {
         return response.responses().get(0).partitionResponses().get(0);
     }
 
+    void assertSentFetchResponse(Errors error) {
+        List<RaftResponse.Outbound> sentMessages = drainSentResponses(ApiKeys.FETCH);
+        assertEquals(
+            1, sentMessages.size(), "Found unexpected sent messages " + sentMessages);
+        RaftResponse.Outbound raftMessage = sentMessages.get(0);
+        assertEquals(ApiKeys.FETCH.id, raftMessage.data.apiKey());
+        FetchResponseData response = (FetchResponseData) raftMessage.data();
+        assertEquals(error, Errors.forCode(response.errorCode()));
+    }
+
 
     MemoryRecords assertSentFetchResponse(
         Errors error,
@@ -867,6 +889,24 @@ public final class RaftClientTestContext {
         int lastFetchedEpoch,
         int maxWaitTimeMs
     ) {
+        return fetchRequest(
+            epoch,
+            clusterId.toString(),
+            replicaId,
+            fetchOffset,
+            lastFetchedEpoch,
+            maxWaitTimeMs
+        );
+    }
+
+    FetchRequestData fetchRequest(
+        int epoch,
+        String clusterId,
+        int replicaId,
+        long fetchOffset,
+        int lastFetchedEpoch,
+        int maxWaitTimeMs
+    ) {
         FetchRequestData request = RaftUtil.singletonFetchRequest(metadataPartition, fetchPartition -> {
             fetchPartition
                 .setCurrentLeaderEpoch(epoch)
@@ -875,6 +915,7 @@ public final class RaftClientTestContext {
         });
         return request
             .setMaxWaitMs(maxWaitTimeMs)
+            .setClusterId(clusterId)
             .setReplicaId(replicaId);
     }
 
