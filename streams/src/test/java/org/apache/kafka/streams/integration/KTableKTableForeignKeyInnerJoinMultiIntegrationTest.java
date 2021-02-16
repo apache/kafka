@@ -292,17 +292,12 @@ public class KTableKTableForeignKeyInnerJoinMultiIntegrationTest {
         streamsTwo.start();
         waitForApplicationState(singletonList(streamsTwo), KafkaStreams.State.RUNNING, Duration.ofSeconds(120));
         waitForApplicationState(singletonList(streams), KafkaStreams.State.RUNNING, Duration.ofSeconds(120));
-////        Thread.sleep(20000);
-////        System.out.println("sleep done");
+
         streamsThree.start();
 //
         waitForApplicationState(singletonList(streamsThree), KafkaStreams.State.RUNNING, Duration.ofSeconds(120));
         waitForApplicationState(singletonList(streamsTwo), KafkaStreams.State.RUNNING, Duration.ofSeconds(120));
         waitForApplicationState(singletonList(streams), KafkaStreams.State.RUNNING, Duration.ofSeconds(120));
-
-//        startApplicationAndWaitUntilRunning(singletonList(streams), Duration.ofSeconds(60));
-//        startApplicationAndWaitUntilRunning(singletonList(streamsTwo), Duration.ofSeconds(60));
-//        startApplicationAndWaitUntilRunning(singletonList(streamsThree), Duration.ofSeconds(60));
 
         System.err.println("!!! before stream state:" + streams.state() + streamsTwo.state() + streamsThree.state());
 
