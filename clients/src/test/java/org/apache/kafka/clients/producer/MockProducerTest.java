@@ -24,6 +24,7 @@ import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.ProducerFencedException;
+import org.apache.kafka.common.record.RecordBatch;
 import org.apache.kafka.common.serialization.IntegerSerializer;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.test.MockSerializer;
@@ -42,6 +43,7 @@ import static java.util.Arrays.asList;
 import static java.util.Collections.singletonList;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
@@ -733,6 +735,26 @@ public class MockProducerTest {
         producer.send(record1);
         producer.flush();
         assertTrue(producer.flushed());
+    }
+
+    @Test
+    public void testMetadataOnException() throws InterruptedException {
+        buildMockProducer(false);
+        Future<RecordMetadata> metadata = producer.send(record2, (md, exception) -> {
+            assertNotNull(md);
+            assertEquals(md.offset(), -1L, "Invalid offset");
+            assertEquals(md.timestamp(), RecordBatch.NO_TIMESTAMP, "Invalid timestamp");
+            assertEquals(md.serializedKeySize(), -1L, "Invalid Serialized Key size");
+            assertEquals(md.serializedValueSize(), -1L, "Invalid Serialized value size");
+        });
+        IllegalArgumentException e = new IllegalArgumentException("dummy exception");
+        assertTrue(producer.errorNext(e), "Complete the second request with an error");
+        try {
+            metadata.get();
+            fail("Something went wrong, expected an error");
+        } catch (ExecutionException err) {
+            assertEquals(e, err.getCause());
+        }
     }
 
     private boolean isError(Future<?> future) {
