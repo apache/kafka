@@ -36,6 +36,7 @@ import javax.net.ssl.SSLPeerUnverifiedException;
 import javax.net.ssl.SSLProtocolException;
 import javax.net.ssl.SSLSession;
 
+import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.errors.SslAuthenticationException;
 import org.apache.kafka.common.security.auth.KafkaPrincipal;
 import org.apache.kafka.common.utils.ByteUtils;
@@ -176,23 +177,29 @@ public class SslTransportLayer implements TransportLayer {
         State prevState = state;
         if (state == State.CLOSING) return;
         state = State.CLOSING;
-        sslEngine.closeOutbound();
+
         try {
             if (prevState != State.NOT_INITIALIZED && isConnected()) {
+                // Flush any remaining data
                 if (!flush(netWriteBuffer)) {
                     throw new IOException("Remaining data in the network buffer, can't send SSL close message.");
                 }
-                //prep the buffer for the close message
-                netWriteBuffer.clear();
-                //perform the close, since we called sslEngine.closeOutbound
-                SSLEngineResult wrapResult = sslEngine.wrap(ByteUtils.EMPTY_BUF, netWriteBuffer);
-                //we should be in a close state
-                if (wrapResult.getStatus() != SSLEngineResult.Status.CLOSED) {
-                    throw new IOException("Unexpected status returned by SSLEngine.wrap, expected CLOSED, received " +
-                            wrapResult.getStatus() + ". Will not send close message to peer.");
-                }
-                netWriteBuffer.flip();
-                flush(netWriteBuffer);
+                // Signal to the engine that we want to close -we can't write any user data after this
+                // point
+                sslEngine.closeOutbound();
+                SSLEngineResult.Status wrapStatus;
+                do {
+                    // Get the encoded notify_close packet
+                    // We may have to call wrap multiple times until CLOSED is returned as per
+                    // SSLEngine javadoc
+                    netWriteBuffer.clear();
+                    wrapStatus = sslEngine.wrap(ByteUtils.EMPTY_BUF, netWriteBuffer).getStatus();
+                    if (wrapStatus != Status.OK && wrapStatus != Status.CLOSED) {
+                        throw new KafkaException("Failed to wrap: " + wrapStatus);
+                    }
+                    netWriteBuffer.flip();
+                    flush(netWriteBuffer);
+                } while (wrapStatus != Status.CLOSED);
             }
         } catch (IOException ie) {
             log.debug("Failed to send SSL Close message", ie);
