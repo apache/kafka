@@ -15,7 +15,7 @@
  * limitations under the License.
  */
 
-package org.apache.kafka.common.record;
+package org.apache.kafka.common.utils;
 
 import java.nio.ByteBuffer;
 import java.util.ArrayDeque;
