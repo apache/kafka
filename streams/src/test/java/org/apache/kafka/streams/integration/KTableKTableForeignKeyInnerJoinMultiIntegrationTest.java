@@ -270,19 +270,35 @@ public class KTableKTableForeignKeyInnerJoinMultiIntegrationTest {
         streams = prepareTopology(queryableName, queryableNameTwo, streamsConfig);
         streamsTwo = prepareTopology(queryableName, queryableNameTwo, streamsConfigTwo);
         streamsThree = prepareTopology(queryableName, queryableNameTwo, streamsConfigThree);
+
+        final KafkaStreams.StateListener newStateListener = (newState, oldState) -> {
+            System.err.println("!!! stream1," + oldState + "," + newState);
+        };
+        final KafkaStreams.StateListener newStateListener2 = (newState, oldState) -> {
+            System.err.println("!!! stream2," + oldState + "," + newState);
+        };
+        final KafkaStreams.StateListener newStateListener3 = (newState, oldState) -> {
+            System.err.println("!!! stream3," + oldState + "," + newState);
+        };
+
+        streams.setStateListener(newStateListener);
+        streamsTwo.setStateListener(newStateListener2);
+        streamsThree.setStateListener(newStateListener3);
+
+
         streams.start();
-        waitForApplicationState(singletonList(streams), KafkaStreams.State.RUNNING, Duration.ofSeconds(60));
+        waitForApplicationState(singletonList(streams), KafkaStreams.State.RUNNING, Duration.ofSeconds(120));
 
         streamsTwo.start();
-        waitForApplicationState(singletonList(streamsTwo), KafkaStreams.State.RUNNING, Duration.ofSeconds(60));
-        waitForApplicationState(singletonList(streams), KafkaStreams.State.RUNNING, Duration.ofSeconds(60));
+        waitForApplicationState(singletonList(streamsTwo), KafkaStreams.State.RUNNING, Duration.ofSeconds(120));
+        waitForApplicationState(singletonList(streams), KafkaStreams.State.RUNNING, Duration.ofSeconds(120));
 ////        Thread.sleep(20000);
 ////        System.out.println("sleep done");
         streamsThree.start();
 //
-        waitForApplicationState(singletonList(streamsThree), KafkaStreams.State.RUNNING, Duration.ofSeconds(60));
-        waitForApplicationState(singletonList(streamsTwo), KafkaStreams.State.RUNNING, Duration.ofSeconds(60));
-        waitForApplicationState(singletonList(streams), KafkaStreams.State.RUNNING, Duration.ofSeconds(60));
+        waitForApplicationState(singletonList(streamsThree), KafkaStreams.State.RUNNING, Duration.ofSeconds(120));
+        waitForApplicationState(singletonList(streamsTwo), KafkaStreams.State.RUNNING, Duration.ofSeconds(120));
+        waitForApplicationState(singletonList(streams), KafkaStreams.State.RUNNING, Duration.ofSeconds(120));
 
 //        startApplicationAndWaitUntilRunning(singletonList(streams), Duration.ofSeconds(60));
 //        startApplicationAndWaitUntilRunning(singletonList(streamsTwo), Duration.ofSeconds(60));

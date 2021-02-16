@@ -318,6 +318,7 @@ public class KafkaStreams implements AutoCloseable {
                 throw new IllegalStateException("Stream-client " + clientId + ": Unexpected state transition from " + oldState + " to " + newState);
             } else {
                 log.info("State transition from {} to {}", oldState, newState);
+                System.err.println("Stream-client " + clientId + oldState + "," + newState);
             }
             state = newState;
             stateLock.notifyAll();

@@ -228,6 +228,7 @@ public class StreamThread extends Thread {
                 throw new StreamsException(logPrefix + "Unexpected state transition from " + oldState + " to " + newState);
             } else {
                 log.info("State transition from {} to {}", oldState, newState);
+                System.err.println(logPrefix + ", " + oldState + "," + newState);
             }
 
             state = newState;
