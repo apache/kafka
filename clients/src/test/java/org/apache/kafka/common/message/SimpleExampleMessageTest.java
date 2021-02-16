@@ -20,6 +20,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.protocol.ByteBufferAccessor;
+import org.apache.kafka.common.protocol.MessageUtil;
 import org.apache.kafka.common.protocol.ObjectSerializationCache;
 import org.apache.kafka.common.utils.ByteUtils;
 import org.junit.jupiter.api.Test;
@@ -79,10 +80,7 @@ public class SimpleExampleMessageTest {
         out.setProcessId(uuid);
         out.setZeroCopyByteBuffer(buf);
 
-        ObjectSerializationCache cache = new ObjectSerializationCache();
-        final ByteBuffer buffer = ByteBuffer.allocate(out.size(cache, (short) 1));
-        out.write(new ByteBufferAccessor(buffer), cache, (short) 1);
-        buffer.rewind();
+        final ByteBuffer buffer = MessageUtil.toByteBuffer(out, (short) 1);
 
         final SimpleExampleMessageData in = new SimpleExampleMessageData();
         in.read(new ByteBufferAccessor(buffer), (short) 1);
@@ -104,10 +102,7 @@ public class SimpleExampleMessageTest {
         out.setZeroCopyByteBuffer(buf1);
         out.setNullableZeroCopyByteBuffer(buf2);
 
-        ObjectSerializationCache cache = new ObjectSerializationCache();
-        final ByteBuffer buffer = ByteBuffer.allocate(out.size(cache, (short) 1));
-        out.write(new ByteBufferAccessor(buffer), cache, (short) 1);
-        buffer.rewind();
+        final ByteBuffer buffer = MessageUtil.toByteBuffer(out, (short) 1);
 
         final SimpleExampleMessageData in = new SimpleExampleMessageData();
         in.read(new ByteBufferAccessor(buffer), (short) 1);
@@ -248,7 +243,7 @@ public class SimpleExampleMessageTest {
 
         testRoundTrip(new SimpleExampleMessageData().
                 setMyString("blah").
-                setMyTaggedIntArray(Arrays.asList(4)).
+                setMyTaggedIntArray(Collections.singletonList(4)).
                 setTaggedLong(0x123443211234432L),
             message -> assertEquals(0x123443211234432L,
                 message.taggedLong()));
@@ -306,16 +301,6 @@ public class SimpleExampleMessageTest {
         testRoundTrip(message, (short) 2);
     }
 
-    private ByteBuffer serialize(SimpleExampleMessageData message, short version) {
-        ObjectSerializationCache cache = new ObjectSerializationCache();
-        int size = message.size(cache, version);
-        ByteBuffer buf = ByteBuffer.allocate(size);
-        message.write(new ByteBufferAccessor(buf), cache, version);
-        buf.flip();
-        assertEquals(size, buf.remaining());
-        return buf;
-    }
-
     private SimpleExampleMessageData deserialize(ByteBuffer buf, short version) {
         SimpleExampleMessageData message = new SimpleExampleMessageData();
         message.read(new ByteBufferAccessor(buf.duplicate()), version);
@@ -335,7 +320,7 @@ public class SimpleExampleMessageTest {
                                Consumer<SimpleExampleMessageData> validator,
                                short version) {
         validator.accept(message);
-        ByteBuffer buf = serialize(message, version);
+        ByteBuffer buf = MessageUtil.toByteBuffer(message, version);
 
         SimpleExampleMessageData message2 = deserialize(buf.duplicate(), version);
         validator.accept(message2);
