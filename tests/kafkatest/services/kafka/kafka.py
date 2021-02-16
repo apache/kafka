@@ -1074,7 +1074,7 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
 
     def parse_describe_topic(self, topic_description):
         """Parse output of kafka-topics.sh --describe (or describe_topic() method above), which is a string of form
-        PartitionCount:2\tReplicationFactor:2\tConfigs:
+        Topic:test_topic\tTopicId:AAAAAAAAAAAAAAAAAAAAAA\tPartitionCount:2\tReplicationFactor:2\tConfigs:
             Topic: test_topic\ttPartition: 0\tLeader: 3\tReplicas: 3,1\tIsr: 3,1
             Topic: test_topic\tPartition: 1\tLeader: 1\tReplicas: 1,2\tIsr: 1,2
         into a dictionary structure appropriate for use with reassign-partitions tool:
@@ -1342,7 +1342,31 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
 
     def topic_id(self, topic):
         if self.quorum_info.using_raft:
-            raise Exception("Not yet implemented: Cannot obtain topic ID information when using Raft instead of ZooKeeper")
+            node = self.nodes[0]
+
+            cmd = fix_opts_for_new_jvm(node)
+            cmd += "%s --topic %s --describe" % \
+               (self.kafka_topics_cmd_with_optional_security_settings(node, False), topic)
+
+            self.logger.debug(
+                "Querying topic ID by using describe topic command ...\n%s" % cmd
+            )
+            output = ""
+            for line in node.account.ssh_capture(cmd):
+                output += line
+
+            lines = map(lambda x: x.strip(), output.split("\n"))
+            for line in lines:
+                m = re.match(".*TopicId:.*", line)
+                if m is None:
+                   continue
+
+                fields = line.split("\t")
+                # [Topic: test_topic, TopicId: AAAAAAAAAAAAAAAAAAAAAA, PartitionCount: 2, ReplicationFactor: 2, ...]
+                # -> [test_topic, AAAAAAAAAAAAAAAAAAAAAA, 2, 2, ...]
+                topic_id = list(map(lambda x: x.split(" ")[1], fields))[1]
+
+                return topic_id
         self.logger.debug(
             "Querying zookeeper to find assigned topic ID for topic %s." % topic)
         zk_path = "/brokers/topics/%s" % topic
