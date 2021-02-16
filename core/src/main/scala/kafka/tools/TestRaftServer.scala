@@ -26,6 +26,7 @@ import kafka.raft.{KafkaRaftManager, RaftManager}
 import kafka.security.CredentialProvider
 import kafka.server.{KafkaConfig, KafkaRequestHandlerPool, MetaProperties}
 import kafka.utils.{CommandDefaultOptions, CommandLineUtils, CoreUtils, Exit, Logging, ShutdownableThread}
+import org.apache.kafka.common.errors.InvalidConfigurationException
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.metrics.stats.Percentiles.BucketSizing
 import org.apache.kafka.common.metrics.stats.{Meter, Percentile, Percentiles}
@@ -419,6 +420,9 @@ object TestRaftServer extends Logging {
         "Standalone raft server for performance testing")
 
       val configFile = opts.options.valueOf(opts.configOpt)
+      if (configFile == null) {
+        throw new InvalidConfigurationException("Missing configuration file. Should specify with '--config'")
+      }
       val serverProps = Utils.loadProps(configFile)
 
       // KafkaConfig requires either `process.roles` or `zookeeper.connect`. Neither are
