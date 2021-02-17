@@ -5,11 +5,14 @@ import java.io.DataOutputStream;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import org.apache.kafka.common.InvalidRecordException;
+import org.apache.kafka.common.errors.SerializationException;
 import org.apache.kafka.common.header.Header;
 import org.apache.kafka.common.header.internals.RecordHeader;
+import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.record.Record;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.Serde;
+import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.utils.ByteUtils;
 import org.apache.kafka.common.utils.Utils;
@@ -111,7 +114,10 @@ public class RecordValueSerde<V> implements Serde<RecordValue<V>> {
             final ByteBuffer valueBuffer = buffer.slice();
             valueBuffer.limit(valueSize);
             buffer.position(buffer.position() + valueSize);
-            final V value = valueDeserializer.deserialize(t, valueBuffer.array());
+            byte[] valueSerialized = new byte[valueBuffer.remaining()];
+            valueBuffer.get(valueSerialized);
+            valueBuffer.clear();
+            final V value = valueDeserializer.deserialize(t, valueSerialized);
 
             // read record metadata
             final int topicSize = ByteUtils.readVarint(buffer);
@@ -167,6 +173,19 @@ public class RecordValueSerde<V> implements Serde<RecordValue<V>> {
             }
 
             return headers;
+        }
+    }
+
+    public static void main(String[] args) {
+        try {
+            RecordValueSerde<Long> serde = new RecordValueSerde<>(Serdes.Long());
+            RecordValue<Long> val = new RecordValue<>(
+                "t1", 0, 1L, 1L, 0L, new RecordHeaders());
+            byte[] ser = serde.serializer().serialize("t1", val);
+            RecordValue<Long> des = serde.deserializer().deserialize("t1", ser);
+            System.out.println(val.equals(des));
+        } catch (SerializationException e) {
+            e.printStackTrace();
         }
     }
 }

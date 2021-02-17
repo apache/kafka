@@ -1,5 +1,6 @@
 package org.apache.kafka.streams.kstream;
 
+import java.util.Objects;
 import org.apache.kafka.streams.header.Headers;
 import org.apache.kafka.streams.header.StreamHeaders;
 
@@ -71,6 +72,25 @@ public class RecordValue<V> {
 
     public long timestamp() {
         return timestamp;
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) {
+            return true;
+        }
+        if (o == null || getClass() != o.getClass()) {
+            return false;
+        }
+        RecordValue<?> that = (RecordValue<?>) o;
+        return partition == that.partition && offset == that.offset && timestamp == that.timestamp
+            && Objects.equals(topic, that.topic) && Objects
+            .equals(value, that.value) && Objects.equals(headers, that.headers);
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(topic, partition, offset, value, timestamp, headers);
     }
 
     @Override
