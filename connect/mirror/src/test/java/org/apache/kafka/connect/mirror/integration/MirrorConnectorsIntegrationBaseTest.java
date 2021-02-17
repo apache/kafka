@@ -64,6 +64,7 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 
 import static org.apache.kafka.connect.mirror.TestUtils.generateRecords;
+import static org.junit.jupiter.api.Assertions.fail;
 
 /**
  * Tests MM2 replication and failover/failback logic.
@@ -1413,6 +1414,8 @@ public abstract class MirrorConnectorsIntegrationBaseTest {
             log.error("Couldn't delete all topics before stopping brokers", e);
             System.err.println("!!! Couldn't delete all topics before stopping brokers:" + e);
         }
+
+        fail("check topics");
     }
     
     /*
