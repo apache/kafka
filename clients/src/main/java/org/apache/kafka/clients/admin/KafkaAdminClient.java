@@ -2578,13 +2578,13 @@ public class KafkaAdminClient extends AdminClient {
                 brokerId -> new DescribeLogDirsRequestData());
             DescribableLogDirTopic describableLogDirTopic = requestData.topics().find(replica.topic());
             if (describableLogDirTopic == null) {
-                List<Integer> partitionIndex = new ArrayList<>();
-                partitionIndex.add(replica.partition());
+                List<Integer> partitions = new ArrayList<>();
+                partitions.add(replica.partition());
                 describableLogDirTopic = new DescribableLogDirTopic().setTopic(replica.topic())
-                        .setPartitionIndex(partitionIndex);
+                        .setPartitions(partitions);
                 requestData.topics().add(describableLogDirTopic);
             } else {
-                describableLogDirTopic.partitionIndex().add(replica.partition());
+                describableLogDirTopic.partitions().add(replica.partition());
             }
         }
 
@@ -2594,7 +2594,7 @@ public class KafkaAdminClient extends AdminClient {
             final DescribeLogDirsRequestData topicPartitions = entry.getValue();
             final Map<TopicPartition, ReplicaLogDirInfo> replicaDirInfoByPartition = new HashMap<>();
             for (DescribableLogDirTopic topicPartition: topicPartitions.topics()) {
-                for (Integer partitionId : topicPartition.partitionIndex()) {
+                for (Integer partitionId : topicPartition.partitions()) {
                     replicaDirInfoByPartition.put(new TopicPartition(topicPartition.topic(), partitionId), new ReplicaLogDirInfo());
                 }
             }
