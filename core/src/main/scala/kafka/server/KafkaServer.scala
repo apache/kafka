@@ -135,6 +135,8 @@ class KafkaServer(
 
   var autoTopicCreationManager: AutoTopicCreationManager = null
 
+  var clientToControllerChannelManager: Option[BrokerToControllerChannelManager] = None
+
   var alterIsrManager: AlterIsrManager = null
 
   var kafkaScheduler: KafkaScheduler = null
@@ -256,13 +258,22 @@ class KafkaServer(
         tokenCache = new DelegationTokenCache(ScramMechanism.mechanismNames)
         credentialProvider = new CredentialProvider(ScramMechanism.mechanismNames, tokenCache)
 
+        /* start forwarding manager */
         if (enableForwarding) {
+          clientToControllerChannelManager =
+            Some(
+              BrokerToControllerChannelManager(
+                controllerNodeProvider = MetadataCacheControllerNodeProvider(config, metadataCache),
+                time = time,
+                metrics = metrics,
+                config = config,
+                channelName = "clientToControllerChannel",
+                threadNamePrefix = threadNamePrefix,
+                retryTimeoutMs = config.requestTimeoutMs.longValue)
+            )
+          clientToControllerChannelManager.get.start()
           this.forwardingManager = Some(ForwardingManager(
-            config,
-            metadataCache,
-            time,
-            metrics,
-            threadNamePrefix
+            clientToControllerChannelManager.get
           ))
           forwardingManager.foreach(_.start())
         }
@@ -336,14 +347,12 @@ class KafkaServer(
         this.autoTopicCreationManager = AutoTopicCreationManager(
           config,
           metadataCache,
-          time,
-          metrics,
           threadNamePrefix,
+          clientToControllerChannelManager,
           Some(adminManager),
           Some(kafkaController),
           groupCoordinator,
-          transactionCoordinator,
-          enableForwarding
+          transactionCoordinator
         )
         autoTopicCreationManager.start()
 
@@ -706,6 +715,8 @@ class KafkaServer(
 
         if (autoTopicCreationManager != null)
           CoreUtils.swallow(autoTopicCreationManager.shutdown(), this)
+
+        CoreUtils.swallow(clientToControllerChannelManager.foreach(_.shutdown()), this)
 
         if (logManager != null)
           CoreUtils.swallow(logManager.shutdown(), this)

@@ -23,10 +23,8 @@ import kafka.network.RequestChannel
 import kafka.utils.Logging
 import org.apache.kafka.clients.{ClientResponse, NodeApiVersions}
 import org.apache.kafka.common.errors.TimeoutException
-import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests.{AbstractRequest, AbstractResponse, EnvelopeRequest, EnvelopeResponse, RequestHeader}
-import org.apache.kafka.common.utils.Time
 
 import scala.compat.java8.OptionConverters._
 
@@ -44,25 +42,9 @@ trait ForwardingManager {
 }
 
 object ForwardingManager {
-
   def apply(
-    config: KafkaConfig,
-    metadataCache: MetadataCache,
-    time: Time,
-    metrics: Metrics,
-    threadNamePrefix: Option[String]
+    channelManager: BrokerToControllerChannelManager
   ): ForwardingManager = {
-    val nodeProvider = MetadataCacheControllerNodeProvider(config, metadataCache)
-
-    val channelManager = BrokerToControllerChannelManager(
-      controllerNodeProvider = nodeProvider,
-      time = time,
-      metrics = metrics,
-      config = config,
-      channelName = "forwardingChannel",
-      threadNamePrefix = threadNamePrefix,
-      retryTimeoutMs = config.requestTimeoutMs.longValue
-    )
     new ForwardingManagerImpl(channelManager)
   }
 }
@@ -72,11 +54,9 @@ class ForwardingManagerImpl(
 ) extends ForwardingManager with Logging {
 
   override def start(): Unit = {
-    channelManager.start()
   }
 
   override def shutdown(): Unit = {
-    channelManager.shutdown()
   }
 
   /**
