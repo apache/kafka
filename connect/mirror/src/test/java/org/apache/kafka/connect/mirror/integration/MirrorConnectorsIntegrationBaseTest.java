@@ -1400,7 +1400,7 @@ public abstract class MirrorConnectorsIntegrationBaseTest {
             for (int i = 0; i < 5; i++) {
                 topics = adminClient.listTopics().names().get();
                 System.out.println("!!! t:" + i + topics);
-                Thread.sleep(2000);
+                Thread.sleep(3000);
             }
 //            System.out.println("!!! deleting:" + topics);
 //            System.out.println("!!! del:" + adminClient.deleteTopics(topics).all().get());
