@@ -32,7 +32,7 @@
         <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-516%3A+Topic+Identifiers">KIP-516</a>.
         When using ZooKeeper, this information is stored in the TopicZNode. If the cluster is downgraded to a previous IBP or version,
         future topics will not get topic IDs and it is not guaranteed that topics will retain their topic IDs in ZooKeeper.
-        This means that upon upgrading again, topics some or all topics will be assigned new IDs.
+        This means that upon upgrading again, some topics or all topics will be assigned new IDs.
     </li>
     <li>Kafka Streams introduce a type-safe <code>split()</code> operator as a substitution for deprecated <code>KStream#branch()</code> method
         (cf. <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-418%3A+A+method-chaining+way+to+branch+KStream">KIP-418</a>).
