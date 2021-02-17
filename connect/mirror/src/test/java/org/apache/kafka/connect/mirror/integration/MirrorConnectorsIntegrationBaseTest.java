@@ -196,7 +196,7 @@ public abstract class MirrorConnectorsIntegrationBaseTest {
 //                System.out.println("!!! bac:" + x);
                 backup.deleteConnector(x);
             }
-            deleteAllTopics(primary.kafka());
+            // deleteAllTopics(primary.kafka());
             deleteAllTopics(backup.kafka());
         } finally {
             shuttingDown = true;
