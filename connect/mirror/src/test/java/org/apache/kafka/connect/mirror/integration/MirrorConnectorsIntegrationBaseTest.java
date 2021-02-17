@@ -67,7 +67,7 @@ import static org.apache.kafka.connect.mirror.TestUtils.generateRecords;
 import static org.junit.jupiter.api.Assertions.fail;
 
 /**
- * Tests MM2 replication and failover/failback logic.
+ * Tests MM2 replaication and failover/failback logic.
  *
  * MM2 is configured with active/active replication between two Kafka clusters. Tests validate that
  * records sent to either cluster arrive at the other cluster. Then, a consumer group is migrated from
