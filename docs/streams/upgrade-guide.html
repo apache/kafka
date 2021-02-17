@@ -53,8 +53,9 @@
     </ul>
 
     <p>
-        Starting in Kafka Streams 2.6.x, a new processing mode <code>"exactly_once_beta"</code> (configurable via parameter
-        <code>processing.guarantee</code>) is available.
+        Starting in Kafka Streams 2.6.x, a new processing mode is available, named EOS version 2, which is configurable by setting 
+        <code>processing.guarantee</code> to <code>"exactly_once_beta"</code>.
+        <b>NOTE:</b> The <code>"exactly_once_beta"</code> processing mode is ready for production (<i>i.e.</i>, it's not "beta" software). 
         To use this new feature, your brokers must be on version 2.5.x or newer.
         A switch from <code>"exactly_once"</code> to <code>"exactly_once_beta"</code> (or the other way around) is
         only possible if the application is on version 2.6.x.
@@ -162,7 +163,7 @@
 
     <h3><a id="streams_api_changes_260" href="#streams_api_changes_260">Streams API changes in 2.6.0</a></h3>
     <p>
-        We added a new processing mode that improves application scalability using exactly-once guarantees
+        We added a new processing mode, EOS version 2, that improves application scalability using exactly-once guarantees
         (via <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-447%3A+Producer+scalability+for+exactly+once+semantics">KIP-447</a>).
         You can enable this new feature by setting the configuration parameter <code>processing.guarantee</code> to the
         new value <code>"exactly_once_beta"</code>.
@@ -894,9 +895,9 @@
 
     <p> Metrics using exactly-once semantics: </p>
     <p>
-        If <code>"exactly_once"</code> processing is enabled via the <code>processing.guarantee</code> parameter,
+        If <code>"exactly_once"</code> processing (EOS version 1) is enabled via the <code>processing.guarantee</code> parameter,
         internally Streams switches from a producer-per-thread to a producer-per-task runtime model.
-        Using <code>"exactly_once_beta"</code> does use a producer-per-thread, so <code>client.id</code> doesn't change,
+        Using <code>"exactly_once_beta"</code> (EOS version 2) does use a producer-per-thread, so <code>client.id</code> doesn't change,
         compared with <code>"at_least_once"</code> for this case).
         In order to distinguish the different producers, the producer's <code>client.id</code> additionally encodes the task-ID for this case.
         Because the producer's <code>client.id</code> is used to report JMX metrics, it might be required to update tools that receive those metrics.
