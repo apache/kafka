@@ -18,8 +18,8 @@ package org.apache.kafka.streams.processor.internals;
 
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.AdminClient;
-import org.apache.kafka.clients.admin.ListOffsetsResult;
-import org.apache.kafka.clients.admin.ListOffsetsResult.ListOffsetsResultInfo;
+import org.apache.kafka.clients.admin.DescribeFeaturesResult;
+import org.apache.kafka.clients.admin.FeatureMetadata;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerPartitionAssignor.Assignment;
 import org.apache.kafka.clients.consumer.ConsumerPartitionAssignor.GroupSubscription;
@@ -47,10 +47,11 @@ import org.junit.Before;
 import org.junit.Test;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Map.Entry;
+import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
@@ -75,6 +76,7 @@ import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.anyOf;
 import static org.hamcrest.Matchers.empty;
 import static org.hamcrest.Matchers.is;
+import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.createMockAdminClientForAssignor;
 
 public class HighAvailabilityStreamsPartitionAssignorTest {
 
@@ -153,29 +155,6 @@ public class HighAvailabilityStreamsPartitionAssignorTest {
         builder.buildTopology();
     }
 
-    // If you don't care about setting the end offsets for each specific topic partition, the helper method
-    // getTopicPartitionOffsetMap is useful for building this input map for all partitions
-    private void createMockAdminClient(final Map<TopicPartition, Long> changelogEndOffsets) {
-        adminClient = EasyMock.createMock(AdminClient.class);
-
-        final ListOffsetsResult result = EasyMock.createNiceMock(ListOffsetsResult.class);
-        final KafkaFutureImpl<Map<TopicPartition, ListOffsetsResultInfo>> allFuture = new KafkaFutureImpl<>();
-        allFuture.complete(changelogEndOffsets.entrySet().stream().collect(Collectors.toMap(
-            Entry::getKey,
-            t -> {
-                final ListOffsetsResultInfo info = EasyMock.createNiceMock(ListOffsetsResultInfo.class);
-                expect(info.offset()).andStubReturn(t.getValue());
-                EasyMock.replay(info);
-                return info;
-            }))
-        );
-
-        expect(adminClient.listOffsets(anyObject())).andStubReturn(result);
-        expect(result.all()).andReturn(allFuture);
-
-        EasyMock.replay(result);
-    }
-
     private void overwriteInternalTopicManagerWithMock() {
         final MockInternalTopicManager mockInternalTopicManager = new MockInternalTopicManager(
             time,
@@ -188,9 +167,8 @@ public class HighAvailabilityStreamsPartitionAssignorTest {
 
     @Before
     public void setUp() {
-        createMockAdminClient(EMPTY_CHANGELOG_END_OFFSETS);
+        adminClient = createMockAdminClientForAssignor(EMPTY_CHANGELOG_END_OFFSETS);
     }
-
 
     @Test
     public void shouldReturnAllActiveTasksToPreviousOwnerRegardlessOfBalanceAndTriggerRebalanceIfEndOffsetFetchFailsAndHighAvailabilityEnabled() {
@@ -202,7 +180,18 @@ public class HighAvailabilityStreamsPartitionAssignorTest {
         final Set<TaskId> allTasks = mkSet(TASK_0_0, TASK_0_1, TASK_0_2);
 
         createMockTaskManager(allTasks);
-        adminClient = EasyMock.createMock(AdminClient.class);
+
+        adminClient = EasyMock.createNiceMock(AdminClient.class);
+        final DescribeFeaturesResult describeFeaturesResult = EasyMock.createNiceMock(DescribeFeaturesResult.class);
+        final KafkaFutureImpl<FeatureMetadata> featureMetadataFuture = new KafkaFutureImpl<>();
+        final FeatureMetadata featureMetadata = new FeatureMetadata(
+                Collections.emptyMap(),
+                Optional.of(1L),
+                Collections.emptyMap());
+        featureMetadataFuture.complete(featureMetadata);
+        expect(adminClient.describeFeatures()).andStubReturn(describeFeaturesResult);
+        expect(describeFeaturesResult.featureMetadata()).andStubReturn(featureMetadataFuture);
+        EasyMock.replay(describeFeaturesResult);
         expect(adminClient.listOffsets(anyObject())).andThrow(new StreamsException("Should be handled"));
         configurePartitionAssignorWith(singletonMap(StreamsConfig.PROBING_REBALANCE_INTERVAL_MS_CONFIG, rebalanceInterval));
 
@@ -253,9 +242,9 @@ public class HighAvailabilityStreamsPartitionAssignorTest {
         final Set<TaskId> allTasks = mkSet(TASK_0_0, TASK_0_1, TASK_0_2);
 
         createMockTaskManager(allTasks);
-        createMockAdminClient(getTopicPartitionOffsetsMap(
-            singletonList(APPLICATION_ID + "-store1-changelog"),
-            singletonList(3)));
+        adminClient = createMockAdminClientForAssignor(getTopicPartitionOffsetsMap(
+                singletonList(APPLICATION_ID + "-store1-changelog"),
+                singletonList(3)));
         configurePartitionAssignorWith(singletonMap(StreamsConfig.PROBING_REBALANCE_INTERVAL_MS_CONFIG, rebalanceInterval));
 
         final String firstConsumer = "consumer1";

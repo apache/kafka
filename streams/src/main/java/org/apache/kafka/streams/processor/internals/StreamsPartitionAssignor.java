@@ -1024,25 +1024,23 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
         for (final Map.Entry<String, Map<String, StreamConsumerFeatureVersion>> entry: consumerToFeatureMetadataMap.entrySet()) {
             final String consumer = entry.getKey();
             final Map<String, StreamConsumerFeatureVersion> streamConsumerFeatureMetadataMap = entry.getValue();
-            final short finalizedMaxVersionLevel = finalizedFeatures.get(feature).maxVersionLevel();
-            final StreamConsumerFeatureVersion streamConsumerFeatureVersion = streamConsumerFeatureMetadataMap.get(feature);
-            if (streamConsumerFeatureMetadataMap.containsKey(feature)) {
-                final int currentlyUsedFeatureVersion = streamConsumerFeatureVersion.currentlyUsedFeatureVersion();
-                final int suggestedFeatureVersion = streamConsumerFeatureVersion.leaderSuggestedFeatureVersion();
-                if (finalizedMaxVersionLevel > suggestedFeatureVersion && streamConsumerFeatureVersion.pendingUpgrade()) {
-                    log.info("Detect finalizedMaxVersionLevel={} which is greater than current suggestedFeatureVersion={}," +
-                            " but consumer: {} is pending client side feature upgrade, just ignore", finalizedMaxVersionLevel, suggestedFeatureVersion, consumer);
-                } else if (finalizedMaxVersionLevel > currentlyUsedFeatureVersion) {
-                    log.info("Set suggestedFeatureVersion={} for consumer: {}", finalizedMaxVersionLevel, consumer);
-                    final StreamConsumerFeatureVersion updatedStreamConsumerFeatureVersion = new StreamConsumerFeatureVersion(currentlyUsedFeatureVersion, finalizedMaxVersionLevel);
-                    streamConsumerFeatureMetadataMap.put(feature, updatedStreamConsumerFeatureVersion);
+            if (finalizedFeatures.containsKey(feature)) {
+                final short finalizedMaxVersionLevel = finalizedFeatures.get(feature).maxVersionLevel();
+                final StreamConsumerFeatureVersion streamConsumerFeatureVersion = streamConsumerFeatureMetadataMap.get(feature);
+                if (streamConsumerFeatureMetadataMap.containsKey(feature)) {
+                    final int currentlyUsedFeatureVersion = streamConsumerFeatureVersion.currentlyUsedFeatureVersion();
+                    final int suggestedFeatureVersion = streamConsumerFeatureVersion.leaderSuggestedFeatureVersion();
+                    if (finalizedMaxVersionLevel > suggestedFeatureVersion && streamConsumerFeatureVersion.pendingUpgrade()) {
+                        log.info("Detect finalizedMaxVersionLevel={} which is greater than current suggestedFeatureVersion={}," +
+                                " but consumer: {} is pending client side feature upgrade, just ignore", finalizedMaxVersionLevel, suggestedFeatureVersion, consumer);
+                    } else if (finalizedMaxVersionLevel > currentlyUsedFeatureVersion) {
+                        log.info("Set suggestedFeatureVersion={} for consumer: {}", finalizedMaxVersionLevel, consumer);
+                        final StreamConsumerFeatureVersion updatedStreamConsumerFeatureVersion = new StreamConsumerFeatureVersion(currentlyUsedFeatureVersion, finalizedMaxVersionLevel);
+                        streamConsumerFeatureMetadataMap.put(feature, updatedStreamConsumerFeatureVersion);
+                    }
+                    consumerToFeatureMetadataMap.put(consumer, streamConsumerFeatureMetadataMap);
                 }
-                consumerToFeatureMetadataMap.put(consumer, streamConsumerFeatureMetadataMap);
-            } else {
-                // TODO KAFKA-9689 might need to handle differently for the case when consumer is of old version or don't have the EOSFeature
-                log.info("Got no streamConsumerFeatureMetadata for consumer: {}", consumer);
             }
-
         }
     }
 
@@ -1424,7 +1422,6 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
                 );
         }
 
-        // TODO KAFKA-9689 Think if we need to trigger rebalance specific to the feature metadata change
         maybeScheduleFollowupRebalance(
             encodedNextScheduledRebalanceMs,
             receivedAssignmentMetadataVersion,

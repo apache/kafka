@@ -140,9 +140,11 @@ public class TaskManager {
 
     private void initFeatureMetadata() {
         final Map<String, StreamConsumerFeatureVersion> featureMetadataMap = new HashMap<>();
-        final String feature = FeatureAndVersionRange.EOS_FEATURE.feature();
-        final StreamConsumerFeatureVersion eosFeatureMetadata = new StreamConsumerFeatureVersion(processingMode.versionLevel, StreamConsumerFeatureVersion.NOT_EXIST);
-        featureMetadataMap.put(feature, eosFeatureMetadata);
+        if (processingMode != null) {
+            final String feature = FeatureAndVersionRange.EOS_FEATURE.feature();
+            final StreamConsumerFeatureVersion eosFeatureMetadata = new StreamConsumerFeatureVersion(processingMode.versionLevel, StreamConsumerFeatureVersion.NOT_EXIST);
+            featureMetadataMap.put(feature, eosFeatureMetadata);
+        }
         featureMetadata = featureMetadataMap;
     }
 
