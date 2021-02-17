@@ -606,7 +606,7 @@ public final class RaftClientTestContext {
         return raftMessage.correlationId();
     }
 
-    FetchResponseData.FetchablePartitionResponse assertSentFetchResponse() {
+    FetchResponseData.FetchablePartitionResponse assertSentFetchPartitionResponse() {
         List<RaftResponse.Outbound> sentMessages = drainSentResponses(ApiKeys.FETCH);
         assertEquals(
             1, sentMessages.size(), "Found unexpected sent messages " + sentMessages);
@@ -621,7 +621,7 @@ public final class RaftClientTestContext {
         return response.responses().get(0).partitionResponses().get(0);
     }
 
-    void assertSentFetchResponse(Errors error) {
+    void assertSentFetchPartitionResponse(Errors error) {
         List<RaftResponse.Outbound> sentMessages = drainSentResponses(ApiKeys.FETCH);
         assertEquals(
             1, sentMessages.size(), "Found unexpected sent messages " + sentMessages);
@@ -632,12 +632,12 @@ public final class RaftClientTestContext {
     }
 
 
-    MemoryRecords assertSentFetchResponse(
+    MemoryRecords assertSentFetchPartitionResponse(
         Errors error,
         int epoch,
         OptionalInt leaderId
     ) {
-        FetchResponseData.FetchablePartitionResponse partitionResponse = assertSentFetchResponse();
+        FetchResponseData.FetchablePartitionResponse partitionResponse = assertSentFetchPartitionResponse();
         assertEquals(error, Errors.forCode(partitionResponse.errorCode()));
         assertEquals(epoch, partitionResponse.currentLeader().leaderEpoch());
         assertEquals(leaderId.orElse(-1), partitionResponse.currentLeader().leaderId());
@@ -648,11 +648,11 @@ public final class RaftClientTestContext {
         return (MemoryRecords) partitionResponse.recordSet();
     }
 
-    MemoryRecords assertSentFetchResponse(
+    MemoryRecords assertSentFetchPartitionResponse(
         long highWatermark,
         int leaderEpoch
     ) {
-        FetchResponseData.FetchablePartitionResponse partitionResponse = assertSentFetchResponse();
+        FetchResponseData.FetchablePartitionResponse partitionResponse = assertSentFetchPartitionResponse();
         assertEquals(Errors.NONE, Errors.forCode(partitionResponse.errorCode()));
         assertEquals(leaderEpoch, partitionResponse.currentLeader().leaderEpoch());
         assertEquals(highWatermark, partitionResponse.highWatermark());
@@ -692,7 +692,7 @@ public final class RaftClientTestContext {
         deliverRequest(fetchRequest(1, laggingFollower, 0L, 0, 0));
 
         pollUntilResponse();
-        assertSentFetchResponse(0L, epoch);
+        assertSentFetchPartitionResponse(0L, epoch);
 
         // Append some records, so that the close follower will be able to advance further.
         client.scheduleAppend(epoch, Arrays.asList("foo", "bar"));
@@ -701,7 +701,7 @@ public final class RaftClientTestContext {
         deliverRequest(fetchRequest(epoch, closeFollower, 1L, epoch, 0));
 
         pollUntilResponse();
-        assertSentFetchResponse(1L, epoch);
+        assertSentFetchPartitionResponse(1L, epoch);
     }
 
     List<RaftRequest.Outbound> collectEndQuorumRequests(int epoch, Set<Integer> destinationIdSet) {

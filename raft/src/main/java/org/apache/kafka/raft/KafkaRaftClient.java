@@ -947,9 +947,12 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
     }
 
     private boolean hasValidClusterId(FetchRequestData request) {
+        // We don't enforce the cluster id if it is not provided.
+        if (request.clusterId() == null) {
+            return true;
+        }
         try {
-            // TODO Check id clusterId must be mandatory
-            return request.clusterId() != null && Uuid.fromString(request.clusterId()).equals(clusterId);
+            return Uuid.fromString(request.clusterId()).equals(clusterId);
         } catch (IllegalArgumentException e) {
             return false;
         }
@@ -975,8 +978,7 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
         FetchRequestData request = (FetchRequestData) requestMetadata.data;
 
         if (!hasValidClusterId(request)) {
-            // TODO Use INVALID_CLUSTER_ID?
-            return completedFuture(new FetchResponseData().setErrorCode(Errors.INVALID_REQUEST.code()));
+            return completedFuture(new FetchResponseData().setErrorCode(Errors.INVALID_CLUSTER_ID.code()));
         }
 
         if (!hasValidTopicPartition(request, log.topicPartition())) {
