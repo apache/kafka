@@ -195,7 +195,7 @@ public class MockLogTest {
             RuntimeException.class,
             () -> {
                 log.appendAsFollower(
-                    MemoryRecords.withRecords(initialOffset, CompressionType.NONE, currentEpoch, recordFoo),
+                    MemoryRecords.withRecords(initialOffset, CompressionType.NONE, currentEpoch, recordFoo)
                 );
             }
         );

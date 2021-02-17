@@ -107,7 +107,7 @@ final public class KafkaRaftClientSnapshotTest {
 
         RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
             .appendToLog(oldestSnapshotId.epoch, Arrays.asList("a", "b", "c"))
-            .appendToLog(oldestSnapshotId.epoch, Arrays.asList("a", "b", "c"))
+            .appendToLog(oldestSnapshotId.epoch, Arrays.asList("d", "e", "f"))
             .withAppendLingerMs(1)
             .build();
 
@@ -149,7 +149,7 @@ final public class KafkaRaftClientSnapshotTest {
 
         RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
             .appendToLog(oldestSnapshotId.epoch, Arrays.asList("a", "b", "c"))
-            .appendToLog(oldestSnapshotId.epoch + 2, Arrays.asList("a", "b", "c"))
+            .appendToLog(oldestSnapshotId.epoch + 2, Arrays.asList("d", "e", "f"))
             .withAppendLingerMs(1)
             .build();
 
@@ -195,8 +195,8 @@ final public class KafkaRaftClientSnapshotTest {
 
         RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
             .appendToLog(oldestSnapshotId.epoch, Arrays.asList("a", "b", "c"))
-            .appendToLog(oldestSnapshotId.epoch, Arrays.asList("a", "b", "c"))
-            .appendToLog(oldestSnapshotId.epoch + 2, Arrays.asList("a", "b", "c"))
+            .appendToLog(oldestSnapshotId.epoch, Arrays.asList("d", "e", "f"))
+            .appendToLog(oldestSnapshotId.epoch + 2, Arrays.asList("g", "h", "i"))
             .withAppendLingerMs(1)
             .build();
 
@@ -237,8 +237,8 @@ final public class KafkaRaftClientSnapshotTest {
 
         RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
             .appendToLog(oldestSnapshotId.epoch, Arrays.asList("a", "b", "c"))
-            .appendToLog(oldestSnapshotId.epoch, Arrays.asList("a", "b", "c"))
-            .appendToLog(oldestSnapshotId.epoch + 2, Arrays.asList("a", "b", "c"))
+            .appendToLog(oldestSnapshotId.epoch, Arrays.asList("d", "e", "f"))
+            .appendToLog(oldestSnapshotId.epoch + 2, Arrays.asList("g", "h", "i"))
             .withAppendLingerMs(1)
             .build();
 
@@ -284,8 +284,8 @@ final public class KafkaRaftClientSnapshotTest {
 
         RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
             .appendToLog(oldestSnapshotId.epoch, Arrays.asList("a", "b", "c"))
-            .appendToLog(oldestSnapshotId.epoch, Arrays.asList("a", "b", "c"))
-            .appendToLog(oldestSnapshotId.epoch + 2, Arrays.asList("a", "b", "c"))
+            .appendToLog(oldestSnapshotId.epoch, Arrays.asList("d", "e", "f"))
+            .appendToLog(oldestSnapshotId.epoch + 2, Arrays.asList("g", "h", "i"))
             .withAppendLingerMs(1)
             .build();
 
