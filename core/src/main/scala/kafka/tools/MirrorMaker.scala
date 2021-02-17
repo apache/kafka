@@ -44,7 +44,7 @@ import scala.util.{Failure, Success, Try}
 
 /**
  * The mirror maker has the following architecture:
- * - There are N mirror maker thread, each of which is equipped with a separate KafkaConsumer instance.
+ * - There are N mirror maker threads, each of which is equipped with a separate KafkaConsumer instance.
  * - All the mirror maker threads share one producer.
  * - Each mirror maker thread periodically flushes the producer and then commits all offsets.
  *
