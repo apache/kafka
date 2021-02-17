@@ -45,7 +45,7 @@ import java.util.function.Supplier;
 
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
-import static org.apache.kafka.common.utils.Utils.mkObjectProperties;
+import static org.apache.kafka.common.utils.Utils.mkProperties;
 import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.safeUniqueTestName;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.instanceOf;
@@ -89,7 +89,7 @@ public class TaskAssignorIntegrationTest {
         final AssignmentListener configuredAssignmentListener =
             stable -> compilerDefeatingReference.incrementAndGet();
 
-        final Properties properties = mkObjectProperties(
+        final Properties properties = mkProperties(
             mkMap(
                 mkEntry(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers()),
                 mkEntry(StreamsConfig.APPLICATION_ID_CONFIG, appId),

@@ -49,7 +49,7 @@ import java.util.concurrent.atomic.AtomicReference;
 
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
-import static org.apache.kafka.common.utils.Utils.mkObjectProperties;
+import static org.apache.kafka.common.utils.Utils.mkProperties;
 import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.purgeLocalStreamsState;
 import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.safeUniqueTestName;
 import static org.apache.kafka.test.TestUtils.waitForCondition;
@@ -88,7 +88,7 @@ public class AdjustStreamThreadCountTest {
         builder  = new StreamsBuilder();
         builder.stream(inputTopic);
 
-        properties  = mkObjectProperties(
+        properties = mkProperties(
             mkMap(
                 mkEntry(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers()),
                 mkEntry(StreamsConfig.APPLICATION_ID_CONFIG, appId),

@@ -23,38 +23,10 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Collection;
-import java.util.stream.Collectors;
 
 public final class CollectionUtils {
 
     private CollectionUtils() {}
-
-    /**
-     * Given two maps (A, B), returns all the key-value pairs in A whose keys are not contained in B
-     */
-    public static <K, V> Map<K, V> subtractMap(Map<? extends K, ? extends V> minuend, Map<? extends K, ? extends V> subtrahend) {
-        return minuend.entrySet().stream()
-                .filter(entry -> !subtrahend.containsKey(entry.getKey()))
-                .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
-    }
-
-    /**
-     * group data by topic
-     *
-     * @param data Data to be partitioned
-     * @param <T> Partition data type
-     * @return partitioned data
-     */
-    public static <T> Map<String, Map<Integer, T>> groupPartitionDataByTopic(Map<TopicPartition, ? extends T> data) {
-        Map<String, Map<Integer, T>> dataByTopic = new HashMap<>();
-        for (Map.Entry<TopicPartition, ? extends T> entry : data.entrySet()) {
-            String topic = entry.getKey().topic();
-            int partition = entry.getKey().partition();
-            Map<Integer, T> topicData = dataByTopic.computeIfAbsent(topic, t -> new HashMap<>());
-            topicData.put(partition, entry.getValue());
-        }
-        return dataByTopic;
-    }
 
     /**
      * Group a list of partitions by the topic name.
