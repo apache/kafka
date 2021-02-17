@@ -24,6 +24,8 @@ import com.yammer.metrics.core.MetricsRegistry;
 
 
 public final class QuorumControllerMetrics implements ControllerMetrics {
+    private final static MetricName ACTIVE_CONTROLLER_COUNT = new MetricName(
+        "kafka.controller", "KafkaController", "ActiveControllerCount", null);
     private final static MetricName EVENT_QUEUE_TIME_MS = new MetricName(
         "kafka.controller", "ControllerEventManager", "EventQueueTimeMs", null);
 
@@ -33,7 +35,7 @@ public final class QuorumControllerMetrics implements ControllerMetrics {
 
     public QuorumControllerMetrics(MetricsRegistry registry) {
         this.active = false;
-        this.activeControllerCount = registry.newGauge(EVENT_QUEUE_TIME_MS, new Gauge<Integer>() {
+        this.activeControllerCount = registry.newGauge(ACTIVE_CONTROLLER_COUNT, new Gauge<Integer>() {
             @Override
             public Integer value() {
                 return active ? 1 : 0;
