@@ -61,6 +61,7 @@ import static java.util.Arrays.asList;
 import static java.util.Collections.singletonList;
 import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.waitForApplicationState;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 
 @Category({IntegrationTest.class})
 public class KTableKTableForeignKeyInnerJoinMultiIntegrationTest {
@@ -285,19 +286,62 @@ public class KTableKTableForeignKeyInnerJoinMultiIntegrationTest {
         streamsTwo.setStateListener(newStateListener2);
         streamsThree.setStateListener(newStateListener3);
 
+        boolean streamStartFailed = false;
 
         streams.start();
+        try {
+            waitForApplicationState(singletonList(streams), KafkaStreams.State.RUNNING, Duration.ofSeconds(60));
+        } catch (final AssertionError e) {
+            streamStartFailed = true;
+            System.err.println("stream1StartFailed1");
+        }
         waitForApplicationState(singletonList(streams), KafkaStreams.State.RUNNING, Duration.ofSeconds(60));
 
+
         streamsTwo.start();
+        try {
+            waitForApplicationState(singletonList(streamsTwo), KafkaStreams.State.RUNNING, Duration.ofSeconds(60));
+        } catch (final AssertionError e) {
+            streamStartFailed = true;
+            System.err.println("stream2StartFailed1");
+        }
         waitForApplicationState(singletonList(streamsTwo), KafkaStreams.State.RUNNING, Duration.ofSeconds(60));
+
+        try {
+            waitForApplicationState(singletonList(streams), KafkaStreams.State.RUNNING, Duration.ofSeconds(60));
+        } catch (final AssertionError e) {
+            streamStartFailed = true;
+            System.err.println("stream1StartFailed2");
+        }
         waitForApplicationState(singletonList(streams), KafkaStreams.State.RUNNING, Duration.ofSeconds(60));
 
         streamsThree.start();
 
+        try {
+            waitForApplicationState(singletonList(streamsThree), KafkaStreams.State.RUNNING, Duration.ofSeconds(60));
+        } catch (final AssertionError e) {
+            streamStartFailed = true;
+            System.err.println("stream3StartFailed1");
+        }
         waitForApplicationState(singletonList(streamsThree), KafkaStreams.State.RUNNING, Duration.ofSeconds(60));
+
+        try {
+            waitForApplicationState(singletonList(streamsTwo), KafkaStreams.State.RUNNING, Duration.ofSeconds(60));
+        } catch (final AssertionError e) {
+            streamStartFailed = true;
+            System.err.println("stream2StartFailed2");
+        }
         waitForApplicationState(singletonList(streamsTwo), KafkaStreams.State.RUNNING, Duration.ofSeconds(60));
+
+        try {
+            waitForApplicationState(singletonList(streams), KafkaStreams.State.RUNNING, Duration.ofSeconds(60));
+        } catch (final AssertionError e) {
+            streamStartFailed = true;
+            System.err.println("stream1StartFailed3");
+        }
         waitForApplicationState(singletonList(streams), KafkaStreams.State.RUNNING, Duration.ofSeconds(60));
+
+        assertFalse("1st try failed!", streamStartFailed);
 
         System.err.println("!!! before stream state:" + streams.state() + streamsTwo.state() + streamsThree.state());
 
