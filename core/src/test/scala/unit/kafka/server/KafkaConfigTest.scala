@@ -33,12 +33,9 @@ import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.Test
 import java.net.InetSocketAddress
 import java.util
-import java.util.{Collections, Properties}
+import java.util.Properties
 
-import org.apache.kafka.common.Node
 import org.junit.jupiter.api.function.Executable
-
-import scala.jdk.CollectionConverters._
 
 class KafkaConfigTest {
 
