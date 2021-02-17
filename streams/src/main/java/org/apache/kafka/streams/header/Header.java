@@ -9,4 +9,6 @@ public interface Header {
     String key();
 
     byte[] value();
+
+    String valueAsUtf8();
 }

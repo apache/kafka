@@ -72,4 +72,16 @@ public class RecordValue<V> {
     public long timestamp() {
         return timestamp;
     }
+
+    @Override
+    public String toString() {
+        return "RecordValue(" +
+            "topic='" + topic + '\'' +
+            ",partition=" + partition +
+            ",offset=" + offset +
+            ",value=" + value +
+            ",timestamp=" + timestamp +
+            ",headers=" + headers +
+            ')';
+    }
 }

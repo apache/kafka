@@ -1,5 +1,8 @@
 package org.apache.kafka.streams.header;
 
+import java.util.Arrays;
+import org.apache.kafka.common.utils.Utils;
+
 public class StreamHeader implements Header {
 
     final String key;
@@ -22,5 +25,18 @@ public class StreamHeader implements Header {
     @Override
     public byte[] value() {
         return value;
+    }
+
+    @Override
+    public String valueAsUtf8() {
+        return Utils.utf8(value);
+    }
+
+    @Override
+    public String toString() {
+        return "StreamHeader(" +
+            "key='" + key + '\'' +
+            ",value=" + Arrays.toString(value) +
+            ')';
     }
 }

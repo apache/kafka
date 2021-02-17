@@ -1,8 +1,6 @@
 package org.apache.kafka.streams.header;
 
 import java.util.Iterator;
-import org.apache.kafka.connect.data.Schema;
-import org.apache.kafka.connect.errors.DataException;
 
 public interface Headers  extends Iterable<Header> {
   /**
@@ -45,6 +43,10 @@ public interface Headers  extends Iterable<Header> {
    */
   Headers add(Header header);
 
+  Headers add(String key, byte[] value);
+
+  Headers addUtf8(String key, String value);
+
   /**
    * Removes all {@link Header} objects whose {@link Header#key() key} matches the specified key.
    *
@@ -86,10 +88,8 @@ public interface Headers  extends Iterable<Header> {
    *
    * @param transform the transform to apply; may not be null
    * @return this object to facilitate chaining multiple methods; never null
-   * @throws DataException if the header's value is invalid
    */
-  Headers apply(
-      Headers.HeaderTransform transform);
+  Headers apply(Headers.HeaderTransform transform);
 
   /**
    * Get all {@link Header}s with the given key, apply the transform to each and store the result in place of the original.
@@ -97,13 +97,11 @@ public interface Headers  extends Iterable<Header> {
    * @param key       the header's key; may not be null
    * @param transform the transform to apply; may not be null
    * @return this object to facilitate chaining multiple methods; never null
-   * @throws DataException if the header's value is invalid
    */
   Headers apply(String key, Headers.HeaderTransform transform);
 
   /**
-   * A function to transform the supplied {@link Header}. Implementations will likely need to use {@link Header#with(Schema, Object)}
-   * to create the new instance.
+   * A function to transform the supplied {@link Header}.
    */
   interface HeaderTransform {
     /**

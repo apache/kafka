@@ -9,6 +9,7 @@ import java.util.Objects;
 import java.util.Set;
 import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.utils.AbstractIterator;
+import org.apache.kafka.common.utils.Utils;
 
 public class StreamHeaders implements Headers {
 
@@ -77,6 +78,26 @@ public class StreamHeaders implements Headers {
             headers = new LinkedList<>();
         }
         headers.add(header);
+        return this;
+    }
+
+    @Override
+    public Headers add(String key, byte[] value) {
+        Objects.requireNonNull(key, "Unable to add a null header key.");
+        if (headers == null) {
+            headers = new LinkedList<>();
+        }
+        headers.add(new StreamHeader(key, value));
+        return this;
+    }
+
+    @Override
+    public Headers addUtf8(String key, String value) {
+        Objects.requireNonNull(key, "Unable to add a null header key.");
+        if (headers == null) {
+            headers = new LinkedList<>();
+        }
+        headers.add(new StreamHeader(key, Utils.utf8(value)));
         return this;
     }
 
@@ -245,7 +266,7 @@ public class StreamHeaders implements Headers {
     public org.apache.kafka.common.header.Headers unwrap() {
         RecordHeaders headers = new RecordHeaders();
         if (!isEmpty()) {
-            headers.forEach(header -> headers.add(header.key(), header.value()));
+            this.headers.forEach(header -> headers.add(header.key(), header.value()));
         }
         return headers;
     }
