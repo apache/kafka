@@ -1364,34 +1364,59 @@ class ReplicaManager(val config: KafkaConfig,
                 Some(partition)
             }
 
-            // Next check partition's leader epoch
+            // Next check the topic ID and the partition's leader epoch
             partitionOpt.foreach { partition =>
               val currentLeaderEpoch = partition.getLeaderEpoch
               val requestLeaderEpoch = partitionState.leaderEpoch
-              if (requestLeaderEpoch > currentLeaderEpoch) {
-                // If the leader epoch is valid record the epoch of the controller that made the leadership decision.
-                // This is useful while updating the isr to maintain the decision maker controller's epoch in the zookeeper path
-                if (partitionState.replicas.contains(localBrokerId))
-                  partitionStates.put(partition, partitionState)
-                else {
-                  stateChangeLogger.warn(s"Ignoring LeaderAndIsr request from controller $controllerId with " +
-                    s"correlation id $correlationId epoch $controllerEpoch for partition $topicPartition as itself is not " +
-                    s"in assigned replica list ${partitionState.replicas.asScala.mkString(",")}")
-                  responseMap.put(topicPartition, Errors.UNKNOWN_TOPIC_OR_PARTITION)
+              val id = topicIds.get(topicPartition.topic())
+              var invalidId = false
+
+              // Ensure we have not received a request from an older protocol
+              if (id != null && id != Uuid.ZERO_UUID) {
+                partition.log.foreach { log =>
+                  // Check if topic ID is in memory, if not, it must be new to the broker and does not have a metadata file.
+                  // This is because if the broker previously wrote it to file, it would be recovered on restart after failure.
+                  if (log.topicId == Uuid.ZERO_UUID) {
+                    log.partitionMetadataFile.write(id)
+                    log.topicId = id
+                    // Warn if the topic ID in the request does not match the log.
+                  } else if (log.topicId != id) {
+                    stateChangeLogger.warn(s"Topic Id in memory: ${log.topicId.toString} does not" +
+                      s" match the topic Id provided in the request: " +
+                      s"${id.toString}.")
+                    responseMap.put(topicPartition, Errors.UNKNOWN_TOPIC_ID)
+                    invalidId = true
+                  }
                 }
-              } else if (requestLeaderEpoch < currentLeaderEpoch) {
-                stateChangeLogger.warn(s"Ignoring LeaderAndIsr request from " +
-                  s"controller $controllerId with correlation id $correlationId " +
-                  s"epoch $controllerEpoch for partition $topicPartition since its associated " +
-                  s"leader epoch $requestLeaderEpoch is smaller than the current " +
-                  s"leader epoch $currentLeaderEpoch")
-                responseMap.put(topicPartition, Errors.STALE_CONTROLLER_EPOCH)
-              } else {
-                stateChangeLogger.info(s"Ignoring LeaderAndIsr request from " +
-                  s"controller $controllerId with correlation id $correlationId " +
-                  s"epoch $controllerEpoch for partition $topicPartition since its associated " +
-                  s"leader epoch $requestLeaderEpoch matches the current leader epoch")
-                responseMap.put(topicPartition, Errors.STALE_CONTROLLER_EPOCH)
+              }
+
+              // If we found an invalid ID, we don't need to check the leader epoch
+              if (!invalidId) {
+                if (requestLeaderEpoch > currentLeaderEpoch) {
+                  // If the leader epoch is valid record the epoch of the controller that made the leadership decision.
+                  // This is useful while updating the isr to maintain the decision maker controller's epoch in the zookeeper path
+                  if (partitionState.replicas.contains(localBrokerId))
+                    partitionStates.put(partition, partitionState)
+                  else {
+                    stateChangeLogger.warn(s"Ignoring LeaderAndIsr request from controller $controllerId with " +
+                      s"correlation id $correlationId epoch $controllerEpoch for partition $topicPartition as itself is not " +
+                      s"in assigned replica list ${partitionState.replicas.asScala.mkString(",")}")
+                    responseMap.put(topicPartition, Errors.UNKNOWN_TOPIC_OR_PARTITION)
+                  }
+                } else if (requestLeaderEpoch < currentLeaderEpoch) {
+                  stateChangeLogger.warn(s"Ignoring LeaderAndIsr request from " +
+                    s"controller $controllerId with correlation id $correlationId " +
+                    s"epoch $controllerEpoch for partition $topicPartition since its associated " +
+                    s"leader epoch $requestLeaderEpoch is smaller than the current " +
+                    s"leader epoch $currentLeaderEpoch")
+                  responseMap.put(topicPartition, Errors.STALE_CONTROLLER_EPOCH)
+                } else {
+                  stateChangeLogger.info(s"Ignoring LeaderAndIsr request from " +
+                    s"controller $controllerId with correlation id $correlationId " +
+                    s"epoch $controllerEpoch for partition $topicPartition since its associated " +
+                    s"leader epoch $requestLeaderEpoch matches the current leader epoch")
+                  responseMap.put(topicPartition, Errors.STALE_CONTROLLER_EPOCH)
+                }
               }
             }
           }
@@ -1424,27 +1449,8 @@ class ReplicaManager(val config: KafkaConfig,
            * In this case ReplicaManager.allPartitions will map this topic-partition to an empty Partition object.
            * we need to map this topic-partition to OfflinePartition instead.
            */
-            val local = localLog(topicPartition)
-            if (local.isEmpty)
+            if (localLog(topicPartition).isEmpty)
               markPartitionOffline(topicPartition)
-            else {
-              val id = topicIds.get(topicPartition.topic())
-              // Ensure we have not received a request from an older protocol
-              if (id != null && !id.equals(Uuid.ZERO_UUID)) {
-                val log = local.get
-                // Check if topic ID is in memory, if not, it must be new to the broker and does not have a metadata file.
-                // This is because if the broker previously wrote it to file, it would be recovered on restart after failure.
-                if (log.topicId.equals(Uuid.ZERO_UUID)) {
-                  log.partitionMetadataFile.write(id)
-                  log.topicId = id
-                  // Warn if the topic ID in the request does not match the log.
-                } else if (!log.topicId.equals(id)) {
-                  stateChangeLogger.warn(s"Topic Id in memory: ${log.topicId.toString} does not" +
-                    s" match the topic Id provided in the request: " +
-                    s"${id.toString}.")
-                }
-              }
-            }
           }
 
           // we initialize highwatermark thread after the first leaderisrrequest. This ensures that all the partitions
