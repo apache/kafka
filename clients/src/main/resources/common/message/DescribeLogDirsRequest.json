@@ -26,7 +26,7 @@
       "about": "Each topic that we want to describe log directories for, or null for all topics.", "fields": [
       { "name": "Topic", "type": "string", "versions": "0+", "entityType": "topicName", "mapKey": true,
         "about": "The topic name" },
-      { "name": "PartitionIndex", "type": "[]int32", "versions": "0+",
+      { "name": "Partitions", "type": "[]int32", "versions": "0+",
         "about": "The partition indxes." }
     ]}
   ]
