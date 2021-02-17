@@ -76,7 +76,7 @@ final class KafkaMetadataLogTest {
       classOf[RuntimeException],
       () => {
         log.appendAsLeader(
-          MemoryRecords.withRecords(initialOffset, CompressionType.NONE, recordFoo),
+          MemoryRecords.withRecords(initialOffset, CompressionType.NONE, currentEpoch, recordFoo),
           currentEpoch
         )
       }

@@ -185,8 +185,17 @@ public class MockLogTest {
             RuntimeException.class,
             () -> {
                 log.appendAsLeader(
-                    MemoryRecords.withRecords(initialOffset, CompressionType.NONE, recordFoo),
+                    MemoryRecords.withRecords(initialOffset, CompressionType.NONE, currentEpoch, recordFoo),
                     currentEpoch
+                );
+            }
+        );
+
+        assertThrows(
+            RuntimeException.class,
+            () -> {
+                log.appendAsFollower(
+                    MemoryRecords.withRecords(initialOffset, CompressionType.NONE, currentEpoch, recordFoo),
                 );
             }
         );
