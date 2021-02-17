@@ -1394,11 +1394,17 @@ public abstract class MirrorConnectorsIntegrationBaseTest {
 //        Admin client = cluster.createAdminClient();
 //        client.deleteTopics(client.listTopics().names().get());
 
-        System.out.println("!!! delete topics");
+//        System.out.println("!!! delete topics");
         try (final Admin adminClient = cluster.createAdminClient()) {
-            Set<String> topics = adminClient.listTopics().names().get();
-            System.out.println("!!! deleting:" + topics);
-            System.out.println("!!! del:" + adminClient.deleteTopics(topics).all().get());
+            Set<String> topics = null;
+            for (int i = 0; i < 5; i++) {
+                topics = adminClient.listTopics().names().get();
+                System.out.println("!!! t:" + i + topics);
+                Thread.sleep(2000);
+            }
+//            System.out.println("!!! deleting:" + topics);
+//            System.out.println("!!! del:" + adminClient.deleteTopics(topics).all().get());
+            adminClient.deleteTopics(topics).all().get();
         } catch (final InterruptedException e) {
             log.error("Got interrupted while deleting topics in preparation for stopping embedded brokers", e);
             System.err.println("!!! Got interrupted while deleting topics in preparation for stopping embedded brokers:" + e);
