@@ -205,13 +205,6 @@ class BrokerServer(
       forwardingManager = new ForwardingManagerImpl(forwardingChannelManager)
       forwardingManager.start()
 
-      val autoTopicCreationChannelManager = BrokerToControllerChannelManager(controllerNodeProvider,
-        time, metrics, config, "autocreate", threadNamePrefix, 60000)
-      autoTopicCreationManager = new DefaultAutoTopicCreationManager(
-        config, metadataCache, Some(autoTopicCreationChannelManager), None, None,
-        groupCoordinator, transactionCoordinator)
-      autoTopicCreationManager.start()
-
       /* start token manager */
       if (config.tokenAuthEnabled) {
         throw new UnsupportedOperationException("Delegation tokens are not supported")
@@ -228,6 +221,13 @@ class BrokerServer(
       transactionCoordinator = TransactionCoordinator(config, replicaManager,
         new KafkaScheduler(threads = 1, threadNamePrefix = "transaction-log-manager-"),
         createTemporaryProducerIdManager, metrics, metadataCache, Time.SYSTEM)
+
+      val autoTopicCreationChannelManager = BrokerToControllerChannelManager(controllerNodeProvider,
+        time, metrics, config, "autocreate", threadNamePrefix, 60000)
+      autoTopicCreationManager = new DefaultAutoTopicCreationManager(
+        config, metadataCache, Some(autoTopicCreationChannelManager), None, None,
+        groupCoordinator, transactionCoordinator)
+      autoTopicCreationManager.start()
 
       /* Add all reconfigurables for config change notification before starting the metadata listener */
       config.dynamicConfig.addReconfigurables(this)
