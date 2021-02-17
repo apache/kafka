@@ -188,9 +188,11 @@ public abstract class MirrorConnectorsIntegrationBaseTest {
     public void shutdownClusters() throws Exception {
         try {
             for (String x : primary.connectors()) {
+//                System.out.println("!!! pri:" + x);
                 primary.deleteConnector(x);
             }
             for (String x : backup.connectors()) {
+//                System.out.println("!!! bac:" + x);
                 backup.deleteConnector(x);
             }
             deleteAllTopics(primary.kafka());
