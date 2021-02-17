@@ -47,6 +47,7 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Properties;
+import java.util.Set;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -211,6 +212,7 @@ public abstract class MirrorConnectorsIntegrationBaseTest {
     
     @Test
     public void testReplication() throws Exception {
+        System.out.println("testReplication");
         produceMessages(primary, "test-topic-1");
         produceMessages(backup, "test-topic-1");
         String consumerGroupName = "consumer-group-testReplication";
@@ -331,6 +333,7 @@ public abstract class MirrorConnectorsIntegrationBaseTest {
     
     @Test
     public void testReplicationWithEmptyPartition() throws Exception {
+        System.out.println("testReplicationWE");
         String consumerGroupName = "consumer-group-testReplicationWithEmptyPartition";
         Map<String, Object> consumerProps  = Collections.singletonMap("group.id", consumerGroupName);
 
@@ -374,6 +377,7 @@ public abstract class MirrorConnectorsIntegrationBaseTest {
     
     @Test
     public void testOneWayReplicationWithAutoOffsetSync() throws InterruptedException {
+        System.out.println("testOneW");
         produceMessages(primary, "test-topic-1");
         String consumerGroupName = "consumer-group-testOneWayReplicationWithAutoOffsetSync";
         Map<String, Object> consumerProps  = new HashMap<String, Object>() {{
@@ -439,6 +443,7 @@ public abstract class MirrorConnectorsIntegrationBaseTest {
 
     @Test
     public void testReplication2() throws Exception {
+        System.out.println("testReplication");
         produceMessages(primary, "test-topic-1");
         produceMessages(backup, "test-topic-1");
         String consumerGroupName = "consumer-group-testReplication";
@@ -559,6 +564,7 @@ public abstract class MirrorConnectorsIntegrationBaseTest {
 
     @Test
     public void testReplicationWithEmptyPartition2() throws Exception {
+        System.out.println("testReplicationWE");
         String consumerGroupName = "consumer-group-testReplicationWithEmptyPartition";
         Map<String, Object> consumerProps  = Collections.singletonMap("group.id", consumerGroupName);
 
@@ -602,6 +608,7 @@ public abstract class MirrorConnectorsIntegrationBaseTest {
 
     @Test
     public void testOneWayReplicationWithAutoOffsetSync2() throws InterruptedException {
+        System.out.println("testOneW");
         produceMessages(primary, "test-topic-1");
         String consumerGroupName = "consumer-group-testOneWayReplicationWithAutoOffsetSync";
         Map<String, Object> consumerProps  = new HashMap<String, Object>() {{
@@ -667,6 +674,7 @@ public abstract class MirrorConnectorsIntegrationBaseTest {
 
     @Test
     public void testReplication3() throws Exception {
+        System.out.println("testReplication");
         produceMessages(primary, "test-topic-1");
         produceMessages(backup, "test-topic-1");
         String consumerGroupName = "consumer-group-testReplication";
@@ -787,6 +795,7 @@ public abstract class MirrorConnectorsIntegrationBaseTest {
 
     @Test
     public void testReplicationWithEmptyPartition3() throws Exception {
+        System.out.println("testReplicationWE");
         String consumerGroupName = "consumer-group-testReplicationWithEmptyPartition";
         Map<String, Object> consumerProps  = Collections.singletonMap("group.id", consumerGroupName);
 
@@ -830,6 +839,7 @@ public abstract class MirrorConnectorsIntegrationBaseTest {
 
     @Test
     public void testOneWayReplicationWithAutoOffsetSync3() throws InterruptedException {
+        System.out.println("testOneW");
         produceMessages(primary, "test-topic-1");
         String consumerGroupName = "consumer-group-testOneWayReplicationWithAutoOffsetSync";
         Map<String, Object> consumerProps  = new HashMap<String, Object>() {{
@@ -895,6 +905,7 @@ public abstract class MirrorConnectorsIntegrationBaseTest {
 
     @Test
     public void testReplication4() throws Exception {
+        System.out.println("testReplication");
         produceMessages(primary, "test-topic-1");
         produceMessages(backup, "test-topic-1");
         String consumerGroupName = "consumer-group-testReplication";
@@ -1015,6 +1026,7 @@ public abstract class MirrorConnectorsIntegrationBaseTest {
 
     @Test
     public void testReplicationWithEmptyPartition4() throws Exception {
+        System.out.println("testReplicationWE");
         String consumerGroupName = "consumer-group-testReplicationWithEmptyPartition";
         Map<String, Object> consumerProps  = Collections.singletonMap("group.id", consumerGroupName);
 
@@ -1058,6 +1070,7 @@ public abstract class MirrorConnectorsIntegrationBaseTest {
 
     @Test
     public void testOneWayReplicationWithAutoOffsetSync4() throws InterruptedException {
+        System.out.println("testOneW");
         produceMessages(primary, "test-topic-1");
         String consumerGroupName = "consumer-group-testOneWayReplicationWithAutoOffsetSync";
         Map<String, Object> consumerProps  = new HashMap<String, Object>() {{
@@ -1123,6 +1136,7 @@ public abstract class MirrorConnectorsIntegrationBaseTest {
 
     @Test
     public void testReplication5() throws Exception {
+        System.out.println("testReplication");
         produceMessages(primary, "test-topic-1");
         produceMessages(backup, "test-topic-1");
         String consumerGroupName = "consumer-group-testReplication";
@@ -1243,6 +1257,7 @@ public abstract class MirrorConnectorsIntegrationBaseTest {
 
     @Test
     public void testReplicationWithEmptyPartition5() throws Exception {
+        System.out.println("testReplicationWE");
         String consumerGroupName = "consumer-group-testReplicationWithEmptyPartition";
         Map<String, Object> consumerProps  = Collections.singletonMap("group.id", consumerGroupName);
 
@@ -1286,6 +1301,7 @@ public abstract class MirrorConnectorsIntegrationBaseTest {
 
     @Test
     public void testOneWayReplicationWithAutoOffsetSync5() throws InterruptedException {
+        System.out.println("testOneW");
         produceMessages(primary, "test-topic-1");
         String consumerGroupName = "consumer-group-testOneWayReplicationWithAutoOffsetSync";
         Map<String, Object> consumerProps  = new HashMap<String, Object>() {{
@@ -1376,9 +1392,11 @@ public abstract class MirrorConnectorsIntegrationBaseTest {
 //        Admin client = cluster.createAdminClient();
 //        client.deleteTopics(client.listTopics().names().get());
 
-        System.err.println("!!! delete topics");
+        System.out.println("!!! delete topics");
         try (final Admin adminClient = cluster.createAdminClient()) {
-            System.err.println("!!! del:" + adminClient.deleteTopics(adminClient.listTopics().names().get()).all().get());
+            Set<String> topics = adminClient.listTopics().names().get();
+            System.out.println("!!! deleting:" + topics);
+            System.out.println("!!! del:" + adminClient.deleteTopics(topics).all().get());
         } catch (final InterruptedException e) {
             log.error("Got interrupted while deleting topics in preparation for stopping embedded brokers", e);
             System.err.println("!!! Got interrupted while deleting topics in preparation for stopping embedded brokers:" + e);
