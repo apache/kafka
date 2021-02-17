@@ -24,6 +24,7 @@ import java.util.concurrent.atomic.AtomicReference
 import kafka.controller.KafkaController
 import kafka.coordinator.group.GroupCoordinator
 import kafka.coordinator.transaction.TransactionCoordinator
+import kafka.network.RequestChannel
 import kafka.utils.Logging
 import org.apache.kafka.clients.ClientResponse
 import org.apache.kafka.common.errors.InvalidTopicException
@@ -32,8 +33,8 @@ import org.apache.kafka.common.internals.Topic.{GROUP_METADATA_TOPIC_NAME, TRANS
 import org.apache.kafka.common.message.CreateTopicsRequestData
 import org.apache.kafka.common.message.CreateTopicsRequestData.{CreatableTopic, CreateableTopicConfig, CreateableTopicConfigCollection}
 import org.apache.kafka.common.message.MetadataResponseData.MetadataResponseTopic
-import org.apache.kafka.common.protocol.Errors
-import org.apache.kafka.common.requests.{ApiError, CreateTopicsRequest}
+import org.apache.kafka.common.protocol.{ApiKeys, Errors}
+import org.apache.kafka.common.requests.{ApiError, CreateTopicsRequest, RequestHeader}
 
 import scala.collection.{Map, Seq, Set, mutable}
 import scala.jdk.CollectionConverters._
@@ -42,7 +43,8 @@ trait AutoTopicCreationManager {
 
   def createTopics(
     topicNames: Set[String],
-    controllerMutationQuota: ControllerMutationQuota
+    controllerMutationQuota: ControllerMutationQuota,
+    requestOpt: Option[RequestChannel.Request]
   ): Seq[MetadataResponseTopic]
 }
 
@@ -77,16 +79,24 @@ class DefaultAutoTopicCreationManager(
 
   private val inflightTopics = Collections.newSetFromMap(new ConcurrentHashMap[String, java.lang.Boolean]())
 
+  /**
+   * Initiate auto topic creation for the given topics.
+   *
+   * @param requestOpt defined when creating topics on behalf of the client. The goal here is to preserve
+   *                   original client principal for auditing, thus needing to wrap a plain CreateTopicsRequest
+   *                   inside Envelope to send to the controller when forwarding is enabled.
+   */
   override def createTopics(
     topics: Set[String],
-    controllerMutationQuota: ControllerMutationQuota
+    controllerMutationQuota: ControllerMutationQuota,
+    requestOpt: Option[RequestChannel.Request]
   ): Seq[MetadataResponseTopic] = {
     val (creatableTopics, uncreatableTopicResponses) = filterCreatableTopics(topics)
 
     val creatableTopicResponses = if (creatableTopics.isEmpty) {
       Seq.empty
     } else if (controller.isEmpty || !controller.get.isActive && channelManager.isDefined) {
-      sendCreateTopicRequest(creatableTopics)
+      sendCreateTopicRequest(creatableTopics, requestOpt)
     } else {
       createTopicsInZk(creatableTopics, controllerMutationQuota)
     }
@@ -145,7 +155,8 @@ class DefaultAutoTopicCreationManager(
   }
 
   private def sendCreateTopicRequest(
-    creatableTopics: Map[String, CreatableTopic]
+    creatableTopics: Map[String, CreatableTopic],
+    requestOpt: Option[RequestChannel.Request]
   ): Seq[MetadataResponseTopic] = {
     val topicsToCreate = new CreateTopicsRequestData.CreatableTopicCollection(creatableTopics.size)
     topicsToCreate.addAll(creatableTopics.values.asJavaCollection)
@@ -156,7 +167,7 @@ class DefaultAutoTopicCreationManager(
         .setTopics(topicsToCreate)
     )
 
-    channelManager.get.sendRequest(createTopicsRequest, new ControllerRequestCompletionHandler {
+    val requestCompletionHandler = new ControllerRequestCompletionHandler {
       override def onTimeout(): Unit = {
         debug(s"Auto topic creation timed out for ${creatableTopics.keys}.")
         clearInflightRequests(creatableTopics)
@@ -166,7 +177,28 @@ class DefaultAutoTopicCreationManager(
         debug(s"Auto topic creation completed for ${creatableTopics.keys}.")
         clearInflightRequests(creatableTopics)
       }
-    })
+    }
+
+    requestOpt match {
+      case Some(request) =>
+        val requestVersion =
+          channelManager.get.controllerApiVersions() match {
+            case None =>
+              ApiKeys.CREATE_TOPICS.latestVersion()
+            case Some(nodeApiVersions) =>
+              nodeApiVersions.latestUsableVersion(ApiKeys.CREATE_TOPICS)
+          }
+
+        val requestHeader = new RequestHeader(ApiKeys.CREATE_TOPICS,
+          requestVersion,
+          request.context.clientId(),
+          request.context.correlationId())
+        val envelopeRequest = ForwardingManager.buildEnvelopeRequest(request,
+          createTopicsRequest.build().serializeWithHeader(requestHeader))
+        channelManager.get.sendRequest(envelopeRequest, requestCompletionHandler)
+
+      case None => channelManager.get.sendRequest(createTopicsRequest, requestCompletionHandler)
+    }
 
     val creatableTopicResponses = creatableTopics.keySet.toSeq.map { topic =>
       new MetadataResponseTopic()

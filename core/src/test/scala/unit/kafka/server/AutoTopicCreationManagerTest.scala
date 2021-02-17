@@ -263,7 +263,7 @@ class AutoTopicCreationManagerTest {
                                          topicName: String,
                                          isInternal: Boolean): Unit = {
     val topicResponses = autoTopicCreationManager.createTopics(
-      Set(topicName), UnboundedControllerMutationQuota)
+      Set(topicName), UnboundedControllerMutationQuota, None)
 
     val expectedResponses = Seq(new MetadataResponseTopic()
       .setErrorCode(error.code())
