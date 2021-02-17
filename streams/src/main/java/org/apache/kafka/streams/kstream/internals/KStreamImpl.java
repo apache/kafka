@@ -36,6 +36,7 @@ import org.apache.kafka.streams.kstream.Predicate;
 import org.apache.kafka.streams.kstream.Printed;
 import org.apache.kafka.streams.kstream.Produced;
 import org.apache.kafka.streams.kstream.RecordValue;
+import org.apache.kafka.streams.kstream.RecordValueSerde;
 import org.apache.kafka.streams.kstream.Repartitioned;
 import org.apache.kafka.streams.kstream.RecordHeadersMapper;
 import org.apache.kafka.streams.kstream.StreamJoined;
@@ -333,7 +334,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
 
         final String name = new NamedInternal(named).orElseGenerateWithPrefix(builder, MAPRECORDVALUE_NAME);
         final ProcessorParameters<? super K, ? super V, ?, ?> processorParameters =
-            new ProcessorParameters<>(new KStreamMapToRecordValue<>(), name);
+            new ProcessorParameters<>(new KStreamMapRecordValue<>(), name);
         final ProcessorGraphNode<? super K, ? super V> mapValuesProcessorNode =
             new ProcessorGraphNode<>(name, processorParameters);
         mapValuesProcessorNode.setValueChangingOperation(true);
@@ -344,7 +345,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
         return new KStreamImpl<>(
             name,
             keySerde,
-            null, // TODO add new serde
+            new RecordValueSerde<>(valueSerde),
             subTopologySourceNodes,
             repartitionRequired,
             mapValuesProcessorNode,

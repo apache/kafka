@@ -73,6 +73,11 @@ public class To {
         return this;
     }
 
+    /**
+     * Set the headers of the output records.
+     * @param headers the output record headers
+     * @return itself (i.e., {@code this})
+     */
     public To withHeaders(Headers headers) {
         this.headers = headers;
         return this;
