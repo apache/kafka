@@ -1415,7 +1415,7 @@ public abstract class MirrorConnectorsIntegrationBaseTest {
             System.err.println("!!! Couldn't delete all topics before stopping brokers:" + e);
         }
 
-        fail("check topics");
+        fail("check topics.");
     }
     
     /*
