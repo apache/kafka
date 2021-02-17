@@ -341,7 +341,7 @@ public class KTableKTableForeignKeyInnerJoinMultiIntegrationTest {
         }
         waitForApplicationState(singletonList(streams), KafkaStreams.State.RUNNING, Duration.ofSeconds(60));
 
-        assertFalse("1st try failed!", streamStartFailed);
+        assertFalse("1st try failed!!", streamStartFailed);
 
         System.err.println("!!! before stream state:" + streams.state() + streamsTwo.state() + streamsThree.state());
 
