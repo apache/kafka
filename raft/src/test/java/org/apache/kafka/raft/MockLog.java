@@ -285,8 +285,6 @@ public class MockLog implements ReplicatedLog {
                 );
             }
 
-            // TODO: Confirm that we don't need to validate the epoch when compared to KafkaMetadataLog
-
             List<LogEntry> entries = buildEntries(batch, Record::offset);
             appendBatch(
                 new LogBatch(
