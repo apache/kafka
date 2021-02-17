@@ -27,5 +27,4 @@ import org.apache.kafka.common.quota.ClientQuotaFilter;
  */
 @InterfaceStability.Evolving
 public class DescribeClientQuotasOptions extends AbstractOptions<DescribeClientQuotasOptions> {
-
 }
