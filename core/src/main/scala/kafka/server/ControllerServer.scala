@@ -35,7 +35,7 @@ import org.apache.kafka.common.security.scram.internals.ScramMechanism
 import org.apache.kafka.common.security.token.delegation.internals.DelegationTokenCache
 import org.apache.kafka.common.utils.{LogContext, Time}
 import org.apache.kafka.common.{ClusterResource, Endpoint}
-import org.apache.kafka.controller.{Controller, QuorumController}
+import org.apache.kafka.controller.{Controller, QuorumController, QuorumControllerMetrics}
 import org.apache.kafka.metadata.{ApiMessageAndVersion, VersionRange}
 import org.apache.kafka.metalog.MetaLogManager
 import org.apache.kafka.raft.RaftConfig
@@ -149,6 +149,7 @@ class ControllerServer(
         setDefaultNumPartitions(config.numPartitions.intValue()).
         setSessionTimeoutNs(TimeUnit.NANOSECONDS.convert(config.brokerSessionTimeoutMs.longValue(),
           TimeUnit.MILLISECONDS)).
+        setMetrics(new QuorumControllerMetrics(KafkaYammerMetrics.defaultRegistry())).
         build()
       quotaManagers = QuotaFactory.instantiate(config, metrics, time, threadNamePrefix.getOrElse(""))
       val controllerNodes =
