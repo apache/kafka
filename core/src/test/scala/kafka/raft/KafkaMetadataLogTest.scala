@@ -64,6 +64,23 @@ final class KafkaMetadataLogTest {
   }
 
   @Test
+  def testUnexpectedAppendOffset(): Unit = {
+    val recordFoo = new SimpleRecord("foo".getBytes())
+    val currentEpoch = 3
+    val initialOffset = log.endOffset().offset + 1
+
+    assertThrows(
+      classOf[RuntimeException],
+      () => {
+        log.appendAsLeader(
+          MemoryRecords.withRecords(initialOffset, CompressionType.NONE, recordFoo),
+          currentEpoch
+        )
+      }
+    )
+  }
+
+  @Test
   def testCreateSnapshot(): Unit = {
     val topicPartition = new TopicPartition("cluster-metadata", 0)
     val numberOfRecords = 10

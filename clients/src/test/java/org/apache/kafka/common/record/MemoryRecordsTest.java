@@ -497,20 +497,25 @@ public class MemoryRecordsTest {
             final int leaderId = 5;
             final int leaderEpoch = 20;
             final int voterId = 6;
+            final long initialOffset = 4200;
 
             LeaderChangeMessage leaderChangeMessage = new LeaderChangeMessage()
                 .setLeaderId(leaderId)
                 .setVoters(Collections.singletonList(
                     new Voter().setVoterId(voterId)));
-            MemoryRecords records = MemoryRecords.withLeaderChangeMessage(System.currentTimeMillis(),
-                leaderEpoch, leaderChangeMessage);
+            MemoryRecords records = MemoryRecords.withLeaderChangeMessage(
+                initialOffset,
+                System.currentTimeMillis(),
+                leaderEpoch,
+                leaderChangeMessage
+            );
 
             List<MutableRecordBatch> batches = TestUtils.toList(records.batches());
             assertEquals(1, batches.size());
 
             RecordBatch batch = batches.get(0);
             assertTrue(batch.isControlBatch());
-            assertEquals(0, batch.baseOffset());
+            assertEquals(initialOffset, batch.baseOffset());
             assertEquals(leaderEpoch, batch.partitionLeaderEpoch());
             assertTrue(batch.isValid());
 
