@@ -1782,6 +1782,8 @@ class Log(@volatile private var _dir: File,
         startIndex = offsetTimeArray.length - 1
       case ListOffsetsRequest.EARLIEST_TIMESTAMP =>
         startIndex = 0
+      case ListOffsetsRequest.EARLIEST_LOCAL_TIMESTAMP =>
+        startIndex = 0
       case _ =>
         var isFound = false
         debug("Offset time array = " + offsetTimeArray.foreach(o => "%d, %d".format(o._1, o._2)))
