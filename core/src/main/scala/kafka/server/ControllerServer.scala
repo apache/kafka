@@ -132,7 +132,8 @@ class ControllerServer(
         metrics,
         time,
         credentialProvider,
-        allowControllerOnlyApis = true)
+        allowControllerOnlyApis = true,
+        controllerSocketServer = true)
       socketServer.startup(false, None, config.controllerListeners)
       socketServerFirstBoundPortFuture.complete(socketServer.boundPort(
         config.controllerListeners.head.listenerName))
