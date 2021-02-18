@@ -21,7 +21,6 @@ import org.apache.kafka.common.record.MemoryRecords;
 import org.apache.kafka.common.record.MutableRecordBatch;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Utils;
-import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
 import org.junit.jupiter.params.provider.ValueSource;
@@ -32,7 +31,6 @@ import java.util.List;
 import java.util.stream.Collectors;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -70,7 +68,7 @@ class BatchBuilderTest {
 
         records.forEach(record -> builder.appendRecord(record, null));
         MemoryRecords builtRecordSet = builder.build();
-        assertFalse(builder.hasRoomFor(new int[] {1}));
+        assertTrue(builder.roomFor(Arrays.asList("a"), null).isPresent());
         assertThrows(IllegalStateException.class, () -> builder.appendRecord("a", null));
 
         List<MutableRecordBatch> builtBatches = Utils.toList(builtRecordSet.batchIterator());
@@ -113,9 +111,8 @@ class BatchBuilderTest {
         );
 
         String record = "i am a record";
-        int recordSize = serde.recordSize(record);
 
-        while (builder.hasRoomFor(new int[] {recordSize})) {
+        while (!builder.roomFor(Arrays.asList(record), null).isPresent()) {
             builder.appendRecord(record, null);
         }
 
@@ -125,25 +122,5 @@ class BatchBuilderTest {
         assertEquals(sizeInBytes, records.sizeInBytes());
         assertTrue(sizeInBytes <= batchSize, "Built batch size "
             + sizeInBytes + " is larger than max batch size " + batchSize);
-    }
-
-    @Test
-    public void testSizeCalculations() {
-        CompressionType compressionType = CompressionType.NONE;
-        int batchHeaderSizeInBytes = BatchBuilder.batchHeaderSizeInBytes(compressionType);
-        long baseOffset = 57;
-        int recordSize = 1;
-        int bytesNeededForRecordSizes = BatchBuilder.bytesNeededForRecordSizes(
-            baseOffset,
-            baseOffset,
-            new int[] {recordSize}
-        );
-
-        assertEquals(61, batchHeaderSizeInBytes);
-        assertEquals(8, bytesNeededForRecordSizes);
-        assertEquals(
-            batchHeaderSizeInBytes + bytesNeededForRecordSizes,
-            BatchBuilder.batchSizeForRecordSizes(compressionType, baseOffset, new int[] {recordSize})
-        );
     }
 }

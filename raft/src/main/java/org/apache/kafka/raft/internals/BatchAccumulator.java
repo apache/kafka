@@ -27,8 +27,10 @@ import org.apache.kafka.raft.RecordSerde;
 import java.io.Closeable;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
+import java.util.OptionalInt;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.locks.ReentrantLock;
@@ -124,10 +126,6 @@ public class BatchAccumulator<T> implements Closeable {
         }
 
         ObjectSerializationCache serializationCache = new ObjectSerializationCache();
-        int[] recordSizes = records
-            .stream()
-            .mapToInt(record -> serde.recordSize(record, serializationCache))
-            .toArray();
 
         appendLock.lock();
         try {
@@ -135,14 +133,12 @@ public class BatchAccumulator<T> implements Closeable {
 
             BatchBuilder<T> batch = null;
             if (isAtomic) {
-                batch = maybeAllocateBatch(recordSizes);
+                batch = maybeAllocateBatch(records, serializationCache);
             }
 
             for (T record : records) {
                 if (!isAtomic) {
-                    batch = maybeAllocateBatch(
-                        new int[] {serde.recordSize(record, serializationCache)}
-                    );
+                    batch = maybeAllocateBatch(Collections.singleton(record), serializationCache);
                 }
 
                 if (batch == null) {
@@ -167,26 +163,30 @@ public class BatchAccumulator<T> implements Closeable {
         }
     }
 
-    private BatchBuilder<T> maybeAllocateBatch(int[] recordSizes) {
-        int bytesNeeded = BatchBuilder.batchSizeForRecordSizes(
-            compressionType,
-            nextOffset,
-            recordSizes
-        );
-        if (bytesNeeded > maxBatchSize) {
-            throw new RecordBatchTooLargeException(
-                String.format(
-                    "The total record(s) size of %s exceeds the maximum allowed batch size of %s",
-                    bytesNeeded,
-                    maxBatchSize
-                )
-            );
-        } else if (currentBatch == null) {
-            startNewBatch();
-        } else if (!currentBatch.hasRoomFor(recordSizes)) {
-            completeCurrentBatch();
+    private BatchBuilder<T> maybeAllocateBatch(
+        Collection<T> records,
+        ObjectSerializationCache serializationCache
+    ) {
+        if (currentBatch == null) {
             startNewBatch();
         }
+
+        if (currentBatch != null) {
+            OptionalInt bytesNeeded = currentBatch.roomFor(records, serializationCache);
+            if (bytesNeeded.isPresent() && bytesNeeded.getAsInt() > maxBatchSize) {
+                throw new RecordBatchTooLargeException(
+                    String.format(
+                        "The total record(s) size of %s exceeds the maximum allowed batch size of %s",
+                        bytesNeeded.getAsInt(),
+                        maxBatchSize
+                    )
+                );
+            } else if (bytesNeeded.isPresent()) {
+                completeCurrentBatch();
+                startNewBatch();
+            }
+        }
+
         return currentBatch;
     }
 
@@ -342,20 +342,22 @@ public class BatchAccumulator<T> implements Closeable {
         public final List<T> records;
         public final MemoryRecords data;
         private final MemoryPool pool;
-        private final ByteBuffer buffer;
+        // Buffer that was allocated by the MemoryPool (pool). This may not be the buffer used in
+        // the MemoryRecords (data) object.
+        private final ByteBuffer pooledBuffer;
 
         private CompletedBatch(
             long baseOffset,
             List<T> records,
             MemoryRecords data,
             MemoryPool pool,
-            ByteBuffer buffer
+            ByteBuffer pooledBuffer
         ) {
             this.baseOffset = baseOffset;
             this.records = records;
             this.data = data;
             this.pool = pool;
-            this.buffer = buffer;
+            this.pooledBuffer = pooledBuffer;
         }
 
         public int sizeInBytes() {
@@ -363,7 +365,7 @@ public class BatchAccumulator<T> implements Closeable {
         }
 
         public void release() {
-            pool.release(buffer);
+            pool.release(pooledBuffer);
         }
     }
 

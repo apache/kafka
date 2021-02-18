@@ -33,12 +33,14 @@ import org.apache.kafka.raft.RecordSerde;
 import java.io.DataOutputStream;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.List;
+import java.util.OptionalInt;
 
 /**
  * Collect a set of records into a single batch. New records are added
  * through {@link #appendRecord(Object, ObjectSerializationCache)}, but the caller must first
- * check whether there is room using {@link #hasRoomFor(int)}. Once the
+ * check whether there is room using {@link #roomFor(Collection, ObjectSerializationCache)}. Once the
  * batch is ready, then {@link #build()} should be used to get the resulting
  * {@link MemoryRecords} instance.
  *
@@ -85,7 +87,8 @@ public class BatchBuilder<T> {
         this.maxBytes = maxBytes;
         this.records = new ArrayList<>();
 
-        int batchHeaderSizeInBytes = batchHeaderSizeInBytes(compressionType);
+        // field compressionType must be set before calculating the batch header size
+        int batchHeaderSizeInBytes = batchHeaderSizeInBytes();
         batchOutput.position(initialPosition + batchHeaderSizeInBytes);
 
         this.recordOutput = new DataOutputStreamWritable(new DataOutputStream(
@@ -94,7 +97,7 @@ public class BatchBuilder<T> {
 
     /**
      * Append a record to this patch. The caller must first verify there is room for the batch
-     * using {@link #hasRoomFor(int[])}.
+     * using {@link #roomFor(Collection, ObjectSerializationCache)}.
      *
      * @param record the record to append
      * @param serializationCache serialization cache for use in {@link RecordSerde#write(Object, ObjectSerializationCache, Writable)}
@@ -124,27 +127,37 @@ public class BatchBuilder<T> {
     /**
      * Check whether the batch has enough room for all the record values.
      *
-     * @param recordSizes the sizes of the records to be appended
-     * @return true if there is room for the records to be appended, false otherwise
+     * Returns an empty {@link OptionalInt} if the batch builder has room for this list of records.
+     * Otherwise it returns the expected number of bytes needed for a batch to contain these records.
+     *
+     * @param records the records to use when checking for room
+     * @param serializationCache serialization cache for computing sizes
+     * @return empty {@link OptionalInt} if there is room for the records to be appended, otherwise
+     *         returns the number of bytes needed
      */
-    public boolean hasRoomFor(int[] recordSizes) {
-        if (!isOpenForAppends) {
-            return false;
-        }
+    public OptionalInt roomFor(Collection<T> records, ObjectSerializationCache serializationCache) {
+        int bytesNeeded = bytesNeededForRecords(
+            records,
+            serializationCache
+        );
 
-        int bytesNeeded = bytesNeededForRecordSizes(baseOffset, nextOffset, recordSizes);
+        if (!isOpenForAppends) {
+            return OptionalInt.of(batchHeaderSizeInBytes() + bytesNeeded);
+        }
 
         int approxUnusedSizeInBytes = maxBytes - approximateSizeInBytes();
         if (approxUnusedSizeInBytes >= bytesNeeded) {
-            return true;
+            return OptionalInt.empty();
         } else if (unflushedBytes > 0) {
             recordOutput.flush();
             unflushedBytes = 0;
             int unusedSizeInBytes = maxBytes - flushedSizeInBytes();
-            return unusedSizeInBytes >= bytesNeeded;
-        } else {
-            return false;
+            if (unusedSizeInBytes >= bytesNeeded) {
+                return OptionalInt.empty();
+            }
         }
+
+        return OptionalInt.of(batchHeaderSizeInBytes() + bytesNeeded);
     }
 
     private int flushedSizeInBytes() {
@@ -297,57 +310,20 @@ public class BatchBuilder<T> {
         return ByteUtils.sizeOfVarint(sizeInBytes) + sizeInBytes;
     }
 
-    /**
-     * Computes the bytes required to store records with the given sizes in a new batch.
-     *
-     * @param compressionType the type of compression
-     * @param baseOffset the base offset of the batch
-     * @param recordSizes the size of the records
-     * @return the bytes required, {@link Integer#MAX_VALUE} when offset delta is too large.
-     */
-    public static int batchSizeForRecordSizes(
-        CompressionType compressionType,
-        long baseOffset,
-        int[] recordSizes
-    ) {
-        int bytesNeeded = bytesNeededForRecordSizes(baseOffset, 0, recordSizes);
-        if (bytesNeeded != Integer.MAX_VALUE) {
-            return batchHeaderSizeInBytes(compressionType) + bytesNeeded;
-        } else {
-            return Integer.MAX_VALUE;
-        }
-    }
-
-    /**
-     * Computes the bytes overhead of an empty batch.
-     *
-     * @param compressionType the type of compression
-     * @return the minimal bytes size of a batch
-     */
-    static int batchHeaderSizeInBytes(CompressionType compressionType) {
+    private int batchHeaderSizeInBytes() {
         return AbstractRecords.recordBatchHeaderSizeInBytes(
             RecordBatch.MAGIC_VALUE_V2,
             compressionType
         );
     }
 
-    /**
-     * Compute the number of bytes required to store the give record sizes.
-     *
-     * @param baseOffset the base offset for the batch
-     * @param startingOffset the offset of the first record
-     * @param recordSizes the sizes of all of the records
-     * @return the bytes required to store records with the given sizes, {@link Integer#MAX_VALUE}
-     *         when offset delta is too large.
-     */
-    static int bytesNeededForRecordSizes(
-        long baseOffset,
-        long startingOffset,
-        int[] recordSizes
+    private int bytesNeededForRecords(
+        Collection<T> records,
+        ObjectSerializationCache serializationCache
     ) {
-        long expectedNextOffset = startingOffset;
+        long expectedNextOffset = nextOffset;
         int bytesNeeded = 0;
-        for (int size: recordSizes) {
+        for (T record : records) {
             if (expectedNextOffset - baseOffset >= Integer.MAX_VALUE) {
                 return Integer.MAX_VALUE;
             }
@@ -356,7 +332,7 @@ public class BatchBuilder<T> {
                 (int) (expectedNextOffset  - baseOffset),
                 0,
                 -1,
-                size,
+                serde.recordSize(record, serializationCache),
                 DefaultRecord.EMPTY_HEADERS
             );
 
