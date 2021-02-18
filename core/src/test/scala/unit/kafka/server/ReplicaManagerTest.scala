@@ -2292,12 +2292,15 @@ class ReplicaManagerTest {
       val response = replicaManager.becomeLeaderOrFollower(0, leaderAndIsrRequest(0, topicIds), (_, _) => ())
       assertEquals(Errors.NONE, response.partitionErrors(topicNames).get(topicPartition))
 
-      // Send request with invalid ID.
-      val response2 = replicaManager.becomeLeaderOrFollower(0, leaderAndIsrRequest(0, invalidTopicIds), (_, _) => ())
-      assertEquals(Errors.UNKNOWN_TOPIC_ID, response2.partitionErrors(invalidTopicNames).get(topicPartition))
+      val response2 = replicaManager.becomeLeaderOrFollower(0, leaderAndIsrRequest(1, topicIds), (_, _) => ())
+      assertEquals(Errors.NONE, response2.partitionErrors(topicNames).get(topicPartition))
 
+      // Send request with invalid ID.
       val response3 = replicaManager.becomeLeaderOrFollower(0, leaderAndIsrRequest(1, invalidTopicIds), (_, _) => ())
-      assertEquals(Errors.UNKNOWN_TOPIC_ID, response3.partitionErrors(invalidTopicNames).get(topicPartition))
+      assertEquals(Errors.INCONSISTENT_TOPIC_ID, response3.partitionErrors(invalidTopicNames).get(topicPartition))
+
+      val response4 = replicaManager.becomeLeaderOrFollower(0, leaderAndIsrRequest(2, invalidTopicIds), (_, _) => ())
+      assertEquals(Errors.INCONSISTENT_TOPIC_ID, response4.partitionErrors(invalidTopicNames).get(topicPartition))
     } finally replicaManager.shutdown(checkpointHW = false)
   }
 
