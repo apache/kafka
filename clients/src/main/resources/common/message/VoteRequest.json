@@ -16,7 +16,7 @@
 {
   "apiKey": 52,
   "type": "request",
-  "listeners": ["controller", "raft"],
+  "listeners": ["controller"],
   "name": "VoteRequest",
   "validVersions": "0",
   "flexibleVersions": "0+",

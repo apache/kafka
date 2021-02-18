@@ -26,8 +26,5 @@ public enum RequestListenerType {
     BROKER,
 
     @JsonProperty("controller")
-    CONTROLLER,
-
-    @JsonProperty("raft")
-    RAFT;
+    CONTROLLER;
 }
