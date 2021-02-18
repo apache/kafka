@@ -179,8 +179,14 @@ public class MockLogTest {
     public void testUnexpectedAppendOffset() {
         SimpleRecord recordFoo = new SimpleRecord("foo".getBytes());
         final int currentEpoch = 3;
-        final long initialOffset = log.endOffset().offset + 1;
+        final long initialOffset = log.endOffset().offset;
 
+        log.appendAsLeader(
+            MemoryRecords.withRecords(initialOffset, CompressionType.NONE, currentEpoch, recordFoo),
+            currentEpoch
+        );
+
+        // Throw exception for out of order records
         assertThrows(
             RuntimeException.class,
             () -> {

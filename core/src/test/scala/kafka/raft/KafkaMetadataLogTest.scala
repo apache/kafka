@@ -70,8 +70,14 @@ final class KafkaMetadataLogTest {
 
     val recordFoo = new SimpleRecord("foo".getBytes())
     val currentEpoch = 3
-    val initialOffset = log.endOffset().offset + 1
+    val initialOffset = log.endOffset().offset
 
+    log.appendAsLeader(
+      MemoryRecords.withRecords(initialOffset, CompressionType.NONE, currentEpoch, recordFoo),
+      currentEpoch
+    )
+
+    // Throw exception for out of order records
     assertThrows(
       classOf[RuntimeException],
       () => {
