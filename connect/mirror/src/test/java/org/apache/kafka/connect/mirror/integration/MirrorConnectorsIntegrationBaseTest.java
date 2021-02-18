@@ -1418,8 +1418,7 @@ public abstract class MirrorConnectorsIntegrationBaseTest {
             log.error("Couldn't delete all topics before stopping brokers", e);
             System.err.println("!!! Couldn't delete all topics before stopping brokers:" + e);
         }
-
-        fail("check topics.");
+        
     }
     
     /*
