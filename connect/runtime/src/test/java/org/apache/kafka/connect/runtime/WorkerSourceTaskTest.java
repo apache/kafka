@@ -1233,7 +1233,7 @@ public class WorkerSourceTaskTest extends ThreadedTest {
         double activeCountMax = metrics.currentMetricValueAsDouble(sourceTaskGroup, "source-record-active-count-max");
         assertEquals(0, activeCount, 0.000001d);
         if (minimumPollCountExpected > 0) {
-            assertEquals(activeCountMaxExpected, activeCountMaxExpected, 0.000001d);
+            assertEquals(activeCountMaxExpected, activeCountMax, 0.000001d);
         }
     }
 
