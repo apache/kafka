@@ -429,9 +429,11 @@ class Partition(val topicPartition: TopicPartition,
   }
 
   /**
-   * This method checks if the topic ID provided in the request is consistent with the topic ID in the log.
+   * Checks if the topic ID provided in the request is consistent with the topic ID in the log.
    * If a valid topic ID is provided, and the log exists but has no ID set, set the log ID to be the request ID.
-   * Returns a boolean representing whether the topic ID was consistent.
+   *
+   * @param requestTopicId the topic ID from the request
+   * @return true if the request topic id is consistent, false otherwise
    */
   def checkOrSetTopicId(requestTopicId: Uuid): Boolean = {
     // If the request had an invalid topic ID, then we assume that topic IDs are not supported.
@@ -451,7 +453,6 @@ class Partition(val topicPartition: TopicPartition,
             log.topicId = requestTopicId
             true
           } else if (log.topicId != requestTopicId) {
-            // topic ID in log exists and is not consistent with request topic ID
             stateChangeLogger.error(s"Topic Id in memory: ${log.topicId} does not" +
               s" match the topic Id for partition $topicPartition provided in the request: " +
               s"$requestTopicId.")
