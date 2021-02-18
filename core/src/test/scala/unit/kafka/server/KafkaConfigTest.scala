@@ -33,9 +33,12 @@ import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.Test
 import java.net.InetSocketAddress
 import java.util
-import java.util.Properties
+import java.util.{Collections, Properties}
 
+import org.apache.kafka.common.Node
 import org.junit.jupiter.api.function.Executable
+
+import scala.jdk.CollectionConverters._
 
 class KafkaConfigTest {
 
@@ -1034,7 +1037,17 @@ class KafkaConfigTest {
   }
 
   @Test
-  def testInvalidQuorumVotersConfig(): Unit = {
+  def testControllerQuorumVoterStringsToNodes(): Unit = {
+    assertThrows(classOf[ConfigException], () => RaftConfig.quorumVoterStringsToNodes(Collections.singletonList("")))
+    assertEquals(Seq(new Node(3000, "example.com", 9093)),
+      RaftConfig.quorumVoterStringsToNodes(util.Arrays.asList("3000@example.com:9093")).asScala.toSeq)
+    assertEquals(Seq(new Node(3000, "example.com", 9093),
+      new Node(3001, "example.com", 9094)),
+      RaftConfig.quorumVoterStringsToNodes(util.Arrays.asList("3000@example.com:9093","3001@example.com:9094")).asScala.toSeq)
+  }
+
+  @Test
+  def testInvalidQuorumVoterConfig(): Unit = {
     assertInvalidQuorumVoters("1")
     assertInvalidQuorumVoters("1@")
     assertInvalidQuorumVoters("1:")
