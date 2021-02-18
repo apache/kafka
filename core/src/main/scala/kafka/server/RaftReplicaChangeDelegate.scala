@@ -35,6 +35,7 @@ trait RaftReplicaChangeDelegateHelper {
   def getLogDir(topicPartition: TopicPartition): Option[String]
   def error(msg: => String, e: => Throwable): Unit
   def markOffline(topicPartition: TopicPartition): Unit
+  def markOnline(partition: Partition): Unit
   def completeDelayedFetchOrProduceRequests(topicPartition: TopicPartition): Unit
   def isShuttingDown: Boolean
   def initialFetchOffset(log: Log): Long
@@ -216,6 +217,9 @@ class RaftReplicaChangeDelegate(helper: RaftReplicaChangeDelegateHelper) {
             val leader = allBrokersByIdMap(partition.leaderReplicaIdOpt.get).brokerEndPoint(helper.config.interBrokerListenerName)
             val log = partition.localLogOrException
             val fetchOffset = helper.initialFetchOffset(log)
+            if (deferredBatches) {
+              helper.markOnline(partition)
+            }
             partition.topicPartition -> InitialFetchState(leader, partition.getLeaderEpoch, fetchOffset)
           }.toMap
 
