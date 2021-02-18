@@ -61,8 +61,8 @@ object AutoTopicCreationManager {
     time: Time,
     metrics: Metrics,
     threadNamePrefix: Option[String],
-    adminManager: ZkAdminManager,
-    controller: KafkaController,
+    adminManager: Option[ZkAdminManager],
+    controller: Option[KafkaController],
     groupCoordinator: GroupCoordinator,
     txnCoordinator: TransactionCoordinator,
     enableForwarding: Boolean
@@ -91,11 +91,14 @@ class DefaultAutoTopicCreationManager(
   config: KafkaConfig,
   metadataCache: MetadataCache,
   channelManager: Option[BrokerToControllerChannelManager],
-  adminManager: ZkAdminManager,
-  controller: KafkaController,
+  adminManager: Option[ZkAdminManager],
+  controller: Option[KafkaController],
   groupCoordinator: GroupCoordinator,
   txnCoordinator: TransactionCoordinator
 ) extends AutoTopicCreationManager with Logging {
+  if (controller.isEmpty && channelManager.isEmpty) {
+    throw new IllegalArgumentException("Must supply a channel manager if not supplying a controller")
+  }
 
   private val inflightTopics = Collections.newSetFromMap(new ConcurrentHashMap[String, java.lang.Boolean]())
 
@@ -116,7 +119,7 @@ class DefaultAutoTopicCreationManager(
 
     val creatableTopicResponses = if (creatableTopics.isEmpty) {
       Seq.empty
-    } else if (!controller.isActive && channelManager.isDefined) {
+    } else if (controller.isEmpty || !controller.get.isActive && channelManager.isDefined) {
       sendCreateTopicRequest(creatableTopics)
     } else {
       createTopicsInZk(creatableTopics, controllerMutationQuota)
@@ -133,7 +136,7 @@ class DefaultAutoTopicCreationManager(
     try {
       // Note that we use timeout = 0 since we do not need to wait for metadata propagation
       // and we want to get the response error immediately.
-      adminManager.createTopics(
+      adminManager.get.createTopics(
         timeout = 0,
         validateOnly = false,
         creatableTopics,

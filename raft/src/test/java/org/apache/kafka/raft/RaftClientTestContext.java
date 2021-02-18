@@ -1033,7 +1033,7 @@ public final class RaftClientTestContext {
         }
 
         @Override
-        public void handleResign() {
+        public void handleResign(int epoch) {
             this.currentClaimedEpoch = OptionalInt.empty();
         }
 

@@ -255,6 +255,12 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
             random);
         this.kafkaRaftMetrics = new KafkaRaftMetrics(metrics, "raft", quorum);
         kafkaRaftMetrics.updateNumUnknownVoterConnections(quorum.remoteVoters().size());
+
+        // Update the voter endpoints with what's in RaftConfig
+        Map<Integer, RaftConfig.AddressSpec> voterAddresses = raftConfig.quorumVoterConnections();
+        voterAddresses.entrySet().stream()
+            .filter(e -> e.getValue() instanceof RaftConfig.InetAddressSpec)
+            .forEach(e -> this.channel.updateEndpoint(e.getKey(), (RaftConfig.InetAddressSpec) e.getValue()));
     }
 
     private void updateFollowerHighWatermark(
@@ -374,9 +380,9 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
         }
     }
 
-    private void fireHandleResign() {
+    private void fireHandleResign(int epoch) {
         for (ListenerContext listenerContext : listenerContexts) {
-            listenerContext.fireHandleResign();
+            listenerContext.fireHandleResign(epoch);
         }
     }
 
@@ -406,6 +412,11 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
     public void register(Listener<T> listener) {
         pendingListeners.add(listener);
         wakeup();
+    }
+
+    @Override
+    public LeaderAndEpoch leaderAndEpoch() {
+        return quorum.leaderAndEpoch();
     }
 
     private OffsetAndEpoch endOffset() {
@@ -495,7 +506,7 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
 
     private void maybeResignLeadership() {
         if (quorum.isLeader()) {
-            fireHandleResign();
+            fireHandleResign(quorum.epoch());
         }
 
         if (accumulator != null) {
@@ -2404,8 +2415,8 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
             }
         }
 
-        void fireHandleResign() {
-            listener.handleResign();
+        void fireHandleResign(int epoch) {
+            listener.handleResign(epoch);
         }
 
         public synchronized void onClose(BatchReader<T> reader) {
