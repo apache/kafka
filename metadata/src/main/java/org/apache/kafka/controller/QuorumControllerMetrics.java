@@ -28,10 +28,13 @@ public final class QuorumControllerMetrics implements ControllerMetrics {
         "kafka.controller", "KafkaController", "ActiveControllerCount", null);
     private final static MetricName EVENT_QUEUE_TIME_MS = new MetricName(
         "kafka.controller", "ControllerEventManager", "EventQueueTimeMs", null);
+    private final static MetricName EVENT_QUEUE_PROCESSING_TIME_MS = new MetricName(
+        "kafka.controller", "ControllerEventManager", "EventQueueProcessingTimeMs", null);
 
     private volatile boolean active;
     private final Gauge<Integer> activeControllerCount;
     private final Histogram eventQueueTime;
+    private final Histogram eventQueueProcessingTime;
 
     public QuorumControllerMetrics(MetricsRegistry registry) {
         this.active = false;
@@ -42,6 +45,7 @@ public final class QuorumControllerMetrics implements ControllerMetrics {
             }
         });
         this.eventQueueTime = registry.newHistogram(EVENT_QUEUE_TIME_MS, true);
+        this.eventQueueProcessingTime = registry.newHistogram(EVENT_QUEUE_PROCESSING_TIME_MS, true);
     }
 
     @Override
@@ -52,6 +56,11 @@ public final class QuorumControllerMetrics implements ControllerMetrics {
     @Override
     public boolean active() {
         return this.active;
+    }
+
+    @Override
+    public void updateEventQueueTime(long durationMs) {
+        eventQueueTime.update(durationMs);
     }
 
     @Override

@@ -249,6 +249,7 @@ public final class QuorumController implements Controller {
     class ControlEvent implements EventQueue.Event {
         private final String name;
         private final Runnable handler;
+        private long eventCreatedTimeNs = time.nanoseconds();
         private Optional<Long> startProcessingTimeNs = Optional.empty();
 
         ControlEvent(String name, Runnable handler) {
@@ -258,7 +259,9 @@ public final class QuorumController implements Controller {
 
         @Override
         public void run() throws Exception {
-            startProcessingTimeNs = Optional.of(time.nanoseconds());
+            long now = time.nanoseconds();
+            controllerMetrics.updateEventQueueTime(NANOSECONDS.toMillis(now - eventCreatedTimeNs));
+            startProcessingTimeNs = Optional.of(now);
             log.debug("Executing {}.", this);
             handler.run();
             handleEventEnd(this.toString(), startProcessingTimeNs.get());
@@ -288,6 +291,7 @@ public final class QuorumController implements Controller {
         private final String name;
         private final CompletableFuture<T> future;
         private final Supplier<T> handler;
+        private long eventCreatedTimeNs = time.nanoseconds();
         private Optional<Long> startProcessingTimeNs = Optional.empty();
 
         ControllerReadEvent(String name, Supplier<T> handler) {
@@ -302,7 +306,9 @@ public final class QuorumController implements Controller {
 
         @Override
         public void run() throws Exception {
-            startProcessingTimeNs = Optional.of(time.nanoseconds());
+            long now = time.nanoseconds();
+            controllerMetrics.updateEventQueueTime(NANOSECONDS.toMillis(now - eventCreatedTimeNs));
+            startProcessingTimeNs = Optional.of(now);
             T value = handler.get();
             handleEventEnd(this.toString(), startProcessingTimeNs.get());
             future.complete(value);
@@ -367,6 +373,7 @@ public final class QuorumController implements Controller {
         private final String name;
         private final CompletableFuture<T> future;
         private final ControllerWriteOperation<T> op;
+        private long eventCreatedTimeNs = time.nanoseconds();
         private Optional<Long> startProcessingTimeNs = Optional.empty();
         private ControllerResultAndOffset<T> resultAndOffset;
 
@@ -383,11 +390,13 @@ public final class QuorumController implements Controller {
 
         @Override
         public void run() throws Exception {
+            long now = time.nanoseconds();
+            controllerMetrics.updateEventQueueTime(NANOSECONDS.toMillis(now - eventCreatedTimeNs));
             long controllerEpoch = curClaimEpoch;
             if (controllerEpoch == -1) {
                 throw newNotControllerException();
             }
-            startProcessingTimeNs = Optional.of(time.nanoseconds());
+            startProcessingTimeNs = Optional.of(now);
             ControllerResult<T> result = op.generateRecordsAndResult();
             if (result.records().isEmpty()) {
                 op.processBatchEndOffset(writeOffset);

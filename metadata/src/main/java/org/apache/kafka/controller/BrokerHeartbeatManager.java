@@ -547,7 +547,17 @@ public class BrokerHeartbeatManager {
                 return new BrokerControlStates(currentState, FENCED);
 
             case UNFENCED:
-                if (request.wantShutDown()) {
+                if (request.wantFence()) {
+                    if (request.wantShutDown()) {
+                        log.info("Unfenced broker {} has requested and been granted an " +
+                            "immediate shutdown.", brokerId);
+                        return new BrokerControlStates(currentState, SHUTDOWN_NOW);
+                    } else {
+                        log.info("Unfenced broker {} has requested and been granted " +
+                            "fencing", brokerId);
+                        return new BrokerControlStates(currentState, FENCED);
+                    }
+                } else if (request.wantShutDown()) {
                     if (hasLeaderships.get()) {
                         log.info("Unfenced broker {} has requested and been granted a " +
                             "controlled shutdown.", brokerId);
