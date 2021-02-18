@@ -5082,7 +5082,7 @@ public class KafkaAdminClientTest {
     }
 
     @Test
-    public void testDecommissionBrokerTimeoutMaxRetry() {
+    public void testUnregisterBrokerTimeoutMaxRetry() {
         int nodeId = 1;
         try (final AdminClientUnitTestEnv env = mockClientEnv(Time.SYSTEM, AdminClientConfig.RETRIES_CONFIG, "1")) {
             env.kafkaClient().setNodeApiVersions(
@@ -5099,7 +5099,7 @@ public class KafkaAdminClientTest {
     }
 
     @Test
-    public void testDecommissionBrokerTimeoutMaxWait() {
+    public void testUnregisterBrokerTimeoutMaxWait() {
         int nodeId = 1;
         try (final AdminClientUnitTestEnv env = mockClientEnv()) {
             env.kafkaClient().setNodeApiVersions(

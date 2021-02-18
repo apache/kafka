@@ -18,7 +18,6 @@
 package kafka.server
 
 import java.lang.{Long => JLong}
-import java.net.{InetAddress, UnknownHostException}
 import java.nio.ByteBuffer
 import java.util
 import java.util.concurrent.ConcurrentHashMap
@@ -64,7 +63,7 @@ import org.apache.kafka.common.message.OffsetForLeaderEpochRequestData.OffsetFor
 import org.apache.kafka.common.message.OffsetForLeaderEpochResponseData.{EpochEndOffset, OffsetForLeaderTopicResult, OffsetForLeaderTopicResultCollection}
 import org.apache.kafka.common.message.{AddOffsetsToTxnResponseData, AlterClientQuotasResponseData, AlterConfigsResponseData, AlterPartitionReassignmentsResponseData, AlterReplicaLogDirsResponseData, ApiVersionsResponseData, CreateAclsResponseData, CreatePartitionsResponseData, CreateTopicsResponseData, DeleteAclsResponseData, DeleteGroupsResponseData, DeleteRecordsResponseData, DeleteTopicsResponseData, DescribeAclsResponseData, DescribeClientQuotasResponseData, DescribeClusterResponseData, DescribeConfigsResponseData, DescribeGroupsResponseData, DescribeLogDirsResponseData, DescribeProducersResponseData, EndTxnResponseData, ExpireDelegationTokenResponseData, FindCoordinatorResponseData, HeartbeatResponseData, InitProducerIdResponseData, JoinGroupResponseData, LeaveGroupResponseData, ListGroupsResponseData, ListOffsetsResponseData, ListPartitionReassignmentsResponseData, OffsetCommitRequestData, OffsetCommitResponseData, OffsetDeleteResponseData, OffsetForLeaderEpochResponseData, RenewDelegationTokenResponseData, SaslAuthenticateResponseData, SaslHandshakeResponseData, StopReplicaResponseData, SyncGroupResponseData, UpdateMetadataResponseData}
 import org.apache.kafka.common.metrics.Metrics
-import org.apache.kafka.common.network.{ClientInformation, ListenerName, Send}
+import org.apache.kafka.common.network.{ListenerName, Send}
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.record._
 import org.apache.kafka.common.replica.ClientMetadata
@@ -1224,7 +1223,7 @@ class KafkaApis(val requestChannel: RequestChannel,
          requestThrottleMs,
          brokers.flatMap(_.endpoints.get(request.context.listenerName.value())).toList.asJava,
          clusterId,
-         metadataCache.getControllerId.getOrElse(MetadataResponse.NO_CONTROLLER_ID),
+         metadataSupport.controllerId.getOrElse(MetadataResponse.NO_CONTROLLER_ID),
          completeTopicMetadata.asJava,
          clusterAuthorizedOperations
       ))
@@ -3210,7 +3209,7 @@ class KafkaApis(val requestChannel: RequestChannel,
     }
 
     val brokers = metadataCache.getAliveBrokers
-    val controllerId = metadataCache.getControllerId.getOrElse(MetadataResponse.NO_CONTROLLER_ID)
+    val controllerId = metadataSupport.controllerId.getOrElse(MetadataResponse.NO_CONTROLLER_ID)
 
     requestHelper.sendResponseMaybeThrottle(request, requestThrottleMs => {
       val data = new DescribeClusterResponseData()
@@ -3234,7 +3233,6 @@ class KafkaApis(val requestChannel: RequestChannel,
 
   def handleEnvelope(request: RequestChannel.Request): Unit = {
     val zkSupport = metadataSupport.requireZkOrThrow(KafkaApis.shouldNeverReceive(request))
-    val envelope = request.body[EnvelopeRequest]
 
     // If forwarding is not yet enabled or this request has been received on an invalid endpoint,
     // then we treat the request as unparsable and close the connection.
@@ -3258,101 +3256,8 @@ class KafkaApis(val requestChannel: RequestChannel,
         s"Broker $brokerId is not the active controller"))
       return
     }
-
-    val forwardedPrincipal = parseForwardedPrincipal(request.context, envelope.requestPrincipal)
-    val forwardedClientAddress = parseForwardedClientAddress(envelope.clientAddress)
-
-    val forwardedRequestBuffer = envelope.requestData.duplicate()
-    val forwardedRequestHeader = parseForwardedRequestHeader(forwardedRequestBuffer)
-
-    val forwardedApi = forwardedRequestHeader.apiKey
-    if (!forwardedApi.forwardable) {
-      throw new InvalidRequestException(s"API $forwardedApi is not enabled or is not eligible for forwarding")
+    EnvelopeUtils.handleEnvelopeRequest(request, requestChannel.metrics, handle)
     }
-
-    val forwardedContext = new RequestContext(
-      forwardedRequestHeader,
-      request.context.connectionId,
-      forwardedClientAddress,
-      forwardedPrincipal,
-      request.context.listenerName,
-      request.context.securityProtocol,
-      ClientInformation.EMPTY,
-      request.context.fromPrivilegedListener
-    )
-
-    val forwardedRequest = parseForwardedRequest(request, forwardedContext, forwardedRequestBuffer)
-    handle(forwardedRequest)
-  }
-
-  private def parseForwardedClientAddress(
-    address: Array[Byte]
-  ): InetAddress = {
-    try {
-      InetAddress.getByAddress(address)
-    } catch {
-      case e: UnknownHostException =>
-        throw new InvalidRequestException("Failed to parse client address from envelope", e)
-    }
-  }
-
-  private def parseForwardedRequest(
-    envelope: RequestChannel.Request,
-    forwardedContext: RequestContext,
-    buffer: ByteBuffer
-  ): RequestChannel.Request = {
-    try {
-      new RequestChannel.Request(
-        processor = envelope.processor,
-        context = forwardedContext,
-        startTimeNanos = envelope.startTimeNanos,
-        envelope.memoryPool,
-        buffer,
-        requestChannel.metrics,
-        Some(envelope)
-      )
-    } catch {
-      case e: InvalidRequestException =>
-        // We use UNSUPPORTED_VERSION if the embedded request cannot be parsed.
-        // The purpose is to disambiguate structural errors in the envelope request
-        // itself, such as an invalid client address.
-        throw new UnsupportedVersionException(s"Failed to parse forwarded request " +
-          s"with header ${forwardedContext.header}", e)
-    }
-  }
-
-  private def parseForwardedRequestHeader(
-    buffer: ByteBuffer
-  ): RequestHeader = {
-    try {
-      RequestHeader.parse(buffer)
-    } catch {
-      case e: InvalidRequestException =>
-        // We use UNSUPPORTED_VERSION if the embedded request cannot be parsed.
-        // The purpose is to disambiguate structural errors in the envelope request
-        // itself, such as an invalid client address.
-        throw new UnsupportedVersionException("Failed to parse request header from envelope", e)
-    }
-  }
-
-  private def parseForwardedPrincipal(
-    envelopeContext: RequestContext,
-    principalBytes: Array[Byte]
-  ): KafkaPrincipal = {
-    envelopeContext.principalSerde.asScala match {
-      case Some(serde) =>
-        try {
-          serde.deserialize(principalBytes)
-        } catch {
-          case e: Exception =>
-            throw new PrincipalDeserializationException("Failed to deserialize client principal from envelope", e)
-        }
-
-      case None =>
-        throw new PrincipalDeserializationException("Could not deserialize principal since " +
-          "no `KafkaPrincipalSerde` has been defined")
-    }
-  }
 
   def handleDescribeProducersRequest(request: RequestChannel.Request): Unit = {
     val describeProducersRequest = request.body[DescribeProducersRequest]
