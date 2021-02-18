@@ -221,7 +221,7 @@ public final class RaftClientTestContext {
                 metrics,
                 new MockExpirationService(time),
                 FETCH_MAX_WAIT_MS,
-                clusterId,
+                clusterId.toString(),
                 localId,
                 logContext,
                 random,

@@ -18,7 +18,6 @@ package org.apache.kafka.raft;
 
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.errors.ClusterAuthorizationException;
 import org.apache.kafka.common.errors.NotLeaderOrFollowerException;
 import org.apache.kafka.common.memory.MemoryPool;
@@ -149,7 +148,7 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
     private final LogContext logContext;
     private final Time time;
     private final int fetchMaxWaitMs;
-    private final Uuid clusterId;
+    private final String clusterId;
     private final OptionalInt nodeId;
     private final NetworkChannel channel;
     private final ReplicatedLog log;
@@ -186,7 +185,7 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
         Metrics metrics,
         ExpirationService expirationService,
         LogContext logContext,
-        Uuid clusterId,
+        String clusterId,
         OptionalInt nodeId,
         RaftConfig raftConfig
     ) {
@@ -218,7 +217,7 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
         Metrics metrics,
         ExpirationService expirationService,
         int fetchMaxWaitMs,
-        Uuid clusterId,
+        String clusterId,
         OptionalInt nodeId,
         LogContext logContext,
         Random random,
@@ -951,11 +950,7 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
         if (request.clusterId() == null) {
             return true;
         }
-        try {
-            return Uuid.fromString(request.clusterId()).equals(clusterId);
-        } catch (IllegalArgumentException e) {
-            return false;
-        }
+        return clusterId.equals(request.clusterId());
     }
 
     /**
