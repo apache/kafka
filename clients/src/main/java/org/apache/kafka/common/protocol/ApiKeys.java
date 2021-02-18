@@ -23,6 +23,7 @@ import org.apache.kafka.common.record.RecordBatch;
 
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.EnumMap;
 import java.util.EnumSet;
 import java.util.List;
 import java.util.Map;
@@ -105,6 +106,15 @@ public enum ApiKeys {
     BROKER_REGISTRATION(ApiMessageType.BROKER_REGISTRATION, true, RecordBatch.MAGIC_VALUE_V0, false),
     BROKER_HEARTBEAT(ApiMessageType.BROKER_HEARTBEAT, true, RecordBatch.MAGIC_VALUE_V0, false),
     UNREGISTER_BROKER(ApiMessageType.UNREGISTER_BROKER, false, RecordBatch.MAGIC_VALUE_V0, true);
+
+    private static final Map<ApiMessageType.ListenerType, EnumSet<ApiKeys>> APIS_BY_LISTENER =
+        new EnumMap<>(ApiMessageType.ListenerType.class);
+
+    static {
+        for (ApiMessageType.ListenerType listenerType : ApiMessageType.ListenerType.values()) {
+            APIS_BY_LISTENER.put(listenerType, filterApisForListener(listenerType));
+        }
+    }
 
     // The generator ensures every `ApiMessageType` has a unique id
     private static final Map<Integer, ApiKeys> ID_TO_TYPE = Arrays.stream(ApiKeys.values())
@@ -255,6 +265,10 @@ public enum ApiKeys {
     }
 
     public static EnumSet<ApiKeys> apisForListener(ApiMessageType.ListenerType listener) {
+        return APIS_BY_LISTENER.get(listener);
+    }
+
+    private static EnumSet<ApiKeys> filterApisForListener(ApiMessageType.ListenerType listener) {
         List<ApiKeys> controllerApis = Arrays.stream(ApiKeys.values())
             .filter(apiKey -> apiKey.messageType.listeners().contains(listener))
             .collect(Collectors.toList());
