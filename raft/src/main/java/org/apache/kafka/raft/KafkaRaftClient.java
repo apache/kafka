@@ -336,20 +336,20 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
     }
 
     private Optional<SnapshotReader<T>> oldestSnapshot() {
-        if (log.oldestSnapshotId().isPresent()) {
+        return log.oldestSnapshotId().flatMap(oldestSnapshotId -> {
             try {
                 return log
-                    .readSnapshot(log.oldestSnapshotId().get())
+                    .readSnapshot(oldestSnapshotId)
                     .map(reader -> new SnapshotReader<>(reader, serde, BufferSupplier.create()));
             } catch (IOException e) {
                 logger.error(
-                    String.format("Unable to read snapshot: %s", log.oldestSnapshotId().get()),
+                    String.format("Unable to read snapshot: %s", oldestSnapshotId),
                     e
                 );
-            }
-        }
 
-        return Optional.empty();
+                return Optional.empty();
+            }
+        });
     }
 
     private void maybeFireHandleCommit(long baseOffset, int epoch, List<T> records) {
