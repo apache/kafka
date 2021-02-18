@@ -211,24 +211,6 @@ public class ClusterControlManager {
         return new ControllerResult<>(records, new BrokerRegistrationReply(brokerEpoch));
     }
 
-    public ControllerResult<Void> decommissionBroker(int brokerId) {
-        if (heartbeatManager == null) {
-            throw new RuntimeException("ClusterControlManager is not active.");
-        }
-        BrokerRegistration existing = brokerRegistrations.get(brokerId);
-        if (existing == null) {
-            return new ControllerResult<>(new ArrayList<>(), null);
-        }
-        List<ApiMessageAndVersion> records = new ArrayList<>();
-        records.add(new ApiMessageAndVersion(
-            new UnregisterBrokerRecord().
-                setBrokerId(brokerId).
-                setBrokerEpoch(existing.epoch()),
-            (short) 0));
-        heartbeatManager.remove(brokerId);
-        return new ControllerResult<>(records, null);
-    }
-
     public void replay(RegisterBrokerRecord record) {
         int brokerId = record.brokerId();
         List<Endpoint> listeners = new ArrayList<>();

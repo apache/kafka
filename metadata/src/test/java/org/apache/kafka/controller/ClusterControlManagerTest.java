@@ -27,6 +27,7 @@ import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.errors.StaleBrokerEpochException;
 import org.apache.kafka.common.metadata.RegisterBrokerRecord;
 import org.apache.kafka.common.metadata.UnfenceBrokerRecord;
+import org.apache.kafka.common.metadata.UnregisterBrokerRecord;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
@@ -79,7 +80,7 @@ public class ClusterControlManagerTest {
     }
 
     @Test
-    public void testDecommission() throws Exception {
+    public void testUnregister() throws Exception {
         RegisterBrokerRecord brokerRecord = new RegisterBrokerRecord().
             setBrokerId(1).
             setBrokerEpoch(100).
@@ -101,14 +102,16 @@ public class ClusterControlManagerTest {
             new Endpoint("PLAINTEXT", SecurityProtocol.PLAINTEXT, "example.com", 9092)),
             Collections.emptyMap(), Optional.of("arack"), true),
                 clusterControl.brokerRegistrations().get(1));
-        ControllerResult<Void> result = clusterControl.decommissionBroker(1);
-        ControllerTestUtils.replayAll(clusterControl, result.records());
+        UnregisterBrokerRecord unregisterRecord = new UnregisterBrokerRecord().
+            setBrokerId(1).
+            setBrokerEpoch(100);
+        clusterControl.replay(unregisterRecord);
         assertFalse(clusterControl.brokerRegistrations().containsKey(1));
     }
 
     @ParameterizedTest
     @ValueSource(ints = {3, 10})
-    public void testChooseRandomRegistered(int numUsableBrokers) throws Exception {
+    public void testPlaceReplicas(int numUsableBrokers) throws Exception {
         MockTime time = new MockTime(0, 0, 0);
         SnapshotRegistry snapshotRegistry = new SnapshotRegistry(new LogContext());
         MockRandom random = new MockRandom();

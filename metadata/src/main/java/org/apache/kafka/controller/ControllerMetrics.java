@@ -23,5 +23,7 @@ public interface ControllerMetrics {
 
     boolean active();
 
+    void updateEventQueueTime(long durationMs);
+
     void updateEventQueueProcessingTime(long durationMs);
 }

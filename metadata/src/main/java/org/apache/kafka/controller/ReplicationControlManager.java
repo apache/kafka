@@ -610,8 +610,8 @@ public class ReplicationControlManager {
     /**
      * Generate the appropriate records to handle a broker being unregistered.
      *
-     * First, we remove this broker from any non-singleton ISR. Then we generate a
-     * FenceBrokerRecord.
+     * First, we remove this broker from any non-singleton ISR. Then we generate an
+     * UnregisterBrokerRecord.
      *
      * @param brokerId      The broker id.
      * @param brokerEpoch   The broker epoch.
@@ -628,6 +628,7 @@ public class ReplicationControlManager {
      * Handle a broker being deactivated. This means we remove it from any ISR that has
      * more than one element. We do not remove the broker from ISRs where it is the only
      * member since this would preclude clean leader election in the future.
+     * It is removed as the leader for all partitions it leads.
      *
      * @param brokerId      The broker id.
      * @param records       The record list to append to.
@@ -722,32 +723,6 @@ public class ReplicationControlManager {
                     setLeaderEpoch(partition.leaderEpoch + 1).
                     setPartitionEpoch(partition.partitionEpoch + 1), (short) 0));
             }
-        }
-    }
-
-    void removeLeaderships(int brokerId, List<ApiMessageAndVersion> records) {
-        Iterator<TopicPartition> iterator = brokersToIsrs.iterator(brokerId, true);
-        while (iterator.hasNext()) {
-            TopicPartition topicPartition = iterator.next();
-            TopicControlInfo topic = topics.get(topicPartition.topicId());
-            if (topic == null) {
-                throw new RuntimeException("Topic ID " + topicPartition.topicId() + " existed in " +
-                    "isrMembers, but not in the topics map.");
-            }
-            PartitionControlInfo partition = topic.parts.get(topicPartition.partitionId());
-            if (partition == null) {
-                throw new RuntimeException("Partition " + topicPartition +
-                    " existed in isrMembers, but not in the partitions map.");
-            }
-            int[] isrWithoutCurLeader = Replicas.copyWithout(partition.isr, brokerId);
-            int newLeader = chooseNewLeader(partition, isrWithoutCurLeader, false);
-            records.add(new ApiMessageAndVersion(new PartitionChangeRecord().
-                setPartitionId(topicPartition.partitionId()).
-                setTopicId(topic.id).
-                setIsr(Replicas.toList(partition.isr)).
-                setLeader(newLeader).
-                setLeaderEpoch(partition.leaderEpoch + 1).
-                setPartitionEpoch(partition.partitionEpoch + 1), (short) 0));
         }
     }
 
@@ -857,7 +832,7 @@ public class ReplicationControlManager {
                     handleBrokerUnfenced(brokerId, brokerEpoch, records);
                     break;
                 case CONTROLLED_SHUTDOWN:
-                    removeLeaderships(brokerId, records);
+                    handleNodeDeactivated(brokerId, records);
                     break;
                 case SHUTDOWN_NOW:
                     handleBrokerFenced(brokerId, records);
