@@ -297,11 +297,7 @@ public class KafkaConfigBackingStore implements ConfigBackingStore {
             configLog.stop();
         } finally {
             if (ownTopicAdmin != null) {
-                try {
-                    ownTopicAdmin.close();
-                } finally {
-                    ownTopicAdmin = null;
-                }
+                ownTopicAdmin.close();
             }
         }
         log.info("Closed KafkaConfigBackingStore");

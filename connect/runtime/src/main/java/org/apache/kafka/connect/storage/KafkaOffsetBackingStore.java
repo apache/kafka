@@ -153,11 +153,7 @@ public class KafkaOffsetBackingStore implements OffsetBackingStore {
             offsetLog.stop();
         } finally {
             if (ownTopicAdmin != null) {
-                try {
-                    ownTopicAdmin.close();
-                } finally {
-                    ownTopicAdmin = null;
-                }
+                ownTopicAdmin.close();
             }
         }
         log.info("Stopped KafkaOffsetBackingStore");
