@@ -50,6 +50,7 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.function.Consumer;
 
 import static java.lang.String.format;
 import static java.nio.ByteBuffer.wrap;
@@ -186,6 +187,24 @@ public final class LocalTieredStorageTest {
 
         tieredStorage.copyLogSegment(newRemoteLogSegmentMetadata(id), segment);
         remoteStorageVerifier.verifyContainsLogSegmentFiles(id, segment);
+
+        tieredStorage.deleteLogSegment(newRemoteLogSegmentMetadata(id));
+        remoteStorageVerifier.verifyLogSegmentFilesAbsent(id, segment);
+    }
+
+    @Test
+    public void deleteLogSegmentWithoutOptionalFiles() throws RemoteStorageException {
+        final RemoteLogSegmentId id = newRemoteLogSegmentId();
+        final LogSegmentData segment = localLogSegments.nextSegment();
+
+        segment.txnIndex().delete();
+        segment.producerIdSnapshotIndex().delete();
+        tieredStorage.copyLogSegment(newRemoteLogSegmentMetadata(id), segment);
+        remoteStorageVerifier.verifyContainsLogSegmentFiles(id, path -> {
+            if (!(path.contains("transaction_index") || path.contains("snapshot"))) {
+                remoteStorageVerifier.assertFileExists(path);
+            }
+        });
 
         tieredStorage.deleteLogSegment(newRemoteLogSegmentMetadata(id));
         remoteStorageVerifier.verifyLogSegmentFilesAbsent(id, segment);
@@ -356,6 +375,10 @@ public final class LocalTieredStorageTest {
                     Paths.get(rootPath, topicPartitionSubpath, uuid + "-leader_epoch_checkpoint").toString(),
                     Paths.get(rootPath, topicPartitionSubpath, uuid + "-producer_snapshot").toString()
             );
+        }
+
+        public void verifyContainsLogSegmentFiles(final RemoteLogSegmentId id, final Consumer<String> action) {
+            expectedPaths(id).forEach(action);
         }
 
         /**

@@ -19,10 +19,12 @@
 package kafka.tiered.storage
 
 import java.io.PrintStream
-import java.util.Properties
+import java.util
+import java.util.{Optional, Properties}
 import java.util.concurrent.{ExecutionException, TimeUnit}
 
 import kafka.utils.{TestUtils, nonthreadsafe}
+import org.apache.kafka.clients.admin.NewPartitionReassignment
 import org.apache.kafka.clients.producer.ProducerRecord
 import org.apache.kafka.common.{ElectionType, TopicPartition}
 import org.apache.kafka.common.config.TopicConfig
@@ -399,13 +401,23 @@ final class ExpectLeaderAction(val topicPartition: TopicPartition, val replicaId
   extends TieredStorageTestAction {
 
   override def doExecute(context: TieredStorageTestContext): Unit = {
-    if (electLeader) {
-      context.admin().electLeaders(ElectionType.PREFERRED, Set(topicPartition).asJava)
-    }
-
     val topic = topicPartition.topic()
     val partition = topicPartition.partition()
     var actualLeader = -1
+    TestUtils.waitUntilTrue(() => {
+      val topicResult = context.admin().describeTopics(List(topic).asJava).all.get.get(topic)
+      val isr = topicResult.partitions.get(partition).isr()
+      if (isr != null) {
+        isr.asScala.exists(node => node.id() == replicaId)
+      } else {
+        false
+      }
+    }, s"Broker $replicaId is out of sync. Cannot be elected as leader.", 60_000)
+
+    reassignPartition(context)
+    if (electLeader) {
+      context.admin().electLeaders(ElectionType.PREFERRED, Set(topicPartition).asJava)
+    }
 
     TestUtils.waitUntilTrue(() => {
       try {
@@ -421,6 +433,23 @@ final class ExpectLeaderAction(val topicPartition: TopicPartition, val replicaId
 
   override def describe(output: PrintStream): Unit = {
     output.println(s"expect-leader: topic-partition: $topicPartition replica-id: $replicaId")
+  }
+
+  def reassignPartition(context: TieredStorageTestContext): Unit = {
+    val topic = topicPartition.topic()
+    val topicDescription = context.admin().describeTopics(List(topic).asJava).all().get().get(topic)
+    val partitionInfo = topicDescription.partitions().asScala
+      .find(info => info.partition() == topicPartition.partition())
+
+    val targetReplicas = new util.ArrayList[Integer]()
+    targetReplicas.add(new Integer(replicaId))
+    partitionInfo.foreach(info => info.replicas().forEach(replica => {
+      if (replica.id() != replicaId) {
+        targetReplicas.add(replica.id())
+      }
+    }))
+    val proposed = Map(topicPartition -> Optional.of(new NewPartitionReassignment(targetReplicas)))
+    context.admin().alterPartitionReassignments(proposed.asJava)
   }
 }
 

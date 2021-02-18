@@ -224,7 +224,7 @@ public final class RemoteLogSegmentFileset {
     }
 
     public static boolean deleteFilesOnly(final Collection<File> files) {
-        final Optional<File> notAFile = files.stream().filter(f -> !f.isFile()).findAny();
+        final Optional<File> notAFile = files.stream().filter(f -> f.exists() && !f.isFile()).findAny();
 
         if (notAFile.isPresent()) {
             LOGGER.warn(format("Found unexpected directory %s. Will not delete.", notAFile.get().getAbsolutePath()));
@@ -237,8 +237,10 @@ public final class RemoteLogSegmentFileset {
     public static boolean deleteQuietly(final File file) {
         try {
             LOGGER.trace("Deleting " + file.getAbsolutePath());
+            if (!file.exists()) {
+                return true;
+            }
             return file.delete();
-
         } catch (final Exception e) {
             LOGGER.error(format("Encountered error while deleting %s", file.getAbsolutePath()));
         }

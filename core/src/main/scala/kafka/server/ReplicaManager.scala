@@ -174,7 +174,7 @@ class ReplicaManager(val config: KafkaConfig,
                      val zkClient: KafkaZkClient,
                      scheduler: Scheduler,
                      val logManager: LogManager,
-                     remoteLogManager: Option[RemoteLogManager],
+                     val remoteLogManager: Option[RemoteLogManager],
                      val isShuttingDown: AtomicBoolean,
                      quotaManagers: QuotaManagers,
                      val brokerTopicStats: BrokerTopicStats,
@@ -1100,6 +1100,21 @@ class ReplicaManager(val config: KafkaConfig,
     }
   }
 
+  def createLogReadResult(highWatermark: Long,
+                          leaderLogStartOffset: Long,
+                          leaderLogEndOffset: Long,
+                          e: Throwable) = {
+    LogReadResult(info = FetchDataInfo(LogOffsetMetadata.UnknownOffsetMetadata, MemoryRecords.EMPTY),
+      divergingEpoch = None,
+      highWatermark,
+      leaderLogStartOffset,
+      leaderLogEndOffset,
+      followerLogStartOffset = -1L,
+      fetchTimeMs = -1L,
+      lastStableOffset = None,
+      exception = Some(e))
+  }
+
   def createLogReadResult(e: Throwable) = {
     LogReadResult(info = FetchDataInfo(LogOffsetMetadata.UnknownOffsetMetadata, MemoryRecords.EMPTY),
       divergingEpoch = None,
@@ -1226,12 +1241,13 @@ class ReplicaManager(val config: KafkaConfig,
           // from the remote store.
           if (remoteLogManager.isDefined && log != null && !log.config.compact) {
             // For follower fetch requests, throw an error saying that this offset is moved to tiered storage.
-            if(Request.isValidBrokerId(replicaId)) {
-              createLogReadResult(new OffsetMovedToTieredStorageException("Given offset is moved to tiered storage"))
+            val highWatermark = log.highWatermark
+            val leaderLogStartOffset = log.logStartOffset
+            val leaderLogEndOffset = log.logEndOffset
+            if (Request.isValidBrokerId(replicaId)) {
+              createLogReadResult(highWatermark, leaderLogStartOffset, leaderLogEndOffset,
+                new OffsetMovedToTieredStorageException("Given offset is moved to tiered storage"))
             } else {
-              val highWatermark = log.highWatermark
-              val leaderLogStartOffset = log.logStartOffset
-              val leaderLogEndOffset = log.logEndOffset
               val fetchTimeMs = time.milliseconds
               val lastStableOffset = Some(log.lastStableOffset)
               val fetchDataInfo = {

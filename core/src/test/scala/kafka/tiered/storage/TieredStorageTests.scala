@@ -20,7 +20,7 @@ package kafka.tiered.storage
 
 import java.util.Optional
 
-import kafka.tiered.storage.TieredStorageTests.{OffloadAndConsumeFromFollowerTest, OffloadAndConsumeFromLeaderTest}
+import kafka.tiered.storage.TieredStorageTests.{OffloadAndConsumeFromLeaderTest, CanFetchFromTieredStorageAfterRecoveryOfLocalSegmentsTest, OffloadAndConsumeFromFollowerTest}
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.replica.{ClientMetadata, PartitionView, ReplicaSelector, ReplicaView}
@@ -33,6 +33,7 @@ import scala.jdk.CollectionConverters._
 
 @SuiteClasses(Array[Class[_]](
   classOf[OffloadAndConsumeFromLeaderTest],
+  classOf[CanFetchFromTieredStorageAfterRecoveryOfLocalSegmentsTest],
   classOf[OffloadAndConsumeFromFollowerTest]
 ))
 @RunWith(classOf[Suite])

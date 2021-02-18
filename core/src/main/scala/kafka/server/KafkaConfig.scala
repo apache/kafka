@@ -138,7 +138,7 @@ object Defaults {
   val RemoteLogStorageEnable = false
   val RemoteStorageManager = ""
   val RemoteStorageManagerClassPath = ""
-  val RemoteLogRetentionMillis = 7 * 24 * 60 * 1000L
+  val RemoteLogRetentionMillis = 7 * 24 * 60 * 60 * 1000L
   val RemoteLogRetentionBytes = 1024 * 1024 * 1024L
   val RemoteLogManagerThreadPoolSize = 10
   val RemoteLogManagerTaskIntervalMs = 30 * 1000L

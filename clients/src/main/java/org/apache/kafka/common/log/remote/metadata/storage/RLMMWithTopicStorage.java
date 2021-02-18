@@ -91,6 +91,7 @@ public class RLMMWithTopicStorage implements RemoteLogMetadataManager, RemoteLog
     protected int noOfMetadataTopicPartitions;
     private ConcurrentSkipListMap<RemoteLogSegmentId, RemoteLogSegmentMetadata> idWithSegmentMetadata =
             new ConcurrentSkipListMap<>();
+    // map of topic-partition to (log-segment-base-offset, remote-segment-id)
     private Map<TopicPartition, NavigableMap<Long, RemoteLogSegmentId>> partitionsWithSegmentIds =
             new ConcurrentHashMap<>();
     private KafkaProducer<String, Object> producer;
@@ -216,6 +217,7 @@ public class RLMMWithTopicStorage implements RemoteLogMetadataManager, RemoteLog
         return map == null || map.isEmpty() ? Optional.empty() : Optional.of(map.firstEntry().getKey());
     }
 
+    @Override
     public Optional<Long> highestLogOffset(TopicPartition topicPartition, int leaderEpoch) throws RemoteStorageException {
         ensureInitialized();
 

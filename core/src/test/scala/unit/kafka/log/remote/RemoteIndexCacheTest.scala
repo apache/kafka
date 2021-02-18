@@ -55,7 +55,7 @@ class RemoteIndexCacheTest {
       .andReturn(new FileInputStream(File.createTempFile("kafka-test-", ".txnIndex")))
       .times(1)
     EasyMock.expect(rlsm.fetchProducerSnapshotIndex(EasyMock.anyObject(classOf[RemoteLogSegmentMetadata])))
-      .andReturn(new FileInputStream(File.createTempFile("kafka-test-", ".pid")))
+      .andReturn(new FileInputStream(File.createTempFile("kafka-test-", ".snapshot")))
       .times(1)
 
     EasyMock.replay(rlsm)

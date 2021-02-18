@@ -251,7 +251,7 @@ class Log(@volatile private var _dir: File,
           val topicPartition: TopicPartition,
           val producerStateManager: ProducerStateManager,
           logDirFailureChannel: LogDirFailureChannel,
-          val rlmEnabled:Boolean = false,
+          val rlmEnabled: Boolean = false,
           private val hadCleanShutdown: Boolean = true) extends Logging with KafkaMetricsGroup {
 
   import kafka.log.Log._
@@ -835,6 +835,18 @@ class Log(@volatile private var _dir: File,
     }
   }
 
+  private def updateLocalLogStartOffset(offset: Long): Unit = {
+    localLogStartOffset = offset
+
+    if (highWatermark < offset) {
+      updateHighWatermark(offset)
+    }
+
+    if (this.recoveryPoint < offset) {
+      this.recoveryPoint = offset
+    }
+  }
+
   private def updateLogStartOffset(offset: Long): Unit = {
     logStartOffset = offset
 
@@ -988,7 +1000,7 @@ class Log(@volatile private var _dir: File,
     }
   }
 
-  private def loadProducerState(lastOffset: Long, reloadFromCleanShutdown: Boolean): Unit = lock synchronized {
+  def loadProducerState(lastOffset: Long, reloadFromCleanShutdown: Boolean): Unit = lock synchronized {
     rebuildProducerState(lastOffset, reloadFromCleanShutdown, producerStateManager)
     maybeIncrementFirstUnstableOffset()
   }
@@ -1334,7 +1346,7 @@ class Log(@volatile private var _dir: File,
   /**
    * Increment the log start offset if the provided offset is larger.
    */
-  def maybeIncrementLogStartOffset(newLogStartOffset: Long, reason: LogStartOffsetIncrementReason, onlyLocalLogStartOffsetUpdate:Boolean = false): Unit = {
+  def maybeIncrementLogStartOffset(newLogStartOffset: Long, reason: LogStartOffsetIncrementReason, onlyLocalLogStartOffsetUpdate: Boolean = false): Unit = {
     if (newLogStartOffset > highWatermark)
       throw new OffsetOutOfRangeException(s"Cannot increment the log start offset to $newLogStartOffset of partition $topicPartition " +
         s"since it is larger than the high watermark $highWatermark")
@@ -1689,7 +1701,7 @@ class Log(@volatile private var _dir: File,
       // For the earliest and latest, we do not need to return the timestamp.
       if (targetTimestamp == ListOffsetsRequest.EARLIEST_TIMESTAMP ||
         (!remoteLogEnabled() && targetTimestamp == ListOffsetsRequest.EARLIEST_LOCAL_TIMESTAMP)) {
-        // If remote log is not enabled, NEXT_LOCAL_TIMESTAMP is same with EARLIEST_TIMESTAMP
+        // If remote log is not enabled, EARLIEST_LOCAL_TIMESTAMP is same with EARLIEST_TIMESTAMP
         // The first cached epoch usually corresponds to the log start offset, but we have to verify this since
         // it may not be true following a message format version bump as the epoch will not be available for
         // log entries written in the older format.
@@ -1700,10 +1712,10 @@ class Log(@volatile private var _dir: File,
         }
         return Some(new TimestampAndOffset(RecordBatch.NO_TIMESTAMP, logStartOffset, epochOpt))
       } else if (targetTimestamp == ListOffsetsRequest.EARLIEST_LOCAL_TIMESTAMP) {
-        // NEXT_LOCAL_TIMESTAMP is only used by follower brokers, to find out the offset that they
+        // EARLIEST_LOCAL_TIMESTAMP is only used by follower brokers, to find out the offset that they
         // should start fetching from. Since the followers do not need the epoch, we can return
         // an empty epoch here to keep things simple.
-        return Some(new TimestampAndOffset(RecordBatch.NO_TIMESTAMP, localLogStartOffset + 1, Optional.empty[Integer]()))
+        return Some(new TimestampAndOffset(RecordBatch.NO_TIMESTAMP, localLogStartOffset, Optional.empty[Integer]()))
       } else if (targetTimestamp == ListOffsetsRequest.LATEST_TIMESTAMP) {
         val latestEpochOpt = leaderEpochCache.flatMap(_.latestEpoch).map(_.asInstanceOf[Integer])
         val epochOptional = Optional.ofNullable(latestEpochOpt.orNull)
@@ -2219,7 +2231,11 @@ class Log(@volatile private var _dir: File,
         producerStateManager.updateMapEndOffset(newOffset)
         maybeIncrementFirstUnstableOffset()
         //todo-tiering cleanup remote logs??
-        updateLogStartOffset(newOffset)
+        if (remoteLogEnabled()) {
+          updateLocalLogStartOffset(newOffset)
+        } else {
+          updateLogStartOffset(newOffset)
+        }
       }
     }
   }
@@ -2590,12 +2606,13 @@ object Log {
             maxProducerIdExpirationMs: Int,
             producerIdExpirationCheckIntervalMs: Int,
             logDirFailureChannel: LogDirFailureChannel,
-            remoteLogEnable:Boolean = false,
+            remoteLogEnable: Boolean = false,
             lastShutdownClean: Boolean = true): Log = {
     val topicPartition = Log.parseTopicPartitionName(dir)
     val producerStateManager = new ProducerStateManager(topicPartition, dir, maxProducerIdExpirationMs)
     new Log(dir, config, logStartOffset, recoveryPoint, scheduler, brokerTopicStats, time, maxProducerIdExpirationMs,
-      producerIdExpirationCheckIntervalMs, topicPartition, producerStateManager, logDirFailureChannel, lastShutdownClean)
+      producerIdExpirationCheckIntervalMs, topicPartition, producerStateManager, logDirFailureChannel,
+      remoteLogEnable, lastShutdownClean)
   }
 
   /**

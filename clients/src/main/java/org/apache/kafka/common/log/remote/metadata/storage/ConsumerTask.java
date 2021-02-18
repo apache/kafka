@@ -158,7 +158,7 @@ class ConsumerTask implements Runnable, Closeable {
                 if (!targetEndOffsets.isEmpty()) {
                     for (Map.Entry<Integer, Long> entry : targetEndOffsets.entrySet()) {
                         final Long offset = committedOffsets.getOrDefault(entry.getKey(), 0L);
-                        if (offset >= entry.getValue()) {
+                        if (offset > entry.getValue()) {
                             targetEndOffsets.remove(entry.getKey());
                         }
                     }
