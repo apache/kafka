@@ -78,15 +78,15 @@ class SocketServer(val config: KafkaConfig,
                    val metrics: Metrics,
                    val time: Time,
                    val credentialProvider: CredentialProvider,
-                   configuredLogContext: Option[LogContext] = None,
-                   val allowControllerOnlyApis: Boolean = false)
+                   allowControllerOnlyApis: Boolean = false,
+                   controllerSocketServer: Boolean = false)
   extends Logging with KafkaMetricsGroup with BrokerReconfigurable {
 
   private val maxQueuedRequests = config.queuedMaxRequests
 
   private val nodeId = config.brokerId
 
-  private val logContext = configuredLogContext.getOrElse(new LogContext(s"[SocketServer brokerId=${nodeId}] "))
+  private val logContext = new LogContext(s"[SocketServer ${if (controllerSocketServer) "controller" else "broker"}Id=${nodeId}] ")
 
   this.logIdent = logContext.logPrefix
 
