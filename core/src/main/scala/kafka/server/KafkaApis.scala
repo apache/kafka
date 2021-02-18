@@ -2772,7 +2772,7 @@ class KafkaApis(val requestChannel: RequestChannel,
             replicaManager.logManager.allLogs.map(_.topicPartition).toSet
           else
             describeLogDirsDirRequest.data.topics.asScala.flatMap(
-              logDirTopic => logDirTopic.partitionIndex.asScala.map(partitionIndex =>
+              logDirTopic => logDirTopic.partitions.asScala.map(partitionIndex =>
                 new TopicPartition(logDirTopic.topic, partitionIndex))).toSet
 
         replicaManager.describeLogDirs(partitions)
