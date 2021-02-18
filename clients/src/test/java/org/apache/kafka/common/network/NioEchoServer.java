@@ -120,7 +120,7 @@ public class NioEchoServer extends Thread {
         if (channelBuilder == null)
             channelBuilder = ChannelBuilders.serverChannelBuilder(listenerName, false,
                 securityProtocol, config, credentialCache, tokenCache, time, logContext,
-                () -> ApiVersionsResponse.defaultApiVersionsResponse(ApiMessageType.ApiScope.ZK_BROKER));
+                () -> ApiVersionsResponse.defaultApiVersionsResponse(ApiMessageType.ListenerType.ZK_BROKER));
         this.metrics = new Metrics();
         this.selector = new Selector(10000, failedAuthenticationDelayMs, metrics, time,
                 "MetricGroup", channelBuilder, logContext);

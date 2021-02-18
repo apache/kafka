@@ -21,7 +21,7 @@ import org.apache.kafka.clients.NodeApiVersions
 import org.apache.kafka.common.config.ConfigDef.Validator
 import org.apache.kafka.common.config.ConfigException
 import org.apache.kafka.common.feature.{Features, FinalizedVersionRange, SupportedVersionRange}
-import org.apache.kafka.common.message.ApiMessageType.ApiScope
+import org.apache.kafka.common.message.ApiMessageType.ListenerType
 import org.apache.kafka.common.record.RecordVersion
 import org.apache.kafka.common.requests.ApiVersionsResponse
 
@@ -151,7 +151,7 @@ object ApiVersion {
     minRecordVersion: RecordVersion,
     latestSupportedFeatures: Features[SupportedVersionRange],
     controllerApiVersions: Option[NodeApiVersions],
-    scope: ApiScope
+    listenerType: ListenerType
   ): ApiVersionsResponse = {
     apiVersionsResponse(
       throttleTimeMs,
@@ -160,7 +160,7 @@ object ApiVersion {
       Features.emptyFinalizedFeatures,
       ApiVersionsResponse.UNKNOWN_FINALIZED_FEATURES_EPOCH,
       controllerApiVersions,
-      scope
+      listenerType
     )
   }
 
@@ -171,12 +171,12 @@ object ApiVersion {
     finalizedFeatures: Features[FinalizedVersionRange],
     finalizedFeaturesEpoch: Long,
     controllerApiVersions: Option[NodeApiVersions],
-    scope: ApiScope
+    listenerType: ListenerType
   ): ApiVersionsResponse = {
     val apiKeys = controllerApiVersions match {
-      case None => ApiVersionsResponse.filterApis(minRecordVersion, scope)
+      case None => ApiVersionsResponse.filterApis(minRecordVersion, listenerType)
       case Some(controllerApiVersion) => ApiVersionsResponse.intersectForwardableApis(
-        scope, minRecordVersion, controllerApiVersion.allSupportedApiVersions())
+        listenerType, minRecordVersion, controllerApiVersion.allSupportedApiVersions())
     }
 
     ApiVersionsResponse.createApiVersionsResponse(

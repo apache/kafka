@@ -34,7 +34,11 @@ import kafka.log.AppendOrigin
 import kafka.network.RequestChannel
 import kafka.network.RequestChannel.{CloseConnectionResponse, SendResponse}
 import kafka.server.QuotaFactory.QuotaManagers
+<<<<<<< HEAD
 import kafka.server.metadata.{CachedConfigRepository, ConfigRepository, RaftMetadataCache}
+=======
+import kafka.server.metadata.{CachedConfigRepository, ConfigRepository}
+>>>>>>> Rename `scope` to `listeners`
 import kafka.utils.{MockTime, TestUtils}
 import kafka.zk.KafkaZkClient
 import org.apache.kafka.clients.admin.AlterConfigOp.OpType
@@ -44,7 +48,7 @@ import org.apache.kafka.common.config.ConfigResource
 import org.apache.kafka.common.errors.UnsupportedVersionException
 import org.apache.kafka.common.internals.{KafkaFutureImpl, Topic}
 import org.apache.kafka.common.memory.MemoryPool
-import org.apache.kafka.common.message.ApiMessageType.ApiScope
+import org.apache.kafka.common.message.ApiMessageType.ListenerType
 import org.apache.kafka.common.message.CreateTopicsRequestData.{CreatableTopic, CreatableTopicCollection}
 import org.apache.kafka.common.message.DescribeConfigsResponseData.DescribeConfigsResult
 import org.apache.kafka.common.message.JoinGroupRequestData.JoinGroupRequestProtocol
@@ -163,9 +167,9 @@ class KafkaApisTest {
     }
 
     val enabledApis = if (enableForwarding) {
-      ApiKeys.apisInScope(ApiScope.ZK_BROKER).asScala ++ Set(ApiKeys.ENVELOPE)
+      ApiKeys.apisForListener(ListenerType.ZK_BROKER).asScala ++ Set(ApiKeys.ENVELOPE)
     } else {
-      ApiKeys.apisInScope(ApiScope.ZK_BROKER).asScala.toSet
+      ApiKeys.apisForListener(ListenerType.ZK_BROKER).asScala.toSet
     }
     val apiVersionManager = new SimpleApiVersionManager(enabledApis)
 

@@ -18,7 +18,7 @@ package kafka.server
 
 import kafka.api.ApiVersion
 import org.apache.kafka.clients.NodeApiVersions
-import org.apache.kafka.common.message.ApiMessageType.ApiScope
+import org.apache.kafka.common.message.ApiMessageType.ListenerType
 import org.apache.kafka.common.protocol.ApiKeys
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.Assertions._
@@ -33,17 +33,17 @@ class ApiVersionManagerTest {
   private val featureCache = new FinalizedFeatureCache(brokerFeatures)
 
   @ParameterizedTest
-  @EnumSource(classOf[ApiScope])
-  def testApiScope(apiScope: ApiScope): Unit = {
+  @EnumSource(classOf[ListenerType])
+  def testApiScope(apiScope: ListenerType): Unit = {
     val versionManager = new DefaultApiVersionManager(
-      apiScope = apiScope,
+      listenerType = apiScope,
       interBrokerProtocolVersion = ApiVersion.latestVersion,
       forwardingManager = None,
       features = brokerFeatures,
       featureCache = featureCache
     )
-    assertEquals(ApiKeys.apisInScope(apiScope).asScala, versionManager.enabledApis)
-    assertTrue(ApiKeys.apisInScope(apiScope).asScala.forall(versionManager.isApiEnabled))
+    assertEquals(ApiKeys.apisForListener(apiScope).asScala, versionManager.enabledApis)
+    assertTrue(ApiKeys.apisForListener(apiScope).asScala.forall(versionManager.isApiEnabled))
   }
 
   @Test
@@ -60,7 +60,7 @@ class ApiVersionManagerTest {
     )))
 
     val versionManager = new DefaultApiVersionManager(
-      apiScope = ApiScope.ZK_BROKER,
+      listenerType = ListenerType.ZK_BROKER,
       interBrokerProtocolVersion = ApiVersion.latestVersion,
       forwardingManager = Some(forwardingManager),
       features = brokerFeatures,
@@ -80,7 +80,7 @@ class ApiVersionManagerTest {
     Mockito.when(forwardingManager.controllerApiVersions).thenReturn(None)
 
     val versionManager = new DefaultApiVersionManager(
-      apiScope = ApiScope.ZK_BROKER,
+      listenerType = ListenerType.ZK_BROKER,
       interBrokerProtocolVersion = ApiVersion.latestVersion,
       forwardingManager = Some(forwardingManager),
       features = brokerFeatures,
@@ -99,7 +99,7 @@ class ApiVersionManagerTest {
   @Test
   def testEnvelopeDisabledWhenForwardingManagerEmpty(): Unit = {
     val versionManager = new DefaultApiVersionManager(
-      apiScope = ApiScope.ZK_BROKER,
+      listenerType = ListenerType.ZK_BROKER,
       interBrokerProtocolVersion = ApiVersion.latestVersion,
       forwardingManager = None,
       features = brokerFeatures,

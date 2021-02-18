@@ -39,13 +39,13 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 public class ApiVersionsResponseTest {
 
     @ParameterizedTest
-    @EnumSource(ApiMessageType.ApiScope.class)
-    public void shouldHaveCorrectDefaultApiVersionsResponse(ApiMessageType.ApiScope scope) {
+    @EnumSource(ApiMessageType.ListenerType.class)
+    public void shouldHaveCorrectDefaultApiVersionsResponse(ApiMessageType.ListenerType scope) {
         ApiVersionsResponse defaultResponse = ApiVersionsResponse.defaultApiVersionsResponse(scope);
-        assertEquals(ApiKeys.apisInScope(scope).size(), defaultResponse.data().apiKeys().size(),
+        assertEquals(ApiKeys.apisForListener(scope).size(), defaultResponse.data().apiKeys().size(),
             "API versions for all API keys must be maintained.");
 
-        for (ApiKeys key : ApiKeys.apisInScope(scope)) {
+        for (ApiKeys key : ApiKeys.apisForListener(scope)) {
             ApiVersion version = defaultResponse.apiVersion(key.id);
             assertNotNull(version, "Could not find ApiVersion for API " + key.name);
             assertEquals(version.minVersion(), key.oldestVersion(), "Incorrect min version for Api " + key.name);
@@ -91,7 +91,7 @@ public class ApiVersionsResponseTest {
         );
 
         ApiVersionCollection commonResponse = ApiVersionsResponse.intersectForwardableApis(
-            ApiMessageType.ApiScope.ZK_BROKER,
+            ApiMessageType.ListenerType.ZK_BROKER,
             RecordVersion.current(),
             activeControllerApiVersions
         );

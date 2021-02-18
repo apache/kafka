@@ -96,16 +96,16 @@ public class ApiVersionsResponse extends AbstractResponse {
     }
 
     public static ApiVersionsResponse defaultApiVersionsResponse(
-        ApiMessageType.ApiScope scope
+        ApiMessageType.ListenerType listenerType
     ) {
-        return defaultApiVersionsResponse(0, scope);
+        return defaultApiVersionsResponse(0, listenerType);
     }
 
     public static ApiVersionsResponse defaultApiVersionsResponse(
         int throttleTimeMs,
-        ApiMessageType.ApiScope scope
+        ApiMessageType.ListenerType listenerType
     ) {
-        return createApiVersionsResponse(throttleTimeMs, filterApis(RecordVersion.current(), scope));
+        return createApiVersionsResponse(throttleTimeMs, filterApis(RecordVersion.current(), listenerType));
     }
 
     public static ApiVersionsResponse createApiVersionsResponse(
@@ -140,9 +140,12 @@ public class ApiVersionsResponse extends AbstractResponse {
         );
     }
 
-    public static ApiVersionCollection filterApis(RecordVersion minRecordVersion, ApiMessageType.ApiScope scope) {
+    public static ApiVersionCollection filterApis(
+        RecordVersion minRecordVersion,
+        ApiMessageType.ListenerType listenerType
+    ) {
         ApiVersionCollection apiKeys = new ApiVersionCollection();
-        for (ApiKeys apiKey : ApiKeys.apisInScope(scope)) {
+        for (ApiKeys apiKey : ApiKeys.apisForListener(listenerType)) {
             if (apiKey.minRequiredInterBrokerMagic <= minRecordVersion.value) {
                 apiKeys.add(ApiVersionsResponse.toApiVersion(apiKey));
             }
@@ -162,17 +165,18 @@ public class ApiVersionsResponse extends AbstractResponse {
      * Find the common range of supported API versions between the locally
      * known range and that of another set.
      *
+     * @param listenerType the listener type which constrains the set of exposed APIs
      * @param minRecordVersion min inter broker magic
      * @param activeControllerApiVersions controller ApiVersions
      * @return commonly agreed ApiVersion collection
      */
     public static ApiVersionCollection intersectForwardableApis(
-        final ApiMessageType.ApiScope scope,
+        final ApiMessageType.ListenerType listenerType,
         final RecordVersion minRecordVersion,
         final Map<ApiKeys, ApiVersion> activeControllerApiVersions
     ) {
         ApiVersionCollection apiKeys = new ApiVersionCollection();
-        for (ApiKeys apiKey : ApiKeys.apisInScope(scope)) {
+        for (ApiKeys apiKey : ApiKeys.apisForListener(listenerType)) {
             if (apiKey.minRequiredInterBrokerMagic <= minRecordVersion.value) {
                 ApiVersion brokerApiVersion = toApiVersion(apiKey);
 

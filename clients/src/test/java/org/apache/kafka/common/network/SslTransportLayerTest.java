@@ -1343,7 +1343,7 @@ public class SslTransportLayerTest {
     }
 
     private Supplier<ApiVersionsResponse> defaultApiVersionsSupplier() {
-        return () -> ApiVersionsResponse.defaultApiVersionsResponse(ApiMessageType.ApiScope.ZK_BROKER);
+        return () -> ApiVersionsResponse.defaultApiVersionsResponse(ApiMessageType.ListenerType.ZK_BROKER);
     }
 
     static class TestSslChannelBuilder extends SslChannelBuilder {

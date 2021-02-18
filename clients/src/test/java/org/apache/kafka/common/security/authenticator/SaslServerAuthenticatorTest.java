@@ -161,7 +161,7 @@ public class SaslServerAuthenticatorTest {
         Map<String, AuthenticateCallbackHandler> callbackHandlers = Collections.singletonMap(
                 mechanism, new SaslServerCallbackHandler());
         ApiVersionsResponse apiVersionsResponse = ApiVersionsResponse.defaultApiVersionsResponse(
-            ApiMessageType.ApiScope.ZK_BROKER);
+            ApiMessageType.ListenerType.ZK_BROKER);
         return new SaslServerAuthenticator(configs, callbackHandlers, "node", subjects, null,
                 new ListenerName("ssl"), SecurityProtocol.SASL_SSL, transportLayer, Collections.emptyMap(),
                 metadataRegistry, Time.SYSTEM, () -> apiVersionsResponse);

@@ -27,7 +27,7 @@ import kafka.security.CredentialProvider
 import kafka.server.{KafkaConfig, KafkaRequestHandlerPool, MetaProperties, SimpleApiVersionManager}
 import kafka.utils.{CommandDefaultOptions, CommandLineUtils, CoreUtils, Exit, Logging, ShutdownableThread}
 import org.apache.kafka.common.errors.InvalidConfigurationException
-import org.apache.kafka.common.message.ApiMessageType.ApiScope
+import org.apache.kafka.common.message.ApiMessageType.ListenerType
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.metrics.stats.Percentiles.BucketSizing
 import org.apache.kafka.common.metrics.stats.{Meter, Percentile, Percentiles}
@@ -69,7 +69,7 @@ class TestRaftServer(
     tokenCache = new DelegationTokenCache(ScramMechanism.mechanismNames)
     credentialProvider = new CredentialProvider(ScramMechanism.mechanismNames, tokenCache)
 
-    val apiVersionManager = new SimpleApiVersionManager(ApiScope.RAFT)
+    val apiVersionManager = new SimpleApiVersionManager(ListenerType.RAFT)
     socketServer = new SocketServer(config, metrics, time, credentialProvider, apiVersionManager)
     socketServer.startup(startProcessingRequests = false)
 

@@ -16,7 +16,7 @@
 {
   "apiKey": 63,
   "type": "request",
-  "scope": ["controller"],
+  "listeners": ["controller"],
   "name": "BrokerHeartbeatRequest",
   "validVersions": "0",
   "flexibleVersions": "0+",

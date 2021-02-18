@@ -16,7 +16,7 @@
 {
   "apiKey": 1,
   "type": "request",
-  "scope": ["zkBroker", "broker", "controller", "raft"],
+  "listeners": ["zkBroker", "broker", "controller", "raft"],
   "name": "FetchRequest",
   //
   // Version 1 is the same as version 0.

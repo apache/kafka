@@ -137,8 +137,8 @@ public class NodeApiVersionsTest {
     }
 
     @ParameterizedTest
-    @EnumSource(ApiMessageType.ApiScope.class)
-    public void testUsableVersionLatestVersions(ApiMessageType.ApiScope scope) {
+    @EnumSource(ApiMessageType.ListenerType.class)
+    public void testUsableVersionLatestVersions(ApiMessageType.ListenerType scope) {
         ApiVersionsResponse defaultResponse = ApiVersionsResponse.defaultApiVersionsResponse(scope);
         List<ApiVersion> versionList = new LinkedList<>(defaultResponse.data().apiKeys());
         // Add an API key that we don't know about.
@@ -147,14 +147,14 @@ public class NodeApiVersionsTest {
                 .setMinVersion((short) 0)
                 .setMaxVersion((short) 1));
         NodeApiVersions versions = new NodeApiVersions(versionList);
-        for (ApiKeys apiKey: ApiKeys.apisInScope(scope)) {
+        for (ApiKeys apiKey: ApiKeys.apisForListener(scope)) {
             assertEquals(apiKey.latestVersion(), versions.latestUsableVersion(apiKey));
         }
     }
 
     @ParameterizedTest
-    @EnumSource(ApiMessageType.ApiScope.class)
-    public void testConstructionFromApiVersionsResponse(ApiMessageType.ApiScope scope) {
+    @EnumSource(ApiMessageType.ListenerType.class)
+    public void testConstructionFromApiVersionsResponse(ApiMessageType.ListenerType scope) {
         ApiVersionsResponse apiVersionsResponse = ApiVersionsResponse.defaultApiVersionsResponse(scope);
         NodeApiVersions versions = new NodeApiVersions(apiVersionsResponse.data().apiKeys());
 

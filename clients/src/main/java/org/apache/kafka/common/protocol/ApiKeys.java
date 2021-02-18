@@ -207,8 +207,8 @@ public enum ApiKeys {
         return messageType.responseHeaderVersion(apiVersion);
     }
 
-    public boolean inScope(ApiMessageType.ApiScope scope) {
-        return messageType.scope().contains(scope);
+    public boolean inScope(ApiMessageType.ListenerType listener) {
+        return messageType.listeners().contains(listener);
     }
 
     private static String toHtml() {
@@ -251,12 +251,12 @@ public enum ApiKeys {
     }
 
     public static EnumSet<ApiKeys> zkBrokerApis() {
-        return apisInScope(ApiMessageType.ApiScope.ZK_BROKER);
+        return apisForListener(ApiMessageType.ListenerType.ZK_BROKER);
     }
 
-    public static EnumSet<ApiKeys> apisInScope(ApiMessageType.ApiScope scope) {
+    public static EnumSet<ApiKeys> apisForListener(ApiMessageType.ListenerType listener) {
         List<ApiKeys> controllerApis = Arrays.stream(ApiKeys.values())
-            .filter(apiKey -> apiKey.messageType.scope().contains(scope))
+            .filter(apiKey -> apiKey.messageType.listeners().contains(listener))
             .collect(Collectors.toList());
         return EnumSet.copyOf(controllerApis);
     }

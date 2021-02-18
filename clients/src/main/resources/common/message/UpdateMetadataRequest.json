@@ -16,7 +16,7 @@
 {
   "apiKey": 6,
   "type": "request",
-  "scope": ["zkBroker"],
+  "listeners": ["zkBroker"],
   "name": "UpdateMetadataRequest",
   // Version 1 allows specifying multiple endpoints for each broker.
   //

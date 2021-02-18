@@ -18,7 +18,7 @@ package org.apache.kafka.message;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
 
-public enum RequestApiScope {
+public enum RequestListenerType {
     @JsonProperty("zkBroker")
     ZK_BROKER,
 

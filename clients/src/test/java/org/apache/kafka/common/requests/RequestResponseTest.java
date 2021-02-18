@@ -518,7 +518,7 @@ public class RequestResponseTest {
             checkErrorResponse(createApiVersionRequest(v), unknownServerException, true);
             checkErrorResponse(createApiVersionRequest(v), new UnsupportedVersionException("Not Supported"), true);
             checkResponse(createApiVersionResponse(), v, true);
-            checkResponse(ApiVersionsResponse.defaultApiVersionsResponse(ApiMessageType.ApiScope.ZK_BROKER), v, true);
+            checkResponse(ApiVersionsResponse.defaultApiVersionsResponse(ApiMessageType.ListenerType.ZK_BROKER), v, true);
         }
     }
 
@@ -1038,7 +1038,7 @@ public class RequestResponseTest {
     }
 
     private ApiVersionsResponse defaultApiVersionsResponse() {
-        return ApiVersionsResponse.defaultApiVersionsResponse(ApiMessageType.ApiScope.ZK_BROKER);
+        return ApiVersionsResponse.defaultApiVersionsResponse(ApiMessageType.ListenerType.ZK_BROKER);
     }
 
     @Test

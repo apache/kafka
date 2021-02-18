@@ -1935,7 +1935,7 @@ public class SaslAuthenticatorTest {
 
         Supplier<ApiVersionsResponse> apiVersionSupplier = () -> {
             ApiVersionsResponse defaultApiVersionResponse = ApiVersionsResponse.defaultApiVersionsResponse(
-                ApiMessageType.ApiScope.ZK_BROKER);
+                ApiMessageType.ListenerType.ZK_BROKER);
             ApiVersionCollection apiVersions = new ApiVersionCollection();
             for (ApiVersion apiVersion : defaultApiVersionResponse.data().apiKeys()) {
                 if (apiVersion.apiKey() != ApiKeys.SASL_AUTHENTICATE.id) {
@@ -2532,7 +2532,7 @@ public class SaslAuthenticatorTest {
                 DelegationTokenCache tokenCache, Time time) {
             super(mode, jaasContexts, securityProtocol, listenerName, isInterBrokerListener, clientSaslMechanism,
                 handshakeRequestEnable, credentialCache, tokenCache, null, time, new LogContext(),
-                () -> ApiVersionsResponse.defaultApiVersionsResponse(ApiMessageType.ApiScope.ZK_BROKER));
+                () -> ApiVersionsResponse.defaultApiVersionsResponse(ApiMessageType.ListenerType.ZK_BROKER));
         }
 
         @Override

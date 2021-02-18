@@ -16,7 +16,7 @@
 {
   "apiKey": 49,
   "type": "request",
-  "scope": ["zkBroker", "broker", "controller"],
+  "listeners": ["zkBroker", "broker", "controller"],
   "name": "AlterClientQuotasRequest",
   "validVersions": "0-1",
   // Version 1 enables flexible versions.

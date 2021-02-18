@@ -19,7 +19,7 @@ package kafka.server
 import kafka.api.ApiVersion
 import kafka.network
 import kafka.network.RequestChannel
-import org.apache.kafka.common.message.ApiMessageType.ApiScope
+import org.apache.kafka.common.message.ApiMessageType.ListenerType
 import org.apache.kafka.common.message.ApiVersionsResponseData
 import org.apache.kafka.common.protocol.ApiKeys
 import org.apache.kafka.common.requests.ApiVersionsResponse
@@ -27,7 +27,7 @@ import org.apache.kafka.common.requests.ApiVersionsResponse
 import scala.jdk.CollectionConverters._
 
 trait ApiVersionManager {
-  def apiScope: ApiScope
+  def listenerType: ListenerType
   def enabledApis: collection.Set[ApiKeys]
   def apiVersionResponse(throttleTimeMs: Int): ApiVersionsResponse
   def isApiEnabled(apiKey: ApiKeys): Boolean = enabledApis.contains(apiKey)
@@ -36,14 +36,14 @@ trait ApiVersionManager {
 
 object ApiVersionManager {
   def apply(
-    apiScope: ApiScope,
+    listenerType: ListenerType,
     config: KafkaConfig,
     forwardingManager: Option[ForwardingManager],
     features: BrokerFeatures,
     featureCache: FinalizedFeatureCache
   ): ApiVersionManager = {
     new DefaultApiVersionManager(
-      apiScope,
+      listenerType,
       config.interBrokerProtocolVersion,
       forwardingManager,
       features,
@@ -53,11 +53,12 @@ object ApiVersionManager {
 }
 
 class SimpleApiVersionManager(
+  val listenerType: ListenerType,
   val enabledApis: collection.Set[ApiKeys]
 ) extends ApiVersionManager {
 
-  def this(scope: ApiScope) = {
-    this(ApiKeys.apisInScope(scope).asScala)
+  def this(listenerType: ListenerType) = {
+    this(listenerType, ApiKeys.apisForListener(listenerType).asScala)
   }
 
   private val apiVersions = ApiVersionsResponse.collectApis(enabledApis.asJava)
@@ -68,7 +69,7 @@ class SimpleApiVersionManager(
 }
 
 class DefaultApiVersionManager(
-  val apiScope: ApiScope,
+  val listenerType: ListenerType,
   interBrokerProtocolVersion: ApiVersion,
   forwardingManager: Option[ForwardingManager],
   features: BrokerFeatures,
@@ -88,13 +89,13 @@ class DefaultApiVersionManager(
         finalizedFeatures.features,
         finalizedFeatures.epoch,
         controllerApiVersions,
-        apiScope)
+        listenerType)
       case None => ApiVersion.apiVersionsResponse(
         throttleTimeMs,
         interBrokerProtocolVersion.recordVersion,
         supportedFeatures,
         controllerApiVersions,
-        apiScope)
+        listenerType)
     }
 
     // This is a temporary workaround in order to allow testing of forwarding
@@ -114,12 +115,12 @@ class DefaultApiVersionManager(
 
   override def enabledApis: collection.Set[ApiKeys] = {
     forwardingManager match {
-      case Some(_) => ApiKeys.apisInScope(apiScope).asScala ++ Set(ApiKeys.ENVELOPE)
-      case None => ApiKeys.apisInScope(apiScope).asScala
+      case Some(_) => ApiKeys.apisForListener(listenerType).asScala ++ Set(ApiKeys.ENVELOPE)
+      case None => ApiKeys.apisForListener(listenerType).asScala
     }
   }
 
   override def isApiEnabled(apiKey: ApiKeys): Boolean = {
-    apiKey.inScope(apiScope) || (apiKey == ApiKeys.ENVELOPE && forwardingManager.isDefined)
+    apiKey.inScope(listenerType) || (apiKey == ApiKeys.ENVELOPE && forwardingManager.isDefined)
   }
 }

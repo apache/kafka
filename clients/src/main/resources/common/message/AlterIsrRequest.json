@@ -16,7 +16,7 @@
 {
   "apiKey": 56,
   "type": "request",
-  "scope": ["zkBroker", "controller"],
+  "listeners": ["zkBroker", "controller"],
   "name": "AlterIsrRequest",
   "validVersions": "0",
   "flexibleVersions": "0+",

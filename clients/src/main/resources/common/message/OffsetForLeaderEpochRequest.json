@@ -16,7 +16,7 @@
 {
   "apiKey": 23,
   "type": "request",
-  "scope": ["zkBroker", "broker"],
+  "listeners": ["zkBroker", "broker"],
   "name": "OffsetForLeaderEpochRequest",
   // Version 1 is the same as version 0.
   //

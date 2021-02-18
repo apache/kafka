@@ -35,7 +35,7 @@ public final class ApiMessageTypeGenerator implements TypeClassGenerator {
     private final HeaderGenerator headerGenerator;
     private final CodeBuffer buffer;
     private final TreeMap<Short, ApiData> apis;
-    private final EnumMap<RequestApiScope, List<ApiData>> apisByScope = new EnumMap<>(RequestApiScope.class);
+    private final EnumMap<RequestListenerType, List<ApiData>> apisByListener = new EnumMap<>(RequestListenerType.class);
 
     private static final class ApiData {
         short apiKey;
@@ -103,10 +103,10 @@ public final class ApiMessageTypeGenerator implements TypeClassGenerator {
                 }
                 data.requestSpec = spec;
 
-                if (spec.scope() != null) {
-                    for (RequestApiScope scope : spec.scope()) {
-                        apisByScope.putIfAbsent(scope, new ArrayList<>());
-                        apisByScope.get(scope).add(data);
+                if (spec.listeners() != null) {
+                    for (RequestListenerType listener : spec.listeners()) {
+                        apisByListener.putIfAbsent(listener, new ArrayList<>());
+                        apisByListener.get(listener).add(data);
                     }
                 }
                 break;
@@ -156,7 +156,7 @@ public final class ApiMessageTypeGenerator implements TypeClassGenerator {
         buffer.printf("%n");
         generateAccessor("highestSupportedVersion", "short");
         buffer.printf("%n");
-        generateAccessor("scope", "EnumSet<ApiScope>");
+        generateAccessor("listeners", "EnumSet<ListenerType>");
         buffer.printf("%n");
         generateAccessor("apiKey", "short");
         buffer.printf("%n");
@@ -170,21 +170,21 @@ public final class ApiMessageTypeGenerator implements TypeClassGenerator {
         buffer.printf("%n");
         generateHeaderVersion("response");
         buffer.printf("%n");
-        generateApiScopeEnum();
+        generateListenerTypesEnum();
         buffer.printf("%n");
         buffer.decrementIndent();
         buffer.printf("}%n");
         headerGenerator.generate();
     }
 
-    private String generateApiScopeEnumSet(Collection<String> values) {
+    private String generateListenerTypeEnumSet(Collection<String> values) {
         if (values.isEmpty()) {
-            return "EnumSet.noneOf(ApiScope.class)";
+            return "EnumSet.noneOf(ListenerType.class)";
         }
         StringBuilder bldr = new StringBuilder("EnumSet.of(");
         Iterator<String> iter = values.iterator();
         while (iter.hasNext()) {
-            bldr.append("ApiScope.");
+            bldr.append("ListenerType.");
             bldr.append(iter.next());
             if (iter.hasNext()) {
                 bldr.append(", ");
@@ -201,12 +201,12 @@ public final class ApiMessageTypeGenerator implements TypeClassGenerator {
             String name = apiData.name();
             numProcessed++;
 
-            final Collection<String> scopes;
-            if (apiData.requestSpec.scope() == null) {
-                scopes = Collections.emptyList();
+            final Collection<String> listeners;
+            if (apiData.requestSpec.listeners() == null) {
+                listeners = Collections.emptyList();
             } else {
-                scopes = apiData.requestSpec.scope().stream()
-                    .map(RequestApiScope::name)
+                listeners = apiData.requestSpec.listeners().stream()
+                    .map(RequestListenerType::name)
                     .collect(Collectors.toList());
             }
 
@@ -218,7 +218,7 @@ public final class ApiMessageTypeGenerator implements TypeClassGenerator {
                 apiData.responseSchema(),
                 apiData.requestSpec.struct().versions().lowest(),
                 apiData.requestSpec.struct().versions().highest(),
-                generateApiScopeEnumSet(scopes),
+                generateListenerTypeEnumSet(listeners),
                 (numProcessed == apis.size()) ? ";" : ",");
         }
     }
@@ -230,7 +230,7 @@ public final class ApiMessageTypeGenerator implements TypeClassGenerator {
         buffer.printf("private final Schema[] responseSchemas;%n");
         buffer.printf("private final short lowestSupportedVersion;%n");
         buffer.printf("private final short highestSupportedVersion;%n");
-        buffer.printf("private final EnumSet<ApiScope> scope;%n");
+        buffer.printf("private final EnumSet<ListenerType> listeners;%n");
         headerGenerator.addImport(MessageGenerator.SCHEMA_CLASS);
         headerGenerator.addImport(MessageGenerator.ENUM_SET_CLASS);
     }
@@ -239,7 +239,7 @@ public final class ApiMessageTypeGenerator implements TypeClassGenerator {
         buffer.printf("ApiMessageType(String name, short apiKey, " +
             "Schema[] requestSchemas, Schema[] responseSchemas, " +
             "short lowestSupportedVersion, short highestSupportedVersion, " +
-            "EnumSet<ApiScope> scope) {%n");
+            "EnumSet<ListenerType> listeners) {%n");
         buffer.incrementIndent();
         buffer.printf("this.name = name;%n");
         buffer.printf("this.apiKey = apiKey;%n");
@@ -247,7 +247,7 @@ public final class ApiMessageTypeGenerator implements TypeClassGenerator {
         buffer.printf("this.responseSchemas = responseSchemas;%n");
         buffer.printf("this.lowestSupportedVersion = lowestSupportedVersion;%n");
         buffer.printf("this.highestSupportedVersion = highestSupportedVersion;%n");
-        buffer.printf("this.scope = scope;%n");
+        buffer.printf("this.listeners = listeners;%n");
         buffer.decrementIndent();
         buffer.printf("}%n");
     }
@@ -391,13 +391,13 @@ public final class ApiMessageTypeGenerator implements TypeClassGenerator {
         buffer.printf("}%n");
     }
 
-    private void generateApiScopeEnum() {
-        buffer.printf("public enum ApiScope {%n");
+    private void generateListenerTypesEnum() {
+        buffer.printf("public enum ListenerType {%n");
         buffer.incrementIndent();
-        Iterator<RequestApiScope> scopeIterator = Arrays.stream(RequestApiScope.values()).iterator();
-        while (scopeIterator.hasNext()) {
-            RequestApiScope scope = scopeIterator.next();
-            buffer.printf("%s%s%n", scope.name(), scopeIterator.hasNext() ? "," : ";");
+        Iterator<RequestListenerType> listenerIter = Arrays.stream(RequestListenerType.values()).iterator();
+        while (listenerIter.hasNext()) {
+            RequestListenerType scope = listenerIter.next();
+            buffer.printf("%s%s%n", scope.name(), listenerIter.hasNext() ? "," : ";");
         }
         buffer.decrementIndent();
         buffer.printf("}%n");

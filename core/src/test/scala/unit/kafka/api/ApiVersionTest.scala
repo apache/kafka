@@ -20,7 +20,7 @@ package kafka.api
 import java.util
 
 import org.apache.kafka.common.feature.{Features, FinalizedVersionRange, SupportedVersionRange}
-import org.apache.kafka.common.message.ApiMessageType.ApiScope
+import org.apache.kafka.common.message.ApiMessageType.ListenerType
 import org.apache.kafka.common.protocol.ApiKeys
 import org.apache.kafka.common.record.{RecordBatch, RecordVersion}
 import org.apache.kafka.common.requests.{AbstractResponse, ApiVersionsResponse}
@@ -183,7 +183,7 @@ class ApiVersionTest {
       RecordVersion.V1,
       Features.emptySupportedFeatures,
       None,
-      ApiScope.ZK_BROKER
+      ListenerType.ZK_BROKER
     )
     verifyApiKeysForMagic(response, RecordBatch.MAGIC_VALUE_V1)
     assertEquals(10, response.throttleTimeMs)
@@ -203,7 +203,7 @@ class ApiVersionTest {
         Utils.mkMap(Utils.mkEntry("feature", new FinalizedVersionRange(2.toShort, 3.toShort)))),
       10,
       None,
-      ApiScope.ZK_BROKER
+      ListenerType.ZK_BROKER
     )
 
     verifyApiKeysForMagic(response, RecordBatch.MAGIC_VALUE_V1)
@@ -234,7 +234,7 @@ class ApiVersionTest {
       RecordVersion.current(),
       Features.emptySupportedFeatures,
       None,
-      ApiScope.ZK_BROKER
+      ListenerType.ZK_BROKER
     )
     assertEquals(new util.HashSet[ApiKeys](ApiKeys.zkBrokerApis), apiKeysInResponse(response))
     assertEquals(AbstractResponse.DEFAULT_THROTTLE_TIME, response.throttleTimeMs)
@@ -250,7 +250,7 @@ class ApiVersionTest {
       RecordVersion.current(),
       Features.emptySupportedFeatures,
       None,
-      ApiScope.ZK_BROKER
+      ListenerType.ZK_BROKER
     )
 
     // Ensure that APIs needed for the internal metadata quorum (KIP-500)

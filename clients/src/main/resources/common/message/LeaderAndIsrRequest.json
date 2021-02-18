@@ -16,7 +16,7 @@
 {
   "apiKey": 4,
   "type": "request",
-  "scope": ["zkBroker"],
+  "listeners": ["zkBroker"],
   "name": "LeaderAndIsrRequest",
   // Version 1 adds IsNew.
   //

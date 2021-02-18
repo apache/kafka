@@ -30,7 +30,7 @@ import kafka.utils.{Logging, NotNothing, Pool}
 import kafka.utils.Implicits._
 import org.apache.kafka.common.config.ConfigResource
 import org.apache.kafka.common.memory.MemoryPool
-import org.apache.kafka.common.message.ApiMessageType.ApiScope
+import org.apache.kafka.common.message.ApiMessageType.ListenerType
 import org.apache.kafka.common.message.IncrementalAlterConfigsRequestData
 import org.apache.kafka.common.message.IncrementalAlterConfigsRequestData._
 import org.apache.kafka.common.network.Send
@@ -61,8 +61,8 @@ object RequestChannel extends Logging {
   }
 
   class Metrics(enabledApis: Iterable[ApiKeys]) {
-    def this(scope: ApiScope) = {
-      this(ApiKeys.apisInScope(scope).asScala)
+    def this(scope: ListenerType) = {
+      this(ApiKeys.apisForListener(scope).asScala)
     }
 
     private val metricsMap = mutable.Map[String, RequestMetrics]()

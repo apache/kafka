@@ -190,7 +190,7 @@ public class MetadataRequestBenchmark {
             "clusterId",
             new SystemTime(),
             null,
-            new SimpleApiVersionManager(ApiMessageType.ApiScope.ZK_BROKER));
+            new SimpleApiVersionManager(ApiMessageType.ListenerType.ZK_BROKER));
     }
 
     @TearDown(Level.Trial)

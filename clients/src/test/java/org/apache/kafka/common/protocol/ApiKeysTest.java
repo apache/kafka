@@ -78,7 +78,7 @@ public class ApiKeysTest {
     public void testApiScope() {
         Set<ApiKeys> apisMissingScope = new HashSet<>();
         for (ApiKeys apiKey : ApiKeys.values()) {
-            if (apiKey.messageType.scope().isEmpty()) {
+            if (apiKey.messageType.listeners().isEmpty()) {
                 apisMissingScope.add(apiKey);
             }
         }

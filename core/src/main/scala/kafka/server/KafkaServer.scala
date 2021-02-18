@@ -37,7 +37,7 @@ import kafka.utils._
 import kafka.zk.{AdminZkClient, BrokerInfo, KafkaZkClient}
 import org.apache.kafka.clients.{ApiVersions, ClientDnsLookup, ManualMetadataUpdater, NetworkClient, NetworkClientUtils}
 import org.apache.kafka.common.internals.Topic
-import org.apache.kafka.common.message.ApiMessageType.ApiScope
+import org.apache.kafka.common.message.ApiMessageType.ListenerType
 import org.apache.kafka.common.message.ControlledShutdownRequestData
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.network._
@@ -268,7 +268,7 @@ class KafkaServer(
         }
 
         val apiVersionManager = ApiVersionManager(
-          ApiScope.ZK_BROKER,
+          ListenerType.ZK_BROKER,
           config,
           forwardingManager,
           brokerFeatures,

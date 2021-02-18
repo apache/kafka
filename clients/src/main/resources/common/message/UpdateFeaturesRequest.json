@@ -16,7 +16,7 @@
 {
   "apiKey": 57,
   "type": "request",
-  "scope": ["zkBroker", "broker", "controller"],
+  "listeners": ["zkBroker", "broker", "controller"],
   "name": "UpdateFeaturesRequest",
   "validVersions": "0",
   "flexibleVersions": "0+",

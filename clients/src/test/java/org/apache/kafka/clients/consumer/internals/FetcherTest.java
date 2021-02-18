@@ -2076,7 +2076,7 @@ public class FetcherTest {
                 time, true, new ApiVersions(), throttleTimeSensor, new LogContext());
 
         ApiVersionsResponse apiVersionsResponse = ApiVersionsResponse.defaultApiVersionsResponse(
-            400, ApiMessageType.ApiScope.ZK_BROKER);
+            400, ApiMessageType.ListenerType.ZK_BROKER);
         ByteBuffer buffer = RequestTestUtils.serializeResponseWithHeader(apiVersionsResponse, ApiKeys.API_VERSIONS.latestVersion(), 0);
 
         selector.delayedReceive(new DelayedReceive(node.idString(), new NetworkReceive(node.idString(), buffer)));

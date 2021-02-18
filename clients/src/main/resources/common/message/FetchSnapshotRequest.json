@@ -16,7 +16,7 @@
 {
   "apiKey": 59,
   "type": "request",
-  "scope": ["controller", "raft"],
+  "listeners": ["controller", "raft"],
   "name": "FetchSnapshotRequest",
   "validVersions": "0",
   "flexibleVersions": "0+",

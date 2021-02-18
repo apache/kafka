@@ -16,7 +16,7 @@
 {
   "apiKey": 19,
   "type": "request",
-  "scope": ["zkBroker", "broker", "controller"],
+  "listeners": ["zkBroker", "broker", "controller"],
   "name": "CreateTopicsRequest",
   // Version 1 adds validateOnly.
   //

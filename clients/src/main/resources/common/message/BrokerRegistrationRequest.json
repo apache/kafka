@@ -16,7 +16,7 @@
 {
   "apiKey":62,
   "type": "request",
-  "scope": ["controller"],
+  "listeners": ["controller"],
   "name": "BrokerRegistrationRequest",
   "validVersions": "0",
   "flexibleVersions": "0+",

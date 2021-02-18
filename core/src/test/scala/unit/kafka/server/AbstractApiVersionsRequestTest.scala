@@ -20,7 +20,7 @@ import java.util.Properties
 
 import integration.kafka.server.IntegrationTestUtils
 import kafka.test.ClusterInstance
-import org.apache.kafka.common.message.ApiMessageType.ApiScope
+import org.apache.kafka.common.message.ApiMessageType.ListenerType
 import org.apache.kafka.common.message.ApiVersionsResponseData.ApiVersion
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.protocol.ApiKeys
@@ -60,7 +60,7 @@ abstract class AbstractApiVersionsRequestTest(cluster: ClusterInstance) {
     assertEquals(expectedApis.size(), apiVersionsResponse.data.apiKeys().size(),
       "API keys in ApiVersionsResponse must match API keys supported by broker.")
 
-    val defaultApiVersionsResponse = ApiVersionsResponse.defaultApiVersionsResponse(ApiScope.ZK_BROKER)
+    val defaultApiVersionsResponse = ApiVersionsResponse.defaultApiVersionsResponse(ListenerType.ZK_BROKER)
     for (expectedApiVersion: ApiVersion <- defaultApiVersionsResponse.data.apiKeys().asScala) {
       val actualApiVersion = apiVersionsResponse.apiVersion(expectedApiVersion.apiKey)
       assertNotNull(actualApiVersion, s"API key ${actualApiVersion.apiKey} is supported by broker, but not received in ApiVersionsResponse.")
