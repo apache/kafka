@@ -104,6 +104,8 @@ class RaftReplicaManager(config: KafkaConfig,
 
     override def markOffline(topicPartition: TopicPartition): Unit = raftReplicaManager.markPartitionOffline(topicPartition)
 
+    override def markOnline(partition: Partition): Unit = raftReplicaManager.allPartitions.put(partition.topicPartition, HostedPartition.Online(partition))
+
     override def replicaAlterLogDirsManager: ReplicaAlterLogDirsManager = raftReplicaManager.replicaAlterLogDirsManager
 
     override def replicaFetcherManager: ReplicaFetcherManager = raftReplicaManager.replicaFetcherManager
