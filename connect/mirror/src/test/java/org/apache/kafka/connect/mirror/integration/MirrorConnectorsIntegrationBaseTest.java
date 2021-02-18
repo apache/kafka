@@ -196,7 +196,7 @@ public abstract class MirrorConnectorsIntegrationBaseTest {
 //                System.out.println("!!! bac:" + x);
                 backup.deleteConnector(x);
             }
-            // deleteAllTopics(primary.kafka());
+            deleteAllTopics(primary.kafka());
             deleteAllTopics(backup.kafka());
         } finally {
             shuttingDown = true;
@@ -1397,13 +1397,17 @@ public abstract class MirrorConnectorsIntegrationBaseTest {
 
 //        System.out.println("!!! delete topics");
         try (final Admin adminClient = cluster.createAdminClient()) {
-            Set<String> topics = null;
-            for (int i = 0; i < 5; i++) {
-                topics = adminClient.listTopics().names().get();
-                System.out.println("!!! t:" + i + topics);
-                Thread.sleep(3000);
+            Set<String> topics = adminClient.listTopics().names().get();
+            System.out.println("!!! t:" + topics);
+            Thread.sleep(5000);
+            for (int i = 0; i < 2; i++) {
+                Set<String> topics2 = adminClient.listTopics().names().get();
+                System.out.println("!!! t:" + i + topics2);
+                Thread.sleep(5000);
             }
-//            System.out.println("!!! deleting:" + topics);
+//            topics = adminClient.listTopics().names().get();
+//            topics.add("ccc");
+            System.out.println("!!! deleting:" + topics);
 //            System.out.println("!!! del:" + adminClient.deleteTopics(topics).all().get());
             adminClient.deleteTopics(topics).all().get();
         } catch (final InterruptedException e) {
