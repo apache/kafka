@@ -34,11 +34,7 @@ import kafka.log.AppendOrigin
 import kafka.network.RequestChannel
 import kafka.network.RequestChannel.{CloseConnectionResponse, SendResponse}
 import kafka.server.QuotaFactory.QuotaManagers
-<<<<<<< HEAD
 import kafka.server.metadata.{CachedConfigRepository, ConfigRepository, RaftMetadataCache}
-=======
-import kafka.server.metadata.{CachedConfigRepository, ConfigRepository}
->>>>>>> Rename `scope` to `listeners`
 import kafka.utils.{MockTime, TestUtils}
 import kafka.zk.KafkaZkClient
 import org.apache.kafka.clients.admin.AlterConfigOp.OpType
@@ -166,12 +162,13 @@ class KafkaApisTest {
       }
     }
 
+    val listenerType = if (raftSupport) ListenerType.BROKER else ListenerType.ZK_BROKER
     val enabledApis = if (enableForwarding) {
-      ApiKeys.apisForListener(ListenerType.ZK_BROKER).asScala ++ Set(ApiKeys.ENVELOPE)
+      ApiKeys.apisForListener(listenerType).asScala ++ Set(ApiKeys.ENVELOPE)
     } else {
-      ApiKeys.apisForListener(ListenerType.ZK_BROKER).asScala.toSet
+      ApiKeys.apisForListener(listenerType).asScala.toSet
     }
-    val apiVersionManager = new SimpleApiVersionManager(enabledApis)
+    val apiVersionManager = new SimpleApiVersionManager(listenerType, enabledApis)
 
     new KafkaApis(requestChannel,
       metadataSupport,

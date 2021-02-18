@@ -33,6 +33,7 @@ import kafka.server.KafkaBroker.metricsPrefix
 import kafka.server.metadata.{BrokerMetadataListener, CachedConfigRepository, ClientQuotaCache, ClientQuotaMetadataManager, RaftMetadataCache}
 import kafka.utils.{CoreUtils, KafkaScheduler}
 import org.apache.kafka.common.internals.Topic
+import org.apache.kafka.common.message.ApiMessageType.ListenerType
 import org.apache.kafka.common.message.BrokerRegistrationRequestData.{Listener, ListenerCollection}
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.network.ListenerName
@@ -167,7 +168,7 @@ class BrokerServer(
       // Create log manager, but don't start it because we need to delay any potential unclean shutdown log recovery
       // until we catch up on the metadata log and have up-to-date topic and broker configs.
       logManager = LogManager(config, initialOfflineDirs, configRepository, kafkaScheduler, time,
-        brokerTopicStats, logDirFailureChannel, true)
+        brokerTopicStats, logDirFailureChannel, keepPartitionMetadataFile = true)
 
       metadataCache = MetadataCache.raftMetadataCache(config.nodeId)
       // Enable delegation token cache for all SCRAM mechanisms to simplify dynamic update.
@@ -175,17 +176,44 @@ class BrokerServer(
       tokenCache = new DelegationTokenCache(ScramMechanism.mechanismNames)
       credentialProvider = new CredentialProvider(ScramMechanism.mechanismNames, tokenCache)
 
+      val controllerNodes = RaftConfig.quorumVoterStringsToNodes(controllerQuorumVotersFuture.get()).asScala
+      val controllerNodeProvider = RaftControllerNodeProvider(metaLogManager, config, controllerNodes)
+
+      val forwardingChannelManager = BrokerToControllerChannelManager(
+        controllerNodeProvider,
+        time,
+        metrics,
+        config,
+        channelName = "forwarding",
+        threadNamePrefix,
+        retryTimeoutMs = 60000
+      )
+      forwardingManager = new ForwardingManagerImpl(forwardingChannelManager)
+      forwardingManager.start()
+
+      val apiVersionManager = ApiVersionManager(
+        ListenerType.BROKER,
+        config,
+        Some(forwardingManager),
+        brokerFeatures,
+        featureCache
+      )
+
       // Create and start the socket server acceptor threads so that the bound port is known.
       // Delay starting processors until the end of the initialization sequence to ensure
       // that credentials have been loaded before processing authentications.
-      socketServer = new SocketServer(config, metrics, time, credentialProvider, allowControllerOnlyApis = false)
+      socketServer = new SocketServer(config, metrics, time, credentialProvider, apiVersionManager)
       socketServer.startup(startProcessingRequests = false)
 
-      val controllerNodes =
-        RaftConfig.quorumVoterStringsToNodes(controllerQuorumVotersFuture.get()).asScala
-      val controllerNodeProvider = RaftControllerNodeProvider(metaLogManager, config, controllerNodes)
-      val alterIsrChannelManager = BrokerToControllerChannelManager(controllerNodeProvider,
-        time, metrics, config, "alterisr", threadNamePrefix, 60000)
+      val alterIsrChannelManager = BrokerToControllerChannelManager(
+        controllerNodeProvider,
+        time,
+        metrics,
+        config,
+        channelName = "alterisr",
+        threadNamePrefix,
+        retryTimeoutMs = Long.MaxValue
+      )
       alterIsrManager = new DefaultAlterIsrManager(
         controllerChannelManager = alterIsrChannelManager,
         scheduler = kafkaScheduler,
@@ -199,11 +227,6 @@ class BrokerServer(
         kafkaScheduler, logManager, isShuttingDown, quotaManagers,
         brokerTopicStats, metadataCache, logDirFailureChannel, alterIsrManager,
         configRepository, threadNamePrefix)
-
-      val forwardingChannelManager = BrokerToControllerChannelManager(controllerNodeProvider,
-        time, metrics, config, "forwarding", threadNamePrefix, 60000)
-      forwardingManager = new ForwardingManagerImpl(forwardingChannelManager)
-      forwardingManager.start()
 
       /* start token manager */
       if (config.tokenAuthEnabled) {
@@ -306,7 +329,7 @@ class BrokerServer(
       dataPlaneRequestProcessor = new KafkaApis(socketServer.dataPlaneRequestChannel, raftSupport,
         replicaManager, groupCoordinator, transactionCoordinator, autoTopicCreationManager,
         config.nodeId, config, configRepository, metadataCache, metrics, authorizer, quotaManagers,
-        fetchManager, brokerTopicStats, clusterId, time, tokenManager, brokerFeatures, featureCache)
+        fetchManager, brokerTopicStats, clusterId, time, tokenManager, apiVersionManager)
 
       dataPlaneRequestHandlerPool = new KafkaRequestHandlerPool(config.nodeId, socketServer.dataPlaneRequestChannel, dataPlaneRequestProcessor, time,
         config.numIoThreads, s"${SocketServer.DataPlaneMetricPrefix}RequestHandlerAvgIdlePercent", SocketServer.DataPlaneThreadPrefix)
@@ -315,7 +338,7 @@ class BrokerServer(
         controlPlaneRequestProcessor = new KafkaApis(controlPlaneRequestChannel, raftSupport,
           replicaManager, groupCoordinator, transactionCoordinator, autoTopicCreationManager,
           config.nodeId, config, configRepository, metadataCache, metrics, authorizer, quotaManagers,
-          fetchManager, brokerTopicStats, clusterId, time, tokenManager, brokerFeatures, featureCache)
+          fetchManager, brokerTopicStats, clusterId, time, tokenManager, apiVersionManager)
 
         controlPlaneRequestHandlerPool = new KafkaRequestHandlerPool(config.nodeId, socketServer.controlPlaneRequestChannelOpt.get, controlPlaneRequestProcessor, time,
           1, s"${SocketServer.ControlPlaneMetricPrefix}RequestHandlerAvgIdlePercent", SocketServer.ControlPlaneThreadPrefix)
