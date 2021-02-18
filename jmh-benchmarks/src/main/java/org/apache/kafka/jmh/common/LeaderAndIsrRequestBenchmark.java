@@ -25,6 +25,7 @@ import kafka.log.LogConfig;
 import kafka.log.LogManager;
 import kafka.network.RequestChannel;
 import kafka.server.AlterIsrManager;
+import kafka.server.AutoTopicCreationManager;
 import kafka.server.BrokerFeatures;
 import kafka.server.BrokerTopicStats;
 import kafka.server.ClientQuotaManager;
@@ -41,6 +42,7 @@ import kafka.server.QuotaFactory;
 import kafka.server.ReplicaManager;
 import kafka.server.ReplicationQuotaManager;
 import kafka.server.ZkAdminManager;
+import kafka.server.ZkSupport;
 import kafka.server.metadata.CachedConfigRepository;
 import kafka.utils.KafkaScheduler;
 import kafka.utils.MockTime;
@@ -115,6 +117,7 @@ public class LeaderAndIsrRequestBenchmark {
     private ZkAdminManager adminManager = Mockito.mock(ZkAdminManager.class);
     private TransactionCoordinator transactionCoordinator = Mockito.mock(TransactionCoordinator.class);
     private KafkaController kafkaController = Mockito.mock(KafkaController.class);
+    private AutoTopicCreationManager autoTopicCreationManager = Mockito.mock(AutoTopicCreationManager.class);
     private KafkaZkClient kafkaZkClient = Mockito.mock(KafkaZkClient.class);
     private Metrics metrics = new Metrics();
     private MetadataCache metadataCache = Mockito.mock(MetadataCache.class);
@@ -149,7 +152,7 @@ public class LeaderAndIsrRequestBenchmark {
         final List<File> files =
                 JavaConverters.seqAsJavaList(brokerProperties.logDirs()).stream().map(File::new).collect(Collectors.toList());
         this.logManager = TestUtils.createLogManager(JavaConverters.asScalaBuffer(files),
-                LogConfig.apply(), CleanerConfig.apply(1, 4 * 1024 * 1024L, 0.9d,
+                LogConfig.apply(), configRepository, CleanerConfig.apply(1, 4 * 1024 * 1024L, 0.9d,
                         1024 * 1024, 32 * 1024 * 1024,
                         Double.MAX_VALUE, 15 * 1000, true, "MD5"), time);
         scheduler.startup();
@@ -227,16 +230,14 @@ public class LeaderAndIsrRequestBenchmark {
         kafkaProps.put(KafkaConfig$.MODULE$.BrokerIdProp(), brokerId + "");
         BrokerFeatures brokerFeatures = BrokerFeatures.createDefault();
         return new KafkaApis(requestChannel,
+                new ZkSupport(adminManager, kafkaController, kafkaZkClient, Option.empty()),
                 replicaManager,
-                adminManager,
                 groupCoordinator,
                 transactionCoordinator,
-                kafkaController,
-                Option.empty(),
-                kafkaZkClient,
+                autoTopicCreationManager,
                 brokerId,
                 new KafkaConfig(kafkaProps),
-                new CachedConfigRepository(),
+                configRepository,
                 metadataCache,
                 metrics,
                 Option.empty(),
@@ -270,12 +271,17 @@ public class LeaderAndIsrRequestBenchmark {
                 if (subdirs != null) {
                     for (int i = 0; i < subdirs.length; i++) {
                         File partitionMetadata = new File(subdirs[i].toString() + "/partition.metadata");
-                        if (partitionMetadata.exists())
+                        if (partitionMetadata.exists()) {
                             Utils.delete(partitionMetadata);
+                        }
                     }
                 }
             }
         }
+        logManager.allLogs().foreach(log -> {
+            log.topicId_$eq(Uuid.ZERO_UUID);
+            return log.topicId();
+        });
     }
 
     private RequestChannel.Request buildLeaderAndIsrRequest() {
