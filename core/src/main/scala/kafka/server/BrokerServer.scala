@@ -326,14 +326,16 @@ class BrokerServer(
       // Start log manager, which will perform (potentially lengthy) recovery-from-unclean-shutdown if required.
       logManager.startup(metadataCache.getAllTopics())
       // Start other services that we've delayed starting, in the appropriate order.
-      replicaManager.endMetadataChangeDeferral(
-        RequestHandlerHelper.onLeadershipChange(groupCoordinator, transactionCoordinator, _, _))
       replicaManager.startup()
       replicaManager.startHighWatermarkCheckPointThread()
       groupCoordinator.startup(() => metadataCache.numPartitions(Topic.GROUP_METADATA_TOPIC_NAME).
         getOrElse(config.offsetsTopicPartitions))
       transactionCoordinator.startup(() => metadataCache.numPartitions(Topic.TRANSACTION_STATE_TOPIC_NAME).
         getOrElse(config.transactionTopicPartitions))
+      // Apply deferred changes after starting coordinators to avoid GroupMetadataManager IllegalStateException
+      // due to Kafka scheduler not yet running (this manifests if we have deferred any coordinator offsets partitions).
+      replicaManager.endMetadataChangeDeferral(
+        RequestHandlerHelper.onLeadershipChange(groupCoordinator, transactionCoordinator, _, _))
 
       socketServer.startProcessingRequests(authorizerFutures)
 
