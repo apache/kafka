@@ -332,7 +332,7 @@ public abstract class MirrorConnectorsIntegrationBaseTest {
         assertEquals(NUM_RECORDS_PER_PARTITION, primary.kafka().consume(NUM_RECORDS_PER_PARTITION, 2 * RECORD_TRANSFER_DURATION_MS, "backup.test-topic-3").count(),
             "New topic was not replicated to primary cluster.");
         assertEquals(NUM_RECORDS_PER_PARTITION, backup.kafka().consume(NUM_RECORDS_PER_PARTITION, 2 * RECORD_TRANSFER_DURATION_MS, "primary.test-topic-2").count(),
-            "New topic was not replicated to backup cluster.");
+            "New topic was not replicated to backup cluster");
     }
     
     @Test
