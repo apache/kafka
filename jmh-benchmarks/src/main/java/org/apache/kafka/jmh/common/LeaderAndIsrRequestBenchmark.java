@@ -37,12 +37,12 @@ import kafka.server.KafkaApis;
 import kafka.server.KafkaConfig;
 import kafka.server.KafkaConfig$;
 import kafka.server.LogDirFailureChannel;
-import kafka.server.MetadataCache;
 import kafka.server.QuotaFactory;
 import kafka.server.ReplicaManager;
 import kafka.server.ReplicationQuotaManager;
 import kafka.server.ZkAdminManager;
 import kafka.server.ZkSupport;
+import kafka.server.ZkMetadataCache;
 import kafka.server.metadata.CachedConfigRepository;
 import kafka.utils.KafkaScheduler;
 import kafka.utils.MockTime;
@@ -120,7 +120,7 @@ public class LeaderAndIsrRequestBenchmark {
     private AutoTopicCreationManager autoTopicCreationManager = Mockito.mock(AutoTopicCreationManager.class);
     private KafkaZkClient kafkaZkClient = Mockito.mock(KafkaZkClient.class);
     private Metrics metrics = new Metrics();
-    private MetadataCache metadataCache = Mockito.mock(MetadataCache.class);
+    private ZkMetadataCache metadataCache = Mockito.mock(ZkMetadataCache.class);
     private ClientQuotaManager clientQuotaManager = Mockito.mock(ClientQuotaManager.class);
     private ClientRequestQuotaManager clientRequestQuotaManager = Mockito.mock(ClientRequestQuotaManager.class);
     private ControllerMutationQuotaManager controllerMutationQuotaManager = Mockito.mock(ControllerMutationQuotaManager.class);
@@ -230,7 +230,7 @@ public class LeaderAndIsrRequestBenchmark {
         kafkaProps.put(KafkaConfig$.MODULE$.BrokerIdProp(), brokerId + "");
         BrokerFeatures brokerFeatures = BrokerFeatures.createDefault();
         return new KafkaApis(requestChannel,
-                new ZkSupport(adminManager, kafkaController, kafkaZkClient, Option.empty()),
+                new ZkSupport(adminManager, kafkaController, kafkaZkClient, Option.empty(), metadataCache),
                 replicaManager,
                 groupCoordinator,
                 transactionCoordinator,
