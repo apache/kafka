@@ -83,8 +83,9 @@ class GroupCoordinatorConcurrencyTest extends AbstractCoordinatorConcurrencyTest
     heartbeatPurgatory = new DelayedOperationPurgatory[DelayedHeartbeat]("Heartbeat", timer, config.brokerId, reaperEnabled = false)
     joinPurgatory = new DelayedOperationPurgatory[DelayedJoin]("Rebalance", timer, config.brokerId, reaperEnabled = false)
 
-    groupCoordinator = GroupCoordinator(config, zkClient, replicaManager, heartbeatPurgatory, joinPurgatory, timer.time, new Metrics())
-    groupCoordinator.startup(false)
+    groupCoordinator = GroupCoordinator(config, replicaManager, heartbeatPurgatory, joinPurgatory, timer.time, new Metrics())
+    groupCoordinator.startup(() => zkClient.getTopicPartitionCount(Topic.GROUP_METADATA_TOPIC_NAME).getOrElse(config.offsetsTopicPartitions),
+      false)
   }
 
   @AfterEach
@@ -148,9 +149,10 @@ class GroupCoordinatorConcurrencyTest extends AbstractCoordinatorConcurrencyTest
 
     if (groupCoordinator != null)
       groupCoordinator.shutdown()
-    groupCoordinator = GroupCoordinator(config, zkClient, replicaManager, heartbeatPurgatory,
+    groupCoordinator = GroupCoordinator(config, replicaManager, heartbeatPurgatory,
       joinPurgatory, timer.time, new Metrics())
-    groupCoordinator.startup(false)
+    groupCoordinator.startup(() => zkClient.getTopicPartitionCount(Topic.GROUP_METADATA_TOPIC_NAME).getOrElse(config.offsetsTopicPartitions),
+      false)
 
     val members = new Group(s"group", nMembersPerGroup, groupCoordinator, replicaManager)
       .members

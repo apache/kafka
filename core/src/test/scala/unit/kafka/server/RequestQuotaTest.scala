@@ -507,7 +507,7 @@ class RequestQuotaTest extends BaseRequestTest {
           val data = new DescribeLogDirsRequestData()
           data.topics.add(new DescribeLogDirsRequestData.DescribableLogDirTopic()
             .setTopic(tp.topic)
-            .setPartitionIndex(Collections.singletonList(tp.partition)))
+            .setPartitions(Collections.singletonList(tp.partition)))
           new DescribeLogDirsRequest.Builder(data)
 
         case ApiKeys.CREATE_PARTITIONS =>
@@ -632,8 +632,8 @@ class RequestQuotaTest extends BaseRequestTest {
         case ApiKeys.BROKER_HEARTBEAT =>
           new BrokerHeartbeatRequest.Builder(new BrokerHeartbeatRequestData())
 
-        case ApiKeys.DECOMMISSION_BROKER =>
-          new DecommissionBrokerRequest.Builder(new DecommissionBrokerRequestData())
+        case ApiKeys.UNREGISTER_BROKER =>
+          new UnregisterBrokerRequest.Builder(new UnregisterBrokerRequestData())
 
         case _ =>
           throw new IllegalArgumentException("Unsupported API key " + apiKey)

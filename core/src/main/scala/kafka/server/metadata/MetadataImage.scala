@@ -86,12 +86,15 @@ case class MetadataImageBuilder(brokerId: Int,
     } else {
       _partitionsBuilder.build()
     }
-    val nextBrokers = if (_brokersBuilder == null) {
+    MetadataImage(nextPartitions, _controllerId, brokers())
+  }
+
+  def brokers(): MetadataBrokers = {
+    if (_brokersBuilder == null) {
       prevImage.brokers
     } else {
       _brokersBuilder.build()
     }
-    MetadataImage(nextPartitions, _controllerId, nextBrokers)
   }
 }
 
@@ -117,6 +120,10 @@ case class MetadataImage(partitions: MetadataPartitions,
 
   def topicIdToName(uuid: Uuid): Option[String] = {
     partitions.topicIdToName(uuid)
+  }
+
+  def topicNameToId(name: String): Option[Uuid] = {
+    partitions.topicNameToId(name)
   }
 }
 

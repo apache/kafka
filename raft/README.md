@@ -9,7 +9,7 @@ we have a standalone test server which can be used for performance testing.
 Below we describe the details to set this up.
 
 ### Run Single Quorum ###
-    bin/test-raft-server-start.sh config/raft.properties
+    bin/test-raft-server-start.sh --config config/raft.properties
 
 ### Run Multi Node Quorum ###
 Create 3 separate raft quorum properties as the following:

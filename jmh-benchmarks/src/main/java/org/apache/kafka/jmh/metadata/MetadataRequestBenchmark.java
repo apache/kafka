@@ -22,6 +22,7 @@ import kafka.coordinator.group.GroupCoordinator;
 import kafka.coordinator.transaction.TransactionCoordinator;
 import kafka.network.RequestChannel;
 import kafka.network.RequestConvertToJson;
+import kafka.server.AutoTopicCreationManager;
 import kafka.server.BrokerFeatures;
 import kafka.server.BrokerTopicStats;
 import kafka.server.ClientQuotaManager;
@@ -33,10 +34,12 @@ import kafka.server.KafkaApis;
 import kafka.server.KafkaConfig;
 import kafka.server.KafkaConfig$;
 import kafka.server.MetadataCache;
+import kafka.server.ZkMetadataCache;
 import kafka.server.QuotaFactory;
 import kafka.server.ReplicaManager;
 import kafka.server.ReplicationQuotaManager;
 import kafka.server.ZkAdminManager;
+import kafka.server.ZkSupport;
 import kafka.server.metadata.CachedConfigRepository;
 import kafka.zk.KafkaZkClient;
 import org.apache.kafka.common.Uuid;
@@ -102,10 +105,11 @@ public class MetadataRequestBenchmark {
     private ZkAdminManager adminManager = Mockito.mock(ZkAdminManager.class);
     private TransactionCoordinator transactionCoordinator = Mockito.mock(TransactionCoordinator.class);
     private KafkaController kafkaController = Mockito.mock(KafkaController.class);
+    private AutoTopicCreationManager autoTopicCreationManager = Mockito.mock(AutoTopicCreationManager.class);
     private KafkaZkClient kafkaZkClient = Mockito.mock(KafkaZkClient.class);
     private Metrics metrics = new Metrics();
     private int brokerId = 1;
-    private MetadataCache metadataCache = new MetadataCache(brokerId);
+    private ZkMetadataCache metadataCache = MetadataCache.zkMetadataCache(brokerId);
     private ClientQuotaManager clientQuotaManager = Mockito.mock(ClientQuotaManager.class);
     private ClientRequestQuotaManager clientRequestQuotaManager = Mockito.mock(ClientRequestQuotaManager.class);
     private ControllerMutationQuotaManager controllerMutationQuotaManager = Mockito.mock(ControllerMutationQuotaManager.class);
@@ -175,13 +179,11 @@ public class MetadataRequestBenchmark {
         kafkaProps.put(KafkaConfig$.MODULE$.BrokerIdProp(), brokerId + "");
         BrokerFeatures brokerFeatures = BrokerFeatures.createDefault();
         return new KafkaApis(requestChannel,
+            new ZkSupport(adminManager, kafkaController, kafkaZkClient, Option.empty(), metadataCache),
             replicaManager,
-            adminManager,
             groupCoordinator,
             transactionCoordinator,
-            kafkaController,
-            Option.empty(),
-            kafkaZkClient,
+            autoTopicCreationManager,
             brokerId,
             new KafkaConfig(kafkaProps),
             new CachedConfigRepository(),

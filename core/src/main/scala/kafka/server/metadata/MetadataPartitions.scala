@@ -199,9 +199,21 @@ class MetadataPartitionsBuilder(val brokerId: Int,
   def localRemoved(): collection.Set[MetadataPartition] = _localRemoved.asScala
 }
 
+object MetadataPartitions {
+  def apply(nameMap: util.Map[String, util.Map[Int, MetadataPartition]],
+            idMap: util.Map[Uuid, String]): MetadataPartitions = {
+    val reverseMap = idMap.asScala.map(_.swap).toMap.asJava
+    new MetadataPartitions(nameMap, idMap, reverseMap)
+  }
+}
+
 case class MetadataPartitions(private val nameMap: util.Map[String, util.Map[Int, MetadataPartition]],
-                              private val idMap: util.Map[Uuid, String]) {
+                              private val idMap: util.Map[Uuid, String],
+                              private val reverseIdMap: util.Map[String, Uuid]) {
+
   def topicIdToName(uuid: Uuid): Option[String] = Option(idMap.get(uuid))
+
+  def topicNameToId(name: String): Option[Uuid] = Option(reverseIdMap.get(name))
 
   def copyNameMap(): util.Map[String, util.Map[Int, MetadataPartition]] = {
     val copy = new util.HashMap[String, util.Map[Int, MetadataPartition]](nameMap.size())
