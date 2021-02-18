@@ -275,6 +275,7 @@ public class KTableKTableForeignKeyInnerJoinMultiIntegrationTest {
 
         startApplicationAndWaitUntilRunning(kafkaStreamsList, Duration.ofSeconds(60));
 
+        
 //        final KafkaStreams.StateListener newStateListener = (newState, oldState) -> {
 //            System.err.println("!!! stream1," + oldState + "," + newState);
 //        };
