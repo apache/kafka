@@ -67,7 +67,7 @@ class ControllerApisTest {
   private def createControllerApis(authorizer: Option[Authorizer],
                                    supportedFeatures: Map[String, VersionRange] = Map.empty): ControllerApis = {
     val props = new Properties()
-    props.put(KafkaConfig.NodeIdProp, nodeId)
+    props.put(KafkaConfig.NodeIdProp, nodeId: java.lang.Integer)
     props.put(KafkaConfig.ProcessRolesProp, "controller")
     new ControllerApis(
       requestChannel,
