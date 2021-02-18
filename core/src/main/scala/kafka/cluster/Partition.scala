@@ -430,30 +430,38 @@ class Partition(val topicPartition: TopicPartition,
 
   /**
    * This method checks if the topic ID provided in the request is consistent with the topic ID in the log.
-   * If a valid topic ID is provided, but the log has no ID set, set the log ID to be the request ID.
-   * Returns a boolean representing whether the topic ID was consistent and the final log ID if it exists.
+   * If a valid topic ID is provided, and the log exists but has no ID set, set the log ID to be the request ID.
+   * Returns a boolean representing whether the topic ID was consistent.
    */
-  def checkOrSetTopicId(requestTopicId: Uuid): (Boolean, Option[Uuid]) = {
+  def checkOrSetTopicId(requestTopicId: Uuid): Boolean = {
     // If the request had an invalid topic ID, then we assume that topic IDs are not supported.
     // The topic ID was not inconsistent, so return true.
     // If the log is empty, then we can not say that topic ID is inconsistent, so return true.
     if (requestTopicId == null || requestTopicId == Uuid.ZERO_UUID)
-      (true, None)
-    else if (log.isEmpty)
-      (true, None)
+      true
     else {
-      val partitionLog = log.get
-      // Check if topic ID is in memory, if not, it must be new to the broker and does not have a metadata file.
-      // This is because if the broker previously wrote it to file, it would be recovered on restart after failure.
-      // Topic ID is consistent since we are just setting it here.
-      if (partitionLog.topicId == Uuid.ZERO_UUID) {
-        partitionLog.partitionMetadataFile.write(requestTopicId)
-        partitionLog.topicId = requestTopicId
-        (true, Some(partitionLog.topicId))
-      } else if (partitionLog.topicId != requestTopicId)
-        (false, Some(partitionLog.topicId))
-      else
-        (true, Some(partitionLog.topicId))
+      log match {
+        case None => true
+        case Some(log) => {
+          // Check if topic ID is in memory, if not, it must be new to the broker and does not have a metadata file.
+          // This is because if the broker previously wrote it to file, it would be recovered on restart after failure.
+          // Topic ID is consistent since we are just setting it here.
+          if (log.topicId == Uuid.ZERO_UUID) {
+            log.partitionMetadataFile.write(requestTopicId)
+            log.topicId = requestTopicId
+            true
+          } else if (log.topicId != requestTopicId) {
+            // topic ID in log exists and is not consistent with request topic ID
+            stateChangeLogger.error(s"Topic Id in memory: ${log.topicId} does not" +
+              s" match the topic Id for partition $topicPartition provided in the request: " +
+              s"$requestTopicId.")
+            false
+          } else {
+            // topic ID in log exists and matches request topic ID
+            true
+          }
+        }
+      }
     }
   }
 
