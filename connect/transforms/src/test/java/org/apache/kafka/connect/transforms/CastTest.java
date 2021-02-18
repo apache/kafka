@@ -426,18 +426,8 @@ public class CastTest {
     @Test
     public void castFieldsWithSchema() {
         Date day = new Date(MILLIS_PER_DAY);
-        ByteBuffer byteBuffer = ByteBuffer.allocate(8);
-        byteBuffer.put((byte) 0xFE);
-        byteBuffer.put((byte) 0xDC);
-        byteBuffer.put((byte) 0xBA);
-        byteBuffer.put((byte) 0x98);
-        byteBuffer.put((byte) 0x76);
-        byteBuffer.put((byte) 0x54);
-        byteBuffer.put((byte) 0x32);
-        byteBuffer.put((byte) 0x10);
-        byteBuffer.flip();
-
-        byte[] byteArray = Arrays.copyOf(byteBuffer.array(), byteBuffer.array().length);
+        byte[] byteArray = new byte[] {(byte) 0xFE, (byte) 0xDC, (byte) 0xBA, (byte) 0x98, 0x76, 0x54, 0x32, 0x10};
+        ByteBuffer byteBuffer = ByteBuffer.wrap(Arrays.copyOf(byteArray, byteArray.length));
 
         xformValue.configure(Collections.singletonMap(Cast.SPEC_CONFIG,
                 "int8:int16,int16:int32,int32:int64,int64:boolean,float32:float64,float64:boolean,boolean:int8,string:int32,bigdecimal:string,date:string,optional:int32,bytes:string,byteArray:string"));

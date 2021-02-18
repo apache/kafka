@@ -361,16 +361,14 @@ public abstract class Cast<R extends ConnectRecord<R>> implements Transformation
             throw new DataException("Unexpected type in Cast transformation: " + value.getClass());
     }
 
-
     private static String castToString(Object value) {
         if (value instanceof java.util.Date) {
             java.util.Date dateValue = (java.util.Date) value;
             return Values.dateFormatFor(dateValue).format(dateValue);
         } else if (value instanceof ByteBuffer) {
             ByteBuffer byteBuffer = (ByteBuffer) value;
-
             return castByteArrayToString(byteBuffer.array());
-        } else if (value.getClass() == byte[].class) {
+        } else if (value instanceof byte[]) {
             return castByteArrayToString((byte[]) value);
         } else {
             return value.toString();
