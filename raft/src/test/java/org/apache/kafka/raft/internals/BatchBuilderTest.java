@@ -68,7 +68,7 @@ class BatchBuilderTest {
 
         records.forEach(record -> builder.appendRecord(record, null));
         MemoryRecords builtRecordSet = builder.build();
-        assertTrue(builder.roomFor(Arrays.asList("a"), null).isPresent());
+        assertTrue(builder.bytesNeeded(Arrays.asList("a"), null).isPresent());
         assertThrows(IllegalStateException.class, () -> builder.appendRecord("a", null));
 
         List<MutableRecordBatch> builtBatches = Utils.toList(builtRecordSet.batchIterator());
@@ -112,7 +112,7 @@ class BatchBuilderTest {
 
         String record = "i am a record";
 
-        while (!builder.roomFor(Arrays.asList(record), null).isPresent()) {
+        while (!builder.bytesNeeded(Arrays.asList(record), null).isPresent()) {
             builder.appendRecord(record, null);
         }
 

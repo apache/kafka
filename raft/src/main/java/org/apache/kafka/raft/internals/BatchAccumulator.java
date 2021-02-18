@@ -172,7 +172,7 @@ public class BatchAccumulator<T> implements Closeable {
         }
 
         if (currentBatch != null) {
-            OptionalInt bytesNeeded = currentBatch.roomFor(records, serializationCache);
+            OptionalInt bytesNeeded = currentBatch.bytesNeeded(records, serializationCache);
             if (bytesNeeded.isPresent() && bytesNeeded.getAsInt() > maxBatchSize) {
                 throw new RecordBatchTooLargeException(
                     String.format(

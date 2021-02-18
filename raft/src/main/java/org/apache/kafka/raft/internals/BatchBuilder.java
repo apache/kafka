@@ -40,7 +40,7 @@ import java.util.OptionalInt;
 /**
  * Collect a set of records into a single batch. New records are added
  * through {@link #appendRecord(Object, ObjectSerializationCache)}, but the caller must first
- * check whether there is room using {@link #roomFor(Collection, ObjectSerializationCache)}. Once the
+ * check whether there is room using {@link #bytesNeeded(Collection, ObjectSerializationCache)}. Once the
  * batch is ready, then {@link #build()} should be used to get the resulting
  * {@link MemoryRecords} instance.
  *
@@ -97,7 +97,7 @@ public class BatchBuilder<T> {
 
     /**
      * Append a record to this patch. The caller must first verify there is room for the batch
-     * using {@link #roomFor(Collection, ObjectSerializationCache)}.
+     * using {@link #bytesNeeded(Collection, ObjectSerializationCache)}.
      *
      * @param record the record to append
      * @param serializationCache serialization cache for use in {@link RecordSerde#write(Object, ObjectSerializationCache, Writable)}
@@ -135,7 +135,7 @@ public class BatchBuilder<T> {
      * @return empty {@link OptionalInt} if there is room for the records to be appended, otherwise
      *         returns the number of bytes needed
      */
-    public OptionalInt roomFor(Collection<T> records, ObjectSerializationCache serializationCache) {
+    public OptionalInt bytesNeeded(Collection<T> records, ObjectSerializationCache serializationCache) {
         int bytesNeeded = bytesNeededForRecords(
             records,
             serializationCache
@@ -325,7 +325,14 @@ public class BatchBuilder<T> {
         int bytesNeeded = 0;
         for (T record : records) {
             if (expectedNextOffset - baseOffset >= Integer.MAX_VALUE) {
-                return Integer.MAX_VALUE;
+                throw new IllegalArgumentException(
+                    String.format(
+                        "Adding %s records to a batch with base offset of %s and next offset of %s",
+                        records.size(),
+                        baseOffset,
+                        expectedNextOffset
+                    )
+                );
             }
 
             int recordSizeInBytes = DefaultRecord.sizeOfBodyInBytes(
