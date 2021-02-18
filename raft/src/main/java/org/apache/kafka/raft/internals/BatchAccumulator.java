@@ -87,7 +87,7 @@ public class BatchAccumulator<T> implements Closeable {
      * The order of the elements in the records argument will match the order in the batches.
      * This method will use as many batches as necessary to serialize all of the records. Since
      * this method can split the records into multiple batches it is possible that some of the
-     * recors will get committed while other will not when the leader fails.
+     * records will get committed while other will not when the leader fails.
      *
      * @param epoch the expected leader epoch. If this does not match, then {@link Long#MAX_VALUE}
      *              will be returned as an offset which cannot become committed

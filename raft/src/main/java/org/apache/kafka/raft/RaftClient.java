@@ -83,8 +83,9 @@ public interface RaftClient<T> extends Closeable {
      * Append a list of records to the log. The write will be scheduled for some time
      * in the future. There is no guarantee that appended records will be written to
      * the log and eventually committed. While the order of the records is preserve, they can
-     * be appended to the log using one or more batches. This means that each record could
-     * be committed independently.
+     * be appended to the log using one or more batches. Each record may be committed independently.
+     * If a record is committed, then all records scheduled for append during this epoch
+     * and prior to this record are also committed.
      *
      * If the provided current leader epoch does not match the current epoch, which
      * is possible when the state machine has yet to observe the epoch change, then
