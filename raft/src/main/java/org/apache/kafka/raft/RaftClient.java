@@ -57,15 +57,16 @@ public interface RaftClient<T> extends Closeable {
         /**
          * Invoked after a leader has stepped down. This callback may or may not
          * fire before the next leader has been elected.
+         *
+         * @param epoch the epoch that the leader is resigning from
          */
-        default void handleResign() {}
+        default void handleResign(int epoch) {}
     }
 
     /**
      * Initialize the client.
      * This should only be called once on startup.
      *
-     * @param raftConfig the Raft quorum configuration
      * @throws IOException For any IO errors during initialization
      */
     void initialize() throws IOException;
@@ -76,6 +77,12 @@ public interface RaftClient<T> extends Closeable {
      * @param listener the listener
      */
     void register(Listener<T> listener);
+
+    /**
+     * Return the current {@link LeaderAndEpoch}.
+     * @return the current {@link LeaderAndEpoch}
+     */
+    LeaderAndEpoch leaderAndEpoch();
 
     /**
      * Append a list of records to the log. The write will be scheduled for some time

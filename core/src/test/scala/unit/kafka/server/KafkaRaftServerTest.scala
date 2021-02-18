@@ -66,7 +66,7 @@ class KafkaRaftServerTest {
   private def invokeLoadMetaProperties(
     metaProperties: MetaProperties,
     configProperties: Properties
-  ): (MetaProperties, Seq[String]) = {
+  ): (MetaProperties, collection.Seq[String]) = {
     val tempLogDir = TestUtils.tempDirectory()
     try {
       writeMetaProperties(tempLogDir, metaProperties)

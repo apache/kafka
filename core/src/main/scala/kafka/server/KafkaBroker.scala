@@ -67,6 +67,14 @@ object KafkaBroker {
       case _ => //do nothing
     }
   }
+
+  /**
+   * The log message that we print when the broker has been successfully started.
+   * The ducktape system tests look for a line matching the regex 'Kafka\s*Server.*started'
+   * to know when the broker is started, so it is best not to change this message -- but if
+   * you do change it, be sure to make it match that regex or the system tests will fail.
+   */
+  val STARTED_MESSAGE = "Kafka Server started"
 }
 
 trait KafkaBroker extends KafkaMetricsGroup {

@@ -96,7 +96,7 @@ public class ReplicatedCounter implements RaftClient.Listener<Integer> {
     }
 
     @Override
-    public synchronized void handleResign() {
+    public synchronized void handleResign(int epoch) {
         log.debug("Counter uncommitted value reset after resigning leadership");
         this.uncommitted = -1;
         this.claimedEpoch = Optional.empty();

@@ -56,6 +56,11 @@ public class MockNetworkChannel implements NetworkChannel {
         sendQueue.add(request);
     }
 
+    @Override
+    public void updateEndpoint(int id, RaftConfig.InetAddressSpec address) {
+        // empty
+    }
+
     public List<RaftRequest.Outbound> drainSendQueue() {
         return drainSentRequests(Optional.empty());
     }

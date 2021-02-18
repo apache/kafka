@@ -96,8 +96,8 @@ class AutoTopicCreationManagerTest {
       config,
       metadataCache,
       Some(brokerToController),
-      adminManager,
-      controller,
+      Some(adminManager),
+      Some(controller),
       groupCoordinator,
       transactionCoordinator)
 
@@ -125,8 +125,8 @@ class AutoTopicCreationManagerTest {
       config,
       metadataCache,
       None,
-      adminManager,
-      controller,
+      Some(adminManager),
+      Some(controller),
       groupCoordinator,
       transactionCoordinator)
 
@@ -155,8 +155,8 @@ class AutoTopicCreationManagerTest {
       config,
       metadataCache,
       Some(brokerToController),
-      adminManager,
-      controller,
+      Some(adminManager),
+      Some(controller),
       groupCoordinator,
       transactionCoordinator)
 

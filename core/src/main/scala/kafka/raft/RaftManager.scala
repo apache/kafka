@@ -121,6 +121,8 @@ class KafkaRaftManager[T](
   private val raftClient = buildRaftClient()
   private val raftIoThread = new RaftIoThread(raftClient, threadNamePrefix)
 
+  def kafkaRaftClient: KafkaRaftClient[T] = raftClient
+
   def startup(): Unit = {
     // Update the voter endpoints (if valid) with what's in RaftConfig
     val voterAddresses: util.Map[Integer, AddressSpec] = raftConfig.quorumVoterConnections

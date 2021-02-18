@@ -228,7 +228,7 @@ object LogConfig {
   }
 
   // Package private for testing, return a copy since it's a mutable global variable
-  private[log] def configDefCopy: LogConfigDef = new LogConfigDef(configDef)
+  private[kafka] def configDefCopy: LogConfigDef = new LogConfigDef(configDef)
 
   private val configDef: LogConfigDef = {
     import org.apache.kafka.common.config.ConfigDef.Importance._

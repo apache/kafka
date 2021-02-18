@@ -138,7 +138,7 @@ class KafkaServer(
 
   var kafkaScheduler: KafkaScheduler = null
 
-  var metadataCache: MetadataCache = null
+  var metadataCache: ZkMetadataCache = null
   var quotaManagers: QuotaFactory.QuotaManagers = null
 
   val zkClientConfig: ZKClientConfig = KafkaServer.zkClientConfigFromKafkaConfig(config).getOrElse(new ZKClientConfig())
@@ -275,7 +275,8 @@ class KafkaServer(
             time = time,
             metrics = metrics,
             threadNamePrefix = threadNamePrefix,
-            brokerEpochSupplier = () => kafkaController.brokerEpoch
+            brokerEpochSupplier = () => kafkaController.brokerEpoch,
+            config.brokerId
           )
         } else {
           AlterIsrManager(kafkaScheduler, time, zkClient)
@@ -332,8 +333,8 @@ class KafkaServer(
           time,
           metrics,
           threadNamePrefix,
-          adminManager,
-          kafkaController,
+          Some(adminManager),
+          Some(kafkaController),
           groupCoordinator,
           transactionCoordinator,
           enableForwarding
@@ -359,7 +360,7 @@ class KafkaServer(
             KafkaServer.MIN_INCREMENTAL_FETCH_SESSION_EVICTION_MS))
 
         /* start processing requests */
-        val zkSupport = ZkSupport(adminManager, kafkaController, zkClient, forwardingManager)
+        val zkSupport = ZkSupport(adminManager, kafkaController, zkClient, forwardingManager, metadataCache)
         dataPlaneRequestProcessor = new KafkaApis(socketServer.dataPlaneRequestChannel, zkSupport, replicaManager, groupCoordinator, transactionCoordinator,
           autoTopicCreationManager, config.brokerId, config, configRepository, metadataCache, metrics, authorizer, quotaManagers,
           fetchManager, brokerTopicStats, clusterId, time, tokenManager, brokerFeatures, featureCache)

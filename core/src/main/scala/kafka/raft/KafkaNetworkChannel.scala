@@ -165,7 +165,7 @@ class KafkaNetworkChannel(
     RaftUtil.errorResponse(apiKey, error)
   }
 
-  def updateEndpoint(id: Int, spec: InetAddressSpec): Unit = {
+  override def updateEndpoint(id: Int, spec: InetAddressSpec): Unit = {
     val node = new Node(id, spec.address.getHostString, spec.address.getPort)
     endpoints.put(id, node)
   }
@@ -181,5 +181,4 @@ class KafkaNetworkChannel(
   override def close(): Unit = {
     requestThread.shutdown()
   }
-
 }

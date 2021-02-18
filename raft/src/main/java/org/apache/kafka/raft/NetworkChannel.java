@@ -36,6 +36,11 @@ public interface NetworkChannel extends Closeable {
      */
     void send(RaftRequest.Outbound request);
 
+    /**
+     * Update connection information for the given id.
+     */
+    void updateEndpoint(int id, RaftConfig.InetAddressSpec address);
+
     default void close() {}
 
 }

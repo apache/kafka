@@ -1025,7 +1025,7 @@ object KafkaConfig {
   val PasswordEncoderKeyLengthDoc =  "The key length used for encoding dynamically configured passwords."
   val PasswordEncoderIterationsDoc =  "The iteration count used for encoding dynamically configured passwords."
 
-  private val configDef = {
+  private[server] val configDef = {
     import ConfigDef.Importance._
     import ConfigDef.Range._
     import ConfigDef.Type._
@@ -1893,14 +1893,25 @@ class KafkaConfig(val props: java.util.Map[_, _], doLog: Boolean, dynamicConfigO
   validateValues()
 
   private def validateValues(): Unit = {
-    if(brokerIdGenerationEnable) {
-      require(brokerId >= -1 && brokerId <= maxReservedBrokerId, "broker.id must be equal or greater than -1 and not greater than reserved.broker.max.id")
+    if (requiresZookeeper) {
+      if (zkConnect == null) {
+        throw new ConfigException(s"Missing required configuration `${KafkaConfig.ZkConnectProp}` which has no default value.")
+      }
+      if (brokerIdGenerationEnable) {
+        require(brokerId >= -1 && brokerId <= maxReservedBrokerId, "broker.id must be greater than or equal to -1 and not greater than reserved.broker.max.id")
+      } else {
+        require(brokerId >= 0, "broker.id must be greater than or equal to 0")
+      }
     } else {
-      require(brokerId >= 0, "broker.id must be equal or greater than 0")
+      // Raft-based metadata quorum
+      if (nodeId < 0) {
+        throw new ConfigException(s"Missing configuration `${KafkaConfig.NodeIdProp}` which is required " +
+          s"when `process.roles` is defined (i.e. when using the self-managed quorum).")
+      }
     }
-    require(logRollTimeMillis >= 1, "log.roll.ms must be equal or greater than 1")
-    require(logRollTimeJitterMillis >= 0, "log.roll.jitter.ms must be equal or greater than 0")
-    require(logRetentionTimeMillis >= 1 || logRetentionTimeMillis == -1, "log.retention.ms must be unlimited (-1) or, equal or greater than 1")
+    require(logRollTimeMillis >= 1, "log.roll.ms must be greater than or equal to 1")
+    require(logRollTimeJitterMillis >= 0, "log.roll.jitter.ms must be greater than or equal to 0")
+    require(logRetentionTimeMillis >= 1 || logRetentionTimeMillis == -1, "log.retention.ms must be unlimited (-1) or, greater than or equal to 1")
     require(logDirs.nonEmpty, "At least one log directory must be defined via log.dirs or log.dir.")
     require(logCleanerDedupeBufferSize / logCleanerThreads > 1024 * 1024, "log.cleaner.dedupe.buffer.size must be at least 1MB per cleaner thread.")
     require(replicaFetchWaitMaxMs <= replicaSocketTimeoutMs, "replica.socket.timeout.ms should always be at least replica.fetch.wait.max.ms" +
@@ -1975,12 +1986,5 @@ class KafkaConfig(val props: java.util.Map[_, _], doLog: Boolean, dynamicConfigO
         s"${KafkaConfig.FailedAuthenticationDelayMsProp}=$failedAuthenticationDelayMs should always be less than" +
         s" ${KafkaConfig.ConnectionsMaxIdleMsProp}=$connectionsMaxIdleMs to prevent failed" +
         s" authentication responses from timing out")
-
-    if (requiresZookeeper && zkConnect == null) {
-      throw new ConfigException(s"Missing required configuration `${KafkaConfig.ZkConnectProp}` which has no default value.")
-    } else if (usesSelfManagedQuorum && nodeId < 0) {
-      throw new ConfigException(s"Missing required configuration `${KafkaConfig.NodeIdProp}` which is required " +
-        s"when `process.roles` is defined (i.e. when using the self-managed quorum).")
-    }
   }
 }
