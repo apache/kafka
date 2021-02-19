@@ -114,7 +114,7 @@ public class ConfigurationControlManagerTest {
         assertEquals(new ApiError(Errors.INVALID_REQUEST, "Illegal topic name.").toString(),
             ConfigurationControlManager.checkConfigResource(
                 new ConfigResource(TOPIC, "* @ invalid$")).toString());
-        assertEquals(new ApiError(Errors.NONE, null).toString(),
+        assertEquals(new ApiError(Errors.INVALID_REQUEST, "Illegal topic name.").toString(),
             ConfigurationControlManager.checkConfigResource(
                 new ConfigResource(TOPIC, "")).toString());
         assertEquals(new ApiError(Errors.INVALID_REQUEST, "Illegal non-integral " +
