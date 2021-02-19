@@ -141,7 +141,7 @@ import static org.apache.kafka.raft.RaftUtil.hasValidTopicPartition;
 public class KafkaRaftClient<T> implements RaftClient<T> {
     private static final int RETRY_BACKOFF_BASE_MS = 100;
     private static final int FETCH_MAX_WAIT_MS = 1000;
-    static final int MAX_BATCH_SIZE = 1024 * 1024;
+    static final int MAX_BATCH_SIZE = 8 * 1024 * 1024;
 
     private final AtomicReference<GracefulShutdown> shutdown = new AtomicReference<>();
     private final Logger logger;
@@ -404,7 +404,7 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
         // The high watermark can only be advanced once we have written a record
         // from the new leader's epoch. Hence we write a control message immediately
         // to ensure there is no delay committing pending data.
-        appendLeaderChangeMessage(state, currentTimeMs);
+        appendLeaderChangeMessage(state, log.endOffset().offset, currentTimeMs);
         updateLeaderEndOffsetAndTimestamp(state, currentTimeMs);
 
         resetConnections();
@@ -429,7 +429,7 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
             .collect(Collectors.toList());
     }
 
-    private void appendLeaderChangeMessage(LeaderState state, long currentTimeMs) {
+    private void appendLeaderChangeMessage(LeaderState state, long baseOffset, long currentTimeMs) {
         List<Voter> voters = convertToVoters(state.followers());
         List<Voter> grantingVoters = convertToVoters(state.grantingVoters());
 
@@ -442,7 +442,11 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
             .setGrantingVoters(grantingVoters);
 
         MemoryRecords records = MemoryRecords.withLeaderChangeMessage(
-            currentTimeMs, quorum.epoch(), leaderChangeMessage);
+            baseOffset,
+            currentTimeMs,
+            quorum.epoch(),
+            leaderChangeMessage
+        );
 
         appendAsLeader(records);
         flushLeaderLog(state, currentTimeMs);
@@ -2184,13 +2188,27 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
 
     @Override
     public Long scheduleAppend(int epoch, List<T> records) {
+        return append(epoch, records, false);
+    }
+
+    @Override
+    public Long scheduleAtomicAppend(int epoch, List<T> records) {
+        return append(epoch, records, true);
+    }
+
+    private Long append(int epoch, List<T> records, boolean isAtomic) {
         BatchAccumulator<T> accumulator = this.accumulator;
         if (accumulator == null) {
             return Long.MAX_VALUE;
         }
 
         boolean isFirstAppend = accumulator.isEmpty();
-        Long offset = accumulator.append(epoch, records);
+        final Long offset;
+        if (isAtomic) {
+            offset = accumulator.appendAtomic(epoch, records);
+        } else {
+            offset = accumulator.append(epoch, records);
+        }
 
         // Wakeup the network channel if either this is the first append
         // or the accumulator is ready to drain now. Checking for the first
@@ -2347,9 +2365,10 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
 
         /**
          * This API is used for committed records originating from {@link #scheduleAppend(int, List)}
-         * on this instance. In this case, we are able to save the original record objects,
-         * which saves the need to read them back from disk. This is a nice optimization
-         * for the leader which is typically doing more work than all of the followers.
+         * or {@link #scheduleAtomicAppend(int, List)} on this instance. In this case, we are able to
+         * save the original record objects, which saves the need to read them back from disk. This is
+         * a nice optimization for the leader which is typically doing more work than all of the
+         * followers.
          */
         public void fireHandleCommit(long baseOffset, int epoch, List<T> records) {
             BatchReader.Batch<T> batch = new BatchReader.Batch<>(baseOffset, epoch, records);
