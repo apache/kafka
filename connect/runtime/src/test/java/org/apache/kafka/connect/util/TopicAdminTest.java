@@ -176,8 +176,8 @@ public class TopicAdminTest {
         admin.endOffsets(tps);
     }
 
-    @Test(expected = ConnectException.class)
-    public void endOffsetsShouldFailWithNonRetriableWhenVersionUnsupportedErrorOccurs() throws Exception {
+    @Test(expected = UnsupportedVersionException.class)
+    public void endOffsetsShouldFailWithUnsupportedVersionWhenVersionUnsupportedErrorOccurs() throws Exception {
         String topicName = "myTopic";
         TopicPartition tp1 = new TopicPartition(topicName, 0);
         Set<TopicPartition> tps = Collections.singleton(tp1);
@@ -190,8 +190,8 @@ public class TopicAdminTest {
         admin.endOffsets(tps);
     }
 
-    @Test(expected = ConnectException.class)
-    public void endOffsetsShouldFailWithRetriableWhenTimeoutErrorOccurs() throws Exception {
+    @Test(expected = TimeoutException.class)
+    public void endOffsetsShouldFailWithTimeoutExceptionWhenTimeoutErrorOccurs() throws Exception {
         String topicName = "myTopic";
         TopicPartition tp1 = new TopicPartition(topicName, 0);
         Set<TopicPartition> tps = Collections.singleton(tp1);
