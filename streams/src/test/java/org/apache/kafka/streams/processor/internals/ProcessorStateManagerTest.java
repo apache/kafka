@@ -904,8 +904,8 @@ public class ProcessorStateManagerTest {
                 () -> stateMgr.initializeStoreOffsetsFromCheckpoint(false));
 
             assertEquals(
-                Collections.singletonMap(taskId, stateMgr.changelogPartitions()),
-                exception.corruptedTaskWithChangelogs()
+                Collections.singleton(taskId),
+                exception.corruptedTasks()
             );
         } finally {
             stateMgr.close();

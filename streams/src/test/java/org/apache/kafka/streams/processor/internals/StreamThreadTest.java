@@ -1422,7 +1422,7 @@ public class StreamThreadTest {
             "proc",
             () -> record -> {
                 if (shouldThrow.get()) {
-                    throw new TaskCorruptedException(singletonMap(task1, new HashSet<>(singleton(storeChangelogTopicPartition))));
+                    throw new TaskCorruptedException(singleton(task1));
                 } else {
                     processed.set(true);
                 }
@@ -1479,7 +1479,7 @@ public class StreamThreadTest {
         final TaskCorruptedException taskCorruptedException = assertThrows(TaskCorruptedException.class, thread::runOnce);
 
         // Now, we can handle the corruption
-        thread.taskManager().handleCorruption(taskCorruptedException.corruptedTaskWithChangelogs());
+        thread.taskManager().handleCorruption(taskCorruptedException.corruptedTasks());
 
         // again, complete the restoration
         thread.runOnce();
@@ -2261,16 +2261,14 @@ public class StreamThreadTest {
         final TaskId taskId1 = new TaskId(0, 0);
         final TaskId taskId2 = new TaskId(0, 2);
 
-        final Map<TaskId, Collection<TopicPartition>> corruptedTasksWithChangelogs = mkMap(
-            mkEntry(taskId1, emptySet())
-        );
+        final Set<TaskId> corruptedTasks = singleton(taskId1);
 
         expect(task1.state()).andReturn(Task.State.RUNNING).anyTimes();
         expect(task1.id()).andReturn(taskId1).anyTimes();
         expect(task2.state()).andReturn(Task.State.RUNNING).anyTimes();
         expect(task2.id()).andReturn(taskId2).anyTimes();
 
-        taskManager.handleCorruption(corruptedTasksWithChangelogs);
+        taskManager.handleCorruption(corruptedTasks);
 
         EasyMock.replay(task1, task2, taskManager, consumer);
 
@@ -2298,7 +2296,7 @@ public class StreamThreadTest {
             @Override
             void runOnce() {
                 setState(State.PENDING_SHUTDOWN);
-                throw new TaskCorruptedException(corruptedTasksWithChangelogs);
+                throw new TaskCorruptedException(corruptedTasks);
             }
         }.updateThreadMetadata(getSharedAdminClientId(CLIENT_ID));
 
@@ -2326,16 +2324,14 @@ public class StreamThreadTest {
         final TaskId taskId1 = new TaskId(0, 0);
         final TaskId taskId2 = new TaskId(0, 2);
 
-        final Map<TaskId, Collection<TopicPartition>> corruptedTasksWithChangelogs = mkMap(
-            mkEntry(taskId1, emptySet())
-        );
+        final Set<TaskId> corruptedTasks = singleton(taskId1);
 
         expect(task1.state()).andReturn(Task.State.RUNNING).anyTimes();
         expect(task1.id()).andReturn(taskId1).anyTimes();
         expect(task2.state()).andReturn(Task.State.RUNNING).anyTimes();
         expect(task2.id()).andReturn(taskId2).anyTimes();
 
-        taskManager.handleCorruption(corruptedTasksWithChangelogs);
+        taskManager.handleCorruption(corruptedTasks);
         expectLastCall().andThrow(new TaskMigratedException("Task migrated",
                                                             new RuntimeException("non-corrupted task migrated")));
 
@@ -2368,7 +2364,7 @@ public class StreamThreadTest {
             @Override
             void runOnce() {
                 setState(State.PENDING_SHUTDOWN);
-                throw new TaskCorruptedException(corruptedTasksWithChangelogs);
+                throw new TaskCorruptedException(corruptedTasks);
             }
         }.updateThreadMetadata(getSharedAdminClientId(CLIENT_ID));
 
