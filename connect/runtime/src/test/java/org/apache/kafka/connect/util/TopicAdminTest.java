@@ -521,7 +521,7 @@ public class TopicAdminTest {
     }
 
     @Test
-    public void endOffsetsShouldFailWithNonRetriableWhenVersionUnsupportedErrorOccurs() throws Exception {
+    public void endOffsetsShouldFailWithUnsupportedVersionWhenVersionUnsupportedErrorOccurs() throws Exception {
         String topicName = "myTopic";
         TopicPartition tp1 = new TopicPartition(topicName, 0);
         Set<TopicPartition> tps = Collections.singleton(tp1);
@@ -531,14 +531,13 @@ public class TopicAdminTest {
 
         // Then the topic admin should throw exception
         TopicAdmin admin = new TopicAdmin(null, mockAdmin);
-        ConnectException e = assertThrows(ConnectException.class, () -> {
+        UnsupportedVersionException e = assertThrows(UnsupportedVersionException.class, () -> {
             admin.endOffsets(tps);
         });
-        assertTrue(e.getMessage().contains("is unsupported on brokers"));
     }
 
     @Test
-    public void endOffsetsShouldFailWithRetriableWhenTimeoutErrorOccurs() throws Exception {
+    public void endOffsetsShouldFailWithTimeoutExceptionWhenTimeoutErrorOccurs() throws Exception {
         String topicName = "myTopic";
         TopicPartition tp1 = new TopicPartition(topicName, 0);
         Set<TopicPartition> tps = Collections.singleton(tp1);
@@ -548,10 +547,9 @@ public class TopicAdminTest {
 
         // Then the topic admin should throw exception
         TopicAdmin admin = new TopicAdmin(null, mockAdmin);
-        ConnectException e = assertThrows(ConnectException.class, () -> {
+        TimeoutException e = assertThrows(TimeoutException.class, () -> {
             admin.endOffsets(tps);
         });
-        assertTrue(e.getMessage().contains("Timed out while waiting"));
     }
 
     @Test
