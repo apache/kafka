@@ -60,6 +60,7 @@ import org.slf4j.Logger;
 import java.util.AbstractMap.SimpleImmutableEntry;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
@@ -121,13 +122,23 @@ public class ReplicationControlManager {
         }
 
         PartitionControlInfo merge(PartitionChangeRecord record) {
+            int[] newIsr = (record.isr() == null) ? isr : Replicas.toArray(record.isr());
+            int newLeader;
+            int newLeaderEpoch;
+            if (record.leader() == Integer.MIN_VALUE) {
+                newLeader = leader;
+                newLeaderEpoch = leaderEpoch;
+            } else {
+                newLeader = record.leader();
+                newLeaderEpoch = leaderEpoch + 1;
+            }
             return new PartitionControlInfo(replicas,
-                Replicas.toArray(record.isr()),
+                newIsr,
                 removingReplicas,
                 addingReplicas,
-                record.leader(),
-                record.leaderEpoch(),
-                record.partitionEpoch());
+                newLeader,
+                newLeaderEpoch,
+                partitionEpoch + 1);
         }
 
         String diff(PartitionControlInfo prev) {
@@ -578,10 +589,7 @@ public class ReplicationControlManager {
                 records.add(new ApiMessageAndVersion(new PartitionChangeRecord().
                     setPartitionId(partitionData.partitionIndex()).
                     setTopicId(topic.id).
-                    setIsr(partitionData.newIsr()).
-                    setLeader(partition.leader).
-                    setLeaderEpoch(partition.leaderEpoch).
-                    setPartitionEpoch(partition.partitionEpoch + 1), (short) 0));
+                    setIsr(partitionData.newIsr()), (short) 0));
             }
         }
         return new ControllerResult<>(records, response);
@@ -602,7 +610,7 @@ public class ReplicationControlManager {
         if (brokerRegistration == null) {
             throw new RuntimeException("Can't find broker registration for broker " + brokerId);
         }
-        handleNodeDeactivated(brokerId, records);
+        handleNodeDeactivated(brokerId, false, records);
         records.add(new ApiMessageAndVersion(new FenceBrokerRecord().
             setId(brokerId).setEpoch(brokerRegistration.epoch()), (short) 0));
     }
@@ -619,7 +627,7 @@ public class ReplicationControlManager {
      */
     void handleBrokerUnregistered(int brokerId, long brokerEpoch,
                                   List<ApiMessageAndVersion> records) {
-        handleNodeDeactivated(brokerId, records);
+        handleNodeDeactivated(brokerId, false, records);
         records.add(new ApiMessageAndVersion(new UnregisterBrokerRecord().
             setBrokerId(brokerId).setBrokerEpoch(brokerEpoch), (short) 0));
     }
@@ -630,10 +638,13 @@ public class ReplicationControlManager {
      * member since this would preclude clean leader election in the future.
      * It is removed as the leader for all partitions it leads.
      *
-     * @param brokerId      The broker id.
-     * @param records       The record list to append to.
+     * @param brokerId              The broker id.
+     * @param alwaysBumpLeaderEpoch True if we should generate a record that
+     *                              always increments the leader epoch.
+     * @param records               The record list to append to.
      */
-    void handleNodeDeactivated(int brokerId, List<ApiMessageAndVersion> records) {
+    void handleNodeDeactivated(int brokerId, boolean alwaysBumpLeaderEpoch,
+            List<ApiMessageAndVersion> records) {
         Iterator<TopicPartition> iterator = brokersToIsrs.iterator(brokerId, false);
         while (iterator.hasNext()) {
             TopicPartition topicPartition = iterator.next();
@@ -647,30 +658,28 @@ public class ReplicationControlManager {
                 throw new RuntimeException("Partition " + topicPartition +
                     " existed in isrMembers, but not in the partitions map.");
             }
-            int[] newIsr = Replicas.copyWithout(partition.isr, brokerId);
-            int newLeader, newLeaderEpoch;
-            if (newIsr.length == 0) {
-                // We don't want to shrink the ISR to size 0. So, leave the node in the
-                // ISR, but set the leader to -1 (no leader).
-                newIsr = partition.isr;
-                newLeader = -1;
-                newLeaderEpoch = partition.leaderEpoch + 1;
-            } else if (partition.leader == brokerId) {
-                // The fenced node will no longer be the leader.
-                newLeader = chooseNewLeader(partition, newIsr, false);
-                newLeaderEpoch = partition.leaderEpoch + 1;
-            } else {
-                // The fenced node wasn't the leader, so no leader change is needed.
-                newLeader = partition.leader;
-                newLeaderEpoch = partition.leaderEpoch;
-            }
-            records.add(new ApiMessageAndVersion(new PartitionChangeRecord().
+            PartitionChangeRecord record = new PartitionChangeRecord().
                 setPartitionId(topicPartition.partitionId()).
-                setTopicId(topic.id).
-                setIsr(Replicas.toList(newIsr)).
-                setLeader(newLeader).
-                setLeaderEpoch(newLeaderEpoch).
-                setPartitionEpoch(partition.partitionEpoch + 1), (short) 0));
+                setTopicId(topic.id);
+            int[] newIsr = Replicas.copyWithout(partition.isr, brokerId);
+            if (newIsr.length == 0) {
+                // We don't want to shrink the ISR to size 0. So, leave the node in the ISR.
+                if (alwaysBumpLeaderEpoch || record.leader() != -1) {
+                    // The partition is now leaderless, so set its leader to -1.
+                    record.setLeader(-1);
+                    records.add(new ApiMessageAndVersion(record, (short) 0));
+                }
+            } else {
+                record.setIsr(Replicas.toList(newIsr));
+                if (partition.leader == brokerId) {
+                    // The fenced node will no longer be the leader.
+                    int newLeader = chooseNewLeader(partition, newIsr, false);
+                    record.setLeader(newLeader);
+                } else if (alwaysBumpLeaderEpoch) {
+                    record.setLeader(partition.leader);
+                }
+                records.add(new ApiMessageAndVersion(record, (short) 0));
+            }
         }
     }
 
@@ -718,10 +727,7 @@ public class ReplicationControlManager {
                 records.add(new ApiMessageAndVersion(new PartitionChangeRecord().
                     setPartitionId(topicPartition.partitionId()).
                     setTopicId(topic.id).
-                    setIsr(Replicas.toList(partition.isr)).
-                    setLeader(brokerId).
-                    setLeaderEpoch(partition.leaderEpoch + 1).
-                    setPartitionEpoch(partition.partitionEpoch + 1), (short) 0));
+                    setLeader(brokerId), (short) 0));
             }
         }
     }
@@ -781,17 +787,15 @@ public class ReplicationControlManager {
                 return ApiError.NONE;
             }
         } else {
+            PartitionChangeRecord record = new PartitionChangeRecord().
+                setPartitionId(partitionId).
+                setTopicId(topicId);
             int[] newIsr = partitionInfo.isr;
             if (!Replicas.contains(partitionInfo.isr, newLeader)) {
-                newIsr = new int[] {newLeader};
+                record.setIsr(Collections.singletonList(newLeader));
             }
-            records.add(new ApiMessageAndVersion(new PartitionChangeRecord().
-                setPartitionId(partitionId).
-                setTopicId(topicId).
-                setIsr(Replicas.toList(newIsr)).
-                setLeader(newLeader).
-                setLeaderEpoch(partitionInfo.leaderEpoch + 1).
-                setPartitionEpoch(partitionInfo.partitionEpoch + 1), (short) 0));
+            record.setLeader(newLeader);
+            records.add(new ApiMessageAndVersion(record, (short) 0));
             return ApiError.NONE;
         }
     }
@@ -832,7 +836,10 @@ public class ReplicationControlManager {
                     handleBrokerUnfenced(brokerId, brokerEpoch, records);
                     break;
                 case CONTROLLED_SHUTDOWN:
-                    handleNodeDeactivated(brokerId, records);
+                    // Note: we always bump the leader epoch of each partition that the
+                    // shutting down broker is in here.  This prevents the broker from
+                    // getting re-added to the ISR later.
+                    handleNodeDeactivated(brokerId, true, records);
                     break;
                 case SHUTDOWN_NOW:
                     handleBrokerFenced(brokerId, records);
