@@ -146,7 +146,7 @@ public class WorkerConfig extends AbstractConfig {
     public static final long OFFSET_COMMIT_TIMEOUT_MS_DEFAULT = 5000L;
 
     /**
-     * @deprecated As of 1.1.0.
+     * @deprecated As of 1.1.0. Only used when listeners is not set. Use listeners instead.
      */
     @Deprecated
     public static final String REST_HOST_NAME_CONFIG = "rest.host.name";
@@ -154,7 +154,7 @@ public class WorkerConfig extends AbstractConfig {
             = "Hostname for the REST API. If this is set, it will only bind to this interface.";
 
     /**
-     * @deprecated As of 1.1.0.
+     * @deprecated As of 1.1.0. Only used when listeners is not set. Use listeners instead.
      */
     @Deprecated
     public static final String REST_PORT_CONFIG = "rest.port";
