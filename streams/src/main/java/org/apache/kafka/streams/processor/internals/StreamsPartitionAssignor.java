@@ -577,7 +577,7 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
 
         final Map<UUID, ClientState> clientStates = new HashMap<>();
         final boolean lagComputationSuccessful =
-                populateClientStatesMap(clientStates, clientMetadataMap, taskForPartition, changelogTopics);
+            populateClientStatesMap(clientStates, clientMetadataMap, taskForPartition, changelogTopics);
 
         final Set<TaskId> allTasks = partitionsForTask.keySet();
         statefulTasks.addAll(changelogTopics.taskIds());
