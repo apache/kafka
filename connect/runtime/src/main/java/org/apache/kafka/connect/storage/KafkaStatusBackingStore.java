@@ -44,6 +44,7 @@ import org.apache.kafka.connect.util.Callback;
 import org.apache.kafka.connect.util.ConnectUtils;
 import org.apache.kafka.connect.util.ConnectorTaskId;
 import org.apache.kafka.connect.util.KafkaBasedLog;
+import org.apache.kafka.connect.util.SharedTopicAdmin;
 import org.apache.kafka.connect.util.Table;
 import org.apache.kafka.connect.util.TopicAdmin;
 import org.slf4j.Logger;
@@ -134,6 +135,7 @@ public class KafkaStatusBackingStore implements StatusBackingStore {
     private String statusTopic;
     private KafkaBasedLog<String, byte[]> kafkaLog;
     private int generation;
+    private SharedTopicAdmin ownTopicAdmin;
 
     @Deprecated
     public KafkaStatusBackingStore(Time time, Converter converter) {
@@ -177,7 +179,14 @@ public class KafkaStatusBackingStore implements StatusBackingStore {
 
         Map<String, Object> adminProps = new HashMap<>(originals);
         ConnectUtils.addMetricsContextProperties(adminProps, config, clusterId);
-        Supplier<TopicAdmin> adminSupplier = topicAdminSupplier != null ? topicAdminSupplier : () -> new TopicAdmin(adminProps);
+        Supplier<TopicAdmin> adminSupplier;
+        if (topicAdminSupplier != null) {
+            adminSupplier = topicAdminSupplier;
+        } else {
+            // Create our own topic admin supplier that we'll close when we're stopped
+            ownTopicAdmin = new SharedTopicAdmin(adminProps);
+            adminSupplier = ownTopicAdmin;
+        }
 
         Map<String, Object> topicSettings = config instanceof DistributedConfig
                                             ? ((DistributedConfig) config).statusStorageTopicSettings()
@@ -221,7 +230,13 @@ public class KafkaStatusBackingStore implements StatusBackingStore {
 
     @Override
     public void stop() {
-        kafkaLog.stop();
+        try {
+            kafkaLog.stop();
+        } finally {
+            if (ownTopicAdmin != null) {
+                ownTopicAdmin.close();
+            }
+        }
     }
 
     @Override

@@ -32,6 +32,7 @@ import org.apache.kafka.connect.util.Callback;
 import org.apache.kafka.connect.util.ConnectUtils;
 import org.apache.kafka.connect.util.ConvertingFutureCallback;
 import org.apache.kafka.connect.util.KafkaBasedLog;
+import org.apache.kafka.connect.util.SharedTopicAdmin;
 import org.apache.kafka.connect.util.TopicAdmin;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -65,6 +66,7 @@ public class KafkaOffsetBackingStore implements OffsetBackingStore {
     private KafkaBasedLog<byte[], byte[]> offsetLog;
     private HashMap<ByteBuffer, ByteBuffer> data;
     private final Supplier<TopicAdmin> topicAdminSupplier;
+    private SharedTopicAdmin ownTopicAdmin;
 
     @Deprecated
     public KafkaOffsetBackingStore() {
@@ -98,7 +100,14 @@ public class KafkaOffsetBackingStore implements OffsetBackingStore {
 
         Map<String, Object> adminProps = new HashMap<>(originals);
         ConnectUtils.addMetricsContextProperties(adminProps, config, clusterId);
-        Supplier<TopicAdmin> adminSupplier = topicAdminSupplier != null ? topicAdminSupplier : () -> new TopicAdmin(adminProps);
+        Supplier<TopicAdmin> adminSupplier;
+        if (topicAdminSupplier != null) {
+            adminSupplier = topicAdminSupplier;
+        } else {
+            // Create our own topic admin supplier that we'll close when we're stopped
+            ownTopicAdmin = new SharedTopicAdmin(adminProps);
+            adminSupplier = ownTopicAdmin;
+        }
         Map<String, Object> topicSettings = config instanceof DistributedConfig
                                             ? ((DistributedConfig) config).offsetStorageTopicSettings()
                                             : Collections.emptyMap();
@@ -140,7 +149,13 @@ public class KafkaOffsetBackingStore implements OffsetBackingStore {
     @Override
     public void stop() {
         log.info("Stopping KafkaOffsetBackingStore");
-        offsetLog.stop();
+        try {
+            offsetLog.stop();
+        } finally {
+            if (ownTopicAdmin != null) {
+                ownTopicAdmin.close();
+            }
+        }
         log.info("Stopped KafkaOffsetBackingStore");
     }
 
