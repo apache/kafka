@@ -344,20 +344,20 @@ public class BatchAccumulator<T> implements Closeable {
         private final MemoryPool pool;
         // Buffer that was allocated by the MemoryPool (pool). This may not be the buffer used in
         // the MemoryRecords (data) object.
-        private final ByteBuffer pooledBuffer;
+        private final ByteBuffer initialBuffer;
 
         private CompletedBatch(
             long baseOffset,
             List<T> records,
             MemoryRecords data,
             MemoryPool pool,
-            ByteBuffer pooledBuffer
+            ByteBuffer initialBuffer
         ) {
             this.baseOffset = baseOffset;
             this.records = records;
             this.data = data;
             this.pool = pool;
-            this.pooledBuffer = pooledBuffer;
+            this.initialBuffer = initialBuffer;
         }
 
         public int sizeInBytes() {
@@ -365,7 +365,7 @@ public class BatchAccumulator<T> implements Closeable {
         }
 
         public void release() {
-            pool.release(pooledBuffer);
+            pool.release(initialBuffer);
         }
     }
 

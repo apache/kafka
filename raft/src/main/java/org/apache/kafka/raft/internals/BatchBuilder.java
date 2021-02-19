@@ -343,7 +343,8 @@ public class BatchBuilder<T> {
                 DefaultRecord.EMPTY_HEADERS
             );
 
-            bytesNeeded += ByteUtils.sizeOfVarint(recordSizeInBytes) + recordSizeInBytes;
+            bytesNeeded = Math.addExact(bytesNeeded, ByteUtils.sizeOfVarint(recordSizeInBytes));
+            bytesNeeded = Math.addExact(bytesNeeded, recordSizeInBytes);
 
             expectedNextOffset += 1;
         }

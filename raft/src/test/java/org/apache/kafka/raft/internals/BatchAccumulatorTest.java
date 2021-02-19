@@ -236,7 +236,8 @@ class BatchAccumulatorTest {
         });
     }
 
-    @Test void testRecordsAreSplit() {
+    @Test
+    public void testRecordsAreSplit() {
         int leaderEpoch = 17;
         long baseOffset = 157;
         int lingerMs = 50;
