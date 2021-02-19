@@ -355,8 +355,8 @@ class BrokerServer(
         getOrElse(config.offsetsTopicPartitions))
       transactionCoordinator.startup(() => metadataCache.numPartitions(Topic.TRANSACTION_STATE_TOPIC_NAME).
         getOrElse(config.transactionTopicPartitions))
-      // Apply deferred changes after starting coordinators to avoid GroupMetadataManager IllegalStateException
-      // due to Kafka scheduler not yet running (this manifests if we have deferred any coordinator offsets partitions).
+      // Apply deferred partition metadata changes after starting replica manager and coordinators
+      // so that those services are ready and able to process the changes.
       replicaManager.endMetadataChangeDeferral(
         RequestHandlerHelper.onLeadershipChange(groupCoordinator, transactionCoordinator, _, _))
 
