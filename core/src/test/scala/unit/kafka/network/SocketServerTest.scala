@@ -31,10 +31,11 @@ import com.yammer.metrics.core.{Gauge, Meter}
 import javax.net.ssl._
 import kafka.metrics.KafkaYammerMetrics
 import kafka.security.CredentialProvider
-import kafka.server.{KafkaConfig, ThrottledChannel}
+import kafka.server.{KafkaConfig, SimpleApiVersionManager, ThrottledChannel}
 import kafka.utils.Implicits._
 import kafka.utils.TestUtils
 import org.apache.kafka.common.memory.MemoryPool
+import org.apache.kafka.common.message.ApiMessageType.ListenerType
 import org.apache.kafka.common.message.{ProduceRequestData, SaslAuthenticateRequestData, SaslHandshakeRequestData, VoteRequestData}
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.network.KafkaChannel.ChannelMuteState
@@ -73,7 +74,8 @@ class SocketServerTest {
   // Clean-up any metrics left around by previous tests
   TestUtils.clearYammerMetrics()
 
-  val server = new SocketServer(config, metrics, Time.SYSTEM, credentialProvider)
+  private val apiVersionManager = new SimpleApiVersionManager(ListenerType.ZK_BROKER)
+  val server = new SocketServer(config, metrics, Time.SYSTEM, credentialProvider, apiVersionManager)
   server.startup()
   val sockets = new ArrayBuffer[Socket]
 
@@ -452,7 +454,8 @@ class SocketServerTest {
     val time = new MockTime()
     props.put(KafkaConfig.ConnectionsMaxIdleMsProp, idleTimeMs.toString)
     val serverMetrics = new Metrics
-    val overrideServer = new SocketServer(KafkaConfig.fromProps(props), serverMetrics, time, credentialProvider)
+    val overrideServer = new SocketServer(KafkaConfig.fromProps(props), serverMetrics,
+      time, credentialProvider, apiVersionManager)
 
     try {
       overrideServer.startup()
@@ -504,12 +507,14 @@ class SocketServerTest {
     val serverMetrics = new Metrics
     @volatile var selector: TestableSelector = null
     val overrideConnectionId = "127.0.0.1:1-127.0.0.1:2-0"
-    val overrideServer = new SocketServer(KafkaConfig.fromProps(props), serverMetrics, time, credentialProvider) {
+    val overrideServer = new SocketServer(
+      KafkaConfig.fromProps(props), serverMetrics, time, credentialProvider, apiVersionManager
+    ) {
       override def newProcessor(id: Int, requestChannel: RequestChannel, connectionQuotas: ConnectionQuotas, listenerName: ListenerName,
-                                protocol: SecurityProtocol, memoryPool: MemoryPool, isPrivilegedListener: Boolean = false): Processor = {
+                                protocol: SecurityProtocol, memoryPool: MemoryPool, isPrivilegedListener: Boolean): Processor = {
         new Processor(id, time, config.socketRequestMaxBytes, dataPlaneRequestChannel, connectionQuotas,
           config.connectionsMaxIdleMs, config.failedAuthenticationDelayMs, listenerName, protocol, config, metrics,
-          credentialProvider, memoryPool, new LogContext(), isPrivilegedListener = isPrivilegedListener) {
+          credentialProvider, memoryPool, new LogContext(), Processor.ConnectionQueueSize, isPrivilegedListener, apiVersionManager) {
           override protected[network] def connectionId(socket: Socket): String = overrideConnectionId
           override protected[network] def createSelector(channelBuilder: ChannelBuilder): Selector = {
             val testableSelector = new TestableSelector(config, channelBuilder, time, metrics)
@@ -799,7 +804,8 @@ class SocketServerTest {
     val newProps = TestUtils.createBrokerConfig(0, TestUtils.MockZkConnect, port = 0)
     newProps.setProperty(KafkaConfig.MaxConnectionsPerIpProp, "0")
     newProps.setProperty(KafkaConfig.MaxConnectionsPerIpOverridesProp, "%s:%s".format("127.0.0.1", "5"))
-    val server = new SocketServer(KafkaConfig.fromProps(newProps), new Metrics(), Time.SYSTEM, credentialProvider)
+    val server = new SocketServer(KafkaConfig.fromProps(newProps), new Metrics(),
+      Time.SYSTEM, credentialProvider, apiVersionManager)
     try {
       server.startup()
       // make the maximum allowable number of connections
@@ -837,7 +843,8 @@ class SocketServerTest {
     val overrideProps = TestUtils.createBrokerConfig(0, TestUtils.MockZkConnect, port = 0)
     overrideProps.put(KafkaConfig.MaxConnectionsPerIpOverridesProp, s"localhost:$overrideNum")
     val serverMetrics = new Metrics()
-    val overrideServer = new SocketServer(KafkaConfig.fromProps(overrideProps), serverMetrics, Time.SYSTEM, credentialProvider)
+    val overrideServer = new SocketServer(KafkaConfig.fromProps(overrideProps), serverMetrics,
+      Time.SYSTEM, credentialProvider, apiVersionManager)
     try {
       overrideServer.startup()
       // make the maximum allowable number of connections
@@ -866,7 +873,8 @@ class SocketServerTest {
     overrideProps.put(KafkaConfig.NumQuotaSamplesProp, String.valueOf(2))
     val connectionRate = 5
     val time = new MockTime()
-    val overrideServer = new SocketServer(KafkaConfig.fromProps(overrideProps), new Metrics(), time, credentialProvider)
+    val overrideServer = new SocketServer(KafkaConfig.fromProps(overrideProps), new Metrics(),
+      time, credentialProvider, apiVersionManager)
     // update the connection rate to 5
     overrideServer.connectionQuotas.updateIpConnectionRateQuota(None, Some(connectionRate))
     try {
@@ -916,7 +924,8 @@ class SocketServerTest {
     overrideProps.put(KafkaConfig.NumQuotaSamplesProp, String.valueOf(2))
     val connectionRate = 5
     val time = new MockTime()
-    val overrideServer = new SocketServer(KafkaConfig.fromProps(overrideProps), new Metrics(), time, credentialProvider)
+    val overrideServer = new SocketServer(KafkaConfig.fromProps(overrideProps), new Metrics(),
+      time, credentialProvider, apiVersionManager)
     overrideServer.connectionQuotas.updateIpConnectionRateQuota(None, Some(connectionRate))
     overrideServer.startup()
     // make the maximum allowable number of connections
@@ -938,7 +947,8 @@ class SocketServerTest {
   @Test
   def testSslSocketServer(): Unit = {
     val serverMetrics = new Metrics
-    val overrideServer = new SocketServer(KafkaConfig.fromProps(sslServerProps), serverMetrics, Time.SYSTEM, credentialProvider)
+    val overrideServer = new SocketServer(KafkaConfig.fromProps(sslServerProps), serverMetrics,
+      Time.SYSTEM, credentialProvider, apiVersionManager)
     try {
       overrideServer.startup()
       val sslContext = SSLContext.getInstance(TestSslUtils.DEFAULT_TLS_PROTOCOL_FOR_TESTS)
@@ -1078,12 +1088,14 @@ class SocketServerTest {
     val props = TestUtils.createBrokerConfig(0, TestUtils.MockZkConnect, port = 0)
     val serverMetrics = new Metrics
     var conn: Socket = null
-    val overrideServer = new SocketServer(KafkaConfig.fromProps(props), serverMetrics, Time.SYSTEM, credentialProvider) {
+    val overrideServer = new SocketServer(
+      KafkaConfig.fromProps(props), serverMetrics, Time.SYSTEM, credentialProvider, apiVersionManager
+    ) {
       override def newProcessor(id: Int, requestChannel: RequestChannel, connectionQuotas: ConnectionQuotas, listenerName: ListenerName,
                                 protocol: SecurityProtocol, memoryPool: MemoryPool, isPrivilegedListener: Boolean = false): Processor = {
         new Processor(id, time, config.socketRequestMaxBytes, dataPlaneRequestChannel, connectionQuotas,
           config.connectionsMaxIdleMs, config.failedAuthenticationDelayMs, listenerName, protocol, config, metrics,
-          credentialProvider, MemoryPool.NONE, new LogContext(), isPrivilegedListener = isPrivilegedListener) {
+          credentialProvider, MemoryPool.NONE, new LogContext(), Processor.ConnectionQueueSize, isPrivilegedListener, apiVersionManager) {
           override protected[network] def sendResponse(response: RequestChannel.Response, responseSend: Send): Unit = {
             conn.close()
             super.sendResponse(response, responseSend)
@@ -1120,12 +1132,14 @@ class SocketServerTest {
   def testClientDisconnectionWithOutstandingReceivesProcessedUntilFailedSend(): Unit = {
     val serverMetrics = new Metrics
     @volatile var selector: TestableSelector = null
-    val overrideServer = new SocketServer(KafkaConfig.fromProps(props), serverMetrics, Time.SYSTEM, credentialProvider) {
+    val overrideServer = new SocketServer(
+      KafkaConfig.fromProps(props), serverMetrics, Time.SYSTEM, credentialProvider, apiVersionManager
+    ) {
       override def newProcessor(id: Int, requestChannel: RequestChannel, connectionQuotas: ConnectionQuotas, listenerName: ListenerName,
-                                protocol: SecurityProtocol, memoryPool: MemoryPool, isPrivilegedListener: Boolean = false): Processor = {
+                                protocol: SecurityProtocol, memoryPool: MemoryPool, isPrivilegedListener: Boolean): Processor = {
         new Processor(id, time, config.socketRequestMaxBytes, dataPlaneRequestChannel, connectionQuotas,
           config.connectionsMaxIdleMs, config.failedAuthenticationDelayMs, listenerName, protocol, config, metrics,
-          credentialProvider, memoryPool, new LogContext(), isPrivilegedListener = isPrivilegedListener) {
+          credentialProvider, memoryPool, new LogContext(), Processor.ConnectionQueueSize, isPrivilegedListener, apiVersionManager) {
           override protected[network] def createSelector(channelBuilder: ChannelBuilder): Selector = {
             val testableSelector = new TestableSelector(config, channelBuilder, time, metrics)
             selector = testableSelector
@@ -1161,7 +1175,8 @@ class SocketServerTest {
     props.setProperty(KafkaConfig.ConnectionsMaxIdleMsProp, "110")
     val serverMetrics = new Metrics
     var conn: Socket = null
-    val overrideServer = new SocketServer(KafkaConfig.fromProps(props), serverMetrics, Time.SYSTEM, credentialProvider)
+    val overrideServer = new SocketServer(KafkaConfig.fromProps(props), serverMetrics,
+      Time.SYSTEM, credentialProvider, apiVersionManager)
     try {
       overrideServer.startup()
       conn = connect(overrideServer)
@@ -1873,9 +1888,13 @@ class SocketServerTest {
     }
   }
 
-  class TestableSocketServer(config : KafkaConfig = KafkaConfig.fromProps(props), val connectionQueueSize: Int = 20,
-                             override val time: Time = Time.SYSTEM) extends SocketServer(config,
-    new Metrics, time, credentialProvider) {
+  class TestableSocketServer(
+    config : KafkaConfig = KafkaConfig.fromProps(props),
+    connectionQueueSize: Int = 20,
+    time: Time = Time.SYSTEM
+  ) extends SocketServer(
+    config, new Metrics, time, credentialProvider, apiVersionManager,
+  ) {
 
     @volatile var selector: Option[TestableSelector] = None
     @volatile var uncaughtExceptions = 0
@@ -1884,7 +1903,7 @@ class SocketServerTest {
                               protocol: SecurityProtocol, memoryPool: MemoryPool, isPrivilegedListener: Boolean = false): Processor = {
       new Processor(id, time, config.socketRequestMaxBytes, requestChannel, connectionQuotas, config.connectionsMaxIdleMs,
         config.failedAuthenticationDelayMs, listenerName, protocol, config, metrics, credentialProvider,
-        memoryPool, new LogContext(), connectionQueueSize, isPrivilegedListener) {
+        memoryPool, new LogContext(), connectionQueueSize, isPrivilegedListener, apiVersionManager) {
 
         override protected[network] def createSelector(channelBuilder: ChannelBuilder): Selector = {
           val testableSelector = new TestableSelector(config, channelBuilder, time, metrics, metricTags.asScala)

@@ -30,6 +30,7 @@ import kafka.security.CredentialProvider
 import kafka.server.QuotaFactory.QuotaManagers
 import kafka.utils.{CoreUtils, Logging}
 import org.apache.kafka.common.config.ConfigResource
+import org.apache.kafka.common.message.ApiMessageType.ListenerType
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.security.scram.internals.ScramMechanism
 import org.apache.kafka.common.security.token.delegation.internals.DelegationTokenCache
@@ -126,15 +127,16 @@ class ControllerServer(
           }.toMap
       }
 
+      val apiVersionManager = new SimpleApiVersionManager(ListenerType.CONTROLLER)
+
       tokenCache = new DelegationTokenCache(ScramMechanism.mechanismNames)
       credentialProvider = new CredentialProvider(ScramMechanism.mechanismNames, tokenCache)
       socketServer = new SocketServer(config,
         metrics,
         time,
         credentialProvider,
-        allowControllerOnlyApis = true,
-        controllerSocketServer = true)
-      socketServer.startup(false, None, config.controllerListeners)
+        apiVersionManager)
+      socketServer.startup(startProcessingRequests = false, controlPlaneListener = None, config.controllerListeners)
       socketServerFirstBoundPortFuture.complete(socketServer.boundPort(
         config.controllerListeners.head.listenerName))
 

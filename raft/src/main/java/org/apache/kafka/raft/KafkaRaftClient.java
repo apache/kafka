@@ -404,7 +404,7 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
         // The high watermark can only be advanced once we have written a record
         // from the new leader's epoch. Hence we write a control message immediately
         // to ensure there is no delay committing pending data.
-        appendLeaderChangeMessage(state, currentTimeMs);
+        appendLeaderChangeMessage(state, log.endOffset().offset, currentTimeMs);
         updateLeaderEndOffsetAndTimestamp(state, currentTimeMs);
 
         resetConnections();
@@ -429,7 +429,7 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
             .collect(Collectors.toList());
     }
 
-    private void appendLeaderChangeMessage(LeaderState state, long currentTimeMs) {
+    private void appendLeaderChangeMessage(LeaderState state, long baseOffset, long currentTimeMs) {
         List<Voter> voters = convertToVoters(state.followers());
         List<Voter> grantingVoters = convertToVoters(state.grantingVoters());
 
@@ -442,7 +442,11 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
             .setGrantingVoters(grantingVoters);
 
         MemoryRecords records = MemoryRecords.withLeaderChangeMessage(
-            currentTimeMs, quorum.epoch(), leaderChangeMessage);
+            baseOffset,
+            currentTimeMs,
+            quorum.epoch(),
+            leaderChangeMessage
+        );
 
         appendAsLeader(records);
         flushLeaderLog(state, currentTimeMs);
