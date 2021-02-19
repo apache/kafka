@@ -21,6 +21,7 @@ import org.apache.kafka.common.config.SaslConfigs;
 import org.apache.kafka.common.config.SslConfigs;
 import org.apache.kafka.common.config.internals.BrokerSecurityConfigs;
 import org.apache.kafka.common.memory.MemoryPool;
+import org.apache.kafka.common.requests.ApiVersionsResponse;
 import org.apache.kafka.common.security.JaasContext;
 import org.apache.kafka.common.security.auth.AuthenticateCallbackHandler;
 import org.apache.kafka.common.security.auth.Login;
@@ -85,6 +86,7 @@ public class SaslChannelBuilder implements ChannelBuilder, ListenerReconfigurabl
     private final DelegationTokenCache tokenCache;
     private final Map<String, LoginManager> loginManagers;
     private final Map<String, Subject> subjects;
+    private final Supplier<ApiVersionsResponse> apiVersionSupplier;
 
     private SslFactory sslFactory;
     private Map<String, ?> configs;
@@ -108,7 +110,8 @@ public class SaslChannelBuilder implements ChannelBuilder, ListenerReconfigurabl
                               DelegationTokenCache tokenCache,
                               String sslClientAuthOverride,
                               Time time,
-                              LogContext logContext) {
+                              LogContext logContext,
+                              Supplier<ApiVersionsResponse> apiVersionSupplier) {
         this.mode = mode;
         this.jaasContexts = jaasContexts;
         this.loginManagers = new HashMap<>(jaasContexts.size());
@@ -126,6 +129,11 @@ public class SaslChannelBuilder implements ChannelBuilder, ListenerReconfigurabl
         this.time = time;
         this.logContext = logContext;
         this.log = logContext.logger(getClass());
+        this.apiVersionSupplier = apiVersionSupplier;
+
+        if (mode == Mode.SERVER && apiVersionSupplier == null) {
+            throw new IllegalArgumentException("Server channel builder must provide an ApiVersionResponse supplier");
+        }
     }
 
     @SuppressWarnings("unchecked")
@@ -266,7 +274,7 @@ public class SaslChannelBuilder implements ChannelBuilder, ListenerReconfigurabl
                                                                ChannelMetadataRegistry metadataRegistry) {
         return new SaslServerAuthenticator(configs, callbackHandlers, id, subjects,
                 kerberosShortNamer, listenerName, securityProtocol, transportLayer,
-                connectionsMaxReauthMsByMechanism, metadataRegistry, time);
+                connectionsMaxReauthMsByMechanism, metadataRegistry, time, apiVersionSupplier);
     }
 
     // Visible to override for testing
