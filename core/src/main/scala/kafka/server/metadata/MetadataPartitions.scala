@@ -84,12 +84,22 @@ case class MetadataPartition(topicName: String,
   def isReplicaFor(brokerId: Int): Boolean = replicas.contains(Integer.valueOf(brokerId))
 
   def copyWithChanges(record: PartitionChangeRecord): MetadataPartition = {
+    val (newLeader, newLeaderEpoch) = if (record.leader() == Integer.MIN_VALUE) {
+      (leaderId, leaderEpoch)
+    } else {
+      (record.leader(), leaderEpoch + 1)
+    }
+    val newIsr = if (record.isr() == null) {
+      isr
+    } else {
+      record.isr()
+    }
     MetadataPartition(topicName,
       partitionIndex,
-      record.leader(),
-      record.leaderEpoch(),
+      newLeader,
+      newLeaderEpoch,
       replicas,
-      record.isr(),
+      newIsr,
       offlineReplicas,
       addingReplicas,
       removingReplicas)
