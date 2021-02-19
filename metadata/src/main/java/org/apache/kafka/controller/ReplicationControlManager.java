@@ -186,6 +186,11 @@ public class ReplicationControlManager {
             return builder.toString();
         }
 
+        int preferredReplica() {
+            if (replicas.length == 0) return -1;
+            return replicas[0];
+        }
+
         @Override
         public int hashCode() {
             return Objects.hash(replicas, isr, removingReplicas, addingReplicas, leader,
@@ -779,25 +784,32 @@ public class ReplicationControlManager {
                 "No such partition as " + topic + "-" + partitionId);
         }
         int newLeader = chooseNewLeader(partitionInfo, partitionInfo.isr, unclean);
+        if (newLeader < 0) {
+            // If we can't find any leader for the partition, return an error.
+            return new ApiError(Errors.LEADER_NOT_AVAILABLE,
+                "Unable to find any leader for the partition.");
+        }
         if (newLeader == partitionInfo.leader) {
-            if (newLeader < 0) {
-                return new ApiError(Errors.LEADER_NOT_AVAILABLE,
-                    "Unable to find any leader for the partition.");
-            } else {
-                return ApiError.NONE;
-            }
-        } else {
-            PartitionChangeRecord record = new PartitionChangeRecord().
-                setPartitionId(partitionId).
-                setTopicId(topicId);
-            int[] newIsr = partitionInfo.isr;
-            if (!Replicas.contains(partitionInfo.isr, newLeader)) {
-                record.setIsr(Collections.singletonList(newLeader));
-            }
-            record.setLeader(newLeader);
-            records.add(new ApiMessageAndVersion(record, (short) 0));
+            // If the new leader we picked is the same as the current leader, there is
+            // nothing to do.
             return ApiError.NONE;
         }
+        if (partitionInfo.leader != -1 && newLeader != partitionInfo.preferredReplica()) {
+            // It is not worth moving away from a valid leader to a new leader unless the
+            // new leader is the preferred replica.
+            return ApiError.NONE;
+        }
+        PartitionChangeRecord record = new PartitionChangeRecord().
+            setPartitionId(partitionId).
+            setTopicId(topicId);
+        if (unclean && !Replicas.contains(partitionInfo.isr, newLeader)) {
+            // If the election was unclean, we may have to forcibly add the replica to
+            // the ISR.  This can result in data loss!
+            record.setIsr(Collections.singletonList(newLeader));
+        }
+        record.setLeader(newLeader);
+        records.add(new ApiMessageAndVersion(record, (short) 0));
+        return ApiError.NONE;
     }
 
     int chooseNewLeader(PartitionControlInfo partition, int[] newIsr, boolean unclean) {
