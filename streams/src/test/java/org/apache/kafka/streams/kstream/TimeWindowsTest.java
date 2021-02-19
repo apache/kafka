@@ -19,8 +19,10 @@ package org.apache.kafka.streams.kstream;
 import org.apache.kafka.streams.kstream.internals.TimeWindow;
 import org.junit.Test;
 
+import java.time.Duration;
 import java.util.Map;
 
+import static java.time.Duration.ofDays;
 import static java.time.Duration.ofMillis;
 import static org.apache.kafka.streams.EqualityCheck.verifyEquality;
 import static org.apache.kafka.streams.EqualityCheck.verifyInEquality;
@@ -53,9 +55,16 @@ public class TimeWindowsTest {
 
     @SuppressWarnings("deprecation") // specifically testing deprecated APIs
     @Test
-    public void shouldUseWindowSizeAsRentitionTimeIfWindowSizeIsLargerThanDefaultRetentionTime() {
+    public void shouldUseWindowSizeAsRetentionTimeIfWindowSizeIsLargerThanDefaultRetentionTime() {
         final long windowSize = 2 * TimeWindows.of(ofMillis(1)).maintainMs();
         assertEquals(windowSize, TimeWindows.of(ofMillis(windowSize)).maintainMs());
+    }
+
+    @Test
+    public void shouldUseWindowSizeAndGraceAsRetentionTimeIfBothCombinedAreLargerThanDefaultRetentionTime() {
+        final Duration windowsSize = ofDays(1).minus(ofMillis(1));
+        final Duration gracePeriod = ofMillis(2);
+        assertEquals(windowsSize.toMillis() + gracePeriod.toMillis(), TimeWindows.of(windowsSize).grace(gracePeriod).maintainMs());
     }
 
     @Test
