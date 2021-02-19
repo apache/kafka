@@ -56,8 +56,7 @@ public class QuorumControllerTestEnv implements AutoCloseable {
         TestUtils.retryOnExceptionWithTimeout(3, 20000, () -> {
             QuorumController activeController = null;
             for (QuorumController controller : controllers) {
-                long curEpoch = controller.curClaimEpoch();
-                if (curEpoch != -1) {
+                if (controller.isActive()) {
                     if (activeController != null) {
                         throw new RuntimeException("node " + activeController.nodeId() +
                             " thinks it's the leader, but so does " + controller.nodeId());
