@@ -180,7 +180,7 @@ been set:
 
 * Bytes fields default to the empty byte array.
 
-* Records fields default to empty.
+* Records fields default to null.
 
 * Array fields default to empty.
 
