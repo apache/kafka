@@ -18,6 +18,7 @@
 package org.apache.kafka.clients.admin;
 
 import org.apache.kafka.common.TopicPartitionInfo;
+import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.acl.AclOperation;
 import org.apache.kafka.common.utils.Utils;
 
@@ -34,6 +35,7 @@ public class TopicDescription {
     private final boolean internal;
     private final List<TopicPartitionInfo> partitions;
     private final Set<AclOperation> authorizedOperations;
+    private final Uuid topicId;
 
     @Override
     public boolean equals(final Object o) {
@@ -74,10 +76,16 @@ public class TopicDescription {
      */
     public TopicDescription(String name, boolean internal, List<TopicPartitionInfo> partitions,
                             Set<AclOperation> authorizedOperations) {
+        this(name, internal, partitions, authorizedOperations, Uuid.ZERO_UUID);
+    }
+
+    public TopicDescription(String name, boolean internal, List<TopicPartitionInfo> partitions,
+                            Set<AclOperation> authorizedOperations, Uuid topicId) {
         this.name = name;
         this.internal = internal;
         this.partitions = partitions;
         this.authorizedOperations = authorizedOperations;
+        this.topicId = topicId;
     }
 
     /**
@@ -93,6 +101,10 @@ public class TopicDescription {
      */
     public boolean isInternal() {
         return internal;
+    }
+
+    public Uuid topicId() {
+        return topicId;
     }
 
     /**

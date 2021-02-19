@@ -102,9 +102,7 @@ class WorkerSourceTask extends WorkerTask {
     private CountDownLatch stopRequestedLatch;
 
     private Map<String, String> taskConfig;
-    private boolean finishedStart = false;
-    private boolean startedShutdownBeforeStartCompleted = false;
-    private boolean stopped = false;
+    private boolean started = false;
 
     public WorkerSourceTask(ConnectorTaskId id,
                             SourceTask task,
@@ -166,8 +164,12 @@ class WorkerSourceTask extends WorkerTask {
 
     @Override
     protected void close() {
-        if (!shouldPause()) {
-            tryStop();
+        if (started) {
+            try {
+                task.stop();
+            } catch (Throwable t) {
+                log.warn("Could not stop task", t);
+            }
         }
         if (producer != null) {
             try {
@@ -206,39 +208,21 @@ class WorkerSourceTask extends WorkerTask {
     public void stop() {
         super.stop();
         stopRequestedLatch.countDown();
-        synchronized (this) {
-            if (finishedStart)
-                tryStop();
-            else
-                startedShutdownBeforeStartCompleted = true;
-        }
-    }
-
-    private synchronized void tryStop() {
-        if (!stopped) {
-            try {
-                task.stop();
-                stopped = true;
-            } catch (Throwable t) {
-                log.warn("Could not stop task", t);
-            }
-        }
     }
 
     @Override
     public void execute() {
         try {
+            // If we try to start the task at all by invoking initialize, then count this as
+            // "started" and expect a subsequent call to the task's stop() method
+            // to properly clean up any resources allocated by its initialize() or 
+            // start() methods. If the task throws an exception during stop(),
+            // the worst thing that happens is another exception gets logged for an already-
+            // failed task
+            started = true;
             task.initialize(new WorkerSourceTaskContext(offsetReader, this, configState));
             task.start(taskConfig);
             log.info("{} Source task finished initialization and start", this);
-            synchronized (this) {
-                if (startedShutdownBeforeStartCompleted) {
-                    tryStop();
-                    return;
-                }
-                finishedStart = true;
-            }
-
             while (!isStopping()) {
                 if (shouldPause()) {
                     onPause();
@@ -428,10 +412,15 @@ class WorkerSourceTask extends WorkerTask {
         log.debug("Topic '{}' matched topic creation group: {}", topic, topicGroup);
         NewTopic newTopic = topicGroup.newTopic(topic);
 
-        if (admin.createTopic(newTopic)) {
+        TopicAdmin.TopicCreationResponse response = admin.createOrFindTopics(newTopic);
+        if (response.isCreated(newTopic.name())) {
             topicCreation.addTopic(topic);
             log.info("Created topic '{}' using creation group {}", newTopic, topicGroup);
+        } else if (response.isExisting(newTopic.name())) {
+            topicCreation.addTopic(topic);
+            log.info("Found existing topic '{}'", newTopic);
         } else {
+            // The topic still does not exist and could not be created, so treat it as a task failure
             log.warn("Request to create new topic '{}' failed", topic);
             throw new ConnectException("Task failed to create new topic " + newTopic + ". Ensure "
                     + "that the task is authorized to create topics or that the topic exists and "

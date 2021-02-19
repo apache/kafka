@@ -19,9 +19,10 @@ package org.apache.kafka.common.requests;
 import org.apache.kafka.common.feature.Features;
 import org.apache.kafka.common.feature.FinalizedVersionRange;
 import org.apache.kafka.common.feature.SupportedVersionRange;
+import org.apache.kafka.common.message.ApiMessageType;
 import org.apache.kafka.common.message.ApiVersionsResponseData;
-import org.apache.kafka.common.message.ApiVersionsResponseData.ApiVersionsResponseKey;
-import org.apache.kafka.common.message.ApiVersionsResponseData.ApiVersionsResponseKeyCollection;
+import org.apache.kafka.common.message.ApiVersionsResponseData.ApiVersion;
+import org.apache.kafka.common.message.ApiVersionsResponseData.ApiVersionCollection;
 import org.apache.kafka.common.message.ApiVersionsResponseData.FinalizedFeatureKey;
 import org.apache.kafka.common.message.ApiVersionsResponseData.FinalizedFeatureKeyCollection;
 import org.apache.kafka.common.message.ApiVersionsResponseData.SupportedFeatureKey;
@@ -29,12 +30,12 @@ import org.apache.kafka.common.message.ApiVersionsResponseData.SupportedFeatureK
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.protocol.types.SchemaException;
-import org.apache.kafka.common.protocol.types.Struct;
-import org.apache.kafka.common.record.RecordBatch;
+import org.apache.kafka.common.record.RecordVersion;
 
 import java.nio.ByteBuffer;
 import java.util.Map;
+import java.util.Optional;
+import java.util.Set;
 
 /**
  * Possible error codes:
@@ -45,39 +46,19 @@ public class ApiVersionsResponse extends AbstractResponse {
 
     public static final long UNKNOWN_FINALIZED_FEATURES_EPOCH = -1L;
 
-    public static final ApiVersionsResponse DEFAULT_API_VERSIONS_RESPONSE =
-        createApiVersionsResponse(
-            DEFAULT_THROTTLE_TIME,
-            RecordBatch.CURRENT_MAGIC_VALUE,
-            Features.emptySupportedFeatures(),
-            Features.emptyFinalizedFeatures(),
-            UNKNOWN_FINALIZED_FEATURES_EPOCH
-        );
-
-    public final ApiVersionsResponseData data;
+    private final ApiVersionsResponseData data;
 
     public ApiVersionsResponse(ApiVersionsResponseData data) {
+        super(ApiKeys.API_VERSIONS);
         this.data = data;
     }
 
-    public ApiVersionsResponse(Struct struct) {
-        this(new ApiVersionsResponseData(struct, (short) (ApiVersionsResponseData.SCHEMAS.length - 1)));
-    }
-
-    public ApiVersionsResponse(Struct struct, short version) {
-        this(new ApiVersionsResponseData(struct, version));
-    }
-
+    @Override
     public ApiVersionsResponseData data() {
         return data;
     }
 
-    @Override
-    protected Struct toStruct(short version) {
-        return this.data.toStruct(version);
-    }
-
-    public ApiVersionsResponseKey apiVersion(short apiKey) {
+    public ApiVersion apiVersion(short apiKey) {
         return data.apiKeys().find(apiKey);
     }
 
@@ -100,83 +81,129 @@ public class ApiVersionsResponse extends AbstractResponse {
         // Fallback to version 0 for ApiVersions response. If a client sends an ApiVersionsRequest
         // using a version higher than that supported by the broker, a version 0 response is sent
         // to the client indicating UNSUPPORTED_VERSION. When the client receives the response, it
-        // falls back while parsing it into a Struct which means that the version received by this
-        // method is not necessary the real one. It may be version 0 as well.
+        // falls back while parsing it which means that the version received by this
+        // method is not necessarily the real one. It may be version 0 as well.
         int prev = buffer.position();
         try {
-            return new ApiVersionsResponse(
-                new ApiVersionsResponseData(new ByteBufferAccessor(buffer), version));
+            return new ApiVersionsResponse(new ApiVersionsResponseData(new ByteBufferAccessor(buffer), version));
         } catch (RuntimeException e) {
             buffer.position(prev);
             if (version != 0)
-                return new ApiVersionsResponse(
-                    new ApiVersionsResponseData(new ByteBufferAccessor(buffer), (short) 0));
+                return new ApiVersionsResponse(new ApiVersionsResponseData(new ByteBufferAccessor(buffer), (short) 0));
             else
                 throw e;
         }
     }
 
-    public static ApiVersionsResponse fromStruct(Struct struct, short version) {
-        // Fallback to version 0 for ApiVersions response. If a client sends an ApiVersionsRequest
-        // using a version higher than that supported by the broker, a version 0 response is sent
-        // to the client indicating UNSUPPORTED_VERSION. When the client receives the response, it
-        // falls back while parsing it into a Struct which means that the version received by this
-        // method is not necessary the real one. It may be version 0 as well.
-        try {
-            return new ApiVersionsResponse(struct, version);
-        } catch (SchemaException e) {
-            if (version != 0)
-                return new ApiVersionsResponse(struct, (short) 0);
-            else
-                throw e;
-        }
+    public static ApiVersionsResponse defaultApiVersionsResponse(
+        ApiMessageType.ListenerType listenerType
+    ) {
+        return defaultApiVersionsResponse(0, listenerType);
+    }
+
+    public static ApiVersionsResponse defaultApiVersionsResponse(
+        int throttleTimeMs,
+        ApiMessageType.ListenerType listenerType
+    ) {
+        return createApiVersionsResponse(throttleTimeMs, filterApis(RecordVersion.current(), listenerType));
     }
 
     public static ApiVersionsResponse createApiVersionsResponse(
-        final int throttleTimeMs,
-        final byte minMagic) {
+        int throttleTimeMs,
+        ApiVersionCollection apiVersions
+    ) {
         return createApiVersionsResponse(
             throttleTimeMs,
-            minMagic,
+            apiVersions,
             Features.emptySupportedFeatures(),
             Features.emptyFinalizedFeatures(),
             UNKNOWN_FINALIZED_FEATURES_EPOCH
         );
     }
 
-    private static ApiVersionsResponse createApiVersionsResponse(
-        final int throttleTimeMs,
-        final byte minMagic,
-        final Features<SupportedVersionRange> latestSupportedFeatures,
-        final Features<FinalizedVersionRange> finalizedFeatures,
-        final long finalizedFeaturesEpoch) {
+    public static ApiVersionsResponse createApiVersionsResponse(
+        int throttleTimeMs,
+        ApiVersionCollection apiVersions,
+        Features<SupportedVersionRange> latestSupportedFeatures,
+        Features<FinalizedVersionRange> finalizedFeatures,
+        long finalizedFeaturesEpoch
+    ) {
         return new ApiVersionsResponse(
             createApiVersionsResponseData(
                 throttleTimeMs,
                 Errors.NONE,
-                defaultApiKeys(minMagic),
+                apiVersions,
                 latestSupportedFeatures,
                 finalizedFeatures,
-                finalizedFeaturesEpoch));
+                finalizedFeaturesEpoch
+            )
+        );
     }
 
-    public static ApiVersionsResponseKeyCollection defaultApiKeys(final byte minMagic) {
-        ApiVersionsResponseKeyCollection apiKeys = new ApiVersionsResponseKeyCollection();
-        for (ApiKeys apiKey : ApiKeys.enabledApis()) {
-            if (apiKey.minRequiredInterBrokerMagic <= minMagic) {
-                apiKeys.add(new ApiVersionsResponseKey()
-                                .setApiKey(apiKey.id)
-                                .setMinVersion(apiKey.oldestVersion())
-                                .setMaxVersion(apiKey.latestVersion()));
+    public static ApiVersionCollection filterApis(
+        RecordVersion minRecordVersion,
+        ApiMessageType.ListenerType listenerType
+    ) {
+        ApiVersionCollection apiKeys = new ApiVersionCollection();
+        for (ApiKeys apiKey : ApiKeys.apisForListener(listenerType)) {
+            if (apiKey.minRequiredInterBrokerMagic <= minRecordVersion.value) {
+                apiKeys.add(ApiVersionsResponse.toApiVersion(apiKey));
             }
         }
         return apiKeys;
     }
 
-    public static ApiVersionsResponseData createApiVersionsResponseData(
+    public static ApiVersionCollection collectApis(Set<ApiKeys> apiKeys) {
+        ApiVersionCollection res = new ApiVersionCollection();
+        for (ApiKeys apiKey : apiKeys) {
+            res.add(ApiVersionsResponse.toApiVersion(apiKey));
+        }
+        return res;
+    }
+
+    /**
+     * Find the common range of supported API versions between the locally
+     * known range and that of another set.
+     *
+     * @param listenerType the listener type which constrains the set of exposed APIs
+     * @param minRecordVersion min inter broker magic
+     * @param activeControllerApiVersions controller ApiVersions
+     * @return commonly agreed ApiVersion collection
+     */
+    public static ApiVersionCollection intersectForwardableApis(
+        final ApiMessageType.ListenerType listenerType,
+        final RecordVersion minRecordVersion,
+        final Map<ApiKeys, ApiVersion> activeControllerApiVersions
+    ) {
+        ApiVersionCollection apiKeys = new ApiVersionCollection();
+        for (ApiKeys apiKey : ApiKeys.apisForListener(listenerType)) {
+            if (apiKey.minRequiredInterBrokerMagic <= minRecordVersion.value) {
+                ApiVersion brokerApiVersion = toApiVersion(apiKey);
+
+                final ApiVersion finalApiVersion;
+                if (!apiKey.forwardable) {
+                    finalApiVersion = brokerApiVersion;
+                } else {
+                    Optional<ApiVersion> intersectVersion = intersect(brokerApiVersion,
+                        activeControllerApiVersions.getOrDefault(apiKey, null));
+                    if (intersectVersion.isPresent()) {
+                        finalApiVersion = intersectVersion.get();
+                    } else {
+                        // Controller doesn't support this API key, or there is no intersection.
+                        continue;
+                    }
+                }
+
+                apiKeys.add(finalApiVersion.duplicate());
+            }
+        }
+        return apiKeys;
+    }
+
+    private static ApiVersionsResponseData createApiVersionsResponseData(
         final int throttleTimeMs,
         final Errors error,
-        final ApiVersionsResponseKeyCollection apiKeys,
+        final ApiVersionCollection apiKeys,
         final Features<SupportedVersionRange> latestSupportedFeatures,
         final Features<FinalizedVersionRange> finalizedFeatures,
         final long finalizedFeaturesEpoch
@@ -220,5 +247,28 @@ public class ApiVersionsResponse extends AbstractResponse {
         }
 
         return converted;
+    }
+
+    public static Optional<ApiVersion> intersect(ApiVersion thisVersion,
+                                                 ApiVersion other) {
+        if (thisVersion == null || other == null) return Optional.empty();
+        if (thisVersion.apiKey() != other.apiKey())
+            throw new IllegalArgumentException("thisVersion.apiKey: " + thisVersion.apiKey()
+                + " must be equal to other.apiKey: " + other.apiKey());
+        short minVersion = (short) Math.max(thisVersion.minVersion(), other.minVersion());
+        short maxVersion = (short) Math.min(thisVersion.maxVersion(), other.maxVersion());
+        return minVersion > maxVersion
+                ? Optional.empty()
+                : Optional.of(new ApiVersion()
+                    .setApiKey(thisVersion.apiKey())
+                    .setMinVersion(minVersion)
+                    .setMaxVersion(maxVersion));
+    }
+
+    public static ApiVersion toApiVersion(ApiKeys apiKey) {
+        return new ApiVersion()
+            .setApiKey(apiKey.id)
+            .setMinVersion(apiKey.oldestVersion())
+            .setMaxVersion(apiKey.latestVersion());
     }
 }

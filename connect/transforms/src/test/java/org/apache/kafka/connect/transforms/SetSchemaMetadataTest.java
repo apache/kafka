@@ -21,20 +21,21 @@ import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.data.SchemaBuilder;
 import org.apache.kafka.connect.data.Struct;
 import org.apache.kafka.connect.sink.SinkRecord;
-import org.junit.After;
-import org.junit.Test;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.Test;
 
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertSame;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertSame;
 
 public class SetSchemaMetadataTest {
     private final SetSchemaMetadata<SinkRecord> xform = new SetSchemaMetadata.Value<>();
 
-    @After
+    @AfterEach
     public void teardown() {
         xform.close();
     }
@@ -125,7 +126,7 @@ public class SetSchemaMetadataTest {
 
     @Test
     public void updateSchemaOfNonStruct() {
-        Object value = Integer.valueOf(1);
+        Object value = 1;
         Object updatedValue = SetSchemaMetadata.updateSchemaIn(value, Schema.INT32_SCHEMA);
         assertSame(value, updatedValue);
     }
@@ -133,7 +134,7 @@ public class SetSchemaMetadataTest {
     @Test
     public void updateSchemaOfNull() {
         Object updatedValue = SetSchemaMetadata.updateSchemaIn(null, Schema.INT32_SCHEMA);
-        assertEquals(null, updatedValue);
+        assertNull(updatedValue);
     }
 
     protected void assertMatchingSchema(Struct value, Schema schema) {

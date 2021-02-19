@@ -27,6 +27,7 @@ import org.apache.kafka.clients.consumer.internals.ConsumerCoordinator;
 import org.apache.kafka.clients.consumer.internals.ConsumerInterceptors;
 import org.apache.kafka.clients.consumer.internals.ConsumerMetadata;
 import org.apache.kafka.clients.consumer.internals.ConsumerNetworkClient;
+import org.apache.kafka.clients.consumer.internals.FetchedRecords;
 import org.apache.kafka.clients.consumer.internals.Fetcher;
 import org.apache.kafka.clients.consumer.internals.FetcherMetricsRegistry;
 import org.apache.kafka.clients.consumer.internals.KafkaConsumerMetrics;
@@ -659,11 +660,15 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      * @param valueDeserializer The deserializer for value that implements {@link Deserializer}. The configure() method
      *            won't be called in the consumer when the deserializer is passed in directly.
      */
-    @SuppressWarnings("unchecked")
     public KafkaConsumer(Map<String, Object> configs,
                          Deserializer<K> keyDeserializer,
                          Deserializer<V> valueDeserializer) {
-        ConsumerConfig config = new ConsumerConfig(ConsumerConfig.appendDeserializerToConfig(configs, keyDeserializer, valueDeserializer));
+        this(new ConsumerConfig(ConsumerConfig.appendDeserializerToConfig(configs, keyDeserializer, valueDeserializer)),
+                keyDeserializer, valueDeserializer);
+    }
+
+    @SuppressWarnings("unchecked")
+    KafkaConsumer(ConsumerConfig config, Deserializer<K> keyDeserializer, Deserializer<V> valueDeserializer) {
         try {
             GroupRebalanceConfig groupRebalanceConfig = new GroupRebalanceConfig(config,
                     GroupRebalanceConfig.ProtocolType.CONSUMER);
@@ -696,11 +701,10 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
             this.metrics = buildMetrics(config, time, clientId);
             this.retryBackoffMs = config.getLong(ConsumerConfig.RETRY_BACKOFF_MS_CONFIG);
 
-            // load interceptors and make sure they get clientId
-            Map<String, Object> userProvidedConfigs = config.originals();
-            userProvidedConfigs.put(ConsumerConfig.CLIENT_ID_CONFIG, clientId);
-            List<ConsumerInterceptor<K, V>> interceptorList = (List) (new ConsumerConfig(userProvidedConfigs, false)).getConfiguredInstances(ConsumerConfig.INTERCEPTOR_CLASSES_CONFIG,
-                    ConsumerInterceptor.class);
+            List<ConsumerInterceptor<K, V>> interceptorList = (List) config.getConfiguredInstances(
+                    ConsumerConfig.INTERCEPTOR_CLASSES_CONFIG,
+                    ConsumerInterceptor.class,
+                    Collections.singletonMap(ConsumerConfig.CLIENT_ID_CONFIG, clientId));
             this.interceptors = new ConsumerInterceptors<>(interceptorList);
             if (keyDeserializer == null) {
                 this.keyDeserializer = config.getConfiguredInstance(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, Deserializer.class);
@@ -765,7 +769,8 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
                     config.getInt(ConsumerConfig.REQUEST_TIMEOUT_MS_CONFIG),
                     heartbeatIntervalMs); //Will avoid blocking an extended period of time to prevent heartbeat thread starvation
 
-            this.assignors = getAssignorInstances(config.getList(ConsumerConfig.PARTITION_ASSIGNMENT_STRATEGY_CONFIG), config.originals());
+            this.assignors = getAssignorInstances(config.getList(ConsumerConfig.PARTITION_ASSIGNMENT_STRATEGY_CONFIG),
+                    config.originals(Collections.singletonMap(ConsumerConfig.CLIENT_ID_CONFIG, clientId)));
 
             // no coordinator will be constructed for the default (null) group id
             this.coordinator = !groupId.isPresent() ? null :
@@ -867,7 +872,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
         List<MetricsReporter> reporters = config.getConfiguredInstances(ConsumerConfig.METRIC_REPORTER_CLASSES_CONFIG,
                 MetricsReporter.class, Collections.singletonMap(ConsumerConfig.CLIENT_ID_CONFIG, clientId));
         JmxReporter jmxReporter = new JmxReporter();
-        jmxReporter.configure(config.originals());
+        jmxReporter.configure(config.originals(Collections.singletonMap(ConsumerConfig.CLIENT_ID_CONFIG, clientId)));
         reporters.add(jmxReporter);
         MetricsContext metricsContext = new KafkaMetricsContext(JMX_PREFIX,
                 config.originalsWithPrefix(CommonClientConfigs.METRICS_CONTEXT_PREFIX));
@@ -1230,7 +1235,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
                     }
                 }
 
-                final Map<TopicPartition, List<ConsumerRecord<K, V>>> records = pollForFetches(timer);
+                final FetchedRecords<K, V> records = pollForFetches(timer);
                 if (!records.isEmpty()) {
                     // before returning the fetched records, we can send off the next round of fetches
                     // and avoid block waiting for their responses to enable pipelining while the user
@@ -1264,12 +1269,12 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
     /**
      * @throws KafkaException if the rebalance callback throws exception
      */
-    private Map<TopicPartition, List<ConsumerRecord<K, V>>> pollForFetches(Timer timer) {
+    private FetchedRecords<K, V> pollForFetches(Timer timer) {
         long pollTimeout = coordinator == null ? timer.remainingMs() :
                 Math.min(coordinator.timeToNextPoll(timer.currentTimeMs()), timer.remainingMs());
 
         // if data is available already, return it immediately
-        final Map<TopicPartition, List<ConsumerRecord<K, V>>> records = fetcher.fetchedRecords();
+        final FetchedRecords<K, V> records = fetcher.fetchedRecords();
         if (!records.isEmpty()) {
             return records;
         }

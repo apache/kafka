@@ -19,7 +19,6 @@ package kafka.admin
 
 import java.util.concurrent.ExecutionException
 import java.util.{Arrays, Collections}
-
 import kafka.admin.ReassignPartitionsCommand._
 import kafka.common.AdminCommandFailedException
 import kafka.utils.Exit
@@ -27,24 +26,21 @@ import org.apache.kafka.clients.admin.{Config, MockAdminClient, PartitionReassig
 import org.apache.kafka.common.config.ConfigResource
 import org.apache.kafka.common.errors.{InvalidReplicationFactorException, UnknownTopicOrPartitionException}
 import org.apache.kafka.common.{Node, TopicPartition, TopicPartitionInfo, TopicPartitionReplica}
-import org.junit.Assert.{assertEquals, assertFalse, assertThrows, assertTrue}
-import org.junit.function.ThrowingRunnable
-import org.junit.rules.Timeout
-import org.junit.{After, Assert, Before, Rule, Test}
+import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertThrows, assertTrue}
+import org.junit.jupiter.api.{AfterEach, BeforeEach, Test, Timeout}
 
 import scala.collection.mutable
 import scala.jdk.CollectionConverters._
 
+@Timeout(60)
 class ReassignPartitionsUnitTest {
-  @Rule
-  def globalTimeout: Timeout = Timeout.millis(60000)
 
-  @Before
+  @BeforeEach
   def setUp(): Unit = {
     Exit.setExitProcedure((_, message) => throw new IllegalArgumentException(message.orNull))
   }
 
-  @After
+  @AfterEach
   def tearDown(): Unit = {
     Exit.resetExitProcedure()
   }
@@ -75,11 +71,11 @@ class ReassignPartitionsUnitTest {
         mkString(System.lineSeparator()),
       partitionReassignmentStatesToString(Map(
         new TopicPartition("foo", 0) ->
-          new PartitionReassignmentState(Seq(1, 2, 3), Seq(1, 2, 3), true),
+          PartitionReassignmentState(Seq(1, 2, 3), Seq(1, 2, 3), true),
         new TopicPartition("foo", 1) ->
-          new PartitionReassignmentState(Seq(1, 2, 3), Seq(1, 2, 4), false),
+          PartitionReassignmentState(Seq(1, 2, 3), Seq(1, 2, 4), false),
         new TopicPartition("bar", 0) ->
-          new PartitionReassignmentState(Seq(1, 2, 3), Seq(1, 2, 4), false),
+          PartitionReassignmentState(Seq(1, 2, 3), Seq(1, 2, 4), false),
       )))
   }
 
@@ -192,15 +188,15 @@ class ReassignPartitionsUnitTest {
       "Partition quux-2 is not found in any live log dir on broker 1. " +
           "There is likely an offline log directory on the broker.").mkString(System.lineSeparator()),
         replicaMoveStatesToString(Map(
-          new TopicPartitionReplica("bar", 0, 0) -> new CompletedMoveState("/tmp/kafka-logs0"),
-          new TopicPartitionReplica("foo", 0, 0) -> new ActiveMoveState("/tmp/kafka-logs0",
+          new TopicPartitionReplica("bar", 0, 0) -> CompletedMoveState("/tmp/kafka-logs0"),
+          new TopicPartitionReplica("foo", 0, 0) -> ActiveMoveState("/tmp/kafka-logs0",
             "/tmp/kafka-logs1", "/tmp/kafka-logs1"),
-          new TopicPartitionReplica("foo", 1, 0) -> new CancelledMoveState("/tmp/kafka-logs0",
+          new TopicPartitionReplica("foo", 1, 0) -> CancelledMoveState("/tmp/kafka-logs0",
             "/tmp/kafka-logs1"),
-          new TopicPartitionReplica("quux", 0, 0) -> new MissingReplicaMoveState("/tmp/kafka-logs1"),
-          new TopicPartitionReplica("quux", 1, 1) -> new ActiveMoveState("/tmp/kafka-logs0",
+          new TopicPartitionReplica("quux", 0, 0) -> MissingReplicaMoveState("/tmp/kafka-logs1"),
+          new TopicPartitionReplica("quux", 1, 1) -> ActiveMoveState("/tmp/kafka-logs0",
             "/tmp/kafka-logs1", "/tmp/kafka-logs2"),
-          new TopicPartitionReplica("quux", 2, 1) -> new MissingLogDirMoveState("/tmp/kafka-logs1")
+          new TopicPartitionReplica("quux", 2, 1) -> MissingLogDirMoveState("/tmp/kafka-logs1")
         )))
   }
 
@@ -234,20 +230,19 @@ class ReassignPartitionsUnitTest {
       build()
     try {
       assertEquals(Seq(
-        new BrokerMetadata(0, Some("rack0")),
-        new BrokerMetadata(1, Some("rack1"))
+        BrokerMetadata(0, Some("rack0")),
+        BrokerMetadata(1, Some("rack1"))
       ), getBrokerMetadata(adminClient, Seq(0, 1), true))
       assertEquals(Seq(
-        new BrokerMetadata(0, None),
-        new BrokerMetadata(1, None)
+        BrokerMetadata(0, None),
+        BrokerMetadata(1, None)
       ), getBrokerMetadata(adminClient, Seq(0, 1), false))
       assertStartsWith("Not all brokers have rack information",
-        assertThrows(classOf[AdminOperationException], new ThrowingRunnable {
-          override def run(): Unit = getBrokerMetadata(adminClient, Seq(1, 2), true)
-        }).getMessage)
+        assertThrows(classOf[AdminOperationException],
+          () => getBrokerMetadata(adminClient, Seq(1, 2), true)).getMessage)
       assertEquals(Seq(
-        new BrokerMetadata(1, None),
-        new BrokerMetadata(2, None)
+        BrokerMetadata(1, None),
+        BrokerMetadata(2, None)
       ), getBrokerMetadata(adminClient, Seq(1, 2), false))
     } finally {
       adminClient.close()
@@ -257,26 +252,20 @@ class ReassignPartitionsUnitTest {
   @Test
   def testParseGenerateAssignmentArgs(): Unit = {
     assertStartsWith("Broker list contains duplicate entries",
-      assertThrows("Expected to detect duplicate broker list entries",
-        classOf[AdminCommandFailedException], new ThrowingRunnable {
-          override def run():Unit = parseGenerateAssignmentArgs(
-            """{"topics": [{"topic": "foo"}], "version":1}""", "1,1,2")
-        }).getMessage)
+      assertThrows(classOf[AdminCommandFailedException], () => parseGenerateAssignmentArgs(
+          """{"topics": [{"topic": "foo"}], "version":1}""", "1,1,2"),
+        () => "Expected to detect duplicate broker list entries").getMessage)
     assertStartsWith("Broker list contains duplicate entries",
-      assertThrows("Expected to detect duplicate broker list entries",
-        classOf[AdminCommandFailedException], new ThrowingRunnable {
-          override def run():Unit = parseGenerateAssignmentArgs(
-            """{"topics": [{"topic": "foo"}], "version":1}""", "5,2,3,4,5")
-        }).getMessage)
+      assertThrows(classOf[AdminCommandFailedException], () => parseGenerateAssignmentArgs(
+          """{"topics": [{"topic": "foo"}], "version":1}""", "5,2,3,4,5"),
+        () => "Expected to detect duplicate broker list entries").getMessage)
     assertEquals((Seq(5,2,3,4),Seq("foo")),
       parseGenerateAssignmentArgs("""{"topics": [{"topic": "foo"}], "version":1}""",
         "5,2,3,4"))
     assertStartsWith("List of topics to reassign contains duplicate entries",
-      assertThrows("Expected to detect duplicate topic entries",
-        classOf[AdminCommandFailedException], new ThrowingRunnable {
-          override def run():Unit = parseGenerateAssignmentArgs(
-            """{"topics": [{"topic": "foo"},{"topic": "foo"}], "version":1}""", "5,2,3,4")
-        }).getMessage)
+      assertThrows(classOf[AdminCommandFailedException], () => parseGenerateAssignmentArgs(
+          """{"topics": [{"topic": "foo"},{"topic": "foo"}], "version":1}""", "5,2,3,4"),
+        () => "Expected to detect duplicate topic entries").getMessage)
     assertEquals((Seq(5,3,4),Seq("foo","bar")),
       parseGenerateAssignmentArgs(
         """{"topics": [{"topic": "foo"},{"topic": "bar"}], "version":1}""",
@@ -289,13 +278,9 @@ class ReassignPartitionsUnitTest {
     try {
       addTopics(adminClient)
       assertStartsWith("Replication factor: 3 larger than available brokers: 2",
-        assertThrows("Expected generateAssignment to fail",
-          classOf[InvalidReplicationFactorException], new ThrowingRunnable {
-            override def run():Unit = {
-              generateAssignment(adminClient,
-                """{"topics":[{"topic":"foo"},{"topic":"bar"}]}""", "0,1", false)
-            }
-          }).getMessage)
+        assertThrows(classOf[InvalidReplicationFactorException],
+          () => generateAssignment(adminClient, """{"topics":[{"topic":"foo"},{"topic":"bar"}]}""", "0,1", false),
+          () => "Expected generateAssignment to fail").getMessage)
     } finally {
       adminClient.close()
     }
@@ -315,13 +300,9 @@ class ReassignPartitionsUnitTest {
     try {
       addTopics(adminClient)
       assertStartsWith("Not all brokers have rack information.",
-        assertThrows("Expected generateAssignment to fail",
-          classOf[AdminOperationException], new ThrowingRunnable {
-            override def run():Unit = {
-              generateAssignment(adminClient,
-                """{"topics":[{"topic":"foo"}]}""", "0,1,2,3", true)
-            }
-          }).getMessage)
+        assertThrows(classOf[AdminOperationException],
+          () => generateAssignment(adminClient, """{"topics":[{"topic":"foo"}]}""", "0,1,2,3", true),
+          () => "Expected generateAssignment to fail").getMessage)
       // It should succeed when --disable-rack-aware is used.
       val (_, current) = generateAssignment(adminClient,
         """{"topics":[{"topic":"foo"}]}""", "0,1,2,3", false)
@@ -350,14 +331,8 @@ class ReassignPartitionsUnitTest {
       ), current)
 
       // The proposed assignment should only span the provided brokers
-      proposed.values.foreach {
-        case replicas => {
-          if (!replicas.forall(goalBrokers.contains(_))) {
-            Assert.fail(s"Proposed assignment ${proposed} puts replicas on brokers " +
-              s"other than ${goalBrokers}")
-          }
-        }
-      }
+      proposed.values.foreach(replicas => assertTrue(replicas.forall(goalBrokers.contains),
+        s"Proposed assignment $proposed puts replicas on brokers other than $goalBrokers"))
     } finally {
       adminClient.close()
     }
@@ -390,38 +365,68 @@ class ReassignPartitionsUnitTest {
 
   @Test
   def testMoveMap(): Unit = {
+    // overwrite foo-0 with different reassignments
+    // keep old reassignments of foo-1
+    // overwrite foo-2 with same reassignments
+    // overwrite foo-3 with new reassignments without overlap of old reassignments
+    // overwrite foo-4 with a subset of old reassignments
+    // overwrite foo-5 with a superset of old reassignments
+    // add new reassignments to bar-0
     val moveMap = calculateProposedMoveMap(Map(
       new TopicPartition("foo", 0) -> new PartitionReassignment(
-        Arrays.asList(1,2,3),Arrays.asList(4),Arrays.asList(3)),
+        Arrays.asList(1,2,3,4), Arrays.asList(4), Arrays.asList(3)),
       new TopicPartition("foo", 1) -> new PartitionReassignment(
-        Arrays.asList(4,5,6),Arrays.asList(7, 8),Arrays.asList(4, 5))
+        Arrays.asList(4,5,6,7,8), Arrays.asList(7, 8), Arrays.asList(4, 5)),
+      new TopicPartition("foo", 2) -> new PartitionReassignment(
+        Arrays.asList(1,2,3,4), Arrays.asList(3,4), Arrays.asList(1,2)),
+      new TopicPartition("foo", 3) -> new PartitionReassignment(
+        Arrays.asList(1,2,3,4), Arrays.asList(3,4), Arrays.asList(1,2)),
+      new TopicPartition("foo", 4) -> new PartitionReassignment(
+        Arrays.asList(1,2,3,4), Arrays.asList(3,4), Arrays.asList(1,2)),
+      new TopicPartition("foo", 5) -> new PartitionReassignment(
+        Arrays.asList(1,2,3,4), Arrays.asList(3,4), Arrays.asList(1,2))
     ), Map(
       new TopicPartition("foo", 0) -> Seq(1,2,5),
+      new TopicPartition("foo", 2) -> Seq(3,4),
+      new TopicPartition("foo", 3) -> Seq(5,6),
+      new TopicPartition("foo", 4) -> Seq(3),
+      new TopicPartition("foo", 5) -> Seq(3,4,5,6),
       new TopicPartition("bar", 0) -> Seq(1,2,3)
     ), Map(
-      new TopicPartition("foo", 0) -> Seq(1,2,3),
-      new TopicPartition("foo", 1) -> Seq(4,5,6),
+      new TopicPartition("foo", 0) -> Seq(1,2,3,4),
+      new TopicPartition("foo", 1) -> Seq(4,5,6,7,8),
+      new TopicPartition("foo", 2) -> Seq(1,2,3,4),
+      new TopicPartition("foo", 3) -> Seq(1,2,3,4),
+      new TopicPartition("foo", 4) -> Seq(1,2,3,4),
+      new TopicPartition("foo", 5) -> Seq(1,2,3,4),
       new TopicPartition("bar", 0) -> Seq(2,3,4),
       new TopicPartition("baz", 0) -> Seq(1,2,3)
     ))
+
     assertEquals(
       mutable.Map("foo" -> mutable.Map(
-          0 -> new PartitionMove(mutable.Set(1,2,3), mutable.Set(5)),
-          1 -> new PartitionMove(mutable.Set(4,5,6), mutable.Set(7, 8))
-        ),
-        "bar" -> mutable.Map(
-          0 -> new PartitionMove(mutable.Set(2,3,4), mutable.Set(1)),
-        )
-      ), moveMap)
+        0 -> PartitionMove(mutable.Set(1,2,3), mutable.Set(5)),
+        1 -> PartitionMove(mutable.Set(4,5,6), mutable.Set(7,8)),
+        2 -> PartitionMove(mutable.Set(1,2), mutable.Set(3,4)),
+        3 -> PartitionMove(mutable.Set(1,2), mutable.Set(5,6)),
+        4 -> PartitionMove(mutable.Set(1,2), mutable.Set(3)),
+        5 -> PartitionMove(mutable.Set(1,2), mutable.Set(3,4,5,6))
+      ), "bar" -> mutable.Map(
+        0 -> PartitionMove(mutable.Set(2,3,4), mutable.Set(1)),
+      )), moveMap)
+
     assertEquals(Map(
-        "foo" -> "0:1,0:2,0:3,1:4,1:5,1:6",
+        "foo" -> "0:1,0:2,0:3,1:4,1:5,1:6,2:1,2:2,3:1,3:2,4:1,4:2,5:1,5:2",
         "bar" -> "0:2,0:3,0:4"
       ), calculateLeaderThrottles(moveMap))
+
     assertEquals(Map(
-        "foo" -> "0:5,1:7,1:8",
+        "foo" -> "0:5,1:7,1:8,2:3,2:4,3:5,3:6,4:3,5:3,5:4,5:5,5:6",
         "bar" -> "0:1"
       ), calculateFollowerThrottles(moveMap))
+
     assertEquals(Set(1,2,3,4,5,6,7,8), calculateReassigningBrokers(moveMap))
+
     assertEquals(Set(0,2), calculateMovingBrokers(
       Set(new TopicPartitionReplica("quux", 0, 0),
           new TopicPartitionReplica("quux", 1, 2))))
@@ -430,41 +435,27 @@ class ReassignPartitionsUnitTest {
   @Test
   def testParseExecuteAssignmentArgs(): Unit = {
     assertStartsWith("Partition reassignment list cannot be empty",
-      assertThrows("Expected to detect empty partition reassignment list",
-        classOf[AdminCommandFailedException], new ThrowingRunnable {
-          override def run():Unit =
-            parseExecuteAssignmentArgs("""{"version":1,"partitions":[]}""")
-        }).getMessage)
+      assertThrows(classOf[AdminCommandFailedException],
+        () => parseExecuteAssignmentArgs("""{"version":1,"partitions":[]}"""),
+        () => "Expected to detect empty partition reassignment list").getMessage)
     assertStartsWith("Partition reassignment contains duplicate topic partitions",
-      assertThrows("Expected to detect a partition list with duplicate entries",
-        classOf[AdminCommandFailedException], new ThrowingRunnable {
-          override def run():Unit =
-            parseExecuteAssignmentArgs(
-              """{"version":1,"partitions":""" +
-                """[{"topic":"foo","partition":0,"replicas":[0,1],"log_dirs":["any","any"]},""" +
-                """{"topic":"foo","partition":0,"replicas":[2,3,4],"log_dirs":["any","any","any"]}""" +
-                """]}""")
-        }).getMessage)
+      assertThrows(classOf[AdminCommandFailedException], () => parseExecuteAssignmentArgs(
+          """{"version":1,"partitions":""" +
+            """[{"topic":"foo","partition":0,"replicas":[0,1],"log_dirs":["any","any"]},""" +
+            """{"topic":"foo","partition":0,"replicas":[2,3,4],"log_dirs":["any","any","any"]}""" +
+            """]}"""), () => "Expected to detect a partition list with duplicate entries").getMessage)
     assertStartsWith("Partition reassignment contains duplicate topic partitions",
-      assertThrows("Expected to detect a partition replica list with duplicate entries",
-        classOf[AdminCommandFailedException], new ThrowingRunnable {
-          override def run():Unit =
-            parseExecuteAssignmentArgs(
-              """{"version":1,"partitions":""" +
-                """[{"topic":"foo","partition":0,"replicas":[0,1],"log_dirs":["/abc","/def"]},""" +
-                """{"topic":"foo","partition":0,"replicas":[2,3],"log_dirs":["/abc","/def"]}""" +
-                """]}""")
-        }).getMessage)
+      assertThrows(classOf[AdminCommandFailedException], () => parseExecuteAssignmentArgs(
+          """{"version":1,"partitions":""" +
+            """[{"topic":"foo","partition":0,"replicas":[0,1],"log_dirs":["/abc","/def"]},""" +
+            """{"topic":"foo","partition":0,"replicas":[2,3],"log_dirs":["/abc","/def"]}""" +
+            """]}"""), () => "Expected to detect a partition replica list with duplicate entries").getMessage)
     assertStartsWith("Partition replica lists may not contain duplicate entries",
-      assertThrows("Expected to detect a partition replica list with duplicate entries",
-        classOf[AdminCommandFailedException], new ThrowingRunnable {
-          override def run():Unit =
-            parseExecuteAssignmentArgs(
-              """{"version":1,"partitions":""" +
-                """[{"topic":"foo","partition":0,"replicas":[0,0],"log_dirs":["/abc","/def"]},""" +
-                """{"topic":"foo","partition":1,"replicas":[2,3],"log_dirs":["/abc","/def"]}""" +
-                """]}""")
-        }).getMessage)
+      assertThrows(classOf[AdminCommandFailedException], () => parseExecuteAssignmentArgs(
+          """{"version":1,"partitions":""" +
+            """[{"topic":"foo","partition":0,"replicas":[0,0],"log_dirs":["/abc","/def"]},""" +
+            """{"topic":"foo","partition":1,"replicas":[2,3],"log_dirs":["/abc","/def"]}""" +
+            """]}"""), () => "Expected to detect a partition replica list with duplicate entries").getMessage)
     assertEquals((Map(
         new TopicPartition("foo", 0) -> Seq(1, 2, 3),
         new TopicPartition("foo", 1) -> Seq(3, 4, 5),
@@ -494,15 +485,11 @@ class ReassignPartitionsUnitTest {
     try {
       addTopics(adminClient)
       assertStartsWith("Topic quux not found",
-        assertThrows("Expected reassignment with non-existent topic to fail",
-          classOf[ExecutionException], new ThrowingRunnable {
-            override def run():Unit =
-              executeAssignment(adminClient, false,
-                """{"version":1,"partitions":""" +
-                """[{"topic":"foo","partition":0,"replicas":[0,1],"log_dirs":["any","any"]},""" +
-                """{"topic":"quux","partition":0,"replicas":[2,3,4],"log_dirs":["any","any","any"]}""" +
-                """]}""")
-          }).getCause.getMessage)
+        assertThrows(classOf[ExecutionException], () => executeAssignment(adminClient, false,
+            """{"version":1,"partitions":""" +
+              """[{"topic":"foo","partition":0,"replicas":[0,1],"log_dirs":["any","any"]},""" +
+              """{"topic":"quux","partition":0,"replicas":[2,3,4],"log_dirs":["any","any","any"]}""" +
+              """]}"""), () => "Expected reassignment with non-existent topic to fail").getCause.getMessage)
     } finally {
       adminClient.close()
     }
@@ -514,15 +501,11 @@ class ReassignPartitionsUnitTest {
     try {
       addTopics(adminClient)
       assertStartsWith("Unknown broker id 4",
-        assertThrows("Expected reassignment with non-existent broker id to fail",
-          classOf[AdminCommandFailedException], new ThrowingRunnable {
-            override def run():Unit =
-              executeAssignment(adminClient, false,
-                """{"version":1,"partitions":""" +
-                  """[{"topic":"foo","partition":0,"replicas":[0,1],"log_dirs":["any","any"]},""" +
-                  """{"topic":"foo","partition":1,"replicas":[2,3,4],"log_dirs":["any","any","any"]}""" +
-                  """]}""")
-          }).getMessage)
+        assertThrows(classOf[AdminCommandFailedException], () => executeAssignment(adminClient, false,
+            """{"version":1,"partitions":""" +
+              """[{"topic":"foo","partition":0,"replicas":[0,1],"log_dirs":["any","any"]},""" +
+              """{"topic":"foo","partition":1,"replicas":[2,3,4],"log_dirs":["any","any","any"]}""" +
+              """]}"""), () => "Expected reassignment with non-existent broker id to fail").getMessage)
     } finally {
       adminClient.close()
     }
@@ -614,7 +597,7 @@ class ReassignPartitionsUnitTest {
         Map("foo" -> "leaderFoo", "bar" -> "leaderBar"),
         Map("bar" -> "followerBar"))
       val topics = Seq("bar", "foo").map(
-        id => new ConfigResource(ConfigResource.Type.TOPIC, id.toString))
+        id => new ConfigResource(ConfigResource.Type.TOPIC, id))
       val results = adminClient.describeConfigs(topics.asJava).all().get()
       verifyTopicThrottleResults(results.get(topics(0)), "leaderBar", "followerBar")
       verifyTopicThrottleResults(results.get(topics(1)), "leaderFoo", "")
@@ -628,9 +611,9 @@ class ReassignPartitionsUnitTest {
                                          expectedFollowerThrottle: String): Unit = {
     val configs = new mutable.HashMap[String, String]
     config.entries.forEach(entry => configs.put(entry.name, entry.value))
-    assertEquals(expectedLeaderThrottle.toString,
+    assertEquals(expectedLeaderThrottle,
       configs.getOrElse(topicLevelLeaderThrottle, ""))
-    assertEquals(expectedFollowerThrottle.toString,
+    assertEquals(expectedFollowerThrottle,
       configs.getOrElse(topicLevelFollowerThrottle, ""))
   }
 
@@ -656,7 +639,18 @@ class ReassignPartitionsUnitTest {
   }
 
   def assertStartsWith(prefix: String, str: String): Unit = {
-    assertTrue("Expected the string to start with %s, but it was %s".format(prefix, str),
-      str.startsWith(prefix))
+    assertTrue(str.startsWith(prefix), "Expected the string to start with %s, but it was %s".format(prefix, str))
+  }
+
+  @Test
+  def testPropagateInvalidJsonError(): Unit = {
+    val adminClient = new MockAdminClient.Builder().numBrokers(4).build()
+    try {
+      addTopics(adminClient)
+      assertStartsWith("Unexpected character",
+        assertThrows(classOf[AdminOperationException], () => executeAssignment(adminClient, additional = false, "{invalid_json")).getMessage)
+    } finally {
+      adminClient.close()
+    }
   }
 }

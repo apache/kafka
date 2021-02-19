@@ -30,8 +30,10 @@
   //
   // Version 8 added RecordErrors and ErrorMessage to include information about
   // records that cause the whole batch to be dropped.  See KIP-467 for details.
-  "validVersions": "0-8",
-  "flexibleVersions": "none",
+  //
+  // Version 9 enables flexible versions.
+  "validVersions": "0-9",
+  "flexibleVersions": "9+",
   "fields": [
     { "name": "Responses", "type": "[]TopicProduceResponse", "versions": "0+",
       "about": "Each produce response", "fields": [

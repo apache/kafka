@@ -17,17 +17,16 @@
 
 package org.apache.kafka.message;
 
-import org.junit.Rule;
-import org.junit.Test;
-import org.junit.rules.Timeout;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.Timeout;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertTrue;
-import static org.junit.Assert.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
 
+@Timeout(120)
 public class VersionsTest {
-    @Rule
-    final public Timeout globalTimeout = Timeout.millis(120000);
 
     private static Versions newVersions(int lower, int higher) {
         if ((lower < Short.MIN_VALUE) || (lower > Short.MAX_VALUE)) {
@@ -63,17 +62,13 @@ public class VersionsTest {
 
     @Test
     public void testIntersections() {
-        assertEquals(newVersions(2, 3),
-            newVersions(1, 3).intersect(
+        assertEquals(newVersions(2, 3), newVersions(1, 3).intersect(
                 newVersions(2, 4)));
-        assertEquals(newVersions(3, 3),
-            newVersions(0, Short.MAX_VALUE).intersect(
+        assertEquals(newVersions(3, 3), newVersions(0, Short.MAX_VALUE).intersect(
                 newVersions(3, 3)));
-        assertEquals(Versions.NONE,
-            newVersions(9, Short.MAX_VALUE).intersect(
+        assertEquals(Versions.NONE, newVersions(9, Short.MAX_VALUE).intersect(
                 newVersions(2, 8)));
-        assertEquals(Versions.NONE,
-            Versions.NONE.intersect(Versions.NONE));
+        assertEquals(Versions.NONE, Versions.NONE.intersect(Versions.NONE));
     }
 
     @Test
@@ -92,16 +87,14 @@ public class VersionsTest {
 
     @Test
     public void testSubtract() {
-        assertEquals(Versions.NONE,
-            Versions.NONE.subtract(Versions.NONE));
+        assertEquals(Versions.NONE, Versions.NONE.subtract(Versions.NONE));
         assertEquals(newVersions(0, 0),
             newVersions(0, 0).subtract(Versions.NONE));
         assertEquals(newVersions(1, 1),
             newVersions(1, 2).subtract(newVersions(2, 2)));
         assertEquals(newVersions(2, 2),
             newVersions(1, 2).subtract(newVersions(1, 1)));
-        assertEquals(null,
-            newVersions(0, Short.MAX_VALUE).subtract(newVersions(1, 100)));
+        assertNull(newVersions(0, Short.MAX_VALUE).subtract(newVersions(1, 100)));
         assertEquals(newVersions(10, 10),
             newVersions(1, 10).subtract(newVersions(1, 9)));
         assertEquals(newVersions(1, 1),

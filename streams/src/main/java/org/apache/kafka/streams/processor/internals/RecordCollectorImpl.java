@@ -23,6 +23,7 @@ import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.AuthenticationException;
 import org.apache.kafka.common.errors.AuthorizationException;
+import org.apache.kafka.common.errors.InvalidProducerEpochException;
 import org.apache.kafka.common.errors.InvalidTopicException;
 import org.apache.kafka.common.errors.OffsetMetadataTooLarge;
 import org.apache.kafka.common.errors.OutOfOrderSequenceException;
@@ -30,6 +31,7 @@ import org.apache.kafka.common.errors.ProducerFencedException;
 import org.apache.kafka.common.errors.RetriableException;
 import org.apache.kafka.common.errors.SecurityDisabledException;
 import org.apache.kafka.common.errors.SerializationException;
+import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.errors.UnknownServerException;
 import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.metrics.Sensor;
@@ -110,13 +112,18 @@ public class RecordCollectorImpl implements RecordCollector {
             final List<PartitionInfo> partitions;
             try {
                 partitions = streamsProducer.partitionsFor(topic);
-            } catch (final KafkaException e) {
-                // TODO: KIP-572 need to handle `TimeoutException`
-                // -> should we throw a `TaskCorruptedException` for this case to reset the task and retry (including triggering `task.timeout.ms`) ?
+            } catch (final TimeoutException timeoutException) {
+                log.warn("Could not get partitions for topic {}, will retry", topic);
+
+                // re-throw to trigger `task.timeout.ms`
+                throw timeoutException;
+            } catch (final KafkaException fatal) {
                 // here we cannot drop the message on the floor even if it is a transient timeout exception,
                 // so we treat everything the same as a fatal exception
                 throw new StreamsException("Could not determine the number of partitions for topic '" + topic +
-                    "' for task " + taskId + " due to " + e.toString());
+                    "' for task " + taskId + " due to " + fatal.toString(),
+                    fatal
+                );
             }
             if (partitions.size() > 0) {
                 partition = partitioner.partition(topic, key, value, partitions.size());
@@ -199,7 +206,9 @@ public class RecordCollectorImpl implements RecordCollector {
         if (isFatalException(exception)) {
             errorMessage += "\nWritten offsets would not be recorded and no more records would be sent since this is a fatal error.";
             sendException.set(new StreamsException(errorMessage, exception));
-        } else if (exception instanceof ProducerFencedException || exception instanceof OutOfOrderSequenceException) {
+        } else if (exception instanceof ProducerFencedException ||
+                exception instanceof InvalidProducerEpochException ||
+                exception instanceof OutOfOrderSequenceException) {
             errorMessage += "\nWritten offsets would not be recorded and no more records would be sent since the producer is fenced, " +
                 "indicating the task may be migrated out";
             sendException.set(new TaskMigratedException(errorMessage, exception));

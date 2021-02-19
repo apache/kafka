@@ -18,17 +18,19 @@ package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.message.SyncGroupRequestData;
-import org.junit.Test;
+import org.junit.jupiter.api.Test;
+
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 public class SyncGroupRequestTest {
 
-    @Test(expected = UnsupportedVersionException.class)
+    @Test
     public void testRequestVersionCompatibilityFailBuild() {
-        new SyncGroupRequest.Builder(
-                new SyncGroupRequestData()
-                        .setGroupId("groupId")
-                        .setMemberId("consumerId")
-                        .setGroupInstanceId("groupInstanceId")
-        ).build((short) 2);
+        assertThrows(UnsupportedVersionException.class, () -> new SyncGroupRequest.Builder(
+            new SyncGroupRequestData()
+                .setGroupId("groupId")
+                .setMemberId("consumerId")
+                .setGroupInstanceId("groupInstanceId")
+        ).build((short) 2));
     }
 }

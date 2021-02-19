@@ -26,7 +26,7 @@ import org.apache.kafka.clients.consumer.OffsetResetStrategy;
 import org.apache.kafka.common.IsolationLevel;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.internals.PartitionStates;
-import org.apache.kafka.common.message.OffsetForLeaderEpochResponseData.OffsetForLeaderPartitionResult;
+import org.apache.kafka.common.message.OffsetForLeaderEpochResponseData.EpochEndOffset;
 import org.apache.kafka.common.utils.LogContext;
 import org.slf4j.Logger;
 
@@ -47,8 +47,8 @@ import java.util.function.Predicate;
 import java.util.regex.Pattern;
 
 import static org.apache.kafka.clients.consumer.internals.Fetcher.hasUsableOffsetForLeaderEpochVersion;
-import static org.apache.kafka.common.requests.EpochEndOffset.UNDEFINED_EPOCH;
-import static org.apache.kafka.common.requests.EpochEndOffset.UNDEFINED_EPOCH_OFFSET;
+import static org.apache.kafka.common.requests.OffsetsForLeaderEpochResponse.UNDEFINED_EPOCH;
+import static org.apache.kafka.common.requests.OffsetsForLeaderEpochResponse.UNDEFINED_EPOCH_OFFSET;
 
 /**
  * A class for tracking the topics, partitions, and offsets for the consumer. A partition
@@ -475,7 +475,7 @@ public class SubscriptionState {
      */
     public synchronized Optional<LogTruncation> maybeCompleteValidation(TopicPartition tp,
                                                                         FetchPosition requestPosition,
-                                                                        OffsetForLeaderPartitionResult epochEndOffset) {
+                                                                        EpochEndOffset epochEndOffset) {
         TopicPartitionState state = assignedStateOrNull(tp);
         if (state == null) {
             log.debug("Skipping completed validation for partition {} which is not currently assigned.", tp);
@@ -560,6 +560,18 @@ public class SubscriptionState {
 
     synchronized void updateLastStableOffset(TopicPartition tp, long lastStableOffset) {
         assignedState(tp).lastStableOffset(lastStableOffset);
+    }
+
+    synchronized Long logStartOffset(TopicPartition tp) {
+        return assignedState(tp).logStartOffset;
+    }
+
+    synchronized Long logEndOffset(TopicPartition tp, IsolationLevel isolationLevel) {
+        TopicPartitionState topicPartitionState = assignedState(tp);
+        if (isolationLevel == IsolationLevel.READ_COMMITTED)
+            return topicPartitionState.lastStableOffset == null ? null : topicPartitionState.lastStableOffset;
+        else
+            return topicPartitionState.highWatermark == null ? null : topicPartitionState.highWatermark;
     }
 
     /**

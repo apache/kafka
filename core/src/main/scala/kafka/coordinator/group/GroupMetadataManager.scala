@@ -28,20 +28,19 @@ import java.util.concurrent.locks.ReentrantLock
 import com.yammer.metrics.core.Gauge
 import kafka.api.{ApiVersion, KAFKA_0_10_1_IV0, KAFKA_2_1_IV0, KAFKA_2_1_IV1, KAFKA_2_3_IV0}
 import kafka.common.OffsetAndMetadata
-import kafka.internals.generated.{GroupMetadataKey => GroupMetadataKeyData, GroupMetadataValue, OffsetCommitKey, OffsetCommitValue}
+import kafka.internals.generated.{GroupMetadataValue, OffsetCommitKey, OffsetCommitValue, GroupMetadataKey => GroupMetadataKeyData}
 import kafka.log.AppendOrigin
 import kafka.metrics.KafkaMetricsGroup
 import kafka.server.{FetchLogEnd, ReplicaManager}
 import kafka.utils.CoreUtils.inLock
-import kafka.utils._
 import kafka.utils.Implicits._
-import kafka.zk.KafkaZkClient
+import kafka.utils._
 import org.apache.kafka.clients.consumer.ConsumerRecord
 import org.apache.kafka.clients.consumer.internals.ConsumerProtocol
 import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.metrics.stats.{Avg, Max, Meter}
-import org.apache.kafka.common.protocol.{ByteBufferAccessor, Errors, Message, MessageUtil}
+import org.apache.kafka.common.protocol.{ByteBufferAccessor, Errors, MessageUtil}
 import org.apache.kafka.common.record._
 import org.apache.kafka.common.requests.OffsetFetchResponse.PartitionData
 import org.apache.kafka.common.requests.ProduceResponse.PartitionResponse
@@ -57,7 +56,6 @@ class GroupMetadataManager(brokerId: Int,
                            interBrokerProtocolVersion: ApiVersion,
                            config: OffsetConfig,
                            val replicaManager: ReplicaManager,
-                           zkClient: KafkaZkClient,
                            time: Time,
                            metrics: Metrics) extends Logging with KafkaMetricsGroup {
 
@@ -78,7 +76,7 @@ class GroupMetadataManager(brokerId: Int,
   private val shuttingDown = new AtomicBoolean(false)
 
   /* number of partitions for the consumer metadata topic */
-  private val groupMetadataTopicPartitionCount = getGroupMetadataTopicPartitionCount
+  @volatile private var groupMetadataTopicPartitionCount: Int = _
 
   /* single-thread scheduler to handle offset/group metadata cache loading and unloading */
   private val scheduler = new KafkaScheduler(threads = 1, threadNamePrefix = "group-metadata-manager-")
@@ -170,7 +168,8 @@ class GroupMetadataManager(brokerId: Int,
       }
     })
 
-  def startup(enableMetadataExpiration: Boolean): Unit = {
+  def startup(retrieveGroupMetadataTopicPartitionCount: () => Int, enableMetadataExpiration: Boolean): Unit = {
+    groupMetadataTopicPartitionCount = retrieveGroupMetadataTopicPartitionCount()
     scheduler.startup()
     if (enableMetadataExpiration) {
       scheduler.schedule(name = "delete-expired-group-metadata",
@@ -589,7 +588,7 @@ class GroupMetadataManager(brokerId: Int,
 
           readAtLeastOneRecord = fetchDataInfo.records.sizeInBytes > 0
 
-          val memRecords = fetchDataInfo.records match {
+          val memRecords = (fetchDataInfo.records: @unchecked) match {
             case records: MemoryRecords => records
             case fileRecords: FileRecords =>
               val sizeInBytes = fileRecords.sizeInBytes
@@ -819,7 +818,7 @@ class GroupMetadataManager(brokerId: Int,
         val timestampType = TimestampType.CREATE_TIME
         val timestamp = time.milliseconds()
 
-          replicaManager.nonOfflinePartition(appendPartition).foreach { partition =>
+          replicaManager.onlinePartition(appendPartition).foreach { partition =>
             val tombstones = ArrayBuffer.empty[SimpleRecord]
             removedOffsets.forKeyValue { (topicPartition, offsetAndMetadata) =>
               trace(s"Removing expired/deleted offset and metadata for $groupId, $topicPartition: $offsetAndMetadata")
@@ -935,14 +934,6 @@ class GroupMetadataManager(brokerId: Int,
   }
 
   /**
-   * Gets the partition count of the group metadata topic from ZooKeeper.
-   * If the topic does not exist, the configured partition count is returned.
-   */
-  private def getGroupMetadataTopicPartitionCount: Int = {
-    zkClient.getTopicPartitionCount(Topic.GROUP_METADATA_TOPIC_NAME).getOrElse(config.offsetsTopicNumPartitions)
-  }
-
-  /**
    * Check if the replica is local and return the message format version and timestamp
    *
    * @param   partition  Partition of GroupMetadataTopic
@@ -996,17 +987,6 @@ object GroupMetadataManager {
   val MetricsGroup: String = "group-coordinator-metrics"
   val LoadTimeSensor: String = "GroupPartitionLoadTime"
 
-  private def serializeMessage(version: Short, message: Message): Array[Byte] = {
-    val buffer = MessageUtil.serializeMessage(version, message)
-    // take the inner array directly if it is full with data
-    if (buffer.hasArray &&
-      buffer.arrayOffset() == 0 &&
-      buffer.position() == 0 &&
-      buffer.limit() == buffer.array().length)
-      buffer.array()
-    else Utils.toArray(buffer)
-  }
-
   /**
    * Generates the key for offset commit message for given (group, topic, partition)
    *
@@ -1015,7 +995,7 @@ object GroupMetadataManager {
    * @return key for offset commit message
    */
   def offsetCommitKey(groupId: String, topicPartition: TopicPartition): Array[Byte] = {
-    serializeMessage(OffsetCommitKey.HIGHEST_SUPPORTED_VERSION,
+    MessageUtil.toVersionPrefixedBytes(OffsetCommitKey.HIGHEST_SUPPORTED_VERSION,
       new OffsetCommitKey()
         .setGroup(groupId)
         .setTopic(topicPartition.topic)
@@ -1029,7 +1009,7 @@ object GroupMetadataManager {
    * @return key bytes for group metadata message
    */
   def groupMetadataKey(groupId: String): Array[Byte] = {
-    serializeMessage(GroupMetadataKeyData.HIGHEST_SUPPORTED_VERSION,
+    MessageUtil.toVersionPrefixedBytes(GroupMetadataKeyData.HIGHEST_SUPPORTED_VERSION,
       new GroupMetadataKeyData()
         .setGroup(groupId))
   }
@@ -1047,7 +1027,7 @@ object GroupMetadataManager {
       if (apiVersion < KAFKA_2_1_IV0 || offsetAndMetadata.expireTimestamp.nonEmpty) 1.toShort
       else if (apiVersion < KAFKA_2_1_IV1) 2.toShort
       else 3.toShort
-    serializeMessage(version, new OffsetCommitValue()
+    MessageUtil.toVersionPrefixedBytes(version, new OffsetCommitValue()
       .setOffset(offsetAndMetadata.offset)
       .setMetadata(offsetAndMetadata.metadata)
       .setCommitTimestamp(offsetAndMetadata.commitTimestamp)
@@ -1076,7 +1056,7 @@ object GroupMetadataManager {
       else if (apiVersion < KAFKA_2_3_IV0) 2.toShort
       else 3.toShort
 
-    serializeMessage(version, new GroupMetadataValue()
+    MessageUtil.toVersionPrefixedBytes(version, new GroupMetadataValue()
       .setProtocolType(groupMetadata.protocolType.getOrElse(""))
       .setGeneration(groupMetadata.generationId)
       .setProtocol(groupMetadata.protocolName.orNull)
@@ -1158,7 +1138,6 @@ object GroupMetadataManager {
         val members = value.members.asScala.map { memberMetadata =>
           new MemberMetadata(
             memberId = memberMetadata.memberId,
-            groupId = groupId,
             groupInstanceId = Option(memberMetadata.groupInstanceId),
             clientId = memberMetadata.clientId,
             clientHost = memberMetadata.clientHost,

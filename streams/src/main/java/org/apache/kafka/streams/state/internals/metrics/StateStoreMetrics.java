@@ -110,6 +110,13 @@ public class StateStoreMetrics {
     private static final String RANGE_AVG_LATENCY_DESCRIPTION = AVG_LATENCY_DESCRIPTION_PREFIX + RANGE_DESCRIPTION;
     private static final String RANGE_MAX_LATENCY_DESCRIPTION = MAX_LATENCY_DESCRIPTION_PREFIX + RANGE_DESCRIPTION;
 
+    private static final String PREFIX_SCAN = "prefix-scan";
+    private static final String PREFIX_SCAN_DESCRIPTION = "calls to prefix-scan";
+    private static final String PREFIX_SCAN_RATE_DESCRIPTION =
+            RATE_DESCRIPTION_PREFIX + PREFIX_SCAN_DESCRIPTION + RATE_DESCRIPTION_SUFFIX;
+    private static final String PREFIX_SCAN_AVG_LATENCY_DESCRIPTION = AVG_LATENCY_DESCRIPTION_PREFIX + PREFIX_SCAN_DESCRIPTION;
+    private static final String PREFIX_SCAN_MAX_LATENCY_DESCRIPTION = MAX_LATENCY_DESCRIPTION_PREFIX + PREFIX_SCAN_DESCRIPTION;
+
     private static final String FLUSH = "flush";
     private static final String FLUSH_DESCRIPTION = "calls to flush";
     private static final String FLUSH_TOTAL_DESCRIPTION = TOTAL_DESCRIPTION + FLUSH_DESCRIPTION;
@@ -305,6 +312,33 @@ public class StateStoreMetrics {
             RecordingLevel.DEBUG,
             streamsMetrics
         );
+    }
+
+    public static Sensor prefixScanSensor(final String taskId,
+                                          final String storeType,
+                                          final String storeName,
+                                          final StreamsMetricsImpl streamsMetrics) {
+
+        final String latencyMetricName = PREFIX_SCAN + LATENCY_SUFFIX;
+        final Map<String, String> tagMap = streamsMetrics.storeLevelTagMap(taskId, storeType, storeName);
+
+        final Sensor sensor = streamsMetrics.storeLevelSensor(taskId, storeName, PREFIX_SCAN, RecordingLevel.DEBUG);
+        addInvocationRateToSensor(
+            sensor,
+            STATE_STORE_LEVEL_GROUP,
+            tagMap,
+            PREFIX_SCAN,
+            PREFIX_SCAN_RATE_DESCRIPTION
+        );
+        addAvgAndMaxToSensor(
+            sensor,
+            STATE_STORE_LEVEL_GROUP,
+            tagMap,
+            latencyMetricName,
+            PREFIX_SCAN_AVG_LATENCY_DESCRIPTION,
+            PREFIX_SCAN_MAX_LATENCY_DESCRIPTION
+        );
+        return sensor;
     }
 
     public static Sensor flushSensor(final String threadId,

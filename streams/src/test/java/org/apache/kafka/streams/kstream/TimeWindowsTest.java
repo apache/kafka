@@ -19,13 +19,16 @@ package org.apache.kafka.streams.kstream;
 import org.apache.kafka.streams.kstream.internals.TimeWindow;
 import org.junit.Test;
 
+import java.time.Duration;
 import java.util.Map;
 
+import static java.time.Duration.ofDays;
 import static java.time.Duration.ofMillis;
 import static org.apache.kafka.streams.EqualityCheck.verifyEquality;
 import static org.apache.kafka.streams.EqualityCheck.verifyInEquality;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotEquals;
+import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.fail;
 
 @SuppressWarnings("deprecation")
@@ -52,19 +55,26 @@ public class TimeWindowsTest {
 
     @SuppressWarnings("deprecation") // specifically testing deprecated APIs
     @Test
-    public void shouldUseWindowSizeAsRentitionTimeIfWindowSizeIsLargerThanDefaultRetentionTime() {
+    public void shouldUseWindowSizeAsRetentionTimeIfWindowSizeIsLargerThanDefaultRetentionTime() {
         final long windowSize = 2 * TimeWindows.of(ofMillis(1)).maintainMs();
         assertEquals(windowSize, TimeWindows.of(ofMillis(windowSize)).maintainMs());
     }
 
-    @Test(expected = IllegalArgumentException.class)
-    public void windowSizeMustNotBeZero() {
-        TimeWindows.of(ofMillis(0));
+    @Test
+    public void shouldUseWindowSizeAndGraceAsRetentionTimeIfBothCombinedAreLargerThanDefaultRetentionTime() {
+        final Duration windowsSize = ofDays(1).minus(ofMillis(1));
+        final Duration gracePeriod = ofMillis(2);
+        assertEquals(windowsSize.toMillis() + gracePeriod.toMillis(), TimeWindows.of(windowsSize).grace(gracePeriod).maintainMs());
     }
 
-    @Test(expected = IllegalArgumentException.class)
+    @Test
+    public void windowSizeMustNotBeZero() {
+        assertThrows(IllegalArgumentException.class, () -> TimeWindows.of(ofMillis(0)));
+    }
+
+    @Test
     public void windowSizeMustNotBeNegative() {
-        TimeWindows.of(ofMillis(-1));
+        assertThrows(IllegalArgumentException.class, () -> TimeWindows.of(ofMillis(-1)));
     }
 
     @Test

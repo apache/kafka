@@ -19,6 +19,7 @@ package org.apache.kafka.streams;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerGroupMetadata;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
+import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.clients.consumer.MockConsumer;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.consumer.OffsetResetStrategy;
@@ -99,6 +100,7 @@ import java.util.Objects;
 import java.util.Properties;
 import java.util.Queue;
 import java.util.Set;
+import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Supplier;
@@ -244,6 +246,16 @@ public class TopologyTestDriver implements Closeable {
 
     /**
      * Create a new test diver instance.
+     * Default test properties are used to initialize the driver instance
+     *
+     * @param topology the topology to be tested
+     */
+    public TopologyTestDriver(final Topology topology) {
+        this(topology, new Properties());
+    }
+
+    /**
+     * Create a new test diver instance.
      * Initialized the internally mocked wall-clock time with {@link System#currentTimeMillis() current system time}.
      *
      * @param topology the topology to be tested
@@ -253,6 +265,18 @@ public class TopologyTestDriver implements Closeable {
                               final Properties config) {
         this(topology, config, null);
     }
+
+    /**
+     * Create a new test diver instance.
+     *
+     * @param topology the topology to be tested
+     * @param initialWallClockTimeMs the initial value of internally mocked wall-clock time
+     */
+    public TopologyTestDriver(final Topology topology,
+                              final Instant initialWallClockTimeMs) {
+        this(topology, new Properties(), initialWallClockTimeMs);
+    }
+
 
     /**
      * Create a new test diver instance.
@@ -299,7 +323,8 @@ public class TopologyTestDriver implements Closeable {
         final Properties configCopy = new Properties();
         configCopy.putAll(config);
         configCopy.putIfAbsent(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "dummy-bootstrap-host:0");
-        configCopy.putIfAbsent(StreamsConfig.APPLICATION_ID_CONFIG, "dummy-topology-test-driver-app-id");
+        // provide randomized dummy app-id if it's not specified
+        configCopy.putIfAbsent(StreamsConfig.APPLICATION_ID_CONFIG,  "dummy-topology-test-driver-app-id-" + ThreadLocalRandom.current().nextInt());
         final StreamsConfig streamsConfig = new ClientUtils.QuietStreamsConfig(configCopy);
         logIfTaskIdleEnabled(streamsConfig);
 
@@ -501,11 +526,21 @@ public class TopologyTestDriver implements Closeable {
                 mockWallClockTime,
                 stateManager,
                 recordCollector,
-                context
-            );
+                context,
+                logContext);
             task.initializeIfNeeded();
             task.completeRestoration();
             task.processorContext().setRecordContext(null);
+
+            // initialize the task metadata so that all topics have zero lag
+            for (final Map.Entry<TopicPartition, Long> entry : startOffsets.entrySet()) {
+                final ConsumerRecords.Metadata metadata = new ConsumerRecords.Metadata(
+                    mockWallClockTime.milliseconds(),
+                    0L,
+                    0L
+                );
+                task.addFetchedMetadata(entry.getKey(), metadata);
+            }
         } else {
             task = null;
         }
@@ -567,10 +602,11 @@ public class TopologyTestDriver implements Closeable {
                                    final byte[] key,
                                    final byte[] value,
                                    final Headers headers) {
+        final long offset = offsetsByTopicOrPatternPartition.get(topicOrPatternPartition).incrementAndGet() - 1;
         task.addRecords(topicOrPatternPartition, Collections.singleton(new ConsumerRecord<>(
             inputTopic,
             topicOrPatternPartition.partition(),
-            offsetsByTopicOrPatternPartition.get(topicOrPatternPartition).incrementAndGet() - 1,
+            offset,
             timestamp,
             TimestampType.CREATE_TIME,
             (long) ConsumerRecord.NULL_CHECKSUM,
@@ -580,6 +616,12 @@ public class TopologyTestDriver implements Closeable {
             value,
             headers))
         );
+        final ConsumerRecords.Metadata metadata = new ConsumerRecords.Metadata(
+            mockWallClockTime.milliseconds(),
+            offset,
+            offset
+        );
+        task.addFetchedMetadata(topicOrPatternPartition, metadata);
     }
 
     private void completeAllProcessableWork() {

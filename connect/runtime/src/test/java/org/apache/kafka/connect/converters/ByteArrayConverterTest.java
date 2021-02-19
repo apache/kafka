@@ -30,6 +30,7 @@ import java.util.Collections;
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 
 public class ByteArrayConverterTest {
@@ -59,14 +60,16 @@ public class ByteArrayConverterTest {
         );
     }
 
-    @Test(expected = DataException.class)
+    @Test
     public void testFromConnectBadSchema() {
-        converter.fromConnectData(TOPIC, Schema.INT32_SCHEMA, SAMPLE_BYTES);
+        assertThrows(DataException.class,
+            () -> converter.fromConnectData(TOPIC, Schema.INT32_SCHEMA, SAMPLE_BYTES));
     }
 
-    @Test(expected = DataException.class)
+    @Test
     public void testFromConnectInvalidValue() {
-        converter.fromConnectData(TOPIC, Schema.BYTES_SCHEMA, 12);
+        assertThrows(DataException.class,
+            () -> converter.fromConnectData(TOPIC, Schema.BYTES_SCHEMA, 12));
     }
 
     @Test

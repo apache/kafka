@@ -172,7 +172,7 @@ public class RestClient {
      * @return
      */
     private static Map<String, String> convertHttpFieldsToMap(HttpFields httpFields) {
-        Map<String, String> headers = new HashMap<String, String>();
+        Map<String, String> headers = new HashMap<>();
 
         if (httpFields == null || httpFields.size() == 0)
             return headers;

@@ -38,11 +38,14 @@ import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.QueryableStoreTypes;
 import org.apache.kafka.streams.state.Stores;
 import org.apache.kafka.streams.state.internals.OffsetCheckpoint;
+import org.apache.kafka.test.IntegrationTest;
 import org.apache.kafka.test.TestUtils;
+import org.junit.After;
 import org.junit.Before;
 import org.junit.ClassRule;
 import org.junit.Rule;
 import org.junit.Test;
+import org.junit.experimental.categories.Category;
 import org.junit.rules.TestName;
 import org.junit.runner.RunWith;
 import org.junit.runners.Parameterized;
@@ -67,6 +70,7 @@ import static org.junit.Assert.assertTrue;
  * task towards a standby task is safe across restarts of the application.
  */
 @RunWith(Parameterized.class)
+@Category(IntegrationTest.class)
 public class StandbyTaskEOSIntegrationTest {
 
     private final static long REBALANCE_TIMEOUT = Duration.ofMinutes(2L).toMillis();
@@ -91,6 +95,11 @@ public class StandbyTaskEOSIntegrationTest {
     private String storeName;
     private String outputTopic;
 
+    private KafkaStreams streamInstanceOne;
+    private KafkaStreams streamInstanceTwo;
+    private KafkaStreams streamInstanceOneRecovery;
+
+
     @ClassRule
     public static final EmbeddedKafkaCluster CLUSTER = new EmbeddedKafkaCluster(3);
 
@@ -107,6 +116,19 @@ public class StandbyTaskEOSIntegrationTest {
         CLUSTER.deleteTopicsAndWait(inputTopic, outputTopic, appId + "-KSTREAM-AGGREGATE-STATE-STORE-0000000001-changelog");
         CLUSTER.createTopic(inputTopic, 1, 3);
         CLUSTER.createTopic(outputTopic, 1, 3);
+    }
+
+    @After
+    public void cleanUp() {
+        if (streamInstanceOne != null) {
+            streamInstanceOne.close();
+        }
+        if (streamInstanceTwo != null) {
+            streamInstanceTwo.close();
+        }
+        if (streamInstanceOneRecovery != null) {
+            streamInstanceOneRecovery.close();
+        }
     }
 
     @Test
@@ -129,21 +151,19 @@ public class StandbyTaskEOSIntegrationTest {
 
         final CountDownLatch instanceLatch = new CountDownLatch(1);
 
-        try (
-            final KafkaStreams streamInstanceOne = buildStreamWithDirtyStateDir(stateDirPath + "/" + appId + "-1/", instanceLatch);
-            final KafkaStreams streamInstanceTwo = buildStreamWithDirtyStateDir(stateDirPath + "/" + appId + "-2/", instanceLatch)
-        ) {
-            startApplicationAndWaitUntilRunning(asList(streamInstanceOne, streamInstanceTwo), Duration.ofSeconds(60));
+        streamInstanceOne = buildStreamWithDirtyStateDir(stateDirPath + "/" + appId + "-1/", instanceLatch);
+        streamInstanceTwo = buildStreamWithDirtyStateDir(stateDirPath + "/" + appId + "-2/", instanceLatch);
 
-            // Wait for the record to be processed
-            assertTrue(instanceLatch.await(15, TimeUnit.SECONDS));
+        startApplicationAndWaitUntilRunning(asList(streamInstanceOne, streamInstanceTwo), Duration.ofSeconds(60));
 
-            streamInstanceOne.close(Duration.ZERO);
-            streamInstanceTwo.close(Duration.ZERO);
+        // Wait for the record to be processed
+        assertTrue(instanceLatch.await(15, TimeUnit.SECONDS));
 
-            streamInstanceOne.cleanUp();
-            streamInstanceTwo.cleanUp();
-        }
+        streamInstanceOne.close(Duration.ZERO);
+        streamInstanceTwo.close(Duration.ZERO);
+
+        streamInstanceOne.cleanUp();
+        streamInstanceTwo.cleanUp();
     }
 
     private KafkaStreams buildStreamWithDirtyStateDir(final String stateDirPath,
@@ -174,8 +194,8 @@ public class StandbyTaskEOSIntegrationTest {
     }
 
     @Test
-    @Deprecated
     public void shouldWipeOutStandbyStateDirectoryIfCheckpointIsMissing() throws Exception {
+        final long time = System.currentTimeMillis();
         final String base = TestUtils.tempDirectory(appId).getPath();
 
         IntegrationTestUtils.produceKeyValuesSynchronouslyWithTimestamp(
@@ -189,131 +209,126 @@ public class StandbyTaskEOSIntegrationTest {
                 IntegerSerializer.class,
                 new Properties()
             ),
-            10L
+            10L + time
         );
 
-        try (
-            final KafkaStreams streamInstanceOne = buildWithDeduplicationTopology(base + "-1");
-            final KafkaStreams streamInstanceTwo = buildWithDeduplicationTopology(base + "-2");
-            final KafkaStreams streamInstanceOneRecovery = buildWithDeduplicationTopology(base + "-1")
-        ) {
-            // start first instance and wait for processing
-            streamInstanceOne.setUncaughtExceptionHandler((t, e) -> { });
-            streamInstanceTwo.setUncaughtExceptionHandler((t, e) -> { });
-            streamInstanceOneRecovery.setUncaughtExceptionHandler((t, e) -> { });
+        streamInstanceOne = buildWithDeduplicationTopology(base + "-1");
+        streamInstanceTwo = buildWithDeduplicationTopology(base + "-2");
 
-            startApplicationAndWaitUntilRunning(Collections.singletonList(streamInstanceOne), Duration.ofSeconds(30));
-            IntegrationTestUtils.waitUntilMinRecordsReceived(
-                TestUtils.consumerConfig(
-                    CLUSTER.bootstrapServers(),
-                    IntegerDeserializer.class,
-                    IntegerDeserializer.class
-                ),
-                outputTopic,
-                1
-            );
+        // start first instance and wait for processing
+        startApplicationAndWaitUntilRunning(Collections.singletonList(streamInstanceOne), Duration.ofSeconds(30));
+        IntegrationTestUtils.waitUntilMinRecordsReceived(
+            TestUtils.consumerConfig(
+                CLUSTER.bootstrapServers(),
+                IntegerDeserializer.class,
+                IntegerDeserializer.class
+            ),
+            outputTopic,
+            1
+        );
 
-            // start second instance and wait for standby replication
-            startApplicationAndWaitUntilRunning(Collections.singletonList(streamInstanceTwo), Duration.ofSeconds(30));
-            waitForCondition(
-                () -> streamInstanceTwo.store(
-                    StoreQueryParameters.fromNameAndType(
-                        storeName,
-                        QueryableStoreTypes.<Integer, Integer>keyValueStore()
-                    ).enableStaleStores()
-                ).get(KEY_0) != null,
-                REBALANCE_TIMEOUT,
-                "Could not get key from standby store"
-            );
-            // sanity check that first instance is still active
-            waitForCondition(
-                () -> streamInstanceOne.store(
-                    StoreQueryParameters.fromNameAndType(
-                        storeName,
-                        QueryableStoreTypes.<Integer, Integer>keyValueStore()
-                    )
-                ).get(KEY_0) != null,
-                "Could not get key from main store"
-            );
+        // start second instance and wait for standby replication
+        startApplicationAndWaitUntilRunning(Collections.singletonList(streamInstanceTwo), Duration.ofSeconds(30));
+        waitForCondition(
+            () -> streamInstanceTwo.store(
+                StoreQueryParameters.fromNameAndType(
+                    storeName,
+                    QueryableStoreTypes.<Integer, Integer>keyValueStore()
+                ).enableStaleStores()
+            ).get(KEY_0) != null,
+            REBALANCE_TIMEOUT,
+            "Could not get key from standby store"
+        );
+        // sanity check that first instance is still active
+        waitForCondition(
+            () -> streamInstanceOne.store(
+                StoreQueryParameters.fromNameAndType(
+                    storeName,
+                    QueryableStoreTypes.<Integer, Integer>keyValueStore()
+                )
+            ).get(KEY_0) != null,
+            "Could not get key from main store"
+        );
 
-            // inject poison pill and wait for crash of first instance and recovery on second instance
-            IntegrationTestUtils.produceKeyValuesSynchronouslyWithTimestamp(
-                inputTopic,
-                Collections.singletonList(
-                    new KeyValue<>(KEY_1, 0)
-                ),
-                TestUtils.producerConfig(
-                    CLUSTER.bootstrapServers(),
-                    IntegerSerializer.class,
-                    IntegerSerializer.class,
-                    new Properties()
-                ),
-                10L
-            );
-            waitForCondition(
-                () -> streamInstanceOne.state() == KafkaStreams.State.ERROR,
-                "Stream instance 1 did not go into error state"
-            );
-            streamInstanceOne.close();
+        // inject poison pill and wait for crash of first instance and recovery on second instance
+        IntegrationTestUtils.produceKeyValuesSynchronouslyWithTimestamp(
+            inputTopic,
+            Collections.singletonList(
+                new KeyValue<>(KEY_1, 0)
+            ),
+            TestUtils.producerConfig(
+                CLUSTER.bootstrapServers(),
+                IntegerSerializer.class,
+                IntegerSerializer.class,
+                new Properties()
+            ),
+            10L + time
+        );
+        waitForCondition(
+            () -> streamInstanceOne.state() == KafkaStreams.State.ERROR,
+            "Stream instance 1 did not go into error state"
+        );
+        streamInstanceOne.close();
 
-            IntegrationTestUtils.waitUntilMinRecordsReceived(
-                TestUtils.consumerConfig(
-                    CLUSTER.bootstrapServers(),
-                    IntegerDeserializer.class,
-                    IntegerDeserializer.class
-                ),
-                outputTopic,
-                2
-            );
+        IntegrationTestUtils.waitUntilMinRecordsReceived(
+            TestUtils.consumerConfig(
+                CLUSTER.bootstrapServers(),
+                IntegerDeserializer.class,
+                IntegerDeserializer.class
+            ),
+            outputTopic,
+            2
+        );
 
-            // "restart" first client and wait for standby recovery
-            // (could actually also be active, but it does not matter as long as we enable "state stores"
-            startApplicationAndWaitUntilRunning(
-                Collections.singletonList(streamInstanceOneRecovery),
-                Duration.ofSeconds(30)
-            );
-            waitForCondition(
-                () -> streamInstanceOneRecovery.store(
-                    StoreQueryParameters.fromNameAndType(
-                        storeName,
-                        QueryableStoreTypes.<Integer, Integer>keyValueStore()
-                    ).enableStaleStores()
-                ).get(KEY_0) != null,
-                "Could not get key from recovered standby store"
-            );
+        streamInstanceOneRecovery = buildWithDeduplicationTopology(base + "-1");
 
-            streamInstanceTwo.close();
-            waitForCondition(
-                () -> streamInstanceOneRecovery.store(
-                    StoreQueryParameters.fromNameAndType(
-                        storeName,
-                        QueryableStoreTypes.<Integer, Integer>keyValueStore()
-                    )
-                ).get(KEY_0) != null,
-                REBALANCE_TIMEOUT,
-                "Could not get key from recovered main store"
-            );
+        // "restart" first client and wait for standby recovery
+        // (could actually also be active, but it does not matter as long as we enable "state stores"
+        startApplicationAndWaitUntilRunning(
+            Collections.singletonList(streamInstanceOneRecovery),
+            Duration.ofSeconds(30)
+        );
+        waitForCondition(
+            () -> streamInstanceOneRecovery.store(
+                StoreQueryParameters.fromNameAndType(
+                    storeName,
+                    QueryableStoreTypes.<Integer, Integer>keyValueStore()
+                ).enableStaleStores()
+            ).get(KEY_0) != null,
+            "Could not get key from recovered standby store"
+        );
 
-            // re-inject poison pill and wait for crash of first instance
-            skipRecord.set(false);
-            IntegrationTestUtils.produceKeyValuesSynchronouslyWithTimestamp(
-                inputTopic,
-                Collections.singletonList(
-                    new KeyValue<>(KEY_1, 0)
-                ),
-                TestUtils.producerConfig(
-                    CLUSTER.bootstrapServers(),
-                    IntegerSerializer.class,
-                    IntegerSerializer.class,
-                    new Properties()
-                ),
-                10L
-            );
-            waitForCondition(
-                () -> streamInstanceOneRecovery.state() == KafkaStreams.State.ERROR,
-                "Stream instance 1 did not go into error state"
-            );
-        }
+        streamInstanceTwo.close();
+        waitForCondition(
+            () -> streamInstanceOneRecovery.store(
+                StoreQueryParameters.fromNameAndType(
+                    storeName,
+                    QueryableStoreTypes.<Integer, Integer>keyValueStore()
+                )
+            ).get(KEY_0) != null,
+            REBALANCE_TIMEOUT,
+            "Could not get key from recovered main store"
+        );
+
+        // re-inject poison pill and wait for crash of first instance
+        skipRecord.set(false);
+        IntegrationTestUtils.produceKeyValuesSynchronouslyWithTimestamp(
+            inputTopic,
+            Collections.singletonList(
+                new KeyValue<>(KEY_1, 0)
+            ),
+            TestUtils.producerConfig(
+                CLUSTER.bootstrapServers(),
+                IntegerSerializer.class,
+                IntegerSerializer.class,
+                new Properties()
+            ),
+            10L + time
+        );
+        waitForCondition(
+            () -> streamInstanceOneRecovery.state() == KafkaStreams.State.ERROR,
+            "Stream instance 1 did not go into error state. Is in " + streamInstanceOneRecovery.state() + " state."
+        );
     }
 
     private KafkaStreams buildWithDeduplicationTopology(final String stateDirPath) {

@@ -141,5 +141,5 @@ public class Heartbeat {
         assert version == 0;
         return VALUE_SCHEMA_V0;
     }
-};
+}
 

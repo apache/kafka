@@ -481,7 +481,7 @@ public class KStreamImplTest {
     }
 
     @Test
-    @SuppressWarnings({"rawtypes", "unchecked"})
+    @SuppressWarnings({"rawtypes", "unchecked", "deprecation"})
     public void shouldNotAllowNullPredicatedOnBranch() {
         final NullPointerException exception = assertThrows(
             NullPointerException.class,
@@ -490,7 +490,7 @@ public class KStreamImplTest {
     }
 
     @Test
-    @SuppressWarnings("unchecked")
+    @SuppressWarnings({"unchecked", "deprecation"})
     public void shouldHaveAtLeastOnPredicateWhenBranching() {
         final IllegalArgumentException exception = assertThrows(
             IllegalArgumentException.class,
@@ -498,7 +498,7 @@ public class KStreamImplTest {
         assertThat(exception.getMessage(), equalTo("branch() requires at least one predicate"));
     }
 
-    @SuppressWarnings("unchecked")
+    @SuppressWarnings({"unchecked", "deprecation"})
     @Test
     public void shouldHaveAtLeastOnPredicateWhenBranchingWithNamed() {
         final IllegalArgumentException exception = assertThrows(
@@ -507,7 +507,7 @@ public class KStreamImplTest {
         assertThat(exception.getMessage(), equalTo("branch() requires at least one predicate"));
     }
 
-    @SuppressWarnings("unchecked")
+    @SuppressWarnings({"unchecked", "deprecation"})
     @Test
     public void shouldNotAllowNullNamedOnBranch() {
         final NullPointerException exception = assertThrows(
@@ -516,7 +516,7 @@ public class KStreamImplTest {
         assertThat(exception.getMessage(), equalTo("named can't be null"));
     }
 
-    @SuppressWarnings("unchecked")
+    @SuppressWarnings({"unchecked", "deprecation"})
     @Test
     public void shouldCantHaveNullPredicate() {
         final NullPointerException exception = assertThrows(
@@ -525,7 +525,7 @@ public class KStreamImplTest {
         assertThat(exception.getMessage(), equalTo("predicates can't be null"));
     }
 
-    @SuppressWarnings("unchecked")
+    @SuppressWarnings({"unchecked", "deprecation"})
     @Test
     public void shouldCantHaveNullPredicateWithNamed() {
         final NullPointerException exception = assertThrows(

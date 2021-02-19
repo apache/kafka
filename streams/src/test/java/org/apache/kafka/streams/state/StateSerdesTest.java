@@ -32,19 +32,19 @@ import static org.junit.Assert.assertThrows;
 @SuppressWarnings("unchecked")
 public class StateSerdesTest {
 
-    @Test(expected = NullPointerException.class)
+    @Test
     public void shouldThrowIfTopicNameIsNullForBuiltinTypes() {
-        StateSerdes.withBuiltinTypes(null, byte[].class, byte[].class);
+        assertThrows(NullPointerException.class, () -> StateSerdes.withBuiltinTypes(null, byte[].class, byte[].class));
     }
 
-    @Test(expected = NullPointerException.class)
+    @Test
     public void shouldThrowIfKeyClassIsNullForBuiltinTypes() {
-        StateSerdes.withBuiltinTypes("anyName", null, byte[].class);
+        assertThrows(NullPointerException.class, () -> StateSerdes.withBuiltinTypes("anyName", null, byte[].class));
     }
 
-    @Test(expected = NullPointerException.class)
+    @Test
     public void shouldThrowIfValueClassIsNullForBuiltinTypes() {
-        StateSerdes.withBuiltinTypes("anyName", byte[].class, null);
+        assertThrows(NullPointerException.class, () -> StateSerdes.withBuiltinTypes("anyName", byte[].class, null));
     }
 
     @Test
@@ -68,29 +68,29 @@ public class StateSerdesTest {
         }
     }
 
-    @Test(expected = IllegalArgumentException.class)
+    @Test
     public void shouldThrowForUnknownKeyTypeForBuiltinTypes() {
-        StateSerdes.withBuiltinTypes("anyName", Class.class, byte[].class);
+        assertThrows(IllegalArgumentException.class, () -> StateSerdes.withBuiltinTypes("anyName", Class.class, byte[].class));
     }
 
-    @Test(expected = IllegalArgumentException.class)
+    @Test
     public void shouldThrowForUnknownValueTypeForBuiltinTypes() {
-        StateSerdes.withBuiltinTypes("anyName", byte[].class, Class.class);
+        assertThrows(IllegalArgumentException.class, () -> StateSerdes.withBuiltinTypes("anyName", byte[].class, Class.class));
     }
 
-    @Test(expected = NullPointerException.class)
+    @Test
     public void shouldThrowIfTopicNameIsNull() {
-        new StateSerdes<>(null, Serdes.ByteArray(), Serdes.ByteArray());
+        assertThrows(NullPointerException.class, () -> new StateSerdes<>(null, Serdes.ByteArray(), Serdes.ByteArray()));
     }
 
-    @Test(expected = NullPointerException.class)
+    @Test
     public void shouldThrowIfKeyClassIsNull() {
-        new StateSerdes<>("anyName", null, Serdes.ByteArray());
+        assertThrows(NullPointerException.class, () -> new StateSerdes<>("anyName", null, Serdes.ByteArray()));
     }
 
-    @Test(expected = NullPointerException.class)
+    @Test
     public void shouldThrowIfValueClassIsNull() {
-        new StateSerdes<>("anyName", Serdes.ByteArray(), null);
+        assertThrows(NullPointerException.class, () -> new StateSerdes<>("anyName", Serdes.ByteArray(), null));
     }
 
     @Test

@@ -18,11 +18,13 @@ package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.message.DescribeClientQuotasRequestData;
 import org.apache.kafka.common.message.DescribeClientQuotasRequestData.ComponentData;
+import org.apache.kafka.common.message.DescribeClientQuotasResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
-import org.apache.kafka.common.protocol.types.Struct;
+import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.quota.ClientQuotaFilter;
 import org.apache.kafka.common.quota.ClientQuotaFilterComponent;
 
+import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -77,11 +79,6 @@ public class DescribeClientQuotasRequest extends AbstractRequest {
         this.data = data;
     }
 
-    public DescribeClientQuotasRequest(Struct struct, short version) {
-        super(ApiKeys.DESCRIBE_CLIENT_QUOTAS, version);
-        this.data = new DescribeClientQuotasRequestData(struct, version);
-    }
-
     public ClientQuotaFilter filter() {
         List<ClientQuotaFilterComponent> components = new ArrayList<>(data.components().size());
         for (ComponentData componentData : data.components()) {
@@ -109,12 +106,23 @@ public class DescribeClientQuotasRequest extends AbstractRequest {
     }
 
     @Override
-    public DescribeClientQuotasResponse getErrorResponse(int throttleTimeMs, Throwable e) {
-        return new DescribeClientQuotasResponse(throttleTimeMs, e);
+    public DescribeClientQuotasRequestData data() {
+        return data;
     }
 
     @Override
-    protected Struct toStruct() {
-        return data.toStruct(version());
+    public DescribeClientQuotasResponse getErrorResponse(int throttleTimeMs, Throwable e) {
+        ApiError error = ApiError.fromThrowable(e);
+        return new DescribeClientQuotasResponse(new DescribeClientQuotasResponseData()
+            .setThrottleTimeMs(throttleTimeMs)
+            .setErrorCode(error.error().code())
+            .setErrorMessage(error.message())
+            .setEntries(null));
     }
+
+    public static DescribeClientQuotasRequest parse(ByteBuffer buffer, short version) {
+        return new DescribeClientQuotasRequest(new DescribeClientQuotasRequestData(new ByteBufferAccessor(buffer), version),
+            version);
+    }
+
 }

@@ -17,8 +17,9 @@
   "apiKey": 27,
   "type": "response",
   "name": "WriteTxnMarkersResponse",
-  "validVersions": "0",
-  "flexibleVersions": "none",
+  "validVersions": "0-1",
+  // Version 1 enables flexible versions.
+  "flexibleVersions": "1+",
   "fields": [
     { "name": "Markers", "type": "[]WritableTxnMarkerResult", "versions": "0+",
       "about": "The results for writing makers.", "fields": [
