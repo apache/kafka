@@ -75,6 +75,8 @@ There are several primitive field types available.
 
 * "int16": a 16-bit integer.
 
+* "uint16": a 16-bit unsigned integer.
+
 * "int32": a 32-bit integer.
 
 * "int64": a 64-bit integer.
@@ -84,6 +86,8 @@ There are several primitive field types available.
 * "string": a UTF-8 string.
 
 * "bytes": binary data.
+
+* "records": record set used in fetch api and fetch snapshot api
 
 In addition to these primitive field types, there is also an array type.  Array
 types start with a "[]" and end with the name of the element type.  For
@@ -96,12 +100,12 @@ Guide](https://kafka.apache.org/protocol.html).
 Nullable Fields
 ---------------
 Booleans, ints, and floats can never be null.  However, fields that are strings,
-bytes, or arrays may optionally be "nullable."  When a field is "nullable," that
-simply means that we are prepared to serialize and deserialize null entries for
+bytes, records, or arrays may optionally be "nullable".  When a field is "nullable",
+that simply means that we are prepared to serialize and deserialize null entries for
 that field.
 
 If you want to declare a field as nullable, you set "nullableVersions" for that
-field.  Nullability is implemented as a version range in order to accomodate a
+field.  Nullability is implemented as a version range in order to accommodate a
 very common pattern in Kafka where a field that was originally not nullable
 becomes nullable in a later version.
 
@@ -175,6 +179,8 @@ been set:
 * Strings default to the empty string.
 
 * Bytes fields default to the empty byte array.
+
+* Records fields default to empty.
 
 * Array fields default to empty.
 
