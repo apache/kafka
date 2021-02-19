@@ -322,8 +322,6 @@ public class KafkaBasedLog<K, V> {
     }
 
     private void readToLogEnd() {
-        log.trace("Reading to end of offset log");
-
         Set<TopicPartition> assignment = consumer.assignment();
         Map<TopicPartition, Long> endOffsets = readEndOffsets(assignment);
         log.trace("Reading to end of log offsets {}", endOffsets);

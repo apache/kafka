@@ -655,8 +655,8 @@ public class TopicAdmin implements AutoCloseable {
      * @throws TimeoutException if the offset metadata could not be fetched before the amount of time allocated
      *         by {@code request.timeout.ms} expires, and this call can be retried
      * @throws LeaderNotAvailableException if the leader was not available and this call can be retried
-     * @throws RetriableException if a retriable error occurs, the operation takes too long, or the
-     *         thread is interrupted while attempting to perform this operation
+     * @throws RetriableException if a retriable error occurs, or the thread is interrupted while attempting 
+     *         to perform this operation
      * @throws ConnectException if a non retriable error occurs
      */
     public Map<TopicPartition, Long> endOffsets(Set<TopicPartition> partitions) {
