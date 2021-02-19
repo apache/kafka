@@ -365,24 +365,22 @@ public class KafkaBasedLog<K, V> {
             // Use the admin client to immediately find the end offsets for the assigned topic partitions.
             // Unlike using the consumer
             try {
-                endOffsets = admin.endOffsets(assignment);
+                return admin.endOffsets(assignment);
             } catch (UnsupportedVersionException e) {
                 // This may happen with really old brokers that don't support the auto topic creation
                 // field in metadata requests
                 log.debug("Reading to end of log offsets with consumer since admin client is unsupported: {}", e.getMessage());
                 useAdminForListOffsets = false;
-                endOffsets = consumer.endOffsets(assignment);
+                // continue and let the consumer handle the read
             }
             // Other errors, like timeouts and retriable exceptions are thrown
-        } else {
-            // The admin may be null if older deprecated constructor is used, though AK Connect currently always provides an admin client.
-            // Using the consumer is not ideal, because when the topic has low volume, the 'poll(...)' method called from the
-            // work thread may have blocked the consumer while waiting for more records (even when there are none).
-            // In such cases, this call to the consumer to simply find the end offsets will block even though we might already be
-            // at the end offset.
-            endOffsets = consumer.endOffsets(assignment);
         }
-        return endOffsets;
+        // The admin may be null if older deprecated constructor is used, though AK Connect currently always provides an admin client.
+        // Using the consumer is not ideal, because when the topic has low volume, the 'poll(...)' method called from the
+        // work thread may have blocked the consumer while waiting for more records (even when there are none).
+        // In such cases, this call to the consumer to simply find the end offsets will block even though we might already be
+        // at the end offset.
+        return consumer.endOffsets(assignment);
     }
 
     private class WorkThread extends Thread {
