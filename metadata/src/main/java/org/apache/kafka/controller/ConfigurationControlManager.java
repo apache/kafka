@@ -243,6 +243,8 @@ public class ConfigurationControlManager {
                 return new ApiError(Errors.INVALID_REQUEST, "Unsupported " +
                     "configuration resource type BROKER_LOGGER ");
             case BROKER:
+                // Note: A Resource with type BROKER and an empty name represents a
+                // cluster configuration that applies to all brokers.
                 if (!configResource.name().isEmpty()) {
                     try {
                         int brokerId = Integer.parseInt(configResource.name());
@@ -257,12 +259,10 @@ public class ConfigurationControlManager {
                 }
                 return ApiError.NONE;
             case TOPIC:
-                if (!configResource.name().isEmpty()) {
-                    try {
-                        Topic.validate(configResource.name());
-                    } catch (Exception e) {
-                        return new ApiError(Errors.INVALID_REQUEST, "Illegal topic name.");
-                    }
+                try {
+                    Topic.validate(configResource.name());
+                } catch (Exception e) {
+                    return new ApiError(Errors.INVALID_REQUEST, "Illegal topic name.");
                 }
                 return ApiError.NONE;
             case UNKNOWN:
