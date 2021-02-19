@@ -28,6 +28,7 @@ import org.apache.kafka.common.utils.Exit;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.ThreadUtils;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.connect.connector.Connector;
 import org.apache.kafka.connect.connector.policy.ConnectorClientConfigOverridePolicy;
 import org.apache.kafka.connect.errors.AlreadyExistsException;
@@ -66,6 +67,7 @@ import javax.crypto.KeyGenerator;
 import javax.crypto.SecretKey;
 import javax.ws.rs.core.Response;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashSet;
@@ -138,6 +140,7 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
 
     private final Time time;
     private final HerderMetrics herderMetrics;
+    private final List<AutoCloseable> uponShutdown;
 
     private final String workerGroupId;
     private final int workerSyncTimeoutMs;
@@ -185,6 +188,22 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
 
     private final DistributedConfig config;
 
+    /**
+     * Create a herder that will form a Connect cluster with other {@link DistributedHerder} instances (in this or other JVMs)
+     * that have the same group ID.
+     *
+     * @param config             the configuration for the worker; may not be null
+     * @param time               the clock to use; may not be null
+     * @param worker             the {@link Worker} instance to use; may not be null
+     * @param kafkaClusterId     the identifier of the Kafka cluster to use for internal topics; may not be null
+     * @param statusBackingStore the backing store for statuses; may not be null
+     * @param configBackingStore the backing store for connector configurations; may not be null
+     * @param restUrl            the URL of this herder's REST API; may not be null
+     * @param connectorClientConfigOverridePolicy the policy specifying the client configuration properties that may be overridden
+     *                                            in connector configurations; may not be null
+     * @param uponShutdown       any {@link AutoCloseable} objects that should be closed when this herder is {@link #stop() stopped},
+     *                           after all services and resources owned by this herder are stopped
+     */
     public DistributedHerder(DistributedConfig config,
                              Time time,
                              Worker worker,
@@ -192,9 +211,10 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
                              StatusBackingStore statusBackingStore,
                              ConfigBackingStore configBackingStore,
                              String restUrl,
-                             ConnectorClientConfigOverridePolicy connectorClientConfigOverridePolicy) {
+                             ConnectorClientConfigOverridePolicy connectorClientConfigOverridePolicy,
+                             AutoCloseable... uponShutdown) {
         this(config, worker, worker.workerId(), kafkaClusterId, statusBackingStore, configBackingStore, null, restUrl, worker.metrics(),
-             time, connectorClientConfigOverridePolicy);
+             time, connectorClientConfigOverridePolicy, uponShutdown);
         configBackingStore.setUpdateListener(new ConfigUpdateListener());
     }
 
@@ -209,7 +229,8 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
                       String restUrl,
                       ConnectMetrics metrics,
                       Time time,
-                      ConnectorClientConfigOverridePolicy connectorClientConfigOverridePolicy) {
+                      ConnectorClientConfigOverridePolicy connectorClientConfigOverridePolicy,
+                      AutoCloseable... uponShutdown) {
         super(worker, workerId, kafkaClusterId, statusBackingStore, configBackingStore, connectorClientConfigOverridePolicy);
 
         this.time = time;
@@ -223,6 +244,7 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
         this.keySignatureVerificationAlgorithms = config.getList(DistributedConfig.INTER_WORKER_VERIFICATION_ALGORITHMS_CONFIG);
         this.keyGenerator = config.getInternalRequestKeyGenerator();
         this.isTopicTrackingEnabled = config.getBoolean(TOPIC_TRACKING_ENABLE_CONFIG);
+        this.uponShutdown = Arrays.asList(uponShutdown);
 
         String clientIdConfig = config.getString(CommonClientConfigs.CLIENT_ID_CONFIG);
         String clientId = clientIdConfig.length() <= 0 ? "connect-" + CONNECT_CLIENT_ID_SEQUENCE.getAndIncrement() : clientIdConfig;
@@ -236,7 +258,7 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
 
         this.herderExecutor = new ThreadPoolExecutor(1, 1, 0L,
                 TimeUnit.MILLISECONDS,
-                new LinkedBlockingDeque<Runnable>(1),
+                new LinkedBlockingDeque<>(1),
                 ThreadUtils.createThreadFactory(
                         this.getClass().getSimpleName() + "-" + clientId + "-%d", false));
 
@@ -577,7 +599,7 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
     private void processConnectorConfigUpdates(Set<String> connectorConfigUpdates) {
         // If we only have connector config updates, we can just bounce the updated connectors that are
         // currently assigned to this worker.
-        Set<String> localConnectors = assignment == null ? Collections.<String>emptySet() : new HashSet<>(assignment.connectors());
+        Set<String> localConnectors = assignment == null ? Collections.emptySet() : new HashSet<>(assignment.connectors());
         log.trace("Processing connector config updates; "
                 + "currently-owned connectors are {}, and to-be-updated connectors are {}",
                 localConnectors,
@@ -677,6 +699,15 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
     }
 
     @Override
+    protected void stopServices() {
+        try {
+            super.stopServices();
+        } finally {
+            this.uponShutdown.forEach(closeable -> Utils.closeQuietly(closeable, closeable != null ? closeable.toString() : "<unknown>"));
+        }
+    }
+
+    @Override
     public void stop() {
         log.info("Herder stopping");
 
@@ -738,6 +769,26 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
     }
 
     @Override
+    public void tasksConfig(String connName, final Callback<Map<ConnectorTaskId, Map<String, String>>> callback) {
+        log.trace("Submitting tasks config request {}", connName);
+
+        addRequest(
+            () -> {
+                if (checkRebalanceNeeded(callback))
+                    return null;
+
+                if (!configState.contains(connName)) {
+                    callback.onCompletion(new NotFoundException("Connector " + connName + " not found"), null);
+                } else {
+                    callback.onCompletion(null, buildTasksConfig(connName));
+                }
+                return null;
+            },
+            forwardErrorCallback(callback)
+        );
+    }
+
+    @Override
     protected Map<String, String> rawConfig(String connName) {
         return configState.rawConnectorConfig(connName);
     }
@@ -763,7 +814,7 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
                 } else {
                     log.trace("Removing connector config {} {}", connName, configState.connectors());
                     configBackingStore.removeConnectorConfig(connName);
-                    callback.onCompletion(null, new Created<ConnectorInfo>(false, null));
+                    callback.onCompletion(null, new Created<>(false, null));
                 }
                 return null;
             },

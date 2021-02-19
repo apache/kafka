@@ -18,7 +18,6 @@
 package kafka.server
 
 import java.util
-import java.util.concurrent.atomic.AtomicReference
 
 import com.yammer.metrics.core.MetricName
 import kafka.log.LogManager
@@ -68,11 +67,22 @@ object KafkaBroker {
       case _ => //do nothing
     }
   }
+
+  /**
+   * The log message that we print when the broker has been successfully started.
+   * The ducktape system tests look for a line matching the regex 'Kafka\s*Server.*started'
+   * to know when the broker is started, so it is best not to change this message -- but if
+   * you do change it, be sure to make it match that regex or the system tests will fail.
+   */
+  val STARTED_MESSAGE = "Kafka Server started"
 }
 
 trait KafkaBroker extends KafkaMetricsGroup {
+  @volatile private var _brokerState: BrokerState = BrokerState.NOT_RUNNING
+
   def authorizer: Option[Authorizer]
-  val brokerState = new AtomicReference[BrokerState](BrokerState.NOT_RUNNING)
+  def brokerState: BrokerState = _brokerState
+  protected def brokerState_= (brokerState: BrokerState): Unit = _brokerState = brokerState
   def clusterId: String
   def config: KafkaConfig
   def dataPlaneRequestHandlerPool: KafkaRequestHandlerPool
@@ -90,7 +100,7 @@ trait KafkaBroker extends KafkaMetricsGroup {
     explicitMetricName(KafkaBroker.metricsPrefix, KafkaBroker.metricsTypeName, name, metricTags)
   }
 
-  newGauge("BrokerState", () => brokerState.get.value())
+  newGauge("BrokerState", () => brokerState.value)
   newGauge("ClusterId", () => clusterId)
   newGauge("yammer-metrics-count", () =>  KafkaYammerMetrics.defaultRegistry.allMetrics.size)
 

@@ -751,6 +751,7 @@ project(':core') {
     compile project(':clients')
     compile project(':metadata')
     compile project(':raft')
+    compile libs.argparse4j
     compile libs.jacksonDatabind
     compile libs.jacksonModuleScala
     compile libs.jacksonDataformatCsv
@@ -1012,7 +1013,10 @@ project(':core') {
     }
     test {
       java {
-        srcDirs = ["src/generated/java", "src/test/java"]
+        srcDirs = []
+      }
+      scala {
+        srcDirs = ["src/test/java", "src/test/scala"]
       }
     }
   }

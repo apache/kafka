@@ -79,7 +79,7 @@ public class ProducerPerformance {
                     throw new  IllegalArgumentException("File does not exist or empty file provided.");
                 }
 
-                String[] payloadList = new String(Files.readAllBytes(path), "UTF-8").split(payloadDelimiter);
+                String[] payloadList = new String(Files.readAllBytes(path), StandardCharsets.UTF_8).split(payloadDelimiter);
 
                 System.out.println("Number of messages read: " + payloadList.length);
 

@@ -23,6 +23,7 @@
     <!-- core -->
     <suppress checks="(NPathComplexity|ClassFanOutComplexity|CyclomaticComplexity|ClassDataAbstractionCoupling|FinalLocalVariable|LocalVariableName|MemberName|ParameterName|MethodLength|JavaNCSS|AvoidStarImport)"
               files="core[\\/]src[\\/](generated|generated-test)[\\/].+.java$"/>
+    <suppress checks="NPathComplexity" files="ClusterTestExtensions.java"/>
 
     <!-- Clients -->
     <suppress id="dontUseSystemExit"
@@ -262,6 +263,8 @@
               files="RequestResponseTest.java"/>
 
     <!-- metadata -->
+    <suppress checks="NPathComplexity"
+              files="KafkaEventQueue.java"/>
     <suppress checks="(NPathComplexity|ClassFanOutComplexity|CyclomaticComplexity|ClassDataAbstractionCoupling|LocalVariableName|MemberName|ParameterName|MethodLength|JavaNCSS|AvoidStarImport)"
             files="metadata[\\/]src[\\/](generated|generated-test)[\\/].+.java$"/>
 </suppressions>

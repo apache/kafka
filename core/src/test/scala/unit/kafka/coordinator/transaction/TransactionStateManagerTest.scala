@@ -63,7 +63,7 @@ class TransactionStateManagerTest {
   val metrics = new Metrics()
 
   val txnConfig = TransactionConfig()
-  val transactionManager: TransactionStateManager = new TransactionStateManager(0, zkClient, scheduler,
+  val transactionManager: TransactionStateManager = new TransactionStateManager(0, scheduler,
     replicaManager, txnConfig, time, metrics)
 
   val transactionalId1: String = "one"
@@ -78,6 +78,7 @@ class TransactionStateManagerTest {
 
   @BeforeEach
   def setUp(): Unit = {
+    transactionManager.startup(() => numPartitions, false)
     // make sure the transactional id hashes to the assigning partition id
     assertEquals(partitionId, transactionManager.partitionFor(transactionalId1))
     assertEquals(partitionId, transactionManager.partitionFor(transactionalId2))

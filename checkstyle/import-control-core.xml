@@ -58,4 +58,19 @@
     <allow pkg="org.apache.kafka.clients" />
   </subpackage>
 
+  <subpackage name="test">
+    <allow pkg="kafka.test.annotation"/>
+    <allow pkg="kafka.test.junit"/>
+    <allow pkg="kafka.network"/>
+    <allow pkg="kafka.api"/>
+    <allow pkg="kafka.server"/>
+    <allow pkg="org.apache.kafka.clients.admin"/>
+    <allow pkg="integration.kafka.server" class="IntegrationTestHelper"/>
+    <subpackage name="annotation">
+      <allow pkg="kafka.test"/>
+    </subpackage>
+    <subpackage name="junit">
+      <allow pkg="kafka.test"/>
+    </subpackage>
+  </subpackage>
 </import-control>

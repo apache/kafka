@@ -845,14 +845,14 @@ public class ValuesTest {
         );
         assertEquals(Schema.FLOAT32_SCHEMA, schemaAndValue.schema());
         assertTrue(schemaAndValue.value() instanceof Float);
-        assertEquals(value.floatValue(), ((Float) schemaAndValue.value()).floatValue(), 0);
+        assertEquals(value, (Float) schemaAndValue.value(), 0);
         value = -Float.MAX_VALUE;
         schemaAndValue = Values.parseString(
             String.valueOf(value)
         );
         assertEquals(Schema.FLOAT32_SCHEMA, schemaAndValue.schema());
         assertTrue(schemaAndValue.value() instanceof Float);
-        assertEquals(value.floatValue(), ((Float) schemaAndValue.value()).floatValue(), 0);
+        assertEquals(value, (Float) schemaAndValue.value(), 0);
     }
 
     @Test
@@ -863,14 +863,14 @@ public class ValuesTest {
         );
         assertEquals(Schema.FLOAT64_SCHEMA, schemaAndValue.schema());
         assertTrue(schemaAndValue.value() instanceof Double);
-        assertEquals(value.doubleValue(), ((Double) schemaAndValue.value()).doubleValue(), 0);
+        assertEquals(value, (Double) schemaAndValue.value(), 0);
         value = -Double.MAX_VALUE;
         schemaAndValue = Values.parseString(
             String.valueOf(value)
         );
         assertEquals(Schema.FLOAT64_SCHEMA, schemaAndValue.schema());
         assertTrue(schemaAndValue.value() instanceof Double);
-        assertEquals(value.doubleValue(), ((Double) schemaAndValue.value()).doubleValue(), 0);
+        assertEquals(value, (Double) schemaAndValue.value(), 0);
     }
 
     protected void assertParsed(String input) {

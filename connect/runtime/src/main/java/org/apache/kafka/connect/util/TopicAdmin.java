@@ -23,14 +23,20 @@ import org.apache.kafka.clients.admin.ConfigEntry;
 import org.apache.kafka.clients.admin.CreateTopicsOptions;
 import org.apache.kafka.clients.admin.DescribeConfigsOptions;
 import org.apache.kafka.clients.admin.DescribeTopicsOptions;
+import org.apache.kafka.clients.admin.ListOffsetsResult;
+import org.apache.kafka.clients.admin.ListOffsetsResult.ListOffsetsResultInfo;
 import org.apache.kafka.clients.admin.NewTopic;
+import org.apache.kafka.clients.admin.OffsetSpec;
 import org.apache.kafka.clients.admin.TopicDescription;
 import org.apache.kafka.common.KafkaFuture;
+import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.config.ConfigResource;
 import org.apache.kafka.common.config.TopicConfig;
+import org.apache.kafka.common.errors.AuthorizationException;
 import org.apache.kafka.common.errors.ClusterAuthorizationException;
 import org.apache.kafka.common.errors.InvalidConfigurationException;
+import org.apache.kafka.common.errors.LeaderNotAvailableException;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.errors.TopicAuthorizationException;
 import org.apache.kafka.common.errors.TopicExistsException;
@@ -53,6 +59,7 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.ExecutionException;
+import java.util.function.Function;
 import java.util.stream.Collectors;
 
 /**
@@ -278,11 +285,19 @@ public class TopicAdmin implements AutoCloseable {
     // visible for testing
     TopicAdmin(Map<String, Object> adminConfig, Admin adminClient, boolean logCreation) {
         this.admin = adminClient;
-        this.adminConfig = adminConfig != null ? adminConfig : Collections.<String, Object>emptyMap();
+        this.adminConfig = adminConfig != null ? adminConfig : Collections.emptyMap();
         this.logCreation = logCreation;
     }
 
     /**
+     * Get the {@link Admin} client used by this topic admin object.
+     * @return the Kafka admin instance; never null
+     */
+    public Admin admin() {
+        return admin;
+    }
+
+   /**
      * Attempt to create the topic described by the given definition, returning true if the topic was created or false
      * if the topic already existed.
      *
@@ -627,6 +642,58 @@ public class TopicAdmin implements AutoCloseable {
                 throw new RetriableException(msg, e);
             }
         });
+        return result;
+    }
+
+    /**
+     * Fetch the most recent offset for each of the supplied {@link TopicPartition} objects.
+     *
+     * @param partitions the topic partitions
+     * @return the map of offset for each topic partition, or an empty map if the supplied partitions
+     *         are null or empty
+     * @throws RetriableException if a retriable error occurs, the operation takes too long, or the
+     *         thread is interrupted while attempting to perform this operation
+     * @throws ConnectException if a non retriable error occurs
+     */
+    public Map<TopicPartition, Long> endOffsets(Set<TopicPartition> partitions) {
+        if (partitions == null || partitions.isEmpty()) {
+            return Collections.emptyMap();
+        }
+        Map<TopicPartition, OffsetSpec> offsetSpecMap = partitions.stream().collect(Collectors.toMap(Function.identity(), tp -> OffsetSpec.latest()));
+        ListOffsetsResult resultFuture = admin.listOffsets(offsetSpecMap);
+        // Get the individual result for each topic partition so we have better error messages
+        Map<TopicPartition, Long> result = new HashMap<>();
+        for (TopicPartition partition : partitions) {
+            try {
+                ListOffsetsResultInfo info = resultFuture.partitionResult(partition).get();
+                result.put(partition, info.offset());
+            } catch (ExecutionException e) {
+                Throwable cause = e.getCause();
+                String topic = partition.topic();
+                if (cause instanceof AuthorizationException) {
+                    String msg = String.format("Not authorized to get the end offsets for topic '%s' on brokers at %s", topic, bootstrapServers());
+                    throw new ConnectException(msg, e);
+                } else if (cause instanceof UnsupportedVersionException) {
+                    // Should theoretically never happen, because this method is the same as what the consumer uses and therefore
+                    // should exist in the broker since before the admin client was added
+                    String msg = String.format("API to get the get the end offsets for topic '%s' is unsupported on brokers at %s", topic, bootstrapServers());
+                    throw new ConnectException(msg, e);
+                } else if (cause instanceof TimeoutException) {
+                    String msg = String.format("Timed out while waiting to get end offsets for topic '%s' on brokers at %s", topic, bootstrapServers());
+                    throw new RetriableException(msg, e);
+                } else if (cause instanceof LeaderNotAvailableException) {
+                    String msg = String.format("Unable to get end offsets during leader election for topic '%s' on brokers at %s", topic, bootstrapServers());
+                    throw new RetriableException(msg, e);
+                } else {
+                    String msg = String.format("Error while getting end offsets for topic '%s' on brokers at %s", topic, bootstrapServers());
+                    throw new ConnectException(msg, e);
+                }
+            } catch (InterruptedException e) {
+                Thread.interrupted();
+                String msg = String.format("Interrupted while attempting to read end offsets for topic '%s' on brokers at %s", partition.topic(), bootstrapServers());
+                throw new RetriableException(msg, e);
+            }
+        }
         return result;
     }
 
