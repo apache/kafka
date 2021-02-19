@@ -155,17 +155,16 @@ public class TaskManager {
     /**
      * @throws TaskMigratedException
      */
-    void handleCorruption(final Map<TaskId, Collection<TopicPartition>> tasksWithChangelogs) {
+    void handleCorruption(final Set<TaskId> corruptedTasks) {
         final Map<Task, Collection<TopicPartition>> corruptedStandbyTasks = new HashMap<>();
         final Map<Task, Collection<TopicPartition>> corruptedActiveTasks = new HashMap<>();
 
-        for (final Map.Entry<TaskId, Collection<TopicPartition>> taskEntry : tasksWithChangelogs.entrySet()) {
-            final TaskId taskId = taskEntry.getKey();
+        for (final TaskId taskId : corruptedTasks) {
             final Task task = tasks.task(taskId);
             if (task.isActive()) {
-                corruptedActiveTasks.put(task, taskEntry.getValue());
+                corruptedActiveTasks.put(task, task.changelogPartitions());
             } else {
-                corruptedStandbyTasks.put(task, taskEntry.getValue());
+                corruptedStandbyTasks.put(task, task.changelogPartitions());
             }
         }
 
@@ -177,7 +176,7 @@ public class TaskManager {
                    .values()
                    .stream()
                    .filter(t -> t.state() == Task.State.RUNNING || t.state() == Task.State.RESTORING)
-                   .filter(t -> !tasksWithChangelogs.containsKey(t.id()))
+                   .filter(t -> !corruptedTasks.contains(t.id()))
                    .collect(Collectors.toSet())
         );
 
@@ -861,7 +860,7 @@ public class TaskManager {
             } catch (final TaskCorruptedException taskCorruptedException) {
                 firstException.compareAndSet(null, taskCorruptedException);
 
-                final Set<TaskId> corruptedTaskIds = taskCorruptedException.corruptedTaskWithChangelogs().keySet();
+                final Set<TaskId> corruptedTaskIds = taskCorruptedException.corruptedTasks();
                 final Set<Task> corruptedTasks = tasksToCommit
                         .stream()
                         .filter(task -> corruptedTaskIds.contains(task.id()))
@@ -1047,7 +1046,7 @@ public class TaskManager {
     private void commitOffsetsOrTransaction(final Map<Task, Map<TopicPartition, OffsetAndMetadata>> offsetsPerTask) {
         log.debug("Committing task offsets {}", offsetsPerTask.entrySet().stream().collect(Collectors.toMap(t -> t.getKey().id(), Entry::getValue))); // avoid logging actual Task objects
 
-        final Map<TaskId, Collection<TopicPartition>> corruptedTasks = new HashMap<>();
+        final Set<TaskId> corruptedTasks = new HashSet<>();
 
         if (!offsetsPerTask.isEmpty()) {
             if (processingMode == EXACTLY_ONCE_ALPHA) {
@@ -1061,7 +1060,7 @@ public class TaskManager {
                             String.format("Committing task %s failed.", task.id()),
                             timeoutException
                         );
-                        corruptedTasks.put(task.id(), task.changelogPartitions());
+                        corruptedTasks.add(task.id());
                     }
                 }
             } else {
@@ -1083,7 +1082,7 @@ public class TaskManager {
                         );
                         offsetsPerTask
                             .keySet()
-                            .forEach(task -> corruptedTasks.put(task.id(), task.changelogPartitions()));
+                            .forEach(task -> corruptedTasks.add(task.id()));
                     }
                 } else {
                     try {

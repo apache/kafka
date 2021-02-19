@@ -17,7 +17,6 @@
 package org.apache.kafka.streams.processor;
 
 import org.apache.kafka.streams.errors.TaskIdFormatException;
-import org.apache.kafka.streams.processor.internals.Task;
 
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
@@ -33,7 +32,6 @@ public class TaskId implements Comparable<TaskId> {
     public final int topicGroupId;
     /** The ID of the partition. */
     public final int partition;
-    public Task task;
 
     public TaskId(final int topicGroupId, final int partition) {
         this.topicGroupId = topicGroupId;
@@ -42,10 +40,6 @@ public class TaskId implements Comparable<TaskId> {
 
     public String toString() {
         return topicGroupId + "_" + partition;
-    }
-
-    public void setTask(final Task task) {
-        this.task = task;
     }
 
     /**

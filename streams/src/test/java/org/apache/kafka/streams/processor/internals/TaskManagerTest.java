@@ -655,7 +655,8 @@ public class TaskManagerTest {
         assertThat(taskManager.tryToCompleteRestoration(time.milliseconds()), is(true));
         assertThat(task00.state(), is(Task.State.RUNNING));
 
-        taskManager.handleCorruption(singletonMap(taskId00, taskId00Partitions));
+        task00.setChangelogOffsets(singletonMap(t1p0, 0L));
+        taskManager.handleCorruption(singleton(taskId00));
 
         assertThat(task00.commitPrepared, is(true));
         assertThat(task00.state(), is(Task.State.CREATED));
@@ -699,7 +700,8 @@ public class TaskManagerTest {
         assertThat(taskManager.tryToCompleteRestoration(time.milliseconds()), is(true));
         assertThat(task00.state(), is(Task.State.RUNNING));
 
-        taskManager.handleCorruption(singletonMap(taskId00, taskId00Partitions));
+        task00.setChangelogOffsets(singletonMap(t1p0, 0L));
+        taskManager.handleCorruption(singleton(taskId00));
         assertThat(task00.commitPrepared, is(true));
         assertThat(task00.state(), is(Task.State.CREATED));
         assertThat(taskManager.activeTaskMap(), is(singletonMap(taskId00, task00)));
@@ -744,7 +746,8 @@ public class TaskManagerTest {
         assertThat(nonCorruptedTask.state(), is(Task.State.RUNNING));
         nonCorruptedTask.setCommitNeeded();
 
-        taskManager.handleCorruption(singletonMap(taskId00, taskId00Partitions));
+        corruptedTask.setChangelogOffsets(singletonMap(t1p0, 0L));
+        taskManager.handleCorruption(singleton(taskId00));
 
         assertTrue(nonCorruptedTask.commitPrepared);
         verify(consumer);
@@ -783,7 +786,8 @@ public class TaskManagerTest {
         taskManager.handleAssignment(assignment, emptyMap());
         assertThat(nonRunningNonCorruptedTask.state(), is(Task.State.CREATED));
 
-        taskManager.handleCorruption(singletonMap(taskId00, taskId00Partitions));
+        corruptedTask.setChangelogOffsets(singletonMap(t1p0, 0L));
+        taskManager.handleCorruption(singleton(taskId00));
 
         verify(activeTaskCreator);
         assertFalse(nonRunningNonCorruptedTask.commitPrepared);
@@ -823,7 +827,8 @@ public class TaskManagerTest {
 
         runningNonCorruptedActive.setCommitNeeded();
 
-        assertThrows(TaskMigratedException.class, () -> taskManager.handleCorruption(singletonMap(taskId00, taskId00Partitions)));
+        corruptedStandby.setChangelogOffsets(singletonMap(t1p0, 0L));
+        assertThrows(TaskMigratedException.class, () -> taskManager.handleCorruption(singleton(taskId00)));
 
 
         assertThat(corruptedStandby.commitPrepared, is(true));
@@ -2724,8 +2729,8 @@ public class TaskManagerTest {
             () -> taskManager.commit(mkSet(task00, task01, task02))
         );
         assertThat(
-            exception.corruptedTaskWithChangelogs(),
-            equalTo(Collections.singletonMap(taskId00, Collections.emptySet()))
+            exception.corruptedTasks(),
+            equalTo(Collections.singleton(taskId00))
         );
     }
 
@@ -2765,8 +2770,8 @@ public class TaskManagerTest {
             () -> taskManager.commit(mkSet(task00, task01, task02))
         );
         assertThat(
-            exception.corruptedTaskWithChangelogs(),
-            equalTo(mkMap(mkEntry(taskId00, Collections.emptySet()), mkEntry(taskId01, Collections.emptySet())))
+            exception.corruptedTasks(),
+            equalTo(mkSet(taskId00, taskId01))
         );
     }
 

@@ -578,10 +578,10 @@ public class StreamThread extends Thread {
                     nextProbingRebalanceMs.set(Long.MAX_VALUE);
                 }
             } catch (final TaskCorruptedException e) {
-                log.warn("Detected the states of tasks " + e.corruptedTaskWithChangelogs() + " are corrupted. " +
+                log.warn("Detected the states of tasks " + e.corruptedTasks() + " are corrupted. " +
                         "Will close the task as dirty and re-create and bootstrap from scratch.", e);
                 try {
-                    taskManager.handleCorruption(e.corruptedTaskWithChangelogs());
+                    taskManager.handleCorruption(e.corruptedTasks());
                 } catch (final TaskMigratedException taskMigrated) {
                     handleTaskMigrated(taskMigrated);
                 }

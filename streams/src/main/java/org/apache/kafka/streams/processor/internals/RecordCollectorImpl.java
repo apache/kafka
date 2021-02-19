@@ -219,9 +219,7 @@ public class RecordCollectorImpl implements RecordCollector {
                     "or the connection to broker was interrupted sending the request or receiving the response. " +
                     "\nConsider overwriting `max.block.ms` and /or " +
                     "`delivery.timeout.ms` to a larger value to wait longer for such scenarios and avoid timeout errors";
-                sendException.set(
-                    new TaskCorruptedException(Collections.singletonMap(taskId, taskId.task.changelogPartitions()))
-                );
+                sendException.set(new TaskCorruptedException(Collections.singleton(taskId)));
             } else {
                 if (productionExceptionHandler.handle(serializedRecord, exception) == ProductionExceptionHandlerResponse.FAIL) {
                     errorMessage += "\nException handler choose to FAIL the processing, no more records would be sent.";
