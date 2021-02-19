@@ -31,6 +31,7 @@ from kafkatest.services.security.minikdc import MiniKdc
 from kafkatest.services.security.listener_security_config import ListenerSecurityConfig
 from kafkatest.services.security.security_config import SecurityConfig
 from kafkatest.version import DEV_BRANCH
+from kafkatest.version import KafkaVersion
 from kafkatest.services.kafka.util import fix_opts_for_new_jvm
 
 
