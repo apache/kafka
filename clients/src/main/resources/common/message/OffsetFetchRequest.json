@@ -16,6 +16,7 @@
 {
   "apiKey": 9,
   "type": "request",
+  "listeners": ["zkBroker", "broker"],
   "name": "OffsetFetchRequest",
   // In version 0, the request read offsets from ZK.
   //
