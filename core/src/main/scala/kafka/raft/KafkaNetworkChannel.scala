@@ -124,8 +124,14 @@ class KafkaNetworkChannel(
     }
 
     def onComplete(clientResponse: ClientResponse): Unit = {
-      val response = if (clientResponse.authenticationException != null) {
-        errorResponse(request.data, Errors.CLUSTER_AUTHORIZATION_FAILED)
+      val response = if (clientResponse.versionMismatch != null) {
+        errorResponse(request.data, Errors.UNSUPPORTED_VERSION)
+      } else if (clientResponse.authenticationException != null) {
+        // For now we treat authentication errors as retriable. We use the
+        // `NETWORK_EXCEPTION` error code for lack of a good alternative.
+        // Note that `BrokerToControllerChannelManager` will still log the
+        // authentication errors so that users have a chance to fix the problem.
+        errorResponse(request.data, Errors.NETWORK_EXCEPTION)
       } else if (clientResponse.wasDisconnected()) {
         errorResponse(request.data, Errors.BROKER_NOT_AVAILABLE)
       } else {
