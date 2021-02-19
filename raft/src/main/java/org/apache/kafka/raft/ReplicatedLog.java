@@ -34,6 +34,7 @@ public interface ReplicatedLog extends Closeable {
      *
      * @return the metadata information of the appended batch
      * @throws IllegalArgumentException if the record set is empty
+     * @throws RuntimeException if the batch base offset doesn't match the log end offset
      */
     LogAppendInfo appendAsLeader(Records records, int epoch);
 
@@ -44,6 +45,7 @@ public interface ReplicatedLog extends Closeable {
      *
      * @return the metadata information of the appended batch
      * @throws IllegalArgumentException if the record set is empty
+     * @throws RuntimeException if the batch base offset doesn't match the log end offset
      */
     LogAppendInfo appendAsFollower(Records records);
 

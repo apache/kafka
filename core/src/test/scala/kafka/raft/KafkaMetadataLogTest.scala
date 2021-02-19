@@ -64,6 +64,41 @@ final class KafkaMetadataLogTest {
   }
 
   @Test
+  def testUnexpectedAppendOffset(): Unit = {
+    val topicPartition = new TopicPartition("cluster-metadata", 0)
+    val log = buildMetadataLog(tempDir, mockTime, topicPartition)
+
+    val recordFoo = new SimpleRecord("foo".getBytes())
+    val currentEpoch = 3
+    val initialOffset = log.endOffset().offset
+
+    log.appendAsLeader(
+      MemoryRecords.withRecords(initialOffset, CompressionType.NONE, currentEpoch, recordFoo),
+      currentEpoch
+    )
+
+    // Throw exception for out of order records
+    assertThrows(
+      classOf[RuntimeException],
+      () => {
+        log.appendAsLeader(
+          MemoryRecords.withRecords(initialOffset, CompressionType.NONE, currentEpoch, recordFoo),
+          currentEpoch
+        )
+      }
+    )
+
+    assertThrows(
+      classOf[RuntimeException],
+      () => {
+        log.appendAsFollower(
+          MemoryRecords.withRecords(initialOffset, CompressionType.NONE, currentEpoch, recordFoo)
+        )
+      }
+    )
+  }
+
+  @Test
   def testCreateSnapshot(): Unit = {
     val topicPartition = new TopicPartition("cluster-metadata", 0)
     val numberOfRecords = 10

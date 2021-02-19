@@ -106,7 +106,8 @@ final public class KafkaRaftClientSnapshotTest {
         OffsetAndEpoch oldestSnapshotId = new OffsetAndEpoch(3, 2);
 
         RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
-            .appendToLog(oldestSnapshotId.offset, oldestSnapshotId.epoch, Arrays.asList("a", "b", "c"))
+            .appendToLog(oldestSnapshotId.epoch, Arrays.asList("a", "b", "c"))
+            .appendToLog(oldestSnapshotId.epoch, Arrays.asList("d", "e", "f"))
             .withAppendLingerMs(1)
             .build();
 
@@ -115,10 +116,11 @@ final public class KafkaRaftClientSnapshotTest {
         assertEquals(oldestSnapshotId.epoch + 1, epoch);
 
         // Advance the highWatermark
-        context.deliverRequest(context.fetchRequest(epoch, otherNodeId, oldestSnapshotId.offset, oldestSnapshotId.epoch, 0));
+        long localLogEndOffset = context.log.endOffset().offset;
+        context.deliverRequest(context.fetchRequest(epoch, otherNodeId, localLogEndOffset, epoch, 0));
         context.pollUntilResponse();
         context.assertSentFetchResponse(Errors.NONE, epoch, OptionalInt.of(localId));
-        assertEquals(oldestSnapshotId.offset, context.client.highWatermark().getAsLong());
+        assertEquals(localLogEndOffset, context.client.highWatermark().getAsLong());
 
         // Create a snapshot at the high watermark
         try (SnapshotWriter<String> snapshot = context.client.createSnapshot(oldestSnapshotId)) {
@@ -146,8 +148,8 @@ final public class KafkaRaftClientSnapshotTest {
         OffsetAndEpoch oldestSnapshotId = new OffsetAndEpoch(3, 2);
 
         RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
-            .appendToLog(oldestSnapshotId.offset, oldestSnapshotId.epoch, Arrays.asList("a", "b", "c"))
-            .appendToLog(oldestSnapshotId.offset + 3, oldestSnapshotId.epoch + 2, Arrays.asList("a", "b", "c"))
+            .appendToLog(oldestSnapshotId.epoch, Arrays.asList("a", "b", "c"))
+            .appendToLog(oldestSnapshotId.epoch + 2, Arrays.asList("d", "e", "f"))
             .withAppendLingerMs(1)
             .build();
 
@@ -192,8 +194,9 @@ final public class KafkaRaftClientSnapshotTest {
         OffsetAndEpoch oldestSnapshotId = new OffsetAndEpoch(3, 2);
 
         RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
-            .appendToLog(oldestSnapshotId.offset, oldestSnapshotId.epoch, Arrays.asList("a", "b", "c"))
-            .appendToLog(oldestSnapshotId.offset + 3, oldestSnapshotId.epoch + 2, Arrays.asList("a", "b", "c"))
+            .appendToLog(oldestSnapshotId.epoch, Arrays.asList("a", "b", "c"))
+            .appendToLog(oldestSnapshotId.epoch, Arrays.asList("d", "e", "f"))
+            .appendToLog(oldestSnapshotId.epoch + 2, Arrays.asList("g", "h", "i"))
             .withAppendLingerMs(1)
             .build();
 
@@ -233,8 +236,9 @@ final public class KafkaRaftClientSnapshotTest {
         OffsetAndEpoch oldestSnapshotId = new OffsetAndEpoch(3, 2);
 
         RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
-            .appendToLog(oldestSnapshotId.offset, oldestSnapshotId.epoch, Arrays.asList("a", "b", "c"))
-            .appendToLog(oldestSnapshotId.offset + 3, oldestSnapshotId.epoch + 2, Arrays.asList("a", "b", "c"))
+            .appendToLog(oldestSnapshotId.epoch, Arrays.asList("a", "b", "c"))
+            .appendToLog(oldestSnapshotId.epoch, Arrays.asList("d", "e", "f"))
+            .appendToLog(oldestSnapshotId.epoch + 2, Arrays.asList("g", "h", "i"))
             .withAppendLingerMs(1)
             .build();
 
@@ -279,8 +283,9 @@ final public class KafkaRaftClientSnapshotTest {
         OffsetAndEpoch oldestSnapshotId = new OffsetAndEpoch(3, 2);
 
         RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
-            .appendToLog(oldestSnapshotId.offset, oldestSnapshotId.epoch, Arrays.asList("a", "b", "c"))
-            .appendToLog(oldestSnapshotId.offset + 3, oldestSnapshotId.epoch + 2, Arrays.asList("a", "b", "c"))
+            .appendToLog(oldestSnapshotId.epoch, Arrays.asList("a", "b", "c"))
+            .appendToLog(oldestSnapshotId.epoch, Arrays.asList("d", "e", "f"))
+            .appendToLog(oldestSnapshotId.epoch + 2, Arrays.asList("g", "h", "i"))
             .withAppendLingerMs(1)
             .build();
 

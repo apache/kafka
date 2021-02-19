@@ -31,7 +31,6 @@ import org.apache.kafka.common.record.MutableRecordBatch;
 import org.apache.kafka.common.record.Record;
 import org.apache.kafka.common.record.RecordBatch;
 import org.apache.kafka.common.record.Records;
-import org.apache.kafka.common.record.SimpleRecord;
 import org.apache.kafka.common.requests.DescribeQuorumRequest;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.test.TestUtils;
@@ -226,7 +225,10 @@ public class KafkaRaftClientTest {
         context.client.poll();
 
         // append some record, but the fetch in purgatory will still fail
-        context.log.appendAsLeader(Collections.singleton(new SimpleRecord("raft".getBytes())), epoch);
+        context.log.appendAsLeader(
+            context.buildBatch(context.log.endOffset().offset, epoch, Arrays.asList("raft")),
+            epoch
+        );
 
         // when transition to resign, all request in fetchPurgatory will fail
         context.client.shutdown(1000);
@@ -449,7 +451,7 @@ public class KafkaRaftClientTest {
         RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
             .withUnknownLeader(epoch)
             .build();
-        
+
         context.deliverRequest(context.endEpochRequest(epoch, voter2,
             Arrays.asList(localId, voter3)));
 
@@ -945,7 +947,7 @@ public class KafkaRaftClientTest {
 
         RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
             .withElectedLeader(epoch, otherNodeId)
-            .appendToLog(0L, lastEpoch, singletonList("foo"))
+            .appendToLog(lastEpoch, singletonList("foo"))
             .build();
 
         context.assertElectedLeader(epoch, otherNodeId);
@@ -964,7 +966,7 @@ public class KafkaRaftClientTest {
 
         RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
             .withElectedLeader(epoch, otherNodeId)
-            .appendToLog(0L, lastEpoch, singletonList("foo"))
+            .appendToLog(lastEpoch, singletonList("foo"))
             .build();
         context.assertElectedLeader(epoch, otherNodeId);
 
@@ -1781,8 +1783,8 @@ public class KafkaRaftClientTest {
 
         RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
             .withElectedLeader(epoch, otherNodeId)
-            .appendToLog(0L, lastEpoch, Arrays.asList("foo", "bar"))
-            .appendToLog(2L, lastEpoch, Arrays.asList("baz"))
+            .appendToLog(lastEpoch, Arrays.asList("foo", "bar"))
+            .appendToLog(lastEpoch, Arrays.asList("baz"))
             .build();
 
         context.assertElectedLeader(epoch, otherNodeId);
@@ -1964,9 +1966,9 @@ public class KafkaRaftClientTest {
         List<String> batch3 = Arrays.asList("7", "8", "9");
 
         RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
-            .appendToLog(0L, 1, batch1)
-            .appendToLog(3L, 1, batch2)
-            .appendToLog(6L, 2, batch3)
+            .appendToLog(1, batch1)
+            .appendToLog(1, batch2)
+            .appendToLog(2, batch3)
             .withUnknownLeader(epoch - 1)
             .build();
 
@@ -2016,9 +2018,9 @@ public class KafkaRaftClientTest {
         List<String> batch3 = Arrays.asList("7", "8", "9");
 
         RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
-            .appendToLog(0L, 1, batch1)
-            .appendToLog(3L, 1, batch2)
-            .appendToLog(6L, 2, batch3)
+            .appendToLog(1, batch1)
+            .appendToLog(1, batch2)
+            .appendToLog(2, batch3)
             .withUnknownLeader(epoch - 1)
             .build();
 
@@ -2105,9 +2107,9 @@ public class KafkaRaftClientTest {
         Set<Integer> voters = Utils.mkSet(localId, otherNodeId);
 
         RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
-            .appendToLog(0L, 2, Arrays.asList("a", "b", "c"))
-            .appendToLog(3L, 4, Arrays.asList("d", "e", "f"))
-            .appendToLog(6L, 4, Arrays.asList("g", "h", "i"))
+            .appendToLog(2, Arrays.asList("a", "b", "c"))
+            .appendToLog(4, Arrays.asList("d", "e", "f"))
+            .appendToLog(4, Arrays.asList("g", "h", "i"))
             .withUnknownLeader(epoch - 1)
             .build();
 
@@ -2146,9 +2148,9 @@ public class KafkaRaftClientTest {
         Set<Integer> voters = Utils.mkSet(localId, otherNodeId);
 
         RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
-            .appendToLog(0L, 2, Arrays.asList("a", "b", "c"))
-            .appendToLog(3L, 4, Arrays.asList("d", "e", "f"))
-            .appendToLog(6L, 4, Arrays.asList("g", "h", "i"))
+            .appendToLog(2, Arrays.asList("a", "b", "c"))
+            .appendToLog(4, Arrays.asList("d", "e", "f"))
+            .appendToLog(4, Arrays.asList("g", "h", "i"))
             .withUnknownLeader(epoch - 1)
             .build();
 

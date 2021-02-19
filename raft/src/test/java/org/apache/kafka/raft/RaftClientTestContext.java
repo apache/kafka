@@ -171,8 +171,13 @@ public final class RaftClientTestContext {
             return this;
         }
 
-        Builder appendToLog(long baseOffset, int epoch, List<String> records) {
-            MemoryRecords batch = buildBatch(time.milliseconds(), baseOffset, epoch, records);
+        Builder appendToLog(int epoch, List<String> records) {
+            MemoryRecords batch = buildBatch(
+                time.milliseconds(),
+                log.endOffset().offset,
+                epoch,
+                records
+            );
             log.appendAsLeader(batch, epoch);
             return this;
         }
