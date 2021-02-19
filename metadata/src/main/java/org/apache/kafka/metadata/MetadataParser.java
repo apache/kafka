@@ -19,11 +19,10 @@ package org.apache.kafka.metadata;
 
 import org.apache.kafka.common.metadata.MetadataRecordType;
 import org.apache.kafka.common.protocol.ApiMessage;
-import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.ObjectSerializationCache;
+import org.apache.kafka.common.protocol.Readable;
+import org.apache.kafka.common.protocol.Writable;
 import org.apache.kafka.common.utils.ByteUtils;
-
-import java.nio.ByteBuffer;
 
 public class MetadataParser {
     public static final int MAX_SERIALIZED_EVENT_SIZE = 32 * 1024 * 1024;
@@ -36,23 +35,23 @@ public class MetadataParser {
     }
 
     /**
-     * Parse the given buffer.
+     * Parse the given stream.
      *
-     * @param buffer    The buffer.  Its offsets will be modified.
+     * @param input    The input stream to deserialize. Its offsets will be modified.
      *
-     * @return          The metadata message.
+     * @return         The metadata message.
      */
-    public static ApiMessage read(ByteBuffer buffer) {
+    public static ApiMessageAndVersion read(Readable input, int size) {
         short type;
         try {
-            type = unsignedIntToShort(ByteUtils.readUnsignedVarint(buffer), "type");
+            type = unsignedIntToShort(input.readUnsignedVarint(), "type");
         } catch (Exception e) {
             throw new MetadataParseException("Failed to read variable-length type " +
                 "number: " + e.getClass().getSimpleName() + ": " + e.getMessage());
         }
         short version;
         try {
-            version = unsignedIntToShort(ByteUtils.readUnsignedVarint(buffer), "version");
+            version = unsignedIntToShort(input.readUnsignedVarint(), "version");
         } catch (Exception e) {
             throw new MetadataParseException("Failed to read variable-length " +
                 "version number: " + e.getClass().getSimpleName() + ": " + e.getMessage());
@@ -60,16 +59,16 @@ public class MetadataParser {
         MetadataRecordType recordType = MetadataRecordType.fromId(type);
         ApiMessage message = recordType.newMetadataRecord();
         try {
-            message.read(new ByteBufferAccessor(buffer), version);
+            message.read(input, version);
         } catch (Exception e) {
             throw new MetadataParseException(recordType + "#parse failed: " +
                 e.getClass().getSimpleName() + ": " + e.getMessage());
         }
-        if (buffer.hasRemaining()) {
-            throw new MetadataParseException("Found " + buffer.remaining() +
+        if (input.remaining() > 0) {
+            throw new MetadataParseException("Found " + input.remaining() +
                 " byte(s) of garbage after " + recordType);
         }
-        return message;
+        return new ApiMessageAndVersion(message, version);
     }
 
     /**
@@ -98,18 +97,16 @@ public class MetadataParser {
     /**
      * Convert the given metadata message into a ByteBuffer.
      *
-     * @param message   The metadata message.
-     * @param version   The metadata message version.
-     * @param cache     The object serialization cache to use.  This must have been
-     *                  initialized by calling size() previously.
-     * @param buf       The buffer to write to.
+     * @param data   The metadata message and version.
+     * @param cache  The object serialization cache to use.  This must have been
+     *               initialized by calling size() previously.
+     * @param out    The output stream to write the record to
      */
-    public static void write(ApiMessage message,
-                             short version,
+    public static void write(ApiMessageAndVersion data,
                              ObjectSerializationCache cache,
-                             ByteBuffer buf) {
-        ByteUtils.writeUnsignedVarint(message.apiKey(), buf);
-        ByteUtils.writeUnsignedVarint(version, buf);
-        message.write(new ByteBufferAccessor(buf), cache, version);
+                             Writable out) {
+        out.writeUnsignedVarint(data.message().apiKey());
+        out.writeUnsignedVarint(data.version());
+        data.message().write(out, cache, data.version());
     }
 }

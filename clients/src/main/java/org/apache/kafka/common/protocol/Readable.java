@@ -37,6 +37,7 @@ public interface Readable {
     ByteBuffer readByteBuffer(int length);
     int readVarint();
     long readVarlong();
+    int remaining();
 
     default String readString(int length) {
         byte[] arr = new byte[length];

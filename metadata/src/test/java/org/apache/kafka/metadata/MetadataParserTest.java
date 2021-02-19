@@ -21,11 +21,10 @@ import org.apache.kafka.common.metadata.ConfigRecord;
 import org.apache.kafka.common.metadata.PartitionRecord;
 import org.apache.kafka.common.metadata.RegisterBrokerRecord;
 import org.apache.kafka.common.protocol.ApiMessage;
+import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.ObjectSerializationCache;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
@@ -37,8 +36,6 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 @Timeout(value = 40)
 public class MetadataParserTest {
-    private static final Logger log =
-        LoggerFactory.getLogger(MetadataParserTest.class);
 
     /**
      * Test some serialization / deserialization round trips.
@@ -54,17 +51,18 @@ public class MetadataParserTest {
         ObjectSerializationCache cache = new ObjectSerializationCache();
         int size = MetadataParser.size(message, version, cache);
         ByteBuffer buffer = ByteBuffer.allocate(size);
-        MetadataParser.write(message, version, cache, buffer);
+        MetadataParser.write(new ApiMessageAndVersion(message, version), cache, new ByteBufferAccessor(buffer));
         buffer.flip();
-        ApiMessage message2 = MetadataParser.read(buffer.duplicate());
-        assertEquals(message, message2);
-        assertEquals(message2, message);
+        ApiMessageAndVersion message2 = MetadataParser.read(new ByteBufferAccessor(buffer.duplicate()), buffer.remaining());
+        assertEquals(message, message2.message());
+        assertEquals(version, message2.version());
+        assertEquals(message2.message(), message);
 
         ObjectSerializationCache cache2 = new ObjectSerializationCache();
-        int size2 = MetadataParser.size(message2, version, cache2);
+        int size2 = MetadataParser.size(message2.message(), version, cache2);
         assertEquals(size, size2);
         ByteBuffer buffer2 = ByteBuffer.allocate(size);
-        MetadataParser.write(message2, version, cache2, buffer2);
+        MetadataParser.write(message2, cache2, new ByteBufferAccessor(buffer2));
         buffer2.flip();
         assertEquals(buffer.duplicate(), buffer2.duplicate());
     }
@@ -89,7 +87,7 @@ public class MetadataParserTest {
     }
 
     /**
-     * Test attemping to parse an event which has a malformed message type varint.
+     * Test attempting to parse an event which has a malformed message type varint.
      */
     @Test
     public void testParsingMalformedMessageTypeVarint() {
@@ -104,13 +102,12 @@ public class MetadataParserTest {
         buffer.position(0);
         buffer.limit(64);
         assertStartsWith("Failed to read variable-length type number",
-            assertThrows(MetadataParseException.class, () -> {
-                MetadataParser.read(buffer);
-            }).getMessage());
+            assertThrows(MetadataParseException.class,
+                () -> MetadataParser.read(new ByteBufferAccessor(buffer), buffer.remaining())).getMessage());
     }
 
     /**
-     * Test attemping to parse an event which has a malformed message version varint.
+     * Test attempting to parse an event which has a malformed message version varint.
      */
     @Test
     public void testParsingMalformedMessageVersionVarint() {
@@ -126,13 +123,12 @@ public class MetadataParserTest {
         buffer.position(0);
         buffer.limit(64);
         assertStartsWith("Failed to read variable-length version number",
-            assertThrows(MetadataParseException.class, () -> {
-                MetadataParser.read(buffer);
-            }).getMessage());
+            assertThrows(MetadataParseException.class,
+                () -> MetadataParser.read(new ByteBufferAccessor(buffer), buffer.remaining())).getMessage());
     }
 
     /**
-     * Test attemping to parse an event which has a malformed message version varint.
+     * Test attempting to parse an event which has a malformed message version varint.
      */
     @Test
     public void testParsingRecordWithGarbageAtEnd() {
@@ -140,12 +136,11 @@ public class MetadataParserTest {
         ObjectSerializationCache cache = new ObjectSerializationCache();
         int size = MetadataParser.size(message, (short) 0, cache);
         ByteBuffer buffer = ByteBuffer.allocate(size + 1);
-        MetadataParser.write(message, (short) 0, cache, buffer);
+        MetadataParser.write(new ApiMessageAndVersion(message, (short) 0), cache, new ByteBufferAccessor(buffer));
         buffer.clear();
         assertStartsWith("Found 1 byte(s) of garbage after",
-            assertThrows(MetadataParseException.class, () -> {
-                MetadataParser.read(buffer);
-            }).getMessage());
+            assertThrows(MetadataParseException.class,
+                () -> MetadataParser.read(new ByteBufferAccessor(buffer), buffer.remaining())).getMessage());
     }
 
     private static void assertStartsWith(String prefix, String str) {
