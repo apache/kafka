@@ -973,7 +973,7 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
         FetchRequestData request = (FetchRequestData) requestMetadata.data;
 
         if (!hasValidClusterId(request)) {
-            return completedFuture(new FetchResponseData().setErrorCode(Errors.INVALID_CLUSTER_ID.code()));
+            return completedFuture(new FetchResponseData().setErrorCode(Errors.INCONSISTENT_CLUSTER_ID.code()));
         }
 
         if (!hasValidTopicPartition(request, log.topicPartition())) {

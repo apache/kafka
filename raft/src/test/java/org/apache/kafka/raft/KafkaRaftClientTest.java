@@ -1117,13 +1117,13 @@ public class KafkaRaftClientTest {
         context.deliverRequest(context.fetchRequest(
             epoch, "", otherNodeId, -5L, 0, 0));
         context.pollUntilResponse();
-        context.assertSentFetchPartitionResponse(Errors.INVALID_CLUSTER_ID);
+        context.assertSentFetchPartitionResponse(Errors.INCONSISTENT_CLUSTER_ID);
 
         // invalid cluster id is rejected
         context.deliverRequest(context.fetchRequest(
             epoch, "invalid-uuid", otherNodeId, -5L, 0, 0));
         context.pollUntilResponse();
-        context.assertSentFetchPartitionResponse(Errors.INVALID_CLUSTER_ID);
+        context.assertSentFetchPartitionResponse(Errors.INCONSISTENT_CLUSTER_ID);
     }
 
     @Test

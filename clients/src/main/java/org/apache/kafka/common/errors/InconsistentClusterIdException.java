@@ -16,13 +16,13 @@
  */
 package org.apache.kafka.common.errors;
 
-public class InvalidClusterIdException extends ApiException {
+public class InconsistentClusterIdException extends ApiException {
 
-    public InvalidClusterIdException(String message) {
+    public InconsistentClusterIdException(String message) {
         super(message);
     }
 
-    public InvalidClusterIdException(String message, Throwable throwable) {
+    public InconsistentClusterIdException(String message, Throwable throwable) {
         super(message, throwable);
     }
 }

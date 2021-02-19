@@ -49,7 +49,7 @@ import org.apache.kafka.common.errors.IllegalSaslStateException;
 import org.apache.kafka.common.errors.InconsistentGroupProtocolException;
 import org.apache.kafka.common.errors.InconsistentTopicIdException;
 import org.apache.kafka.common.errors.InconsistentVoterSetException;
-import org.apache.kafka.common.errors.InvalidClusterIdException;
+import org.apache.kafka.common.errors.InconsistentClusterIdException;
 import org.apache.kafka.common.errors.InvalidCommitOffsetSizeException;
 import org.apache.kafka.common.errors.InvalidConfigurationException;
 import org.apache.kafka.common.errors.InvalidFetchSessionEpochException;
@@ -358,7 +358,7 @@ public enum Errors {
     UNKNOWN_TOPIC_ID(100, "This server does not host this topic ID.", UnknownTopicIdException::new),
     DUPLICATE_BROKER_REGISTRATION(101, "This broker ID is already in use.", DuplicateBrokerRegistrationException::new),
     INCONSISTENT_TOPIC_ID(102, "The log's topic ID did not match the topic ID in the request", InconsistentTopicIdException::new),
-    INVALID_CLUSTER_ID(103, "The supplied cluster id is not valid.", InvalidClusterIdException::new);
+    INCONSISTENT_CLUSTER_ID(103, "The clusterId in the request does not match that found on the server", InconsistentClusterIdException::new);
 
     private static final Logger log = LoggerFactory.getLogger(Errors.class);
 
