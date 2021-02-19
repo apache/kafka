@@ -174,6 +174,13 @@ public interface Controller extends AutoCloseable {
     long curClaimEpoch();
 
     /**
+     * Returns true if this controller is currently active.
+     */
+    default boolean isActive() {
+        return curClaimEpoch() != -1;
+    }
+
+    /**
      * Blocks until we have shut down and freed all resources.
      */
     void close() throws InterruptedException;

@@ -79,6 +79,22 @@ import static java.util.concurrent.TimeUnit.MICROSECONDS;
 import static java.util.concurrent.TimeUnit.NANOSECONDS;
 
 
+/**
+ * QuorumController implements the main logic of the KIP-500 controller.
+ *
+ * The node which is the leader of the metadata log becomes the active controller.  All
+ * other nodes remain in standby mode.  Standby controllers cannot create new metadata log
+ * entries.  They just replay the metadata log entries that the current active controller
+ * has created.
+ *
+ * The QuorumController is single-threaded.  A single event handler thread performs most
+ * operations.  This avoids the need for complex locking.
+ *
+ * The controller exposes an asynchronous, futures-based API to the world.  This reflects
+ * the fact that the controller may have several operations in progress at any given
+ * point.  The future associated with each operation will not be completed until the
+ * results of the operation have been made durable to the metadata log.
+ */
 public final class QuorumController implements Controller {
     /**
      * A builder class which creates the QuorumController.
@@ -401,8 +417,8 @@ public final class QuorumController implements Controller {
             if (result.records().isEmpty()) {
                 op.processBatchEndOffset(writeOffset);
                 // If the operation did not return any records, then it was actually just
-                //a read after all, and not a read + write.  However, this read was done
-                //from the latest in-memory state, which might contain uncommitted data.
+                // a read after all, and not a read + write.  However, this read was done
+                // from the latest in-memory state, which might contain uncommitted data.
                 Optional<Long> maybeOffset = purgatory.highestPendingOffset();
                 if (!maybeOffset.isPresent()) {
                     // If the purgatory is empty, there are no pending operations and no
