@@ -78,7 +78,7 @@ public class BrokerHeartbeatManagerTest {
     }
 
     @Test
-    public void testMaybeFenceLeastRecentlyContacted() {
+    public void testFindStaleBrokers() {
         BrokerHeartbeatManager manager = newBrokerHeartbeatManager();
         MockTime time = (MockTime)  manager.time();
         assertFalse(manager.hasValidSession(0));

@@ -67,7 +67,7 @@ public class ClientQuotaControlManagerTest {
         assertInvalidEntity(manager, new ClientQuotaEntity(Collections.emptyMap()));
     }
 
-    void assertInvalidEntity(ClientQuotaControlManager manager, ClientQuotaEntity entity) {
+    private void assertInvalidEntity(ClientQuotaControlManager manager, ClientQuotaEntity entity) {
         List<ClientQuotaAlteration> alters = new ArrayList<>();
         entityQuotaToAlterations(entity, quotas(QuotaConfigs.PRODUCER_BYTE_RATE_OVERRIDE_CONFIG, 10000.0), alters::add);
         ControllerResult<Map<ClientQuotaEntity, ApiError>> result = manager.alterClientQuotas(alters);

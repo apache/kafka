@@ -196,7 +196,7 @@ public class ReplicationControlManagerTest {
         assertEquals(expectedPartitions, ControllerTestUtils.
             iteratorToSet(replicationControl.brokersToIsrs().iterator(0, true)));
         List<ApiMessageAndVersion> records = new ArrayList<>();
-        replicationControl.removeLeaderships(0, records);
+        replicationControl.handleNodeDeactivated(0, records);
         ControllerTestUtils.replayAll(replicationControl, records);
         assertEquals(Collections.emptySet(), ControllerTestUtils.
             iteratorToSet(replicationControl.brokersToIsrs().iterator(0, true)));

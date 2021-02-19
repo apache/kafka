@@ -32,7 +32,7 @@ public class BrokerHeartbeatReply {
     private final boolean isFenced;
 
     /**
-     * True if the heartbeat reply should tell the broker that it should shut down.
+     * True if the broker is currently in a controlled shutdown state.
      */
     private final boolean inControlledShutdown;
 
