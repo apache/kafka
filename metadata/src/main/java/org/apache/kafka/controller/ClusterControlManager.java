@@ -46,6 +46,11 @@ import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 
 
+/**
+ * The ClusterControlManager manages all the hard state associated with the Kafka cluster.
+ * Hard state is state which appears in the metadata log, such as broker registrations,
+ * brokers being fenced or unfenced, and broker feature versions.
+ */
 public class ClusterControlManager {
     class ReadyBrokersFuture {
         private final CompletableFuture<Void> future;
