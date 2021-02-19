@@ -74,7 +74,7 @@ final public class KafkaRaftClientSnapshotTest {
         // Advance the highWatermark
         context.deliverRequest(context.fetchRequest(epoch, otherNodeId, localLogEndOffset, epoch, 0));
         context.pollUntilResponse();
-        context.assertSentFetchResponse(Errors.NONE, epoch, OptionalInt.of(localId));
+        context.assertSentFetchPartitionResponse(Errors.NONE, epoch, OptionalInt.of(localId));
         assertEquals(localLogEndOffset, context.client.highWatermark().getAsLong());
 
         OffsetAndEpoch snapshotId = new OffsetAndEpoch(localLogEndOffset, epoch);
@@ -89,7 +89,7 @@ final public class KafkaRaftClientSnapshotTest {
         // Send Fetch request less than start offset
         context.deliverRequest(context.fetchRequest(epoch, otherNodeId, 0, epoch, 0));
         context.pollUntilResponse();
-        FetchResponseData.FetchablePartitionResponse partitionResponse = context.assertSentFetchResponse();
+        FetchResponseData.FetchablePartitionResponse partitionResponse = context.assertSentFetchPartitionResponse();
         assertEquals(Errors.NONE, Errors.forCode(partitionResponse.errorCode()));
         assertEquals(epoch, partitionResponse.currentLeader().leaderEpoch());
         assertEquals(localId, partitionResponse.currentLeader().leaderId());
@@ -119,7 +119,7 @@ final public class KafkaRaftClientSnapshotTest {
         long localLogEndOffset = context.log.endOffset().offset;
         context.deliverRequest(context.fetchRequest(epoch, otherNodeId, localLogEndOffset, epoch, 0));
         context.pollUntilResponse();
-        context.assertSentFetchResponse(Errors.NONE, epoch, OptionalInt.of(localId));
+        context.assertSentFetchPartitionResponse(Errors.NONE, epoch, OptionalInt.of(localId));
         assertEquals(localLogEndOffset, context.client.highWatermark().getAsLong());
 
         // Create a snapshot at the high watermark
@@ -135,7 +135,7 @@ final public class KafkaRaftClientSnapshotTest {
         // It is an invalid request to send an last fetched epoch greater than the current epoch
         context.deliverRequest(context.fetchRequest(epoch, otherNodeId, oldestSnapshotId.offset + 1, epoch + 1, 0));
         context.pollUntilResponse();
-        context.assertSentFetchResponse(Errors.INVALID_REQUEST, epoch, OptionalInt.of(localId));
+        context.assertSentFetchPartitionResponse(Errors.INVALID_REQUEST, epoch, OptionalInt.of(localId));
     }
 
     @Test
@@ -162,7 +162,7 @@ final public class KafkaRaftClientSnapshotTest {
             context.fetchRequest(epoch, syncNodeId, context.log.endOffset().offset, epoch, 0)
         );
         context.pollUntilResponse();
-        context.assertSentFetchResponse(Errors.NONE, epoch, OptionalInt.of(localId));
+        context.assertSentFetchPartitionResponse(Errors.NONE, epoch, OptionalInt.of(localId));
         assertEquals(context.log.endOffset().offset, context.client.highWatermark().getAsLong());
 
         // Create a snapshot at the high watermark
@@ -176,7 +176,7 @@ final public class KafkaRaftClientSnapshotTest {
             context.fetchRequest(epoch, otherNodeId, oldestSnapshotId.offset + 1, oldestSnapshotId.epoch + 1, 0)
         );
         context.pollUntilResponse();
-        FetchResponseData.FetchablePartitionResponse partitionResponse = context.assertSentFetchResponse();
+        FetchResponseData.FetchablePartitionResponse partitionResponse = context.assertSentFetchPartitionResponse();
         assertEquals(Errors.NONE, Errors.forCode(partitionResponse.errorCode()));
         assertEquals(epoch, partitionResponse.currentLeader().leaderEpoch());
         assertEquals(localId, partitionResponse.currentLeader().leaderId());
@@ -209,7 +209,7 @@ final public class KafkaRaftClientSnapshotTest {
             context.fetchRequest(epoch, syncNodeId, context.log.endOffset().offset, epoch, 0)
         );
         context.pollUntilResponse();
-        context.assertSentFetchResponse(Errors.NONE, epoch, OptionalInt.of(localId));
+        context.assertSentFetchPartitionResponse(Errors.NONE, epoch, OptionalInt.of(localId));
         assertEquals(context.log.endOffset().offset, context.client.highWatermark().getAsLong());
 
         // Create a snapshot at the high watermark
@@ -223,7 +223,7 @@ final public class KafkaRaftClientSnapshotTest {
             context.fetchRequest(epoch, otherNodeId, oldestSnapshotId.offset, oldestSnapshotId.epoch, 0)
         );
         context.pollUntilResponse();
-        context.assertSentFetchResponse(Errors.NONE, epoch, OptionalInt.of(localId));
+        context.assertSentFetchPartitionResponse(Errors.NONE, epoch, OptionalInt.of(localId));
     }
 
     @Test
@@ -251,7 +251,7 @@ final public class KafkaRaftClientSnapshotTest {
             context.fetchRequest(epoch, syncNodeId, context.log.endOffset().offset, epoch, 0)
         );
         context.pollUntilResponse();
-        context.assertSentFetchResponse(Errors.NONE, epoch, OptionalInt.of(localId));
+        context.assertSentFetchPartitionResponse(Errors.NONE, epoch, OptionalInt.of(localId));
         assertEquals(context.log.endOffset().offset, context.client.highWatermark().getAsLong());
 
         // Create a snapshot at the high watermark
@@ -265,7 +265,7 @@ final public class KafkaRaftClientSnapshotTest {
             context.fetchRequest(epoch, otherNodeId, oldestSnapshotId.offset, oldestSnapshotId.epoch + 1, 0)
         );
         context.pollUntilResponse();
-        FetchResponseData.FetchablePartitionResponse partitionResponse = context.assertSentFetchResponse();
+        FetchResponseData.FetchablePartitionResponse partitionResponse = context.assertSentFetchPartitionResponse();
         assertEquals(Errors.NONE, Errors.forCode(partitionResponse.errorCode()));
         assertEquals(epoch, partitionResponse.currentLeader().leaderEpoch());
         assertEquals(localId, partitionResponse.currentLeader().leaderId());
@@ -298,7 +298,7 @@ final public class KafkaRaftClientSnapshotTest {
             context.fetchRequest(epoch, syncNodeId, context.log.endOffset().offset, epoch, 0)
         );
         context.pollUntilResponse();
-        context.assertSentFetchResponse(Errors.NONE, epoch, OptionalInt.of(localId));
+        context.assertSentFetchPartitionResponse(Errors.NONE, epoch, OptionalInt.of(localId));
         assertEquals(context.log.endOffset().offset, context.client.highWatermark().getAsLong());
 
         // Create a snapshot at the high watermark
@@ -318,7 +318,7 @@ final public class KafkaRaftClientSnapshotTest {
             )
         );
         context.pollUntilResponse();
-        FetchResponseData.FetchablePartitionResponse partitionResponse = context.assertSentFetchResponse();
+        FetchResponseData.FetchablePartitionResponse partitionResponse = context.assertSentFetchPartitionResponse();
         assertEquals(Errors.NONE, Errors.forCode(partitionResponse.errorCode()));
         assertEquals(epoch, partitionResponse.currentLeader().leaderEpoch());
         assertEquals(localId, partitionResponse.currentLeader().leaderId());
