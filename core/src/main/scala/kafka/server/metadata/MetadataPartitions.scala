@@ -30,6 +30,8 @@ import scala.jdk.CollectionConverters._
 
 
 object MetadataPartition {
+  val NO_LEADER_CHANGE = -2
+
   def apply(name: String, record: PartitionRecord): MetadataPartition = {
     MetadataPartition(name,
       record.partitionId(),
@@ -84,7 +86,7 @@ case class MetadataPartition(topicName: String,
   def isReplicaFor(brokerId: Int): Boolean = replicas.contains(Integer.valueOf(brokerId))
 
   def copyWithChanges(record: PartitionChangeRecord): MetadataPartition = {
-    val (newLeader, newLeaderEpoch) = if (record.leader() == Integer.MIN_VALUE) {
+    val (newLeader, newLeaderEpoch) = if (record.leader() == MetadataPartition.NO_LEADER_CHANGE) {
       (leaderId, leaderEpoch)
     } else {
       (record.leader(), leaderEpoch + 1)
