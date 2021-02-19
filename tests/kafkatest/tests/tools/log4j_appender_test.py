@@ -20,7 +20,7 @@ from ducktape.mark import matrix
 from ducktape.mark.resource import cluster
 
 from kafkatest.services.zookeeper import ZookeeperService
-from kafkatest.services.kafka import KafkaService
+from kafkatest.services.kafka import KafkaService, quorum
 from kafkatest.services.console_consumer import ConsoleConsumer
 from kafkatest.services.kafka_log4j_appender import KafkaLog4jAppender
 
@@ -41,16 +41,18 @@ class Log4jAppenderTest(Test):
             TOPIC: {'partitions': 1, 'replication-factor': 1}
         }
 
-        self.zk = ZookeeperService(test_context, self.num_zk)
+        self.zk = ZookeeperService(test_context, self.num_zk) if quorum.for_test(test_context) == quorum.zk else None
 
     def setUp(self):
-        self.zk.start()
+        if self.zk:
+            self.zk.start()
 
     def start_kafka(self, security_protocol, interbroker_security_protocol):
         self.kafka = KafkaService(
             self.test_context, self.num_brokers,
             self.zk, security_protocol=security_protocol,
-            interbroker_security_protocol=interbroker_security_protocol, topics=self.topics)
+            interbroker_security_protocol=interbroker_security_protocol, topics=self.topics,
+            controller_num_nodes_override=self.num_zk)
         self.kafka.start()
 
     def start_appender(self, security_protocol):
@@ -70,10 +72,10 @@ class Log4jAppenderTest(Test):
         self.consumer.start()
 
     @cluster(num_nodes=4)
-    @matrix(security_protocol=['PLAINTEXT', 'SSL'])
+    @matrix(security_protocol=['PLAINTEXT', 'SSL'], metadata_quorum=quorum.all_non_upgrade)
     @cluster(num_nodes=5)
-    @matrix(security_protocol=['SASL_PLAINTEXT', 'SASL_SSL'])
-    def test_log4j_appender(self, security_protocol='PLAINTEXT'):
+    @matrix(security_protocol=['SASL_PLAINTEXT', 'SASL_SSL'], metadata_quorum=quorum.all_non_upgrade)
+    def test_log4j_appender(self, security_protocol='PLAINTEXT', metadata_quorum=quorum.zk):
         """
         Tests if KafkaLog4jAppender is producing to Kafka topic
         :return: None
