@@ -31,6 +31,7 @@ import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.LeaderNotAvailableException;
 import org.apache.kafka.common.errors.TimeoutException;
+import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.errors.WakeupException;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.record.TimestampType;
@@ -61,11 +62,13 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.Supplier;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 
 @RunWith(PowerMockRunner.class)
@@ -117,6 +120,8 @@ public class KafkaBasedLogTest {
     @Mock
     private KafkaProducer<String, String> producer;
     private MockConsumer<String, String> consumer;
+    @Mock
+    private TopicAdmin admin;
 
     private Map<TopicPartition, List<ConsumerRecord<String, String>>> consumedRecords = new HashMap<>();
     private Callback<ConsumerRecord<String, String>> consumedCallback = (error, record) -> {
@@ -463,15 +468,91 @@ public class KafkaBasedLogTest {
         PowerMock.verifyAll();
     }
 
+    @Test
+    public void testReadEndOffsetsUsingAdmin() throws Exception {
+        // Create a log that uses the admin supplier
+        setupWithAdmin();
+        expectProducerAndConsumerCreate();
+
+        Set<TopicPartition> tps = new HashSet<>(Arrays.asList(TP0, TP1));
+        Map<TopicPartition, Long> endOffsets = new HashMap<>();
+        endOffsets.put(TP0, 0L);
+        endOffsets.put(TP1, 0L);
+        admin.endOffsets(EasyMock.eq(tps));
+        PowerMock.expectLastCall().andReturn(endOffsets).times(2);
+
+        PowerMock.replayAll();
+
+        store.start();
+        assertEquals(endOffsets, store.readEndOffsets(tps));
+    }
+
+    @Test
+    public void testReadEndOffsetsUsingAdminThatFailsWithUnsupported() throws Exception {
+        // Create a log that uses the admin supplier
+        setupWithAdmin();
+        expectProducerAndConsumerCreate();
+
+        Set<TopicPartition> tps = new HashSet<>(Arrays.asList(TP0, TP1));
+        // Getting end offsets using the admin client should fail with unsupported version
+        admin.endOffsets(EasyMock.eq(tps));
+        PowerMock.expectLastCall().andThrow(new UnsupportedVersionException("too old"));
+
+        // Falls back to the consumer
+        Map<TopicPartition, Long> endOffsets = new HashMap<>();
+        endOffsets.put(TP0, 0L);
+        endOffsets.put(TP1, 0L);
+        consumer.updateEndOffsets(endOffsets);
+
+        PowerMock.replayAll();
+
+        store.start();
+        assertEquals(endOffsets, store.readEndOffsets(tps));
+    }
+
+    @Test
+    public void testReadEndOffsetsUsingAdminThatFailsWithRetriable() throws Exception {
+        // Create a log that uses the admin supplier
+        setupWithAdmin();
+        expectProducerAndConsumerCreate();
+
+        Set<TopicPartition> tps = new HashSet<>(Arrays.asList(TP0, TP1));
+        Map<TopicPartition, Long> endOffsets = new HashMap<>();
+        endOffsets.put(TP0, 0L);
+        endOffsets.put(TP1, 0L);
+        // Getting end offsets upon startup should work fine
+        admin.endOffsets(EasyMock.eq(tps));
+        PowerMock.expectLastCall().andReturn(endOffsets).times(1);
+        // Getting end offsets using the admin client should fail with leader not available
+        admin.endOffsets(EasyMock.eq(tps));
+        PowerMock.expectLastCall().andThrow(new LeaderNotAvailableException("retry"));
+
+        PowerMock.replayAll();
+
+        store.start();
+        assertThrows(LeaderNotAvailableException.class, () -> store.readEndOffsets(tps));
+    }
+
+    @SuppressWarnings("unchecked")
+    private void setupWithAdmin() {
+        Supplier<TopicAdmin> adminSupplier = () -> admin;
+        java.util.function.Consumer<TopicAdmin> initializer = admin -> { };
+        store = PowerMock.createPartialMock(KafkaBasedLog.class, new String[]{"createConsumer", "createProducer"},
+                TOPIC, PRODUCER_PROPS, CONSUMER_PROPS, adminSupplier, consumedCallback, time, initializer);
+    }
+
+    private void expectProducerAndConsumerCreate() throws Exception {
+        PowerMock.expectPrivate(store, "createProducer")
+                 .andReturn(producer);
+        PowerMock.expectPrivate(store, "createConsumer")
+                 .andReturn(consumer);
+    }
 
     private void expectStart() throws Exception {
         initializer.run();
         EasyMock.expectLastCall().times(1);
 
-        PowerMock.expectPrivate(store, "createProducer")
-                .andReturn(producer);
-        PowerMock.expectPrivate(store, "createConsumer")
-                .andReturn(consumer);
+        expectProducerAndConsumerCreate();
     }
 
     private void expectStop() {

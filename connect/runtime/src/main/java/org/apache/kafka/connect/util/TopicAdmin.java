@@ -651,8 +651,12 @@ public class TopicAdmin implements AutoCloseable {
      * @param partitions the topic partitions
      * @return the map of offset for each topic partition, or an empty map if the supplied partitions
      *         are null or empty
-     * @throws RetriableException if a retriable error occurs, the operation takes too long, or the
-     *         thread is interrupted while attempting to perform this operation
+     * @throws UnsupportedVersionException if the admin client cannot read end offsets
+     * @throws TimeoutException if the offset metadata could not be fetched before the amount of time allocated
+     *         by {@code request.timeout.ms} expires, and this call can be retried
+     * @throws LeaderNotAvailableException if the leader was not available and this call can be retried
+     * @throws RetriableException if a retriable error occurs, or the thread is interrupted while attempting 
+     *         to perform this operation
      * @throws ConnectException if a non retriable error occurs
      */
     public Map<TopicPartition, Long> endOffsets(Set<TopicPartition> partitions) {
@@ -677,13 +681,15 @@ public class TopicAdmin implements AutoCloseable {
                     // Should theoretically never happen, because this method is the same as what the consumer uses and therefore
                     // should exist in the broker since before the admin client was added
                     String msg = String.format("API to get the get the end offsets for topic '%s' is unsupported on brokers at %s", topic, bootstrapServers());
-                    throw new ConnectException(msg, e);
+                    throw new UnsupportedVersionException(msg, e);
                 } else if (cause instanceof TimeoutException) {
                     String msg = String.format("Timed out while waiting to get end offsets for topic '%s' on brokers at %s", topic, bootstrapServers());
-                    throw new RetriableException(msg, e);
+                    throw new TimeoutException(msg, e);
                 } else if (cause instanceof LeaderNotAvailableException) {
                     String msg = String.format("Unable to get end offsets during leader election for topic '%s' on brokers at %s", topic, bootstrapServers());
-                    throw new RetriableException(msg, e);
+                    throw new LeaderNotAvailableException(msg, e);
+                } else if (cause instanceof org.apache.kafka.common.errors.RetriableException) {
+                    throw (org.apache.kafka.common.errors.RetriableException) cause;
                 } else {
                     String msg = String.format("Error while getting end offsets for topic '%s' on brokers at %s", topic, bootstrapServers());
                     throw new ConnectException(msg, e);
