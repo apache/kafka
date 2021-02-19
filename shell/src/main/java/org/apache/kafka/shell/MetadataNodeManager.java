@@ -125,7 +125,7 @@ public final class MetadataNodeManager implements AutoCloseable {
         }
 
         @Override
-        public void handleResign() {
+        public void handleResign(int epoch) {
             // This shouldn't happen because we should never be the leader.
             log.debug("MetaLogListener sent handleResign()");
         }
