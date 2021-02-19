@@ -87,7 +87,6 @@ public class KafkaBasedLog<K, V> {
     private Consumer<K, V> consumer;
     private Producer<K, V> producer;
     private TopicAdmin admin;
-    private boolean useAdminForListOffsets;
 
     private Thread thread;
     private boolean stopRequested;
@@ -164,7 +163,6 @@ public class KafkaBasedLog<K, V> {
 
         // Create the topic admin client and initialize the topic ...
         admin = topicAdminSupplier.get();   // may be null
-        useAdminForListOffsets = admin != null;
         initializer.accept(admin);
 
         // Then create the producer and consumer
@@ -350,18 +348,15 @@ public class KafkaBasedLog<K, V> {
     Map<TopicPartition, Long> readEndOffsets(Set<TopicPartition> assignment) {
         log.trace("Reading to end of offset log");
 
-        Map<TopicPartition, Long> endOffsets;
         // Note that we'd prefer to not use the consumer to find the end offsets for the assigned topic partitions.
         // That is because it's possible that the consumer is already blocked waiting for new records to appear, when
         // the consumer is already at the end. In such cases, using 'consumer.endOffsets(...)' will block until at least
         // one more record becomes available, meaning we can't even check whether we're at the end offset.
         // Since all we're trying to do here is get the end offset, we should use the supplied admin client
-        // (if available)
-        // (which prevents 'consumer.endOffsets(...)'
-        // from
+        // (if available) to obtain the end offsets for the given topic partitions.
 
         // Deprecated constructors do not provide an admin supplier, so the admin is potentially null.
-        if (useAdminForListOffsets) {
+        if (admin != null) {
             // Use the admin client to immediately find the end offsets for the assigned topic partitions.
             // Unlike using the consumer
             try {
@@ -370,16 +365,14 @@ public class KafkaBasedLog<K, V> {
                 // This may happen with really old brokers that don't support the auto topic creation
                 // field in metadata requests
                 log.debug("Reading to end of log offsets with consumer since admin client is unsupported: {}", e.getMessage());
-                useAdminForListOffsets = false;
+                // Forget the reference to the admin so that we won't even try to use the admin the next time this method is called
+                admin = null;
                 // continue and let the consumer handle the read
             }
-            // Other errors, like timeouts and retriable exceptions are thrown
+            // Other errors, like timeouts and retriable exceptions are intentionally propagated
         }
-        // The admin may be null if older deprecated constructor is used, though AK Connect currently always provides an admin client.
-        // Using the consumer is not ideal, because when the topic has low volume, the 'poll(...)' method called from the
-        // work thread may have blocked the consumer while waiting for more records (even when there are none).
-        // In such cases, this call to the consumer to simply find the end offsets will block even though we might already be
-        // at the end offset.
+        // The admin may be null if older deprecated constructor is used or if the admin client is using a broker that doesn't
+        // support getting the end offsets (e.g., 0.10.x). In such cases, we should use the consumer, which is not ideal (see above).
         return consumer.endOffsets(assignment);
     }
 
