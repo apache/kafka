@@ -37,7 +37,7 @@ import kafka.server.metadata.ConfigRepository
 import kafka.utils._
 import kafka.utils.Implicits._
 import kafka.zk.KafkaZkClient
-import org.apache.kafka.common.{ElectionType, IsolationLevel, Node, TopicPartition, Uuid}
+import org.apache.kafka.common.{ElectionType, IsolationLevel, Node, TopicPartition}
 import org.apache.kafka.common.errors._
 import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.message.LeaderAndIsrRequestData.LeaderAndIsrPartitionState
@@ -1364,11 +1364,15 @@ class ReplicaManager(val config: KafkaConfig,
                 Some(partition)
             }
 
-            // Next check partition's leader epoch
+            // Next check the topic ID and the partition's leader epoch
             partitionOpt.foreach { partition =>
               val currentLeaderEpoch = partition.getLeaderEpoch
               val requestLeaderEpoch = partitionState.leaderEpoch
-              if (requestLeaderEpoch > currentLeaderEpoch) {
+              val requestTopicId = topicIds.get(topicPartition.topic)
+
+              if (!partition.checkOrSetTopicId(requestTopicId)) {
+                responseMap.put(topicPartition, Errors.INCONSISTENT_TOPIC_ID)
+              } else if (requestLeaderEpoch > currentLeaderEpoch) {
                 // If the leader epoch is valid record the epoch of the controller that made the leadership decision.
                 // This is useful while updating the isr to maintain the decision maker controller's epoch in the zookeeper path
                 if (partitionState.replicas.contains(localBrokerId))
@@ -1424,27 +1428,8 @@ class ReplicaManager(val config: KafkaConfig,
            * In this case ReplicaManager.allPartitions will map this topic-partition to an empty Partition object.
            * we need to map this topic-partition to OfflinePartition instead.
            */
-            val local = localLog(topicPartition)
-            if (local.isEmpty)
+            if (localLog(topicPartition).isEmpty)
               markPartitionOffline(topicPartition)
-            else {
-              val id = topicIds.get(topicPartition.topic())
-              // Ensure we have not received a request from an older protocol
-              if (id != null && !id.equals(Uuid.ZERO_UUID)) {
-                val log = local.get
-                // Check if topic ID is in memory, if not, it must be new to the broker and does not have a metadata file.
-                // This is because if the broker previously wrote it to file, it would be recovered on restart after failure.
-                if (log.topicId.equals(Uuid.ZERO_UUID)) {
-                  log.partitionMetadataFile.write(id)
-                  log.topicId = id
-                  // Warn if the topic ID in the request does not match the log.
-                } else if (!log.topicId.equals(id)) {
-                  stateChangeLogger.warn(s"Topic Id in memory: ${log.topicId.toString} does not" +
-                    s" match the topic Id provided in the request: " +
-                    s"${id.toString}.")
-                }
-              }
-            }
           }
 
           // we initialize highwatermark thread after the first leaderisrrequest. This ensures that all the partitions

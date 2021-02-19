@@ -20,7 +20,7 @@ package kafka.tools
 import kafka.network.RequestChannel
 import kafka.network.RequestConvertToJson
 import kafka.raft.RaftManager
-import kafka.server.ApiRequestHandler
+import kafka.server.{ApiRequestHandler, ApiVersionManager}
 import kafka.utils.Logging
 import org.apache.kafka.common.internals.FatalExitError
 import org.apache.kafka.common.message.{BeginQuorumEpochResponseData, EndQuorumEpochResponseData, FetchResponseData, FetchSnapshotResponseData, VoteResponseData}
@@ -38,6 +38,7 @@ class TestRaftRequestHandler(
   raftManager: RaftManager[_],
   requestChannel: RequestChannel,
   time: Time,
+  apiVersionManager: ApiVersionManager
 ) extends ApiRequestHandler with Logging {
 
   override def handle(request: RequestChannel.Request): Unit = {
@@ -45,6 +46,7 @@ class TestRaftRequestHandler(
       trace(s"Handling request:${request.requestDesc(true)} from connection ${request.context.connectionId};" +
         s"securityProtocol:${request.context.securityProtocol},principal:${request.context.principal}")
       request.header.apiKey match {
+        case ApiKeys.API_VERSIONS => handleApiVersions(request)
         case ApiKeys.VOTE => handleVote(request)
         case ApiKeys.BEGIN_QUORUM_EPOCH => handleBeginQuorumEpoch(request)
         case ApiKeys.END_QUORUM_EPOCH => handleEndQuorumEpoch(request)
@@ -60,6 +62,10 @@ class TestRaftRequestHandler(
       if (request.apiLocalCompleteTimeNanos < 0)
         request.apiLocalCompleteTimeNanos = time.nanoseconds
     }
+  }
+
+  private def handleApiVersions(request: RequestChannel.Request): Unit = {
+    sendResponse(request, Some(apiVersionManager.apiVersionResponse(throttleTimeMs = 0)))
   }
 
   private def handleVote(request: RequestChannel.Request): Unit = {
