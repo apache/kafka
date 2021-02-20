@@ -87,7 +87,7 @@ There are several primitive field types available.
 
 * "bytes": binary data.
 
-* "records": record set used in fetch api and fetch snapshot api
+* "records": memory record set or file record set.
 
 In addition to these primitive field types, there is also an array type.  Array
 types start with a "[]" and end with the name of the element type.  For
