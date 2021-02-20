@@ -445,8 +445,7 @@ public class Plugins {
             plugin = newPlugin(klass);
             if (plugin instanceof Versioned) {
                 Versioned versionedPlugin = (Versioned) plugin;
-                if (versionedPlugin.version() == null || versionedPlugin.version().trim()
-                    .isEmpty()) {
+                if (Utils.isBlank(versionedPlugin.version())) {
                     throw new ConnectException("Version not defined for '" + klassName + "'");
                 }
             }

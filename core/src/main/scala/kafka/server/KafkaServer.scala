@@ -46,7 +46,7 @@ import org.apache.kafka.common.requests.{ControlledShutdownRequest, ControlledSh
 import org.apache.kafka.common.security.scram.internals.ScramMechanism
 import org.apache.kafka.common.security.token.delegation.internals.DelegationTokenCache
 import org.apache.kafka.common.security.{JaasContext, JaasUtils}
-import org.apache.kafka.common.utils.{AppInfoParser, LogContext, Time}
+import org.apache.kafka.common.utils.{AppInfoParser, LogContext, Time, Utils}
 import org.apache.kafka.common.{Endpoint, Node}
 import org.apache.kafka.metadata.BrokerState
 import org.apache.kafka.server.authorizer.Authorizer
@@ -477,7 +477,7 @@ class KafkaServer(
     }
 
     val updatedEndpoints = listeners.map(endpoint =>
-      if (endpoint.host == null || endpoint.host.trim.isEmpty)
+      if (Utils.isBlank(endpoint.host))
         endpoint.copy(host = InetAddress.getLocalHost.getCanonicalHostName)
       else
         endpoint
