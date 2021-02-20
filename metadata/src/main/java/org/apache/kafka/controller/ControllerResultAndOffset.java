@@ -17,45 +17,31 @@
 
 package org.apache.kafka.controller;
 
-import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.requests.ApiError;
+import org.apache.kafka.metadata.ApiMessageAndVersion;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Objects;
+import java.util.stream.Collectors;
 
 
-class ResultOrError<T> {
-    private final ApiError error;
-    private final T result;
+class ControllerResultAndOffset<T> extends ControllerResult<T> {
+    private final long offset;
 
-    public ResultOrError(Errors error, String message) {
-        this(new ApiError(error, message));
+    public ControllerResultAndOffset(T response) {
+        super(new ArrayList<>(), response);
+        this.offset = -1;
     }
 
-    public ResultOrError(ApiError error) {
-        Objects.requireNonNull(error);
-        this.error = error;
-        this.result = null;
+    public ControllerResultAndOffset(long offset,
+                              List<ApiMessageAndVersion> records,
+                              T response) {
+        super(records, response);
+        this.offset = offset;
     }
 
-    public ResultOrError(T result) {
-        this.error = null;
-        this.result = result;
-    }
-
-    public boolean isError() {
-        return error != null;
-    }
-
-    public boolean isResult() {
-        return error == null;
-    }
-
-    public ApiError error() {
-        return error;
-    }
-
-    public T result() {
-        return result;
+    public long offset() {
+        return offset;
     }
 
     @Override
@@ -63,22 +49,21 @@ class ResultOrError<T> {
         if (o == null || (!o.getClass().equals(getClass()))) {
             return false;
         }
-        ResultOrError other = (ResultOrError) o;
-        return Objects.equals(error, other.error) &&
-            Objects.equals(result, other.result);
+        ControllerResultAndOffset other = (ControllerResultAndOffset) o;
+        return records().equals(other.records()) &&
+            response().equals(other.response()) &&
+            offset == other.offset;
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(error, result);
+        return Objects.hash(records(), response(), offset);
     }
 
     @Override
     public String toString() {
-        if (error == null) {
-            return "ResultOrError(" + result + ")";
-        } else {
-            return "ResultOrError(" + error + ")";
-        }
+        return "ControllerResultAndOffset(records=" + String.join(",",
+            records().stream().map(r -> r.toString()).collect(Collectors.toList())) +
+            ", response=" + response() + ", offset=" + offset + ")";
     }
 }

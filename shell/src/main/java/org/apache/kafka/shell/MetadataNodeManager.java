@@ -23,8 +23,8 @@ import com.fasterxml.jackson.datatype.jdk8.Jdk8Module;
 import org.apache.kafka.common.config.ConfigResource;
 import org.apache.kafka.common.metadata.ConfigRecord;
 import org.apache.kafka.common.metadata.FenceBrokerRecord;
-import org.apache.kafka.common.metadata.IsrChangeRecord;
 import org.apache.kafka.common.metadata.MetadataRecordType;
+import org.apache.kafka.common.metadata.PartitionChangeRecord;
 import org.apache.kafka.common.metadata.PartitionRecord;
 import org.apache.kafka.common.metadata.PartitionRecordJsonConverter;
 import org.apache.kafka.common.metadata.RegisterBrokerRecord;
@@ -56,6 +56,8 @@ import java.util.function.Consumer;
  * Maintains the in-memory metadata for the metadata tool.
  */
 public final class MetadataNodeManager implements AutoCloseable {
+    private static final int NO_LEADER_CHANGE = -2;
+
     private static final Logger log = LoggerFactory.getLogger(MetadataNodeManager.class);
 
     public static class Data {
@@ -259,17 +261,21 @@ public final class MetadataNodeManager implements AutoCloseable {
                 }
                 break;
             }
-            case ISR_CHANGE_RECORD: {
-                IsrChangeRecord record = (IsrChangeRecord) message;
+            case PARTITION_CHANGE_RECORD: {
+                PartitionChangeRecord record = (PartitionChangeRecord) message;
                 FileNode file = data.root.file("topicIds", record.topicId().toString(),
                     Integer.toString(record.partitionId()), "data");
                 JsonNode node = objectMapper.readTree(file.contents());
                 PartitionRecord partition = PartitionRecordJsonConverter.
                     read(node, PartitionRecord.HIGHEST_SUPPORTED_VERSION);
-                partition.setIsr(record.isr());
-                partition.setLeader(record.leader());
-                partition.setLeaderEpoch(record.leaderEpoch());
-                partition.setPartitionEpoch(record.partitionEpoch());
+                if (record.isr() != null) {
+                    partition.setIsr(record.isr());
+                }
+                if (record.leader() != NO_LEADER_CHANGE) {
+                    partition.setLeader(record.leader());
+                    partition.setLeaderEpoch(partition.leaderEpoch() + 1);
+                }
+                partition.setPartitionEpoch(partition.partitionEpoch() + 1);
                 file.setContents(PartitionRecordJsonConverter.write(partition,
                     PartitionRecord.HIGHEST_SUPPORTED_VERSION).toPrettyString());
                 break;

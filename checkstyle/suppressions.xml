@@ -267,6 +267,12 @@
               files="RequestResponseTest.java"/>
 
     <!-- metadata -->
+    <suppress checks="ClassDataAbstractionCoupling"
+              files="(ReplicationControlManager).java"/>
+    <suppress checks="ClassFanOutComplexity"
+              files="(QuorumController|ReplicationControlManager).java"/>
+    <suppress checks="CyclomaticComplexity"
+              files="(ReplicationControlManager).java"/>
     <suppress checks="NPathComplexity"
               files="KafkaEventQueue.java"/>
     <suppress checks="(NPathComplexity|ClassFanOutComplexity|CyclomaticComplexity|ClassDataAbstractionCoupling|LocalVariableName|MemberName|ParameterName|MethodLength|JavaNCSS|AvoidStarImport)"

@@ -173,7 +173,7 @@ class ControllerApis(val requestChannel: RequestChannel,
           .setRack(node.rack))
       }
       metadataResponseData.setClusterId(metaProperties.clusterId.toString)
-      if (controller.curClaimEpoch() > 0) {
+      if (controller.isActive()) {
         metadataResponseData.setControllerId(config.nodeId)
       } else {
         metadataResponseData.setControllerId(MetadataResponse.NO_CONTROLLER_ID)

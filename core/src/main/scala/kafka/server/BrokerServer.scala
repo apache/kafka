@@ -399,6 +399,9 @@ class BrokerServer(
       info("shutting down")
 
       if (config.controlledShutdownEnable) {
+        // Shut down the broker metadata listener, so that we don't get added to any
+        // more ISRs.
+        brokerMetadataListener.beginShutdown()
         lifecycleManager.beginControlledShutdown()
         try {
           lifecycleManager.controlledShutdownFuture.get(5L, TimeUnit.MINUTES)

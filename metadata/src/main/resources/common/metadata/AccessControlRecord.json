@@ -18,6 +18,7 @@
   "type": "metadata",
   "name": "AccessControlRecord",
   "validVersions": "0",
+  "flexibleVersions": "0+",
   "fields": [
     { "name": "ResourceType", "type": "int8", "versions": "0+",
       "about": "The resource type" },

@@ -1029,6 +1029,7 @@ project(':metadata') {
     compile project(':clients')
     compile libs.jacksonDatabind
     compile libs.jacksonJDK8Datatypes
+    compile libs.metrics
     compileOnly libs.log4j
     testCompile libs.junitJupiter
     testCompile libs.hamcrest

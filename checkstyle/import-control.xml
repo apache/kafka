@@ -203,8 +203,10 @@
   </subpackage>
 
   <subpackage name="controller">
+    <allow pkg="com.yammer.metrics"/>
     <allow pkg="org.apache.kafka.clients" />
     <allow pkg="org.apache.kafka.clients.admin" />
+    <allow pkg="org.apache.kafka.common.annotation" />
     <allow pkg="org.apache.kafka.common.config" />
     <allow pkg="org.apache.kafka.common.feature" />
     <allow pkg="org.apache.kafka.common.internals" />
