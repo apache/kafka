@@ -271,7 +271,7 @@ public class KTableKTableForeignKeyInnerJoinMultiIntegrationTest {
         streamsTwo = prepareTopology(queryableName, queryableNameTwo, streamsConfigTwo);
         streamsThree = prepareTopology(queryableName, queryableNameTwo, streamsConfigThree);
 
-        final List<KafkaStreams> kafkaStreamsList = Arrays.asList(streams, streamsTwo, streamsThree);
+        // final List<KafkaStreams> kafkaStreamsList = Arrays.asList(streams, streamsTwo, streamsThree);
 
  //       startApplicationAndWaitUntilRunning(kafkaStreamsList, Duration.ofSeconds(60));
 
