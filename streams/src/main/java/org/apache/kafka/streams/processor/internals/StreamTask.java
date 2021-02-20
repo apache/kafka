@@ -727,7 +727,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
                 throw timeoutException;
             } else {
                 record = null;
-                throw new TaskCorruptedException(Collections.singletonMap(id, changelogPartitions()));
+                throw new TaskCorruptedException(Collections.singleton(id));
             }
         } catch (final StreamsException exception) {
             record = null;

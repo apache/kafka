@@ -34,6 +34,8 @@
     { "name": "Leader", "type": "int32", "versions": "0+", "default": "-1",
       "about": "The lead replica, or -1 if there is no leader." },
     { "name": "LeaderEpoch", "type": "int32", "versions": "0+", "default": "-1",
-      "about": "An epoch that gets incremented each time we change the ISR." }
+      "about": "The epoch of the partition leader." },
+    { "name": "PartitionEpoch", "type": "int32", "versions": "0+", "default": "-1",
+      "about": "An epoch that gets incremented each time we change anything in the partition." }
   ]
 }

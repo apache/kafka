@@ -18,7 +18,6 @@
 package kafka.server
 
 import java.lang.{Long => JLong}
-import java.net.{InetAddress, UnknownHostException}
 import java.nio.ByteBuffer
 import java.util
 import java.util.concurrent.ConcurrentHashMap
@@ -62,9 +61,9 @@ import org.apache.kafka.common.message.ListOffsetsResponseData.{ListOffsetsParti
 import org.apache.kafka.common.message.MetadataResponseData.{MetadataResponsePartition, MetadataResponseTopic}
 import org.apache.kafka.common.message.OffsetForLeaderEpochRequestData.OffsetForLeaderTopic
 import org.apache.kafka.common.message.OffsetForLeaderEpochResponseData.{EpochEndOffset, OffsetForLeaderTopicResult, OffsetForLeaderTopicResultCollection}
-import org.apache.kafka.common.message.{AddOffsetsToTxnResponseData, AlterClientQuotasResponseData, AlterConfigsResponseData, AlterPartitionReassignmentsResponseData, AlterReplicaLogDirsResponseData, ApiVersionsResponseData, CreateAclsResponseData, CreatePartitionsResponseData, CreateTopicsResponseData, DeleteAclsResponseData, DeleteGroupsResponseData, DeleteRecordsResponseData, DeleteTopicsResponseData, DescribeAclsResponseData, DescribeClientQuotasResponseData, DescribeClusterResponseData, DescribeConfigsResponseData, DescribeGroupsResponseData, DescribeLogDirsResponseData, DescribeProducersResponseData, EndTxnResponseData, ExpireDelegationTokenResponseData, FindCoordinatorResponseData, HeartbeatResponseData, InitProducerIdResponseData, JoinGroupResponseData, LeaveGroupResponseData, ListGroupsResponseData, ListOffsetsResponseData, ListPartitionReassignmentsResponseData, OffsetCommitRequestData, OffsetCommitResponseData, OffsetDeleteResponseData, OffsetForLeaderEpochResponseData, RenewDelegationTokenResponseData, SaslAuthenticateResponseData, SaslHandshakeResponseData, StopReplicaResponseData, SyncGroupResponseData, UpdateMetadataResponseData}
+import org.apache.kafka.common.message.{AddOffsetsToTxnResponseData, AlterClientQuotasResponseData, AlterConfigsResponseData, AlterPartitionReassignmentsResponseData, AlterReplicaLogDirsResponseData, CreateAclsResponseData, CreatePartitionsResponseData, CreateTopicsResponseData, DeleteAclsResponseData, DeleteGroupsResponseData, DeleteRecordsResponseData, DeleteTopicsResponseData, DescribeAclsResponseData, DescribeClientQuotasResponseData, DescribeClusterResponseData, DescribeConfigsResponseData, DescribeGroupsResponseData, DescribeLogDirsResponseData, DescribeProducersResponseData, EndTxnResponseData, ExpireDelegationTokenResponseData, FindCoordinatorResponseData, HeartbeatResponseData, InitProducerIdResponseData, JoinGroupResponseData, LeaveGroupResponseData, ListGroupsResponseData, ListOffsetsResponseData, ListPartitionReassignmentsResponseData, OffsetCommitRequestData, OffsetCommitResponseData, OffsetDeleteResponseData, OffsetForLeaderEpochResponseData, RenewDelegationTokenResponseData, SaslAuthenticateResponseData, SaslHandshakeResponseData, StopReplicaResponseData, SyncGroupResponseData, UpdateMetadataResponseData}
 import org.apache.kafka.common.metrics.Metrics
-import org.apache.kafka.common.network.{ClientInformation, ListenerName, Send}
+import org.apache.kafka.common.network.{ListenerName, Send}
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.record._
 import org.apache.kafka.common.replica.ClientMetadata
@@ -111,8 +110,7 @@ class KafkaApis(val requestChannel: RequestChannel,
                 val clusterId: String,
                 time: Time,
                 val tokenManager: DelegationTokenManager,
-                val brokerFeatures: BrokerFeatures,
-                val finalizedFeatureCache: FinalizedFeatureCache) extends ApiRequestHandler with Logging {
+                val apiVersionManager: ApiVersionManager) extends ApiRequestHandler with Logging {
 
   metadataSupport.ensureConsistentWith(config)
 
@@ -158,6 +156,12 @@ class KafkaApis(val requestChannel: RequestChannel,
     try {
       trace(s"Handling request:${request.requestDesc(true)} from connection ${request.context.connectionId};" +
         s"securityProtocol:${request.context.securityProtocol},principal:${request.context.principal}")
+
+      if (!apiVersionManager.isApiEnabled(request.header.apiKey)) {
+        // The socket server will reject APIs which are not exposed in this scope and close the connection
+        // before handing them to the request handler, so this path should not be exercised in practice
+        throw new IllegalStateException(s"API ${request.header.apiKey} is not enabled")
+      }
 
       request.header.apiKey match {
         case ApiKeys.PRODUCE => handleProduceRequest(request)
@@ -217,18 +221,8 @@ class KafkaApis(val requestChannel: RequestChannel,
         case ApiKeys.ENVELOPE => handleEnvelope(request)
         case ApiKeys.DESCRIBE_CLUSTER => handleDescribeCluster(request)
         case ApiKeys.DESCRIBE_PRODUCERS => handleDescribeProducersRequest(request)
-
-        // Handle requests that should have been sent to the KIP-500 controller.
-        // Until we are ready to integrate the Raft layer, these APIs are treated as
-        // unexpected and we just close the connection.
-        case ApiKeys.VOTE => requestHelper.closeConnection(request, util.Collections.emptyMap())
-        case ApiKeys.BEGIN_QUORUM_EPOCH => requestHelper.closeConnection(request, util.Collections.emptyMap())
-        case ApiKeys.END_QUORUM_EPOCH => requestHelper.closeConnection(request, util.Collections.emptyMap())
-        case ApiKeys.DESCRIBE_QUORUM => requestHelper.closeConnection(request, util.Collections.emptyMap())
-        case ApiKeys.FETCH_SNAPSHOT => requestHelper.closeConnection(request, util.Collections.emptyMap())
-        case ApiKeys.BROKER_REGISTRATION => requestHelper.closeConnection(request, util.Collections.emptyMap())
-        case ApiKeys.BROKER_HEARTBEAT => requestHelper.closeConnection(request, util.Collections.emptyMap())
-        case ApiKeys.DECOMMISSION_BROKER => requestHelper.closeConnection(request, util.Collections.emptyMap())
+        case ApiKeys.UNREGISTER_BROKER => maybeForwardToController(request, handleUnregisterBrokerRequest)
+        case _ => throw new IllegalStateException(s"No handler for request api key ${request.header.apiKey}")
       }
     } catch {
       case e: FatalExitError => throw e
@@ -720,7 +714,7 @@ class KafkaApis(val requestChannel: RequestChannel,
       }
     }
 
-    def maybeDownConvertStorageError(error: Errors, version: Short): Errors = {
+    def maybeDownConvertStorageError(error: Errors): Errors = {
       // If consumer sends FetchRequest V5 or earlier, the client library is not guaranteed to recognize the error code
       // for KafkaStorageException. In this case the client library will translate KafkaStorageException to
       // UnknownServerException which is not retriable. We can ensure that consumer will update metadata and retry
@@ -771,7 +765,7 @@ class KafkaApis(val requestChannel: RequestChannel,
                 // as possible. With KIP-283, we have the ability to lazily down-convert in a chunked manner. The lazy, chunked
                 // down-conversion always guarantees that at least one batch of messages is down-converted and sent out to the
                 // client.
-                val error = maybeDownConvertStorageError(partitionData.error, versionId)
+                val error = maybeDownConvertStorageError(partitionData.error)
                 new FetchResponse.PartitionData[BaseRecords](error, partitionData.highWatermark,
                   partitionData.lastStableOffset, partitionData.logStartOffset,
                   partitionData.preferredReadReplica, partitionData.abortedTransactions,
@@ -783,7 +777,7 @@ class KafkaApis(val requestChannel: RequestChannel,
               }
             }
           case None =>
-            val error = maybeDownConvertStorageError(partitionData.error, versionId)
+            val error = maybeDownConvertStorageError(partitionData.error)
             new FetchResponse.PartitionData[BaseRecords](error,
               partitionData.highWatermark,
               partitionData.lastStableOffset,
@@ -805,7 +799,7 @@ class KafkaApis(val requestChannel: RequestChannel,
         val lastStableOffset = data.lastStableOffset.getOrElse(FetchResponse.INVALID_LAST_STABLE_OFFSET)
         if (data.isReassignmentFetch)
           reassigningPartitions.add(tp)
-        val error = maybeDownConvertStorageError(data.error, versionId)
+        val error = maybeDownConvertStorageError(data.error)
         partitions.put(tp, new FetchResponse.PartitionData(
           error,
           data.highWatermark,
@@ -1224,7 +1218,7 @@ class KafkaApis(val requestChannel: RequestChannel,
          requestThrottleMs,
          brokers.flatMap(_.endpoints.get(request.context.listenerName.value())).toList.asJava,
          clusterId,
-         metadataCache.getControllerId.getOrElse(MetadataResponse.NO_CONTROLLER_ID),
+         metadataSupport.controllerId.getOrElse(MetadataResponse.NO_CONTROLLER_ID),
          completeTopicMetadata.asJava,
          clusterAuthorizedOperations
       ))
@@ -1687,39 +1681,12 @@ class KafkaApis(val requestChannel: RequestChannel,
     // ApiVersionRequest is not available.
     def createResponseCallback(requestThrottleMs: Int): ApiVersionsResponse = {
       val apiVersionRequest = request.body[ApiVersionsRequest]
-      if (apiVersionRequest.hasUnsupportedRequestVersion)
+      if (apiVersionRequest.hasUnsupportedRequestVersion) {
         apiVersionRequest.getErrorResponse(requestThrottleMs, Errors.UNSUPPORTED_VERSION.exception)
-      else if (!apiVersionRequest.isValid)
+      } else if (!apiVersionRequest.isValid) {
         apiVersionRequest.getErrorResponse(requestThrottleMs, Errors.INVALID_REQUEST.exception)
-      else {
-        val supportedFeatures = brokerFeatures.supportedFeatures
-        val finalizedFeaturesOpt = finalizedFeatureCache.get
-        val controllerApiVersions = metadataSupport.forwardingManager.flatMap(_.controllerApiVersions)
-
-        val apiVersionsResponse =
-          finalizedFeaturesOpt match {
-            case Some(finalizedFeatures) => ApiVersion.apiVersionsResponse(
-              requestThrottleMs,
-              config.interBrokerProtocolVersion.recordVersion.value,
-              supportedFeatures,
-              finalizedFeatures.features,
-              finalizedFeatures.epoch,
-              controllerApiVersions)
-            case None => ApiVersion.apiVersionsResponse(
-              requestThrottleMs,
-              config.interBrokerProtocolVersion.recordVersion.value,
-              supportedFeatures,
-              controllerApiVersions)
-          }
-        if (request.context.fromPrivilegedListener) {
-          apiVersionsResponse.data.apiKeys().add(
-            new ApiVersionsResponseData.ApiVersion()
-              .setApiKey(ApiKeys.ENVELOPE.id)
-              .setMinVersion(ApiKeys.ENVELOPE.oldestVersion())
-              .setMaxVersion(ApiKeys.ENVELOPE.latestVersion())
-          )
-        }
-        apiVersionsResponse
+      } else {
+        apiVersionManager.apiVersionResponse(requestThrottleMs)
       }
     }
     requestHelper.sendResponseMaybeThrottle(request, createResponseCallback)
@@ -2772,7 +2739,7 @@ class KafkaApis(val requestChannel: RequestChannel,
             replicaManager.logManager.allLogs.map(_.topicPartition).toSet
           else
             describeLogDirsDirRequest.data.topics.asScala.flatMap(
-              logDirTopic => logDirTopic.partitionIndex.asScala.map(partitionIndex =>
+              logDirTopic => logDirTopic.partitions.asScala.map(partitionIndex =>
                 new TopicPartition(logDirTopic.topic, partitionIndex))).toSet
 
         replicaManager.describeLogDirs(partitions)
@@ -3210,7 +3177,7 @@ class KafkaApis(val requestChannel: RequestChannel,
     }
 
     val brokers = metadataCache.getAliveBrokers
-    val controllerId = metadataCache.getControllerId.getOrElse(MetadataResponse.NO_CONTROLLER_ID)
+    val controllerId = metadataSupport.controllerId.getOrElse(MetadataResponse.NO_CONTROLLER_ID)
 
     requestHelper.sendResponseMaybeThrottle(request, requestThrottleMs => {
       val data = new DescribeClusterResponseData()
@@ -3234,7 +3201,6 @@ class KafkaApis(val requestChannel: RequestChannel,
 
   def handleEnvelope(request: RequestChannel.Request): Unit = {
     val zkSupport = metadataSupport.requireZkOrThrow(KafkaApis.shouldNeverReceive(request))
-    val envelope = request.body[EnvelopeRequest]
 
     // If forwarding is not yet enabled or this request has been received on an invalid endpoint,
     // then we treat the request as unparsable and close the connection.
@@ -3258,101 +3224,8 @@ class KafkaApis(val requestChannel: RequestChannel,
         s"Broker $brokerId is not the active controller"))
       return
     }
-
-    val forwardedPrincipal = parseForwardedPrincipal(request.context, envelope.requestPrincipal)
-    val forwardedClientAddress = parseForwardedClientAddress(envelope.clientAddress)
-
-    val forwardedRequestBuffer = envelope.requestData.duplicate()
-    val forwardedRequestHeader = parseForwardedRequestHeader(forwardedRequestBuffer)
-
-    val forwardedApi = forwardedRequestHeader.apiKey
-    if (!forwardedApi.forwardable) {
-      throw new InvalidRequestException(s"API $forwardedApi is not enabled or is not eligible for forwarding")
+    EnvelopeUtils.handleEnvelopeRequest(request, requestChannel.metrics, handle)
     }
-
-    val forwardedContext = new RequestContext(
-      forwardedRequestHeader,
-      request.context.connectionId,
-      forwardedClientAddress,
-      forwardedPrincipal,
-      request.context.listenerName,
-      request.context.securityProtocol,
-      ClientInformation.EMPTY,
-      request.context.fromPrivilegedListener
-    )
-
-    val forwardedRequest = parseForwardedRequest(request, forwardedContext, forwardedRequestBuffer)
-    handle(forwardedRequest)
-  }
-
-  private def parseForwardedClientAddress(
-    address: Array[Byte]
-  ): InetAddress = {
-    try {
-      InetAddress.getByAddress(address)
-    } catch {
-      case e: UnknownHostException =>
-        throw new InvalidRequestException("Failed to parse client address from envelope", e)
-    }
-  }
-
-  private def parseForwardedRequest(
-    envelope: RequestChannel.Request,
-    forwardedContext: RequestContext,
-    buffer: ByteBuffer
-  ): RequestChannel.Request = {
-    try {
-      new RequestChannel.Request(
-        processor = envelope.processor,
-        context = forwardedContext,
-        startTimeNanos = envelope.startTimeNanos,
-        envelope.memoryPool,
-        buffer,
-        requestChannel.metrics,
-        Some(envelope)
-      )
-    } catch {
-      case e: InvalidRequestException =>
-        // We use UNSUPPORTED_VERSION if the embedded request cannot be parsed.
-        // The purpose is to disambiguate structural errors in the envelope request
-        // itself, such as an invalid client address.
-        throw new UnsupportedVersionException(s"Failed to parse forwarded request " +
-          s"with header ${forwardedContext.header}", e)
-    }
-  }
-
-  private def parseForwardedRequestHeader(
-    buffer: ByteBuffer
-  ): RequestHeader = {
-    try {
-      RequestHeader.parse(buffer)
-    } catch {
-      case e: InvalidRequestException =>
-        // We use UNSUPPORTED_VERSION if the embedded request cannot be parsed.
-        // The purpose is to disambiguate structural errors in the envelope request
-        // itself, such as an invalid client address.
-        throw new UnsupportedVersionException("Failed to parse request header from envelope", e)
-    }
-  }
-
-  private def parseForwardedPrincipal(
-    envelopeContext: RequestContext,
-    principalBytes: Array[Byte]
-  ): KafkaPrincipal = {
-    envelopeContext.principalSerde.asScala match {
-      case Some(serde) =>
-        try {
-          serde.deserialize(principalBytes)
-        } catch {
-          case e: Exception =>
-            throw new PrincipalDeserializationException("Failed to deserialize client principal from envelope", e)
-        }
-
-      case None =>
-        throw new PrincipalDeserializationException("Could not deserialize principal since " +
-          "no `KafkaPrincipalSerde` has been defined")
-    }
-  }
 
   def handleDescribeProducersRequest(request: RequestChannel.Request): Unit = {
     val describeProducersRequest = request.body[DescribeProducersRequest]
@@ -3388,6 +3261,14 @@ class KafkaApis(val requestChannel: RequestChannel,
 
     requestHelper.sendResponseMaybeThrottle(request, requestThrottleMs =>
       new DescribeProducersResponse(response.setThrottleTimeMs(requestThrottleMs)))
+  }
+
+  def handleUnregisterBrokerRequest(request: RequestChannel.Request): Unit = {
+    // This function will not be called when in self-managed quorum mode, since the
+    // UNREGISTER_BROKER API is marked as forwardable and we will always have a forwarding
+    // manager.
+    throw new UnsupportedVersionException("The broker unregistration API is not available when using " +
+      "Apache ZooKeeper mode.")
   }
 
   private def updateRecordConversionStats(request: RequestChannel.Request,
