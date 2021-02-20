@@ -759,7 +759,7 @@ public class ReplicationControlManager {
             ReplicaElectionResult topicResults =
                 new ReplicaElectionResult().setTopic(topic.topic());
             response.replicaElectionResults().add(topicResults);
-            for (int partitionId : topic.partitions()) {
+            for (int partitionId : topic.partitionId()) {
                 ApiError error = electLeader(topic.topic(), partitionId, unclean, records);
                 topicResults.partitionResult().add(new PartitionResult().
                     setPartitionId(partitionId).
