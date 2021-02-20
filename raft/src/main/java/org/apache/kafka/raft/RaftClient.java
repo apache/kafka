@@ -32,11 +32,13 @@ public interface RaftClient<T> extends Closeable {
          * after consuming the reader.
          *
          * Note that there is not a one-to-one correspondence between writes through
-         * {@link #scheduleAppend(int, List)} and this callback. The Raft implementation
-         * is free to batch together the records from multiple append calls provided
-         * that batch boundaries are respected. This means that each batch specified
-         * through {@link #scheduleAppend(int, List)} is guaranteed to be a subset of
-         * a batch provided by the {@link BatchReader}.
+         * {@link #scheduleAppend(int, List)} or {@link #scheduleAtomicAppend(int, List)}
+         * and this callback. The Raft implementation is free to batch together the records
+         * from multiple append calls provided that batch boundaries are respected. Records
+         * specified through {@link #scheduleAtomicAppend(int, List)} are guaranteed to be a
+         * subset of a batch provided by the {@link BatchReader}. Records specified through
+         * {@link #scheduleAppend(int, List)} are guaranteed to be in the same order but
+         * they can map to any number of batches provided by the {@link BatchReader}.
          *
          * @param reader reader instance which must be iterated and closed
          */
@@ -48,7 +50,7 @@ public interface RaftClient<T> extends Closeable {
          * {@link #handleCommit(BatchReader)}.
          *
          * After becoming a leader, the client is eligible to write to the log
-         * using {@link #scheduleAppend(int, List)}.
+         * using {@link #scheduleAppend(int, List)} or {@link #scheduleAtomicAppend(int, List)}.
          *
          * @param epoch the claimed leader epoch
          */
@@ -57,15 +59,16 @@ public interface RaftClient<T> extends Closeable {
         /**
          * Invoked after a leader has stepped down. This callback may or may not
          * fire before the next leader has been elected.
+         *
+         * @param epoch the epoch that the leader is resigning from
          */
-        default void handleResign() {}
+        default void handleResign(int epoch) {}
     }
 
     /**
      * Initialize the client.
      * This should only be called once on startup.
      *
-     * @param raftConfig the Raft quorum configuration
      * @throws IOException For any IO errors during initialization
      */
     void initialize() throws IOException;
@@ -76,6 +79,36 @@ public interface RaftClient<T> extends Closeable {
      * @param listener the listener
      */
     void register(Listener<T> listener);
+
+    /**
+     * Return the current {@link LeaderAndEpoch}.
+     * @return the current {@link LeaderAndEpoch}
+     */
+    LeaderAndEpoch leaderAndEpoch();
+
+    /**
+     * Append a list of records to the log. The write will be scheduled for some time
+     * in the future. There is no guarantee that appended records will be written to
+     * the log and eventually committed. While the order of the records is preserve, they can
+     * be appended to the log using one or more batches. Each record may be committed independently.
+     * If a record is committed, then all records scheduled for append during this epoch
+     * and prior to this record are also committed.
+     *
+     * If the provided current leader epoch does not match the current epoch, which
+     * is possible when the state machine has yet to observe the epoch change, then
+     * this method will return {@link Long#MAX_VALUE} to indicate an offset which is
+     * not possible to become committed. The state machine is expected to discard all
+     * uncommitted entries after observing an epoch change.
+     *
+     * @param epoch the current leader epoch
+     * @param records the list of records to append
+     * @return the expected offset of the last record; {@link Long#MAX_VALUE} if the records could
+     *         be committed; null if no memory could be allocated for the batch at this time
+     * @throws RecordBatchTooLargeException if the size of the records is greater than the maximum
+     *         batch size; if this exception is throw none of the elements in records were
+     *         committed
+     */
+    Long scheduleAppend(int epoch, List<T> records);
 
     /**
      * Append a list of records to the log. The write will be scheduled for some time
@@ -91,11 +124,13 @@ public interface RaftClient<T> extends Closeable {
      *
      * @param epoch the current leader epoch
      * @param records the list of records to append
-     * @return the offset within the current epoch that the log entries will be appended,
-     *         or null if the leader was unable to accept the write (e.g. due to memory
-     *         being reached).
+     * @return the expected offset of the last record; {@link Long#MAX_VALUE} if the records could
+     *         be committed; null if no memory could be allocated for the batch at this time
+     * @throws RecordBatchTooLargeException if the size of the records is greater than the maximum
+     *         batch size; if this exception is throw none of the elements in records were
+     *         committed
      */
-    Long scheduleAppend(int epoch, List<T> records);
+    Long scheduleAtomicAppend(int epoch, List<T> records);
 
     /**
      * Attempt a graceful shutdown of the client. This allows the leader to proactively

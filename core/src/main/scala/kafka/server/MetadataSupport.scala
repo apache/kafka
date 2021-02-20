@@ -19,6 +19,7 @@ package kafka.server
 
 import kafka.controller.KafkaController
 import kafka.network.RequestChannel
+import kafka.server.metadata.RaftMetadataCache
 import kafka.zk.{AdminZkClient, KafkaZkClient}
 import org.apache.kafka.common.requests.AbstractResponse
 
@@ -58,12 +59,15 @@ sealed trait MetadataSupport {
   def maybeForward(request: RequestChannel.Request,
                    handler: RequestChannel.Request => Unit,
                    responseCallback: Option[AbstractResponse] => Unit): Unit
+
+  def controllerId: Option[Int]
 }
 
 case class ZkSupport(adminManager: ZkAdminManager,
                      controller: KafkaController,
                      zkClient: KafkaZkClient,
-                     forwardingManager: Option[ForwardingManager]) extends MetadataSupport {
+                     forwardingManager: Option[ForwardingManager],
+                     metadataCache: ZkMetadataCache) extends MetadataSupport {
   val adminZkClient = new AdminZkClient(zkClient)
 
   override def requireZkOrThrow(createException: => Exception): ZkSupport = this
@@ -83,9 +87,11 @@ case class ZkSupport(adminManager: ZkAdminManager,
       case _ => handler(request)
     }
   }
+
+  override def controllerId: Option[Int] =  metadataCache.getControllerId
 }
 
-case class RaftSupport(fwdMgr: ForwardingManager) extends MetadataSupport {
+case class RaftSupport(fwdMgr: ForwardingManager, metadataCache: RaftMetadataCache) extends MetadataSupport {
   override val forwardingManager: Option[ForwardingManager] = Some(fwdMgr)
   override def requireZkOrThrow(createException: => Exception): ZkSupport = throw createException
   override def requireRaftOrThrow(createException: => Exception): RaftSupport = this
@@ -105,4 +111,14 @@ case class RaftSupport(fwdMgr: ForwardingManager) extends MetadataSupport {
       handler(request) // will reject
     }
   }
+
+  override def controllerId: Option[Int] = {
+    // We send back a random controller ID when running with a Raft-based metadata quorum.
+    // Raft-based controllers are not directly accessible to clients; rather, clients can send
+    // requests destined for the controller to any broker node, and the receiving broker will
+    // automatically forward the request on the client's behalf to the active Raft-based
+    // controller  as per KIP-590.
+    metadataCache.currentImage().brokers.randomAliveBrokerId()
+  }
+
 }

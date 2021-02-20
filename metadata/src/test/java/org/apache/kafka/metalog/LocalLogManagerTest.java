@@ -34,6 +34,7 @@ import static org.apache.kafka.metalog.MockMetaLogManagerListener.LAST_COMMITTED
 import static org.apache.kafka.metalog.MockMetaLogManagerListener.SHUTDOWN;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
+
 @Timeout(value = 40)
 public class LocalLogManagerTest {
     private static final Logger log = LoggerFactory.getLogger(LocalLogManagerTest.class);
@@ -51,7 +52,7 @@ public class LocalLogManagerTest {
     }
 
     /**
-     * Test that the local log maanger will claim leadership.
+     * Test that the local log manager will claim leadership.
      */
     @Test
     public void testClaimsLeadership() throws Exception {

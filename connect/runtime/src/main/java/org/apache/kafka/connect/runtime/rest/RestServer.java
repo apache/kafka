@@ -18,6 +18,7 @@ package org.apache.kafka.connect.runtime.rest;
 
 import com.fasterxml.jackson.jaxrs.json.JacksonJsonProvider;
 import org.apache.kafka.common.config.ConfigException;
+import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.health.ConnectClusterDetails;
 import org.apache.kafka.connect.rest.ConnectRestExtension;
@@ -275,19 +276,19 @@ public class RestServer {
         }
 
         String allowedOrigins = config.getString(WorkerConfig.ACCESS_CONTROL_ALLOW_ORIGIN_CONFIG);
-        if (allowedOrigins != null && !allowedOrigins.trim().isEmpty()) {
+        if (!Utils.isBlank(allowedOrigins)) {
             FilterHolder filterHolder = new FilterHolder(new CrossOriginFilter());
             filterHolder.setName("cross-origin");
             filterHolder.setInitParameter(CrossOriginFilter.ALLOWED_ORIGINS_PARAM, allowedOrigins);
             String allowedMethods = config.getString(WorkerConfig.ACCESS_CONTROL_ALLOW_METHODS_CONFIG);
-            if (allowedMethods != null && !allowedOrigins.trim().isEmpty()) {
+            if (!Utils.isBlank(allowedMethods)) {
                 filterHolder.setInitParameter(CrossOriginFilter.ALLOWED_METHODS_PARAM, allowedMethods);
             }
             context.addFilter(filterHolder, "/*", EnumSet.of(DispatcherType.REQUEST));
         }
 
         String headerConfig = config.getString(WorkerConfig.RESPONSE_HTTP_HEADERS_CONFIG);
-        if (headerConfig != null && !headerConfig.trim().isEmpty()) {
+        if (!Utils.isBlank(headerConfig)) {
             configureHttpResponsHeaderFilter(context);
         }
 
