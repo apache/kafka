@@ -273,7 +273,7 @@ public class KTableKTableForeignKeyInnerJoinMultiIntegrationTest {
 
         final List<KafkaStreams> kafkaStreamsList = Arrays.asList(streams, streamsTwo, streamsThree);
 
-        startApplicationAndWaitUntilRunning(kafkaStreamsList, Duration.ofSeconds(60));
+ //       startApplicationAndWaitUntilRunning(kafkaStreamsList, Duration.ofSeconds(60));
 
 
 
@@ -293,7 +293,7 @@ public class KTableKTableForeignKeyInnerJoinMultiIntegrationTest {
 //
 //        boolean streamStartFailed = false;
 //
-//        streams.start();
+        streams.start();
 //        try {
 //            waitForApplicationState(singletonList(streams), KafkaStreams.State.RUNNING, Duration.ofSeconds(60));
 //        } catch (final AssertionError e) {
@@ -303,7 +303,7 @@ public class KTableKTableForeignKeyInnerJoinMultiIntegrationTest {
 //        waitForApplicationState(singletonList(streams), KafkaStreams.State.RUNNING, Duration.ofSeconds(60));
 //
 //
-//        streamsTwo.start();
+        streamsTwo.start();
 //        try {
 //            waitForApplicationState(singletonList(streamsTwo), KafkaStreams.State.RUNNING, Duration.ofSeconds(60));
 //        } catch (final AssertionError e) {
@@ -320,7 +320,7 @@ public class KTableKTableForeignKeyInnerJoinMultiIntegrationTest {
 //        }
 //        waitForApplicationState(singletonList(streams), KafkaStreams.State.RUNNING, Duration.ofSeconds(60));
 //
-//        streamsThree.start();
+        streamsThree.start();
 //
 //        try {
 //            waitForApplicationState(singletonList(streamsThree), KafkaStreams.State.RUNNING, Duration.ofSeconds(60));
