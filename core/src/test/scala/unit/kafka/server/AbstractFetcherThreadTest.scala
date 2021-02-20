@@ -39,13 +39,12 @@ import org.apache.kafka.common.record._
 import org.apache.kafka.common.requests.OffsetsForLeaderEpochResponse.{UNDEFINED_EPOCH, UNDEFINED_EPOCH_OFFSET}
 import org.apache.kafka.common.requests.FetchRequest
 import org.apache.kafka.common.utils.Time
-import org.junit.Assert._
-import org.junit.{Before, Test}
+import org.junit.jupiter.api.Assertions._
+import org.junit.jupiter.api.{BeforeEach, Test}
 
 import scala.jdk.CollectionConverters._
 import scala.collection.{Map, Set, mutable}
 import scala.util.Random
-import org.scalatest.Assertions.assertThrows
 
 import scala.collection.mutable.ArrayBuffer
 import scala.compat.java8.OptionConverters._
@@ -57,7 +56,7 @@ class AbstractFetcherThreadTest {
   private val partition2 = new TopicPartition("topic2", 0)
   private val failedPartitions = new FailedPartitions
 
-  @Before
+  @BeforeEach
   def cleanMetricRegistry(): Unit = {
     TestUtils.clearYammerMetrics()
   }
@@ -113,8 +112,8 @@ class AbstractFetcherThreadTest {
 
     fetcher.doWork()
 
-    assertTrue("Failed waiting for consumer lag metric",
-      allMetricsNames(FetcherMetrics.ConsumerLag))
+    assertTrue(allMetricsNames(FetcherMetrics.ConsumerLag),
+      "Failed waiting for consumer lag metric")
 
     // remove the partition to simulate leader migration
     fetcher.removePartitions(Set(partition))
@@ -747,9 +746,7 @@ class AbstractFetcherThreadTest {
     fetcher.setLeaderState(partition, MockFetcherThread.PartitionState(leaderEpoch = 0))
 
     // first round of truncation should throw an exception
-    assertThrows[IllegalStateException] {
-      fetcher.doWork()
-    }
+    assertThrows(classOf[IllegalStateException], () => fetcher.doWork())
   }
 
   @Test
@@ -947,7 +944,7 @@ class AbstractFetcherThreadTest {
       state.logStartOffset = partitionData.logStartOffset
       state.highWatermark = partitionData.highWatermark
 
-      Some(LogAppendInfo(firstOffset = Some(fetchOffset),
+      Some(LogAppendInfo(firstOffset = Some(LogOffsetMetadata(fetchOffset)),
         lastOffset = lastOffset,
         lastLeaderEpoch = lastEpoch,
         maxTimestamp = maxTimestamp,

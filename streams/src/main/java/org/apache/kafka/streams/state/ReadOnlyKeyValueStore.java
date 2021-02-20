@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.state;
 
+import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.streams.errors.InvalidStateStoreException;
 
 /**
@@ -94,6 +95,23 @@ public interface ReadOnlyKeyValueStore<K, V> {
      * @throws InvalidStateStoreException if the store is not initialized
      */
     default KeyValueIterator<K, V> reverseAll() {
+        throw new UnsupportedOperationException();
+    }
+
+    /**
+     * Return an iterator over all keys with the specified prefix.
+     * Since the type of the prefix can be different from that of the key, a serializer to convert the
+     * prefix into the format in which the keys are stored in the stores needs to be passed to this method.
+     * The returned iterator must be safe from {@link java.util.ConcurrentModificationException}s
+     * and must not return null values.
+     *
+     * @param prefix The prefix.
+     * @param prefixKeySerializer Serializer for the Prefix key type
+     * @param <PS> Prefix Serializer type
+     * @param <P> Prefix Type.
+     * @return The iterator for keys having the specified prefix.
+     */
+    default <PS extends Serializer<P>, P> KeyValueIterator<K, V> prefixScan(P prefix, PS prefixKeySerializer) {
         throw new UnsupportedOperationException();
     }
 

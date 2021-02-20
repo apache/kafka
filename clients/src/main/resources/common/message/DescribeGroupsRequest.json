@@ -16,6 +16,7 @@
 {
   "apiKey": 15,
   "type": "request",
+  "listeners": ["zkBroker", "broker"],
   "name": "DescribeGroupsRequest",
   // Versions 1 and 2 are the same as version 0.
   //

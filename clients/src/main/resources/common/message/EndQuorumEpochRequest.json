@@ -16,6 +16,7 @@
 {
   "apiKey": 54,
   "type": "request",
+  "listeners": ["controller"],
   "name": "EndQuorumEpochRequest",
   "validVersions": "0",
   "fields": [

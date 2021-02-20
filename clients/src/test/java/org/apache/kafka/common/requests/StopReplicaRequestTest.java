@@ -26,7 +26,7 @@ import org.apache.kafka.common.message.StopReplicaRequestData.StopReplicaTopicV1
 import org.apache.kafka.common.message.StopReplicaRequestData.StopReplicaTopicState;
 import org.apache.kafka.common.message.StopReplicaResponseData.StopReplicaPartitionError;
 import org.apache.kafka.common.protocol.Errors;
-import org.junit.Test;
+import org.junit.jupiter.api.Test;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -37,10 +37,10 @@ import java.util.Map;
 import java.util.Set;
 
 import static org.apache.kafka.common.protocol.ApiKeys.STOP_REPLICA;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertThrows;
-import static org.junit.Assert.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class StopReplicaRequestTest {
 
@@ -66,7 +66,7 @@ public class StopReplicaRequestTest {
             }
         }
 
-        for (short version = STOP_REPLICA.oldestVersion(); version < STOP_REPLICA.latestVersion(); version++) {
+        for (short version = STOP_REPLICA.oldestVersion(); version <= STOP_REPLICA.latestVersion(); version++) {
             StopReplicaRequest.Builder builder = new StopReplicaRequest.Builder(version,
                     0, 0, 0L, false, topicStates);
             StopReplicaRequest request = builder.build();
@@ -93,7 +93,7 @@ public class StopReplicaRequestTest {
         Map<TopicPartition, StopReplicaPartitionState> expectedPartitionStates =
             StopReplicaRequestTest.partitionStates(topicStates);
 
-        for (short version = STOP_REPLICA.oldestVersion(); version < STOP_REPLICA.latestVersion(); version++) {
+        for (short version = STOP_REPLICA.oldestVersion(); version <= STOP_REPLICA.latestVersion(); version++) {
             StopReplicaRequest request = new StopReplicaRequest.Builder(version, 0, 1, 0,
                 deletePartitions, topicStates).build(version);
             StopReplicaRequestData data = request.data();
@@ -128,7 +128,7 @@ public class StopReplicaRequestTest {
     public void testTopicStatesNormalization() {
         List<StopReplicaTopicState> topicStates = topicStates(true);
 
-        for (short version = STOP_REPLICA.oldestVersion(); version < STOP_REPLICA.latestVersion(); version++) {
+        for (short version = STOP_REPLICA.oldestVersion(); version <= STOP_REPLICA.latestVersion(); version++) {
             // Create a request for version to get its serialized form
             StopReplicaRequest baseRequest = new StopReplicaRequest.Builder(version, 0, 1, 0,
                 true, topicStates).build(version);
@@ -163,7 +163,7 @@ public class StopReplicaRequestTest {
     public void testPartitionStatesNormalization() {
         List<StopReplicaTopicState> topicStates = topicStates(true);
 
-        for (short version = STOP_REPLICA.oldestVersion(); version < STOP_REPLICA.latestVersion(); version++) {
+        for (short version = STOP_REPLICA.oldestVersion(); version <= STOP_REPLICA.latestVersion(); version++) {
             // Create a request for version to get its serialized form
             StopReplicaRequest baseRequest = new StopReplicaRequest.Builder(version, 0, 1, 0,
                 true, topicStates).build(version);

@@ -19,7 +19,8 @@ package kafka.tools
 
 import kafka.network.RequestChannel
 import kafka.network.RequestConvertToJson
-import kafka.server.ApiRequestHandler
+import kafka.raft.RaftManager
+import kafka.server.{ApiRequestHandler, ApiVersionManager}
 import kafka.utils.Logging
 import org.apache.kafka.common.internals.FatalExitError
 import org.apache.kafka.common.message.{BeginQuorumEpochResponseData, EndQuorumEpochResponseData, FetchResponseData, FetchSnapshotResponseData, VoteResponseData}
@@ -27,7 +28,6 @@ import org.apache.kafka.common.protocol.{ApiKeys, ApiMessage, Errors}
 import org.apache.kafka.common.record.BaseRecords
 import org.apache.kafka.common.requests.{AbstractRequest, AbstractResponse, BeginQuorumEpochResponse, EndQuorumEpochResponse, FetchResponse, FetchSnapshotResponse, VoteResponse}
 import org.apache.kafka.common.utils.Time
-import org.apache.kafka.raft.{KafkaRaftClient, RaftRequest}
 
 import scala.jdk.CollectionConverters._
 
@@ -35,9 +35,10 @@ import scala.jdk.CollectionConverters._
  * Simple request handler implementation for use by [[TestRaftServer]].
  */
 class TestRaftRequestHandler(
-  raftClient: KafkaRaftClient[_],
+  raftManager: RaftManager[_],
   requestChannel: RequestChannel,
   time: Time,
+  apiVersionManager: ApiVersionManager
 ) extends ApiRequestHandler with Logging {
 
   override def handle(request: RequestChannel.Request): Unit = {
@@ -45,6 +46,7 @@ class TestRaftRequestHandler(
       trace(s"Handling request:${request.requestDesc(true)} from connection ${request.context.connectionId};" +
         s"securityProtocol:${request.context.securityProtocol},principal:${request.context.principal}")
       request.header.apiKey match {
+        case ApiKeys.API_VERSIONS => handleApiVersions(request)
         case ApiKeys.VOTE => handleVote(request)
         case ApiKeys.BEGIN_QUORUM_EPOCH => handleBeginQuorumEpoch(request)
         case ApiKeys.END_QUORUM_EPOCH => handleEndQuorumEpoch(request)
@@ -60,6 +62,10 @@ class TestRaftRequestHandler(
       if (request.apiLocalCompleteTimeNanos < 0)
         request.apiLocalCompleteTimeNanos = time.nanoseconds
     }
+  }
+
+  private def handleApiVersions(request: RequestChannel.Request): Unit = {
+    sendResponse(request, Some(apiVersionManager.apiVersionResponse(throttleTimeMs = 0)))
   }
 
   private def handleVote(request: RequestChannel.Request): Unit = {
@@ -87,22 +93,21 @@ class TestRaftRequestHandler(
     buildResponse: ApiMessage => AbstractResponse
   ): Unit = {
     val requestBody = request.body[AbstractRequest]
-    val inboundRequest = new RaftRequest.Inbound(
-      request.header.correlationId,
+
+    val future = raftManager.handleRequest(
+      request.header,
       requestBody.data,
       time.milliseconds()
     )
 
-    inboundRequest.completion.whenComplete((response, exception) => {
+    future.whenComplete((response, exception) => {
       val res = if (exception != null) {
         requestBody.getErrorResponse(exception)
       } else {
-        buildResponse(response.data)
+        buildResponse(response)
       }
       sendResponse(request, Some(res))
     })
-
-    raftClient.handle(inboundRequest)
   }
 
   private def handleError(request: RequestChannel.Request, err: Throwable): Unit = {

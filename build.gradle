@@ -194,6 +194,13 @@ subprojects {
   sourceCompatibility = minJavaVersion
   targetCompatibility = minJavaVersion
 
+  java {
+    consistentResolution {
+      // resolve the compileClasspath and then "inject" the result of resolution as strict constraints into the runtimeClasspath
+      useCompileClasspathVersions()
+    }
+  }
+
   tasks.withType(JavaCompile) {
     options.encoding = 'UTF-8'
     options.compilerArgs << "-Xlint:all"
@@ -241,7 +248,9 @@ subprojects {
     }
   }
 
-  def shouldUseJUnit5 = ["tools", "raft"].contains(it.project.name)
+  // Remove the relevant project name once it's converted to JUnit 5
+  def shouldUseJUnit5 = !(["runtime", "streams-scala", "streams"].contains(it.project.name))
+
   def testLoggingEvents = ["passed", "skipped", "failed"]
   def testShowStandardStreams = false
   def testExceptionFormat = 'full'
@@ -398,10 +407,8 @@ subprojects {
         excludeTags "integration"
       }
     } else {
-      if (it.project.name != 'generator') {
-        useJUnit {
-          excludeCategories 'org.apache.kafka.test.IntegrationTest'
-        }
+      useJUnit {
+        excludeCategories 'org.apache.kafka.test.IntegrationTest'
       }
     }
 
@@ -742,7 +749,9 @@ project(':core') {
 
   dependencies {
     compile project(':clients')
+    compile project(':metadata')
     compile project(':raft')
+    compile libs.argparse4j
     compile libs.jacksonDatabind
     compile libs.jacksonModuleScala
     compile libs.jacksonDataformatCsv
@@ -783,11 +792,11 @@ project(':core') {
     testCompile libs.apachedsLdifPartition
     testCompile libs.apachedsMavibotPartition
     testCompile libs.apachedsJdbmPartition
-    testCompile libs.junitJupiterApi
-    testCompile libs.junitVintageEngine
-    testCompile libs.scalatest
+    testCompile libs.junitJupiter
     testCompile libs.slf4jlog4j
-    testCompile libs.jfreechart
+    testCompile(libs.jfreechart) {
+      exclude group: 'junit', module: 'junit'
+    }
   }
 
   if (userEnableTestCoverage) {
@@ -1004,9 +1013,59 @@ project(':core') {
     }
     test {
       java {
+        srcDirs = []
+      }
+      scala {
+        srcDirs = ["src/test/java", "src/test/scala"]
+      }
+    }
+  }
+}
+
+project(':metadata') {
+  archivesBaseName = "kafka-metadata"
+
+  dependencies {
+    compile project(':clients')
+    compile libs.jacksonDatabind
+    compile libs.jacksonJDK8Datatypes
+    compileOnly libs.log4j
+    testCompile libs.junitJupiter
+    testCompile libs.hamcrest
+    testCompile libs.slf4jlog4j
+    testCompile project(':clients').sourceSets.test.output
+  }
+
+  task processMessages(type:JavaExec) {
+    main = "org.apache.kafka.message.MessageGenerator"
+    classpath = project(':generator').sourceSets.main.runtimeClasspath
+    args = [ "-p", "org.apache.kafka.common.metadata",
+             "-o", "src/generated/java/org/apache/kafka/common/metadata",
+             "-i", "src/main/resources/common/metadata",
+             "-m", "MessageDataGenerator", "JsonConverterGenerator",
+             "-t", "MetadataRecordTypeGenerator", "MetadataJsonConvertersGenerator"
+           ]
+    inputs.dir("src/main/resources/common/metadata")
+    outputs.dir("src/generated/java/org/apache/kafka/common/metadata")
+  }
+
+  compileJava.dependsOn 'processMessages'
+
+  sourceSets {
+    main {
+      java {
+        srcDirs = ["src/generated/java", "src/main/java"]
+      }
+    }
+    test {
+      java {
         srcDirs = ["src/generated/java", "src/test/java"]
       }
     }
+  }
+
+  javadoc {
+    enabled = false
   }
 }
 
@@ -1032,12 +1091,7 @@ project(':generator') {
     compile libs.jacksonDatabind
     compile libs.jacksonJDK8Datatypes
     compile libs.jacksonJaxrsJsonProvider
-    testCompile libs.junitJupiterApi
-    testCompile libs.junitVintageEngine
-  }
-
-  integrationTest {
-    enabled = false
+    testCompile libs.junitJupiter
   }
 
   javadoc {
@@ -1067,9 +1121,9 @@ project(':clients') {
     jacksonDatabindConfig libs.jacksonDatabind // to publish as provided scope dependency.
 
     testCompile libs.bcpkix
-    testCompile libs.junitJupiterApi
-    testCompile libs.junitVintageEngine
+    testCompile libs.junitJupiter
     testCompile libs.mockitoCore
+    testCompile libs.hamcrest
 
     testRuntime libs.slf4jlog4j
     testRuntime libs.jacksonDatabind
@@ -1157,6 +1211,7 @@ project(':clients') {
     include "**/org/apache/kafka/common/header/*"
     include "**/org/apache/kafka/common/metrics/*"
     include "**/org/apache/kafka/common/metrics/stats/*"
+    include "**/org/apache/kafka/common/quota/*"
     include "**/org/apache/kafka/common/resource/*"
     include "**/org/apache/kafka/common/serialization/*"
     include "**/org/apache/kafka/common/config/*"
@@ -1177,6 +1232,7 @@ project(':raft') {
 
   dependencies {
     compile project(':clients')
+    compile project(':metadata')
     compile libs.slf4jApi
     compile libs.jacksonDatabind
 
@@ -1489,8 +1545,7 @@ project(':streams:test-utils') {
     compile project(':clients')
 
     testCompile project(':clients').sourceSets.test.output
-    testCompile libs.junitJupiterApi
-    testCompile libs.junitVintageEngine
+    testCompile libs.junitJupiter
     testCompile libs.easymock
     testCompile libs.hamcrest
 
@@ -1526,8 +1581,8 @@ project(':streams:examples') {
 
     testCompile project(':streams:test-utils')
     testCompile project(':clients').sourceSets.test.output // for org.apache.kafka.test.IntegrationTest
-    testCompile libs.junitJupiterApi
-    testCompile libs.junitVintageEngine
+    testCompile libs.junitJupiter
+    testCompile libs.hamcrest
   }
 
   javadoc {
@@ -1552,6 +1607,7 @@ project(':streams:upgrade-system-tests-0100') {
 
   dependencies {
     testCompile libs.kafkaStreams_0100
+    testRuntime libs.junitJupiter
   }
 
   systemTestLibs {
@@ -1564,6 +1620,7 @@ project(':streams:upgrade-system-tests-0101') {
 
   dependencies {
     testCompile libs.kafkaStreams_0101
+    testRuntime libs.junitJupiter
   }
 
   systemTestLibs {
@@ -1576,6 +1633,7 @@ project(':streams:upgrade-system-tests-0102') {
 
   dependencies {
     testCompile libs.kafkaStreams_0102
+    testRuntime libs.junitJupiter
   }
 
   systemTestLibs {
@@ -1588,6 +1646,7 @@ project(':streams:upgrade-system-tests-0110') {
 
   dependencies {
     testCompile libs.kafkaStreams_0110
+    testRuntime libs.junitJupiter
   }
 
   systemTestLibs {
@@ -1600,6 +1659,7 @@ project(':streams:upgrade-system-tests-10') {
 
   dependencies {
     testCompile libs.kafkaStreams_10
+    testRuntime libs.junitJupiter
   }
 
   systemTestLibs {
@@ -1612,6 +1672,7 @@ project(':streams:upgrade-system-tests-11') {
 
   dependencies {
     testCompile libs.kafkaStreams_11
+    testRuntime libs.junitJupiter
   }
 
   systemTestLibs {
@@ -1624,6 +1685,7 @@ project(':streams:upgrade-system-tests-20') {
 
   dependencies {
     testCompile libs.kafkaStreams_20
+    testRuntime libs.junitJupiter
   }
 
   systemTestLibs {
@@ -1636,6 +1698,7 @@ project(':streams:upgrade-system-tests-21') {
 
   dependencies {
     testCompile libs.kafkaStreams_21
+    testRuntime libs.junitJupiter
   }
 
   systemTestLibs {
@@ -1648,6 +1711,7 @@ project(':streams:upgrade-system-tests-22') {
 
   dependencies {
     testCompile libs.kafkaStreams_22
+    testRuntime libs.junitJupiter
   }
 
   systemTestLibs {
@@ -1660,6 +1724,7 @@ project(':streams:upgrade-system-tests-23') {
 
   dependencies {
     testCompile libs.kafkaStreams_23
+    testRuntime libs.junitJupiter
   }
 
   systemTestLibs {
@@ -1672,6 +1737,7 @@ project(':streams:upgrade-system-tests-24') {
 
   dependencies {
     testCompile libs.kafkaStreams_24
+    testRuntime libs.junitJupiter
   }
 
   systemTestLibs {
@@ -1684,6 +1750,7 @@ project(':streams:upgrade-system-tests-25') {
 
   dependencies {
     testCompile libs.kafkaStreams_25
+    testRuntime libs.junitJupiter
   }
 
   systemTestLibs {
@@ -1696,6 +1763,7 @@ project(':streams:upgrade-system-tests-26') {
 
   dependencies {
     testCompile libs.kafkaStreams_26
+    testRuntime libs.junitJupiter
   }
 
   systemTestLibs {
@@ -1704,15 +1772,16 @@ project(':streams:upgrade-system-tests-26') {
 }
 
 project(':streams:upgrade-system-tests-27') {
-    archivesBaseName = "kafka-streams-upgrade-system-tests-27"
+  archivesBaseName = "kafka-streams-upgrade-system-tests-27"
 
-    dependencies {
-        testCompile libs.kafkaStreams_27
-    }
+  dependencies {
+    testCompile libs.kafkaStreams_27
+    testRuntime libs.junitJupiter
+  }
 
-    systemTestLibs {
-        dependsOn testJar
-    }
+  systemTestLibs {
+    dependsOn testJar
+  }
 }
 
 project(':jmh-benchmarks') {
@@ -1731,6 +1800,7 @@ project(':jmh-benchmarks') {
       exclude group: 'net.sf.jopt-simple', module: 'jopt-simple'
     }
     compile project(':clients')
+    compile project(':metadata')
     compile project(':streams')
     compile project(':core')
     compile project(':clients').sourceSets.test.output
@@ -1782,8 +1852,8 @@ project(':log4j-appender') {
     compile libs.slf4jlog4j
 
     testCompile project(':clients').sourceSets.test.output
-    testCompile libs.junitJupiterApi
-    testCompile libs.junitVintageEngine
+    testCompile libs.junitJupiter
+    testCompile libs.hamcrest
     testCompile libs.easymock
   }
 
@@ -1801,9 +1871,7 @@ project(':connect:api') {
     compile libs.slf4jApi
     compile libs.jaxrsApi
 
-    testCompile libs.junitJupiterApi
-    testCompile libs.junitVintageEngine
-
+    testCompile libs.junitJupiter
     testRuntime libs.slf4jlog4j
     testCompile project(':clients').sourceSets.test.output
   }
@@ -1843,10 +1911,7 @@ project(':connect:transforms') {
     compile libs.slf4jApi
 
     testCompile libs.easymock
-    testCompile libs.junitJupiterApi
-    testCompile libs.junitVintageEngine
-    testCompile libs.powermockJunit4
-    testCompile libs.powermockEasymock
+    testCompile libs.junitJupiter
 
     testRuntime libs.slf4jlog4j
     testCompile project(':clients').sourceSets.test.output
@@ -1884,10 +1949,7 @@ project(':connect:json') {
     compile libs.slf4jApi
 
     testCompile libs.easymock
-    testCompile libs.junitJupiterApi
-    testCompile libs.junitVintageEngine
-    testCompile libs.powermockJunit4
-    testCompile libs.powermockEasymock
+    testCompile libs.junitJupiter
 
     testRuntime libs.slf4jlog4j
     testCompile project(':clients').sourceSets.test.output
@@ -2028,10 +2090,7 @@ project(':connect:file') {
     compile libs.slf4jApi
 
     testCompile libs.easymock
-    testCompile libs.junitJupiterApi
-    testCompile libs.junitVintageEngine
-    testCompile libs.powermockJunit4
-    testCompile libs.powermockEasymock
+    testCompile libs.junitJupiter
 
     testRuntime libs.slf4jlog4j
     testCompile project(':clients').sourceSets.test.output
@@ -2068,10 +2127,7 @@ project(':connect:basic-auth-extension') {
 
     testCompile libs.bcpkix
     testCompile libs.easymock
-    testCompile libs.junitJupiterApi
-    testCompile libs.junitVintageEngine
-    testCompile libs.powermockJunit4
-    testCompile libs.powermockEasymock
+    testCompile libs.junitJupiter
     testCompile project(':clients').sourceSets.test.output
 
     testRuntime libs.slf4jlog4j
@@ -2111,8 +2167,7 @@ project(':connect:mirror') {
     compile libs.argparse4j
     compile libs.slf4jApi
 
-    testCompile libs.junitJupiterApi
-    testCompile libs.junitVintageEngine
+    testCompile libs.junitJupiter
     testCompile libs.mockitoCore
     testCompile project(':clients').sourceSets.test.output
     testCompile project(':connect:runtime').sourceSets.test.output
@@ -2121,6 +2176,7 @@ project(':connect:mirror') {
 
     testRuntime project(':connect:runtime')
     testRuntime libs.slf4jlog4j
+    testRuntime libs.bcpkix
   }
 
   javadoc {
@@ -2152,8 +2208,7 @@ project(':connect:mirror-client') {
     compile project(':clients')
     compile libs.slf4jApi
 
-    testCompile libs.junitJupiterApi
-    testCompile libs.junitVintageEngine
+    testCompile libs.junitJupiter
     testCompile project(':clients').sourceSets.test.output
 
     testRuntime libs.slf4jlog4j

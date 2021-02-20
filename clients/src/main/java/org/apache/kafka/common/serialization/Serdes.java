@@ -189,77 +189,77 @@ public class Serdes {
         return new WrapperSerde<>(serializer, deserializer);
     }
 
-    /*
+    /**
      * A serde for nullable {@code Long} type.
      */
     static public Serde<Long> Long() {
         return new LongSerde();
     }
 
-    /*
+    /**
      * A serde for nullable {@code Integer} type.
      */
     static public Serde<Integer> Integer() {
         return new IntegerSerde();
     }
 
-    /*
+    /**
      * A serde for nullable {@code Short} type.
      */
     static public Serde<Short> Short() {
         return new ShortSerde();
     }
 
-    /*
+    /**
      * A serde for nullable {@code Float} type.
      */
     static public Serde<Float> Float() {
         return new FloatSerde();
     }
 
-    /*
+    /**
      * A serde for nullable {@code Double} type.
      */
     static public Serde<Double> Double() {
         return new DoubleSerde();
     }
 
-    /*
+    /**
      * A serde for nullable {@code String} type.
      */
     static public Serde<String> String() {
         return new StringSerde();
     }
 
-    /*
+    /**
      * A serde for nullable {@code ByteBuffer} type.
      */
     static public Serde<ByteBuffer> ByteBuffer() {
         return new ByteBufferSerde();
     }
 
-    /*
+    /**
      * A serde for nullable {@code Bytes} type.
      */
     static public Serde<Bytes> Bytes() {
         return new BytesSerde();
     }
 
-    /*
+    /**
      * A serde for nullable {@code UUID} type
      */
     static public Serde<UUID> UUID() {
         return new UUIDSerde();
     }
 
-    /*
+    /**
      * A serde for nullable {@code byte[]} type.
      */
     static public Serde<byte[]> ByteArray() {
         return new ByteArraySerde();
     }
 
-    /*
+    /**
      * A serde for {@code Void} type.
      */
     static public Serde<Void> Void() {

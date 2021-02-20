@@ -21,7 +21,7 @@ import org.apache.kafka.common.message.StopReplicaRequestData.StopReplicaTopicSt
 import org.apache.kafka.common.message.StopReplicaResponseData;
 import org.apache.kafka.common.message.StopReplicaResponseData.StopReplicaPartitionError;
 import org.apache.kafka.common.protocol.Errors;
-import org.junit.Test;
+import org.junit.jupiter.api.Test;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -30,8 +30,8 @@ import java.util.List;
 import java.util.Map;
 
 import static org.apache.kafka.common.protocol.ApiKeys.STOP_REPLICA;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class StopReplicaResponseTest {
 
@@ -44,7 +44,7 @@ public class StopReplicaResponseTest {
                 new StopReplicaPartitionState().setPartitionIndex(0),
                 new StopReplicaPartitionState().setPartitionIndex(1))));
 
-        for (short version = STOP_REPLICA.oldestVersion(); version < STOP_REPLICA.latestVersion(); version++) {
+        for (short version = STOP_REPLICA.oldestVersion(); version <= STOP_REPLICA.latestVersion(); version++) {
             StopReplicaRequest request = new StopReplicaRequest.Builder(version,
                 15, 20, 0, false, topicStates).build(version);
             StopReplicaResponse response = request

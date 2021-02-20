@@ -17,28 +17,29 @@
 package org.apache.kafka.common.security;
 
 import org.apache.kafka.common.security.auth.SaslExtensions;
-import org.junit.Before;
-import org.junit.Test;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 
 import java.util.HashMap;
 import java.util.Map;
 
-import static org.junit.Assert.assertNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 public class SaslExtensionsTest {
     Map<String, String> map;
 
-    @Before
+    @BeforeEach
     public void setUp() {
         this.map = new HashMap<>();
         this.map.put("what", "42");
         this.map.put("who", "me");
     }
 
-    @Test(expected = UnsupportedOperationException.class)
+    @Test
     public void testReturnedMapIsImmutable() {
         SaslExtensions extensions = new SaslExtensions(this.map);
-        extensions.map().put("hello", "test");
+        assertThrows(UnsupportedOperationException.class, () -> extensions.map().put("hello", "test"));
     }
 
     @Test

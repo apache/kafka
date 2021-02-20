@@ -25,7 +25,8 @@ import org.apache.kafka.common.errors.AuthenticationException
 import org.apache.kafka.common.protocol.ApiKeys
 import org.apache.kafka.common.requests.AbstractRequest
 import org.easymock.EasyMock
-import org.junit.{Assert, Test}
+import org.junit.jupiter.api.Assertions._
+import org.junit.jupiter.api.Test
 
 import scala.collection.mutable
 
@@ -65,7 +66,7 @@ class InterBrokerSendThreadTest {
     sendThread.doWork()
 
     EasyMock.verify(networkClient)
-    Assert.assertFalse(completionHandler.executedWithDisconnectedResponse)
+    assertFalse(completionHandler.executedWithDisconnectedResponse)
   }
 
   @Test
@@ -100,7 +101,7 @@ class InterBrokerSendThreadTest {
     sendThread.doWork()
 
     EasyMock.verify(networkClient)
-    Assert.assertFalse(completionHandler.executedWithDisconnectedResponse)
+    assertFalse(completionHandler.executedWithDisconnectedResponse)
   }
 
   @Test
@@ -142,7 +143,7 @@ class InterBrokerSendThreadTest {
     sendThread.doWork()
 
     EasyMock.verify(networkClient)
-    Assert.assertTrue(completionHandler.executedWithDisconnectedResponse)
+    assertTrue(completionHandler.executedWithDisconnectedResponse)
   }
 
   @Test
@@ -191,8 +192,8 @@ class InterBrokerSendThreadTest {
     sendThread.doWork()
 
     EasyMock.verify(networkClient)
-    Assert.assertFalse(sendThread.hasUnsentRequests)
-    Assert.assertTrue(completionHandler.executedWithDisconnectedResponse)
+    assertFalse(sendThread.hasUnsentRequests)
+    assertTrue(completionHandler.executedWithDisconnectedResponse)
   }
 
   private class StubRequestBuilder extends AbstractRequest.Builder(ApiKeys.END_TXN) {

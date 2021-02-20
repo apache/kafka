@@ -16,30 +16,36 @@
  */
 package org.apache.kafka.snapshot;
 
+import org.apache.kafka.common.record.MemoryRecords;
+import org.apache.kafka.common.record.UnalignedMemoryRecords;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.raft.OffsetAndEpoch;
+import org.apache.kafka.raft.ReplicatedLog;
 
 import java.io.IOException;
-import java.nio.ByteBuffer;
 import java.nio.channels.FileChannel;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
+import java.util.Optional;
 
 public final class FileRawSnapshotWriter implements RawSnapshotWriter {
     private final Path tempSnapshotPath;
     private final FileChannel channel;
     private final OffsetAndEpoch snapshotId;
+    private final Optional<ReplicatedLog> replicatedLog;
     private boolean frozen = false;
 
     private FileRawSnapshotWriter(
         Path tempSnapshotPath,
         FileChannel channel,
-        OffsetAndEpoch snapshotId
+        OffsetAndEpoch snapshotId,
+        Optional<ReplicatedLog> replicatedLog
     ) {
         this.tempSnapshotPath = tempSnapshotPath;
         this.channel = channel;
         this.snapshotId = snapshotId;
+        this.replicatedLog = replicatedLog;
     }
 
     @Override
@@ -53,14 +59,23 @@ public final class FileRawSnapshotWriter implements RawSnapshotWriter {
     }
 
     @Override
-    public void append(ByteBuffer buffer) throws IOException {
+    public void append(UnalignedMemoryRecords records) throws IOException {
         if (frozen) {
             throw new IllegalStateException(
                 String.format("Append is not supported. Snapshot is already frozen: id = %s; temp path = %s", snapshotId, tempSnapshotPath)
             );
         }
+        Utils.writeFully(channel, records.buffer());
+    }
 
-        Utils.writeFully(channel, buffer);
+    @Override
+    public void append(MemoryRecords records) throws IOException {
+        if (frozen) {
+            throw new IllegalStateException(
+                    String.format("Append is not supported. Snapshot is already frozen: id = %s; temp path = %s", snapshotId, tempSnapshotPath)
+            );
+        }
+        Utils.writeFully(channel, records.buffer());
     }
 
     @Override
@@ -86,6 +101,8 @@ public final class FileRawSnapshotWriter implements RawSnapshotWriter {
 
         Path destination = Snapshots.moveRename(tempSnapshotPath, snapshotId);
         Utils.atomicMoveWithFallback(tempSnapshotPath, destination);
+
+        replicatedLog.ifPresent(log -> log.onSnapshotFrozen(snapshotId));
     }
 
     @Override
@@ -105,13 +122,18 @@ public final class FileRawSnapshotWriter implements RawSnapshotWriter {
      * @param snapshotId the end offset and epoch for the snapshotId
      * @throws IOException for any IO error while creating the snapshot
      */
-    public static FileRawSnapshotWriter create(Path logDir, OffsetAndEpoch snapshotId) throws IOException {
+    public static FileRawSnapshotWriter create(
+        Path logDir,
+        OffsetAndEpoch snapshotId,
+        Optional<ReplicatedLog> replicatedLog
+    ) throws IOException {
         Path path = Snapshots.createTempFile(logDir, snapshotId);
 
         return new FileRawSnapshotWriter(
             path,
             FileChannel.open(path, Utils.mkSet(StandardOpenOption.WRITE, StandardOpenOption.APPEND)),
-            snapshotId
+            snapshotId,
+            replicatedLog
         );
     }
 }

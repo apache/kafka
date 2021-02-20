@@ -23,14 +23,15 @@ import java.util.concurrent.atomic.AtomicBoolean
 import kafka.cluster.Partition
 import kafka.log.{Log, LogManager}
 import kafka.server.QuotaFactory.QuotaManagers
+import kafka.server.metadata.CachedConfigRepository
 import kafka.utils.TestUtils.MockAlterIsrManager
 import kafka.utils._
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.utils.Time
 import org.easymock.EasyMock
-import org.junit.Assert._
-import org.junit.{After, Before, Test}
+import org.junit.jupiter.api.Assertions._
+import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
 
 import scala.collection.Seq
 import scala.collection.mutable.{HashMap, Map}
@@ -57,7 +58,7 @@ class IsrExpirationTest {
 
   var alterIsrManager: MockAlterIsrManager = _
 
-  @Before
+  @BeforeEach
   def setUp(): Unit = {
     val logManager: LogManager = EasyMock.createMock(classOf[LogManager])
     EasyMock.expect(logManager.liveLogDirs).andReturn(Array.empty[File]).anyTimes()
@@ -65,12 +66,12 @@ class IsrExpirationTest {
 
     alterIsrManager = TestUtils.createAlterIsrManager()
     quotaManager = QuotaFactory.instantiate(configs.head, metrics, time, "")
-    replicaManager = new ReplicaManager(configs.head, metrics, time, null, null, logManager, new AtomicBoolean(false),
-      quotaManager, new BrokerTopicStats, new MetadataCache(configs.head.brokerId),
-      new LogDirFailureChannel(configs.head.logDirs.size), alterIsrManager)
+    replicaManager = new ReplicaManager(configs.head, metrics, time, None, null, logManager, new AtomicBoolean(false),
+      quotaManager, new BrokerTopicStats, MetadataCache.zkMetadataCache(configs.head.brokerId),
+      new LogDirFailureChannel(configs.head.logDirs.size), alterIsrManager, new CachedConfigRepository())
   }
 
-  @After
+  @AfterEach
   def tearDown(): Unit = {
     Option(replicaManager).foreach(_.shutdown(false))
     Option(quotaManager).foreach(_.shutdown())
@@ -86,7 +87,7 @@ class IsrExpirationTest {
 
     // create one partition and all replicas
     val partition0 = getPartitionWithAllReplicasInIsr(topic, 0, time, configs.head, log)
-    assertEquals("All replicas should be in ISR", configs.map(_.brokerId).toSet, partition0.inSyncReplicaIds)
+    assertEquals(configs.map(_.brokerId).toSet, partition0.inSyncReplicaIds, "All replicas should be in ISR")
 
     // let the follower catch up to the Leader logEndOffset - 1
     for (replica <- partition0.remoteReplicas)
@@ -96,14 +97,14 @@ class IsrExpirationTest {
         followerFetchTimeMs= time.milliseconds,
         leaderEndOffset = leaderLogEndOffset)
     var partition0OSR = partition0.getOutOfSyncReplicas(configs.head.replicaLagTimeMaxMs)
-    assertEquals("No replica should be out of sync", Set.empty[Int], partition0OSR)
+    assertEquals(Set.empty[Int], partition0OSR, "No replica should be out of sync")
 
     // let some time pass
     time.sleep(150)
 
     // now follower hasn't pulled any data for > replicaMaxLagTimeMs ms. So it is stuck
     partition0OSR = partition0.getOutOfSyncReplicas(configs.head.replicaLagTimeMaxMs)
-    assertEquals("Replica 1 should be out of sync", Set(configs.last.brokerId), partition0OSR)
+    assertEquals(Set(configs.last.brokerId), partition0OSR, "Replica 1 should be out of sync")
     EasyMock.verify(log)
   }
 
@@ -116,13 +117,13 @@ class IsrExpirationTest {
 
     // create one partition and all replicas
     val partition0 = getPartitionWithAllReplicasInIsr(topic, 0, time, configs.head, log)
-    assertEquals("All replicas should be in ISR", configs.map(_.brokerId).toSet, partition0.inSyncReplicaIds)
+    assertEquals(configs.map(_.brokerId).toSet, partition0.inSyncReplicaIds, "All replicas should be in ISR")
 
     // Let enough time pass for the replica to be considered stuck
     time.sleep(150)
 
     val partition0OSR = partition0.getOutOfSyncReplicas(configs.head.replicaLagTimeMaxMs)
-    assertEquals("Replica 1 should be out of sync", Set(configs.last.brokerId), partition0OSR)
+    assertEquals(Set(configs.last.brokerId), partition0OSR, "Replica 1 should be out of sync")
     EasyMock.verify(log)
   }
 
@@ -136,7 +137,7 @@ class IsrExpirationTest {
     val log = logMock
     // add one partition
     val partition0 = getPartitionWithAllReplicasInIsr(topic, 0, time, configs.head, log)
-    assertEquals("All replicas should be in ISR", configs.map(_.brokerId).toSet, partition0.inSyncReplicaIds)
+    assertEquals(configs.map(_.brokerId).toSet, partition0.inSyncReplicaIds, "All replicas should be in ISR")
     // Make the remote replica not read to the end of log. It should be not be out of sync for at least 100 ms
     for (replica <- partition0.remoteReplicas)
       replica.updateFetchState(
@@ -148,7 +149,7 @@ class IsrExpirationTest {
     // Simulate 2 fetch requests spanning more than 100 ms which do not read to the end of the log.
     // The replicas will no longer be in ISR. We do 2 fetches because we want to simulate the case where the replica is lagging but is not stuck
     var partition0OSR = partition0.getOutOfSyncReplicas(configs.head.replicaLagTimeMaxMs)
-    assertEquals("No replica should be out of sync", Set.empty[Int], partition0OSR)
+    assertEquals(Set.empty[Int], partition0OSR, "No replica should be out of sync")
 
     time.sleep(75)
 
@@ -160,13 +161,13 @@ class IsrExpirationTest {
         leaderEndOffset = leaderLogEndOffset)
     }
     partition0OSR = partition0.getOutOfSyncReplicas(configs.head.replicaLagTimeMaxMs)
-    assertEquals("No replica should be out of sync", Set.empty[Int], partition0OSR)
+    assertEquals(Set.empty[Int], partition0OSR, "No replica should be out of sync")
 
     time.sleep(75)
 
     // The replicas will no longer be in ISR
     partition0OSR = partition0.getOutOfSyncReplicas(configs.head.replicaLagTimeMaxMs)
-    assertEquals("Replica 1 should be out of sync", Set(configs.last.brokerId), partition0OSR)
+    assertEquals(Set(configs.last.brokerId), partition0OSR, "Replica 1 should be out of sync")
 
     // Now actually make a fetch to the end of the log. The replicas should be back in ISR
     partition0.remoteReplicas.foreach { r =>
@@ -177,7 +178,7 @@ class IsrExpirationTest {
         leaderEndOffset = leaderLogEndOffset)
     }
     partition0OSR = partition0.getOutOfSyncReplicas(configs.head.replicaLagTimeMaxMs)
-    assertEquals("No replica should be out of sync", Set.empty[Int], partition0OSR)
+    assertEquals(Set.empty[Int], partition0OSR, "No replica should be out of sync")
 
     EasyMock.verify(log)
   }
@@ -191,7 +192,7 @@ class IsrExpirationTest {
 
     // create one partition and all replicas
     val partition0 = getPartitionWithAllReplicasInIsr(topic, 0, time, configs.head, log)
-    assertEquals("All replicas should be in ISR", configs.map(_.brokerId).toSet, partition0.inSyncReplicaIds)
+    assertEquals(configs.map(_.brokerId).toSet, partition0.inSyncReplicaIds, "All replicas should be in ISR")
 
     // let the follower catch up to the Leader logEndOffset
     for (replica <- partition0.remoteReplicas)
@@ -202,14 +203,14 @@ class IsrExpirationTest {
         leaderEndOffset = leaderLogEndOffset)
 
     var partition0OSR = partition0.getOutOfSyncReplicas(configs.head.replicaLagTimeMaxMs)
-    assertEquals("No replica should be out of sync", Set.empty[Int], partition0OSR)
+    assertEquals(Set.empty[Int], partition0OSR, "No replica should be out of sync")
 
     // let some time pass
     time.sleep(150)
 
     // even though follower hasn't pulled any data for > replicaMaxLagTimeMs ms, the follower has already caught up. So it is not out-of-sync.
     partition0OSR = partition0.getOutOfSyncReplicas(configs.head.replicaLagTimeMaxMs)
-    assertEquals("No replica should be out of sync", Set.empty[Int], partition0OSR)
+    assertEquals(Set.empty[Int], partition0OSR, "No replica should be out of sync")
     EasyMock.verify(log)
   }
 

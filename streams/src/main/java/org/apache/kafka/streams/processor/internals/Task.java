@@ -17,6 +17,7 @@
 package org.apache.kafka.streams.processor.internals;
 
 import org.apache.kafka.clients.consumer.ConsumerRecord;
+import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.TimeoutException;
@@ -41,29 +42,29 @@ public interface Task {
 
     /*
      * <pre>
-     *                 +-------------+
-     *          +----- | Created (0) | <----------+
-     *          |      +-----+-------+            |
-     *          |            |                    |
-     *          |            v                    |
-     *          |      +-----+-------+            |
-     *          +----- | Restoring(1)| <----+     |
-     *          |      +-----+-------+      |     |
-     *          |            |              |     |
-     *          |            v              |     |
-     *          |      +-----+-------+      |     |
-     *          |      | Running (2) |      |     |
-     *          |      +-----+-------+      |     |
-     *          |            |              |     |
-     *          |            v              |     |
-     *          |     +------+--------+     |     |
-     *          +---> | Suspended (3) | ----+     |    //TODO Suspended(3) could be removed after we've stable on KIP-429
-     *                +------+--------+           |
-     *                       |                    |
-     *                       v                    |
-     *                 +-----+-------+            |
-     *                 | Closed (4)  | -----------+
-     *                 +-------------+
+     *                 +---------------+
+     *          +----- |  Created (0)  | <---------+
+     *          |      +-------+-------+           |
+     *          |              |                   |
+     *          |              v                   |
+     *          |      +-------+-------+           |
+     *          +----- | Restoring (1) | <---+     |
+     *          |      +-------+-------+     |     |
+     *          |              |             |     |
+     *          |              v             |     |
+     *          |      +-------+-------+     |     |
+     *          |      |  Running (2)  |     |     |
+     *          |      +-------+-------+     |     |
+     *          |              |             |     |
+     *          |              v             |     |
+     *          |     +--------+-------+     |     |
+     *          +---> |  Suspended (3) | ----+     |    //TODO Suspended(3) could be removed after we've stable on KIP-429
+     *                +--------+-------+           |
+     *                         |                   |
+     *                         v                   |
+     *                +--------+-------+           |
+     *                |   Closed (4)   | ----------+
+     *                +----------------+
      * </pre>
      */
     enum State {
@@ -98,17 +99,9 @@ public interface Task {
         }
     }
 
-    TaskId id();
 
-    State state();
 
-    default boolean needsInitializationOrRestoration() {
-        return state() == State.CREATED || state() == State.RESTORING;
-    }
-
-    boolean isActive();
-
-    boolean isClosed();
+    // idempotent life-cycle methods
 
     /**
      * @throws LockException could happen when multi-threads within the single instance, could retry
@@ -121,21 +114,9 @@ public interface Task {
      */
     void completeRestoration();
 
-    void addRecords(TopicPartition partition, Iterable<ConsumerRecord<byte[], byte[]>> records);
-
-    boolean commitNeeded();
-
-    /**
-     * @throws StreamsException fatal error, should close the thread
-     */
-    Map<TopicPartition, OffsetAndMetadata> prepareCommit();
-
-    void postCommit(boolean enforceCheckpoint);
-
     void suspend();
 
     /**
-     *
      * @throws StreamsException fatal error, should close the thread
      */
     void resume();
@@ -143,60 +124,52 @@ public interface Task {
     /**
      * Must be idempotent.
      */
-    void closeClean();
+    void closeDirty();
 
     /**
      * Must be idempotent.
      */
-    void closeDirty();
+    void closeClean();
+
+
+
+    // non-idempotent life-cycle methods
 
     /**
      * Updates input partitions and topology after rebalance
      */
-    void update(final Set<TopicPartition> topicPartitions, final Map<String, List<String>> allTopologyNodesToSourceTopics);
+    void updateInputPartitions(final Set<TopicPartition> topicPartitions, final Map<String, List<String>> allTopologyNodesToSourceTopics);
 
-    /**
-     * Attempt a clean close but do not close the underlying state
-     */
-    void closeCleanAndRecycleState();
+    void markChangelogAsCorrupted(final Collection<TopicPartition> partitions);
 
     /**
      * Revive a closed task to a created one; should never throw an exception
      */
     void revive();
 
-    StateStore getStore(final String name);
+    /**
+     * Attempt a clean close but do not close the underlying state
+     */
+    void closeCleanAndRecycleState();
 
-    Set<TopicPartition> inputPartitions();
+
+
+    // runtime methods (using in RUNNING state)
+
+    void addRecords(TopicPartition partition, Iterable<ConsumerRecord<byte[], byte[]>> records);
 
     /**
-     * @return any changelog partitions associated with this task
+     * Add to this task any metadata returned from the poll.
      */
-    Collection<TopicPartition> changelogPartitions();
-
-    /**
-     * @return the offsets of all the changelog partitions associated with this task,
-     *         indicating the current positions of the logged state stores of the task.
-     */
-    Map<TopicPartition, Long> changelogOffsets();
-
-    void markChangelogAsCorrupted(final Collection<TopicPartition> partitions);
-
-    default Map<TopicPartition, Long> purgeableOffsets() {
-        return Collections.emptyMap();
-    }
-
-    default void recordProcessBatchTime(final long processBatchTime) {}
-
-    default void recordProcessTimeRatioAndBufferSize(final long allTaskProcessMs, final long now) {}
+    void addFetchedMetadata(TopicPartition partition, ConsumerRecords.Metadata metadata);
 
     default boolean process(final long wallClockTime) {
         return false;
     }
 
-    default boolean commitRequested() {
-        return false;
-    }
+    default void recordProcessBatchTime(final long processBatchTime) {}
+
+    default void recordProcessTimeRatioAndBufferSize(final long allTaskProcessMs, final long now) {}
 
     default boolean maybePunctuateStreamTime() {
         return false;
@@ -207,10 +180,61 @@ public interface Task {
     }
 
     /**
+     * @throws StreamsException fatal error, should close the thread
+     */
+    Map<TopicPartition, OffsetAndMetadata> prepareCommit();
+
+    void postCommit(boolean enforceCheckpoint);
+
+    default Map<TopicPartition, Long> purgeableOffsets() {
+        return Collections.emptyMap();
+    }
+
+    /**
      * @throws TimeoutException if {@code currentWallClockMs > task-timeout-deadline}
      */
     void maybeInitTaskTimeoutOrThrow(final long currentWallClockMs,
                                      final Exception cause);
 
     void clearTaskTimeout();
+
+
+
+    // task status inquiry
+
+    TaskId id();
+
+    boolean isActive();
+
+    Set<TopicPartition> inputPartitions();
+
+    /**
+     * @return any changelog partitions associated with this task
+     */
+    Collection<TopicPartition> changelogPartitions();
+
+    State state();
+
+    default boolean needsInitializationOrRestoration() {
+        return state() == State.CREATED || state() == State.RESTORING;
+    }
+
+    boolean commitNeeded();
+
+    default boolean commitRequested() {
+        return false;
+    }
+
+
+
+    // IQ related methods
+
+    StateStore getStore(final String name);
+
+    /**
+     * @return the offsets of all the changelog partitions associated with this task,
+     *         indicating the current positions of the logged state stores of the task.
+     */
+    Map<TopicPartition, Long> changelogOffsets();
+
 }

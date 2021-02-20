@@ -31,10 +31,11 @@ import com.yammer.metrics.core.{Gauge, Meter}
 import javax.net.ssl._
 import kafka.metrics.KafkaYammerMetrics
 import kafka.security.CredentialProvider
-import kafka.server.{KafkaConfig, ThrottledChannel}
+import kafka.server.{KafkaConfig, SimpleApiVersionManager, ThrottledChannel}
 import kafka.utils.Implicits._
 import kafka.utils.TestUtils
 import org.apache.kafka.common.memory.MemoryPool
+import org.apache.kafka.common.message.ApiMessageType.ListenerType
 import org.apache.kafka.common.message.{ProduceRequestData, SaslAuthenticateRequestData, SaslHandshakeRequestData, VoteRequestData}
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.network.KafkaChannel.ChannelMuteState
@@ -47,9 +48,8 @@ import org.apache.kafka.common.security.scram.internals.ScramMechanism
 import org.apache.kafka.common.utils.{AppInfoParser, LogContext, MockTime, Time, Utils}
 import org.apache.kafka.test.{TestSslUtils, TestUtils => JTestUtils}
 import org.apache.log4j.Level
-import org.junit.Assert._
-import org.junit._
-import org.scalatest.Assertions.fail
+import org.junit.jupiter.api.Assertions._
+import org.junit.jupiter.api._
 
 import scala.collection.mutable
 import scala.collection.mutable.ArrayBuffer
@@ -74,14 +74,15 @@ class SocketServerTest {
   // Clean-up any metrics left around by previous tests
   TestUtils.clearYammerMetrics()
 
-  val server = new SocketServer(config, metrics, Time.SYSTEM, credentialProvider)
+  private val apiVersionManager = new SimpleApiVersionManager(ListenerType.ZK_BROKER)
+  val server = new SocketServer(config, metrics, Time.SYSTEM, credentialProvider, apiVersionManager)
   server.startup()
   val sockets = new ArrayBuffer[Socket]
 
   private val kafkaLogger = org.apache.log4j.LogManager.getLogger("kafka")
   private var logLevelToRestore: Level = _
 
-  @Before
+  @BeforeEach
   def setUp(): Unit = {
     // Run the tests with TRACE logging to exercise request logging path
     logLevelToRestore = kafkaLogger.getLevel
@@ -90,7 +91,7 @@ class SocketServerTest {
     assertTrue(server.controlPlaneRequestChannelOpt.isEmpty)
   }
 
-  @After
+  @AfterEach
   def tearDown(): Unit = {
     shutdownServerAndMetrics(server)
     sockets.foreach(_.close())
@@ -128,8 +129,8 @@ class SocketServerTest {
   private def receiveRequest(channel: RequestChannel, timeout: Long = 2000L): RequestChannel.Request = {
     channel.receiveRequest(timeout) match {
       case request: RequestChannel.Request => request
-      case RequestChannel.ShutdownRequest => fail("Unexpected shutdown received")
-      case null => fail("receiveRequest timed out")
+      case RequestChannel.ShutdownRequest => throw new AssertionError("Unexpected shutdown received")
+      case null => throw new AssertionError("receiveRequest timed out")
     }
   }
 
@@ -328,7 +329,7 @@ class SocketServerTest {
       val startFuture = executor.submit((() => testableServer.startProcessingRequests(futures)): Runnable)
       TestUtils.waitUntilTrue(() => controlPlaneListenerStarted(), "Control plane listener not started")
       TestUtils.waitUntilTrue(() => listenerStarted(config.interBrokerListenerName), "Inter-broker listener not started")
-      assertFalse("Socket server startup did not wait for future to complete", startFuture.isDone)
+      assertFalse(startFuture.isDone, "Socket server startup did not wait for future to complete")
 
       assertFalse(listenerStarted(externalListener))
 
@@ -411,7 +412,7 @@ class SocketServerTest {
     plainSocket.close()
     for (_ <- 0 until 10) {
       val request = receiveRequest(server.dataPlaneRequestChannel)
-      assertNotNull("receiveRequest timed out", request)
+      assertNotNull(request, "receiveRequest timed out")
       processRequestNoOpResponse(server.dataPlaneRequestChannel, request)
     }
   }
@@ -425,7 +426,7 @@ class SocketServerTest {
       sendRequest(plainSocket, serializedBytes)
     for (_ <- 0 until 3) {
       val request = receiveRequest(server.dataPlaneRequestChannel)
-      assertNotNull("receiveRequest timed out", request)
+      assertNotNull(request, "receiveRequest timed out")
       processRequestNoOpResponse(server.dataPlaneRequestChannel, request)
     }
   }
@@ -453,7 +454,8 @@ class SocketServerTest {
     val time = new MockTime()
     props.put(KafkaConfig.ConnectionsMaxIdleMsProp, idleTimeMs.toString)
     val serverMetrics = new Metrics
-    val overrideServer = new SocketServer(KafkaConfig.fromProps(props), serverMetrics, time, credentialProvider)
+    val overrideServer = new SocketServer(KafkaConfig.fromProps(props), serverMetrics,
+      time, credentialProvider, apiVersionManager)
 
     try {
       overrideServer.startup()
@@ -464,22 +466,22 @@ class SocketServerTest {
       sendRequest(socket0, serializedBytes)
       val request0 = receiveRequest(overrideServer.dataPlaneRequestChannel)
       processRequest(overrideServer.dataPlaneRequestChannel, request0)
-      assertTrue("Channel not open", openChannel(request0, overrideServer).nonEmpty)
+      assertTrue(openChannel(request0, overrideServer).nonEmpty, "Channel not open")
       assertEquals(openChannel(request0, overrideServer), openOrClosingChannel(request0, overrideServer))
       TestUtils.waitUntilTrue(() => !openChannel(request0, overrideServer).get.isMuted, "Failed to unmute channel")
       time.sleep(idleTimeMs + 1)
       TestUtils.waitUntilTrue(() => openOrClosingChannel(request0, overrideServer).isEmpty, "Failed to close idle channel")
-      assertTrue("Channel not removed", openChannel(request0, overrideServer).isEmpty)
+      assertTrue(openChannel(request0, overrideServer).isEmpty, "Channel not removed")
 
       // Connection with one request being processed (channel is muted), no other in-flight requests
       val socket1 = connect(overrideServer)
       sendRequest(socket1, serializedBytes)
       val request1 = receiveRequest(overrideServer.dataPlaneRequestChannel)
-      assertTrue("Channel not open", openChannel(request1, overrideServer).nonEmpty)
+      assertTrue(openChannel(request1, overrideServer).nonEmpty, "Channel not open")
       assertEquals(openChannel(request1, overrideServer), openOrClosingChannel(request1, overrideServer))
       time.sleep(idleTimeMs + 1)
       TestUtils.waitUntilTrue(() => openOrClosingChannel(request1, overrideServer).isEmpty, "Failed to close idle channel")
-      assertTrue("Channel not removed", openChannel(request1, overrideServer).isEmpty)
+      assertTrue(openChannel(request1, overrideServer).isEmpty, "Channel not removed")
       processRequest(overrideServer.dataPlaneRequestChannel, request1)
 
       // Connection with one request being processed (channel is muted), more in-flight requests
@@ -487,9 +489,9 @@ class SocketServerTest {
       val request2 = sendRequestsReceiveOne(overrideServer, socket2, serializedBytes, 3)
       time.sleep(idleTimeMs + 1)
       TestUtils.waitUntilTrue(() => openOrClosingChannel(request2, overrideServer).isEmpty, "Failed to close idle channel")
-      assertTrue("Channel not removed", openChannel(request1, overrideServer).isEmpty)
+      assertTrue(openChannel(request1, overrideServer).isEmpty, "Channel not removed")
       processRequest(overrideServer.dataPlaneRequestChannel, request2) // this triggers a failed send since channel has been closed
-      assertNull("Received request on expired channel", overrideServer.dataPlaneRequestChannel.receiveRequest(200))
+      assertNull(overrideServer.dataPlaneRequestChannel.receiveRequest(200), "Received request on expired channel")
 
     } finally {
       shutdownServerAndMetrics(overrideServer)
@@ -505,12 +507,14 @@ class SocketServerTest {
     val serverMetrics = new Metrics
     @volatile var selector: TestableSelector = null
     val overrideConnectionId = "127.0.0.1:1-127.0.0.1:2-0"
-    val overrideServer = new SocketServer(KafkaConfig.fromProps(props), serverMetrics, time, credentialProvider) {
+    val overrideServer = new SocketServer(
+      KafkaConfig.fromProps(props), serverMetrics, time, credentialProvider, apiVersionManager
+    ) {
       override def newProcessor(id: Int, requestChannel: RequestChannel, connectionQuotas: ConnectionQuotas, listenerName: ListenerName,
-                                protocol: SecurityProtocol, memoryPool: MemoryPool, isPrivilegedListener: Boolean = false): Processor = {
+                                protocol: SecurityProtocol, memoryPool: MemoryPool, isPrivilegedListener: Boolean): Processor = {
         new Processor(id, time, config.socketRequestMaxBytes, dataPlaneRequestChannel, connectionQuotas,
           config.connectionsMaxIdleMs, config.failedAuthenticationDelayMs, listenerName, protocol, config, metrics,
-          credentialProvider, memoryPool, new LogContext(), isPrivilegedListener = isPrivilegedListener) {
+          credentialProvider, memoryPool, new LogContext(), Processor.ConnectionQueueSize, isPrivilegedListener, apiVersionManager) {
           override protected[network] def connectionId(socket: Socket): String = overrideConnectionId
           override protected[network] def createSelector(channelBuilder: ChannelBuilder): Selector = {
             val testableSelector = new TestableSelector(config, channelBuilder, time, metrics)
@@ -800,7 +804,8 @@ class SocketServerTest {
     val newProps = TestUtils.createBrokerConfig(0, TestUtils.MockZkConnect, port = 0)
     newProps.setProperty(KafkaConfig.MaxConnectionsPerIpProp, "0")
     newProps.setProperty(KafkaConfig.MaxConnectionsPerIpOverridesProp, "%s:%s".format("127.0.0.1", "5"))
-    val server = new SocketServer(KafkaConfig.fromProps(newProps), new Metrics(), Time.SYSTEM, credentialProvider)
+    val server = new SocketServer(KafkaConfig.fromProps(newProps), new Metrics(),
+      Time.SYSTEM, credentialProvider, apiVersionManager)
     try {
       server.startup()
       // make the maximum allowable number of connections
@@ -838,7 +843,8 @@ class SocketServerTest {
     val overrideProps = TestUtils.createBrokerConfig(0, TestUtils.MockZkConnect, port = 0)
     overrideProps.put(KafkaConfig.MaxConnectionsPerIpOverridesProp, s"localhost:$overrideNum")
     val serverMetrics = new Metrics()
-    val overrideServer = new SocketServer(KafkaConfig.fromProps(overrideProps), serverMetrics, Time.SYSTEM, credentialProvider)
+    val overrideServer = new SocketServer(KafkaConfig.fromProps(overrideProps), serverMetrics,
+      Time.SYSTEM, credentialProvider, apiVersionManager)
     try {
       overrideServer.startup()
       // make the maximum allowable number of connections
@@ -867,7 +873,8 @@ class SocketServerTest {
     overrideProps.put(KafkaConfig.NumQuotaSamplesProp, String.valueOf(2))
     val connectionRate = 5
     val time = new MockTime()
-    val overrideServer = new SocketServer(KafkaConfig.fromProps(overrideProps), new Metrics(), time, credentialProvider)
+    val overrideServer = new SocketServer(KafkaConfig.fromProps(overrideProps), new Metrics(),
+      time, credentialProvider, apiVersionManager)
     // update the connection rate to 5
     overrideServer.connectionQuotas.updateIpConnectionRateQuota(None, Some(connectionRate))
     try {
@@ -917,7 +924,8 @@ class SocketServerTest {
     overrideProps.put(KafkaConfig.NumQuotaSamplesProp, String.valueOf(2))
     val connectionRate = 5
     val time = new MockTime()
-    val overrideServer = new SocketServer(KafkaConfig.fromProps(overrideProps), new Metrics(), time, credentialProvider)
+    val overrideServer = new SocketServer(KafkaConfig.fromProps(overrideProps), new Metrics(),
+      time, credentialProvider, apiVersionManager)
     overrideServer.connectionQuotas.updateIpConnectionRateQuota(None, Some(connectionRate))
     overrideServer.startup()
     // make the maximum allowable number of connections
@@ -933,18 +941,14 @@ class SocketServerTest {
     val largeChunkOfBytes = new Array[Byte](1000000)
     // doing a subsequent send should throw an exception as the connection should be closed.
     // send a large chunk of bytes to trigger a socket flush
-    try {
-      sendRequest(connection, largeChunkOfBytes, Some(0))
-      fail("expected exception when writing to closed plain socket")
-    } catch {
-      case _: IOException => // expected
-    }
+    assertThrows(classOf[IOException], () => sendRequest(connection, largeChunkOfBytes, Some(0)))
   }
 
   @Test
   def testSslSocketServer(): Unit = {
     val serverMetrics = new Metrics
-    val overrideServer = new SocketServer(KafkaConfig.fromProps(sslServerProps), serverMetrics, Time.SYSTEM, credentialProvider)
+    val overrideServer = new SocketServer(KafkaConfig.fromProps(sslServerProps), serverMetrics,
+      Time.SYSTEM, credentialProvider, apiVersionManager)
     try {
       overrideServer.startup()
       val sslContext = SSLContext.getInstance(TestSslUtils.DEFAULT_TLS_PROTOCOL_FOR_TESTS)
@@ -1084,12 +1088,14 @@ class SocketServerTest {
     val props = TestUtils.createBrokerConfig(0, TestUtils.MockZkConnect, port = 0)
     val serverMetrics = new Metrics
     var conn: Socket = null
-    val overrideServer = new SocketServer(KafkaConfig.fromProps(props), serverMetrics, Time.SYSTEM, credentialProvider) {
+    val overrideServer = new SocketServer(
+      KafkaConfig.fromProps(props), serverMetrics, Time.SYSTEM, credentialProvider, apiVersionManager
+    ) {
       override def newProcessor(id: Int, requestChannel: RequestChannel, connectionQuotas: ConnectionQuotas, listenerName: ListenerName,
                                 protocol: SecurityProtocol, memoryPool: MemoryPool, isPrivilegedListener: Boolean = false): Processor = {
         new Processor(id, time, config.socketRequestMaxBytes, dataPlaneRequestChannel, connectionQuotas,
           config.connectionsMaxIdleMs, config.failedAuthenticationDelayMs, listenerName, protocol, config, metrics,
-          credentialProvider, MemoryPool.NONE, new LogContext(), isPrivilegedListener = isPrivilegedListener) {
+          credentialProvider, MemoryPool.NONE, new LogContext(), Processor.ConnectionQueueSize, isPrivilegedListener, apiVersionManager) {
           override protected[network] def sendResponse(response: RequestChannel.Response, responseSend: Send): Unit = {
             conn.close()
             super.sendResponse(response, responseSend)
@@ -1126,12 +1132,14 @@ class SocketServerTest {
   def testClientDisconnectionWithOutstandingReceivesProcessedUntilFailedSend(): Unit = {
     val serverMetrics = new Metrics
     @volatile var selector: TestableSelector = null
-    val overrideServer = new SocketServer(KafkaConfig.fromProps(props), serverMetrics, Time.SYSTEM, credentialProvider) {
+    val overrideServer = new SocketServer(
+      KafkaConfig.fromProps(props), serverMetrics, Time.SYSTEM, credentialProvider, apiVersionManager
+    ) {
       override def newProcessor(id: Int, requestChannel: RequestChannel, connectionQuotas: ConnectionQuotas, listenerName: ListenerName,
-                                protocol: SecurityProtocol, memoryPool: MemoryPool, isPrivilegedListener: Boolean = false): Processor = {
+                                protocol: SecurityProtocol, memoryPool: MemoryPool, isPrivilegedListener: Boolean): Processor = {
         new Processor(id, time, config.socketRequestMaxBytes, dataPlaneRequestChannel, connectionQuotas,
           config.connectionsMaxIdleMs, config.failedAuthenticationDelayMs, listenerName, protocol, config, metrics,
-          credentialProvider, memoryPool, new LogContext(), isPrivilegedListener = isPrivilegedListener) {
+          credentialProvider, memoryPool, new LogContext(), Processor.ConnectionQueueSize, isPrivilegedListener, apiVersionManager) {
           override protected[network] def createSelector(channelBuilder: ChannelBuilder): Selector = {
             val testableSelector = new TestableSelector(config, channelBuilder, time, metrics)
             selector = testableSelector
@@ -1150,7 +1158,7 @@ class SocketServerTest {
       // Complete request with socket exception so that the channel is closed
       processRequest(overrideServer.dataPlaneRequestChannel, request)
       TestUtils.waitUntilTrue(() => openOrClosingChannel(request, overrideServer).isEmpty, "Channel not closed after failed send")
-      assertTrue("Unexpected completed send", selector.completedSends.isEmpty)
+      assertTrue(selector.completedSends.isEmpty, "Unexpected completed send")
     } finally {
       overrideServer.shutdown()
       serverMetrics.close()
@@ -1167,7 +1175,8 @@ class SocketServerTest {
     props.setProperty(KafkaConfig.ConnectionsMaxIdleMsProp, "110")
     val serverMetrics = new Metrics
     var conn: Socket = null
-    val overrideServer = new SocketServer(KafkaConfig.fromProps(props), serverMetrics, Time.SYSTEM, credentialProvider)
+    val overrideServer = new SocketServer(KafkaConfig.fromProps(props), serverMetrics,
+      Time.SYSTEM, credentialProvider, apiVersionManager)
     try {
       overrideServer.startup()
       conn = connect(overrideServer)
@@ -1734,7 +1743,7 @@ class SocketServerTest {
       // 5 connections, we expect 5 iterations. Since we stop when the 5th connection is processed,
       // we can safely check that there were atleast 4 polls prior to the 5th connection.
       val pollCount = testableSelector.operationCounts(SelectorOperation.Poll)
-      assertTrue(s"Connections created too quickly: $pollCount", pollCount >= numConnections - 1)
+      assertTrue(pollCount >= numConnections - 1, s"Connections created too quickly: $pollCount")
       verifyAcceptorBlockedPercent("PLAINTEXT", expectBlocked = true)
 
       assertProcessorHealthy(testableServer, sockets)
@@ -1853,8 +1862,8 @@ class SocketServerTest {
     // Check new channel behaves as expected
     val (socket, connectionId) = connectAndProcessRequest(testableServer)
     assertArrayEquals(producerRequestBytes(), receiveResponse(socket))
-    assertNotNull("Channel should not have been closed", selector.channel(connectionId))
-    assertNull("Channel should not be closing", selector.closingChannel(connectionId))
+    assertNotNull(selector.channel(connectionId), "Channel should not have been closed")
+    assertNull(selector.closingChannel(connectionId), "Channel should not be closing")
     socket.close()
     TestUtils.waitUntilTrue(() => testableServer.connectionCount(localAddress) == 0, "Channels not removed")
   }
@@ -1872,16 +1881,20 @@ class SocketServerTest {
     val blockedPercentMetric = blockedPercentMetrics.head.asInstanceOf[Meter]
     val blockedPercent = blockedPercentMetric.meanRate
     if (expectBlocked) {
-      assertTrue(s"Acceptor blocked percent not recorded: $blockedPercent", blockedPercent > 0.0)
-      assertTrue(s"Unexpected blocked percent in acceptor: $blockedPercent", blockedPercent <= 1.0)
+      assertTrue(blockedPercent > 0.0, s"Acceptor blocked percent not recorded: $blockedPercent")
+      assertTrue(blockedPercent <= 1.0, s"Unexpected blocked percent in acceptor: $blockedPercent")
     } else {
       assertEquals(0.0, blockedPercent, 0.001)
     }
   }
 
-  class TestableSocketServer(config : KafkaConfig = KafkaConfig.fromProps(props), val connectionQueueSize: Int = 20,
-                             override val time: Time = Time.SYSTEM) extends SocketServer(config,
-    new Metrics, time, credentialProvider) {
+  class TestableSocketServer(
+    config : KafkaConfig = KafkaConfig.fromProps(props),
+    connectionQueueSize: Int = 20,
+    time: Time = Time.SYSTEM
+  ) extends SocketServer(
+    config, new Metrics, time, credentialProvider, apiVersionManager,
+  ) {
 
     @volatile var selector: Option[TestableSelector] = None
     @volatile var uncaughtExceptions = 0
@@ -1890,7 +1903,7 @@ class SocketServerTest {
                               protocol: SecurityProtocol, memoryPool: MemoryPool, isPrivilegedListener: Boolean = false): Processor = {
       new Processor(id, time, config.socketRequestMaxBytes, requestChannel, connectionQuotas, config.connectionsMaxIdleMs,
         config.failedAuthenticationDelayMs, listenerName, protocol, config, metrics, credentialProvider,
-        memoryPool, new LogContext(), connectionQueueSize, isPrivilegedListener) {
+        memoryPool, new LogContext(), connectionQueueSize, isPrivilegedListener, apiVersionManager) {
 
         override protected[network] def createSelector(channelBuilder: ChannelBuilder): Selector = {
           val testableSelector = new TestableSelector(config, channelBuilder, time, metrics, metricTags.asScala)
@@ -1914,18 +1927,18 @@ class SocketServerTest {
       if (locallyClosed) {
         TestUtils.waitUntilTrue(() => selector.allLocallyClosedChannels.contains(connectionId),
           s"Channel not closed: $connectionId")
-        assertTrue("Unexpected disconnect notification", testableSelector.allDisconnectedChannels.isEmpty)
+        assertTrue(testableSelector.allDisconnectedChannels.isEmpty, "Unexpected disconnect notification")
       } else {
         TestUtils.waitUntilTrue(() => selector.allDisconnectedChannels.contains(connectionId),
           s"Disconnect notification not received: $connectionId")
-        assertTrue("Channel closed locally", testableSelector.allLocallyClosedChannels.isEmpty)
+        assertTrue(testableSelector.allLocallyClosedChannels.isEmpty, "Channel closed locally")
       }
       val openCount = selector.allChannels.size - 1 // minus one for the channel just closed above
       TestUtils.waitUntilTrue(() => connectionCount(localAddress) == openCount, "Connection count not decremented")
       TestUtils.waitUntilTrue(() =>
         dataPlaneProcessor(0).inflightResponseCount == 0, "Inflight responses not cleared")
-      assertNull("Channel not removed", selector.channel(connectionId))
-      assertNull("Closing channel not removed", selector.closingChannel(connectionId))
+      assertNull(selector.channel(connectionId), "Channel not removed")
+      assertNull(selector.closingChannel(connectionId), "Closing channel not removed")
     }
   }
 

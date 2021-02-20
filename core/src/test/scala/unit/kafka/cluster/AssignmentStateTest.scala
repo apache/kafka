@@ -17,78 +17,76 @@
 package kafka.cluster
 
 import org.apache.kafka.common.message.LeaderAndIsrRequestData.LeaderAndIsrPartitionState
-import org.junit.Assert.{assertEquals, assertFalse, assertTrue}
-import org.junit.Test
-import org.junit.runner.RunWith
-import org.junit.runners.Parameterized
-import org.junit.runners.Parameterized.Parameters
+import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertTrue}
+import org.junit.jupiter.params.ParameterizedTest
+import org.junit.jupiter.params.provider.{Arguments, MethodSource}
 
 import scala.jdk.CollectionConverters._
 
-object AssignmentStateTest extends AbstractPartitionTest {
+object AssignmentStateTest {
+  import AbstractPartitionTest._
 
-  @Parameters
-  def data: Array[Array[Any]] = Seq[Array[Any]](
-    Array(
+  def parameters: java.util.stream.Stream[Arguments] = Seq[Arguments](
+    Arguments.of(
       List[Integer](brokerId, brokerId + 1, brokerId + 2),
       List[Integer](brokerId, brokerId + 1, brokerId + 2),
-      List.empty[Integer], List.empty[Integer], Seq.empty[Int], false),
-    Array(
+      List.empty[Integer], List.empty[Integer], Seq.empty[Int], Boolean.box(false)),
+    Arguments.of(
       List[Integer](brokerId, brokerId + 1),
       List[Integer](brokerId, brokerId + 1, brokerId + 2),
-      List.empty[Integer], List.empty[Integer], Seq.empty[Int], true),
-    Array(
+      List.empty[Integer], List.empty[Integer], Seq.empty[Int], Boolean.box(true)),
+    Arguments.of(
       List[Integer](brokerId, brokerId + 1, brokerId + 2),
       List[Integer](brokerId, brokerId + 1, brokerId + 2),
       List[Integer](brokerId + 3, brokerId + 4),
       List[Integer](brokerId + 1),
-      Seq(brokerId, brokerId + 1, brokerId + 2), false),
-    Array(
+      Seq(brokerId, brokerId + 1, brokerId + 2), Boolean.box(false)),
+    Arguments.of(
       List[Integer](brokerId, brokerId + 1, brokerId + 2),
       List[Integer](brokerId, brokerId + 1, brokerId + 2),
       List[Integer](brokerId + 3, brokerId + 4),
       List.empty[Integer],
-      Seq(brokerId, brokerId + 1, brokerId + 2), false),
-    Array(
+      Seq(brokerId, brokerId + 1, brokerId + 2), Boolean.box(false)),
+    Arguments.of(
       List[Integer](brokerId, brokerId + 1, brokerId + 2),
       List[Integer](brokerId, brokerId + 1, brokerId + 2),
       List.empty[Integer],
       List[Integer](brokerId + 1),
-      Seq(brokerId, brokerId + 1, brokerId + 2), false),
-    Array(
+      Seq(brokerId, brokerId + 1, brokerId + 2), Boolean.box(false)),
+    Arguments.of(
       List[Integer](brokerId + 1, brokerId + 2),
       List[Integer](brokerId + 1, brokerId + 2),
       List[Integer](brokerId),
       List.empty[Integer],
-      Seq(brokerId + 1, brokerId + 2), false),
-    Array(
+      Seq(brokerId + 1, brokerId + 2), Boolean.box(false)),
+    Arguments.of(
       List[Integer](brokerId + 2, brokerId + 3, brokerId + 4),
       List[Integer](brokerId, brokerId + 1, brokerId + 2),
       List[Integer](brokerId + 3, brokerId + 4, brokerId + 5),
       List.empty[Integer],
-      Seq(brokerId, brokerId + 1, brokerId + 2), false),
-    Array(
+      Seq(brokerId, brokerId + 1, brokerId + 2), Boolean.box(false)),
+    Arguments.of(
       List[Integer](brokerId + 2, brokerId + 3, brokerId + 4),
       List[Integer](brokerId, brokerId + 1, brokerId + 2),
       List[Integer](brokerId + 3, brokerId + 4, brokerId + 5),
       List.empty[Integer],
-      Seq(brokerId, brokerId + 1, brokerId + 2), false),
-    Array(
+      Seq(brokerId, brokerId + 1, brokerId + 2), Boolean.box(false)),
+    Arguments.of(
       List[Integer](brokerId + 2, brokerId + 3),
       List[Integer](brokerId, brokerId + 1, brokerId + 2),
       List[Integer](brokerId + 3, brokerId + 4, brokerId + 5),
       List.empty[Integer],
-      Seq(brokerId, brokerId + 1, brokerId + 2), true)
-  ).toArray
+      Seq(brokerId, brokerId + 1, brokerId + 2), Boolean.box(true))
+  ).asJava.stream()
 }
 
-@RunWith(classOf[Parameterized])
-class AssignmentStateTest(isr: List[Integer], replicas: List[Integer],
-                          adding: List[Integer], removing: List[Integer],
-                          original: Seq[Int], isUnderReplicated: Boolean) extends AbstractPartitionTest {
+class AssignmentStateTest extends AbstractPartitionTest {
 
-  @Test
-  def testPartitionAssignmentStatus(): Unit = {
+  @ParameterizedTest
+  @MethodSource(Array("parameters"))
+  def testPartitionAssignmentStatus(isr: List[Integer], replicas: List[Integer],
+                                    adding: List[Integer], removing: List[Integer],
+                                    original: Seq[Int], isUnderReplicated: Boolean): Unit = {
     val controllerEpoch = 3
 
     val leaderState = new LeaderAndIsrPartitionState()
