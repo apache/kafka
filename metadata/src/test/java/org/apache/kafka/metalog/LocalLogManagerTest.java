@@ -52,7 +52,7 @@ public class LocalLogManagerTest {
     }
 
     /**
-     * Test that the local log maanger will claim leadership.
+     * Test that the local log manager will claim leadership.
      */
     @Test
     public void testClaimsLeadership() throws Exception {

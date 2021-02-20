@@ -253,6 +253,10 @@
     <suppress id="dontUseSystemExit"
               files="VerifiableProducer.java"/>
 
+    <!-- Shell -->
+    <suppress checks="CyclomaticComplexity"
+              files="(GlobComponent).java"/>
+
     <!-- Log4J-Appender -->
     <suppress checks="CyclomaticComplexity"
               files="KafkaLog4jAppender.java"/>

@@ -80,6 +80,17 @@ import static org.apache.kafka.common.config.ConfigResource.Type.TOPIC;
  * of each partition, as well as administrative tasks like creating or deleting topics.
  */
 public class ReplicationControlManager {
+    /**
+     * A special value used to represent the leader for a partition with no leader. 
+     */
+    public static final int NO_LEADER = -1;
+
+    /**
+     * A special value used to represent a PartitionChangeRecord that does not change the
+     * partition leader.
+     */
+    public static final int NO_LEADER_CHANGE = -2;
+
     static class TopicControlInfo {
         private final Uuid id;
         private final TimelineHashMap<Integer, PartitionControlInfo> parts;
@@ -125,7 +136,7 @@ public class ReplicationControlManager {
             int[] newIsr = (record.isr() == null) ? isr : Replicas.toArray(record.isr());
             int newLeader;
             int newLeaderEpoch;
-            if (record.leader() == Integer.MIN_VALUE) {
+            if (record.leader() == NO_LEADER_CHANGE) {
                 newLeader = leader;
                 newLeaderEpoch = leaderEpoch;
             } else {
@@ -186,9 +197,12 @@ public class ReplicationControlManager {
             return builder.toString();
         }
 
+        boolean hasLeader() {
+            return leader != NO_LEADER;
+        }
+
         int preferredReplica() {
-            if (replicas.length == 0) return -1;
-            return replicas[0];
+            return replicas.length == 0 ? NO_LEADER : replicas[0];
         }
 
         @Override
@@ -302,7 +316,7 @@ public class ReplicationControlManager {
                 record.partitionId(), newPartInfo.toString());
             topicInfo.parts.put(record.partitionId(), newPartInfo);
             brokersToIsrs.update(record.topicId(), record.partitionId(), null,
-                newPartInfo.isr, -1, newPartInfo.leader);
+                newPartInfo.isr, NO_LEADER, newPartInfo.leader);
         } else {
             String diff = newPartInfo.diff(prevPartInfo);
             if (!diff.isEmpty()) {
@@ -584,12 +598,14 @@ public class ReplicationControlManager {
                     responseTopicData.partitions().add(new AlterIsrResponseData.PartitionData().
                         setPartitionIndex(partitionData.partitionIndex()).
                         setErrorCode(Errors.INVALID_REQUEST.code()));
+                    continue;
                 }
                 if (!Replicas.contains(newIsr, partition.leader)) {
                     // An alterIsr request can't remove the current leader.
                     responseTopicData.partitions().add(new AlterIsrResponseData.PartitionData().
                         setPartitionIndex(partitionData.partitionIndex()).
                         setErrorCode(Errors.INVALID_REQUEST.code()));
+                    continue;
                 }
                 records.add(new ApiMessageAndVersion(new PartitionChangeRecord().
                     setPartitionId(partitionData.partitionIndex()).
@@ -615,7 +631,7 @@ public class ReplicationControlManager {
         if (brokerRegistration == null) {
             throw new RuntimeException("Can't find broker registration for broker " + brokerId);
         }
-        handleNodeDeactivated(brokerId, false, records);
+        handleNodeDeactivated(brokerId, records);
         records.add(new ApiMessageAndVersion(new FenceBrokerRecord().
             setId(brokerId).setEpoch(brokerRegistration.epoch()), (short) 0));
     }
@@ -632,7 +648,7 @@ public class ReplicationControlManager {
      */
     void handleBrokerUnregistered(int brokerId, long brokerEpoch,
                                   List<ApiMessageAndVersion> records) {
-        handleNodeDeactivated(brokerId, false, records);
+        handleNodeDeactivated(brokerId, records);
         records.add(new ApiMessageAndVersion(new UnregisterBrokerRecord().
             setBrokerId(brokerId).setBrokerEpoch(brokerEpoch), (short) 0));
     }
@@ -644,12 +660,9 @@ public class ReplicationControlManager {
      * It is removed as the leader for all partitions it leads.
      *
      * @param brokerId              The broker id.
-     * @param alwaysBumpLeaderEpoch True if we should generate a record that
-     *                              always increments the leader epoch.
      * @param records               The record list to append to.
      */
-    void handleNodeDeactivated(int brokerId, boolean alwaysBumpLeaderEpoch,
-            List<ApiMessageAndVersion> records) {
+    void handleNodeDeactivated(int brokerId, List<ApiMessageAndVersion> records) {
         Iterator<TopicPartition> iterator = brokersToIsrs.iterator(brokerId, false);
         while (iterator.hasNext()) {
             TopicPartition topicPartition = iterator.next();
@@ -669,7 +682,7 @@ public class ReplicationControlManager {
             int[] newIsr = Replicas.copyWithout(partition.isr, brokerId);
             if (newIsr.length == 0) {
                 // We don't want to shrink the ISR to size 0. So, leave the node in the ISR.
-                if (alwaysBumpLeaderEpoch || record.leader() != -1) {
+                if (record.leader() != NO_LEADER) {
                     // The partition is now leaderless, so set its leader to -1.
                     record.setLeader(-1);
                     records.add(new ApiMessageAndVersion(record, (short) 0));
@@ -678,9 +691,10 @@ public class ReplicationControlManager {
                 record.setIsr(Replicas.toList(newIsr));
                 if (partition.leader == brokerId) {
                     // The fenced node will no longer be the leader.
-                    int newLeader = chooseNewLeader(partition, newIsr, false);
+                    int newLeader = bestLeader(partition.replicas, newIsr, false);
                     record.setLeader(newLeader);
-                } else if (alwaysBumpLeaderEpoch) {
+                } else {
+                    // Bump the partition leader epoch.
                     record.setLeader(partition.leader);
                 }
                 records.add(new ApiMessageAndVersion(record, (short) 0));
@@ -783,8 +797,8 @@ public class ReplicationControlManager {
             return new ApiError(Errors.UNKNOWN_TOPIC_OR_PARTITION,
                 "No such partition as " + topic + "-" + partitionId);
         }
-        int newLeader = chooseNewLeader(partitionInfo, partitionInfo.isr, unclean);
-        if (newLeader < 0) {
+        int newLeader = bestLeader(partitionInfo.replicas, partitionInfo.isr, unclean);
+        if (newLeader == NO_LEADER) {
             // If we can't find any leader for the partition, return an error.
             return new ApiError(Errors.LEADER_NOT_AVAILABLE,
                 "Unable to find any leader for the partition.");
@@ -794,7 +808,7 @@ public class ReplicationControlManager {
             // nothing to do.
             return ApiError.NONE;
         }
-        if (partitionInfo.leader != -1 && newLeader != partitionInfo.preferredReplica()) {
+        if (partitionInfo.hasLeader() && newLeader != partitionInfo.preferredReplica()) {
             // It is not worth moving away from a valid leader to a new leader unless the
             // new leader is the preferred replica.
             return ApiError.NONE;
@@ -810,24 +824,6 @@ public class ReplicationControlManager {
         record.setLeader(newLeader);
         records.add(new ApiMessageAndVersion(record, (short) 0));
         return ApiError.NONE;
-    }
-
-    int chooseNewLeader(PartitionControlInfo partition, int[] newIsr, boolean unclean) {
-        for (int i = 0; i < partition.replicas.length; i++) {
-            int replica = partition.replicas[i];
-            if (Replicas.contains(newIsr, replica)) {
-                return replica;
-            }
-        }
-        if (unclean) {
-            for (int i = 0; i < partition.replicas.length; i++) {
-                int replica = partition.replicas[i];
-                if (clusterControl.unfenced(replica)) {
-                    return replica;
-                }
-            }
-        }
-        return -1;
     }
 
     ControllerResult<BrokerHeartbeatReply> processBrokerHeartbeat(
@@ -851,7 +847,7 @@ public class ReplicationControlManager {
                     // Note: we always bump the leader epoch of each partition that the
                     // shutting down broker is in here.  This prevents the broker from
                     // getting re-added to the ISR later.
-                    handleNodeDeactivated(brokerId, true, records);
+                    handleNodeDeactivated(brokerId, records);
                     break;
                 case SHUTDOWN_NOW:
                     handleBrokerFenced(brokerId, records);
@@ -867,6 +863,24 @@ public class ReplicationControlManager {
                 states.next().inControlledShutdown(),
                 states.next().shouldShutDown());
         return new ControllerResult<>(records, reply);
+    }
+
+    int bestLeader(int[] replicas, int[] isr, boolean unclean) {
+        for (int i = 0; i < replicas.length; i++) {
+            int replica = replicas[i];
+            if (Replicas.contains(isr, replica)) {
+                return replica;
+            }
+        }
+        if (unclean) {
+            for (int i = 0; i < replicas.length; i++) {
+                int replica = replicas[i];
+                if (clusterControl.unfenced(replica)) {
+                    return replica;
+                }
+            }
+        }
+        return NO_LEADER;
     }
 
     public ControllerResult<Void> unregisterBroker(int brokerId) {

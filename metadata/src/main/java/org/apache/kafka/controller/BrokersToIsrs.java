@@ -29,6 +29,8 @@ import java.util.Map.Entry;
 import java.util.NoSuchElementException;
 import java.util.Objects;
 
+import static org.apache.kafka.controller.ReplicationControlManager.NO_LEADER;
+
 
 /**
  * Associates brokers with their in-sync partitions.
@@ -134,7 +136,7 @@ public class BrokersToIsrs {
 
     /**
      * A map of broker IDs to the partitions that the broker is in the ISR for.
-     * Partitions with no isr members appear in this map under id -1.
+     * Partitions with no isr members appear in this map under id NO_LEADER.
      */
     private final TimelineHashMap<Integer, TimelineHashMap<Uuid, int[]>> isrMembers;
 
@@ -150,8 +152,8 @@ public class BrokersToIsrs {
      * @param partitionId   The partition ID of the partition.
      * @param prevIsr       The previous ISR, or null if the partition is new.
      * @param nextIsr       The new ISR, or null if the partition is being removed.
-     * @param prevLeader    The previous leader, or -1 if the partition had no leader.
-     * @param nextLeader    The new leader, or -1 if the partition now has no leader.
+     * @param prevLeader    The previous leader, or NO_LEADER if the partition had no leader.
+     * @param nextLeader    The new leader, or NO_LEADER if the partition now has no leader.
      */
     void update(Uuid topicId, int partitionId, int[] prevIsr, int[] nextIsr,
                 int prevLeader, int nextLeader) {
@@ -159,8 +161,8 @@ public class BrokersToIsrs {
         if (prevIsr == null) {
             prev = EMPTY;
         } else {
-            if (prevLeader == -1) {
-                prev = Replicas.copyWith(prevIsr, -1);
+            if (prevLeader == NO_LEADER) {
+                prev = Replicas.copyWith(prevIsr, NO_LEADER);
             } else {
                 prev = Replicas.clone(prevIsr);
             }
@@ -170,8 +172,8 @@ public class BrokersToIsrs {
         if (nextIsr == null) {
             next = EMPTY;
         } else {
-            if (nextLeader == -1) {
-                next = Replicas.copyWith(nextIsr, -1);
+            if (nextLeader == NO_LEADER) {
+                next = Replicas.copyWith(nextIsr, NO_LEADER);
             } else {
                 next = Replicas.clone(nextIsr);
             }
@@ -303,7 +305,7 @@ public class BrokersToIsrs {
     }
 
     PartitionsOnReplicaIterator noLeaderIterator() {
-        return iterator(-1, true);
+        return iterator(NO_LEADER, true);
     }
 
     boolean hasLeaderships(int brokerId) {
