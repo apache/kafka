@@ -21,6 +21,7 @@ import static org.apache.kafka.common.utils.Utils.getPort;
 
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.serialization.Serializer;
+import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.processor.StreamPartitioner;
 import org.apache.kafka.streams.processor.internals.StreamsPartitionAssignor;
@@ -55,7 +56,7 @@ public class HostInfo {
      * @return a new HostInfo or null if endPoint is null or has no characters
      */
     public static HostInfo buildFromEndpoint(final String endPoint) {
-        if (endPoint == null || endPoint.trim().isEmpty()) {
+        if (Utils.isBlank(endPoint)) {
             return null;
         }
 

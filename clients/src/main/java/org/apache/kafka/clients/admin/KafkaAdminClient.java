@@ -4540,7 +4540,7 @@ public class KafkaAdminClient extends AdminClient {
         final Map<String, KafkaFutureImpl<Void>> updateFutures = new HashMap<>();
         for (final Map.Entry<String, FeatureUpdate> entry : featureUpdates.entrySet()) {
             final String feature = entry.getKey();
-            if (feature.trim().isEmpty()) {
+            if (Utils.isBlank(feature)) {
                 throw new IllegalArgumentException("Provided feature can not be empty.");
             }
             updateFutures.put(entry.getKey(), new KafkaFutureImpl<>());

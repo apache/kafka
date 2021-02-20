@@ -25,6 +25,7 @@ import org.apache.kafka.common.config.ConfigDef.Type;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.config.internals.BrokerSecurityConfigs;
 import org.apache.kafka.common.metrics.Sensor;
+import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.connect.json.JsonConverter;
 import org.apache.kafka.connect.json.JsonConverterConfig;
 import org.apache.kafka.connect.storage.Converter;
@@ -516,7 +517,7 @@ public class WorkerConfig extends AbstractConfig {
                 if (!(item instanceof String)) {
                     throw new ConfigException("Invalid type for admin listener (expected String).");
                 }
-                if (((String) item).trim().isEmpty()) {
+                if (Utils.isBlank((String) item)) {
                     throw new ConfigException("Empty listener found when parsing list.");
                 }
             }
@@ -527,7 +528,7 @@ public class WorkerConfig extends AbstractConfig {
         @Override
         public void ensureValid(String name, Object value) {
             String strValue = (String) value;
-            if (strValue == null || strValue.trim().isEmpty()) {
+            if (Utils.isBlank(strValue)) {
                 return;
             }
 

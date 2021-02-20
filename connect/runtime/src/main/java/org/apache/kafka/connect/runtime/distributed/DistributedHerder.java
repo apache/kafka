@@ -1447,7 +1447,7 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
                     forwardRequestExecutor.submit(() -> {
                         try {
                             String leaderUrl = leaderUrl();
-                            if (leaderUrl == null || leaderUrl.trim().isEmpty()) {
+                            if (Utils.isBlank(leaderUrl)) {
                                 cb.onCompletion(new ConnectException("Request to leader to " +
                                         "reconfigure connector tasks failed " +
                                         "because the URL of the leader's REST interface is empty!"), null);

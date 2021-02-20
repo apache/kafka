@@ -21,6 +21,7 @@ import static org.junit.jupiter.api.Assertions.fail;
 
 import java.util.List;
 
+import org.apache.kafka.common.utils.Utils;
 import org.junit.jupiter.api.Test;
 
 public class OAuthBearerScopeUtilsTest {
@@ -28,7 +29,7 @@ public class OAuthBearerScopeUtilsTest {
     public void validScope() {
         for (String validScope : new String[] {"", "   ", "scope1", " scope1 ", "scope1 Scope2", "scope1   Scope2"}) {
             List<String> parsedScope = OAuthBearerScopeUtils.parseScope(validScope);
-            if (validScope.trim().isEmpty()) {
+            if (Utils.isBlank(validScope)) {
                 assertTrue(parsedScope.isEmpty());
             } else if (validScope.contains("Scope2")) {
                 assertTrue(parsedScope.size() == 2 && parsedScope.get(0).equals("scope1")
