@@ -25,6 +25,7 @@ from ducktape.mark import matrix
 from ducktape.mark.resource import cluster
 from ducktape.utils.util import wait_until
 
+import time
 
 class TransactionsTest(Test):
     """Tests transactions by transactionally copying data from a source topic to
