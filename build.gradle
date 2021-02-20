@@ -97,7 +97,7 @@ allprojects {
 
 ext {
   gradleVersion = versions.gradle
-  minJavaVersion = "8"
+  minJavaVersion = "11"
   buildVersionFileName = "kafka-version.properties"
 
   defaultMaxHeapSize = "2g"
@@ -2504,10 +2504,5 @@ task aggregatedJavadoc(type: Javadoc, dependsOn: compileJava) {
   options.encoding = 'UTF-8'
   // Turn off doclint for now, see https://blog.joda.org/2014/02/turning-off-doclint-in-jdk-8-javadoc.html for rationale
   options.addStringOption('Xdoclint:none', '-quiet')
-
-  // The URL structure was changed to include the locale after Java 8
-  if (JavaVersion.current().isJava11Compatible())
-    options.links "https://docs.oracle.com/en/java/javase/${JavaVersion.current().majorVersion}/docs/api/"
-  else
-    options.links "https://docs.oracle.com/javase/8/docs/api/"
+  options.links "https://docs.oracle.com/en/java/javase/${JavaVersion.current().majorVersion}/docs/api/"
 }

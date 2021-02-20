@@ -21,10 +21,10 @@ import java.security.Provider;
 public class TestScramSaslServerProvider extends Provider {
 
     public TestScramSaslServerProvider() {
-        this("TestScramSaslServerProvider", 0.1, "test scram sasl server provider");
+        this("TestScramSaslServerProvider", "0.1", "test scram sasl server provider");
     }
 
-    protected TestScramSaslServerProvider(String name, double version, String info) {
+    protected TestScramSaslServerProvider(String name, String version, String info) {
         super(name, version, info);
     }
 

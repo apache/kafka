@@ -26,7 +26,7 @@ public class OAuthBearerSaslServerProvider extends Provider {
     private static final long serialVersionUID = 1L;
 
     protected OAuthBearerSaslServerProvider() {
-        super("SASL/OAUTHBEARER Server Provider", 1.0, "SASL/OAUTHBEARER Server Provider for Kafka");
+        super("SASL/OAUTHBEARER Server Provider", "1.0", "SASL/OAUTHBEARER Server Provider for Kafka");
         put("SaslServerFactory." + OAuthBearerLoginModule.OAUTHBEARER_MECHANISM,
                 OAuthBearerSaslServerFactory.class.getName());
     }

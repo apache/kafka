@@ -73,6 +73,7 @@ public class JsonSerializationTest {
         Class<T> clazz = (Class<T>) val1.getClass();
         T val2 = JsonUtil.JSON_SERDE.readValue(bytes, clazz);
         for (Field field : clazz.getDeclaredFields()) {
+            @SuppressWarnings("deprecation")
             boolean wasAccessible = field.isAccessible();
             field.setAccessible(true);
             assertNotNull(field.get(val2), "Field " + field + " was null.");
