@@ -198,6 +198,8 @@ public abstract class MirrorConnectorsIntegrationBaseTest {
 //            System.out.println("!!! sleep");
 //            Thread.sleep(40000);
             deleteAllTopics(primary.kafka());
+            System.out.println("!!! sleep");
+            Thread.sleep(40000);
             deleteAllTopics(backup.kafka());
         } finally {
             shuttingDown = true;
@@ -1404,7 +1406,7 @@ public abstract class MirrorConnectorsIntegrationBaseTest {
             for (int i = 0; i < 2; i++) {
                 Set<String> topics2 = adminClient.listTopics().names().get();
                 System.out.println("!!! t:" + i + topics2);
-                Thread.sleep(5000);
+                Thread.sleep(2000);
             }
 //            topics = adminClient.listTopics().names().get();
 //            topics.add("ccc");
