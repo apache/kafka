@@ -64,7 +64,7 @@ class ResultOrError<T> {
             return false;
         }
         ResultOrError other = (ResultOrError) o;
-        return error.equals(other.error) &&
+        return Objects.equals(error, other.error) &&
             Objects.equals(result, other.result);
     }
 
@@ -75,7 +75,7 @@ class ResultOrError<T> {
 
     @Override
     public String toString() {
-        if (error.isSuccess()) {
+        if (error == null) {
             return "ResultOrError(" + result + ")";
         } else {
             return "ResultOrError(" + error + ")";
