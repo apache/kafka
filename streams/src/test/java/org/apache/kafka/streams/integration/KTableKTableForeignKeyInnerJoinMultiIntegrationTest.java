@@ -117,7 +117,7 @@ public class KTableKTableForeignKeyInnerJoinMultiIntegrationTest {
             new KeyValue<>(4, -2.22f)  //Won't be joined in at all.
         );
 
-        //Pzartitions precomputed using the default Murmur2 hash, just to ensure that all 3 partitions will be exercised.
+        //Pzaritions precomputed using the default Murmur2 hash, just to ensure that all 3 partitions will be exercised.
         final List<KeyValue<String, Long>> table2 = asList(
             new KeyValue<>("0", 0L),  //partition 2
             new KeyValue<>("1", 10L), //partition 0
