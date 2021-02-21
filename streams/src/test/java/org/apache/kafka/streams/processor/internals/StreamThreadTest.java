@@ -48,6 +48,7 @@ import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.LogAndContinueExceptionHandler;
 import org.apache.kafka.streams.errors.StreamsException;
@@ -1805,18 +1806,16 @@ public class StreamThreadTest {
         final List<Long> punctuatedStreamTime = new ArrayList<>();
         final List<Long> punctuatedWallClockTime = new ArrayList<>();
         final org.apache.kafka.streams.processor.ProcessorSupplier<Object, Object> punctuateProcessor =
-            () -> new org.apache.kafka.streams.processor.Processor<Object, Object>() {
+            () -> new org.apache.kafka.streams.processor.AbstractProcessor<Object, Object>() {
                 @Override
                 public void init(final org.apache.kafka.streams.processor.ProcessorContext context) {
                     context.schedule(Duration.ofMillis(100L), PunctuationType.STREAM_TIME, punctuatedStreamTime::add);
                     context.schedule(Duration.ofMillis(100L), PunctuationType.WALL_CLOCK_TIME, punctuatedWallClockTime::add);
+                    context.schedule(Duration.ofMillis(200L), PunctuationType.WALL_CLOCK_TIME, timestamp -> context.forward("key", "value"));
                 }
 
                 @Override
                 public void process(final Object key, final Object value) {}
-
-                @Override
-                public void close() {}
             };
 
         internalStreamsBuilder.stream(Collections.singleton(topic1), consumed).process(punctuateProcessor);
@@ -1872,6 +1871,66 @@ public class StreamThreadTest {
         // we should skip stream time punctuation, only trigger wall-clock time punctuation
         assertEquals(1, punctuatedStreamTime.size());
         assertEquals(2, punctuatedWallClockTime.size());
+    }
+
+    @Test
+    public void shouldPunctuateWithTimestampPreservedInProcessorContext() {
+        final org.apache.kafka.streams.kstream.TransformerSupplier<Object, Object, KeyValue<Object, Object>> punctuateProcessor =
+            () -> new org.apache.kafka.streams.kstream.Transformer<Object, Object, KeyValue<Object, Object>>() {
+                @Override
+                public void init(final org.apache.kafka.streams.processor.ProcessorContext context) {
+                    context.schedule(Duration.ofMillis(100L), PunctuationType.WALL_CLOCK_TIME, timestamp -> context.forward("key", "value"));
+                }
+
+                @Override
+                public KeyValue<Object, Object> transform(final Object key, final Object value) {
+                        return null;
+                    }
+
+                @Override
+                public void close() {}
+            };
+
+        final List<Long> peekedContextTime = new ArrayList<>();
+        final org.apache.kafka.streams.processor.ProcessorSupplier<Object, Object> peekProcessor =
+            () -> new org.apache.kafka.streams.processor.AbstractProcessor<Object, Object>() {
+                @Override
+                public void process(final Object key, final Object value) {
+                    peekedContextTime.add(context.timestamp());
+                }
+            };
+
+        internalStreamsBuilder.stream(Collections.singleton(topic1), consumed)
+            .transform(punctuateProcessor)
+            .process(peekProcessor);
+        internalStreamsBuilder.buildAndOptimizeTopology();
+
+        final StreamThread thread = createStreamThread(CLIENT_ID, config, false);
+
+        thread.setState(StreamThread.State.STARTING);
+        thread.rebalanceListener().onPartitionsRevoked(Collections.emptySet());
+        final List<TopicPartition> assignedPartitions = new ArrayList<>();
+
+        final Map<TaskId, Set<TopicPartition>> activeTasks = new HashMap<>();
+
+        // assign single partition
+        assignedPartitions.add(t1p1);
+        activeTasks.put(task1, Collections.singleton(t1p1));
+
+        thread.taskManager().handleAssignment(activeTasks, emptyMap());
+
+        clientSupplier.consumer.assign(assignedPartitions);
+        clientSupplier.consumer.updateBeginningOffsets(Collections.singletonMap(t1p1, 0L));
+        thread.rebalanceListener().onPartitionsAssigned(assignedPartitions);
+
+        thread.runOnce();
+        assertEquals(0, peekedContextTime.size());
+
+        mockTime.sleep(100L);
+        thread.runOnce();
+
+        assertEquals(1, peekedContextTime.size());
+        assertNotNull(peekedContextTime.get(0));
     }
 
     @Test
