@@ -131,7 +131,7 @@ public class KTableKTableForeignKeyInnerJoinMultiIntegrationTest {
             new KeyValue<>("9", 90L)  //partition 2
         );
 
-        //Partaitions pre-computed using the default Murmur2 hash, just to ensure that all 3 partitions will be exercised.
+        //Partaitions pre-computed sing the default Murmur2 hash, just to ensure that all 3 partitions will be exercised.
         final List<KeyValue<Integer, String>> table3 = Collections.singletonList(
             new KeyValue<>(10, "waffle")
         );
