@@ -1029,6 +1029,7 @@ project(':metadata') {
     compile project(':clients')
     compile libs.jacksonDatabind
     compile libs.jacksonJDK8Datatypes
+    compile libs.metrics
     compileOnly libs.log4j
     testCompile libs.junitJupiter
     testCompile libs.hamcrest
@@ -1341,6 +1342,49 @@ project(':tools') {
     }
     from (configurations.runtime) {
       exclude('kafka-clients*')
+    }
+    into "$buildDir/dependant-libs-${versions.scala}"
+    duplicatesStrategy 'exclude'
+  }
+
+  jar {
+    dependsOn 'copyDependantLibs'
+  }
+}
+
+project(':shell') {
+  archivesBaseName = "kafka-shell"
+
+  dependencies {
+    compile libs.argparse4j
+    compile libs.jacksonDatabind
+    compile libs.jacksonJDK8Datatypes
+    compile libs.jline
+    compile libs.slf4jApi
+    compile project(':clients')
+    compile project(':core')
+    compile project(':log4j-appender')
+    compile project(':metadata')
+    compile project(':raft')
+
+    compile libs.jacksonJaxrsJsonProvider
+
+    testCompile project(':clients')
+    testCompile libs.junitJupiter
+
+    testRuntime libs.slf4jlog4j
+  }
+
+  javadoc {
+    enabled = false
+  }
+
+  tasks.create(name: "copyDependantLibs", type: Copy) {
+    from (configurations.testRuntime) {
+      include('jline-*jar')
+    }
+    from (configurations.runtime) {
+      include('jline-*jar')
     }
     into "$buildDir/dependant-libs-${versions.scala}"
     duplicatesStrategy 'exclude'

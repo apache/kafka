@@ -51,11 +51,11 @@ public class KafkaConsumerMetrics implements AutoCloseable {
         this.timeBetweenPollSensor = metrics.sensor("time-between-poll");
         this.timeBetweenPollSensor.add(metrics.metricName("time-between-poll-avg",
                 metricGroupName,
-                "The average delay between invocations of poll()."),
+                "The average delay between invocations of poll() in milliseconds."),
                 new Avg());
         this.timeBetweenPollSensor.add(metrics.metricName("time-between-poll-max",
                 metricGroupName,
-                "The max delay between invocations of poll()."),
+                "The max delay between invocations of poll() in milliseconds."),
                 new Max());
 
         this.pollIdleSensor = metrics.sensor("poll-idle-ratio-avg");
