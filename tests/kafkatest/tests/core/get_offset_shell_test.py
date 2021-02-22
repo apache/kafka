@@ -16,11 +16,12 @@
 
 from ducktape.utils.util import wait_until
 from ducktape.tests.test import Test
+from ducktape.mark import matrix
 from ducktape.mark.resource import cluster
 
 from kafkatest.services.verifiable_producer import VerifiableProducer
 from kafkatest.services.zookeeper import ZookeeperService
-from kafkatest.services.kafka import KafkaService
+from kafkatest.services.kafka import KafkaService, quorum
 from kafkatest.services.console_consumer import ConsoleConsumer
 
 MAX_MESSAGES = 100
@@ -63,10 +64,11 @@ class GetOffsetShellTest(Test):
             TOPIC_TEST_TOPIC_PARTITIONS2: {'partitions': 2, 'replication-factor': REPLICATION_FACTOR}
         }
 
-        self.zk = ZookeeperService(test_context, self.num_zk)
+        self.zk = ZookeeperService(test_context, self.num_zk) if quorum.for_test(test_context) == quorum.zk else None
 
     def setUp(self):
-        self.zk.start()
+        if self.zk:
+            self.zk.start()
 
     def start_kafka(self, security_protocol, interbroker_security_protocol):
         self.kafka = KafkaService(
@@ -103,7 +105,8 @@ class GetOffsetShellTest(Test):
         return sum
 
     @cluster(num_nodes=3)
-    def test_get_offset_shell_topic_name(self, security_protocol='PLAINTEXT'):
+    @matrix(metadata_quorum=quorum.all_non_upgrade)
+    def test_get_offset_shell_topic_name(self, security_protocol='PLAINTEXT', metadata_quorum=quorum.zk):
         """
         Tests if GetOffsetShell handles --topic argument with a simple name correctly
         :return: None
@@ -116,7 +119,8 @@ class GetOffsetShellTest(Test):
                    timeout_sec=10, err_msg="Timed out waiting to reach expected offset.")
 
     @cluster(num_nodes=4)
-    def test_get_offset_shell_topic_pattern(self, security_protocol='PLAINTEXT'):
+    @matrix(metadata_quorum=quorum.all_non_upgrade)
+    def test_get_offset_shell_topic_pattern(self, security_protocol='PLAINTEXT', metadata_quorum=quorum.zk):
         """
         Tests if GetOffsetShell handles --topic argument with a pattern correctly
         :return: None
@@ -130,7 +134,8 @@ class GetOffsetShellTest(Test):
                    timeout_sec=10, err_msg="Timed out waiting to reach expected offset.")
 
     @cluster(num_nodes=3)
-    def test_get_offset_shell_partitions(self, security_protocol='PLAINTEXT'):
+    @matrix(metadata_quorum=quorum.all_non_upgrade)
+    def test_get_offset_shell_partitions(self, security_protocol='PLAINTEXT', metadata_quorum=quorum.zk):
         """
         Tests if GetOffsetShell handles --partitions argument correctly
         :return: None
@@ -151,7 +156,8 @@ class GetOffsetShellTest(Test):
                    timeout_sec=10, err_msg="Timed out waiting to reach expected offset.")
 
     @cluster(num_nodes=4)
-    def test_get_offset_shell_topic_partitions(self, security_protocol='PLAINTEXT'):
+    @matrix(metadata_quorum=quorum.all_non_upgrade)
+    def test_get_offset_shell_topic_partitions(self, security_protocol='PLAINTEXT', metadata_quorum=quorum.zk):
         """
         Tests if GetOffsetShell handles --topic-partitions argument correctly
         :return: None
@@ -202,7 +208,8 @@ class GetOffsetShellTest(Test):
         assert 0 == filtered_partitions.count("%s:%s" % (TOPIC_TEST_TOPIC_PARTITIONS2, 1))
 
     @cluster(num_nodes=4)
-    def test_get_offset_shell_internal_filter(self, security_protocol='PLAINTEXT'):
+    @matrix(metadata_quorum=quorum.all_non_upgrade)
+    def test_get_offset_shell_internal_filter(self, security_protocol='PLAINTEXT', metadata_quorum=quorum.zk):
         """
         Tests if GetOffsetShell handles --exclude-internal-topics flag correctly
         :return: None

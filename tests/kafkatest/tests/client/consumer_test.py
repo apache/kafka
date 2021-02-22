@@ -18,7 +18,7 @@ from ducktape.utils.util import wait_until
 from ducktape.mark.resource import cluster
 
 from kafkatest.tests.verifiable_consumer_test import VerifiableConsumerTest
-from kafkatest.services.kafka import TopicPartition
+from kafkatest.services.kafka import TopicPartition, quorum
 
 import signal
 
@@ -75,7 +75,8 @@ class OffsetValidationTest(VerifiableConsumerTest):
         return consumer
 
     @cluster(num_nodes=7)
-    def test_broker_rolling_bounce(self):
+    @matrix(metadata_quorum=quorum.all_non_upgrade)
+    def test_broker_rolling_bounce(self, metadata_quorum=quorum.zk):
         """
         Verify correct consumer behavior when the brokers are consecutively restarted.
 
@@ -117,8 +118,8 @@ class OffsetValidationTest(VerifiableConsumerTest):
             (consumer.total_consumed(), consumer.current_position(partition))
 
     @cluster(num_nodes=7)
-    @matrix(clean_shutdown=[True], bounce_mode=["all", "rolling"])
-    def test_consumer_bounce(self, clean_shutdown, bounce_mode):
+    @matrix(clean_shutdown=[True], bounce_mode=["all", "rolling"], metadata_quorum=quorum.all_non_upgrade)
+    def test_consumer_bounce(self, clean_shutdown, bounce_mode, metadata_quorum=quorum.zk):
         """
         Verify correct consumer behavior when the consumers in the group are consecutively restarted.
 
@@ -160,8 +161,8 @@ class OffsetValidationTest(VerifiableConsumerTest):
                 (consumer.current_position(partition), consumer.total_consumed())
 
     @cluster(num_nodes=7)
-    @matrix(clean_shutdown=[True], static_membership=[True, False], bounce_mode=["all", "rolling"], num_bounces=[5])
-    def test_static_consumer_bounce(self, clean_shutdown, static_membership, bounce_mode, num_bounces):
+    @matrix(clean_shutdown=[True], static_membership=[True, False], bounce_mode=["all", "rolling"], num_bounces=[5], metadata_quorum=quorum.all_non_upgrade)
+    def test_static_consumer_bounce(self, clean_shutdown, static_membership, bounce_mode, num_bounces, metadata_quorum=quorum.zk):
         """
         Verify correct static consumer behavior when the consumers in the group are restarted. In order to make
         sure the behavior of static members are different from dynamic ones, we take both static and dynamic
@@ -222,8 +223,8 @@ class OffsetValidationTest(VerifiableConsumerTest):
                 (consumer.current_position(partition), consumer.total_consumed())
 
     @cluster(num_nodes=7)
-    @matrix(bounce_mode=["all", "rolling"])
-    def test_static_consumer_persisted_after_rejoin(self, bounce_mode):
+    @matrix(bounce_mode=["all", "rolling"], metadata_quorum=quorum.all_non_upgrade)
+    def test_static_consumer_persisted_after_rejoin(self, bounce_mode, metadata_quorum=quorum.zk):
         """
         Verify that the updated member.id(updated_member_id) caused by static member rejoin would be persisted. If not,
         after the brokers rolling bounce, the migrated group coordinator would load the stale persisted member.id and
@@ -253,8 +254,8 @@ class OffsetValidationTest(VerifiableConsumerTest):
         self.rolling_bounce_brokers(consumer, num_bounces=1)
 
     @cluster(num_nodes=10)
-    @matrix(num_conflict_consumers=[1, 2], fencing_stage=["stable", "all"])
-    def test_fencing_static_consumer(self, num_conflict_consumers, fencing_stage):
+    @matrix(num_conflict_consumers=[1, 2], fencing_stage=["stable", "all"], metadata_quorum=quorum.all_non_upgrade)
+    def test_fencing_static_consumer(self, num_conflict_consumers, fencing_stage, metadata_quorum=quorum.zk):
         """
         Verify correct static consumer behavior when there are conflicting consumers with same group.instance.id.
 
@@ -306,8 +307,8 @@ class OffsetValidationTest(VerifiableConsumerTest):
                        )
 
     @cluster(num_nodes=7)
-    @matrix(clean_shutdown=[True], enable_autocommit=[True, False])
-    def test_consumer_failure(self, clean_shutdown, enable_autocommit):
+    @matrix(clean_shutdown=[True], enable_autocommit=[True, False], metadata_quorum=quorum.all_non_upgrade)
+    def test_consumer_failure(self, clean_shutdown, enable_autocommit, metadata_quorum=quorum.zk):
         partition = TopicPartition(self.TOPIC, 0)
 
         consumer = self.setup_consumer(self.TOPIC, enable_autocommit=enable_autocommit)
@@ -353,8 +354,8 @@ class OffsetValidationTest(VerifiableConsumerTest):
                 (consumer.last_commit(partition), consumer.current_position(partition))
 
     @cluster(num_nodes=7)
-    @matrix(clean_shutdown=[True, False], enable_autocommit=[True, False])
-    def test_broker_failure(self, clean_shutdown, enable_autocommit):
+    @matrix(clean_shutdown=[True, False], enable_autocommit=[True, False], metadata_quorum=quorum.all_non_upgrade)
+    def test_broker_failure(self, clean_shutdown, enable_autocommit, metadata_quorum=quorum.zk):
         partition = TopicPartition(self.TOPIC, 0)
 
         consumer = self.setup_consumer(self.TOPIC, enable_autocommit=enable_autocommit)
@@ -390,7 +391,8 @@ class OffsetValidationTest(VerifiableConsumerTest):
                 (consumer.last_commit(partition), consumer.current_position(partition))
 
     @cluster(num_nodes=7)
-    def test_group_consumption(self):
+    @matrix(metadata_quorum=quorum.all_non_upgrade)
+    def test_group_consumption(self, metadata_quorum=quorum.zk):
         """
         Verifies correct group rebalance behavior as consumers are started and stopped.
         In particular, this test verifies that the partition is readable after every
@@ -442,8 +444,8 @@ class AssignmentValidationTest(VerifiableConsumerTest):
     @cluster(num_nodes=6)
     @matrix(assignment_strategy=["org.apache.kafka.clients.consumer.RangeAssignor",
                                  "org.apache.kafka.clients.consumer.RoundRobinAssignor",
-                                 "org.apache.kafka.clients.consumer.StickyAssignor"])
-    def test_valid_assignment(self, assignment_strategy):
+                                 "org.apache.kafka.clients.consumer.StickyAssignor"], metadata_quorum=quorum.all_non_upgrade)
+    def test_valid_assignment(self, assignment_strategy, metadata_quorum=quorum.zk):
         """
         Verify assignment strategy correctness: each partition is assigned to exactly
         one consumer instance.

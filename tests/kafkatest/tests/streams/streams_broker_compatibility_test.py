@@ -14,6 +14,7 @@
 # limitations under the License.
 
 from ducktape.mark import parametrize
+from ducktape.mark.resource import cluster
 from ducktape.tests.test import Test
 from ducktape.utils.util import wait_until
 from kafkatest.services.kafka import KafkaService
@@ -61,6 +62,7 @@ class StreamsBrokerCompatibility(Test):
         self.zk.start()
 
 
+    @cluster(num_nodes=4)
     @parametrize(broker_version=str(LATEST_2_4))
     @parametrize(broker_version=str(LATEST_2_3))
     @parametrize(broker_version=str(LATEST_2_2))
@@ -85,6 +87,7 @@ class StreamsBrokerCompatibility(Test):
         self.consumer.stop()
         self.kafka.stop()
 
+    @cluster(num_nodes=4)
     @parametrize(broker_version=str(LATEST_2_6))
     @parametrize(broker_version=str(LATEST_2_5))
     @parametrize(broker_version=str(LATEST_2_4))
@@ -129,6 +132,7 @@ class StreamsBrokerCompatibility(Test):
     #     self.consumer.stop()
     #     self.kafka.stop()
 
+    @cluster(num_nodes=4)
     @parametrize(broker_version=str(LATEST_0_10_2))
     @parametrize(broker_version=str(LATEST_0_10_1))
     @parametrize(broker_version=str(LATEST_0_10_0))
@@ -146,6 +150,7 @@ class StreamsBrokerCompatibility(Test):
 
         self.kafka.stop()
 
+    @cluster(num_nodes=4)
     @parametrize(broker_version=str(LATEST_2_4))
     @parametrize(broker_version=str(LATEST_2_3))
     @parametrize(broker_version=str(LATEST_2_2))

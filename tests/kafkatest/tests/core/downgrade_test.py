@@ -53,7 +53,7 @@ class TestDowngrade(EndToEndTest):
             self.wait_until_rejoin()
 
     def setup_services(self, kafka_version, compression_types, security_protocol, static_membership):
-        self.create_zookeeper()
+        self.create_zookeeper_if_necessary()
         self.zk.start()
 
         self.create_kafka(num_nodes=3,
