@@ -14,12 +14,12 @@
 # limitations under the License.
 
 
-from ducktape.mark import parametrize
+from ducktape.mark import matrix, parametrize
 from ducktape.mark.resource import cluster
 from ducktape.tests.test import Test
 from ducktape.utils.util import wait_until
 
-from kafkatest.services.kafka import KafkaService
+from kafkatest.services.kafka import KafkaService, quorum
 from kafkatest.services.verifiable_producer import VerifiableProducer
 from kafkatest.services.zookeeper import ZookeeperService
 from kafkatest.utils import is_version
@@ -32,7 +32,7 @@ class TestVerifiableProducer(Test):
         super(TestVerifiableProducer, self).__init__(test_context)
 
         self.topic = "topic"
-        self.zk = ZookeeperService(test_context, num_nodes=1)
+        self.zk = ZookeeperService(test_context, num_nodes=1) if quorum.for_test(test_context) == quorum.zk else None
         self.kafka = KafkaService(test_context, num_nodes=1, zk=self.zk,
                                   topics={self.topic: {"partitions": 1, "replication-factor": 1}})
 
@@ -41,24 +41,40 @@ class TestVerifiableProducer(Test):
         self.producer = VerifiableProducer(test_context, num_nodes=1, kafka=self.kafka, topic=self.topic,
                                            max_messages=self.num_messages, throughput=self.num_messages // 10)
     def setUp(self):
-        self.zk.start()
-        self.kafka.start()
+        if self.zk:
+            self.zk.start()
 
     @cluster(num_nodes=3)
     @parametrize(producer_version=str(LATEST_0_8_2))
     @parametrize(producer_version=str(LATEST_0_9))
     @parametrize(producer_version=str(LATEST_0_10_0))
     @parametrize(producer_version=str(LATEST_0_10_1))
-    @parametrize(producer_version=str(DEV_BRANCH))
-    def test_simple_run(self, producer_version=DEV_BRANCH):
+    @matrix(producer_version=[str(DEV_BRANCH)], security_protocol=['PLAINTEXT', 'SSL'], metadata_quorum=quorum.all)
+    @cluster(num_nodes=4)
+    @matrix(producer_version=[str(DEV_BRANCH)], security_protocol=['SASL_SSL'], sasl_mechanism=['PLAIN', 'GSSAPI'],
+            metadata_quorum=quorum.all)
+    def test_simple_run(self, producer_version, security_protocol = 'PLAINTEXT', sasl_mechanism='PLAIN',
+                        metadata_quorum=quorum.zk):
         """
         Test that we can start VerifiableProducer on the current branch snapshot version or against the 0.8.2 jar, and
         verify that we can produce a small number of messages.
         """
+        self.kafka.security_protocol = security_protocol
+        self.kafka.client_sasl_mechanism = sasl_mechanism
+        self.kafka.interbroker_security_protocol = security_protocol
+        self.kafka.interbroker_sasl_mechanism = sasl_mechanism
+        if self.kafka.quorum_info.using_raft:
+            controller_quorum = self.kafka.controller_quorum
+            controller_quorum.controller_security_protocol = security_protocol
+            controller_quorum.controller_sasl_mechanism = sasl_mechanism
+            controller_quorum.intercontroller_security_protocol = security_protocol
+            controller_quorum.intercontroller_sasl_mechanism = sasl_mechanism
+        self.kafka.start()
+
         node = self.producer.nodes[0]
         node.version = KafkaVersion(producer_version)
         self.producer.start()
-        wait_until(lambda: self.producer.num_acked > 5, timeout_sec=5,
+        wait_until(lambda: self.producer.num_acked > 5, timeout_sec=15,
              err_msg="Producer failed to start in a reasonable amount of time.")
 
         # using version.vstring (distutils.version.LooseVersion) is a tricky way of ensuring
