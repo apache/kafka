@@ -184,9 +184,31 @@ class GroupCoordinator(val brokerId: Int,
               group.remove(memberId)
               responseCallback(JoinGroupResult(JoinGroupRequest.UNKNOWN_MEMBER_ID, Errors.GROUP_MAX_SIZE_REACHED))
             } else if (isUnknownMember) {
-              doNewMemberJoinGroup(group, groupInstanceId, requireKnownMemberId, clientId, clientHost, rebalanceTimeoutMs, sessionTimeoutMs, protocolType, protocols, responseCallback)
+              doNewMemberJoinGroup(
+                group,
+                groupInstanceId,
+                requireKnownMemberId,
+                clientId,
+                clientHost,
+                rebalanceTimeoutMs,
+                sessionTimeoutMs,
+                protocolType,
+                protocols,
+                responseCallback
+              )
             } else {
-              doCurrentMemberJoinGroup(group, memberId, groupInstanceId, clientId, clientHost, rebalanceTimeoutMs, sessionTimeoutMs, protocolType, protocols, responseCallback)
+              doCurrentMemberJoinGroup(
+                group,
+                memberId,
+                groupInstanceId,
+                clientId,
+                clientHost,
+                rebalanceTimeoutMs,
+                sessionTimeoutMs,
+                protocolType,
+                protocols,
+                responseCallback
+              )
             }
 
             // attempt to complete JoinGroup
@@ -271,7 +293,7 @@ class GroupCoordinator(val brokerId: Int,
         info(s"Static member with groupInstanceId=$groupInstanceId and unknown member id joins " +
           s"group ${group.groupId} in ${group.currentState} state. Replacing previously mapped " +
           s"member $oldMemberId with this groupInstanceId.")
-        updateStaticMemberAndRebalance(group, newMemberId, oldMemberId, groupInstanceId, protocols, responseCallback)
+        updateStaticMemberAndRebalance(group, oldMemberId, newMemberId, groupInstanceId, protocols, responseCallback)
 
       case None =>
         info(s"Static member with groupInstanceId=$groupInstanceId and unknown member id joins " +
@@ -321,7 +343,6 @@ class GroupCoordinator(val brokerId: Int,
     // We are validating two things:
     // 1. If `groupInstanceId` is present, then it exists and is mapped to `memberId`
     // 2. The `memberId` exists in the group
-
     groupInstanceId.flatMap { instanceId =>
       group.currentStaticMemberId(instanceId) match {
         case Some(currentMemberId) if currentMemberId != memberId =>
@@ -375,17 +396,23 @@ class GroupCoordinator(val brokerId: Int,
         addMemberAndRebalance(rebalanceTimeoutMs, sessionTimeoutMs, memberId, None,
           clientId, clientHost, protocolType, protocols, group, responseCallback)
       } else {
-        val memberError = validateCurrentMember(group, memberId, groupInstanceId, "join-group")
-        if (memberError.isDefined) {
-          responseCallback(JoinGroupResult(memberId, memberError.get))
-        } else {
-          val member = group.get(memberId)
+        val memberErrorOpt = validateCurrentMember(
+          group,
+          memberId,
+          groupInstanceId,
+          operation = "join-group"
+        )
 
-          group.currentState match {
+        memberErrorOpt match {
+          case Some(error) => JoinGroupResult(memberId, error)
+
+          case None => group.currentState match {
             case PreparingRebalance =>
+              val member = group.get(memberId)
               updateMemberAndRebalance(group, member, protocols, s"Member ${member.memberId} joining group during ${group.currentState}", responseCallback)
 
             case CompletingRebalance =>
+              val member = group.get(memberId)
               if (member.matches(protocols)) {
                 // member is joining with the same metadata (which could be because it failed to
                 // receive the initial JoinGroup response), so just return current group information
@@ -482,7 +509,12 @@ class GroupCoordinator(val brokerId: Int,
       // finding the correct coordinator and rejoin.
       Some(Errors.COORDINATOR_NOT_AVAILABLE)
     } else {
-      validateCurrentMember(group, memberId, groupInstanceId, "sync-group").orElse {
+      validateCurrentMember(
+        group,
+        memberId,
+        groupInstanceId,
+        operation = "sync-group"
+      ).orElse {
         if (generationId != group.generationId) {
           Some(Errors.ILLEGAL_GENERATION)
         } else if (protocolType.isDefined && !group.protocolType.contains(protocolType.get)) {
@@ -514,10 +546,10 @@ class GroupCoordinator(val brokerId: Int,
         groupInstanceId
       )
 
-      if (validationErrorOpt.isDefined) {
-        responseCallback(SyncGroupResult(validationErrorOpt.get))
-      } else {
-        group.currentState match {
+      validationErrorOpt match {
+        case Some(error) =>  responseCallback(SyncGroupResult(error))
+
+        case None => group.currentState match {
           case Empty =>
             responseCallback(SyncGroupResult(Errors.UNKNOWN_MEMBER_ID))
 
@@ -617,13 +649,16 @@ class GroupCoordinator(val brokerId: Int,
                       s"through explicit `LeaveGroup` request")
                     memberLeaveError(leavingMember, Errors.NONE)
                   } else {
-                    val memberErrorOpt = validateCurrentMember(group, memberId, groupInstanceId, "leave-group")
-                    if (memberErrorOpt.isDefined) {
-                      memberLeaveError(leavingMember, memberErrorOpt.get)
-                    } else {
+                    val memberError = validateCurrentMember(
+                      group,
+                      memberId,
+                      groupInstanceId,
+                      operation = "leave-group"
+                    ).getOrElse {
                       removeCurrentMemberFromGroup(group, memberId)
-                      memberLeaveError(leavingMember, Errors.NONE)
+                      Errors.NONE
                     }
+                    memberLeaveError(leavingMember, memberError)
                   }
                 }
                 responseCallback(leaveError(Errors.NONE, memberErrors))
@@ -739,7 +774,12 @@ class GroupCoordinator(val brokerId: Int,
     if (group.is(Dead)) {
       Some(Errors.COORDINATOR_NOT_AVAILABLE)
     } else {
-      validateCurrentMember(group, memberId, groupInstanceId, "sync-group").orElse {
+      validateCurrentMember(
+        group,
+        memberId,
+        groupInstanceId,
+        operation = "sync-group"
+      ).orElse {
         if (generationId != group.generationId) {
           Some(Errors.ILLEGAL_GENERATION)
         } else {
@@ -859,27 +899,6 @@ class GroupCoordinator(val brokerId: Int,
     groupManager.scheduleHandleTxnCompletion(producerId, offsetsPartitions.map(_.partition).toSet, isCommit)
   }
 
-  private def validateTxnOffsetCommit(
-    group: GroupMetadata,
-    generationId: Int,
-    memberId: String,
-    groupInstanceId: Option[String]
-  ): Option[Errors] = {
-    if (group.is(Dead)) {
-      Some(Errors.COORDINATOR_NOT_AVAILABLE)
-    } else if (generationId >= 0 || memberId != JoinGroupRequest.UNKNOWN_MEMBER_ID || groupInstanceId.isDefined) {
-      validateCurrentMember(group, memberId, groupInstanceId, "txn-offset-commit").orElse {
-        if (generationId != group.generationId) {
-          Some(Errors.ILLEGAL_GENERATION)
-        } else {
-          None
-        }
-      }
-    } else {
-      None
-    }
-  }
-
   private def doTxnCommitOffsets(group: GroupMetadata,
                                  memberId: String,
                                  groupInstanceId: Option[String],
@@ -889,11 +908,12 @@ class GroupCoordinator(val brokerId: Int,
                                  offsetMetadata: immutable.Map[TopicPartition, OffsetAndMetadata],
                                  responseCallback: immutable.Map[TopicPartition, Errors] => Unit): Unit = {
     group.inLock {
-      val validationErrorOpt = validateTxnOffsetCommit(
+      val validationErrorOpt = validateOffsetCommit(
         group,
         generationId,
         memberId,
-        groupInstanceId
+        groupInstanceId,
+        isTransactional = true
       )
 
       if (validationErrorOpt.isDefined) {
@@ -904,25 +924,33 @@ class GroupCoordinator(val brokerId: Int,
     }
   }
 
-
   private def validateOffsetCommit(
     group: GroupMetadata,
     generationId: Int,
     memberId: String,
-    groupInstanceId: Option[String]
+    groupInstanceId: Option[String],
+    isTransactional: Boolean
   ): Option[Errors] = {
     if (group.is(Dead)) {
       Some(Errors.COORDINATOR_NOT_AVAILABLE)
     } else if (generationId >= 0 || memberId != JoinGroupRequest.UNKNOWN_MEMBER_ID || groupInstanceId.isDefined) {
-      validateCurrentMember(group, memberId, groupInstanceId, "offset-commit").orElse {
+      validateCurrentMember(
+        group,
+        memberId,
+        groupInstanceId,
+        operation = "offset-commit"
+      ).orElse {
         if (generationId != group.generationId) {
           Some(Errors.ILLEGAL_GENERATION)
         } else {
           None
         }
       }
-    } else if (!group.is(Empty)) {
-      // When the group is non-empty, only members can commit offsets
+    } else if (!isTransactional && !group.is(Empty)) {
+      // When the group is non-empty, only members can commit offsets.
+      // This does not apply to transactional offset commits, since the
+      // older versions of this protocol do not require memberId and
+      // generationId.
       Some(Errors.UNKNOWN_MEMBER_ID)
     } else {
       None
@@ -940,7 +968,8 @@ class GroupCoordinator(val brokerId: Int,
         group,
         generationId,
         memberId,
-        groupInstanceId
+        groupInstanceId,
+        isTransactional = false
       )
 
       if (validationErrorOpt.isDefined) {
@@ -1201,8 +1230,8 @@ class GroupCoordinator(val brokerId: Int,
   }
 
   private def updateStaticMemberAndRebalance(group: GroupMetadata,
-                                             newMemberId: String,
                                              oldMemberId: String,
+                                             newMemberId: String,
                                              groupInstanceId: String,
                                              protocols: List[(String, Array[Byte])],
                                              responseCallback: JoinCallback): Unit = {
@@ -1226,10 +1255,6 @@ class GroupCoordinator(val brokerId: Int,
           val groupAssignment: Map[String, Array[Byte]] = group.allMemberMetadata.map(member => member.memberId -> member.assignment).toMap
           groupManager.storeGroup(group, groupAssignment, error => {
             if (error != Errors.NONE) {
-
-              // TODO: This logic seems questionable. The write was not committed, but that doesn't
-              //  mean it wasn't written to the log and cannot eventually become committed.
-
               warn(s"Failed to persist metadata for group ${group.groupId}: ${error.message}")
 
               // Failed to persist member.id of the given static member, revert the update of the static member in the group.
