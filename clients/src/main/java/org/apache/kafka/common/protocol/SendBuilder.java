@@ -21,6 +21,7 @@ import org.apache.kafka.common.network.Send;
 import org.apache.kafka.common.record.BaseRecords;
 import org.apache.kafka.common.record.MemoryRecords;
 import org.apache.kafka.common.record.MultiRecordsSend;
+import org.apache.kafka.common.record.UnalignedMemoryRecords;
 import org.apache.kafka.common.requests.RequestHeader;
 import org.apache.kafka.common.requests.ResponseHeader;
 import org.apache.kafka.common.utils.ByteUtils;
@@ -137,6 +138,9 @@ public class SendBuilder implements Writable {
         if (records instanceof MemoryRecords) {
             flushPendingBuffer();
             addBuffer(((MemoryRecords) records).buffer());
+        } else if (records instanceof UnalignedMemoryRecords) {
+            flushPendingBuffer();
+            addBuffer(((UnalignedMemoryRecords) records).buffer());
         } else {
             flushPendingSend();
             addSend(records.toSend());

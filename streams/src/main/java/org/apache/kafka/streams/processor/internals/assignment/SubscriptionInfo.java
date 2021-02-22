@@ -24,7 +24,7 @@ import java.util.Map;
 
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.protocol.ByteBufferAccessor;
-import org.apache.kafka.common.protocol.ObjectSerializationCache;
+import org.apache.kafka.common.protocol.MessageUtil;
 import org.apache.kafka.streams.errors.TaskAssignmentException;
 import org.apache.kafka.streams.internals.generated.SubscriptionInfoData;
 import org.apache.kafka.streams.internals.generated.SubscriptionInfoData.PartitionToOffsetSum;
@@ -265,14 +265,7 @@ public class SubscriptionInfo {
                 "Should never try to encode a SubscriptionInfo with version [" +
                     data.version() + "] > LATEST_SUPPORTED_VERSION [" + LATEST_SUPPORTED_VERSION + "]"
             );
-        } else {
-            final ObjectSerializationCache cache = new ObjectSerializationCache();
-            final ByteBuffer buffer = ByteBuffer.allocate(data.size(cache, (short) data.version()));
-            final ByteBufferAccessor accessor = new ByteBufferAccessor(buffer);
-            data.write(accessor, cache, (short) data.version());
-            buffer.rewind();
-            return buffer;
-        }
+        } else return MessageUtil.toByteBuffer(data, (short) data.version());
     }
 
     /**

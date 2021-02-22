@@ -75,7 +75,7 @@ class TopicCommandWithAdminClientTest extends KafkaServerTestHarness with Loggin
   }
 
   private[this] def waitForTopicCreated(topicName: String, timeout: Int = 10000): Unit = {
-    TestUtils.waitUntilMetadataIsPropagated(servers, topicName, partition = 0, timeout)
+    TestUtils.waitForPartitionMetadata(servers, topicName, partition = 0, timeout)
   }
 
   @BeforeEach
@@ -530,7 +530,7 @@ class TopicCommandWithAdminClientTest extends KafkaServerTestHarness with Loggin
     try {
       killBroker(0)
       val aliveServers = servers.filterNot(_.config.brokerId == 0)
-      TestUtils.waitUntilMetadataIsPropagated(aliveServers, testTopicName, 0)
+      TestUtils.waitForPartitionMetadata(aliveServers, testTopicName, 0)
       val output = TestUtils.grabConsoleOutput(
         topicService.describeTopic(new TopicCommandOptions(Array("--under-replicated-partitions"))))
       val rows = output.split("\n")
@@ -552,7 +552,7 @@ class TopicCommandWithAdminClientTest extends KafkaServerTestHarness with Loggin
     try {
       killBroker(0)
       val aliveServers = servers.filterNot(_.config.brokerId == 0)
-      TestUtils.waitUntilMetadataIsPropagated(aliveServers, testTopicName, 0)
+      TestUtils.waitForPartitionMetadata(aliveServers, testTopicName, 0)
       val output = TestUtils.grabConsoleOutput(
         topicService.describeTopic(new TopicCommandOptions(Array("--under-min-isr-partitions"))))
       val rows = output.split("\n")
@@ -672,7 +672,7 @@ class TopicCommandWithAdminClientTest extends KafkaServerTestHarness with Loggin
     try {
       killBroker(0)
       val aliveServers = servers.filterNot(_.config.brokerId == 0)
-      TestUtils.waitUntilMetadataIsPropagated(aliveServers, underMinIsrTopic, 0)
+      TestUtils.waitForPartitionMetadata(aliveServers, underMinIsrTopic, 0)
       val output = TestUtils.grabConsoleOutput(
         topicService.describeTopic(new TopicCommandOptions(Array("--under-min-isr-partitions"))))
       val rows = output.split("\n")

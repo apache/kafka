@@ -21,6 +21,8 @@ import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.SaslConfigs;
 import org.apache.kafka.common.config.SslConfigs;
 import org.apache.kafka.common.config.internals.BrokerSecurityConfigs;
+import org.apache.kafka.common.message.ApiMessageType;
+import org.apache.kafka.common.requests.ApiVersionsResponse;
 import org.apache.kafka.common.security.TestSecurityConfig;
 import org.apache.kafka.common.security.auth.KafkaPrincipal;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
@@ -48,6 +50,7 @@ import java.lang.reflect.Field;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.function.Supplier;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -160,9 +163,8 @@ public class SaslChannelBuilderTest {
 
     private SaslChannelBuilder createGssapiChannelBuilder(Map<String, JaasContext> jaasContexts, GSSManager gssManager) {
         SaslChannelBuilder channelBuilder = new SaslChannelBuilder(Mode.SERVER, jaasContexts,
-                SecurityProtocol.SASL_PLAINTEXT,
-                new ListenerName("GSSAPI"), false, "GSSAPI",
-                true, null, null, Time.SYSTEM, new LogContext()) {
+            SecurityProtocol.SASL_PLAINTEXT, new ListenerName("GSSAPI"), false, "GSSAPI",
+            true, null, null, null, Time.SYSTEM, new LogContext(), defaultApiVersionsSupplier()) {
 
             @Override
             protected GSSManager gssManager() {
@@ -172,6 +174,10 @@ public class SaslChannelBuilderTest {
         Map<String, Object> props = Collections.singletonMap(SaslConfigs.SASL_KERBEROS_SERVICE_NAME, "kafka");
         channelBuilder.configure(new TestSecurityConfig(props).values());
         return channelBuilder;
+    }
+
+    private Supplier<ApiVersionsResponse> defaultApiVersionsSupplier() {
+        return () -> ApiVersionsResponse.defaultApiVersionsResponse(ApiMessageType.ListenerType.ZK_BROKER);
     }
 
     private SaslChannelBuilder createChannelBuilder(SecurityProtocol securityProtocol, String saslMechanism) {
@@ -198,7 +204,7 @@ public class SaslChannelBuilderTest {
         Map<String, JaasContext> jaasContexts = Collections.singletonMap(saslMechanism, jaasContext);
         return new SaslChannelBuilder(Mode.CLIENT, jaasContexts, securityProtocol, new ListenerName(saslMechanism),
                 false, saslMechanism, true, null,
-                null, Time.SYSTEM, new LogContext());
+                null, null, Time.SYSTEM, new LogContext(), defaultApiVersionsSupplier());
     }
 
     public static final class TestGssapiLoginModule implements LoginModule {

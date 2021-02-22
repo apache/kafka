@@ -36,6 +36,8 @@ import org.apache.kafka.streams.processor.internals.testutil.LogCaptureAppender;
 import org.junit.Before;
 import org.junit.Test;
 
+import java.io.File;
+import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
@@ -47,6 +49,7 @@ import static org.apache.kafka.common.IsolationLevel.READ_COMMITTED;
 import static org.apache.kafka.common.IsolationLevel.READ_UNCOMMITTED;
 import static org.apache.kafka.streams.StreamsConfig.EXACTLY_ONCE;
 import static org.apache.kafka.streams.StreamsConfig.EXACTLY_ONCE_BETA;
+import static org.apache.kafka.streams.StreamsConfig.STATE_DIR_CONFIG;
 import static org.apache.kafka.streams.StreamsConfig.TOPOLOGY_OPTIMIZATION_CONFIG;
 import static org.apache.kafka.streams.StreamsConfig.adminClientPrefix;
 import static org.apache.kafka.streams.StreamsConfig.consumerPrefix;
@@ -79,8 +82,8 @@ public class StreamsConfigTest {
         props.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9092");
         props.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.String().getClass().getName());
         props.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.String().getClass().getName());
-        props.put("key.deserializer.encoding", "UTF8");
-        props.put("value.deserializer.encoding", "UTF-16");
+        props.put("key.deserializer.encoding", StandardCharsets.UTF_8.name());
+        props.put("value.deserializer.encoding", StandardCharsets.UTF_16.name());
         streamsConfig = new StreamsConfig(props);
     }
 
@@ -206,8 +209,8 @@ public class StreamsConfigTest {
     @Test
     public void defaultSerdeShouldBeConfigured() {
         final Map<String, Object> serializerConfigs = new HashMap<>();
-        serializerConfigs.put("key.serializer.encoding", "UTF8");
-        serializerConfigs.put("value.serializer.encoding", "UTF-16");
+        serializerConfigs.put("key.serializer.encoding", StandardCharsets.UTF_8.name());
+        serializerConfigs.put("value.serializer.encoding", StandardCharsets.UTF_16.name());
         final Serializer<String> serializer = Serdes.String().serializer();
 
         final String str = "my string for testing";
@@ -873,6 +876,13 @@ public class StreamsConfigTest {
                 e.getMessage()
             );
         }
+    }
+
+    @Test
+    public void shouldStateDirStartsWithJavaIOTmpDir() {
+        final String expectedPrefix = System.getProperty("java.io.tmpdir") + File.separator;
+        final String actual = streamsConfig.getString(STATE_DIR_CONFIG);
+        assertTrue(actual.startsWith(expectedPrefix));
     }
 
     @Test

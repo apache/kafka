@@ -244,7 +244,7 @@ public final class JsonConverterGenerator implements MessageClassGenerator {
             buffer.decrementIndent();
             buffer.printf("}%n");
             String type = target.field().concreteJavaType(headerGenerator, structRegistry);
-            buffer.printf("%s _collection = new %s();%n", type, type);
+            buffer.printf("%s _collection = new %s(%s.size());%n", type, type, target.sourceVariable());
             buffer.printf("%s;%n", target.assignmentStatement("_collection"));
             headerGenerator.addImport(MessageGenerator.JSON_NODE_CLASS);
             buffer.printf("for (JsonNode _element : %s) {%n", target.sourceVariable());

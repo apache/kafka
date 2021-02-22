@@ -40,10 +40,12 @@ import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.ApiMessage;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.record.BufferSupplier;
+import org.apache.kafka.common.utils.BufferSupplier;
 import org.apache.kafka.common.record.CompressionType;
 import org.apache.kafka.common.record.MemoryRecords;
 import org.apache.kafka.common.record.Records;
+import org.apache.kafka.common.record.UnalignedMemoryRecords;
+import org.apache.kafka.common.record.UnalignedRecords;
 import org.apache.kafka.common.requests.BeginQuorumEpochRequest;
 import org.apache.kafka.common.requests.BeginQuorumEpochResponse;
 import org.apache.kafka.common.requests.DescribeQuorumRequest;
@@ -73,8 +75,6 @@ import org.apache.kafka.snapshot.SnapshotWriter;
 import org.slf4j.Logger;
 
 import java.io.IOException;
-import java.net.InetSocketAddress;
-import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Iterator;
@@ -126,21 +126,29 @@ import static org.apache.kafka.raft.RaftUtil.hasValidTopicPartition;
  *    gracefully resign from the current epoch. This causes remaining voters to immediately
  *    begin a new election.
  *
- * 4) {@link FetchRequestData}: This is the same as the usual Fetch API in Kafka, but we piggyback
- *    some additional metadata on responses (i.e. current leader and epoch). Unlike partition replication,
- *    we also piggyback truncation detection on this API rather than through a separate truncation state.
+ * 4) {@link FetchRequestData}: This is the same as the usual Fetch API in Kafka, but we add snapshot
+ *    check before responding, and we also piggyback some additional metadata on responses (i.e. current
+ *    leader and epoch). Unlike partition replication, we also piggyback truncation detection on this API
+ *    rather than through a separate truncation state.
+ *
+ * 5) {@link FetchSnapshotRequestData}: Sent by the follower to the epoch leader in order to fetch a snapshot.
+ *    This happens when a FetchResponse includes a snapshot ID due to the follower's log end offset being less
+ *    than the leader's log start offset. This API is similar to the Fetch API since the snapshot is stored
+ *    as FileRecords, but we use {@link UnalignedRecords} in FetchSnapshotResponse because the records
+ *    are not necessarily offset-aligned.
  *
  */
 public class KafkaRaftClient<T> implements RaftClient<T> {
     private static final int RETRY_BACKOFF_BASE_MS = 100;
     private static final int FETCH_MAX_WAIT_MS = 1000;
-    static final int MAX_BATCH_SIZE = 1024 * 1024;
+    static final int MAX_BATCH_SIZE = 8 * 1024 * 1024;
 
     private final AtomicReference<GracefulShutdown> shutdown = new AtomicReference<>();
     private final Logger logger;
     private final LogContext logContext;
     private final Time time;
     private final int fetchMaxWaitMs;
+    private final String clusterId;
     private final OptionalInt nodeId;
     private final NetworkChannel channel;
     private final ReplicatedLog log;
@@ -152,15 +160,15 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
     private final RaftMessageQueue messageQueue;
     private final QuorumStateStore quorumStateStore;
     private final Metrics metrics;
+    private final RaftConfig raftConfig;
+    private final KafkaRaftMetrics kafkaRaftMetrics;
+    private final QuorumState quorum;
+    private final RequestManager requestManager;
 
     private final List<ListenerContext> listenerContexts = new ArrayList<>();
     private final ConcurrentLinkedQueue<Listener<T>> pendingListeners = new ConcurrentLinkedQueue<>();
 
     private volatile BatchAccumulator<T> accumulator;
-    private RequestManager requestManager;
-    private QuorumState quorum;
-    private KafkaRaftMetrics kafkaRaftMetrics;
-    private RaftConfig raftConfig;
 
     /**
      * Create a new instance.
@@ -177,7 +185,9 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
         Metrics metrics,
         ExpirationService expirationService,
         LogContext logContext,
-        OptionalInt nodeId
+        String clusterId,
+        OptionalInt nodeId,
+        RaftConfig raftConfig
     ) {
         this(serde,
             channel,
@@ -189,9 +199,11 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
             metrics,
             expirationService,
             FETCH_MAX_WAIT_MS,
+            clusterId,
             nodeId,
             logContext,
-            new Random());
+            new Random(),
+            raftConfig);
     }
 
     KafkaRaftClient(
@@ -205,9 +217,11 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
         Metrics metrics,
         ExpirationService expirationService,
         int fetchMaxWaitMs,
+        String clusterId,
         OptionalInt nodeId,
         LogContext logContext,
-        Random random
+        Random random,
+        RaftConfig raftConfig
     ) {
         this.serde = serde;
         this.channel = channel;
@@ -218,12 +232,35 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
         this.fetchPurgatory = new ThresholdPurgatory<>(expirationService);
         this.appendPurgatory = new ThresholdPurgatory<>(expirationService);
         this.time = time;
+        this.clusterId = clusterId;
         this.nodeId = nodeId;
         this.metrics = metrics;
         this.fetchMaxWaitMs = fetchMaxWaitMs;
         this.logContext = logContext;
         this.logger = logContext.logger(KafkaRaftClient.class);
         this.random = random;
+        this.raftConfig = raftConfig;
+
+        Set<Integer> quorumVoterIds = raftConfig.quorumVoterIds();
+        this.requestManager = new RequestManager(quorumVoterIds, raftConfig.retryBackoffMs(),
+            raftConfig.requestTimeoutMs(), random);
+        this.quorum = new QuorumState(
+            nodeId,
+            quorumVoterIds,
+            raftConfig.electionTimeoutMs(),
+            raftConfig.fetchTimeoutMs(),
+            quorumStateStore,
+            time,
+            logContext,
+            random);
+        this.kafkaRaftMetrics = new KafkaRaftMetrics(metrics, "raft", quorum);
+        kafkaRaftMetrics.updateNumUnknownVoterConnections(quorum.remoteVoters().size());
+
+        // Update the voter endpoints with what's in RaftConfig
+        Map<Integer, RaftConfig.AddressSpec> voterAddresses = raftConfig.quorumVoterConnections();
+        voterAddresses.entrySet().stream()
+            .filter(e -> e.getValue() instanceof RaftConfig.InetAddressSpec)
+            .forEach(e -> this.channel.updateEndpoint(e.getKey(), (RaftConfig.InetAddressSpec) e.getValue()));
     }
 
     private void updateFollowerHighWatermark(
@@ -235,7 +272,7 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
             if (state.updateHighWatermark(OptionalLong.of(newHighWatermark))) {
                 logger.debug("Follower high watermark updated to {}", newHighWatermark);
                 log.updateHighWatermark(new LogOffsetMetadata(newHighWatermark));
-                maybeFireHandleCommit(newHighWatermark);
+                updateListenersProgress(newHighWatermark);
             }
         });
     }
@@ -269,26 +306,29 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
             // It is also possible that the high watermark is being updated
             // for the first time following the leader election, so we need
             // to give lagging listeners an opportunity to catch up as well
-            maybeFireHandleCommit(highWatermark.offset);
+            updateListenersProgress(highWatermark.offset);
         });
     }
 
-    private void maybeFireHandleCommit(long highWatermark) {
-        maybeFireHandleCommit(listenerContexts, highWatermark);
+    private void updateListenersProgress(long highWatermark) {
+        updateListenersProgress(listenerContexts, highWatermark);
     }
 
-    private void maybeFireHandleCommit(List<ListenerContext> listenerContexts, long highWatermark) {
+    private void updateListenersProgress(List<ListenerContext> listenerContexts, long highWatermark) {
         for (ListenerContext listenerContext : listenerContexts) {
-            OptionalLong nextExpectedOffsetOpt = listenerContext.nextExpectedOffset();
-            if (!nextExpectedOffsetOpt.isPresent()) {
-                continue;
-            }
+            listenerContext.nextExpectedOffset().ifPresent(nextExpectedOffset -> {
+                if (nextExpectedOffset < log.startOffset()) {
+                    listenerContext.fireHandleSnapshot(log.startOffset());
+                }
+            });
 
-            long nextExpectedOffset = nextExpectedOffsetOpt.getAsLong();
-            if (nextExpectedOffset < highWatermark) {
-                LogFetchInfo readInfo = log.read(nextExpectedOffset, Isolation.COMMITTED);
-                listenerContext.fireHandleCommit(nextExpectedOffset, readInfo.records);
-            }
+            // Re-read the expected offset in case the snapshot had to be reloaded
+            listenerContext.nextExpectedOffset().ifPresent(nextExpectedOffset -> {
+                if (nextExpectedOffset < highWatermark) {
+                    LogFetchInfo readInfo = log.read(nextExpectedOffset, Isolation.COMMITTED);
+                    listenerContext.fireHandleCommit(nextExpectedOffset, readInfo.records);
+                }
+            });
         }
     }
 
@@ -314,37 +354,15 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
         }
     }
 
-    private void fireHandleResign() {
+    private void fireHandleResign(int epoch) {
         for (ListenerContext listenerContext : listenerContexts) {
-            listenerContext.fireHandleResign();
+            listenerContext.fireHandleResign(epoch);
         }
     }
 
     @Override
-    public void initialize(RaftConfig raftConfig) throws IOException {
-        this.raftConfig = raftConfig;
-        Set<Integer> quorumVoterIds = raftConfig.quorumVoterIds();
-        this.requestManager = new RequestManager(quorumVoterIds, raftConfig.retryBackoffMs(),
-                raftConfig.requestTimeoutMs(), random);
-
-        Map<Integer, InetSocketAddress> voterAddresses = raftConfig.quorumVoterConnections();
-        for (Map.Entry<Integer, InetSocketAddress> voterAddressEntry : voterAddresses.entrySet()) {
-            channel.updateEndpoint(voterAddressEntry.getKey(), voterAddressEntry.getValue());
-        }
-
-        QuorumState quorumState = new QuorumState(
-                nodeId,
-                quorumVoterIds,
-                raftConfig.electionTimeoutMs(),
-                raftConfig.fetchTimeoutMs(),
-                quorumStateStore,
-                time,
-                logContext,
-                random);
-        quorumState.initialize(new OffsetAndEpoch(log.endOffset().offset, log.lastFetchedEpoch()));
-        this.quorum = quorumState;
-        this.kafkaRaftMetrics = new KafkaRaftMetrics(metrics, "raft", quorum);
-        kafkaRaftMetrics.updateNumUnknownVoterConnections(quorum.remoteVoters().size());
+    public void initialize() throws IOException {
+        quorum.initialize(new OffsetAndEpoch(log.endOffset().offset, log.lastFetchedEpoch()));
 
         long currentTimeMs = time.milliseconds();
         if (quorum.isLeader()) {
@@ -370,6 +388,11 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
         wakeup();
     }
 
+    @Override
+    public LeaderAndEpoch leaderAndEpoch() {
+        return quorum.leaderAndEpoch();
+    }
+
     private OffsetAndEpoch endOffset() {
         return new OffsetAndEpoch(log.endOffset().offset, log.lastFetchedEpoch());
     }
@@ -386,7 +409,7 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
         // The high watermark can only be advanced once we have written a record
         // from the new leader's epoch. Hence we write a control message immediately
         // to ensure there is no delay committing pending data.
-        appendLeaderChangeMessage(state, currentTimeMs);
+        appendLeaderChangeMessage(state, log.endOffset().offset, currentTimeMs);
         updateLeaderEndOffsetAndTimestamp(state, currentTimeMs);
 
         resetConnections();
@@ -411,7 +434,7 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
             .collect(Collectors.toList());
     }
 
-    private void appendLeaderChangeMessage(LeaderState state, long currentTimeMs) {
+    private void appendLeaderChangeMessage(LeaderState state, long baseOffset, long currentTimeMs) {
         List<Voter> voters = convertToVoters(state.followers());
         List<Voter> grantingVoters = convertToVoters(state.grantingVoters());
 
@@ -424,7 +447,11 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
             .setGrantingVoters(grantingVoters);
 
         MemoryRecords records = MemoryRecords.withLeaderChangeMessage(
-            currentTimeMs, quorum.epoch(), leaderChangeMessage);
+            baseOffset,
+            currentTimeMs,
+            quorum.epoch(),
+            leaderChangeMessage
+        );
 
         appendAsLeader(records);
         flushLeaderLog(state, currentTimeMs);
@@ -457,7 +484,7 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
 
     private void maybeResignLeadership() {
         if (quorum.isLeader()) {
-            fireHandleResign();
+            fireHandleResign(quorum.epoch());
         }
 
         if (accumulator != null) {
@@ -874,7 +901,7 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
     private FetchResponseData buildFetchResponse(
         Errors error,
         Records records,
-        Optional<FetchResponseData.EpochEndOffset> divergingEpoch,
+        ValidOffsetAndEpoch validOffsetAndEpoch,
         Optional<LogOffsetMetadata> highWatermark
     ) {
         return RaftUtil.singletonFetchResponse(log.topicPartition(), Errors.NONE, partitionData -> {
@@ -890,7 +917,19 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
                 .setLeaderEpoch(quorum.epoch())
                 .setLeaderId(quorum.leaderIdOrSentinel());
 
-            divergingEpoch.ifPresent(partitionData::setDivergingEpoch);
+            switch (validOffsetAndEpoch.type()) {
+                case DIVERGING:
+                    partitionData.divergingEpoch()
+                        .setEpoch(validOffsetAndEpoch.offsetAndEpoch().epoch)
+                        .setEndOffset(validOffsetAndEpoch.offsetAndEpoch().offset);
+                    break;
+                case SNAPSHOT:
+                    partitionData.snapshotId()
+                        .setEpoch(validOffsetAndEpoch.offsetAndEpoch().epoch)
+                        .setEndOffset(validOffsetAndEpoch.offsetAndEpoch().offset);
+                    break;
+                default:
+            }
         });
     }
 
@@ -898,7 +937,20 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
         Errors error,
         Optional<LogOffsetMetadata> highWatermark
     ) {
-        return buildFetchResponse(error, MemoryRecords.EMPTY, Optional.empty(), highWatermark);
+        return buildFetchResponse(
+            error,
+            MemoryRecords.EMPTY,
+            ValidOffsetAndEpoch.valid(),
+            highWatermark
+        );
+    }
+
+    private boolean hasValidClusterId(FetchRequestData request) {
+        // We don't enforce the cluster id if it is not provided.
+        if (request.clusterId() == null) {
+            return true;
+        }
+        return clusterId.equals(request.clusterId());
     }
 
     /**
@@ -919,6 +971,10 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
         long currentTimeMs
     ) {
         FetchRequestData request = (FetchRequestData) requestMetadata.data;
+
+        if (!hasValidClusterId(request)) {
+            return completedFuture(new FetchResponseData().setErrorCode(Errors.INCONSISTENT_CLUSTER_ID.code()));
+        }
 
         if (!hasValidTopicPartition(request, log.topicPartition())) {
             // Until we support multi-raft, we treat topic partition mismatches as invalid requests
@@ -968,12 +1024,7 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
             logger.trace("Completing delayed fetch from {} starting at offset {} at {}",
                 request.replicaId(), fetchPartition.fetchOffset(), completionTimeMs);
 
-            try {
-                return tryCompleteFetchRequest(request.replicaId(), fetchPartition, time.milliseconds());
-            } catch (Exception e) {
-                logger.error("Caught unexpected error in fetch completion of request {}", request, e);
-                return buildEmptyFetchResponse(Errors.UNKNOWN_SERVER_ERROR, Optional.empty());
-            }
+            return tryCompleteFetchRequest(request.replicaId(), fetchPartition, time.milliseconds());
         });
     }
 
@@ -982,48 +1033,34 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
         FetchRequestData.FetchPartition request,
         long currentTimeMs
     ) {
-        Optional<Errors> errorOpt = validateLeaderOnlyRequest(request.currentLeaderEpoch());
-        if (errorOpt.isPresent()) {
-            return buildEmptyFetchResponse(errorOpt.get(), Optional.empty());
-        }
-
-        long fetchOffset = request.fetchOffset();
-        int lastFetchedEpoch = request.lastFetchedEpoch();
-        LeaderState state = quorum.leaderStateOrThrow();
-        Optional<OffsetAndEpoch> divergingEpochOpt = validateFetchOffsetAndEpoch(fetchOffset, lastFetchedEpoch);
-
-        if (divergingEpochOpt.isPresent()) {
-            Optional<FetchResponseData.EpochEndOffset> divergingEpoch =
-                divergingEpochOpt.map(offsetAndEpoch -> new FetchResponseData.EpochEndOffset()
-                    .setEpoch(offsetAndEpoch.epoch)
-                    .setEndOffset(offsetAndEpoch.offset));
-            return buildFetchResponse(Errors.NONE, MemoryRecords.EMPTY, divergingEpoch, state.highWatermark());
-        } else {
-            LogFetchInfo info = log.read(fetchOffset, Isolation.UNCOMMITTED);
-
-            if (state.updateReplicaState(replicaId, currentTimeMs, info.startOffsetMetadata)) {
-                onUpdateLeaderHighWatermark(state, currentTimeMs);
+        try {
+            Optional<Errors> errorOpt = validateLeaderOnlyRequest(request.currentLeaderEpoch());
+            if (errorOpt.isPresent()) {
+                return buildEmptyFetchResponse(errorOpt.get(), Optional.empty());
             }
 
-            return buildFetchResponse(Errors.NONE, info.records, Optional.empty(), state.highWatermark());
-        }
-    }
+            long fetchOffset = request.fetchOffset();
+            int lastFetchedEpoch = request.lastFetchedEpoch();
+            LeaderState state = quorum.leaderStateOrThrow();
+            ValidOffsetAndEpoch validOffsetAndEpoch = log.validateOffsetAndEpoch(fetchOffset, lastFetchedEpoch);
 
-    /**
-     * Check whether a fetch offset and epoch is valid. Return the diverging epoch, which
-     * is the largest epoch such that subsequent records are known to diverge.
-     */
-    private Optional<OffsetAndEpoch> validateFetchOffsetAndEpoch(long fetchOffset, int lastFetchedEpoch) {
-        if (fetchOffset == 0 && lastFetchedEpoch == 0) {
-            return Optional.empty();
-        }
+            final Records records;
+            if (validOffsetAndEpoch.type() == ValidOffsetAndEpoch.Type.VALID) {
+                LogFetchInfo info = log.read(fetchOffset, Isolation.UNCOMMITTED);
 
-        OffsetAndEpoch endOffsetAndEpoch = log.endOffsetForEpoch(lastFetchedEpoch)
-            .orElse(new OffsetAndEpoch(-1L, -1));
-        if (endOffsetAndEpoch.epoch != lastFetchedEpoch || endOffsetAndEpoch.offset < fetchOffset) {
-            return Optional.of(endOffsetAndEpoch);
-        } else {
-            return Optional.empty();
+                if (state.updateReplicaState(replicaId, currentTimeMs, info.startOffsetMetadata)) {
+                    onUpdateLeaderHighWatermark(state, currentTimeMs);
+                }
+
+                records = info.records;
+            } else {
+                records = MemoryRecords.EMPTY;
+            }
+
+            return buildFetchResponse(Errors.NONE, records, validOffsetAndEpoch, state.highWatermark());
+        } catch (Exception e) {
+            logger.error("Caught unexpected error in fetch completion of request {}", request, e);
+            return buildEmptyFetchResponse(Errors.UNKNOWN_SERVER_ERROR, Optional.empty());
         }
     }
 
@@ -1077,10 +1114,8 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
                     }
                 });
 
-                log.truncateToEndOffset(divergingOffsetAndEpoch).ifPresent(truncationOffset -> {
-                    logger.info("Truncated to offset {} from Fetch response from leader {}",
-                        truncationOffset, quorum.leaderIdOrSentinel());
-                });
+                long truncationOffset = log.truncateToEndOffset(divergingOffsetAndEpoch);
+                logger.info("Truncated to offset {} from Fetch response from leader {}", truncationOffset, quorum.leaderIdOrSentinel());
             } else if (partitionResponse.snapshotId().epoch() >= 0 ||
                        partitionResponse.snapshotId().endOffset() >= 0) {
                 // The leader is asking us to fetch a snapshot
@@ -1191,10 +1226,8 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
 
             return FetchSnapshotResponse.singleton(
                 unknownTopicPartition,
-                responsePartitionSnapshot -> {
-                    return responsePartitionSnapshot
-                        .setErrorCode(Errors.UNKNOWN_TOPIC_OR_PARTITION.code());
-                }
+                responsePartitionSnapshot -> responsePartitionSnapshot
+                    .setErrorCode(Errors.UNKNOWN_TOPIC_OR_PARTITION.code())
             );
         }
 
@@ -1205,10 +1238,8 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
         if (leaderValidation.isPresent()) {
             return FetchSnapshotResponse.singleton(
                 log.topicPartition(),
-                responsePartitionSnapshot -> {
-                    return addQuorumLeader(responsePartitionSnapshot)
-                        .setErrorCode(leaderValidation.get().code());
-                }
+                responsePartitionSnapshot -> addQuorumLeader(responsePartitionSnapshot)
+                    .setErrorCode(leaderValidation.get().code())
             );
         }
 
@@ -1220,10 +1251,8 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
         if (!snapshotOpt.isPresent()) {
             return FetchSnapshotResponse.singleton(
                 log.topicPartition(),
-                responsePartitionSnapshot -> {
-                    return addQuorumLeader(responsePartitionSnapshot)
-                        .setErrorCode(Errors.SNAPSHOT_NOT_FOUND.code());
-                }
+                responsePartitionSnapshot -> addQuorumLeader(responsePartitionSnapshot)
+                    .setErrorCode(Errors.SNAPSHOT_NOT_FOUND.code())
             );
         }
 
@@ -1231,10 +1260,8 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
             if (partitionSnapshot.position() < 0 || partitionSnapshot.position() >= snapshot.sizeInBytes()) {
                 return FetchSnapshotResponse.singleton(
                     log.topicPartition(),
-                    responsePartitionSnapshot -> {
-                        return addQuorumLeader(responsePartitionSnapshot)
-                            .setErrorCode(Errors.POSITION_OUT_OF_RANGE.code());
-                    }
+                    responsePartitionSnapshot -> addQuorumLeader(responsePartitionSnapshot)
+                        .setErrorCode(Errors.POSITION_OUT_OF_RANGE.code())
                 );
             }
 
@@ -1245,9 +1272,11 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
                 maxSnapshotSize = Integer.MAX_VALUE;
             }
 
-            ByteBuffer buffer = ByteBuffer.allocate(Math.min(data.maxBytes(), maxSnapshotSize));
-            snapshot.read(buffer, partitionSnapshot.position());
-            buffer.flip();
+            if (partitionSnapshot.position() > Integer.MAX_VALUE) {
+                throw new IllegalStateException(String.format("Trying to fetch a snapshot with position: %d lager than Int.MaxValue", partitionSnapshot.position()));
+            }
+
+            UnalignedRecords records = snapshot.read(partitionSnapshot.position(), Math.min(data.maxBytes(), maxSnapshotSize));
 
             long snapshotSize = snapshot.sizeInBytes();
 
@@ -1262,7 +1291,7 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
                     return responsePartitionSnapshot
                         .setSize(snapshotSize)
                         .setPosition(partitionSnapshot.position())
-                        .setBytes(buffer);
+                        .setUnalignedRecords(records);
                 }
             );
         }
@@ -1330,22 +1359,52 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
         if (state.fetchingSnapshot().isPresent()) {
             snapshot = state.fetchingSnapshot().get();
         } else {
-            throw new IllegalStateException(String.format("Received unexpected fetch snapshot response: %s", partitionSnapshot));
+            throw new IllegalStateException(
+                String.format("Received unexpected fetch snapshot response: %s", partitionSnapshot)
+            );
         }
 
         if (!snapshot.snapshotId().equals(snapshotId)) {
-            throw new IllegalStateException(String.format("Received fetch snapshot response with an invalid id. Expected %s; Received %s", snapshot.snapshotId(), snapshotId));
+            throw new IllegalStateException(
+                String.format(
+                    "Received fetch snapshot response with an invalid id. Expected %s; Received %s",
+                    snapshot.snapshotId(),
+                    snapshotId
+                )
+            );
         }
         if (snapshot.sizeInBytes() != partitionSnapshot.position()) {
-            throw new IllegalStateException(String.format("Received fetch snapshot response with an invalid position. Expected %s; Received %s", snapshot.sizeInBytes(), partitionSnapshot.position()));
+            throw new IllegalStateException(
+                String.format(
+                    "Received fetch snapshot response with an invalid position. Expected %s; Received %s",
+                    snapshot.sizeInBytes(),
+                    partitionSnapshot.position()
+                )
+            );
         }
 
-        snapshot.append(partitionSnapshot.bytes());
+        if (!(partitionSnapshot.unalignedRecords() instanceof MemoryRecords)) {
+            throw new IllegalStateException(String.format("Received unexpected fetch snapshot response: %s", partitionSnapshot));
+        }
+        snapshot.append(new UnalignedMemoryRecords(((MemoryRecords) partitionSnapshot.unalignedRecords()).buffer()));
 
         if (snapshot.sizeInBytes() == partitionSnapshot.size()) {
             // Finished fetching the snapshot.
             snapshot.freeze();
             state.setFetchingSnapshot(Optional.empty());
+
+            if (log.truncateToLatestSnapshot()) {
+                updateFollowerHighWatermark(state, OptionalLong.of(log.highWatermark().offset));
+            } else {
+                throw new IllegalStateException(
+                    String.format(
+                        "Full log truncation expected but didn't happen. Snapshot of %s, log end offset %s, last fetched %s",
+                        snapshot.snapshotId(),
+                        log.endOffset(),
+                        log.lastFetchedEpoch()
+                    )
+                );
+            }
         }
 
         state.resetFetchTimeout(currentTimeMs);
@@ -1724,6 +1783,7 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
         });
         return request
             .setMaxWaitMs(fetchMaxWaitMs)
+            .setClusterId(clusterId.toString())
             .setReplicaId(quorum.localIdOrSentinel());
     }
 
@@ -2035,6 +2095,8 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
     }
 
     private long pollCurrentState(long currentTimeMs) throws IOException {
+        maybeUpdateOldestSnapshotId();
+
         if (quorum.isLeader()) {
             return pollLeader(currentTimeMs);
         } else if (quorum.isCandidate()) {
@@ -2070,7 +2132,7 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
                 })
                 .collect(Collectors.toList());
 
-            maybeFireHandleCommit(listenersToUpdate, highWatermarkMetadata.offset);
+            updateListenersProgress(listenersToUpdate, highWatermarkMetadata.offset);
         });
     }
 
@@ -2095,6 +2157,10 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
         }
 
         return false;
+    }
+
+    private void maybeUpdateOldestSnapshotId() {
+        log.latestSnapshotId().ifPresent(snapshotId -> log.deleteBeforeSnapshot(snapshotId));
     }
 
     private void wakeup() {
@@ -2140,13 +2206,27 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
 
     @Override
     public Long scheduleAppend(int epoch, List<T> records) {
+        return append(epoch, records, false);
+    }
+
+    @Override
+    public Long scheduleAtomicAppend(int epoch, List<T> records) {
+        return append(epoch, records, true);
+    }
+
+    private Long append(int epoch, List<T> records, boolean isAtomic) {
         BatchAccumulator<T> accumulator = this.accumulator;
         if (accumulator == null) {
             return Long.MAX_VALUE;
         }
 
         boolean isFirstAppend = accumulator.isEmpty();
-        Long offset = accumulator.append(epoch, records);
+        final Long offset;
+        if (isAtomic) {
+            offset = accumulator.appendAtomic(epoch, records);
+        } else {
+            offset = accumulator.append(epoch, records);
+        }
 
         // Wakeup the network channel if either this is the first append
         // or the accumulator is ready to drain now. Checking for the first
@@ -2241,7 +2321,7 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
         // These fields are visible to both the Raft IO thread and the listener
         // and are protected through synchronization on this `ListenerContext` instance
         private BatchReader<T> lastSent = null;
-        private long lastAckedOffset = 0;
+        private long nextOffset = 0;
 
         private ListenerContext(Listener<T> listener) {
             this.listener = listener;
@@ -2251,8 +2331,8 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
          * Get the last acked offset, which is one greater than the offset of the
          * last record which was acked by the state machine.
          */
-        public synchronized long lastAckedOffset() {
-            return lastAckedOffset;
+        public synchronized long nextOffset() {
+            return nextOffset;
         }
 
         /**
@@ -2272,7 +2352,18 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
                     return OptionalLong.empty();
                 }
             } else {
-                return OptionalLong.of(lastAckedOffset);
+                return OptionalLong.of(nextOffset);
+            }
+        }
+
+        /**
+         * This API is used when the Listener needs to be notified of a new Snapshot. This happens
+         * when the context last acked end offset is less that then log start offset.
+         */
+        public void fireHandleSnapshot(long logStartOffset) {
+            synchronized (this) {
+                nextOffset = logStartOffset;
+                lastSent = null;
             }
         }
 
@@ -2291,9 +2382,10 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
 
         /**
          * This API is used for committed records originating from {@link #scheduleAppend(int, List)}
-         * on this instance. In this case, we are able to save the original record objects,
-         * which saves the need to read them back from disk. This is a nice optimization
-         * for the leader which is typically doing more work than all of the followers.
+         * or {@link #scheduleAtomicAppend(int, List)} on this instance. In this case, we are able to
+         * save the original record objects, which saves the need to read them back from disk. This is
+         * a nice optimization for the leader which is typically doing more work than all of the
+         * followers.
          */
         public void fireHandleCommit(long baseOffset, int epoch, List<T> records) {
             BatchReader.Batch<T> batch = new BatchReader.Batch<>(baseOffset, epoch, records);
@@ -2313,20 +2405,20 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
             // up to the start of the leader epoch. This guarantees that the
             // state machine has seen the full committed state before it becomes
             // leader and begins writing to the log.
-            if (epoch > claimedEpoch && lastAckedOffset() >= epochStartOffset) {
+            if (epoch > claimedEpoch && nextOffset() >= epochStartOffset) {
                 claimedEpoch = epoch;
                 listener.handleClaim(epoch);
             }
         }
 
-        void fireHandleResign() {
-            listener.handleResign();
+        void fireHandleResign(int epoch) {
+            listener.handleResign(epoch);
         }
 
         public synchronized void onClose(BatchReader<T> reader) {
             OptionalLong lastOffset = reader.lastOffset();
             if (lastOffset.isPresent()) {
-                lastAckedOffset = lastOffset.getAsLong() + 1;
+                nextOffset = lastOffset.getAsLong() + 1;
             }
 
             if (lastSent == reader) {

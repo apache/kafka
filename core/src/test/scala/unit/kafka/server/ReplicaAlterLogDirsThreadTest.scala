@@ -95,7 +95,7 @@ class ReplicaAlterLogDirsThreadTest {
     when(partition.partitionId).thenReturn(partitionId)
     when(replicaManager.futureLocalLogOrException(t1p0)).thenReturn(futureLog)
     when(replicaManager.futureLogExists(t1p0)).thenReturn(true)
-    when(replicaManager.nonOfflinePartition(t1p0)).thenReturn(Some(partition))
+    when(replicaManager.onlinePartition(t1p0)).thenReturn(Some(partition))
     when(replicaManager.getPartitionOrException(t1p0)).thenReturn(partition)
 
     when(quotaManager.isQuotaExceeded).thenReturn(false)
@@ -192,7 +192,7 @@ class ReplicaAlterLogDirsThreadTest {
     when(partition.partitionId).thenReturn(partitionId)
     when(replicaManager.futureLocalLogOrException(t1p0)).thenReturn(futureLog)
     when(replicaManager.futureLogExists(t1p0)).thenReturn(true)
-    when(replicaManager.nonOfflinePartition(t1p0)).thenReturn(Some(partition))
+    when(replicaManager.onlinePartition(t1p0)).thenReturn(Some(partition))
     when(replicaManager.getPartitionOrException(t1p0)).thenReturn(partition)
 
     when(quotaManager.isQuotaExceeded).thenReturn(false)
@@ -918,12 +918,12 @@ class ReplicaAlterLogDirsThreadTest {
     expect(replicaManager.localLogOrException(t1p0)).andReturn(logT1p0).anyTimes()
     expect(replicaManager.futureLocalLogOrException(t1p0)).andReturn(futureLog).anyTimes()
     expect(replicaManager.futureLogExists(t1p0)).andStubReturn(true)
-    expect(replicaManager.nonOfflinePartition(t1p0)).andReturn(Some(partition)).anyTimes()
+    expect(replicaManager.onlinePartition(t1p0)).andReturn(Some(partition)).anyTimes()
     expect(replicaManager.localLog(t1p1)).andReturn(Some(logT1p1)).anyTimes()
     expect(replicaManager.localLogOrException(t1p1)).andReturn(logT1p1).anyTimes()
     expect(replicaManager.futureLocalLogOrException(t1p1)).andReturn(futureLog).anyTimes()
     expect(replicaManager.futureLogExists(t1p1)).andStubReturn(true)
-    expect(replicaManager.nonOfflinePartition(t1p1)).andReturn(Some(partition)).anyTimes()
+    expect(replicaManager.onlinePartition(t1p1)).andReturn(Some(partition)).anyTimes()
   }
 
   def stubWithFetchMessages(logT1p0: Log, logT1p1: Log, futureLog: Log, partition: Partition, replicaManager: ReplicaManager,

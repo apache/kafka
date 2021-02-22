@@ -23,6 +23,7 @@
     <!-- core -->
     <suppress checks="(NPathComplexity|ClassFanOutComplexity|CyclomaticComplexity|ClassDataAbstractionCoupling|FinalLocalVariable|LocalVariableName|MemberName|ParameterName|MethodLength|JavaNCSS|AvoidStarImport)"
               files="core[\\/]src[\\/](generated|generated-test)[\\/].+.java$"/>
+    <suppress checks="NPathComplexity" files="ClusterTestExtensions.java"/>
 
     <!-- Clients -->
     <suppress id="dontUseSystemExit"
@@ -100,7 +101,10 @@
               files="RequestResponseTest.java|FetcherTest.java|KafkaAdminClientTest.java"/>
 
     <suppress checks="NPathComplexity"
-              files="MemoryRecordsTest|MetricsTest|RequestResponseTest|TestSslUtils|AclAuthorizerBenchmark"/>
+              files="MemoryRecordsTest|MetricsTest|RequestResponseTest|TestSslUtils|AclAuthorizerBenchmark|MockConsumer"/>
+
+    <suppress checks="CyclomaticComplexity"
+              files="MockConsumer"/>
 
     <suppress checks="(WhitespaceAround|LocalVariableName|ImportControl|AvoidStarImport)"
               files="Murmur3Test.java"/>
@@ -160,7 +164,7 @@
               files="(KStreamImpl|KTableImpl).java"/>
 
     <suppress checks="CyclomaticComplexity"
-              files="(StreamsPartitionAssignor|StreamThread|TaskManager).java"/>
+              files="(StreamsPartitionAssignor|StreamThread|TaskManager|PartitionGroup).java"/>
 
     <suppress checks="StaticVariableName"
               files="StreamsMetricsImpl.java"/>
@@ -249,6 +253,10 @@
     <suppress id="dontUseSystemExit"
               files="VerifiableProducer.java"/>
 
+    <!-- Shell -->
+    <suppress checks="CyclomaticComplexity"
+              files="(GlobComponent).java"/>
+
     <!-- Log4J-Appender -->
     <suppress checks="CyclomaticComplexity"
               files="KafkaLog4jAppender.java"/>
@@ -259,6 +267,14 @@
               files="RequestResponseTest.java"/>
 
     <!-- metadata -->
+    <suppress checks="ClassDataAbstractionCoupling"
+              files="(ReplicationControlManager).java"/>
+    <suppress checks="ClassFanOutComplexity"
+              files="(QuorumController|ReplicationControlManager).java"/>
+    <suppress checks="CyclomaticComplexity"
+              files="(ReplicationControlManager).java"/>
+    <suppress checks="NPathComplexity"
+              files="KafkaEventQueue.java"/>
     <suppress checks="(NPathComplexity|ClassFanOutComplexity|CyclomaticComplexity|ClassDataAbstractionCoupling|LocalVariableName|MemberName|ParameterName|MethodLength|JavaNCSS|AvoidStarImport)"
             files="metadata[\\/]src[\\/](generated|generated-test)[\\/].+.java$"/>
 </suppressions>

@@ -31,6 +31,7 @@ import kafka.utils.{Logging, NotNothing, Pool}
 import kafka.utils.Implicits._
 import org.apache.kafka.common.config.ConfigResource
 import org.apache.kafka.common.memory.MemoryPool
+import org.apache.kafka.common.message.ApiMessageType.ListenerType
 import org.apache.kafka.common.message.IncrementalAlterConfigsRequestData
 import org.apache.kafka.common.message.IncrementalAlterConfigsRequestData._
 import org.apache.kafka.common.network.Send
@@ -60,16 +61,19 @@ object RequestChannel extends Logging {
     val sanitizedUser: String = Sanitizer.sanitize(principal.getName)
   }
 
-  class Metrics(allowDisabledApis: Boolean = false) {
+  class Metrics(enabledApis: Iterable[ApiKeys]) {
+    def this(scope: ListenerType) = {
+      this(ApiKeys.apisForListener(scope).asScala)
+    }
 
     private val metricsMap = mutable.Map[String, RequestMetrics]()
 
-    (ApiKeys.values.toSeq.filter(_.isEnabled || allowDisabledApis).map(_.name) ++
-        Seq(RequestMetrics.consumerFetchMetricName, RequestMetrics.followFetchMetricName)).foreach { name =>
+    (enabledApis.map(_.name) ++
+      Seq(RequestMetrics.consumerFetchMetricName, RequestMetrics.followFetchMetricName)).foreach { name =>
       metricsMap.put(name, new RequestMetrics(name))
     }
 
-    def apply(metricName: String) = metricsMap(metricName)
+    def apply(metricName: String): RequestMetrics = metricsMap(metricName)
 
     def close(): Unit = {
        metricsMap.values.foreach(_.removeMetrics())
@@ -297,8 +301,6 @@ object RequestChannel extends Logging {
     def responseLog: Option[JsonNode] = None
 
     def onComplete: Option[Send => Unit] = None
-
-    override def toString: String
   }
 
   /** responseLogValue should only be defined if request logging is enabled */
@@ -338,9 +340,8 @@ object RequestChannel extends Logging {
 class RequestChannel(val queueSize: Int,
                      val metricNamePrefix: String,
                      time: Time,
-                     allowDisabledApis: Boolean = false) extends KafkaMetricsGroup {
+                     val metrics: RequestChannel.Metrics) extends KafkaMetricsGroup {
   import RequestChannel._
-  val metrics = new RequestChannel.Metrics(allowDisabledApis)
   private val requestQueue = new ArrayBlockingQueue[BaseRequest](queueSize)
   private val processors = new ConcurrentHashMap[Int, Processor]()
   val requestQueueSizeMetricName = metricNamePrefix.concat(RequestQueueSizeMetric)

@@ -71,13 +71,14 @@ class TransactionCoordinatorConcurrencyTest extends AbstractCoordinatorConcurren
       .anyTimes()
     EasyMock.replay(zkClient)
 
-    txnStateManager = new TransactionStateManager(0, zkClient, scheduler, replicaManager, txnConfig, time,
+    txnStateManager = new TransactionStateManager(0, scheduler, replicaManager, txnConfig, time,
       new Metrics())
+    txnStateManager.startup(() => zkClient.getTopicPartitionCount(TRANSACTION_STATE_TOPIC_NAME).get)
     for (i <- 0 until numPartitions)
       txnStateManager.addLoadedTransactionsToCache(i, coordinatorEpoch, new Pool[String, TransactionMetadata]())
 
-    val pidManager: ProducerIdManager = EasyMock.createNiceMock(classOf[ProducerIdManager])
-    EasyMock.expect(pidManager.generateProducerId())
+    val pidGenerator: ProducerIdGenerator = EasyMock.createNiceMock(classOf[ProducerIdGenerator])
+    EasyMock.expect(pidGenerator.generateProducerId())
       .andAnswer(() => if (bumpProducerId) producerId + 1 else producerId)
       .anyTimes()
     val brokerNode = new Node(0, "host", 10)
@@ -98,12 +99,12 @@ class TransactionCoordinatorConcurrencyTest extends AbstractCoordinatorConcurren
     transactionCoordinator = new TransactionCoordinator(brokerId = 0,
       txnConfig,
       scheduler,
-      pidManager,
+      () => pidGenerator,
       txnStateManager,
       txnMarkerChannelManager,
       time,
       new LogContext)
-    EasyMock.replay(pidManager)
+    EasyMock.replay(pidGenerator)
     EasyMock.replay(metadataCache)
     EasyMock.replay(networkClient)
   }

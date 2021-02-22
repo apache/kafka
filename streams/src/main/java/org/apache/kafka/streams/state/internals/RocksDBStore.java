@@ -17,6 +17,7 @@
 package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.common.metrics.Sensor.RecordingLevel;
+import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.KeyValue;
@@ -309,6 +310,21 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
     }
 
     @Override
+    public <PS extends Serializer<P>, P> KeyValueIterator<Bytes, byte[]> prefixScan(final P prefix,
+                                                                                    final PS prefixKeySerializer) {
+        Objects.requireNonNull(prefix, "prefix cannot be null");
+        Objects.requireNonNull(prefixKeySerializer, "prefixKeySerializer cannot be null");
+
+        validateStoreOpen();
+        final Bytes prefixBytes = Bytes.wrap(prefixKeySerializer.serialize(null, prefix));
+
+        final KeyValueIterator<Bytes, byte[]> rocksDbPrefixSeekIterator = dbAccessor.prefixScan(prefixBytes);
+        openIterators.add(rocksDbPrefixSeekIterator);
+
+        return rocksDbPrefixSeekIterator;
+    }
+
+    @Override
     public synchronized byte[] get(final Bytes key) {
         validateStoreOpen();
         try {
@@ -510,6 +526,8 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
 
         KeyValueIterator<Bytes, byte[]> all(final boolean forward);
 
+        KeyValueIterator<Bytes, byte[]> prefixScan(final Bytes prefix);
+
         long approximateNumEntries() throws RocksDBException;
 
         void flush() throws RocksDBException;
@@ -580,7 +598,9 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
                 openIterators,
                 from,
                 to,
-                forward);
+                forward,
+                true
+            );
         }
 
         @Override
@@ -592,6 +612,20 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
                 innerIterWithTimestamp.seekToLast();
             }
             return new RocksDbIterator(name, innerIterWithTimestamp, openIterators, forward);
+        }
+
+        @Override
+        public KeyValueIterator<Bytes, byte[]> prefixScan(final Bytes prefix) {
+            final Bytes to = Bytes.increment(prefix);
+            return new RocksDBRangeIterator(
+                name,
+                db.newIterator(columnFamily),
+                openIterators,
+                prefix,
+                to,
+                true,
+                false
+            );
         }
 
         @Override

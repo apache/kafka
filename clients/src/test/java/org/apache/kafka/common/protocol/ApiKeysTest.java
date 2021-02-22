@@ -20,9 +20,12 @@ import org.apache.kafka.common.protocol.types.BoundField;
 import org.apache.kafka.common.protocol.types.Schema;
 import org.junit.jupiter.api.Test;
 
+import java.util.Collections;
 import java.util.EnumSet;
+import java.util.HashSet;
 import java.util.Set;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -60,7 +63,7 @@ public class ApiKeysTest {
         Set<ApiKeys> authenticationKeys = EnumSet.of(ApiKeys.SASL_HANDSHAKE, ApiKeys.SASL_AUTHENTICATE);
         // Newer protocol apis include throttle time ms even for cluster actions
         Set<ApiKeys> clusterActionsWithThrottleTimeMs = EnumSet.of(ApiKeys.ALTER_ISR);
-        for (ApiKeys apiKey: ApiKeys.values()) {
+        for (ApiKeys apiKey: ApiKeys.zkBrokerApis()) {
             Schema responseSchema = apiKey.messageType.responseSchemas()[apiKey.latestVersion()];
             BoundField throttleTimeField = responseSchema.get("throttle_time_ms");
             if ((apiKey.clusterAction && !clusterActionsWithThrottleTimeMs.contains(apiKey))
@@ -70,4 +73,17 @@ public class ApiKeysTest {
                 assertNotNull(throttleTimeField, "Throttle time field missing: " + apiKey);
         }
     }
+
+    @Test
+    public void testApiScope() {
+        Set<ApiKeys> apisMissingScope = new HashSet<>();
+        for (ApiKeys apiKey : ApiKeys.values()) {
+            if (apiKey.messageType.listeners().isEmpty()) {
+                apisMissingScope.add(apiKey);
+            }
+        }
+        assertEquals(Collections.emptySet(), apisMissingScope,
+            "Found some APIs missing scope definition");
+    }
+
 }

@@ -57,6 +57,8 @@ import static org.apache.kafka.streams.kstream.internals.WindowingDefaults.DEFAU
  */
 public final class TimeWindows extends Windows<TimeWindow> {
 
+    private static final long EMPTY_GRACE_PERIOD = -1;
+
     private final long maintainDurationMs;
 
     /** The size of the windows in milliseconds. */
@@ -111,7 +113,7 @@ public final class TimeWindows extends Windows<TimeWindow> {
             throw new IllegalArgumentException("Window size (sizeMs) must be larger than zero.");
         }
         // This is a static factory method, so we initialize grace and retention to the defaults.
-        return new TimeWindows(sizeMs, sizeMs, -1, DEFAULT_RETENTION_MS);
+        return new TimeWindows(sizeMs, sizeMs, EMPTY_GRACE_PERIOD, DEFAULT_RETENTION_MS);
     }
 
     /**
@@ -214,7 +216,10 @@ public final class TimeWindows extends Windows<TimeWindow> {
         // NOTE: in the future, when we remove maintainMs,
         // we should default the grace period to 24h to maintain the default behavior,
         // or we can default to (24h - size) if you want to be super accurate.
-        return graceMs != -1 ? graceMs : maintainMs() - size();
+        if (graceMs != EMPTY_GRACE_PERIOD) {
+            return graceMs;
+        }
+        return Math.max(maintainDurationMs - sizeMs, 0);
     }
 
     /**
@@ -245,7 +250,7 @@ public final class TimeWindows extends Windows<TimeWindow> {
     @Override
     @Deprecated
     public long maintainMs() {
-        return Math.max(maintainDurationMs, sizeMs);
+        return Math.max(maintainDurationMs, sizeMs + gracePeriodMs());
     }
 
     @SuppressWarnings("deprecation") // removing segments from Windows will fix this

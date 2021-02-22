@@ -27,29 +27,37 @@ import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.PartitionInfo;
+import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.TopicPartitionInfo;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.config.ConfigResource;
 import org.apache.kafka.common.config.TopicConfig;
 import org.apache.kafka.common.errors.ClusterAuthorizationException;
+import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.errors.TopicAuthorizationException;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.message.CreateTopicsResponseData;
 import org.apache.kafka.common.message.CreateTopicsResponseData.CreatableTopicResult;
 import org.apache.kafka.common.message.DescribeConfigsResponseData;
+import org.apache.kafka.common.message.ListOffsetsResponseData;
+import org.apache.kafka.common.message.ListOffsetsResponseData.ListOffsetsTopicResponse;
 import org.apache.kafka.common.message.MetadataResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.ApiError;
 import org.apache.kafka.common.requests.CreateTopicsResponse;
 import org.apache.kafka.common.requests.DescribeConfigsResponse;
+import org.apache.kafka.common.requests.ListOffsetsResponse;
 import org.apache.kafka.common.requests.MetadataResponse;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.connect.errors.ConnectException;
 import org.junit.Test;
 
+import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -74,15 +82,14 @@ public class TopicAdminTest {
      * create no topics, and return false.
      */
     @Test
-    public void returnNullWithApiVersionMismatchOnCreate() {
+    public void returnEmptyWithApiVersionMismatchOnCreate() {
         final NewTopic newTopic = TopicAdmin.defineTopic("myTopic").partitions(1).compacted().build();
         Cluster cluster = createCluster(1);
         try (AdminClientUnitTestEnv env = new AdminClientUnitTestEnv(new MockTime(), cluster)) {
             env.kafkaClient().setNodeApiVersions(NodeApiVersions.create());
             env.kafkaClient().prepareResponse(createTopicResponseWithUnsupportedVersion(newTopic));
             TopicAdmin admin = new TopicAdmin(null, env.adminClient());
-            boolean created = admin.createTopic(newTopic);
-            assertFalse(created);
+            assertTrue(admin.createOrFindTopics(newTopic).isEmpty());
         }
     }
 
@@ -105,14 +112,16 @@ public class TopicAdminTest {
     }
 
     @Test
-    public void returnNullWithClusterAuthorizationFailureOnCreate() {
+    public void returnEmptyWithClusterAuthorizationFailureOnCreate() {
         final NewTopic newTopic = TopicAdmin.defineTopic("myTopic").partitions(1).compacted().build();
         Cluster cluster = createCluster(1);
         try (AdminClientUnitTestEnv env = new AdminClientUnitTestEnv(new MockTime(), cluster)) {
             env.kafkaClient().prepareResponse(createTopicResponseWithClusterAuthorizationException(newTopic));
             TopicAdmin admin = new TopicAdmin(null, env.adminClient());
-            boolean created = admin.createTopic(newTopic);
-            assertFalse(created);
+            assertFalse(admin.createTopic(newTopic));
+
+            env.kafkaClient().prepareResponse(createTopicResponseWithClusterAuthorizationException(newTopic));
+            assertTrue(admin.createOrFindTopics(newTopic).isEmpty());
         }
     }
 
@@ -129,14 +138,16 @@ public class TopicAdminTest {
     }
 
     @Test
-    public void returnNullWithTopicAuthorizationFailureOnCreate() {
+    public void returnEmptyWithTopicAuthorizationFailureOnCreate() {
         final NewTopic newTopic = TopicAdmin.defineTopic("myTopic").partitions(1).compacted().build();
         Cluster cluster = createCluster(1);
         try (AdminClientUnitTestEnv env = new AdminClientUnitTestEnv(new MockTime(), cluster)) {
             env.kafkaClient().prepareResponse(createTopicResponseWithTopicAuthorizationException(newTopic));
             TopicAdmin admin = new TopicAdmin(null, env.adminClient());
-            boolean created = admin.createTopic(newTopic);
-            assertFalse(created);
+            assertFalse(admin.createTopic(newTopic));
+
+            env.kafkaClient().prepareResponse(createTopicResponseWithTopicAuthorizationException(newTopic));
+            assertTrue(admin.createOrFindTopics(newTopic).isEmpty());
         }
     }
 
@@ -157,10 +168,16 @@ public class TopicAdminTest {
         NewTopic newTopic = TopicAdmin.defineTopic("myTopic").partitions(1).compacted().build();
         Cluster cluster = createCluster(1);
         try (MockAdminClient mockAdminClient = new MockAdminClient(cluster.nodes(), cluster.nodeById(0))) {
-            TopicPartitionInfo topicPartitionInfo = new TopicPartitionInfo(0, cluster.nodeById(0), cluster.nodes(), Collections.<Node>emptyList());
+            TopicPartitionInfo topicPartitionInfo = new TopicPartitionInfo(0, cluster.nodeById(0), cluster.nodes(), Collections.emptyList());
             mockAdminClient.addTopic(false, "myTopic", Collections.singletonList(topicPartitionInfo), null);
             TopicAdmin admin = new TopicAdmin(null, mockAdminClient);
             assertFalse(admin.createTopic(newTopic));
+            assertTrue(admin.createTopics(newTopic).isEmpty());
+            assertTrue(admin.createOrFindTopic(newTopic));
+            TopicAdmin.TopicCreationResponse response = admin.createOrFindTopics(newTopic);
+            assertTrue(response.isCreatedOrExisting(newTopic.name()));
+            assertTrue(response.isExisting(newTopic.name()));
+            assertFalse(response.isCreated(newTopic.name()));
         }
     }
 
@@ -263,7 +280,7 @@ public class TopicAdminTest {
         NewTopic newTopic = TopicAdmin.defineTopic(topicName).partitions(1).compacted().build();
         Cluster cluster = createCluster(1);
         try (MockAdminClient mockAdminClient = new MockAdminClient(cluster.nodes(), cluster.nodeById(0))) {
-            TopicPartitionInfo topicPartitionInfo = new TopicPartitionInfo(0, cluster.nodeById(0), cluster.nodes(), Collections.<Node>emptyList());
+            TopicPartitionInfo topicPartitionInfo = new TopicPartitionInfo(0, cluster.nodeById(0), cluster.nodes(), Collections.emptyList());
             mockAdminClient.addTopic(false, topicName, Collections.singletonList(topicPartitionInfo), null);
             TopicAdmin admin = new TopicAdmin(null, mockAdminClient);
             Map<String, TopicDescription> desc = admin.describeTopics(newTopic.name());
@@ -343,7 +360,7 @@ public class TopicAdminTest {
                                       .build();
         Cluster cluster = createCluster(1);
         try (MockAdminClient mockAdminClient = new MockAdminClient(cluster.nodes(), cluster.nodeById(0))) {
-            TopicPartitionInfo topicPartitionInfo = new TopicPartitionInfo(0, cluster.nodeById(0), cluster.nodes(), Collections.<Node>emptyList());
+            TopicPartitionInfo topicPartitionInfo = new TopicPartitionInfo(0, cluster.nodeById(0), cluster.nodes(), Collections.emptyList());
             mockAdminClient.addTopic(false, topicName, Collections.singletonList(topicPartitionInfo), null);
             TopicAdmin admin = new TopicAdmin(null, mockAdminClient);
             Map<String, Config> result = admin.describeTopicConfigs(newTopic.name());
@@ -351,9 +368,7 @@ public class TopicAdminTest {
             assertEquals(1, result.size());
             Config config = result.get("myTopic");
             assertNotNull(config);
-            config.entries().forEach(entry -> {
-                assertEquals(newTopic.configs().get(entry.name()), entry.value());
-            });
+            config.entries().forEach(entry -> assertEquals(newTopic.configs().get(entry.name()), entry.value()));
         }
     }
 
@@ -399,7 +414,7 @@ public class TopicAdminTest {
         Map<String, String> topicConfigs = Collections.singletonMap("cleanup.policy", "compact");
         Cluster cluster = createCluster(1);
         try (MockAdminClient mockAdminClient = new MockAdminClient(cluster.nodes(), cluster.nodeById(0))) {
-            TopicPartitionInfo topicPartitionInfo = new TopicPartitionInfo(0, cluster.nodeById(0), cluster.nodes(), Collections.<Node>emptyList());
+            TopicPartitionInfo topicPartitionInfo = new TopicPartitionInfo(0, cluster.nodeById(0), cluster.nodes(), Collections.emptyList());
             mockAdminClient.addTopic(false, topicName, Collections.singletonList(topicPartitionInfo), topicConfigs);
             TopicAdmin admin = new TopicAdmin(null, mockAdminClient);
             boolean result = admin.verifyTopicCleanupPolicyOnlyCompact("myTopic", "worker.topic", "purpose");
@@ -413,12 +428,10 @@ public class TopicAdminTest {
         Map<String, String> topicConfigs = Collections.singletonMap("cleanup.policy", "delete");
         Cluster cluster = createCluster(1);
         try (MockAdminClient mockAdminClient = new MockAdminClient(cluster.nodes(), cluster.nodeById(0))) {
-            TopicPartitionInfo topicPartitionInfo = new TopicPartitionInfo(0, cluster.nodeById(0), cluster.nodes(), Collections.<Node>emptyList());
+            TopicPartitionInfo topicPartitionInfo = new TopicPartitionInfo(0, cluster.nodeById(0), cluster.nodes(), Collections.emptyList());
             mockAdminClient.addTopic(false, topicName, Collections.singletonList(topicPartitionInfo), topicConfigs);
             TopicAdmin admin = new TopicAdmin(null, mockAdminClient);
-            ConfigException e = assertThrows(ConfigException.class, () -> {
-                admin.verifyTopicCleanupPolicyOnlyCompact("myTopic", "worker.topic", "purpose");
-            });
+            ConfigException e = assertThrows(ConfigException.class, () -> admin.verifyTopicCleanupPolicyOnlyCompact("myTopic", "worker.topic", "purpose"));
             assertTrue(e.getMessage().contains("to guarantee consistency and durability"));
         }
     }
@@ -429,12 +442,10 @@ public class TopicAdminTest {
         Map<String, String> topicConfigs = Collections.singletonMap("cleanup.policy", "delete,compact");
         Cluster cluster = createCluster(1);
         try (MockAdminClient mockAdminClient = new MockAdminClient(cluster.nodes(), cluster.nodeById(0))) {
-            TopicPartitionInfo topicPartitionInfo = new TopicPartitionInfo(0, cluster.nodeById(0), cluster.nodes(), Collections.<Node>emptyList());
+            TopicPartitionInfo topicPartitionInfo = new TopicPartitionInfo(0, cluster.nodeById(0), cluster.nodes(), Collections.emptyList());
             mockAdminClient.addTopic(false, topicName, Collections.singletonList(topicPartitionInfo), topicConfigs);
             TopicAdmin admin = new TopicAdmin(null, mockAdminClient);
-            ConfigException e = assertThrows(ConfigException.class, () -> {
-                admin.verifyTopicCleanupPolicyOnlyCompact("myTopic", "worker.topic", "purpose");
-            });
+            ConfigException e = assertThrows(ConfigException.class, () -> admin.verifyTopicCleanupPolicyOnlyCompact("myTopic", "worker.topic", "purpose"));
             assertTrue(e.getMessage().contains("to guarantee consistency and durability"));
         }
     }
@@ -445,7 +456,7 @@ public class TopicAdminTest {
         Map<String, String> topicConfigs = Collections.singletonMap("cleanup.policy", "compact");
         Cluster cluster = createCluster(1);
         try (MockAdminClient mockAdminClient = new MockAdminClient(cluster.nodes(), cluster.nodeById(0))) {
-            TopicPartitionInfo topicPartitionInfo = new TopicPartitionInfo(0, cluster.nodeById(0), cluster.nodes(), Collections.<Node>emptyList());
+            TopicPartitionInfo topicPartitionInfo = new TopicPartitionInfo(0, cluster.nodeById(0), cluster.nodes(), Collections.emptyList());
             mockAdminClient.addTopic(false, topicName, Collections.singletonList(topicPartitionInfo), topicConfigs);
             TopicAdmin admin = new TopicAdmin(null, mockAdminClient);
             Set<String> policies = admin.topicCleanupPolicy("myTopic");
@@ -454,15 +465,269 @@ public class TopicAdminTest {
         }
     }
 
+    @Test
+    public void endOffsetsShouldFailWithNonRetriableWhenAuthorizationFailureOccurs() {
+        String topicName = "myTopic";
+        TopicPartition tp1 = new TopicPartition(topicName, 0);
+        Set<TopicPartition> tps = Collections.singleton(tp1);
+        Long offset = null; // response should use error
+        Cluster cluster = createCluster(1, topicName, 1);
+        try (AdminClientUnitTestEnv env = new AdminClientUnitTestEnv(new MockTime(), cluster)) {
+            env.kafkaClient().setNodeApiVersions(NodeApiVersions.create());
+            env.kafkaClient().prepareResponse(prepareMetadataResponse(cluster, Errors.NONE));
+            env.kafkaClient().prepareResponse(listOffsetsResultWithClusterAuthorizationException(tp1, offset));
+            TopicAdmin admin = new TopicAdmin(null, env.adminClient());
+            ConnectException e = assertThrows(ConnectException.class, () -> {
+                admin.endOffsets(tps);
+            });
+            assertTrue(e.getMessage().contains("Not authorized to get the end offsets"));
+        }
+    }
+
+    @Test
+    public void endOffsetsShouldFailWithUnsupportedVersionWhenVersionUnsupportedErrorOccurs() {
+        String topicName = "myTopic";
+        TopicPartition tp1 = new TopicPartition(topicName, 0);
+        Set<TopicPartition> tps = Collections.singleton(tp1);
+        Long offset = null; // response should use error
+        Cluster cluster = createCluster(1, topicName, 1);
+        try (AdminClientUnitTestEnv env = new AdminClientUnitTestEnv(new MockTime(), cluster)) {
+            env.kafkaClient().setNodeApiVersions(NodeApiVersions.create());
+            env.kafkaClient().prepareResponse(prepareMetadataResponse(cluster, Errors.NONE));
+            env.kafkaClient().prepareResponse(listOffsetsResultWithUnsupportedVersion(tp1, offset));
+            TopicAdmin admin = new TopicAdmin(null, env.adminClient());
+            UnsupportedVersionException e = assertThrows(UnsupportedVersionException.class, () -> {
+                admin.endOffsets(tps);
+            });
+        }
+    }
+
+    @Test
+    public void endOffsetsShouldFailWithTimeoutExceptionWhenTimeoutErrorOccurs() {
+        String topicName = "myTopic";
+        TopicPartition tp1 = new TopicPartition(topicName, 0);
+        Set<TopicPartition> tps = Collections.singleton(tp1);
+        Long offset = null; // response should use error
+        Cluster cluster = createCluster(1, topicName, 1);
+        try (AdminClientUnitTestEnv env = new AdminClientUnitTestEnv(new MockTime(), cluster)) {
+            env.kafkaClient().setNodeApiVersions(NodeApiVersions.create());
+            env.kafkaClient().prepareResponse(prepareMetadataResponse(cluster, Errors.NONE));
+            env.kafkaClient().prepareResponse(listOffsetsResultWithTimeout(tp1, offset));
+            TopicAdmin admin = new TopicAdmin(null, env.adminClient());
+            TimeoutException e = assertThrows(TimeoutException.class, () -> {
+                admin.endOffsets(tps);
+            });
+        }
+    }
+
+    @Test
+    public void endOffsetsShouldFailWithNonRetriableWhenUnknownErrorOccurs() {
+        String topicName = "myTopic";
+        TopicPartition tp1 = new TopicPartition(topicName, 0);
+        Set<TopicPartition> tps = Collections.singleton(tp1);
+        Long offset = null; // response should use error
+        Cluster cluster = createCluster(1, topicName, 1);
+        try (AdminClientUnitTestEnv env = new AdminClientUnitTestEnv(new MockTime(), cluster)) {
+            env.kafkaClient().setNodeApiVersions(NodeApiVersions.create());
+            env.kafkaClient().prepareResponse(prepareMetadataResponse(cluster, Errors.NONE));
+            env.kafkaClient().prepareResponse(listOffsetsResultWithUnknownError(tp1, offset));
+            TopicAdmin admin = new TopicAdmin(null, env.adminClient());
+            ConnectException e = assertThrows(ConnectException.class, () -> {
+                admin.endOffsets(tps);
+            });
+            assertTrue(e.getMessage().contains("Error while getting end offsets for topic"));
+        }
+    }
+
+    @Test
+    public void endOffsetsShouldReturnEmptyMapWhenPartitionsSetIsNull() {
+        String topicName = "myTopic";
+        Cluster cluster = createCluster(1, topicName, 1);
+        try (AdminClientUnitTestEnv env = new AdminClientUnitTestEnv(new MockTime(), cluster)) {
+            TopicAdmin admin = new TopicAdmin(null, env.adminClient());
+            Map<TopicPartition, Long> offsets = admin.endOffsets(Collections.emptySet());
+            assertTrue(offsets.isEmpty());
+        }
+    }
+
+    @Test
+    public void endOffsetsShouldReturnOffsetsForOnePartition() {
+        String topicName = "myTopic";
+        TopicPartition tp1 = new TopicPartition(topicName, 0);
+        Set<TopicPartition> tps = Collections.singleton(tp1);
+        long offset = 1000L;
+        Cluster cluster = createCluster(1, topicName, 1);
+        try (AdminClientUnitTestEnv env = new AdminClientUnitTestEnv(new MockTime(), cluster)) {
+            env.kafkaClient().setNodeApiVersions(NodeApiVersions.create());
+            env.kafkaClient().prepareResponse(prepareMetadataResponse(cluster, Errors.NONE));
+            env.kafkaClient().prepareResponse(listOffsetsResult(tp1, offset));
+            TopicAdmin admin = new TopicAdmin(null, env.adminClient());
+            Map<TopicPartition, Long> offsets = admin.endOffsets(tps);
+            assertEquals(1, offsets.size());
+            assertEquals(Long.valueOf(offset), offsets.get(tp1));
+        }
+    }
+
+    @Test
+    public void endOffsetsShouldReturnOffsetsForMultiplePartitions() {
+        String topicName = "myTopic";
+        TopicPartition tp1 = new TopicPartition(topicName, 0);
+        TopicPartition tp2 = new TopicPartition(topicName, 1);
+        Set<TopicPartition> tps = new HashSet<>(Arrays.asList(tp1, tp2));
+        long offset1 = 1001;
+        long offset2 = 1002;
+        Cluster cluster = createCluster(1, topicName, 2);
+        try (AdminClientUnitTestEnv env = new AdminClientUnitTestEnv(new MockTime(), cluster)) {
+            env.kafkaClient().setNodeApiVersions(NodeApiVersions.create());
+            env.kafkaClient().prepareResponse(prepareMetadataResponse(cluster, Errors.NONE));
+            env.kafkaClient().prepareResponse(listOffsetsResult(tp1, offset1, tp2, offset2));
+            TopicAdmin admin = new TopicAdmin(null, env.adminClient());
+            Map<TopicPartition, Long> offsets = admin.endOffsets(tps);
+            assertEquals(2, offsets.size());
+            assertEquals(Long.valueOf(offset1), offsets.get(tp1));
+            assertEquals(Long.valueOf(offset2), offsets.get(tp2));
+        }
+    }
+
+    @Test
+    public void endOffsetsShouldFailWhenAnyTopicPartitionHasError() {
+        String topicName = "myTopic";
+        TopicPartition tp1 = new TopicPartition(topicName, 0);
+        Set<TopicPartition> tps = Collections.singleton(tp1);
+        long offset = 1000;
+        Cluster cluster = createCluster(1, topicName, 1);
+        try (AdminClientUnitTestEnv env = new AdminClientUnitTestEnv(new MockTime(), cluster)) {
+            env.kafkaClient().setNodeApiVersions(NodeApiVersions.create());
+            env.kafkaClient().prepareResponse(prepareMetadataResponse(cluster, Errors.NONE));
+            env.kafkaClient().prepareResponse(listOffsetsResultWithClusterAuthorizationException(tp1, null));
+            TopicAdmin admin = new TopicAdmin(null, env.adminClient());
+            ConnectException e = assertThrows(ConnectException.class, () -> {
+                admin.endOffsets(tps);
+            });
+            assertTrue(e.getMessage().contains("Not authorized to get the end offsets"));
+        }
+    }
+
     private Cluster createCluster(int numNodes) {
+        return createCluster(numNodes, "unused", 0);
+    }
+
+    private Cluster createCluster(int numNodes, String topicName, int partitions) {
+        Node[] nodeArray = new Node[numNodes];
         HashMap<Integer, Node> nodes = new HashMap<>();
         for (int i = 0; i < numNodes; ++i) {
-            nodes.put(i, new Node(i, "localhost", 8121 + i));
+            nodeArray[i] = new Node(i, "localhost", 8121 + i);
+            nodes.put(i, nodeArray[i]);
         }
-        Cluster cluster = new Cluster("mockClusterId", nodes.values(),
-                Collections.<PartitionInfo>emptySet(), Collections.<String>emptySet(),
-                Collections.<String>emptySet(), nodes.get(0));
+        Node leader = nodeArray[0];
+        List<PartitionInfo> pInfos = new ArrayList<>();
+        for (int i = 0; i < partitions; ++i) {
+            pInfos.add(new PartitionInfo(topicName, i, leader, nodeArray, nodeArray));
+        }
+        Cluster cluster = new Cluster(
+                "mockClusterId",
+                nodes.values(),
+                pInfos,
+                Collections.emptySet(),
+                Collections.emptySet(),
+                leader);
         return cluster;
+    }
+
+    private MetadataResponse prepareMetadataResponse(Cluster cluster, Errors error) {
+        List<MetadataResponseTopic> metadata = new ArrayList<>();
+        for (String topic : cluster.topics()) {
+            List<MetadataResponseData.MetadataResponsePartition> pms = new ArrayList<>();
+            for (PartitionInfo pInfo : cluster.availablePartitionsForTopic(topic)) {
+                MetadataResponseData.MetadataResponsePartition pm  = new MetadataResponseData.MetadataResponsePartition()
+                        .setErrorCode(error.code())
+                        .setPartitionIndex(pInfo.partition())
+                        .setLeaderId(pInfo.leader().id())
+                        .setLeaderEpoch(234)
+                        .setReplicaNodes(Arrays.stream(pInfo.replicas()).map(Node::id).collect(Collectors.toList()))
+                        .setIsrNodes(Arrays.stream(pInfo.inSyncReplicas()).map(Node::id).collect(Collectors.toList()))
+                        .setOfflineReplicas(Arrays.stream(pInfo.offlineReplicas()).map(Node::id).collect(Collectors.toList()));
+                pms.add(pm);
+            }
+            MetadataResponseTopic tm = new MetadataResponseTopic()
+                    .setErrorCode(error.code())
+                    .setName(topic)
+                    .setIsInternal(false)
+                    .setPartitions(pms);
+            metadata.add(tm);
+        }
+        return MetadataResponse.prepareResponse(true,
+                0,
+                cluster.nodes(),
+                cluster.clusterResource().clusterId(),
+                cluster.controller().id(),
+                metadata,
+                MetadataResponse.AUTHORIZED_OPERATIONS_OMITTED);
+    }
+
+    private ListOffsetsResponse listOffsetsResultWithUnknownError(TopicPartition tp1, Long offset1) {
+        return listOffsetsResult(
+                new ApiError(Errors.UNKNOWN_SERVER_ERROR, "Unknown error"),
+                Collections.singletonMap(tp1, offset1)
+        );
+    }
+
+    private ListOffsetsResponse listOffsetsResultWithTimeout(TopicPartition tp1, Long offset1) {
+        return listOffsetsResult(
+                new ApiError(Errors.REQUEST_TIMED_OUT, "Request timed out"),
+                Collections.singletonMap(tp1, offset1)
+        );
+    }
+
+    private ListOffsetsResponse listOffsetsResultWithUnsupportedVersion(TopicPartition tp1, Long offset1) {
+        return listOffsetsResult(
+                new ApiError(Errors.UNSUPPORTED_VERSION, "This version of the API is not supported"),
+                Collections.singletonMap(tp1, offset1)
+        );
+    }
+
+    private ListOffsetsResponse listOffsetsResultWithClusterAuthorizationException(TopicPartition tp1, Long offset1) {
+        return listOffsetsResult(
+                new ApiError(Errors.CLUSTER_AUTHORIZATION_FAILED, "Not authorized to create topic(s)"),
+                Collections.singletonMap(tp1, offset1)
+        );
+    }
+
+    private ListOffsetsResponse listOffsetsResult(TopicPartition tp1, Long offset1) {
+        return listOffsetsResult(null, Collections.singletonMap(tp1, offset1));
+    }
+
+    private ListOffsetsResponse listOffsetsResult(TopicPartition tp1, Long offset1, TopicPartition tp2, Long offset2) {
+        Map<TopicPartition, Long> offsetsByPartitions = new HashMap<>();
+        offsetsByPartitions.put(tp1, offset1);
+        offsetsByPartitions.put(tp2, offset2);
+        return listOffsetsResult(null, offsetsByPartitions);
+    }
+
+    /**
+     * Create a ListOffsetResponse that exposes the supplied error and includes offsets for the supplied partitions.
+     * @param error               the error; may be null if an unknown error should be used
+     * @param offsetsByPartitions offset for each partition, where offset is null signals the error should be used
+     * @return the response
+     */
+    private ListOffsetsResponse listOffsetsResult(ApiError error, Map<TopicPartition, Long> offsetsByPartitions) {
+        if (error == null) error = new ApiError(Errors.UNKNOWN_TOPIC_OR_PARTITION, "unknown topic");
+        List<ListOffsetsTopicResponse> tpResponses = new ArrayList<>();
+        for (TopicPartition partition : offsetsByPartitions.keySet()) {
+            Long offset = offsetsByPartitions.get(partition);
+            ListOffsetsTopicResponse topicResponse;
+            if (offset == null) {
+                topicResponse = ListOffsetsResponse.singletonListOffsetsTopicResponse(partition, error.error(), -1L, 0, 321);
+            } else {
+                topicResponse = ListOffsetsResponse.singletonListOffsetsTopicResponse(partition, Errors.NONE, -1L, offset, 321);
+            }
+            tpResponses.add(topicResponse);
+        }
+        ListOffsetsResponseData responseData = new ListOffsetsResponseData()
+                .setThrottleTimeMs(0)
+                .setTopics(tpResponses);
+
+        return new ListOffsetsResponse(responseData);
     }
 
     private CreateTopicsResponse createTopicResponseWithUnsupportedVersion(NewTopic... topics) {
@@ -503,13 +768,15 @@ public class TopicAdminTest {
             clientBuilder.defaultPartitions(defaultPartitions.shortValue());
         }
         if (defaultReplicationFactor != null) {
-            clientBuilder.defaultReplicationFactor(defaultReplicationFactor.intValue());
+            clientBuilder.defaultReplicationFactor(defaultReplicationFactor);
         }
         clientBuilder.brokers(cluster.nodes());
         clientBuilder.controller(0);
         try (MockAdminClient admin = clientBuilder.build()) {
             TopicAdmin topicClient = new TopicAdmin(null, admin, false);
-            assertTrue(topicClient.createTopic(newTopic));
+            TopicAdmin.TopicCreationResponse response = topicClient.createOrFindTopics(newTopic);
+            assertTrue(response.isCreated(newTopic.name()));
+            assertFalse(response.isExisting(newTopic.name()));
             assertTopic(admin, newTopic.name(), expectedPartitions, expectedReplicas);
         }
     }

@@ -16,10 +16,6 @@
  */
 package kafka.raft
 
-import java.net.InetSocketAddress
-import java.util.concurrent.ConcurrentLinkedQueue
-import java.util.concurrent.atomic.AtomicInteger
-
 import kafka.common.{InterBrokerSendThread, RequestAndCompletionHandler}
 import kafka.utils.Logging
 import org.apache.kafka.clients.{ClientResponse, KafkaClient}
@@ -28,8 +24,11 @@ import org.apache.kafka.common.message._
 import org.apache.kafka.common.protocol.{ApiKeys, ApiMessage, Errors}
 import org.apache.kafka.common.requests._
 import org.apache.kafka.common.utils.Time
+import org.apache.kafka.raft.RaftConfig.InetAddressSpec
 import org.apache.kafka.raft.{NetworkChannel, RaftRequest, RaftResponse, RaftUtil}
 
+import java.util.concurrent.ConcurrentLinkedQueue
+import java.util.concurrent.atomic.AtomicInteger
 import scala.collection.mutable
 
 object KafkaNetworkChannel {
@@ -96,7 +95,8 @@ private[raft] class RaftSendThread(
 class KafkaNetworkChannel(
   time: Time,
   client: KafkaClient,
-  requestTimeoutMs: Int
+  requestTimeoutMs: Int,
+  threadNamePrefix: String
 ) extends NetworkChannel with Logging {
   import KafkaNetworkChannel._
 
@@ -106,7 +106,7 @@ class KafkaNetworkChannel(
   private val endpoints = mutable.HashMap.empty[Int, Node]
 
   private val requestThread = new RaftSendThread(
-    name = "raft-outbound-request-thread",
+    name = threadNamePrefix + "-outbound-request-thread",
     networkClient = client,
     requestTimeoutMs = requestTimeoutMs,
     time = time,
@@ -124,8 +124,18 @@ class KafkaNetworkChannel(
     }
 
     def onComplete(clientResponse: ClientResponse): Unit = {
-      val response = if (clientResponse.authenticationException != null) {
-        errorResponse(request.data, Errors.CLUSTER_AUTHORIZATION_FAILED)
+      val response = if (clientResponse.versionMismatch != null) {
+        error(s"Request $request failed due to unsupported version error",
+          clientResponse.versionMismatch)
+        errorResponse(request.data, Errors.UNSUPPORTED_VERSION)
+      } else if (clientResponse.authenticationException != null) {
+        // For now we treat authentication errors as retriable. We use the
+        // `NETWORK_EXCEPTION` error code for lack of a good alternative.
+        // Note that `BrokerToControllerChannelManager` will still log the
+        // authentication errors so that users have a chance to fix the problem.
+        error(s"Request $request failed due to authentication error",
+          clientResponse.authenticationException)
+        errorResponse(request.data, Errors.NETWORK_EXCEPTION)
       } else if (clientResponse.wasDisconnected()) {
         errorResponse(request.data, Errors.BROKER_NOT_AVAILABLE)
       } else {
@@ -165,8 +175,8 @@ class KafkaNetworkChannel(
     RaftUtil.errorResponse(apiKey, error)
   }
 
-  override def updateEndpoint(id: Int, address: InetSocketAddress): Unit = {
-    val node = new Node(id, address.getHostString, address.getPort)
+  override def updateEndpoint(id: Int, spec: InetAddressSpec): Unit = {
+    val node = new Node(id, spec.address.getHostString, spec.address.getPort)
     endpoints.put(id, node)
   }
 
@@ -180,7 +190,5 @@ class KafkaNetworkChannel(
 
   override def close(): Unit = {
     requestThread.shutdown()
-    client.close()
   }
-
 }

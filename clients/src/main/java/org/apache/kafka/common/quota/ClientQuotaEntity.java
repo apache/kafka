@@ -34,6 +34,12 @@ public class ClientQuotaEntity {
     public static final String CLIENT_ID = "client-id";
     public static final String IP = "ip";
 
+    public static boolean isValidEntityType(String entityType) {
+        return Objects.equals(entityType, USER) ||
+            Objects.equals(entityType, CLIENT_ID) ||
+            Objects.equals(entityType, IP);
+    }
+
     /**
      * Constructs a quota entity for the given types and names. If a name is null,
      * then it is mapped to the built-in default entity name.
