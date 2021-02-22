@@ -26,7 +26,7 @@ import java.util.function.Supplier;
  * It is used in {@link Topology} for adding new processor operators, whose generated
  * topology can then be replicated (and thus creating one or more {@link Processor} instances)
  * and distributed to multiple stream threads.
- *
+ * <p>
  * The supplier should always generate a new instance each time {@link ProcessorSupplier#get()} gets called. Creating
  * a single {@link Processor} object and returning the same object reference in {@link ProcessorSupplier#get()} would be
  * a violation of the supplier pattern and leads to runtime exceptions.

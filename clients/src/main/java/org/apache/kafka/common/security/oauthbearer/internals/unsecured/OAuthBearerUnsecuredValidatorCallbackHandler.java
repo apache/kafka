@@ -195,8 +195,7 @@ public class OAuthBearerUnsecuredValidatorCallbackHandler implements Authenticat
         String allowableClockSkewMsValue = option(ALLOWABLE_CLOCK_SKEW_MILLIS_OPTION);
         int allowableClockSkewMs = 0;
         try {
-            allowableClockSkewMs = allowableClockSkewMsValue == null || allowableClockSkewMsValue.trim().isEmpty() ? 0
-                    : Integer.parseInt(allowableClockSkewMsValue.trim());
+            allowableClockSkewMs = Utils.isBlank(allowableClockSkewMsValue) ? 0 : Integer.parseInt(allowableClockSkewMsValue.trim());
         } catch (NumberFormatException e) {
             throw new OAuthBearerConfigException(e.getMessage(), e);
         }

@@ -17,6 +17,7 @@
 package org.apache.kafka.raft;
 
 import org.apache.kafka.clients.CommonClientConfigs;
+import org.apache.kafka.common.Node;
 import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigException;
@@ -28,6 +29,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 /**
  * RaftConfig encapsulates configuration specific to the Raft quorum voter nodes.
@@ -231,6 +233,17 @@ public class RaftConfig {
         }
 
         return voterMap;
+    }
+
+    public static List<Node> quorumVoterStringsToNodes(List<String> voters) {
+        return parseVoterConnections(voters).entrySet().stream()
+            .filter(connection -> connection.getValue() instanceof InetAddressSpec)
+            .map(connection -> {
+                InetAddressSpec inetAddressSpec = InetAddressSpec.class.cast(connection.getValue());
+                return new Node(connection.getKey(), inetAddressSpec.address.getHostName(),
+                    inetAddressSpec.address.getPort());
+            })
+            .collect(Collectors.toList());
     }
 
     public static class ControllerQuorumVotersValidator implements ConfigDef.Validator {
