@@ -41,7 +41,7 @@ class StreamsBrokerDownResilience(BaseStreamsTest):
     def setUp(self):
         self.zk.start()
 
-    @cluster(num_nodes=5)
+    @cluster(num_nodes=7)
     def test_streams_resilient_to_broker_down(self):
         self.kafka.start()
 
@@ -77,74 +77,74 @@ class StreamsBrokerDownResilience(BaseStreamsTest):
 
         self.kafka.stop()
 
-    @cluster(num_nodes=7)
-    def test_streams_runs_with_broker_down_initially(self):
-        self.kafka.start()
-        node = self.kafka.leader(self.inputTopic)
-        self.kafka.stop_node(node)
+    # @cluster(num_nodes=7)
+    # def test_streams_runs_with_broker_down_initially(self):
+    #     self.kafka.start()
+    #     node = self.kafka.leader(self.inputTopic)
+    #     self.kafka.stop_node(node)
+    #
+    #     configs = self.get_configs(extra_configs=",application.id=starting_wo_broker_id")
+    #
+    #     # start streams with broker down initially
+    #     processor = StreamsBrokerDownResilienceService(self.test_context, self.kafka, configs)
+    #     processor.start()
+    #
+    #     processor_2 = StreamsBrokerDownResilienceService(self.test_context, self.kafka, configs)
+    #     processor_2.start()
+    #
+    #     processor_3 = StreamsBrokerDownResilienceService(self.test_context, self.kafka, configs)
+    #     processor_3.start()
+    #
+    #     broker_unavailable_message = "Broker may not be available"
+    #
+    #     # verify streams instances unable to connect to broker, kept trying
+    #     self.wait_for_verification(processor, broker_unavailable_message, processor.LOG_FILE, 10)
+    #     self.wait_for_verification(processor_2, broker_unavailable_message, processor_2.LOG_FILE, 10)
+    #     self.wait_for_verification(processor_3, broker_unavailable_message, processor_3.LOG_FILE, 10)
+    #
+    #     with processor.node.account.monitor_log(processor.LOG_FILE) as monitor_1:
+    #         with processor_2.node.account.monitor_log(processor_2.LOG_FILE) as monitor_2:
+    #             with processor_3.node.account.monitor_log(processor_3.LOG_FILE) as monitor_3:
+    #                 self.kafka.start_node(node)
+    #
+    #                 monitor_1.wait_until(self.connected_message,
+    #                                      timeout_sec=120,
+    #                                      err_msg=("Never saw '%s' on " % self.connected_message) + str(processor.node.account))
+    #                 monitor_2.wait_until(self.connected_message,
+    #                                      timeout_sec=120,
+    #                                      err_msg=("Never saw '%s' on " % self.connected_message) + str(processor_2.node.account))
+    #                 monitor_3.wait_until(self.connected_message,
+    #                                      timeout_sec=120,
+    #                                      err_msg=("Never saw '%s' on " % self.connected_message) + str(processor_3.node.account))
+    #
+    #     with processor.node.account.monitor_log(processor.STDOUT_FILE) as monitor_1:
+    #         with processor_2.node.account.monitor_log(processor_2.STDOUT_FILE) as monitor_2:
+    #             with processor_3.node.account.monitor_log(processor_3.STDOUT_FILE) as monitor_3:
+    #
+    #                 self.assert_produce(self.inputTopic,
+    #                                     "sending_message_after_broker_down_initially",
+    #                                     num_messages=self.num_messages,
+    #                                     timeout_sec=120)
+    #
+    #                 monitor_1.wait_until(self.message,
+    #                                      timeout_sec=120,
+    #                                      err_msg=("Never saw '%s' on " % self.message) + str(processor.node.account))
+    #                 monitor_2.wait_until(self.message,
+    #                                      timeout_sec=120,
+    #                                      err_msg=("Never saw '%s' on " % self.message) + str(processor_2.node.account))
+    #                 monitor_3.wait_until(self.message,
+    #                                      timeout_sec=120,
+    #                                      err_msg=("Never saw '%s' on " % self.message) + str(processor_3.node.account))
+    #
+    #                 self.assert_consume(self.client_id,
+    #                                     "consuming_message_after_broker_down_initially",
+    #                                     self.outputTopic,
+    #                                     num_messages=self.num_messages,
+    #                                     timeout_sec=120)
+    #
+    #     self.kafka.stop()
 
-        configs = self.get_configs(extra_configs=",application.id=starting_wo_broker_id")
-
-        # start streams with broker down initially
-        processor = StreamsBrokerDownResilienceService(self.test_context, self.kafka, configs)
-        processor.start()
-
-        processor_2 = StreamsBrokerDownResilienceService(self.test_context, self.kafka, configs)
-        processor_2.start()
-
-        processor_3 = StreamsBrokerDownResilienceService(self.test_context, self.kafka, configs)
-        processor_3.start()
-
-        broker_unavailable_message = "Broker may not be available"
-
-        # verify streams instances unable to connect to broker, kept trying
-        self.wait_for_verification(processor, broker_unavailable_message, processor.LOG_FILE, 10)
-        self.wait_for_verification(processor_2, broker_unavailable_message, processor_2.LOG_FILE, 10)
-        self.wait_for_verification(processor_3, broker_unavailable_message, processor_3.LOG_FILE, 10)
-
-        with processor.node.account.monitor_log(processor.LOG_FILE) as monitor_1:
-            with processor_2.node.account.monitor_log(processor_2.LOG_FILE) as monitor_2:
-                with processor_3.node.account.monitor_log(processor_3.LOG_FILE) as monitor_3:
-                    self.kafka.start_node(node)
-
-                    monitor_1.wait_until(self.connected_message,
-                                         timeout_sec=120,
-                                         err_msg=("Never saw '%s' on " % self.connected_message) + str(processor.node.account))
-                    monitor_2.wait_until(self.connected_message,
-                                         timeout_sec=120,
-                                         err_msg=("Never saw '%s' on " % self.connected_message) + str(processor_2.node.account))
-                    monitor_3.wait_until(self.connected_message,
-                                         timeout_sec=120,
-                                         err_msg=("Never saw '%s' on " % self.connected_message) + str(processor_3.node.account))
-
-        with processor.node.account.monitor_log(processor.STDOUT_FILE) as monitor_1:
-            with processor_2.node.account.monitor_log(processor_2.STDOUT_FILE) as monitor_2:
-                with processor_3.node.account.monitor_log(processor_3.STDOUT_FILE) as monitor_3:
-
-                    self.assert_produce(self.inputTopic,
-                                        "sending_message_after_broker_down_initially",
-                                        num_messages=self.num_messages,
-                                        timeout_sec=120)
-
-                    monitor_1.wait_until(self.message,
-                                         timeout_sec=120,
-                                         err_msg=("Never saw '%s' on " % self.message) + str(processor.node.account))
-                    monitor_2.wait_until(self.message,
-                                         timeout_sec=120,
-                                         err_msg=("Never saw '%s' on " % self.message) + str(processor_2.node.account))
-                    monitor_3.wait_until(self.message,
-                                         timeout_sec=120,
-                                         err_msg=("Never saw '%s' on " % self.message) + str(processor_3.node.account))
-
-                    self.assert_consume(self.client_id,
-                                        "consuming_message_after_broker_down_initially",
-                                        self.outputTopic,
-                                        num_messages=self.num_messages,
-                                        timeout_sec=120)
-
-        self.kafka.stop()
-
-    @cluster(num_nodes=7)
+    @cluster(num_nodes=9)
     def test_streams_should_scale_in_while_brokers_down(self):
         self.kafka.start()
 
@@ -222,7 +222,7 @@ class StreamsBrokerDownResilience(BaseStreamsTest):
 
         self.kafka.stop()
 
-    @cluster(num_nodes=7)
+    @cluster(num_nodes=9)
     def test_streams_should_failover_while_brokers_down(self):
         self.kafka.start()
 
