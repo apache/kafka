@@ -56,7 +56,6 @@ class ClientCompatibilityProduceConsumeTest(ProduceConsumeValidateTest):
 
     @cluster(num_nodes=9)
     @matrix(broker_version=[str(DEV_BRANCH)], metadata_quorum=quorum.all_non_upgrade)
-    @cluster(num_nodes=9)
     @parametrize(broker_version=str(LATEST_0_10_0))
     @parametrize(broker_version=str(LATEST_0_10_1))
     @parametrize(broker_version=str(LATEST_0_10_2))
