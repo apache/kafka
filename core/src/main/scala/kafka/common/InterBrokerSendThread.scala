@@ -78,7 +78,7 @@ abstract class InterBrokerSendThread(
       unsentRequests.clean()
     } catch {
       case _: DisconnectException if !networkClient.active() =>
-        // Other threads can shutdown network client by calling InterBrokerSendThread#shutdown
+        // DisconnectException is expected when NetworkClient#initiateClose is called
       case e: FatalExitError => throw e
       case t: Throwable =>
         error(s"unhandled exception caught in InterBrokerSendThread", t)
