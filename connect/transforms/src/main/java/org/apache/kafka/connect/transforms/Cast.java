@@ -367,7 +367,14 @@ public abstract class Cast<R extends ConnectRecord<R>> implements Transformation
             return Values.dateFormatFor(dateValue).format(dateValue);
         } else if (value instanceof ByteBuffer) {
             ByteBuffer byteBuffer = (ByteBuffer) value;
-            return castByteArrayToString(byteBuffer.array());
+            if (byteBuffer.hasArray()) {
+                return castByteArrayToString(byteBuffer.array());
+            }
+            else {
+                byte[] array = new byte[byteBuffer.remaining()];
+                byteBuffer.get(array);
+                return castByteArrayToString(array);
+            }
         } else if (value instanceof byte[]) {
             return castByteArrayToString((byte[]) value);
         } else {
