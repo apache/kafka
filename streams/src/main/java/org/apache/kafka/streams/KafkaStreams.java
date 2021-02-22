@@ -1120,6 +1120,15 @@ public class KafkaStreams implements AutoCloseable {
         }
     }
 
+    /**
+     * Returns the last committed offset for each task.
+     */
+    public Map<TopicPartition, Long> committedOffsets() {
+        final Map<TopicPartition, Long> offsets = new HashMap<>();
+        processStreamThread(streamThread -> offsets.putAll(streamThread.committedOffsets()));
+        return offsets;
+    }
+
     private ScheduledExecutorService setupStateDirCleaner() {
         return Executors.newSingleThreadScheduledExecutor(r -> {
             final Thread thread = new Thread(r, clientId + "-CleanupThread");

@@ -91,6 +91,7 @@ public class TaskManager {
     // includes assigned & initialized tasks and unassigned tasks we locked temporarily during rebalance
     private final Set<TaskId> lockedTaskDirectories = new HashSet<>();
     private java.util.function.Consumer<Set<TopicPartition>> resetter;
+    private Map<TopicPartition, Long> committedOffsets = new HashMap<>();
 
     TaskManager(final Time time,
                 final ChangelogReader changelogReader,
@@ -1087,6 +1088,7 @@ public class TaskManager {
                 } else {
                     try {
                         mainConsumer.commitSync(allOffsets);
+                        committedOffsets.putAll(allOffsets.entrySet().stream().collect(Collectors.toMap(Entry::getKey, e -> e.getValue().offset())));
                     } catch (final CommitFailedException error) {
                         throw new TaskMigratedException("Consumer committing offsets failed, " +
                                                             "indicating the corresponding thread is no longer part of the group", error);
@@ -1286,5 +1288,9 @@ public class TaskManager {
     // for testing only
     void addTask(final Task task) {
         tasks.addTask(task);
+    }
+
+    public Map<TopicPartition, Long> getCommittedOffsets() {
+        return committedOffsets;
     }
 }

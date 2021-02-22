@@ -52,6 +52,7 @@ import org.slf4j.Logger;
 import java.time.Duration;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -307,6 +308,9 @@ public class StreamThread extends Thread {
     private final ProcessingMode processingMode;
     private AtomicBoolean leaveGroupRequested;
 
+    private final Map<TopicPartition, Integer> committedOffsets;
+
+
     public static StreamThread create(final InternalTopologyBuilder builder,
                                       final StreamsConfig config,
                                       final KafkaClientSupplier clientSupplier,
@@ -495,7 +499,7 @@ public class StreamThread extends Thread {
         this.streamsUncaughtExceptionHandler = streamsUncaughtExceptionHandler;
         this.cacheResizer = cacheResizer;
         this.processingMode = processingMode(config);
-
+        committedOffsets = new HashMap<>();
         // The following sensors are created here but their references are not stored in this object, since within
         // this object they are not recorded. The sensors are created here so that the stream threads starts with all
         // its metrics initialised. Otherwise, those sensors would have been created during processing, which could
@@ -1229,5 +1233,9 @@ public class StreamThread extends Thread {
 
     Admin adminClient() {
         return adminClient;
+    }
+
+    public Map<TopicPartition, Long> committedOffsets() {
+        return taskManager.getCommittedOffsets();
     }
 }
