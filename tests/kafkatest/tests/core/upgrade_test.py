@@ -171,7 +171,7 @@ class TestUpgrade(ProduceConsumeValidateTest):
         # after leader change. Tolerate limited data loss for this case to avoid transient test failures.
         self.may_truncate_acked_records = False if from_kafka_version >= V_0_11_0_0 else True
 
-        new_consumer = from_kafka_version.supports_bootstrap_server()
+        new_consumer = from_kafka_version.consumer_supports_bootstrap_server()
         # TODO - reduce the timeout
         self.consumer = ConsoleConsumer(self.test_context, self.num_consumers, self.kafka,
                                         self.topic, new_consumer=new_consumer, consumer_timeout_ms=30000,

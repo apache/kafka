@@ -79,14 +79,14 @@ class ConsumerPerformanceService(PerformanceService):
         self.new_consumer = new_consumer
         self.settings = settings
 
-        assert version.supports_bootstrap_server() or (not new_consumer), \
+        assert version.consumer_supports_bootstrap_server() or (not new_consumer), \
             "new_consumer is only supported if version >= 0.9.0.0, version %s" % str(version)
 
         assert version < V_2_0_0 or new_consumer, \
             "new_consumer==false is only supported if version < 2.0.0, version %s" % str(version)
 
         security_protocol = self.security_config.security_protocol
-        assert version.supports_bootstrap_server() or security_protocol == SecurityConfig.PLAINTEXT, \
+        assert version.consumer_supports_bootstrap_server() or security_protocol == SecurityConfig.PLAINTEXT, \
             "Security protocol %s is only supported if version >= 0.9.0.0, version %s" % (self.security_config, str(version))
 
         # These less-frequently used settings can be updated manually after instantiation
@@ -142,7 +142,7 @@ class ConsumerPerformanceService(PerformanceService):
         for key, value in self.args(node.version).items():
             cmd += " --%s %s" % (key, value)
 
-        if node.version.supports_bootstrap_server():
+        if node.version.consumer_supports_bootstrap_server():
             # This is only used for security settings
             cmd += " --consumer.config %s" % ConsumerPerformanceService.CONFIG_FILE
 
@@ -155,7 +155,7 @@ class ConsumerPerformanceService(PerformanceService):
 
     def parse_results(self, line, version):
         parts = line.split(',')
-        if version.supports_bootstrap_server():
+        if version.consumer_supports_bootstrap_server():
             result = {
                 'total_mb': float(parts[2]),
                 'mbps': float(parts[3]),

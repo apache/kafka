@@ -62,7 +62,7 @@ class KafkaVersion(LooseVersion):
 
         return LooseVersion._cmp(self, other)
 
-    def supports_bootstrap_server(self):
+    def consumer_supports_bootstrap_server(self):
         """
         Kafka supported a new consumer beginning with v0.9.0 where
         we can specify --bootstrap-server instead of --zookeeper.

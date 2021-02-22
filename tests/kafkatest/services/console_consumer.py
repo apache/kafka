@@ -178,7 +178,7 @@ class ConsoleConsumer(KafkaPathResolverMixin, JmxMixin, BackgroundThreadService)
               "--consumer.config %(config_file)s " % args
 
         if self.new_consumer:
-            assert node.version.supports_bootstrap_server(), \
+            assert node.version.consumer_supports_bootstrap_server(), \
                 "new_consumer is only supported if version >= 0.9.0.0, version %s" % str(node.version)
             if node.version <= LATEST_0_10_0:
                 cmd += " --new-consumer"
