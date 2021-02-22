@@ -151,9 +151,8 @@ class ConsoleConsumer(KafkaPathResolverMixin, JmxMixin, BackgroundThreadService)
     def start_cmd(self, node):
         """Return the start command appropriate for the given node."""
         args = self.args.copy()
-        if self.new_consumer:
-            args['broker_list'] = self.kafka.bootstrap_servers(self.security_config.security_protocol)
-        else:
+        args['broker_list'] = self.kafka.bootstrap_servers(self.security_config.security_protocol)
+        if not self.new_consumer:
             args['zk_connect'] = self.kafka.zk_connect_setting()
         args['stdout'] = ConsoleConsumer.STDOUT_CAPTURE
         args['stderr'] = ConsoleConsumer.STDERR_CAPTURE
