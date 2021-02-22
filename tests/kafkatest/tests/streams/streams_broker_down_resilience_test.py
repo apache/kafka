@@ -41,7 +41,7 @@ class StreamsBrokerDownResilience(BaseStreamsTest):
     def setUp(self):
         self.zk.start()
 
-    @cluster(num_nodes=5)
+    @cluster(num_nodes=7)
     def test_streams_resilient_to_broker_down(self):
         self.kafka.start()
 
@@ -144,7 +144,7 @@ class StreamsBrokerDownResilience(BaseStreamsTest):
 
         self.kafka.stop()
 
-    @cluster(num_nodes=7)
+    @cluster(num_nodes=9)
     def test_streams_should_scale_in_while_brokers_down(self):
         self.kafka.start()
 
@@ -222,7 +222,7 @@ class StreamsBrokerDownResilience(BaseStreamsTest):
 
         self.kafka.stop()
 
-    @cluster(num_nodes=7)
+    @cluster(num_nodes=9)
     def test_streams_should_failover_while_brokers_down(self):
         self.kafka.start()
 
