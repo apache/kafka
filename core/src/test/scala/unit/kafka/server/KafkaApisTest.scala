@@ -555,9 +555,10 @@ class KafkaApisTest {
       adminManager, controller)
     createKafkaApis(authorizer = Some(authorizer)).handleIncrementalAlterConfigsRequest(request)
 
-    verifyIncrementalAlterConfigResult(incrementalAlterConfigsRequest,
-      capturedResponse, Map(authorizedTopic -> Errors.NONE,
-        unauthorizedTopic -> Errors.TOPIC_AUTHORIZATION_FAILED))
+    verifyIncrementalAlterConfigResult(capturedResponse, Map(
+      authorizedTopic -> Errors.NONE,
+      unauthorizedTopic -> Errors.TOPIC_AUTHORIZATION_FAILED
+    ))
 
     verify(authorizer, adminManager)
   }
@@ -579,9 +580,7 @@ class KafkaApisTest {
     new IncrementalAlterConfigsRequest.Builder(resourceMap, false)
   }
 
-  // FIXME: Unused arg
-  private def verifyIncrementalAlterConfigResult(incrementalAlterConfigsRequest: IncrementalAlterConfigsRequest,
-                                                 capturedResponse: Capture[AbstractResponse],
+  private def verifyIncrementalAlterConfigResult(capturedResponse: Capture[AbstractResponse],
                                                  expectedResults: Map[String, Errors]): Unit = {
     val response = capturedResponse.getValue.asInstanceOf[IncrementalAlterConfigsResponse]
     val responseMap = response.data.responses().asScala.map { resourceResponse =>
@@ -615,8 +614,7 @@ class KafkaApisTest {
       adminManager, controller)
     createKafkaApis(authorizer = Some(authorizer)).handleAlterClientQuotasRequest(request)
 
-    verifyAlterClientQuotaResult(alterClientQuotasRequest,
-      capturedResponse, Map(quotaEntity -> Errors.CLUSTER_AUTHORIZATION_FAILED))
+    verifyAlterClientQuotaResult(capturedResponse, Map(quotaEntity -> Errors.CLUSTER_AUTHORIZATION_FAILED))
 
     verify(authorizer, adminManager)
   }
@@ -627,9 +625,7 @@ class KafkaApisTest {
     testForwardableAPI(ApiKeys.ALTER_CLIENT_QUOTAS, requestBuilder)
   }
 
-  // FIXME: Unused arg
-  private def verifyAlterClientQuotaResult(alterClientQuotasRequest: AlterClientQuotasRequest,
-                                           capturedResponse: Capture[AbstractResponse],
+  private def verifyAlterClientQuotaResult(capturedResponse: Capture[AbstractResponse],
                                            expected: Map[ClientQuotaEntity, Errors]): Unit = {
     val response = capturedResponse.getValue.asInstanceOf[AlterClientQuotasResponse]
     val futures = expected.keys.map(quotaEntity => quotaEntity -> new KafkaFutureImpl[Void]()).toMap
