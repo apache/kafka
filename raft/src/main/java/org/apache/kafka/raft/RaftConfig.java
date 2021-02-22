@@ -58,18 +58,18 @@ public class RaftConfig {
     public static final String QUORUM_ELECTION_TIMEOUT_MS_CONFIG = QUORUM_PREFIX + "election.timeout.ms";
     public static final String QUORUM_ELECTION_TIMEOUT_MS_DOC = "Maximum time in milliseconds to wait " +
         "without being able to fetch from the leader before triggering a new election";
-    public static final int DEFAULT_QUORUM_ELECTION_TIMEOUT_MS = 5_000;
+    public static final int DEFAULT_QUORUM_ELECTION_TIMEOUT_MS = 1_000;
 
     public static final String QUORUM_FETCH_TIMEOUT_MS_CONFIG = QUORUM_PREFIX + "fetch.timeout.ms";
     public static final String QUORUM_FETCH_TIMEOUT_MS_DOC = "Maximum time without a successful fetch from " +
         "the current leader before becoming a candidate and triggering a election for voters; Maximum time without " +
         "receiving fetch from a majority of the quorum before asking around to see if there's a new epoch for leader";
-    public static final int DEFAULT_QUORUM_FETCH_TIMEOUT_MS = 15_000;
+    public static final int DEFAULT_QUORUM_FETCH_TIMEOUT_MS = 2_000;
 
     public static final String QUORUM_ELECTION_BACKOFF_MAX_MS_CONFIG = QUORUM_PREFIX + "election.backoff.max.ms";
     public static final String QUORUM_ELECTION_BACKOFF_MAX_MS_DOC = "Maximum time in milliseconds before starting new elections. " +
         "This is used in the binary exponential backoff mechanism that helps prevent gridlocked elections";
-    public static final int DEFAULT_QUORUM_ELECTION_BACKOFF_MAX_MS = 5_000;
+    public static final int DEFAULT_QUORUM_ELECTION_BACKOFF_MAX_MS = 1_000;
 
     public static final String QUORUM_LINGER_MS_CONFIG = QUORUM_PREFIX + "append.linger.ms";
     public static final String QUORUM_LINGER_MS_DOC = "The duration in milliseconds that the leader will " +
@@ -79,12 +79,12 @@ public class RaftConfig {
     public static final String QUORUM_REQUEST_TIMEOUT_MS_CONFIG = QUORUM_PREFIX +
         CommonClientConfigs.REQUEST_TIMEOUT_MS_CONFIG;
     public static final String QUORUM_REQUEST_TIMEOUT_MS_DOC = CommonClientConfigs.REQUEST_TIMEOUT_MS_DOC;
-    public static final int DEFAULT_QUORUM_REQUEST_TIMEOUT_MS = 20_000;
+    public static final int DEFAULT_QUORUM_REQUEST_TIMEOUT_MS = 4_000;
 
     public static final String QUORUM_RETRY_BACKOFF_MS_CONFIG = QUORUM_PREFIX +
         CommonClientConfigs.RETRY_BACKOFF_MS_CONFIG;
     public static final String QUORUM_RETRY_BACKOFF_MS_DOC = CommonClientConfigs.RETRY_BACKOFF_MS_DOC;
-    public static final int DEFAULT_QUORUM_RETRY_BACKOFF_MS = 100;
+    public static final int DEFAULT_QUORUM_RETRY_BACKOFF_MS = 20;
 
     private final int requestTimeoutMs;
     private final int retryBackoffMs;
