@@ -126,7 +126,7 @@ class KafkaNetworkChannel(
     def onComplete(clientResponse: ClientResponse): Unit = {
       val response = if (clientResponse.versionMismatch != null) {
         error(s"Request $request failed due to unsupported version error",
-          clientResponse.authenticationException)
+          clientResponse.versionMismatch)
         errorResponse(request.data, Errors.UNSUPPORTED_VERSION)
       } else if (clientResponse.authenticationException != null) {
         // For now we treat authentication errors as retriable. We use the
