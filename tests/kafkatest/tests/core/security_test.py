@@ -58,8 +58,8 @@ class SecurityTest(EndToEndTest):
         return True
 
     @cluster(num_nodes=7)
-    @matrix(security_protocol='PLAINTEXT', interbroker_security_protocol='SSL', metadata_quorum=quorum.all_non_upgrade)
-    @matrix(security_protocol='SSL', interbroker_security_protocol='PLAINTEXT', metadata_quorum=quorum.all_non_upgrade)
+    @matrix(security_protocol=['PLAINTEXT'], interbroker_security_protocol=['SSL'], metadata_quorum=quorum.all_non_upgrade)
+    @matrix(security_protocol=['SSL'], interbroker_security_protocol=['PLAINTEXT'], metadata_quorum=quorum.all_non_upgrade)
     def test_client_ssl_endpoint_validation_failure(self, security_protocol, interbroker_security_protocol, metadata_quorum=quorum.zk):
         """
         Test that invalid hostname in certificate results in connection failures.
