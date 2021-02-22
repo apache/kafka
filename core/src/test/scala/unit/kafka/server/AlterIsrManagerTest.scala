@@ -19,11 +19,13 @@ package kafka.server
 
 import java.util.Collections
 import java.util.concurrent.atomic.AtomicInteger
+
 import kafka.api.LeaderAndIsr
 import kafka.utils.{MockScheduler, MockTime}
 import kafka.zk.KafkaZkClient
 import org.apache.kafka.clients.ClientResponse
 import org.apache.kafka.common.TopicPartition
+import org.apache.kafka.common.errors.{AuthenticationException, UnsupportedVersionException}
 import org.apache.kafka.common.message.AlterIsrResponseData
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.protocol.Errors
@@ -127,20 +129,39 @@ class AlterIsrManagerTest {
 
   @Test
   def testAuthorizationFailed(): Unit = {
-    checkTopLevelError(Errors.CLUSTER_AUTHORIZATION_FAILED)
+    testRetryOnTopLevelError(Errors.CLUSTER_AUTHORIZATION_FAILED)
   }
 
   @Test
   def testStaleBrokerEpoch(): Unit = {
-    checkTopLevelError(Errors.STALE_BROKER_EPOCH)
+    testRetryOnTopLevelError(Errors.STALE_BROKER_EPOCH)
   }
 
   @Test
   def testUnknownServer(): Unit = {
-    checkTopLevelError(Errors.UNKNOWN_SERVER_ERROR)
+    testRetryOnTopLevelError(Errors.UNKNOWN_SERVER_ERROR)
   }
 
-  private def checkTopLevelError(error: Errors): Unit = {
+  @Test
+  def testRetryOnAuthenticationFailure(): Unit = {
+    testRetryOnErrorResponse(new ClientResponse(null, null, "", 0L, 0L,
+      false, null, new AuthenticationException("authentication failed"), null))
+  }
+
+  @Test
+  def testRetryOnUnsupportedVersionError(): Unit = {
+    testRetryOnErrorResponse(new ClientResponse(null, null, "", 0L, 0L,
+      false, new UnsupportedVersionException("unsupported version"), null, null))
+  }
+
+  private def testRetryOnTopLevelError(error: Errors): Unit = {
+    val alterIsrResp = new AlterIsrResponse(new AlterIsrResponseData().setErrorCode(error.code))
+    val response = new ClientResponse(null, null, "", 0L, 0L,
+      false, null, null, alterIsrResp)
+    testRetryOnErrorResponse(response)
+  }
+
+  private def testRetryOnErrorResponse(response: ClientResponse): Unit = {
     val leaderAndIsr = new LeaderAndIsr(1, 1, List(1,2,3), 10)
     val isrs = Seq(AlterIsrItem(tp0, leaderAndIsr, _ => { }, 0))
     val callbackCapture = EasyMock.newCapture[ControllerRequestCompletionHandler]()
@@ -156,10 +177,7 @@ class AlterIsrManagerTest {
 
     EasyMock.verify(brokerToController)
 
-    var alterIsrResp = new AlterIsrResponse(new AlterIsrResponseData().setErrorCode(error.code))
-    var resp = new ClientResponse(null, null, "", 0L, 0L,
-      false, null, null, alterIsrResp)
-    callbackCapture.getValue.onComplete(resp)
+    callbackCapture.getValue.onComplete(response)
 
     // Any top-level error, we want to retry, so we don't clear items from the pending map
     assertTrue(alterIsrManager.unsentIsrUpdates.containsKey(tp0))
@@ -173,10 +191,10 @@ class AlterIsrManagerTest {
     scheduler.tick()
 
     // After a successful response, we can submit another AlterIsrItem
-    alterIsrResp = partitionResponse(tp0, Errors.NONE)
-    resp = new ClientResponse(null, null, "", 0L, 0L,
-      false, null, null, alterIsrResp)
-    callbackCapture.getValue.onComplete(resp)
+    val retryAlterIsrResponse = partitionResponse(tp0, Errors.NONE)
+    val retryResponse = new ClientResponse(null, null, "", 0L, 0L,
+      false, null, null, retryAlterIsrResponse)
+    callbackCapture.getValue.onComplete(retryResponse)
 
     EasyMock.verify(brokerToController)
 

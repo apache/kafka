@@ -53,7 +53,9 @@ class MockBrokerToControllerChannelManager(
   }
 
   private[server] def handleResponse(request: BrokerToControllerQueueItem)(response: ClientResponse): Unit = {
-    if (response.wasDisconnected() || response.responseBody.errorCounts.containsKey(Errors.NOT_CONTROLLER)) {
+    if (response.authenticationException != null || response.versionMismatch != null) {
+      request.callback.onComplete(response)
+    } else if (response.wasDisconnected() || response.responseBody.errorCounts.containsKey(Errors.NOT_CONTROLLER)) {
       unsentQueue.addFirst(request)
     } else {
       request.callback.onComplete(response)

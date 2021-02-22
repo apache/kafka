@@ -327,10 +327,18 @@ class BrokerToControllerRequestThread(
     None
   }
 
-  private[server] def handleResponse(request: BrokerToControllerQueueItem)(response: ClientResponse): Unit = {
-    if (response.wasDisconnected()) {
+  private[server] def handleResponse(queueItem: BrokerToControllerQueueItem)(response: ClientResponse): Unit = {
+    if (response.authenticationException != null) {
+      error(s"Request ${queueItem.request} failed due to authentication error with controller",
+        response.authenticationException)
+      queueItem.callback.onComplete(response)
+    } else if (response.versionMismatch != null) {
+      error(s"Request ${queueItem.request} failed due to unsupported version error",
+        response.versionMismatch)
+      queueItem.callback.onComplete(response)
+    } else if (response.wasDisconnected()) {
       updateControllerAddress(null)
-      requestQueue.putFirst(request)
+      requestQueue.putFirst(queueItem)
     } else if (response.responseBody().errorCounts().containsKey(Errors.NOT_CONTROLLER)) {
       // just close the controller connection and wait for metadata cache update in doWork
       activeControllerAddress().foreach { controllerAddress => {
@@ -338,9 +346,9 @@ class BrokerToControllerRequestThread(
         updateControllerAddress(null)
       }}
 
-      requestQueue.putFirst(request)
+      requestQueue.putFirst(queueItem)
     } else {
-      request.callback.onComplete(response)
+      queueItem.callback.onComplete(response)
     }
   }
 

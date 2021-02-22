@@ -165,9 +165,19 @@ class DefaultAlterIsrManager(
       new ControllerRequestCompletionHandler {
         override def onComplete(response: ClientResponse): Unit = {
           debug(s"Received AlterIsr response $response")
-          val body = response.responseBody().asInstanceOf[AlterIsrResponse]
           val error = try {
-            handleAlterIsrResponse(body, message.brokerEpoch, inflightAlterIsrItems)
+            if (response.authenticationException != null) {
+              // For now we treat authentication errors as retriable. We use the
+              // `NETWORK_EXCEPTION` error code for lack of a good alternative.
+              // Note that `BrokerToControllerChannelManager` will still log the
+              // authentication errors so that users have a chance to fix the problem.
+              Errors.NETWORK_EXCEPTION
+            } else if (response.versionMismatch != null) {
+              Errors.UNSUPPORTED_VERSION
+            } else {
+              val body = response.responseBody().asInstanceOf[AlterIsrResponse]
+              handleAlterIsrResponse(body, message.brokerEpoch, inflightAlterIsrItems)
+            }
           } finally {
             // clear the flag so future requests can proceed
             clearInFlightRequest()
