@@ -93,17 +93,11 @@ public final class BufferValue {
         final int sizeOfOldValue = oldValue == null || priorValue == oldValue ? 0 : oldValue.length;
         final int sizeOfNewValue = newValue == null ? 0 : newValue.length;
 
-        final byte[] serializedContext = recordContext.serialize();
-
-        final ByteBuffer buffer = ByteBuffer.allocate(
-            serializedContext.length
-                + sizeOfValueLength + sizeOfPriorValue
+        final ByteBuffer buffer = recordContext.serializeTo(sizeOfSerializedContext -> ByteBuffer.allocate(
+            sizeOfSerializedContext + sizeOfValueLength + sizeOfPriorValue
                 + sizeOfValueLength + sizeOfOldValue
                 + sizeOfValueLength + sizeOfNewValue
-                + endPadding
-        );
-
-        buffer.put(serializedContext);
+                + endPadding));
 
         addValue(buffer, priorValue);
 

@@ -25,6 +25,7 @@ import org.apache.kafka.streams.processor.api.RecordMetadata;
 
 import java.nio.ByteBuffer;
 import java.util.Objects;
+import java.util.function.Function;
 
 import static java.nio.charset.StandardCharsets.UTF_8;
 import static java.util.Objects.requireNonNull;
@@ -96,7 +97,12 @@ public class ProcessorRecordContext implements RecordContext, RecordMetadata {
         return size;
     }
 
-    public byte[] serialize() {
+    /**
+     * write this context to byte buffer
+     * @param bufferSupplier buffer supplier. the passed integer is the size of serialization
+     * @return buffer from supplier
+     */
+    public ByteBuffer serializeTo(final Function<Integer, ByteBuffer> bufferSupplier) {
         final byte[] topicBytes = topic.getBytes(UTF_8);
         final byte[][] headerKeysBytes;
         final byte[][] headerValuesBytes;
@@ -131,7 +137,7 @@ public class ProcessorRecordContext implements RecordContext, RecordMetadata {
             }
         }
 
-        final ByteBuffer buffer = ByteBuffer.allocate(size);
+        final ByteBuffer buffer = bufferSupplier.apply(size);
         buffer.putLong(timestamp);
         buffer.putLong(offset);
 
@@ -157,7 +163,7 @@ public class ProcessorRecordContext implements RecordContext, RecordMetadata {
             }
         }
 
-        return buffer.array();
+        return buffer;
     }
 
     public static ProcessorRecordContext deserialize(final ByteBuffer buffer) {

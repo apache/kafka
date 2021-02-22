@@ -95,7 +95,7 @@ public class BufferValueTest {
     @Test
     public void shouldSerializeNulls() {
         final ProcessorRecordContext context = new ProcessorRecordContext(0L, 0L, 0, "topic", null);
-        final byte[] serializedContext = context.serialize();
+        final byte[] serializedContext = context.serializeTo(ByteBuffer::allocate).array();
         final byte[] bytes = new BufferValue(null, null, null, context).serialize(0).array();
         final byte[] withoutContext = Arrays.copyOfRange(bytes, serializedContext.length, bytes.length);
 
@@ -105,7 +105,7 @@ public class BufferValueTest {
     @Test
     public void shouldSerializePrior() {
         final ProcessorRecordContext context = new ProcessorRecordContext(0L, 0L, 0, "topic", null);
-        final byte[] serializedContext = context.serialize();
+        final byte[] serializedContext = context.serializeTo(ByteBuffer::allocate).array();
         final byte[] priorValue = {(byte) 5};
         final byte[] bytes = new BufferValue(priorValue, null, null, context).serialize(0).array();
         final byte[] withoutContext = Arrays.copyOfRange(bytes, serializedContext.length, bytes.length);
@@ -116,7 +116,7 @@ public class BufferValueTest {
     @Test
     public void shouldSerializeOld() {
         final ProcessorRecordContext context = new ProcessorRecordContext(0L, 0L, 0, "topic", null);
-        final byte[] serializedContext = context.serialize();
+        final byte[] serializedContext = context.serializeTo(ByteBuffer::allocate).array();
         final byte[] oldValue = {(byte) 5};
         final byte[] bytes = new BufferValue(null, oldValue, null, context).serialize(0).array();
         final byte[] withoutContext = Arrays.copyOfRange(bytes, serializedContext.length, bytes.length);
@@ -127,7 +127,7 @@ public class BufferValueTest {
     @Test
     public void shouldSerializeNew() {
         final ProcessorRecordContext context = new ProcessorRecordContext(0L, 0L, 0, "topic", null);
-        final byte[] serializedContext = context.serialize();
+        final byte[] serializedContext = context.serializeTo(ByteBuffer::allocate).array();
         final byte[] newValue = {(byte) 5};
         final byte[] bytes = new BufferValue(null, null, newValue, context).serialize(0).array();
         final byte[] withoutContext = Arrays.copyOfRange(bytes, serializedContext.length, bytes.length);
@@ -138,7 +138,7 @@ public class BufferValueTest {
     @Test
     public void shouldCompactDuplicates() {
         final ProcessorRecordContext context = new ProcessorRecordContext(0L, 0L, 0, "topic", null);
-        final byte[] serializedContext = context.serialize();
+        final byte[] serializedContext = context.serializeTo(ByteBuffer::allocate).array();
         final byte[] duplicate = {(byte) 5};
         final byte[] bytes = new BufferValue(duplicate, duplicate, null, context).serialize(0).array();
         final byte[] withoutContext = Arrays.copyOfRange(bytes, serializedContext.length, bytes.length);
@@ -149,7 +149,7 @@ public class BufferValueTest {
     @Test
     public void shouldDeserializePrior() {
         final ProcessorRecordContext context = new ProcessorRecordContext(0L, 0L, 0, "topic", null);
-        final byte[] serializedContext = context.serialize();
+        final byte[] serializedContext = context.serializeTo(ByteBuffer::allocate).array();
         final byte[] priorValue = {(byte) 5};
         final ByteBuffer serialValue =
             ByteBuffer
@@ -164,7 +164,7 @@ public class BufferValueTest {
     @Test
     public void shouldDeserializeOld() {
         final ProcessorRecordContext context = new ProcessorRecordContext(0L, 0L, 0, "topic", null);
-        final byte[] serializedContext = context.serialize();
+        final byte[] serializedContext = context.serializeTo(ByteBuffer::allocate).array();
         final byte[] oldValue = {(byte) 5};
         final ByteBuffer serialValue =
             ByteBuffer
@@ -178,7 +178,7 @@ public class BufferValueTest {
     @Test
     public void shouldDeserializeNew() {
         final ProcessorRecordContext context = new ProcessorRecordContext(0L, 0L, 0, "topic", null);
-        final byte[] serializedContext = context.serialize();
+        final byte[] serializedContext = context.serializeTo(ByteBuffer::allocate).array();
         final byte[] newValue = {(byte) 5};
         final ByteBuffer serialValue =
             ByteBuffer
@@ -192,7 +192,7 @@ public class BufferValueTest {
     @Test
     public void shouldDeserializeCompactedDuplicates() {
         final ProcessorRecordContext context = new ProcessorRecordContext(0L, 0L, 0, "topic", null);
-        final byte[] serializedContext = context.serialize();
+        final byte[] serializedContext = context.serializeTo(ByteBuffer::allocate).array();
         final byte[] duplicate = {(byte) 5};
         final ByteBuffer serialValue =
             ByteBuffer
