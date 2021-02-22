@@ -155,6 +155,48 @@ class ForwardingManagerTest {
     assertEquals(Map(Errors.REQUEST_TIMED_OUT -> 1).asJava, alterConfigResponse.errorCounts)
   }
 
+  @Test
+  def testUnsupportedVersionFromNetworkClient(): Unit = {
+    val requestCorrelationId = 27
+    val clientPrincipal = new KafkaPrincipal(KafkaPrincipal.USER_TYPE, "client")
+    val (requestHeader, requestBuffer) = buildRequest(testAlterConfigRequest, requestCorrelationId)
+    val request = buildRequest(requestHeader, requestBuffer, clientPrincipal)
+
+    val controllerNode = new Node(0, "host", 1234)
+    Mockito.when(controllerNodeProvider.get()).thenReturn(Some(controllerNode))
+
+    client.prepareUnsupportedVersionResponse(req => req.apiKey == requestHeader.apiKey)
+
+    val response = new AtomicReference[AbstractResponse]()
+    forwardingManager.forwardRequest(request, res => res.foreach(response.set))
+    brokerToController.poll()
+    assertNotNull(response.get)
+
+    val alterConfigResponse = response.get.asInstanceOf[AlterConfigsResponse]
+    assertEquals(Map(Errors.UNKNOWN_SERVER_ERROR -> 1).asJava, alterConfigResponse.errorCounts)
+  }
+
+  @Test
+  def testFailedAuthentication(): Unit = {
+    val requestCorrelationId = 27
+    val clientPrincipal = new KafkaPrincipal(KafkaPrincipal.USER_TYPE, "client")
+    val (requestHeader, requestBuffer) = buildRequest(testAlterConfigRequest, requestCorrelationId)
+    val request = buildRequest(requestHeader, requestBuffer, clientPrincipal)
+
+    val controllerNode = new Node(0, "host", 1234)
+    Mockito.when(controllerNodeProvider.get()).thenReturn(Some(controllerNode))
+
+    client.createPendingAuthenticationError(controllerNode, 50)
+
+    val response = new AtomicReference[AbstractResponse]()
+    forwardingManager.forwardRequest(request, res => res.foreach(response.set))
+    brokerToController.poll()
+    assertNotNull(response.get)
+
+    val alterConfigResponse = response.get.asInstanceOf[AlterConfigsResponse]
+    assertEquals(Map(Errors.UNKNOWN_SERVER_ERROR -> 1).asJava, alterConfigResponse.errorCounts)
+  }
+
   private def buildRequest(
     body: AbstractRequest,
     correlationId: Int
