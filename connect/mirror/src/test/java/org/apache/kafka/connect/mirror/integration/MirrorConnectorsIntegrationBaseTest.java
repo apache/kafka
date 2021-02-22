@@ -64,6 +64,7 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 
 import static org.apache.kafka.connect.mirror.TestUtils.generateRecords;
+import static org.junit.jupiter.api.Assertions.fail;
 
 /**
  * Tests MM2 replaication anda failolver/failback logic.
@@ -198,8 +199,6 @@ public abstract class MirrorConnectorsIntegrationBaseTest {
 //            System.out.println("!!! sleep");
 //            Thread.sleep(40000);
             deleteAllTopics(primary.kafka());
-            System.out.println("!!! sleep");
-            Thread.sleep(40000);
             deleteAllTopics(backup.kafka());
         } finally {
             shuttingDown = true;
@@ -335,6 +334,8 @@ public abstract class MirrorConnectorsIntegrationBaseTest {
             "New topic was not replicated to primary cluster.");
         assertEquals(NUM_RECORDS_PER_PARTITION, backup.kafka().consume(NUM_RECORDS_PER_PARTITION, 2 * RECORD_TRANSFER_DURATION_MS, "primary.test-topic-2").count(),
             "New topic was not replicated to backup cluster");
+
+        fail();
     }
     
     @Test
@@ -379,6 +380,8 @@ public abstract class MirrorConnectorsIntegrationBaseTest {
         // offset of the last partition should exist, but its value should be 0
         assertNotNull(offset, "Offset of last partition was not replicated");
         assertEquals(0, offset.offset(), "Offset of last partition is not zero");
+
+
     }
     
     @Test
@@ -445,6 +448,8 @@ public abstract class MirrorConnectorsIntegrationBaseTest {
         // similar reasoning as above, no more records to consume by the same consumer group at backup cluster
         assertEquals(0, records.count(), "consumer record size is not zero");
         backupConsumer.close();
+
+        fail();
     }
 
     @Test
@@ -1402,7 +1407,7 @@ public abstract class MirrorConnectorsIntegrationBaseTest {
         try (final Admin adminClient = cluster.createAdminClient()) {
             Set<String> topics = adminClient.listTopics().names().get();
             System.out.println("!!! t:" + topics);
-            Thread.sleep(5000);
+            Thread.sleep(1000);
             for (int i = 0; i < 2; i++) {
                 Set<String> topics2 = adminClient.listTopics().names().get();
                 System.out.println("!!! t:" + i + topics2);
