@@ -13,6 +13,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from ducktape.mark.resource import cluster
 from ducktape.tests.test import Test
 from ducktape.utils.util import wait_until
 from kafkatest.services.kafka import config_property, KafkaService
@@ -109,6 +110,7 @@ client.id=console-consumer
 
         self.delegation_tokens.renew_delegation_token(dt["hmac"], new_expirydate_ms)
 
+    @cluster(num_nodes=5)
     def test_delegation_token_lifecycle(self):
         self.kafka.start()
         self.delegation_tokens = DelegationTokens(self.kafka, self.test_context)

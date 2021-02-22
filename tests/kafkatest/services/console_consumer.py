@@ -151,7 +151,10 @@ class ConsoleConsumer(KafkaPathResolverMixin, JmxMixin, BackgroundThreadService)
     def start_cmd(self, node):
         """Return the start command appropriate for the given node."""
         args = self.args.copy()
-        args['zk_connect'] = self.kafka.zk_connect_setting()
+        if self.new_consumer:
+            args['broker_list'] = self.kafka.bootstrap_servers(self.security_config.security_protocol)
+        else:
+            args['zk_connect'] = self.kafka.zk_connect_setting()
         args['stdout'] = ConsoleConsumer.STDOUT_CAPTURE
         args['stderr'] = ConsoleConsumer.STDERR_CAPTURE
         args['log_dir'] = ConsoleConsumer.LOG_DIR
@@ -160,7 +163,6 @@ class ConsoleConsumer(KafkaPathResolverMixin, JmxMixin, BackgroundThreadService)
         args['stdout'] = ConsoleConsumer.STDOUT_CAPTURE
         args['jmx_port'] = self.jmx_port
         args['console_consumer'] = self.path.script("kafka-console-consumer.sh", node)
-        args['broker_list'] = self.kafka.bootstrap_servers(self.security_config.security_protocol)
 
         if self.kafka_opts_override:
             args['kafka_opts'] = "\"%s\"" % self.kafka_opts_override
