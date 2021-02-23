@@ -16,10 +16,11 @@
 import time
 from collections import defaultdict
 
+from ducktape.mark import matrix
 from ducktape.mark.resource import cluster
 
 from kafkatest.services.console_consumer import ConsoleConsumer
-from kafkatest.services.kafka import KafkaService
+from kafkatest.services.kafka import KafkaService, quorum
 from kafkatest.services.monitor.jmx import JmxTool
 from kafkatest.services.verifiable_producer import VerifiableProducer
 from kafkatest.services.zookeeper import ZookeeperService
@@ -36,7 +37,7 @@ class FetchFromFollowerTest(ProduceConsumeValidateTest):
         super(FetchFromFollowerTest, self).__init__(test_context=test_context)
         self.jmx_tool = JmxTool(test_context, jmx_poll_ms=100)
         self.topic = "test_topic"
-        self.zk = ZookeeperService(test_context, num_nodes=1)
+        self.zk = ZookeeperService(test_context, num_nodes=1) if quorum.for_test(test_context) == quorum.zk else None
         self.kafka = KafkaService(test_context,
                                   num_nodes=3,
                                   zk=self.zk,
@@ -53,7 +54,8 @@ class FetchFromFollowerTest(ProduceConsumeValidateTest):
                                       1: [("broker.rack", "rack-a")],
                                       2: [("broker.rack", "rack-b")],
                                       3: [("broker.rack", "rack-c")]
-                                  })
+                                  },
+                                  controller_num_nodes_override=1)
 
         self.producer_throughput = 1000
         self.num_producers = 1
@@ -63,11 +65,13 @@ class FetchFromFollowerTest(ProduceConsumeValidateTest):
         return super(FetchFromFollowerTest, self).min_cluster_size() + self.num_producers * 2 + self.num_consumers * 2
 
     def setUp(self):
-        self.zk.start()
+        if self.zk:
+            self.zk.start()
         self.kafka.start()
 
     @cluster(num_nodes=9)
-    def test_consumer_preferred_read_replica(self):
+    @matrix(metadata_quorum=quorum.all_non_upgrade)
+    def test_consumer_preferred_read_replica(self, metadata_quorum=quorum.zk):
         """
         This test starts up brokers with "broker.rack" and "replica.selector.class" configurations set. The replica
         selector is set to the rack-aware implementation. One of the brokers has a different rack than the other two.

@@ -158,7 +158,7 @@ public abstract class AbstractCoordinator implements Closeable {
         Objects.requireNonNull(rebalanceConfig.groupId,
                                "Expected a non-null group id for coordinator construction");
         this.rebalanceConfig = rebalanceConfig;
-        this.log = logContext.logger(AbstractCoordinator.class);
+        this.log = logContext.logger(this.getClass());
         this.client = client;
         this.time = time;
         this.heartbeat = new Heartbeat(rebalanceConfig, time);
