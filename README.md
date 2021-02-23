@@ -221,6 +221,13 @@ The following options should be set with a `-P` switch, for example `./gradlew -
 * `enableTestCoverage`: enables test coverage plugins and tasks, including bytecode enhancement of classes required to track said
 coverage. Note that this introduces some overhead when running tests and hence why it's disabled by default (the overhead
 varies, but 15-20% is a reasonable estimate).
+* `scalaOptimizerMode`: configures the optimizing behavior of the scala compiler, the value should be one of `none`, `method`, `inline-kafka` or
+`inline-scala` (the default is `inline-kafka`). `none` is the scala compiler default, which only eliminates unreachable code. `method` also
+includes method-local optimizations. `inline-kafka` adds inlining of methods within the kafka packages. Finally, `inline-scala` also
+includes inlining of methods within the scala library (which avoids lambda allocations for methods like `Option.exists`). `inline-scala` is
+only safe if the Scala library version is the same at compile time and runtime. Since we cannot guarantee this for all cases (for example, users
+may depend on the kafka jar for integration tests where they may include a scala library with a different version), we don't enable it by
+default. See https://www.lightbend.com/blog/scala-inliner-optimizer for more details.
 
 ### Dependency Analysis ###
 
