@@ -284,7 +284,7 @@ final class KafkaMetadataLog private (
    * Removes all snapshots on the log directory whose epoch and end offset is less than the giving epoch and end offset.
    */
   private def removeSnapshotFilesBefore(logStartSnapshotId: OffsetAndEpoch): Unit = {
-    val expiredSnapshotIdsIter = snapshotIds.headSet(logStartSnapshotId).iterator()
+    val expiredSnapshotIdsIter = snapshotIds.headSet(logStartSnapshotId, false).iterator()
     while (expiredSnapshotIdsIter.hasNext) {
       val snapshotId = expiredSnapshotIdsIter.next()
       // If snapshotIds contains a snapshot id, the KafkaRaftClient and Listener can expect that the snapshot exists
@@ -353,10 +353,14 @@ object KafkaMetadataLog {
     Files
       .walk(log.dir.toPath, 1)
       .map[Optional[SnapshotPath]] { path =>
-        if (path != log.dir.toPath) {
-          Snapshots.parse(path)
-        } else {
+
+        if (path == log.dir.toPath) {
           Optional.empty()
+        } else if (path.endsWith(Snapshots.DELETE_SUFFIX)) {
+          Files.deleteIfExists(path)
+          Optional.empty()
+        } else {
+          Snapshots.parse(path)
         }
       }
       .forEach { path =>

@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.snapshot;
 
+import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.raft.OffsetAndEpoch;
 
 import java.io.IOException;
@@ -23,10 +24,12 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.text.NumberFormat;
 import java.util.Optional;
+import java.util.concurrent.CompletableFuture;
 
 public final class Snapshots {
-    private static final String SUFFIX =  ".checkpoint";
-    private static final String PARTIAL_SUFFIX = String.format("%s.part", SUFFIX);
+    public static final String SUFFIX = ".checkpoint";
+    public static final String PARTIAL_SUFFIX = String.format("%s.part", SUFFIX);
+    public static final String DELETE_SUFFIX = String.format("%s.deleted", SUFFIX);
 
     private static final NumberFormat OFFSET_FORMATTER = NumberFormat.getInstance();
     private static final NumberFormat EPOCH_FORMATTER = NumberFormat.getInstance();
@@ -56,6 +59,10 @@ public final class Snapshots {
 
     static Path moveRename(Path source, OffsetAndEpoch snapshotId) {
         return source.resolveSibling(filenameFromSnapshotId(snapshotId) + SUFFIX);
+    }
+
+    static Path deleteRename(Path source, OffsetAndEpoch snapshotId) {
+        return source.resolveSibling(filenameFromSnapshotId(snapshotId) + DELETE_SUFFIX);
     }
 
     public static Path createTempFile(Path logDir, OffsetAndEpoch snapshotId) throws IOException {
@@ -97,9 +104,18 @@ public final class Snapshots {
     /**
      * Delete this snapshot from the filesystem.
      */
-    public static boolean deleteSnapshotIfExists(Path logDir, OffsetAndEpoch snapshotId) throws IOException {
+    public static CompletableFuture<Boolean> deleteSnapshotIfExists(Path logDir, OffsetAndEpoch snapshotId) throws IOException {
         Path path = snapshotPath(logDir, snapshotId);
-        return Files.deleteIfExists(path);
+        Path destination = Snapshots.deleteRename(path, snapshotId);
+        Utils.atomicMoveWithFallback(path, destination);
+
+        return CompletableFuture.supplyAsync(() -> {
+            try {
+                return Files.deleteIfExists(destination);
+            } catch (IOException e) {
+                throw new RuntimeException("Error deleting snapshot file " + destination + ":" + e.getMessage());
+            }
+        });
     }
 
 }
