@@ -1880,6 +1880,7 @@ public class StreamThreadTest {
                 @Override
                 public void init(final org.apache.kafka.streams.processor.ProcessorContext context) {
                     context.schedule(Duration.ofMillis(100L), PunctuationType.WALL_CLOCK_TIME, timestamp -> context.forward("key", "value"));
+                    context.schedule(Duration.ofMillis(100L), PunctuationType.STREAM_TIME, timestamp -> context.forward("key", "value"));
                 }
 
                 @Override
@@ -1905,6 +1906,7 @@ public class StreamThreadTest {
             .process(peekProcessor);
         internalStreamsBuilder.buildAndOptimizeTopology();
 
+        final long currTime = mockTime.milliseconds();
         final StreamThread thread = createStreamThread(CLIENT_ID, config, false);
 
         thread.setState(StreamThread.State.STARTING);
@@ -1930,7 +1932,24 @@ public class StreamThreadTest {
         thread.runOnce();
 
         assertEquals(1, peekedContextTime.size());
-        assertNotNull(peekedContextTime.get(0));
+        assertEquals(currTime + 100L, peekedContextTime.get(0).longValue());
+
+        clientSupplier.consumer.addRecord(new ConsumerRecord<>(
+            topic1,
+            1,
+            0L,
+             100L,
+             TimestampType.CREATE_TIME,
+             ConsumerRecord.NULL_CHECKSUM,
+             "K".getBytes().length,
+             "V".getBytes().length,
+             "K".getBytes(),
+             "V".getBytes()));
+
+        thread.runOnce();
+
+        assertEquals(2, peekedContextTime.size());
+        assertEquals(0L, peekedContextTime.get(1).longValue());
     }
 
     @Test
