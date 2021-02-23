@@ -137,9 +137,9 @@ public interface ConsumerPartitionAssignor {
         public String toString() {
             return "Subscription(" +
                 "topics=" + topics +
-                ", userData=" + userData +
+                (userData == null ? "" : ", userDataSize=" + userData.remaining()) +
                 ", ownedPartitions=" + ownedPartitions +
-                (groupInstanceId.isPresent() ? ", groupInstanceId=" + groupInstanceId.get() : "") +
+                ", groupInstanceId=" + (groupInstanceId.map(String::toString).orElse("null")) +
                 ")";
         }
     }
