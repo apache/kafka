@@ -280,9 +280,9 @@ class TransactionCoordinator(brokerId: Int,
             val partitionsByTopic = CollectionUtils.groupPartitionsByTopic(txnMetadata.topicPartitions.asJava)
             partitionsByTopic.forEach { (topic, partitions) =>
               val topicData = new DescribeTransactionsResponseData.TopicData()
-                .setName(topic)
-                .setPartitionIndexes(partitions)
-              transactionState.topicPartitions.add(topicData)
+                .setTopic(topic)
+                .setPartitions(partitions)
+              transactionState.topics.add(topicData)
             }
 
             transactionState

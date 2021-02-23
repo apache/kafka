@@ -1121,8 +1121,8 @@ class TransactionCoordinatorTest {
     assertEquals(txnTimeoutMs, result.transactionTimeoutMs)
     assertEquals(time.milliseconds(), result.transactionStartTimeMs)
 
-    val addedPartitions = result.topicPartitions.asScala.flatMap { topicData =>
-      topicData.partitionIndexes.asScala.map(partition => new TopicPartition(topicData.name, partition))
+    val addedPartitions = result.topics.asScala.flatMap { topicData =>
+      topicData.partitions.asScala.map(partition => new TopicPartition(topicData.topic, partition))
     }.toSet
     assertEquals(partitions, addedPartitions)
 

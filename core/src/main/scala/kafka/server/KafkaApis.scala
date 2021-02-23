@@ -3287,6 +3287,15 @@ class KafkaApis(val requestChannel: RequestChannel,
       } else {
         txnCoordinator.handleDescribeTransactions(transactionalId)
       }
+
+      // Include only partitions which the principal is authorized to describe
+      val topicIter = transactionState.topics.iterator()
+      while (topicIter.hasNext) {
+        val topic = topicIter.next().topic
+        if (!authHelper.authorize(request.context, DESCRIBE, TOPIC, topic)) {
+          topicIter.remove()
+        }
+      }
       response.transactionStates.add(transactionState)
     }
 

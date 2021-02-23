@@ -2789,13 +2789,13 @@ public class RequestResponseTest {
                 .setProducerEpoch(30)
                 .setTransactionStartTimeMs(13490218304L)
                 .setTransactionState("Ongoing")
-                .setTopicPartitions(asList(
+                .setTopics(asList(
                     new DescribeTransactionsResponseData.TopicData()
-                        .setName("foo")
-                        .setPartitionIndexes(asList(1, 3, 5, 7)),
+                        .setTopic("foo")
+                        .setPartitions(asList(1, 3, 5, 7)),
                     new DescribeTransactionsResponseData.TopicData()
-                        .setName("bar")
-                        .setPartitionIndexes(asList(1, 3))
+                        .setTopic("bar")
+                        .setPartitions(asList(1, 3))
                 )),
             new DescribeTransactionsResponseData.TransactionState()
                 .setErrorCode(Errors.NOT_COORDINATOR.code())
