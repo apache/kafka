@@ -324,7 +324,7 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
             self.per_node_server_prop_overrides = {}
         else:
             self.per_node_server_prop_overrides = per_node_server_prop_overrides
-        self.log_level = "DEBUG"
+        self.log_level = "TRACE"
         self.zk_chroot = zk_chroot
         self.zk_client_secure = zk_client_secure
         self.listener_security_config = listener_security_config
