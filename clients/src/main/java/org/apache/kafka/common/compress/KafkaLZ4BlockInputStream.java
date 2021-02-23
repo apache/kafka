@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.common.compress;
 
+import net.jpountz.lz4.LZ4Compressor;
 import net.jpountz.lz4.LZ4Exception;
 import net.jpountz.lz4.LZ4Factory;
 import net.jpountz.lz4.LZ4SafeDecompressor;
@@ -51,6 +52,19 @@ public final class KafkaLZ4BlockInputStream extends InputStream {
     private static final LZ4SafeDecompressor DECOMPRESSOR = LZ4Factory.fastestInstance().safeDecompressor();
     private static final XXHash32 CHECKSUM = XXHashFactory.fastestInstance().hash32();
 
+    private static final RuntimeException BROKEN_LZ4_EXCEPTION;
+    // https://issues.apache.org/jira/browse/KAFKA-9203
+    // detect buggy lz4 libraries on the classpath
+    static {
+        RuntimeException exception = null;
+        try {
+            detectBrokenLz4Version();
+        } catch (RuntimeException e) {
+            exception = e;
+        }
+        BROKEN_LZ4_EXCEPTION = exception;
+    }
+
     private final ByteBuffer in;
     private final boolean ignoreFlagDescriptorChecksum;
     private final BufferSupplier bufferSupplier;
@@ -73,6 +87,9 @@ public final class KafkaLZ4BlockInputStream extends InputStream {
      * @throws IOException
      */
     public KafkaLZ4BlockInputStream(ByteBuffer in, BufferSupplier bufferSupplier, boolean ignoreFlagDescriptorChecksum) throws IOException {
+        if (BROKEN_LZ4_EXCEPTION != null) {
+            throw BROKEN_LZ4_EXCEPTION;
+        }
         this.ignoreFlagDescriptorChecksum = ignoreFlagDescriptorChecksum;
         this.in = in.duplicate().order(ByteOrder.LITTLE_ENDIAN);
         this.bufferSupplier = bufferSupplier;
@@ -262,5 +279,38 @@ public final class KafkaLZ4BlockInputStream extends InputStream {
     @Override
     public boolean markSupported() {
         return false;
+    }
+
+    /**
+     * Checks whether the version of lz4 on the classpath has the fix for reading from ByteBuffers with
+     * non-zero array offsets (see https://github.com/lz4/lz4-java/pull/65)
+     */
+    static void detectBrokenLz4Version() {
+        byte[] source = new byte[]{1, 1, 1, 1, 1, 2, 2, 2, 2, 2, 3, 3, 3, 3, 3};
+        final LZ4Compressor compressor = LZ4Factory.fastestInstance().fastCompressor();
+
+        final byte[] compressed = new byte[compressor.maxCompressedLength(source.length)];
+        final int compressedLength = compressor.compress(source, 0, source.length, compressed, 0,
+                                                         compressed.length);
+
+        // allocate an array-backed ByteBuffer with non-zero array-offset
+        final byte[] zeroes = {0, 0, 0, 0, 0};
+        ByteBuffer nonZeroOffsetBuffer = ByteBuffer
+            .allocate(zeroes.length + compressed.length)
+            .put(zeroes)
+            .slice()
+            .put(compressed);
+
+        ByteBuffer dest = ByteBuffer.allocate(source.length);
+        try {
+            DECOMPRESSOR.decompress(nonZeroOffsetBuffer, 0, compressedLength, dest, 0, source.length);
+        } catch (Exception e) {
+            throw new RuntimeException("Kafka has detected detected a buggy lz4-java library (< 1.4.x) on the classpath."
+                                       + " If you are using Kafka client libraries, make sure your application does not"
+                                       + " accidentally override the version provided by Kafka or include multiple versions"
+                                       + " of the library on the classpath. The lz4-java version on the classpath should"
+                                       + " match the version the Kafka client libraries depend on. Adding -verbose:class"
+                                       + " to your JVM arguments may help understand which lz4-java version is getting loaded.", e);
+        }
     }
 }
