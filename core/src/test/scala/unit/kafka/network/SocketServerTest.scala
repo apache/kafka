@@ -31,7 +31,7 @@ import com.yammer.metrics.core.{Gauge, Meter}
 import javax.net.ssl._
 import kafka.metrics.KafkaYammerMetrics
 import kafka.security.CredentialProvider
-import kafka.server.{KafkaConfig, SimpleApiVersionManager, ThrottledChannel}
+import kafka.server.{KafkaConfig, SimpleApiVersionManager, ThrottleCallback, ThrottledChannel}
 import kafka.utils.Implicits._
 import kafka.utils.TestUtils
 import org.apache.kafka.common.memory.MemoryPool
@@ -147,7 +147,7 @@ class SocketServerTest {
   }
 
   def processRequestNoOpResponse(channel: RequestChannel, request: RequestChannel.Request): Unit = {
-    channel.sendResponse(new RequestChannel.NoOpResponse(request))
+    channel.sendNoOpResponse(request)
   }
 
   def connect(s: SocketServer = server,
@@ -247,7 +247,7 @@ class SocketServerTest {
     assertEquals(ClientInformation.UNKNOWN_NAME_OR_VERSION, receivedReq.context.clientInformation.softwareName)
     assertEquals(ClientInformation.UNKNOWN_NAME_OR_VERSION, receivedReq.context.clientInformation.softwareVersion)
 
-    server.dataPlaneRequestChannel.sendResponse(new RequestChannel.NoOpResponse(receivedReq))
+    server.dataPlaneRequestChannel.sendNoOpResponse(receivedReq)
 
     // Send ProduceRequest - client info expected
     sendRequest(plainSocket, producerRequestBytes())
@@ -256,7 +256,7 @@ class SocketServerTest {
     assertEquals(expectedClientSoftwareName, receivedReq.context.clientInformation.softwareName)
     assertEquals(expectedClientSoftwareVersion, receivedReq.context.clientInformation.softwareVersion)
 
-    server.dataPlaneRequestChannel.sendResponse(new RequestChannel.NoOpResponse(receivedReq))
+    server.dataPlaneRequestChannel.sendNoOpResponse(receivedReq)
 
     // Close the socket
     plainSocket.setSoLinger(true, 0)
@@ -678,10 +678,12 @@ class SocketServerTest {
     val request = receiveRequest(server.dataPlaneRequestChannel)
     val byteBuffer = RequestTestUtils.serializeRequestWithHeader(request.header, request.body[AbstractRequest])
     val send = new NetworkSend(request.context.connectionId, ByteBufferSend.sizePrefixed(byteBuffer))
-    def channelThrottlingCallback(response: RequestChannel.Response): Unit = {
-      server.dataPlaneRequestChannel.sendResponse(response)
+
+    val channelThrottlingCallback = new ThrottleCallback {
+      override def startThrottling(): Unit = server.dataPlaneRequestChannel.startThrottling(request)
+      override def endThrottling(): Unit = server.dataPlaneRequestChannel.endThrottling(request)
     }
-    val throttledChannel = new ThrottledChannel(request, new MockTime(), 100, channelThrottlingCallback)
+    val throttledChannel = new ThrottledChannel(new MockTime(), 100, channelThrottlingCallback)
     val headerLog = RequestConvertToJson.requestHeaderNode(request.header)
     val response =
       if (!noOpResponse)

@@ -26,33 +26,36 @@ import kafka.server.QuotaFactory.QuotaManagers
 import kafka.server.{ClientQuotaManager, ClientRequestQuotaManager, ControllerApis, ControllerMutationQuotaManager, KafkaConfig, MetaProperties, ReplicationQuotaManager}
 import kafka.utils.MockTime
 import org.apache.kafka.common.Uuid
-import org.apache.kafka.common.errors.ClusterAuthorizationException
 import org.apache.kafka.common.memory.MemoryPool
 import org.apache.kafka.common.message.BrokerRegistrationRequestData
 import org.apache.kafka.common.network.{ClientInformation, ListenerName}
 import org.apache.kafka.common.protocol.Errors
-import org.apache.kafka.common.requests.{AbstractRequest, BrokerRegistrationRequest, RequestContext, RequestHeader, RequestTestUtils}
+import org.apache.kafka.common.requests.{AbstractRequest, AbstractResponse, BrokerRegistrationRequest, BrokerRegistrationResponse, RequestContext, RequestHeader, RequestTestUtils}
 import org.apache.kafka.common.security.auth.{KafkaPrincipal, SecurityProtocol}
 import org.apache.kafka.controller.Controller
-import org.apache.kafka.metadata.{ApiMessageAndVersion, VersionRange}
-import org.apache.kafka.server.authorizer.{AuthorizableRequestContext, AuthorizationResult, Authorizer}
-import org.easymock.{Capture, EasyMock, IAnswer}
+import org.apache.kafka.metadata.ApiMessageAndVersion
+import org.apache.kafka.server.authorizer.{Action, AuthorizableRequestContext, AuthorizationResult, Authorizer}
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, Test}
+import org.mockito.ArgumentMatchers._
+import org.mockito.Mockito._
+import org.mockito.{ArgumentCaptor, ArgumentMatchers}
+import scala.jdk.CollectionConverters._
 
 class ControllerApisTest {
-  // Mocks
   private val nodeId = 1
   private val brokerRack = "Rack1"
   private val clientID = "Client1"
-  private val requestChannelMetrics: RequestChannel.Metrics = EasyMock.createNiceMock(classOf[RequestChannel.Metrics])
-  private val requestChannel: RequestChannel = EasyMock.createNiceMock(classOf[RequestChannel])
+  private val requestChannelMetrics: RequestChannel.Metrics = mock(classOf[RequestChannel.Metrics])
+  private val requestChannel: RequestChannel = mock(classOf[RequestChannel])
   private val time = new MockTime
-  private val clientQuotaManager: ClientQuotaManager = EasyMock.createNiceMock(classOf[ClientQuotaManager])
-  private val clientRequestQuotaManager: ClientRequestQuotaManager = EasyMock.createNiceMock(classOf[ClientRequestQuotaManager])
-  private val clientControllerQuotaManager: ControllerMutationQuotaManager = EasyMock.createNiceMock(classOf[ControllerMutationQuotaManager])
-  private val replicaQuotaManager: ReplicationQuotaManager = EasyMock.createNiceMock(classOf[ReplicationQuotaManager])
-  private val raftManager: RaftManager[ApiMessageAndVersion] = EasyMock.createNiceMock(classOf[RaftManager[ApiMessageAndVersion]])
+  private val clientQuotaManager: ClientQuotaManager = mock(classOf[ClientQuotaManager])
+  private val clientRequestQuotaManager: ClientRequestQuotaManager = mock(classOf[ClientRequestQuotaManager])
+  private val clientControllerQuotaManager: ControllerMutationQuotaManager = mock(classOf[ControllerMutationQuotaManager])
+  private val replicaQuotaManager: ReplicationQuotaManager = mock(classOf[ReplicationQuotaManager])
+  private val raftManager: RaftManager[ApiMessageAndVersion] = mock(classOf[RaftManager[ApiMessageAndVersion]])
+  private val authorizer: Authorizer = mock(classOf[Authorizer])
+
   private val quotas = QuotaManagers(
     clientQuotaManager,
     clientQuotaManager,
@@ -62,24 +65,21 @@ class ControllerApisTest {
     replicaQuotaManager,
     replicaQuotaManager,
     None)
-  private val controller: Controller = EasyMock.createNiceMock(classOf[Controller])
+  private val controller: Controller = mock(classOf[Controller])
 
-  private def createControllerApis(authorizer: Option[Authorizer],
-                                   supportedFeatures: Map[String, VersionRange] = Map.empty): ControllerApis = {
+  private def createControllerApis(): ControllerApis = {
     val props = new Properties()
     props.put(KafkaConfig.NodeIdProp, nodeId: java.lang.Integer)
     props.put(KafkaConfig.ProcessRolesProp, "controller")
     new ControllerApis(
       requestChannel,
-      authorizer,
+      Some(authorizer),
       quotas,
       time,
-      supportedFeatures,
+      Map.empty,
       controller,
       raftManager,
       new KafkaConfig(props),
-
-      // FIXME: Would make more sense to set controllerId here
       MetaProperties(Uuid.fromString("JgxuGe9URy-E-ceaL04lEw"), nodeId = nodeId),
       Seq.empty
     )
@@ -93,8 +93,10 @@ class ControllerApisTest {
    * @tparam T - Type of AbstractRequest
    * @return
    */
-  private def buildRequest[T <: AbstractRequest](request: AbstractRequest,
-                                                 listenerName: ListenerName = ListenerName.forSecurityProtocol(SecurityProtocol.PLAINTEXT)): RequestChannel.Request = {
+  private def buildRequest[T <: AbstractRequest](
+    request: AbstractRequest,
+    listenerName: ListenerName = ListenerName.forSecurityProtocol(SecurityProtocol.PLAINTEXT)
+  ): RequestChannel.Request = {
     val buffer = RequestTestUtils.serializeRequestWithHeader(
       new RequestHeader(request.apiKey, request.version, clientID, 0), request)
 
@@ -107,7 +109,7 @@ class ControllerApisTest {
   }
 
   @Test
-  def testBrokerRegistration(): Unit = {
+  def testUnauthorizedBrokerRegistration(): Unit = {
     val brokerRegistrationRequest = new BrokerRegistrationRequest.Builder(
       new BrokerRegistrationRequestData()
         .setBrokerId(nodeId)
@@ -115,25 +117,26 @@ class ControllerApisTest {
     ).build()
 
     val request = buildRequest(brokerRegistrationRequest)
+    val capturedResponse: ArgumentCaptor[AbstractResponse] = ArgumentCaptor.forClass(classOf[AbstractResponse])
 
-    val capturedResponse: Capture[RequestChannel.Response] = EasyMock.newCapture()
-    EasyMock.expect(requestChannel.sendResponse(EasyMock.capture(capturedResponse)))
-
-    val authorizer = Some[Authorizer](EasyMock.createNiceMock(classOf[Authorizer]))
-    EasyMock.expect(authorizer.get.authorize(EasyMock.anyObject[AuthorizableRequestContext](), EasyMock.anyObject())).andAnswer(
-      new IAnswer[java.util.List[AuthorizationResult]]() {
-        override def answer(): java.util.List[AuthorizationResult] = {
-          new java.util.ArrayList[AuthorizationResult](){
-            add(AuthorizationResult.DENIED)
-          }
-        }
-      }
+    when(authorizer.authorize(
+      any(classOf[AuthorizableRequestContext]),
+      any(classOf[java.util.List[Action]])
+    )).thenReturn(
+      java.util.Collections.singletonList(AuthorizationResult.DENIED)
     )
-    EasyMock.replay(requestChannel, authorizer.get)
 
-    val assertion = assertThrows(classOf[ClusterAuthorizationException],
-      () => createControllerApis(authorizer = authorizer).handleBrokerRegistration(request))
-    assert(Errors.forException(assertion) == Errors.CLUSTER_AUTHORIZATION_FAILED)
+    createControllerApis().handle(request)
+    verify(requestChannel).sendResponse(
+      ArgumentMatchers.eq(request),
+      capturedResponse.capture(),
+      ArgumentMatchers.eq(None))
+
+    assertNotNull(capturedResponse.getValue)
+
+    val brokerRegistrationResponse = capturedResponse.getValue.asInstanceOf[BrokerRegistrationResponse]
+    assertEquals(Map(Errors.CLUSTER_AUTHORIZATION_FAILED -> 1),
+      brokerRegistrationResponse.errorCounts().asScala)
   }
 
   @AfterEach
