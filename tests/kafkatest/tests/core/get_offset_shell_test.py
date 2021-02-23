@@ -16,11 +16,12 @@
 
 from ducktape.utils.util import wait_until
 from ducktape.tests.test import Test
+from ducktape.mark import matrix
 from ducktape.mark.resource import cluster
 
 from kafkatest.services.verifiable_producer import VerifiableProducer
 from kafkatest.services.zookeeper import ZookeeperService
-from kafkatest.services.kafka import KafkaService
+from kafkatest.services.kafka import KafkaService, quorum
 from kafkatest.services.console_consumer import ConsoleConsumer
 
 TOPIC = "topic-get-offset-shell"
@@ -42,11 +43,11 @@ class GetOffsetShellTest(Test):
             TOPIC: {'partitions': NUM_PARTITIONS, 'replication-factor': REPLICATION_FACTOR}
         }
 
-        self.zk = ZookeeperService(test_context, self.num_zk)
-
+        self.zk = ZookeeperService(test_context, self.num_zk) if quorum.for_test(test_context) == quorum.zk else None
 
     def setUp(self):
-        self.zk.start()
+        if self.zk:
+            self.zk.start()
 
     def start_kafka(self, security_protocol, interbroker_security_protocol):
         self.kafka = KafkaService(
@@ -69,7 +70,8 @@ class GetOffsetShellTest(Test):
         self.consumer.start()
 
     @cluster(num_nodes=4)
-    def test_get_offset_shell(self, security_protocol='PLAINTEXT'):
+    @matrix(metadata_quorum=quorum.all_non_upgrade)
+    def test_get_offset_shell(self, security_protocol='PLAINTEXT', metadata_quorum=quorum.zk):
         """
         Tests if GetOffsetShell is getting offsets correctly
         :return: None
