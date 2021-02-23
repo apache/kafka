@@ -404,7 +404,7 @@ class GroupCoordinator(val brokerId: Int,
         )
 
         memberErrorOpt match {
-          case Some(error) => JoinGroupResult(memberId, error)
+          case Some(error) => responseCallback(JoinGroupResult(memberId, error))
 
           case None => group.currentState match {
             case PreparingRebalance =>
@@ -938,7 +938,7 @@ class GroupCoordinator(val brokerId: Int,
         group,
         memberId,
         groupInstanceId,
-        operation = "offset-commit"
+        operation = if (isTransactional) "txn-offset-commit" else "offset-commit"
       ).orElse {
         if (generationId != group.generationId) {
           Some(Errors.ILLEGAL_GENERATION)
