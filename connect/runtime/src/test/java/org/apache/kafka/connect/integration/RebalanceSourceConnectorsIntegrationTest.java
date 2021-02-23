@@ -301,6 +301,7 @@ public class RebalanceSourceConnectorsIntegrationTest {
         connect.addWorker();
 
         connect.addWorker();
+        
 
         connect.assertions().assertExactlyNumWorkersAreUp(NUM_WORKERS,
                 "Connect workers did not start in time.");
