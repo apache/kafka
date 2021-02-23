@@ -40,6 +40,11 @@ import java.util.stream.Collectors;
  * For example: `1@0.0.0.0:0,2@0.0.0.0:0,3@0.0.0.0:0`
  * This will assign an {@link UnknownAddressSpec} to the voter entries
  *
+ * The default raft timeouts are relatively low compared to some other timeouts such as
+ * request.timeout.ms. This is part of a general design philosophy where we see changing
+ * the leader of a Raft cluster as a relatively quick operation. For example, the KIP-631
+ * controller should be able to transition from standby to active without reloading all of
+ * the metadata. The standby is a "hot" standby, not a "cold" one.
  */
 public class RaftConfig {
 
