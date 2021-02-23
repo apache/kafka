@@ -119,22 +119,26 @@ public class StateDirectory {
         this.appId = config.getString(StreamsConfig.APPLICATION_ID_CONFIG);
         final String stateDirName = config.getString(StreamsConfig.STATE_DIR_CONFIG);
         final File baseDir = new File(stateDirName);
-        if (this.hasPersistentStores && !baseDir.exists() && !baseDir.mkdirs()) {
-            throw new ProcessorStateException(
-                String.format("base state directory [%s] doesn't exist and couldn't be created", stateDirName));
-        }
         stateDir = new File(baseDir, appId);
-        if (this.hasPersistentStores && !stateDir.exists() && !stateDir.mkdir()) {
-            throw new ProcessorStateException(
-                String.format("state directory [%s] doesn't exist and couldn't be created", stateDir.getPath()));
+
+        if (this.hasPersistentStores) {
+            if (!baseDir.exists() && !baseDir.mkdirs()) {
+                throw new ProcessorStateException(
+                    String.format("base state directory [%s] doesn't exist and couldn't be created", stateDirName));
+            }
+
+            if (!stateDir.exists() && !stateDir.mkdir()) {
+                throw new ProcessorStateException(
+                    String.format("state directory [%s] doesn't exist and couldn't be created", stateDir.getPath()));
+            }
+
+            if (stateDirName.startsWith("/tmp")) {
+                log.warn("Using /tmp directory in the state.dir property can cause failures with writing the checkpoint file" +
+                             " due to the fact that this directory can be cleared by the OS");
+            }
+            configurePermissions(baseDir);
+            configurePermissions(stateDir);
         }
-        
-        if (hasPersistentStores && stateDirName.startsWith("/tmp")) {
-            log.warn("Using /tmp directory in the state.dir property can cause failures with writing the checkpoint file" +
-                " due to the fact that this directory can be cleared by the OS");
-        }
-        configurePermissions(baseDir);
-        configurePermissions(stateDir);
     }
     
     private void configurePermissions(final File file) {
