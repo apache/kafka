@@ -364,4 +364,8 @@ public class ConfigurationControlManager {
         }
         return results;
     }
+
+    void deleteTopicConfigs(String name) {
+        configData.remove(new ConfigResource(Type.TOPIC, name));
+    }
 }

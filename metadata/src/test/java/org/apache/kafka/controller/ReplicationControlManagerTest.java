@@ -18,6 +18,7 @@
 package org.apache.kafka.controller;
 
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.errors.StaleBrokerEpochException;
 import org.apache.kafka.common.message.AlterIsrRequestData;
 import org.apache.kafka.common.message.AlterIsrResponseData;
@@ -55,6 +56,9 @@ import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
 import static org.apache.kafka.common.protocol.Errors.INVALID_TOPIC_EXCEPTION;
+import static org.apache.kafka.common.protocol.Errors.NONE;
+import static org.apache.kafka.common.protocol.Errors.UNKNOWN_TOPIC_ID;
+import static org.apache.kafka.common.protocol.Errors.UNKNOWN_TOPIC_OR_PARTITION;
 import static org.apache.kafka.controller.BrokersToIsrs.TopicIdPartition;
 import static org.apache.kafka.controller.ReplicationControlManager.PartitionControlInfo;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -232,7 +236,7 @@ public class ReplicationControlManagerTest {
         ControllerResult<AlterIsrResponseData> shrinkIsrResult = sendAlterIsr(
             replicationControl, 0, brokerEpoch, "foo", shrinkIsrRequest);
         AlterIsrResponseData.PartitionData shrinkIsrResponse = assertAlterIsrResponse(
-            shrinkIsrResult, topicPartition, Errors.NONE);
+            shrinkIsrResult, topicPartition, NONE);
         assertConsistentAlterIsrResponse(replicationControl, topicIdPartition, shrinkIsrResponse);
 
         AlterIsrRequestData.PartitionData expandIsrRequest = newAlterIsrPartition(
@@ -240,7 +244,7 @@ public class ReplicationControlManagerTest {
         ControllerResult<AlterIsrResponseData> expandIsrResult = sendAlterIsr(
             replicationControl, 0, brokerEpoch, "foo", expandIsrRequest);
         AlterIsrResponseData.PartitionData expandIsrResponse = assertAlterIsrResponse(
-            expandIsrResult, topicPartition, Errors.NONE);
+            expandIsrResult, topicPartition, NONE);
         assertConsistentAlterIsrResponse(replicationControl, topicIdPartition, expandIsrResponse);
     }
 
@@ -391,4 +395,64 @@ public class ReplicationControlManagerTest {
         assertEquals(expectedIsr, partitionData.isr());
     }
 
+    @Test
+    public void testDeleteTopics() throws Exception {
+        ReplicationControlManager replicationControl = newReplicationControlManager();
+        CreateTopicsRequestData request = new CreateTopicsRequestData();
+        request.topics().add(new CreatableTopic().setName("foo").
+            setNumPartitions(3).setReplicationFactor((short) 2));
+        registerBroker(0, replicationControl);
+        unfenceBroker(0, replicationControl);
+        registerBroker(1, replicationControl);
+        unfenceBroker(1, replicationControl);
+        ControllerResult<CreateTopicsResponseData> result =
+            replicationControl.createTopics(request);
+        CreateTopicsResponseData expectedResponse = new CreateTopicsResponseData();
+        Uuid topicId = result.response().topics().find("foo").topicId();
+        expectedResponse.topics().add(new CreatableTopicResult().setName("foo").
+            setNumPartitions(3).setReplicationFactor((short) 2).
+            setErrorMessage(null).setErrorCode((short) 0).
+            setTopicId(topicId));
+        assertEquals(expectedResponse, result.response());
+        ControllerTestUtils.replayAll(replicationControl, result.records());
+        assertNotNull(replicationControl.getPartition(topicId, 0));
+        assertNotNull(replicationControl.getPartition(topicId, 1));
+        assertNotNull(replicationControl.getPartition(topicId, 2));
+        assertEquals(null, replicationControl.getPartition(topicId, 3));
+
+        assertEquals(Collections.singletonMap(topicId, new ResultOrError<>("foo")),
+            replicationControl.findTopicNames(Long.MAX_VALUE, Collections.singleton(topicId)));
+        assertEquals(Collections.singletonMap("foo", new ResultOrError<>(topicId)),
+            replicationControl.findTopicIds(Long.MAX_VALUE, Collections.singleton("foo")));
+        Uuid invalidId = new Uuid(topicId.getMostSignificantBits() + 1,
+            topicId.getLeastSignificantBits());
+        assertEquals(Collections.singletonMap(invalidId,
+            new ResultOrError<>(new ApiError(UNKNOWN_TOPIC_ID))),
+                replicationControl.findTopicNames(Long.MAX_VALUE, Collections.singleton(invalidId)));
+        assertEquals(Collections.singletonMap("bar",
+            new ResultOrError<>(new ApiError(UNKNOWN_TOPIC_OR_PARTITION))),
+                replicationControl.findTopicIds(Long.MAX_VALUE, Collections.singleton("bar")));
+
+        ControllerResult<Map<Uuid, ApiError>> result1 = replicationControl.
+            deleteTopics(Collections.singletonList(invalidId));
+        assertEquals(0, result1.records().size());
+        assertEquals(Collections.singletonMap(invalidId, new ApiError(UNKNOWN_TOPIC_ID, null)),
+            result1.response());
+        ControllerResult<Map<Uuid, ApiError>> result2 = replicationControl.
+            deleteTopics(Collections.singletonList(topicId));
+        assertEquals(Collections.singletonMap(topicId, new ApiError(NONE, null)),
+            result2.response());
+        assertEquals(1, result2.records().size());
+        ControllerTestUtils.replayAll(replicationControl, result2.records());
+        assertEquals(null, replicationControl.getPartition(topicId, 0));
+        assertEquals(null, replicationControl.getPartition(topicId, 1));
+        assertEquals(null, replicationControl.getPartition(topicId, 2));
+        assertEquals(null, replicationControl.getPartition(topicId, 3));
+        assertEquals(Collections.singletonMap(topicId, new ResultOrError<>(
+            new ApiError(UNKNOWN_TOPIC_ID))), replicationControl.findTopicNames(
+                Long.MAX_VALUE, Collections.singleton(topicId)));
+        assertEquals(Collections.singletonMap("foo", new ResultOrError<>(
+            new ApiError(UNKNOWN_TOPIC_OR_PARTITION))), replicationControl.findTopicIds(
+                Long.MAX_VALUE, Collections.singleton("foo")));
+    }
 }
