@@ -38,6 +38,10 @@ import org.junit.runners.Suite;
 @Suite.SuiteClasses({
     BytesTest.class,
     KTableKTableForeignKeyInnerJoinMultiIntegrationTest.class,
+    KTableKTableForeignKeyInnerJoinMultiIntegration2Test.class,
+    KTableKTableForeignKeyInnerJoinMultiIntegration3Test.class,
+    KTableKTableForeignKeyInnerJoinMultiIntegration4Test.class,
+    KTableKTableForeignKeyInnerJoinMultiIntegration5Test.class,
     KTableKTableForeignKeyJoinIntegrationTest.class,
     KTableKTableForeignKeyJoinMaterializationIntegrationTest.class,
     KTableKTableForeignKeyJoinScenarioTest.class,
