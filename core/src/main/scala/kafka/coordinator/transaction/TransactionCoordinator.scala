@@ -28,9 +28,7 @@ import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.record.RecordBatch
 import org.apache.kafka.common.requests.TransactionResult
-import org.apache.kafka.common.utils.{CollectionUtils, LogContext, ProducerIdAndEpoch, Time}
-
-import scala.jdk.CollectionConverters._
+import org.apache.kafka.common.utils.{LogContext, ProducerIdAndEpoch, Time}
 
 object TransactionCoordinator {
 
@@ -277,19 +275,21 @@ class TransactionCoordinator(brokerId: Int,
         case Right(Some(coordinatorEpochAndMetadata)) =>
           val txnMetadata = coordinatorEpochAndMetadata.transactionMetadata
           txnMetadata.inLock {
-            val partitionsByTopic = CollectionUtils.groupPartitionsByTopic(txnMetadata.topicPartitions.asJava)
-            partitionsByTopic.forEach { (topic, partitions) =>
-              val topicData = new DescribeTransactionsResponseData.TopicData()
-                .setTopic(topic)
-                .setPartitions(partitions)
-              transactionState.topics.add(topicData)
+            txnMetadata.topicPartitions.foreach { topicPartition =>
+              var topicData = transactionState.topics.find(topicPartition.topic)
+              if (topicData == null) {
+                topicData = new DescribeTransactionsResponseData.TopicData()
+                  .setTopic(topicPartition.topic)
+                transactionState.topics.add(topicData)
+              }
+              topicData.partitions.add(topicPartition.partition)
             }
 
             transactionState
               .setErrorCode(Errors.NONE.code)
               .setProducerId(txnMetadata.producerId)
               .setProducerEpoch(txnMetadata.producerEpoch)
-              .setTransactionState(txnMetadata.state.toString)
+              .setTransactionState(txnMetadata.state.name)
               .setTransactionTimeoutMs(txnMetadata.txnTimeoutMs)
               .setTransactionStartTimeMs(txnMetadata.txnStartTimestamp)
           }

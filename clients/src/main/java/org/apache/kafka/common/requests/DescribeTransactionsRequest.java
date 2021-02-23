@@ -59,7 +59,9 @@ public class DescribeTransactionsRequest extends AbstractRequest {
     @Override
     public DescribeTransactionsResponse getErrorResponse(int throttleTimeMs, Throwable e) {
         Errors error = Errors.forException(e);
-        DescribeTransactionsResponseData response = new DescribeTransactionsResponseData();
+        DescribeTransactionsResponseData response = new DescribeTransactionsResponseData()
+            .setThrottleTimeMs(throttleTimeMs);
+
         for (String transactionalId : data.transactionalIds()) {
             DescribeTransactionsResponseData.TransactionState transactionState =
                 new DescribeTransactionsResponseData.TransactionState()

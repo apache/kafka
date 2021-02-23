@@ -2779,23 +2779,25 @@ public class RequestResponseTest {
                 .setErrorCode(Errors.NONE.code())
                 .setTransactionalId("t1")
                 .setProducerId(12345L)
-                .setProducerEpoch(15)
+                .setProducerEpoch((short) 15)
                 .setTransactionStartTimeMs(13490218304L)
                 .setTransactionState("Empty"),
             new DescribeTransactionsResponseData.TransactionState()
                 .setErrorCode(Errors.NONE.code())
                 .setTransactionalId("t2")
                 .setProducerId(98765L)
-                .setProducerEpoch(30)
+                .setProducerEpoch((short) 30)
                 .setTransactionStartTimeMs(13490218304L)
                 .setTransactionState("Ongoing")
-                .setTopics(asList(
-                    new DescribeTransactionsResponseData.TopicData()
-                        .setTopic("foo")
-                        .setPartitions(asList(1, 3, 5, 7)),
-                    new DescribeTransactionsResponseData.TopicData()
-                        .setTopic("bar")
-                        .setPartitions(asList(1, 3))
+                .setTopics(new DescribeTransactionsResponseData.TopicDataCollection(
+                    asList(
+                        new DescribeTransactionsResponseData.TopicData()
+                            .setTopic("foo")
+                            .setPartitions(asList(1, 3, 5, 7)),
+                        new DescribeTransactionsResponseData.TopicData()
+                            .setTopic("bar")
+                            .setPartitions(asList(1, 3))
+                    ).iterator()
                 )),
             new DescribeTransactionsResponseData.TransactionState()
                 .setErrorCode(Errors.NOT_COORDINATOR.code())
