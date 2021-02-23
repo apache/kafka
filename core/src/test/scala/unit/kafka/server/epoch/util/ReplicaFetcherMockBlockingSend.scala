@@ -50,7 +50,7 @@ class ReplicaFetcherMockBlockingSend(offsets: java.util.Map[TopicPartition, Epoc
   var lastUsedOffsetForLeaderEpochVersion = -1
   var callback: Option[() => Unit] = None
   var currentOffsets: util.Map[TopicPartition, EpochEndOffset] = offsets
-  var fetchPartitionData: Map[TopicPartition, FetchResponseData.FetchablePartitionResponse] = Map.empty
+  var fetchPartitionData: Map[TopicPartition, FetchResponseData.PartitionData] = Map.empty
   private val sourceNode = new Node(sourceBroker.id, sourceBroker.host, sourceBroker.port)
 
   def setEpochRequestCallback(postEpochFunction: () => Unit): Unit = {
@@ -61,7 +61,7 @@ class ReplicaFetcherMockBlockingSend(offsets: java.util.Map[TopicPartition, Epoc
     currentOffsets = newOffsets
   }
 
-  def setFetchPartitionDataForNextResponse(partitionData: Map[TopicPartition, FetchResponseData.FetchablePartitionResponse]): Unit = {
+  def setFetchPartitionDataForNextResponse(partitionData: Map[TopicPartition, FetchResponseData.PartitionData]): Unit = {
     fetchPartitionData = partitionData
   }
 
@@ -95,10 +95,10 @@ class ReplicaFetcherMockBlockingSend(offsets: java.util.Map[TopicPartition, Epoc
 
       case ApiKeys.FETCH =>
         fetchCount += 1
-        val partitionData = new util.LinkedHashMap[TopicPartition, FetchResponseData.FetchablePartitionResponse]
+        val partitionData = new util.LinkedHashMap[TopicPartition, FetchResponseData.PartitionData]
         fetchPartitionData.foreach { case (tp, data) => partitionData.put(tp, data) }
         fetchPartitionData = Map.empty
-        new FetchResponse(Errors.NONE, 0,
+        FetchResponse.of(Errors.NONE, 0,
           if (partitionData.isEmpty) JFetchMetadata.INVALID_SESSION_ID else 1, partitionData)
 
       case _ =>

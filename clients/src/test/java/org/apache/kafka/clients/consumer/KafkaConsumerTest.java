@@ -2361,7 +2361,7 @@ public class KafkaConsumerTest {
     }
 
     private FetchResponse fetchResponse(Map<TopicPartition, FetchInfo> fetches) {
-        LinkedHashMap<TopicPartition, FetchResponseData.FetchablePartitionResponse> tpResponses = new LinkedHashMap<>();
+        LinkedHashMap<TopicPartition, FetchResponseData.PartitionData> tpResponses = new LinkedHashMap<>();
         for (Map.Entry<TopicPartition, FetchInfo> fetchEntry : fetches.entrySet()) {
             TopicPartition partition = fetchEntry.getKey();
             long fetchOffset = fetchEntry.getValue().offset;
@@ -2379,16 +2379,15 @@ public class KafkaConsumerTest {
                 records = builder.build();
             }
             tpResponses.put(partition,
-                    new FetchResponseData.FetchablePartitionResponse()
+                    new FetchResponseData.PartitionData()
                             .setErrorCode(Errors.NONE.code())
                             .setHighWatermark(highWatermark)
                             .setLastStableOffset(FetchResponse.INVALID_LAST_STABLE_OFFSET)
                             .setLogStartOffset(logStartOffset)
                             .setAbortedTransactions(null)
-                            .setRecords(records)
-                            .setPreferredReadReplica(FetchResponse.INVALID_PREFERRED_REPLICA_ID));
+                            .setRecords(records));
         }
-        return new FetchResponse(Errors.NONE, 0, INVALID_SESSION_ID, tpResponses);
+        return FetchResponse.of(Errors.NONE, 0, INVALID_SESSION_ID, tpResponses);
     }
 
     private FetchResponse fetchResponse(TopicPartition partition, long fetchOffset, int count) {

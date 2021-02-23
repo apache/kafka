@@ -27,7 +27,6 @@ import org.apache.kafka.common.message.FetchResponseData
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.network.{NetworkReceive, Selectable, Selector}
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
-import org.apache.kafka.common.record.Records
 import org.apache.kafka.common.requests.AbstractRequest.Builder
 import org.apache.kafka.common.requests.{AbstractRequest, FetchResponse, ListOffsetsRequest, FetchRequest => JFetchRequest}
 import org.apache.kafka.common.serialization.StringDeserializer
@@ -260,7 +259,7 @@ private class ReplicaBuffer(expectedReplicasPerTopicPartition: collection.Map[To
                             expectedNumFetchers: Int,
                             reportInterval: Long) extends Logging {
   private val fetchOffsetMap = new Pool[TopicPartition, Long]
-  private val recordsCache = new Pool[TopicPartition, Pool[Int, FetchResponseData.FetchablePartitionResponse]]
+  private val recordsCache = new Pool[TopicPartition, Pool[Int, FetchResponseData.PartitionData]]
   private val fetcherBarrier = new AtomicReference(new CountDownLatch(expectedNumFetchers))
   private val verificationBarrier = new AtomicReference(new CountDownLatch(1))
   @volatile private var lastReportTime = Time.SYSTEM.milliseconds
@@ -283,7 +282,7 @@ private class ReplicaBuffer(expectedReplicasPerTopicPartition: collection.Map[To
 
   private def initialize(): Unit = {
     for (topicPartition <- expectedReplicasPerTopicPartition.keySet)
-      recordsCache.put(topicPartition, new Pool[Int, FetchResponseData.FetchablePartitionResponse])
+      recordsCache.put(topicPartition, new Pool[Int, FetchResponseData.PartitionData])
     setInitialOffsets()
   }
 
@@ -293,7 +292,7 @@ private class ReplicaBuffer(expectedReplicasPerTopicPartition: collection.Map[To
       fetchOffsetMap.put(tp, offset)
   }
 
-  def addFetchedData(topicAndPartition: TopicPartition, replicaId: Int, partitionData: FetchResponseData.FetchablePartitionResponse): Unit = {
+  def addFetchedData(topicAndPartition: TopicPartition, replicaId: Int, partitionData: FetchResponseData.PartitionData): Unit = {
     recordsCache.get(topicAndPartition).put(replicaId, partitionData)
   }
 
@@ -310,7 +309,7 @@ private class ReplicaBuffer(expectedReplicasPerTopicPartition: collection.Map[To
         "fetched " + fetchResponsePerReplica.size + " replicas for " + topicPartition + ", but expected "
           + expectedReplicasPerTopicPartition(topicPartition) + " replicas")
       val recordBatchIteratorMap = fetchResponsePerReplica.map { case (replicaId, fetchResponse) =>
-        replicaId -> fetchResponse.records.asInstanceOf[Records].batches.iterator
+        replicaId -> FetchResponse.records(fetchResponse).batches.iterator
       }
       val maxHw = fetchResponsePerReplica.values.map(_.highWatermark).max
 
@@ -414,8 +413,8 @@ private class ReplicaFetcher(name: String, sourceBroker: Node, topicPartitions: 
 
     if (fetchResponse != null) {
       fetchResponse.data.responses().forEach(topicResponse =>
-        topicResponse.partitionResponses().forEach(partitionResponse =>
-          replicaBuffer.addFetchedData(new TopicPartition(topicResponse.topic, partitionResponse.partition),
+        topicResponse.partitions().forEach(partitionResponse =>
+          replicaBuffer.addFetchedData(new TopicPartition(topicResponse.topic, partitionResponse.index),
             sourceBroker.id, partitionResponse)))
     } else {
       for (topicAndPartition <- topicPartitions)

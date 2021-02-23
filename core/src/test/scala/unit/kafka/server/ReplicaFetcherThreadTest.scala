@@ -30,7 +30,6 @@ import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.protocol.Errors._
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.record.{CompressionType, MemoryRecords, SimpleRecord}
-import org.apache.kafka.common.requests.FetchResponse
 import org.apache.kafka.common.requests.OffsetsForLeaderEpochResponse.{UNDEFINED_EPOCH, UNDEFINED_EPOCH_OFFSET}
 import org.apache.kafka.common.utils.SystemTime
 import org.easymock.EasyMock._
@@ -530,15 +529,14 @@ class ReplicaFetcherThreadTest {
     assertEquals(1, mockNetwork.fetchCount)
     partitions.foreach { tp => assertEquals(Fetching, thread.fetchState(tp).get.state) }
 
-    def partitionData(divergingEpoch: FetchResponseData.EpochEndOffset): FetchResponseData.FetchablePartitionResponse = {
-      new FetchResponseData.FetchablePartitionResponse()
+    def partitionData(divergingEpoch: FetchResponseData.EpochEndOffset): FetchResponseData.PartitionData = {
+      new FetchResponseData.PartitionData()
           .setErrorCode(Errors.NONE.code)
           .setHighWatermark(0)
           .setLastStableOffset(0)
           .setLogStartOffset(0)
           .setAbortedTransactions(Collections.emptyList())
           .setRecords(MemoryRecords.EMPTY)
-          .setPreferredReadReplica(FetchResponse.INVALID_PREFERRED_REPLICA_ID)
           .setDivergingEpoch(divergingEpoch)
     }
 
@@ -968,14 +966,13 @@ class ReplicaFetcherThreadTest {
 
     val records = MemoryRecords.withRecords(CompressionType.NONE,
       new SimpleRecord(1000, "foo".getBytes(StandardCharsets.UTF_8)))
-    val partitionData: thread.FetchData = new FetchResponseData.FetchablePartitionResponse()
+    val partitionData: thread.FetchData = new FetchResponseData.PartitionData()
         .setErrorCode(Errors.NONE.code)
         .setHighWatermark(0)
         .setLastStableOffset(0)
         .setLogStartOffset(0)
         .setAbortedTransactions(Collections.emptyList())
         .setRecords(records)
-        .setPreferredReadReplica(FetchResponse.INVALID_PREFERRED_REPLICA_ID)
     thread.processPartitionData(t1p0, 0, partitionData)
 
     if (isReassigning)

@@ -53,9 +53,9 @@
       "about": "The response topics.", "fields": [
       { "name": "Topic", "type": "string", "versions": "0+", "entityType": "topicName",
         "about": "The topic name." },
-      { "name": "PartitionResponses", "type": "[]FetchablePartitionResponse", "versions": "0+",
+      { "name": "Partitions", "type": "[]PartitionData", "versions": "0+",
         "about": "The topic partitions.", "fields": [
-        { "name": "Partition", "type": "int32", "versions": "0+",
+        { "name": "Index", "type": "int32", "versions": "0+",
           "about": "The partition index." },
         { "name": "ErrorCode", "type": "int16", "versions": "0+",
           "about": "The error code, or 0 if there was no fetch error." },

@@ -21,7 +21,6 @@ import kafka.log.LogConfig
 import kafka.utils.TestUtils
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerRecord}
 import org.apache.kafka.common.TopicPartition
-import org.apache.kafka.common.record.Records
 import org.apache.kafka.common.requests.FetchRequest.PartitionData
 import org.apache.kafka.common.requests.{FetchRequest, FetchResponse}
 import org.junit.jupiter.api.Assertions._
@@ -117,7 +116,7 @@ class FetchRequestMaxBytesTest extends BaseRequestTest {
       FetchRequest.Builder.forConsumer(Int.MaxValue, 0,
         Map(testTopicPartition ->
           new PartitionData(fetchOffset, 0, Integer.MAX_VALUE, Optional.empty())).asJava).build(3))
-    val records = response.responseData.get(testTopicPartition).records.asInstanceOf[Records].records()
+    val records = FetchResponse.records(response.responseData.get(testTopicPartition)).records()
     assertNotNull(records)
     val recordsList = records.asScala.toList
     assertEquals(expected.size, recordsList.size)

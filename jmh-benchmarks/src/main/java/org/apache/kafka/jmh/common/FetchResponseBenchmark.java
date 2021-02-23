@@ -61,7 +61,7 @@ public class FetchResponseBenchmark {
     @Param({"3", "10", "20"})
     private int partitionCount;
 
-    LinkedHashMap<TopicPartition, FetchResponseData.FetchablePartitionResponse> responseData;
+    LinkedHashMap<TopicPartition, FetchResponseData.PartitionData> responseData;
 
     ResponseHeader header;
 
@@ -78,26 +78,25 @@ public class FetchResponseBenchmark {
         for (int topicIdx = 0; topicIdx < topicCount; topicIdx++) {
             String topic = UUID.randomUUID().toString();
             for (int partitionId = 0; partitionId < partitionCount; partitionId++) {
-                FetchResponseData.FetchablePartitionResponse partitionData = new FetchResponseData.FetchablePartitionResponse()
-                                .setPartition(partitionId)
+                FetchResponseData.PartitionData partitionData = new FetchResponseData.PartitionData()
+                                .setIndex(partitionId)
                                 .setErrorCode(Errors.NONE.code())
                                 .setHighWatermark(0)
                                 .setLastStableOffset(0)
                                 .setLogStartOffset(0)
                                 .setAbortedTransactions(Collections.emptyList())
-                                .setRecords(records)
-                                .setPreferredReadReplica(FetchResponse.INVALID_PREFERRED_REPLICA_ID);
+                                .setRecords(records);
                 responseData.put(new TopicPartition(topic, partitionId), partitionData);
             }
         }
 
         this.header = new ResponseHeader(100, ApiKeys.FETCH.responseHeaderVersion(ApiKeys.FETCH.latestVersion()));
-        this.fetchResponse = new FetchResponse(Errors.NONE, 0, 0, responseData);
+        this.fetchResponse = FetchResponse.of(Errors.NONE, 0, 0, responseData);
     }
 
     @Benchmark
     public int testConstructFetchResponse() {
-        FetchResponse fetchResponse = new FetchResponse(Errors.NONE, 0, 0, responseData);
+        FetchResponse fetchResponse = FetchResponse.of(Errors.NONE, 0, 0, responseData);
         return fetchResponse.responseData().size();
     }
 

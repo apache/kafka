@@ -21,7 +21,6 @@ import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.message.FetchResponseData
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.record.{CompressionType, MemoryRecords, SimpleRecord}
-import org.apache.kafka.common.requests.FetchResponse
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.Assertions.assertTrue
 
@@ -45,14 +44,13 @@ class ReplicaVerificationToolTest {
         }
         val initialOffset = 4
         val memoryRecords = MemoryRecords.withRecords(initialOffset, CompressionType.NONE, records: _*)
-        val partitionData = new FetchResponseData.FetchablePartitionResponse()
+        val partitionData = new FetchResponseData.PartitionData()
           .setErrorCode(Errors.NONE.code)
           .setHighWatermark(20)
           .setLastStableOffset(20)
           .setLogStartOffset(0)
           .setAbortedTransactions(null)
           .setRecords(memoryRecords)
-          .setPreferredReadReplica(FetchResponse.INVALID_PREFERRED_REPLICA_ID)
 
         replicaBuffer.addFetchedData(tp, replicaId, partitionData)
       }

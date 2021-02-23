@@ -80,15 +80,14 @@ class ReplicaAlterLogDirsThread(name: String,
       partitionData = responsePartitionData.map { case (tp, data) =>
         val abortedTransactions = data.abortedTransactions.map(_.asJava).orNull
         val lastStableOffset = data.lastStableOffset.getOrElse(FetchResponse.INVALID_LAST_STABLE_OFFSET)
-        tp -> new FetchResponseData.FetchablePartitionResponse()
-          .setPartition(tp.partition)
+        tp -> new FetchResponseData.PartitionData()
+          .setIndex(tp.partition)
           .setErrorCode(data.error.code)
           .setHighWatermark(data.highWatermark)
           .setLastStableOffset(lastStableOffset)
           .setLogStartOffset(data.logStartOffset)
           .setAbortedTransactions(abortedTransactions)
           .setRecords(data.records)
-          .setPreferredReadReplica(FetchResponse.INVALID_PREFERRED_REPLICA_ID)
       }
     }
 
@@ -113,7 +112,7 @@ class ReplicaAlterLogDirsThread(name: String,
   // process fetched data
   override def processPartitionData(topicPartition: TopicPartition,
                                     fetchOffset: Long,
-                                    partitionData: FetchResponseData.FetchablePartitionResponse): Option[LogAppendInfo] = {
+                                    partitionData: FetchData): Option[LogAppendInfo] = {
     val partition = replicaMgr.getPartitionOrException(topicPartition)
     val futureLog = partition.futureLocalLogOrException
     val records = toMemoryRecords(partitionData.records)

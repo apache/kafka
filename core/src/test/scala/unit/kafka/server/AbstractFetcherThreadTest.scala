@@ -922,7 +922,7 @@ class AbstractFetcherThreadTest {
           s"fetched offset = $fetchOffset, log end offset = ${state.logEndOffset}.")
 
       // Now check message's crc
-      val batches = partitionData.records.asInstanceOf[Records].batches.asScala
+      val batches = FetchResponse.records(partitionData).batches.asScala
       var maxTimestamp = RecordBatch.NO_TIMESTAMP
       var offsetOfMaxTimestamp = -1L
       var lastOffset = state.logEndOffset
@@ -1143,14 +1143,13 @@ class AbstractFetcherThreadTest {
           (Errors.NONE, records)
         }
 
-        (partition, new FetchResponseData.FetchablePartitionResponse()
+        (partition, new FetchResponseData.PartitionData()
           .setErrorCode(error.code)
           .setHighWatermark(leaderState.highWatermark)
           .setLastStableOffset(leaderState.highWatermark)
           .setLogStartOffset(leaderState.logStartOffset)
           .setAbortedTransactions(Collections.emptyList())
           .setRecords(records)
-          .setPreferredReadReplica(FetchResponse.INVALID_PREFERRED_REPLICA_ID)
           .setDivergingEpoch(divergingEpoch.getOrElse(new FetchResponseData.EpochEndOffset)))
       }.toMap
     }

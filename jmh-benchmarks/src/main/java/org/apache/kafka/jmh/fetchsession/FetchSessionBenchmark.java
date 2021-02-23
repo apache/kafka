@@ -70,26 +70,25 @@ public class FetchSessionBenchmark {
         handler = new FetchSessionHandler(LOG_CONTEXT, 1);
         FetchSessionHandler.Builder builder = handler.newBuilder();
 
-        LinkedHashMap<TopicPartition, FetchResponseData.FetchablePartitionResponse> respMap = new LinkedHashMap<>();
+        LinkedHashMap<TopicPartition, FetchResponseData.PartitionData> respMap = new LinkedHashMap<>();
         for (int i = 0; i < partitionCount; i++) {
             TopicPartition tp = new TopicPartition("foo", i);
             FetchRequest.PartitionData partitionData = new FetchRequest.PartitionData(0, 0, 200,
                     Optional.empty());
             fetches.put(tp, partitionData);
             builder.add(tp, partitionData);
-            respMap.put(tp, new FetchResponseData.FetchablePartitionResponse()
-                            .setPartition(tp.partition())
+            respMap.put(tp, new FetchResponseData.PartitionData()
+                            .setIndex(tp.partition())
                             .setErrorCode(Errors.NONE.code())
                             .setHighWatermark(0)
                             .setLastStableOffset(0)
                             .setLogStartOffset(0)
                             .setAbortedTransactions(null)
-                            .setRecords(null)
-                            .setPreferredReadReplica(FetchResponse.INVALID_PREFERRED_REPLICA_ID));
+                            .setRecords(null));
         }
         builder.build();
         // build and handle an initial response so that the next fetch will be incremental
-        handler.handleResponse(new FetchResponse(Errors.NONE, 0, 1, respMap));
+        handler.handleResponse(FetchResponse.of(Errors.NONE, 0, 1, respMap));
 
         int counter = 0;
         for (TopicPartition topicPartition: new ArrayList<>(fetches.keySet())) {

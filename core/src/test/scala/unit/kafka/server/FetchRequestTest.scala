@@ -23,7 +23,7 @@ import kafka.utils.TestUtils
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerRecord, RecordMetadata}
 import org.apache.kafka.common.message.FetchResponseData
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
-import org.apache.kafka.common.record.{Record, RecordBatch, Records}
+import org.apache.kafka.common.record.{Record, RecordBatch}
 import org.apache.kafka.common.requests.{FetchRequest, FetchResponse, FetchMetadata => JFetchMetadata}
 import org.apache.kafka.common.serialization.{ByteArraySerializer, StringSerializer}
 import org.apache.kafka.common.{IsolationLevel, TopicPartition}
@@ -398,7 +398,7 @@ class FetchRequestTest extends BaseRequestTest {
     val fetchResponse = response.getOrElse(throw new IllegalStateException("No fetch response"))
     val partitionData = fetchResponse.responseData.get(topicPartition)
     assertEquals(Errors.NONE.code, partitionData.errorCode)
-    val batches = partitionData.records.asInstanceOf[Records].batches.asScala.toBuffer
+    val batches = FetchResponse.records(partitionData).batches.asScala.toBuffer
     assertEquals(3, batches.size) // size is 3 (not 4) since maxPartitionBytes=msgValueSize*4, excluding key and headers
   }
 
@@ -445,7 +445,7 @@ class FetchRequestTest extends BaseRequestTest {
         val partitionData = fetchResponse.responseData.get(topicPartition)
         assertEquals(Errors.NONE.code, partitionData.errorCode)
         assertTrue(partitionData.highWatermark > 0)
-        val batches = partitionData.records.asInstanceOf[Records].batches.asScala.toBuffer
+        val batches = FetchResponse.records(partitionData).batches.asScala.toBuffer
         val batch = batches.head
         assertEquals(expectedMagic, batch.magic)
         assertEquals(currentExpectedOffset, batch.baseOffset)
@@ -655,8 +655,8 @@ class FetchRequestTest extends BaseRequestTest {
     assertEquals(3, records(data4).size)
   }
 
-  private def records(partitionData: FetchResponseData.FetchablePartitionResponse): Seq[Record] = {
-    partitionData.records.asInstanceOf[Records].records.asScala.toBuffer
+  private def records(partitionData: FetchResponseData.PartitionData): Seq[Record] = {
+    FetchResponse.records(partitionData).records.asScala.toBuffer
   }
 
   private def checkFetchResponse(expectedPartitions: Seq[TopicPartition], fetchResponse: FetchResponse,
@@ -671,7 +671,7 @@ class FetchRequestTest extends BaseRequestTest {
       assertEquals(Errors.NONE.code, partitionData.errorCode)
       assertTrue(partitionData.highWatermark > 0)
 
-      val records = partitionData.records.asInstanceOf[Records]
+      val records = FetchResponse.records(partitionData)
       responseBufferSize += records.sizeInBytes
 
       val batches = records.batches.asScala.toBuffer

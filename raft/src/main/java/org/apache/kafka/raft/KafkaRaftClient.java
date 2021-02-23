@@ -991,8 +991,8 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
         }
 
         FetchResponseData response = tryCompleteFetchRequest(request.replicaId(), fetchPartition, currentTimeMs);
-        FetchResponseData.FetchablePartitionResponse partitionResponse =
-            response.responses().get(0).partitionResponses().get(0);
+        FetchResponseData.PartitionData partitionResponse =
+            response.responses().get(0).partitions().get(0);
 
         if (partitionResponse.errorCode() != Errors.NONE.code()
             || partitionResponse.records().sizeInBytes() > 0
@@ -1084,8 +1084,8 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
             return false;
         }
 
-        FetchResponseData.FetchablePartitionResponse partitionResponse =
-            response.responses().get(0).partitionResponses().get(0);
+        FetchResponseData.PartitionData partitionResponse =
+            response.responses().get(0).partitions().get(0);
 
         FetchResponseData.LeaderIdAndEpoch currentLeaderIdAndEpoch = partitionResponse.currentLeader();
         OptionalInt responseLeaderId = optionalLeaderId(currentLeaderIdAndEpoch.leaderId());
