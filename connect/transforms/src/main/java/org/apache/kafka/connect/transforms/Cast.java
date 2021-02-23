@@ -22,6 +22,7 @@ import org.apache.kafka.common.cache.LRUCache;
 import org.apache.kafka.common.cache.SynchronizedCache;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigException;
+import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.connect.connector.ConnectRecord;
 import org.apache.kafka.connect.data.ConnectSchema;
 import org.apache.kafka.connect.data.Date;
@@ -367,16 +368,10 @@ public abstract class Cast<R extends ConnectRecord<R>> implements Transformation
             return Values.dateFormatFor(dateValue).format(dateValue);
         } else if (value instanceof ByteBuffer) {
             ByteBuffer byteBuffer = (ByteBuffer) value;
-            if (byteBuffer.hasArray()) {
-                return castByteArrayToString(byteBuffer.array());
-            }
-            else {
-                byte[] array = new byte[byteBuffer.remaining()];
-                byteBuffer.get(array);
-                return castByteArrayToString(array);
-            }
+            return castByteArrayToString(Utils.readBytes(byteBuffer));
         } else if (value instanceof byte[]) {
-            return castByteArrayToString((byte[]) value);
+            byte[] rawBytes = (byte[]) value;
+            return castByteArrayToString(rawBytes);
         } else {
             return value.toString();
         }
