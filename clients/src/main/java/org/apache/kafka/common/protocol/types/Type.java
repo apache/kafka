@@ -320,7 +320,7 @@ public abstract class Type {
             if (item instanceof Long)
                 return (Long) item;
             else
-                throw new SchemaException(item + " is not a Long.");
+                throw new SchemaException(item + " is not an unsigned integer.");
         }
 
         @Override
