@@ -134,50 +134,53 @@ public class PartitionGroup {
             final TopicPartition partition = entry.getKey();
             final RecordQueue queue = entry.getValue();
 
-            final OptionalLong fetchedLag = lagProvider.apply(partition);
 
             if (!queue.isEmpty()) {
                 // this partition is ready for processing
                 idlePartitionDeadlines.remove(partition);
                 queued.add(partition);
-            } else if (!fetchedLag.isPresent()) {
-                // must wait to fetch metadata for the partition
-                idlePartitionDeadlines.remove(partition);
-                logger.trace("Waiting to fetch data for {}", partition);
-                return false;
-            } else if (fetchedLag.getAsLong() > 0L) {
-                // must wait to poll the data we know to be on the broker
-                idlePartitionDeadlines.remove(partition);
-                logger.trace(
-                    "Lag for {} is currently {}, but no data is buffered locally. Waiting to buffer some records.",
-                    partition,
-                    fetchedLag.getAsLong()
-                );
-                return false;
             } else {
-                // p is known to have zero lag. wait for maxTaskIdleMs to see if more data shows up.
-                // One alternative would be to set the deadline to nullableMetadata.receivedTimestamp + maxTaskIdleMs
-                // instead. That way, we would start the idling timer as of the freshness of our knowledge about the zero
-                // lag instead of when we happen to run this method, but realistically it's probably a small difference
-                // and using wall clock time seems more intuitive for users,
-                // since the log message will be as of wallClockTime.
-                idlePartitionDeadlines.putIfAbsent(partition, wallClockTime + maxTaskIdleMs);
-                final long deadline = idlePartitionDeadlines.get(partition);
-                if (wallClockTime < deadline) {
+                final OptionalLong fetchedLag = lagProvider.apply(partition);
+
+                if (!fetchedLag.isPresent()) {
+                    // must wait to fetch metadata for the partition
+                    idlePartitionDeadlines.remove(partition);
+                    logger.trace("Waiting to fetch data for {}", partition);
+                    return false;
+                } else if (fetchedLag.getAsLong() > 0L) {
+                    // must wait to poll the data we know to be on the broker
+                    idlePartitionDeadlines.remove(partition);
                     logger.trace(
-                        "Lag for {} is currently 0 and current time is {}. Waiting for new data to be produced for configured idle time {} (deadline is {}).",
+                        "Lag for {} is currently {}, but no data is buffered locally. Waiting to buffer some records.",
                         partition,
-                        wallClockTime,
-                        maxTaskIdleMs,
-                        deadline
+                        fetchedLag.getAsLong()
                     );
                     return false;
                 } else {
-                    // this partition is ready for processing due to the task idling deadline passing
-                    if (enforced == null) {
-                        enforced = new HashMap<>();
+                    // p is known to have zero lag. wait for maxTaskIdleMs to see if more data shows up.
+                    // One alternative would be to set the deadline to nullableMetadata.receivedTimestamp + maxTaskIdleMs
+                    // instead. That way, we would start the idling timer as of the freshness of our knowledge about the zero
+                    // lag instead of when we happen to run this method, but realistically it's probably a small difference
+                    // and using wall clock time seems more intuitive for users,
+                    // since the log message will be as of wallClockTime.
+                    idlePartitionDeadlines.putIfAbsent(partition, wallClockTime + maxTaskIdleMs);
+                    final long deadline = idlePartitionDeadlines.get(partition);
+                    if (wallClockTime < deadline) {
+                        logger.trace(
+                            "Lag for {} is currently 0 and current time is {}. Waiting for new data to be produced for configured idle time {} (deadline is {}).",
+                            partition,
+                            wallClockTime,
+                            maxTaskIdleMs,
+                            deadline
+                        );
+                        return false;
+                    } else {
+                        // this partition is ready for processing due to the task idling deadline passing
+                        if (enforced == null) {
+                            enforced = new HashMap<>();
+                        }
+                        enforced.put(partition, deadline);
                     }
-                    enforced.put(partition, deadline);
                 }
             }
         }

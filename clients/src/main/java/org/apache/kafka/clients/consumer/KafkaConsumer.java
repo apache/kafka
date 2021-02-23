@@ -2236,8 +2236,13 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      **/
     @Override
     public OptionalLong currentLag(TopicPartition topicPartition) {
-        final Long lag = subscriptions.partitionLag(topicPartition, isolationLevel);
-        return lag == null ? OptionalLong.empty() : OptionalLong.of(lag);
+        acquireAndEnsureOpen();
+        try {
+            final Long lag = subscriptions.partitionLag(topicPartition, isolationLevel);
+            return lag == null ? OptionalLong.empty() : OptionalLong.of(lag);
+        } finally {
+            release();
+        }
     }
 
     /**
