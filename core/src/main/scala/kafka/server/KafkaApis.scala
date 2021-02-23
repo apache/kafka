@@ -762,7 +762,7 @@ class KafkaApis(val requestChannel: RequestChannel,
                 // down-conversion always guarantees that at least one batch of messages is down-converted and sent out to the
                 // client.
                 new FetchResponseData.PartitionData()
-                  .setIndex(tp.partition)
+                  .setPartitionIndex(tp.partition)
                   .setErrorCode(maybeDownConvertStorageError(Errors.forCode(partitionData.errorCode)).code)
                   .setHighWatermark(partitionData.highWatermark)
                   .setLastStableOffset(partitionData.lastStableOffset)
@@ -778,7 +778,7 @@ class KafkaApis(val requestChannel: RequestChannel,
             }
           case None =>
             new FetchResponseData.PartitionData()
-              .setIndex(tp.partition)
+              .setPartitionIndex(tp.partition)
               .setErrorCode(maybeDownConvertStorageError(Errors.forCode(partitionData.errorCode)).code)
               .setHighWatermark(partitionData.highWatermark)
               .setLastStableOffset(partitionData.lastStableOffset)
@@ -800,7 +800,7 @@ class KafkaApis(val requestChannel: RequestChannel,
         val lastStableOffset = data.lastStableOffset.getOrElse(FetchResponse.INVALID_LAST_STABLE_OFFSET)
         if (data.isReassignmentFetch) reassigningPartitions.add(tp)
         partitions.put(tp, new FetchResponseData.PartitionData()
-            .setIndex(tp.partition)
+            .setPartitionIndex(tp.partition)
             .setErrorCode(maybeDownConvertStorageError(data.error).code)
             .setHighWatermark(data.highWatermark)
             .setLastStableOffset(lastStableOffset)

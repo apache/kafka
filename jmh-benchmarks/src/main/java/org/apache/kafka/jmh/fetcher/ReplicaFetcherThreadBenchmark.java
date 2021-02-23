@@ -174,7 +174,7 @@ public class ReplicaFetcherThreadBenchmark {
                 }
             };
             initialFetched.put(tp, new FetchResponseData.PartitionData()
-                    .setIndex(tp.partition())
+                    .setPartitionIndex(tp.partition())
                     .setErrorCode(Errors.NONE.code())
                     .setHighWatermark(0)
                     .setLastStableOffset(0)

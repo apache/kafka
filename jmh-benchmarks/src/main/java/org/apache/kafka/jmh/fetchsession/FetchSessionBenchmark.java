@@ -78,7 +78,7 @@ public class FetchSessionBenchmark {
             fetches.put(tp, partitionData);
             builder.add(tp, partitionData);
             respMap.put(tp, new FetchResponseData.PartitionData()
-                            .setIndex(tp.partition())
+                            .setPartitionIndex(tp.partition())
                             .setErrorCode(Errors.NONE.code())
                             .setHighWatermark(0)
                             .setLastStableOffset(0)

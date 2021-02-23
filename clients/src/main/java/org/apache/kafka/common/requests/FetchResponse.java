@@ -85,7 +85,7 @@ public class FetchResponse extends AbstractResponse {
             responseData = new LinkedHashMap<>();
             data.responses().forEach(topicResponse ->
                 topicResponse.partitions().forEach(partition ->
-                    responseData.put(new TopicPartition(topicResponse.topic(), partition.index()), partition))
+                    responseData.put(new TopicPartition(topicResponse.topic(), partition.partitionIndex()), partition))
             );
         }
         return responseData;
@@ -154,7 +154,7 @@ public class FetchResponse extends AbstractResponse {
 
     public static FetchResponseData.PartitionData partitionResponse(int partition, Errors error) {
         return new FetchResponseData.PartitionData()
-                .setIndex(partition)
+                .setPartitionIndex(partition)
                 .setErrorCode(error.code())
                 .setHighWatermark(FetchResponse.INVALID_HIGH_WATERMARK)
                 .setLastStableOffset(FetchResponse.INVALID_LAST_STABLE_OFFSET)
@@ -182,7 +182,7 @@ public class FetchResponse extends AbstractResponse {
             .setThrottleTimeMs(throttleTimeMs)
             .setResponses(responseData.entrySet().stream().map(entry -> new FetchResponseData.FetchableTopicResponse()
                 .setTopic(entry.getKey().topic())
-                .setPartitions(Collections.singletonList(entry.getValue().setIndex(entry.getKey().partition()))))
+                .setPartitions(Collections.singletonList(entry.getValue().setPartitionIndex(entry.getKey().partition()))))
                 .collect(Collectors.toList())));
     }
 }

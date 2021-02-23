@@ -79,7 +79,7 @@ public class FetchResponseBenchmark {
             String topic = UUID.randomUUID().toString();
             for (int partitionId = 0; partitionId < partitionCount; partitionId++) {
                 FetchResponseData.PartitionData partitionData = new FetchResponseData.PartitionData()
-                                .setIndex(partitionId)
+                                .setPartitionIndex(partitionId)
                                 .setErrorCode(Errors.NONE.code())
                                 .setHighWatermark(0)
                                 .setLastStableOffset(0)

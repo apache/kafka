@@ -81,7 +81,7 @@ class ReplicaAlterLogDirsThread(name: String,
         val abortedTransactions = data.abortedTransactions.map(_.asJava).orNull
         val lastStableOffset = data.lastStableOffset.getOrElse(FetchResponse.INVALID_LAST_STABLE_OFFSET)
         tp -> new FetchResponseData.PartitionData()
-          .setIndex(tp.partition)
+          .setPartitionIndex(tp.partition)
           .setErrorCode(data.error.code)
           .setHighWatermark(data.highWatermark)
           .setLastStableOffset(lastStableOffset)

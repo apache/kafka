@@ -78,7 +78,7 @@ public class RaftUtil {
         FetchResponseData.PartitionData fetchablePartition =
             new FetchResponseData.PartitionData();
 
-        fetchablePartition.setIndex(topicPartition.partition());
+        fetchablePartition.setPartitionIndex(topicPartition.partition());
 
         partitionConsumer.accept(fetchablePartition);
 
@@ -103,7 +103,7 @@ public class RaftUtil {
         return data.responses().size() == 1 &&
             data.responses().get(0).topic().equals(topicPartition.topic()) &&
             data.responses().get(0).partitions().size() == 1 &&
-            data.responses().get(0).partitions().get(0).index() == topicPartition.partition();
+            data.responses().get(0).partitions().get(0).partitionIndex() == topicPartition.partition();
     }
 
     static boolean hasValidTopicPartition(VoteResponseData data, TopicPartition topicPartition) {
