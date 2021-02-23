@@ -3364,7 +3364,7 @@ class KafkaApisTest {
       .setTransactionalIds(List("foo", "bar").asJava)
     val describeTransactionsRequest = new DescribeTransactionsRequest.Builder(data).build()
     val request = buildRequest(describeTransactionsRequest)
-    val capturedResponse = expectNoThrottling()
+    val capturedResponse = expectNoThrottling(request)
 
     def buildExpectedActions(transactionalId: String): util.List[Action] = {
       val pattern = new ResourcePattern(ResourceType.TRANSACTIONAL_ID, transactionalId, PatternType.LITERAL)
@@ -3393,8 +3393,7 @@ class KafkaApisTest {
     EasyMock.replay(replicaManager, clientRequestQuotaManager, requestChannel, txnCoordinator, authorizer)
     createKafkaApis(authorizer = Some(authorizer)).handleDescribeTransactionsRequest(request)
 
-    val response = readResponse(describeTransactionsRequest, capturedResponse)
-      .asInstanceOf[DescribeTransactionsResponse]
+    val response = capturedResponse.getValue.asInstanceOf[DescribeTransactionsResponse]
     assertEquals(2, response.data.transactionStates.size)
 
     val fooState = response.data.transactionStates.asScala.find(_.transactionalId == "foo").get
@@ -3404,7 +3403,7 @@ class KafkaApisTest {
     assertEquals(time.milliseconds(), fooState.transactionStartTimeMs)
     assertEquals("CompleteCommit", fooState.transactionState)
     assertEquals(10000, fooState.transactionTimeoutMs)
-    assertEquals(List.empty.asJava, fooState.topics())
+    assertEquals(List.empty, fooState.topics.asScala.toList)
 
     val barState = response.data.transactionStates.asScala.find(_.transactionalId == "bar").get
     assertEquals(Errors.TRANSACTIONAL_ID_AUTHORIZATION_FAILED.code, barState.errorCode)
@@ -3418,7 +3417,7 @@ class KafkaApisTest {
       .setTransactionalIds(List(transactionalId).asJava)
     val describeTransactionsRequest = new DescribeTransactionsRequest.Builder(data).build()
     val request = buildRequest(describeTransactionsRequest)
-    val capturedResponse = expectNoThrottling()
+    val capturedResponse = expectNoThrottling(request)
 
     def expectDescribe(
       resourceType: ResourceType,
@@ -3467,8 +3466,7 @@ class KafkaApisTest {
     EasyMock.replay(replicaManager, clientRequestQuotaManager, requestChannel, txnCoordinator, authorizer)
     createKafkaApis(authorizer = Some(authorizer)).handleDescribeTransactionsRequest(request)
 
-    val response = readResponse(describeTransactionsRequest, capturedResponse)
-      .asInstanceOf[DescribeTransactionsResponse]
+    val response = capturedResponse.getValue.asInstanceOf[DescribeTransactionsResponse]
     assertEquals(1, response.data.transactionStates.size)
 
     val fooState = response.data.transactionStates.asScala.find(_.transactionalId == "foo").get
@@ -3478,7 +3476,7 @@ class KafkaApisTest {
     assertEquals(time.milliseconds(), fooState.transactionStartTimeMs)
     assertEquals("Ongoing", fooState.transactionState)
     assertEquals(10000, fooState.transactionTimeoutMs)
-    assertEquals(List(mkTopicData(topic = "foo", Seq(1, 2))), fooState.topics.asScala)
+    assertEquals(List(mkTopicData(topic = "foo", Seq(1, 2))), fooState.topics.asScala.toList)
   }
 
   private def createMockRequest(): RequestChannel.Request = {
