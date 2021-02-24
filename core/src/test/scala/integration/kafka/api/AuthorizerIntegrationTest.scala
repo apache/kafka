@@ -1820,7 +1820,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
     assertEquals(1, response.data.transactionStates.size)
     val transactionStateData = response.data.transactionStates.asScala.find(_.transactionalId == transactionalId).get
     assertEquals("Ongoing", transactionStateData.transactionState)
-    assertEquals(List.empty, transactionStateData.topics.asScala)
+    assertEquals(List.empty, transactionStateData.topics.asScala.toList)
   }
 
   @Test
