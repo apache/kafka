@@ -48,6 +48,7 @@ import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.LogAndContinueExceptionHandler;
 import org.apache.kafka.streams.errors.StreamsException;
@@ -117,6 +118,7 @@ import static org.easymock.EasyMock.anyObject;
 import static org.easymock.EasyMock.expect;
 import static org.easymock.EasyMock.expectLastCall;
 import static org.easymock.EasyMock.mock;
+import static org.easymock.EasyMock.niceMock;
 import static org.easymock.EasyMock.verify;
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.CoreMatchers.not;
@@ -836,6 +838,119 @@ public class StreamThreadTest {
     }
 
     @Test
+    public void shouldRecordCommitLatency() {
+        final Consumer<byte[], byte[]> consumer = EasyMock.createNiceMock(Consumer.class);
+        final ConsumerGroupMetadata consumerGroupMetadata = mock(ConsumerGroupMetadata.class);
+        expect(consumer.groupMetadata()).andStubReturn(consumerGroupMetadata);
+        expect(consumerGroupMetadata.groupInstanceId()).andReturn(Optional.empty());
+        expect(consumer.poll(anyObject())).andStubReturn(new ConsumerRecords<>(Collections.emptyMap()));
+        final Task task = niceMock(Task.class);
+        expect(task.id()).andStubReturn(task1);
+        expect(task.inputPartitions()).andStubReturn(Collections.singleton(t1p1));
+        final ActiveTaskCreator activeTaskCreator = mock(ActiveTaskCreator.class);
+        expect(activeTaskCreator.createTasks(anyObject(), anyObject())).andStubReturn(Collections.singleton(task));
+        expect(activeTaskCreator.producerClientIds()).andStubReturn(Collections.singleton("producerClientId"));
+        EasyMock.replay(consumer, consumerGroupMetadata, task, activeTaskCreator);
+
+        final StreamsMetricsImpl streamsMetrics =
+            new StreamsMetricsImpl(metrics, CLIENT_ID, StreamsConfig.METRICS_LATEST, mockTime);
+
+        final TaskManager taskManager = new TaskManager(
+            null,
+            null,
+            null,
+            null,
+            null,
+            activeTaskCreator,
+            null,
+            internalTopologyBuilder,
+            null,
+            null,
+            null
+        ) {
+            @Override
+            int commit(final Collection<Task> tasksToCommit) {
+                mockTime.sleep(10L);
+                return 1;
+            }
+        };
+        taskManager.setMainConsumer(consumer);
+
+        final StreamThread thread = new StreamThread(
+            mockTime,
+            config,
+            null,
+            consumer,
+            consumer,
+            changelogReader,
+            null,
+            taskManager,
+            streamsMetrics,
+            internalTopologyBuilder,
+            CLIENT_ID,
+            new LogContext(""),
+            new AtomicInteger(),
+            new AtomicLong(Long.MAX_VALUE),
+            null,
+            HANDLER,
+            null
+        );
+        thread.updateThreadMetadata("adminClientId");
+        thread.setState(StreamThread.State.STARTING);
+
+        final Map<TaskId, Set<TopicPartition>> activeTasks = new HashMap<>();
+        activeTasks.put(task1, Collections.singleton(t1p1));
+        thread.taskManager().handleAssignment(activeTasks, emptyMap());
+        thread.rebalanceListener().onPartitionsAssigned(Collections.singleton(t1p1));
+
+        assertTrue(
+            Double.isNaN(
+                (Double) streamsMetrics.metrics().get(new MetricName(
+                    "commit-latency-max",
+                    "stream-thread-metrics",
+                    "",
+                    Collections.singletonMap("thread-id", CLIENT_ID))
+                ).metricValue()
+            )
+        );
+        assertTrue(
+            Double.isNaN(
+                (Double) streamsMetrics.metrics().get(new MetricName(
+                    "commit-latency-avg",
+                    "stream-thread-metrics",
+                    "",
+                    Collections.singletonMap("thread-id", CLIENT_ID))
+                ).metricValue()
+            )
+        );
+
+        thread.runOnce();
+
+        assertThat(
+            streamsMetrics.metrics().get(
+                new MetricName(
+                    "commit-latency-max",
+                    "stream-thread-metrics",
+                    "",
+                    Collections.singletonMap("thread-id", CLIENT_ID)
+                )
+            ).metricValue(),
+            equalTo(10.0)
+        );
+        assertThat(
+            streamsMetrics.metrics().get(
+                new MetricName(
+                    "commit-latency-avg",
+                    "stream-thread-metrics",
+                    "",
+                    Collections.singletonMap("thread-id", CLIENT_ID)
+                )
+            ).metricValue(),
+            equalTo(10.0)
+        );
+    }
+
+    @Test
     public void shouldInjectSharedProducerForAllTasksUsingClientSupplierOnCreateIfEosDisabled() {
         internalTopologyBuilder.addSource(null, "source1", null, null, null, topic1);
         internalStreamsBuilder.buildAndOptimizeTopology();
@@ -1308,7 +1423,7 @@ public class StreamThreadTest {
             "proc",
             () -> record -> {
                 if (shouldThrow.get()) {
-                    throw new TaskCorruptedException(singletonMap(task1, new HashSet<>(singleton(storeChangelogTopicPartition))));
+                    throw new TaskCorruptedException(singleton(task1));
                 } else {
                     processed.set(true);
                 }
@@ -1365,7 +1480,7 @@ public class StreamThreadTest {
         final TaskCorruptedException taskCorruptedException = assertThrows(TaskCorruptedException.class, thread::runOnce);
 
         // Now, we can handle the corruption
-        thread.taskManager().handleCorruption(taskCorruptedException.corruptedTaskWithChangelogs());
+        thread.taskManager().handleCorruption(taskCorruptedException.corruptedTasks());
 
         // again, complete the restoration
         thread.runOnce();
@@ -1691,7 +1806,7 @@ public class StreamThreadTest {
         final List<Long> punctuatedStreamTime = new ArrayList<>();
         final List<Long> punctuatedWallClockTime = new ArrayList<>();
         final org.apache.kafka.streams.processor.ProcessorSupplier<Object, Object> punctuateProcessor =
-            () -> new org.apache.kafka.streams.processor.Processor<Object, Object>() {
+            () -> new org.apache.kafka.streams.processor.AbstractProcessor<Object, Object>() {
                 @Override
                 public void init(final org.apache.kafka.streams.processor.ProcessorContext context) {
                     context.schedule(Duration.ofMillis(100L), PunctuationType.STREAM_TIME, punctuatedStreamTime::add);
@@ -1700,9 +1815,6 @@ public class StreamThreadTest {
 
                 @Override
                 public void process(final Object key, final Object value) {}
-
-                @Override
-                public void close() {}
             };
 
         internalStreamsBuilder.stream(Collections.singleton(topic1), consumed).process(punctuateProcessor);
@@ -1758,6 +1870,85 @@ public class StreamThreadTest {
         // we should skip stream time punctuation, only trigger wall-clock time punctuation
         assertEquals(1, punctuatedStreamTime.size());
         assertEquals(2, punctuatedWallClockTime.size());
+    }
+
+    @Test
+    public void shouldPunctuateWithTimestampPreservedInProcessorContext() {
+        final org.apache.kafka.streams.kstream.TransformerSupplier<Object, Object, KeyValue<Object, Object>> punctuateProcessor =
+            () -> new org.apache.kafka.streams.kstream.Transformer<Object, Object, KeyValue<Object, Object>>() {
+                @Override
+                public void init(final org.apache.kafka.streams.processor.ProcessorContext context) {
+                    context.schedule(Duration.ofMillis(100L), PunctuationType.WALL_CLOCK_TIME, timestamp -> context.forward("key", "value"));
+                    context.schedule(Duration.ofMillis(100L), PunctuationType.STREAM_TIME, timestamp -> context.forward("key", "value"));
+                }
+
+                @Override
+                public KeyValue<Object, Object> transform(final Object key, final Object value) {
+                        return null;
+                    }
+
+                @Override
+                public void close() {}
+            };
+
+        final List<Long> peekedContextTime = new ArrayList<>();
+        final org.apache.kafka.streams.processor.ProcessorSupplier<Object, Object> peekProcessor =
+            () -> new org.apache.kafka.streams.processor.AbstractProcessor<Object, Object>() {
+                @Override
+                public void process(final Object key, final Object value) {
+                    peekedContextTime.add(context.timestamp());
+                }
+            };
+
+        internalStreamsBuilder.stream(Collections.singleton(topic1), consumed)
+            .transform(punctuateProcessor)
+            .process(peekProcessor);
+        internalStreamsBuilder.buildAndOptimizeTopology();
+
+        final long currTime = mockTime.milliseconds();
+        final StreamThread thread = createStreamThread(CLIENT_ID, config, false);
+
+        thread.setState(StreamThread.State.STARTING);
+        thread.rebalanceListener().onPartitionsRevoked(Collections.emptySet());
+        final List<TopicPartition> assignedPartitions = new ArrayList<>();
+
+        final Map<TaskId, Set<TopicPartition>> activeTasks = new HashMap<>();
+
+        // assign single partition
+        assignedPartitions.add(t1p1);
+        activeTasks.put(task1, Collections.singleton(t1p1));
+
+        thread.taskManager().handleAssignment(activeTasks, emptyMap());
+
+        clientSupplier.consumer.assign(assignedPartitions);
+        clientSupplier.consumer.updateBeginningOffsets(Collections.singletonMap(t1p1, 0L));
+        thread.rebalanceListener().onPartitionsAssigned(assignedPartitions);
+
+        thread.runOnce();
+        assertEquals(0, peekedContextTime.size());
+
+        mockTime.sleep(100L);
+        thread.runOnce();
+
+        assertEquals(1, peekedContextTime.size());
+        assertEquals(currTime + 100L, peekedContextTime.get(0).longValue());
+
+        clientSupplier.consumer.addRecord(new ConsumerRecord<>(
+            topic1,
+            1,
+            0L,
+             100L,
+             TimestampType.CREATE_TIME,
+             ConsumerRecord.NULL_CHECKSUM,
+             "K".getBytes().length,
+             "V".getBytes().length,
+             "K".getBytes(),
+             "V".getBytes()));
+
+        thread.runOnce();
+
+        assertEquals(2, peekedContextTime.size());
+        assertEquals(0L, peekedContextTime.get(1).longValue());
     }
 
     @Test
@@ -2147,16 +2338,14 @@ public class StreamThreadTest {
         final TaskId taskId1 = new TaskId(0, 0);
         final TaskId taskId2 = new TaskId(0, 2);
 
-        final Map<TaskId, Collection<TopicPartition>> corruptedTasksWithChangelogs = mkMap(
-            mkEntry(taskId1, emptySet())
-        );
+        final Set<TaskId> corruptedTasks = singleton(taskId1);
 
         expect(task1.state()).andReturn(Task.State.RUNNING).anyTimes();
         expect(task1.id()).andReturn(taskId1).anyTimes();
         expect(task2.state()).andReturn(Task.State.RUNNING).anyTimes();
         expect(task2.id()).andReturn(taskId2).anyTimes();
 
-        taskManager.handleCorruption(corruptedTasksWithChangelogs);
+        taskManager.handleCorruption(corruptedTasks);
 
         EasyMock.replay(task1, task2, taskManager, consumer);
 
@@ -2184,7 +2373,7 @@ public class StreamThreadTest {
             @Override
             void runOnce() {
                 setState(State.PENDING_SHUTDOWN);
-                throw new TaskCorruptedException(corruptedTasksWithChangelogs);
+                throw new TaskCorruptedException(corruptedTasks);
             }
         }.updateThreadMetadata(getSharedAdminClientId(CLIENT_ID));
 
@@ -2212,16 +2401,14 @@ public class StreamThreadTest {
         final TaskId taskId1 = new TaskId(0, 0);
         final TaskId taskId2 = new TaskId(0, 2);
 
-        final Map<TaskId, Collection<TopicPartition>> corruptedTasksWithChangelogs = mkMap(
-            mkEntry(taskId1, emptySet())
-        );
+        final Set<TaskId> corruptedTasks = singleton(taskId1);
 
         expect(task1.state()).andReturn(Task.State.RUNNING).anyTimes();
         expect(task1.id()).andReturn(taskId1).anyTimes();
         expect(task2.state()).andReturn(Task.State.RUNNING).anyTimes();
         expect(task2.id()).andReturn(taskId2).anyTimes();
 
-        taskManager.handleCorruption(corruptedTasksWithChangelogs);
+        taskManager.handleCorruption(corruptedTasks);
         expectLastCall().andThrow(new TaskMigratedException("Task migrated",
                                                             new RuntimeException("non-corrupted task migrated")));
 
@@ -2254,7 +2441,7 @@ public class StreamThreadTest {
             @Override
             void runOnce() {
                 setState(State.PENDING_SHUTDOWN);
-                throw new TaskCorruptedException(corruptedTasksWithChangelogs);
+                throw new TaskCorruptedException(corruptedTasks);
             }
         }.updateThreadMetadata(getSharedAdminClientId(CLIENT_ID));
 
@@ -2621,7 +2808,7 @@ public class StreamThreadTest {
         internalTopologyBuilder.addSource(null, "source1", null, null, null, topic1);
         internalTopologyBuilder.addProcessor(
             "processor1",
-            (ProcessorSupplier<byte[], byte[], ?, ?>) () -> new MockApiProcessor<>(),
+            (ProcessorSupplier<byte[], byte[], ?, ?>) MockApiProcessor::new,
             "source1"
         );
     }

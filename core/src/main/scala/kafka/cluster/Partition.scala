@@ -40,7 +40,7 @@ import org.apache.kafka.common.record.{MemoryRecords, RecordBatch}
 import org.apache.kafka.common.requests._
 import org.apache.kafka.common.requests.OffsetsForLeaderEpochResponse.{UNDEFINED_EPOCH, UNDEFINED_EPOCH_OFFSET}
 import org.apache.kafka.common.utils.Time
-import org.apache.kafka.common.{IsolationLevel, TopicPartition}
+import org.apache.kafka.common.{IsolationLevel, TopicPartition, Uuid}
 
 import scala.collection.{Map, Seq}
 import scala.jdk.CollectionConverters._
@@ -95,7 +95,6 @@ object Partition extends KafkaMetricsGroup {
       interBrokerProtocolVersion = replicaManager.config.interBrokerProtocolVersion,
       localBrokerId = replicaManager.config.brokerId,
       time = time,
-      configRepository = configRepository,
       isrChangeListener = isrChangeListener,
       delayedOperations = delayedOperations,
       metadataCache = replicaManager.metadataCache,
@@ -218,7 +217,6 @@ class Partition(val topicPartition: TopicPartition,
                 interBrokerProtocolVersion: ApiVersion,
                 localBrokerId: Int,
                 time: Time,
-                configRepository: ConfigRepository,
                 isrChangeListener: IsrChangeListener,
                 delayedOperations: DelayedOperations,
                 metadataCache: MetadataCache,
@@ -331,11 +329,6 @@ class Partition(val topicPartition: TopicPartition,
 
   // Visible for testing
   private[cluster] def createLog(isNew: Boolean, isFutureReplica: Boolean, offsetCheckpoints: OffsetCheckpoints): Log = {
-    def fetchLogConfig: LogConfig = {
-      val props = configRepository.topicConfig(topic)
-      LogConfig.fromProps(logManager.currentDefaultConfig.originals, props)
-    }
-
     def updateHighWatermark(log: Log) = {
       val checkpointHighWatermark = offsetCheckpoints.fetch(log.parentDir, topicPartition).getOrElse {
         info(s"No checkpointed highwatermark is found for partition $topicPartition")
@@ -348,20 +341,16 @@ class Partition(val topicPartition: TopicPartition,
     logManager.initializingLog(topicPartition)
     var maybeLog: Option[Log] = None
     try {
-      val log = logManager.getOrCreateLog(topicPartition, () => fetchLogConfig, isNew, isFutureReplica)
+      val log = logManager.getOrCreateLog(topicPartition, isNew, isFutureReplica)
       maybeLog = Some(log)
       updateHighWatermark(log)
       log
     } finally {
-      logManager.finishedInitializingLog(topicPartition, maybeLog, () => fetchLogConfig)
+      logManager.finishedInitializingLog(topicPartition, maybeLog)
     }
   }
 
   def getReplica(replicaId: Int): Option[Replica] = Option(remoteReplicasMap.get(replicaId))
-
-  private def getReplicaOrException(replicaId: Int): Replica = getReplica(replicaId).getOrElse{
-    throw new NotLeaderOrFollowerException(s"Replica with id $replicaId is not available on broker $localBrokerId")
-  }
 
   private def checkCurrentLeaderEpoch(remoteLeaderEpochOpt: Optional[Integer]): Errors = {
     if (!remoteLeaderEpochOpt.isPresent) {
@@ -433,6 +422,44 @@ class Partition(val topicPartition: TopicPartition,
       futureLog = Some(log)
     else
       this.log = Some(log)
+  }
+
+  /**
+   * Checks if the topic ID provided in the request is consistent with the topic ID in the log.
+   * If a valid topic ID is provided, and the log exists but has no ID set, set the log ID to be the request ID.
+   *
+   * @param requestTopicId the topic ID from the request
+   * @return true if the request topic id is consistent, false otherwise
+   */
+  def checkOrSetTopicId(requestTopicId: Uuid): Boolean = {
+    // If the request had an invalid topic ID, then we assume that topic IDs are not supported.
+    // The topic ID was not inconsistent, so return true.
+    // If the log is empty, then we can not say that topic ID is inconsistent, so return true.
+    if (requestTopicId == null || requestTopicId == Uuid.ZERO_UUID)
+      true
+    else {
+      log match {
+        case None => true
+        case Some(log) => {
+          // Check if topic ID is in memory, if not, it must be new to the broker and does not have a metadata file.
+          // This is because if the broker previously wrote it to file, it would be recovered on restart after failure.
+          // Topic ID is consistent since we are just setting it here.
+          if (log.topicId == Uuid.ZERO_UUID) {
+            log.partitionMetadataFile.write(requestTopicId)
+            log.topicId = requestTopicId
+            true
+          } else if (log.topicId != requestTopicId) {
+            stateChangeLogger.error(s"Topic Id in memory: ${log.topicId} does not" +
+              s" match the topic Id for partition $topicPartition provided in the request: " +
+              s"$requestTopicId.")
+            false
+          } else {
+            // topic ID in log exists and matches request topic ID
+            true
+          }
+        }
+      }
+    }
   }
 
   // remoteReplicas will be called in the hot path, and must be inexpensive
@@ -795,7 +822,7 @@ class Partition(val topicPartition: TopicPartition,
             case (brokerId, logEndOffset) => s"broker $brokerId: $logEndOffset"
           }
 
-          val curInSyncReplicaObjects = (curMaximalIsr - localBrokerId).map(getReplicaOrException)
+          val curInSyncReplicaObjects = (curMaximalIsr - localBrokerId).flatMap(getReplica)
           val replicaInfo = curInSyncReplicaObjects.map(replica => (replica.brokerId, replica.logEndOffset))
           val localLogInfo = (localBrokerId, localLogOrException.logEndOffset)
           val (ackedReplicas, awaitingReplicas) = (replicaInfo + localLogInfo).partition { _._2 >= requiredOffset}
@@ -917,11 +944,15 @@ class Partition(val topicPartition: TopicPartition,
         val outOfSyncReplicaIds = getOutOfSyncReplicas(replicaLagTimeMaxMs)
         if (outOfSyncReplicaIds.nonEmpty) {
           val outOfSyncReplicaLog = outOfSyncReplicaIds.map { replicaId =>
-            s"(brokerId: $replicaId, endOffset: ${getReplicaOrException(replicaId).logEndOffset})"
+            val logEndOffsetMessage = getReplica(replicaId)
+              .map(_.logEndOffset.toString)
+              .getOrElse("unknown")
+            s"(brokerId: $replicaId, endOffset: $logEndOffsetMessage)"
           }.mkString(" ")
           val newIsrLog = (isrState.isr -- outOfSyncReplicaIds).mkString(",")
           info(s"Shrinking ISR from ${isrState.isr.mkString(",")} to $newIsrLog. " +
-               s"Leader: (highWatermark: ${leaderLog.highWatermark}, endOffset: ${leaderLog.logEndOffset}). " +
+               s"Leader: (highWatermark: ${leaderLog.highWatermark}, " +
+               s"endOffset: ${leaderLog.logEndOffset}). " +
                s"Out of sync replicas: $outOfSyncReplicaLog.")
 
           shrinkIsr(outOfSyncReplicaIds)
@@ -947,9 +978,10 @@ class Partition(val topicPartition: TopicPartition,
                                   leaderEndOffset: Long,
                                   currentTimeMs: Long,
                                   maxLagMs: Long): Boolean = {
-    val followerReplica = getReplicaOrException(replicaId)
-    followerReplica.logEndOffset != leaderEndOffset &&
-      (currentTimeMs - followerReplica.lastCaughtUpTimeMs) > maxLagMs
+    getReplica(replicaId).fold(true) { followerReplica =>
+      followerReplica.logEndOffset != leaderEndOffset &&
+        (currentTimeMs - followerReplica.lastCaughtUpTimeMs) > maxLagMs
+    }
   }
 
   /**

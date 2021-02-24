@@ -14,11 +14,12 @@
 # limitations under the License.
 
 from ducktape.cluster.remoteaccount import RemoteCommandError
-from ducktape.mark import parametrize
+from ducktape.mark import matrix
 from ducktape.mark.resource import cluster
 from ducktape.utils.util import wait_until
 from ducktape.errors import TimeoutError
 
+from kafkatest.services.kafka import quorum
 from kafkatest.services.security.security_config import SecurityConfig
 from kafkatest.services.security.security_config import SslStores
 from kafkatest.tests.end_to_end import EndToEndTest
@@ -57,9 +58,9 @@ class SecurityTest(EndToEndTest):
         return True
 
     @cluster(num_nodes=7)
-    @parametrize(security_protocol='PLAINTEXT', interbroker_security_protocol='SSL')
-    @parametrize(security_protocol='SSL', interbroker_security_protocol='PLAINTEXT')
-    def test_client_ssl_endpoint_validation_failure(self, security_protocol, interbroker_security_protocol):
+    @matrix(security_protocol=['PLAINTEXT'], interbroker_security_protocol=['SSL'], metadata_quorum=quorum.all_non_upgrade)
+    @matrix(security_protocol=['SSL'], interbroker_security_protocol=['PLAINTEXT'], metadata_quorum=quorum.all_non_upgrade)
+    def test_client_ssl_endpoint_validation_failure(self, security_protocol, interbroker_security_protocol, metadata_quorum=quorum.zk):
         """
         Test that invalid hostname in certificate results in connection failures.
         When security_protocol=SSL, client SSL handshakes are expected to fail due to hostname verification failure.
@@ -71,8 +72,9 @@ class SecurityTest(EndToEndTest):
         SecurityConfig.ssl_stores = TestSslStores(self.test_context.local_scratch_dir,
                                                   valid_hostname=True)
 
-        self.create_zookeeper()
-        self.zk.start()
+        self.create_zookeeper_if_necessary()
+        if self.zk:
+            self.zk.start()
 
         self.create_kafka(security_protocol=security_protocol,
                           interbroker_security_protocol=interbroker_security_protocol)

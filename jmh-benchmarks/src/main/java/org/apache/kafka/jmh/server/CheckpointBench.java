@@ -104,13 +104,13 @@ public class CheckpointBench {
         final List<File> files =
             JavaConverters.seqAsJavaList(brokerProperties.logDirs()).stream().map(File::new).collect(Collectors.toList());
         this.logManager = TestUtils.createLogManager(JavaConverters.asScalaBuffer(files),
-                LogConfig.apply(), CleanerConfig.apply(1, 4 * 1024 * 1024L, 0.9d,
+                LogConfig.apply(), new CachedConfigRepository(), CleanerConfig.apply(1, 4 * 1024 * 1024L, 0.9d,
                         1024 * 1024, 32 * 1024 * 1024,
                         Double.MAX_VALUE, 15 * 1000, true, "MD5"), time);
         scheduler.startup();
         final BrokerTopicStats brokerTopicStats = new BrokerTopicStats();
         final MetadataCache metadataCache =
-                new MetadataCache(this.brokerProperties.brokerId());
+                MetadataCache.zkMetadataCache(this.brokerProperties.brokerId());
         this.quotaManagers =
                 QuotaFactory.instantiate(this.brokerProperties,
                         this.metrics,

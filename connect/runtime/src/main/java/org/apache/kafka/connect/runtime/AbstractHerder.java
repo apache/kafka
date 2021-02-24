@@ -646,7 +646,7 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
         ByteArrayOutputStream output = new ByteArrayOutputStream();
         try {
             t.printStackTrace(new PrintStream(output, false, StandardCharsets.UTF_8.name()));
-            return output.toString("UTF-8");
+            return output.toString(StandardCharsets.UTF_8.name());
         } catch (UnsupportedEncodingException e) {
             return null;
         }

@@ -21,6 +21,7 @@ import org.apache.kafka.common.utils.Bytes;
 import org.junit.jupiter.api.Test;
 
 import java.nio.ByteBuffer;
+import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
@@ -92,7 +93,7 @@ public class SerializationTest {
     @Test
     public void stringSerdeShouldSupportDifferentEncodings() {
         String str = "my string";
-        List<String> encodings = Arrays.asList("UTF8", "UTF-16");
+        List<String> encodings = Arrays.asList(StandardCharsets.UTF_8.name(), StandardCharsets.UTF_16.name());
 
         for (String encoding : encodings) {
             try (Serde<String> serDeser = getStringSerde(encoding)) {

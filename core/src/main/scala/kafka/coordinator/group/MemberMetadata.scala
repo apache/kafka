@@ -148,7 +148,7 @@ private[group] class MemberMetadata(var memberId: String,
       s"clientHost=$clientHost, " +
       s"sessionTimeoutMs=$sessionTimeoutMs, " +
       s"rebalanceTimeoutMs=$rebalanceTimeoutMs, " +
-      s"supportedProtocols=${supportedProtocols.map(_._1)}, " +
+      s"supportedProtocols=${supportedProtocols.map(_._1)}" +
       ")"
   }
 }

@@ -17,6 +17,10 @@
 package kafka.server
 
 import java.util.Properties
+
+import integration.kafka.server.IntegrationTestUtils
+import kafka.test.ClusterInstance
+import org.apache.kafka.common.message.ApiMessageType.ListenerType
 import org.apache.kafka.common.message.ApiVersionsResponseData.ApiVersion
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.protocol.ApiKeys
@@ -25,12 +29,17 @@ import org.junit.jupiter.api.Assertions._
 
 import scala.jdk.CollectionConverters._
 
-abstract class AbstractApiVersionsRequestTest extends BaseRequestTest {
+abstract class AbstractApiVersionsRequestTest(cluster: ClusterInstance) {
+
+  def sendApiVersionsRequest(request: ApiVersionsRequest, listenerName: ListenerName): ApiVersionsResponse = {
+    IntegrationTestUtils.connectAndReceive[ApiVersionsResponse](request, cluster.brokerSocketServers().asScala.head, listenerName)
+  }
 
   def controlPlaneListenerName = new ListenerName("CONTROLLER")
 
   // Configure control plane listener to make sure we have separate listeners for testing.
-  override def brokerPropertyOverrides(properties: Properties): Unit = {
+  def brokerPropertyOverrides(properties: Properties): Unit = {
+    val securityProtocol = cluster.config().securityProtocol()
     properties.setProperty(KafkaConfig.ControlPlaneListenerNameProp, controlPlaneListenerName.value())
     properties.setProperty(KafkaConfig.ListenerSecurityProtocolMapProp, s"${controlPlaneListenerName.value()}:$securityProtocol,$securityProtocol:$securityProtocol")
     properties.setProperty("listeners", s"$securityProtocol://localhost:0,${controlPlaneListenerName.value()}://localhost:0")
@@ -38,22 +47,21 @@ abstract class AbstractApiVersionsRequestTest extends BaseRequestTest {
   }
 
   def sendUnsupportedApiVersionRequest(request: ApiVersionsRequest): ApiVersionsResponse = {
-    val overrideHeader = nextRequestHeader(ApiKeys.API_VERSIONS, Short.MaxValue)
-    val socket = connect(anySocketServer)
+    val overrideHeader = IntegrationTestUtils.nextRequestHeader(ApiKeys.API_VERSIONS, Short.MaxValue)
+    val socket = IntegrationTestUtils.connect(cluster.brokerSocketServers().asScala.head, cluster.clientListener())
     try {
-      sendWithHeader(request, overrideHeader, socket)
-      receive[ApiVersionsResponse](socket, ApiKeys.API_VERSIONS, 0.toShort)
+      IntegrationTestUtils.sendWithHeader(request, overrideHeader, socket)
+      IntegrationTestUtils.receive[ApiVersionsResponse](socket, ApiKeys.API_VERSIONS, 0.toShort)
     } finally socket.close()
   }
 
-  def validateApiVersionsResponse(apiVersionsResponse: ApiVersionsResponse, listenerName: ListenerName = interBrokerListenerName): Unit = {
-    val expectedApis = ApiKeys.brokerApis()
-    if (listenerName == controlPlaneListenerName) {
-      expectedApis.add(ApiKeys.ENVELOPE)
-    }
+  def validateApiVersionsResponse(apiVersionsResponse: ApiVersionsResponse): Unit = {
+    val expectedApis = ApiKeys.zkBrokerApis()
     assertEquals(expectedApis.size(), apiVersionsResponse.data.apiKeys().size(),
       "API keys in ApiVersionsResponse must match API keys supported by broker.")
-    for (expectedApiVersion: ApiVersion <- ApiVersionsResponse.DEFAULT_API_VERSIONS_RESPONSE.data.apiKeys().asScala) {
+
+    val defaultApiVersionsResponse = ApiVersionsResponse.defaultApiVersionsResponse(ListenerType.ZK_BROKER)
+    for (expectedApiVersion: ApiVersion <- defaultApiVersionsResponse.data.apiKeys().asScala) {
       val actualApiVersion = apiVersionsResponse.apiVersion(expectedApiVersion.apiKey)
       assertNotNull(actualApiVersion, s"API key ${actualApiVersion.apiKey} is supported by broker, but not received in ApiVersionsResponse.")
       assertEquals(expectedApiVersion.apiKey, actualApiVersion.apiKey, "API key must be supported by the broker.")
