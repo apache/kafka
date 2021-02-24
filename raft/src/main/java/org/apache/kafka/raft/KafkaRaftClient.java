@@ -2262,7 +2262,6 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
 
     @Override
     public void close() {
-        log.close();
         if (kafkaRaftMetrics != null) {
             kafkaRaftMetrics.close();
         }
