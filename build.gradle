@@ -216,37 +216,37 @@ subprojects {
       options.compilerArgs << "--release" << minJavaVersion
   }
 
-  uploadArchives {
-    repositories {
-      signing {
-          required { shouldSign }
-          sign configurations.archives
-
-          // To test locally, replace mavenUrl in ~/.gradle/gradle.properties to file://localhost/tmp/myRepo/
-          mavenDeployer {
-              beforeDeployment { MavenDeployment deployment -> signing.signPom(deployment) }
-              repository(url: "${mavenUrl}") {
-                  authentication(userName: "${mavenUsername}", password: "${mavenPassword}")
-              }
-              afterEvaluate {
-                  pom.artifactId = "${archivesBaseName}"
-                  pom.project {
-                      name 'Apache Kafka'
-                      packaging 'jar'
-                      url 'https://kafka.apache.org'
-                      licenses {
-                          license {
-                              name 'The Apache Software License, Version 2.0'
-                              url 'https://www.apache.org/licenses/LICENSE-2.0.txt'
-                              distribution 'repo'
-                          }
-                      }
-                  }
-              }
-          }
-      }
-    }
-  }
+//  uploadArchives {
+//    repositories {
+//      signing {
+//          required { shouldSign }
+//          sign configurations.archives
+//
+//          // To test locally, replace mavenUrl in ~/.gradle/gradle.properties to file://localhost/tmp/myRepo/
+//          mavenDeployer {
+//              beforeDeployment { MavenDeployment deployment -> signing.signPom(deployment) }
+//              repository(url: "${mavenUrl}") {
+//                  authentication(userName: "${mavenUsername}", password: "${mavenPassword}")
+//              }
+//              afterEvaluate {
+//                  pom.artifactId = "${archivesBaseName}"
+//                  pom.project {
+//                      name 'Apache Kafka'
+//                      packaging 'jar'
+//                      url 'https://kafka.apache.org'
+//                      licenses {
+//                          license {
+//                              name 'The Apache Software License, Version 2.0'
+//                              url 'https://www.apache.org/licenses/LICENSE-2.0.txt'
+//                              distribution 'repo'
+//                          }
+//                      }
+//                  }
+//              }
+//          }
+//      }
+//    }
+//  }
 
   // Remove the relevant project name once it's converted to JUnit 5
   def shouldUseJUnit5 = !(["runtime", "streams-scala", "streams"].contains(it.project.name))
@@ -1101,13 +1101,6 @@ project(':generator') {
 project(':clients') {
   archivesBaseName = "kafka-clients"
 
-  configurations {
-    jacksonDatabindConfig
-  }
-
-  // add jacksonDatabindConfig as provided scope config with high priority (1000)
-  conf2ScopeMappings.addMapping(1000, configurations.jacksonDatabindConfig, "provided")
-
   dependencies {
     compile libs.zstd
     compile libs.lz4
@@ -1117,7 +1110,6 @@ project(':clients') {
     compileOnly libs.jacksonDatabind // for SASL/OAUTHBEARER bearer token parsing
     compileOnly libs.jacksonJDK8Datatypes
 
-    jacksonDatabindConfig libs.jacksonDatabind // to publish as provided scope dependency.
 
     testCompile libs.bcpkix
     testCompile libs.junitJupiter
