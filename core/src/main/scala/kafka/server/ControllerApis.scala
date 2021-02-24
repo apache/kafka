@@ -63,7 +63,7 @@ class ControllerApis(val requestChannel: RequestChannel,
                      val controllerNodes: Seq[Node]) extends ApiRequestHandler with Logging {
 
   val authHelper = new AuthHelper(authorizer)
-  val requestHelper = new RequestHandlerHelper(requestChannel, quotas, time, s"[ControllerApis id=${config.nodeId}] ")
+  val requestHelper = new RequestHandlerHelper(requestChannel, quotas, time)
 
   var supportedApiKeys = Set(
     ApiKeys.FETCH,
