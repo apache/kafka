@@ -1811,7 +1811,6 @@ public class StreamThreadTest {
                 public void init(final org.apache.kafka.streams.processor.ProcessorContext context) {
                     context.schedule(Duration.ofMillis(100L), PunctuationType.STREAM_TIME, punctuatedStreamTime::add);
                     context.schedule(Duration.ofMillis(100L), PunctuationType.WALL_CLOCK_TIME, punctuatedWallClockTime::add);
-                    context.schedule(Duration.ofMillis(200L), PunctuationType.WALL_CLOCK_TIME, timestamp -> context.forward("key", "value"));
                 }
 
                 @Override
