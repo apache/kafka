@@ -29,6 +29,7 @@ import kafka.utils.CoreUtils.{inReadLock, inWriteLock}
 import kafka.utils.{Logging, Pool, Scheduler}
 import kafka.utils.Implicits._
 import org.apache.kafka.common.internals.Topic
+import org.apache.kafka.common.message.ListTransactionsResponseData
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.metrics.stats.{Avg, Max}
 import org.apache.kafka.common.protocol.Errors
@@ -221,6 +222,46 @@ class TransactionStateManager(brokerId: Int,
   def putTransactionStateIfNotExists(txnMetadata: TransactionMetadata): Either[Errors, CoordinatorEpochAndTxnMetadata] = {
     getAndMaybeAddTransactionState(txnMetadata.transactionalId, Some(txnMetadata)).map(_.getOrElse(
       throw new IllegalStateException(s"Unexpected empty transaction metadata returned while putting $txnMetadata")))
+  }
+
+  def listTransactionStates(
+    filterProducerIds: Set[Long],
+    filterStateNames: Set[String]
+  ): Either[Errors, List[ListTransactionsResponseData.TransactionState]] = {
+    inReadLock(stateLock) {
+      if (loadingPartitions.nonEmpty) {
+        Left(Errors.COORDINATOR_LOAD_IN_PROGRESS)
+      } else {
+        val filterStates = filterStateNames.flatMap(TransactionState.fromName)
+        val states = mutable.ListBuffer.empty[ListTransactionsResponseData.TransactionState]
+
+        def shouldInclude(txnMetadata: TransactionMetadata): Boolean = {
+          if (txnMetadata.state == Dead) {
+            false
+          } else if (filterProducerIds.nonEmpty && !filterProducerIds.contains(txnMetadata.producerId)) {
+            false
+          } else if (filterStateNames.nonEmpty && !filterStates.contains(txnMetadata.state)) {
+            false
+          } else {
+            true
+          }
+        }
+
+        transactionMetadataCache.foreach { case (_, cache) =>
+          cache.metadataPerTransactionalId.values.foreach { txnMetadata =>
+            txnMetadata.inLock {
+              if (shouldInclude(txnMetadata)) {
+                states += new ListTransactionsResponseData.TransactionState()
+                  .setTransactionalId(txnMetadata.transactionalId)
+                  .setProducerId(txnMetadata.producerId)
+                  .setTransactionState(txnMetadata.state.toString)
+              }
+            }
+          }
+        }
+        Right(states.toList)
+      }
+    }
   }
 
   /**

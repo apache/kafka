@@ -23,7 +23,7 @@ import kafka.server.{KafkaConfig, MetadataCache, ReplicaManager}
 import kafka.utils.{Logging, Scheduler}
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.internals.Topic
-import org.apache.kafka.common.message.DescribeTransactionsResponseData
+import org.apache.kafka.common.message.{DescribeTransactionsResponseData, ListTransactionsResponseData}
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.record.RecordBatch
@@ -253,6 +253,17 @@ class TransactionCoordinator(brokerId: Int,
           throw new IllegalStateException(errorMsg)
 
       }
+    }
+  }
+
+  def handleListTransactions(
+    filteredProducerIds: Set[Long],
+    filteredStates: Set[String]
+  ): Either[Errors, List[ListTransactionsResponseData.TransactionState]] = {
+    if (!isActive.get()) {
+      Left(Errors.COORDINATOR_NOT_AVAILABLE)
+    } else {
+      txnManager.listTransactionStates(filteredProducerIds, filteredStates)
     }
   }
 
