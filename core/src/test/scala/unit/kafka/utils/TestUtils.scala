@@ -1466,7 +1466,7 @@ object TestUtils extends Logging {
       records.size >= numRecords
     }
 
-    car isFail = false
+    var isFail = false
     try {
       pollRecordsUntilTrue(consumer, pollAction,
         waitTimeMs = waitTimeMs,
