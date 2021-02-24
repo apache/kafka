@@ -188,10 +188,10 @@ class TransactionCoordinator(brokerId: Int,
   }
 
   private def prepareInitProducerIdTransit(transactionalId: String,
-                                          transactionTimeoutMs: Int,
-                                          coordinatorEpoch: Int,
-                                          txnMetadata: TransactionMetadata,
-                                          expectedProducerIdAndEpoch: Option[ProducerIdAndEpoch]): ApiResult[(Int, TxnTransitMetadata)] = {
+                                           transactionTimeoutMs: Int,
+                                           coordinatorEpoch: Int,
+                                           txnMetadata: TransactionMetadata,
+                                           expectedProducerIdAndEpoch: Option[ProducerIdAndEpoch]): ApiResult[(Int, TxnTransitMetadata)] = {
 
     def isValidProducerId(producerIdAndEpoch: ProducerIdAndEpoch): Boolean = {
       // If a producer ID and epoch are provided by the request, fence the producer unless one of the following is true:
@@ -259,12 +259,16 @@ class TransactionCoordinator(brokerId: Int,
   def handleDescribeTransactions(
     transactionalId: String
   ): DescribeTransactionsResponseData.TransactionState = {
+    if (transactionalId == null) {
+      throw new IllegalArgumentException("Invalid null transactionalId")
+    }
+
     val transactionState = new DescribeTransactionsResponseData.TransactionState()
       .setTransactionalId(transactionalId)
 
     if (!isActive.get()) {
       transactionState.setErrorCode(Errors.COORDINATOR_NOT_AVAILABLE.code)
-    } else if (transactionalId == null || transactionalId.isEmpty) {
+    } else if (transactionalId.isEmpty) {
       transactionState.setErrorCode(Errors.INVALID_REQUEST.code)
     } else {
       txnManager.getTransactionState(transactionalId) match {
