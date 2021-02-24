@@ -35,7 +35,7 @@
         { "name": "ErrorMessage", "type": "string", "versions": "0+", "nullableVersions": "0+", "default": "null",
           "about": "The partition error message, which may be null if no additional details are available" },
         { "name": "ActiveProducers", "type": "[]ProducerState", "versions": "0+", "fields": [
-          { "name": "ProducerId", "type": "int64", "versions": "0+" },
+          { "name": "ProducerId", "type": "int64", "versions": "0+", "entityType": "producerId" },
           { "name": "ProducerEpoch", "type": "int32", "versions": "0+" },
           { "name": "LastSequence", "type": "int32", "versions": "0+", "default":  "-1" },
           { "name": "LastTimestamp", "type": "int64", "versions": "0+", "default": "-1" },

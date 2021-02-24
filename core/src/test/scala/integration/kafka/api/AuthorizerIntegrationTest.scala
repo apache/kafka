@@ -36,7 +36,6 @@ import org.apache.kafka.common.config.internals.BrokerSecurityConfigs
 import org.apache.kafka.common.config.{ConfigResource, LogLevelConfig}
 import org.apache.kafka.common.errors._
 import org.apache.kafka.common.internals.Topic.GROUP_METADATA_TOPIC_NAME
-import org.apache.kafka.common.message.{AddOffsetsToTxnRequestData, AlterPartitionReassignmentsRequestData, AlterReplicaLogDirsRequestData, ControlledShutdownRequestData, CreateAclsRequestData, CreatePartitionsRequestData, CreateTopicsRequestData, DeleteAclsRequestData, DeleteGroupsRequestData, DeleteRecordsRequestData, DeleteTopicsRequestData, DescribeClusterRequestData, DescribeConfigsRequestData, DescribeGroupsRequestData, DescribeLogDirsRequestData, DescribeProducersRequestData, FindCoordinatorRequestData, HeartbeatRequestData, IncrementalAlterConfigsRequestData, JoinGroupRequestData, ListPartitionReassignmentsRequestData, MetadataRequestData, OffsetCommitRequestData, ProduceRequestData, SyncGroupRequestData}
 import org.apache.kafka.common.message.CreatePartitionsRequestData.CreatePartitionsTopic
 import org.apache.kafka.common.message.CreateTopicsRequestData.{CreatableTopic, CreatableTopicCollection}
 import org.apache.kafka.common.message.IncrementalAlterConfigsRequestData.{AlterConfigsResource, AlterableConfig, AlterableConfigCollection}
@@ -44,11 +43,10 @@ import org.apache.kafka.common.message.JoinGroupRequestData.JoinGroupRequestProt
 import org.apache.kafka.common.message.LeaderAndIsrRequestData.LeaderAndIsrPartitionState
 import org.apache.kafka.common.message.LeaveGroupRequestData.MemberIdentity
 import org.apache.kafka.common.message.ListOffsetsRequestData.{ListOffsetsPartition, ListOffsetsTopic}
-import org.apache.kafka.common.message.OffsetForLeaderEpochRequestData.OffsetForLeaderPartition
-import org.apache.kafka.common.message.OffsetForLeaderEpochRequestData.OffsetForLeaderTopic
-import org.apache.kafka.common.message.OffsetForLeaderEpochRequestData.OffsetForLeaderTopicCollection
+import org.apache.kafka.common.message.OffsetForLeaderEpochRequestData.{OffsetForLeaderPartition, OffsetForLeaderTopic, OffsetForLeaderTopicCollection}
 import org.apache.kafka.common.message.StopReplicaRequestData.{StopReplicaPartitionState, StopReplicaTopicState}
 import org.apache.kafka.common.message.UpdateMetadataRequestData.{UpdateMetadataBroker, UpdateMetadataEndpoint, UpdateMetadataPartitionState}
+import org.apache.kafka.common.message.{AddOffsetsToTxnRequestData, AlterPartitionReassignmentsRequestData, AlterReplicaLogDirsRequestData, ControlledShutdownRequestData, CreateAclsRequestData, CreatePartitionsRequestData, CreateTopicsRequestData, DeleteAclsRequestData, DeleteGroupsRequestData, DeleteRecordsRequestData, DeleteTopicsRequestData, DescribeClusterRequestData, DescribeConfigsRequestData, DescribeGroupsRequestData, DescribeLogDirsRequestData, DescribeProducersRequestData, DescribeTransactionsRequestData, FindCoordinatorRequestData, HeartbeatRequestData, IncrementalAlterConfigsRequestData, JoinGroupRequestData, ListPartitionReassignmentsRequestData, MetadataRequestData, OffsetCommitRequestData, ProduceRequestData, SyncGroupRequestData}
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.record.{CompressionType, MemoryRecords, RecordBatch, Records, SimpleRecord}
@@ -64,9 +62,9 @@ import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
 
 import scala.annotation.nowarn
-import scala.jdk.CollectionConverters._
 import scala.collection.mutable
 import scala.collection.mutable.Buffer
+import scala.jdk.CollectionConverters._
 
 object AuthorizerIntegrationTest {
   val BrokerPrincipal = new KafkaPrincipal(KafkaPrincipal.USER_TYPE, "broker")
@@ -237,6 +235,13 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
           .partitions.asScala.find(_.partitionIndex == part).get
           .errorCode
       )
+    }),
+    ApiKeys.DESCRIBE_TRANSACTIONS -> ((resp: DescribeTransactionsResponse) => {
+      Errors.forCode(
+        resp.data
+          .transactionStates.asScala.find(_.transactionalId == transactionalId).get
+          .errorCode
+      )
     })
   )
 
@@ -285,7 +290,8 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
     ApiKeys.ALTER_PARTITION_REASSIGNMENTS -> clusterAlterAcl,
     ApiKeys.LIST_PARTITION_REASSIGNMENTS -> clusterDescribeAcl,
     ApiKeys.OFFSET_DELETE -> groupReadAcl,
-    ApiKeys.DESCRIBE_PRODUCERS -> topicReadAcl
+    ApiKeys.DESCRIBE_PRODUCERS -> topicReadAcl,
+    ApiKeys.DESCRIBE_TRANSACTIONS -> transactionalIdDescribeAcl
   )
 
   @BeforeEach
@@ -636,6 +642,10 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
       ).asJava)
   ).build()
 
+  private def describeTransactionsRequest: DescribeTransactionsRequest = new DescribeTransactionsRequest.Builder(
+    new DescribeTransactionsRequestData().setTransactionalIds(List(transactionalId).asJava)
+  ).build()
+
   private def alterPartitionReassignmentsRequest = new AlterPartitionReassignmentsRequest.Builder(
     new AlterPartitionReassignmentsRequestData().setTopics(
       List(new AlterPartitionReassignmentsRequestData.ReassignableTopic()
@@ -712,6 +722,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
       ApiKeys.ALTER_PARTITION_REASSIGNMENTS -> alterPartitionReassignmentsRequest,
       ApiKeys.LIST_PARTITION_REASSIGNMENTS -> listPartitionReassignmentsRequest,
       ApiKeys.DESCRIBE_PRODUCERS -> describeProducersRequest,
+      ApiKeys.DESCRIBE_TRANSACTIONS -> describeTransactionsRequest,
 
       // Inter-broker APIs use an invalid broker epoch, so does not affect the test case
       ApiKeys.UPDATE_METADATA -> createUpdateMetadataRequest,
@@ -1791,6 +1802,28 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
   }
 
   @Test
+  def shouldNotIncludeUnauthorizedTopicsInDescribeTransactionsResponse(): Unit = {
+    createTopic(topic)
+    addAndVerifyAcls(Set(new AccessControlEntry(clientPrincipalString, WildcardHost, WRITE, ALLOW)), transactionalIdResource)
+    addAndVerifyAcls(Set(new AccessControlEntry(clientPrincipalString, WildcardHost, WRITE, ALLOW)), topicResource)
+
+    // Start a transaction and write to a topic.
+    val producer = buildTransactionalProducer()
+    producer.initTransactions()
+    producer.beginTransaction()
+    producer.send(new ProducerRecord(tp.topic, tp.partition, "1".getBytes, "1".getBytes)).get
+
+    // Remove only topic authorization so that we can verify that the
+    // topic does not get included in the response.
+    removeAndVerifyAcls(Set(new AccessControlEntry(clientPrincipalString, WildcardHost, WRITE, ALLOW)), topicResource)
+    val response = connectAndReceive[DescribeTransactionsResponse](describeTransactionsRequest)
+    assertEquals(1, response.data.transactionStates.size)
+    val transactionStateData = response.data.transactionStates.asScala.find(_.transactionalId == transactionalId).get
+    assertEquals("Ongoing", transactionStateData.transactionState)
+    assertEquals(List.empty, transactionStateData.topics.asScala.toList)
+  }
+
+  @Test
   def shouldSuccessfullyAbortTransactionAfterTopicAuthorizationException(): Unit = {
     createTopic(topic)
     addAndVerifyAcls(Set(new AccessControlEntry(clientPrincipalString, WildcardHost, WRITE, ALLOW)), transactionalIdResource)
@@ -2112,6 +2145,10 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
 
   private def addAndVerifyAcls(acls: Set[AccessControlEntry], resource: ResourcePattern): Unit = {
     TestUtils.addAndVerifyAcls(servers.head, acls, resource)
+  }
+
+  private def removeAndVerifyAcls(acls: Set[AccessControlEntry], resource: ResourcePattern): Unit = {
+    TestUtils.removeAndVerifyAcls(servers.head, acls, resource)
   }
 
   private def consumeRecords(consumer: Consumer[Array[Byte], Array[Byte]],
