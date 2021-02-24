@@ -134,6 +134,11 @@
         (cf. <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-680%3A+TopologyTestDriver+should+not+require+a+Properties+argument">KIP-680</a>).
     </p>
     <p>
+        We added the <code>prefixScan()</code> method to interface <code>ReadOnlyKeyValueStore</code>.
+        The new <code>prefixScan()</code> allows fetching all values whose keys start with a given prefix.
+        See <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-614%3A+Add+Prefix+Scan+support+for+State+Stores">KIP-614</a> for more details.
+    </p>
+    <p>
         Kafka Streams is now handling <code>TimeoutException</code> thrown by the consumer, producer, and admin client.
         If a timeout occurs on a task, Kafka Streams moves to the next task and retries to make progress on the failed
         task in the next iteration.
