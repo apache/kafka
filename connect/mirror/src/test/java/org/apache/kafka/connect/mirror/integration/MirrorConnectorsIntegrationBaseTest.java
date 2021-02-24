@@ -383,6 +383,7 @@ public abstract class MirrorConnectorsIntegrationBaseTest {
                 put("auto.offset.reset", "earliest");
             }
         };
+
         // create consumers before starting the connectors so we don't need to wait for discovery
         try (Consumer<byte[], byte[]> primaryConsumer = primary.kafka().createConsumerAndSubscribeTo(consumerProps,
             "test-topic-1")) {

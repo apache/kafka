@@ -262,6 +262,7 @@ public class Sender implements Runnable {
         while (!forceClose && transactionManager != null && transactionManager.hasOngoingTransaction()) {
             if (!transactionManager.isCompleting()) {
                 log.info("Aborting incomplete transaction due to shutdown");
+                System.err.println("Aborting incomplete transaction due to shutdown");
                 transactionManager.beginAbort();
             }
             try {

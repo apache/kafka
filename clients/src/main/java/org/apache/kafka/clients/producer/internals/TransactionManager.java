@@ -494,6 +494,7 @@ public class TransactionManager {
         }
 
         log.info("Transiting to abortable error state due to {}", exception.toString());
+        System.err.println("Transiting to abortable error state due to:" + exception.toString());
         transitionTo(State.ABORTABLE_ERROR, exception);
     }
 
@@ -1086,10 +1087,20 @@ public class TransactionManager {
             lastError = null;
         }
 
-        if (lastError != null)
-            log.debug("Transition from state {} to error state {}", currentState, target, lastError);
-        else
-            log.debug("Transition from state {} to {}", currentState, target);
+        if (lastError != null) {
+            log.error("Transition from state {} to error state {}", currentState, target, lastError);
+            System.err.println("Transition from state:" + currentState + " to:" + target + "," + lastError);
+        } else {
+            log.error("Transition from state {} to {}", currentState, target);
+            System.err.println("Transition from state:" + currentState + " to:" + target);
+        }
+        if (target == State.ABORTABLE_ERROR || target == State.ABORTING_TRANSACTION) {
+            final StackTraceElement[] elements = Thread.currentThread().getStackTrace();
+            for (int i = 1; i < elements.length; i++) {
+                final StackTraceElement s = elements[i];
+                System.err.print(" - at " + "(" + s.getFileName() + ":" + s.getLineNumber() + ")");
+            }
+        }
 
         currentState = target;
     }
