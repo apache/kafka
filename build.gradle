@@ -178,7 +178,7 @@ subprojects {
   // eg: ./gradlew allDepInsight --configuration runtime --dependency com.fasterxml.jackson.core:jackson-databind
   task allDepInsight(type: DependencyInsightReportTask) doLast {}
 
-  apply plugin: 'java'
+  apply plugin: 'java-library'
   apply plugin: 'maven-publish'
   apply plugin: 'signing'
   apply plugin: 'checkstyle'
@@ -745,9 +745,12 @@ project(':core') {
   archivesBaseName = "kafka_${versions.baseScala}"
 
   dependencies {
-    implementation project(':clients')
+    api project(':clients')
     implementation project(':metadata')
     implementation project(':raft')
+
+    api libs.scalaLibrary
+
     implementation libs.argparse4j
     implementation libs.jacksonDatabind
     implementation libs.jacksonModuleScala
@@ -757,7 +760,6 @@ project(':core') {
     implementation libs.metrics
     implementation libs.scalaCollectionCompat
     implementation libs.scalaJava8Compat
-    implementation libs.scalaLibrary
     // only needed transitively, but set it explicitly to ensure it has the same version as scala-library
     implementation libs.scalaReflect
     implementation libs.scalaLogging
@@ -1071,6 +1073,7 @@ project(':examples') {
   archivesBaseName = "kafka-examples"
 
   dependencies {
+    implementation project(':clients')
     implementation project(':core')
   }
 
@@ -1301,6 +1304,7 @@ project(':tools') {
     implementation libs.jacksonDatabind
     implementation libs.jacksonJDK8Datatypes
     implementation libs.slf4jApi
+    implementation libs.log4j
 
     implementation libs.jacksonJaxrsJsonProvider
     implementation libs.jerseyContainerServlet
@@ -1388,7 +1392,7 @@ project(':streams') {
   ext.buildStreamsVersionFileName = "kafka-streams-version.properties"
 
   dependencies {
-    implementation project(':clients')
+    api project(':clients')
 
     // this dependency should be removed after we unify data API
     implementation(project(':connect:json')) {
@@ -1398,6 +1402,8 @@ project(':streams') {
 
     implementation libs.slf4jApi
     implementation libs.rocksDBJni
+    implementation libs.jacksonAnnotations
+    implementation libs.jacksonDatabind
 
     // testCompileOnly prevents streams from exporting a dependency on test-utils, which would cause a dependency cycle
     testCompileOnly project(':streams:test-utils')
@@ -1526,7 +1532,7 @@ project(':streams:streams-scala') {
   apply plugin: 'scala'
   archivesBaseName = "kafka-streams-scala_${versions.baseScala}"
   dependencies {
-    implementation project(':streams')
+    api project(':streams')
 
     implementation libs.scalaLibrary
     implementation libs.scalaCollectionCompat
@@ -1575,6 +1581,8 @@ project(':streams:test-utils') {
   dependencies {
     implementation project(':streams')
     implementation project(':clients')
+
+    implementation libs.slf4jApi
 
     testImplementation project(':clients').sourceSets.test.output
     testImplementation libs.junitJupiter
@@ -1837,11 +1845,16 @@ project(':jmh-benchmarks') {
     implementation project(':core')
     implementation project(':clients').sourceSets.test.output
     implementation project(':core').sourceSets.test.output
+
     implementation libs.jmhCore
     annotationProcessor libs.jmhGeneratorAnnProcess
     implementation libs.jmhCoreBenchmarks
+    implementation libs.jacksonDatabind
+    implementation libs.metrics
     implementation libs.mockitoCore
     implementation libs.slf4jlog4j
+    implementation libs.scalaLibrary
+    implementation libs.scalaJava8Compat
   }
 
   tasks.withType(JavaCompile) {
@@ -1899,7 +1912,7 @@ project(':connect:api') {
   archivesBaseName = "connect-api"
 
   dependencies {
-    implementation project(':clients')
+    api project(':clients')
     implementation libs.slf4jApi
     implementation libs.jaxrsApi
 
@@ -1976,8 +1989,10 @@ project(':connect:json') {
 
   dependencies {
     implementation project(':connect:api')
-    implementation libs.jacksonDatabind
-    implementation libs.jacksonJDK8Datatypes
+
+    api libs.jacksonDatabind
+    api libs.jacksonJDK8Datatypes
+
     implementation libs.slf4jApi
 
     testImplementation libs.easymock
@@ -2013,7 +2028,6 @@ project(':connect:runtime') {
   archivesBaseName = "connect-runtime"
 
   dependencies {
-
     implementation project(':connect:api')
     implementation project(':clients')
     implementation project(':tools')
@@ -2021,6 +2035,8 @@ project(':connect:runtime') {
     implementation project(':connect:transforms')
 
     implementation libs.slf4jApi
+    implementation libs.log4j
+    implementation libs.jacksonAnnotations
     implementation libs.jacksonJaxrsJsonProvider
     implementation libs.jerseyContainerServlet
     implementation libs.jerseyHk2
@@ -2032,8 +2048,12 @@ project(':connect:runtime') {
     implementation libs.jettyClient
     implementation libs.reflections
     implementation libs.mavenArtifact
-
+    
     testImplementation project(':clients').sourceSets.test.output
+    testImplementation project(':core')
+    testImplementation project(':metadata')
+    testImplementation project(':core').sourceSets.test.output
+
     testImplementation libs.easymock
     testImplementation libs.junitJupiterApi
     testImplementation libs.junitVintageEngine
@@ -2041,10 +2061,6 @@ project(':connect:runtime') {
     testImplementation libs.powermockEasymock
     testImplementation libs.mockitoCore
     testImplementation libs.httpclient
-
-    testImplementation project(':clients').sourceSets.test.output
-    testImplementation project(':core')
-    testImplementation project(':core').sourceSets.test.output
 
     testRuntimeOnly libs.slf4jlog4j
   }
@@ -2156,6 +2172,7 @@ project(':connect:basic-auth-extension') {
   dependencies {
     implementation project(':connect:api')
     implementation libs.slf4jApi
+    implementation libs.jaxrsApi
 
     testImplementation libs.bcpkix
     testImplementation libs.easymock
@@ -2196,7 +2213,9 @@ project(':connect:mirror') {
     implementation project(':connect:runtime')
     implementation project(':connect:mirror-client')
     implementation project(':clients')
+
     implementation libs.argparse4j
+    implementation libs.jacksonAnnotations
     implementation libs.slf4jApi
 
     testImplementation libs.junitJupiter
