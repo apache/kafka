@@ -79,11 +79,15 @@ There are several primitive field types available.
 
 * "int32": a 32-bit integer.
 
+* "uint32": a 32-bit unsigned integer.
+
 * "int64": a 64-bit integer.
 
 * "float64": is a double-precision floating point number (IEEE 754).
 
 * "string": a UTF-8 string.
+
+* "uuid": a type 4 immutable universally unique identifier.
 
 * "bytes": binary data.
 
@@ -100,9 +104,9 @@ Guide](https://kafka.apache.org/protocol.html).
 Nullable Fields
 ---------------
 Booleans, ints, and floats can never be null.  However, fields that are strings,
-bytes, records, or arrays may optionally be "nullable".  When a field is "nullable",
-that simply means that we are prepared to serialize and deserialize null entries for
-that field.
+bytes, uuid, records, or arrays may optionally be "nullable".  When a field is 
+"nullable", that simply means that we are prepared to serialize and deserialize
+null entries for that field.
 
 If you want to declare a field as nullable, you set "nullableVersions" for that
 field.  Nullability is implemented as a version range in order to accommodate a
@@ -179,6 +183,8 @@ been set:
 * Strings default to the empty string.
 
 * Bytes fields default to the empty byte array.
+
+* Uuid fields default to zero uuid
 
 * Records fields default to null.
 
