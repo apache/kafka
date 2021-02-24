@@ -1465,19 +1465,26 @@ object TestUtils extends Logging {
       records ++= polledRecords.asScala
       records.size >= numRecords
     }
+
+    car isFail = false
     try {
       pollRecordsUntilTrue(consumer, pollAction,
         waitTimeMs = waitTimeMs,
         msg = s"Consumed ${records.size} records before timeout instead of the expected $numRecords records")
     } catch {
-      case e: AssertionFailedError => System.err.println(s"!!! Consumed ${records.size} records before timeout instead of the expected $numRecords records")
+      case e: AssertionFailedError => {
+        isFail = true
+        System.err.println(s"!!! Consumed ${records.size} records before timeout instead of the expected $numRecords records")
+      }
     }
 
     pollRecordsUntilTrue(consumer, pollAction,
-      waitTimeMs = waitTimeMs,
+      waitTimeMs = 30000,
       msg = s"Consumed ${records.size} records before timeout instead of the expected $numRecords records")
 
-    fail("failed at 1st try")
+    if (isFail) {
+      fail("failed at 1st try")
+    }
 
     records
   }
