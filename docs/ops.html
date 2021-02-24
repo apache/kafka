@@ -787,18 +787,18 @@ us-west->us-east.emit.heartbeats = false
 
   <ul>
     <li><code>refresh.topics.enabled</code>: whether to check for new topics in the source cluster periodically (default: true)
-    <li><code>refresh.topics.interval.seconds</code>: frequency of checking for new topics in the source cluster; lower values than the default may lead to performance degradation (default: 6000, every ten minutes)
+    <li><code>refresh.topics.interval.seconds</code>: frequency of checking for new topics in the source cluster; lower values than the default may lead to performance degradation (default: 600, every ten minutes)
     <li><code>refresh.groups.enabled</code>: whether to check for new consumer groups in the source cluster periodically (default: true)
-    <li><code>refresh.groups.interval.seconds</code>: frequency of checking for new consumer groups in the source cluster; lower values than the default may lead to performance degradation (default: 6000, every ten minutes)
+    <li><code>refresh.groups.interval.seconds</code>: frequency of checking for new consumer groups in the source cluster; lower values than the default may lead to performance degradation (default: 600, every ten minutes)
     <li><code>sync.topic.configs.enabled</code>: whether to replicate topic configurations from the source cluster (default: true)
     <li><code>sync.topic.acls.enabled</code>: whether to sync ACLs from the source cluster (default: true)
     <li><code>emit.heartbeats.enabled</code>: whether to emit heartbeats periodically (default: true)
-    <li><code>emit.heartbeats.interval.seconds</code>: frequency at which heartbeats are emitted (default: 5, every five seconds)
+    <li><code>emit.heartbeats.interval.seconds</code>: frequency at which heartbeats are emitted (default: 1, every one seconds)
     <li><code>heartbeats.topic.replication.factor</code>: replication factor of MirrorMaker's internal heartbeat topics (default: 3)
     <li><code>emit.checkpoints.enabled</code>: whether to emit MirrorMaker's consumer offsets periodically (default: true)
     <li><code>emit.checkpoints.interval.seconds</code>: frequency at which checkpoints are emitted (default: 60, every minute)
     <li><code>checkpoints.topic.replication.factor</code>: replication factor of MirrorMaker's internal checkpoints topics (default: 3)
-    <li><code>sync.group.offsets.enabled</code>: whether to periodically write the translated offsets of replicated consumer groups (in the source cluster) to <code>__consumer_offsets</code> topic in target cluster, as long as no active consumers in that group are connected to the target cluster (default: true)
+    <li><code>sync.group.offsets.enabled</code>: whether to periodically write the translated offsets of replicated consumer groups (in the source cluster) to <code>__consumer_offsets</code> topic in target cluster, as long as no active consumers in that group are connected to the target cluster (default: false)
     <li><code>sync.group.offsets.interval.seconds</code>: frequency at which consumer group offsets are synced (default: 60, every minute)
     <li><code>offset-syncs.topic.replication.factor</code>: replication factor of MirrorMaker's internal offset-sync topics (default: 3)
   </ul>
