@@ -17,6 +17,7 @@
 
 package kafka.utils
 
+import kafka.utils.TestUtils.withLogReset
 import org.apache.log4j.{AppenderSkeleton, Level, Logger}
 import org.apache.log4j.spi.LoggingEvent
 
@@ -47,20 +48,32 @@ class LogCaptureAppender extends AppenderSkeleton {
 }
 
 object LogCaptureAppender {
-  def createAndRegister(): LogCaptureAppender = {
+  private def createAndRegister(): LogCaptureAppender = {
     val logCaptureAppender: LogCaptureAppender = new LogCaptureAppender
     Logger.getRootLogger.addAppender(logCaptureAppender)
     logCaptureAppender
   }
 
-  def setClassLoggerLevel(clazz: Class[_], logLevel: Level): Level = {
+  private def setClassLoggerLevel(clazz: Class[_], logLevel: Level): Level = {
     val logger = Logger.getLogger(clazz)
     val previousLevel = logger.getLevel
     Logger.getLogger(clazz).setLevel(logLevel)
     previousLevel
   }
 
-  def unregister(logCaptureAppender: LogCaptureAppender): Unit = {
+  private def unregister(logCaptureAppender: LogCaptureAppender): Unit = {
     Logger.getRootLogger.removeAppender(logCaptureAppender)
+  }
+
+  def captureLogging[T](logClass: Class[_], level: Level)(fn: => T): LogCaptureAppender = withLogReset {
+    val appender = createAndRegister()
+    val previousLevel = LogCaptureAppender.setClassLoggerLevel(logClass, level)
+    try {
+      fn
+    } finally {
+      LogCaptureAppender.setClassLoggerLevel(logClass, previousLevel)
+      LogCaptureAppender.unregister(appender)
+    }
+    appender
   }
 }

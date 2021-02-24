@@ -199,13 +199,8 @@ class AclCommandTest extends ZooKeeperTestHarness with Logging {
 
     createServer(Some(adminClientConfig))
 
-    val appender = LogCaptureAppender.createAndRegister()
-    val previousLevel = LogCaptureAppender.setClassLoggerLevel(classOf[AppInfoParser], Level.WARN)
-    try {
-        testAclCli(adminArgs)
-    } finally {
-      LogCaptureAppender.setClassLoggerLevel(classOf[AppInfoParser], previousLevel)
-      LogCaptureAppender.unregister(appender)
+    val appender = LogCaptureAppender.captureLogging(classOf[AppInfoParser], Level.WARN) {
+      testAclCli(adminArgs)
     }
     val warning = appender.getMessages.find(e => e.getLevel == Level.WARN &&
       e.getThrowableInformation != null &&

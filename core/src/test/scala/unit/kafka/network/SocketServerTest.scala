@@ -97,6 +97,7 @@ class SocketServerTest {
     sockets.foreach(_.close())
     sockets.clear()
     kafkaLogger.setLevel(logLevelToRestore)
+    TestUtils.resetLogging
   }
 
   def sendRequest(socket: Socket, request: Array[Byte], id: Option[Short] = None, flush: Boolean = true): Unit = {
