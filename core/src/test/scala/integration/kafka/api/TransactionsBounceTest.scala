@@ -82,6 +82,60 @@ class TransactionsBounceTest extends IntegrationTestHarness {
       producer.sendOffsetsToTransaction(TestUtils.consumerPositions(consumer).asJava, consumer.groupMetadata()))
   }
 
+  @Test
+  def testWithGroupMetadata2(): Unit = {
+    testBrokerFailure((producer, _, consumer) =>
+      producer.sendOffsetsToTransaction(TestUtils.consumerPositions(consumer).asJava, consumer.groupMetadata()))
+  }
+
+  @Test
+  def testWithGroupMetadata3(): Unit = {
+    testBrokerFailure((producer, _, consumer) =>
+      producer.sendOffsetsToTransaction(TestUtils.consumerPositions(consumer).asJava, consumer.groupMetadata()))
+  }
+
+  @Test
+  def testWithGroupMetadata4(): Unit = {
+    testBrokerFailure((producer, _, consumer) =>
+      producer.sendOffsetsToTransaction(TestUtils.consumerPositions(consumer).asJava, consumer.groupMetadata()))
+  }
+
+  @Test
+  def testWithGroupMetadata5(): Unit = {
+    testBrokerFailure((producer, _, consumer) =>
+      producer.sendOffsetsToTransaction(TestUtils.consumerPositions(consumer).asJava, consumer.groupMetadata()))
+  }
+
+  @Test
+  def testWithGroupMetadata6(): Unit = {
+    testBrokerFailure((producer, _, consumer) =>
+      producer.sendOffsetsToTransaction(TestUtils.consumerPositions(consumer).asJava, consumer.groupMetadata()))
+  }
+
+  @Test
+  def testWithGroupMetadata7(): Unit = {
+    testBrokerFailure((producer, _, consumer) =>
+      producer.sendOffsetsToTransaction(TestUtils.consumerPositions(consumer).asJava, consumer.groupMetadata()))
+  }
+
+  @Test
+  def testWithGroupMetadata8(): Unit = {
+    testBrokerFailure((producer, _, consumer) =>
+      producer.sendOffsetsToTransaction(TestUtils.consumerPositions(consumer).asJava, consumer.groupMetadata()))
+  }
+
+  @Test
+  def testWithGroupMetadata9(): Unit = {
+    testBrokerFailure((producer, _, consumer) =>
+      producer.sendOffsetsToTransaction(TestUtils.consumerPositions(consumer).asJava, consumer.groupMetadata()))
+  }
+
+  @Test
+  def testWithGroupMetadata10(): Unit = {
+    testBrokerFailure((producer, _, consumer) =>
+      producer.sendOffsetsToTransaction(TestUtils.consumerPositions(consumer).asJava, consumer.groupMetadata()))
+  }
+
   private def testBrokerFailure(commit: (KafkaProducer[Array[Byte], Array[Byte]],
     String, KafkaConsumer[Array[Byte], Array[Byte]]) => Unit): Unit = {
     // basic idea is to seed a topic with 10000 records, and copy it transactionally while bouncing brokers
@@ -106,8 +160,10 @@ class TransactionsBounceTest extends IntegrationTestHarness {
       while (numMessagesProcessed < numInputRecords) {
         val toRead = Math.min(200, numInputRecords - numMessagesProcessed)
         trace(s"$iteration: About to read $toRead messages, processed $numMessagesProcessed so far..")
+        System.err.println(s"$iteration: About to read $toRead messages, processed $numMessagesProcessed so far..")
         val records = TestUtils.pollUntilAtLeastNumRecords(consumer, toRead)
         trace(s"Received ${records.size} messages, sending them transactionally to $outputTopic")
+        System.err.println(s"Received ${records.size} messages, sending them transactionally to $outputTopic")
 
         producer.beginTransaction()
         val shouldAbort = iteration % 3 == 0
@@ -115,14 +171,17 @@ class TransactionsBounceTest extends IntegrationTestHarness {
           producer.send(TestUtils.producerRecordWithExpectedTransactionStatus(outputTopic, null, record.key, record.value, !shouldAbort), new ErrorLoggingCallback(outputTopic, record.key, record.value, true))
         }
         trace(s"Sent ${records.size} messages. Committing offsets.")
+        System.err.println(s"Sent ${records.size} messages. Committing offsets.")
         commit(producer, consumerGroup, consumer)
 
         if (shouldAbort) {
           trace(s"Committed offsets. Aborting transaction of ${records.size} messages.")
+          System.err.println(s"Committed offsets. Aborting transaction of ${records.size} messages.")
           producer.abortTransaction()
           TestUtils.resetToCommittedPositions(consumer)
         } else {
           trace(s"Committed offsets. committing transaction of ${records.size} messages.")
+          System.err.println(s"Committed offsets. committing transaction of ${records.size} messages.")
           producer.commitTransaction()
           numMessagesProcessed += records.size
         }

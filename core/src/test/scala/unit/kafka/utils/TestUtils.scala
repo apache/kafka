@@ -26,6 +26,7 @@ import java.time.Duration
 import java.util.concurrent.atomic.{AtomicBoolean, AtomicInteger}
 import java.util.{Arrays, Collections, Properties}
 import java.util.concurrent.{Callable, ExecutionException, Executors, TimeUnit}
+
 import javax.net.ssl.X509TrustManager
 import kafka.api._
 import kafka.cluster.{Broker, EndPoint, IsrChangeListener}
@@ -66,6 +67,7 @@ import org.apache.zookeeper.KeeperException.SessionExpiredException
 import org.apache.zookeeper.ZooDefs._
 import org.apache.zookeeper.data.ACL
 import org.junit.jupiter.api.Assertions._
+import org.opentest4j.AssertionFailedError
 
 import scala.jdk.CollectionConverters._
 import scala.collection.mutable.{ArrayBuffer, ListBuffer}
@@ -1457,15 +1459,26 @@ object TestUtils extends Logging {
 
   def pollUntilAtLeastNumRecords[K, V](consumer: Consumer[K, V],
                                        numRecords: Int,
-                                       waitTimeMs: Long = JTestUtils.DEFAULT_MAX_WAIT_MS): Seq[ConsumerRecord[K, V]] = {
+                                       waitTimeMs: Long = 200): Seq[ConsumerRecord[K, V]] = {
     val records = new ArrayBuffer[ConsumerRecord[K, V]]()
     def pollAction(polledRecords: ConsumerRecords[K, V]): Boolean = {
       records ++= polledRecords.asScala
       records.size >= numRecords
     }
+    try {
+      pollRecordsUntilTrue(consumer, pollAction,
+        waitTimeMs = waitTimeMs,
+        msg = s"Consumed ${records.size} records before timeout instead of the expected $numRecords records")
+    } catch {
+      case e: AssertionFailedError => System.err.println(s"!!! Consumed ${records.size} records before timeout instead of the expected $numRecords records")
+    }
+
     pollRecordsUntilTrue(consumer, pollAction,
       waitTimeMs = waitTimeMs,
       msg = s"Consumed ${records.size} records before timeout instead of the expected $numRecords records")
+
+    fail("failed at 1st try")
+
     records
   }
 

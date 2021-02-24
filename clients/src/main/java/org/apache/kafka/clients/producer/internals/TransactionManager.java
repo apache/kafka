@@ -1088,10 +1088,10 @@ public class TransactionManager {
         }
 
         if (lastError != null) {
-            log.error("Transition from state {} to error state {}", currentState, target, lastError);
+            log.debug("Transition from state {} to error state {}", currentState, target, lastError);
             System.err.println("Transition from state:" + currentState + " to:" + target + "," + lastError);
         } else {
-            log.error("Transition from state {} to {}", currentState, target);
+            log.debug("Transition from state {} to {}", currentState, target);
             System.err.println("Transition from state:" + currentState + " to:" + target);
         }
         if (target == State.ABORTABLE_ERROR || target == State.ABORTING_TRANSACTION) {
