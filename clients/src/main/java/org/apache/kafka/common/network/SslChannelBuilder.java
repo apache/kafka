@@ -102,8 +102,7 @@ public class SslChannelBuilder implements ChannelBuilder, ListenerReconfigurable
     public KafkaChannel buildChannel(String id, SelectionKey key, int maxReceiveSize,
                                      MemoryPool memoryPool, ChannelMetadataRegistry metadataRegistry) throws KafkaException {
         try {
-            SslTransportLayer transportLayer = buildTransportLayer(sslFactory, id, key,
-                ChannelBuilderUtils.peerHost(key), metadataRegistry);
+            SslTransportLayer transportLayer = buildTransportLayer(sslFactory, id, key, metadataRegistry);
             Supplier<Authenticator> authenticatorCreator = () ->
                 new SslAuthenticator(configs, transportLayer, listenerName, sslPrincipalMapper);
             return new KafkaChannel(id, transportLayer, authenticatorCreator, maxReceiveSize,
@@ -119,10 +118,9 @@ public class SslChannelBuilder implements ChannelBuilder, ListenerReconfigurable
         if (sslFactory != null) sslFactory.close();
     }
 
-    protected SslTransportLayer buildTransportLayer(SslFactory sslFactory, String id, SelectionKey key,
-                                                    String host, ChannelMetadataRegistry metadataRegistry) throws IOException {
+    protected SslTransportLayer buildTransportLayer(SslFactory sslFactory, String id, SelectionKey key, ChannelMetadataRegistry metadataRegistry) throws IOException {
         SocketChannel socketChannel = (SocketChannel) key.channel();
-        return SslTransportLayer.create(id, key, sslFactory.createSslEngine(host, socketChannel.socket().getPort()),
+        return SslTransportLayer.create(id, key, sslFactory.createSslEngine(socketChannel.socket()),
             metadataRegistry);
     }
 
