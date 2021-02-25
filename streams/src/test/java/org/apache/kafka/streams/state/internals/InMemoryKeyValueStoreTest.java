@@ -215,7 +215,7 @@ public class InMemoryKeyValueStoreTest extends AbstractKeyValueStoreTest {
         byteStore.putAll(entries);
         byteStore.flush();
 
-        final KeyValueIterator<Bytes, byte[]> keysWithPrefix = byteStore.prefixScan("d", stringSerializer);
+        final KeyValueIterator<Bytes, byte[]> keysWithPrefix = byteStore.prefixScan("bb", stringSerializer);
         int numberOfKeysReturned = 0;
 
         while (keysWithPrefix.hasNext()) {
