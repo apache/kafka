@@ -139,8 +139,9 @@ class TestUpgrade(ProduceConsumeValidateTest):
         - Finally, validate that every message acked by the producer was consumed by the consumer
         """
         self.zk = ZookeeperService(self.test_context, num_nodes=1, version=KafkaVersion(from_kafka_version))
+        fromKafkaVersion = KafkaVersion(from_kafka_version)
         self.kafka = KafkaService(self.test_context, num_nodes=3, zk=self.zk,
-                                  version=KafkaVersion(from_kafka_version),
+                                  version=fromKafkaVersion,
                                   topics={self.topic: {"partitions": self.partitions,
                       "replication-factor": self.replication_factor,
                       'configs': {"min.insync.replicas": 2}}})
@@ -171,7 +172,7 @@ class TestUpgrade(ProduceConsumeValidateTest):
         # after leader change. Tolerate limited data loss for this case to avoid transient test failures.
         self.may_truncate_acked_records = False if from_kafka_version >= V_0_11_0_0 else True
 
-        new_consumer = from_kafka_version.consumer_supports_bootstrap_server()
+        new_consumer = fromKafkaVersion.consumer_supports_bootstrap_server()
         # TODO - reduce the timeout
         self.consumer = ConsoleConsumer(self.test_context, self.num_consumers, self.kafka,
                                         self.topic, new_consumer=new_consumer, consumer_timeout_ms=30000,
