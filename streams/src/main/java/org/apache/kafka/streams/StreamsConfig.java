@@ -412,7 +412,8 @@ public class StreamsConfig extends AbstractConfig {
     /** {@code max.task.idle.ms} */
     public static final String MAX_TASK_IDLE_MS_CONFIG = "max.task.idle.ms";
     private static final String MAX_TASK_IDLE_MS_DOC = "Maximum amount of time in milliseconds a stream task will stay idle when not all of its partition buffers contain records," +
-        " to avoid potential out-of-order record processing across multiple input streams.";
+        " to avoid potential out-of-order record processing across multiple input streams The value must be lower than <code>max.poll.interval.ms</code> to avoid rebalancing" +
+        " of unresponsive tasks.";
 
     /** {@code max.warmup.replicas} */
     public static final String MAX_WARMUP_REPLICAS_CONFIG = "max.warmup.replicas";
