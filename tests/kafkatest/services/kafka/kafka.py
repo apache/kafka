@@ -445,12 +445,22 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
         if not self._security_config:
             client_sasl_mechanism_to_use = self.client_sasl_mechanism if self.quorum_info.using_zk or self.quorum_info.has_brokers else self.controller_sasl_mechanism
             interbroker_sasl_mechanism_to_use = self.interbroker_sasl_mechanism if self.quorum_info.using_zk or self.quorum_info.has_brokers else self.intercontroller_sasl_mechanism
+            if not self.quorum_info.using_raft:
+                raft_sasl_mechanisms = []
+                raft_tls = False
+            else:
+                if self.controller_quorum.controller_security_protocol in [SecurityConfig.SASL_PLAINTEXT, SecurityConfig.SASL_SSL]:
+                    raft_sasl_mechanisms = [self.controller_quorum.controller_sasl_mechanism]
+                else:
+                    raft_sasl_mechanisms = []
+                raft_tls = self.controller_quorum.controller_security_protocol in [SecurityConfig.SSL, SecurityConfig.SASL_SSL]
             self._security_config = SecurityConfig(self.context, self.security_protocol, self.interbroker_security_protocol,
                                                    zk_sasl=self.zk.zk_sasl if self.quorum_info.using_zk else False, zk_tls=self.zk_client_secure,
                                                    client_sasl_mechanism=client_sasl_mechanism_to_use,
                                                    interbroker_sasl_mechanism=interbroker_sasl_mechanism_to_use,
                                                    listener_security_config=self.listener_security_config,
-                                                   tls_version=self.tls_version)
+                                                   tls_version=self.tls_version,
+                                                   raft_sasl_mechanisms=raft_sasl_mechanisms, raft_tls=raft_tls)
         for port in self.port_mappings.values():
             if port.open:
                 self._security_config.enable_security_protocol(port.security_protocol)
@@ -498,6 +508,9 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
         if self.quorum_info.has_brokers_and_controllers and (
                 self.controller_security_protocol != self.intercontroller_security_protocol or
                 self.controller_sasl_mechanism != self.intercontroller_sasl_mechanism):
+            # This is not supported because both the broker and the controller take the first entry from
+            # controller.listener.names and the value from sasl.mechanism.controller.protocol;
+            # they share a single config, so they must both see/use identical values.
             raise Exception("Co-located Raft-based Brokers (%s/%s) and Controllers (%s/%s) cannot talk to Controllers via different security protocols" %
                             (self.controller_security_protocol, self.controller_sasl_mechanism,
                              self.intercontroller_security_protocol, self.intercontroller_sasl_mechanism))

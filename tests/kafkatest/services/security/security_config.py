@@ -145,7 +145,8 @@ class SecurityConfig(TemplateRenderer):
     def __init__(self, context, security_protocol=None, interbroker_security_protocol=None,
                  client_sasl_mechanism=SASL_MECHANISM_GSSAPI, interbroker_sasl_mechanism=SASL_MECHANISM_GSSAPI,
                  zk_sasl=False, zk_tls=False, template_props="", static_jaas_conf=True, jaas_override_variables=None,
-                 listener_security_config=ListenerSecurityConfig(), tls_version=None):
+                 listener_security_config=ListenerSecurityConfig(), tls_version=None,
+                 raft_sasl_mechanisms=[], raft_tls=False):
         """
         Initialize the security properties for the node and copy
         keystore and truststore to the remote node if the transport protocol 
@@ -173,8 +174,9 @@ class SecurityConfig(TemplateRenderer):
         if interbroker_security_protocol is None:
             interbroker_security_protocol = security_protocol
         self.interbroker_security_protocol = interbroker_security_protocol
-        self.has_sasl = self.is_sasl(security_protocol) or self.is_sasl(interbroker_security_protocol) or zk_sasl
-        self.has_ssl = self.is_ssl(security_protocol) or self.is_ssl(interbroker_security_protocol) or zk_tls
+        self.raft_sasl_mechanisms = raft_sasl_mechanisms
+        self.has_sasl = self.is_sasl(security_protocol) or self.is_sasl(interbroker_security_protocol) or zk_sasl or raft_sasl_mechanisms
+        self.has_ssl = self.is_ssl(security_protocol) or self.is_ssl(interbroker_security_protocol) or zk_tls or raft_tls
         self.zk_sasl = zk_sasl
         self.zk_tls = zk_tls
         self.static_jaas_conf = static_jaas_conf
@@ -250,7 +252,8 @@ class SecurityConfig(TemplateRenderer):
                     'is_ibm_jdk': any('IBM' in line for line in java_version),
                     'SecurityConfig': SecurityConfig,
                     'client_sasl_mechanism': self.client_sasl_mechanism,
-                    'enabled_sasl_mechanisms': self.enabled_sasl_mechanisms
+                    'enabled_sasl_mechanisms': self.enabled_sasl_mechanisms,
+                    'usable_sasl_mechanisms': self.usable_sasl_mechanisms
                 }
             )
         else:
@@ -258,6 +261,7 @@ class SecurityConfig(TemplateRenderer):
 
         if self.static_jaas_conf:
             node.account.create_file(SecurityConfig.JAAS_CONF_PATH, jaas_conf)
+            print(jaas_conf)
             node.account.create_file(SecurityConfig.ADMIN_CLIENT_AS_BROKER_JAAS_CONF_PATH,
                                      self.render_jaas_config(
                                          "admin_client_as_broker_jaas.conf",
@@ -342,6 +346,17 @@ class SecurityConfig(TemplateRenderer):
     @property
     def enabled_sasl_mechanisms(self):
         return set([self.client_sasl_mechanism, self.interbroker_sasl_mechanism])
+
+    @property
+    def usable_sasl_mechanisms(self):
+        """
+        Differs from enabled_sasl_mechanisms in that it also includes SASL mechanisms that
+        are used for Raft communication
+        :return: enabled_sasl_mechanisms plus any mechanisms that are used for Raft communication
+        """
+        retval = set([self.client_sasl_mechanism, self.interbroker_sasl_mechanism] + self.raft_sasl_mechanisms)
+        print(retval)
+        return retval
 
     @property
     def has_sasl_kerberos(self):

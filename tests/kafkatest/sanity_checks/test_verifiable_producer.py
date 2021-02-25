@@ -96,4 +96,59 @@ class TestVerifiableProducer(Test):
         num_produced = self.producer.num_acked
         assert num_produced == self.num_messages, "num_produced: %d, num_messages: %d" % (num_produced, self.num_messages)
 
+    @cluster(num_nodes=4)
+    @matrix(inter_broker_security_protocol=['PLAINTEXT', 'SSL'], metadata_quorum=[quorum.remote_raft])
+    @matrix(inter_broker_security_protocol=['SASL_SSL'], inter_broker_sasl_mechanism=['PLAIN', 'GSSAPI'],
+            metadata_quorum=[quorum.remote_raft])
+    def test_multiple_raft_security_protocols(
+            self, inter_broker_security_protocol, inter_broker_sasl_mechanism='GSSAPI', metadata_quorum=quorum.remote_raft):
+        """
+        Test for remote Raft cases that we can start VerifiableProducer on the current branch snapshot version, and
+        verify that we can produce a small number of messages.  The inter-controller and broker-to-controller
+        security protocols are defined to be different (which differs from the above test, where they were the same).
+        """
+        self.kafka.security_protocol = self.kafka.interbroker_security_protocol = inter_broker_security_protocol
+        self.kafka.client_sasl_mechanism = self.kafka.interbroker_sasl_mechanism = inter_broker_sasl_mechanism
+        controller_quorum = self.kafka.controller_quorum
+        sasl_mechanism = 'PLAIN' if inter_broker_sasl_mechanism == 'GSSAPI' else 'GSSAPI'
+        if inter_broker_security_protocol == 'PLAINTEXT':
+            controller_security_protocol = 'SSL'
+            intercontroller_security_protocol = 'SASL_SSL'
+        elif inter_broker_security_protocol == 'SSL':
+            controller_security_protocol = 'SASL_SSL'
+            intercontroller_security_protocol = 'PLAINTEXT'
+        else: # inter_broker_security_protocol == 'SASL_SSL'
+            controller_security_protocol = 'PLAINTEXT'
+            intercontroller_security_protocol = 'SSL'
+        controller_quorum.controller_security_protocol = controller_security_protocol
+        controller_quorum.controller_sasl_mechanism = sasl_mechanism
+        controller_quorum.intercontroller_security_protocol = intercontroller_security_protocol
+        controller_quorum.intercontroller_sasl_mechanism = sasl_mechanism
+        self.kafka.start()
+
+        node = self.producer.nodes[0]
+        node.version = KafkaVersion(str(DEV_BRANCH))
+        self.producer.start()
+        wait_until(lambda: self.producer.num_acked > 5, timeout_sec=15,
+             err_msg="Producer failed to start in a reasonable amount of time.")
+
+        # using version.vstring (distutils.version.LooseVersion) is a tricky way of ensuring
+        # that this check works with DEV_BRANCH
+        # When running VerifiableProducer 0.8.X, both the current branch version and 0.8.X should show up because of the
+        # way verifiable producer pulls in some development directories into its classpath
+        #
+        # If the test fails here because 'ps .. | grep' couldn't find the process it means
+        # the login and grep that is_version() performs is slower than
+        # the time it takes the producer to produce its messages.
+        # Easy fix is to decrease throughput= above, the good fix is to make the producer
+        # not terminate until explicitly killed in this case.
+        if node.version <= LATEST_0_8_2:
+            assert is_version(node, [node.version.vstring, DEV_BRANCH.vstring], logger=self.logger)
+        else:
+            assert is_version(node, [node.version.vstring], logger=self.logger)
+
+        self.producer.wait()
+        num_produced = self.producer.num_acked
+        assert num_produced == self.num_messages, "num_produced: %d, num_messages: %d" % (num_produced, self.num_messages)
+
 
