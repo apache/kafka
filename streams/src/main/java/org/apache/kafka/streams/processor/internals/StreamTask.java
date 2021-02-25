@@ -39,6 +39,7 @@ import org.apache.kafka.streams.processor.Cancellable;
 import org.apache.kafka.streams.processor.PunctuationType;
 import org.apache.kafka.streams.processor.Punctuator;
 import org.apache.kafka.streams.processor.TaskId;
+import org.apache.kafka.streams.processor.TaskMetadata;
 import org.apache.kafka.streams.processor.TimestampExtractor;
 import org.apache.kafka.streams.processor.api.Record;
 import org.apache.kafka.streams.processor.internals.metrics.ProcessorNodeMetrics;
@@ -86,9 +87,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
     private final RecordCollector recordCollector;
     private final PartitionGroup.RecordInfo recordInfo;
     private final Map<TopicPartition, Long> consumedOffsets;
-    private final Map<TopicPartition, Long> committedOffsets;
-    private final Map<TopicPartition, Long> endOffsets;
-    private Long timeCurrentIdlingStarted;
+    private final TaskMetadata taskMetadata;
     private final PunctuationQueue streamTimePunctuationQueue;
     private final PunctuationQueue systemTimePunctuationQueue;
     private final StreamsMetricsImpl streamsMetrics;
@@ -193,9 +192,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
         );
 
         stateMgr.registerGlobalStateStores(topology.globalStateStores());
-        committedOffsets = new HashMap<>();
-        endOffsets = new HashMap<>();
-        timeCurrentIdlingStarted = -1L;
+        taskMetadata = new TaskMetadata(taskId, consumedOffsets.keySet(), new HashMap<>(), new HashMap<>(), -1L);
     }
 
     // create queues for each assigned partition and associate them
@@ -212,32 +209,9 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
         return consumedOffsets;
     }
 
-    public Map<TopicPartition, Long> getEndOffsets() {
-        return endOffsets;
-    }
-
     @Override
-    public Long getIdling() {
-        return timeCurrentIdlingStarted;
-    }
-
-    @Override
-    public void startIdling(Long time) {
-        timeCurrentIdlingStarted = time;
-    }
-
-    @Override
-    public void setCommittedOffset(TopicPartition topicPartition, Long offset) {
-        committedOffsets.put(topicPartition, offset);
-    }
-
-    @Override
-    public void setEndOffset(TopicPartition topicPartition, Long offset) {
-        endOffsets.put(topicPartition, offset);
-    }
-
-    public Long getTimeCurrentIdlingStarted() {
-        return timeCurrentIdlingStarted;
+    public TaskMetadata getTaskMetadata(){
+        return taskMetadata;
     }
 
     @Override
@@ -1189,10 +1163,6 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
 
     long streamTime() {
         return partitionGroup.streamTime();
-    }
-
-    public Map<TopicPartition, Long> getCommittedOffsets() {
-        return committedOffsets;
     }
 
     private class RecordQueueCreator {

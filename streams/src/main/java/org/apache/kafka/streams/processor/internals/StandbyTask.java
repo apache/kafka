@@ -26,6 +26,7 @@ import org.apache.kafka.streams.StreamsMetrics;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.errors.TaskMigratedException;
 import org.apache.kafka.streams.processor.TaskId;
+import org.apache.kafka.streams.processor.TaskMetadata;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.processor.internals.metrics.ThreadMetrics;
 import org.apache.kafka.streams.state.internals.ThreadCache;
@@ -43,6 +44,8 @@ public class StandbyTask extends AbstractTask implements Task {
     private final boolean eosEnabled;
     private final InternalProcessorContext processorContext;
     private final StreamsMetricsImpl streamsMetrics;
+    private final TaskMetadata taskMetadata;
+
 
     /**
      * @param id             the ID of this task
@@ -78,6 +81,7 @@ public class StandbyTask extends AbstractTask implements Task {
 
         closeTaskSensor = ThreadMetrics.closeTaskSensor(Thread.currentThread().getName(), streamsMetrics);
         eosEnabled = StreamThread.eosEnabled(config);
+        taskMetadata = new TaskMetadata(id.toString(), inputPartitions, new HashMap<>(), new HashMap<>(), -1L);
     }
 
     @Override
@@ -284,23 +288,8 @@ public class StandbyTask extends AbstractTask implements Task {
     }
 
     @Override
-    public Map<TopicPartition, Long> getCommittedOffsets() {
-        return new HashMap<>();
-    }
-
-    @Override
-    public Map<TopicPartition, Long> getEndOffsets() {
-        return new HashMap<>();
-    }
-
-    @Override
-    public Long getIdling() {
-        return -1L;
-    }
-
-    @Override
-    public void startIdling(Long time) {
-        //do nothing for standby tasks
+    public TaskMetadata getTaskMetadata() {
+        return null;
     }
 
     @Override
