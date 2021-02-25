@@ -193,6 +193,10 @@ public class SynchronizationTest {
     }
 
     private class SynchronizedPluginClassLoader extends PluginClassLoader {
+        {
+            ClassLoader.registerAsParallelCapable();
+        }
+
 
         public SynchronizedPluginClassLoader(URL pluginLocation, URL[] urls, ClassLoader parent) {
             super(pluginLocation, urls, parent);
@@ -284,7 +288,7 @@ public class SynchronizationTest {
 
     // This is an informative test that is supposed to fail, demonstrating that forName is
     // locking the connectorLoader in this JVM implementation, when initialize is true.
-    @Test(expected = AssertionError.class)
+    @Test
     public void forNameLocksClassloader()
         throws InterruptedException, TimeoutException, BrokenBarrierException {
         // It is not important here that we're using the PluginClassLoader.
