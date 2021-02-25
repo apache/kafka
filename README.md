@@ -167,7 +167,7 @@ Please note for this to work you should create/update user maven settings (typic
 
 
 ### Installing the jars to the local Maven repository ###
-    ./gradlewAll install
+    ./gradlewAll publishToMavenLocal
 
 ### Building the test jar ###
     ./gradlew testJar

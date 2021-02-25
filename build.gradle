@@ -115,7 +115,7 @@ ext {
   userMaxTestRetryFailures = project.hasProperty('maxTestRetryFailures') ? maxTestRetryFailures.toInteger() : 0
 
   skipSigning = project.hasProperty('skipSigning') && skipSigning.toBoolean()
-  shouldSign = !skipSigning && !version.endsWith("SNAPSHOT") && project.gradle.startParameter.taskNames.any { it.contains("upload") }
+  shouldSign = !skipSigning && !version.endsWith("SNAPSHOT") && project.gradle.startParameter.taskNames.any { it.contains("publish") }
 
   mavenUrl = project.hasProperty('mavenUrl') ? project.mavenUrl : ''
   mavenUsername = project.hasProperty('mavenUsername') ? project.mavenUsername : ''
@@ -215,37 +215,43 @@ subprojects {
       options.compilerArgs << "--release" << minJavaVersion
   }
 
-//  uploadArchives {
-//    repositories {
-//      signing {
-//          required { shouldSign }
-//          sign configurations.archives
-//
-//          // To test locally, replace mavenUrl in ~/.gradle/gradle.properties to file://localhost/tmp/myRepo/
-//          mavenDeployer {
-//              beforeDeployment { MavenDeployment deployment -> signing.signPom(deployment) }
-//              repository(url: "${mavenUrl}") {
-//                  authentication(userName: "${mavenUsername}", password: "${mavenPassword}")
-//              }
-//              afterEvaluate {
-//                  pom.artifactId = "${archivesBaseName}"
-//                  pom.project {
-//                      name 'Apache Kafka'
-//                      packaging 'jar'
-//                      url 'https://kafka.apache.org'
-//                      licenses {
-//                          license {
-//                              name 'The Apache Software License, Version 2.0'
-//                              url 'https://www.apache.org/licenses/LICENSE-2.0.txt'
-//                              distribution 'repo'
-//                          }
-//                      }
-//                  }
-//              }
-//          }
-//      }
-//    }
-//  }
+  publishing {
+    repositories {
+      // To test locally, replace mavenUrl in ~/.gradle/gradle.properties to file://localhost/tmp/myRepo/
+      maven {
+        url = mavenUrl
+        credentials {
+          username = mavenUsername
+          password = mavenPassword
+        }
+      }
+    }
+    publications {
+      mavenJava(MavenPublication) {
+        from components.java
+        afterEvaluate {
+          artifactId = archivesBaseName
+          pom {
+            name = 'Apache Kafka'
+            url = 'https://kafka.apache.org'
+            licenses {
+              license {
+                name = 'The Apache License, Version 2.0'
+                url = 'http://www.apache.org/licenses/LICENSE-2.0.txt'
+                distribution = 'repo'
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+
+  if (shouldSign) {
+    signing {
+      sign publishing.publications.mavenJava
+    }
+  }
 
   // Remove the relevant project name once it's converted to JUnit 5
   def shouldUseJUnit5 = !(["runtime", "streams-scala", "streams"].contains(it.project.name))
@@ -1830,8 +1836,6 @@ project(':jmh-benchmarks') {
 
   shadowJar {
     archiveBaseName = 'kafka-jmh-benchmarks-all'
-    classifier = null
-    archiveVersion = null
   }
 
   dependencies {
