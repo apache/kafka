@@ -39,17 +39,7 @@ object TransactionState {
   )
 
   def fromName(name: String): Option[TransactionState] = {
-    name match {
-      case "Empty" => Some(Empty)
-      case "Ongoing" => Some(Ongoing)
-      case "PrepareCommit" => Some(PrepareCommit)
-      case "PrepareAbort" => Some(PrepareAbort)
-      case "CompleteCommit" => Some(CompleteCommit)
-      case "CompleteAbort" => Some(CompleteAbort)
-      case "PrepareEpochFence" => Some(PrepareEpochFence)
-      case "Dead" => Some(Dead)
-      case _ => None
-    }
+    AllStates.find(_.name == name)
   }
 
   def fromId(id: Byte): TransactionState = {

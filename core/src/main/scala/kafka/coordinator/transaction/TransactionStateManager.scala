@@ -237,6 +237,9 @@ class TransactionStateManager(brokerId: Int,
 
         def shouldInclude(txnMetadata: TransactionMetadata): Boolean = {
           if (txnMetadata.state == Dead) {
+            // We filter the `Dead` state since it is a transient state which
+            // indicates that the transactionalId and its metadata are  in the
+            // process of expiration and removal.
             false
           } else if (filterProducerIds.nonEmpty && !filterProducerIds.contains(txnMetadata.producerId)) {
             false
@@ -247,14 +250,14 @@ class TransactionStateManager(brokerId: Int,
           }
         }
 
-        transactionMetadataCache.foreach { case (_, cache) =>
+        transactionMetadataCache.forKeyValue { (_, cache) =>
           cache.metadataPerTransactionalId.values.foreach { txnMetadata =>
             txnMetadata.inLock {
               if (shouldInclude(txnMetadata)) {
                 states += new ListTransactionsResponseData.TransactionState()
                   .setTransactionalId(txnMetadata.transactionalId)
                   .setProducerId(txnMetadata.producerId)
-                  .setTransactionState(txnMetadata.state.toString)
+                  .setTransactionState(txnMetadata.state.name)
               }
             }
           }

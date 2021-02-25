@@ -59,7 +59,8 @@ public class ListTransactionsRequest extends AbstractRequest {
     public ListTransactionsResponse getErrorResponse(int throttleTimeMs, Throwable e) {
         Errors error = Errors.forException(e);
         ListTransactionsResponseData response = new ListTransactionsResponseData()
-            .setErrorCode(error.code());
+            .setErrorCode(error.code())
+            .setThrottleTimeMs(throttleTimeMs);
         return new ListTransactionsResponse(response);
     }
 

@@ -25,7 +25,7 @@
       "about": "The transaction states to filter by: if empty, all transactions are returned; if non-empty, then only transactions matching one of the filtered states will be returned"
     },
     { "name": "ProducerIdFilter", "type": "[]int64", "versions": "0+",
-      "about": "The producerIds to filter by: if empty, no transactions will be returned; if non-empty, only transactions which match one of the filtered producerIds will be returned"
+      "about": "The producerIds to filter by: if empty, all transactions will be returned; if non-empty, only transactions which match one of the filtered producerIds will be returned"
     }
   ]
 }
