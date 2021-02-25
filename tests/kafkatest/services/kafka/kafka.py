@@ -666,6 +666,9 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
                                                       for node in self.controller_quorum.nodes[:self.controller_quorum.num_nodes_controller_role]])
             # define controller.listener.names
             self.controller_listener_names = ','.join(self.controller_listener_name_list())
+            # define sasl.mechanism.controller.protocol to match remote quorum if one exists
+            if self.remote_controller_quorum:
+                self.controller_sasl_mechanism = self.remote_controller_quorum.controller_sasl_mechanism
 
         prop_file = self.prop_file(node)
         self.logger.info("kafka.properties:")
