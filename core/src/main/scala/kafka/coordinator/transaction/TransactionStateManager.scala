@@ -238,7 +238,7 @@ class TransactionStateManager(brokerId: Int,
         def shouldInclude(txnMetadata: TransactionMetadata): Boolean = {
           if (txnMetadata.state == Dead) {
             // We filter the `Dead` state since it is a transient state which
-            // indicates that the transactionalId and its metadata are  in the
+            // indicates that the transactionalId and its metadata are in the
             // process of expiration and removal.
             false
           } else if (filterProducerIds.nonEmpty && !filterProducerIds.contains(txnMetadata.producerId)) {
