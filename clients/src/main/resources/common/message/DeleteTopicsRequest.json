@@ -16,7 +16,7 @@
 {
   "apiKey": 20,
   "type": "request",
-  "listeners": ["zkBroker", "broker", "controller"],
+  "listeners": ["zkBroker"],
   "name": "DeleteTopicsRequest",
   // Versions 0, 1, 2, and 3 are the same.
   //
