@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.common.requests;
 
+import org.apache.kafka.common.errors.InvalidConfigurationException;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.internals.Topic;
 import org.apache.kafka.common.message.JoinGroupRequestData;
@@ -64,6 +65,8 @@ public class JoinGroupRequest extends AbstractRequest {
      * static member id.
      */
     public static void validateGroupInstanceId(String id) {
+        if (id.equals(""))
+            throw new InvalidConfigurationException("Group instance id must be non-empty string");
         Topic.validate(id, "Group instance id");
     }
 
