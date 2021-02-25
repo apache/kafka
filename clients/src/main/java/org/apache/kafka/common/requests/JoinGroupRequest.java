@@ -65,7 +65,7 @@ public class JoinGroupRequest extends AbstractRequest {
      * static member id.
      */
     public static void validateGroupInstanceId(String id) {
-        if (id.equals(""))
+        if ("".equals(id))
             throw new InvalidConfigurationException("Group instance id must be non-empty string");
         Topic.validate(id, "Group instance id");
     }
