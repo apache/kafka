@@ -1851,10 +1851,10 @@ public class StreamThreadTest {
             100L,
             TimestampType.CREATE_TIME,
             ConsumerRecord.NULL_CHECKSUM,
-            ("K").getBytes().length,
-            ("V").getBytes().length,
-            ("K").getBytes(),
-            ("V").getBytes()));
+            "K".getBytes().length,
+            "V".getBytes().length,
+            "K".getBytes(),
+            "V".getBytes()));
 
         thread.runOnce();
 
@@ -1934,8 +1934,8 @@ public class StreamThreadTest {
         clientSupplier.consumer.addRecord(new ConsumerRecord<>(
             topic1,
             1,
-            100L,
-             100L,
+            110L,
+             110L,
              TimestampType.CREATE_TIME,
              ConsumerRecord.NULL_CHECKSUM,
              "K".getBytes().length,
@@ -1946,7 +1946,7 @@ public class StreamThreadTest {
         thread.runOnce();
 
         assertEquals(2, peekedContextTime.size());
-        assertEquals(100L, peekedContextTime.get(1).longValue());
+        assertEquals(110L, peekedContextTime.get(1).longValue());
     }
 
     @Test
