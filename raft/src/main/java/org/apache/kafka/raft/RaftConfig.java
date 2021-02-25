@@ -84,7 +84,7 @@ public class RaftConfig {
     public static final String QUORUM_REQUEST_TIMEOUT_MS_CONFIG = QUORUM_PREFIX +
         CommonClientConfigs.REQUEST_TIMEOUT_MS_CONFIG;
     public static final String QUORUM_REQUEST_TIMEOUT_MS_DOC = CommonClientConfigs.REQUEST_TIMEOUT_MS_DOC;
-    public static final int DEFAULT_QUORUM_REQUEST_TIMEOUT_MS = 4_000;
+    public static final int DEFAULT_QUORUM_REQUEST_TIMEOUT_MS = 2_000;
 
     public static final String QUORUM_RETRY_BACKOFF_MS_CONFIG = QUORUM_PREFIX +
         CommonClientConfigs.RETRY_BACKOFF_MS_CONFIG;
