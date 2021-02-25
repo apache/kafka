@@ -486,8 +486,8 @@ public class CastTest {
         assertEquals("42", ((Struct) transformed.value()).get("bigdecimal"));
         assertEquals(Values.dateFormatFor(day).format(day), ((Struct) transformed.value()).get("date"));
         assertEquals(new Date(0), ((Struct) transformed.value()).get("timestamp"));
-        assertEquals("FEDCBA9876543210", ((Struct) transformed.value()).get("bytes"));
-        assertEquals("FEDCBA9876543210", ((Struct) transformed.value()).get("byteArray"));
+        assertEquals("/ty6mHZUMhA=", ((Struct) transformed.value()).get("bytes"));
+        assertEquals("/ty6mHZUMhA=", ((Struct) transformed.value()).get("byteArray"));
 
         assertNull(((Struct) transformed.value()).get("optional"));
 

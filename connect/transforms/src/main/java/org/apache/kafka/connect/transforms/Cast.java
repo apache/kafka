@@ -41,12 +41,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.nio.ByteBuffer;
-import java.util.EnumSet;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Locale;
-import java.util.Map;
-import java.util.Set;
+import java.util.*;
 
 import static org.apache.kafka.connect.transforms.util.Requirements.requireMap;
 import static org.apache.kafka.connect.transforms.util.Requirements.requireStruct;
@@ -368,21 +363,13 @@ public abstract class Cast<R extends ConnectRecord<R>> implements Transformation
             return Values.dateFormatFor(dateValue).format(dateValue);
         } else if (value instanceof ByteBuffer) {
             ByteBuffer byteBuffer = (ByteBuffer) value;
-            return castByteArrayToString(Utils.readBytes(byteBuffer));
+            return Base64.getEncoder().encodeToString(Utils.readBytes(byteBuffer));
         } else if (value instanceof byte[]) {
             byte[] rawBytes = (byte[]) value;
-            return castByteArrayToString(rawBytes);
+            return Base64.getEncoder().encodeToString(rawBytes);
         } else {
             return value.toString();
         }
-    }
-
-    private static String castByteArrayToString(byte[] array) {
-        StringBuilder sbuf = new StringBuilder();
-        for (byte b : array) {
-            sbuf.append(String.format("%02X", b));
-        }
-        return sbuf.toString();
     }
 
     protected abstract Schema operatingSchema(R record);
