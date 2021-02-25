@@ -205,12 +205,9 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
         return partitionQueues;
     }
 
-    public Map<TopicPartition, Long> getConsumedOffsets() {
-        return consumedOffsets;
-    }
-
     @Override
     public TaskMetadata getTaskMetadata(){
+        taskMetadata.getEndOffsets().putAll(recordCollector.offsets());
         return taskMetadata;
     }
 
