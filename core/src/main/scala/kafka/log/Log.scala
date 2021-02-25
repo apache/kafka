@@ -210,7 +210,7 @@ case object SegmentDeletion extends LogStartOffsetIncrementReason {
   override def toString: String = "segment deletion"
 }
 
-case object SegmentCompaction extends LogStartOffsetIncrementReason {
+case object LogCompaction extends LogStartOffsetIncrementReason {
   override def toString: String = "segment compaction"
 }
 
@@ -2401,6 +2401,8 @@ class Log(@volatile private var _dir: File,
       }
       // okay we are safe now, remove the swap suffix
       sortedNewSegments.foreach(_.changeFileSuffixes(Log.SwapFileSuffix, ""))
+
+      maybeIncrementLogStartOffset(segments.firstEntry.getValue.baseOffset, LogCompaction)
     }
   }
 
@@ -2854,7 +2856,7 @@ case object LogDeletion extends SegmentDeletionReason {
   }
 }
 
-case object LogCompaction extends SegmentDeletionReason {
+case object SegmentCompaction extends SegmentDeletionReason {
   override def logReason(log: Log, toDelete: List[LogSegment]): Unit = {
     log.info(s"Deleting segments as all records were deleted in log compaction: ${toDelete.mkString(",")}")
   }

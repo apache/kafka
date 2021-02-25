@@ -334,7 +334,7 @@ public class MemoryRecordsTest {
                     assertEquals(numRecords, filterResult.messagesRead());
                     assertEquals(records.sizeInBytes(), filterResult.bytesRead());
                     assertEquals(baseOffset + 1, filterResult.maxOffset());
-                    assertEquals(baseOffset, filterResult.minOffset());
+                    assertEquals(baseOffset, filterResult.baseOffsetOfFirstBatch());
                     assertEquals(0, filterResult.messagesRetained());
                     assertEquals(DefaultRecordBatch.RECORD_BATCH_OVERHEAD, filterResult.bytesRetained());
                     assertEquals(12, filterResult.maxTimestamp());
@@ -352,7 +352,7 @@ public class MemoryRecordsTest {
                     assertEquals(12L, batch.maxTimestamp());
                     assertEquals(TimestampType.CREATE_TIME, batch.timestampType());
                     assertEquals(baseOffset, batch.baseOffset());
-                    assertEquals(batch.baseOffset(), filterResult.minOffset());
+                    assertEquals(batch.baseOffset(), filterResult.baseOffsetOfFirstBatch());
                     assertEquals(baseOffset + 1, batch.lastOffset());
                     assertEquals(baseSequence, batch.baseSequence());
                     assertEquals(baseSequence + 1, batch.lastSequence());
@@ -397,7 +397,7 @@ public class MemoryRecordsTest {
         assertEquals(0, filterResult.messagesRead());
         assertEquals(records.sizeInBytes(), filterResult.bytesRead());
         assertEquals(baseOffset, filterResult.maxOffset());
-        assertEquals(baseOffset, filterResult.minOffset());
+        assertEquals(baseOffset, filterResult.baseOffsetOfFirstBatch());
         assertEquals(0, filterResult.messagesRetained());
         assertEquals(DefaultRecordBatch.RECORD_BATCH_OVERHEAD, filterResult.bytesRetained());
         assertEquals(timestamp, filterResult.maxTimestamp());
@@ -443,7 +443,7 @@ public class MemoryRecordsTest {
 
             // Verify filter result
             assertEquals(0, filterResult.outputBuffer().position());
-            assertEquals(-1, filterResult.minOffset());
+            assertEquals(-1, filterResult.baseOffsetOfFirstBatch());
 
             // Verify filtered records
             filtered.flip();
@@ -580,7 +580,7 @@ public class MemoryRecordsTest {
             assertEquals(2, batches.size());
             assertEquals(0, batches.get(0).lastOffset());
             assertEquals(5, batches.get(1).lastOffset());
-            assertEquals(batches.get(0).baseOffset(), result.minOffset());
+            assertEquals(batches.get(0).baseOffset(), result.baseOffsetOfFirstBatch());
         } else {
             assertEquals(5, batches.size());
             assertEquals(0, batches.get(0).lastOffset());
@@ -616,7 +616,7 @@ public class MemoryRecordsTest {
         assertEquals(1, batches.size());
 
         MutableRecordBatch batch = batches.get(0);
-        assertEquals(batch.baseOffset(), result.minOffset());
+        assertEquals(batch.baseOffset(), result.baseOffsetOfFirstBatch());
         List<Record> records = TestUtils.toList(batch);
         assertEquals(1, records.size());
         assertEquals(8L, records.get(0).offset());
@@ -696,7 +696,7 @@ public class MemoryRecordsTest {
             MutableRecordBatch firstBatch = batches.get(0);
             assertEquals(1, firstBatch.countOrNull().intValue());
             assertEquals(0L, firstBatch.baseOffset());
-            assertEquals(firstBatch.baseOffset(), result.minOffset());
+            assertEquals(firstBatch.baseOffset(), result.baseOffsetOfFirstBatch());
             assertEquals(2L, firstBatch.lastOffset());
             assertEquals(RecordBatch.NO_PRODUCER_ID, firstBatch.producerId());
             assertEquals(RecordBatch.NO_PRODUCER_EPOCH, firstBatch.producerEpoch());

@@ -3331,6 +3331,7 @@ class LogTest {
 
     val logConfig = LogTest.createLogConfig(indexIntervalBytes = 1, fileDeleteDelayMs = 1000)
     val log = createLog(logDir, logConfig, recoveryPoint = Long.MaxValue)
+    log.updateHighWatermark(log.logEndOffset)
 
     val segmentWithOverflow = LogTest.firstOverflowSegment(log).getOrElse {
       throw new AssertionError("Failed to create log with a segment which has overflowed offsets")

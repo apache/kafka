@@ -198,7 +198,7 @@ public class MemoryRecords extends AbstractRecords {
             if (!retainedRecords.isEmpty()) {
                 if (writeOriginalBatch) {
                     batch.writeTo(bufferOutputStream);
-                    filterResult.updateRetainedBatchMetadata(batch, batch.baseOffset(), retainedRecords.size(), false);
+                    filterResult.updateRetainedBatchMetadata(batch, retainedRecords.size(), false);
                 } else {
                     MemoryRecordsBuilder builder = buildRetainedRecordsInto(batch, retainedRecords, bufferOutputStream);
                     MemoryRecords records = builder.build();
@@ -224,7 +224,7 @@ public class MemoryRecords extends AbstractRecords {
                         batch.producerEpoch(), batch.baseSequence(), batch.baseOffset(), batch.lastOffset(),
                         batch.partitionLeaderEpoch(), batch.timestampType(), batch.maxTimestamp(),
                         batch.isTransactional(), batch.isControlBatch());
-                filterResult.updateRetainedBatchMetadata(batch, batch.baseOffset(), 0, true);
+                filterResult.updateRetainedBatchMetadata(batch, 0, true);
             }
 
             // If we had to allocate a new buffer to fit the filtered buffer (see KAFKA-5316), return early to
@@ -332,9 +332,7 @@ public class MemoryRecords extends AbstractRecords {
         private int messagesRetained = 0;
         private int bytesRetained = 0;
         private long maxOffset = -1L;
-        // Retains invariant `minOffset` = the baseOffset of the first batch of retained records
-        // or -1 if no batches are retained
-        private long minOffset = -1L;
+        private long baseOffsetOfFirstBatch = -1L;
         private long maxTimestamp = RecordBatch.NO_TIMESTAMP;
         private long shallowOffsetOfMaxTimestamp = -1L;
 
@@ -342,21 +340,21 @@ public class MemoryRecords extends AbstractRecords {
             this.outputBuffer = outputBuffer;
         }
 
-        private void updateRetainedBatchMetadata(MutableRecordBatch retainedBatch, long minOffset, int numMessagesInBatch, boolean headerOnly) {
+        private void updateRetainedBatchMetadata(MutableRecordBatch retainedBatch, int numMessagesInBatch, boolean headerOnly) {
             int bytesRetained = headerOnly ? DefaultRecordBatch.RECORD_BATCH_OVERHEAD : retainedBatch.sizeInBytes();
             updateRetainedBatchMetadata(retainedBatch.maxTimestamp(), retainedBatch.lastOffset(),
-                    retainedBatch.lastOffset(), minOffset, numMessagesInBatch, bytesRetained);
+                    retainedBatch.lastOffset(), retainedBatch.baseOffset(), numMessagesInBatch, bytesRetained);
         }
 
         private void updateRetainedBatchMetadata(long maxTimestamp, long shallowOffsetOfMaxTimestamp, long maxOffset,
-                                                long minOffset, int messagesRetained, int bytesRetained) {
+                                                long baseOffset, int messagesRetained, int bytesRetained) {
             validateBatchMetadata(maxTimestamp, shallowOffsetOfMaxTimestamp, maxOffset);
             if (maxTimestamp > this.maxTimestamp) {
                 this.maxTimestamp = maxTimestamp;
                 this.shallowOffsetOfMaxTimestamp = shallowOffsetOfMaxTimestamp;
             }
             this.maxOffset = Math.max(maxOffset, this.maxOffset);
-            if (this.bytesRetained == 0) this.minOffset = minOffset;
+            if (this.bytesRetained == 0) this.baseOffsetOfFirstBatch = baseOffset;
             this.messagesRetained += messagesRetained;
             this.bytesRetained += bytesRetained;
         }
@@ -392,8 +390,11 @@ public class MemoryRecords extends AbstractRecords {
             return maxOffset;
         }
 
-        public long minOffset() {
-            return minOffset;
+        /**
+         * @return  the baseOffset of the first batch of retained records or -1 if no batches are retained
+         */
+        public long baseOffsetOfFirstBatch() {
+            return baseOffsetOfFirstBatch;
         }
 
         public long maxTimestamp() {
