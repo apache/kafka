@@ -547,7 +547,7 @@ class GroupCoordinator(val brokerId: Int,
       )
 
       validationErrorOpt match {
-        case Some(error) =>  responseCallback(SyncGroupResult(error))
+        case Some(error) => responseCallback(SyncGroupResult(error))
 
         case None => group.currentState match {
           case Empty =>
@@ -778,7 +778,7 @@ class GroupCoordinator(val brokerId: Int,
         group,
         memberId,
         groupInstanceId,
-        operation = "sync-group"
+        operation = "heartbeat"
       ).orElse {
         if (generationId != group.generationId) {
           Some(Errors.ILLEGAL_GENERATION)
