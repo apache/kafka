@@ -39,7 +39,7 @@ public class TaskMetadata {
 
     private final Map<TopicPartition, Long> endOffsets;
 
-    private final Long timeCurrentIdlingStarted;
+    private Long timeCurrentIdlingStarted;
 
     public TaskMetadata(final String taskId,
                         final Set<TopicPartition> topicPartitions,
@@ -73,6 +73,9 @@ public class TaskMetadata {
         return timeCurrentIdlingStarted;
     }
 
+    public void setTimeCurrentIdlingStarted(Long time) {
+        timeCurrentIdlingStarted = time;
+    }
 
     @Override
     public boolean equals(final Object o) {

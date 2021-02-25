@@ -275,13 +275,13 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
             case CREATED:
                 log.info("Suspended created");
                 transitionTo(State.SUSPENDED);
-
+                taskMetadata.setTimeCurrentIdlingStarted(System.currentTimeMillis());
                 break;
 
             case RESTORING:
                 log.info("Suspended restoring");
                 transitionTo(State.SUSPENDED);
-
+                taskMetadata.setTimeCurrentIdlingStarted(System.currentTimeMillis());
                 break;
 
             case RUNNING:
@@ -294,6 +294,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
                     partitionGroup.clear();
                 } finally {
                     transitionTo(State.SUSPENDED);
+                    taskMetadata.setTimeCurrentIdlingStarted(System.currentTimeMillis());
                     log.info("Suspended running");
                 }
 
@@ -372,6 +373,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
             default:
                 throw new IllegalStateException("Unknown state " + state() + " while resuming active task " + id);
         }
+        taskMetadata.setTimeCurrentIdlingStarted(-1L);
     }
 
     /**
