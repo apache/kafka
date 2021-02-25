@@ -49,7 +49,7 @@ import org.apache.kafka.common.metadata.UnregisterBrokerRecord;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.ApiError;
 import org.apache.kafka.common.utils.LogContext;
-import org.apache.kafka.controller.BrokersToIsrs.TopicPartition;
+import org.apache.kafka.controller.BrokersToIsrs.TopicIdPartition;
 import org.apache.kafka.metadata.ApiMessageAndVersion;
 import org.apache.kafka.metadata.BrokerHeartbeatReply;
 import org.apache.kafka.metadata.BrokerRegistration;
@@ -102,13 +102,13 @@ public class ReplicationControlManager {
     }
 
     static class PartitionControlInfo {
-        private final int[] replicas;
-        private final int[] isr;
-        private final int[] removingReplicas;
-        private final int[] addingReplicas;
-        private final int leader;
-        private final int leaderEpoch;
-        private final int partitionEpoch;
+        public final int[] replicas;
+        public final int[] isr;
+        public final int[] removingReplicas;
+        public final int[] addingReplicas;
+        public final int leader;
+        public final int leaderEpoch;
+        public final int partitionEpoch;
 
         PartitionControlInfo(PartitionRecord record) {
             this(Replicas.toArray(record.replicas()),
@@ -581,6 +581,12 @@ public class ReplicationControlManager {
                         setErrorCode(Errors.UNKNOWN_TOPIC_OR_PARTITION.code()));
                     continue;
                 }
+                if (request.brokerId() != partition.leader) {
+                    responseTopicData.partitions().add(new AlterIsrResponseData.PartitionData().
+                        setPartitionIndex(partitionData.partitionIndex()).
+                        setErrorCode(Errors.INVALID_REQUEST.code()));
+                    continue;
+                }
                 if (partitionData.leaderEpoch() != partition.leaderEpoch) {
                     responseTopicData.partitions().add(new AlterIsrResponseData.PartitionData().
                         setPartitionIndex(partitionData.partitionIndex()).
@@ -611,6 +617,13 @@ public class ReplicationControlManager {
                     setPartitionId(partitionData.partitionIndex()).
                     setTopicId(topic.id).
                     setIsr(partitionData.newIsr()), (short) 0));
+                responseTopicData.partitions().add(new AlterIsrResponseData.PartitionData().
+                    setPartitionIndex(partitionData.partitionIndex()).
+                    setErrorCode(Errors.NONE.code()).
+                    setLeaderId(partition.leader).
+                    setLeaderEpoch(partition.leaderEpoch).
+                    setCurrentIsrVersion(partition.partitionEpoch + 1).
+                    setIsr(partitionData.newIsr()));
             }
         }
         return new ControllerResult<>(records, response);
@@ -663,21 +676,21 @@ public class ReplicationControlManager {
      * @param records               The record list to append to.
      */
     void handleNodeDeactivated(int brokerId, List<ApiMessageAndVersion> records) {
-        Iterator<TopicPartition> iterator = brokersToIsrs.iterator(brokerId, false);
+        Iterator<TopicIdPartition> iterator = brokersToIsrs.iterator(brokerId, false);
         while (iterator.hasNext()) {
-            TopicPartition topicPartition = iterator.next();
-            TopicControlInfo topic = topics.get(topicPartition.topicId());
+            TopicIdPartition topicIdPartition = iterator.next();
+            TopicControlInfo topic = topics.get(topicIdPartition.topicId());
             if (topic == null) {
-                throw new RuntimeException("Topic ID " + topicPartition.topicId() + " existed in " +
+                throw new RuntimeException("Topic ID " + topicIdPartition.topicId() + " existed in " +
                     "isrMembers, but not in the topics map.");
             }
-            PartitionControlInfo partition = topic.parts.get(topicPartition.partitionId());
+            PartitionControlInfo partition = topic.parts.get(topicIdPartition.partitionId());
             if (partition == null) {
-                throw new RuntimeException("Partition " + topicPartition +
+                throw new RuntimeException("Partition " + topicIdPartition +
                     " existed in isrMembers, but not in the partitions map.");
             }
             PartitionChangeRecord record = new PartitionChangeRecord().
-                setPartitionId(topicPartition.partitionId()).
+                setPartitionId(topicIdPartition.partitionId()).
                 setTopicId(topic.id);
             int[] newIsr = Replicas.copyWithout(partition.isr, brokerId);
             if (newIsr.length == 0) {
@@ -727,24 +740,24 @@ public class ReplicationControlManager {
      * @param records       The record list to append to.
      */
     void handleNodeActivated(int brokerId, List<ApiMessageAndVersion> records) {
-        Iterator<TopicPartition> iterator = brokersToIsrs.noLeaderIterator();
+        Iterator<TopicIdPartition> iterator = brokersToIsrs.noLeaderIterator();
         while (iterator.hasNext()) {
-            TopicPartition topicPartition = iterator.next();
-            TopicControlInfo topic = topics.get(topicPartition.topicId());
+            TopicIdPartition topicIdPartition = iterator.next();
+            TopicControlInfo topic = topics.get(topicIdPartition.topicId());
             if (topic == null) {
-                throw new RuntimeException("Topic ID " + topicPartition.topicId() + " existed in " +
+                throw new RuntimeException("Topic ID " + topicIdPartition.topicId() + " existed in " +
                     "isrMembers, but not in the topics map.");
             }
-            PartitionControlInfo partition = topic.parts.get(topicPartition.partitionId());
+            PartitionControlInfo partition = topic.parts.get(topicIdPartition.partitionId());
             if (partition == null) {
-                throw new RuntimeException("Partition " + topicPartition +
+                throw new RuntimeException("Partition " + topicIdPartition +
                     " existed in isrMembers, but not in the partitions map.");
             }
             // TODO: if this partition is configured for unclean leader election,
             // check the replica set rather than the ISR.
             if (Replicas.contains(partition.isr, brokerId)) {
                 records.add(new ApiMessageAndVersion(new PartitionChangeRecord().
-                    setPartitionId(topicPartition.partitionId()).
+                    setPartitionId(topicIdPartition.partitionId()).
                     setTopicId(topic.id).
                     setLeader(brokerId), (short) 0));
             }

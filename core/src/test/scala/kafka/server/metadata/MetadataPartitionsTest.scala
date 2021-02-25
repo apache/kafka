@@ -18,11 +18,14 @@
 package kafka.server.metadata
 
 import java.util.Collections
+
 import org.apache.kafka.common.Uuid
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{Test, Timeout}
-
 import java.util.concurrent.TimeUnit
+
+import org.apache.kafka.common.metadata.PartitionChangeRecord
+
 import scala.collection.mutable
 import scala.jdk.CollectionConverters._
 
@@ -30,16 +33,14 @@ import scala.jdk.CollectionConverters._
 @Timeout(value = 120000, unit = TimeUnit.MILLISECONDS)
 class MetadataPartitionsTest {
 
-  val emptyPartitions = MetadataPartitions(Collections.emptyMap(), Collections.emptyMap())
+  private val emptyPartitions = MetadataPartitions(Collections.emptyMap(), Collections.emptyMap())
 
   private def newPartition(topicName: String,
                            partitionIndex: Int,
                            replicas: Option[Seq[Int]] = None,
                            isr: Option[Seq[Int]] = None): MetadataPartition = {
-    val effectiveReplicas = replicas
-      .getOrElse(List(partitionIndex, partitionIndex + 1, partitionIndex + 2))
-      .map(Int.box)
-      .toList.asJava
+    val effectiveReplicas = asJavaList(replicas
+      .getOrElse(List(partitionIndex, partitionIndex + 1, partitionIndex + 2)))
 
     val effectiveIsr = isr match {
       case None => effectiveReplicas
@@ -47,9 +48,11 @@ class MetadataPartitionsTest {
     }
     new MetadataPartition(topicName,
       partitionIndex,
-      partitionIndex % 3, 100,
+      effectiveReplicas.asScala.head,
+      leaderEpoch = 100,
       effectiveReplicas,
       effectiveIsr,
+      partitionEpoch = 200,
       Collections.emptyList(),
       Collections.emptyList(),
       Collections.emptyList())
@@ -149,4 +152,41 @@ class MetadataPartitionsTest {
     assertEquals(Some("bar"), image.topicIdToName(Uuid.fromString("a1I0JF3yRzWFyOuY3F_vHw")))
     assertEquals(None, image.topicIdToName(Uuid.fromString("gdMy05W7QWG4ZjWir1DjBw")))
   }
+
+  @Test
+  def testMergePartitionChangeRecord(): Unit = {
+    val initialMetadata = newPartition(
+      topicName = "foo",
+      partitionIndex = 0,
+      replicas = Some(Seq(1, 2, 3)),
+      isr = Some(Seq(1, 2, 3))
+    )
+    assertEquals(1, initialMetadata.leaderId)
+
+    // If only the ISR changes, then the leader epoch
+    // remains the same and the partition epoch is bumped.
+    val updatedIsr = initialMetadata.merge(new PartitionChangeRecord()
+      .setPartitionId(0)
+      .setIsr(asJavaList(Seq(1, 2))))
+    assertEquals(asJavaList(Seq(1, 2)), updatedIsr.isr)
+    assertEquals(initialMetadata.leaderEpoch, updatedIsr.leaderEpoch)
+    assertEquals(initialMetadata.partitionEpoch + 1, updatedIsr.partitionEpoch)
+    assertEquals(initialMetadata.leaderId, updatedIsr.leaderId)
+
+    // If the leader changes, then both the leader epoch
+    // and the partition epoch should get bumped.
+    val updatedLeader = initialMetadata.merge(new PartitionChangeRecord()
+      .setPartitionId(0)
+      .setLeader(2)
+      .setIsr(asJavaList(Seq(2, 3))))
+    assertEquals(asJavaList(Seq(2, 3)), updatedLeader.isr)
+    assertEquals(initialMetadata.leaderEpoch + 1, updatedLeader.leaderEpoch)
+    assertEquals(initialMetadata.partitionEpoch + 1, updatedLeader.partitionEpoch)
+    assertEquals(2, updatedLeader.leaderId)
+  }
+
+  private def asJavaList(replicas: Iterable[Int]): java.util.List[Integer] = {
+    replicas.map(Int.box).toList.asJava
+  }
+
 }

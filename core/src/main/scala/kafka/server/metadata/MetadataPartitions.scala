@@ -39,6 +39,7 @@ object MetadataPartition {
       record.leaderEpoch(),
       record.replicas(),
       record.isr(),
+      record.partitionEpoch(),
       Collections.emptyList(), // TODO KAFKA-12285 handle offline replicas
       Collections.emptyList(),
       Collections.emptyList())
@@ -52,6 +53,7 @@ object MetadataPartition {
       partition.leaderEpoch(),
       partition.replicas(),
       partition.isr(),
+      partition.zkVersion(),
       partition.offlineReplicas(),
       prevPartition.flatMap(p => Some(p.addingReplicas)).getOrElse(Collections.emptyList()),
       prevPartition.flatMap(p => Some(p.removingReplicas)).getOrElse(Collections.emptyList())
@@ -65,6 +67,7 @@ case class MetadataPartition(topicName: String,
                              leaderEpoch: Int,
                              replicas: util.List[Integer],
                              isr: util.List[Integer],
+                             partitionEpoch: Int,
                              offlineReplicas: util.List[Integer],
                              addingReplicas: util.List[Integer],
                              removingReplicas: util.List[Integer]) {
@@ -79,13 +82,13 @@ case class MetadataPartition(topicName: String,
       setIsr(isr).
       setAddingReplicas(addingReplicas).
       setRemovingReplicas(removingReplicas).
-      setIsNew(isNew)
-    // Note: we don't set ZKVersion here.
+      setIsNew(isNew).
+      setZkVersion(partitionEpoch)
   }
 
   def isReplicaFor(brokerId: Int): Boolean = replicas.contains(Integer.valueOf(brokerId))
 
-  def copyWithChanges(record: PartitionChangeRecord): MetadataPartition = {
+  def merge(record: PartitionChangeRecord): MetadataPartition = {
     val (newLeader, newLeaderEpoch) = if (record.leader() == MetadataPartition.NO_LEADER_CHANGE) {
       (leaderId, leaderEpoch)
     } else {
@@ -102,6 +105,7 @@ case class MetadataPartition(topicName: String,
       newLeaderEpoch,
       replicas,
       newIsr,
+      partitionEpoch + 1,
       offlineReplicas,
       addingReplicas,
       removingReplicas)
@@ -132,7 +136,7 @@ class MetadataPartitionsBuilder(val brokerId: Int,
         case None => throw new RuntimeException(s"Unable to locate topic with name $name")
         case Some(partitionMap) => Option(partitionMap.get(record.partitionId())) match {
           case None => throw new RuntimeException(s"Unable to locate $name-${record.partitionId}")
-          case Some(partition) => set(partition.copyWithChanges(record))
+          case Some(partition) => set(partition.merge(record))
         }
       }
     }

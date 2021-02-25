@@ -32,7 +32,7 @@ import org.apache.kafka.common.message.CreateTopicsRequestData.CreatableTopicCol
 import org.apache.kafka.common.message.CreateTopicsRequestData;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.ApiError;
-import org.apache.kafka.controller.BrokersToIsrs.TopicPartition;
+import org.apache.kafka.controller.BrokersToIsrs.TopicIdPartition;
 import org.apache.kafka.metadata.BrokerHeartbeatReply;
 import org.apache.kafka.metadata.BrokerRegistrationReply;
 import org.apache.kafka.metalog.LocalLogManagerTestEnv;
@@ -157,9 +157,9 @@ public class QuorumControllerTest {
                             setCurrentMetadataOffset(100000L)).get());
                 assertEquals(Errors.NONE.code(), active.createTopics(
                     createTopicsRequestData).get().topics().find("foo").errorCode());
-                CompletableFuture<TopicPartition> topicPartitionFuture = active.appendReadEvent(
+                CompletableFuture<TopicIdPartition> topicPartitionFuture = active.appendReadEvent(
                     "debugGetPartition", () -> {
-                        Iterator<TopicPartition> iterator = active.
+                        Iterator<TopicIdPartition> iterator = active.
                             replicationControl().brokersToIsrs().iterator(0, true);
                         assertTrue(iterator.hasNext());
                         return iterator.next();
@@ -168,7 +168,7 @@ public class QuorumControllerTest {
                 active.unregisterBroker(0).get();
                 topicPartitionFuture = active.appendReadEvent(
                     "debugGetPartition", () -> {
-                        Iterator<TopicPartition> iterator = active.
+                        Iterator<TopicIdPartition> iterator = active.
                             replicationControl().brokersToIsrs().noLeaderIterator();
                         assertTrue(iterator.hasNext());
                         return iterator.next();
