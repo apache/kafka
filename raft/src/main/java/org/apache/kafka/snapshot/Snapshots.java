@@ -117,7 +117,7 @@ public final class Snapshots {
             }
             return Files.deleteIfExists(destination);
         } catch (IOException e) {
-            log.warn("Error deleting snapshot file " + destination + ":" + e.getMessage());
+            log.error("Error deleting snapshot file " + destination, e);
             return false;
         }
     }

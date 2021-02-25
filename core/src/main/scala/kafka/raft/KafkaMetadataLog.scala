@@ -298,9 +298,12 @@ final class KafkaMetadataLog private (
         Utils.atomicMoveWithFallback(path, destination)
       } catch {
         case e: IOException =>
-          warn("Error renaming snapshot file: " + path + " to :" + destination + ", " + e.getMessage)
+          error(s"Error renaming snapshot file: $path to $destination", e)
       }
-      scheduler.schedule("delete-snapshot-file", () => Snapshots.deleteSnapshotIfExists(log.dir.toPath, snapshotId))
+      scheduler.schedule(
+        "delete-snapshot-file",
+        () => Snapshots.deleteSnapshotIfExists(log.dir.toPath, snapshotId),
+        60 * 1000L)
     }
   }
 

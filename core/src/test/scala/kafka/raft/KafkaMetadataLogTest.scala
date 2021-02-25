@@ -144,8 +144,7 @@ final class KafkaMetadataLogTest {
 
   @Test
   def testUpdateLogStartOffsetWillRemoveOlderSnapshot(): Unit = {
-    val topicPartition = new TopicPartition("cluster-metadata", 0)
-    val (logDir, log) = buildMetadataLogAndDir(tempDir, mockTime, topicPartition)
+    val (logDir, log) = buildMetadataLogAndDir(tempDir, mockTime)
     val offset = 10
     val epoch = 0
 
@@ -248,8 +247,7 @@ final class KafkaMetadataLogTest {
   @Test
   def testTruncateWillRemoveOlderSnapshot(): Unit = {
 
-    val topicPartition = new TopicPartition("cluster-metadata", 0)
-    val (logDir, log) = buildMetadataLogAndDir(tempDir, mockTime, topicPartition)
+    val (logDir, log) = buildMetadataLogAndDir(tempDir, mockTime)
     val numberOfRecords = 10
     val epoch = 1
 
@@ -386,7 +384,7 @@ final class KafkaMetadataLogTest {
 
     log.close()
 
-    val secondLog = buildMetadataLog(tempDir, mockTime, topicPartition)
+    val secondLog = buildMetadataLog(tempDir, mockTime)
 
     assertEquals(greaterSnapshotId, secondLog.latestSnapshotId().get)
     assertEquals(3 * numberOfRecords, secondLog.startOffset)
