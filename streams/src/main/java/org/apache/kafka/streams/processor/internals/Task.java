@@ -237,4 +237,15 @@ public interface Task {
      */
     Map<TopicPartition, Long> changelogOffsets();
 
+    Map<TopicPartition, Long> getCommittedOffsets();
+
+    Map<TopicPartition, Long> getEndOffsets();
+
+    Long getIdling();
+
+    void startIdling(Long time);
+
+    void setCommittedOffset(TopicPartition topicPartition, Long offset);
+
+    void setEndOffset(TopicPartition topicPartition, Long offset);
 }

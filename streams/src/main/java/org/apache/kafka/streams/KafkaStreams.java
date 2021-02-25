@@ -1598,7 +1598,6 @@ public class KafkaStreams implements AutoCloseable {
      * @return the set of {@link ThreadMetadata}.
      */
     public Set<ThreadMetadata> localThreadsMetadata() {
-        validateIsRunningOrRebalancing();
         final Set<ThreadMetadata> threadMetadata = new HashSet<>();
         processStreamThread(thread -> {
             synchronized (thread.getStateLock()) {

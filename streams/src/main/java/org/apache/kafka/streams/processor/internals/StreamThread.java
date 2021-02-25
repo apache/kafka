@@ -231,11 +231,8 @@ public class StreamThread extends Thread {
             }
 
             state = newState;
-            if (newState == State.RUNNING) {
-                updateThreadMetadata(taskManager.activeTaskMap(), taskManager.standbyTaskMap());
-            } else {
-                updateThreadMetadata(Collections.emptyMap(), Collections.emptyMap());
-            }
+            updateThreadMetadata(taskManager.activeTaskMap(), taskManager.standbyTaskMap());
+
             stateLock.notifyAll();
         }
 
@@ -1126,11 +1123,11 @@ public class StreamThread extends Thread {
                                       final Map<TaskId, Task> standbyTasks) {
         final Set<TaskMetadata> activeTasksMetadata = new HashSet<>();
         for (final Map.Entry<TaskId, Task> task : activeTasks.entrySet()) {
-            activeTasksMetadata.add(new TaskMetadata(task.getKey().toString(), task.getValue().inputPartitions()));
+            activeTasksMetadata.add(new TaskMetadata(task.getKey().toString(), task.getValue().inputPartitions(), task.getValue().getCommittedOffsets(), task.getValue().getEndOffsets(), task.getValue().getIdling()));
         }
         final Set<TaskMetadata> standbyTasksMetadata = new HashSet<>();
         for (final Map.Entry<TaskId, Task> task : standbyTasks.entrySet()) {
-            standbyTasksMetadata.add(new TaskMetadata(task.getKey().toString(), task.getValue().inputPartitions()));
+            standbyTasksMetadata.add(new TaskMetadata(task.getKey().toString(), task.getValue().inputPartitions(), task.getValue().getCommittedOffsets(), task.getValue().getEndOffsets(), task.getValue().getIdling()));
         }
 
         final String adminClientId = threadMetadata.adminClientId();

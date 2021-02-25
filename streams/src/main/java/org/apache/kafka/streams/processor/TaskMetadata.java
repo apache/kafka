@@ -18,8 +18,11 @@ package org.apache.kafka.streams.processor;
 
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.streams.KafkaStreams;
+import org.apache.kafka.streams.processor.internals.TaskManager;
 
 import java.util.Collections;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 
@@ -32,10 +35,22 @@ public class TaskMetadata {
 
     private final Set<TopicPartition> topicPartitions;
 
+    private final Map<TopicPartition, Long> committedOffsets;
+
+    private final Map<TopicPartition, Long> endOffsets;
+
+    private final Long timeCurrentIdlingStarted;
+
     public TaskMetadata(final String taskId,
-                        final Set<TopicPartition> topicPartitions) {
+                        final Set<TopicPartition> topicPartitions,
+                        final Map<TopicPartition, Long> committedOffsets,
+                        final Map<TopicPartition, Long> endOffsets,
+                        final Long timeCurrentIdlingStarted) {
         this.taskId = taskId;
         this.topicPartitions = Collections.unmodifiableSet(topicPartitions);
+        this.committedOffsets = committedOffsets;
+        this.endOffsets = endOffsets;
+        this.timeCurrentIdlingStarted = timeCurrentIdlingStarted;
     }
 
     public String taskId() {
@@ -45,6 +60,19 @@ public class TaskMetadata {
     public Set<TopicPartition> topicPartitions() {
         return topicPartitions;
     }
+
+    public Map<TopicPartition, Long> getCommittedOffsets() {
+        return committedOffsets;
+    }
+
+    public Map<TopicPartition, Long> getEndOffsets() {
+        return endOffsets;
+    }
+
+    public Long getTimeCurrentIdlingStarted() {
+        return timeCurrentIdlingStarted;
+    }
+
 
     @Override
     public boolean equals(final Object o) {

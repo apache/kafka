@@ -1055,6 +1055,7 @@ public class TaskManager {
                     try {
                         tasks.streamsProducerForTask(task.id())
                             .commitTransaction(taskToCommit.getValue(), mainConsumer.groupMetadata());
+                        updateTaskMetadata(taskToCommit.getValue());
                     } catch (final TimeoutException timeoutException) {
                         log.error(
                             String.format("Committing task %s failed.", task.id()),
@@ -1070,6 +1071,7 @@ public class TaskManager {
                 if (processingMode == EXACTLY_ONCE_BETA) {
                     try {
                         tasks.threadProducer().commitTransaction(allOffsets, mainConsumer.groupMetadata());
+                        updateTaskMetadata(allOffsets);
                     } catch (final TimeoutException timeoutException) {
                         log.error(
                             String.format("Committing task(s) %s failed.",
@@ -1087,6 +1089,7 @@ public class TaskManager {
                 } else {
                     try {
                         mainConsumer.commitSync(allOffsets);
+                        updateTaskMetadata(allOffsets);
                     } catch (final CommitFailedException error) {
                         throw new TaskMigratedException("Consumer committing offsets failed, " +
                                                             "indicating the corresponding thread is no longer part of the group", error);
@@ -1109,6 +1112,16 @@ public class TaskManager {
 
             if (!corruptedTasks.isEmpty()) {
                 throw new TaskCorruptedException(corruptedTasks);
+            }
+        }
+    }
+
+    private void updateTaskMetadata(Map<TopicPartition, OffsetAndMetadata> allOffsets) {
+        for(Task task: tasks.activeTasks()) {
+            for(TopicPartition topicPartition: task.inputPartitions()) {
+                if(allOffsets.containsKey(topicPartition)) {
+                    task.setCommittedOffset(topicPartition, allOffsets.get(topicPartition).offset());
+                }
             }
         }
     }
