@@ -849,6 +849,23 @@ class Log(@volatile private var _dir: File,
    * @throws LogSegmentOffsetOverflowException if we encountered a legacy segment with offset overflow
    */
   private[log] def recoverLog(): Long = {
+    /** return the log end offset if valid */
+    def deleteSegmentsIfLogStartGreaterThanLogEnd(): Option[Long] = {
+      if (logSegments.nonEmpty) {
+        val logEndOffset = activeSegment.readNextOffset
+        if (logEndOffset >= logStartOffset)
+          Some(logEndOffset)
+        else {
+          warn(s"Deleting all segments because logEndOffset ($logEndOffset) is smaller than logStartOffset ($logStartOffset). " +
+            "This could happen if segment files were deleted from the file system.")
+          removeAndDeleteSegments(logSegments, asyncDelete = true, LogRecovery)
+          leaderEpochCache.foreach(_.clearAndFlush())
+          producerStateManager.truncateFullyAndStartAt(logStartOffset)
+          None
+        }
+      } else None
+    }
+
     // if we have the clean shutdown marker, skip recovery
     if (!hadCleanShutdown) {
       val unflushed = logSegments(this.recoveryPoint, Long.MaxValue).iterator
@@ -878,20 +895,7 @@ class Log(@volatile private var _dir: File,
       }
     }
 
-    val logEndOffsetOption: Option[Long] =
-      if (logSegments.nonEmpty) {
-        val logEndOffset = activeSegment.readNextOffset
-        if (logEndOffset >= logStartOffset)
-          Some(logEndOffset)
-        else {
-          warn(s"Deleting all segments because logEndOffset ($logEndOffset) is smaller than logStartOffset ($logStartOffset). " +
-            "This could happen if segment files were deleted from the file system.")
-          removeAndDeleteSegments(logSegments, asyncDelete = true, LogRecovery)
-          leaderEpochCache.foreach(_.clearAndFlush())
-//          producerStateManager.truncate() FIXME
-          None
-        }
-      } else None
+    val logEndOffsetOption = deleteSegmentsIfLogStartGreaterThanLogEnd()
 
     if (logSegments.isEmpty) {
       // no existing segments, create a new mutable segment beginning at logStartOffset
@@ -906,13 +910,15 @@ class Log(@volatile private var _dir: File,
     // Update the recovery point if there was a clean shutdown and did not perform any changes to
     // the segment. Otherwise, we just ensure that the recovery point is not ahead of the log end
     // offset. To ensure correctness and to make it easier to reason about, it's best to only advance
-    // the recovery point in flush(Long).
-    if (hasCleanShutdownFile)
+    // the recovery point in flush(Long). If we advanced the recovery point here, we could skip recovery for
+    // unflushed segments if the broker crashed after we checkpoint the recovery point and before we flush the
+    // segment.
+    if (hadCleanShutdown)
       logEndOffsetOption.foreach(recoveryPoint = _)
     else
-      recoveryPoint = Math.min(recoveryPoint, logEndOffset)
+      recoveryPoint = logEndOffsetOption.map(Math.min(recoveryPoint, _)).getOrElse(recoveryPoint)
 
-    logEndOffset
+    logEndOffsetOption.getOrElse(activeSegment.readNextOffset)
   }
 
   // Rebuild producer state until lastOffset. This method may be called from the recovery code path, and thus must be
