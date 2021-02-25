@@ -261,7 +261,6 @@ class SecurityConfig(TemplateRenderer):
 
         if self.static_jaas_conf:
             node.account.create_file(SecurityConfig.JAAS_CONF_PATH, jaas_conf)
-            print(jaas_conf)
             node.account.create_file(SecurityConfig.ADMIN_CLIENT_AS_BROKER_JAAS_CONF_PATH,
                                      self.render_jaas_config(
                                          "admin_client_as_broker_jaas.conf",
@@ -355,7 +354,6 @@ class SecurityConfig(TemplateRenderer):
         :return: enabled_sasl_mechanisms plus any mechanisms that are used for Raft communication
         """
         retval = set([self.client_sasl_mechanism, self.interbroker_sasl_mechanism] + self.raft_sasl_mechanisms)
-        print(retval)
         return retval
 
     @property
