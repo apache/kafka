@@ -86,8 +86,7 @@ public class PluginClassLoader extends URLClassLoader {
     // base method is not. More on multithreaded classloaders in:
     // https://docs.oracle.com/javase/7/docs/technotes/guides/lang/cl-mt.html
     @Override
-    protected synchronized Class<?> loadClass(String name, boolean resolve)
-            throws ClassNotFoundException {
+    protected Class<?> loadClass(String name, boolean resolve) throws ClassNotFoundException {
         synchronized (getClassLoadingLock(name)) {
             Class<?> klass = findLoadedClass(name);
             if (klass == null) {
