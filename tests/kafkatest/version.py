@@ -208,6 +208,6 @@ LATEST_2_7 = V_2_7_0
 V_2_8_0 = KafkaVersion("2.8.0")
 LATEST_2_8 = V_2_8_0
 
-# 2.9.x versions
-V_2_9_0 = KafkaVersion("2.9.0")
-LATEST_2_9 = V_2_9_0
+# 3.0.x versions
+V_3_0_0 = KafkaVersion("3.0.0")
+LATEST_3_0 = V_3_0_0
