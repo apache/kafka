@@ -244,8 +244,7 @@ class TransactionsTest(Test):
     @matrix(failure_mode=["hard_bounce", "clean_bounce"],
             bounce_target=["brokers", "clients"],
             check_order=[True, False],
-            use_group_metadata=[True, False],
-            metadata_quorum=quorum.all_non_upgrade)
+            use_group_metadata=[True, False])
     def test_transactions(self, failure_mode, bounce_target, check_order, use_group_metadata, metadata_quorum=quorum.zk):
         security_protocol = 'PLAINTEXT'
         self.kafka.security_protocol = security_protocol
