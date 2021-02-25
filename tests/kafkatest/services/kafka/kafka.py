@@ -232,7 +232,7 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
         :param str tls_version: version of the TLS protocol.
         :param str interbroker_security_protocol: security protocol to use for broker-to-broker (and Raft controller-to-controller) communication
         :param str client_sasl_mechanism: sasl mechanism for clients to use
-        :param str interbroker_sasl_mechanism: sasl mechanism to use for broker-to-broker communication
+        :param str interbroker_sasl_mechanism: sasl mechanism to use for broker-to-broker (and to-controller) communication
         :param str authorizer_class_name: which authorizer class to use
         :param str version: which kafka version to use. Defaults to "dev" branch
         :param jmx_object_names:

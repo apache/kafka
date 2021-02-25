@@ -676,7 +676,7 @@ object KafkaConfig {
     "KIP-500. If it is not set, the metadata log is placed in the first log directory from log.dirs."
   val ControllerListenerNamesDoc = "A comma-separated list of the names of the listeners used by the KIP-500 controller. This is required " +
     "if this process is a KIP-500 controller. The ZK-based controller will not use this configuration."
-  val SaslMechanismControllerProtocolDoc = "SASL mechanism used for broker-to-raft-controller communication. Default is GSSAPI."
+  val SaslMechanismControllerProtocolDoc = "SASL mechanism used for communication with controllers. Default is GSSAPI."
 
   /************* Authorizer Configuration ***********/
   val AuthorizerClassNameDoc = s"The fully qualified name of a class that implements s${classOf[Authorizer].getName}" +
