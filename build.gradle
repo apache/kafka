@@ -939,7 +939,7 @@ project(':core') {
   }
 
   tasks.create(name: "releaseTarGz", dependsOn: configurations.archives.artifacts, type: Tar) {
-    into "kafka_${versions.baseScala}-${version}"
+    into "kafka_${versions.baseScala}-${archiveVersion}"
     compression = Compression.GZIP
     from(project.file("$rootDir/bin")) { into "bin/" }
     from(project.file("$rootDir/config")) { into "config/" }
@@ -1829,9 +1829,9 @@ project(':jmh-benchmarks') {
   apply plugin: 'com.github.johnrengelman.shadow'
 
   shadowJar {
-    baseName = 'kafka-jmh-benchmarks-all'
+    archiveBaseName = 'kafka-jmh-benchmarks-all'
     classifier = null
-    version = null
+    archiveVersion = null
   }
 
   dependencies {
@@ -2048,7 +2048,7 @@ project(':connect:runtime') {
     implementation libs.jettyClient
     implementation libs.reflections
     implementation libs.mavenArtifact
-    
+
     testImplementation project(':clients').sourceSets.test.output
     testImplementation project(':core')
     testImplementation project(':metadata')
