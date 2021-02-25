@@ -91,7 +91,7 @@ There are several primitive field types available.
 
 * "bytes": binary data.
 
-* "records": memory record set or file record set.
+* "records": recordset such as memory recordset.
 
 In addition to these primitive field types, there is also an array type.  Array
 types start with a "[]" and end with the name of the element type.  For
