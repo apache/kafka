@@ -100,7 +100,7 @@ class WorkerSourceTask extends WorkerTask {
     private IdentityHashMap<ProducerRecord<byte[], byte[]>, ProducerRecord<byte[], byte[]>> outstandingMessagesBacklog;
     private boolean recordFlushPending;
     private boolean offsetFlushPending;
-    private CountDownLatch stopRequestedLatch;
+    private final CountDownLatch stopRequestedLatch;
 
     private Map<String, String> taskConfig;
     private boolean started = false;
