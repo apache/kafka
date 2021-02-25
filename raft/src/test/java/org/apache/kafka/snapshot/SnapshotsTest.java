@@ -16,17 +16,17 @@
  */
 package org.apache.kafka.snapshot;
 
+import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.raft.OffsetAndEpoch;
+import org.apache.kafka.test.TestUtils;
+import org.junit.jupiter.api.Test;
+
 import java.io.IOException;
 import java.nio.file.FileSystems;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Optional;
-import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ExecutionException;
 
-import org.apache.kafka.raft.OffsetAndEpoch;
-import org.apache.kafka.test.TestUtils;
-import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -80,11 +80,11 @@ final public class SnapshotsTest {
         // partition metadata
         assertEquals(Optional.empty(), Snapshots.parse(root.resolve("partition.metadata")));
         // deleted file
-        assertEquals(Optional.empty(), Snapshots.parse(root.resolve("00000000000000000000.snapshot.deleted")));
+        assertEquals(Optional.empty(), Snapshots.parse(root.resolve("00000000000000000000.deleted")));
     }
 
     @Test
-    public void testDeleteSnapshot() throws IOException, ExecutionException, InterruptedException {
+    public void testDeleteSnapshot() throws IOException {
 
         OffsetAndEpoch snapshotId = new OffsetAndEpoch(
             TestUtils.RANDOM.nextInt(Integer.MAX_VALUE),
@@ -98,10 +98,25 @@ final public class SnapshotsTest {
             Path snapshotPath = Snapshots.snapshotPath(logDirPath, snapshotId);
             assertTrue(Files.exists(snapshotPath));
 
-            CompletableFuture<Boolean> deleted = Snapshots.deleteSnapshotIfExists(logDirPath, snapshot.snapshotId());
+            // delete snapshot directly
+            assertTrue(Snapshots.deleteSnapshotIfExists(logDirPath, snapshot.snapshotId()));
             assertFalse(Files.exists(snapshotPath));
-            assertTrue(deleted.get());
             assertFalse(Files.exists(Snapshots.deleteRename(snapshotPath, snapshotId)));
         }
+
+        try (FileRawSnapshotWriter snapshot = FileRawSnapshotWriter.create(logDirPath, snapshotId, Optional.empty())) {
+            snapshot.freeze();
+
+            Path snapshotPath = Snapshots.snapshotPath(logDirPath, snapshotId);
+            assertTrue(Files.exists(snapshotPath));
+
+            // rename snapshot before deleting
+            Utils.atomicMoveWithFallback(snapshotPath, Snapshots.deleteRename(snapshotPath, snapshotId));
+
+            assertTrue(Snapshots.deleteSnapshotIfExists(logDirPath, snapshot.snapshotId()));
+            assertFalse(Files.exists(snapshotPath));
+            assertFalse(Files.exists(Snapshots.deleteRename(snapshotPath, snapshotId)));
+        }
+
     }
 }

@@ -18,18 +18,20 @@ package org.apache.kafka.snapshot;
 
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.raft.OffsetAndEpoch;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.text.NumberFormat;
 import java.util.Optional;
-import java.util.concurrent.CompletableFuture;
 
 public final class Snapshots {
+    private static final Logger log = LoggerFactory.getLogger(Snapshots.class);
     public static final String SUFFIX = ".checkpoint";
     public static final String PARTIAL_SUFFIX = String.format("%s.part", SUFFIX);
-    public static final String DELETE_SUFFIX = String.format("%s.deleted", SUFFIX);
+    public static final String DELETE_SUFFIX = ".deleted";
 
     private static final NumberFormat OFFSET_FORMATTER = NumberFormat.getInstance();
     private static final NumberFormat EPOCH_FORMATTER = NumberFormat.getInstance();
@@ -49,7 +51,7 @@ public final class Snapshots {
         return logDir;
     }
 
-    static Path snapshotPath(Path logDir, OffsetAndEpoch snapshotId) {
+    public static Path snapshotPath(Path logDir, OffsetAndEpoch snapshotId) {
         return snapshotDir(logDir).resolve(filenameFromSnapshotId(snapshotId) + SUFFIX);
     }
 
@@ -61,7 +63,7 @@ public final class Snapshots {
         return source.resolveSibling(filenameFromSnapshotId(snapshotId) + SUFFIX);
     }
 
-    static Path deleteRename(Path source, OffsetAndEpoch snapshotId) {
+    public static Path deleteRename(Path source, OffsetAndEpoch snapshotId) {
         return source.resolveSibling(filenameFromSnapshotId(snapshotId) + DELETE_SUFFIX);
     }
 
@@ -102,20 +104,22 @@ public final class Snapshots {
     }
 
     /**
-     * Delete this snapshot from the filesystem.
+     * Delete the snapshot from the filesystem, we will firstly tried to rename snapshot file to
+     * ${file}.deleted, or delete the file directly if its already renamed.
      */
-    public static CompletableFuture<Boolean> deleteSnapshotIfExists(Path logDir, OffsetAndEpoch snapshotId) throws IOException {
-        Path path = snapshotPath(logDir, snapshotId);
+    public static boolean deleteSnapshotIfExists(Path logDir, OffsetAndEpoch snapshotId) {
+        Path path = Snapshots.snapshotPath(logDir, snapshotId);
         Path destination = Snapshots.deleteRename(path, snapshotId);
-        Utils.atomicMoveWithFallback(path, destination);
-
-        return CompletableFuture.supplyAsync(() -> {
-            try {
-                return Files.deleteIfExists(destination);
-            } catch (IOException e) {
-                throw new RuntimeException("Error deleting snapshot file " + destination + ":" + e.getMessage());
+        try {
+            // rename before deleting if target file is not renamed
+            if (Files.exists(path) || Files.notExists(destination)) {
+                Utils.atomicMoveWithFallback(path, destination);
             }
-        });
+            return Files.deleteIfExists(destination);
+        } catch (IOException e) {
+            log.warn("Error deleting snapshot file " + destination + ":" + e.getMessage());
+            return false;
+        }
     }
 
 }

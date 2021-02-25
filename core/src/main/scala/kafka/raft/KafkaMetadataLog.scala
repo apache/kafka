@@ -16,7 +16,7 @@
  */
 package kafka.raft
 
-import java.io.File
+import java.io.{File, IOException}
 import java.nio.file.{Files, NoSuchFileException}
 import java.util.concurrent.ConcurrentSkipListSet
 import java.util.{NoSuchElementException, Optional, Properties}
@@ -24,9 +24,9 @@ import java.util.{NoSuchElementException, Optional, Properties}
 import kafka.api.ApiVersion
 import kafka.log.{AppendOrigin, Log, LogConfig, LogOffsetSnapshot, SnapshotGenerated}
 import kafka.server.{BrokerTopicStats, FetchHighWatermark, FetchLogEnd, LogDirFailureChannel}
-import kafka.utils.Scheduler
+import kafka.utils.{Logging, Scheduler}
 import org.apache.kafka.common.record.{MemoryRecords, Records}
-import org.apache.kafka.common.utils.Time
+import org.apache.kafka.common.utils.{Time, Utils}
 import org.apache.kafka.common.{KafkaException, TopicPartition}
 import org.apache.kafka.raft.{Isolation, LogAppendInfo, LogFetchInfo, LogOffsetMetadata, OffsetAndEpoch, OffsetMetadata, ReplicatedLog}
 import org.apache.kafka.snapshot.{FileRawSnapshotReader, FileRawSnapshotWriter, RawSnapshotReader, RawSnapshotWriter, SnapshotPath, Snapshots}
@@ -35,12 +35,13 @@ import scala.compat.java8.OptionConverters._
 
 final class KafkaMetadataLog private (
   log: Log,
+  scheduler: Scheduler,
   // This object needs to be thread-safe because it is used by the snapshotting thread to notify the
   // polling thread when snapshots are created.
   snapshotIds: ConcurrentSkipListSet[OffsetAndEpoch],
   topicPartition: TopicPartition,
   maxFetchSizeInBytes: Int
-) extends ReplicatedLog {
+) extends ReplicatedLog with Logging {
 
   override def read(startOffset: Long, readIsolation: Isolation): LogFetchInfo = {
     val isolation = readIsolation match {
@@ -290,7 +291,16 @@ final class KafkaMetadataLog private (
       // If snapshotIds contains a snapshot id, the KafkaRaftClient and Listener can expect that the snapshot exists
       // on the file system, so we should first remove snapshotId and then delete snapshot file.
       expiredSnapshotIdsIter.remove()
-      Snapshots.deleteSnapshotIfExists(log.dir.toPath, snapshotId)
+
+      val path = Snapshots.snapshotPath(log.dir.toPath, snapshotId)
+      val destination = Snapshots.deleteRename(path, snapshotId)
+      try {
+        Utils.atomicMoveWithFallback(path, destination)
+      } catch {
+        case e: IOException =>
+          warn("Error renaming snapshot file: " + path + " to :" + destination + ", " + e.getMessage)
+      }
+      scheduler.schedule("delete-snapshot-file", () => Snapshots.deleteSnapshotIfExists(log.dir.toPath, snapshotId))
     }
   }
 
