@@ -32,10 +32,10 @@ buildscript {
 }
 
 plugins {
-  id 'com.diffplug.spotless' version '5.8.2'
+  id 'com.diffplug.spotless' version '5.10.2'
   id 'com.github.ben-manes.versions' version '0.36.0'
   id 'idea'
-  id 'org.owasp.dependencycheck' version '6.0.3'
+  id 'org.owasp.dependencycheck' version '6.1.1'
 
   id "com.github.spotbugs" version '4.6.0' apply false
   id 'org.gradle.test-retry' version '1.2.0' apply false
