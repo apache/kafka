@@ -851,7 +851,6 @@ class Log(@volatile private var _dir: File,
   private[log] def recoverLog(): Long = {
     // if we have the clean shutdown marker, skip recovery
     if (!hadCleanShutdown) {
-      // okay we need to actually recover this log
       val unflushed = logSegments(this.recoveryPoint, Long.MaxValue).iterator
       var truncated = false
 
@@ -879,16 +878,20 @@ class Log(@volatile private var _dir: File,
       }
     }
 
-    if (logSegments.nonEmpty) {
-      val logEndOffset = activeSegment.readNextOffset
-      if (logEndOffset < logStartOffset) {
-        warn(s"Deleting all segments because logEndOffset ($logEndOffset) is smaller than logStartOffset ($logStartOffset). " +
-          "This could happen if segment files were deleted from the file system.")
-        removeAndDeleteSegments(logSegments,
-          asyncDelete = true,
-          reason = LogRecovery)
-      }
-    }
+    val logEndOffsetOption: Option[Long] =
+      if (logSegments.nonEmpty) {
+        val logEndOffset = activeSegment.readNextOffset
+        if (logEndOffset >= logStartOffset)
+          Some(logEndOffset)
+        else {
+          warn(s"Deleting all segments because logEndOffset ($logEndOffset) is smaller than logStartOffset ($logStartOffset). " +
+            "This could happen if segment files were deleted from the file system.")
+          removeAndDeleteSegments(logSegments, asyncDelete = true, LogRecovery)
+          leaderEpochCache.foreach(_.clearAndFlush())
+//          producerStateManager.truncate() FIXME
+          None
+        }
+      } else None
 
     if (logSegments.isEmpty) {
       // no existing segments, create a new mutable segment beginning at logStartOffset
@@ -900,8 +903,16 @@ class Log(@volatile private var _dir: File,
         preallocate = config.preallocate))
     }
 
-    recoveryPoint = activeSegment.readNextOffset
-    recoveryPoint
+    // Update the recovery point if there was a clean shutdown and did not perform any changes to
+    // the segment. Otherwise, we just ensure that the recovery point is not ahead of the log end
+    // offset. To ensure correctness and to make it easier to reason about, it's best to only advance
+    // the recovery point in flush(Long).
+    if (hasCleanShutdownFile)
+      logEndOffsetOption.foreach(recoveryPoint = _)
+    else
+      recoveryPoint = Math.min(recoveryPoint, logEndOffset)
+
+    logEndOffset
   }
 
   // Rebuild producer state until lastOffset. This method may be called from the recovery code path, and thus must be
