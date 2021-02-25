@@ -913,12 +913,15 @@ class Log(@volatile private var _dir: File,
     // the recovery point in flush(Long). If we advanced the recovery point here, we could skip recovery for
     // unflushed segments if the broker crashed after we checkpoint the recovery point and before we flush the
     // segment.
-    if (hadCleanShutdown)
-      logEndOffsetOption.foreach(recoveryPoint = _)
-    else
-      recoveryPoint = logEndOffsetOption.map(Math.min(recoveryPoint, _)).getOrElse(recoveryPoint)
-
-    logEndOffsetOption.getOrElse(activeSegment.readNextOffset)
+    (hadCleanShutdown, logEndOffsetOption) match {
+      case (true, Some(logEndOffset)) =>
+        recoveryPoint = logEndOffset
+        logEndOffset
+      case _ =>
+        val logEndOffset = logEndOffsetOption.getOrElse(activeSegment.readNextOffset)
+        recoveryPoint = Math.min(recoveryPoint, logEndOffset)
+        logEndOffset
+    }
   }
 
   // Rebuild producer state until lastOffset. This method may be called from the recovery code path, and thus must be
