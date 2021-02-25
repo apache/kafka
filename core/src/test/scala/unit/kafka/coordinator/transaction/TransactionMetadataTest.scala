@@ -464,7 +464,7 @@ class TransactionMetadataTest {
   def testTransactionStateIdAndNameMapping(): Unit = {
     for (state <- TransactionState.AllStates) {
       assertEquals(state, TransactionState.fromId(state.id))
-      assertEquals(state, TransactionState.fromName(state.name))
+      assertEquals(Some(state), TransactionState.fromName(state.name))
     }
   }
 
