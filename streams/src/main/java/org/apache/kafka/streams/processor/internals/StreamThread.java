@@ -571,6 +571,9 @@ public class StreamThread extends Thread {
         // until the rebalance is completed before we close and commit the tasks
         while (isRunning() || taskManager.isRebalanceInProgress()) {
             try {
+                if (assignmentErrorCode.get() == AssignorError.SHUTDOWN_REQUESTED.code()) {
+                    mainConsumer.enforceRebalance();
+                }
                 runOnce();
                 if (nextProbingRebalanceMs.get() < time.milliseconds()) {
                     log.info("Triggering the followup rebalance scheduled for {} ms.", nextProbingRebalanceMs.get());
@@ -663,7 +666,6 @@ public class StreamThread extends Thread {
         log.warn("Detected that shutdown was requested. " +
                 "All clients in this app will now begin to shutdown");
         assignmentErrorCode.set(assignorError.code());
-        mainConsumer.enforceRebalance();
     }
 
     private void handleTaskMigrated(final TaskMigratedException e) {
