@@ -1482,7 +1482,6 @@ object TestUtils extends Logging {
       pollRecordsUntilTrue(consumer, pollAction,
         waitTimeMs = 30000,
         msg = s"Consumed ${records.size} records before timeout instead of the expected $numRecords records")
-
       fail("failed at 1st try")
     }
 
