@@ -72,7 +72,7 @@ object Defaults {
   val QueuedMaxRequestBytes = -1
   val InitialBrokerRegistrationTimeoutMs = 60000
   val BrokerHeartbeatIntervalMs = 2000
-  val BrokerSessionTimeoutMs = 18000
+  val BrokerSessionTimeoutMs = 9000
 
   /** KIP-500 Configuration */
   val EmptyNodeId: Int = -1

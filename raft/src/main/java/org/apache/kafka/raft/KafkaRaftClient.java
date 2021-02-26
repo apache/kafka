@@ -140,7 +140,7 @@ import static org.apache.kafka.raft.RaftUtil.hasValidTopicPartition;
  */
 public class KafkaRaftClient<T> implements RaftClient<T> {
     private static final int RETRY_BACKOFF_BASE_MS = 100;
-    private static final int FETCH_MAX_WAIT_MS = 1000;
+    private static final int FETCH_MAX_WAIT_MS = 500;
     static final int MAX_BATCH_SIZE = 8 * 1024 * 1024;
 
     private final AtomicReference<GracefulShutdown> shutdown = new AtomicReference<>();
