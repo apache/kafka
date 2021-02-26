@@ -87,6 +87,11 @@
         More details about the new config <code>StreamsConfig#TOPOLOGY_OPTIMIZATION</code> can be found in <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-295%3A+Add+Streams+Configuration+Allowing+for+Optional+Topology+Optimization">KIP-295</a>.
     </p>
 
+    <p>
+      Note: Kafka Streams does not support running multiple instances of the same application as different processes on the same physical state directory. Starting in 2.8.0 (as well as 2.7.1 and 2.6.2),
+      this restriction will be enforced. If you wish to run more than one instance of Kafka Streams, you must configure them with different values for <code>state.dir</code>.
+    </p>
+
     <h3><a id="streams_api_changes_280" href="#streams_api_changes_280">Streams API changes in 2.8.0</a></h3>
     <p>
         We extended <code>StreamJoined</code> to include the options <code>withLoggingEnabled()</code> and <code>withLoggingDisabled()</code> in
@@ -127,6 +132,11 @@
         added to the <code>TopologyTestDriver</code> class. If <code>Properties</code> are passed
         into the constructor, it is no longer required to set mandatory configuration parameters
         (cf. <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-680%3A+TopologyTestDriver+should+not+require+a+Properties+argument">KIP-680</a>).
+    </p>
+    <p>
+        We added the <code>prefixScan()</code> method to interface <code>ReadOnlyKeyValueStore</code>.
+        The new <code>prefixScan()</code> allows fetching all values whose keys start with a given prefix.
+        See <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-614%3A+Add+Prefix+Scan+support+for+State+Stores">KIP-614</a> for more details.
     </p>
     <p>
         Kafka Streams is now handling <code>TimeoutException</code> thrown by the consumer, producer, and admin client.
