@@ -189,10 +189,9 @@ class SecurityConfig(TemplateRenderer):
         if uses_controller_sasl_mechanism is not None:
             uses_raft_sasl += [uses_controller_sasl_mechanism]
         self.uses_raft_sasl = set(uses_raft_sasl)
-        self.has_raft_sasl = self.serves_raft_sasl or self.uses_raft_sasl
 
         self.has_sasl = self.is_sasl(security_protocol) or self.is_sasl(interbroker_security_protocol) or zk_sasl \
-                        or self.has_raft_sasl
+                        or self.serves_raft_sasl or self.uses_raft_sasl
         self.has_ssl = self.is_ssl(security_protocol) or self.is_ssl(interbroker_security_protocol) or zk_tls \
                        or raft_tls
         self.zk_sasl = zk_sasl
@@ -270,11 +269,7 @@ class SecurityConfig(TemplateRenderer):
                     'is_ibm_jdk': any('IBM' in line for line in java_version),
                     'SecurityConfig': SecurityConfig,
                     'client_sasl_mechanism': self.client_sasl_mechanism,
-                    'enabled_sasl_mechanisms': self.enabled_sasl_mechanisms,
-                    'has_raft_sasl': self.has_raft_sasl,
-                    'interbroker_sasl_mechanism': self.interbroker_sasl_mechanism,
-                    'uses_raft_sasl': self.uses_raft_sasl,
-                    'serves_raft_sasl': self.serves_raft_sasl,
+                    'enabled_sasl_mechanisms': self.enabled_sasl_mechanisms
                 }
             )
         else:
@@ -372,6 +367,8 @@ class SecurityConfig(TemplateRenderer):
             sasl_mechanisms += [self.interbroker_sasl_mechanism]
         if self.serves_raft_sasl:
             sasl_mechanisms += list(self.serves_raft_sasl)
+        if self.uses_raft_sasl:
+            sasl_mechanisms += list(self.uses_raft_sasl)
         return set(sasl_mechanisms)
 
     @property
