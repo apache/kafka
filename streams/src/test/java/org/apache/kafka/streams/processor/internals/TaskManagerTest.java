@@ -44,6 +44,7 @@ import org.apache.kafka.streams.errors.TaskCorruptedException;
 import org.apache.kafka.streams.errors.TaskMigratedException;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.TaskId;
+import org.apache.kafka.streams.processor.TaskMetadata;
 import org.apache.kafka.streams.processor.internals.StreamThread.ProcessingMode;
 import org.apache.kafka.streams.processor.internals.Task.State;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
@@ -3110,6 +3111,11 @@ public class TaskManagerTest {
         @Override
         public Map<TopicPartition, Long> changelogOffsets() {
             return changelogOffsets;
+        }
+
+        @Override
+        public TaskMetadata getTaskMetadata() {
+            return new TaskMetadata("test", new HashSet<>(), new HashMap<>(), new HashMap<>(), -1L);
         }
 
         @Override

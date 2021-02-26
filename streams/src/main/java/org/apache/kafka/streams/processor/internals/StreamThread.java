@@ -231,7 +231,9 @@ public class StreamThread extends Thread {
             }
 
             state = newState;
-            updateThreadMetadata(taskManager.activeTaskMap(), taskManager.standbyTaskMap());
+            if (newState == State.RUNNING) {
+                updateThreadMetadata(taskManager.activeTaskMap(), taskManager.standbyTaskMap());
+            }
 
             stateLock.notifyAll();
         }
