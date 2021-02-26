@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.connect.mirror;
 
+import kafka.log.LogConfig;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.acl.AccessControlEntry;
 import org.apache.kafka.common.acl.AclBinding;
@@ -183,9 +184,15 @@ public class MirrorSourceConnectorTest {
         connector.initialize(mock(ConnectorContext.class));
         connector = spy(connector);
 
+        Config topicConfig = new Config(Arrays.asList(
+                new ConfigEntry(LogConfig.CleanupPolicyProp(), "compact"),
+                new ConfigEntry(LogConfig.SegmentBytesProp(), "100")));
+        Map<String, Config> configs = Collections.singletonMap("source.topic", topicConfig);
+
         List<TopicPartition> sourceTopicPartitions = Collections.singletonList(new TopicPartition("topic", 0));
         doReturn(sourceTopicPartitions).when(connector).findSourceTopicPartitions();
         doReturn(Collections.emptyList()).when(connector).findTargetTopicPartitions();
+        doReturn(configs).when(connector).describeTopicConfigs(Collections.singleton("source.topic"));
         doNothing().when(connector).createTopicPartitions(any(), any(), any());
 
         connector.refreshTopicPartitions();
@@ -194,7 +201,12 @@ public class MirrorSourceConnectorTest {
 
         Map<String, Long> expectedPartitionCounts = new HashMap<>();
         expectedPartitionCounts.put("source.topic", 1L);
-        List<NewTopic> expectedNewTopics = Arrays.asList(new NewTopic("source.topic", 1, (short) 0));
+        Map<String, String> configMap = MirrorSourceConnector.configToMap(topicConfig);
+        assertEquals(2, configMap.size());
+
+        List<NewTopic> expectedNewTopics = Arrays.asList(
+                new NewTopic("source.topic", 1, (short) 0)
+                        .configs(configMap));
 
         verify(connector, times(2)).computeAndCreateTopicPartitions();
         verify(connector, times(2)).createTopicPartitions(
@@ -217,10 +229,17 @@ public class MirrorSourceConnectorTest {
         connector.initialize(mock(ConnectorContext.class));
         connector = spy(connector);
 
+        Config topicConfig = new Config(Arrays.asList(
+                new ConfigEntry(LogConfig.CleanupPolicyProp(), "compact"),
+                new ConfigEntry(LogConfig.SegmentBytesProp(), "100")));
+        Map<String, Config> configs = Collections.singletonMap("source.topic", topicConfig);
+
         List<TopicPartition> sourceTopicPartitions = Collections.emptyList();
         List<TopicPartition> targetTopicPartitions = Collections.singletonList(new TopicPartition("source.topic", 0));
         doReturn(sourceTopicPartitions).when(connector).findSourceTopicPartitions();
         doReturn(targetTopicPartitions).when(connector).findTargetTopicPartitions();
+        doReturn(configs).when(connector).describeTopicConfigs(Collections.singleton("source.topic"));
+        doReturn(Collections.emptyMap()).when(connector).describeTopicConfigs(Collections.emptySet());
         doNothing().when(connector).createTopicPartitions(any(), any(), any());
 
         // partitions appearing on the target cluster should not cause reconfiguration
@@ -234,6 +253,5 @@ public class MirrorSourceConnectorTest {
         // when partitions are added to the source cluster, reconfiguration is triggered
         connector.refreshTopicPartitions();
         verify(connector, times(1)).computeAndCreateTopicPartitions();
-
     }
 }

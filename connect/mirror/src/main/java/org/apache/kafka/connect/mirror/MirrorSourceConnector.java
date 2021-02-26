@@ -309,18 +309,29 @@ public class MirrorSourceConnector extends SourceConnector {
     // visible for testing
     void computeAndCreateTopicPartitions()
             throws InterruptedException, ExecutionException {
-        Map<String, Long> partitionCounts = knownSourceTopicPartitions.stream()
+        Map<String, Long> topicToParitionCount = knownSourceTopicPartitions.stream()
             .collect(Collectors.groupingBy(TopicPartition::topic, Collectors.counting())).entrySet().stream()
             .collect(Collectors.toMap(x -> formatRemoteTopic(x.getKey()), Entry::getValue));
         Set<String> knownTargetTopics = toTopics(knownTargetTopicPartitions);
-        List<NewTopic> newTopics = partitionCounts.entrySet().stream()
-            .filter(x -> !knownTargetTopics.contains(x.getKey()))
-            .map(x -> new NewTopic(x.getKey(), x.getValue().intValue(), (short) replicationFactor))
+        Set<String> topicsToCreate = topicToParitionCount.keySet().stream()
+                .filter(topic -> !knownTargetTopics.contains(topic))
+                .collect(Collectors.toSet());
+
+        Map<String, Config> configs = describeTopicConfigs(topicsToCreate);
+        List<NewTopic> newTopics = topicToParitionCount.entrySet().stream()
+            .filter(topicAndPartitionCount -> !knownTargetTopics.contains(topicAndPartitionCount.getKey()))
+            .map(topicAndPartitionCount -> {
+                String topicName = topicAndPartitionCount.getKey();
+                Map<String, String> topicConfigs = configToMap(configs.get(topicName));
+                return new NewTopic(topicName, topicAndPartitionCount.getValue().intValue(), (short) replicationFactor)
+                        .configs(topicConfigs);
+            })
             .collect(Collectors.toList());
-        Map<String, NewPartitions> newPartitions = partitionCounts.entrySet().stream()
+
+        Map<String, NewPartitions> newPartitions = topicToParitionCount.entrySet().stream()
             .filter(x -> knownTargetTopics.contains(x.getKey()))
             .collect(Collectors.toMap(Entry::getKey, x -> NewPartitions.increaseTo(x.getValue().intValue())));
-        createTopicPartitions(partitionCounts, newTopics, newPartitions);
+        createTopicPartitions(topicToParitionCount, newTopics, newPartitions);
     }
 
     // visible for testing
@@ -359,6 +370,11 @@ public class MirrorSourceConnector extends SourceConnector {
         return adminClient.describeTopics(topics).all().get().values();
     }
 
+    static Map<String, String> configToMap(Config config) {
+        return config.entries().stream()
+                .collect(Collectors.toMap(configEntry -> configEntry.name(), configEntry -> configEntry.value()));
+    }
+
     @SuppressWarnings("deprecation")
     // use deprecated alterConfigs API for broker compatibility back to 0.11.0
     private void updateTopicConfigs(Map<String, Config> topicConfigs)
@@ -390,7 +406,7 @@ public class MirrorSourceConnector extends SourceConnector {
             .map(x -> new TopicPartition(topic, x.partition()));
     }
 
-    private Map<String, Config> describeTopicConfigs(Set<String> topics)
+    Map<String, Config> describeTopicConfigs(Set<String> topics)
             throws InterruptedException, ExecutionException {
         Set<ConfigResource> resources = topics.stream()
             .map(x -> new ConfigResource(ConfigResource.Type.TOPIC, x))
