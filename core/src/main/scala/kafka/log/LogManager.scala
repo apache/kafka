@@ -318,7 +318,7 @@ class LogManager(logDirs: Seq[File],
           info(s"Skipping recovery for all logs in $logDirAbsolutePath since clean shutdown file was found")
           // Cache the clean shutdown status and use that for rest of log loading workflow. Delete the CleanShutdownFile
           // so that if broker crashes while loading the log, it is considered hard shutdown during the next boot up. KAFKA-10471
-          cleanShutdownFile.delete()
+          Files.deleteIfExists(cleanShutdownFile.toPath)
           hadCleanShutdown = true
         } else {
           // log recovery itself is being performed by `Log` class during initialization

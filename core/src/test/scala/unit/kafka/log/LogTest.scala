@@ -2518,7 +2518,11 @@ class LogTest {
     log.close()
 
     // test recovery case
-    log = createLog(logDir, logConfig, lastShutdownClean = false)
+    val recoveryPoint = 10
+    log = createLog(logDir, logConfig, recoveryPoint = recoveryPoint, lastShutdownClean = false)
+    // the recovery point should not be updated after unclean shutdown until the log is flushed
+    verifyRecoveredLog(log, recoveryPoint)
+    log.flush()
     verifyRecoveredLog(log, lastOffset)
     log.close()
   }
