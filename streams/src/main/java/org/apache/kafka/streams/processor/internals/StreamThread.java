@@ -572,6 +572,8 @@ public class StreamThread extends Thread {
         while (isRunning() || taskManager.isRebalanceInProgress()) {
             try {
                 if (assignmentErrorCode.get() == AssignorError.SHUTDOWN_REQUESTED.code()) {
+                    log.warn("Detected that shutdown was requested. " +
+                            "All clients in this app will now begin to shutdown");
                     mainConsumer.enforceRebalance();
                 }
                 runOnce();
@@ -663,8 +665,6 @@ public class StreamThread extends Thread {
     }
 
     public void sendShutdownRequest(final AssignorError assignorError) {
-        log.warn("Detected that shutdown was requested. " +
-                "All clients in this app will now begin to shutdown");
         assignmentErrorCode.set(assignorError.code());
     }
 
