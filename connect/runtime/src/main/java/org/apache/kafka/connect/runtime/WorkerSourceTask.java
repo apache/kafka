@@ -272,7 +272,7 @@ class WorkerSourceTask extends WorkerTask {
             try {
                 producer.close(duration);
             } catch (Throwable t) {
-                log.warn("Could not close producer", t);
+                log.warn("Could not close producer for {}", id, t);
             }
         }
     }
@@ -508,7 +508,7 @@ class WorkerSourceTask extends WorkerTask {
                     long timeoutMs = timeout - time.milliseconds();
                     // If the task has been cancelled, no more records will be sent from the producer; in that case, if any outstanding messages remain,
                     // we can stop flushing immediately
-                    if (cancelled || timeoutMs <= 0) {
+                    if (isCancelled() || timeoutMs <= 0) {
                         log.error("{} Failed to flush, timed out while waiting for producer to flush outstanding {} messages", this, outstandingMessages.size());
                         finishFailedFlush();
                         recordCommitFailure(time.milliseconds() - started, null);

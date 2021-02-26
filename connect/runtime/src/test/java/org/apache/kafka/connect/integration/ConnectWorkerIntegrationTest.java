@@ -71,8 +71,8 @@ public class ConnectWorkerIntegrationTest {
 
     private EmbeddedConnectCluster.Builder connectBuilder;
     private EmbeddedConnectCluster connect;
-    Map<String, String> workerProps;
-    Properties brokerProps;
+    private Map<String, String> workerProps;
+    private Properties brokerProps;
 
     @Rule
     public TestRule watcher = ConnectIntegrationTestUtils.newTestWatcher(log);
