@@ -21,19 +21,17 @@ import java.io.{ByteArrayOutputStream, File}
 import java.nio.ByteBuffer
 import java.util
 import java.util.Properties
-
 import kafka.log.{Log, LogConfig, LogManager, LogTest}
 import kafka.server.{BrokerTopicStats, LogDirFailureChannel}
 import kafka.tools.DumpLogSegments.TimeIndexDumpErrors
 import kafka.utils.{MockTime, TestUtils}
 import org.apache.kafka.common.Uuid
-import org.apache.kafka.common.metadata.{RegisterBrokerRecord, IsrChangeRecord, TopicRecord}
+import org.apache.kafka.common.metadata.{PartitionRecord, RegisterBrokerRecord, TopicRecord}
 import org.apache.kafka.common.protocol.{ByteBufferAccessor, ObjectSerializationCache}
 import org.apache.kafka.common.record.{CompressionType, MemoryRecords, SimpleRecord}
 import org.apache.kafka.common.utils.Utils
-import org.junit.Assert._
-import org.junit.{After, Before, Test}
-import org.scalatest.Assertions.fail
+import org.junit.jupiter.api.Assertions._
+import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
 
 import scala.collection.mutable
 import scala.collection.mutable.ArrayBuffer
@@ -53,7 +51,7 @@ class DumpLogSegmentsTest {
   val batches = new ArrayBuffer[BatchInfo]
   var log: Log = _
 
-  @Before
+  @BeforeEach
   def setUp(): Unit = {
     val props = new Properties
     props.setProperty(LogConfig.IndexIntervalBytesProp, "128")
@@ -83,7 +81,7 @@ class DumpLogSegmentsTest {
     log.flush()
   }
 
-  @After
+  @AfterEach
   def tearDown(): Unit = {
     log.close()
     Utils.delete(tmpDir)
@@ -112,7 +110,7 @@ class DumpLogSegmentsTest {
 
       val output = runDumpLogSegments(args)
       val lines = output.split("\n")
-      assertTrue(s"Data not printed: $output", lines.length > 2)
+      assertTrue(lines.length > 2, s"Data not printed: $output")
       val totalRecords = batches.map(_.records.size).sum
       var offset = 0
       val batchIterator = batches.iterator
@@ -122,17 +120,17 @@ class DumpLogSegmentsTest {
         // The base offset of the batch is the offset of the first record in the batch, so we
         // only increment the offset if it's not a batch
         if (isBatch(index)) {
-          assertTrue(s"Not a valid batch-level message record: $line", line.startsWith(s"baseOffset: $offset lastOffset: "))
+          assertTrue(line.startsWith(s"baseOffset: $offset lastOffset: "), s"Not a valid batch-level message record: $line")
           batch = batchIterator.next()
         } else {
-          assertTrue(s"Not a valid message record: $line", line.startsWith(s"${DumpLogSegments.RecordIndent} offset: $offset"))
+          assertTrue(line.startsWith(s"${DumpLogSegments.RecordIndent} offset: $offset"), s"Not a valid message record: $line")
           if (checkKeysAndValues) {
             var suffix = "headerKeys: []"
             if (batch.hasKeys)
               suffix += s" key: message key $offset"
             if (batch.hasValues)
               suffix += s" payload: message value $offset"
-            assertTrue(s"Message record missing key or value: $line", line.endsWith(suffix))
+            assertTrue(line.endsWith(suffix), s"Message record missing key or value: $line")
           }
           offset += 1
         }
@@ -141,7 +139,7 @@ class DumpLogSegmentsTest {
 
     def verifyNoRecordsInOutput(args: Array[String]): Unit = {
       val output = runDumpLogSegments(args)
-      assertFalse(s"Data should not have been printed: $output", output.matches("(?s).*offset: [0-9]* isvalid.*"))
+      assertFalse(output.matches("(?s).*offset: [0-9]* isvalid.*"), s"Data should not have been printed: $output")
     }
 
     // Verify that records are printed with --print-data-log even if --deep-iteration is not specified
@@ -189,7 +187,7 @@ class DumpLogSegmentsTest {
       new RegisterBrokerRecord().setBrokerId(0).setBrokerEpoch(10),
       new RegisterBrokerRecord().setBrokerId(1).setBrokerEpoch(20),
       new TopicRecord().setName("test-topic").setTopicId(Uuid.randomUuid()),
-      new IsrChangeRecord().setTopicId(Uuid.randomUuid()).setLeader(1).setPartitionId(0).setLeaderEpoch(100).setIsr(util.Arrays.asList(0, 1, 2))
+      new PartitionRecord().setTopicId(Uuid.randomUuid()).setLeader(1).setPartitionId(0).setLeaderEpoch(100).setIsr(util.Arrays.asList(0, 1, 2))
     )
 
     // TODO eventually replace this with whatever production code writes the metadata records to the log
