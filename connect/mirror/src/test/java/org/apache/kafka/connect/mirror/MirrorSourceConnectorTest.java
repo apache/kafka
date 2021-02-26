@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.connect.mirror;
 
-import kafka.log.LogConfig;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.acl.AccessControlEntry;
 import org.apache.kafka.common.acl.AclBinding;
@@ -185,15 +184,15 @@ public class MirrorSourceConnectorTest {
         connector = spy(connector);
 
         Config topicConfig = new Config(Arrays.asList(
-                new ConfigEntry(LogConfig.CleanupPolicyProp(), "compact"),
-                new ConfigEntry(LogConfig.SegmentBytesProp(), "100")));
-        Map<String, Config> configs = Collections.singletonMap("source.topic", topicConfig);
+                new ConfigEntry("cleanup.policy", "compact"),
+                new ConfigEntry("segment.bytes", "100")));
+        Map<String, Config> configs = Collections.singletonMap("topic", topicConfig);
 
         List<TopicPartition> sourceTopicPartitions = Collections.singletonList(new TopicPartition("topic", 0));
         doReturn(sourceTopicPartitions).when(connector).findSourceTopicPartitions();
         doReturn(Collections.emptyList()).when(connector).findTargetTopicPartitions();
-        doReturn(configs).when(connector).describeTopicConfigs(Collections.singleton("source.topic"));
-        doNothing().when(connector).createTopicPartitions(any(), any(), any());
+        doReturn(configs).when(connector).describeTopicConfigs(Collections.singleton("topic"));
+        doNothing().when(connector).createNewTopics(any());
 
         connector.refreshTopicPartitions();
         // if target topic is not created, refreshTopicPartitions() will call createTopicPartitions() again
@@ -209,10 +208,8 @@ public class MirrorSourceConnectorTest {
                         .configs(configMap));
 
         verify(connector, times(2)).computeAndCreateTopicPartitions();
-        verify(connector, times(2)).createTopicPartitions(
-                eq(expectedPartitionCounts),
-                eq(expectedNewTopics),
-                eq(Collections.emptyMap()));
+        verify(connector, times(2)).createNewTopics(eq(expectedNewTopics));
+        verify(connector, times(0)).createNewPartitions(any());
 
         List<TopicPartition> targetTopicPartitions = Collections.singletonList(new TopicPartition("source.topic", 0));
         doReturn(targetTopicPartitions).when(connector).findTargetTopicPartitions();
@@ -230,8 +227,8 @@ public class MirrorSourceConnectorTest {
         connector = spy(connector);
 
         Config topicConfig = new Config(Arrays.asList(
-                new ConfigEntry(LogConfig.CleanupPolicyProp(), "compact"),
-                new ConfigEntry(LogConfig.SegmentBytesProp(), "100")));
+                new ConfigEntry("cleanup.policy", "compact"),
+                new ConfigEntry("segment.bytes", "100")));
         Map<String, Config> configs = Collections.singletonMap("source.topic", topicConfig);
 
         List<TopicPartition> sourceTopicPartitions = Collections.emptyList();
@@ -240,7 +237,8 @@ public class MirrorSourceConnectorTest {
         doReturn(targetTopicPartitions).when(connector).findTargetTopicPartitions();
         doReturn(configs).when(connector).describeTopicConfigs(Collections.singleton("source.topic"));
         doReturn(Collections.emptyMap()).when(connector).describeTopicConfigs(Collections.emptySet());
-        doNothing().when(connector).createTopicPartitions(any(), any(), any());
+        doNothing().when(connector).createNewTopics(any());
+        doNothing().when(connector).createNewPartitions(any());
 
         // partitions appearing on the target cluster should not cause reconfiguration
         connector.refreshTopicPartitions();

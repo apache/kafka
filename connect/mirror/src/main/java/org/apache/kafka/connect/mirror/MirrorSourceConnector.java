@@ -49,6 +49,7 @@ import java.util.Set;
 import java.util.HashSet;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 import java.util.concurrent.ExecutionException;
@@ -306,59 +307,82 @@ public class MirrorSourceConnector extends SourceConnector {
         MirrorUtils.createSinglePartitionCompactedTopic(config.offsetSyncsTopic(), config.offsetSyncsTopicReplicationFactor(), config.sourceAdminConfig());
     }
 
-    // visible for testing
-    void computeAndCreateTopicPartitions()
-            throws InterruptedException, ExecutionException {
-        Map<String, Long> topicToParitionCount = knownSourceTopicPartitions.stream()
-            .collect(Collectors.groupingBy(TopicPartition::topic, Collectors.counting())).entrySet().stream()
-            .collect(Collectors.toMap(x -> formatRemoteTopic(x.getKey()), Entry::getValue));
-        Set<String> knownTargetTopics = toTopics(knownTargetTopicPartitions);
+    void computeAndCreateTopicPartitions() throws ExecutionException, InterruptedException {
+        // get source and target topics with respective partition counts
+        Map<String, Long> sourceTopicToPartitionCounts = knownSourceTopicPartitions.stream()
+                .collect(Collectors.groupingBy(TopicPartition::topic, Collectors.counting())).entrySet().stream()
+                .collect(Collectors.toMap(Entry::getKey, Entry::getValue));
+        Map<String, Long> targetTopicToPartitionCounts = knownTargetTopicPartitions.stream()
+                .collect(Collectors.groupingBy(TopicPartition::topic, Collectors.counting())).entrySet().stream()
+                .collect(Collectors.toMap(Entry::getKey, Entry::getValue));
 
-        // get the set of topics that are not present on the target
-        Set<String> topicsToCreate = topicToParitionCount.keySet().stream()
-                .filter(topic -> !knownTargetTopics.contains(topic))
-                .collect(Collectors.toSet());
-        if (topicsToCreate.isEmpty())
-            return;
+        Set<String> knownSourceTopics = sourceTopicToPartitionCounts.keySet();
+        Set<String> knownTargetTopics = targetTopicToPartitionCounts.keySet();
 
-        // get corresponding topic configurations from the source
-        Map<String, Config> configs = describeTopicConfigs(topicsToCreate);
+        // compute existing and new source topics
+        Map<Boolean, Set<String>> partitionedSourceTopics = knownSourceTopics.stream()
+                .collect(Collectors.partitioningBy(sourceTopic -> knownTargetTopics.contains(formatRemoteTopic(sourceTopic)),
+                        Collectors.toSet()));
+        Set<String> existingSourceTopics = partitionedSourceTopics.get(true);
+        Set<String> newSourceTopics = partitionedSourceTopics.get(false);
 
-        // construct collections for new topics and partitions
-        List<NewTopic> newTopics = topicToParitionCount.entrySet().stream()
-            .filter(topicAndPartitionCount -> !knownTargetTopics.contains(topicAndPartitionCount.getKey()))
-            .map(topicAndPartitionCount -> {
-                String topicName = topicAndPartitionCount.getKey();
-                Map<String, String> topicConfigs = configToMap(configs.get(topicName));
-                return new NewTopic(topicName, topicAndPartitionCount.getValue().intValue(), (short) replicationFactor)
-                        .configs(topicConfigs);
-            })
-            .collect(Collectors.toList());
-        Map<String, NewPartitions> newPartitions = topicToParitionCount.entrySet().stream()
-            .filter(x -> knownTargetTopics.contains(x.getKey()))
-            .collect(Collectors.toMap(Entry::getKey, x -> NewPartitions.increaseTo(x.getValue().intValue())));
+        // create new topics
+        if (!newSourceTopics.isEmpty())
+            createNewTopics(newSourceTopics, sourceTopicToPartitionCounts);
 
-        // create topic partitions on target
-        createTopicPartitions(topicToParitionCount, newTopics, newPartitions);
+        // compute topics with new partitions
+        Map<String, Long> sourceTopicsWithNewPartitions = existingSourceTopics.stream()
+                .filter(sourceTopic -> {
+                    String targetTopic = formatRemoteTopic(sourceTopic);
+                    return sourceTopicToPartitionCounts.get(sourceTopic) > targetTopicToPartitionCounts.get(targetTopic);
+                })
+                .collect(Collectors.toMap(Function.identity(), sourceTopicToPartitionCounts::get));
+
+        // create new partitions
+        if (!sourceTopicsWithNewPartitions.isEmpty()) {
+            Map<String, NewPartitions> newTargetPartitions = sourceTopicsWithNewPartitions.entrySet().stream()
+                    .collect(Collectors.toMap(sourceTopicAndPartitionCount -> formatRemoteTopic(sourceTopicAndPartitionCount.getKey()),
+                        sourceTopicAndPartitionCount -> NewPartitions.increaseTo(sourceTopicAndPartitionCount.getValue().intValue())));
+            createNewPartitions(newTargetPartitions);
+        }
+    }
+
+    private void createNewTopics(Set<String> newSourceTopics, Map<String, Long> sourceTopicToPartitionCounts)
+            throws ExecutionException, InterruptedException {
+        Map<String, Config> sourceTopicToConfig = describeTopicConfigs(newSourceTopics);
+        List<NewTopic> newTopics = newSourceTopics.stream()
+                .map(sourceTopic -> {
+                    String remoteTopic = formatRemoteTopic(sourceTopic);
+                    int partitionCount = sourceTopicToPartitionCounts.get(sourceTopic).intValue();
+                    Map<String, String> configs = configToMap(sourceTopicToConfig.get(sourceTopic));
+                    return new NewTopic(remoteTopic, partitionCount, (short) replicationFactor)
+                            .configs(configs);
+                })
+                .collect(Collectors.toList());
+        createNewTopics(newTopics);
     }
 
     // visible for testing
-    void createTopicPartitions(Map<String, Long> partitionCounts, List<NewTopic> newTopics,
-            Map<String, NewPartitions> newPartitions) {
+    void createNewTopics(List<NewTopic> newTopics) {
+        Map<String, NewTopic> newTopicMap = newTopics.stream()
+                .collect(Collectors.toMap(NewTopic::name, Function.identity()));
         targetAdminClient.createTopics(newTopics, new CreateTopicsOptions()).values().forEach((k, v) -> v.whenComplete((x, e) -> {
             if (e != null) {
                 log.warn("Could not create topic {}.", k, e);
             } else {
-                log.info("Created remote topic {} with {} partitions.", k, partitionCounts.get(k));
+                log.info("Created remote topic {} with {} partitions.", k, newTopicMap.get(k).numPartitions());
             }
         }));
+    }
+
+    void createNewPartitions(Map<String, NewPartitions> newPartitions) {
         targetAdminClient.createPartitions(newPartitions).values().forEach((k, v) -> v.whenComplete((x, e) -> {
             if (e instanceof InvalidPartitionsException) {
                 // swallow, this is normal
             } else if (e != null) {
                 log.warn("Could not create topic-partitions for {}.", k, e);
             } else {
-                log.info("Increased size of {} to {} partitions.", k, partitionCounts.get(k));
+                log.info("Increased size of {} to {} partitions.", k, newPartitions.get(k).totalCount());
             }
         }));
     }
