@@ -115,7 +115,7 @@ ext {
   userMaxTestRetryFailures = project.hasProperty('maxTestRetryFailures') ? maxTestRetryFailures.toInteger() : 0
 
   skipSigning = project.hasProperty('skipSigning') && skipSigning.toBoolean()
-  shouldSign = !skipSigning && !version.endsWith("SNAPSHOT") && project.gradle.startParameter.taskNames.any { it.contains("publish") }
+  shouldSign = !skipSigning && !version.endsWith("SNAPSHOT")
 
   mavenUrl = project.hasProperty('mavenUrl') ? project.mavenUrl : ''
   mavenUsername = project.hasProperty('mavenUsername') ? project.mavenUsername : ''
