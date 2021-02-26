@@ -22,18 +22,16 @@ import kafka.utils.TestUtils
 import org.apache.kafka.clients.admin.{Admin, NewTopic}
 import org.apache.kafka.common.quota.{ClientQuotaAlteration, ClientQuotaEntity, ClientQuotaFilter, ClientQuotaFilterComponent}
 import org.apache.kafka.metadata.BrokerState
-import org.junit.rules.Timeout
-import org.junit.{Assert, Rule, Test}
+import org.junit.jupiter.api.{Test, Timeout}
+import org.junit.jupiter.api.Assertions._
 
 import java.util
 import java.util.Collections
 import java.util.concurrent.TimeUnit
-import scala.compat.java8.OptionConverters
 import scala.jdk.CollectionConverters._
 
+@Timeout(120000)
 class Kip500ClusterTest {
-  @Rule
-  def globalTimeout = Timeout.millis(120000)
 
   @Test
   def testCreateClusterAndClose(): Unit = {
@@ -60,11 +58,11 @@ class Kip500ClusterTest {
       cluster.startup()
       TestUtils.waitUntilTrue(() => cluster.kip500Brokers().get(0).currentState() == BrokerState.RUNNING,
         "Broker never made it to RUNNING state.")
-      TestUtils.waitUntilTrue(() => OptionConverters.toJava(cluster.raftManagers().get(0).currentLeader).isPresent,
+      TestUtils.waitUntilTrue(() => cluster.raftManagers().get(0).kafkaRaftClient.leaderAndEpoch().leaderId.isPresent,
       "RaftManager was not initialized.")
       val admin = Admin.create(cluster.clientProperties())
       try {
-        Assert.assertEquals(cluster.nodes().clusterId().toString,
+        assertEquals(cluster.nodes().clusterId().toString,
           admin.describeCluster().clusterId().get())
       } finally {
         admin.close()
@@ -86,7 +84,7 @@ class Kip500ClusterTest {
       cluster.waitForReadyBrokers()
       TestUtils.waitUntilTrue(() => cluster.kip500Brokers().get(0).currentState() == BrokerState.RUNNING,
         "Broker never made it to RUNNING state.")
-      TestUtils.waitUntilTrue(() => OptionConverters.toJava(cluster.raftManagers().get(0).currentLeader).isPresent,
+      TestUtils.waitUntilTrue(() => cluster.raftManagers().get(0).kafkaRaftClient.leaderAndEpoch().leaderId.isPresent,
         "RaftManager was not initialized.")
       val admin = Admin.create(cluster.clientProperties())
       try {
@@ -101,7 +99,7 @@ class Kip500ClusterTest {
           val result = listTopicsResult.names().get(5, TimeUnit.SECONDS).size() == newTopic.size()
           if (result) {
             newTopic forEach(topic => {
-              Assert.assertTrue(listTopicsResult.names().get().contains(topic.name()))
+              assertTrue(listTopicsResult.names().get().contains(topic.name()))
             })
           }
           result
@@ -126,7 +124,7 @@ class Kip500ClusterTest {
       cluster.waitForReadyBrokers()
       TestUtils.waitUntilTrue(() => cluster.kip500Brokers().get(0).currentState() == BrokerState.RUNNING,
         "Broker never made it to RUNNING state.")
-      TestUtils.waitUntilTrue(() => OptionConverters.toJava(cluster.raftManagers().get(0).currentLeader).isPresent,
+      TestUtils.waitUntilTrue(() => cluster.raftManagers().get(0).kafkaRaftClient.leaderAndEpoch().leaderId.isPresent,
         "RaftManager was not initialized.")
       val admin = Admin.create(cluster.clientProperties())
       try {
@@ -144,7 +142,7 @@ class Kip500ClusterTest {
           val result = listTopicsResult.names().get(5, TimeUnit.SECONDS).size() == newTopic.size()
           if (result) {
             newTopic forEach(topic => {
-              Assert.assertTrue(listTopicsResult.names().get().contains(topic.name()))
+              assertTrue(listTopicsResult.names().get().contains(topic.name()))
             })
           }
           result
@@ -169,7 +167,7 @@ class Kip500ClusterTest {
       cluster.waitForReadyBrokers()
       TestUtils.waitUntilTrue(() => cluster.kip500Brokers().get(0).currentState() == BrokerState.RUNNING,
         "Broker never made it to RUNNING state.")
-      TestUtils.waitUntilTrue(() => OptionConverters.toJava(cluster.raftManagers().get(0).currentLeader).isPresent,
+      TestUtils.waitUntilTrue(() => cluster.raftManagers().get(0).kafkaRaftClient.leaderAndEpoch().leaderId.isPresent,
         "RaftManager was not initialized.")
       val admin = Admin.create(cluster.clientProperties())
       try {
@@ -187,7 +185,7 @@ class Kip500ClusterTest {
           val result = listTopicsResult.names().get(5, TimeUnit.SECONDS).size() == newTopic.size()
           if (result) {
             newTopic forEach(topic => {
-              Assert.assertTrue(listTopicsResult.names().get().contains(topic.name()))
+              assertTrue(listTopicsResult.names().get().contains(topic.name()))
             })
           }
           result
@@ -225,13 +223,13 @@ class Kip500ClusterTest {
           val (describeResult, ok) = TestUtils.computeUntilTrue(admin.describeClientQuotas(filter).entities().get()) {
             results => results.getOrDefault(entity, java.util.Collections.emptyMap[String, java.lang.Double]()).size() == expectCount
           }
-          Assert.assertTrue("Broker never saw new client quotas", ok)
+          assertTrue(ok, "Broker never saw new client quotas")
           describeResult
         }
 
         var describeResult = alterThenDescribe(entity,
           Seq(new ClientQuotaAlteration.Op("request_percentage", 0.99)), filter, 1)
-        Assert.assertEquals(0.99, describeResult.get(entity).get("request_percentage"), 1e-6)
+        assertEquals(0.99, describeResult.get(entity).get("request_percentage"), 1e-6)
 
         describeResult = alterThenDescribe(entity, Seq(
           new ClientQuotaAlteration.Op("request_percentage", 0.97),
@@ -239,23 +237,23 @@ class Kip500ClusterTest {
           new ClientQuotaAlteration.Op("producer_byte_rate", 10000),
           new ClientQuotaAlteration.Op("consumer_byte_rate", 10001)
         ), filter, 3)
-        Assert.assertEquals(0.97, describeResult.get(entity).get("request_percentage"), 1e-6)
-        Assert.assertEquals(10000.0, describeResult.get(entity).get("producer_byte_rate"), 1e-6)
-        Assert.assertEquals(10001.0, describeResult.get(entity).get("consumer_byte_rate"), 1e-6)
+        assertEquals(0.97, describeResult.get(entity).get("request_percentage"), 1e-6)
+        assertEquals(10000.0, describeResult.get(entity).get("producer_byte_rate"), 1e-6)
+        assertEquals(10001.0, describeResult.get(entity).get("consumer_byte_rate"), 1e-6)
 
         describeResult = alterThenDescribe(entity, Seq(
           new ClientQuotaAlteration.Op("request_percentage", 0.95),
           new ClientQuotaAlteration.Op("producer_byte_rate", null),
           new ClientQuotaAlteration.Op("consumer_byte_rate", null)
         ), filter, 1)
-        Assert.assertEquals(0.95, describeResult.get(entity).get("request_percentage"), 1e-6)
+        assertEquals(0.95, describeResult.get(entity).get("request_percentage"), 1e-6)
 
         describeResult = alterThenDescribe(entity, Seq(
           new ClientQuotaAlteration.Op("request_percentage", null)), filter, 0)
 
         describeResult = alterThenDescribe(entity,
           Seq(new ClientQuotaAlteration.Op("producer_byte_rate", 9999)), filter, 1)
-        Assert.assertEquals(9999.0, describeResult.get(entity).get("producer_byte_rate"), 1e-6)
+        assertEquals(9999.0, describeResult.get(entity).get("producer_byte_rate"), 1e-6)
 
         // Add another quota for a different entity with same user part
         val entity2 = new ClientQuotaEntity(Map("user" -> "testkit", "client-id" -> "some-client").asJava)
@@ -266,7 +264,7 @@ class Kip500ClusterTest {
           ).asJava)
         describeResult = alterThenDescribe(entity2,
           Seq(new ClientQuotaAlteration.Op("producer_byte_rate", 9998)), filter, 1)
-        Assert.assertEquals(9998.0, describeResult.get(entity2).get("producer_byte_rate"), 1e-6)
+        assertEquals(9998.0, describeResult.get(entity2).get("producer_byte_rate"), 1e-6)
 
         // non-strict match
         filter = ClientQuotaFilter.contains(
@@ -275,9 +273,9 @@ class Kip500ClusterTest {
         val (describeResult2, ok) = TestUtils.computeUntilTrue(admin.describeClientQuotas(filter).entities().get()) {
           results => results.size() == 2
         }
-        Assert.assertTrue("Broker never saw two client quotas", ok)
-        Assert.assertEquals(9999.0, describeResult2.get(entity).get("producer_byte_rate"), 1e-6)
-        Assert.assertEquals(9998.0, describeResult2.get(entity2).get("producer_byte_rate"), 1e-6)
+        assertTrue(ok, "Broker never saw two client quotas")
+        assertEquals(9999.0, describeResult2.get(entity).get("producer_byte_rate"), 1e-6)
+        assertEquals(9998.0, describeResult2.get(entity2).get("producer_byte_rate"), 1e-6)
       } finally {
         admin.close()
       }

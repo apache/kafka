@@ -34,12 +34,16 @@ import org.apache.kafka.common.utils.ThreadUtils;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.controller.Controller;
+import org.apache.kafka.metadata.ApiMessageAndVersion;
+import org.apache.kafka.metalog.MetaLogManager;
 import org.apache.kafka.raft.RaftConfig;
+import org.apache.kafka.raft.metadata.MetaLogRaftShim;
+import org.apache.kafka.raft.metadata.MetadataRecordSerde;
 import org.apache.kafka.test.TestUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import scala.Option;
 import scala.collection.JavaConverters;
-import scala.compat.java8.OptionConverters;
 
 import java.io.ByteArrayOutputStream;
 import java.io.File;
@@ -55,7 +59,6 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
-import java.util.Optional;
 import java.util.Properties;
 import java.util.TreeMap;
 import java.util.concurrent.CompletableFuture;
@@ -144,7 +147,7 @@ public class KafkaClusterTestKit implements AutoCloseable {
                 for (ControllerNode node : nodes.controllerNodes().values()) {
                     Map<String, String> props = new HashMap<>(configProps);
                     props.put(KafkaConfig$.MODULE$.ProcessRolesProp(), "controller");
-                    props.put(KafkaConfig$.MODULE$.ControllerIdProp(),
+                    props.put(KafkaConfig$.MODULE$.NodeIdProp(),
                         Integer.toString(node.id()));
                     props.put(KafkaConfig$.MODULE$.MetadataLogDirProp(),
                         node.metadataDirectory());
@@ -159,22 +162,23 @@ public class KafkaClusterTestKit implements AutoCloseable {
                     // for now as a placeholder.
                     props.put(RaftConfig.QUORUM_VOTERS_CONFIG, dummyQuorumVotersString);
                     setupNodeDirectories(baseDirectory, node.metadataDirectory(), Collections.emptyList());
-                    KafkaConfig config = new KafkaConfig(props, false,
-                        OptionConverters.toScala(Optional.empty()));
+                    KafkaConfig config = new KafkaConfig(props, false, Option.empty());
 
                     String threadNamePrefix = String.format("controller%d_", node.id());
-                    MetaProperties metaProperties = MetaProperties.apply(nodes.clusterId(),
-                            OptionConverters.toScala(Optional.empty()),
-                            OptionConverters.toScala(Optional.of(node.id())));
-                    TopicPartition metadataPartition = new TopicPartition(Server.metadataTopicName(), 0);
-                    KafkaRaftManager raftManager = new KafkaRaftManager(metaProperties, metadataPartition, config,
-                            Time.SYSTEM, new Metrics(), connectFutureManager.future, 0);
-                    ControllerServer controller = new ControllerServer(nodes.controllerProperties(node.id()), config,
-                        raftManager.metaLogManager(),
+                    MetaProperties metaProperties = MetaProperties.apply(nodes.clusterId(), node.id());
+                    TopicPartition metadataPartition = new TopicPartition("@metadata", 0);
+                    KafkaRaftManager<ApiMessageAndVersion> raftManager = new KafkaRaftManager<>(
+                        metaProperties, config, new MetadataRecordSerde(), metadataPartition,
+                        Time.SYSTEM, new Metrics(), Option.apply(threadNamePrefix));
+                    MetaLogManager metaLogShim = new MetaLogRaftShim(raftManager.kafkaRaftClient(), config.nodeId());
+                    ControllerServer controller = new ControllerServer(
+                        nodes.controllerProperties(node.id()),
+                        config,
+                        metaLogShim,
                         raftManager,
                         time,
                         new Metrics(),
-                        OptionConverters.toScala(Optional.of(threadNamePrefix)),
+                        Option.apply(threadNamePrefix),
                         connectFutureManager.future
                     );
                     controllers.put(node.id(), controller);
@@ -211,21 +215,22 @@ public class KafkaClusterTestKit implements AutoCloseable {
                     // Just like above, we set a placeholder voter list here until we
                     // find out what ports the controllers picked.
                     props.put(RaftConfig.QUORUM_VOTERS_CONFIG, dummyQuorumVotersString);
-                    KafkaConfig config = new KafkaConfig(props, false,
-                        OptionConverters.toScala(Optional.empty()));
+                    KafkaConfig config = new KafkaConfig(props, false, Option.empty());
 
                     String threadNamePrefix = String.format("broker%d_", node.id());
-                    MetaProperties metaProperties = MetaProperties.apply(nodes.clusterId(),
-                        OptionConverters.toScala(Optional.of(node.id())),
-                        OptionConverters.toScala(Optional.empty()));
-                    TopicPartition metadataPartition = new TopicPartition(Server.metadataTopicName(), 0);
-                    KafkaRaftManager raftManager = new KafkaRaftManager(metaProperties, metadataPartition, config,
-                            Time.SYSTEM, new Metrics(), connectFutureManager.future, 0);
-                    BrokerServer broker = new BrokerServer(config, nodes.brokerProperties(node.id()),
-                        raftManager.metaLogManager(),
+                    MetaProperties metaProperties = MetaProperties.apply(nodes.clusterId(), node.id());
+                    TopicPartition metadataPartition = new TopicPartition("@metadata", 0);
+                    KafkaRaftManager<ApiMessageAndVersion> raftManager = new KafkaRaftManager<>(
+                            metaProperties, config, new MetadataRecordSerde(), metadataPartition,
+                            Time.SYSTEM, new Metrics(), Option.apply(threadNamePrefix));
+                    MetaLogManager metaLogShim = new MetaLogRaftShim(raftManager.kafkaRaftClient(), config.nodeId());
+                    BrokerServer broker = new BrokerServer(
+                        config,
+                        nodes.brokerProperties(node.id()),
+                        metaLogShim,
                         time,
                         new Metrics(),
-                        OptionConverters.toScala(Optional.of(threadNamePrefix)),
+                        Option.apply(threadNamePrefix),
                         JavaConverters.asScalaBuffer(Collections.<String>emptyList()).toSeq(),
                         connectFutureManager.future,
                         Server.SUPPORTED_FEATURES()

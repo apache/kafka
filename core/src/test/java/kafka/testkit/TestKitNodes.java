@@ -140,15 +140,11 @@ public class TestKitNodes {
     }
 
     public MetaProperties controllerProperties(int id) {
-        return MetaProperties.apply(clusterId,
-            OptionConverters.toScala(Optional.empty()),
-            OptionConverters.toScala(Optional.of(id)));
+        return MetaProperties.apply(clusterId, id);
     }
 
     public MetaProperties brokerProperties(int id) {
-        return MetaProperties.apply(clusterId,
-            OptionConverters.toScala(Optional.of(id)),
-            OptionConverters.toScala(Optional.empty()));
+        return MetaProperties.apply(clusterId, id);
     }
 
     public ListenerName interBrokerListenerName() {
