@@ -190,6 +190,11 @@ subprojects {
   if (shouldPublish) {
     apply plugin: 'maven-publish'
     apply plugin: 'signing'
+
+    // Add aliases for the task names used by the maven plugin for backwards compatibility
+    // The maven plugin was replaced by the maven-publish plugin in Gradle 7.0
+    tasks.register('install').configure { dependsOn(publishToMavenLocal) }
+    tasks.register('uploadArchives').configure { dependsOn(publish) }
   }
 
   // apply the eclipse plugin only to subprojects that hold code. 'connect' is just a folder.
