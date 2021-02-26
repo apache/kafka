@@ -443,24 +443,47 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
     @property
     def security_config(self):
         if not self._security_config:
-            client_sasl_mechanism_to_use = self.client_sasl_mechanism if self.quorum_info.using_zk or self.quorum_info.has_brokers else self.controller_sasl_mechanism
-            interbroker_sasl_mechanism_to_use = self.interbroker_sasl_mechanism if self.quorum_info.using_zk or self.quorum_info.has_brokers else self.intercontroller_sasl_mechanism
-            if not self.quorum_info.using_raft:
-                raft_sasl_mechanisms = []
-                raft_tls = False
-            else:
-                if self.controller_quorum.controller_security_protocol in [SecurityConfig.SASL_PLAINTEXT, SecurityConfig.SASL_SSL]:
-                    raft_sasl_mechanisms = [self.controller_quorum.controller_sasl_mechanism]
-                else:
-                    raft_sasl_mechanisms = []
-                raft_tls = self.controller_quorum.controller_security_protocol in [SecurityConfig.SSL, SecurityConfig.SASL_SSL]
-            self._security_config = SecurityConfig(self.context, self.security_protocol, self.interbroker_security_protocol,
+            # we will later change the security protocols to PLAINTEXT if this is a remote Raft controller case since
+            # those security protocols are irrelevant there and we don't want to falsely indicate the use of SASL or TLS
+            security_protocol_to_use=self.security_protocol
+            interbroker_security_protocol_to_use=self.interbroker_security_protocol
+            # determine uses/serves controller sasl mechanisms
+            serves_controller_sasl_mechanism=None
+            serves_intercontroller_sasl_mechanism=None
+            uses_controller_sasl_mechanism=None
+            if self.quorum_info.has_brokers:
+                if self.controller_quorum.controller_security_protocol in SecurityConfig.SASL_SECURITY_PROTOCOLS:
+                    uses_controller_sasl_mechanism = self.controller_quorum.controller_sasl_mechanism
+            if self.quorum_info.has_controllers:
+                if self.intercontroller_security_protocol in SecurityConfig.SASL_SECURITY_PROTOCOLS:
+                    serves_intercontroller_sasl_mechanism = self.intercontroller_sasl_mechanism
+                    uses_controller_sasl_mechanism = self.intercontroller_sasl_mechanism # won't change from above in co-located case
+                if self.controller_security_protocol in SecurityConfig.SASL_SECURITY_PROTOCOLS:
+                    serves_controller_sasl_mechanism = self.controller_sasl_mechanism
+            # determine if raft uses TLS
+            raft_tls = False
+            if self.quorum_info.has_brokers and not self.quorum_info.has_controllers:
+                # Raft-based broker only
+                raft_tls = self.controller_quorum.controller_security_protocol in SecurityConfig.SSL_SECURITY_PROTOCOLS
+            if self.quorum_info.has_controllers:
+                # remote or co-located raft controller
+                raft_tls = self.controller_security_protocol in SecurityConfig.SSL_SECURITY_PROTOCOLS \
+                           or self.intercontroller_security_protocol in SecurityConfig.SSL_SECURITY_PROTOCOLS
+            # clear irrelevant security protocols of SASL/TLS implications for remote controller quorum case
+            if self.quorum_info.has_controllers and not self.quorum_info.has_brokers:
+                security_protocol_to_use=SecurityConfig.PLAINTEXT
+                interbroker_security_protocol_to_use=SecurityConfig.PLAINTEXT
+
+            self._security_config = SecurityConfig(self.context, security_protocol_to_use, interbroker_security_protocol_to_use,
                                                    zk_sasl=self.zk.zk_sasl if self.quorum_info.using_zk else False, zk_tls=self.zk_client_secure,
-                                                   client_sasl_mechanism=client_sasl_mechanism_to_use,
-                                                   interbroker_sasl_mechanism=interbroker_sasl_mechanism_to_use,
+                                                   client_sasl_mechanism=self.client_sasl_mechanism,
+                                                   interbroker_sasl_mechanism=self.interbroker_sasl_mechanism,
                                                    listener_security_config=self.listener_security_config,
                                                    tls_version=self.tls_version,
-                                                   raft_sasl_mechanisms=raft_sasl_mechanisms, raft_tls=raft_tls)
+                                                   serves_controller_sasl_mechanism=serves_controller_sasl_mechanism,
+                                                   serves_intercontroller_sasl_mechanism=serves_intercontroller_sasl_mechanism,
+                                                   uses_controller_sasl_mechanism=uses_controller_sasl_mechanism,
+                                                   raft_tls=raft_tls)
         for port in self.port_mappings.values():
             if port.open:
                 self._security_config.enable_security_protocol(port.security_protocol)
@@ -507,7 +530,7 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
             raise Exception("Unable to start Kafka: TLS to Zookeeper requested but Zookeeper secure port not enabled")
         if self.quorum_info.has_brokers_and_controllers and (
                 self.controller_security_protocol != self.intercontroller_security_protocol or
-                self.controller_sasl_mechanism != self.intercontroller_sasl_mechanism):
+                self.controller_security_protocol in SecurityConfig.SASL_SECURITY_PROTOCOLS and self.controller_sasl_mechanism != self.intercontroller_sasl_mechanism):
             # This is not supported because both the broker and the controller take the first entry from
             # controller.listener.names and the value from sasl.mechanism.controller.protocol;
             # they share a single config, so they must both see/use identical values.

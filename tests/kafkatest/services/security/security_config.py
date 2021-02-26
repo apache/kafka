@@ -120,6 +120,8 @@ class SecurityConfig(TemplateRenderer):
     SSL = 'SSL'
     SASL_PLAINTEXT = 'SASL_PLAINTEXT'
     SASL_SSL = 'SASL_SSL'
+    SASL_SECURITY_PROTOCOLS = [SASL_PLAINTEXT, SASL_SSL]
+    SSL_SECURITY_PROTOCOLS = [SSL, SASL_SSL]
     SASL_MECHANISM_GSSAPI = 'GSSAPI'
     SASL_MECHANISM_PLAIN = 'PLAIN'
     SASL_MECHANISM_SCRAM_SHA_256 = 'SCRAM-SHA-256'
@@ -146,7 +148,10 @@ class SecurityConfig(TemplateRenderer):
                  client_sasl_mechanism=SASL_MECHANISM_GSSAPI, interbroker_sasl_mechanism=SASL_MECHANISM_GSSAPI,
                  zk_sasl=False, zk_tls=False, template_props="", static_jaas_conf=True, jaas_override_variables=None,
                  listener_security_config=ListenerSecurityConfig(), tls_version=None,
-                 raft_sasl_mechanisms=[], raft_tls=False):
+                 serves_controller_sasl_mechanism=None, # Raft Controller does this
+                 serves_intercontroller_sasl_mechanism=None, # Raft Controller does this
+                 uses_controller_sasl_mechanism=None, # communication to Raft Controller (broker and controller both do this)
+                 raft_tls=False):
         """
         Initialize the security properties for the node and copy
         keystore and truststore to the remote node if the transport protocol 
@@ -174,9 +179,22 @@ class SecurityConfig(TemplateRenderer):
         if interbroker_security_protocol is None:
             interbroker_security_protocol = security_protocol
         self.interbroker_security_protocol = interbroker_security_protocol
-        self.raft_sasl_mechanisms = raft_sasl_mechanisms
-        self.has_sasl = self.is_sasl(security_protocol) or self.is_sasl(interbroker_security_protocol) or zk_sasl or raft_sasl_mechanisms
-        self.has_ssl = self.is_ssl(security_protocol) or self.is_ssl(interbroker_security_protocol) or zk_tls or raft_tls
+        serves_raft_sasl = []
+        if serves_controller_sasl_mechanism is not None:
+            serves_raft_sasl += [serves_controller_sasl_mechanism]
+        if serves_intercontroller_sasl_mechanism is not None:
+            serves_raft_sasl += [serves_intercontroller_sasl_mechanism]
+        self.serves_raft_sasl = set(serves_raft_sasl)
+        uses_raft_sasl = []
+        if uses_controller_sasl_mechanism is not None:
+            uses_raft_sasl += [uses_controller_sasl_mechanism]
+        self.uses_raft_sasl = set(uses_raft_sasl)
+        self.has_raft_sasl = self.serves_raft_sasl or self.uses_raft_sasl
+
+        self.has_sasl = self.is_sasl(security_protocol) or self.is_sasl(interbroker_security_protocol) or zk_sasl \
+                        or self.has_raft_sasl
+        self.has_ssl = self.is_ssl(security_protocol) or self.is_ssl(interbroker_security_protocol) or zk_tls \
+                       or raft_tls
         self.zk_sasl = zk_sasl
         self.zk_tls = zk_tls
         self.static_jaas_conf = static_jaas_conf
@@ -253,7 +271,10 @@ class SecurityConfig(TemplateRenderer):
                     'SecurityConfig': SecurityConfig,
                     'client_sasl_mechanism': self.client_sasl_mechanism,
                     'enabled_sasl_mechanisms': self.enabled_sasl_mechanisms,
-                    'usable_sasl_mechanisms': self.usable_sasl_mechanisms
+                    'has_raft_sasl': self.has_raft_sasl,
+                    'interbroker_sasl_mechanism': self.interbroker_sasl_mechanism,
+                    'uses_raft_sasl': self.uses_raft_sasl,
+                    'serves_raft_sasl': self.serves_raft_sasl,
                 }
             )
         else:
@@ -318,10 +339,10 @@ class SecurityConfig(TemplateRenderer):
         return value
 
     def is_ssl(self, security_protocol):
-        return security_protocol == SecurityConfig.SSL or security_protocol == SecurityConfig.SASL_SSL
+        return security_protocol in SecurityConfig.SSL_SECURITY_PROTOCOLS
 
     def is_sasl(self, security_protocol):
-        return security_protocol == SecurityConfig.SASL_PLAINTEXT or security_protocol == SecurityConfig.SASL_SSL
+        return security_protocol in SecurityConfig.SASL_SECURITY_PROTOCOLS
 
     def is_sasl_scram(self, sasl_mechanism):
         return sasl_mechanism == SecurityConfig.SASL_MECHANISM_SCRAM_SHA_256 or sasl_mechanism == SecurityConfig.SASL_MECHANISM_SCRAM_SHA_512
@@ -344,17 +365,14 @@ class SecurityConfig(TemplateRenderer):
 
     @property
     def enabled_sasl_mechanisms(self):
-        return set([self.client_sasl_mechanism, self.interbroker_sasl_mechanism])
-
-    @property
-    def usable_sasl_mechanisms(self):
-        """
-        Differs from enabled_sasl_mechanisms in that it also includes SASL mechanisms that
-        are used for Raft communication
-        :return: enabled_sasl_mechanisms plus any mechanisms that are used for Raft communication
-        """
-        retval = set([self.client_sasl_mechanism, self.interbroker_sasl_mechanism] + self.raft_sasl_mechanisms)
-        return retval
+        sasl_mechanisms = []
+        if self.is_sasl(self.security_protocol):
+            sasl_mechanisms += [self.client_sasl_mechanism]
+        if self.is_sasl(self.interbroker_security_protocol):
+            sasl_mechanisms += [self.interbroker_sasl_mechanism]
+        if self.serves_raft_sasl:
+            sasl_mechanisms += list(self.serves_raft_sasl)
+        return set(sasl_mechanisms)
 
     @property
     def has_sasl_kerberos(self):

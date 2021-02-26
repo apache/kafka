@@ -132,23 +132,41 @@ class TestVerifiableProducer(Test):
         wait_until(lambda: self.producer.num_acked > 5, timeout_sec=15,
              err_msg="Producer failed to start in a reasonable amount of time.")
 
-        # using version.vstring (distutils.version.LooseVersion) is a tricky way of ensuring
-        # that this check works with DEV_BRANCH
-        # When running VerifiableProducer 0.8.X, both the current branch version and 0.8.X should show up because of the
-        # way verifiable producer pulls in some development directories into its classpath
-        #
-        # If the test fails here because 'ps .. | grep' couldn't find the process it means
-        # the login and grep that is_version() performs is slower than
-        # the time it takes the producer to produce its messages.
-        # Easy fix is to decrease throughput= above, the good fix is to make the producer
-        # not terminate until explicitly killed in this case.
-        if node.version <= LATEST_0_8_2:
-            assert is_version(node, [node.version.vstring, DEV_BRANCH.vstring], logger=self.logger)
-        else:
-            assert is_version(node, [node.version.vstring], logger=self.logger)
+        # See above comment above regarding use of version.vstring (distutils.version.LooseVersion)
+        assert is_version(node, [node.version.vstring], logger=self.logger)
 
         self.producer.wait()
         num_produced = self.producer.num_acked
         assert num_produced == self.num_messages, "num_produced: %d, num_messages: %d" % (num_produced, self.num_messages)
 
+    @cluster(num_nodes=4)
+    @parametrize(metadata_quorum=quorum.remote_raft)
+    def test_multiple_raft_sasl_mechanisms(self, metadata_quorum):
+        """
+        Test for remote Raft cases that we can start VerifiableProducer on the current branch snapshot version, and
+        verify that we can produce a small number of messages.  The inter-controller and broker-to-controller
+        security protocols are both SASL_PLAINTEXT but the SASL mechanisms are different (we set
+        GSSAPI for the inter-controller mechanism and PLAIN for the broker-to-controller mechanism).
+        This test differs from the above tests -- he ones above used the same SASL mechanism for both paths.
+        """
+        self.kafka.security_protocol = self.kafka.interbroker_security_protocol = 'PLAINTEXT'
+        controller_quorum = self.kafka.controller_quorum
+        controller_quorum.controller_security_protocol = 'SASL_PLAINTEXT'
+        controller_quorum.controller_sasl_mechanism = 'PLAIN'
+        controller_quorum.intercontroller_security_protocol = 'SASL_PLAINTEXT'
+        controller_quorum.intercontroller_sasl_mechanism = 'GSSAPI'
+        self.kafka.start()
+
+        node = self.producer.nodes[0]
+        node.version = KafkaVersion(str(DEV_BRANCH))
+        self.producer.start()
+        wait_until(lambda: self.producer.num_acked > 5, timeout_sec=15,
+             err_msg="Producer failed to start in a reasonable amount of time.")
+
+        # See above comment above regarding use of version.vstring (distutils.version.LooseVersion)
+        assert is_version(node, [node.version.vstring], logger=self.logger)
+
+        self.producer.wait()
+        num_produced = self.producer.num_acked
+        assert num_produced == self.num_messages, "num_produced: %d, num_messages: %d" % (num_produced, self.num_messages)
 
