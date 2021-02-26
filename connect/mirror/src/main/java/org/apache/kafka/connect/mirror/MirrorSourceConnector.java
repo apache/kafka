@@ -318,10 +318,12 @@ public class MirrorSourceConnector extends SourceConnector {
 
         Set<String> knownSourceTopics = sourceTopicToPartitionCounts.keySet();
         Set<String> knownTargetTopics = targetTopicToPartitionCounts.keySet();
+        Map<String, String> sourceToRemoteTopic = knownSourceTopics.stream()
+                .collect(Collectors.toMap(Function.identity(), sourceTopic -> formatRemoteTopic(sourceTopic)));
 
         // compute existing and new source topics
         Map<Boolean, Set<String>> partitionedSourceTopics = knownSourceTopics.stream()
-                .collect(Collectors.partitioningBy(sourceTopic -> knownTargetTopics.contains(formatRemoteTopic(sourceTopic)),
+                .collect(Collectors.partitioningBy(sourceTopic -> knownTargetTopics.contains(sourceToRemoteTopic.get(sourceTopic)),
                         Collectors.toSet()));
         Set<String> existingSourceTopics = partitionedSourceTopics.get(true);
         Set<String> newSourceTopics = partitionedSourceTopics.get(false);
@@ -333,7 +335,7 @@ public class MirrorSourceConnector extends SourceConnector {
         // compute topics with new partitions
         Map<String, Long> sourceTopicsWithNewPartitions = existingSourceTopics.stream()
                 .filter(sourceTopic -> {
-                    String targetTopic = formatRemoteTopic(sourceTopic);
+                    String targetTopic = sourceToRemoteTopic.get(sourceTopic);
                     return sourceTopicToPartitionCounts.get(sourceTopic) > targetTopicToPartitionCounts.get(targetTopic);
                 })
                 .collect(Collectors.toMap(Function.identity(), sourceTopicToPartitionCounts::get));
@@ -341,7 +343,7 @@ public class MirrorSourceConnector extends SourceConnector {
         // create new partitions
         if (!sourceTopicsWithNewPartitions.isEmpty()) {
             Map<String, NewPartitions> newTargetPartitions = sourceTopicsWithNewPartitions.entrySet().stream()
-                    .collect(Collectors.toMap(sourceTopicAndPartitionCount -> formatRemoteTopic(sourceTopicAndPartitionCount.getKey()),
+                    .collect(Collectors.toMap(sourceTopicAndPartitionCount -> sourceToRemoteTopic.get(sourceTopicAndPartitionCount.getKey()),
                         sourceTopicAndPartitionCount -> NewPartitions.increaseTo(sourceTopicAndPartitionCount.getValue().intValue())));
             createNewPartitions(newTargetPartitions);
         }
