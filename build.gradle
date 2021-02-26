@@ -232,7 +232,7 @@ subprojects {
 
     publishing {
       repositories {
-        // To test locally, replace mavenUrl in ~/.gradle/gradle.properties to file://localhost/tmp/myRepo/
+        // To test locally, invoke gradlew with `-PmavenUrl=file:///some/local/path`
         maven {
           url = mavenUrl
           credentials {
