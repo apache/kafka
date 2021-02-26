@@ -47,11 +47,11 @@ class ConfigHelper(metadataCache: MetadataCache, config: KafkaConfig, configRepo
 
       def createResponseConfig(configs: Map[String, Any],
                                createConfigEntry: (String, Any) => DescribeConfigsResponseData.DescribeConfigsResourceResult): DescribeConfigsResponseData.DescribeConfigsResult = {
-        val filteredConfigPairs = if (resource.configurationKeys == null)
+        val filteredConfigPairs = if (resource.configurationKeys == null || resource.configurationKeys.isEmpty)
           configs.toBuffer
         else
           configs.filter { case (configName, _) =>
-            resource.configurationKeys.asScala.forall(_.contains(configName))
+            resource.configurationKeys.asScala.contains(configName)
           }.toBuffer
 
         val configEntries = filteredConfigPairs.map { case (name, value) => createConfigEntry(name, value) }
