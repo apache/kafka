@@ -268,13 +268,14 @@ object DumpLogSegments {
             }
             lastOffset = record.offset
 
-            print(s"$RecordIndent ")
+            var prefix = s"${RecordIndent} "
             if (!skipBatchMetadata) {
-              print(s"offset: ${record.offset} isValid: ${record.isValid} crc: ${record.checksumOrNull}" +
+              print(s"${prefix}offset: ${record.offset} isValid: ${record.isValid} crc: ${record.checksumOrNull}" +
                   s" keySize: ${record.keySize} valueSize: ${record.valueSize} ${batch.timestampType}: ${record.timestamp}" +
                   s" baseOffset: ${batch.baseOffset} lastOffset: ${batch.lastOffset} baseSequence: ${batch.baseSequence}" +
                   s" lastSequence: ${batch.lastSequence} producerEpoch: ${batch.producerEpoch} partitionLeaderEpoch: ${batch.partitionLeaderEpoch}" +
                   s" batchSize: ${batch.sizeInBytes} magic: ${batch.magic} compressType: ${batch.compressionType} position: ${validBytes}")
+              prefix = " "
 
               if (batch.magic >= RecordBatch.MAGIC_VALUE_V2) {
                 print(" sequence: " + record.sequence + " headerKeys: " + record.headers.map(_.key).mkString("[", ",", "]"))
@@ -295,7 +296,10 @@ object DumpLogSegments {
             }
             if (printContents && !batch.isControlBatch) {
               val (key, payload) = parser.parse(record)
-              key.foreach(key => print(s" key: $key"))
+              key.foreach { key =>
+                print(s"${prefix}key: $key")
+                prefix = " "
+              }
               payload.foreach(payload => print(s" payload: $payload"))
             }
             println()
@@ -458,19 +462,23 @@ object DumpLogSegments {
         new DecoderMessageParser(keyDecoder, valueDecoder)
       }
 
-    lazy val shouldPrintDataLog: Boolean = options.has(printOpt) ||
+    val shouldPrintDataLog: Boolean = options.has(printOpt) ||
       options.has(offsetsOpt) ||
       options.has(transactionLogOpt) ||
       options.has(clusterMetadataOpt) ||
       options.has(valueDecoderOpt) ||
       options.has(keyDecoderOpt)
 
-    lazy val skipBatchMetadata = options.has(skipBatchMetadataOpt)
-    lazy val isDeepIteration: Boolean = options.has(deepIterationOpt) || shouldPrintDataLog
-    lazy val verifyOnly: Boolean = options.has(verifyOpt)
-    lazy val indexSanityOnly: Boolean = options.has(indexSanityOpt)
-    lazy val files = options.valueOf(filesOpt).split(",")
-    lazy val maxMessageSize = options.valueOf(maxMessageSizeOpt).intValue()
+    val skipBatchMetadata = options.has(skipBatchMetadataOpt)
+    if (skipBatchMetadata && !shouldPrintDataLog) {
+      throw new RuntimeException("When specifying --skip-batch-metadata, should specify " +
+        "some way of printing the batch data.")
+    }
+    val isDeepIteration: Boolean = options.has(deepIterationOpt) || shouldPrintDataLog
+    val verifyOnly: Boolean = options.has(verifyOpt)
+    val indexSanityOnly: Boolean = options.has(indexSanityOpt)
+    val files = options.valueOf(filesOpt).split(",")
+    val maxMessageSize = options.valueOf(maxMessageSizeOpt).intValue()
 
     def checkArgs(): Unit = CommandLineUtils.checkRequiredArgs(parser, options, filesOpt)
 
