@@ -484,6 +484,14 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
                                                    serves_intercontroller_sasl_mechanism=serves_intercontroller_sasl_mechanism,
                                                    uses_controller_sasl_mechanism=uses_controller_sasl_mechanism,
                                                    raft_tls=raft_tls)
+        # Ensure we have the right inter-broker security protocol because it may have been mutated
+        # since we cached our security config (ignore if this is a remote raft controller quorum case; the
+        # inter-broker security protocol is not used there).
+        if (self.quorum_info.using_zk or self.quorum_info.has_brokers) and \
+                self._security_config.interbroker_security_protocol != self.interbroker_security_protocol:
+            self._security_config.interbroker_security_protocol = self.interbroker_security_protocol
+            self._security_config.calc_has_sasl()
+            self._security_config.calc_has_ssl()
         for port in self.port_mappings.values():
             if port.open:
                 self._security_config.enable_security_protocol(port.security_protocol)

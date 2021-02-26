@@ -190,10 +190,6 @@ class SecurityConfig(TemplateRenderer):
             uses_raft_sasl += [uses_controller_sasl_mechanism]
         self.uses_raft_sasl = set(uses_raft_sasl)
 
-        self.has_sasl = self.is_sasl(security_protocol) or self.is_sasl(interbroker_security_protocol) or zk_sasl \
-                        or self.serves_raft_sasl or self.uses_raft_sasl
-        self.has_ssl = self.is_ssl(security_protocol) or self.is_ssl(interbroker_security_protocol) or zk_tls \
-                       or raft_tls
         self.zk_sasl = zk_sasl
         self.zk_tls = zk_tls
         self.static_jaas_conf = static_jaas_conf
@@ -210,12 +206,28 @@ class SecurityConfig(TemplateRenderer):
             'sasl.mechanism.inter.broker.protocol' : interbroker_sasl_mechanism,
             'sasl.kerberos.service.name' : 'kafka'
         }
+        self.raft_tls = raft_tls
 
         if tls_version is not None:
             self.properties.update({'tls.version' : tls_version})
 
         self.properties.update(self.listener_security_config.client_listener_overrides)
         self.jaas_override_variables = jaas_override_variables or {}
+
+        self.calc_has_sasl()
+        self.calc_has_ssl()
+
+    def calc_has_sasl(self):
+        self.has_sasl = self.is_sasl(self.properties['security.protocol']) \
+                        or self.is_sasl(self.interbroker_security_protocol) \
+                        or self.zk_sasl \
+                        or self.serves_raft_sasl or self.uses_raft_sasl
+
+    def calc_has_ssl(self):
+        self.has_ssl = self.is_ssl(self.properties['security.protocol']) \
+                       or self.is_ssl(self.interbroker_security_protocol) \
+                       or self.zk_tls \
+                       or self.raft_tls
 
     def client_config(self, template_props="", node=None, jaas_override_variables=None,
                       use_inter_broker_mechanism_for_client = False):
