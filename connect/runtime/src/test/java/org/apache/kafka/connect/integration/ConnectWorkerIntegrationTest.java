@@ -304,6 +304,7 @@ public class ConnectWorkerIntegrationTest {
 
         connect.assertions().assertAtLeastNumWorkersAreUp(1, "Initial group of workers did not start in time.");
 
+        // and when the connector is not configured to create topics
         Map<String, String> props = defaultSourceConnectorProps("nonexistenttopic");
         props.remove(DEFAULT_TOPIC_CREATION_PREFIX + REPLICATION_FACTOR_CONFIG);
         props.remove(DEFAULT_TOPIC_CREATION_PREFIX + PARTITIONS_CONFIG);
