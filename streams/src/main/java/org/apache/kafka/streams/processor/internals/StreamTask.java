@@ -192,7 +192,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
         );
 
         stateMgr.registerGlobalStateStores(topology.globalStateStores());
-        taskMetadata = new TaskMetadata(taskId, consumedOffsets.keySet(), new HashMap<>(), new HashMap<>(), -1L);
+        taskMetadata = new TaskMetadata(taskId, inputPartitions, new HashMap<>(), new HashMap<>(), -1L);
     }
 
     // create queues for each assigned partition and associate them
@@ -206,7 +206,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
     }
 
     @Override
-    public TaskMetadata getTaskMetadata(){
+    public TaskMetadata getTaskMetadata() {
         taskMetadata.getEndOffsets().putAll(recordCollector.offsets());
         return taskMetadata;
     }

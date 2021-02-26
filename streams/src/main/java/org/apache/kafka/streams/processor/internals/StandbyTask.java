@@ -46,7 +46,6 @@ public class StandbyTask extends AbstractTask implements Task {
     private final StreamsMetricsImpl streamsMetrics;
     private final TaskMetadata taskMetadata;
 
-
     /**
      * @param id             the ID of this task
      * @param inputPartitions     input topic partitions, used for thread metadata only
@@ -289,7 +288,7 @@ public class StandbyTask extends AbstractTask implements Task {
 
     @Override
     public TaskMetadata getTaskMetadata() {
-        return null;
+        return taskMetadata;
     }
 
     @Override

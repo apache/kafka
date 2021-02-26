@@ -1116,10 +1116,10 @@ public class TaskManager {
         }
     }
 
-    private void updateTaskMetadata(Map<TopicPartition, OffsetAndMetadata> allOffsets) {
-        for(Task task: tasks.activeTasks()) {
-            for(TopicPartition topicPartition: task.inputPartitions()) {
-                if(allOffsets.containsKey(topicPartition)) {
+    private void updateTaskMetadata(final Map<TopicPartition, OffsetAndMetadata> allOffsets) {
+        for (final Task task: tasks.activeTasks()) {
+            for (final TopicPartition topicPartition: task.inputPartitions()) {
+                if (allOffsets.containsKey(topicPartition)) {
                     task.getTaskMetadata().getCommittedOffsets().put(topicPartition, allOffsets.get(topicPartition).offset());
                 }
             }
