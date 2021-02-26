@@ -352,7 +352,7 @@ public class MirrorSourceConnector extends SourceConnector {
     private void createNewTopics(Set<String> newSourceTopics, Map<String, Long> sourceTopicToPartitionCounts)
             throws ExecutionException, InterruptedException {
         Map<String, Config> sourceTopicToConfig = describeTopicConfigs(newSourceTopics);
-        List<NewTopic> newTopics = newSourceTopics.stream()
+        Map<String, NewTopic> newTopics = newSourceTopics.stream()
                 .map(sourceTopic -> {
                     String remoteTopic = formatRemoteTopic(sourceTopic);
                     int partitionCount = sourceTopicToPartitionCounts.get(sourceTopic).intValue();
@@ -360,19 +360,17 @@ public class MirrorSourceConnector extends SourceConnector {
                     return new NewTopic(remoteTopic, partitionCount, (short) replicationFactor)
                             .configs(configs);
                 })
-                .collect(Collectors.toList());
+                .collect(Collectors.toMap(NewTopic::name, Function.identity()));
         createNewTopics(newTopics);
     }
 
     // visible for testing
-    void createNewTopics(List<NewTopic> newTopics) {
-        Map<String, NewTopic> newTopicMap = newTopics.stream()
-                .collect(Collectors.toMap(NewTopic::name, Function.identity()));
-        targetAdminClient.createTopics(newTopics, new CreateTopicsOptions()).values().forEach((k, v) -> v.whenComplete((x, e) -> {
+    void createNewTopics(Map<String, NewTopic> newTopics) {
+        targetAdminClient.createTopics(newTopics.values(), new CreateTopicsOptions()).values().forEach((k, v) -> v.whenComplete((x, e) -> {
             if (e != null) {
                 log.warn("Could not create topic {}.", k, e);
             } else {
-                log.info("Created remote topic {} with {} partitions.", k, newTopicMap.get(k).numPartitions());
+                log.info("Created remote topic {} with {} partitions.", k, newTopics.get(k).numPartitions());
             }
         }));
     }

@@ -203,9 +203,8 @@ public class MirrorSourceConnectorTest {
         Map<String, String> configMap = MirrorSourceConnector.configToMap(topicConfig);
         assertEquals(2, configMap.size());
 
-        List<NewTopic> expectedNewTopics = Arrays.asList(
-                new NewTopic("source.topic", 1, (short) 0)
-                        .configs(configMap));
+        Map<String, NewTopic> expectedNewTopics = new HashMap<>();
+        expectedNewTopics.put("source.topic", new NewTopic("source.topic", 1, (short) 0).configs(configMap));
 
         verify(connector, times(2)).computeAndCreateTopicPartitions();
         verify(connector, times(2)).createNewTopics(eq(expectedNewTopics));
