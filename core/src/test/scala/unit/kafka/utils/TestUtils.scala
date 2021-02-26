@@ -1459,7 +1459,7 @@ object TestUtils extends Logging {
 
   def pollUntilAtLeastNumRecords[K, V](consumer: Consumer[K, V],
                                        numRecords: Int,
-                                       waitTimeMs: Long = 200): Seq[ConsumerRecord[K, V]] = {
+                                       waitTimeMs: Long = JTestUtils.DEFAULT_MAX_WAIT_MS): Seq[ConsumerRecord[K, V]] = {
     val records = new ArrayBuffer[ConsumerRecord[K, V]]()
     def pollAction(polledRecords: ConsumerRecords[K, V]): Boolean = {
       records ++= polledRecords.asScala
