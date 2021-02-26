@@ -313,11 +313,18 @@ public class MirrorSourceConnector extends SourceConnector {
             .collect(Collectors.groupingBy(TopicPartition::topic, Collectors.counting())).entrySet().stream()
             .collect(Collectors.toMap(x -> formatRemoteTopic(x.getKey()), Entry::getValue));
         Set<String> knownTargetTopics = toTopics(knownTargetTopicPartitions);
+
+        // get the set of topics that are not present on the target
         Set<String> topicsToCreate = topicToParitionCount.keySet().stream()
                 .filter(topic -> !knownTargetTopics.contains(topic))
                 .collect(Collectors.toSet());
+        if (topicsToCreate.isEmpty())
+            return;
 
+        // get corresponding topic configurations from the source
         Map<String, Config> configs = describeTopicConfigs(topicsToCreate);
+
+        // construct collections for new topics and partitions
         List<NewTopic> newTopics = topicToParitionCount.entrySet().stream()
             .filter(topicAndPartitionCount -> !knownTargetTopics.contains(topicAndPartitionCount.getKey()))
             .map(topicAndPartitionCount -> {
@@ -327,10 +334,11 @@ public class MirrorSourceConnector extends SourceConnector {
                         .configs(topicConfigs);
             })
             .collect(Collectors.toList());
-
         Map<String, NewPartitions> newPartitions = topicToParitionCount.entrySet().stream()
             .filter(x -> knownTargetTopics.contains(x.getKey()))
             .collect(Collectors.toMap(Entry::getKey, x -> NewPartitions.increaseTo(x.getValue().intValue())));
+
+        // create topic partitions on target
         createTopicPartitions(topicToParitionCount, newTopics, newPartitions);
     }
 
