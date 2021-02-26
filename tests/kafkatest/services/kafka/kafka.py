@@ -503,9 +503,7 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
         self.port_mappings[listener_name].open = False
 
     def start_minikdc_if_necessary(self, add_principals=""):
-        has_sasl = self.security_config.has_sasl if self.quorum_info.using_zk else \
-            self.security_config.has_sasl or self.controller_quorum.security_config.has_sasl if self.quorum_info.has_brokers else \
-                self.security_config.has_sasl or self.remote_kafka.security_config.has_sasl
+        has_sasl = self.security_config.has_sasl
         if has_sasl:
             if self.minikdc is None:
                 other_service = self.remote_kafka if self.remote_kafka else self.controller_quorum if self.quorum_info.using_raft else None
