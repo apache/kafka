@@ -184,7 +184,7 @@ been set:
 
 * Bytes fields default to the empty byte array.
 
-* Uuid fields default to zero uuid
+* Uuid fields default to zero uuid.
 
 * Records fields default to null.
 
