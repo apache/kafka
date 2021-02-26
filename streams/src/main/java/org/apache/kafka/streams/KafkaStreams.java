@@ -92,6 +92,7 @@ import java.util.Properties;
 import java.util.Set;
 import java.util.TreeMap;
 import java.util.UUID;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
@@ -463,9 +464,8 @@ public class KafkaStreams implements AutoCloseable {
             closeToError();
         }
         final StreamThread deadThread = (StreamThread) Thread.currentThread();
-        threads.remove(deadThread);
-        addStreamThread();
         deadThread.shutdown();
+        addStreamThread();
         if (throwable instanceof RuntimeException) {
             throw (RuntimeException) throwable;
         } else if (throwable instanceof Error) {
@@ -1094,16 +1094,32 @@ public class KafkaStreams implements AutoCloseable {
     }
 
     private int getNextThreadIndex() {
-        final HashSet<String> names = new HashSet<>();
-        processStreamThread(thread -> names.add(thread.getName()));
-        final String baseName = clientId + "-StreamThread-";
-        for (int i = 1; i <= threads.size(); i++) {
-            final String name = baseName + i;
-            if (!names.contains(name)) {
-                return i;
+        final HashSet<String> allLiveThreadNames = new HashSet<>();
+        AtomicInteger maxThreadId = new AtomicInteger(1);
+        synchronized (threads) {
+            processStreamThread(thread -> {
+                // trim any DEAD threads from the list so we can reuse the thread.id
+                // this is only safe to do once the thread has fully completed shutdown
+                if (thread.state() == StreamThread.State.DEAD) {
+                    threads.remove(thread);
+                } else {
+                    allLiveThreadNames.add(thread.getName());
+                    int threadId = thread.getName().charAt(thread.getName().length() - 1);
+                    if (threadId > maxThreadId.get()) {
+                        maxThreadId.set(threadId);
+                    }
+                }
+            });
+
+            final String baseName = clientId + "-StreamThread-";
+            for (int i = 1; i <= maxThreadId.get(); i++) {
+                final String name = baseName + i;
+                if (!allLiveThreadNames.contains(name)) {
+                    return i;
+                }
             }
+            return threads.size() + 1;
         }
-        return threads.size() + 1;
     }
 
     private long getCacheSizePerThread(final int numStreamThreads) {
