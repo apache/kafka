@@ -1047,9 +1047,15 @@ public class KafkaStreams implements AutoCloseable {
                             if (!streamThread.waitOnThreadState(StreamThread.State.DEAD, timeoutMs - begin)) {
                                 log.warn("Thread " + streamThread.getName() + " did not shutdown in the allotted time");
                                 timeout = true;
+                                // Don't remove from threads until shutdown is complete. We will trim it from the
+                                // list once it reaches DEAD, and if for some reason it's hanging indefinitely in the
+                                // shutdown then we should just consider this thread.id to be burned
+                            } else {
+                                threads.remove(streamThread);
                             }
                         }
-                        threads.remove(streamThread);
+                        // Don't remove from threads until shutdown is complete since this will let another thread
+                        // reuse its thread.id. We will trim any DEAD threads from the list later
                         final long cacheSizePerThread = getCacheSizePerThread(threads.size());
                         resizeThreadCache(cacheSizePerThread);
                         if (groupInstanceID.isPresent() && callingThreadIsNotCurrentStreamThread) {
