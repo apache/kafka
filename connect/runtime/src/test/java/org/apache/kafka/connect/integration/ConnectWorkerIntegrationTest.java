@@ -317,7 +317,8 @@ public class ConnectWorkerIntegrationTest {
             NUM_TASKS, "Connector tasks did not start in time");
         connector.awaitRecords(TimeUnit.MINUTES.toMillis(1));
 
-        // After we delete the connector, it and each of its tasks should  be stopped by the framework
+        // Then if we delete the connector, it and each of its tasks should be stopped by the framework
+        // even though the producer is blocked because there is no topic
         StartAndStopLatch stopCounter = connector.expectedStops(1);
         connect.deleteConnector(CONNECTOR_NAME);
 
