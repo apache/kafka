@@ -372,7 +372,7 @@ public class MirrorSourceConnector extends SourceConnector {
 
     static Map<String, String> configToMap(Config config) {
         return config.entries().stream()
-                .collect(Collectors.toMap(configEntry -> configEntry.name(), configEntry -> configEntry.value()));
+                .collect(Collectors.toMap(ConfigEntry::name, ConfigEntry::value));
     }
 
     @SuppressWarnings("deprecation")
