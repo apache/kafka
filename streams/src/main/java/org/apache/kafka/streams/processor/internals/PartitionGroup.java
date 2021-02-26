@@ -211,7 +211,7 @@ public class PartitionGroup {
             return false;
         } else {
             enforcedProcessingSensor.record(1.0d, wallClockTime);
-            logger.info("Continuing to process although some partition timestamps were not buffered locally." +
+            logger.trace("Continuing to process although some partitions do not have any data." +
                          "\n\tThere may be out-of-order processing for this task as a result." +
                          "\n\tPartitions with local data: {}." +
                          "\n\tPartitions we gave up waiting for, with their corresponding deadlines: {}." +
