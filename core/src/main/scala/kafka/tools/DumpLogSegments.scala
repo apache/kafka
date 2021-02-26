@@ -59,7 +59,7 @@ object DumpLogSegments {
       suffix match {
         case Log.LogFileSuffix =>
           dumpLog(file, opts.shouldPrintDataLog, nonConsecutivePairsForLogFilesMap, opts.isDeepIteration,
-            opts.maxMessageSize, opts.messageParser, opts.skipBatchMetadata)
+            opts.maxMessageSize, opts.messageParser, opts.skipRecordMetadata)
         case Log.IndexFileSuffix =>
           dumpIndex(file, opts.indexSanityOnly, opts.verifyOnly, misMatchesForIndexFilesMap, opts.maxMessageSize)
         case Log.TimeIndexFileSuffix =>
@@ -247,7 +247,7 @@ object DumpLogSegments {
                       isDeepIteration: Boolean,
                       maxMessageSize: Int,
                       parser: MessageParser[_, _],
-                      skipBatchMetadata: Boolean): Unit = {
+                      skipRecordMetadata: Boolean): Unit = {
     val startOffset = file.getName.split("\\.")(0).toLong
     println("Starting offset: " + startOffset)
     val fileRecords = FileRecords.open(file, false)
@@ -269,7 +269,7 @@ object DumpLogSegments {
             lastOffset = record.offset
 
             var prefix = s"${RecordIndent} "
-            if (!skipBatchMetadata) {
+            if (!skipRecordMetadata) {
               print(s"${prefix}offset: ${record.offset} isValid: ${record.isValid} crc: ${record.checksumOrNull}" +
                   s" keySize: ${record.keySize} valueSize: ${record.valueSize} ${batch.timestampType}: ${record.timestamp}" +
                   s" baseOffset: ${batch.baseOffset} lastOffset: ${batch.lastOffset} baseSequence: ${batch.baseSequence}" +
@@ -394,9 +394,9 @@ object DumpLogSegments {
     }
   }
 
-  val metadataRecordSerde = new MetadataRecordSerde()
-
   private class ClusterMetadataLogMessageParser extends MessageParser[String, String] {
+    val metadataRecordSerde = new MetadataRecordSerde()
+
     override def parse(record: Record): (Option[String], Option[String]) = {
       val output = try {
         val messageAndVersion = metadataRecordSerde.
@@ -446,7 +446,7 @@ object DumpLogSegments {
     val transactionLogOpt = parser.accepts("transaction-log-decoder", "if set, log data will be parsed as " +
       "transaction metadata from the __transaction_state topic.")
     val clusterMetadataOpt = parser.accepts("cluster-metadata-decoder", "if set, log data will be parsed as cluster metadata records.")
-    val skipBatchMetadataOpt = parser.accepts("skip-batch-metadata", "whether to skip printing the log batch metadata.")
+    val skipRecordMetadataOpt = parser.accepts("skip-record-metadata", "whether to skip printing metadata for each record.")
     options = parser.parse(args : _*)
 
     def messageParser: MessageParser[_, _] =
@@ -462,23 +462,19 @@ object DumpLogSegments {
         new DecoderMessageParser(keyDecoder, valueDecoder)
       }
 
-    val shouldPrintDataLog: Boolean = options.has(printOpt) ||
+    lazy val shouldPrintDataLog: Boolean = options.has(printOpt) ||
       options.has(offsetsOpt) ||
       options.has(transactionLogOpt) ||
       options.has(clusterMetadataOpt) ||
       options.has(valueDecoderOpt) ||
       options.has(keyDecoderOpt)
 
-    val skipBatchMetadata = options.has(skipBatchMetadataOpt)
-    if (skipBatchMetadata && !shouldPrintDataLog) {
-      throw new RuntimeException("When specifying --skip-batch-metadata, should specify " +
-        "some way of printing the batch data.")
-    }
-    val isDeepIteration: Boolean = options.has(deepIterationOpt) || shouldPrintDataLog
-    val verifyOnly: Boolean = options.has(verifyOpt)
-    val indexSanityOnly: Boolean = options.has(indexSanityOpt)
-    val files = options.valueOf(filesOpt).split(",")
-    val maxMessageSize = options.valueOf(maxMessageSizeOpt).intValue()
+    lazy val skipRecordMetadata = options.has(skipRecordMetadataOpt)
+    lazy val isDeepIteration: Boolean = options.has(deepIterationOpt) || shouldPrintDataLog
+    lazy val verifyOnly: Boolean = options.has(verifyOpt)
+    lazy val indexSanityOnly: Boolean = options.has(indexSanityOpt)
+    lazy val files = options.valueOf(filesOpt).split(",")
+    lazy val maxMessageSize = options.valueOf(maxMessageSizeOpt).intValue()
 
     def checkArgs(): Unit = CommandLineUtils.checkRequiredArgs(parser, options, filesOpt)
 
