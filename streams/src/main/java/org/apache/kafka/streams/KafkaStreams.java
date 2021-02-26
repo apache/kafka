@@ -1101,7 +1101,7 @@ public class KafkaStreams implements AutoCloseable {
 
     private int getNextThreadIndex() {
         final HashSet<String> allLiveThreadNames = new HashSet<>();
-        AtomicInteger maxThreadId = new AtomicInteger(1);
+        final AtomicInteger maxThreadId = new AtomicInteger(1);
         synchronized (threads) {
             processStreamThread(thread -> {
                 // trim any DEAD threads from the list so we can reuse the thread.id
@@ -1110,7 +1110,7 @@ public class KafkaStreams implements AutoCloseable {
                     threads.remove(thread);
                 } else {
                     allLiveThreadNames.add(thread.getName());
-                    int threadId = thread.getName().charAt(thread.getName().length() - 1);
+                    final int threadId = thread.getName().charAt(thread.getName().length() - 1);
                     if (threadId > maxThreadId.get()) {
                         maxThreadId.set(threadId);
                     }
