@@ -293,7 +293,7 @@ public class ConnectWorkerIntegrationTest {
 
     @Test
     public void testSourceTaskNotBlockedOnShutdownWithNonExistentTopic() throws Exception {
-        // Ensure that automatic topic creation is disabled on the broker
+        // When automatic topic creation is disabled on the broker
         brokerProps.put("auto.create.topics.enable", "false");
         connect = connectBuilder
             .brokerProps(brokerProps)
