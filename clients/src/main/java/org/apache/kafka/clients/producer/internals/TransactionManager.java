@@ -1094,13 +1094,13 @@ public class TransactionManager {
             log.debug("Transition from state {} to {}", currentState, target);
             System.err.println("Transition from state:" + currentState + " to:" + target);
         }
-        if (target == State.ABORTABLE_ERROR || target == State.ABORTING_TRANSACTION) {
-            final StackTraceElement[] elements = Thread.currentThread().getStackTrace();
-            for (int i = 1; i < elements.length; i++) {
-                final StackTraceElement s = elements[i];
-                System.err.print(" - at " + "(" + s.getFileName() + ":" + s.getLineNumber() + ")");
-            }
-        }
+//        if (target == State.ABORTABLE_ERROR || target == State.ABORTING_TRANSACTION) {
+//            final StackTraceElement[] elements = Thread.currentThread().getStackTrace();
+//            for (int i = 1; i < elements.length; i++) {
+//                final StackTraceElement s = elements[i];
+//                System.err.print(" - at " + "(" + s.getFileName() + ":" + s.getLineNumber() + ")");
+//            }
+//        }
 
         currentState = target;
     }
