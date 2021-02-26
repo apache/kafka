@@ -24,15 +24,15 @@ import kafka.raft.RaftManager
 import kafka.server.QuotaFactory.QuotaManagers
 import kafka.utils.Logging
 import org.apache.kafka.clients.admin.AlterConfigOp
+import org.apache.kafka.common.Node
 import org.apache.kafka.common.acl.AclOperation.{ALTER, ALTER_CONFIGS, CLUSTER_ACTION, CREATE, DESCRIBE}
 import org.apache.kafka.common.config.ConfigResource
-import org.apache.kafka.common.errors.ApiException
+import org.apache.kafka.common.errors.{ApiException, ClusterAuthorizationException}
 import org.apache.kafka.common.internals.FatalExitError
-import org.apache.kafka.common.message.ApiVersionsResponseData.{ApiVersion, SupportedFeatureKey}
 import org.apache.kafka.common.message.CreateTopicsRequestData.CreatableTopicCollection
 import org.apache.kafka.common.message.CreateTopicsResponseData.CreatableTopicResult
 import org.apache.kafka.common.message.MetadataResponseData.MetadataResponseBroker
-import org.apache.kafka.common.message.{ApiVersionsResponseData, BeginQuorumEpochResponseData, BrokerHeartbeatResponseData, BrokerRegistrationResponseData, CreateTopicsResponseData, DescribeQuorumResponseData, EndQuorumEpochResponseData, FetchResponseData, MetadataResponseData, UnregisterBrokerResponseData, VoteResponseData}
+import org.apache.kafka.common.message.{BeginQuorumEpochResponseData, BrokerHeartbeatResponseData, BrokerRegistrationResponseData, CreateTopicsResponseData, DescribeQuorumResponseData, EndQuorumEpochResponseData, FetchResponseData, MetadataResponseData, SaslAuthenticateResponseData, SaslHandshakeResponseData, UnregisterBrokerResponseData, VoteResponseData}
 import org.apache.kafka.common.protocol.{ApiKeys, ApiMessage, Errors}
 import org.apache.kafka.common.record.BaseRecords
 import org.apache.kafka.common.requests._
@@ -40,9 +40,8 @@ import org.apache.kafka.common.resource.Resource
 import org.apache.kafka.common.resource.Resource.CLUSTER_NAME
 import org.apache.kafka.common.resource.ResourceType.{CLUSTER, TOPIC}
 import org.apache.kafka.common.utils.Time
-import org.apache.kafka.common.Node
 import org.apache.kafka.controller.Controller
-import org.apache.kafka.metadata.{ApiMessageAndVersion, BrokerHeartbeatReply, BrokerRegistrationReply, FeatureMap, FeatureMapAndEpoch, VersionRange}
+import org.apache.kafka.metadata.{ApiMessageAndVersion, BrokerHeartbeatReply, BrokerRegistrationReply, VersionRange}
 import org.apache.kafka.server.authorizer.Authorizer
 
 import scala.collection.mutable
@@ -60,77 +59,14 @@ class ControllerApis(val requestChannel: RequestChannel,
                      val raftManager: RaftManager[ApiMessageAndVersion],
                      val config: KafkaConfig,
                      val metaProperties: MetaProperties,
-                     val controllerNodes: Seq[Node]) extends ApiRequestHandler with Logging {
+                     val controllerNodes: Seq[Node],
+                     val apiVersionManager: ApiVersionManager) extends ApiRequestHandler with Logging {
 
   val authHelper = new AuthHelper(authorizer)
   val requestHelper = new RequestHandlerHelper(requestChannel, quotas, time)
 
-  var supportedApiKeys = Set(
-    ApiKeys.FETCH,
-    ApiKeys.METADATA,
-    //ApiKeys.SASL_HANDSHAKE
-    ApiKeys.API_VERSIONS,
-    ApiKeys.CREATE_TOPICS,
-    //ApiKeys.DELETE_TOPICS,
-    //ApiKeys.DESCRIBE_ACLS,
-    //ApiKeys.CREATE_ACLS,
-    //ApiKeys.DELETE_ACLS,
-    //ApiKeys.DESCRIBE_CONFIGS,
-    //ApiKeys.ALTER_CONFIGS,
-    //ApiKeys.SASL_AUTHENTICATE,
-    //ApiKeys.CREATE_PARTITIONS,
-    //ApiKeys.CREATE_DELEGATION_TOKEN
-    //ApiKeys.RENEW_DELEGATION_TOKEN
-    //ApiKeys.EXPIRE_DELEGATION_TOKEN
-    //ApiKeys.DESCRIBE_DELEGATION_TOKEN
-    //ApiKeys.ELECT_LEADERS
-    ApiKeys.INCREMENTAL_ALTER_CONFIGS,
-    //ApiKeys.ALTER_PARTITION_REASSIGNMENTS
-    //ApiKeys.LIST_PARTITION_REASSIGNMENTS
-    ApiKeys.ALTER_CLIENT_QUOTAS,
-    //ApiKeys.DESCRIBE_USER_SCRAM_CREDENTIALS
-    //ApiKeys.ALTER_USER_SCRAM_CREDENTIALS
-    //ApiKeys.UPDATE_FEATURES
-    ApiKeys.ENVELOPE,
-    ApiKeys.VOTE,
-    ApiKeys.BEGIN_QUORUM_EPOCH,
-    ApiKeys.END_QUORUM_EPOCH,
-    ApiKeys.DESCRIBE_QUORUM,
-    ApiKeys.ALTER_ISR,
-    ApiKeys.BROKER_REGISTRATION,
-    ApiKeys.BROKER_HEARTBEAT,
-    ApiKeys.UNREGISTER_BROKER,
-  )
-
-  private def maybeHandleInvalidEnvelope(
-                                          envelope: RequestChannel.Request,
-                                          forwardedApiKey: ApiKeys
-                                        ): Boolean = {
-    def sendEnvelopeError(error: Errors): Unit = {
-      requestHelper.sendErrorResponseMaybeThrottle(envelope, error.exception)
-    }
-
-    if (!authHelper.authorize(envelope.context, CLUSTER_ACTION, CLUSTER, CLUSTER_NAME)) {
-      // Forwarding request must have CLUSTER_ACTION authorization to reduce the risk of impersonation.
-      sendEnvelopeError(Errors.CLUSTER_AUTHORIZATION_FAILED)
-      true
-    } else if (!forwardedApiKey.forwardable) {
-      sendEnvelopeError(Errors.INVALID_REQUEST)
-      true
-    } else {
-      false
-    }
-  }
-
   override def handle(request: RequestChannel.Request): Unit = {
     try {
-      val handled = request.envelope.exists(envelope => {
-        maybeHandleInvalidEnvelope(envelope, request.header.apiKey)
-      })
-
-      if (handled)
-        return
-
       request.header.apiKey match {
         case ApiKeys.FETCH => handleFetch(request)
         case ApiKeys.METADATA => handleMetadataRequest(request)
@@ -146,13 +82,36 @@ class ControllerApis(val requestChannel: RequestChannel,
         case ApiKeys.UNREGISTER_BROKER => handleUnregisterBroker(request)
         case ApiKeys.ALTER_CLIENT_QUOTAS => handleAlterClientQuotas(request)
         case ApiKeys.INCREMENTAL_ALTER_CONFIGS => handleIncrementalAlterConfigs(request)
-        case ApiKeys.ENVELOPE => EnvelopeUtils.handleEnvelopeRequest(request, requestChannel.metrics, handle)
+        case ApiKeys.ENVELOPE => handleEnvelopeRequest(request)
+        case ApiKeys.SASL_HANDSHAKE => handleSaslHandshakeRequest(request)
+        case ApiKeys.SASL_AUTHENTICATE => handleSaslAuthenticateRequest(request)
         case _ => throw new ApiException(s"Unsupported ApiKey ${request.context.header.apiKey()}")
       }
     } catch {
       case e: FatalExitError => throw e
       case e: Throwable => requestHelper.handleError(request, e)
     }
+  }
+
+  def handleEnvelopeRequest(request: RequestChannel.Request): Unit = {
+    if (!authHelper.authorize(request.context, CLUSTER_ACTION, CLUSTER, CLUSTER_NAME)) {
+      requestHelper.sendErrorResponseMaybeThrottle(request, new ClusterAuthorizationException(
+        s"Principal ${request.context.principal} does not have required CLUSTER_ACTION for envelope"))
+    } else {
+      EnvelopeUtils.handleEnvelopeRequest(request, requestChannel.metrics, handle)
+    }
+  }
+
+  def handleSaslHandshakeRequest(request: RequestChannel.Request): Unit = {
+    val responseData = new SaslHandshakeResponseData().setErrorCode(Errors.ILLEGAL_SASL_STATE.code)
+    requestHelper.sendResponseMaybeThrottle(request, _ => new SaslHandshakeResponse(responseData))
+  }
+
+  def handleSaslAuthenticateRequest(request: RequestChannel.Request): Unit = {
+    val responseData = new SaslAuthenticateResponseData()
+      .setErrorCode(Errors.ILLEGAL_SASL_STATE.code)
+      .setErrorMessage("SaslAuthenticate request received after successful authentication")
+    requestHelper.sendResponseMaybeThrottle(request, _ => new SaslAuthenticateResponse(responseData))
   }
 
   private def handleFetch(request: RequestChannel.Request): Unit = {
@@ -251,45 +210,17 @@ class ControllerApis(val requestChannel: RequestChannel,
     // If this is considered to leak information about the broker version a workaround is to use SSL
     // with client authentication which is performed at an earlier stage of the connection where the
     // ApiVersionRequest is not available.
-    def createResponseCallback(features: FeatureMapAndEpoch,
-                               requestThrottleMs: Int): ApiVersionsResponse = {
+    def createResponseCallback(requestThrottleMs: Int): ApiVersionsResponse = {
       val apiVersionRequest = request.body[ApiVersionsRequest]
-      if (apiVersionRequest.hasUnsupportedRequestVersion)
+      if (apiVersionRequest.hasUnsupportedRequestVersion) {
         apiVersionRequest.getErrorResponse(requestThrottleMs, Errors.UNSUPPORTED_VERSION.exception)
-      else if (!apiVersionRequest.isValid)
+      } else if (!apiVersionRequest.isValid) {
         apiVersionRequest.getErrorResponse(requestThrottleMs, Errors.INVALID_REQUEST.exception)
-      else {
-        val data = new ApiVersionsResponseData().
-          setErrorCode(0.toShort).
-          setThrottleTimeMs(requestThrottleMs).
-          setFinalizedFeaturesEpoch(features.epoch())
-        supportedFeatures.foreach {
-          case (k, v) => data.supportedFeatures().add(new SupportedFeatureKey().
-            setName(k).setMaxVersion(v.max()).setMinVersion(v.min()))
-        }
-        //        features.finalizedFeatures().asScala.foreach {
-        //          case (k, v) => data.finalizedFeatures().add(new FinalizedFeatureKey().
-        //            setName(k).setMaxVersionLevel(v.max()).setMinVersionLevel(v.min()))
-        //        }
-        ApiKeys.values().foreach {
-          key =>
-            if (supportedApiKeys.contains(key)) {
-              data.apiKeys().add(new ApiVersion().
-                setApiKey(key.id).
-                setMaxVersion(key.latestVersion()).
-                setMinVersion(key.oldestVersion()))
-            }
-        }
-        new ApiVersionsResponse(data)
+      } else {
+        apiVersionManager.apiVersionResponse(requestThrottleMs)
       }
     }
-    //    FutureConverters.toScala(controller.finalizedFeatures()).onComplete {
-    //      case Success(features) =>
-    requestHelper.sendResponseMaybeThrottle(request,
-      requestThrottleMs => createResponseCallback(new FeatureMapAndEpoch(
-        new FeatureMap(new util.HashMap()), 0), requestThrottleMs))
-    //      case Failure(e) => requestHelper.handleError(request, e)
-    //    }
+    requestHelper.sendResponseMaybeThrottle(request, createResponseCallback)
   }
 
   private def handleVote(request: RequestChannel.Request): Unit = {

@@ -16,7 +16,7 @@
 {
   "apiKey": 43,
   "type": "request",
-  "listeners": ["zkBroker", "broker", "controller"],
+  "listeners": ["zkBroker"],
   "name": "ElectLeadersRequest",
   // Version 1 implements multiple leader election types, as described by KIP-460.
   //

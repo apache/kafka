@@ -23,10 +23,11 @@ import java.util.Properties
 import kafka.network.RequestChannel
 import kafka.raft.RaftManager
 import kafka.server.QuotaFactory.QuotaManagers
-import kafka.server.{ClientQuotaManager, ClientRequestQuotaManager, ControllerApis, ControllerMutationQuotaManager, KafkaConfig, MetaProperties, ReplicationQuotaManager}
+import kafka.server.{ClientQuotaManager, ClientRequestQuotaManager, ControllerApis, ControllerMutationQuotaManager, KafkaConfig, MetaProperties, ReplicationQuotaManager, SimpleApiVersionManager}
 import kafka.utils.MockTime
 import org.apache.kafka.common.Uuid
 import org.apache.kafka.common.memory.MemoryPool
+import org.apache.kafka.common.message.ApiMessageType.ListenerType
 import org.apache.kafka.common.message.BrokerRegistrationRequestData
 import org.apache.kafka.common.network.{ClientInformation, ListenerName}
 import org.apache.kafka.common.protocol.Errors
@@ -40,6 +41,7 @@ import org.junit.jupiter.api.{AfterEach, Test}
 import org.mockito.ArgumentMatchers._
 import org.mockito.Mockito._
 import org.mockito.{ArgumentCaptor, ArgumentMatchers}
+
 import scala.jdk.CollectionConverters._
 
 class ControllerApisTest {
@@ -81,7 +83,8 @@ class ControllerApisTest {
       raftManager,
       new KafkaConfig(props),
       MetaProperties(Uuid.fromString("JgxuGe9URy-E-ceaL04lEw"), nodeId = nodeId),
-      Seq.empty
+      Seq.empty,
+      new SimpleApiVersionManager(ListenerType.CONTROLLER)
     )
   }
 
