@@ -33,6 +33,8 @@ import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNotEquals
 import java.util.Properties
 
+import scala.jdk.CollectionConverters._
+
 class AdminManagerTest {
 
   private val zkClient: KafkaZkClient = EasyMock.createNiceMock(classOf[KafkaZkClient])
@@ -82,6 +84,25 @@ class AdminManagerTest {
     val results: List[DescribeConfigsResponseData.DescribeConfigsResult] = adminManager.describeConfigs(resources, true, true)
     assertEquals(Errors.NONE.code, results.head.errorCode())
     assertFalse("Should return configs", results.head.configs().isEmpty)
+  }
+
+  @Test
+  def testDescribeConfigsWithConfigurationKeys(): Unit = {
+    EasyMock.expect(zkClient.getEntityConfigs(ConfigType.Topic, topic)).andReturn(TestUtils.createBrokerConfig(brokerId, "zk"))
+    EasyMock.expect(metadataCache.contains(topic)).andReturn(true)
+
+    EasyMock.replay(zkClient, metadataCache)
+
+    val resources = List(new DescribeConfigsRequestData.DescribeConfigsResource()
+      .setResourceName(topic)
+      .setResourceType(ConfigResource.Type.TOPIC.id)
+      .setConfigurationKeys(List("retention.ms", "retention.bytes", "segment.bytes").asJava)
+    )
+    val adminManager = createAdminManager()
+    val results: List[DescribeConfigsResponseData.DescribeConfigsResult] = adminManager.describeConfigs(resources, true, true)
+    assertEquals(Errors.NONE.code, results.head.errorCode())
+    val resultConfigKeys = results.head.configs().asScala.map(r => r.name()).toSet
+    assertEquals(Set("retention.ms", "retention.bytes", "segment.bytes"), resultConfigKeys)
   }
 
   @Test
