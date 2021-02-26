@@ -19,14 +19,18 @@ package kafka.tools
 
 import java.io._
 
+import com.fasterxml.jackson.databind.node.{IntNode, JsonNodeFactory, ObjectNode, TextNode}
 import kafka.coordinator.group.GroupMetadataManager
 import kafka.coordinator.transaction.TransactionLog
 import kafka.log._
 import kafka.serializer.Decoder
 import kafka.utils._
 import kafka.utils.Implicits._
+import org.apache.kafka.common.metadata.{MetadataJsonConverters, MetadataRecordType}
+import org.apache.kafka.common.protocol.ByteBufferAccessor
 import org.apache.kafka.common.record._
 import org.apache.kafka.common.utils.Utils
+import org.apache.kafka.raft.metadata.MetadataRecordSerde
 
 import scala.jdk.CollectionConverters._
 import scala.collection.mutable
@@ -55,7 +59,7 @@ object DumpLogSegments {
       suffix match {
         case Log.LogFileSuffix =>
           dumpLog(file, opts.shouldPrintDataLog, nonConsecutivePairsForLogFilesMap, opts.isDeepIteration,
-            opts.maxMessageSize, opts.messageParser)
+            opts.maxMessageSize, opts.messageParser, opts.skipRecordMetadata)
         case Log.IndexFileSuffix =>
           dumpIndex(file, opts.indexSanityOnly, opts.verifyOnly, misMatchesForIndexFilesMap, opts.maxMessageSize)
         case Log.TimeIndexFileSuffix =>
@@ -242,7 +246,8 @@ object DumpLogSegments {
                       nonConsecutivePairsForLogFilesMap: mutable.Map[String, List[(Long, Long)]],
                       isDeepIteration: Boolean,
                       maxMessageSize: Int,
-                      parser: MessageParser[_, _]): Unit = {
+                      parser: MessageParser[_, _],
+                      skipRecordMetadata: Boolean): Unit = {
     val startOffset = file.getName.split("\\.")(0).toLong
     println("Starting offset: " + startOffset)
     val fileRecords = FileRecords.open(file, false)
@@ -263,31 +268,38 @@ object DumpLogSegments {
             }
             lastOffset = record.offset
 
-            print(s"$RecordIndent offset: ${record.offset} isValid: ${record.isValid} crc: ${record.checksumOrNull}" +
-                s" keySize: ${record.keySize} valueSize: ${record.valueSize} ${batch.timestampType}: ${record.timestamp}" +
-                s" baseOffset: ${batch.baseOffset} lastOffset: ${batch.lastOffset} baseSequence: ${batch.baseSequence}" +
-                s" lastSequence: ${batch.lastSequence} producerEpoch: ${batch.producerEpoch} partitionLeaderEpoch: ${batch.partitionLeaderEpoch}" +
-                s" batchSize: ${batch.sizeInBytes} magic: ${batch.magic} compressType: ${batch.compressionType} position: ${validBytes}")
+            var prefix = s"${RecordIndent} "
+            if (!skipRecordMetadata) {
+              print(s"${prefix}offset: ${record.offset} isValid: ${record.isValid} crc: ${record.checksumOrNull}" +
+                  s" keySize: ${record.keySize} valueSize: ${record.valueSize} ${batch.timestampType}: ${record.timestamp}" +
+                  s" baseOffset: ${batch.baseOffset} lastOffset: ${batch.lastOffset} baseSequence: ${batch.baseSequence}" +
+                  s" lastSequence: ${batch.lastSequence} producerEpoch: ${batch.producerEpoch} partitionLeaderEpoch: ${batch.partitionLeaderEpoch}" +
+                  s" batchSize: ${batch.sizeInBytes} magic: ${batch.magic} compressType: ${batch.compressionType} position: ${validBytes}")
+              prefix = " "
 
-
-            if (batch.magic >= RecordBatch.MAGIC_VALUE_V2) {
-              print(" sequence: " + record.sequence + " headerKeys: " + record.headers.map(_.key).mkString("[", ",", "]"))
-            } else {
-              print(s" crc: ${record.checksumOrNull} isvalid: ${record.isValid}")
-            }
-
-            if (batch.isControlBatch) {
-              val controlTypeId = ControlRecordType.parseTypeId(record.key)
-              ControlRecordType.fromTypeId(controlTypeId) match {
-                case ControlRecordType.ABORT | ControlRecordType.COMMIT =>
-                  val endTxnMarker = EndTransactionMarker.deserialize(record)
-                  print(s" endTxnMarker: ${endTxnMarker.controlType} coordinatorEpoch: ${endTxnMarker.coordinatorEpoch}")
-                case controlType =>
-                  print(s" controlType: $controlType($controlTypeId)")
+              if (batch.magic >= RecordBatch.MAGIC_VALUE_V2) {
+                print(" sequence: " + record.sequence + " headerKeys: " + record.headers.map(_.key).mkString("[", ",", "]"))
+              } else {
+                print(s" crc: ${record.checksumOrNull} isvalid: ${record.isValid}")
               }
-            } else if (printContents) {
+
+              if (batch.isControlBatch) {
+                val controlTypeId = ControlRecordType.parseTypeId(record.key)
+                ControlRecordType.fromTypeId(controlTypeId) match {
+                  case ControlRecordType.ABORT | ControlRecordType.COMMIT =>
+                    val endTxnMarker = EndTransactionMarker.deserialize(record)
+                    print(s" endTxnMarker: ${endTxnMarker.controlType} coordinatorEpoch: ${endTxnMarker.coordinatorEpoch}")
+                  case controlType =>
+                    print(s" controlType: $controlType($controlTypeId)")
+                }
+              }
+            }
+            if (printContents && !batch.isControlBatch) {
               val (key, payload) = parser.parse(record)
-              key.foreach(key => print(s" key: $key"))
+              key.foreach { key =>
+                print(s"${prefix}key: $key")
+                prefix = " "
+              }
               payload.foreach(payload => print(s" payload: $payload"))
             }
             println()
@@ -382,6 +394,30 @@ object DumpLogSegments {
     }
   }
 
+  private class ClusterMetadataLogMessageParser extends MessageParser[String, String] {
+    val metadataRecordSerde = new MetadataRecordSerde()
+
+    override def parse(record: Record): (Option[String], Option[String]) = {
+      val output = try {
+        val messageAndVersion = metadataRecordSerde.
+          read(new ByteBufferAccessor(record.value), record.valueSize())
+        val json = new ObjectNode(JsonNodeFactory.instance)
+        json.set("type", new TextNode(MetadataRecordType.fromId(
+          messageAndVersion.message().apiKey()).toString))
+        json.set("version", new IntNode(messageAndVersion.version()))
+        json.set("data", MetadataJsonConverters.writeJson(
+          messageAndVersion.message(), messageAndVersion.version()))
+        json.toString()
+      } catch {
+        case e: Throwable => {
+          s"Error at ${record.offset}, skipping. ${e.getMessage}"
+        }
+      }
+      // No keys for metadata records
+      (None, Some(output))
+    }
+  }
+
   private class DumpLogSegmentsOptions(args: Array[String]) extends CommandDefaultOptions(args) {
     val printOpt = parser.accepts("print-data-log", "if set, printing the messages content when dumping data logs. Automatically set if any decoder option is specified.")
     val verifyOpt = parser.accepts("verify-index-only", "if set, just verify the index log without printing its content.")
@@ -409,6 +445,8 @@ object DumpLogSegments {
       "__consumer_offsets topic.")
     val transactionLogOpt = parser.accepts("transaction-log-decoder", "if set, log data will be parsed as " +
       "transaction metadata from the __transaction_state topic.")
+    val clusterMetadataOpt = parser.accepts("cluster-metadata-decoder", "if set, log data will be parsed as cluster metadata records.")
+    val skipRecordMetadataOpt = parser.accepts("skip-record-metadata", "whether to skip printing metadata for each record.")
     options = parser.parse(args : _*)
 
     def messageParser: MessageParser[_, _] =
@@ -416,6 +454,8 @@ object DumpLogSegments {
         new OffsetsMessageParser
       } else if (options.has(transactionLogOpt)) {
         new TransactionLogMessageParser
+      } else if (options.has(clusterMetadataOpt)) {
+        new ClusterMetadataLogMessageParser
       } else {
         val valueDecoder: Decoder[_] = CoreUtils.createObject[Decoder[_]](options.valueOf(valueDecoderOpt), new VerifiableProperties)
         val keyDecoder: Decoder[_] = CoreUtils.createObject[Decoder[_]](options.valueOf(keyDecoderOpt), new VerifiableProperties)
@@ -425,9 +465,11 @@ object DumpLogSegments {
     lazy val shouldPrintDataLog: Boolean = options.has(printOpt) ||
       options.has(offsetsOpt) ||
       options.has(transactionLogOpt) ||
+      options.has(clusterMetadataOpt) ||
       options.has(valueDecoderOpt) ||
       options.has(keyDecoderOpt)
 
+    lazy val skipRecordMetadata = options.has(skipRecordMetadataOpt)
     lazy val isDeepIteration: Boolean = options.has(deepIterationOpt) || shouldPrintDataLog
     lazy val verifyOnly: Boolean = options.has(verifyOpt)
     lazy val indexSanityOnly: Boolean = options.has(indexSanityOpt)
