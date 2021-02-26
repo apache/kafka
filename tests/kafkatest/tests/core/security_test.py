@@ -111,7 +111,7 @@ class SecurityTest(EndToEndTest):
                 # expected
                 pass
 
-            error = 'SSLHandshakeException' if security_protocol == 'SSL' else 'INVALID_REPLICATION_FACTOR'
+            error = 'SSLHandshakeException' if security_protocol == 'SSL' else 'LEADER_NOT_AVAILABLE'
             wait_until(lambda: self.producer_consumer_have_expected_error(error), timeout_sec=30)
             self.producer.stop()
             self.consumer.stop()
