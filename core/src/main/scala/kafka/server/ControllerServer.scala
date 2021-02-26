@@ -168,7 +168,8 @@ class ControllerServer(
         raftManager,
         config,
         metaProperties,
-        controllerNodes.toSeq)
+        controllerNodes.toSeq,
+        apiVersionManager)
       controllerApisHandlerPool = new KafkaRequestHandlerPool(config.nodeId,
         socketServer.dataPlaneRequestChannel,
         controllerApis,
