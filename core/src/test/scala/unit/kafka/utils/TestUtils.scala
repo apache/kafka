@@ -1466,6 +1466,7 @@ object TestUtils extends Logging {
       records.size >= numRecords
     }
 
+    
     var isFail = false
     try {
       pollRecordsUntilTrue(consumer, pollAction,
