@@ -169,7 +169,7 @@ public class KafkaClusterTestKit implements AutoCloseable {
                     TopicPartition metadataPartition = new TopicPartition("@metadata", 0);
                     KafkaRaftManager<ApiMessageAndVersion> raftManager = new KafkaRaftManager<>(
                         metaProperties, config, new MetadataRecordSerde(), metadataPartition,
-                        Time.SYSTEM, new Metrics(), Option.apply(threadNamePrefix));
+                        Time.SYSTEM, new Metrics(), Option.apply(threadNamePrefix), connectFutureManager.future);
                     MetaLogManager metaLogShim = new MetaLogRaftShim(raftManager.kafkaRaftClient(), config.nodeId());
                     ControllerServer controller = new ControllerServer(
                         nodes.controllerProperties(node.id()),
@@ -222,7 +222,7 @@ public class KafkaClusterTestKit implements AutoCloseable {
                     TopicPartition metadataPartition = new TopicPartition("@metadata", 0);
                     KafkaRaftManager<ApiMessageAndVersion> raftManager = new KafkaRaftManager<>(
                             metaProperties, config, new MetadataRecordSerde(), metadataPartition,
-                            Time.SYSTEM, new Metrics(), Option.apply(threadNamePrefix));
+                            Time.SYSTEM, new Metrics(), Option.apply(threadNamePrefix), connectFutureManager.future);
                     MetaLogManager metaLogShim = new MetaLogRaftShim(raftManager.kafkaRaftClient(), config.nodeId());
                     BrokerServer broker = new BrokerServer(
                         config,
@@ -360,7 +360,7 @@ public class KafkaClusterTestKit implements AutoCloseable {
                 futures.add(executorService.submit(controller::startup));
             }
             for (KafkaRaftManager raftManager : raftManagers.values()) {
-                futures.add(executorService.submit(raftManager::startup));
+                futures.add(controllerQuorumVotersFutureManager.future.thenRunAsync(raftManager::startup));
             }
             for (BrokerServer broker : kip500Brokers.values()) {
                 futures.add(executorService.submit(broker::startup));

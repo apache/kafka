@@ -104,7 +104,8 @@ class KafkaRaftManager[T](
   topicPartition: TopicPartition,
   time: Time,
   metrics: Metrics,
-  threadNamePrefixOpt: Option[String]
+  threadNamePrefixOpt: Option[String],
+  val controllerQuorumVotersFuture: CompletableFuture[util.List[String]]
 ) extends RaftManager[T] with Logging {
 
   private val raftConfig = new RaftConfig(config)
@@ -125,7 +126,7 @@ class KafkaRaftManager[T](
 
   def startup(): Unit = {
     // Update the voter endpoints (if valid) with what's in RaftConfig
-    val voterAddresses: util.Map[Integer, AddressSpec] = raftConfig.quorumVoterConnections
+    val voterAddresses: util.Map[Integer, AddressSpec] = RaftConfig.parseVoterConnections(controllerQuorumVotersFuture.get())
     for (voterAddressEntry <- voterAddresses.entrySet.asScala) {
       voterAddressEntry.getValue match {
         case spec: InetAddressSpec =>

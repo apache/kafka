@@ -18,8 +18,7 @@
 package kafka.tools
 
 import java.util.concurrent.atomic.{AtomicInteger, AtomicLong}
-import java.util.concurrent.{CountDownLatch, LinkedBlockingDeque, TimeUnit}
-
+import java.util.concurrent.{CompletableFuture, CountDownLatch, LinkedBlockingDeque, TimeUnit}
 import joptsimple.OptionException
 import kafka.network.SocketServer
 import kafka.raft.{KafkaRaftManager, RaftManager}
@@ -85,7 +84,8 @@ class TestRaftServer(
       partition,
       time,
       metrics,
-      Some(threadNamePrefix)
+      Some(threadNamePrefix),
+      CompletableFuture.completedFuture(config.quorumVoters)
     )
 
     workloadGenerator = new RaftWorkloadGenerator(

@@ -68,7 +68,8 @@ class KafkaRaftServer(
     KafkaRaftServer.MetadataPartition,
     time,
     metrics,
-    threadNamePrefix
+    threadNamePrefix,
+    controllerQuorumVotersFuture
   )
 
   private val metaLogShim = new MetaLogRaftShim(raftManager.kafkaRaftClient, config.nodeId)
