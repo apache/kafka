@@ -1,0 +1,11 @@
+[
+  {
+  "name":"javax.management.remote.rmi.RMIServerImpl_Stub"
+  },
+  {
+  "name":"java.rmi.server.RemoteStub"
+  },
+  {
+  "name":"java.rmi.server.RemoteObject"
+  }
+]
