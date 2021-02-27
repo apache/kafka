@@ -378,6 +378,7 @@ object KafkaConfig {
   val NodeIdProp = "node.id"
   val MetadataLogDirProp = "metadata.log.dir"
   val ControllerListenerNamesProp = "controller.listener.names"
+  val SaslMechanismControllerProtocolProp = "sasl.mechanism.controller.protocol"
 
   /************* Authorizer Configuration ***********/
   val AuthorizerClassNameProp = "authorizer.class.name"
@@ -675,6 +676,7 @@ object KafkaConfig {
     "KIP-500. If it is not set, the metadata log is placed in the first log directory from log.dirs."
   val ControllerListenerNamesDoc = "A comma-separated list of the names of the listeners used by the KIP-500 controller. This is required " +
     "if this process is a KIP-500 controller. The ZK-based controller will not use this configuration."
+  val SaslMechanismControllerProtocolDoc = "SASL mechanism used for communication with controllers. Default is GSSAPI."
 
   /************* Authorizer Configuration ***********/
   val AuthorizerClassNameDoc = s"The fully qualified name of a class that implements s${classOf[Authorizer].getName}" +
@@ -1081,6 +1083,7 @@ object KafkaConfig {
       .defineInternal(BrokerSessionTimeoutMsProp, INT, Defaults.BrokerSessionTimeoutMs, null, MEDIUM, BrokerSessionTimeoutMsDoc)
       .defineInternal(MetadataLogDirProp, STRING, null, null, HIGH, MetadataLogDirDoc)
       .defineInternal(ControllerListenerNamesProp, STRING, null, null, HIGH, ControllerListenerNamesDoc)
+      .defineInternal(SaslMechanismControllerProtocolProp, STRING, SaslConfigs.DEFAULT_SASL_MECHANISM, null, HIGH, SaslMechanismControllerProtocolDoc)
 
       /************* Authorizer Configuration ***********/
       .define(AuthorizerClassNameProp, STRING, Defaults.AuthorizerClassName, LOW, AuthorizerClassNameDoc)
@@ -1813,6 +1816,8 @@ class KafkaConfig(val props: java.util.Map[_, _], doLog: Boolean, dynamicConfigO
 
   def controllerListeners: Seq[EndPoint] =
     listeners.filter(l => controllerListenerNames.contains(l.listenerName.value()))
+
+  def saslMechanismControllerProtocol = getString(KafkaConfig.SaslMechanismControllerProtocolProp)
 
   def controlPlaneListener: Option[EndPoint] = {
     controlPlaneListenerName.map { listenerName =>
