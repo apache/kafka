@@ -1418,8 +1418,10 @@ project(':streams') {
   dependencies {
     api project(':clients')
 
+    // use `api` dependency for `connect-json` for compatibility (e.g. users who use `JsonSerializer`/`JsonDeserializer`
+    // at compile-time without an explicit dependency on `connect-json`)
     // this dependency should be removed after we unify data API
-    implementation(project(':connect:json')) {
+    api(project(':connect:json')) {
       // this transitive dependency is not used in Streams, and it breaks SBT builds
       exclude module: 'javax.ws.rs-api'
     }
