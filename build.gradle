@@ -767,11 +767,13 @@ project(':core') {
   archivesBaseName = "kafka_${versions.baseScala}"
 
   dependencies {
+    // `core` is often used in users' tests, define the following dependencies as `api` for backwards compatibility
+    // even though the `core` module doesn't expose any public API
     api project(':clients')
+    api libs.scalaLibrary
+
     implementation project(':metadata')
     implementation project(':raft')
-
-    api libs.scalaLibrary
 
     implementation libs.argparse4j
     implementation libs.jacksonDatabind
@@ -1556,8 +1558,8 @@ project(':streams:streams-scala') {
   dependencies {
     api project(':streams')
 
-    implementation libs.scalaLibrary
-    implementation libs.scalaCollectionCompat
+    api libs.scalaLibrary
+    api libs.scalaCollectionCompat
 
     testImplementation project(':core')
     testImplementation project(':core').sourceSets.test.output
@@ -2048,10 +2050,13 @@ project(':connect:runtime') {
   archivesBaseName = "connect-runtime"
 
   dependencies {
+    // connect-runtime is used in tests, use `api` for modules below for backwards compatibility even though
+    // applications should generally not depend on `connect-runtime`
     api project(':connect:api')
     api project(':clients')
     api project(':connect:json')
     api project(':connect:transforms')
+
     implementation project(':tools')
 
     implementation libs.slf4jApi
