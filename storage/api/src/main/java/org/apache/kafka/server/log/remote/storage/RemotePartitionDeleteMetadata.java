@@ -22,7 +22,7 @@ import org.apache.kafka.common.annotation.InterfaceStability;
 import java.util.Objects;
 
 /**
- * This class represents the metadata about the remote partition. It can be updated with {@link RemoteLogMetadataManager#putRemotePartitionDeleteMetadata(RemotePartitionDeleteMetadata)}.
+ * This class represents the metadata about the remote partition. It can be created/updated with {@link RemoteLogMetadataManager#putRemotePartitionDeleteMetadata(RemotePartitionDeleteMetadata)}.
  * Possible state transitions are mentioned at {@link RemotePartitionDeleteState}.
  */
 @InterfaceStability.Evolving
@@ -30,23 +30,24 @@ public class RemotePartitionDeleteMetadata {
 
     private final TopicIdPartition topicIdPartition;
     private final RemotePartitionDeleteState state;
-    private final long eventTimestamp;
+    private final long eventTimestampMs;
     private final int brokerId;
 
     /**
+     * Creates an instance of this class with the given metadata.
      *
-     * @param topicIdPartition
-     * @param state
-     * @param eventTimestamp
-     * @param brokerId
+     * @param topicIdPartition topic partition for which this event is meant for.
+     * @param state            State of the remote topic partition.
+     * @param eventTimestampMs Epoch time in milli seconds at which this event is occurred.
+     * @param brokerId         Id of the broker in which this event is raised.
      */
     public RemotePartitionDeleteMetadata(TopicIdPartition topicIdPartition,
                                          RemotePartitionDeleteState state,
-                                         long eventTimestamp,
+                                         long eventTimestampMs,
                                          int brokerId) {
         this.topicIdPartition = Objects.requireNonNull(topicIdPartition);
         this.state = Objects.requireNonNull(state);
-        this.eventTimestamp = eventTimestamp;
+        this.eventTimestampMs = eventTimestampMs;
         this.brokerId = brokerId;
     }
 
@@ -65,10 +66,10 @@ public class RemotePartitionDeleteMetadata {
     }
 
     /**
-     * @return Epoch time at which this event is occurred.
+     * @return Epoch time in milli seconds at which this event is occurred.
      */
-    public long eventTimestamp() {
-        return eventTimestamp;
+    public long eventTimestampMs() {
+        return eventTimestampMs;
     }
 
     /**
@@ -83,7 +84,7 @@ public class RemotePartitionDeleteMetadata {
         return "RemotePartitionDeleteMetadata{" +
                "topicPartition=" + topicIdPartition +
                ", state=" + state +
-               ", eventTimestamp=" + eventTimestamp +
+               ", eventTimestampMs=" + eventTimestampMs +
                ", brokerId=" + brokerId +
                '}';
     }
@@ -97,7 +98,7 @@ public class RemotePartitionDeleteMetadata {
             return false;
         }
         RemotePartitionDeleteMetadata that = (RemotePartitionDeleteMetadata) o;
-        return eventTimestamp == that.eventTimestamp &&
+        return eventTimestampMs == that.eventTimestampMs &&
                brokerId == that.brokerId &&
                Objects.equals(topicIdPartition, that.topicIdPartition) &&
                state == that.state;
@@ -105,6 +106,6 @@ public class RemotePartitionDeleteMetadata {
 
     @Override
     public int hashCode() {
-        return Objects.hash(topicIdPartition, state, eventTimestamp, brokerId);
+        return Objects.hash(topicIdPartition, state, eventTimestampMs, brokerId);
     }
 }
