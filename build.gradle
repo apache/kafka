@@ -2048,11 +2048,11 @@ project(':connect:runtime') {
   archivesBaseName = "connect-runtime"
 
   dependencies {
-    implementation project(':connect:api')
-    implementation project(':clients')
+    api project(':connect:api')
+    api project(':clients')
+    api project(':connect:json')
+    api project(':connect:transforms')
     implementation project(':tools')
-    implementation project(':connect:json')
-    implementation project(':connect:transforms')
 
     implementation libs.slf4jApi
     implementation libs.log4j
