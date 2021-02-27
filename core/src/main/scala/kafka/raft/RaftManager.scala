@@ -121,6 +121,8 @@ class KafkaRaftManager[T](
   private val raftClient = buildRaftClient()
   private val raftIoThread = new RaftIoThread(raftClient, threadNamePrefix)
 
+  def kafkaRaftClient: KafkaRaftClient[T] = raftClient
+
   def startup(): Unit = {
     // Update the voter endpoints (if valid) with what's in RaftConfig
     val voterAddresses: util.Map[Integer, AddressSpec] = raftConfig.quorumVoterConnections
@@ -198,6 +200,7 @@ class KafkaRaftManager[T](
       metrics,
       expirationService,
       logContext,
+      metaProperties.clusterId.toString,
       OptionalInt.of(config.nodeId),
       raftConfig
     )
@@ -268,7 +271,7 @@ class KafkaRaftManager[T](
     val maxInflightRequestsPerConnection = 1
     val reconnectBackoffMs = 50
     val reconnectBackoffMsMs = 500
-    val discoverBrokerVersions = false
+    val discoverBrokerVersions = true
 
     new NetworkClient(
       selector,

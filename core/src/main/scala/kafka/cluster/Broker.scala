@@ -32,7 +32,7 @@ import scala.collection.Seq
 import scala.jdk.CollectionConverters._
 
 object Broker {
-  private[cluster] case class ServerInfo(clusterResource: ClusterResource,
+  private[kafka] case class ServerInfo(clusterResource: ClusterResource,
                                          brokerId: Int,
                                          endpoints: util.List[Endpoint],
                                          interBrokerEndpoint: Endpoint) extends AuthorizerServerInfo

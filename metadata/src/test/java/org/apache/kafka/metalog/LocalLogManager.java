@@ -39,6 +39,7 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.stream.Collectors;
 
+
 /**
  * The LocalLogManager is a test implementation that relies on the contents of memory.
  */
@@ -111,9 +112,26 @@ public final class LocalLogManager implements MetaLogManager, AutoCloseable {
 
     public static class SharedLogData {
         private final Logger log = LoggerFactory.getLogger(SharedLogData.class);
+
+        /**
+         * Maps node IDs to the matching log managers.
+         */
         private final HashMap<Integer, LocalLogManager> logManagers = new HashMap<>();
+
+        /**
+         * Maps offsets to record batches.
+         */
         private final TreeMap<Long, LocalBatch> batches = new TreeMap<>();
+
+        /**
+         * The current leader.
+         */
         private MetaLogLeader leader = new MetaLogLeader(-1, -1);
+
+        /**
+         * The start offset of the last batch that was created, or -1 if no batches have
+         * been created.
+         */
         private long prevOffset = -1;
 
         synchronized void registerLogManager(LocalLogManager logManager) {
@@ -197,20 +215,45 @@ public final class LocalLogManager implements MetaLogManager, AutoCloseable {
 
     private final Logger log;
 
+    /**
+     * The node ID of this local log manager. Each log manager must have a unique ID.
+     */
     private final int nodeId;
 
+    /**
+     * A reference to the in-memory state that unites all the log managers in use.
+     */
     private final SharedLogData shared;
 
+    /**
+     * The event queue used by this local log manager.
+     */
     private final EventQueue eventQueue;
 
+    /**
+     * Whether this LocalLogManager has been initialized.
+     */
     private boolean initialized = false;
 
+    /**
+     * Whether this LocalLogManager has been shut down.
+     */
     private boolean shutdown = false;
 
+    /**
+     * An offset that the log manager will not read beyond. This exists only for testing
+     * purposes.
+     */
     private long maxReadOffset = Long.MAX_VALUE;
 
+    /**
+     * The listener objects attached to this local log manager.
+     */
     private final List<MetaLogListenerData> listeners = new ArrayList<>();
 
+    /**
+     * The current leader, as seen by this log manager.
+     */
     private volatile MetaLogLeader leader = new MetaLogLeader(-1, -1);
 
     public LocalLogManager(LogContext logContext,
