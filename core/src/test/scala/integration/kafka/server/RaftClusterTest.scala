@@ -31,7 +31,7 @@ import java.util.concurrent.TimeUnit
 import scala.jdk.CollectionConverters._
 
 @Timeout(120000)
-class Kip500ClusterTest {
+class RaftClusterTest {
 
   @Test
   def testCreateClusterAndClose(): Unit = {
@@ -198,7 +198,6 @@ class Kip500ClusterTest {
     }
   }
 
-  @Test
   def testClientQuotas(): Unit = {
     val cluster = new KafkaClusterTestKit.Builder(
       new TestKitNodes.Builder().
