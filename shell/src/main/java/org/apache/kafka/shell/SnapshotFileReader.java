@@ -18,7 +18,6 @@
 package org.apache.kafka.shell;
 
 import org.apache.kafka.common.message.LeaderChangeMessage;
-import org.apache.kafka.common.metadata.MetadataRecordType;
 import org.apache.kafka.common.protocol.ApiMessage;
 import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.record.ControlRecordType;
@@ -27,8 +26,10 @@ import org.apache.kafka.common.record.FileRecords;
 import org.apache.kafka.common.record.Record;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.metadata.ApiMessageAndVersion;
 import org.apache.kafka.metalog.MetaLogLeader;
 import org.apache.kafka.metalog.MetaLogListener;
+import org.apache.kafka.raft.metadata.MetadataRecordSerde;
 import org.apache.kafka.queue.EventQueue;
 import org.apache.kafka.queue.KafkaEventQueue;
 import org.slf4j.Logger;
@@ -53,6 +54,7 @@ public final class SnapshotFileReader implements AutoCloseable {
     private final CompletableFuture<Void> caughtUpFuture;
     private FileRecords fileRecords;
     private Iterator<FileChannelRecordBatch> batchIterator;
+    private final MetadataRecordSerde serde = new MetadataRecordSerde();
 
     public SnapshotFileReader(String snapshotPath, MetaLogListener listener) {
         this.snapshotPath = snapshotPath;
@@ -140,17 +142,8 @@ public final class SnapshotFileReader implements AutoCloseable {
             Record record = iter.next();
             ByteBufferAccessor accessor = new ByteBufferAccessor(record.value());
             try {
-                int apiKey = accessor.readUnsignedVarint();
-                if (apiKey > Short.MAX_VALUE || apiKey < 0) {
-                    throw new RuntimeException("Invalid apiKey value " + apiKey);
-                }
-                int apiVersion = accessor.readUnsignedVarint();
-                if (apiVersion > Short.MAX_VALUE || apiVersion < 0) {
-                    throw new RuntimeException("Invalid apiVersion value " + apiVersion);
-                }
-                ApiMessage message = MetadataRecordType.fromId((short) apiKey).newMetadataRecord();
-                message.read(accessor, (short) apiVersion);
-                messages.add(message);
+                ApiMessageAndVersion messageAndVersion = serde.read(accessor, record.valueSize());
+                messages.add(messageAndVersion.message());
             } catch (Throwable e) {
                 log.error("unable to read metadata record at offset {}", record.offset(), e);
             }

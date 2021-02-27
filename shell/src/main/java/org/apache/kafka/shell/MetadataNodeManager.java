@@ -96,7 +96,7 @@ public final class MetadataNodeManager implements AutoCloseable {
         @Override
         public void handleCommits(long lastOffset, List<ApiMessage> messages) {
             appendEvent("handleCommits", () -> {
-                log.error("handleCommits " + messages + " at offset " + lastOffset);
+                log.debug("handleCommits " + messages + " at offset " + lastOffset);
                 DirectoryNode dir = data.root.mkdirs("metadataQuorum");
                 dir.create("offset").setContents(String.valueOf(lastOffset));
                 for (ApiMessage message : messages) {
@@ -108,7 +108,7 @@ public final class MetadataNodeManager implements AutoCloseable {
         @Override
         public void handleNewLeader(MetaLogLeader leader) {
             appendEvent("handleNewLeader", () -> {
-                log.error("handleNewLeader " + leader);
+                log.debug("handleNewLeader " + leader);
                 DirectoryNode dir = data.root.mkdirs("metadataQuorum");
                 dir.create("leader").setContents(leader.toString());
             }, null);
