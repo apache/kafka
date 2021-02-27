@@ -83,6 +83,7 @@ public abstract class MirrorConnectorsIntegrationBaseTest {
     private static final int CHECKPOINT_DURATION_MS = 20_000;
     private static final int RECORD_CONSUME_DURATION_MS = 20_000;
     private static final int OFFSET_SYNC_DURATION_MS = 30_000;
+    private static final int TOPIC_SYNC_DURATION_MS = 30_000;
     private static final int NUM_WORKERS = 3;
     private static final Duration CONSUMER_POLL_TIMEOUT_MS = Duration.ofMillis(500);
     protected static final String PRIMARY_CLUSTER_ALIAS = "primary";
@@ -476,7 +477,7 @@ public abstract class MirrorConnectorsIntegrationBaseTest {
      */
     private static void waitForTopicCreated(EmbeddedKafkaCluster cluster, String topicName) throws InterruptedException {
         try (final Admin adminClient = cluster.createAdminClient()) {
-            waitForCondition(() -> adminClient.listTopics().names().get().contains(topicName), OFFSET_SYNC_DURATION_MS,
+            waitForCondition(() -> adminClient.listTopics().names().get().contains(topicName), TOPIC_SYNC_DURATION_MS,
                 "Topic: " + topicName + " didn't get created in the cluster"
             );
         }
@@ -490,9 +491,6 @@ public abstract class MirrorConnectorsIntegrationBaseTest {
             Set<String> topicsToBeDeleted = adminClient.listTopics().names().get();
             log.debug("Deleting topics: {} ", topicsToBeDeleted);
             adminClient.deleteTopics(topicsToBeDeleted).all().get();
-        } catch (final Throwable e) {
-            log.error("Could not delete all topics.", e);
-            throw new RuntimeException(e);
         }
     }
     
