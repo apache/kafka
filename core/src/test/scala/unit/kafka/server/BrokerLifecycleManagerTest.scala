@@ -22,6 +22,7 @@ import java.util.concurrent.atomic.{AtomicLong, AtomicReference}
 
 import kafka.utils.{MockTime, TestUtils}
 import org.apache.kafka.clients.{Metadata, MockClient, NodeApiVersions}
+import org.apache.kafka.common.config.SaslConfigs
 import org.apache.kafka.common.{Node, Uuid}
 import org.apache.kafka.common.internals.ClusterResourceListeners
 import org.apache.kafka.common.message.ApiVersionsResponseData.ApiVersion
@@ -58,6 +59,8 @@ class BrokerLifecycleManagerTest {
     override def listenerName: ListenerName = new ListenerName("PLAINTEXT")
 
     override def securityProtocol: SecurityProtocol = SecurityProtocol.PLAINTEXT;
+
+    override def saslMechanism: String = SaslConfigs.DEFAULT_SASL_MECHANISM
   }
 
   class BrokerLifecycleManagerTestContext(properties: Properties) {

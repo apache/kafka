@@ -779,6 +779,7 @@ class KafkaConfigTest {
         case KafkaConfig.SslPrincipalMappingRulesProp => // ignore string
 
         //Sasl Configs
+        case KafkaConfig.SaslMechanismControllerProtocolProp => // ignore
         case KafkaConfig.SaslMechanismInterBrokerProtocolProp => // ignore
         case KafkaConfig.SaslEnabledMechanismsProp =>
         case KafkaConfig.SaslClientCallbackHandlerClassProp =>
