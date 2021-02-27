@@ -129,10 +129,20 @@ public class ClusterTestExtensions implements TestTemplateInvocationContextProvi
         }
 
         generatedClusterConfigs.forEach(config -> {
-            if (config.clusterType() == Type.ZK) {
-                testInvocations.accept(new ZkClusterInvocationContext(config.copyOf()));
-            } else {
-                throw new IllegalStateException("Unknown cluster type " + config.clusterType());
+            switch (config.clusterType()) {
+                case RAFT:
+                    testInvocations.accept(new RaftClusterInvocationContext(config.copyOf()));
+                    break;
+                case BOTH:
+                    testInvocations.accept(new RaftClusterInvocationContext(config.copyOf()));
+                    testInvocations.accept(new ZkClusterInvocationContext(config.copyOf()));
+                    break;
+                case ZK:
+                    testInvocations.accept(new ZkClusterInvocationContext(config.copyOf()));
+                    break;
+                case DEFAULT: // Should not see DEFAULT here
+                default:
+                    throw new IllegalStateException("Unknown cluster type " + config.clusterType());
             }
         });
     }

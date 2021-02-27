@@ -84,6 +84,9 @@
     </subpackage>
     <subpackage name="junit">
       <allow pkg="kafka.test"/>
+      <allow pkg="kafka.testkit"/>
+      <allow pkg="org.apache.kafka.clients"/>
+      <allow pkg="org.apache.kafka.metadata" />
     </subpackage>
   </subpackage>
 </import-control>

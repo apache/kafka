@@ -29,7 +29,7 @@ public interface ClusterInstance {
 
     enum ClusterType {
         ZK,
-        // RAFT
+        RAFT
     }
 
     /**

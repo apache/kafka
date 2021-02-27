@@ -21,7 +21,7 @@ package kafka.test.annotation;
  * The type of cluster config being requested. Used by {@link kafka.test.ClusterConfig} and the test annotations.
  */
 public enum Type {
-    // RAFT,
+    RAFT,
     ZK,
     BOTH,
     DEFAULT
