@@ -40,6 +40,7 @@ trait ControllerNodeProvider {
   def get(): Option[Node]
   def listenerName: ListenerName
   def securityProtocol: SecurityProtocol
+  def saslMechanism: String
 }
 
 object MetadataCacheControllerNodeProvider {
@@ -56,7 +57,8 @@ object MetadataCacheControllerNodeProvider {
     new MetadataCacheControllerNodeProvider(
       metadataCache,
       listenerName,
-      securityProtocol
+      securityProtocol,
+      config.saslMechanismInterBrokerProtocol
     )
   }
 }
@@ -64,7 +66,8 @@ object MetadataCacheControllerNodeProvider {
 class MetadataCacheControllerNodeProvider(
   val metadataCache: kafka.server.MetadataCache,
   val listenerName: ListenerName,
-  val securityProtocol: SecurityProtocol
+  val securityProtocol: SecurityProtocol,
+  val saslMechanism: String
 ) extends ControllerNodeProvider {
   override def get(): Option[Node] = {
     metadataCache.getControllerId
@@ -78,9 +81,16 @@ object RaftControllerNodeProvider {
             config: KafkaConfig,
             controllerQuorumVoterNodes: Seq[Node]): RaftControllerNodeProvider = {
 
-    val listenerName = new ListenerName(config.controllerListenerNames.head)
-    val securityProtocol = config.listenerSecurityProtocolMap.getOrElse(listenerName, SecurityProtocol.forName(listenerName.value()))
-    new RaftControllerNodeProvider(metaLogManager, controllerQuorumVoterNodes, listenerName, securityProtocol)
+    val controllerListenerName = new ListenerName(config.controllerListenerNames.head)
+    val controllerSecurityProtocol = config.listenerSecurityProtocolMap.getOrElse(controllerListenerName, SecurityProtocol.forName(controllerListenerName.value()))
+    val controllerSaslMechanism = config.saslMechanismControllerProtocol
+    new RaftControllerNodeProvider(
+      metaLogManager,
+      controllerQuorumVoterNodes,
+      controllerListenerName,
+      controllerSecurityProtocol,
+      controllerSaslMechanism
+    )
   }
 }
 
@@ -91,7 +101,8 @@ object RaftControllerNodeProvider {
 class RaftControllerNodeProvider(val metaLogManager: MetaLogManager,
                                  controllerQuorumVoterNodes: Seq[Node],
                                  val listenerName: ListenerName,
-                                 val securityProtocol: SecurityProtocol
+                                 val securityProtocol: SecurityProtocol,
+                                 val saslMechanism: String
                                 ) extends ControllerNodeProvider with Logging {
   val idToNode = controllerQuorumVoterNodes.map(node => node.id() -> node).toMap
 
@@ -179,7 +190,7 @@ class BrokerToControllerChannelManagerImpl(
         JaasContext.Type.SERVER,
         config,
         controllerNodeProvider.listenerName,
-        config.saslMechanismInterBrokerProtocol,
+        controllerNodeProvider.saslMechanism,
         time,
         config.saslInterBrokerHandshakeRequestEnable,
         logContext
