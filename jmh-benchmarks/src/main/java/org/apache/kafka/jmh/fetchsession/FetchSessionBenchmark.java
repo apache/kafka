@@ -79,12 +79,8 @@ public class FetchSessionBenchmark {
             builder.add(tp, partitionData);
             respMap.put(tp, new FetchResponseData.PartitionData()
                             .setPartitionIndex(tp.partition())
-                            .setErrorCode(Errors.NONE.code())
-                            .setHighWatermark(0)
                             .setLastStableOffset(0)
-                            .setLogStartOffset(0)
-                            .setAbortedTransactions(null)
-                            .setRecords(null));
+                            .setLogStartOffset(0));
         }
         builder.build();
         // build and handle an initial response so that the next fetch will be incremental

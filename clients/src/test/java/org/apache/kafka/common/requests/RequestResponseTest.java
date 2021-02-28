@@ -796,9 +796,7 @@ public class RequestResponseTest {
         MemoryRecords records = MemoryRecords.readableRecords(ByteBuffer.allocate(10));
         responseData.put(new TopicPartition("test", 0),
                 new FetchResponseData.PartitionData()
-                        .setErrorCode(Errors.NONE.code())
                         .setHighWatermark(1000000)
-                        .setLastStableOffset(FetchResponse.INVALID_LAST_STABLE_OFFSET)
                         .setLogStartOffset(0)
                         .setAbortedTransactions(Collections.emptyList())
                         .setRecords(records));
@@ -822,26 +820,18 @@ public class RequestResponseTest {
         );
         responseData.put(new TopicPartition("bar", 0),
                 new FetchResponseData.PartitionData()
-                        .setErrorCode(Errors.NONE.code())
                         .setHighWatermark(1000000)
-                        .setLastStableOffset(FetchResponse.INVALID_LAST_STABLE_OFFSET)
-                        .setLogStartOffset(FetchResponse.INVALID_LOG_START_OFFSET)
                         .setAbortedTransactions(abortedTransactions)
                         .setRecords(records));
         responseData.put(new TopicPartition("bar", 1),
                 new FetchResponseData.PartitionData()
-                        .setErrorCode(Errors.NONE.code())
                         .setHighWatermark(900000)
                         .setLastStableOffset(5)
-                        .setLogStartOffset(FetchResponse.INVALID_LOG_START_OFFSET)
-                        .setAbortedTransactions(null)
                         .setRecords(records));
         responseData.put(new TopicPartition("foo", 0),
                 new FetchResponseData.PartitionData()
-                        .setErrorCode(Errors.NONE.code())
                         .setHighWatermark(70000)
                         .setLastStableOffset(6)
-                        .setLogStartOffset(FetchResponse.INVALID_LOG_START_OFFSET)
                         .setAbortedTransactions(emptyList())
                         .setRecords(records));
 
@@ -1177,21 +1167,16 @@ public class RequestResponseTest {
         LinkedHashMap<TopicPartition, FetchResponseData.PartitionData> responseData = new LinkedHashMap<>();
         MemoryRecords records = MemoryRecords.withRecords(CompressionType.NONE, new SimpleRecord("blah".getBytes()));
         responseData.put(new TopicPartition("test", 0), new FetchResponseData.PartitionData()
-                        .setErrorCode(Errors.NONE.code())
                         .setHighWatermark(1000000)
-                        .setLastStableOffset(FetchResponse.INVALID_LAST_STABLE_OFFSET)
                         .setLogStartOffset(0)
                         .setAbortedTransactions(Collections.emptyList())
                         .setRecords(records));
         List<FetchResponseData.AbortedTransaction> abortedTransactions = Collections.singletonList(
             new FetchResponseData.AbortedTransaction().setProducerId(234L).setFirstOffset(999L));
         responseData.put(new TopicPartition("test", 1), new FetchResponseData.PartitionData()
-                        .setErrorCode(Errors.NONE.code())
                         .setHighWatermark(1000000)
-                        .setLastStableOffset(FetchResponse.INVALID_LAST_STABLE_OFFSET)
                         .setLogStartOffset(0)
-                        .setAbortedTransactions(abortedTransactions)
-                        .setRecords(MemoryRecords.EMPTY));
+                        .setAbortedTransactions(abortedTransactions));
         return FetchResponse.of(Errors.NONE, 25, sessionId, responseData);
     }
 
@@ -1199,9 +1184,7 @@ public class RequestResponseTest {
         LinkedHashMap<TopicPartition, FetchResponseData.PartitionData> responseData = new LinkedHashMap<>();
         MemoryRecords records = MemoryRecords.withRecords(CompressionType.NONE, new SimpleRecord("blah".getBytes()));
         responseData.put(new TopicPartition("test", 0), new FetchResponseData.PartitionData()
-                        .setErrorCode(Errors.NONE.code())
                         .setHighWatermark(1000000)
-                        .setLastStableOffset(FetchResponse.INVALID_LAST_STABLE_OFFSET)
                         .setLogStartOffset(0)
                         .setAbortedTransactions(Collections.emptyList())
                         .setRecords(records));
@@ -1212,12 +1195,9 @@ public class RequestResponseTest {
                     new FetchResponseData.AbortedTransaction().setProducerId(234L).setFirstOffset(999L));
         }
         responseData.put(new TopicPartition("test", 1), new FetchResponseData.PartitionData()
-                        .setErrorCode(Errors.NONE.code())
                         .setHighWatermark(1000000)
-                        .setLastStableOffset(FetchResponse.INVALID_LAST_STABLE_OFFSET)
                         .setLogStartOffset(0)
-                        .setAbortedTransactions(abortedTransactions)
-                        .setRecords(MemoryRecords.EMPTY));
+                        .setAbortedTransactions(abortedTransactions));
 
         return FetchResponse.of(Errors.NONE, 25, INVALID_SESSION_ID, responseData);
     }

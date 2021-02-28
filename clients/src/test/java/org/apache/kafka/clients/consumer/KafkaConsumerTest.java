@@ -2379,13 +2379,10 @@ public class KafkaConsumerTest {
                 records = builder.build();
             }
             tpResponses.put(partition,
-                    new FetchResponseData.PartitionData()
-                            .setErrorCode(Errors.NONE.code())
-                            .setHighWatermark(highWatermark)
-                            .setLastStableOffset(FetchResponse.INVALID_LAST_STABLE_OFFSET)
-                            .setLogStartOffset(logStartOffset)
-                            .setAbortedTransactions(null)
-                            .setRecords(records));
+                new FetchResponseData.PartitionData()
+                    .setHighWatermark(highWatermark)
+                    .setLogStartOffset(logStartOffset)
+                    .setRecords(records));
         }
         return FetchResponse.of(Errors.NONE, 0, INVALID_SESSION_ID, tpResponses);
     }

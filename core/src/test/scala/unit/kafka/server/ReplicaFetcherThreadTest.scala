@@ -531,12 +531,9 @@ class ReplicaFetcherThreadTest {
 
     def partitionData(divergingEpoch: FetchResponseData.EpochEndOffset): FetchResponseData.PartitionData = {
       new FetchResponseData.PartitionData()
-          .setErrorCode(Errors.NONE.code)
-          .setHighWatermark(0)
           .setLastStableOffset(0)
           .setLogStartOffset(0)
           .setAbortedTransactions(Collections.emptyList())
-          .setRecords(MemoryRecords.EMPTY)
           .setDivergingEpoch(divergingEpoch)
     }
 
@@ -967,8 +964,6 @@ class ReplicaFetcherThreadTest {
     val records = MemoryRecords.withRecords(CompressionType.NONE,
       new SimpleRecord(1000, "foo".getBytes(StandardCharsets.UTF_8)))
     val partitionData: thread.FetchData = new FetchResponseData.PartitionData()
-        .setErrorCode(Errors.NONE.code)
-        .setHighWatermark(0)
         .setLastStableOffset(0)
         .setLogStartOffset(0)
         .setAbortedTransactions(Collections.emptyList())

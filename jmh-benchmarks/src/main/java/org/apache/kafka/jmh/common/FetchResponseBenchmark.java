@@ -80,8 +80,6 @@ public class FetchResponseBenchmark {
             for (int partitionId = 0; partitionId < partitionCount; partitionId++) {
                 FetchResponseData.PartitionData partitionData = new FetchResponseData.PartitionData()
                                 .setPartitionIndex(partitionId)
-                                .setErrorCode(Errors.NONE.code())
-                                .setHighWatermark(0)
                                 .setLastStableOffset(0)
                                 .setLogStartOffset(0)
                                 .setAbortedTransactions(Collections.emptyList())

@@ -26,13 +26,13 @@ import org.apache.kafka.common.record.MemoryRecords;
 import org.apache.kafka.common.record.Records;
 
 import java.nio.ByteBuffer;
-import java.util.Collections;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-import java.util.stream.Collectors;
 
 import static org.apache.kafka.common.requests.FetchMetadata.INVALID_SESSION_ID;
 
@@ -108,7 +108,10 @@ public class FetchResponse extends AbstractResponse {
     public Map<Errors, Integer> errorCounts() {
         Map<Errors, Integer> errorCounts = new HashMap<>();
         updateErrorCounts(errorCounts, error());
-        responseData().values().forEach(response -> updateErrorCounts(errorCounts, Errors.forCode(response.errorCode())));
+        data.responses().forEach(topicResponse ->
+            topicResponse.partitions().forEach(partition ->
+                updateErrorCounts(errorCounts, Errors.forCode(partition.errorCode())))
+        );
         return errorCounts;
     }
 
@@ -158,35 +161,57 @@ public class FetchResponse extends AbstractResponse {
 
     public static FetchResponseData.PartitionData partitionResponse(int partition, Errors error) {
         return new FetchResponseData.PartitionData()
-                .setPartitionIndex(partition)
-                .setErrorCode(error.code())
-                .setHighWatermark(FetchResponse.INVALID_HIGH_WATERMARK)
-                .setLastStableOffset(FetchResponse.INVALID_LAST_STABLE_OFFSET)
-                .setLogStartOffset(FetchResponse.INVALID_LOG_START_OFFSET)
-                .setAbortedTransactions(null)
-                .setRecords(MemoryRecords.EMPTY);
+            .setPartitionIndex(partition)
+            .setErrorCode(error.code())
+            .setHighWatermark(FetchResponse.INVALID_HIGH_WATERMARK);
     }
 
     /**
-     * cast the BaseRecords of PartitionData to Records. This is used to eliminate duplicate code of type casting.
+     * cast the BaseRecords of PartitionData to Records. KRPC converts the byte array to MemoryRecords so this method
+     * never fail if the data is from KRPC.
+     *
      * @param partition partition data
-     * @return Records
+     * @return Records or empty record if the records in PartitionData is null.
      */
     public static Records records(FetchResponseData.PartitionData partition) {
-        return (Records) partition.records();
+        return partition.records() == null ? MemoryRecords.EMPTY : (Records) partition.records();
     }
 
     public static FetchResponse of(Errors error,
                                    int throttleTimeMs,
                                    int sessionId,
                                    LinkedHashMap<TopicPartition, FetchResponseData.PartitionData> responseData) {
-        return new FetchResponse(new FetchResponseData()
-            .setSessionId(sessionId)
-            .setErrorCode(error.code())
+        return new FetchResponse(toMessage(error, throttleTimeMs, sessionId, responseData.entrySet().iterator()));
+    }
+
+    private static FetchResponseData toMessage(Errors error,
+                                               int throttleTimeMs,
+                                               int sessionId,
+                                               Iterator<Map.Entry<TopicPartition, FetchResponseData.PartitionData>> partIterator) {
+        List<FetchResponseData.FetchableTopicResponse> topicResponseList = new ArrayList<>();
+        partIterator.forEachRemaining(entry -> {
+            FetchResponseData.PartitionData partitionData = entry.getValue();
+            // Since PartitionData alone doesn't know the partition ID, we set it here
+            partitionData.setPartitionIndex(entry.getKey().partition());
+            // We have to keep the order of input topic-partition. Hence, we batch the partitions only if the last
+            // batch is in the same topic group.
+            FetchResponseData.FetchableTopicResponse previousTopic = topicResponseList.isEmpty() ? null
+                : topicResponseList.get(topicResponseList.size() - 1);
+            if (previousTopic != null && previousTopic.topic().equals(entry.getKey().topic()))
+                previousTopic.partitions().add(partitionData);
+            else {
+                List<FetchResponseData.PartitionData> partitionResponses = new ArrayList<>();
+                partitionResponses.add(partitionData);
+                topicResponseList.add(new FetchResponseData.FetchableTopicResponse()
+                    .setTopic(entry.getKey().topic())
+                    .setPartitions(partitionResponses));
+            }
+        });
+
+        return new FetchResponseData()
             .setThrottleTimeMs(throttleTimeMs)
-            .setResponses(responseData.entrySet().stream().map(entry -> new FetchResponseData.FetchableTopicResponse()
-                .setTopic(entry.getKey().topic())
-                .setPartitions(Collections.singletonList(entry.getValue().setPartitionIndex(entry.getKey().partition()))))
-                .collect(Collectors.toList())));
+            .setErrorCode(error.code())
+            .setSessionId(sessionId)
+            .setResponses(topicResponseList);
     }
 }

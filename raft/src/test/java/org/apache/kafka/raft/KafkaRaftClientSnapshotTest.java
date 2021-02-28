@@ -1329,9 +1329,7 @@ final public class KafkaRaftClientSnapshotTest {
         long highWatermark
     ) {
         return RaftUtil.singletonFetchResponse(topicPartition, Errors.NONE, partitionData -> {
-            partitionData
-                .setErrorCode(Errors.NONE.code())
-                .setHighWatermark(highWatermark);
+            partitionData.setHighWatermark(highWatermark);
 
             partitionData.currentLeader()
                 .setLeaderEpoch(epoch)

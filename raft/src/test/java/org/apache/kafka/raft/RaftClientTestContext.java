@@ -946,9 +946,7 @@ public final class RaftClientTestContext {
         long highWatermark
     ) {
         return RaftUtil.singletonFetchResponse(metadataPartition, Errors.NONE, partitionData -> {
-            partitionData
-                .setErrorCode(Errors.NONE.code())
-                .setHighWatermark(highWatermark);
+            partitionData.setHighWatermark(highWatermark);
 
             partitionData.currentLeader()
                 .setLeaderEpoch(epoch)

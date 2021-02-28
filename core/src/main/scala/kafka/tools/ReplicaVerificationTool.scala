@@ -412,8 +412,8 @@ private class ReplicaFetcher(name: String, sourceBroker: Node, topicPartitions: 
     }
 
     if (fetchResponse != null) {
-      fetchResponse.data.responses().forEach(topicResponse =>
-        topicResponse.partitions().forEach(partitionResponse =>
+      fetchResponse.data.responses.forEach(topicResponse =>
+        topicResponse.partitions.forEach(partitionResponse =>
           replicaBuffer.addFetchedData(new TopicPartition(topicResponse.topic, partitionResponse.partitionIndex),
             sourceBroker.id, partitionResponse)))
     } else {

@@ -30,7 +30,7 @@ import org.apache.kafka.common.internals.PartitionStates
 import org.apache.kafka.common.message.OffsetForLeaderEpochResponseData.EpochEndOffset
 import org.apache.kafka.common.message.{FetchResponseData, OffsetForLeaderEpochRequestData}
 import org.apache.kafka.common.protocol.Errors
-import org.apache.kafka.common.record.{BaseRecords, FileRecords, MemoryRecords}
+import org.apache.kafka.common.record.{FileRecords, MemoryRecords, Records}
 import org.apache.kafka.common.requests.OffsetsForLeaderEpochResponse.{UNDEFINED_EPOCH, UNDEFINED_EPOCH_OFFSET}
 import org.apache.kafka.common.requests._
 import org.apache.kafka.common.{InvalidRecordException, TopicPartition}
@@ -336,8 +336,7 @@ abstract class AbstractFetcherThread(name: String,
             // the current offset is the same as the offset requested.
             val fetchPartitionData = sessionPartitions.get(topicPartition)
             if (fetchPartitionData != null && fetchPartitionData.fetchOffset == currentFetchState.fetchOffset && currentFetchState.isReadyForFetch) {
-              val partitionError = Errors.forCode(partitionData.errorCode)
-              partitionError match {
+              Errors.forCode(partitionData.errorCode) match {
                 case Errors.NONE =>
                   try {
                     // Once we hand off the partition data to the subclass, we can't mess with it any more in this thread
@@ -361,7 +360,7 @@ abstract class AbstractFetcherThread(name: String,
                       }
                     }
                     if (isTruncationOnFetchSupported) {
-                     FetchResponse.divergingEpoch(partitionData).ifPresent { divergingEpoch =>
+                      FetchResponse.divergingEpoch(partitionData).ifPresent { divergingEpoch =>
                         divergingEndOffsets += topicPartition -> new EpochEndOffset()
                           .setPartition(topicPartition.partition)
                           .setErrorCode(Errors.NONE.code)
@@ -413,7 +412,7 @@ abstract class AbstractFetcherThread(name: String,
                        "expected to persist.")
                   partitionsWithError += topicPartition
 
-                case _ =>
+                case partitionError: Errors =>
                   error(s"Error for partition $topicPartition at offset ${currentFetchState.fetchOffset}", partitionError.exception)
                   partitionsWithError += topicPartition
               }
@@ -730,7 +729,7 @@ abstract class AbstractFetcherThread(name: String,
     Option(partitionStates.stateValue(topicPartition))
   }
 
-  protected def toMemoryRecords(records: BaseRecords): MemoryRecords = {
+  protected def toMemoryRecords(records: Records): MemoryRecords = {
     (records: @unchecked) match {
       case r: MemoryRecords => r
       case r: FileRecords =>

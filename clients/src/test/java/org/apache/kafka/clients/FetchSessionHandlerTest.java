@@ -156,12 +156,9 @@ public class FetchSessionHandlerTest {
             this.part = new TopicPartition(topic, partition);
 
             this.data = new FetchResponseData.PartitionData()
-                        .setErrorCode(Errors.NONE.code())
-                        .setHighWatermark(highWatermark)
-                        .setLastStableOffset(lastStableOffset)
-                        .setLogStartOffset(0)
-                        .setAbortedTransactions(null)
-                        .setRecords(null);
+                .setHighWatermark(highWatermark)
+                .setLastStableOffset(lastStableOffset)
+                .setLogStartOffset(0);
         }
     }
 
