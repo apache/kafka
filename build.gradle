@@ -1036,9 +1036,11 @@ project(':core') {
   // More details here: https://github.com/oracle/graal/blob/master/substratevm/BuildConfiguration.md
   task nativeImage(type: Exec, dependsOn: jar) {
     executable = nativeImagePath()
+    // Use test runtime classpath since log4j is not part of source runtime classpath,
+    // see https://github.com/apache/kafka/pull/4297 for details
     args "--no-fallback", "--allow-incomplete-classpath", "--report-unsupported-elements-at-runtime",
             "-H:+ReportExceptionStackTraces",
-            "-cp", "${-> sourceSets.main.runtimeClasspath.asPath}",
+            "-cp", "${-> sourceSets.test.runtimeClasspath.asPath}",
             "kafka.Kafka"
   }
 }
