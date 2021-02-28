@@ -1034,9 +1034,10 @@ project(':core') {
   // is to run kafka with the tracing agent by adding the following jvm argument:
   // -agentlib:native-image-agent=config-output-dir=/path/to/config-dir/
   // More details here: https://github.com/oracle/graal/blob/master/substratevm/BuildConfiguration.md
-  task nativeImage(type: Exec) {
+  task nativeImage(type: Exec, dependsOn: jar) {
     executable = nativeImagePath()
     args "--no-fallback", "--allow-incomplete-classpath", "--report-unsupported-elements-at-runtime",
+            "-H:+ReportExceptionStackTraces",
             "-cp", "${-> sourceSets.main.runtimeClasspath.asPath}",
             "kafka.Kafka"
   }
