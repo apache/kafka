@@ -94,6 +94,7 @@ import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.ExecutionException;
+import java.util.concurrent.Executor;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.TimeUnit;
 
@@ -1481,7 +1482,8 @@ public class WorkerTest extends ThreadedTest {
                 EasyMock.eq(pluginLoader),
                 anyObject(Time.class),
                 anyObject(RetryWithToleranceOperator.class),
-                anyObject(StatusBackingStore.class))
+                anyObject(StatusBackingStore.class),
+                anyObject(Executor.class))
                 .andReturn(workerTask);
     }
     /* Name here needs to be unique as we are testing the aliasing mechanism */
