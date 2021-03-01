@@ -196,7 +196,7 @@ public class WorkerSourceTaskTest extends ThreadedTest {
         workerTask = new WorkerSourceTask(taskId, sourceTask, statusListener, initialState, keyConverter, valueConverter, headerConverter,
                 transformationChain, producer, admin, null,
                 offsetReader, offsetWriter, config, clusterConfigState, metrics, plugins.delegatingLoader(), Time.SYSTEM,
-                RetryWithToleranceOperatorTest.NOOP_OPERATOR, statusBackingStore);
+                RetryWithToleranceOperatorTest.NOOP_OPERATOR, statusBackingStore, Runnable::run);
     }
 
     @Test
@@ -716,6 +716,9 @@ public class WorkerSourceTaskTest extends ThreadedTest {
         createWorkerTask();
 
         offsetReader.close();
+        PowerMock.expectLastCall();
+
+        producer.close(Duration.ZERO);
         PowerMock.expectLastCall();
 
         PowerMock.replayAll();
