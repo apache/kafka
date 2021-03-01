@@ -41,7 +41,7 @@ class VerifiableProducer(KafkaPathResolverMixin, VerifiableClientMixin, Backgrou
     STDERR_CAPTURE = os.path.join(PERSISTENT_ROOT, "verifiable_producer.stderr")
     LOG_DIR = os.path.join(PERSISTENT_ROOT, "logs")
     LOG_FILE = os.path.join(LOG_DIR, "verifiable_producer.log")
-    LOG4J_CONFIG = os.path.join(PERSISTENT_ROOT, "tools-log4j.properties")
+    LOG4J_CONFIG = os.path.join(PERSISTENT_ROOT, "tools-log4j2.properties")
     CONFIG_FILE = os.path.join(PERSISTENT_ROOT, "verifiable_producer.properties")
 
     logs = {
@@ -127,7 +127,7 @@ class VerifiableProducer(KafkaPathResolverMixin, VerifiableClientMixin, Backgrou
         node.account.ssh("mkdir -p %s" % VerifiableProducer.PERSISTENT_ROOT, allow_fail=False)
 
         # Create and upload log properties
-        log_config = self.render('tools_log4j.properties', log_file=VerifiableProducer.LOG_FILE)
+        log_config = self.render('tools_log4j2.properties', log_file=VerifiableProducer.LOG_FILE)
         node.account.create_file(VerifiableProducer.LOG4J_CONFIG, log_config)
 
         # Configure security
@@ -222,7 +222,7 @@ class VerifiableProducer(KafkaPathResolverMixin, VerifiableClientMixin, Backgrou
             cmd += " export KAFKA_OPTS=%s;" % self.security_config.kafka_opts
 
         cmd += fix_opts_for_new_jvm(node)
-        cmd += " export KAFKA_LOG4J_OPTS=\"-Dlog4j.configuration=file:%s\"; " % VerifiableProducer.LOG4J_CONFIG
+        cmd += " export KAFKA_LOG4J_OPTS=\"-Dlog4j.configurationFile=file:%s\"; " % VerifiableProducer.LOG4J_CONFIG
         cmd += self.impl.exec_cmd(node)
         cmd += " --topic %s --broker-list %s" % (self.topic, self.kafka.bootstrap_servers(self.security_config.security_protocol, True, self.offline_nodes))
         if self.max_messages > 0:

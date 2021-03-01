@@ -222,6 +222,7 @@ fi
 
 # Log4j settings
 if [ -z "$KAFKA_LOG4J_OPTS" ]; then
+  echo "DEPRECATED: using log4j 1.x configuration. To use log4j 2.x configuration, run with: 'export KAFKA_LOG4J_OPTS=\"-Dlog4j.configurationFile=file:$base_dir/config/tools-log4j2.properties\"'"
   # Log to console. This is a tool.
   LOG4J_DIR="$base_dir/config/tools-log4j.properties"
   # If Cygwin is detected, LOG4J_DIR is converted to Windows format.

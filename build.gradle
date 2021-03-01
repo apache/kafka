@@ -1605,12 +1605,15 @@ project(':tools') {
 
   dependencies {
     implementation project(':clients')
-    implementation project(':log4j-appender')
     implementation libs.argparse4j
     implementation libs.jacksonDatabind
     implementation libs.jacksonJDK8Datatypes
     implementation libs.slf4jApi
-    implementation libs.log4j
+    implementation libs.log4j2Api
+    implementation libs.log4j1_2Api
+    implementation (libs.log4j2Core) {
+      exclude(group: 'org.apache.kafka', module: 'kafka-clients')
+    }
 
     implementation libs.jose4j                    // for SASL/OAUTHBEARER JWT validation
     implementation libs.jacksonJaxrsJsonProvider
@@ -1629,12 +1632,10 @@ project(':tools') {
 
   tasks.create(name: "copyDependantLibs", type: Copy) {
     from (configurations.testRuntimeClasspath) {
-      include('slf4j-log4j12*')
-      include('log4j*jar')
+      include('log4j-slf4j-impl*')
+      include('log4j-[api|core]*jar')
     }
-    from (configurations.runtimeClasspath) {
-      exclude('kafka-clients*')
-    }
+    from (configurations.runtimeClasspath)
     into "$buildDir/dependant-libs-${versions.scala}"
     duplicatesStrategy 'exclude'
   }
@@ -1649,12 +1650,15 @@ project(':trogdor') {
 
   dependencies {
     implementation project(':clients')
-    implementation project(':log4j-appender')
     implementation libs.argparse4j
     implementation libs.jacksonDatabind
     implementation libs.jacksonJDK8Datatypes
     implementation libs.slf4jApi
-    implementation libs.log4j
+    implementation libs.log4j2Api
+    implementation libs.log4j1_2Api
+    implementation (libs.log4j2Core) {
+      exclude(group: 'org.apache.kafka', module: 'kafka-clients')
+    }
 
     implementation libs.jacksonJaxrsJsonProvider
     implementation libs.jerseyContainerServlet
@@ -1670,7 +1674,7 @@ project(':trogdor') {
     testImplementation project(':clients').sourceSets.test.output
     testImplementation libs.mockitoInline // supports mocking static methods, final classes, etc.
 
-    testRuntimeOnly libs.slf4jlog4j
+    testRuntimeOnly libs.slf4jlog4j2
   }
 
   javadoc {
@@ -1706,9 +1710,13 @@ project(':shell') {
     implementation project(':server-common')
     implementation project(':clients')
     implementation project(':core')
-    implementation project(':log4j-appender')
     implementation project(':metadata')
     implementation project(':raft')
+    implementation libs.log4j2Api
+    implementation libs.log4j1_2Api
+    implementation (libs.log4j2Core) {
+      exclude(group: 'org.apache.kafka', module: 'kafka-clients')
+    }
 
     implementation libs.jose4j                    // for SASL/OAUTHBEARER JWT validation
     implementation libs.jacksonJaxrsJsonProvider
@@ -1716,7 +1724,7 @@ project(':shell') {
     testImplementation project(':clients')
     testImplementation libs.junitJupiter
 
-    testRuntimeOnly libs.slf4jlog4j
+    testRuntimeOnly libs.slf4jlog4j2
   }
 
   javadoc {

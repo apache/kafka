@@ -30,7 +30,7 @@ class MirrorMaker(KafkaPathResolverMixin, Service):
     PERSISTENT_ROOT = "/mnt/mirror_maker"
     LOG_DIR = os.path.join(PERSISTENT_ROOT, "logs")
     LOG_FILE = os.path.join(LOG_DIR, "mirror_maker.log")
-    LOG4J_CONFIG = os.path.join(PERSISTENT_ROOT, "tools-log4j.properties")
+    LOG4J_CONFIG = os.path.join(PERSISTENT_ROOT, "tools-log4j2.properties")
     PRODUCER_CONFIG = os.path.join(PERSISTENT_ROOT, "producer.properties")
     CONSUMER_CONFIG = os.path.join(PERSISTENT_ROOT, "consumer.properties")
 
@@ -84,7 +84,7 @@ class MirrorMaker(KafkaPathResolverMixin, Service):
 
     def start_cmd(self, node):
         cmd = "export LOG_DIR=%s;" % MirrorMaker.LOG_DIR
-        cmd += " export KAFKA_LOG4J_OPTS=\"-Dlog4j.configuration=file:%s\";" % MirrorMaker.LOG4J_CONFIG
+        cmd += " export KAFKA_LOG4J_OPTS=\"-Dlog4j.configurationFile=file:%s\";" % MirrorMaker.LOG4J_CONFIG
         cmd += " export KAFKA_OPTS=%s;" % self.security_config.kafka_opts
         # add external dependencies, for instance for interceptors
         if self.external_jars is not None:
@@ -134,7 +134,7 @@ class MirrorMaker(KafkaPathResolverMixin, Service):
 
 
         # Create and upload log properties
-        log_config = self.render('tools_log4j.properties', log_file=MirrorMaker.LOG_FILE)
+        log_config = self.render('tools_log4j2.properties', log_file=MirrorMaker.LOG_FILE)
         node.account.create_file(MirrorMaker.LOG4J_CONFIG, log_config)
 
         # Run mirror maker

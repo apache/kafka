@@ -286,6 +286,12 @@
     <suppress checks="JavaNCSS"
               files="RequestResponseTest.java"/>
 
+    <!-- Log4J2-Appender -->
+    <suppress checks="CyclomaticComplexity"
+              files="KafkaAppender.java"/>
+    <suppress checks="NPathComplexity"
+              files="KafkaAppender.java"/>
+
     <!-- metadata -->
     <suppress checks="ClassDataAbstractionCoupling"
               files="(QuorumController|QuorumControllerTest|ReplicationControlManager|ReplicationControlManagerTest).java"/>

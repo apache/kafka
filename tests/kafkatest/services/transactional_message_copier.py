@@ -31,7 +31,7 @@ class TransactionalMessageCopier(KafkaPathResolverMixin, BackgroundThreadService
     STDERR_CAPTURE = os.path.join(PERSISTENT_ROOT, "transactional_message_copier.stderr")
     LOG_DIR = os.path.join(PERSISTENT_ROOT, "logs")
     LOG_FILE = os.path.join(LOG_DIR, "transactional_message_copier.log")
-    LOG4J_CONFIG = os.path.join(PERSISTENT_ROOT, "tools-log4j.properties")
+    LOG4J_CONFIG = os.path.join(PERSISTENT_ROOT, "tools-log4j2.properties")
 
     logs = {
         "transactional_message_copier_stdout": {
@@ -75,7 +75,7 @@ class TransactionalMessageCopier(KafkaPathResolverMixin, BackgroundThreadService
         node.account.ssh("mkdir -p %s" % TransactionalMessageCopier.PERSISTENT_ROOT,
                          allow_fail=False)
         # Create and upload log properties
-        log_config = self.render('tools_log4j.properties',
+        log_config = self.render('tools_log4j2.properties',
                                  log_file=TransactionalMessageCopier.LOG_FILE)
         node.account.create_file(TransactionalMessageCopier.LOG4J_CONFIG, log_config)
         # Configure security
@@ -114,7 +114,7 @@ class TransactionalMessageCopier(KafkaPathResolverMixin, BackgroundThreadService
     def start_cmd(self, node, idx):
         cmd  = "export LOG_DIR=%s;" % TransactionalMessageCopier.LOG_DIR
         cmd += " export KAFKA_OPTS=%s;" % self.security_config.kafka_opts
-        cmd += " export KAFKA_LOG4J_OPTS=\"-Dlog4j.configuration=file:%s\"; " % TransactionalMessageCopier.LOG4J_CONFIG
+        cmd += " export KAFKA_LOG4J_OPTS=\"-Dlog4j.configurationFile=file:%s\"; " % TransactionalMessageCopier.LOG4J_CONFIG
         cmd += self.path.script("kafka-run-class.sh", node) + " org.apache.kafka.tools." + "TransactionalMessageCopier"
         cmd += " --broker-list %s" % self.kafka.bootstrap_servers(self.security_config.security_protocol)
         cmd += " --transactional-id %s" % self.transactional_id
