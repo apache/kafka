@@ -1039,7 +1039,7 @@ project(':core') {
     // Use test runtime classpath since log4j is not part of source runtime classpath,
     // see https://github.com/apache/kafka/pull/4297 for details
     args "--no-fallback", "--allow-incomplete-classpath", "--report-unsupported-elements-at-runtime",
-            "-H:+ReportExceptionStackTraces",
+            "-H:+ReportExceptionStackTraces", "--verbose",
             "-cp", "${-> sourceSets.test.runtimeClasspath.asPath}",
             "kafka.Kafka"
   }
