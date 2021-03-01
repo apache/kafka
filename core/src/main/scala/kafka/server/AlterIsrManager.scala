@@ -17,20 +17,20 @@
 package kafka.server
 
 import java.util
+import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.{ConcurrentHashMap, TimeUnit}
+
 import kafka.api.LeaderAndIsr
 import kafka.metrics.KafkaMetricsGroup
-import kafka.utils.{KafkaScheduler, Logging, Scheduler}
+import kafka.utils.{Logging, Scheduler}
 import kafka.zk.KafkaZkClient
 import org.apache.kafka.clients.ClientResponse
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.message.{AlterIsrRequestData, AlterIsrResponseData}
-import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests.{AlterIsrRequest, AlterIsrResponse}
 import org.apache.kafka.common.utils.Time
 
-import java.util.concurrent.atomic.AtomicBoolean
 import scala.collection.mutable
 import scala.collection.mutable.ListBuffer
 import scala.jdk.CollectionConverters._
@@ -64,26 +64,12 @@ object AlterIsrManager {
    * Factory to AlterIsr based implementation, used when IBP >= 2.7-IV2
    */
   def apply(
-    config: KafkaConfig,
-    metadataCache: MetadataCache,
-    scheduler: KafkaScheduler,
+    channelManager: BrokerToControllerChannelManager,
+    scheduler: Scheduler,
     time: Time,
-    metrics: Metrics,
-    threadNamePrefix: Option[String],
-    brokerEpochSupplier: () => Long,
-    brokerId: Int
+    brokerId: Int,
+    brokerEpochSupplier: () => Long
   ): AlterIsrManager = {
-    val nodeProvider = MetadataCacheControllerNodeProvider(config, metadataCache)
-
-    val channelManager = BrokerToControllerChannelManager(
-      controllerNodeProvider = nodeProvider,
-      time = time,
-      metrics = metrics,
-      config = config,
-      channelName = "alterIsr",
-      threadNamePrefix = threadNamePrefix,
-      retryTimeoutMs = Long.MaxValue
-    )
     new DefaultAlterIsrManager(
       controllerChannelManager = channelManager,
       scheduler = scheduler,
@@ -120,13 +106,9 @@ class DefaultAlterIsrManager(
   // Used to allow only one in-flight request at a time
   private val inflightRequest: AtomicBoolean = new AtomicBoolean(false)
 
-  override def start(): Unit = {
-    controllerChannelManager.start()
-  }
+  override def start(): Unit = {}
 
-  override def shutdown(): Unit = {
-    controllerChannelManager.shutdown()
-  }
+  override def shutdown(): Unit = {}
 
   override def submit(alterIsrItem: AlterIsrItem): Boolean = {
     val enqueued = unsentIsrUpdates.putIfAbsent(alterIsrItem.topicPartition, alterIsrItem) == null

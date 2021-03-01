@@ -106,6 +106,8 @@ class BrokerServer(
 
   var forwardingManager: ForwardingManager = null
 
+  var brokerToControllerChannelManager: BrokerToControllerChannelManager = null
+
   var alterIsrManager: AlterIsrManager = null
 
   var autoTopicCreationManager: AutoTopicCreationManager = null
@@ -186,7 +188,7 @@ class BrokerServer(
         time,
         metrics,
         config,
-        channelName = "forwarding",
+        channelName = "clientForwarding",
         threadNamePrefix,
         retryTimeoutMs = 60000
       )
@@ -207,20 +209,22 @@ class BrokerServer(
       socketServer = new SocketServer(config, metrics, time, credentialProvider, apiVersionManager)
       socketServer.startup(startProcessingRequests = false)
 
-      val alterIsrChannelManager = BrokerToControllerChannelManager(
+      brokerToControllerChannelManager = BrokerToControllerChannelManager(
         controllerNodeProvider,
         time,
         metrics,
         config,
-        channelName = "alterIsr",
+        channelName = "brokerForwarding",
         threadNamePrefix,
         retryTimeoutMs = Long.MaxValue
       )
-      alterIsrManager = new DefaultAlterIsrManager(
-        controllerChannelManager = alterIsrChannelManager,
+      brokerToControllerChannelManager.start()
+
+      alterIsrManager = AlterIsrManager(
+        brokerToControllerChannelManager,
         scheduler = kafkaScheduler,
         time = time,
-        brokerId = config.nodeId,
+        brokerId = config.brokerId,
         brokerEpochSupplier = () => lifecycleManager.brokerEpoch()
       )
       alterIsrManager.start()
@@ -277,8 +281,7 @@ class BrokerServer(
           setSecurityProtocol(ep.securityProtocol.id))
       }
       lifecycleManager.start(() => brokerMetadataListener.highestMetadataOffset(),
-        BrokerToControllerChannelManager(controllerNodeProvider, time, metrics, config,
-          "heartbeat", threadNamePrefix, config.brokerSessionTimeoutMs.toLong),
+        brokerToControllerChannelManager,
         metaProps.clusterId, networkListeners, supportedFeatures)
 
       // Register a listener with the Raft layer to receive metadata event notifications
@@ -449,6 +452,9 @@ class BrokerServer(
 
       if (clientToControllerChannelManager != null)
         CoreUtils.swallow(clientToControllerChannelManager.shutdown(), this)
+
+      if (brokerToControllerChannelManager != null)
+        CoreUtils.swallow(brokerToControllerChannelManager.shutdown(), this)
 
       if (logManager != null)
         CoreUtils.swallow(logManager.shutdown(), this)
