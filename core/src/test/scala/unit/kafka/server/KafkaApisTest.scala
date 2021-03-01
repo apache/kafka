@@ -3479,6 +3479,26 @@ class KafkaApisTest {
     assertEquals(List(mkTopicData(topic = "foo", Seq(1, 2))), fooState.topics.asScala.toList)
   }
 
+
+  @Test
+  def testListTransactionsErrorResponse(): Unit = {
+    val data = new ListTransactionsRequestData()
+    val listTransactionsRequest = new ListTransactionsRequest.Builder(data).build()
+    val request = buildRequest(listTransactionsRequest)
+    val capturedResponse = expectNoThrottling(request)
+
+    EasyMock.expect(txnCoordinator.handleListTransactions(Set.empty[Long], Set.empty[String]))
+      .andReturn(new ListTransactionsResponseData()
+        .setErrorCode(Errors.COORDINATOR_LOAD_IN_PROGRESS.code))
+
+    EasyMock.replay(replicaManager, clientRequestQuotaManager, requestChannel, txnCoordinator)
+    createKafkaApis().handleListTransactionsRequest(request)
+
+    val response = capturedResponse.getValue.asInstanceOf[ListTransactionsResponse]
+    assertEquals(0, response.data.transactionStates.size)
+    assertEquals(Errors.COORDINATOR_LOAD_IN_PROGRESS, Errors.forCode(response.data.errorCode))
+  }
+
   @Test
   def testListTransactionsAuthorization(): Unit = {
     val authorizer: Authorizer = EasyMock.niceMock(classOf[Authorizer])
@@ -3487,17 +3507,20 @@ class KafkaApisTest {
     val request = buildRequest(listTransactionsRequest)
     val capturedResponse = expectNoThrottling(request)
 
+    val transactionStates = new util.ArrayList[ListTransactionsResponseData.TransactionState]()
+    transactionStates.add(new ListTransactionsResponseData.TransactionState()
+      .setTransactionalId("foo")
+      .setProducerId(12345L)
+      .setTransactionState("Ongoing"))
+    transactionStates.add(new ListTransactionsResponseData.TransactionState()
+      .setTransactionalId("bar")
+      .setProducerId(98765)
+      .setTransactionState("PrepareAbort"))
+
     EasyMock.expect(txnCoordinator.handleListTransactions(Set.empty[Long], Set.empty[String]))
-      .andReturn(Right(List(
-        new ListTransactionsResponseData.TransactionState()
-          .setTransactionalId("foo")
-          .setProducerId(12345L)
-          .setTransactionState("Ongoing"),
-        new ListTransactionsResponseData.TransactionState()
-          .setTransactionalId("bar")
-          .setProducerId(98765)
-          .setTransactionState("PrepareAbort")
-      )))
+      .andReturn(new ListTransactionsResponseData()
+          .setErrorCode(Errors.NONE.code)
+          .setTransactionStates(transactionStates))
 
     def buildExpectedActions(transactionalId: String): util.List[Action] = {
       val pattern = new ResourcePattern(ResourceType.TRANSACTIONAL_ID, transactionalId, PatternType.LITERAL)

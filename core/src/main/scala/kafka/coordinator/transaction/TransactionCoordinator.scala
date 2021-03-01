@@ -251,7 +251,6 @@ class TransactionCoordinator(brokerId: Int,
             s"This is illegal as we should never have transitioned to this state."
           fatal(errorMsg)
           throw new IllegalStateException(errorMsg)
-
       }
     }
   }
@@ -259,9 +258,9 @@ class TransactionCoordinator(brokerId: Int,
   def handleListTransactions(
     filteredProducerIds: Set[Long],
     filteredStates: Set[String]
-  ): Either[Errors, List[ListTransactionsResponseData.TransactionState]] = {
+  ): ListTransactionsResponseData = {
     if (!isActive.get()) {
-      Left(Errors.COORDINATOR_NOT_AVAILABLE)
+      new ListTransactionsResponseData().setErrorCode(Errors.COORDINATOR_NOT_AVAILABLE.code)
     } else {
       txnManager.listTransactionStates(filteredProducerIds, filteredStates)
     }

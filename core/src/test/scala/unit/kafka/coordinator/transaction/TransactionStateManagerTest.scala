@@ -34,7 +34,7 @@ import org.apache.kafka.common.requests.ProduceResponse.PartitionResponse
 import org.apache.kafka.common.requests.TransactionResult
 import org.apache.kafka.common.utils.MockTime
 import org.easymock.{Capture, EasyMock, IAnswer}
-import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertThrows, assertTrue, fail}
+import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
 
 import scala.jdk.CollectionConverters._
@@ -486,11 +486,11 @@ class TransactionStateManagerTest {
   @Test
   def testListTransactionsWithCoordinatorLoadingInProgress(): Unit = {
     transactionManager.addLoadingPartition(partitionId = 0, coordinatorEpoch = 15)
-    val listResult = transactionManager.listTransactionStates(
+    val listResponse = transactionManager.listTransactionStates(
       filterProducerIds = Set.empty,
       filterStateNames = Set.empty
     )
-    assertEquals(Left(Errors.COORDINATOR_LOAD_IN_PROGRESS), listResult)
+    assertEquals(Errors.COORDINATOR_LOAD_IN_PROGRESS, Errors.forCode(listResponse.errorCode))
   }
 
   @Test
@@ -528,13 +528,14 @@ class TransactionStateManagerTest {
       filterProducerIds: Set[Long] = Set.empty,
       filterStates: Set[String] = Set.empty
     ): Unit = {
-      val listResult = transactionManager.listTransactionStates(filterProducerIds, filterStates)
-      listResult match {
-        case Right(transactions) =>
-          assertEquals(expectedTransactionalIds, transactions.map(_.transactionalId).toSet)
-
-        case Left(error) =>
-          fail(s"Unexpected error $error")
+      val listResponse = transactionManager.listTransactionStates(filterProducerIds, filterStates)
+      assertEquals(Errors.NONE, Errors.forCode(listResponse.errorCode))
+      assertEquals(expectedTransactionalIds, listResponse.transactionStates.asScala.map(_.transactionalId).toSet)
+      val expectedUnknownStates = filterStates.filter(state => TransactionState.fromName(state).isEmpty)
+      if (expectedUnknownStates.nonEmpty) {
+        assertEquals(expectedUnknownStates, listResponse.unknownStateFilters.asScala.toSet)
+      } else {
+        assertNull(listResponse.unknownStateFilters)
       }
     }
 

@@ -227,13 +227,24 @@ class TransactionStateManager(brokerId: Int,
   def listTransactionStates(
     filterProducerIds: Set[Long],
     filterStateNames: Set[String]
-  ): Either[Errors, List[ListTransactionsResponseData.TransactionState]] = {
+  ): ListTransactionsResponseData = {
     inReadLock(stateLock) {
+      val response = new ListTransactionsResponseData()
       if (loadingPartitions.nonEmpty) {
-        Left(Errors.COORDINATOR_LOAD_IN_PROGRESS)
+        response.setErrorCode(Errors.COORDINATOR_LOAD_IN_PROGRESS.code)
       } else {
-        val filterStates = filterStateNames.flatMap(TransactionState.fromName)
-        val states = mutable.ListBuffer.empty[ListTransactionsResponseData.TransactionState]
+        val filterStates = mutable.Set.empty[TransactionState]
+        val unknownStates = new java.util.ArrayList[String]
+        filterStateNames.foreach { stateName =>
+          TransactionState.fromName(stateName) match {
+            case Some(state) => filterStates += state
+            case None => unknownStates.add(stateName)
+          }
+        }
+
+        if (!unknownStates.isEmpty) {
+          response.setUnknownStateFilters(unknownStates)
+        }
 
         def shouldInclude(txnMetadata: TransactionMetadata): Boolean = {
           if (txnMetadata.state == Dead) {
@@ -250,19 +261,22 @@ class TransactionStateManager(brokerId: Int,
           }
         }
 
+        val states = new java.util.ArrayList[ListTransactionsResponseData.TransactionState]
         transactionMetadataCache.forKeyValue { (_, cache) =>
           cache.metadataPerTransactionalId.values.foreach { txnMetadata =>
             txnMetadata.inLock {
               if (shouldInclude(txnMetadata)) {
-                states += new ListTransactionsResponseData.TransactionState()
+                states.add(new ListTransactionsResponseData.TransactionState()
                   .setTransactionalId(txnMetadata.transactionalId)
                   .setProducerId(txnMetadata.producerId)
                   .setTransactionState(txnMetadata.state.name)
+                )
               }
             }
           }
         }
-        Right(states.toList)
+        response.setErrorCode(Errors.NONE.code)
+          .setTransactionStates(states)
       }
     }
   }
