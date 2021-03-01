@@ -52,7 +52,7 @@ public class WordCountTransformerTest {
         transformer.init(context);
 
         // send a record to the transformer
-        transformer.transform("key", "alpha beta gamma alpha");
+        transformer.transform("key", "alpha beta\tgamma\n\talpha");
 
         // note that the transformer does not forward during transform()
         assertTrue(context.forwarded().isEmpty());

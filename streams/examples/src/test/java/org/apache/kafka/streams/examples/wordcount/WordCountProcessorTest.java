@@ -52,7 +52,7 @@ public class WordCountProcessorTest {
         processor.init(context);
 
         // send a record to the processor
-        processor.process(new Record<>("key", "alpha beta gamma alpha", 0L));
+        processor.process(new Record<>("key", "alpha beta\tgamma\n\talpha", 0L));
 
         // note that the processor does not forward during process()
         assertTrue(context.forwarded().isEmpty());

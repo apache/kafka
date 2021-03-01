@@ -85,7 +85,7 @@ public final class WordCountProcessorDemo {
 
                 @Override
                 public void process(final Record<String, String> record) {
-                    final String[] words = record.value().toLowerCase(Locale.getDefault()).split(" ");
+                    final String[] words = record.value().toLowerCase(Locale.getDefault()).split("\\W+");
 
                     for (final String word : words) {
                         final Integer oldValue = kvStore.get(word);
