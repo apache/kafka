@@ -1935,13 +1935,13 @@ public class StreamThreadTest {
             topic1,
             1,
             110L,
-             110L,
-             TimestampType.CREATE_TIME,
-             ConsumerRecord.NULL_CHECKSUM,
-             "K".getBytes().length,
-             "V".getBytes().length,
-             "K".getBytes(),
-             "V".getBytes()));
+            110L,
+            TimestampType.CREATE_TIME,
+            ConsumerRecord.NULL_CHECKSUM,
+            "K".getBytes().length,
+            "V".getBytes().length,
+            "K".getBytes(),
+            "V".getBytes()));
 
         thread.runOnce();
 
