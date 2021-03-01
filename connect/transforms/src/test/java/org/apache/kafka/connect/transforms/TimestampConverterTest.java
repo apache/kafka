@@ -28,6 +28,8 @@ import org.apache.kafka.connect.source.SourceRecord;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 
+import java.time.LocalDate;
+import java.time.ZoneOffset;
 import java.util.Calendar;
 import java.util.Collections;
 import java.util.GregorianCalendar;
@@ -96,16 +98,10 @@ public class TimestampConverterTest {
     }
 
     @Test
-    public void testConfigMissingFormat() {
-        assertThrows(ConfigException.class,
-            () -> xformValue.configure(Collections.singletonMap(TimestampConverter.TARGET_TYPE_CONFIG, "string")));
-    }
-
-    @Test
     public void testConfigInvalidFormat() {
         Map<String, String> config = new HashMap<>();
         config.put(TimestampConverter.TARGET_TYPE_CONFIG, "string");
-        config.put(TimestampConverter.FORMAT_CONFIG, "bad-format");
+        config.put(TimestampConverter.FORMAT_TIMESTAMP_CONFIG, "bad-format");
         assertThrows(ConfigException.class, () -> xformValue.configure(config));
     }
 
@@ -151,7 +147,7 @@ public class TimestampConverterTest {
     public void testSchemalessTimestampToString() {
         Map<String, String> config = new HashMap<>();
         config.put(TimestampConverter.TARGET_TYPE_CONFIG, "string");
-        config.put(TimestampConverter.FORMAT_CONFIG, STRING_DATE_FMT);
+        config.put(TimestampConverter.FORMAT_TIMESTAMP_CONFIG, STRING_DATE_FMT);
         xformValue.configure(config);
         SourceRecord transformed = xformValue.apply(createRecordSchemaless(DATE_PLUS_TIME.getTime()));
 
@@ -195,7 +191,7 @@ public class TimestampConverterTest {
     public void testSchemalessStringToTimestamp() {
         Map<String, String> config = new HashMap<>();
         config.put(TimestampConverter.TARGET_TYPE_CONFIG, "Timestamp");
-        config.put(TimestampConverter.FORMAT_CONFIG, STRING_DATE_FMT);
+        config.put(TimestampConverter.FORMAT_TIMESTAMP_CONFIG, STRING_DATE_FMT);
         xformValue.configure(config);
         SourceRecord transformed = xformValue.apply(createRecordSchemaless(DATE_PLUS_TIME_STRING));
 
@@ -246,7 +242,7 @@ public class TimestampConverterTest {
     public void testWithSchemaTimestampToString() {
         Map<String, String> config = new HashMap<>();
         config.put(TimestampConverter.TARGET_TYPE_CONFIG, "string");
-        config.put(TimestampConverter.FORMAT_CONFIG, STRING_DATE_FMT);
+        config.put(TimestampConverter.FORMAT_TIMESTAMP_CONFIG, STRING_DATE_FMT);
         xformValue.configure(config);
         SourceRecord transformed = xformValue.apply(createRecordWithSchema(Timestamp.SCHEMA, DATE_PLUS_TIME.getTime()));
 
@@ -286,7 +282,7 @@ public class TimestampConverterTest {
     private void testSchemalessNullValueConversion(String targetType) {
         Map<String, String> config = new HashMap<>();
         config.put(TimestampConverter.TARGET_TYPE_CONFIG, targetType);
-        config.put(TimestampConverter.FORMAT_CONFIG, STRING_DATE_FMT);
+        config.put(TimestampConverter.FORMAT_TIMESTAMP_CONFIG, STRING_DATE_FMT);
         xformValue.configure(config);
         SourceRecord transformed = xformValue.apply(createRecordSchemaless(null));
 
@@ -297,7 +293,7 @@ public class TimestampConverterTest {
     private void testSchemalessNullFieldConversion(String targetType) {
         Map<String, String> config = new HashMap<>();
         config.put(TimestampConverter.TARGET_TYPE_CONFIG, targetType);
-        config.put(TimestampConverter.FORMAT_CONFIG, STRING_DATE_FMT);
+        config.put(TimestampConverter.FORMAT_TIMESTAMP_CONFIG, STRING_DATE_FMT);
         config.put(TimestampConverter.FIELD_CONFIG, "ts");
         xformValue.configure(config);
         SourceRecord transformed = xformValue.apply(createRecordSchemaless(null));
@@ -341,7 +337,7 @@ public class TimestampConverterTest {
     public void testWithSchemaStringToTimestamp() {
         Map<String, String> config = new HashMap<>();
         config.put(TimestampConverter.TARGET_TYPE_CONFIG, "Timestamp");
-        config.put(TimestampConverter.FORMAT_CONFIG, STRING_DATE_FMT);
+        config.put(TimestampConverter.FORMAT_TIMESTAMP_CONFIG, STRING_DATE_FMT);
         xformValue.configure(config);
         SourceRecord transformed = xformValue.apply(createRecordWithSchema(Schema.STRING_SCHEMA, DATE_PLUS_TIME_STRING));
 
@@ -444,7 +440,7 @@ public class TimestampConverterTest {
     private void testWithSchemaNullValueConversion(String targetType, Schema originalSchema, Schema expectedSchema) {
         Map<String, String> config = new HashMap<>();
         config.put(TimestampConverter.TARGET_TYPE_CONFIG, targetType);
-        config.put(TimestampConverter.FORMAT_CONFIG, STRING_DATE_FMT);
+        config.put(TimestampConverter.FORMAT_TIMESTAMP_CONFIG, STRING_DATE_FMT);
         xformValue.configure(config);
         SourceRecord transformed = xformValue.apply(createRecordWithSchema(originalSchema, null));
 
@@ -455,7 +451,7 @@ public class TimestampConverterTest {
     private void testWithSchemaNullFieldConversion(String targetType, Schema originalSchema, Schema expectedSchema) {
         Map<String, String> config = new HashMap<>();
         config.put(TimestampConverter.TARGET_TYPE_CONFIG, targetType);
-        config.put(TimestampConverter.FORMAT_CONFIG, STRING_DATE_FMT);
+        config.put(TimestampConverter.FORMAT_TIMESTAMP_CONFIG, STRING_DATE_FMT);
         config.put(TimestampConverter.FIELD_CONFIG, "ts");
         xformValue.configure(config);
         SchemaBuilder structSchema = SchemaBuilder.struct()
@@ -544,5 +540,221 @@ public class TimestampConverterTest {
 
     private SourceRecord createRecordSchemaless(Object value) {
         return createRecordWithSchema(null, value);
+    }
+
+    private static final Schema ORIGINAL_DATE_TIMESTAMP_SCHEMA =
+            SchemaBuilder.struct()
+                    .field("connect_date", Date.SCHEMA)
+                    .field("connect_timestamp", Timestamp.SCHEMA)
+                    .field("other", Schema.STRING_SCHEMA)
+                    .build();
+
+    private static final int NUM_OF_DAYS_SINCE_EPOCH = 0;
+    private static final LocalDate LOCAL_DATE =
+            LocalDate.ofEpochDay(Long.valueOf(NUM_OF_DAYS_SINCE_EPOCH));
+    private static final java.util.Date EPOCH_DATE =
+            java.util.Date.from(LOCAL_DATE.atStartOfDay(ZoneOffset.UTC).toInstant());
+
+    @Test
+    public void testDateAndTimestampConversionWithRecordSchemaTargetString() {
+        Map<String, String> config = Collections.singletonMap(TimestampConverter.TARGET_TYPE_CONFIG, "string");
+        xformValue.configure(config);
+        Struct original =
+                new Struct(ORIGINAL_DATE_TIMESTAMP_SCHEMA)
+                        .put("connect_date", EPOCH_DATE)
+                        .put("connect_timestamp", EPOCH_DATE)
+                        .put("other", "test");
+
+        Schema expectedSchema =
+                SchemaBuilder.struct()
+                        .field("connect_date", Schema.STRING_SCHEMA)
+                        .field("connect_timestamp", Schema.STRING_SCHEMA)
+                        .field("other", Schema.STRING_SCHEMA)
+                        .build();
+
+        Struct expectedValue =
+                new Struct(expectedSchema)
+                        .put("connect_date", "1970-01-01")
+                        .put("connect_timestamp", "1970-01-01 00:00:00")
+                        .put("other", "test");
+
+        SourceRecord transformed =
+                xformValue.apply(createRecordWithSchema(ORIGINAL_DATE_TIMESTAMP_SCHEMA, original));
+
+        assertEquals(expectedSchema, transformed.valueSchema());
+        assertEquals(expectedValue, transformed.value());
+        assertEquals("test", ((Struct) transformed.value()).get("other"));
+    }
+
+    @Test
+    public void testDateAndTimestampConversionWithRecordSchemaTargetTimestamp() {
+        Map<String, String> config = Collections.singletonMap(TimestampConverter.TARGET_TYPE_CONFIG, "Timestamp");
+        xformValue.configure(config);
+        java.util.Date date =
+                java.util.Date.from(LOCAL_DATE.atStartOfDay(ZoneOffset.UTC).toInstant());
+        Struct original =
+                new Struct(ORIGINAL_DATE_TIMESTAMP_SCHEMA)
+                        .put("connect_date", EPOCH_DATE)
+                        .put("connect_timestamp", EPOCH_DATE)
+                        .put("other", "test");
+
+        Schema expectedSchema =
+                SchemaBuilder.struct()
+                        .field("connect_date", Timestamp.SCHEMA)
+                        .field("connect_timestamp", Timestamp.SCHEMA)
+                        .field("other", Schema.STRING_SCHEMA)
+                        .build();
+
+        Struct expectedValue =
+                new Struct(expectedSchema)
+                        .put("connect_date", EPOCH_DATE)
+                        .put("connect_timestamp", EPOCH_DATE)
+                        .put("other", "test");
+
+        SourceRecord transformed =
+                xformValue.apply(createRecordWithSchema(ORIGINAL_DATE_TIMESTAMP_SCHEMA, original));
+
+        assertEquals(
+                expectedSchema.field("connect_date").schema(),
+                transformed.valueSchema().field("connect_date").schema());
+        assertEquals(
+                expectedSchema.field("connect_timestamp").schema(),
+                transformed.valueSchema().field("connect_timestamp").schema());
+        assertEquals(
+                expectedValue.get("connect_date"),
+                ((Struct) transformed.value()).get("connect_date"));
+        assertEquals(
+                expectedValue.get("connect_timestamp"),
+                ((Struct) transformed.value()).get("connect_timestamp"));
+        assertEquals(expectedValue.get("other"), ((Struct) transformed.value()).get("other"));
+    }
+
+    @Test
+    public void testDateAndTimestampConversionWithRecordSchemaTargetTime() {
+        Map<String, String> config = Collections.singletonMap(TimestampConverter.TARGET_TYPE_CONFIG, "Time");
+        xformValue.configure(config);
+        java.util.Date date =
+                java.util.Date.from(LOCAL_DATE.atStartOfDay(ZoneOffset.UTC).toInstant());
+        Struct original =
+                new Struct(ORIGINAL_DATE_TIMESTAMP_SCHEMA)
+                        .put("connect_date", EPOCH_DATE)
+                        .put("connect_timestamp", EPOCH_DATE)
+                        .put("other", "test");
+
+        Schema expectedSchema =
+                SchemaBuilder.struct()
+                        .field("connect_date", Time.SCHEMA)
+                        .field("connect_timestamp", Time.SCHEMA)
+                        .field("other", Schema.STRING_SCHEMA)
+                        .build();
+
+        Struct expectedValue =
+                new Struct(expectedSchema)
+                        .put("connect_date", EPOCH_DATE)
+                        .put("connect_timestamp", EPOCH_DATE)
+                        .put("other", "test");
+
+        SourceRecord transformed =
+                xformValue.apply(createRecordWithSchema(ORIGINAL_DATE_TIMESTAMP_SCHEMA, original));
+
+        assertEquals(
+                expectedSchema.field("connect_date").schema(),
+                transformed.valueSchema().field("connect_date").schema());
+        assertEquals(
+                expectedSchema.field("connect_timestamp").schema(),
+                transformed.valueSchema().field("connect_timestamp").schema());
+        assertEquals(
+                expectedValue.get("connect_date"),
+                ((Struct) transformed.value()).get("connect_date"));
+        assertEquals(
+                expectedValue.get("connect_timestamp"),
+                ((Struct) transformed.value()).get("connect_timestamp"));
+        assertEquals(expectedValue.get("other"), ((Struct) transformed.value()).get("other"));
+    }
+
+    @Test
+    public void testDateAndTimestampConversionWithRecordSchemaTargetDate() {
+        Map<String, String> config = Collections.singletonMap(TimestampConverter.TARGET_TYPE_CONFIG, "Date");
+        xformValue.configure(config);
+        java.util.Date date =
+                java.util.Date.from(LOCAL_DATE.atStartOfDay(ZoneOffset.UTC).toInstant());
+        Struct original =
+                new Struct(ORIGINAL_DATE_TIMESTAMP_SCHEMA)
+                        .put("connect_date", EPOCH_DATE)
+                        .put("connect_timestamp", EPOCH_DATE)
+                        .put("other", "test");
+
+        Schema expectedSchema =
+                SchemaBuilder.struct()
+                        .field("connect_date", Date.SCHEMA)
+                        .field("connect_timestamp", Date.SCHEMA)
+                        .field("other", Schema.STRING_SCHEMA)
+                        .build();
+
+        Struct expectedValue =
+                new Struct(expectedSchema)
+                        .put("connect_date", EPOCH_DATE)
+                        .put("connect_timestamp", EPOCH_DATE)
+                        .put("other", "test");
+
+        SourceRecord transformed =
+                xformValue.apply(createRecordWithSchema(ORIGINAL_DATE_TIMESTAMP_SCHEMA, original));
+
+        assertEquals(
+                expectedSchema.field("connect_date").schema(),
+                transformed.valueSchema().field("connect_date").schema());
+        assertEquals(
+                expectedSchema.field("connect_timestamp").schema(),
+                transformed.valueSchema().field("connect_timestamp").schema());
+        assertEquals(
+                expectedValue.get("connect_date"),
+                ((Struct) transformed.value()).get("connect_date"));
+        assertEquals(
+                expectedValue.get("connect_timestamp"),
+                ((Struct) transformed.value()).get("connect_timestamp"));
+        assertEquals(expectedValue.get("other"), ((Struct) transformed.value()).get("other"));
+    }
+
+    @Test
+    public void testDateAndTimestampConversionWithRecordSchemaTargetUnix() {
+        Map<String, String> config = Collections.singletonMap(TimestampConverter.TARGET_TYPE_CONFIG, "unix");
+        xformValue.configure(config);
+        java.util.Date date =
+                java.util.Date.from(LOCAL_DATE.atStartOfDay(ZoneOffset.UTC).toInstant());
+        Struct original =
+                new Struct(ORIGINAL_DATE_TIMESTAMP_SCHEMA)
+                        .put("connect_date", EPOCH_DATE)
+                        .put("connect_timestamp", EPOCH_DATE)
+                        .put("other", "test");
+
+        Schema expectedSchema =
+                SchemaBuilder.struct()
+                        .field("connect_date", SchemaBuilder.int64().build())
+                        .field("connect_timestamp", SchemaBuilder.int64().build())
+                        .field("other", Schema.STRING_SCHEMA)
+                        .build();
+
+        Struct expectedValue =
+                new Struct(expectedSchema)
+                        .put("connect_date", EPOCH_DATE.getTime())
+                        .put("connect_timestamp", EPOCH_DATE.getTime())
+                        .put("other", "test");
+
+        SourceRecord transformed =
+                xformValue.apply(createRecordWithSchema(ORIGINAL_DATE_TIMESTAMP_SCHEMA, original));
+
+        assertEquals(
+                expectedSchema.field("connect_date").schema(),
+                transformed.valueSchema().field("connect_date").schema());
+        assertEquals(
+                expectedSchema.field("connect_timestamp").schema(),
+                transformed.valueSchema().field("connect_timestamp").schema());
+        assertEquals(
+                expectedValue.get("connect_date"),
+                ((Struct) transformed.value()).get("connect_date"));
+        assertEquals(
+                expectedValue.get("connect_timestamp"),
+                ((Struct) transformed.value()).get("connect_timestamp"));
+        assertEquals(expectedValue.get("other"), ((Struct) transformed.value()).get("other"));
     }
 }
