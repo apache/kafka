@@ -821,8 +821,8 @@ object ReassignPartitionsCommand extends Logging {
           topicName -> topicDescriptionFuture.get
         }
         catch {
-          case t: ExecutionException if t.getCause != null =>
-            if (t.getCause.isInstanceOf[UnknownTopicOrPartitionException]) {
+          case t: ExecutionException =>
+            if (classOf[UnknownTopicOrPartitionException].isInstance(t.getCause)) {
               throw new ExecutionException(
                 new UnknownTopicOrPartitionException(s"Topic $topicName not found."))
             } else {
