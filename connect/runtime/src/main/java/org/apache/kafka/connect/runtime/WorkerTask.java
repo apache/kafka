@@ -159,6 +159,10 @@ abstract class WorkerTask implements Runnable {
         return stopping;
     }
 
+    protected boolean isCancelled() {
+        return cancelled;
+    }
+
     private void doClose() {
         try {
             close();
