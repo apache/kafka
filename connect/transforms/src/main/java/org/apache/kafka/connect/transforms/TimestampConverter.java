@@ -209,7 +209,7 @@ public abstract class TimestampConverter<R extends ConnectRecord<R>> implements 
                         if (orig instanceof Date) return (Date) orig;
                         if (orig instanceof Integer) {
                             LocalDate localDate =
-                                    LocalDate.ofEpochDay(Long.valueOf(orig.toString()));
+                                    LocalDate.ofEpochDay(Long.parseLong(orig.toString()));
                             return Date.from(localDate.atStartOfDay(ZoneOffset.UTC).toInstant());
                         } else {
                             throw new DataException(
