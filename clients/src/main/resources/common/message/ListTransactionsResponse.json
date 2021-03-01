@@ -28,7 +28,8 @@
       { "name": "TransactionStates", "type": "[]TransactionState", "versions": "0+", "fields": [
         { "name": "TransactionalId", "type": "string", "versions": "0+", "entityType": "transactionalId" },
         { "name": "ProducerId", "type": "int64", "versions": "0+", "entityType": "producerId" },
-        { "name": "TransactionState", "type": "string", "versions": "0+" }
+        { "name": "TransactionState", "type": "string", "versions": "0+",
+          "about": "The current transaction state of the producer" }
     ]}
   ]
 }
