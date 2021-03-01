@@ -70,7 +70,7 @@ public class LeaderAndIsrRequestTest {
             if (version < 5) {
                 assertEquals(0, response.topics().size());
             } else {
-                assertEquals(id, response.topics().get(0).topicId());
+                assertEquals(id, response.topics().find(id).topicId());
             }
         }
     }
