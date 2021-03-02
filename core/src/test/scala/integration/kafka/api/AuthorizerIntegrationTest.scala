@@ -1813,17 +1813,25 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
     producer.beginTransaction()
     producer.send(new ProducerRecord(tp.topic, tp.partition, "1".getBytes, "1".getBytes)).get
 
+    def assertListTransactionResult(
+      expectedTransactionalIds: Set[String]
+    ): Unit = {
+      val listTransactionsRequest = new ListTransactionsRequest.Builder(new ListTransactionsRequestData()).build()
+      val listTransactionsResponse = connectAndReceive[ListTransactionsResponse](listTransactionsRequest)
+      assertEquals(Errors.NONE, Errors.forCode(listTransactionsResponse.data.errorCode))
+      assertEquals(expectedTransactionalIds, listTransactionsResponse.data.transactionStates.asScala.map(_.transactionalId).toSet)
+    }
+
     // First verify that we can list the transaction
-    val listTransactionsRequest = new ListTransactionsRequest.Builder(new ListTransactionsRequestData()).build()
-    val authorizedResponse = connectAndReceive[ListTransactionsResponse](listTransactionsRequest)
-    assertEquals(Errors.NONE, Errors.forCode(authorizedResponse.data.errorCode))
-    assertEquals(Set(transactionalId), authorizedResponse.data.transactionStates.asScala.map(_.transactionalId).toSet)
+    assertListTransactionResult(expectedTransactionalIds = Set(transactionalId))
 
     // Now revoke authorization and verify that the transaction is no longer listable
     removeAndVerifyAcls(Set(new AccessControlEntry(clientPrincipalString, WildcardHost, WRITE, ALLOW)), transactionalIdResource)
-    val unauthorizedResponse = connectAndReceive[ListTransactionsResponse](listTransactionsRequest)
-    assertEquals(Errors.NONE, Errors.forCode(unauthorizedResponse.data.errorCode))
-    assertEquals(Set(), unauthorizedResponse.data.transactionStates.asScala.map(_.transactionalId).toSet)
+    assertListTransactionResult(expectedTransactionalIds = Set())
+
+    // The minimum permission needed is `Describe`
+    addAndVerifyAcls(Set(new AccessControlEntry(clientPrincipalString, WildcardHost, WRITE, ALLOW)), transactionalIdResource)
+    assertListTransactionResult(expectedTransactionalIds = Set(transactionalId))
   }
 
   @Test

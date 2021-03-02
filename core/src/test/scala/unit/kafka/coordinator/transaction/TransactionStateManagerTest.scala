@@ -546,6 +546,7 @@ class TransactionStateManagerTest {
     assertListTransactions(Set("t4", "t5"), filterProducerIds = Set(4L, 5L), filterStates = Set("CompleteCommit", "CompleteAbort"))
     assertListTransactions(Set(), filterProducerIds = Set(3L, 6L), filterStates = Set("UnknownState"))
     assertListTransactions(Set(), filterProducerIds = Set(10L), filterStates = Set("CompleteCommit"))
+    assertListTransactions(Set(), filterStates = Set("Dead"))
   }
 
   @Test
