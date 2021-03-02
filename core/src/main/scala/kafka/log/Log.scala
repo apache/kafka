@@ -962,7 +962,7 @@ class Log(@volatile private var _dir: File,
         producerStateManager.takeSnapshot()
       }
     } else {
-      info(s"Reloading from producer snapshot and rebuilding producer state from $lastOffset")
+      info(s"Reloading from producer snapshot and rebuilding producer state from offset $lastOffset")
       val isEmptyBeforeTruncation = producerStateManager.isEmpty && producerStateManager.mapEndOffset >= lastOffset
       val producerStateLoadStart = time.milliseconds()
       producerStateManager.truncateAndReload(logStartOffset, lastOffset, time.milliseconds())
