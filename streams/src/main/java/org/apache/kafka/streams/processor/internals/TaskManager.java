@@ -1120,7 +1120,7 @@ public class TaskManager {
         for (final Task task: tasks.activeTasks()) {
             for (final TopicPartition topicPartition: task.inputPartitions()) {
                 if (allOffsets.containsKey(topicPartition)) {
-                    task.getTaskMetadata().getCommittedOffsets().put(topicPartition, allOffsets.get(topicPartition).offset());
+                    task.getCommittedOffsets().put(topicPartition, allOffsets.get(topicPartition).offset());
                 }
             }
         }

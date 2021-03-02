@@ -39,7 +39,6 @@ import org.apache.kafka.streams.processor.Cancellable;
 import org.apache.kafka.streams.processor.PunctuationType;
 import org.apache.kafka.streams.processor.Punctuator;
 import org.apache.kafka.streams.processor.TaskId;
-import org.apache.kafka.streams.processor.TaskMetadata;
 import org.apache.kafka.streams.processor.TimestampExtractor;
 import org.apache.kafka.streams.processor.api.Record;
 import org.apache.kafka.streams.processor.internals.metrics.ProcessorNodeMetrics;
@@ -59,6 +58,7 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.function.Function;
 import java.util.stream.Collectors;
@@ -87,7 +87,11 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
     private final RecordCollector recordCollector;
     private final PartitionGroup.RecordInfo recordInfo;
     private final Map<TopicPartition, Long> consumedOffsets;
-    private final TaskMetadata taskMetadata;
+    private final String taskId;
+    private final Set<TopicPartition> topicPartitions;
+    private final Map<TopicPartition, Long> committedOffsets;
+    private final Map<TopicPartition, Long> highWatermark;
+    private Optional<Long> timeCurrentIdlingStarted;
     private final PunctuationQueue streamTimePunctuationQueue;
     private final PunctuationQueue systemTimePunctuationQueue;
     private final StreamsMetricsImpl streamsMetrics;
@@ -192,7 +196,10 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
         );
 
         stateMgr.registerGlobalStateStores(topology.globalStateStores());
-        taskMetadata = new TaskMetadata(taskId, inputPartitions, new HashMap<>(), new HashMap<>(), -1L);
+        this.committedOffsets = new HashMap<>();
+        this.highWatermark = new HashMap<>();
+        this.taskId = taskId;
+        this.topicPartitions = Collections.unmodifiableSet(inputPartitions);
     }
 
     // create queues for each assigned partition and associate them
@@ -203,12 +210,6 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
             partitionQueues.put(partition, recordQueueCreator.createQueue(partition));
         }
         return partitionQueues;
-    }
-
-    @Override
-    public TaskMetadata getTaskMetadata() {
-        taskMetadata.getEndOffsets().putAll(recordCollector.offsets());
-        return taskMetadata;
     }
 
     @Override
@@ -275,13 +276,13 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
             case CREATED:
                 log.info("Suspended created");
                 transitionTo(State.SUSPENDED);
-                taskMetadata.setTimeCurrentIdlingStarted(System.currentTimeMillis());
+                timeCurrentIdlingStarted = Optional.of(System.currentTimeMillis());
                 break;
 
             case RESTORING:
                 log.info("Suspended restoring");
                 transitionTo(State.SUSPENDED);
-                taskMetadata.setTimeCurrentIdlingStarted(System.currentTimeMillis());
+                timeCurrentIdlingStarted = Optional.of(System.currentTimeMillis());
                 break;
 
             case RUNNING:
@@ -294,7 +295,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
                     partitionGroup.clear();
                 } finally {
                     transitionTo(State.SUSPENDED);
-                    taskMetadata.setTimeCurrentIdlingStarted(System.currentTimeMillis());
+                    timeCurrentIdlingStarted = Optional.of(System.currentTimeMillis());
                     log.info("Suspended running");
                 }
 
@@ -373,7 +374,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
             default:
                 throw new IllegalStateException("Unknown state " + state() + " while resuming active task " + id);
         }
-        taskMetadata.setTimeCurrentIdlingStarted(-1L);
+        timeCurrentIdlingStarted = Optional.empty();
     }
 
     /**
@@ -1145,6 +1146,22 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
         } else {
             return Collections.unmodifiableMap(stateMgr.changelogOffsets());
         }
+    }
+
+    @Override
+    public Map<TopicPartition, Long> getCommittedOffsets() {
+        return committedOffsets;
+    }
+
+    @Override
+    public Map<TopicPartition, Long> getHighWaterMark() {
+        highWatermark.putAll(recordCollector.offsets());
+        return highWatermark;
+    }
+
+    @Override
+    public Optional<Long> getTimeCurrentIdlingStarted() {
+        return timeCurrentIdlingStarted;
     }
 
     public boolean hasRecordsQueued() {

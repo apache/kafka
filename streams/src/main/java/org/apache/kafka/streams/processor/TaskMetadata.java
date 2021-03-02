@@ -22,6 +22,7 @@ import org.apache.kafka.streams.KafkaStreams;
 import java.util.Collections;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.Set;
 
 /**
@@ -35,19 +36,19 @@ public class TaskMetadata {
 
     private final Map<TopicPartition, Long> committedOffsets;
 
-    private final Map<TopicPartition, Long> endOffsets;
+    private final Map<TopicPartition, Long> highWatermark;
 
-    private Long timeCurrentIdlingStarted;
+    private Optional<Long> timeCurrentIdlingStarted;
 
     public TaskMetadata(final String taskId,
                         final Set<TopicPartition> topicPartitions,
                         final Map<TopicPartition, Long> committedOffsets,
-                        final Map<TopicPartition, Long> endOffsets,
-                        final Long timeCurrentIdlingStarted) {
+                        final Map<TopicPartition, Long> highWatermark,
+                        final Optional<Long> timeCurrentIdlingStarted) {
         this.taskId = taskId;
         this.topicPartitions = Collections.unmodifiableSet(topicPartitions);
         this.committedOffsets = committedOffsets;
-        this.endOffsets = endOffsets;
+        this.highWatermark = highWatermark;
         this.timeCurrentIdlingStarted = timeCurrentIdlingStarted;
     }
 
@@ -59,20 +60,16 @@ public class TaskMetadata {
         return topicPartitions;
     }
 
-    public Map<TopicPartition, Long> getCommittedOffsets() {
+    public Map<TopicPartition, Long> committedOffsets() {
         return committedOffsets;
     }
 
-    public Map<TopicPartition, Long> getEndOffsets() {
-        return endOffsets;
+    public Map<TopicPartition, Long> highWatermark() {
+        return highWatermark;
     }
 
-    public Long getTimeCurrentIdlingStarted() {
+    public Optional<Long> timeCurrentIdlingStarted() {
         return timeCurrentIdlingStarted;
-    }
-
-    public void setTimeCurrentIdlingStarted(final Long time) {
-        timeCurrentIdlingStarted = time;
     }
 
     @Override

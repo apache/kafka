@@ -1125,11 +1125,23 @@ public class StreamThread extends Thread {
                                       final Map<TaskId, Task> standbyTasks) {
         final Set<TaskMetadata> activeTasksMetadata = new HashSet<>();
         for (final Map.Entry<TaskId, Task> task : activeTasks.entrySet()) {
-            activeTasksMetadata.add(task.getValue().getTaskMetadata());
+            activeTasksMetadata.add(new TaskMetadata(
+                task.getValue().id().toString(),
+                task.getValue().inputPartitions(),
+                task.getValue().getCommittedOffsets(),
+                task.getValue().getHighWaterMark(),
+                task.getValue().getTimeCurrentIdlingStarted()
+            ));
         }
         final Set<TaskMetadata> standbyTasksMetadata = new HashSet<>();
         for (final Map.Entry<TaskId, Task> task : standbyTasks.entrySet()) {
-            standbyTasksMetadata.add(task.getValue().getTaskMetadata());
+            standbyTasksMetadata.add(new TaskMetadata(
+                task.getValue().id().toString(),
+                task.getValue().inputPartitions(),
+                task.getValue().getCommittedOffsets(),
+                task.getValue().getHighWaterMark(),
+                task.getValue().getTimeCurrentIdlingStarted()
+            ));
         }
 
         final String adminClientId = threadMetadata.adminClientId();

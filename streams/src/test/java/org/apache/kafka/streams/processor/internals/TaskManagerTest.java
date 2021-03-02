@@ -44,7 +44,6 @@ import org.apache.kafka.streams.errors.TaskCorruptedException;
 import org.apache.kafka.streams.errors.TaskMigratedException;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.TaskId;
-import org.apache.kafka.streams.processor.TaskMetadata;
 import org.apache.kafka.streams.processor.internals.StreamThread.ProcessingMode;
 import org.apache.kafka.streams.processor.internals.Task.State;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
@@ -71,6 +70,7 @@ import java.util.HashSet;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -3114,8 +3114,18 @@ public class TaskManagerTest {
         }
 
         @Override
-        public TaskMetadata getTaskMetadata() {
-            return new TaskMetadata("test", new HashSet<>(), new HashMap<>(), new HashMap<>(), -1L);
+        public Map<TopicPartition, Long> getCommittedOffsets() {
+            return new HashMap<>();
+        }
+
+        @Override
+        public Map<TopicPartition, Long> getHighWaterMark() {
+            return new HashMap<>();
+        }
+
+        @Override
+        public Optional<Long> getTimeCurrentIdlingStarted() {
+            return Optional.empty();
         }
 
         @Override

@@ -25,7 +25,6 @@ import org.apache.kafka.streams.errors.LockException;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.TaskId;
-import org.apache.kafka.streams.processor.TaskMetadata;
 
 import java.util.Arrays;
 import java.util.Collection;
@@ -33,6 +32,7 @@ import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 
 public interface Task {
@@ -238,5 +238,9 @@ public interface Task {
      */
     Map<TopicPartition, Long> changelogOffsets();
 
-    TaskMetadata getTaskMetadata();
+    Map<TopicPartition, Long> getCommittedOffsets();
+
+    Map<TopicPartition, Long> getHighWaterMark();
+
+    Optional<Long> getTimeCurrentIdlingStarted();
 }
