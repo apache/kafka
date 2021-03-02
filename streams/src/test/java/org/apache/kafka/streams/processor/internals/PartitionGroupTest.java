@@ -17,7 +17,6 @@
 package org.apache.kafka.streams.processor.internals;
 
 import org.apache.kafka.clients.consumer.ConsumerRecord;
-import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.metrics.Metrics;
@@ -41,7 +40,9 @@ import org.hamcrest.Matchers;
 import org.junit.Test;
 
 import java.util.Arrays;
+import java.util.HashMap;
 import java.util.List;
+import java.util.OptionalLong;
 import java.util.UUID;
 
 import static org.apache.kafka.common.utils.Utils.mkEntry;
@@ -481,6 +482,7 @@ public class PartitionGroupTest {
         final PartitionGroup group = new PartitionGroup(
             logContext,
             mkMap(mkEntry(partition1, queue1)),
+            tp -> OptionalLong.of(0L),
             getValueSensor(metrics, lastLatenessValue),
             enforcedProcessingSensor,
             maxTaskIdleMs
@@ -513,6 +515,7 @@ public class PartitionGroupTest {
         final PartitionGroup group = new PartitionGroup(
             logContext,
             mkMap(mkEntry(partition1, queue1)),
+            tp -> OptionalLong.of(0L),
             getValueSensor(metrics, lastLatenessValue),
             enforcedProcessingSensor,
             maxTaskIdleMs
@@ -547,6 +550,7 @@ public class PartitionGroupTest {
                 mkEntry(partition1, queue1),
                 mkEntry(partition2, queue2)
             ),
+            tp -> OptionalLong.of(0L),
             getValueSensor(metrics, lastLatenessValue),
             enforcedProcessingSensor,
             StreamsConfig.MAX_TASK_IDLE_MS_DISABLED
@@ -584,6 +588,7 @@ public class PartitionGroupTest {
                 mkEntry(partition1, queue1),
                 mkEntry(partition2, queue2)
             ),
+            tp -> OptionalLong.of(0L),
             getValueSensor(metrics, lastLatenessValue),
             enforcedProcessingSensor,
             0L
@@ -615,12 +620,14 @@ public class PartitionGroupTest {
 
     @Test
     public void shouldWaitForFetchesWhenMetadataIsIncomplete() {
+        final HashMap<TopicPartition, OptionalLong> lags = new HashMap<>();
         final PartitionGroup group = new PartitionGroup(
             logContext,
             mkMap(
                 mkEntry(partition1, queue1),
                 mkEntry(partition2, queue2)
             ),
+            tp -> lags.getOrDefault(tp, OptionalLong.empty()),
             getValueSensor(metrics, lastLatenessValue),
             enforcedProcessingSensor,
             0L
@@ -643,18 +650,20 @@ public class PartitionGroupTest {
                 ))
             );
         }
-        group.addFetchedMetadata(partition2, new ConsumerRecords.Metadata(0L, 0L, 0L));
+        lags.put(partition2, OptionalLong.of(0L));
         assertThat(group.readyToProcess(0L), is(true));
     }
 
     @Test
     public void shouldWaitForPollWhenLagIsNonzero() {
+        final HashMap<TopicPartition, OptionalLong> lags = new HashMap<>();
         final PartitionGroup group = new PartitionGroup(
             logContext,
             mkMap(
                 mkEntry(partition1, queue1),
                 mkEntry(partition2, queue2)
             ),
+            tp -> lags.getOrDefault(tp, OptionalLong.empty()),
             getValueSensor(metrics, lastLatenessValue),
             enforcedProcessingSensor,
             0L
@@ -664,7 +673,8 @@ public class PartitionGroupTest {
             new ConsumerRecord<>("topic", 1, 1L, recordKey, recordValue),
             new ConsumerRecord<>("topic", 1, 5L, recordKey, recordValue));
         group.addRawRecords(partition1, list1);
-        group.addFetchedMetadata(partition2, new ConsumerRecords.Metadata(0L, 0L, 1L));
+
+        lags.put(partition2, OptionalLong.of(1L));
 
         assertThat(group.allPartitionsBufferedLocally(), is(false));
 
@@ -689,6 +699,7 @@ public class PartitionGroupTest {
                 mkEntry(partition1, queue1),
                 mkEntry(partition2, queue2)
             ),
+            tp -> OptionalLong.of(0L),
             getValueSensor(metrics, lastLatenessValue),
             enforcedProcessingSensor,
             1L
@@ -698,7 +709,6 @@ public class PartitionGroupTest {
             new ConsumerRecord<>("topic", 1, 1L, recordKey, recordValue),
             new ConsumerRecord<>("topic", 1, 5L, recordKey, recordValue));
         group.addRawRecords(partition1, list1);
-        group.addFetchedMetadata(partition2, new ConsumerRecords.Metadata(0L, 0L, 0L));
 
         assertThat(group.allPartitionsBufferedLocally(), is(false));
 
@@ -714,16 +724,15 @@ public class PartitionGroupTest {
             );
         }
 
-        group.addFetchedMetadata(partition2, new ConsumerRecords.Metadata(0L, 0L, 0L));
         try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(PartitionGroup.class)) {
             LogCaptureAppender.setClassLoggerToTrace(PartitionGroup.class);
             assertThat(group.readyToProcess(1L), is(true));
             assertThat(
                 appender.getEvents(),
                 hasItem(Matchers.allOf(
-                    Matchers.hasProperty("level", equalTo("INFO")),
+                    Matchers.hasProperty("level", equalTo("TRACE")),
                     Matchers.hasProperty("message", equalTo(
-                        "[test] Continuing to process although some partition timestamps were not buffered locally.\n" +
+                        "[test] Continuing to process although some partitions are empty on the broker.\n" +
                             "\tThere may be out-of-order processing for this task as a result.\n" +
                             "\tPartitions with local data: [topic-1].\n" +
                             "\tPartitions we gave up waiting for, with their corresponding deadlines: {topic-2=1}.\n" +
@@ -734,16 +743,15 @@ public class PartitionGroupTest {
             );
         }
 
-        group.addFetchedMetadata(partition2, new ConsumerRecords.Metadata(0L, 0L, 0L));
         try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(PartitionGroup.class)) {
             LogCaptureAppender.setClassLoggerToTrace(PartitionGroup.class);
             assertThat(group.readyToProcess(2L), is(true));
             assertThat(
                 appender.getEvents(),
                 hasItem(Matchers.allOf(
-                    Matchers.hasProperty("level", equalTo("INFO")),
+                    Matchers.hasProperty("level", equalTo("TRACE")),
                     Matchers.hasProperty("message", equalTo(
-                        "[test] Continuing to process although some partition timestamps were not buffered locally.\n" +
+                        "[test] Continuing to process although some partitions are empty on the broker.\n" +
                             "\tThere may be out-of-order processing for this task as a result.\n" +
                             "\tPartitions with local data: [topic-1].\n" +
                             "\tPartitions we gave up waiting for, with their corresponding deadlines: {topic-2=1}.\n" +
@@ -762,6 +770,7 @@ public class PartitionGroupTest {
                 mkEntry(partition1, queue1),
                 mkEntry(partition2, queue2)
             ),
+            tp -> OptionalLong.of(0L),
             getValueSensor(metrics, lastLatenessValue),
             enforcedProcessingSensor,
             maxTaskIdleMs

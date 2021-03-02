@@ -968,7 +968,7 @@ public class TaskManager {
      * @param records Records, can be null
      */
     void addRecordsToTasks(final ConsumerRecords<byte[], byte[]> records) {
-        for (final TopicPartition partition : union(HashSet::new, records.partitions(), records.metadata().keySet())) {
+        for (final TopicPartition partition : records.partitions()) {
             final Task activeTask = tasks.activeTasksForInputPartition(partition);
 
             if (activeTask == null) {
@@ -978,7 +978,6 @@ public class TaskManager {
             }
 
             activeTask.addRecords(partition, records.records(partition));
-            activeTask.addFetchedMetadata(partition, records.metadata().get(partition));
         }
     }
 
