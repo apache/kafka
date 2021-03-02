@@ -532,11 +532,7 @@ class TransactionStateManagerTest {
       assertEquals(Errors.NONE, Errors.forCode(listResponse.errorCode))
       assertEquals(expectedTransactionalIds, listResponse.transactionStates.asScala.map(_.transactionalId).toSet)
       val expectedUnknownStates = filterStates.filter(state => TransactionState.fromName(state).isEmpty)
-      if (expectedUnknownStates.nonEmpty) {
-        assertEquals(expectedUnknownStates, listResponse.unknownStateFilters.asScala.toSet)
-      } else {
-        assertNull(listResponse.unknownStateFilters)
-      }
+      assertEquals(expectedUnknownStates, listResponse.unknownStateFilters.asScala.toSet)
     }
 
     assertListTransactions(Set("t0", "t1", "t2", "t3", "t4", "t5", "t6", "t7"))

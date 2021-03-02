@@ -3306,19 +3306,17 @@ class KafkaApis(val requestChannel: RequestChannel,
 
   def handleListTransactionsRequest(request: RequestChannel.Request): Unit = {
     val listTransactionsRequest = request.body[ListTransactionsRequest]
-    val filteredProducerIds = listTransactionsRequest.data.producerIdFilter.asScala.map(Long.unbox).toSet
-    val filteredStates = listTransactionsRequest.data.statesFilter.asScala.toSet
+    val filteredProducerIds = listTransactionsRequest.data.producerIdFilters.asScala.map(Long.unbox).toSet
+    val filteredStates = listTransactionsRequest.data.stateFilters.asScala.toSet
     val response = txnCoordinator.handleListTransactions(filteredProducerIds, filteredStates)
 
     // The response should contain only transactionalIds that the principal
     // has `Describe` permission to access.
-    if (response.transactionStates != null) {
-      val transactionStateIter = response.transactionStates.iterator()
-      while (transactionStateIter.hasNext) {
-        val transactionState = transactionStateIter.next()
-        if (!authHelper.authorize(request.context, DESCRIBE, TRANSACTIONAL_ID, transactionState.transactionalId)) {
-          transactionStateIter.remove()
-        }
+    val transactionStateIter = response.transactionStates.iterator()
+    while (transactionStateIter.hasNext) {
+      val transactionState = transactionStateIter.next()
+      if (!authHelper.authorize(request.context, DESCRIBE, TRANSACTIONAL_ID, transactionState.transactionalId)) {
+        transactionStateIter.remove()
       }
     }
 

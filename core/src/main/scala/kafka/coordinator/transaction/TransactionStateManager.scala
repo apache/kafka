@@ -234,16 +234,11 @@ class TransactionStateManager(brokerId: Int,
         response.setErrorCode(Errors.COORDINATOR_LOAD_IN_PROGRESS.code)
       } else {
         val filterStates = mutable.Set.empty[TransactionState]
-        val unknownStates = new java.util.ArrayList[String]
         filterStateNames.foreach { stateName =>
           TransactionState.fromName(stateName) match {
             case Some(state) => filterStates += state
-            case None => unknownStates.add(stateName)
+            case None => response.unknownStateFilters.add(stateName)
           }
-        }
-
-        if (!unknownStates.isEmpty) {
-          response.setUnknownStateFilters(unknownStates)
         }
 
         def shouldInclude(txnMetadata: TransactionMetadata): Boolean = {

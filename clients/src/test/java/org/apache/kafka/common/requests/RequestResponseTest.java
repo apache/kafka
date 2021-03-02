@@ -2819,8 +2819,8 @@ public class RequestResponseTest {
 
     private ListTransactionsRequest createListTransactionsRequest(short version) {
         return new ListTransactionsRequest.Builder(new ListTransactionsRequestData()
-            .setStatesFilter(singletonList("Ongoing"))
-            .setProducerIdFilter(asList(1L, 2L, 15L))
+            .setStateFilters(singletonList("Ongoing"))
+            .setProducerIdFilters(asList(1L, 2L, 15L))
         ).build(version);
     }
 
