@@ -17,7 +17,6 @@
 package org.apache.kafka.streams.processor.internals;
 
 import org.apache.kafka.clients.consumer.ConsumerRecord;
-import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.utils.LogContext;
@@ -30,6 +29,7 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.Map;
+import java.util.OptionalLong;
 import java.util.PriorityQueue;
 import java.util.Set;
 import java.util.function.Function;
@@ -60,6 +60,7 @@ public class PartitionGroup {
 
     private  final Logger logger;
     private final Map<TopicPartition, RecordQueue> partitionQueues;
+    private final Function<TopicPartition, OptionalLong> lagProvider;
     private final Sensor enforcedProcessingSensor;
     private final long maxTaskIdleMs;
     private final Sensor recordLatenessSensor;
@@ -68,7 +69,6 @@ public class PartitionGroup {
     private long streamTime;
     private int totalBuffered;
     private boolean allBuffered;
-    private final Map<TopicPartition, Long> fetchedLags = new HashMap<>();
     private final Map<TopicPartition, Long> idlePartitionDeadlines = new HashMap<>();
 
     static class RecordInfo {
@@ -89,12 +89,14 @@ public class PartitionGroup {
 
     PartitionGroup(final LogContext logContext,
                    final Map<TopicPartition, RecordQueue> partitionQueues,
+                   final Function<TopicPartition, OptionalLong> lagProvider,
                    final Sensor recordLatenessSensor,
                    final Sensor enforcedProcessingSensor,
                    final long maxTaskIdleMs) {
         this.logger = logContext.logger(PartitionGroup.class);
         nonEmptyQueuesByTime = new PriorityQueue<>(partitionQueues.size(), Comparator.comparingLong(RecordQueue::headRecordTimestamp));
         this.partitionQueues = partitionQueues;
+        this.lagProvider = lagProvider;
         this.enforcedProcessingSensor = enforcedProcessingSensor;
         this.maxTaskIdleMs = maxTaskIdleMs;
         this.recordLatenessSensor = recordLatenessSensor;
@@ -103,31 +105,7 @@ public class PartitionGroup {
         streamTime = RecordQueue.UNKNOWN;
     }
 
-    public void addFetchedMetadata(final TopicPartition partition, final ConsumerRecords.Metadata metadata) {
-        final Long lag = metadata.lag();
-        if (lag != null) {
-            logger.trace("added fetched lag {}: {}", partition, lag);
-            fetchedLags.put(partition, lag);
-        }
-    }
-
     public boolean readyToProcess(final long wallClockTime) {
-        if (logger.isTraceEnabled()) {
-            for (final Map.Entry<TopicPartition, RecordQueue> entry : partitionQueues.entrySet()) {
-                logger.trace(
-                    "buffered/lag {}: {}/{}",
-                    entry.getKey(),
-                    entry.getValue().size(),
-                    fetchedLags.get(entry.getKey())
-                );
-            }
-        }
-        // Log-level strategy:
-        //  TRACE for messages that don't wait for fetches
-        //  TRACE when we waited for a fetch and decided to wait some more, as configured
-        //  TRACE when we are ready for processing and didn't have to enforce processing
-        //  INFO  when we enforce processing, since this has to wait for fetches AND may result in disorder
-
         if (maxTaskIdleMs == StreamsConfig.MAX_TASK_IDLE_MS_DISABLED) {
             if (logger.isTraceEnabled() && !allBuffered && totalBuffered > 0) {
                 final Set<TopicPartition> bufferedPartitions = new HashSet<>();
@@ -156,50 +134,53 @@ public class PartitionGroup {
             final TopicPartition partition = entry.getKey();
             final RecordQueue queue = entry.getValue();
 
-            final Long nullableFetchedLag = fetchedLags.get(partition);
 
             if (!queue.isEmpty()) {
                 // this partition is ready for processing
                 idlePartitionDeadlines.remove(partition);
                 queued.add(partition);
-            } else if (nullableFetchedLag == null) {
-                // must wait to fetch metadata for the partition
-                idlePartitionDeadlines.remove(partition);
-                logger.trace("Waiting to fetch data for {}", partition);
-                return false;
-            } else if (nullableFetchedLag > 0L) {
-                // must wait to poll the data we know to be on the broker
-                idlePartitionDeadlines.remove(partition);
-                logger.trace(
-                    "Lag for {} is currently {}, but no data is buffered locally. Waiting to buffer some records.",
-                    partition,
-                    nullableFetchedLag
-                );
-                return false;
             } else {
-                // p is known to have zero lag. wait for maxTaskIdleMs to see if more data shows up.
-                // One alternative would be to set the deadline to nullableMetadata.receivedTimestamp + maxTaskIdleMs
-                // instead. That way, we would start the idling timer as of the freshness of our knowledge about the zero
-                // lag instead of when we happen to run this method, but realistically it's probably a small difference
-                // and using wall clock time seems more intuitive for users,
-                // since the log message will be as of wallClockTime.
-                idlePartitionDeadlines.putIfAbsent(partition, wallClockTime + maxTaskIdleMs);
-                final long deadline = idlePartitionDeadlines.get(partition);
-                if (wallClockTime < deadline) {
+                final OptionalLong fetchedLag = lagProvider.apply(partition);
+
+                if (!fetchedLag.isPresent()) {
+                    // must wait to fetch metadata for the partition
+                    idlePartitionDeadlines.remove(partition);
+                    logger.trace("Waiting to fetch data for {}", partition);
+                    return false;
+                } else if (fetchedLag.getAsLong() > 0L) {
+                    // must wait to poll the data we know to be on the broker
+                    idlePartitionDeadlines.remove(partition);
                     logger.trace(
-                        "Lag for {} is currently 0 and current time is {}. Waiting for new data to be produced for configured idle time {} (deadline is {}).",
+                        "Lag for {} is currently {}, but no data is buffered locally. Waiting to buffer some records.",
                         partition,
-                        wallClockTime,
-                        maxTaskIdleMs,
-                        deadline
+                        fetchedLag.getAsLong()
                     );
                     return false;
                 } else {
-                    // this partition is ready for processing due to the task idling deadline passing
-                    if (enforced == null) {
-                        enforced = new HashMap<>();
+                    // p is known to have zero lag. wait for maxTaskIdleMs to see if more data shows up.
+                    // One alternative would be to set the deadline to nullableMetadata.receivedTimestamp + maxTaskIdleMs
+                    // instead. That way, we would start the idling timer as of the freshness of our knowledge about the zero
+                    // lag instead of when we happen to run this method, but realistically it's probably a small difference
+                    // and using wall clock time seems more intuitive for users,
+                    // since the log message will be as of wallClockTime.
+                    idlePartitionDeadlines.putIfAbsent(partition, wallClockTime + maxTaskIdleMs);
+                    final long deadline = idlePartitionDeadlines.get(partition);
+                    if (wallClockTime < deadline) {
+                        logger.trace(
+                            "Lag for {} is currently 0 and current time is {}. Waiting for new data to be produced for configured idle time {} (deadline is {}).",
+                            partition,
+                            wallClockTime,
+                            maxTaskIdleMs,
+                            deadline
+                        );
+                        return false;
+                    } else {
+                        // this partition is ready for processing due to the task idling deadline passing
+                        if (enforced == null) {
+                            enforced = new HashMap<>();
+                        }
+                        enforced.put(partition, deadline);
                     }
-                    enforced.put(partition, deadline);
                 }
             }
         }
@@ -211,7 +192,7 @@ public class PartitionGroup {
             return false;
         } else {
             enforcedProcessingSensor.record(1.0d, wallClockTime);
-            logger.info("Continuing to process although some partition timestamps were not buffered locally." +
+            logger.trace("Continuing to process although some partitions are empty on the broker." +
                          "\n\tThere may be out-of-order processing for this task as a result." +
                          "\n\tPartitions with local data: {}." +
                          "\n\tPartitions we gave up waiting for, with their corresponding deadlines: {}." +

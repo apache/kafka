@@ -18,7 +18,6 @@ package org.apache.kafka.streams.processor.internals;
 
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
-import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.clients.consumer.MockConsumer;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.consumer.OffsetResetStrategy;
@@ -424,9 +423,6 @@ public class StreamTaskTest {
         assertEquals(asList(101, 102, 103), source1.values);
         assertEquals(singletonList(201), source2.values);
 
-        // tell the task that it doesn't need to wait for more records on partition1
-        task.addFetchedMetadata(partition1, new ConsumerRecords.Metadata(0L, 30L, 30L));
-
         assertTrue(task.process(0L));
         assertEquals(1, task.numBuffered());
         assertEquals(3, source1.numReceived);
@@ -434,8 +430,6 @@ public class StreamTaskTest {
         assertEquals(asList(101, 102, 103), source1.values);
         assertEquals(asList(201, 202), source2.values);
 
-        // tell the task that it doesn't need to wait for more records on partition1
-        task.addFetchedMetadata(partition1, new ConsumerRecords.Metadata(0L, 30L, 30L));
         assertTrue(task.process(0L));
         assertEquals(0, task.numBuffered());
         assertEquals(3, source1.numReceived);
@@ -966,9 +960,6 @@ public class StreamTaskTest {
         assertEquals(4, source1.numReceived);
         assertEquals(3, source2.numReceived);
         assertTrue(task.maybePunctuateStreamTime());
-
-        // tell the task that it doesn't need to wait for new data on partition1
-        task.addFetchedMetadata(partition1, new ConsumerRecords.Metadata(0L, 160L, 160L));
 
         // st: 161
         assertTrue(task.process(0L));
@@ -1560,7 +1551,6 @@ public class StreamTaskTest {
         task.addRecords(repartition, singletonList(getConsumerRecordWithOffsetAsTimestamp(repartition, 10L)));
 
         assertTrue(task.process(0L));
-        task.addFetchedMetadata(partition1, new ConsumerRecords.Metadata(0L, 5L, 5L));
         assertTrue(task.process(0L));
 
         task.prepareCommit();
