@@ -46,6 +46,17 @@ public class Field {
         this(name, type, null, false, null);
     }
 
+    @Override
+    public String toString() {
+        return "Field{" +
+                "name='" + name + '\'' +
+                ", docString='" + docString + '\'' +
+                ", type=" + type +
+                ", hasDefaultValue=" + hasDefaultValue +
+                ", defaultValue=" + defaultValue +
+                '}';
+    }
+
     public static class Int8 extends Field {
         public Int8(String name, String docString) {
             super(name, Type.INT8, docString, false, null);

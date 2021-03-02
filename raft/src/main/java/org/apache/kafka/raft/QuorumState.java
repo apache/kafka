@@ -522,4 +522,15 @@ public class QuorumState {
         return state instanceof CandidateState;
     }
 
+    @Override
+    public String toString() {
+        return "QuorumState{" +
+                "localId=" + localId +
+                ", store=" + store +
+                ", voters=" + voters +
+                ", electionTimeoutMs=" + electionTimeoutMs +
+                ", fetchTimeoutMs=" + fetchTimeoutMs +
+                ", state=" + state +
+                '}';
+    }
 }

@@ -120,6 +120,16 @@ public class BrokerHeartbeatManager {
         boolean shuttingDown() {
             return controlledShutDownOffset >= 0;
         }
+
+        @Override
+        public String toString() {
+            return "BrokerHeartbeatState{" +
+                    "id=" + id +
+                    ", lastContactNs=" + lastContactNs +
+                    ", metadataOffset=" + metadataOffset +
+                    ", controlledShutDownOffset=" + controlledShutDownOffset +
+                    '}';
+        }
     }
 
     static class MetadataOffsetComparator implements Comparator<BrokerHeartbeatState> {

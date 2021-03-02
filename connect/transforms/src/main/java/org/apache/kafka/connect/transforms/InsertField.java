@@ -93,6 +93,14 @@ public abstract class InsertField<R extends ConnectRecord<R>> implements Transfo
             }
             return new InsertionSpec(spec, true);
         }
+
+        @Override
+        public String toString() {
+            return "InsertionSpec{" +
+                    "name='" + name + '\'' +
+                    ", optional=" + optional +
+                    '}';
+        }
     }
 
     private InsertionSpec topicField;
