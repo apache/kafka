@@ -1874,7 +1874,7 @@ class KafkaApis(val requestChannel: RequestChannel,
         if (topic.name() != null && topic.topicId() != Uuid.ZERO_UUID)
           throw new InvalidRequestException("Topic name and topic ID can not both be specified.")
         val name = if (topic.topicId() == Uuid.ZERO_UUID) topic.name()
-        else zkSupport.controller.controllerContext.topicNames.getOrElse(topic.topicId(), null)
+        else zkSupport.controller.controllerContext.topicName(topic.topicId).orNull
         results.add(new DeletableTopicResult()
           .setName(name)
           .setTopicId(topic.topicId()))
@@ -1884,20 +1884,27 @@ class KafkaApis(val requestChannel: RequestChannel,
       val authorizedDeleteTopics = authHelper.filterByAuthorized(request.context, DELETE, TOPIC,
         results.asScala.filter(result => result.name() != null))(_.name)
       results.forEach { topic =>
-        val unresolvedTopicId = !(topic.topicId() == Uuid.ZERO_UUID) && topic.name() == null
-         if (!config.usesTopicId && topicIdsFromRequest.contains(topic.topicId)) {
-           topic.setErrorCode(Errors.UNSUPPORTED_VERSION.code)
-           topic.setErrorMessage("Topic IDs are not supported on the server.")
-         } else if (unresolvedTopicId)
-             topic.setErrorCode(Errors.UNKNOWN_TOPIC_ID.code)
-         else if (topicIdsFromRequest.contains(topic.topicId) && !authorizedDescribeTopics(topic.name))
-           topic.setErrorCode(Errors.UNKNOWN_TOPIC_ID.code)
-         else if (!authorizedDeleteTopics.contains(topic.name))
-           topic.setErrorCode(Errors.TOPIC_AUTHORIZATION_FAILED.code)
-         else if (!metadataCache.contains(topic.name))
-           topic.setErrorCode(Errors.UNKNOWN_TOPIC_OR_PARTITION.code)
-         else
-           toDelete += topic.name
+        val unresolvedTopicId = topic.topicId() != Uuid.ZERO_UUID && topic.name() == null
+        if (!config.usesTopicId && topicIdsFromRequest.contains(topic.topicId)) {
+          topic.setErrorCode(Errors.UNSUPPORTED_VERSION.code)
+          topic.setErrorMessage("Topic IDs are not supported on the server.")
+        } else if (unresolvedTopicId) {
+          topic.setErrorCode(Errors.UNKNOWN_TOPIC_ID.code)
+        } else if (topicIdsFromRequest.contains(topic.topicId) && !authorizedDescribeTopics.contains(topic.name)) {
+
+          // Because the client does not have Describe permission, the name should
+          // not be returned in the response. Note, however, that we do not consider
+          // the topicId itself to be sensitive, so there is no reason to obscure
+          // this case with `UNKNOWN_TOPIC_ID`.
+          topic.setName(null)
+          topic.setErrorCode(Errors.TOPIC_AUTHORIZATION_FAILED.code)
+        } else if (!authorizedDeleteTopics.contains(topic.name)) {
+          topic.setErrorCode(Errors.TOPIC_AUTHORIZATION_FAILED.code)
+        } else if (!metadataCache.contains(topic.name)) {
+          topic.setErrorCode(Errors.UNKNOWN_TOPIC_OR_PARTITION.code)
+        } else {
+          toDelete += topic.name
+        }
       }
       // If no authorized topics return immediately
       if (toDelete.isEmpty)
