@@ -1532,7 +1532,7 @@ class LogTest {
     log.maybeIncrementLogStartOffset(1L, ClientRecordDeletion)
     assertEquals(2, log.deleteOldSegments(),
       "Expecting two segment deletions as log start offset retention should unblock time based retention")
-    //assertEquals(0, log.deleteOldSegments())
+    assertEquals(0, log.deleteOldSegments())
   }
 
 
