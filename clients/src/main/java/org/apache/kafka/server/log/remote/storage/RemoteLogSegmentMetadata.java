@@ -18,7 +18,6 @@ package org.apache.kafka.server.log.remote.storage;
 
 import org.apache.kafka.common.annotation.InterfaceStability;
 
-import java.io.Serializable;
 import java.util.Collections;
 import java.util.Map;
 import java.util.NavigableMap;
@@ -34,9 +33,7 @@ import java.util.TreeMap;
  * {@code RemoteLogSegmentMetadata}.
  */
 @InterfaceStability.Evolving
-public class RemoteLogSegmentMetadata implements Serializable {
-
-    private static final long serialVersionUID = 1L;
+public class RemoteLogSegmentMetadata {
 
     /**
      * Universally unique remote log segment id.
@@ -69,7 +66,7 @@ public class RemoteLogSegmentMetadata implements Serializable {
     private final long eventTimestamp;
 
     /**
-     * LeaderEpoch vs offset for messages with in this segment.
+     * LeaderEpoch vs offset for messages within this segment.
      */
     private final NavigableMap<Integer, Long> segmentLeaderEpochs;
 
@@ -90,14 +87,14 @@ public class RemoteLogSegmentMetadata implements Serializable {
      * then it should have an entry with epoch mapping to start-offset of this segment.
      *
      * @param remoteLogSegmentId  Universally unique remote log segment id.
-     * @param startOffset         Start offset of this segment.
-     * @param endOffset           End offset of this segment.
+     * @param startOffset         Start offset of this segment (inclusive).
+     * @param endOffset           End offset of this segment (inclusive).
      * @param maxTimestamp        Maximum timestamp in this segment.
      * @param brokerId            Broker id from which this event is generated.
-     * @param eventTimestamp      Epoch time at which the remote log segment is copied to the remote tier storage.
+     * @param eventTimestamp      Epoch time in milli seconds at which the remote log segment is copied to the remote tier storage.
      * @param segmentSizeInBytes  Size of this segment in bytes.
      * @param state               State of the respective segment of remoteLogSegmentId.
-     * @param segmentLeaderEpochs leader epochs occurred with in this segment.
+     * @param segmentLeaderEpochs leader epochs occurred within this segment.
      */
     private RemoteLogSegmentMetadata(RemoteLogSegmentId remoteLogSegmentId,
                                      long startOffset,
@@ -126,19 +123,19 @@ public class RemoteLogSegmentMetadata implements Serializable {
     }
 
     /**
-     * Creates an instance with the given metadata of remote log segment and it's state as {@link RemoteLogSegmentState#COPY_SEGMENT_STARTED}.
+     * Creates an instance with the given metadata of remote log segment and its state as {@link RemoteLogSegmentState#COPY_SEGMENT_STARTED}.
      *
      * {@code segmentLeaderEpochs} can not be empty. If all the records in this segment belong to the same leader epoch
      * then it should have an entry with epoch mapping to start-offset of this segment.
      *
      * @param remoteLogSegmentId  Universally unique remote log segment id.
-     * @param startOffset         Start offset of this segment.
-     * @param endOffset           End offset of this segment.
+     * @param startOffset         Start offset of this segment (inclusive).
+     * @param endOffset           End offset of this segment (inclusive).
      * @param maxTimestamp        Maximum timestamp in this segment
      * @param brokerId            Broker id from which this event is generated.
-     * @param eventTimestamp      Epoch time at which the remote log segment is copied to the remote tier storage.
+     * @param eventTimestamp      Epoch time in milli seconds at which the remote log segment is copied to the remote tier storage.
      * @param segmentSizeInBytes  Size of this segment in bytes.
-     * @param segmentLeaderEpochs leader epochs occurred with in this segment
+     * @param segmentLeaderEpochs leader epochs occurred within this segment
      */
     public RemoteLogSegmentMetadata(RemoteLogSegmentId remoteLogSegmentId,
                                     long startOffset,
@@ -167,14 +164,14 @@ public class RemoteLogSegmentMetadata implements Serializable {
     }
 
     /**
-     * @return Start offset of this segment(inclusive).
+     * @return Start offset of this segment (inclusive).
      */
     public long startOffset() {
         return startOffset;
     }
 
     /**
-     * @return End offset of this segment(inclusive).
+     * @return End offset of this segment (inclusive).
      */
     public long endOffset() {
         return endOffset;
@@ -195,7 +192,7 @@ public class RemoteLogSegmentMetadata implements Serializable {
     }
 
     /**
-     * @return Maximum timestamp of a record with in this segment.
+     * @return Maximum timestamp of a record within this segment.
      */
     public long maxTimestamp() {
         return maxTimestamp;

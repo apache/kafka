@@ -121,7 +121,7 @@ public interface RemoteLogMetadataManager extends Configurable, Closeable {
 
     /**
      * Returns the highest log offset of topic partition for the given leader epoch in remote storage. This is used by
-     * remote log management subsystem to know upto which offset the segments have been copied to remote storage for
+     * remote log management subsystem to know up to which offset the segments have been copied to remote storage for
      * a given leader epoch.
      *
      * @param topicIdPartition topic partition
@@ -138,7 +138,7 @@ public interface RemoteLogMetadataManager extends Configurable, Closeable {
      * this method with {@link RemotePartitionDeleteMetadata} having state as {@link RemotePartitionDeleteState#DELETE_PARTITION_MARKED}.
      * So, remote partition removers can act on this event to clean the respective remote log segments of the partition.
      * <p><br>
-     * Incase of default RLMM implementation, remote partition remover processes {@link RemotePartitionDeleteState#DELETE_PARTITION_MARKED}
+     * In the case of default RLMM implementation, remote partition remover processes {@link RemotePartitionDeleteState#DELETE_PARTITION_MARKED}
      * <ul>
      * <li> sends an event with state as {@link RemotePartitionDeleteState#DELETE_PARTITION_STARTED}
      * <li> gets all the remote log segments and deletes them.

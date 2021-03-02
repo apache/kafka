@@ -17,11 +17,10 @@
 package org.apache.kafka.server.log.remote.storage;
 
 import org.apache.kafka.common.TopicIdPartition;
+import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.annotation.InterfaceStability;
 
-import java.io.Serializable;
 import java.util.Objects;
-import java.util.UUID;
 
 /**
  * This class represents a universally unique identifier associated to a topic partition's log segment. This will be
@@ -29,13 +28,12 @@ import java.util.UUID;
  * Once it is stored in remote storage, it is used to access that segment later from remote log metadata storage.
  */
 @InterfaceStability.Evolving
-public class RemoteLogSegmentId implements Serializable {
-    private static final long serialVersionUID = 1L;
+public class RemoteLogSegmentId {
 
     private final TopicIdPartition topicIdPartition;
-    private final UUID id;
+    private final Uuid id;
 
-    public RemoteLogSegmentId(TopicIdPartition topicIdPartition, UUID id) {
+    public RemoteLogSegmentId(TopicIdPartition topicIdPartition, Uuid id) {
         this.topicIdPartition = Objects.requireNonNull(topicIdPartition, "topicIdPartition can not be null");
         this.id = Objects.requireNonNull(id, "id can not be null");
     }
@@ -50,7 +48,7 @@ public class RemoteLogSegmentId implements Serializable {
     /**
      * @return Universally Unique Id of this remote log segment.
      */
-    public UUID id() {
+    public Uuid id() {
         return id;
     }
 

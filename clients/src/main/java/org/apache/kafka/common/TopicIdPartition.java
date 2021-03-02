@@ -16,21 +16,18 @@
  */
 package org.apache.kafka.common;
 
-import java.io.Serializable;
 import java.util.Objects;
-import java.util.UUID;
 
 /**
  * This represents universally unique identifier with topic id for a topic partition. This makes sure that topics
  * recreated with the same name will always have unique topic identifiers.
  */
-public class TopicIdPartition implements Serializable {
-    private static final long serialVersionUID = 1L;
+public class TopicIdPartition {
 
-    private final UUID topicId;
+    private final Uuid topicId;
     private final TopicPartition topicPartition;
 
-    public TopicIdPartition(UUID topicId, TopicPartition topicPartition) {
+    public TopicIdPartition(Uuid topicId, TopicPartition topicPartition) {
         this.topicId = Objects.requireNonNull(topicId, "topicId can not be null");
         this.topicPartition = Objects.requireNonNull(topicPartition, "topicPartition can not be null");
     }
@@ -38,7 +35,7 @@ public class TopicIdPartition implements Serializable {
     /**
      * @return Universally unique id representing this topic partition.
      */
-    public UUID topicId() {
+    public Uuid topicId() {
         return topicId;
     }
 

@@ -18,7 +18,6 @@ package org.apache.kafka.server.log.remote.storage;
 
 import org.apache.kafka.common.annotation.InterfaceStability;
 
-import java.io.Serializable;
 import java.util.Objects;
 
 /**
@@ -27,9 +26,7 @@ import java.util.Objects;
  * This also includes the timestamp of this event.
  */
 @InterfaceStability.Evolving
-public class RemoteLogSegmentMetadataUpdate implements Serializable {
-
-    private static final long serialVersionUID = 1L;
+public class RemoteLogSegmentMetadataUpdate {
 
     /**
      * Universally unique remote log segment id.
@@ -53,7 +50,7 @@ public class RemoteLogSegmentMetadataUpdate implements Serializable {
 
     /**
      * @param remoteLogSegmentId Universally unique remote log segment id.
-     * @param eventTimestamp     Epoch time at which the remote log segment is copied to the remote tier storage.
+     * @param eventTimestamp     Epoch time in milli seconds at which the remote log segment is copied to the remote tier storage.
      * @param state              State of the remote log segment.
      * @param brokerId           Broker id from which this event is generated.
      */

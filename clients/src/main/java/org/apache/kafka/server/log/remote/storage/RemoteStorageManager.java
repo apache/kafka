@@ -32,12 +32,11 @@ import java.io.InputStream;
  * {@link RemoteLogSegmentMetadata} is stored in {@link RemoteLogMetadataManager} before and after copy/delete operations on
  * {@link RemoteStorageManager} with the respective {@link RemoteLogSegmentState}. {@link RemoteLogMetadataManager} is
  * responsible for storing and fetching metadata about the remote log segments in a strongly consistent manner.
- * This allows {@link RemoteStorageManager} to store segments even in eventually consistent manner as the metadata is already
- * stored in a consistent store.
+ * This allows {@link RemoteStorageManager} to have eventual consistency on metadata (although the data is stored
+ * in strongly consistent semantics).
  */
 @InterfaceStability.Evolving
 public interface RemoteStorageManager extends Configurable, Closeable {
-
 
     /**
      * Type of the index file.
