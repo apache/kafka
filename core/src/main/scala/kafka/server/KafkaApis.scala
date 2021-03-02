@@ -1892,9 +1892,11 @@ class KafkaApis(val requestChannel: RequestChannel,
           topic.setErrorCode(Errors.UNKNOWN_TOPIC_ID.code)
         } else if (topicIdsFromRequest.contains(topic.topicId) && !authorizedDescribeTopics(topic.name)) {
           // Because the client does not have Describe permission, the name should
-          // not be returned in the response.
+          // not be returned in the response. Note, however, that we do not consider
+          // the topicId itself to be sensitive, so there is no reason to obscure
+          // this case with `UNKNOWN_TOPIC_ID`.
           topic.setName(null)
-          topic.setErrorCode(Errors.UNKNOWN_TOPIC_ID.code)
+          topic.setErrorCode(Errors.TOPIC_AUTHORIZATION_FAILED.code)
         } else if (!authorizedDeleteTopics.contains(topic.name)) {
           topic.setErrorCode(Errors.TOPIC_AUTHORIZATION_FAILED.code)
         } else if (!metadataCache.contains(topic.name)) {

@@ -3539,7 +3539,7 @@ class KafkaApisTest {
       nameOpt match {
         case Some("foo") =>
           assertNull(response.name)
-          assertEquals(Errors.UNKNOWN_TOPIC_ID, Errors.forCode(response.errorCode))
+          assertEquals(Errors.TOPIC_AUTHORIZATION_FAILED, Errors.forCode(response.errorCode))
         case Some("bar") =>
           assertEquals("bar", response.name)
           assertEquals(Errors.TOPIC_AUTHORIZATION_FAILED, Errors.forCode(response.errorCode))
