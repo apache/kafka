@@ -177,7 +177,6 @@ public class ReplicaFetcherThreadBenchmark {
                     .setPartitionIndex(tp.partition())
                     .setLastStableOffset(0)
                     .setLogStartOffset(0)
-                    .setAbortedTransactions(Collections.emptyList())
                     .setRecords(fetched));
         }
 

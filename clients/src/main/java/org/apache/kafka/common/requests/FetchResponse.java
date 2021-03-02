@@ -167,14 +167,20 @@ public class FetchResponse extends AbstractResponse {
     }
 
     /**
-     * cast the BaseRecords of PartitionData to Records. KRPC converts the byte array to MemoryRecords so this method
-     * never fail if the data is from KRPC.
+     * Returns `partition.records` as `Records` (instead of `BaseRecords`). If `records` is `null`, returns `MemoryRecords.EMPTY`.
+     *
+     * If this response was deserialized after a fetch, this method should never fail. An example where this would
+     * fail is a down-converted response (e.g. LazyDownConversionRecords) on the broker (before it's serialized and
+     * sent on the wire).
      *
      * @param partition partition data
      * @return Records or empty record if the records in PartitionData is null.
      */
     public static Records records(FetchResponseData.PartitionData partition) {
-        return partition.records() == null ? MemoryRecords.EMPTY : (Records) partition.records();
+        if (partition.records() == null) return MemoryRecords.EMPTY;
+        else if (partition.records() instanceof Records) return (Records) partition.records();
+        else throw new IllegalStateException("the record type is " + partition.records().getClass().getSimpleName() +
+            " but supported types are MemoryRecords and FileRecords. It may fail if the data is NOT from deserialization");
     }
 
     public static FetchResponse of(Errors error,

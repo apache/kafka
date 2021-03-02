@@ -529,18 +529,18 @@ class ReplicaFetcherThreadTest {
     assertEquals(1, mockNetwork.fetchCount)
     partitions.foreach { tp => assertEquals(Fetching, thread.fetchState(tp).get.state) }
 
-    def partitionData(divergingEpoch: FetchResponseData.EpochEndOffset): FetchResponseData.PartitionData = {
+    def partitionData(partition: Int, divergingEpoch: FetchResponseData.EpochEndOffset): FetchResponseData.PartitionData = {
       new FetchResponseData.PartitionData()
-          .setLastStableOffset(0)
-          .setLogStartOffset(0)
-          .setAbortedTransactions(Collections.emptyList())
-          .setDivergingEpoch(divergingEpoch)
+        .setPartitionIndex(partition)
+        .setLastStableOffset(0)
+        .setLogStartOffset(0)
+        .setDivergingEpoch(divergingEpoch)
     }
 
     // Loop 2 should truncate based on diverging epoch and continue to send fetch requests.
     mockNetwork.setFetchPartitionDataForNextResponse(Map(
-      t1p0 -> partitionData(new FetchResponseData.EpochEndOffset().setEpoch(4).setEndOffset(140)),
-      t1p1 -> partitionData(new FetchResponseData.EpochEndOffset().setEpoch(4).setEndOffset(141))
+      t1p0 -> partitionData(t1p0.partition, new FetchResponseData.EpochEndOffset().setEpoch(4).setEndOffset(140)),
+      t1p1 -> partitionData(t1p1.partition, new FetchResponseData.EpochEndOffset().setEpoch(4).setEndOffset(141))
     ))
     latestLogEpoch = Some(4)
     thread.doWork()
@@ -555,8 +555,8 @@ class ReplicaFetcherThreadTest {
     // Loop 3 should truncate because of diverging epoch. Offset truncation is not complete
     // because divergent epoch is not known to follower. We truncate and stay in Fetching state.
     mockNetwork.setFetchPartitionDataForNextResponse(Map(
-      t1p0 -> partitionData(new FetchResponseData.EpochEndOffset().setEpoch(3).setEndOffset(130)),
-      t1p1 -> partitionData(new FetchResponseData.EpochEndOffset().setEpoch(3).setEndOffset(131))
+      t1p0 -> partitionData(t1p0.partition, new FetchResponseData.EpochEndOffset().setEpoch(3).setEndOffset(130)),
+      t1p1 -> partitionData(t1p1.partition, new FetchResponseData.EpochEndOffset().setEpoch(3).setEndOffset(131))
     ))
     thread.doWork()
     assertEquals(0, mockNetwork.epochFetchCount)
@@ -569,8 +569,8 @@ class ReplicaFetcherThreadTest {
     // because divergent epoch is not known to follower. Last fetched epoch cannot be determined
     // from the log. We truncate and stay in Fetching state.
     mockNetwork.setFetchPartitionDataForNextResponse(Map(
-      t1p0 -> partitionData(new FetchResponseData.EpochEndOffset().setEpoch(2).setEndOffset(120)),
-      t1p1 -> partitionData(new FetchResponseData.EpochEndOffset().setEpoch(2).setEndOffset(121))
+      t1p0 -> partitionData(t1p0.partition, new FetchResponseData.EpochEndOffset().setEpoch(2).setEndOffset(120)),
+      t1p1 -> partitionData(t1p1.partition, new FetchResponseData.EpochEndOffset().setEpoch(2).setEndOffset(121))
     ))
     latestLogEpoch = None
     thread.doWork()
@@ -964,10 +964,10 @@ class ReplicaFetcherThreadTest {
     val records = MemoryRecords.withRecords(CompressionType.NONE,
       new SimpleRecord(1000, "foo".getBytes(StandardCharsets.UTF_8)))
     val partitionData: thread.FetchData = new FetchResponseData.PartitionData()
-        .setLastStableOffset(0)
-        .setLogStartOffset(0)
-        .setAbortedTransactions(Collections.emptyList())
-        .setRecords(records)
+      .setPartitionIndex(t1p0.partition)
+      .setLastStableOffset(0)
+      .setLogStartOffset(0)
+      .setRecords(records)
     thread.processPartitionData(t1p0, 0, partitionData)
 
     if (isReassigning)

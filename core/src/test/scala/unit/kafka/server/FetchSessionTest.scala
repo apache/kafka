@@ -157,14 +157,17 @@ class FetchSessionTest {
 
     val response = new util.LinkedHashMap[TopicPartition, FetchResponseData.PartitionData]
     response.put(tp0, new FetchResponseData.PartitionData()
+      .setPartitionIndex(tp0.partition)
       .setHighWatermark(100)
       .setLastStableOffset(100)
       .setLogStartOffset(100))
     response.put(tp1, new FetchResponseData.PartitionData()
+      .setPartitionIndex(tp1.partition)
       .setHighWatermark(10)
       .setLastStableOffset(10)
       .setLogStartOffset(10))
     response.put(tp2, new FetchResponseData.PartitionData()
+      .setPartitionIndex(tp2.partition)
       .setHighWatermark(5)
       .setLastStableOffset(5)
       .setLogStartOffset(5))
@@ -228,14 +231,17 @@ class FetchSessionTest {
 
     val response = new util.LinkedHashMap[TopicPartition, FetchResponseData.PartitionData]
     response.put(tp0, new FetchResponseData.PartitionData()
+      .setPartitionIndex(tp0.partition)
       .setHighWatermark(100)
       .setLastStableOffset(100)
       .setLogStartOffset(100))
     response.put(tp1, new FetchResponseData.PartitionData()
+      .setPartitionIndex(tp1.partition)
       .setHighWatermark(10)
       .setLastStableOffset(10)
       .setLogStartOffset(10))
     response.put(tp2, new FetchResponseData.PartitionData()
+      .setPartitionIndex(tp2.partition)
       .setHighWatermark(5)
       .setLastStableOffset(5)
       .setLogStartOffset(5))
@@ -293,11 +299,13 @@ class FetchSessionTest {
     val respData2 = new util.LinkedHashMap[TopicPartition, FetchResponseData.PartitionData]
     respData2.put(new TopicPartition("foo", 0),
       new FetchResponseData.PartitionData()
+        .setPartitionIndex(0)
         .setHighWatermark(100)
         .setLastStableOffset(100)
         .setLogStartOffset(100))
     respData2.put(new TopicPartition("foo", 1),
       new FetchResponseData.PartitionData()
+        .setPartitionIndex(1)
         .setHighWatermark(10)
         .setLastStableOffset(10)
         .setLogStartOffset(10))
@@ -369,11 +377,13 @@ class FetchSessionTest {
       val respData8 = new util.LinkedHashMap[TopicPartition, FetchResponseData.PartitionData]
       respData8.put(new TopicPartition("bar", 0),
         new FetchResponseData.PartitionData()
+          .setPartitionIndex(0)
           .setHighWatermark(100)
           .setLastStableOffset(100)
           .setLogStartOffset(100))
       respData8.put(new TopicPartition("bar", 1),
         new FetchResponseData.PartitionData()
+          .setPartitionIndex(1)
           .setHighWatermark(100)
           .setLastStableOffset(100)
           .setLogStartOffset(100))
@@ -399,10 +409,12 @@ class FetchSessionTest {
     assertEquals(classOf[FullFetchContext], context1.getClass)
     val respData1 = new util.LinkedHashMap[TopicPartition, FetchResponseData.PartitionData]
     respData1.put(new TopicPartition("foo", 0), new FetchResponseData.PartitionData()
+        .setPartitionIndex(0)
         .setHighWatermark(100)
         .setLastStableOffset(100)
         .setLogStartOffset(100))
     respData1.put(new TopicPartition("foo", 1), new FetchResponseData.PartitionData()
+        .setPartitionIndex(1)
         .setHighWatermark(10)
         .setLastStableOffset(10)
         .setLogStartOffset(10))
@@ -432,11 +444,13 @@ class FetchSessionTest {
     val respData2 = new util.LinkedHashMap[TopicPartition, FetchResponseData.PartitionData]
     respData2.put(new TopicPartition("foo", 1),
       new FetchResponseData.PartitionData()
+        .setPartitionIndex(1)
         .setHighWatermark(10)
         .setLastStableOffset(10)
         .setLogStartOffset(10))
     respData2.put(new TopicPartition("bar", 0),
       new FetchResponseData.PartitionData()
+        .setPartitionIndex(0)
         .setHighWatermark(10)
         .setLastStableOffset(10)
         .setLogStartOffset(10))
@@ -463,10 +477,12 @@ class FetchSessionTest {
     assertEquals(classOf[FullFetchContext], session1context1.getClass)
     val respData1 = new util.LinkedHashMap[TopicPartition, FetchResponseData.PartitionData]
     respData1.put(new TopicPartition("foo", 0), new FetchResponseData.PartitionData()
+        .setPartitionIndex(0)
         .setHighWatermark(100)
         .setLastStableOffset(100)
         .setLogStartOffset(100))
     respData1.put(new TopicPartition("foo", 1), new FetchResponseData.PartitionData()
+        .setPartitionIndex(1)
         .setHighWatermark(10)
         .setLastStableOffset(10)
         .setLogStartOffset(10))
@@ -490,10 +506,12 @@ class FetchSessionTest {
     val session2RespData = new util.LinkedHashMap[TopicPartition, FetchResponseData.PartitionData]
     session2RespData.put(new TopicPartition("foo", 0),
       new FetchResponseData.PartitionData()
+        .setPartitionIndex(0)
         .setHighWatermark(100)
         .setLastStableOffset(100)
         .setLogStartOffset(100))
     session2RespData.put(new TopicPartition("foo", 1), new FetchResponseData.PartitionData()
+      .setPartitionIndex(1)
       .setHighWatermark(10)
       .setLastStableOffset(10)
       .setLogStartOffset(10))
@@ -529,11 +547,13 @@ class FetchSessionTest {
     assertEquals(classOf[FullFetchContext], session3context.getClass)
     val respData3 = new util.LinkedHashMap[TopicPartition, FetchResponseData.PartitionData]
     respData3.put(new TopicPartition("foo", 0), new FetchResponseData.PartitionData()
+      .setPartitionIndex(0)
       .setHighWatermark(100)
       .setLastStableOffset(100)
       .setLogStartOffset(100))
     respData3.put(new TopicPartition("foo", 1),
       new FetchResponseData.PartitionData()
+        .setPartitionIndex(1)
         .setHighWatermark(10)
         .setLastStableOffset(10)
         .setLogStartOffset(10))
@@ -564,10 +584,12 @@ class FetchSessionTest {
     assertEquals(classOf[FullFetchContext], session1context.getClass)
     val respData1 = new util.LinkedHashMap[TopicPartition, FetchResponseData.PartitionData]
     respData1.put(new TopicPartition("foo", 0), new FetchResponseData.PartitionData()
+        .setPartitionIndex(0)
         .setHighWatermark(100)
         .setLastStableOffset(100)
         .setLogStartOffset(100))
     respData1.put(new TopicPartition("foo", 1), new FetchResponseData.PartitionData()
+        .setPartitionIndex(1)
         .setHighWatermark(10)
         .setLastStableOffset(10)
         .setLogStartOffset(10))
@@ -591,11 +613,13 @@ class FetchSessionTest {
     val session2RespData = new util.LinkedHashMap[TopicPartition, FetchResponseData.PartitionData]
     session2RespData.put(new TopicPartition("foo", 0),
       new FetchResponseData.PartitionData()
+        .setPartitionIndex(0)
         .setHighWatermark(100)
         .setLastStableOffset(100)
         .setLogStartOffset(100))
     session2RespData.put(new TopicPartition("foo", 1),
       new FetchResponseData.PartitionData()
+        .setPartitionIndex(1)
         .setHighWatermark(10)
         .setLastStableOffset(10)
         .setLogStartOffset(10))
@@ -621,11 +645,13 @@ class FetchSessionTest {
     val respData3 = new util.LinkedHashMap[TopicPartition, FetchResponseData.PartitionData]
     respData3.put(new TopicPartition("foo", 0),
       new FetchResponseData.PartitionData()
+        .setPartitionIndex(0)
         .setHighWatermark(100)
         .setLastStableOffset(100)
         .setLogStartOffset(100))
     respData3.put(new TopicPartition("foo", 1),
       new FetchResponseData.PartitionData()
+        .setPartitionIndex(1)
         .setHighWatermark(10)
         .setLastStableOffset(10)
         .setLogStartOffset(10))
@@ -654,11 +680,13 @@ class FetchSessionTest {
     val respData4 = new util.LinkedHashMap[TopicPartition, FetchResponseData.PartitionData]
     respData4.put(new TopicPartition("foo", 0),
       new FetchResponseData.PartitionData()
+        .setPartitionIndex(0)
         .setHighWatermark(100)
         .setLastStableOffset(100)
         .setLogStartOffset(100))
     respData4.put(new TopicPartition("foo", 1),
       new FetchResponseData.PartitionData()
+        .setPartitionIndex(1)
         .setHighWatermark(10)
         .setLastStableOffset(10)
         .setLogStartOffset(10))
@@ -689,10 +717,12 @@ class FetchSessionTest {
     assertEquals(classOf[FullFetchContext], context1.getClass)
     val respData1 = new util.LinkedHashMap[TopicPartition, FetchResponseData.PartitionData]
     respData1.put(new TopicPartition("foo", 0), new FetchResponseData.PartitionData()
+        .setPartitionIndex(0)
         .setHighWatermark(100)
         .setLastStableOffset(100)
         .setLogStartOffset(100))
     respData1.put(new TopicPartition("foo", 1), new FetchResponseData.PartitionData()
+        .setPartitionIndex(1)
         .setHighWatermark(10)
         .setLastStableOffset(10)
         .setLogStartOffset(10))
@@ -734,16 +764,16 @@ class FetchSessionTest {
     assertEquals(classOf[FullFetchContext], context1.getClass)
     val respData = new util.LinkedHashMap[TopicPartition, FetchResponseData.PartitionData]
     respData.put(tp1, new FetchResponseData.PartitionData()
+        .setPartitionIndex(tp1.partition)
         .setHighWatermark(105)
         .setLastStableOffset(105)
-        .setLogStartOffset(0)
-        .setAbortedTransactions(Collections.emptyList()))
+        .setLogStartOffset(0))
     val divergingEpoch = new FetchResponseData.EpochEndOffset().setEpoch(3).setEndOffset(90)
     respData.put(tp2, new FetchResponseData.PartitionData()
+        .setPartitionIndex(tp2.partition)
         .setHighWatermark(105)
         .setLastStableOffset(105)
         .setLogStartOffset(0)
-        .setAbortedTransactions(Collections.emptyList())
         .setDivergingEpoch(divergingEpoch))
     val resp1 = context1.updateAndGenerateResponseData(respData)
     assertEquals(Errors.NONE, resp1.error)
@@ -761,11 +791,11 @@ class FetchSessionTest {
 
     // All partitions with divergent epoch should be returned.
     respData.put(tp1, new FetchResponseData.PartitionData()
-          .setHighWatermark(105)
-          .setLastStableOffset(105)
-          .setLogStartOffset(0)
-          .setAbortedTransactions(Collections.emptyList())
-          .setDivergingEpoch(divergingEpoch))
+      .setPartitionIndex(tp1.partition)
+      .setHighWatermark(105)
+      .setLastStableOffset(105)
+      .setLogStartOffset(0)
+      .setDivergingEpoch(divergingEpoch))
     val resp3 = context2.updateAndGenerateResponseData(respData)
     assertEquals(Errors.NONE, resp3.error)
     assertEquals(resp1.sessionId, resp3.sessionId)
@@ -774,10 +804,10 @@ class FetchSessionTest {
     // Partitions that meet other conditions should be returned regardless of whether
     // divergingEpoch is set or not.
     respData.put(tp1, new FetchResponseData.PartitionData()
-        .setHighWatermark(110)
-        .setLastStableOffset(110)
-        .setLogStartOffset(0)
-        .setAbortedTransactions(Collections.emptyList()))
+      .setPartitionIndex(tp1.partition)
+      .setHighWatermark(110)
+      .setLastStableOffset(110)
+      .setLogStartOffset(0))
     val resp4 = context2.updateAndGenerateResponseData(respData)
     assertEquals(Errors.NONE, resp4.error)
     assertEquals(resp1.sessionId, resp4.sessionId)

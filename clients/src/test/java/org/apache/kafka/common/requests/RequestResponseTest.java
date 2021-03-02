@@ -798,7 +798,6 @@ public class RequestResponseTest {
                 new FetchResponseData.PartitionData()
                         .setHighWatermark(1000000)
                         .setLogStartOffset(0)
-                        .setAbortedTransactions(Collections.emptyList())
                         .setRecords(records));
 
         FetchResponse v0Response = FetchResponse.of(Errors.NONE, 0, INVALID_SESSION_ID, responseData);
@@ -820,19 +819,21 @@ public class RequestResponseTest {
         );
         responseData.put(new TopicPartition("bar", 0),
                 new FetchResponseData.PartitionData()
+                        .setPartitionIndex(0)
                         .setHighWatermark(1000000)
                         .setAbortedTransactions(abortedTransactions)
                         .setRecords(records));
         responseData.put(new TopicPartition("bar", 1),
                 new FetchResponseData.PartitionData()
+                        .setPartitionIndex(1)
                         .setHighWatermark(900000)
                         .setLastStableOffset(5)
                         .setRecords(records));
         responseData.put(new TopicPartition("foo", 0),
                 new FetchResponseData.PartitionData()
+                        .setPartitionIndex(0)
                         .setHighWatermark(70000)
                         .setLastStableOffset(6)
-                        .setAbortedTransactions(emptyList())
                         .setRecords(records));
 
         FetchResponse response = FetchResponse.of(Errors.NONE, 10, INVALID_SESSION_ID, responseData);
@@ -1169,7 +1170,6 @@ public class RequestResponseTest {
         responseData.put(new TopicPartition("test", 0), new FetchResponseData.PartitionData()
                         .setHighWatermark(1000000)
                         .setLogStartOffset(0)
-                        .setAbortedTransactions(Collections.emptyList())
                         .setRecords(records));
         List<FetchResponseData.AbortedTransaction> abortedTransactions = Collections.singletonList(
             new FetchResponseData.AbortedTransaction().setProducerId(234L).setFirstOffset(999L));
@@ -1186,7 +1186,6 @@ public class RequestResponseTest {
         responseData.put(new TopicPartition("test", 0), new FetchResponseData.PartitionData()
                         .setHighWatermark(1000000)
                         .setLogStartOffset(0)
-                        .setAbortedTransactions(Collections.emptyList())
                         .setRecords(records));
 
         List<FetchResponseData.AbortedTransaction> abortedTransactions = Collections.emptyList();

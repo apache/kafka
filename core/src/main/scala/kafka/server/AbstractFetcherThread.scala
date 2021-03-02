@@ -412,7 +412,7 @@ abstract class AbstractFetcherThread(name: String,
                        "expected to persist.")
                   partitionsWithError += topicPartition
 
-                case partitionError: Errors =>
+                case partitionError =>
                   error(s"Error for partition $topicPartition at offset ${currentFetchState.fetchOffset}", partitionError.exception)
                   partitionsWithError += topicPartition
               }

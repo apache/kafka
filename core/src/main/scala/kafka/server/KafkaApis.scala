@@ -800,16 +800,17 @@ class KafkaApis(val requestChannel: RequestChannel,
         val abortedTransactions = data.abortedTransactions.map(_.asJava).orNull
         val lastStableOffset = data.lastStableOffset.getOrElse(FetchResponse.INVALID_LAST_STABLE_OFFSET)
         if (data.isReassignmentFetch) reassigningPartitions.add(tp)
-        partitions.put(tp, new FetchResponseData.PartitionData()
-            .setPartitionIndex(tp.partition)
-            .setErrorCode(maybeDownConvertStorageError(data.error).code)
-            .setHighWatermark(data.highWatermark)
-            .setLastStableOffset(lastStableOffset)
-            .setLogStartOffset(data.logStartOffset)
-            .setAbortedTransactions(abortedTransactions)
-            .setRecords(data.records)
-            .setPreferredReadReplica(data.preferredReadReplica.getOrElse(FetchResponse.INVALID_PREFERRED_REPLICA_ID))
-            .setDivergingEpoch(data.divergingEpoch.getOrElse(new FetchResponseData.EpochEndOffset)))
+        val partitionData = new FetchResponseData.PartitionData()
+          .setPartitionIndex(tp.partition)
+          .setErrorCode(maybeDownConvertStorageError(data.error).code)
+          .setHighWatermark(data.highWatermark)
+          .setLastStableOffset(lastStableOffset)
+          .setLogStartOffset(data.logStartOffset)
+          .setAbortedTransactions(abortedTransactions)
+          .setRecords(data.records)
+          .setPreferredReadReplica(data.preferredReadReplica.getOrElse(FetchResponse.INVALID_PREFERRED_REPLICA_ID))
+        data.divergingEpoch.foreach(partitionData.setDivergingEpoch)
+        partitions.put(tp, partitionData)
       }
       erroneous.foreach { case (tp, data) => partitions.put(tp, data) }
 

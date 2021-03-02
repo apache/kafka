@@ -18,7 +18,7 @@
 package kafka.server
 
 import java.nio.ByteBuffer
-import java.util.{Collections, Optional}
+import java.util.Optional
 import java.util.concurrent.atomic.AtomicInteger
 import kafka.cluster.BrokerEndPoint
 import kafka.log.LogAppendInfo
@@ -1142,15 +1142,16 @@ class AbstractFetcherThreadTest {
 
           (Errors.NONE, records)
         }
-
-        (partition, new FetchResponseData.PartitionData()
+        val partitionData = new FetchData()
+          .setPartitionIndex(partition.partition)
           .setErrorCode(error.code)
           .setHighWatermark(leaderState.highWatermark)
           .setLastStableOffset(leaderState.highWatermark)
           .setLogStartOffset(leaderState.logStartOffset)
-          .setAbortedTransactions(Collections.emptyList())
           .setRecords(records)
-          .setDivergingEpoch(divergingEpoch.getOrElse(new FetchResponseData.EpochEndOffset)))
+        divergingEpoch.foreach(partitionData.setDivergingEpoch)
+
+        (partition, partitionData)
       }.toMap
     }
 

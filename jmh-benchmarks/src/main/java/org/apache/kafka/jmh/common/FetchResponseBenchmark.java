@@ -43,7 +43,6 @@ import org.openjdk.jmh.annotations.Warmup;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
-import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
@@ -82,7 +81,6 @@ public class FetchResponseBenchmark {
                                 .setPartitionIndex(partitionId)
                                 .setLastStableOffset(0)
                                 .setLogStartOffset(0)
-                                .setAbortedTransactions(Collections.emptyList())
                                 .setRecords(records);
                 responseData.put(new TopicPartition(topic, partitionId), partitionData);
             }

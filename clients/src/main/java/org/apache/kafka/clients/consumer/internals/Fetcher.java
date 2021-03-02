@@ -618,7 +618,7 @@ public class Fetcher<K, V> implements Closeable {
                             // in cases such as the TopicAuthorizationException, and the second condition ensures that no
                             // potential data loss due to an exception in a following record.
                             FetchResponseData.PartitionData partition = records.partitionData;
-                            if (fetched.isEmpty() && (partition.records() == null || partition.records().sizeInBytes() == 0)) {
+                            if (fetched.isEmpty() && FetchResponse.records(partition).sizeInBytes() == 0) {
                                 completedFetches.poll();
                             }
                             throw e;
