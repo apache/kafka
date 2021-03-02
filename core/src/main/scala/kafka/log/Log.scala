@@ -1889,7 +1889,9 @@ class Log(@volatile private var _dir: File,
    */
   def deleteOldSegments(): Int = {
     if (config.delete) {
-      deleteRetentionMsBreachedSegments() + deleteRetentionSizeBreachedSegments() + deleteLogStartOffsetBreachedSegments()
+      deleteLogStartOffsetBreachedSegments() +
+        deleteRetentionSizeBreachedSegments() +
+        deleteRetentionMsBreachedSegments()
     } else {
       deleteLogStartOffsetBreachedSegments()
     }
