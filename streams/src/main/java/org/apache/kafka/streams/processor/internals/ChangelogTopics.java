@@ -36,11 +36,11 @@ public class ChangelogTopics {
     private final InternalTopicManager internalTopicManager;
     private final Map<Integer, TopicsInfo> topicGroups;
     private final Map<Integer, Set<TaskId>> tasksForTopicGroup;
-    private final Map<TaskId, Set<TopicPartition>> changelogPartitionsForTask = new HashMap<>();
+    private final Map<TaskId, Set<TopicPartition>> changelogPartitionsForStatefulTask = new HashMap<>();
     private final Map<TaskId, Set<TopicPartition>> preExistingChangelogPartitionsForTask = new HashMap<>();
     private final Set<TopicPartition> preExistingNonSourceTopicBasedChangelogPartitions = new HashSet<>();
     private final Set<String> sourceTopicBasedChangelogTopics = new HashSet<>();
-    private final Set<TopicPartition> sourceTopicBasedChangelogTopicPartitions = new HashSet<>();
+    private final Set<TopicPartition> preExsitingSourceTopicBasedChangelogPartitions = new HashSet<>();
     private final Logger log;
 
     public ChangelogTopics(final InternalTopicManager internalTopicManager,
@@ -75,7 +75,7 @@ public class ChangelogTopics {
                     .stream()
                     .map(topic -> new TopicPartition(topic, task.partition))
                     .collect(Collectors.toSet());
-                changelogPartitionsForTask.put(task, changelogTopicPartitions);
+                changelogPartitionsForStatefulTask.put(task, changelogTopicPartitions);
             }
 
             for (final InternalTopicConfig topicConfig : topicsInfo.nonSourceChangelogTopics()) {
@@ -95,7 +95,7 @@ public class ChangelogTopics {
         final Set<String> newlyCreatedChangelogTopics = internalTopicManager.makeReady(changelogTopicMetadata);
         log.debug("Created state changelog topics {} from the parsed topology.", changelogTopicMetadata.values());
 
-        for (final Map.Entry<TaskId, Set<TopicPartition>> entry : changelogPartitionsForTask.entrySet()) {
+        for (final Map.Entry<TaskId, Set<TopicPartition>> entry : changelogPartitionsForStatefulTask.entrySet()) {
             final TaskId taskId = entry.getKey();
             final Set<TopicPartition> topicPartitions = entry.getValue();
             for (final TopicPartition topicPartition : topicPartitions) {
@@ -104,7 +104,7 @@ public class ChangelogTopics {
                     if (!sourceTopicBasedChangelogTopics.contains(topicPartition.topic())) {
                         preExistingNonSourceTopicBasedChangelogPartitions.add(topicPartition);
                     } else {
-                        sourceTopicBasedChangelogTopicPartitions.add(topicPartition);
+                        preExsitingSourceTopicBasedChangelogPartitions.add(topicPartition);
                     }
                 }
             }
@@ -122,11 +122,11 @@ public class ChangelogTopics {
         return Collections.emptySet();
     }
 
-    public Set<TopicPartition> sourceTopicBasedPartitions() {
-        return Collections.unmodifiableSet(sourceTopicBasedChangelogTopicPartitions);
+    public Set<TopicPartition> preExistingSourceTopicBasedPartitions() {
+        return Collections.unmodifiableSet(preExsitingSourceTopicBasedChangelogPartitions);
     }
 
-    public Set<TaskId> taskIds() {
-        return Collections.unmodifiableSet(changelogPartitionsForTask.keySet());
+    public Set<TaskId> statefulTaskIds() {
+        return Collections.unmodifiableSet(changelogPartitionsForStatefulTask.keySet());
     }
 }

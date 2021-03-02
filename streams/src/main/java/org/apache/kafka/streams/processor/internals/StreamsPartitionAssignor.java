@@ -580,7 +580,7 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
             populateClientStatesMap(clientStates, clientMetadataMap, taskForPartition, changelogTopics);
 
         final Set<TaskId> allTasks = partitionsForTask.keySet();
-        statefulTasks.addAll(changelogTopics.taskIds());
+        statefulTasks.addAll(changelogTopics.statefulTaskIds());
 
         log.debug("Assigning tasks {} to clients {} with number of replicas {}",
             allTasks, clientStates, numStandbyReplicas());
@@ -639,7 +639,7 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
                 fetchEndOffsetsFuture(changelogTopics.preExistingNonSourceTopicBasedPartitions(), adminClient);
 
             final Map<TopicPartition, Long> sourceChangelogEndOffsets =
-                fetchCommittedOffsets(changelogTopics.sourceTopicBasedPartitions(), mainConsumerSupplier.get());
+                fetchCommittedOffsets(changelogTopics.preExistingSourceTopicBasedPartitions(), mainConsumerSupplier.get());
 
             final Map<TopicPartition, ListOffsetsResultInfo> endOffsets = ClientUtils.getEndOffsets(endOffsetsFuture);
 
@@ -650,7 +650,7 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
             );
             fetchEndOffsetsSuccessful = true;
         } catch (final StreamsException | TimeoutException e) {
-            allTaskEndOffsetSums = changelogTopics.taskIds().stream().collect(Collectors.toMap(t -> t, t -> UNKNOWN_OFFSET_SUM));
+            allTaskEndOffsetSums = changelogTopics.statefulTaskIds().stream().collect(Collectors.toMap(t -> t, t -> UNKNOWN_OFFSET_SUM));
             fetchEndOffsetsSuccessful = false;
         }
 
@@ -677,7 +677,7 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
                                                          final ChangelogTopics changelogTopics) {
 
         final Map<TaskId, Long> taskEndOffsetSums = new HashMap<>();
-        for (final TaskId taskId : changelogTopics.taskIds()) {
+        for (final TaskId taskId : changelogTopics.statefulTaskIds()) {
             taskEndOffsetSums.put(taskId, 0L);
             for (final TopicPartition changelogPartition : changelogTopics.preExistingPartitionsFor(taskId)) {
                 final long changelogPartitionEndOffset;

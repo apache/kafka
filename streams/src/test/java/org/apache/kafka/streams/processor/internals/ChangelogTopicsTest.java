@@ -92,7 +92,7 @@ public class ChangelogTopicsTest {
         assertThat(changelogTopics.preExistingPartitionsFor(TASK_0_0), is(Collections.emptySet()));
         assertThat(changelogTopics.preExistingPartitionsFor(TASK_0_1), is(Collections.emptySet()));
         assertThat(changelogTopics.preExistingPartitionsFor(TASK_0_2), is(Collections.emptySet()));
-        assertThat(changelogTopics.sourceTopicBasedPartitions(), is(Collections.emptySet()));
+        assertThat(changelogTopics.preExistingSourceTopicBasedPartitions(), is(Collections.emptySet()));
         assertThat(changelogTopics.preExistingNonSourceTopicBasedPartitions(), is(Collections.emptySet()));
     }
 
@@ -114,7 +114,7 @@ public class ChangelogTopicsTest {
         assertThat(changelogTopics.preExistingPartitionsFor(TASK_0_0), is(Collections.emptySet()));
         assertThat(changelogTopics.preExistingPartitionsFor(TASK_0_1), is(Collections.emptySet()));
         assertThat(changelogTopics.preExistingPartitionsFor(TASK_0_2), is(Collections.emptySet()));
-        assertThat(changelogTopics.sourceTopicBasedPartitions(), is(Collections.emptySet()));
+        assertThat(changelogTopics.preExistingSourceTopicBasedPartitions(), is(Collections.emptySet()));
         assertThat(changelogTopics.preExistingNonSourceTopicBasedPartitions(), is(Collections.emptySet()));
     }
 
@@ -139,7 +139,7 @@ public class ChangelogTopicsTest {
         assertThat(changelogTopics.preExistingPartitionsFor(TASK_0_0), is(mkSet(changelogPartition0)));
         assertThat(changelogTopics.preExistingPartitionsFor(TASK_0_1), is(mkSet(changelogPartition1)));
         assertThat(changelogTopics.preExistingPartitionsFor(TASK_0_2), is(mkSet(changelogPartition2)));
-        assertThat(changelogTopics.sourceTopicBasedPartitions(), is(Collections.emptySet()));
+        assertThat(changelogTopics.preExistingSourceTopicBasedPartitions(), is(Collections.emptySet()));
         assertThat(
             changelogTopics.preExistingNonSourceTopicBasedPartitions(),
             is(mkSet(changelogPartition0, changelogPartition1, changelogPartition2))
@@ -166,7 +166,7 @@ public class ChangelogTopicsTest {
         assertThat(changelogTopics.preExistingPartitionsFor(TASK_0_1), is(mkSet(changelogPartition1)));
         assertThat(changelogTopics.preExistingPartitionsFor(TASK_0_2), is(mkSet(changelogPartition2)));
         assertThat(
-            changelogTopics.sourceTopicBasedPartitions(),
+            changelogTopics.preExistingSourceTopicBasedPartitions(),
             is(mkSet(changelogPartition0, changelogPartition1, changelogPartition2))
         );
         assertThat(changelogTopics.preExistingNonSourceTopicBasedPartitions(), is(Collections.emptySet()));
@@ -197,7 +197,7 @@ public class ChangelogTopicsTest {
         assertThat(changelogTopics.preExistingPartitionsFor(TASK_0_1), is(mkSet(sourcePartition1, changelogPartition1)));
         assertThat(changelogTopics.preExistingPartitionsFor(TASK_0_2), is(mkSet(sourcePartition2, changelogPartition2)));
         assertThat(
-            changelogTopics.sourceTopicBasedPartitions(),
+            changelogTopics.preExistingSourceTopicBasedPartitions(),
             is(mkSet(sourcePartition0, sourcePartition1, sourcePartition2))
         );
         assertThat(
