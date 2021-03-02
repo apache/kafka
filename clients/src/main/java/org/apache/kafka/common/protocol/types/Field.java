@@ -50,10 +50,10 @@ public class Field {
     public String toString() {
         return "Field{" +
                 "name='" + name + '\'' +
-                ", docString='" + docString + '\'' +
                 ", type=" + type +
                 ", hasDefaultValue=" + hasDefaultValue +
                 ", defaultValue=" + defaultValue +
+                ", docString='" + docString + '\'' +
                 '}';
     }
 
