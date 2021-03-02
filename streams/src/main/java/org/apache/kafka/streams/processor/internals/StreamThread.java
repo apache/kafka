@@ -1153,7 +1153,8 @@ public class StreamThread extends Thread {
             taskManager.producerClientIds(),
             adminClientId,
             activeTasksMetadata,
-            standbyTasksMetadata);
+            standbyTasksMetadata
+        );
     }
 
     public Map<TaskId, Task> activeTaskMap() {

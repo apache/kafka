@@ -36,19 +36,19 @@ public class TaskMetadata {
 
     private final Map<TopicPartition, Long> committedOffsets;
 
-    private final Map<TopicPartition, Long> highWatermark;
+    private final Map<TopicPartition, Long> endOffsets;
 
     private Optional<Long> timeCurrentIdlingStarted;
 
     public TaskMetadata(final String taskId,
                         final Set<TopicPartition> topicPartitions,
                         final Map<TopicPartition, Long> committedOffsets,
-                        final Map<TopicPartition, Long> highWatermark,
+                        final Map<TopicPartition, Long> endOffsets,
                         final Optional<Long> timeCurrentIdlingStarted) {
         this.taskId = taskId;
         this.topicPartitions = Collections.unmodifiableSet(topicPartitions);
         this.committedOffsets = committedOffsets;
-        this.highWatermark = highWatermark;
+        this.endOffsets = endOffsets;
         this.timeCurrentIdlingStarted = timeCurrentIdlingStarted;
     }
 
@@ -64,8 +64,8 @@ public class TaskMetadata {
         return committedOffsets;
     }
 
-    public Map<TopicPartition, Long> highWatermark() {
-        return highWatermark;
+    public Map<TopicPartition, Long> endOffsets() {
+        return endOffsets;
     }
 
     public Optional<Long> timeCurrentIdlingStarted() {
