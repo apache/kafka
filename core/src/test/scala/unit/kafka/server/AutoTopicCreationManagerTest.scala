@@ -24,6 +24,7 @@ import kafka.coordinator.group.GroupCoordinator
 import kafka.coordinator.transaction.TransactionCoordinator
 import kafka.utils.TestUtils
 import kafka.utils.TestUtils.createBroker
+import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.internals.Topic.{GROUP_METADATA_TOPIC_NAME, TRANSACTION_STATE_TOPIC_NAME}
 import org.apache.kafka.common.message.CreateTopicsRequestData
 import org.apache.kafka.common.message.CreateTopicsRequestData.CreatableTopic
@@ -146,9 +147,26 @@ class AutoTopicCreationManagerTest {
   }
 
   @Test
-  def testNotEnoughLiveBrokers(): Unit = {
+  def testNotEnoughLiveBrokersForNonInternalTopics(): Unit = {
+    testNotEnoughLiveBrokers("topic", KafkaConfig.DefaultReplicationFactorProp)
+  }
+
+  @Test
+  def testNotEnoughLiveBrokersForConsumerOffsetsTopic(): Unit = {
+    Mockito.when(groupCoordinator.offsetsTopicConfigs).thenReturn(new Properties)
+    testNotEnoughLiveBrokers(Topic.GROUP_METADATA_TOPIC_NAME,
+      KafkaConfig.OffsetsTopicReplicationFactorProp)
+  }
+
+  @Test
+  def testNotEnoughLiveBrokersForTxnOffsetTopic(): Unit = {
+    testNotEnoughLiveBrokers(Topic.TRANSACTION_STATE_TOPIC_NAME,
+      KafkaConfig.TransactionsTopicReplicationFactorProp)
+  }
+
+  private def testNotEnoughLiveBrokers(topic: String, replicationConfig: String): Unit = {
     val props = TestUtils.createBrokerConfig(1, "localhost")
-    props.setProperty(KafkaConfig.DefaultReplicationFactorProp, 3.toString)
+    props.setProperty(replicationConfig, 3.toString)
     config = KafkaConfig.fromProps(props)
 
     autoTopicCreationManager = new DefaultAutoTopicCreationManager(
@@ -160,11 +178,15 @@ class AutoTopicCreationManagerTest {
       groupCoordinator,
       transactionCoordinator)
 
-    val topicName = "topic"
-
     Mockito.when(controller.isActive).thenReturn(false)
 
-    createTopicAndVerifyResult(Errors.INVALID_REPLICATION_FACTOR, topicName, false)
+    val isInternal = Topic.isInternal(topic)
+    val expectedError = if (isInternal)
+      Errors.INVALID_REPLICATION_FACTOR
+    else
+      Errors.LEADER_NOT_AVAILABLE
+
+    createTopicAndVerifyResult(expectedError, topic, isInternal)
 
     Mockito.verify(brokerToController, Mockito.never()).sendRequest(
       any(),

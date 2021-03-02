@@ -275,7 +275,11 @@ class DefaultAutoTopicCreationManager(
       val validationError: Option[Errors] = if (!isValidTopicName(topic)) {
         Some(Errors.INVALID_TOPIC_EXCEPTION)
       } else if (!hasEnoughLiveBrokers(topic, aliveBrokers)) {
-        Some(Errors.INVALID_REPLICATION_FACTOR)
+        if (Topic.isInternal(topic)) {
+          Some(Errors.INVALID_REPLICATION_FACTOR)
+        } else {
+          Some(Errors.LEADER_NOT_AVAILABLE)
+        }
       } else if (!inflightTopics.add(topic)) {
         Some(Errors.UNKNOWN_TOPIC_OR_PARTITION)
       } else {
