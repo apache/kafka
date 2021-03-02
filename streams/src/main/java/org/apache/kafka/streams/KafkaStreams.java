@@ -970,7 +970,7 @@ public class KafkaStreams implements AutoCloseable {
             final StreamThread streamThread;
             synchronized (changeThreadCount) {
                 threadIdx = getNextThreadIndex();
-                cacheSizePerThread = getCacheSizePerThread(threads.size() + 1);
+                cacheSizePerThread = getCacheSizePerThread(getNumLiveStreamThreads() + 1);
                 resizeThreadCache(cacheSizePerThread);
                 // Creating thread should hold the lock in order to avoid duplicate thread index.
                 // If the duplicate index happen, the metadata of thread may be duplicate too.
@@ -984,7 +984,7 @@ public class KafkaStreams implements AutoCloseable {
                 } else {
                     streamThread.shutdown();
                     threads.remove(streamThread);
-                    resizeThreadCache(getCacheSizePerThread(threads.size()));
+                    resizeThreadCache(getCacheSizePerThread(getNumLiveStreamThreads()));
                 }
             }
         }
@@ -1038,7 +1038,7 @@ public class KafkaStreams implements AutoCloseable {
                 // make a copy of threads to avoid holding lock
                 for (final StreamThread streamThread : new ArrayList<>(threads)) {
                     final boolean callingThreadIsNotCurrentStreamThread = !streamThread.getName().equals(Thread.currentThread().getName());
-                    if (streamThread.isAlive() && (callingThreadIsNotCurrentStreamThread || threads.size() == 1)) {
+                    if (streamThread.isAlive() && (callingThreadIsNotCurrentStreamThread || getNumLiveStreamThreads() == 1)) {
                         log.info("Removing StreamThread " + streamThread.getName());
                         final Optional<String> groupInstanceID = streamThread.getGroupInstanceID();
                         streamThread.requestLeaveGroupDuringShutdown();
@@ -1054,9 +1054,8 @@ public class KafkaStreams implements AutoCloseable {
                                 threads.remove(streamThread);
                             }
                         }
-                        // Don't remove from threads until shutdown is complete since this will let another thread
-                        // reuse its thread.id. We will trim any DEAD threads from the list later
-                        final long cacheSizePerThread = getCacheSizePerThread(threads.size());
+
+                        final long cacheSizePerThread = getCacheSizePerThread(getNumLiveStreamThreads());
                         resizeThreadCache(cacheSizePerThread);
                         if (groupInstanceID.isPresent() && callingThreadIsNotCurrentStreamThread) {
                             final MemberToRemove memberToRemove = new MemberToRemove(groupInstanceID.get());
@@ -1099,6 +1098,21 @@ public class KafkaStreams implements AutoCloseable {
         return Optional.empty();
     }
 
+    // Returns the number of threads that are not in the DEAD state -- use this over threads.size()
+    private int getNumLiveStreamThreads() {
+        final AtomicInteger numLiveThreads = new AtomicInteger(0);
+        synchronized (threads) {
+            processStreamThread(thread -> {
+                if (thread.state() == StreamThread.State.DEAD) {
+                    threads.remove(thread);
+                } else {
+                    numLiveThreads.incrementAndGet();
+                }
+            });
+            return numLiveThreads.get();
+        }
+    }
+
     private int getNextThreadIndex() {
         final HashSet<String> allLiveThreadNames = new HashSet<>();
         final AtomicInteger maxThreadId = new AtomicInteger(1);
@@ -1110,7 +1124,8 @@ public class KafkaStreams implements AutoCloseable {
                     threads.remove(thread);
                 } else {
                     allLiveThreadNames.add(thread.getName());
-                    final int threadId = thread.getName().charAt(thread.getName().length() - 1);
+                    // Assume threads are always named with the "-StreamThread-<threadId>" suffix
+                    final int threadId = Integer.parseInt(thread.getName().substring(thread.getName().lastIndexOf("-") + 1));
                     if (threadId > maxThreadId.get()) {
                         maxThreadId.set(threadId);
                     }
@@ -1124,6 +1139,8 @@ public class KafkaStreams implements AutoCloseable {
                     return i;
                 }
             }
+            // It's safe to use threads.size() rather than getNumLiveStreamThreads() to infer the number of threads
+            // here since we trimmed any DEAD threads earlier in this method while holding the lock
             return threads.size() + 1;
         }
     }
