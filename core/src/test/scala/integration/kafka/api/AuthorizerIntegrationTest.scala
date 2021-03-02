@@ -60,6 +60,8 @@ import org.apache.kafka.common.{ElectionType, IsolationLevel, Node, TopicPartiti
 import org.apache.kafka.test.{TestUtils => JTestUtils}
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
+import org.junit.jupiter.params.ParameterizedTest
+import org.junit.jupiter.params.provider.ValueSource
 
 import scala.annotation.nowarn
 import scala.collection.mutable
@@ -245,9 +247,14 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
     })
   )
 
-  val requestKeysToErrorWithIds = (id: Uuid) => Map[ApiKeys, Nothing => Errors](
-    ApiKeys.DELETE_TOPICS -> ((resp: requests.DeleteTopicsResponse) => Errors.forCode(resp.data.responses.asScala.find(_.topicId == id).get.errorCode()))
-  )
+  def findErrorForTopicId(id: Uuid, response: AbstractResponse): Errors = {
+    response match {
+      case res: DeleteTopicsResponse =>
+        Errors.forCode(res.data.responses.asScala.find(_.topicId == id).get.errorCode)
+      case _ =>
+        fail(s"Unexpected response type $response")
+    }
+  }
 
   val requestKeysToAcls = Map[ApiKeys, Map[ResourcePattern, Set[AccessControlEntry]]](
     ApiKeys.METADATA -> topicDescribeAcl,
@@ -534,12 +541,12 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
         .setTimeoutMs(5000)).build()
   }
 
-  private def deleteTopicsWithIdsRequest(id: Uuid = getTopicIds()(topic)): DeleteTopicsRequest = {
+  private def deleteTopicsWithIdsRequest(topicId: Uuid): DeleteTopicsRequest = {
     new DeleteTopicsRequest.Builder(
       new DeleteTopicsRequestData()
         .setTopics(Collections.singletonList(
           new DeleteTopicsRequestData.DeleteTopicState()
-            .setTopicId(id)))
+            .setTopicId(topicId)))
         .setTimeoutMs(5000)).build()
   }
 
@@ -737,29 +744,53 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
     sendRequests(requestKeyToRequest)
   }
 
-  @Test
-  def testAuthorizationDeleteTopicsIdWithTopicExisting(): Unit = {
-    sendRequests(mutable.Map(ApiKeys.CREATE_TOPICS -> createTopicsRequest))
+  @ParameterizedTest
+  @ValueSource(booleans = Array(true, false))
+  def testTopicIdAuthorization(withTopicExisting: Boolean): Unit = {
+    val topicId = if (withTopicExisting) {
+      createTopic(topic)
+      getTopicIds()(topic)
+    } else {
+      Uuid.randomUuid()
+    }
 
-    val id = getTopicIds()(topic)
+    val requestKeyToRequest = mutable.LinkedHashMap[ApiKeys, AbstractRequest](
+      ApiKeys.DELETE_TOPICS -> deleteTopicsWithIdsRequest(topicId)
+    )
 
-    for ((key, request) <- mutable.Map(ApiKeys.DELETE_TOPICS -> deleteTopicsWithIdsRequest())) {
+    def sendAndVerify(
+      request: AbstractRequest,
+      isAuthorized: Boolean,
+      isDescribeAuthorized: Boolean
+    ): Unit = {
+      val response = connectAndReceive[AbstractResponse](request)
+      val error = findErrorForTopicId(topicId, response)
+      if (!withTopicExisting) {
+        assertEquals(Errors.UNKNOWN_TOPIC_ID, error)
+      } else if (!isDescribeAuthorized || !isAuthorized) {
+        assertEquals(Errors.TOPIC_AUTHORIZATION_FAILED, error)
+      }
+    }
+
+    for ((key, request) <- requestKeyToRequest) {
       removeAllClientAcls()
-      val resources = requestKeysToAcls(key).map(_._1.resourceType).toSet
-      sendRequestWithIdAndVerifyResponseError(request, resources, isAuthorized = false, topicExists = true, describeAuthorized = false, id = id)
+      sendAndVerify(request, isAuthorized = false, isDescribeAuthorized = false)
+
+      val describeAcls = topicDescribeAcl(topicResource)
+      addAndVerifyAcls(describeAcls, topicResource)
 
       val resourceToAcls = requestKeysToAcls(key)
       resourceToAcls.get(topicResource).foreach { acls =>
-        val describeAcls = topicDescribeAcl(topicResource)
         val isAuthorized = describeAcls == acls
-        addAndVerifyAcls(describeAcls, topicResource)
-        sendRequestWithIdAndVerifyResponseError(request, resources, isAuthorized = isAuthorized, topicExists = true, describeAuthorized = true, id = id)
-        removeAllClientAcls()
+        sendAndVerify(request, isAuthorized = isAuthorized, isDescribeAuthorized = true)
       }
 
-      for ((resource, acls) <- resourceToAcls)
+      removeAllClientAcls()
+      for ((resource, acls) <- resourceToAcls) {
         addAndVerifyAcls(acls, resource)
-      sendRequestWithIdAndVerifyResponseError(request, resources, isAuthorized = true, topicExists = true, describeAuthorized = true, id = id)
+      }
+
+      sendAndVerify(request, isAuthorized = true, isDescribeAuthorized = true)
     }
   }
 
@@ -787,33 +818,6 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
     )
 
     sendRequests(requestKeyToRequest, false)
-  }
-
-  @Test
-  def testAuthorizationDeleteTopicsIdWithTopicNotExisting(): Unit = {
-    val id = Uuid.randomUuid()
-    val requestKeyToRequest = mutable.LinkedHashMap[ApiKeys, AbstractRequest](
-      ApiKeys.DELETE_TOPICS -> deleteTopicsWithIdsRequest(id),
-    )
-
-    for ((key, request) <- requestKeyToRequest) {
-      removeAllClientAcls()
-      val resources = requestKeysToAcls(key).map(_._1.resourceType).toSet
-      sendRequestWithIdAndVerifyResponseError(request, resources, isAuthorized = false, topicExists = false, describeAuthorized = false, id = id)
-
-      val resourceToAcls = requestKeysToAcls(key)
-      resourceToAcls.get(topicResource).foreach { acls =>
-        val describeAcls = topicDescribeAcl(topicResource)
-        val isAuthorized = describeAcls == acls
-        addAndVerifyAcls(describeAcls, topicResource)
-        sendRequestWithIdAndVerifyResponseError(request, resources, isAuthorized = isAuthorized, topicExists = false, describeAuthorized = true, id = id)
-        removeAllClientAcls()
-      }
-
-      for ((resource, acls) <- resourceToAcls)
-        addAndVerifyAcls(acls, resource)
-      sendRequestWithIdAndVerifyResponseError(request, resources, isAuthorized = true, topicExists = false, describeAuthorized = true, id = id)
-    }
   }
 
   @Test
@@ -2056,44 +2060,6 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
     }.foreach { resource =>
       TestUtils.waitAndVerifyAcls(Set.empty[AccessControlEntry], authorizer, resource, aclEntryFilter)
     }
-  }
-
-  private def sendRequestWithIdAndVerifyResponseError(request: AbstractRequest,
-                                                resources: Set[ResourceType],
-                                                isAuthorized: Boolean,
-                                                topicExists: Boolean,
-                                                describeAuthorized: Boolean,
-                                                id: Uuid): AbstractResponse = {
-    val apiKey = request.apiKey
-    val response = connectAndReceive[AbstractResponse](request)
-    val error = requestKeysToErrorWithIds(id)(apiKey).asInstanceOf[AbstractResponse => Errors](response)
-
-    val authorizationErrors = resources.flatMap { resourceType =>
-      if (resourceType == TOPIC) {
-        if (isAuthorized)
-          Set(Errors.UNKNOWN_TOPIC_ID, AclEntry.authorizationError(ResourceType.TOPIC))
-        else if (describeAuthorized)
-          Set(AclEntry.authorizationError(ResourceType.TOPIC))
-        else
-          Set(Errors.UNKNOWN_TOPIC_ID)
-      } else {
-        Set(AclEntry.authorizationError(resourceType))
-      }
-    }
-
-    if (topicExists)
-      if (isAuthorized)
-        assertFalse(authorizationErrors.contains(error), s"$apiKey should be allowed. Found unexpected authorization error $error")
-      else
-        assertTrue(authorizationErrors.contains(error), s"$apiKey should be forbidden. Found error $error but expected one of $authorizationErrors")
-    else if (resources == Set(TOPIC))
-      if (isAuthorized)
-        assertEquals(Errors.UNKNOWN_TOPIC_ID, error, s"$apiKey had an unexpected error")
-      else {
-        assertEquals(Errors.UNKNOWN_TOPIC_ID, error, s"$apiKey had an unexpected error")
-      }
-
-    response
   }
 
   private def sendRequestAndVerifyResponseError(request: AbstractRequest,
