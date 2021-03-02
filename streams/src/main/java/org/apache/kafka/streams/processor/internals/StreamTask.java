@@ -87,8 +87,6 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
     private final RecordCollector recordCollector;
     private final PartitionGroup.RecordInfo recordInfo;
     private final Map<TopicPartition, Long> consumedOffsets;
-    private final String taskId;
-    private final Set<TopicPartition> topicPartitions;
     private final Map<TopicPartition, Long> committedOffsets;
     private final Map<TopicPartition, Long> highWatermark;
     private Optional<Long> timeCurrentIdlingStarted;
@@ -198,8 +196,6 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
         stateMgr.registerGlobalStateStores(topology.globalStateStores());
         this.committedOffsets = new HashMap<>();
         this.highWatermark = new HashMap<>();
-        this.taskId = taskId;
-        this.topicPartitions = Collections.unmodifiableSet(inputPartitions);
     }
 
     // create queues for each assigned partition and associate them
