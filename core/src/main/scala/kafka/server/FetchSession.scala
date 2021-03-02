@@ -127,7 +127,7 @@ class CachedPartition(val topic: String,
   def maybeUpdateResponseData(respData: FetchResponseData.PartitionData, updateResponseData: Boolean): Boolean = {
     // Check the response data.
     var mustRespond = false
-    if ((respData.records != null) && (respData.records.sizeInBytes > 0)) {
+    if (FetchResponse.recordsSize(respData) > 0) {
       // Partitions with new data are always included in the response.
       mustRespond = true
     }

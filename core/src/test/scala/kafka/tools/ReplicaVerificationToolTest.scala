@@ -44,6 +44,7 @@ class ReplicaVerificationToolTest {
         val initialOffset = 4
         val memoryRecords = MemoryRecords.withRecords(initialOffset, CompressionType.NONE, records: _*)
         val partitionData = new FetchResponseData.PartitionData()
+          .setPartitionIndex(tp.partition)
           .setHighWatermark(20)
           .setLastStableOffset(20)
           .setLogStartOffset(0)

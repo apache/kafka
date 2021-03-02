@@ -1274,9 +1274,11 @@ public class FetcherTest {
 
         Map<TopicPartition, FetchResponseData.PartitionData> partitions = new LinkedHashMap<>();
         partitions.put(tp1, new FetchResponseData.PartitionData()
+                .setPartitionIndex(tp1.partition())
                 .setHighWatermark(100)
                 .setRecords(records));
         partitions.put(tp0, new FetchResponseData.PartitionData()
+                .setPartitionIndex(tp0.partition())
                 .setErrorCode(Errors.OFFSET_OUT_OF_RANGE.code())
                 .setHighWatermark(100));
         client.prepareResponse(FetchResponse.of(Errors.NONE,
@@ -1322,17 +1324,21 @@ public class FetcherTest {
 
         Map<TopicPartition, FetchResponseData.PartitionData> partitions = new LinkedHashMap<>();
         partitions.put(tp1, new FetchResponseData.PartitionData()
+                .setPartitionIndex(tp1.partition())
                 .setHighWatermark(100)
                 .setRecords(records));
         partitions.put(tp0, new FetchResponseData.PartitionData()
+                .setPartitionIndex(tp0.partition())
                 .setErrorCode(Errors.OFFSET_OUT_OF_RANGE.code())
                 .setHighWatermark(100));
         partitions.put(tp2, new FetchResponseData.PartitionData()
+                .setPartitionIndex(tp2.partition())
                 .setHighWatermark(100)
                 .setLastStableOffset(4)
                 .setLogStartOffset(0)
                 .setRecords(nextRecords));
         partitions.put(tp3, new FetchResponseData.PartitionData()
+                .setPartitionIndex(tp3.partition())
                 .setHighWatermark(100)
                 .setLastStableOffset(4)
                 .setLogStartOffset(0)
@@ -1398,6 +1404,7 @@ public class FetcherTest {
         assertEquals(1, fetcher.sendFetches());
         Map<TopicPartition, FetchResponseData.PartitionData> partitions = new HashMap<>();
         partitions.put(tp0, new FetchResponseData.PartitionData()
+                        .setPartitionIndex(tp0.partition())
                         .setHighWatermark(100)
                         .setRecords(records));
         client.prepareResponse(fullFetchResponse(tp0, this.records, Errors.NONE, 100L, 0));
@@ -1411,6 +1418,7 @@ public class FetcherTest {
         assertEquals(1, fetcher.sendFetches());
         partitions = new HashMap<>();
         partitions.put(tp1, new FetchResponseData.PartitionData()
+                        .setPartitionIndex(tp1.partition())
                         .setErrorCode(Errors.OFFSET_OUT_OF_RANGE.code())
                         .setHighWatermark(100));
         client.prepareResponse(FetchResponse.of(Errors.NONE, 0, INVALID_SESSION_ID, new LinkedHashMap<>(partitions)));
@@ -2284,6 +2292,7 @@ public class FetcherTest {
                 expectedBytes += record.sizeInBytes();
 
             fetchPartitionData.put(tp, new FetchResponseData.PartitionData()
+                    .setPartitionIndex(tp.partition())
                     .setHighWatermark(15)
                     .setLogStartOffset(0)
                     .setRecords(records));
@@ -2351,10 +2360,12 @@ public class FetcherTest {
 
         Map<TopicPartition, FetchResponseData.PartitionData> partitions = new HashMap<>();
         partitions.put(tp0, new FetchResponseData.PartitionData()
+                .setPartitionIndex(tp0.partition())
                 .setHighWatermark(100)
                 .setLogStartOffset(0)
                 .setRecords(records));
         partitions.put(tp1, new FetchResponseData.PartitionData()
+                .setPartitionIndex(tp1.partition())
                 .setErrorCode(Errors.OFFSET_OUT_OF_RANGE.code())
                 .setHighWatermark(100)
                 .setLogStartOffset(0));
@@ -2397,10 +2408,12 @@ public class FetcherTest {
 
         Map<TopicPartition, FetchResponseData.PartitionData> partitions = new HashMap<>();
         partitions.put(tp0, new FetchResponseData.PartitionData()
+                .setPartitionIndex(tp0.partition())
                 .setHighWatermark(100)
                 .setLogStartOffset(0)
                 .setRecords(records));
         partitions.put(tp1, new FetchResponseData.PartitionData()
+                .setPartitionIndex(tp1.partition())
                 .setHighWatermark(100)
                 .setLogStartOffset(0)
                 .setRecords(MemoryRecords.withRecords(CompressionType.NONE, new SimpleRecord("val".getBytes()))));
@@ -3241,11 +3254,13 @@ public class FetcherTest {
         // Fetch some records and establish an incremental fetch session.
         LinkedHashMap<TopicPartition, FetchResponseData.PartitionData> partitions1 = new LinkedHashMap<>();
         partitions1.put(tp0, new FetchResponseData.PartitionData()
+                .setPartitionIndex(tp0.partition())
                 .setHighWatermark(2)
                 .setLastStableOffset(2)
                 .setLogStartOffset(0)
                 .setRecords(this.records));
         partitions1.put(tp1, new FetchResponseData.PartitionData()
+                .setPartitionIndex(tp1.partition())
                 .setHighWatermark(100)
                 .setLogStartOffset(0)
                 .setRecords(emptyRecords));
@@ -3287,6 +3302,7 @@ public class FetcherTest {
         // The third response contains some new records for tp0.
         LinkedHashMap<TopicPartition, FetchResponseData.PartitionData> partitions3 = new LinkedHashMap<>();
         partitions3.put(tp0, new FetchResponseData.PartitionData()
+                .setPartitionIndex(tp0.partition())
                 .setHighWatermark(100)
                 .setLastStableOffset(4)
                 .setLogStartOffset(0)
@@ -3403,6 +3419,7 @@ public class FetcherTest {
                             TopicPartition tp = entry.getKey();
                             long offset = entry.getValue().fetchOffset;
                             responseMap.put(tp, new FetchResponseData.PartitionData()
+                                    .setPartitionIndex(tp.partition())
                                     .setHighWatermark(offset + 2)
                                     .setLastStableOffset(offset + 2)
                                     .setLogStartOffset(0)
@@ -3465,6 +3482,7 @@ public class FetcherTest {
                         nextEpoch++;
                         LinkedHashMap<TopicPartition, FetchResponseData.PartitionData> responseMap = new LinkedHashMap<>();
                         responseMap.put(tp0, new FetchResponseData.PartitionData()
+                                .setPartitionIndex(tp0.partition())
                                 .setHighWatermark(nextOffset + 2)
                                 .setLastStableOffset(nextOffset + 2)
                                 .setLogStartOffset(0)
@@ -4507,6 +4525,7 @@ public class FetcherTest {
                                                                                   int throttleTime) {
         Map<TopicPartition, FetchResponseData.PartitionData> partitions = Collections.singletonMap(tp0,
                 new FetchResponseData.PartitionData()
+                        .setPartitionIndex(tp0.partition())
                         .setErrorCode(error.code())
                         .setHighWatermark(hw)
                         .setLastStableOffset(lastStableOffset)
@@ -4524,6 +4543,7 @@ public class FetcherTest {
                                             long lastStableOffset, int throttleTime) {
         Map<TopicPartition, FetchResponseData.PartitionData> partitions = Collections.singletonMap(tp,
                 new FetchResponseData.PartitionData()
+                        .setPartitionIndex(tp.partition())
                         .setErrorCode(error.code())
                         .setHighWatermark(hw)
                         .setLastStableOffset(lastStableOffset)
@@ -4536,6 +4556,7 @@ public class FetcherTest {
                                                            long lastStableOffset, int throttleTime, Optional<Integer> preferredReplicaId) {
         Map<TopicPartition, FetchResponseData.PartitionData> partitions = Collections.singletonMap(tp,
                 new FetchResponseData.PartitionData()
+                        .setPartitionIndex(tp.partition())
                         .setErrorCode(error.code())
                         .setHighWatermark(hw)
                         .setLastStableOffset(lastStableOffset)
@@ -4549,6 +4570,7 @@ public class FetcherTest {
                                         long lastStableOffset, long logStartOffset, int throttleTime) {
         Map<TopicPartition, FetchResponseData.PartitionData> partitions = Collections.singletonMap(tp,
                 new FetchResponseData.PartitionData()
+                        .setPartitionIndex(tp.partition())
                         .setErrorCode(error.code())
                         .setHighWatermark(hw)
                         .setLastStableOffset(lastStableOffset)

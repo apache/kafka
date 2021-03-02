@@ -796,6 +796,7 @@ public class RequestResponseTest {
         MemoryRecords records = MemoryRecords.readableRecords(ByteBuffer.allocate(10));
         responseData.put(new TopicPartition("test", 0),
                 new FetchResponseData.PartitionData()
+                        .setPartitionIndex(0)
                         .setHighWatermark(1000000)
                         .setLogStartOffset(0)
                         .setRecords(records));
@@ -1168,12 +1169,14 @@ public class RequestResponseTest {
         LinkedHashMap<TopicPartition, FetchResponseData.PartitionData> responseData = new LinkedHashMap<>();
         MemoryRecords records = MemoryRecords.withRecords(CompressionType.NONE, new SimpleRecord("blah".getBytes()));
         responseData.put(new TopicPartition("test", 0), new FetchResponseData.PartitionData()
+                        .setPartitionIndex(0)
                         .setHighWatermark(1000000)
                         .setLogStartOffset(0)
                         .setRecords(records));
         List<FetchResponseData.AbortedTransaction> abortedTransactions = Collections.singletonList(
             new FetchResponseData.AbortedTransaction().setProducerId(234L).setFirstOffset(999L));
         responseData.put(new TopicPartition("test", 1), new FetchResponseData.PartitionData()
+                        .setPartitionIndex(1)
                         .setHighWatermark(1000000)
                         .setLogStartOffset(0)
                         .setAbortedTransactions(abortedTransactions));
@@ -1184,6 +1187,7 @@ public class RequestResponseTest {
         LinkedHashMap<TopicPartition, FetchResponseData.PartitionData> responseData = new LinkedHashMap<>();
         MemoryRecords records = MemoryRecords.withRecords(CompressionType.NONE, new SimpleRecord("blah".getBytes()));
         responseData.put(new TopicPartition("test", 0), new FetchResponseData.PartitionData()
+                        .setPartitionIndex(0)
                         .setHighWatermark(1000000)
                         .setLogStartOffset(0)
                         .setRecords(records));
@@ -1194,6 +1198,7 @@ public class RequestResponseTest {
                     new FetchResponseData.AbortedTransaction().setProducerId(234L).setFirstOffset(999L));
         }
         responseData.put(new TopicPartition("test", 1), new FetchResponseData.PartitionData()
+                        .setPartitionIndex(1)
                         .setHighWatermark(1000000)
                         .setLogStartOffset(0)
                         .setAbortedTransactions(abortedTransactions));

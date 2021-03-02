@@ -115,7 +115,7 @@ class ReplicaAlterLogDirsThread(name: String,
                                     partitionData: FetchData): Option[LogAppendInfo] = {
     val partition = replicaMgr.getPartitionOrException(topicPartition)
     val futureLog = partition.futureLocalLogOrException
-    val records = toMemoryRecords(FetchResponse.records(partitionData))
+    val records = toMemoryRecords(FetchResponse.recordsOrFail(partitionData))
 
     if (fetchOffset != futureLog.logEndOffset)
       throw new IllegalStateException("Offset mismatch for the future replica %s: fetched offset = %d, log end offset = %d.".format(

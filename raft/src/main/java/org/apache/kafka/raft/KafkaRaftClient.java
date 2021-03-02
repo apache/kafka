@@ -40,6 +40,7 @@ import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.ApiMessage;
 import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.common.requests.FetchResponse;
 import org.apache.kafka.common.utils.BufferSupplier;
 import org.apache.kafka.common.record.CompressionType;
 import org.apache.kafka.common.record.MemoryRecords;
@@ -995,7 +996,7 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
             response.responses().get(0).partitions().get(0);
 
         if (partitionResponse.errorCode() != Errors.NONE.code()
-            || partitionResponse.records().sizeInBytes() > 0
+            || FetchResponse.recordsSize(partitionResponse) > 0
             || request.maxWaitMs() == 0) {
             return completedFuture(response);
         }
@@ -1143,7 +1144,7 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
                     state.setFetchingSnapshot(Optional.of(log.createSnapshot(snapshotId)));
                 }
             } else {
-                Records records = (Records) partitionResponse.records();
+                Records records = FetchResponse.recordsOrFail(partitionResponse);
                 if (records.sizeInBytes() > 0) {
                     appendAsFollower(records);
                 }

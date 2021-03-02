@@ -922,7 +922,7 @@ class AbstractFetcherThreadTest {
           s"fetched offset = $fetchOffset, log end offset = ${state.logEndOffset}.")
 
       // Now check message's crc
-      val batches = FetchResponse.records(partitionData).batches.asScala
+      val batches = FetchResponse.recordsOrFail(partitionData).batches.asScala
       var maxTimestamp = RecordBatch.NO_TIMESTAMP
       var offsetOfMaxTimestamp = -1L
       var lastOffset = state.logEndOffset
@@ -954,7 +954,7 @@ class AbstractFetcherThreadTest {
         sourceCodec = NoCompressionCodec,
         targetCodec = NoCompressionCodec,
         shallowCount = batches.size,
-        validBytes = partitionData.records.sizeInBytes,
+        validBytes = FetchResponse.recordsSize(partitionData),
         offsetsMonotonic = true,
         lastOffsetOfFirstBatch = batches.headOption.map(_.lastOffset).getOrElse(-1)))
     }

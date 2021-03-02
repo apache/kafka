@@ -2296,6 +2296,7 @@ public class KafkaConsumerTest {
             }
             tpResponses.put(partition,
                 new FetchResponseData.PartitionData()
+                    .setPartitionIndex(partition.partition())
                     .setHighWatermark(highWatermark)
                     .setLogStartOffset(logStartOffset)
                     .setRecords(records));

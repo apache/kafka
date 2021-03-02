@@ -176,11 +176,18 @@ public class FetchResponse extends AbstractResponse {
      * @param partition partition data
      * @return Records or empty record if the records in PartitionData is null.
      */
-    public static Records records(FetchResponseData.PartitionData partition) {
+    public static Records recordsOrFail(FetchResponseData.PartitionData partition) {
         if (partition.records() == null) return MemoryRecords.EMPTY;
-        else if (partition.records() instanceof Records) return (Records) partition.records();
-        else throw new IllegalStateException("the record type is " + partition.records().getClass().getSimpleName() +
-            " but supported types are MemoryRecords and FileRecords. It may fail if the data is NOT from deserialization");
+        if (partition.records() instanceof Records) return (Records) partition.records();
+        throw new ClassCastException("The record type is " + partition.records().getClass().getSimpleName() + ", which is not a subtype of " +
+            Records.class.getSimpleName() + ". This method is only safe to call if the `FetchResponse` was deserialized from bytes.");
+    }
+
+    /**
+     * @return The size in bytes of the records. 0 is returned if records of input partition is null.
+     */
+    public static int recordsSize(FetchResponseData.PartitionData partition) {
+        return partition.records() == null ? 0 : partition.records().sizeInBytes();
     }
 
     public static FetchResponse of(Errors error,

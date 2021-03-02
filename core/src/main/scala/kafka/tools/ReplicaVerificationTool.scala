@@ -309,7 +309,7 @@ private class ReplicaBuffer(expectedReplicasPerTopicPartition: collection.Map[To
         "fetched " + fetchResponsePerReplica.size + " replicas for " + topicPartition + ", but expected "
           + expectedReplicasPerTopicPartition(topicPartition) + " replicas")
       val recordBatchIteratorMap = fetchResponsePerReplica.map { case (replicaId, fetchResponse) =>
-        replicaId -> FetchResponse.records(fetchResponse).batches.iterator
+        replicaId -> FetchResponse.recordsOrFail(fetchResponse).batches.iterator
       }
       val maxHw = fetchResponsePerReplica.values.map(_.highWatermark).max
 

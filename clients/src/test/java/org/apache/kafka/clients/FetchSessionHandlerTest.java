@@ -156,6 +156,7 @@ public class FetchSessionHandlerTest {
             this.part = new TopicPartition(topic, partition);
 
             this.data = new FetchResponseData.PartitionData()
+                .setPartitionIndex(partition)
                 .setHighWatermark(highWatermark)
                 .setLastStableOffset(lastStableOffset)
                 .setLogStartOffset(0);

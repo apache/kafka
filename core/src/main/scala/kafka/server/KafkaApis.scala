@@ -738,7 +738,7 @@ class KafkaApis(val requestChannel: RequestChannel,
         // know it must be supported. However, if the magic version is changed from a higher version back to a
         // lower version, this check will no longer be valid and we will fail to down-convert the messages
         // which were written in the new format prior to the version downgrade.
-        val unconvertedRecords = FetchResponse.records(partitionData)
+        val unconvertedRecords = FetchResponse.recordsOrFail(partitionData)
         val downConvertMagic =
           logConfig.map(_.messageFormatVersion.recordVersion.value).flatMap { magic =>
             if (magic > RecordBatch.MAGIC_VALUE_V0 && versionId <= 1 && !unconvertedRecords.hasCompatibleMagic(RecordBatch.MAGIC_VALUE_V0))
@@ -832,7 +832,7 @@ class KafkaApis(val requestChannel: RequestChannel,
         // record the bytes out metrics only when the response is being sent
         response.responseData.forEach { (tp, data) =>
           brokerTopicStats.updateBytesOut(tp.topic, fetchRequest.isFromFollower,
-            reassigningPartitions.contains(tp), if (data.records  == null) 0 else data.records.sizeInBytes)
+            reassigningPartitions.contains(tp), FetchResponse.recordsSize(data))
         }
         response
       }

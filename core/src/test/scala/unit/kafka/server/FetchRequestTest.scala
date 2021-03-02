@@ -139,7 +139,7 @@ class FetchRequestTest extends BaseRequestTest {
     val size3 = records(partitionData3).map(_.sizeInBytes).sum
     assertTrue(size3 <= maxResponseBytes, s"Expected $size3 to be smaller than $maxResponseBytes")
     assertTrue(size3 > maxPartitionBytes, s"Expected $size3 to be larger than $maxPartitionBytes")
-    assertTrue(maxPartitionBytes < partitionData3.records.sizeInBytes)
+    assertTrue(maxPartitionBytes < FetchResponse.recordsSize(partitionData3))
 
     // 4. Partition with message larger than the response limit at the start of the list
     val shuffledTopicPartitions4 = Seq(partitionWithLargeMessage2, partitionWithLargeMessage1) ++
@@ -156,7 +156,7 @@ class FetchRequestTest extends BaseRequestTest {
     assertTrue(partitionData4.highWatermark > 0)
     val size4 = records(partitionData4).map(_.sizeInBytes).sum
     assertTrue(size4 > maxResponseBytes, s"Expected $size4 to be larger than $maxResponseBytes")
-    assertTrue(maxResponseBytes < partitionData4.records.sizeInBytes)
+    assertTrue(maxResponseBytes < FetchResponse.recordsSize(partitionData4))
   }
 
   @Test
@@ -172,7 +172,7 @@ class FetchRequestTest extends BaseRequestTest {
     val partitionData = fetchResponse.responseData.get(topicPartition)
     assertEquals(Errors.NONE.code, partitionData.errorCode)
     assertTrue(partitionData.highWatermark > 0)
-    assertEquals(maxPartitionBytes, partitionData.records.sizeInBytes)
+    assertEquals(maxPartitionBytes, FetchResponse.recordsSize(partitionData))
     assertEquals(0, records(partitionData).map(_.sizeInBytes).sum)
   }
 
@@ -245,7 +245,7 @@ class FetchRequestTest extends BaseRequestTest {
     val fetchResponse = sendFetchRequest(secondLeaderId, fetchRequest)
     val partitionData = fetchResponse.responseData.get(topicPartition)
     assertEquals(Errors.NONE.code, partitionData.errorCode)
-    assertEquals(0L, partitionData.records.sizeInBytes())
+    assertEquals(0L, FetchResponse.recordsSize(partitionData))
     assertTrue(FetchResponse.isDivergingEpoch(partitionData))
 
     val divergingEpoch = partitionData.divergingEpoch
@@ -398,7 +398,7 @@ class FetchRequestTest extends BaseRequestTest {
     val fetchResponse = response.getOrElse(throw new IllegalStateException("No fetch response"))
     val partitionData = fetchResponse.responseData.get(topicPartition)
     assertEquals(Errors.NONE.code, partitionData.errorCode)
-    val batches = FetchResponse.records(partitionData).batches.asScala.toBuffer
+    val batches = FetchResponse.recordsOrFail(partitionData).batches.asScala.toBuffer
     assertEquals(3, batches.size) // size is 3 (not 4) since maxPartitionBytes=msgValueSize*4, excluding key and headers
   }
 
@@ -445,7 +445,7 @@ class FetchRequestTest extends BaseRequestTest {
         val partitionData = fetchResponse.responseData.get(topicPartition)
         assertEquals(Errors.NONE.code, partitionData.errorCode)
         assertTrue(partitionData.highWatermark > 0)
-        val batches = FetchResponse.records(partitionData).batches.asScala.toBuffer
+        val batches = FetchResponse.recordsOrFail(partitionData).batches.asScala.toBuffer
         val batch = batches.head
         assertEquals(expectedMagic, batch.magic)
         assertEquals(currentExpectedOffset, batch.baseOffset)
@@ -656,7 +656,7 @@ class FetchRequestTest extends BaseRequestTest {
   }
 
   private def records(partitionData: FetchResponseData.PartitionData): Seq[Record] = {
-    FetchResponse.records(partitionData).records.asScala.toBuffer
+    FetchResponse.recordsOrFail(partitionData).records.asScala.toBuffer
   }
 
   private def checkFetchResponse(expectedPartitions: Seq[TopicPartition], fetchResponse: FetchResponse,
@@ -671,7 +671,7 @@ class FetchRequestTest extends BaseRequestTest {
       assertEquals(Errors.NONE.code, partitionData.errorCode)
       assertTrue(partitionData.highWatermark > 0)
 
-      val records = FetchResponse.records(partitionData)
+      val records = FetchResponse.recordsOrFail(partitionData)
       responseBufferSize += records.sizeInBytes
 
       val batches = records.batches.asScala.toBuffer
