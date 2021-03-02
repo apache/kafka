@@ -1368,9 +1368,9 @@ public class SslTransportLayerTest {
 
         @Override
         protected SslTransportLayer buildTransportLayer(SslFactory sslFactory, String id, SelectionKey key,
-                                                        String host, ChannelMetadataRegistry metadataRegistry) throws IOException {
+                                                        ChannelMetadataRegistry metadataRegistry) throws IOException {
             SocketChannel socketChannel = (SocketChannel) key.channel();
-            SSLEngine sslEngine = sslFactory.createSslEngine(host, socketChannel.socket().getPort());
+            SSLEngine sslEngine = sslFactory.createSslEngine(socketChannel.socket());
             return newTransportLayer(id, key, sslEngine);
         }
 

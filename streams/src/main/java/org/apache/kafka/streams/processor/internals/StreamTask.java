@@ -24,6 +24,7 @@ import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.TimeoutException;
+import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
@@ -688,17 +689,14 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
 
             log.trace("Start processing one record [{}]", record);
 
-            updateProcessorContext(
-                currNode,
-                wallClockTime,
-                new ProcessorRecordContext(
-                    record.timestamp,
-                    record.offset(),
-                    record.partition(),
-                    record.topic(),
-                    record.headers()
-                )
+            final ProcessorRecordContext recordContext = new ProcessorRecordContext(
+                record.timestamp,
+                record.offset(),
+                record.partition(),
+                record.topic(),
+                record.headers()
             );
+            updateProcessorContext(currNode, wallClockTime, recordContext);
 
             maybeRecordE2ELatency(record.timestamp, wallClockTime, currNode.name());
             final Record<Object, Object> toProcess = new Record<>(
@@ -792,7 +790,16 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
             throw new IllegalStateException(String.format("%sCurrent node is not null", logPrefix));
         }
 
-        updateProcessorContext(node, time.milliseconds(), null);
+        // when punctuating, we need to preserve the timestamp (this can be either system time or event time)
+        // while other record context are set as dummy: null topic, -1 partition, -1 offset and empty header
+        final ProcessorRecordContext recordContext = new ProcessorRecordContext(
+            timestamp,
+            -1L,
+            -1,
+            null,
+            new RecordHeaders()
+        );
+        updateProcessorContext(node, time.milliseconds(), recordContext);
 
         if (log.isTraceEnabled()) {
             log.trace("Punctuating processor {} with timestamp {} and punctuation type {}", node.name(), timestamp, type);

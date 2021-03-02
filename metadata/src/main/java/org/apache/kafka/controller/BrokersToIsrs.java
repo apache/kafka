@@ -54,11 +54,11 @@ public class BrokersToIsrs {
 
     private final static int REPLICA_MASK = 0x7fff_ffff;
 
-    static class TopicPartition {
+    static class TopicIdPartition {
         private final Uuid topicId;
         private final int partitionId;
 
-        TopicPartition(Uuid topicId, int partitionId) {
+        TopicIdPartition(Uuid topicId, int partitionId) {
             this.topicId = topicId;
             this.partitionId = partitionId;
         }
@@ -73,8 +73,8 @@ public class BrokersToIsrs {
 
         @Override
         public boolean equals(Object o) {
-            if (!(o instanceof TopicPartition)) return false;
-            TopicPartition other = (TopicPartition) o;
+            if (!(o instanceof TopicIdPartition)) return false;
+            TopicIdPartition other = (TopicIdPartition) o;
             return other.topicId.equals(topicId) && other.partitionId == partitionId;
         }
 
@@ -89,13 +89,13 @@ public class BrokersToIsrs {
         }
     }
 
-    static class PartitionsOnReplicaIterator implements Iterator<TopicPartition> {
+    static class PartitionsOnReplicaIterator implements Iterator<TopicIdPartition> {
         private final Iterator<Entry<Uuid, int[]>> iterator;
         private final boolean leaderOnly;
         private int offset = 0;
         Uuid uuid = Uuid.ZERO_UUID;
         int[] replicas = EMPTY;
-        private TopicPartition next = null;
+        private TopicIdPartition next = null;
 
         PartitionsOnReplicaIterator(Map<Uuid, int[]> topicMap, boolean leaderOnly) {
             this.iterator = topicMap.entrySet().iterator();
@@ -115,18 +115,18 @@ public class BrokersToIsrs {
                 }
                 int replica = replicas[offset++];
                 if ((!leaderOnly) || (replica & LEADER_FLAG) != 0) {
-                    next = new TopicPartition(uuid, replica & REPLICA_MASK);
+                    next = new TopicIdPartition(uuid, replica & REPLICA_MASK);
                     return true;
                 }
             }
         }
 
         @Override
-        public TopicPartition next() {
+        public TopicIdPartition next() {
             if (!hasNext()) {
                 throw new NoSuchElementException();
             }
-            TopicPartition result = next;
+            TopicIdPartition result = next;
             next = null;
             return result;
         }
