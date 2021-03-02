@@ -885,7 +885,7 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
                 "\tprev owned active {}\n" +
                 "\tprev owned standby {}\n" +
                 "\tassigned active {}\n" +
-                "\trevoking active {}" +
+                "\trevoking active {}\n" +
                 "\tassigned standby {}\n",
                 clientId,
                 clientMetadata.state.prevOwnedActiveTasksByConsumer(),
