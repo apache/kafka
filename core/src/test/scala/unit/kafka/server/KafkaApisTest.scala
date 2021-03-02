@@ -3482,6 +3482,73 @@ class KafkaApisTest {
   }
 
   @Test
+  def testListTransactionsErrorResponse(): Unit = {
+    val data = new ListTransactionsRequestData()
+    val listTransactionsRequest = new ListTransactionsRequest.Builder(data).build()
+    val request = buildRequest(listTransactionsRequest)
+    val capturedResponse = expectNoThrottling(request)
+
+    EasyMock.expect(txnCoordinator.handleListTransactions(Set.empty[Long], Set.empty[String]))
+      .andReturn(new ListTransactionsResponseData()
+        .setErrorCode(Errors.COORDINATOR_LOAD_IN_PROGRESS.code))
+
+    EasyMock.replay(replicaManager, clientRequestQuotaManager, requestChannel, txnCoordinator)
+    createKafkaApis().handleListTransactionsRequest(request)
+
+    val response = capturedResponse.getValue.asInstanceOf[ListTransactionsResponse]
+    assertEquals(0, response.data.transactionStates.size)
+    assertEquals(Errors.COORDINATOR_LOAD_IN_PROGRESS, Errors.forCode(response.data.errorCode))
+  }
+
+  @Test
+  def testListTransactionsAuthorization(): Unit = {
+    val authorizer: Authorizer = EasyMock.niceMock(classOf[Authorizer])
+    val data = new ListTransactionsRequestData()
+    val listTransactionsRequest = new ListTransactionsRequest.Builder(data).build()
+    val request = buildRequest(listTransactionsRequest)
+    val capturedResponse = expectNoThrottling(request)
+
+    val transactionStates = new util.ArrayList[ListTransactionsResponseData.TransactionState]()
+    transactionStates.add(new ListTransactionsResponseData.TransactionState()
+      .setTransactionalId("foo")
+      .setProducerId(12345L)
+      .setTransactionState("Ongoing"))
+    transactionStates.add(new ListTransactionsResponseData.TransactionState()
+      .setTransactionalId("bar")
+      .setProducerId(98765)
+      .setTransactionState("PrepareAbort"))
+
+    EasyMock.expect(txnCoordinator.handleListTransactions(Set.empty[Long], Set.empty[String]))
+      .andReturn(new ListTransactionsResponseData()
+        .setErrorCode(Errors.NONE.code)
+        .setTransactionStates(transactionStates))
+
+    def buildExpectedActions(transactionalId: String): util.List[Action] = {
+      val pattern = new ResourcePattern(ResourceType.TRANSACTIONAL_ID, transactionalId, PatternType.LITERAL)
+      val action = new Action(AclOperation.DESCRIBE, pattern, 1, true, true)
+      Collections.singletonList(action)
+    }
+
+    EasyMock.expect(authorizer.authorize(anyObject[RequestContext], EasyMock.eq(buildExpectedActions("foo"))))
+      .andReturn(Seq(AuthorizationResult.ALLOWED).asJava)
+      .once()
+
+    EasyMock.expect(authorizer.authorize(anyObject[RequestContext], EasyMock.eq(buildExpectedActions("bar"))))
+      .andReturn(Seq(AuthorizationResult.DENIED).asJava)
+      .once()
+
+    EasyMock.replay(replicaManager, clientRequestQuotaManager, requestChannel, txnCoordinator, authorizer)
+    createKafkaApis(authorizer = Some(authorizer)).handleListTransactionsRequest(request)
+
+    val response = capturedResponse.getValue.asInstanceOf[ListTransactionsResponse]
+    assertEquals(1, response.data.transactionStates.size())
+    val transactionState = response.data.transactionStates.get(0)
+    assertEquals("foo", transactionState.transactionalId)
+    assertEquals(12345L, transactionState.producerId)
+    assertEquals("Ongoing", transactionState.transactionState)
+  }
+
+  @Test
   def testDeleteTopicsByIdAuthorization(): Unit = {
     val authorizer: Authorizer = EasyMock.niceMock(classOf[Authorizer])
     val controllerContext: ControllerContext = EasyMock.mock(classOf[ControllerContext])

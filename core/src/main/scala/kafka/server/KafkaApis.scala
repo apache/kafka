@@ -223,6 +223,7 @@ class KafkaApis(val requestChannel: RequestChannel,
         case ApiKeys.DESCRIBE_PRODUCERS => handleDescribeProducersRequest(request)
         case ApiKeys.UNREGISTER_BROKER => maybeForwardToController(request, handleUnregisterBrokerRequest)
         case ApiKeys.DESCRIBE_TRANSACTIONS => handleDescribeTransactionsRequest(request)
+        case ApiKeys.LIST_TRANSACTIONS => handleListTransactionsRequest(request)
         case _ => throw new IllegalStateException(s"No handler for request api key ${request.header.apiKey}")
       }
     } catch {
@@ -3308,6 +3309,26 @@ class KafkaApis(val requestChannel: RequestChannel,
 
     requestHelper.sendResponseMaybeThrottle(request, requestThrottleMs =>
       new DescribeTransactionsResponse(response.setThrottleTimeMs(requestThrottleMs)))
+  }
+
+  def handleListTransactionsRequest(request: RequestChannel.Request): Unit = {
+    val listTransactionsRequest = request.body[ListTransactionsRequest]
+    val filteredProducerIds = listTransactionsRequest.data.producerIdFilters.asScala.map(Long.unbox).toSet
+    val filteredStates = listTransactionsRequest.data.stateFilters.asScala.toSet
+    val response = txnCoordinator.handleListTransactions(filteredProducerIds, filteredStates)
+
+    // The response should contain only transactionalIds that the principal
+    // has `Describe` permission to access.
+    val transactionStateIter = response.transactionStates.iterator()
+    while (transactionStateIter.hasNext) {
+      val transactionState = transactionStateIter.next()
+      if (!authHelper.authorize(request.context, DESCRIBE, TRANSACTIONAL_ID, transactionState.transactionalId)) {
+        transactionStateIter.remove()
+      }
+    }
+
+    requestHelper.sendResponseMaybeThrottle(request, requestThrottleMs =>
+      new ListTransactionsResponse(response.setThrottleTimeMs(requestThrottleMs)))
   }
 
   private def updateRecordConversionStats(request: RequestChannel.Request,
