@@ -1834,7 +1834,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
     assertListTransactionResult(expectedTransactionalIds = Set())
 
     // The minimum permission needed is `Describe`
-    addAndVerifyAcls(Set(new AccessControlEntry(clientPrincipalString, WildcardHost, WRITE, ALLOW)), transactionalIdResource)
+    addAndVerifyAcls(Set(new AccessControlEntry(clientPrincipalString, WildcardHost, DESCRIBE, ALLOW)), transactionalIdResource)
     assertListTransactionResult(expectedTransactionalIds = Set(transactionalId))
   }
 
