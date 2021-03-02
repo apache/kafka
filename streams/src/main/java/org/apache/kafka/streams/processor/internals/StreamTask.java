@@ -19,7 +19,6 @@ package org.apache.kafka.streams.processor.internals;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
-import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicPartition;
@@ -184,6 +183,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
         partitionGroup = new PartitionGroup(
             logContext,
             createPartitionQueues(),
+            mainConsumer::currentLag,
             TaskMetrics.recordLatenessSensor(threadId, taskId, streamsMetrics),
             enforcedProcessingSensor,
             maxTaskIdleMs
@@ -634,11 +634,6 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
     /**
      * An active task is processable if its buffer contains data for all of its input
      * source topic partitions, or if it is enforced to be processable.
-     *
-     * Note that this method is _NOT_ idempotent, because the internal bookkeeping
-     * consumes the partition metadata. For example, unit tests may have to invoke
-     * {@link #addFetchedMetadata(TopicPartition, ConsumerRecords.Metadata)} again
-     * invoking this method.
      */
     public boolean isProcessable(final long wallClockTime) {
         if (state() == State.CLOSED) {
@@ -927,11 +922,6 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
         if (newQueueSize > maxBufferedSize) {
             mainConsumer.pause(singleton(partition));
         }
-    }
-
-    @Override
-    public void addFetchedMetadata(final TopicPartition partition, final ConsumerRecords.Metadata metadata) {
-        partitionGroup.addFetchedMetadata(partition, metadata);
     }
 
     /**
