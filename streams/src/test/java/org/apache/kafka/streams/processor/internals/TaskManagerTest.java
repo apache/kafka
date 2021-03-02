@@ -1089,6 +1089,15 @@ public class TaskManagerTest {
         producer.commitTransaction(expectedCommittedOffsets, groupMetadata);
         expectLastCall();
 
+        task00.getCommittedOffsets();
+        EasyMock.expectLastCall();
+        task01.getCommittedOffsets();
+        EasyMock.expectLastCall();
+        task02.getCommittedOffsets();
+        EasyMock.expectLastCall();
+        task10.getCommittedOffsets();
+        EasyMock.expectLastCall();
+
         replay(activeTaskCreator, standbyTaskCreator, consumer, changeLogReader);
 
         taskManager.handleAssignment(assignmentActive, assignmentStandby);
