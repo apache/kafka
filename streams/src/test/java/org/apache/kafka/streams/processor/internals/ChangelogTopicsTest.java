@@ -47,25 +47,25 @@ public class ChangelogTopicsTest {
     private static final UnwindowedChangelogTopicConfig CHANGELOG_TOPIC_CONFIG =
         new UnwindowedChangelogTopicConfig(CHANGELOG_TOPIC_NAME1, TOPIC_CONFIG);
 
-    private static final TopicsInfo TOPICS_INFO1  = new TopicsInfo(
+    private static final TopicsInfo TOPICS_INFO1 = new TopicsInfo(
         mkSet(SINK_TOPIC_NAME),
         mkSet(SOURCE_TOPIC_NAME),
         mkMap(mkEntry(REPARTITION_TOPIC_NAME, REPARTITION_TOPIC_CONFIG)),
         mkMap(mkEntry(CHANGELOG_TOPIC_NAME1, CHANGELOG_TOPIC_CONFIG))
     );
-    private static final TopicsInfo TOPICS_INFO2  = new TopicsInfo(
+    private static final TopicsInfo TOPICS_INFO2 = new TopicsInfo(
         mkSet(SINK_TOPIC_NAME),
         mkSet(SOURCE_TOPIC_NAME),
         mkMap(mkEntry(REPARTITION_TOPIC_NAME, REPARTITION_TOPIC_CONFIG)),
         mkMap()
     );
-    private static final TopicsInfo TOPICS_INFO3  = new TopicsInfo(
+    private static final TopicsInfo TOPICS_INFO3 = new TopicsInfo(
         mkSet(SINK_TOPIC_NAME),
         mkSet(SOURCE_TOPIC_NAME),
         mkMap(mkEntry(REPARTITION_TOPIC_NAME, REPARTITION_TOPIC_CONFIG)),
         mkMap(mkEntry(SOURCE_TOPIC_NAME, CHANGELOG_TOPIC_CONFIG))
     );
-    private static final TopicsInfo TOPICS_INFO4  = new TopicsInfo(
+    private static final TopicsInfo TOPICS_INFO4 = new TopicsInfo(
         mkSet(SINK_TOPIC_NAME),
         mkSet(SOURCE_TOPIC_NAME),
         mkMap(mkEntry(REPARTITION_TOPIC_NAME, REPARTITION_TOPIC_CONFIG)),
