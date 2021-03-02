@@ -375,7 +375,7 @@ class SecurityConfig(TemplateRenderer):
         sasl_mechanisms = []
         if self.is_sasl(self.security_protocol):
             # .csv is supported so be sure to account for that possibility
-            sasl_mechanisms += self.client_sasl_mechanism.strip().split(',')
+            sasl_mechanisms += [mechanism.strip() for mechanism in self.client_sasl_mechanism.split(',')]
         if self.is_sasl(self.interbroker_security_protocol):
             sasl_mechanisms += [self.interbroker_sasl_mechanism]
         if self.serves_raft_sasl:
