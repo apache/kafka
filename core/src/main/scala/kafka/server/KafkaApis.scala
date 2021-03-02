@@ -1890,7 +1890,8 @@ class KafkaApis(val requestChannel: RequestChannel,
           topic.setErrorMessage("Topic IDs are not supported on the server.")
         } else if (unresolvedTopicId) {
           topic.setErrorCode(Errors.UNKNOWN_TOPIC_ID.code)
-        } else if (topicIdsFromRequest.contains(topic.topicId) && !authorizedDescribeTopics(topic.name)) {
+        } else if (topicIdsFromRequest.contains(topic.topicId) && !authorizedDescribeTopics.contains(topic.name)) {
+
           // Because the client does not have Describe permission, the name should
           // not be returned in the response. Note, however, that we do not consider
           // the topicId itself to be sensitive, so there is no reason to obscure
