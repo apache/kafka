@@ -209,12 +209,25 @@ public class ClusterTestExtensions implements TestTemplateInvocationContextProvi
         }
 
         switch (type) {
-            case ZK:
-            case BOTH:
+            case ZK: {
                 ClusterConfig config = builder.build();
                 config.serverProperties().putAll(properties);
                 testInvocations.accept(new ZkClusterInvocationContext(config));
                 break;
+            } case RAFT: {
+                ClusterConfig config = builder.build();
+                config.serverProperties().putAll(properties);
+                testInvocations.accept(new RaftClusterInvocationContext(config));
+                break;
+            } case BOTH: {
+                ClusterConfig zkConfig = builder.build();
+                zkConfig.serverProperties().putAll(properties);
+                testInvocations.accept(new ZkClusterInvocationContext(zkConfig));
+                ClusterConfig raftConfig = builder.build();
+                raftConfig.serverProperties().putAll(properties);
+                testInvocations.accept(new RaftClusterInvocationContext(raftConfig));
+                break;
+            }
         }
     }
 
