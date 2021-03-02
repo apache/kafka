@@ -16,7 +16,7 @@
 {
   "apiKey": 24,
   "type": "request",
-  "listeners": ["zkBroker", "broker"],
+  "listeners": ["zkBroker"],
   "name": "AddPartitionsToTxnRequest",
   // Version 1 is the same as version 0.
   //

@@ -20,7 +20,7 @@ package org.apache.kafka.controller;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.controller.BrokersToIsrs.PartitionsOnReplicaIterator;
-import org.apache.kafka.controller.BrokersToIsrs.TopicPartition;
+import org.apache.kafka.controller.BrokersToIsrs.TopicIdPartition;
 import org.apache.kafka.timeline.SnapshotRegistry;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
@@ -38,16 +38,16 @@ public class BrokersToIsrsTest {
         Uuid.fromString("U52uRe20RsGI0RvpcTx33Q")
     };
 
-    private static Set<TopicPartition> toSet(TopicPartition... partitions) {
-        HashSet<TopicPartition> set = new HashSet<>();
-        for (TopicPartition partition : partitions) {
+    private static Set<TopicIdPartition> toSet(TopicIdPartition... partitions) {
+        HashSet<TopicIdPartition> set = new HashSet<>();
+        for (TopicIdPartition partition : partitions) {
             set.add(partition);
         }
         return set;
     }
 
-    private static Set<TopicPartition> toSet(PartitionsOnReplicaIterator iterator) {
-        HashSet<TopicPartition> set = new HashSet<>();
+    private static Set<TopicIdPartition> toSet(PartitionsOnReplicaIterator iterator) {
+        HashSet<TopicIdPartition> set = new HashSet<>();
         while (iterator.hasNext()) {
             set.add(iterator.next());
         }
@@ -61,18 +61,18 @@ public class BrokersToIsrsTest {
         assertEquals(toSet(), toSet(brokersToIsrs.iterator(1, false)));
         brokersToIsrs.update(UUIDS[0], 0, null, new int[] {1, 2, 3}, -1, 1);
         brokersToIsrs.update(UUIDS[1], 1, null, new int[] {2, 3, 4}, -1, 4);
-        assertEquals(toSet(new TopicPartition(UUIDS[0], 0)),
+        assertEquals(toSet(new TopicIdPartition(UUIDS[0], 0)),
             toSet(brokersToIsrs.iterator(1, false)));
-        assertEquals(toSet(new TopicPartition(UUIDS[0], 0),
-                           new TopicPartition(UUIDS[1], 1)),
+        assertEquals(toSet(new TopicIdPartition(UUIDS[0], 0),
+                           new TopicIdPartition(UUIDS[1], 1)),
             toSet(brokersToIsrs.iterator(2, false)));
-        assertEquals(toSet(new TopicPartition(UUIDS[1], 1)),
+        assertEquals(toSet(new TopicIdPartition(UUIDS[1], 1)),
             toSet(brokersToIsrs.iterator(4, false)));
         assertEquals(toSet(), toSet(brokersToIsrs.iterator(5, false)));
         brokersToIsrs.update(UUIDS[1], 2, null, new int[] {3, 2, 1}, -1, 3);
-        assertEquals(toSet(new TopicPartition(UUIDS[0], 0),
-                new TopicPartition(UUIDS[1], 1),
-                new TopicPartition(UUIDS[1], 2)),
+        assertEquals(toSet(new TopicIdPartition(UUIDS[0], 0),
+                new TopicIdPartition(UUIDS[1], 1),
+                new TopicIdPartition(UUIDS[1], 2)),
             toSet(brokersToIsrs.iterator(2, false)));
     }
 
@@ -82,14 +82,14 @@ public class BrokersToIsrsTest {
         BrokersToIsrs brokersToIsrs = new BrokersToIsrs(snapshotRegistry);
         brokersToIsrs.update(UUIDS[0], 0, null, new int[]{1, 2, 3}, -1, 1);
         brokersToIsrs.update(UUIDS[1], 1, null, new int[]{2, 3, 4}, -1, 4);
-        assertEquals(toSet(new TopicPartition(UUIDS[0], 0)),
+        assertEquals(toSet(new TopicIdPartition(UUIDS[0], 0)),
             toSet(brokersToIsrs.iterator(1, true)));
         assertEquals(toSet(), toSet(brokersToIsrs.iterator(2, true)));
-        assertEquals(toSet(new TopicPartition(UUIDS[1], 1)),
+        assertEquals(toSet(new TopicIdPartition(UUIDS[1], 1)),
             toSet(brokersToIsrs.iterator(4, true)));
         brokersToIsrs.update(UUIDS[0], 0, new int[]{1, 2, 3}, new int[]{1, 2, 3}, 1, 2);
         assertEquals(toSet(), toSet(brokersToIsrs.iterator(1, true)));
-        assertEquals(toSet(new TopicPartition(UUIDS[0], 0)),
+        assertEquals(toSet(new TopicIdPartition(UUIDS[0], 0)),
             toSet(brokersToIsrs.iterator(2, true)));
     }
 
@@ -98,12 +98,12 @@ public class BrokersToIsrsTest {
         SnapshotRegistry snapshotRegistry = new SnapshotRegistry(new LogContext());
         BrokersToIsrs brokersToIsrs = new BrokersToIsrs(snapshotRegistry);
         brokersToIsrs.update(UUIDS[0], 2, null, new int[]{1, 2, 3}, -1, 3);
-        assertEquals(toSet(new TopicPartition(UUIDS[0], 2)),
+        assertEquals(toSet(new TopicIdPartition(UUIDS[0], 2)),
             toSet(brokersToIsrs.iterator(3, true)));
         assertEquals(toSet(), toSet(brokersToIsrs.iterator(2, true)));
         assertEquals(toSet(), toSet(brokersToIsrs.noLeaderIterator()));
         brokersToIsrs.update(UUIDS[0], 2, new int[]{1, 2, 3}, new int[]{1, 2, 3}, 3, -1);
-        assertEquals(toSet(new TopicPartition(UUIDS[0], 2)),
+        assertEquals(toSet(new TopicIdPartition(UUIDS[0], 2)),
             toSet(brokersToIsrs.noLeaderIterator()));
     }
 }

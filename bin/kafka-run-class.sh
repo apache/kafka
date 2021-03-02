@@ -135,6 +135,18 @@ do
   CLASSPATH="$CLASSPATH":"$file"
 done
 
+for file in "$base_dir"/shell/build/libs/kafka-shell*.jar;
+do
+  if should_include_file "$file"; then
+    CLASSPATH="$CLASSPATH":"$file"
+  fi
+done
+
+for dir in "$base_dir"/shell/build/dependant-libs-${SCALA_VERSION}*;
+do
+  CLASSPATH="$CLASSPATH:$dir/*"
+done
+
 for file in "$base_dir"/tools/build/libs/kafka-tools*.jar;
 do
   if should_include_file "$file"; then

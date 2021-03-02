@@ -23,6 +23,7 @@ import kafka.server.{KafkaConfig, MetadataCache, ReplicaManager}
 import kafka.utils.{Logging, Scheduler}
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.internals.Topic
+import org.apache.kafka.common.message.DescribeTransactionsResponseData
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.record.RecordBatch
@@ -187,10 +188,10 @@ class TransactionCoordinator(brokerId: Int,
   }
 
   private def prepareInitProducerIdTransit(transactionalId: String,
-                                          transactionTimeoutMs: Int,
-                                          coordinatorEpoch: Int,
-                                          txnMetadata: TransactionMetadata,
-                                          expectedProducerIdAndEpoch: Option[ProducerIdAndEpoch]): ApiResult[(Int, TxnTransitMetadata)] = {
+                                           transactionTimeoutMs: Int,
+                                           coordinatorEpoch: Int,
+                                           txnMetadata: TransactionMetadata,
+                                           expectedProducerIdAndEpoch: Option[ProducerIdAndEpoch]): ApiResult[(Int, TxnTransitMetadata)] = {
 
     def isValidProducerId(producerIdAndEpoch: ProducerIdAndEpoch): Boolean = {
       // If a producer ID and epoch are provided by the request, fence the producer unless one of the following is true:
@@ -251,6 +252,51 @@ class TransactionCoordinator(brokerId: Int,
           fatal(errorMsg)
           throw new IllegalStateException(errorMsg)
 
+      }
+    }
+  }
+
+  def handleDescribeTransactions(
+    transactionalId: String
+  ): DescribeTransactionsResponseData.TransactionState = {
+    if (transactionalId == null) {
+      throw new IllegalArgumentException("Invalid null transactionalId")
+    }
+
+    val transactionState = new DescribeTransactionsResponseData.TransactionState()
+      .setTransactionalId(transactionalId)
+
+    if (!isActive.get()) {
+      transactionState.setErrorCode(Errors.COORDINATOR_NOT_AVAILABLE.code)
+    } else if (transactionalId.isEmpty) {
+      transactionState.setErrorCode(Errors.INVALID_REQUEST.code)
+    } else {
+      txnManager.getTransactionState(transactionalId) match {
+        case Left(error) =>
+          transactionState.setErrorCode(error.code)
+        case Right(None) =>
+          transactionState.setErrorCode(Errors.TRANSACTIONAL_ID_NOT_FOUND.code)
+        case Right(Some(coordinatorEpochAndMetadata)) =>
+          val txnMetadata = coordinatorEpochAndMetadata.transactionMetadata
+          txnMetadata.inLock {
+            txnMetadata.topicPartitions.foreach { topicPartition =>
+              var topicData = transactionState.topics.find(topicPartition.topic)
+              if (topicData == null) {
+                topicData = new DescribeTransactionsResponseData.TopicData()
+                  .setTopic(topicPartition.topic)
+                transactionState.topics.add(topicData)
+              }
+              topicData.partitions.add(topicPartition.partition)
+            }
+
+            transactionState
+              .setErrorCode(Errors.NONE.code)
+              .setProducerId(txnMetadata.producerId)
+              .setProducerEpoch(txnMetadata.producerEpoch)
+              .setTransactionState(txnMetadata.state.name)
+              .setTransactionTimeoutMs(txnMetadata.txnTimeoutMs)
+              .setTransactionStartTimeMs(txnMetadata.txnStartTimestamp)
+          }
       }
     }
   }

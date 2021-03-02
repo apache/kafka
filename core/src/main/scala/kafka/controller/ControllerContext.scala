@@ -463,6 +463,10 @@ class ControllerContext {
     }.keySet
   }
 
+  def topicName(topicId: Uuid): Option[String] = {
+    topicNames.get(topicId)
+  }
+
   def clearPartitionLeadershipInfo(): Unit = partitionLeadershipInfo.clear()
 
   def partitionWithLeadersCount: Int = partitionLeadershipInfo.size
