@@ -1605,8 +1605,8 @@ project(':streams:test-utils') {
   archivesBaseName = "kafka-streams-test-utils"
 
   dependencies {
-    implementation project(':streams')
-    implementation project(':clients')
+    api project(':streams')
+    api project(':clients')
 
     implementation libs.slf4jApi
 
