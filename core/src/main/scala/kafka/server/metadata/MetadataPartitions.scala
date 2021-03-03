@@ -183,10 +183,6 @@ class MetadataPartitionsBuilder(val brokerId: Int,
     Option(newNameMap.get(topicName)).flatMap(m => Option(m.get(partitionId)))
   }
 
-  def get(tp: TopicPartition): Option[MetadataPartition] = {
-    get(tp.topic, tp.partition)
-  }
-
   def set(partition: MetadataPartition): Unit = {
     val prevPartitionMap = newNameMap.get(partition.topicName)
     val newPartitionMap = if (prevPartitionMap == null) {
@@ -316,10 +312,6 @@ case class MetadataPartitions(private val nameMap: util.Map[String, util.Map[Int
 
   def topicPartition(topicName: String, partitionId: Int): Option[MetadataPartition] = {
     Option(nameMap.get(topicName)).flatMap(m => Option(m.get(partitionId)))
-  }
-
-  def topicPartition(tp: TopicPartition): Option[MetadataPartition] = {
-    topicPartition(tp.topic, tp.partition)
   }
 
   def contains(topicName: String): Boolean = nameMap.containsKey(topicName)

@@ -199,14 +199,13 @@ class MetadataPartitionsTest {
 
     builder.removeTopicById(topicId)
     assertEquals(None, builder.topicIdToName(topicId))
-    assertEquals(Set.empty, topicPartitions.flatMap(builder.get))
+    assertEquals(Set.empty, filterPartitions(builder, topicPartitions))
     assertEquals(Set.empty, localRemoved(builder))
     assertEquals(Set.empty, localChanged(builder))
 
     val metadata = builder.build()
     assertEquals(Set.empty, metadata.allTopicNames())
     assertEquals(None, metadata.topicIdToName(topicId))
-    assertEquals(Set.empty, topicPartitions.flatMap(metadata.topicPartition).map(_.toTopicPartition))
     assertEquals(Set.empty, metadata.topicPartitions(topic).toSet)
   }
 
@@ -228,14 +227,13 @@ class MetadataPartitionsTest {
     val deleteBuilder = new MetadataPartitionsBuilder(brokerId = 0, createMetadata)
     deleteBuilder.removeTopicById(topicId)
     assertEquals(None, deleteBuilder.topicIdToName(topicId))
-    assertEquals(Set.empty, topicPartitions.flatMap(deleteBuilder.get))
+    assertEquals(Set.empty, filterPartitions(deleteBuilder, topicPartitions))
     assertEquals(localTopicPartitions, localRemoved(deleteBuilder))
     assertEquals(Set.empty, localChanged(deleteBuilder))
 
     val deleteMetadata = deleteBuilder.build()
     assertEquals(Set.empty, deleteMetadata.allTopicNames())
     assertEquals(None, deleteMetadata.topicIdToName(topicId))
-    assertEquals(Set.empty, topicPartitions.flatMap(deleteMetadata.topicPartition).map(_.toTopicPartition))
     assertEquals(Set.empty, deleteMetadata.topicPartitions(topic).toSet)
   }
 
@@ -262,11 +260,11 @@ class MetadataPartitionsTest {
     assertTrue(recreatedLocalTopicPartitions.subsetOf(recreatedTopicPartitions))
     assertFalse(recreatedLocalTopicPartitions.subsetOf(initialLocalTopicPartitions))
     assertEquals(Some(topic), recreateBuilder.topicIdToName(recreatedTopicId))
-    assertEquals(recreatedTopicPartitions, recreatedTopicPartitions.flatMap(recreateBuilder.get).map(_.toTopicPartition))
+    assertEquals(recreatedTopicPartitions, filterPartitions(recreateBuilder, recreatedTopicPartitions))
     assertEquals(initialLocalTopicPartitions, localRemoved(recreateBuilder))
 
     val recreatedMetadata = recreateBuilder.build()
-    assertEquals(recreatedTopicPartitions, recreatedMetadata.topicPartitions(topic).map(_.toTopicPartition).toSet)
+    assertEquals(recreatedTopicPartitions, filterPartitions(recreatedMetadata, topic))
     assertEquals(Some(recreatedTopicId), recreatedMetadata.topicNameToId(topic))
     assertEquals(Some(topic), recreatedMetadata.topicIdToName(recreatedTopicId))
   }
@@ -281,6 +279,22 @@ class MetadataPartitionsTest {
     builder: MetadataPartitionsBuilder
   ): Set[TopicPartition] = {
     builder.localChanged().toSet[MetadataPartition].map(_.toTopicPartition)
+  }
+
+  private def filterPartitions(
+    metadata: MetadataPartitions,
+    topic: String
+  ): Set[TopicPartition] = {
+    metadata.topicPartitions(topic).map(_.toTopicPartition).toSet
+  }
+
+  private def filterPartitions(
+    builder: MetadataPartitionsBuilder,
+    topicPartitions: Set[TopicPartition]
+  ): Set[TopicPartition] = {
+    topicPartitions.filter { topicPartition =>
+      builder.get(topicPartition.topic, topicPartition.partition).isDefined
+    }
   }
 
   private def createTopic(
