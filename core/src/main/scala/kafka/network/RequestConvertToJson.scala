@@ -93,6 +93,7 @@ object RequestConvertToJson {
       case req: DescribeClusterRequest => DescribeClusterRequestDataJsonConverter.write(req.data, request.version)
       case req: DescribeProducersRequest => DescribeProducersRequestDataJsonConverter.write(req.data, request.version)
       case req: DescribeTransactionsRequest => DescribeTransactionsRequestDataJsonConverter.write(req.data, request.version)
+      case req: ListTransactionsRequest => ListTransactionsRequestDataJsonConverter.write(req.data, request.version)
       case _ => throw new IllegalStateException(s"ApiKey ${request.apiKey} is not currently handled in `request`, the " +
         "code should be updated to do so.");
     }
@@ -166,6 +167,7 @@ object RequestConvertToJson {
       case res: DescribeClusterResponse => DescribeClusterResponseDataJsonConverter.write(res.data, version)
       case res: DescribeProducersResponse => DescribeProducersResponseDataJsonConverter.write(res.data, version)
       case res: DescribeTransactionsResponse => DescribeTransactionsResponseDataJsonConverter.write(res.data, version)
+      case res: ListTransactionsResponse => ListTransactionsResponseDataJsonConverter.write(res.data, version)
       case _ => throw new IllegalStateException(s"ApiKey ${response.apiKey} is not currently handled in `response`, the " +
         "code should be updated to do so.");
     }

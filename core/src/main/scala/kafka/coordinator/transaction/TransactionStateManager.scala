@@ -29,6 +29,7 @@ import kafka.utils.CoreUtils.{inReadLock, inWriteLock}
 import kafka.utils.{Logging, Pool, Scheduler}
 import kafka.utils.Implicits._
 import org.apache.kafka.common.internals.Topic
+import org.apache.kafka.common.message.ListTransactionsResponseData
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.metrics.stats.{Avg, Max}
 import org.apache.kafka.common.protocol.Errors
@@ -221,6 +222,58 @@ class TransactionStateManager(brokerId: Int,
   def putTransactionStateIfNotExists(txnMetadata: TransactionMetadata): Either[Errors, CoordinatorEpochAndTxnMetadata] = {
     getAndMaybeAddTransactionState(txnMetadata.transactionalId, Some(txnMetadata)).map(_.getOrElse(
       throw new IllegalStateException(s"Unexpected empty transaction metadata returned while putting $txnMetadata")))
+  }
+
+  def listTransactionStates(
+    filterProducerIds: Set[Long],
+    filterStateNames: Set[String]
+  ): ListTransactionsResponseData = {
+    inReadLock(stateLock) {
+      val response = new ListTransactionsResponseData()
+      if (loadingPartitions.nonEmpty) {
+        response.setErrorCode(Errors.COORDINATOR_LOAD_IN_PROGRESS.code)
+      } else {
+        val filterStates = mutable.Set.empty[TransactionState]
+        filterStateNames.foreach { stateName =>
+          TransactionState.fromName(stateName) match {
+            case Some(state) => filterStates += state
+            case None => response.unknownStateFilters.add(stateName)
+          }
+        }
+
+        def shouldInclude(txnMetadata: TransactionMetadata): Boolean = {
+          if (txnMetadata.state == Dead) {
+            // We filter the `Dead` state since it is a transient state which
+            // indicates that the transactionalId and its metadata are in the
+            // process of expiration and removal.
+            false
+          } else if (filterProducerIds.nonEmpty && !filterProducerIds.contains(txnMetadata.producerId)) {
+            false
+          } else if (filterStateNames.nonEmpty && !filterStates.contains(txnMetadata.state)) {
+            false
+          } else {
+            true
+          }
+        }
+
+        val states = new java.util.ArrayList[ListTransactionsResponseData.TransactionState]
+        transactionMetadataCache.forKeyValue { (_, cache) =>
+          cache.metadataPerTransactionalId.values.foreach { txnMetadata =>
+            txnMetadata.inLock {
+              if (shouldInclude(txnMetadata)) {
+                states.add(new ListTransactionsResponseData.TransactionState()
+                  .setTransactionalId(txnMetadata.transactionalId)
+                  .setProducerId(txnMetadata.producerId)
+                  .setTransactionState(txnMetadata.state.name)
+                )
+              }
+            }
+          }
+        }
+        response.setErrorCode(Errors.NONE.code)
+          .setTransactionStates(states)
+      }
+    }
   }
 
   /**
