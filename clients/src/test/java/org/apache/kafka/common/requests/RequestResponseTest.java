@@ -843,7 +843,7 @@ public class RequestResponseTest {
         verifyFetchResponseFullWrite(FETCH.latestVersion(), createFetchResponse(123));
         verifyFetchResponseFullWrite(FETCH.latestVersion(),
             createFetchResponse(Errors.FETCH_SESSION_ID_NOT_FOUND, 123));
-        for (short version = 0; version <= FETCH.latestVersion(); version++) {
+        for (short version : FETCH.allVersions()) {
             verifyFetchResponseFullWrite(version, createFetchResponse(version >= 4));
         }
     }

@@ -42,7 +42,7 @@ public class OffsetsForLeaderEpochRequestTest {
 
     @Test
     public void testDefaultReplicaId() {
-        for (short version = 0; version <= ApiKeys.OFFSET_FOR_LEADER_EPOCH.latestVersion(); version++) {
+        for (short version : ApiKeys.OFFSET_FOR_LEADER_EPOCH.allVersions()) {
             int replicaId = 1;
             OffsetsForLeaderEpochRequest.Builder builder = OffsetsForLeaderEpochRequest.Builder.forFollower(
                     version, new OffsetForLeaderTopicCollection(), replicaId);

@@ -60,7 +60,7 @@ public class LeaderAndIsrRequestTest {
     @Test
     public void testGetErrorResponse() {
         Uuid id = Uuid.randomUuid();
-        for (short version = LEADER_AND_ISR.oldestVersion(); version <= LEADER_AND_ISR.latestVersion(); version++) {
+        for (short version : LEADER_AND_ISR.allVersions()) {
             LeaderAndIsrRequest.Builder builder = new LeaderAndIsrRequest.Builder(version, 0, 0, 0,
                 Collections.singletonList(new LeaderAndIsrPartitionState().setTopicName("topic")),
                 Collections.singletonMap("topic", id), Collections.emptySet());
@@ -84,7 +84,7 @@ public class LeaderAndIsrRequestTest {
      */
     @Test
     public void testVersionLogic() {
-        for (short version = LEADER_AND_ISR.oldestVersion(); version <= LEADER_AND_ISR.latestVersion(); version++) {
+        for (short version : LEADER_AND_ISR.allVersions()) {
             List<LeaderAndIsrPartitionState> partitionStates = asList(
                 new LeaderAndIsrPartitionState()
                     .setTopicName("topic0")

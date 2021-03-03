@@ -186,7 +186,7 @@ public final class MessageTest {
                 .setPartitions(Collections.singletonList(partition)));
         Supplier<ListOffsetsResponseData> response = () -> new ListOffsetsResponseData()
                 .setTopics(topics);
-        for (short version = 0; version <= ApiKeys.LIST_OFFSETS.latestVersion(); version++) {
+        for (short version : ApiKeys.LIST_OFFSETS.allVersions()) {
             ListOffsetsResponseData responseData = response.get();
             if (version > 0) {
                 responseData.topics().get(0).partitions().get(0)
@@ -459,7 +459,7 @@ public final class MessageTest {
                             ))))
                     .setRetentionTimeMs(20);
 
-        for (short version = 0; version <= ApiKeys.OFFSET_COMMIT.latestVersion(); version++) {
+        for (short version : ApiKeys.OFFSET_COMMIT.allVersions()) {
             OffsetCommitRequestData requestData = request.get();
             if (version < 1) {
                 requestData.setMemberId("");
@@ -568,7 +568,7 @@ public final class MessageTest {
                                       .setCommittedOffset(offset)
                               ))));
 
-        for (short version = 0; version <= ApiKeys.TXN_OFFSET_COMMIT.latestVersion(); version++) {
+        for (short version : ApiKeys.TXN_OFFSET_COMMIT.allVersions()) {
             TxnOffsetCommitRequestData requestData = request.get();
             if (version < 2) {
                 requestData.topics().get(0).partitions().get(0).setCommittedLeaderEpoch(-1);
@@ -632,7 +632,7 @@ public final class MessageTest {
                                                        .setTopics(topics)
                                                        .setRequireStable(true);
 
-        for (short version = 0; version <= ApiKeys.OFFSET_FETCH.latestVersion(); version++) {
+        for (short version : ApiKeys.OFFSET_FETCH.allVersions()) {
             final short finalVersion = version;
             if (version < 2) {
                 assertThrows(NullPointerException.class, () -> testAllMessageRoundTripsFromVersion(finalVersion, allPartitionData));
@@ -661,7 +661,7 @@ public final class MessageTest {
                                       .setErrorCode(Errors.UNKNOWN_TOPIC_OR_PARTITION.code())))))
                       .setErrorCode(Errors.NOT_COORDINATOR.code())
                       .setThrottleTimeMs(10);
-        for (short version = 0; version <= ApiKeys.OFFSET_FETCH.latestVersion(); version++) {
+        for (short version : ApiKeys.OFFSET_FETCH.allVersions()) {
             OffsetFetchResponseData responseData = response.get();
             if (version <= 1) {
                 responseData.setErrorCode(Errors.NONE.code());
@@ -720,7 +720,7 @@ public final class MessageTest {
                                  .setErrorMessage(errorMessage)))).iterator()))
                 .setThrottleTimeMs(throttleTimeMs);
 
-        for (short version = 0; version <= ApiKeys.PRODUCE.latestVersion(); version++) {
+        for (short version : ApiKeys.PRODUCE.allVersions()) {
             ProduceResponseData responseData = response.get();
 
             if (version < 8) {
