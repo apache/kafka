@@ -1089,13 +1089,13 @@ public class TaskManagerTest {
         producer.commitTransaction(expectedCommittedOffsets, groupMetadata);
         expectLastCall();
 
-        task00.getCommittedOffsets();
+        task00.committedOffsets();
         EasyMock.expectLastCall();
-        task01.getCommittedOffsets();
+        task01.committedOffsets();
         EasyMock.expectLastCall();
-        task02.getCommittedOffsets();
+        task02.committedOffsets();
         EasyMock.expectLastCall();
-        task10.getCommittedOffsets();
+        task10.committedOffsets();
         EasyMock.expectLastCall();
 
         replay(activeTaskCreator, standbyTaskCreator, consumer, changeLogReader);
@@ -3123,18 +3123,23 @@ public class TaskManagerTest {
         }
 
         @Override
-        public Map<TopicPartition, Long> getCommittedOffsets() {
-            return new HashMap<>();
+        public Map<TopicPartition, Long> committedOffsets() {
+            return Collections.emptyMap();
         }
 
         @Override
-        public Map<TopicPartition, Long> getHighWaterMark() {
-            return new HashMap<>();
+        public Map<TopicPartition, Long> highWaterMark() {
+            return Collections.emptyMap();
         }
 
         @Override
-        public Optional<Long> getTimeCurrentIdlingStarted() {
+        public Optional<Long> timeCurrentIdlingStarted() {
             return Optional.empty();
+        }
+
+        @Override
+        public void updateCommittedOffsets(final TopicPartition topicPartition, final Long offset) {
+
         }
 
         @Override

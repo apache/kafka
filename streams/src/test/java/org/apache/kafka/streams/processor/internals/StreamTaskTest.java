@@ -1311,7 +1311,7 @@ public class StreamTaskTest {
             getConsumerRecordWithOffsetAsTimestamp(partition2, 45)
         ));
 
-        assertThat("Map was not empty", task.getHighWaterMark().isEmpty());
+        assertThat("Map was not empty", task.highWaterMark().isEmpty());
         assertThrows(StreamsException.class, () -> task.process(0L));
     }
 
@@ -1367,7 +1367,7 @@ public class StreamTaskTest {
         EasyMock.reset(recordCollector);
         EasyMock.expect(recordCollector.offsets()).andReturn(emptyMap());
         EasyMock.replay(recordCollector);
-        assertThat("Map was not empty", task.getHighWaterMark().isEmpty());
+        assertThat("Map was not empty", task.highWaterMark().isEmpty());
     }
 
     @Test
@@ -1395,7 +1395,7 @@ public class StreamTaskTest {
         task.postCommit(false);   // should not checkpoint
 
         EasyMock.verify(stateManager, recordCollector);
-        assertThat("Map was not empty", task.getHighWaterMark().containsValue(offset));
+        assertThat("Map was not empty", task.highWaterMark().containsValue(offset));
     }
 
     @Test
@@ -1425,7 +1425,7 @@ public class StreamTaskTest {
         task.postCommit(false);
 
         EasyMock.verify(recordCollector);
-        assertThat("Map was not empty", task.getHighWaterMark().containsValue(offset));
+        assertThat("Map was not empty", task.highWaterMark().containsValue(offset));
     }
 
     @Test

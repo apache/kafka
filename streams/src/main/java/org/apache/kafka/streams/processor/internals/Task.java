@@ -101,11 +101,10 @@ public interface Task {
     }
 
 
-
     // idempotent life-cycle methods
 
     /**
-     * @throws LockException could happen when multi-threads within the single instance, could retry
+     * @throws LockException    could happen when multi-threads within the single instance, could retry
      * @throws StreamsException fatal error, should close the thread
      */
     void initializeIfNeeded();
@@ -133,7 +132,6 @@ public interface Task {
     void closeClean();
 
 
-
     // non-idempotent life-cycle methods
 
     /**
@@ -154,7 +152,6 @@ public interface Task {
     void closeCleanAndRecycleState();
 
 
-
     // runtime methods (using in RUNNING state)
 
     void addRecords(TopicPartition partition, Iterable<ConsumerRecord<byte[], byte[]>> records);
@@ -168,9 +165,11 @@ public interface Task {
         return false;
     }
 
-    default void recordProcessBatchTime(final long processBatchTime) {}
+    default void recordProcessBatchTime(final long processBatchTime) {
+    }
 
-    default void recordProcessTimeRatioAndBufferSize(final long allTaskProcessMs, final long now) {}
+    default void recordProcessTimeRatioAndBufferSize(final long allTaskProcessMs, final long now) {
+    }
 
     default boolean maybePunctuateStreamTime() {
         return false;
@@ -200,7 +199,6 @@ public interface Task {
     void clearTaskTimeout();
 
 
-
     // task status inquiry
 
     TaskId id();
@@ -227,20 +225,36 @@ public interface Task {
     }
 
 
-
     // IQ related methods
 
     StateStore getStore(final String name);
 
     /**
      * @return the offsets of all the changelog partitions associated with this task,
-     *         indicating the current positions of the logged state stores of the task.
+     * indicating the current positions of the logged state stores of the task.
      */
     Map<TopicPartition, Long> changelogOffsets();
 
-    Map<TopicPartition, Long> getCommittedOffsets();
+    /**
+     * @return the offsets that each TopicPartition has committed so far in this task,
+     * indicating how far the processing has committed
+     */
+    Map<TopicPartition, Long> committedOffsets();
 
-    Map<TopicPartition, Long> getHighWaterMark();
+    /**
+     * @return the highest offsets that each TopicPartition has seen so far in this task
+     */
+    Map<TopicPartition, Long> highWaterMark();
 
-    Optional<Long> getTimeCurrentIdlingStarted();
+    /**
+     * @return This returns the time the task started idling. If it is not idling it returns empty.
+     */
+    Optional<Long> timeCurrentIdlingStarted();
+
+    /**
+     * Update the committed offsets in the Task
+     * @param topicPartition
+     * @param offset
+     */
+    void updateCommittedOffsets(final TopicPartition topicPartition, final Long offset);
 }

@@ -272,13 +272,13 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
             case CREATED:
                 log.info("Suspended created");
                 transitionTo(State.SUSPENDED);
-                timeCurrentIdlingStarted = Optional.of(System.currentTimeMillis());
+                setTimeCurrentIdlingStarted();
                 break;
 
             case RESTORING:
                 log.info("Suspended restoring");
                 transitionTo(State.SUSPENDED);
-                timeCurrentIdlingStarted = Optional.of(System.currentTimeMillis());
+                setTimeCurrentIdlingStarted();
                 break;
 
             case RUNNING:
@@ -291,7 +291,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
                     partitionGroup.clear();
                 } finally {
                     transitionTo(State.SUSPENDED);
-                    timeCurrentIdlingStarted = Optional.of(System.currentTimeMillis());
+                    setTimeCurrentIdlingStarted();
                     log.info("Suspended running");
                 }
 
@@ -1145,19 +1145,28 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
     }
 
     @Override
-    public Map<TopicPartition, Long> getCommittedOffsets() {
-        return committedOffsets;
+    public Map<TopicPartition, Long> committedOffsets() {
+        return Collections.unmodifiableMap(committedOffsets);
     }
 
     @Override
-    public Map<TopicPartition, Long> getHighWaterMark() {
+    public Map<TopicPartition, Long> highWaterMark() {
         highWatermark.putAll(recordCollector.offsets());
-        return highWatermark;
+        return Collections.unmodifiableMap(highWatermark);
+    }
+
+    private void setTimeCurrentIdlingStarted() {
+        timeCurrentIdlingStarted = Optional.of(System.currentTimeMillis());
     }
 
     @Override
-    public Optional<Long> getTimeCurrentIdlingStarted() {
+    public Optional<Long> timeCurrentIdlingStarted() {
         return timeCurrentIdlingStarted;
+    }
+
+    @Override
+    public void updateCommittedOffsets(final TopicPartition topicPartition, final Long offset) {
+        committedOffsets.put(topicPartition, offset);
     }
 
     public boolean hasRecordsQueued() {

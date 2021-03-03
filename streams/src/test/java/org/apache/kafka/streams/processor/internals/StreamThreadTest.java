@@ -847,8 +847,8 @@ public class StreamThreadTest {
         final Task task = niceMock(Task.class);
         expect(task.id()).andStubReturn(task1);
         expect(task.inputPartitions()).andStubReturn(Collections.singleton(t1p1));
-        expect(task.getCommittedOffsets()).andStubReturn(Collections.emptyMap());
-        expect(task.getHighWaterMark()).andStubReturn(Collections.emptyMap());
+        expect(task.committedOffsets()).andStubReturn(Collections.emptyMap());
+        expect(task.highWaterMark()).andStubReturn(Collections.emptyMap());
         final ActiveTaskCreator activeTaskCreator = mock(ActiveTaskCreator.class);
         expect(activeTaskCreator.createTasks(anyObject(), anyObject())).andStubReturn(Collections.singleton(task));
         expect(activeTaskCreator.producerClientIds()).andStubReturn(Collections.singleton("producerClientId"));

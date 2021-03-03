@@ -38,7 +38,7 @@ public class TaskMetadata {
 
     private final Map<TopicPartition, Long> endOffsets;
 
-    private Optional<Long> timeCurrentIdlingStarted;
+    private final Optional<Long> timeCurrentIdlingStarted;
 
     public TaskMetadata(final String taskId,
                         final Set<TopicPartition> topicPartitions,

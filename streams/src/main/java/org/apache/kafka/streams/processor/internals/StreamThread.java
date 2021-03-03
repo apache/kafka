@@ -1128,9 +1128,9 @@ public class StreamThread extends Thread {
             activeTasksMetadata.add(new TaskMetadata(
                 task.getValue().id().toString(),
                 task.getValue().inputPartitions(),
-                task.getValue().getCommittedOffsets(),
-                task.getValue().getHighWaterMark(),
-                task.getValue().getTimeCurrentIdlingStarted()
+                task.getValue().committedOffsets(),
+                task.getValue().highWaterMark(),
+                task.getValue().timeCurrentIdlingStarted()
             ));
         }
         final Set<TaskMetadata> standbyTasksMetadata = new HashSet<>();
@@ -1138,9 +1138,9 @@ public class StreamThread extends Thread {
             standbyTasksMetadata.add(new TaskMetadata(
                 task.getValue().id().toString(),
                 task.getValue().inputPartitions(),
-                task.getValue().getCommittedOffsets(),
-                task.getValue().getHighWaterMark(),
-                task.getValue().getTimeCurrentIdlingStarted()
+                task.getValue().committedOffsets(),
+                task.getValue().highWaterMark(),
+                task.getValue().timeCurrentIdlingStarted()
             ));
         }
 
