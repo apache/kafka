@@ -20,18 +20,19 @@ import java.util.Properties
 
 import kafka.coordinator.group.GroupCoordinator
 import kafka.coordinator.transaction.TransactionCoordinator
+import kafka.log.LogConfig
 import kafka.server.RaftReplicaManager
-import org.apache.kafka.common.{TopicPartition, Uuid}
+import kafka.utils.Implicits._
 import org.apache.kafka.common.config.ConfigResource
 import org.apache.kafka.common.metadata.{ConfigRecord, PartitionRecord, RemoveTopicRecord, TopicRecord}
 import org.apache.kafka.common.protocol.ApiMessage
 import org.apache.kafka.common.utils.MockTime
+import org.apache.kafka.common.{TopicPartition, Uuid}
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.Test
-import org.mockito.{ArgumentCaptor, ArgumentMatchers}
-import org.mockito.Mockito._
 import org.mockito.ArgumentMatchers._
-import kafka.utils.Implicits._
+import org.mockito.Mockito._
+import org.mockito.{ArgumentCaptor, ArgumentMatchers}
 
 import scala.collection.mutable
 import scala.jdk.CollectionConverters._
@@ -46,6 +47,7 @@ class BrokerMetadataListenerTest {
   private val replicaManager = mock(classOf[RaftReplicaManager])
   private val txnCoordinator = mock(classOf[TransactionCoordinator])
   private val clientQuotaManager = mock(classOf[ClientQuotaMetadataManager])
+  private var lastMetadataOffset = 0L
 
   private val listener = new BrokerMetadataListener(
     brokerId,
@@ -64,12 +66,15 @@ class BrokerMetadataListenerTest {
     val topicId = Uuid.randomUuid()
     val topic = "foo"
     val numPartitions = 10
-    val config = Map("cleanup.policy" -> "compact")
+    val config = Map(
+      LogConfig.CleanupPolicyProp -> LogConfig.Compact,
+      LogConfig.MaxCompactionLagMsProp -> "5000"
+    )
     val localPartitions = createAndAssert(topicId, topic, config, numPartitions, numBrokers = 4)
-    deleteAndAssert(topicId, topic, numPartitions, localPartitions)
+    deleteTopic(topicId, topic, numPartitions, localPartitions)
   }
 
-  private def deleteAndAssert(
+  private def deleteTopic(
     topicId: Uuid,
     topic: String,
     numPartitions: Int,
@@ -77,8 +82,8 @@ class BrokerMetadataListenerTest {
   ): Unit = {
     val deleteRecord = new RemoveTopicRecord()
       .setTopicId(topicId)
-
-    listener.execCommits(lastOffset = 3L, List[ApiMessage](
+    lastMetadataOffset += 1
+    listener.execCommits(lastOffset = lastMetadataOffset, List[ApiMessage](
       deleteRecord,
     ).asJava)
 
@@ -93,7 +98,7 @@ class BrokerMetadataListenerTest {
       ArgumentCaptor.forClass(classOf[MetadataImageBuilder])
     verify(replicaManager).handleMetadataRecords(
       deleteImageCapture.capture(),
-      ArgumentMatchers.eq(3L),
+      ArgumentMatchers.eq(lastMetadataOffset),
       any()
     )
 
@@ -106,11 +111,10 @@ class BrokerMetadataListenerTest {
   private def createAndAssert(
     topicId: Uuid,
     topic: String,
-    config: Map[String, String],
+    topicConfig: Map[String, String],
     numPartitions: Int,
     numBrokers: Int
   ): Set[TopicPartition] = {
-    // First create the topic and verify state is updated
     val records = new java.util.ArrayList[ApiMessage]
     records.add(new TopicRecord()
       .setName(topic)
@@ -141,7 +145,7 @@ class BrokerMetadataListenerTest {
       )
     }
 
-    config.forKeyValue { (key, value) =>
+    topicConfig.forKeyValue { (key, value) =>
       records.add(new ConfigRecord()
         .setResourceName(topic)
         .setResourceType(ConfigResource.Type.TOPIC.id())
@@ -150,16 +154,17 @@ class BrokerMetadataListenerTest {
       )
     }
 
-    listener.execCommits(lastOffset = 2L, records)
+    lastMetadataOffset += records.size()
+    listener.execCommits(lastOffset = lastMetadataOffset, records)
     assertTrue(metadataCache.contains(topic))
     assertEquals(Some(numPartitions), metadataCache.numPartitions(topic))
-    assertEquals(config, configRepository.topicConfig(topic).asScala)
+    assertEquals(topicConfig, configRepository.topicConfig(topic).asScala)
 
     val imageCapture: ArgumentCaptor[MetadataImageBuilder] =
       ArgumentCaptor.forClass(classOf[MetadataImageBuilder])
     verify(replicaManager).handleMetadataRecords(
       imageCapture.capture(),
-      ArgumentMatchers.eq(2L),
+      ArgumentMatchers.eq(lastMetadataOffset),
       any()
     )
 
