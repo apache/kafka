@@ -248,7 +248,7 @@ class BrokerServer(
       val autoTopicCreationChannelManager = BrokerToControllerChannelManager(controllerNodeProvider,
         time, metrics, config, "autocreate", threadNamePrefix, 60000)
       autoTopicCreationManager = new DefaultAutoTopicCreationManager(
-        config, metadataCache, Some(autoTopicCreationChannelManager), None, None,
+        config, Some(autoTopicCreationChannelManager), None, None,
         groupCoordinator, transactionCoordinator)
       autoTopicCreationManager.start()
 

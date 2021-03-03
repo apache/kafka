@@ -34,6 +34,7 @@ import org.apache.kafka.common.requests._
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.{BeforeEach, Test}
 import org.mockito.ArgumentMatchers.any
+import org.mockito.invocation.InvocationOnMock
 import org.mockito.{ArgumentMatchers, Mockito}
 
 import scala.collection.{Map, Seq}
@@ -95,7 +96,6 @@ class AutoTopicCreationManagerTest {
                               replicationFactor: Short = 1): Unit = {
     autoTopicCreationManager = new DefaultAutoTopicCreationManager(
       config,
-      metadataCache,
       Some(brokerToController),
       Some(adminManager),
       Some(controller),
@@ -124,7 +124,6 @@ class AutoTopicCreationManagerTest {
   def testCreateTopicsWithForwardingDisabled(): Unit = {
     autoTopicCreationManager = new DefaultAutoTopicCreationManager(
       config,
-      metadataCache,
       None,
       Some(adminManager),
       Some(controller),
@@ -147,50 +146,118 @@ class AutoTopicCreationManagerTest {
   }
 
   @Test
-  def testNotEnoughLiveBrokersForNonInternalTopics(): Unit = {
-    testNotEnoughLiveBrokers("topic", KafkaConfig.DefaultReplicationFactorProp)
+  def testInvalidReplicationFactorForNonInternalTopics(): Unit = {
+    testErrorWithCreationInZk(Errors.INVALID_REPLICATION_FACTOR, "topic", isInternal = false)
   }
 
   @Test
-  def testNotEnoughLiveBrokersForConsumerOffsetsTopic(): Unit = {
+  def testInvalidReplicationFactorForConsumerOffsetsTopic(): Unit = {
     Mockito.when(groupCoordinator.offsetsTopicConfigs).thenReturn(new Properties)
-    testNotEnoughLiveBrokers(Topic.GROUP_METADATA_TOPIC_NAME,
-      KafkaConfig.OffsetsTopicReplicationFactorProp)
+    testErrorWithCreationInZk(Errors.INVALID_REPLICATION_FACTOR, Topic.GROUP_METADATA_TOPIC_NAME, isInternal = true)
   }
 
   @Test
-  def testNotEnoughLiveBrokersForTxnOffsetTopic(): Unit = {
-    testNotEnoughLiveBrokers(Topic.TRANSACTION_STATE_TOPIC_NAME,
-      KafkaConfig.TransactionsTopicReplicationFactorProp)
+  def testInvalidReplicationFactorForTxnOffsetTopic(): Unit = {
+    Mockito.when(transactionCoordinator.transactionTopicConfigs).thenReturn(new Properties)
+    testErrorWithCreationInZk(Errors.INVALID_REPLICATION_FACTOR, Topic.TRANSACTION_STATE_TOPIC_NAME, isInternal = true)
   }
 
-  private def testNotEnoughLiveBrokers(topic: String, replicationConfig: String): Unit = {
-    val props = TestUtils.createBrokerConfig(1, "localhost")
-    props.setProperty(replicationConfig, 3.toString)
-    config = KafkaConfig.fromProps(props)
+  @Test
+  def testTopicExistsErrorSwapForNonInternalTopics(): Unit = {
+    testErrorWithCreationInZk(Errors.TOPIC_ALREADY_EXISTS, "topic", isInternal = false,
+      expectedError = Errors.LEADER_NOT_AVAILABLE)
+  }
 
+  @Test
+  def testTopicExistsErrorSwapForConsumerOffsetsTopic(): Unit = {
+    Mockito.when(groupCoordinator.offsetsTopicConfigs).thenReturn(new Properties)
+    testErrorWithCreationInZk(Errors.TOPIC_ALREADY_EXISTS, Topic.GROUP_METADATA_TOPIC_NAME, isInternal = true,
+      expectedError = Errors.LEADER_NOT_AVAILABLE)
+  }
+
+  @Test
+  def testTopicExistsErrorSwapForTxnOffsetTopic(): Unit = {
+    Mockito.when(transactionCoordinator.transactionTopicConfigs).thenReturn(new Properties)
+    testErrorWithCreationInZk(Errors.TOPIC_ALREADY_EXISTS, Topic.TRANSACTION_STATE_TOPIC_NAME, isInternal = true,
+      expectedError = Errors.LEADER_NOT_AVAILABLE)
+  }
+
+  @Test
+  def testRequestTimeoutErrorSwapForNonInternalTopics(): Unit = {
+    testErrorWithCreationInZk(Errors.REQUEST_TIMED_OUT, "topic", isInternal = false,
+      expectedError = Errors.LEADER_NOT_AVAILABLE)
+  }
+
+  @Test
+  def testRequestTimeoutErrorSwapForConsumerOffsetTopic(): Unit = {
+    Mockito.when(groupCoordinator.offsetsTopicConfigs).thenReturn(new Properties)
+    testErrorWithCreationInZk(Errors.REQUEST_TIMED_OUT, Topic.GROUP_METADATA_TOPIC_NAME, isInternal = true,
+      expectedError = Errors.LEADER_NOT_AVAILABLE)
+  }
+
+  @Test
+  def testRequestTimeoutErrorSwapForTxnOffsetTopic(): Unit = {
+    Mockito.when(transactionCoordinator.transactionTopicConfigs).thenReturn(new Properties)
+    testErrorWithCreationInZk(Errors.REQUEST_TIMED_OUT, Topic.TRANSACTION_STATE_TOPIC_NAME, isInternal = true,
+      expectedError = Errors.LEADER_NOT_AVAILABLE)
+  }
+
+  @Test
+  def testUnknownTopicPartitionForNonIntervalTopic(): Unit = {
+    testErrorWithCreationInZk(Errors.UNKNOWN_TOPIC_OR_PARTITION, "topic", isInternal = false)
+  }
+
+  @Test
+  def testUnknownTopicPartitionForConsumerOffsetTopic(): Unit = {
+    Mockito.when(groupCoordinator.offsetsTopicConfigs).thenReturn(new Properties)
+    testErrorWithCreationInZk(Errors.UNKNOWN_TOPIC_OR_PARTITION, Topic.GROUP_METADATA_TOPIC_NAME, isInternal = true)
+  }
+
+  @Test
+  def testUnknownTopicPartitionForTxnOffsetTopic(): Unit = {
+    Mockito.when(transactionCoordinator.transactionTopicConfigs).thenReturn(new Properties)
+    testErrorWithCreationInZk(Errors.UNKNOWN_TOPIC_OR_PARTITION, Topic.TRANSACTION_STATE_TOPIC_NAME, isInternal = true)
+  }
+
+  private def testErrorWithCreationInZk(error: Errors,
+                                        topicName: String,
+                                        isInternal: Boolean,
+                                        expectedError: Errors = null): Unit = {
     autoTopicCreationManager = new DefaultAutoTopicCreationManager(
       config,
-      metadataCache,
-      Some(brokerToController),
+      None,
       Some(adminManager),
       Some(controller),
       groupCoordinator,
       transactionCoordinator)
 
     Mockito.when(controller.isActive).thenReturn(false)
+    val newTopic = if (isInternal) {
+      topicName match {
+        case Topic.GROUP_METADATA_TOPIC_NAME => getNewTopic(topicName,
+          numPartitions = config.offsetsTopicPartitions, replicationFactor = config.offsetsTopicReplicationFactor)
+        case Topic.TRANSACTION_STATE_TOPIC_NAME => getNewTopic(topicName,
+          numPartitions = config.transactionTopicPartitions, replicationFactor = config.transactionTopicReplicationFactor)
+      }
+    } else {
+      getNewTopic(topicName)
+    }
 
-    val isInternal = Topic.isInternal(topic)
-    val expectedError = if (isInternal)
-      Errors.INVALID_REPLICATION_FACTOR
-    else
-      Errors.LEADER_NOT_AVAILABLE
+    val topicErrors = if (error == Errors.UNKNOWN_TOPIC_OR_PARTITION) null else
+      Map(topicName -> new ApiError(error))
+    Mockito.when(adminManager.createTopics(
+      ArgumentMatchers.eq(0),
+      ArgumentMatchers.eq(false),
+      ArgumentMatchers.eq(Map(topicName -> newTopic)),
+      ArgumentMatchers.eq(Map.empty),
+      any(classOf[ControllerMutationQuota]),
+      any(classOf[Map[String, ApiError] => Unit]))).thenAnswer((invocation: InvocationOnMock) => {
+      invocation.getArgument(5).asInstanceOf[Map[String, ApiError] => Unit]
+        .apply(topicErrors)
+    })
 
-    createTopicAndVerifyResult(expectedError, topic, isInternal)
-
-    Mockito.verify(brokerToController, Mockito.never()).sendRequest(
-      any(),
-      any(classOf[ControllerRequestCompletionHandler]))
+    val errorToVerify = if (expectedError != null) expectedError else error
+    createTopicAndVerifyResult(errorToVerify, topicName, isInternal = isInternal)
   }
 
   private def createTopicAndVerifyResult(error: Errors,
