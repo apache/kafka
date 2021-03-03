@@ -124,8 +124,18 @@ class KafkaNetworkChannel(
     }
 
     def onComplete(clientResponse: ClientResponse): Unit = {
-      val response = if (clientResponse.authenticationException != null) {
-        errorResponse(request.data, Errors.CLUSTER_AUTHORIZATION_FAILED)
+      val response = if (clientResponse.versionMismatch != null) {
+        error(s"Request $request failed due to unsupported version error",
+          clientResponse.versionMismatch)
+        errorResponse(request.data, Errors.UNSUPPORTED_VERSION)
+      } else if (clientResponse.authenticationException != null) {
+        // For now we treat authentication errors as retriable. We use the
+        // `NETWORK_EXCEPTION` error code for lack of a good alternative.
+        // Note that `BrokerToControllerChannelManager` will still log the
+        // authentication errors so that users have a chance to fix the problem.
+        error(s"Request $request failed due to authentication error",
+          clientResponse.authenticationException)
+        errorResponse(request.data, Errors.NETWORK_EXCEPTION)
       } else if (clientResponse.wasDisconnected()) {
         errorResponse(request.data, Errors.BROKER_NOT_AVAILABLE)
       } else {
@@ -165,7 +175,7 @@ class KafkaNetworkChannel(
     RaftUtil.errorResponse(apiKey, error)
   }
 
-  def updateEndpoint(id: Int, spec: InetAddressSpec): Unit = {
+  override def updateEndpoint(id: Int, spec: InetAddressSpec): Unit = {
     val node = new Node(id, spec.address.getHostString, spec.address.getPort)
     endpoints.put(id, node)
   }
@@ -181,5 +191,4 @@ class KafkaNetworkChannel(
   override def close(): Unit = {
     requestThread.shutdown()
   }
-
 }

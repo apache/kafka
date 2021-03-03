@@ -171,7 +171,7 @@ class RequestQuotaTest extends BaseRequestTest {
   def testUnauthorizedThrottle(): Unit = {
     RequestQuotaTest.principal = RequestQuotaTest.UnauthorizedPrincipal
 
-    for (apiKey <- ApiKeys.brokerApis.asScala) {
+    for (apiKey <- ApiKeys.zkBrokerApis.asScala) {
       submitTest(apiKey, () => checkUnauthorizedRequestThrottle(apiKey))
     }
 
@@ -507,7 +507,7 @@ class RequestQuotaTest extends BaseRequestTest {
           val data = new DescribeLogDirsRequestData()
           data.topics.add(new DescribeLogDirsRequestData.DescribableLogDirTopic()
             .setTopic(tp.topic)
-            .setPartitionIndex(Collections.singletonList(tp.partition)))
+            .setPartitions(Collections.singletonList(tp.partition)))
           new DescribeLogDirsRequest.Builder(data)
 
         case ApiKeys.CREATE_PARTITIONS =>
@@ -635,6 +635,13 @@ class RequestQuotaTest extends BaseRequestTest {
         case ApiKeys.UNREGISTER_BROKER =>
           new UnregisterBrokerRequest.Builder(new UnregisterBrokerRequestData())
 
+        case ApiKeys.DESCRIBE_TRANSACTIONS =>
+          new DescribeTransactionsRequest.Builder(new DescribeTransactionsRequestData()
+            .setTransactionalIds(List("test-transactional-id").asJava))
+
+        case ApiKeys.LIST_TRANSACTIONS =>
+          new ListTransactionsRequest.Builder(new ListTransactionsRequestData())
+
         case _ =>
           throw new IllegalArgumentException("Unsupported API key " + apiKey)
     }
@@ -754,9 +761,9 @@ class RequestQuotaTest extends BaseRequestTest {
 }
 
 object RequestQuotaTest {
-  val ClusterActions = ApiKeys.brokerApis.asScala.filter(_.clusterAction).toSet
+  val ClusterActions = ApiKeys.zkBrokerApis.asScala.filter(_.clusterAction).toSet
   val SaslActions = Set(ApiKeys.SASL_HANDSHAKE, ApiKeys.SASL_AUTHENTICATE)
-  val ClientActions = ApiKeys.brokerApis.asScala.toSet -- ClusterActions -- SaslActions
+  val ClientActions = ApiKeys.zkBrokerApis.asScala.toSet -- ClusterActions -- SaslActions
 
   val UnauthorizedPrincipal = new KafkaPrincipal(KafkaPrincipal.USER_TYPE, "Unauthorized")
   // Principal used for all client connections. This is modified by tests which

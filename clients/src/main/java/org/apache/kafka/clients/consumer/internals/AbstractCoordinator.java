@@ -158,7 +158,7 @@ public abstract class AbstractCoordinator implements Closeable {
         Objects.requireNonNull(rebalanceConfig.groupId,
                                "Expected a non-null group id for coordinator construction");
         this.rebalanceConfig = rebalanceConfig;
-        this.log = logContext.logger(AbstractCoordinator.class);
+        this.log = logContext.logger(this.getClass());
         this.client = client;
         this.time = time;
         this.heartbeat = new Heartbeat(rebalanceConfig, time);
@@ -256,8 +256,8 @@ public abstract class AbstractCoordinator implements Closeable {
                     log.debug("Coordinator discovery failed, refreshing metadata", future.exception());
                     client.awaitMetadataUpdate(timer);
                 } else {
-                    log.info("FindCoordinator request hit fatal exception", fatalException);
                     fatalException = future.exception();
+                    log.info("FindCoordinator request hit fatal exception", fatalException);
                 }
             } else if (coordinator != null && client.isUnavailable(coordinator)) {
                 // we found the coordinator, but the connection has failed, so mark
@@ -267,7 +267,7 @@ public abstract class AbstractCoordinator implements Closeable {
             }
 
             clearFindCoordinatorFuture();
-            if (fatalException !=  null)
+            if (fatalException != null)
                 throw fatalException;
         } while (coordinatorUnknown() && timer.notExpired());
 

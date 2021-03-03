@@ -16,6 +16,7 @@
 {
   "apiKey": 33,
   "type": "request",
+  "listeners": ["zkBroker"],
   "name": "AlterConfigsRequest",
   // Version 1 is the same as version 0.
   // Version 2 enables flexible versions.
