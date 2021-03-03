@@ -243,7 +243,8 @@
           <tr class="row-even"><td>max.task.idle.ms</td>
             <td>Medium</td>
             <td colspan="2">Maximum amount of time in milliseconds a stream task will stay idle while waiting for all partitions to contain data
-              and avoid potential out-of-order record processing across multiple input streams.</td>
+              and avoid potential out-of-order record processing across multiple input streams. The value must be lower than <code class="docutils literal"><span class="pre">max.poll.interval.ms</span></code> 
+              to avoid rebalancing of unresponsive tasks.</td>
             <td>0 milliseconds</td>
           </tr>
           <tr class="row-odd"><td>max.warmup.replicas</td>
