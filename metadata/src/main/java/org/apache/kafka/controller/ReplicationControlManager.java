@@ -407,7 +407,7 @@ public class ReplicationControlManager {
             resultsPrefix = ", ";
         }
         log.info("createTopics result(s): {}", resultsBuilder.toString());
-        return new ControllerResult<>(records, data);
+        return new ControllerResult<>(records, data, true);
     }
 
     private ApiError createTopic(CreatableTopic topic,

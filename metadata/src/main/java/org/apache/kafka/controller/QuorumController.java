@@ -265,7 +265,7 @@ public final class QuorumController implements Controller {
     class ControlEvent implements EventQueue.Event {
         private final String name;
         private final Runnable handler;
-        private long eventCreatedTimeNs = time.nanoseconds();
+        private final long eventCreatedTimeNs = time.nanoseconds();
         private Optional<Long> startProcessingTimeNs = Optional.empty();
 
         ControlEvent(String name, Runnable handler) {
@@ -307,7 +307,7 @@ public final class QuorumController implements Controller {
         private final String name;
         private final CompletableFuture<T> future;
         private final Supplier<T> handler;
-        private long eventCreatedTimeNs = time.nanoseconds();
+        private final long eventCreatedTimeNs = time.nanoseconds();
         private Optional<Long> startProcessingTimeNs = Optional.empty();
 
         ControllerReadEvent(String name, Supplier<T> handler) {
@@ -389,7 +389,7 @@ public final class QuorumController implements Controller {
         private final String name;
         private final CompletableFuture<T> future;
         private final ControllerWriteOperation<T> op;
-        private long eventCreatedTimeNs = time.nanoseconds();
+        private final long eventCreatedTimeNs = time.nanoseconds();
         private Optional<Long> startProcessingTimeNs = Optional.empty();
         private ControllerResultAndOffset<T> resultAndOffset;
 
@@ -441,7 +441,12 @@ public final class QuorumController implements Controller {
                 // written before we can return our result to the user.  Here, we hand off
                 // the batch of records to the metadata log manager.  They will be written
                 // out asynchronously.
-                long offset = logManager.scheduleWrite(controllerEpoch, result.records());
+                final long offset;
+                if (result.isAtomic()) {
+                    offset = logManager.scheduleAtomicWrite(controllerEpoch, result.records());
+                } else {
+                    offset = logManager.scheduleWrite(controllerEpoch, result.records());
+                }
                 op.processBatchEndOffset(offset);
                 writeOffset = offset;
                 resultAndOffset = new ControllerResultAndOffset<>(offset,

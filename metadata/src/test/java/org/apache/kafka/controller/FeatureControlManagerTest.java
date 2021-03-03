@@ -101,12 +101,23 @@ public class FeatureControlManagerTest {
         SnapshotRegistry snapshotRegistry = new SnapshotRegistry(new LogContext());
         FeatureControlManager manager = new FeatureControlManager(
             rangeMap("foo", 1, 5, "bar", 1, 2), snapshotRegistry);
-        assertEquals(new ControllerResult<>(Collections.
-                singletonMap("foo", new ApiError(Errors.INVALID_UPDATE_VERSION,
-                    "Broker 5 does not support the given feature range."))),
-            manager.updateFeatures(rangeMap("foo", 1, 3),
+
+        assertEquals(
+            new ControllerResult<>(
+                Collections.singletonMap(
+                    "foo",
+                    new ApiError(
+                        Errors.INVALID_UPDATE_VERSION,
+                        "Broker 5 does not support the given feature range."
+                    )
+                )
+            ),
+            manager.updateFeatures(
+                rangeMap("foo", 1, 3),
                 new HashSet<>(Arrays.asList("foo")),
-                Collections.singletonMap(5, rangeMap())));
+                Collections.singletonMap(5, rangeMap())
+            )
+        );
 
         ControllerResult<Map<String, ApiError>> result = manager.updateFeatures(
             rangeMap("foo", 1, 3), Collections.emptySet(), Collections.emptyMap());
@@ -121,12 +132,24 @@ public class FeatureControlManagerTest {
             manager.updateFeatures(rangeMap("foo", 1, 2),
                 Collections.emptySet(), Collections.emptyMap()));
 
-        assertEquals(new ControllerResult<>(
-            Collections.singletonList(new ApiMessageAndVersion(new FeatureLevelRecord().
-                    setName("foo").setMinFeatureLevel((short) 1).setMaxFeatureLevel((short) 2),
-                    (short) 0)),
-                Collections.singletonMap("foo", ApiError.NONE)),
-            manager.updateFeatures(rangeMap("foo", 1, 2),
-                new HashSet<>(Collections.singletonList("foo")), Collections.emptyMap()));
+        assertEquals(
+            new ControllerResult<>(
+                Collections.singletonList(
+                    new ApiMessageAndVersion(
+                        new FeatureLevelRecord()
+                            .setName("foo")
+                            .setMinFeatureLevel((short) 1)
+                            .setMaxFeatureLevel((short) 2),
+                        (short) 0
+                    )
+                ),
+                Collections.singletonMap("foo", ApiError.NONE),
+                true
+            ),
+            manager.updateFeatures(
+                rangeMap("foo", 1, 2),
+                new HashSet<>(Collections.singletonList("foo")), Collections.emptyMap()
+            )
+        );
     }
 }

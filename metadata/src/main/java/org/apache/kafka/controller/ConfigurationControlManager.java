@@ -83,7 +83,7 @@ public class ConfigurationControlManager {
                 outputRecords,
                 outputResults);
         }
-        return new ControllerResult<>(outputRecords, outputResults);
+        return new ControllerResult<>(outputRecords, outputResults, true);
     }
 
     private void incrementalAlterConfigResource(ConfigResource configResource,
@@ -171,7 +171,7 @@ public class ConfigurationControlManager {
                 outputRecords,
                 outputResults);
         }
-        return new ControllerResult<>(outputRecords, outputResults);
+        return new ControllerResult<>(outputRecords, outputResults, true);
     }
 
     private void legacyAlterConfigResource(ConfigResource configResource,
