@@ -509,7 +509,7 @@ public final class MessageTest {
                       )
                       .setThrottleTimeMs(20);
 
-        for (short version = 0; version <= ApiKeys.OFFSET_COMMIT.latestVersion(); version++) {
+        for (short version : ApiKeys.OFFSET_COMMIT.allVersions()) {
             OffsetCommitResponseData responseData = response.get();
             if (version < 3) {
                 responseData.setThrottleTimeMs(0);
@@ -924,8 +924,8 @@ public final class MessageTest {
     @Test
     public void testWriteNullForNonNullableFieldRaisesException() {
         CreateTopicsRequestData createTopics = new CreateTopicsRequestData().setTopics(null);
-        for (short i = (short) 0; i <= createTopics.highestSupportedVersion(); i++) {
-            verifyWriteRaisesNpe(i, createTopics);
+        for (short version : ApiKeys.CREATE_TOPICS.allVersions()) {
+            verifyWriteRaisesNpe(version, createTopics);
         }
         MetadataRequestData metadata = new MetadataRequestData().setTopics(null);
         verifyWriteRaisesNpe((short) 0, metadata);

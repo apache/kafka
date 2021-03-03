@@ -282,10 +282,10 @@ public class RequestResponseTest {
         checkErrorResponse(createLeaveGroupRequest(), unknownServerException, true);
         checkResponse(createLeaveGroupResponse(), 0, true);
 
-        for (short v = ApiKeys.LIST_GROUPS.oldestVersion(); v <= ApiKeys.LIST_GROUPS.latestVersion(); v++) {
-            checkRequest(createListGroupsRequest(v), false);
-            checkErrorResponse(createListGroupsRequest(v), unknownServerException, true);
-            checkResponse(createListGroupsResponse(v), v, true);
+        for (short version : ApiKeys.LIST_GROUPS.allVersions()) {
+            checkRequest(createListGroupsRequest(version), false);
+            checkErrorResponse(createListGroupsRequest(version), unknownServerException, true);
+            checkResponse(createListGroupsResponse(version), version, true);
         }
 
         checkRequest(createDescribeGroupRequest(), true);
@@ -667,12 +667,11 @@ public class RequestResponseTest {
     }
 
     private void checkDescribeConfigsResponseVersions() {
-        for (int version = ApiKeys.DESCRIBE_CONFIGS.oldestVersion(); version <= ApiKeys.DESCRIBE_CONFIGS.latestVersion(); ++version) {
-            short apiVersion = (short) version;
-            DescribeConfigsResponse response = createDescribeConfigsResponse(apiVersion);
+        for (short version : ApiKeys.DESCRIBE_CONFIGS.allVersions()) {
+            DescribeConfigsResponse response = createDescribeConfigsResponse(version);
             DescribeConfigsResponse deserialized0 = (DescribeConfigsResponse) AbstractResponse.parseResponse(ApiKeys.DESCRIBE_CONFIGS,
-                    response.serialize(apiVersion), apiVersion);
-            verifyDescribeConfigsResponse(response, deserialized0, apiVersion);
+                    response.serialize(version), version);
+            verifyDescribeConfigsResponse(response, deserialized0, version);
         }
     }
 
