@@ -47,8 +47,8 @@ public class TaskMetadata {
                         final Optional<Long> timeCurrentIdlingStarted) {
         this.taskId = taskId;
         this.topicPartitions = Collections.unmodifiableSet(topicPartitions);
-        this.committedOffsets = committedOffsets;
-        this.endOffsets = endOffsets;
+        this.committedOffsets = Collections.unmodifiableMap(committedOffsets);
+        this.endOffsets = Collections.unmodifiableMap(endOffsets);
         this.timeCurrentIdlingStarted = timeCurrentIdlingStarted;
     }
 
