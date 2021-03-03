@@ -899,8 +899,9 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
         return True
 
     def all_nodes_support_topic_ids(self):
+        if self.quorum_info.using_raft: return True
         for node in self.nodes:
-            if not self.node_inter_broker_protocol_version(node).supports_topic_ids():
+            if not self.node_inter_broker_protocol_version(node).zk_supports_topic_ids():
                 return False
         return True
 
@@ -1341,12 +1342,14 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
             raise
 
     def topic_id(self, topic):
-        if self.quorum_info.using_raft:
+        if self.all_nodes_support_topic_ids():
             node = self.nodes[0]
+
+            force_use_zk_connection = not self.all_nodes_topic_command_supports_bootstrap_server()
 
             cmd = fix_opts_for_new_jvm(node)
             cmd += "%s --topic %s --describe" % \
-               (self.kafka_topics_cmd_with_optional_security_settings(node, False), topic)
+               (self.kafka_topics_cmd_with_optional_security_settings(node, force_use_zk_connection), topic)
 
             self.logger.debug(
                 "Querying topic ID by using describe topic command ...\n%s" % cmd
@@ -1362,26 +1365,12 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
                    continue
 
                 fields = line.split("\t")
-                # [Topic: test_topic, TopicId: AAAAAAAAAAAAAAAAAAAAAA, PartitionCount: 2, ReplicationFactor: 2, ...]
-                # -> [test_topic, AAAAAAAAAAAAAAAAAAAAAA, 2, 2, ...]
+                # [Topic: test_topic, TopicId: <topic_id>, PartitionCount: 2, ReplicationFactor: 2, ...]
+                # -> [test_topic, <topic_id>, 2, 2, ...]
+                # -> <topic_id>
                 topic_id = list(map(lambda x: x.split(" ")[1], fields))[1]
 
                 return topic_id
-        self.logger.debug(
-            "Querying zookeeper to find assigned topic ID for topic %s." % topic)
-        zk_path = "/brokers/topics/%s" % topic
-        topic_info_json = self.zk.query(zk_path, chroot=self.zk_chroot)
-
-        if topic_info_json is None:
-            raise Exception("Error finding state for topic %s." % topic)
-
-        topic_info = json.loads(topic_info_json)
-        self.logger.info(topic_info)
-
-        if self.all_nodes_support_topic_ids():
-            topic_id = topic_info["topic_id"]
-            self.logger.info("Topic ID assigned for topic %s is %s" % (topic, topic_id))
-            return topic_id
         else:
             self.logger.info("No topic ID assigned for topic %s" % topic)
             return None
