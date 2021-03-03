@@ -33,12 +33,12 @@ def doValidation() {
   '''
 }
 
-def doTest() {
-  sh '''
-    ./gradlew -PscalaVersion=$SCALA_VERSION unitTest integrationTest \
+def doTest(target = "unitTest integrationTest") {
+  sh """
+    ./gradlew -PscalaVersion=$SCALA_VERSION ${target} \
         --profile --no-daemon --continue -PtestLoggingEvents=started,passed,skipped,failed \
         -PignoreFailures=true -PmaxParallelForks=2 -PmaxTestRetries=1 -PmaxTestRetryFailures=5
-  '''
+  """
   junit '**/build/test-results/**/TEST-*.xml'
 }
 
@@ -156,6 +156,25 @@ pipeline {
             doValidation()
             doTest()
             echo 'Skipping Kafka Streams archetype test for Java 15'
+          }
+        }
+
+        stage('ARM') {
+          agent { label 'arm4' }
+          options {
+            timeout(time: 2, unit: 'HOURS') 
+            timestamps()
+          }
+          environment {
+            SCALA_VERSION=2.12
+          }
+          steps {
+            setupGradle()
+            doValidation()
+            catchError(buildResult: 'SUCCESS', stageResult: 'FAILURE') {
+              doTest('unitTest')
+            }
+            echo 'Skipping Kafka Streams archetype test for ARM build'
           }
         }
       }
