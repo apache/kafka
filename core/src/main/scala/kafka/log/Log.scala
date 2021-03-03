@@ -242,6 +242,12 @@ case object SnapshotGenerated extends LogStartOffsetIncrementReason {
  * @param producerIdExpirationCheckIntervalMs How often to check for producer ids which need to be expired
  * @param hadCleanShutdown boolean flag to indicate if the Log had a clean/graceful shutdown last time. true means
  *                         clean shutdown whereas false means a crash.
+ * @param keepPartitionMetadataFile boolean flag to indicate whether the partition.metadata file should be kept in the
+ *                                  log directory. A partition.metadata file is only created when the controller's
+ *                                  inter-broker protocol version is at least 2.8. This file will persist the topic ID on
+ *                                  the broker. If inter-broker protocol is downgraded below 2.8, a topic ID may be lost
+ *                                  and a new ID generated upon re-upgrade. If the inter-broker protocol version is below
+ *                                  2.8, partition.metadata will be deleted to avoid ID conflicts upon re-upgrade.
  */
 @threadsafe
 class Log(@volatile private var _dir: File,
@@ -256,7 +262,8 @@ class Log(@volatile private var _dir: File,
           val topicPartition: TopicPartition,
           val producerStateManager: ProducerStateManager,
           logDirFailureChannel: LogDirFailureChannel,
-          private val hadCleanShutdown: Boolean = true) extends Logging with KafkaMetricsGroup {
+          private val hadCleanShutdown: Boolean = true,
+          val keepPartitionMetadataFile: Boolean = true) extends Logging with KafkaMetricsGroup {
 
   import kafka.log.Log._
 
@@ -307,7 +314,7 @@ class Log(@volatile private var _dir: File,
   // Visible for testing
   @volatile var leaderEpochCache: Option[LeaderEpochFileCache] = None
 
-  @volatile var partitionMetadataFile : Option[PartitionMetadataFile] = None
+  @volatile var partitionMetadataFile : PartitionMetadataFile = null
 
   @volatile var topicId : Uuid = Uuid.ZERO_UUID
 
@@ -341,10 +348,13 @@ class Log(@volatile private var _dir: File,
     producerStateManager.removeStraySnapshots(segments.values().asScala.map(_.baseOffset).toSeq)
     loadProducerState(logEndOffset, reloadFromCleanShutdown = hadCleanShutdown)
 
-    // Recover topic ID if present
-    partitionMetadataFile.foreach { file =>
-      if (!file.isEmpty())
-        topicId = file.read().topicId
+    // Delete partition metadata file if the version does not support topic IDs.
+    // Recover topic ID if present and topic IDs are supported
+    if (partitionMetadataFile.exists()) {
+        if (!keepPartitionMetadataFile)
+          partitionMetadataFile.delete()
+        else
+          topicId = partitionMetadataFile.read().topicId
     }
   }
 
@@ -564,7 +574,7 @@ class Log(@volatile private var _dir: File,
 
   private def initializePartitionMetadata(): Unit = lock synchronized {
     val partitionMetadata = PartitionMetadataFile.newFile(dir)
-    partitionMetadataFile = Some(new PartitionMetadataFile(partitionMetadata, logDirFailureChannel))
+    partitionMetadataFile = new PartitionMetadataFile(partitionMetadata, logDirFailureChannel)
   }
 
   private def initializeLeaderEpochCache(): Unit = lock synchronized {
@@ -839,9 +849,25 @@ class Log(@volatile private var _dir: File,
    * @throws LogSegmentOffsetOverflowException if we encountered a legacy segment with offset overflow
    */
   private[log] def recoverLog(): Long = {
+    /** return the log end offset if valid */
+    def deleteSegmentsIfLogStartGreaterThanLogEnd(): Option[Long] = {
+      if (logSegments.nonEmpty) {
+        val logEndOffset = activeSegment.readNextOffset
+        if (logEndOffset >= logStartOffset)
+          Some(logEndOffset)
+        else {
+          warn(s"Deleting all segments because logEndOffset ($logEndOffset) is smaller than logStartOffset ($logStartOffset). " +
+            "This could happen if segment files were deleted from the file system.")
+          removeAndDeleteSegments(logSegments, asyncDelete = true, LogRecovery)
+          leaderEpochCache.foreach(_.clearAndFlush())
+          producerStateManager.truncateFullyAndStartAt(logStartOffset)
+          None
+        }
+      } else None
+    }
+
     // if we have the clean shutdown marker, skip recovery
     if (!hadCleanShutdown) {
-      // okay we need to actually recover this log
       val unflushed = logSegments(this.recoveryPoint, Long.MaxValue).iterator
       var truncated = false
 
@@ -869,16 +895,7 @@ class Log(@volatile private var _dir: File,
       }
     }
 
-    if (logSegments.nonEmpty) {
-      val logEndOffset = activeSegment.readNextOffset
-      if (logEndOffset < logStartOffset) {
-        warn(s"Deleting all segments because logEndOffset ($logEndOffset) is smaller than logStartOffset ($logStartOffset). " +
-          "This could happen if segment files were deleted from the file system.")
-        removeAndDeleteSegments(logSegments,
-          asyncDelete = true,
-          reason = LogRecovery)
-      }
-    }
+    val logEndOffsetOption = deleteSegmentsIfLogStartGreaterThanLogEnd()
 
     if (logSegments.isEmpty) {
       // no existing segments, create a new mutable segment beginning at logStartOffset
@@ -890,8 +907,21 @@ class Log(@volatile private var _dir: File,
         preallocate = config.preallocate))
     }
 
-    recoveryPoint = activeSegment.readNextOffset
-    recoveryPoint
+    // Update the recovery point if there was a clean shutdown and did not perform any changes to
+    // the segment. Otherwise, we just ensure that the recovery point is not ahead of the log end
+    // offset. To ensure correctness and to make it easier to reason about, it's best to only advance
+    // the recovery point in flush(Long). If we advanced the recovery point here, we could skip recovery for
+    // unflushed segments if the broker crashed after we checkpoint the recovery point and before we flush the
+    // segment.
+    (hadCleanShutdown, logEndOffsetOption) match {
+      case (true, Some(logEndOffset)) =>
+        recoveryPoint = logEndOffset
+        logEndOffset
+      case _ =>
+        val logEndOffset = logEndOffsetOption.getOrElse(activeSegment.readNextOffset)
+        recoveryPoint = Math.min(recoveryPoint, logEndOffset)
+        logEndOffset
+    }
   }
 
   // Rebuild producer state until lastOffset. This method may be called from the recovery code path, and thus must be
@@ -932,8 +962,11 @@ class Log(@volatile private var _dir: File,
         producerStateManager.takeSnapshot()
       }
     } else {
+      info(s"Reloading from producer snapshot and rebuilding producer state from offset $lastOffset")
       val isEmptyBeforeTruncation = producerStateManager.isEmpty && producerStateManager.mapEndOffset >= lastOffset
+      val producerStateLoadStart = time.milliseconds()
       producerStateManager.truncateAndReload(logStartOffset, lastOffset, time.milliseconds())
+      val segmentRecoveryStart = time.milliseconds()
 
       // Only do the potentially expensive reloading if the last snapshot offset is lower than the log end
       // offset (which would be the case on first startup) and there were active producers prior to truncation
@@ -969,6 +1002,8 @@ class Log(@volatile private var _dir: File,
       }
       producerStateManager.updateMapEndOffset(lastOffset)
       producerStateManager.takeSnapshot()
+      info(s"Producer state recovery took ${producerStateLoadStart - segmentRecoveryStart}ms for snapshot load " +
+        s"and ${time.milliseconds() - segmentRecoveryStart}ms for segment recovery from offset $lastOffset")
     }
   }
 
@@ -1854,7 +1889,9 @@ class Log(@volatile private var _dir: File,
    */
   def deleteOldSegments(): Int = {
     if (config.delete) {
-      deleteRetentionMsBreachedSegments() + deleteRetentionSizeBreachedSegments() + deleteLogStartOffsetBreachedSegments()
+      deleteLogStartOffsetBreachedSegments() +
+        deleteRetentionSizeBreachedSegments() +
+        deleteRetentionMsBreachedSegments()
     } else {
       deleteLogStartOffsetBreachedSegments()
     }
@@ -2563,11 +2600,12 @@ object Log {
             maxProducerIdExpirationMs: Int,
             producerIdExpirationCheckIntervalMs: Int,
             logDirFailureChannel: LogDirFailureChannel,
-            lastShutdownClean: Boolean = true): Log = {
+            lastShutdownClean: Boolean = true,
+            keepPartitionMetadataFile: Boolean = true): Log = {
     val topicPartition = Log.parseTopicPartitionName(dir)
     val producerStateManager = new ProducerStateManager(topicPartition, dir, maxProducerIdExpirationMs)
     new Log(dir, config, logStartOffset, recoveryPoint, scheduler, brokerTopicStats, time, maxProducerIdExpirationMs,
-      producerIdExpirationCheckIntervalMs, topicPartition, producerStateManager, logDirFailureChannel, lastShutdownClean)
+      producerIdExpirationCheckIntervalMs, topicPartition, producerStateManager, logDirFailureChannel, lastShutdownClean, keepPartitionMetadataFile)
   }
 
   /**

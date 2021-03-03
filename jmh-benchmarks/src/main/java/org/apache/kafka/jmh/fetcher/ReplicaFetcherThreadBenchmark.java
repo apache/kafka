@@ -56,7 +56,6 @@ import org.apache.kafka.common.requests.FetchRequest;
 import org.apache.kafka.common.requests.FetchResponse;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
-import org.apache.kafka.metadata.BrokerState;
 import org.mockito.Mockito;
 import org.openjdk.jmh.annotations.Benchmark;
 import org.openjdk.jmh.annotations.BenchmarkMode;
@@ -89,7 +88,6 @@ import java.util.Optional;
 import java.util.Properties;
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicReference;
 
 @State(Scope.Benchmark)
 @Fork(value = 1)
@@ -124,7 +122,7 @@ public class ReplicaFetcherThreadBenchmark {
         LogDirFailureChannel logDirFailureChannel = Mockito.mock(LogDirFailureChannel.class);
         logManager = new LogManager(JavaConverters.asScalaIteratorConverter(logDirs.iterator()).asScala().toSeq(),
                 JavaConverters.asScalaIteratorConverter(new ArrayList<File>().iterator()).asScala().toSeq(),
-                new scala.collection.mutable.HashMap<>(),
+                new CachedConfigRepository(),
                 logConfig,
                 new CleanerConfig(0, 0, 0, 0, 0, 0.0, 0, false, "MD5"),
                 1,
@@ -134,10 +132,10 @@ public class ReplicaFetcherThreadBenchmark {
                 1000L,
                 60000,
                 scheduler,
-                new AtomicReference<>(BrokerState.NOT_RUNNING),
                 brokerTopicStats,
                 logDirFailureChannel,
-                Time.SYSTEM);
+                Time.SYSTEM,
+                true);
 
         LinkedHashMap<TopicPartition, FetchResponse.PartitionData<BaseRecords>> initialFetched = new LinkedHashMap<>();
         scala.collection.mutable.Map<TopicPartition, InitialFetchState> initialFetchStates = new scala.collection.mutable.HashMap<>();
@@ -159,7 +157,7 @@ public class ReplicaFetcherThreadBenchmark {
             Mockito.when(offsetCheckpoints.fetch(logDir.getAbsolutePath(), tp)).thenReturn(Option.apply(0L));
             AlterIsrManager isrChannelManager = Mockito.mock(AlterIsrManager.class);
             Partition partition = new Partition(tp, 100, ApiVersion$.MODULE$.latestVersion(),
-                    0, Time.SYSTEM, new CachedConfigRepository(), isrChangeListener, new DelayedOperationsMock(tp),
+                    0, Time.SYSTEM, isrChangeListener, new DelayedOperationsMock(tp),
                     Mockito.mock(MetadataCache.class), logManager, isrChannelManager);
 
             partition.makeFollower(partitionState, offsetCheckpoints);

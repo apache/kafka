@@ -571,6 +571,11 @@ public class StreamThread extends Thread {
         // until the rebalance is completed before we close and commit the tasks
         while (isRunning() || taskManager.isRebalanceInProgress()) {
             try {
+                if (assignmentErrorCode.get() == AssignorError.SHUTDOWN_REQUESTED.code()) {
+                    log.warn("Detected that shutdown was requested. " +
+                            "All clients in this app will now begin to shutdown");
+                    mainConsumer.enforceRebalance();
+                }
                 runOnce();
                 if (nextProbingRebalanceMs.get() < time.milliseconds()) {
                     log.info("Triggering the followup rebalance scheduled for {} ms.", nextProbingRebalanceMs.get());
@@ -578,10 +583,10 @@ public class StreamThread extends Thread {
                     nextProbingRebalanceMs.set(Long.MAX_VALUE);
                 }
             } catch (final TaskCorruptedException e) {
-                log.warn("Detected the states of tasks " + e.corruptedTaskWithChangelogs() + " are corrupted. " +
+                log.warn("Detected the states of tasks " + e.corruptedTasks() + " are corrupted. " +
                         "Will close the task as dirty and re-create and bootstrap from scratch.", e);
                 try {
-                    taskManager.handleCorruption(e.corruptedTaskWithChangelogs());
+                    taskManager.handleCorruption(e.corruptedTasks());
                 } catch (final TaskMigratedException taskMigrated) {
                     handleTaskMigrated(taskMigrated);
                 }
@@ -660,10 +665,7 @@ public class StreamThread extends Thread {
     }
 
     public void sendShutdownRequest(final AssignorError assignorError) {
-        log.warn("Detected that shutdown was requested. " +
-                "All clients in this app will now begin to shutdown");
         assignmentErrorCode.set(assignorError.code());
-        mainConsumer.enforceRebalance();
     }
 
     private void handleTaskMigrated(final TaskMigratedException e) {
@@ -776,9 +778,10 @@ public class StreamThread extends Thread {
 
                 log.debug("{} punctuators ran.", punctuated);
 
+                final long beforeCommitMs = now;
                 final int committed = maybeCommit();
                 totalCommittedSinceLastSummary += committed;
-                final long commitLatency = advanceNowAndComputeLatency();
+                final long commitLatency = Math.max(now - beforeCommitMs, 0);
                 totalCommitLatency += commitLatency;
                 if (committed > 0) {
                     commitSensor.record(commitLatency / (double) committed, now);
@@ -890,16 +893,11 @@ public class StreamThread extends Thread {
 
         final int numRecords = records.count();
 
-        log.debug(
-            "Main Consumer poll completed in {} ms and fetched {} records and {} metadata",
-            pollLatency,
-            numRecords,
-            records.metadata().size()
-        );
+        log.debug("Main Consumer poll completed in {} ms and fetched {} records", pollLatency, numRecords);
 
         pollSensor.record(pollLatency, now);
 
-        if (!records.isEmpty() || !records.metadata().isEmpty()) {
+        if (!records.isEmpty()) {
             pollRecordsSensor.record(numRecords, now);
             taskManager.addRecordsToTasks(records);
         }
@@ -1020,7 +1018,7 @@ public class StreamThread extends Thread {
             if (committed == -1) {
                 log.debug("Unable to commit as we are in the middle of a rebalance, will try again when it completes.");
             } else {
-                advanceNowAndComputeLatency();
+                now = time.milliseconds();
                 lastCommitMs = now;
             }
         } else {

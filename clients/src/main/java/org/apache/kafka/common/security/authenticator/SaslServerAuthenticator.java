@@ -85,6 +85,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.function.Supplier;
 
 public class SaslServerAuthenticator implements Authenticator {
     // GSSAPI limits requests to 64K, but we allow a bit extra for custom SASL mechanisms
@@ -127,6 +128,7 @@ public class SaslServerAuthenticator implements Authenticator {
     private final Time time;
     private final ReauthInfo reauthInfo;
     private final ChannelMetadataRegistry metadataRegistry;
+    private final Supplier<ApiVersionsResponse> apiVersionSupplier;
 
     // Current SASL state
     private SaslState saslState = SaslState.INITIAL_REQUEST;
@@ -154,7 +156,8 @@ public class SaslServerAuthenticator implements Authenticator {
                                    TransportLayer transportLayer,
                                    Map<String, Long> connectionsMaxReauthMsByMechanism,
                                    ChannelMetadataRegistry metadataRegistry,
-                                   Time time) {
+                                   Time time,
+                                   Supplier<ApiVersionsResponse> apiVersionSupplier) {
         this.callbackHandlers = callbackHandlers;
         this.connectionId = connectionId;
         this.subjects = subjects;
@@ -166,6 +169,7 @@ public class SaslServerAuthenticator implements Authenticator {
         this.time = time;
         this.reauthInfo = new ReauthInfo();
         this.metadataRegistry = metadataRegistry;
+        this.apiVersionSupplier = apiVersionSupplier;
 
         this.configs = configs;
         @SuppressWarnings("unchecked")
@@ -563,11 +567,6 @@ public class SaslServerAuthenticator implements Authenticator {
     }
 
     // Visible to override for testing
-    protected ApiVersionsResponse apiVersionsResponse() {
-        return ApiVersionsResponse.DEFAULT_API_VERSIONS_RESPONSE;
-    }
-
-    // Visible to override for testing
     protected void enableKafkaSaslAuthenticateHeaders(boolean flag) {
         this.enableKafkaSaslAuthenticateHeaders = flag;
     }
@@ -583,7 +582,7 @@ public class SaslServerAuthenticator implements Authenticator {
         else {
             metadataRegistry.registerClientInformation(new ClientInformation(apiVersionsRequest.data().clientSoftwareName(),
                 apiVersionsRequest.data().clientSoftwareVersion()));
-            sendKafkaResponse(context, apiVersionsResponse());
+            sendKafkaResponse(context, apiVersionSupplier.get());
             setSaslState(SaslState.HANDSHAKE_REQUEST);
         }
     }

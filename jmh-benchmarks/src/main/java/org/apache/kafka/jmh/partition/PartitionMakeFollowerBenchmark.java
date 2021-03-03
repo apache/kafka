@@ -39,7 +39,6 @@ import org.apache.kafka.common.record.MemoryRecords;
 import org.apache.kafka.common.record.SimpleRecord;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
-import org.apache.kafka.metadata.BrokerState;
 import org.mockito.Mockito;
 import org.openjdk.jmh.annotations.Benchmark;
 import org.openjdk.jmh.annotations.BenchmarkMode;
@@ -68,7 +67,6 @@ import java.util.UUID;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicReference;
 
 @State(Scope.Benchmark)
 @Fork(value = 1)
@@ -100,7 +98,7 @@ public class PartitionMakeFollowerBenchmark {
         LogDirFailureChannel logDirFailureChannel = Mockito.mock(LogDirFailureChannel.class);
         logManager = new LogManager(JavaConverters.asScalaIteratorConverter(logDirs.iterator()).asScala().toSeq(),
             JavaConverters.asScalaIteratorConverter(new ArrayList<File>().iterator()).asScala().toSeq(),
-            new scala.collection.mutable.HashMap<>(),
+            new CachedConfigRepository(),
             logConfig,
             new CleanerConfig(0, 0, 0, 0, 0, 0.0, 0, false, "MD5"),
             1,
@@ -110,10 +108,10 @@ public class PartitionMakeFollowerBenchmark {
             1000L,
             60000,
             scheduler,
-            new AtomicReference<>(BrokerState.NOT_RUNNING),
             brokerTopicStats,
             logDirFailureChannel,
-            Time.SYSTEM);
+            Time.SYSTEM,
+            true);
 
         TopicPartition tp = new TopicPartition("topic", 0);
 
@@ -122,7 +120,7 @@ public class PartitionMakeFollowerBenchmark {
         AlterIsrManager alterIsrManager = Mockito.mock(AlterIsrManager.class);
         partition = new Partition(tp, 100,
             ApiVersion$.MODULE$.latestVersion(), 0, Time.SYSTEM,
-            new CachedConfigRepository(), isrChangeListener, delayedOperations,
+            isrChangeListener, delayedOperations,
             Mockito.mock(MetadataCache.class), logManager, alterIsrManager);
         partition.createLogIfNotExists(true, false, offsetCheckpoints);
         executorService.submit((Runnable) () -> {

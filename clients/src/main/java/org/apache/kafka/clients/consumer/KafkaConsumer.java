@@ -27,7 +27,6 @@ import org.apache.kafka.clients.consumer.internals.ConsumerCoordinator;
 import org.apache.kafka.clients.consumer.internals.ConsumerInterceptors;
 import org.apache.kafka.clients.consumer.internals.ConsumerMetadata;
 import org.apache.kafka.clients.consumer.internals.ConsumerNetworkClient;
-import org.apache.kafka.clients.consumer.internals.FetchedRecords;
 import org.apache.kafka.clients.consumer.internals.Fetcher;
 import org.apache.kafka.clients.consumer.internals.FetcherMetricsRegistry;
 import org.apache.kafka.clients.consumer.internals.KafkaConsumerMetrics;
@@ -74,6 +73,7 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.OptionalLong;
 import java.util.Properties;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
@@ -578,6 +578,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
     private final Deserializer<V> valueDeserializer;
     private final Fetcher<K, V> fetcher;
     private final ConsumerInterceptors<K, V> interceptors;
+    private final IsolationLevel isolationLevel;
 
     private final Time time;
     private final ConsumerNetworkClient client;
@@ -736,7 +737,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
 
             FetcherMetricsRegistry metricsRegistry = new FetcherMetricsRegistry(Collections.singleton(CLIENT_ID_METRIC_TAG), metricGrpPrefix);
             ChannelBuilder channelBuilder = ClientUtils.createChannelBuilder(config, time, logContext);
-            IsolationLevel isolationLevel = IsolationLevel.valueOf(
+            this.isolationLevel = IsolationLevel.valueOf(
                     config.getString(ConsumerConfig.ISOLATION_LEVEL_CONFIG).toUpperCase(Locale.ROOT));
             Sensor throttleTimeSensor = Fetcher.throttleTimeSensor(metrics, metricsRegistry);
             int heartbeatIntervalMs = config.getInt(ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG);
@@ -849,6 +850,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
         this.keyDeserializer = keyDeserializer;
         this.valueDeserializer = valueDeserializer;
         this.fetcher = fetcher;
+        this.isolationLevel = IsolationLevel.READ_UNCOMMITTED;
         this.interceptors = Objects.requireNonNull(interceptors);
         this.time = time;
         this.client = client;
@@ -957,7 +959,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
                 this.unsubscribe();
             } else {
                 for (String topic : topics) {
-                    if (topic == null || topic.trim().isEmpty())
+                    if (Utils.isBlank(topic))
                         throw new IllegalArgumentException("Topic collection to subscribe to cannot contain null or empty topic");
                 }
 
@@ -1108,7 +1110,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
             } else {
                 for (TopicPartition tp : partitions) {
                     String topic = (tp != null) ? tp.topic() : null;
-                    if (topic == null || topic.trim().isEmpty())
+                    if (Utils.isBlank(topic))
                         throw new IllegalArgumentException("Topic partitions to assign to cannot have null or empty topic");
                 }
                 fetcher.clearBufferedDataForUnassignedPartitions(partitions);
@@ -1235,7 +1237,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
                     }
                 }
 
-                final FetchedRecords<K, V> records = pollForFetches(timer);
+                final Map<TopicPartition, List<ConsumerRecord<K, V>>> records = pollForFetches(timer);
                 if (!records.isEmpty()) {
                     // before returning the fetched records, we can send off the next round of fetches
                     // and avoid block waiting for their responses to enable pipelining while the user
@@ -1269,12 +1271,12 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
     /**
      * @throws KafkaException if the rebalance callback throws exception
      */
-    private FetchedRecords<K, V> pollForFetches(Timer timer) {
+    private Map<TopicPartition, List<ConsumerRecord<K, V>>> pollForFetches(Timer timer) {
         long pollTimeout = coordinator == null ? timer.remainingMs() :
                 Math.min(coordinator.timeToNextPoll(timer.currentTimeMs()), timer.remainingMs());
 
         // if data is available already, return it immediately
-        final FetchedRecords<K, V> records = fetcher.fetchedRecords();
+        final Map<TopicPartition, List<ConsumerRecord<K, V>>> records = fetcher.fetchedRecords();
         if (!records.isEmpty()) {
             return records;
         }
@@ -2214,6 +2216,30 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
         acquireAndEnsureOpen();
         try {
             return fetcher.endOffsets(partitions, time.timer(timeout));
+        } finally {
+            release();
+        }
+    }
+
+    /**
+     * Get the consumer's current lag on the partition. Returns an "empty" {@link OptionalLong} if the lag is not known,
+     * for example if there is no position yet, or if the end offset is not known yet.
+     *
+     * <p>
+     * This method uses locally cached metadata and never makes a remote call.
+     *
+     * @param topicPartition The partition to get the lag for.
+     *
+     * @return This {@code Consumer} instance's current lag for the given partition.
+     *
+     * @throws IllegalStateException if the {@code topicPartition} is not assigned
+     **/
+    @Override
+    public OptionalLong currentLag(TopicPartition topicPartition) {
+        acquireAndEnsureOpen();
+        try {
+            final Long lag = subscriptions.partitionLag(topicPartition, isolationLevel);
+            return lag == null ? OptionalLong.empty() : OptionalLong.of(lag);
         } finally {
             release();
         }

@@ -117,7 +117,7 @@ class KafkaNetworkChannelTest {
 
     for (apiKey <- RaftApis) {
       client.createPendingAuthenticationError(destinationNode, 100)
-      sendAndAssertErrorResponse(apiKey, destinationId, Errors.CLUSTER_AUTHORIZATION_FAILED)
+      sendAndAssertErrorResponse(apiKey, destinationId, Errors.NETWORK_EXCEPTION)
 
       // reset to clear backoff time
       client.reset()
@@ -142,6 +142,19 @@ class KafkaNetworkChannelTest {
       val response = buildResponse(buildTestErrorResponse(apiKey, expectedError))
       client.prepareResponseFrom(response, destinationNode)
       sendAndAssertErrorResponse(apiKey, destinationId, expectedError)
+    }
+  }
+
+  @Test
+  def testUnsupportedVersionError(): Unit = {
+    val destinationId = 2
+    val destinationNode = new Node(destinationId, "127.0.0.1", 9092)
+    channel.updateEndpoint(destinationId, new InetAddressSpec(
+      new InetSocketAddress(destinationNode.host, destinationNode.port)))
+
+    for (apiKey <- RaftApis) {
+      client.prepareUnsupportedVersionResponse(request => request.apiKey == apiKey)
+      sendAndAssertErrorResponse(apiKey, destinationId, Errors.UNSUPPORTED_VERSION)
     }
   }
 

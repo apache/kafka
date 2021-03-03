@@ -99,7 +99,7 @@ class ServerStartupTest extends ZooKeeperTestHarness {
     server = new KafkaServer(KafkaConfig.fromProps(props))
 
     server.startup()
-    TestUtils.waitUntilTrue(() => server.brokerState.get() == BrokerState.RUNNING,
+    TestUtils.waitUntilTrue(() => server.brokerState == BrokerState.RUNNING,
       "waiting for the broker state to become RUNNING")
     val brokers = zkClient.getAllBrokersInCluster
     assertEquals(1, brokers.size)

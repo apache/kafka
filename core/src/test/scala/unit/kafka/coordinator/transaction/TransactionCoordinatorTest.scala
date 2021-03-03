@@ -27,6 +27,7 @@ import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.Test
 
 import scala.collection.mutable
+import scala.jdk.CollectionConverters._
 
 class TransactionCoordinatorTest {
 
@@ -1074,6 +1075,56 @@ class TransactionCoordinatorTest {
     coordinator.handleInitProducerId(transactionalId, txnTimeoutMs, Some(new ProducerIdAndEpoch(producerId, 10)),
       initProducerIdMockCallback)
     assertEquals(InitProducerIdResult(RecordBatch.NO_PRODUCER_ID, RecordBatch.NO_PRODUCER_EPOCH, Errors.CONCURRENT_TRANSACTIONS), result)
+
+    EasyMock.verify(transactionManager)
+  }
+
+  @Test
+  def testDescribeTransactionsWithEmptyTransactionalId(): Unit = {
+    coordinator.startup(() => transactionStatePartitionCount, enableTransactionalIdExpiration = false)
+    val result = coordinator.handleDescribeTransactions("")
+    assertEquals("", result.transactionalId)
+    assertEquals(Errors.INVALID_REQUEST, Errors.forCode(result.errorCode))
+  }
+
+  @Test
+  def testDescribeTransactionsWhileCoordinatorLoading(): Unit = {
+    EasyMock.expect(transactionManager.getTransactionState(EasyMock.eq(transactionalId)))
+      .andReturn(Left(Errors.COORDINATOR_LOAD_IN_PROGRESS))
+
+    EasyMock.replay(transactionManager)
+
+    coordinator.startup(() => transactionStatePartitionCount, enableTransactionalIdExpiration = false)
+    val result = coordinator.handleDescribeTransactions(transactionalId)
+    assertEquals(transactionalId, result.transactionalId)
+    assertEquals(Errors.COORDINATOR_LOAD_IN_PROGRESS, Errors.forCode(result.errorCode))
+
+    EasyMock.verify(transactionManager)
+  }
+
+  @Test
+  def testDescribeTransactions(): Unit = {
+    val txnMetadata = new TransactionMetadata(transactionalId, producerId, producerId, producerEpoch,
+      RecordBatch.NO_PRODUCER_EPOCH, txnTimeoutMs, Ongoing, partitions, time.milliseconds(), time.milliseconds())
+
+    EasyMock.expect(transactionManager.getTransactionState(EasyMock.eq(transactionalId)))
+      .andReturn(Right(Some(CoordinatorEpochAndTxnMetadata(coordinatorEpoch, txnMetadata))))
+
+    EasyMock.replay(transactionManager)
+
+    coordinator.startup(() => transactionStatePartitionCount, enableTransactionalIdExpiration = false)
+    val result = coordinator.handleDescribeTransactions(transactionalId)
+    assertEquals(Errors.NONE, Errors.forCode(result.errorCode))
+    assertEquals(transactionalId, result.transactionalId)
+    assertEquals(producerId, result.producerId)
+    assertEquals(producerEpoch, result.producerEpoch)
+    assertEquals(txnTimeoutMs, result.transactionTimeoutMs)
+    assertEquals(time.milliseconds(), result.transactionStartTimeMs)
+
+    val addedPartitions = result.topics.asScala.flatMap { topicData =>
+      topicData.partitions.asScala.map(partition => new TopicPartition(topicData.topic, partition))
+    }.toSet
+    assertEquals(partitions, addedPartitions)
 
     EasyMock.verify(transactionManager)
   }
