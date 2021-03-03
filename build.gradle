@@ -244,7 +244,14 @@ subprojects {
       publications {
         mavenJava(MavenPublication) {
           from components.java
+
           afterEvaluate {
+            ["srcJar", "javadocJar", "scaladocJar", "testJar", "testSrcJar"].forEach { taskName ->
+              def task = tasks.findByName(taskName)
+              if (task != null)
+                artifact task
+            }
+
             artifactId = archivesBaseName
             pom {
               name = 'Apache Kafka'
@@ -468,10 +475,6 @@ subprojects {
 
   task systemTestLibs(dependsOn: jar)
 
-  artifacts {
-    archives srcJar
-    archives javadocJar
-  }
 
   if(!sourceSets.test.allSource.isEmpty()) {
     task testJar(type: Jar) {
@@ -488,10 +491,6 @@ subprojects {
       from sourceSets.test.allSource
     }
 
-    artifacts {
-      archives testJar
-      archives testSrcJar
-    }
   }
 
   plugins.withType(ScalaPlugin) {
@@ -1591,10 +1590,6 @@ project(':streams:streams-scala') {
 
   jar {
     dependsOn 'copyDependantLibs'
-  }
-
-  artifacts {
-    archives scaladocJar
   }
 
   test.dependsOn(':spotlessScalaCheck')
