@@ -237,11 +237,6 @@ public class ReplicationControlManager {
     private final Logger log;
 
     /**
-     * The random number generator used by this object.
-     */
-    private final Random random;
-
-    /**
      * The KIP-464 default replication factor that is used if a CreateTopics request does
      * not specify one.
      */
@@ -280,14 +275,12 @@ public class ReplicationControlManager {
 
     ReplicationControlManager(SnapshotRegistry snapshotRegistry,
                               LogContext logContext,
-                              Random random,
                               short defaultReplicationFactor,
                               int defaultNumPartitions,
                               ConfigurationControlManager configurationControl,
                               ClusterControlManager clusterControl) {
         this.snapshotRegistry = snapshotRegistry;
         this.log = logContext.logger(ReplicationControlManager.class);
-        this.random = random;
         this.defaultReplicationFactor = defaultReplicationFactor;
         this.defaultNumPartitions = defaultNumPartitions;
         this.configurationControl = configurationControl;
@@ -483,7 +476,7 @@ public class ReplicationControlManager {
                         " times: " + e.getMessage());
             }
         }
-        Uuid topicId = new Uuid(random.nextLong(), random.nextLong());
+        Uuid topicId = Uuid.randomUuid();
         successes.put(topic.name(), new CreatableTopicResult().
             setName(topic.name()).
             setTopicId(topicId).
