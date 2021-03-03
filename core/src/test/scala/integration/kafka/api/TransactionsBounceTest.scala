@@ -129,6 +129,7 @@ class TransactionsBounceTest extends IntegrationTestHarness {
     testBrokerFailure((producer, groupId, consumer) =>
       producer.sendOffsetsToTransaction(TestUtils.consumerPositions(consumer).asJava, groupId))
   }
+  
 
   @Test
   def testWithGroupMetadata(): Unit = {
