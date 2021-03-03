@@ -77,6 +77,60 @@ class TransactionsBounceTest extends IntegrationTestHarness {
   }
 
   @Test
+  def testWithGroupId2(): Unit = {
+    testBrokerFailure((producer, groupId, consumer) =>
+      producer.sendOffsetsToTransaction(TestUtils.consumerPositions(consumer).asJava, groupId))
+  }
+
+  @Test
+  def testWithGroupId3(): Unit = {
+    testBrokerFailure((producer, groupId, consumer) =>
+      producer.sendOffsetsToTransaction(TestUtils.consumerPositions(consumer).asJava, groupId))
+  }
+
+  @Test
+  def testWithGroupId4(): Unit = {
+    testBrokerFailure((producer, groupId, consumer) =>
+      producer.sendOffsetsToTransaction(TestUtils.consumerPositions(consumer).asJava, groupId))
+  }
+
+  @Test
+  def testWithGroupId5(): Unit = {
+    testBrokerFailure((producer, groupId, consumer) =>
+      producer.sendOffsetsToTransaction(TestUtils.consumerPositions(consumer).asJava, groupId))
+  }
+
+  @Test
+  def testWithGroupId6(): Unit = {
+    testBrokerFailure((producer, groupId, consumer) =>
+      producer.sendOffsetsToTransaction(TestUtils.consumerPositions(consumer).asJava, groupId))
+  }
+
+  @Test
+  def testWithGroupId7(): Unit = {
+    testBrokerFailure((producer, groupId, consumer) =>
+      producer.sendOffsetsToTransaction(TestUtils.consumerPositions(consumer).asJava, groupId))
+  }
+
+  @Test
+  def testWithGroupId8(): Unit = {
+    testBrokerFailure((producer, groupId, consumer) =>
+      producer.sendOffsetsToTransaction(TestUtils.consumerPositions(consumer).asJava, groupId))
+  }
+
+  @Test
+  def testWithGroupId9(): Unit = {
+    testBrokerFailure((producer, groupId, consumer) =>
+      producer.sendOffsetsToTransaction(TestUtils.consumerPositions(consumer).asJava, groupId))
+  }
+
+  @Test
+  def testWithGroupId10(): Unit = {
+    testBrokerFailure((producer, groupId, consumer) =>
+      producer.sendOffsetsToTransaction(TestUtils.consumerPositions(consumer).asJava, groupId))
+  }
+
+  @Test
   def testWithGroupMetadata(): Unit = {
     testBrokerFailure((producer, _, consumer) =>
       producer.sendOffsetsToTransaction(TestUtils.consumerPositions(consumer).asJava, consumer.groupMetadata()))
