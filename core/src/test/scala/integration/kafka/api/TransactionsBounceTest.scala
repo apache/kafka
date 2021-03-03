@@ -32,7 +32,7 @@ import scala.jdk.CollectionConverters._
 import scala.collection.mutable
 
 class TransactionsBounceTest extends IntegrationTestHarness {
-  private val consumeRecordTimeout = 20000
+  private val consumeRecordTimeout = 30000
   private val producerBufferSize =  65536
   private val serverMessageMaxBytes =  producerBufferSize/2
   private val numPartitions = 3
