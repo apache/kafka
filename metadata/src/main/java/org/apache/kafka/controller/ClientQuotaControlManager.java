@@ -86,7 +86,7 @@ public class ClientQuotaControlManager {
             }
         });
 
-        return new ControllerResult<>(outputRecords, outputResults, true);
+        return ControllerResult.atomicOf(outputRecords, outputResults);
     }
 
     /**

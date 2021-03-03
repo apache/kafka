@@ -30,7 +30,7 @@ class ControllerResult<T> {
     private final T response;
     private final boolean isAtomic;
 
-    public ControllerResult(List<ApiMessageAndVersion> records, T response, boolean isAtomic) {
+    protected ControllerResult(List<ApiMessageAndVersion> records, T response, boolean isAtomic) {
         Objects.requireNonNull(records);
         this.records = records;
         this.response = response;

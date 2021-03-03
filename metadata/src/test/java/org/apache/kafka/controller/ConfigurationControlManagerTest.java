@@ -136,7 +136,7 @@ public class ConfigurationControlManagerTest {
         ConfigurationControlManager manager =
             new ConfigurationControlManager(new LogContext(), snapshotRegistry, CONFIGS);
         assertEquals(
-            new ControllerResult<Map<ConfigResource, ApiError>>(
+            ControllerResult.atomicOf(
                 Collections.singletonList(
                     new ApiMessageAndVersion(
                         new ConfigRecord()
@@ -156,8 +156,7 @@ public class ConfigurationControlManagerTest {
                         )
                     ),
                     entry(MYTOPIC, ApiError.NONE)
-                ),
-                true
+                )
             ),
             manager.incrementalAlterConfigs(
                 toMap(
@@ -210,10 +209,9 @@ public class ConfigurationControlManagerTest {
                 setResourceType(TOPIC.id()).setResourceName("mytopic").
                 setName("def").setValue("901"), (short) 0));
         assertEquals(
-            new ControllerResult<Map<ConfigResource, ApiError>>(
+            ControllerResult.atomicOf(
                 expectedRecords1,
-                toMap(entry(MYTOPIC, ApiError.NONE)),
-                true
+                toMap(entry(MYTOPIC, ApiError.NONE))
             ),
             manager.legacyAlterConfigs(
                 toMap(entry(MYTOPIC, toMap(entry("abc", "456"), entry("def", "901"))))
@@ -223,7 +221,7 @@ public class ConfigurationControlManagerTest {
             manager.replay((ConfigRecord) message.message());
         }
         assertEquals(
-            new ControllerResult<Map<ConfigResource, ApiError>>(
+            ControllerResult.atomicOf(
                 Arrays.asList(
                     new ApiMessageAndVersion(
                         new ConfigRecord()
@@ -234,8 +232,7 @@ public class ConfigurationControlManagerTest {
                         (short) 0
                     )
                 ),
-                toMap(entry(MYTOPIC, ApiError.NONE)),
-                true
+                toMap(entry(MYTOPIC, ApiError.NONE))
             ),
             manager.legacyAlterConfigs(toMap(entry(MYTOPIC, toMap(entry("def", "901")))))
         );

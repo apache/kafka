@@ -69,7 +69,12 @@ public class FeatureControlManager {
             results.put(entry.getKey(), updateFeature(entry.getKey(), entry.getValue(),
                 downgradeables.contains(entry.getKey()), brokerFeatures, records));
         }
-        return new ControllerResult<>(records, results, records.isEmpty() ? false : true);
+
+        if (records.isEmpty()) {
+            return ControllerResult.of(records, results);
+        } else {
+            return ControllerResult.atomicOf(records, results);
+        }
     }
 
     private ApiError updateFeature(String featureName,
