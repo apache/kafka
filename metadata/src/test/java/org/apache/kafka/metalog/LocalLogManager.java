@@ -382,7 +382,7 @@ public final class LocalLogManager implements MetaLogManager, AutoCloseable {
             new LocalRecordBatch(
                 batch
                     .stream()
-                    .map(r -> r.message())
+                    .map(ApiMessageAndVersion::message)
                     .collect(Collectors.toList())
             )
         );

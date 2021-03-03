@@ -30,14 +30,6 @@ class ControllerResult<T> {
     private final T response;
     private final boolean isAtomic;
 
-    public ControllerResult(T response) {
-        this(new ArrayList<>(), response);
-    }
-
-    public ControllerResult(List<ApiMessageAndVersion> records, T response) {
-        this(records, response, false);
-    }
-
     public ControllerResult(List<ApiMessageAndVersion> records, T response, boolean isAtomic) {
         Objects.requireNonNull(records);
         this.records = records;
@@ -85,5 +77,13 @@ class ControllerResult<T> {
 
     public ControllerResult<T> withoutRecords() {
         return new ControllerResult<>(new ArrayList<>(), response, false);
+    }
+
+    public static <T> ControllerResult<T> atomicOf(List<ApiMessageAndVersion> records, T response) {
+        return new ControllerResult<>(records, response, true);
+    }
+
+    public static <T> ControllerResult<T> of(List<ApiMessageAndVersion> records, T response) {
+        return new ControllerResult<>(records, response, false);
     }
 }
