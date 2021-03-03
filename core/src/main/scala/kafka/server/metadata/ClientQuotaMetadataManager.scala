@@ -121,9 +121,6 @@ class ClientQuotaMetadataManager(private[metadata] val quotaManagers: QuotaManag
       return
     }
 
-    // Update the cache
-    quotaCache.updateQuotaCache(ipEntity, quotaRecord.key, quotaRecord.value, quotaRecord.remove)
-
     // Convert the value to an appropriate Option for the quota manager
     val newValue = if (quotaRecord.remove()) {
       None
@@ -131,6 +128,9 @@ class ClientQuotaMetadataManager(private[metadata] val quotaManagers: QuotaManag
       Some(quotaRecord.value).map(_.toInt)
     }
     connectionQuotas.updateIpConnectionRateQuota(inetAddress, newValue)
+
+    // Update the cache
+    quotaCache.updateQuotaCache(ipEntity, quotaRecord.key, quotaRecord.value, quotaRecord.remove)
   }
 
   def handleUserClientQuota(quotaEntity: QuotaEntity, quotaRecord: QuotaRecord): Unit = {

@@ -170,8 +170,10 @@ public class ClientQuotaControlManager {
             }
         });
 
-        outputRecords.addAll(newRecords);
-        outputResults.put(entity, ApiError.NONE);
+        // Only add the records to outputRecords if there were no errors
+        if (outputResults.putIfAbsent(entity, ApiError.NONE) == null) {
+            outputRecords.addAll(newRecords);
+        }
     }
 
     private ApiError configKeysForEntityType(Map<String, String> entity, Map<String, ConfigDef.ConfigKey> output) {
@@ -182,18 +184,23 @@ public class ClientQuotaControlManager {
         boolean hasIp = entity.containsKey(ClientQuotaEntity.IP);
 
         final Map<String, ConfigDef.ConfigKey> configKeys;
-        if (hasUser && hasClientId && !hasIp) {
-            configKeys = QuotaConfigs.userConfigs().configKeys();
-        } else if (hasUser && !hasClientId && !hasIp) {
-            configKeys = QuotaConfigs.userConfigs().configKeys();
-        } else if (!hasUser && hasClientId && !hasIp) {
-            configKeys = QuotaConfigs.clientConfigs().configKeys();
-        } else if (!hasUser && !hasClientId && hasIp) {
-            if (isValidIpEntity(entity.get(ClientQuotaEntity.IP))) {
-                configKeys = QuotaConfigs.ipConfigs().configKeys();
+        if (hasIp) {
+            if (hasUser || hasClientId) {
+                return new ApiError(Errors.INVALID_REQUEST, "Invalid quota entity combination, IP entity should" +
+                    "not be combined with User or ClientId");
             } else {
-                return new ApiError(Errors.INVALID_REQUEST, entity.get(ClientQuotaEntity.IP) + " is not a valid IP or resolvable host.");
+                if (isValidIpEntity(entity.get(ClientQuotaEntity.IP))) {
+                    configKeys = QuotaConfigs.ipConfigs().configKeys();
+                } else {
+                    return new ApiError(Errors.INVALID_REQUEST, entity.get(ClientQuotaEntity.IP) + " is not a valid IP or resolvable host.");
+                }
             }
+        } else if (hasUser && hasClientId) {
+            configKeys = QuotaConfigs.userConfigs().configKeys();
+        } else if (hasUser) {
+            configKeys = QuotaConfigs.userConfigs().configKeys();
+        } else if (hasClientId) {
+            configKeys = QuotaConfigs.clientConfigs().configKeys();
         } else {
             return new ApiError(Errors.INVALID_REQUEST, "Invalid empty client quota entity");
         }
@@ -214,6 +221,8 @@ public class ClientQuotaControlManager {
         switch (configKey.type()) {
             case DOUBLE:
                 break;
+            case SHORT:
+            case INT:
             case LONG:
                 Double epsilon = 1e-6;
                 Long longValue = Double.valueOf(value + epsilon).longValue();
@@ -253,7 +262,7 @@ public class ClientQuotaControlManager {
             String entityType = entityEntry.getKey();
             String entityName = entityEntry.getValue();
             if (validatedEntityMap.containsKey(entityType)) {
-                return new ApiError(Errors.INVALID_REQUEST, "Invalid empty client quota entity, duplicate entity entry " + entityType);
+                return new ApiError(Errors.INVALID_REQUEST, "Invalid client quota entity, duplicate entity entry " + entityType);
             }
             if (Objects.equals(entityType, ClientQuotaEntity.USER)) {
                 validatedEntityMap.put(ClientQuotaEntity.USER, entityName);

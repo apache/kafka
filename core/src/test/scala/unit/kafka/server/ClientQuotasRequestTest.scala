@@ -38,7 +38,7 @@ import kafka.test.junit.ClusterTestExtensions
 
 import scala.jdk.CollectionConverters._
 
-@ClusterTestDefaults(clusterType = Type.ZK)
+@ClusterTestDefaults(clusterType = Type.BOTH)
 @ExtendWith(value = Array(classOf[ClusterTestExtensions]))
 class ClientQuotasRequestTest(cluster: ClusterInstance) {
   private val ConsumerByteRateProp = QuotaConfigs.CONSUMER_BYTE_RATE_OVERRIDE_CONFIG
@@ -174,7 +174,7 @@ class ClientQuotasRequestTest(cluster: ClusterInstance) {
     ))
   }
 
-  @ClusterTest
+  @ClusterTest(clusterType = Type.ZK) // No SCRAM for Raft yet
   def testClientQuotasForScramUsers(): Unit = {
     val userName = "user"
 
@@ -399,7 +399,7 @@ class ClientQuotasRequestTest(cluster: ClusterInstance) {
       val result = describeClientQuotas(filter)
       val (expectedMatches, _) = (matchUserClientEntities ++ matchIpEntities).partition(e => partition(e._1))
       assertEquals(expectedMatchSize, expectedMatches.size)  // for test verification
-      assertEquals(expectedMatchSize, result.size)
+      assertEquals(expectedMatchSize, result.size, s"Failed to match $expectedMatchSize entities for $filter")
       val expectedMatchesMap = expectedMatches.toMap
       matchUserClientEntities.foreach { case (entity, expectedValue) =>
         if (expectedMatchesMap.contains(entity)) {
@@ -561,6 +561,9 @@ class ClientQuotasRequestTest(cluster: ClusterInstance) {
 
   private def describeClientQuotas(filter: ClientQuotaFilter) = {
     val result = new KafkaFutureImpl[java.util.Map[ClientQuotaEntity, java.util.Map[String, java.lang.Double]]]
+    if (cluster.clusterType() == ClusterType.RAFT) {
+      Thread.sleep(3000) // need to do this since updates are now async!
+    }
     sendDescribeClientQuotasRequest(filter).complete(result)
     try result.get catch {
       case e: ExecutionException => throw e.getCause
@@ -570,7 +573,7 @@ class ClientQuotasRequestTest(cluster: ClusterInstance) {
   private def sendDescribeClientQuotasRequest(filter: ClientQuotaFilter): DescribeClientQuotasResponse = {
     val request = new DescribeClientQuotasRequest.Builder(filter).build()
     IntegrationTestUtils.connectAndReceive[DescribeClientQuotasResponse](request,
-      destination = cluster.anyControllerSocketServer(),
+      destination = cluster.anyBrokerSocketServer(),
       listenerName = cluster.clientListener())
   }
 
@@ -598,7 +601,7 @@ class ClientQuotasRequestTest(cluster: ClusterInstance) {
   private def sendAlterClientQuotasRequest(entries: Iterable[ClientQuotaAlteration], validateOnly: Boolean): AlterClientQuotasResponse = {
     val request = new AlterClientQuotasRequest.Builder(entries.asJavaCollection, validateOnly).build()
     IntegrationTestUtils.connectAndReceive[AlterClientQuotasResponse](request,
-      destination = cluster.anyControllerSocketServer(),
+      destination = cluster.anyBrokerSocketServer(),
       listenerName = cluster.clientListener())
   }
 
