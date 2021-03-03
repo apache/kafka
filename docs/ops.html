@@ -2277,8 +2277,8 @@ All of the following metrics have a recording level of <code>info</code>:
 </table>
 
 <h5 class="anchor-heading"><a id="kafka_streams_task_monitoring" class="anchor-link"></a><a href="#kafka_streams_task_monitoring">Task Metrics</a></h5>
-All of the following metrics have a recording level of <code>debug</code>, except for metrics
-dropped-records-rated-* and record-e2e-latency-* which have a recording level of <code>info</code>:
+All of the following metrics have a recording level of <code>debug</code>, except for the
+dropped-records-rated-*, active-process-ratio, and record-e2e-latency-* metrics which have a recording level of <code>info</code>:
  <table class="data-table">
       <tbody>
       <tr>
@@ -2353,6 +2353,11 @@ dropped-records-rated-* and record-e2e-latency-* which have a recording level of
       </tr>
       <tr>
         <td>dropped-records-total</td>
+        <td>The total number of records dropped within this task.</td>
+        <td>kafka.streams:type=stream-task-metrics,thread-id=([-.\w]+),task-id=([-.\w]+)</td>
+      </tr>
+      <tr>
+        <td>active-process-ratio</td>
         <td>The total number of records dropped within this task.</td>
         <td>kafka.streams:type=stream-task-metrics,thread-id=([-.\w]+),task-id=([-.\w]+)</td>
       </tr>
