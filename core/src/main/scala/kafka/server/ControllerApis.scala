@@ -37,7 +37,7 @@ import org.apache.kafka.common.message.CreateTopicsResponseData.CreatableTopicRe
 import org.apache.kafka.common.message.DeleteTopicsResponseData.{DeletableTopicResult, DeletableTopicResultCollection}
 import org.apache.kafka.common.message.MetadataResponseData.MetadataResponseBroker
 import org.apache.kafka.common.message.{BeginQuorumEpochResponseData, BrokerHeartbeatResponseData, BrokerRegistrationResponseData, CreateTopicsResponseData, DeleteTopicsRequestData, DeleteTopicsResponseData, DescribeQuorumResponseData, EndQuorumEpochResponseData, FetchResponseData, MetadataResponseData, SaslAuthenticateResponseData, SaslHandshakeResponseData, UnregisterBrokerResponseData, VoteResponseData}
-import org.apache.kafka.common.protocol.Errors.{INVALID_REQUEST, TOPIC_AUTHORIZATION_FAILED, UNKNOWN_TOPIC_ID, UNKNOWN_TOPIC_OR_PARTITION}
+import org.apache.kafka.common.protocol.Errors.{INVALID_REQUEST, TOPIC_AUTHORIZATION_FAILED}
 import org.apache.kafka.common.protocol.{ApiKeys, ApiMessage, Errors}
 import org.apache.kafka.common.record.BaseRecords
 import org.apache.kafka.common.requests._
@@ -269,7 +269,7 @@ class ControllerApis(val requestChannel: RequestChannel,
         if (describeable.contains(name)) {
           appendResponse(name, id, new ApiError(TOPIC_AUTHORIZATION_FAILED))
         } else {
-          appendResponse(null, id, new ApiError(UNKNOWN_TOPIC_ID))
+          appendResponse(null, id, new ApiError(TOPIC_AUTHORIZATION_FAILED))
         }
         iterator.remove()
       }
@@ -277,7 +277,9 @@ class ControllerApis(val requestChannel: RequestChannel,
     // For each topic that was provided by name, check if authentication failed.
     // If so, create an error response for it.  Otherwise, add it to the idToName map.
     controller.findTopicIds(providedNames).get().forEach { (name, idOrError) =>
-      if (idOrError.isError) {
+      if (!describeable.contains(name)) {
+        appendResponse(name, ZERO_UUID, new ApiError(TOPIC_AUTHORIZATION_FAILED))
+      } else if (idOrError.isError) {
         appendResponse(name, ZERO_UUID, idOrError.error)
       } else if (deletable.contains(name)) {
         val id = idOrError.result()
@@ -291,10 +293,8 @@ class ControllerApis(val requestChannel: RequestChannel,
           appendResponse(name, id, new ApiError(INVALID_REQUEST,
             "The provided topic name maps to an ID that was already supplied."))
         }
-      } else if (describeable.contains(name)) {
-        appendResponse(name, idOrError.result(), new ApiError(TOPIC_AUTHORIZATION_FAILED))
       } else {
-        appendResponse(name, ZERO_UUID, new ApiError(UNKNOWN_TOPIC_OR_PARTITION))
+        appendResponse(name, ZERO_UUID, new ApiError(TOPIC_AUTHORIZATION_FAILED))
       }
     }
     // Finally, the idToName map contains all the topics that we are authorized to delete.

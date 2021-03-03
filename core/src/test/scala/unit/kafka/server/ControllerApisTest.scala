@@ -239,41 +239,45 @@ class ControllerApisTest {
   }
 
   @Test
-  def testNotAuthorizedToDeleteTopics(): Unit = {
+  def testNotAuthorizedToDeleteWithTopicExisting(): Unit = {
     val fooId = Uuid.fromString("vZKYST0pSA2HO5x_6hoO2Q")
     val barId = Uuid.fromString("VlFu5c51ToiNx64wtwkhQw")
+    val bazId = Uuid.fromString("hr4TVh3YQiu3p16Awkka6w")
     val quuxId = Uuid.fromString("5URoQzW_RJiERVZXJgUVLg")
     val controller = new MockController.Builder().
       newInitialTopic("foo", fooId).
       newInitialTopic("bar", barId).
+      newInitialTopic("baz", bazId).
       newInitialTopic("quux", quuxId).build()
     val controllerApis = createControllerApis(None, controller)
     val request = new DeleteTopicsRequestData()
     request.topics().add(new DeleteTopicState().setName(null).setTopicId(fooId))
     request.topics().add(new DeleteTopicState().setName(null).setTopicId(barId))
+    request.topics().add(new DeleteTopicState().setName("baz").setTopicId(ZERO_UUID))
     request.topics().add(new DeleteTopicState().setName("quux").setTopicId(ZERO_UUID))
     val response = Set(new DeletableTopicResult().setName(null).setTopicId(barId).
-        setErrorCode(Errors.UNKNOWN_TOPIC_ID.code()).
-        setErrorMessage("This server does not host this topic ID."),
+        setErrorCode(Errors.TOPIC_AUTHORIZATION_FAILED.code).
+        setErrorMessage(Errors.TOPIC_AUTHORIZATION_FAILED.message),
       new DeletableTopicResult().setName("quux").setTopicId(ZERO_UUID).
-        setErrorCode(Errors.UNKNOWN_TOPIC_OR_PARTITION.code()).
-        setErrorMessage("This server does not host this topic-partition."),
+        setErrorCode(Errors.TOPIC_AUTHORIZATION_FAILED.code).
+        setErrorMessage(Errors.TOPIC_AUTHORIZATION_FAILED.message),
+      new DeletableTopicResult().setName("baz").setTopicId(ZERO_UUID).
+        setErrorCode(Errors.TOPIC_AUTHORIZATION_FAILED.code).
+        setErrorMessage(Errors.TOPIC_AUTHORIZATION_FAILED.message),
       new DeletableTopicResult().setName("foo").setTopicId(fooId).
-        setErrorCode(Errors.TOPIC_AUTHORIZATION_FAILED.code()).
-        setErrorMessage("Topic authorization failed."))
+        setErrorCode(Errors.TOPIC_AUTHORIZATION_FAILED.code).
+        setErrorMessage(Errors.TOPIC_AUTHORIZATION_FAILED.message))
     assertEquals(response, controllerApis.deleteTopics(request,
       ApiKeys.DELETE_TOPICS.latestVersion().toInt,
       false,
-      _ => Set("foo"),
+      _ => Set("foo", "baz"),
       _ => Set.empty).asScala.toSet)
   }
 
   @Test
-  def testNotAuthorizedToDeleteTopics2(): Unit = {
-    val fooId = Uuid.fromString("vZKYST0pSA2HO5x_6hoO2Q")
+  def testNotAuthorizedToDeleteWithTopicNotExisting(): Unit = {
     val barId = Uuid.fromString("VlFu5c51ToiNx64wtwkhQw")
-    val controller = new MockController.Builder().
-      newInitialTopic("foo", fooId).build()
+    val controller = new MockController.Builder().build()
     val props = new Properties()
     props.put(KafkaConfig.DeleteTopicEnableProp, "false")
     val controllerApis = createControllerApis(None, controller)
@@ -282,18 +286,18 @@ class ControllerApisTest {
     request.topics().add(new DeleteTopicState().setName("bar").setTopicId(ZERO_UUID))
     request.topics().add(new DeleteTopicState().setName(null).setTopicId(barId))
     val expectedResponse = Set(new DeletableTopicResult().setName("foo").
-      setErrorCode(Errors.UNKNOWN_TOPIC_OR_PARTITION.code()).
-      setErrorMessage("This server does not host this topic-partition."),
+        setErrorCode(Errors.UNKNOWN_TOPIC_OR_PARTITION.code).
+        setErrorMessage(Errors.UNKNOWN_TOPIC_OR_PARTITION.message),
       new DeletableTopicResult().setName("bar").
-        setErrorCode(Errors.UNKNOWN_TOPIC_OR_PARTITION.code()).
-        setErrorMessage("This server does not host this topic-partition."),
+        setErrorCode(Errors.TOPIC_AUTHORIZATION_FAILED.code).
+        setErrorMessage(Errors.TOPIC_AUTHORIZATION_FAILED.message),
       new DeletableTopicResult().setName(null).setTopicId(barId).
-        setErrorCode(Errors.UNKNOWN_TOPIC_ID.code()).
-        setErrorMessage("This server does not host this topic ID."))
+        setErrorCode(Errors.UNKNOWN_TOPIC_ID.code).
+        setErrorMessage(Errors.UNKNOWN_TOPIC_ID.message))
     assertEquals(expectedResponse, controllerApis.deleteTopics(request,
       ApiKeys.DELETE_TOPICS.latestVersion().toInt,
       false,
-      _ => Set.empty,
+      _ => Set("foo"),
       _ => Set.empty).asScala.toSet)
   }
 
