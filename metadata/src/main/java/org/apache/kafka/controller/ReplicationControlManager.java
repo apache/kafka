@@ -31,17 +31,17 @@ import org.apache.kafka.common.internals.Topic;
 import org.apache.kafka.common.message.AlterIsrRequestData;
 import org.apache.kafka.common.message.AlterIsrResponseData;
 import org.apache.kafka.common.message.BrokerHeartbeatRequestData;
+import org.apache.kafka.common.message.CreateTopicsRequestData;
 import org.apache.kafka.common.message.CreateTopicsRequestData.CreatableReplicaAssignment;
 import org.apache.kafka.common.message.CreateTopicsRequestData.CreatableTopic;
 import org.apache.kafka.common.message.CreateTopicsRequestData.CreatableTopicCollection;
-import org.apache.kafka.common.message.CreateTopicsRequestData;
-import org.apache.kafka.common.message.CreateTopicsResponseData.CreatableTopicResult;
 import org.apache.kafka.common.message.CreateTopicsResponseData;
-import org.apache.kafka.common.message.ElectLeadersRequestData.TopicPartitions;
+import org.apache.kafka.common.message.CreateTopicsResponseData.CreatableTopicResult;
 import org.apache.kafka.common.message.ElectLeadersRequestData;
+import org.apache.kafka.common.message.ElectLeadersRequestData.TopicPartitions;
+import org.apache.kafka.common.message.ElectLeadersResponseData;
 import org.apache.kafka.common.message.ElectLeadersResponseData.PartitionResult;
 import org.apache.kafka.common.message.ElectLeadersResponseData.ReplicaElectionResult;
-import org.apache.kafka.common.message.ElectLeadersResponseData;
 import org.apache.kafka.common.metadata.FenceBrokerRecord;
 import org.apache.kafka.common.metadata.PartitionChangeRecord;
 import org.apache.kafka.common.metadata.PartitionRecord;
@@ -73,7 +73,6 @@ import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Objects;
 import java.util.Random;
-import java.util.Set;
 
 import static org.apache.kafka.clients.admin.AlterConfigOp.OpType.SET;
 import static org.apache.kafka.common.config.ConfigResource.Type.TOPIC;
@@ -271,7 +270,7 @@ public class ReplicationControlManager {
     /**
      * A reference to the controller's cluster control manager.
      */
-    final ClusterControlManager clusterControl;
+    private final ClusterControlManager clusterControl;
 
     /**
      * Maps topic names to topic UUIDs.
@@ -576,7 +575,7 @@ public class ReplicationControlManager {
     }
 
     Map<String, ResultOrError<Uuid>> findTopicIds(long offset, Collection<String> names) {
-        Map<String, ResultOrError<Uuid>> results = new HashMap<>();
+        Map<String, ResultOrError<Uuid>> results = new HashMap<>(names.size());
         for (String name : names) {
             if (name == null) {
                 results.put(null, new ResultOrError<>(INVALID_REQUEST, "Invalid null topic name."));
@@ -594,7 +593,7 @@ public class ReplicationControlManager {
     }
 
     Map<Uuid, ResultOrError<String>> findTopicNames(long offset, Collection<Uuid> ids) {
-        Map<Uuid, ResultOrError<String>> results = new HashMap<>();
+        Map<Uuid, ResultOrError<String>> results = new HashMap<>(ids.size());
         for (Uuid id : ids) {
             TopicControlInfo topic = topics.get(id, offset);
             if (topic == null) {
@@ -607,7 +606,7 @@ public class ReplicationControlManager {
     }
 
     ControllerResult<Map<Uuid, ApiError>> deleteTopics(Collection<Uuid> ids) {
-        Map<Uuid, ApiError> results = new HashMap<>();
+        Map<Uuid, ApiError> results = new HashMap<>(ids.size());
         List<ApiMessageAndVersion> records = new ArrayList<>();
         for (Uuid id : ids) {
             try {
@@ -628,7 +627,6 @@ public class ReplicationControlManager {
         if (topic == null) {
             throw new UnknownTopicIdException(UNKNOWN_TOPIC_ID.message());
         }
-        configurationControl.deleteTopicConfigs(topic.name);
         records.add(new ApiMessageAndVersion(new RemoveTopicRecord().
             setTopicId(id), (short) 0));
     }

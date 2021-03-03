@@ -303,7 +303,7 @@ public class ConfigurationControlManager {
      *
      * @param record            The ConfigRecord.
      */
-    void replay(ConfigRecord record) {
+    public void replay(ConfigRecord record) {
         Type type = Type.forId(record.resourceType());
         ConfigResource configResource = new ConfigResource(type, record.resourceName());
         TimelineHashMap<String, String> configs = configData.get(configResource);
