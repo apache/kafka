@@ -146,7 +146,6 @@ public class LeaderAndIsrRequest extends AbstractControlRequest {
             }
             responseData.setPartitionErrors(partitions);
         } else {
-            Map<String, Uuid> topicIds = topicIds();
             for (LeaderAndIsrTopicState topicState : data.topicStates()) {
                 List<LeaderAndIsrPartitionError> partitions = new ArrayList<>(
                     topicState.partitionStates().size());
@@ -156,7 +155,7 @@ public class LeaderAndIsrRequest extends AbstractControlRequest {
                         .setErrorCode(error.code()));
                 }
                 responseData.topics().add(new LeaderAndIsrTopicError()
-                    .setTopicId(topicIds.get(topicState.topicName()))
+                    .setTopicId(topicState.topicId())
                     .setPartitionErrors(partitions));
             }
         }
