@@ -1465,7 +1465,6 @@ object TestUtils extends Logging {
       records ++= polledRecords.asScala
       records.size >= numRecords
     }
-
     
     var isFail = false
     try {
