@@ -69,10 +69,6 @@ Generate coverage for a single module, i.e.:
 ### Building a binary release gzipped tar ball ###
     ./gradlew clean releaseTarGz
 
-The above command will fail if you haven't set up the signing key. To bypass signing the artifact, you can run:
-
-    ./gradlew clean releaseTarGz -x signArchives
-
 The release file can be found inside `./core/build/distributions/`.
 
 ### Building auto generated messages ###
