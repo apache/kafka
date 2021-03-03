@@ -22,6 +22,7 @@ import org.apache.kafka.common.cache.LRUCache;
 import org.apache.kafka.common.cache.SynchronizedCache;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigException;
+import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.connect.connector.ConnectRecord;
 import org.apache.kafka.connect.data.ConnectSchema;
 import org.apache.kafka.connect.data.Date;
@@ -39,6 +40,8 @@ import org.apache.kafka.connect.transforms.util.SimpleConfig;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.nio.ByteBuffer;
+import java.util.Base64;
 import java.util.EnumSet;
 import java.util.HashMap;
 import java.util.List;
@@ -56,7 +59,8 @@ public abstract class Cast<R extends ConnectRecord<R>> implements Transformation
     // allow casting nested fields.
     public static final String OVERVIEW_DOC =
             "Cast fields or the entire key or value to a specific type, e.g. to force an integer field to a smaller "
-                    + "width. Only simple primitive types are supported -- integers, floats, boolean, and string. "
+                    + "width. Cast from integers, floats, boolean and string to any other type, "
+                    + "and cast binary to string (base64 encoded)."
                     + "<p/>Use the concrete transformation type designed for the record key (<code>" + Key.class.getName() + "</code>) "
                     + "or value (<code>" + Value.class.getName() + "</code>).";
 
@@ -82,7 +86,7 @@ public abstract class Cast<R extends ConnectRecord<R>> implements Transformation
             ConfigDef.Importance.HIGH,
             "List of fields and the type to cast them to of the form field1:type,field2:type to cast fields of "
                     + "Maps or Structs. A single type to cast the entire value. Valid types are int8, int16, int32, "
-                    + "int64, float32, float64, boolean, and string.");
+                    + "int64, float32, float64, boolean, and string. Note that binary fields can only be cast to string.");
 
     private static final String PURPOSE = "cast types";
 
@@ -364,6 +368,12 @@ public abstract class Cast<R extends ConnectRecord<R>> implements Transformation
         if (value instanceof java.util.Date) {
             java.util.Date dateValue = (java.util.Date) value;
             return Values.dateFormatFor(dateValue).format(dateValue);
+        } else if (value instanceof ByteBuffer) {
+            ByteBuffer byteBuffer = (ByteBuffer) value;
+            return Base64.getEncoder().encodeToString(Utils.readBytes(byteBuffer));
+        } else if (value instanceof byte[]) {
+            byte[] rawBytes = (byte[]) value;
+            return Base64.getEncoder().encodeToString(rawBytes);
         } else {
             return value.toString();
         }
