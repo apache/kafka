@@ -961,7 +961,7 @@ project(':core') {
   }
 
   tasks.create(name: "releaseTarGz", dependsOn: configurations.archives.artifacts, type: Tar) {
-    into "kafka_${versions.baseScala}-${archiveVersion}"
+    into "kafka_${versions.baseScala}-${archiveVersion.get()}"
     compression = Compression.GZIP
     from(project.file("$rootDir/bin")) { into "bin/" }
     from(project.file("$rootDir/config")) { into "config/" }
