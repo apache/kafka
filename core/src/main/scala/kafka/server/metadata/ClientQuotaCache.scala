@@ -137,8 +137,8 @@ class ClientQuotaCache {
     // We do not allow IP filters to be combined with user or client filters
     val matchingEntities: Set[QuotaEntity] = if (entityFilters.contains(ClientQuotaEntity.IP)) {
       if (entityFilters.size > 1) {
-        throw new InvalidRequestException("Invalid quota entity combination, IP filter component should " +
-          "not be used with user or clientId filter component.")
+        throw new InvalidRequestException("Invalid entity filter component combination, IP filter component should " +
+          "not be used with User or ClientId filter component.")
       }
       val ipMatch = entityFilters.get(ClientQuotaEntity.IP)
       ipMatch.fold(Set.empty[QuotaEntity]) {

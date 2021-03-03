@@ -19,6 +19,7 @@ package kafka.server
 
 import integration.kafka.server.IntegrationTestUtils
 import kafka.test.ClusterInstance
+import kafka.test.ClusterInstance.ClusterType
 
 import java.net.InetAddress
 import org.apache.kafka.clients.admin.{ScramCredentialInfo, ScramMechanism, UserScramCredentialUpsertion}
