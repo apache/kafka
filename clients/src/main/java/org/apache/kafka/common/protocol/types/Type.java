@@ -248,7 +248,7 @@ public abstract class Type {
             if (item instanceof Integer)
                 return (Integer) item;
             else
-                throw new SchemaException(item + " is not an a Integer (encoding an unsigned short)");
+                throw new SchemaException(item + " is not an Integer (using two bytes as an unsigned short)");
         }
 
         @Override
@@ -320,7 +320,7 @@ public abstract class Type {
             if (item instanceof Long)
                 return (Long) item;
             else
-                throw new SchemaException(item + " is not an a Long (encoding an unsigned integer).");
+                throw new SchemaException(item + " is not an Long (using four bytes as an unsigned integer).");
         }
 
         @Override
