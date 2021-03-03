@@ -230,7 +230,7 @@ public class RemoteLogSegmentMetadata {
      * not update this instance.
      *
      * @param rlsmUpdate update to be applied.
-     * @return
+     * @return a new instance created by applying the given update on this instance.
      */
     public RemoteLogSegmentMetadata createRemoteLogSegmentWithUpdates(RemoteLogSegmentMetadataUpdate rlsmUpdate) {
         if (!remoteLogSegmentId.equals(rlsmUpdate.remoteLogSegmentId())) {

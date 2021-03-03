@@ -69,11 +69,11 @@ public interface RemoteStorageManager extends Configurable, Closeable {
     }
 
     /**
-     * Copies the given {@link LogSegmentData} provided for the given {@param remoteLogSegmentMetadata}. This includes
+     * Copies the given {@link LogSegmentData} provided for the given {@code remoteLogSegmentMetadata}. This includes
      * log segment and its auxiliary indexes like offset index, time index, transaction index, leader epoch index, and
      * producer snapshot index.
      * <p>
-     * Invoker of this API should always send a unique id as part of {@link RemoteLogSegmentMetadata#remoteLogSegmentId()#id()}
+     * Invoker of this API should always send a unique id as part of {@link RemoteLogSegmentMetadata#remoteLogSegmentId()}
      * even when it retries to invoke this method for the same log segment data.
      *
      * @param remoteLogSegmentMetadata metadata about the remote log segment.
@@ -126,11 +126,10 @@ public interface RemoteStorageManager extends Configurable, Closeable {
                            IndexType indexType) throws RemoteStorageException;
 
     /**
-     * Deletes the resources associated with the given {@param remoteLogSegmentMetadata}. Deletion is considered as
+     * Deletes the resources associated with the given {@code remoteLogSegmentMetadata}. Deletion is considered as
      * successful if this call returns successfully without any errors. It will throw {@link RemoteStorageException} if
      * there are any errors in deleting the file.
      * <p>
-     * {@param remoteLogSegmentMetadata}.
      *
      * @param remoteLogSegmentMetadata metadata about the remote log segment to be deleted.
      * @throws RemoteResourceNotFoundException if the requested resource is not found

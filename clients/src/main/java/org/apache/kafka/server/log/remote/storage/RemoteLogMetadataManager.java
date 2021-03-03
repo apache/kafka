@@ -53,14 +53,17 @@ import java.util.Set;
 public interface RemoteLogMetadataManager extends Configurable, Closeable {
 
     /**
-     * Stores {@link }RemoteLogSegmentMetadata} with the containing {@link }RemoteLogSegmentId} into {@link RemoteLogMetadataManager}.
+     * Adds {@link RemoteLogSegmentMetadata} with the containing {@link RemoteLogSegmentId} into {@link RemoteLogMetadataManager}.
      * <p>
-     * RemoteLogSegmentMetadata is identified by RemoteLogSegmentId.
+     * RemoteLogSegmentMetadata is identified by RemoteLogSegmentId and it should have the initial state which is {@link RemoteLogSegmentState#COPY_SEGMENT_STARTED}.
+     * <p>
+     * {@link #updateRemoteLogSegmentMetadata(RemoteLogSegmentMetadataUpdate)} should be used to update an existing RemoteLogSegmentMetadata.
      *
      * @param remoteLogSegmentMetadata metadata about the remote log segment.
-     * @throws RemoteStorageException if there are any storage related errors occurred.
+     * @throws RemoteStorageException   if there are any storage related errors occurred.
+     * @throws IllegalArgumentException if the given metadata instance does not have the state as {@link RemoteLogSegmentState#COPY_SEGMENT_STARTED}
      */
-    void putRemoteLogSegmentMetadata(RemoteLogSegmentMetadata remoteLogSegmentMetadata) throws RemoteStorageException;
+    void addRemoteLogSegmentMetadata(RemoteLogSegmentMetadata remoteLogSegmentMetadata) throws RemoteStorageException;
 
     /**
      * This method is used to update the {@link RemoteLogSegmentMetadata}. Currently, it allows to update with the new
@@ -100,6 +103,7 @@ public interface RemoteLogMetadataManager extends Configurable, Closeable {
      * @param remoteLogSegmentMetadataUpdate update of the remote log segment metadata.
      * @throws RemoteStorageException          if there are any storage related errors occurred.
      * @throws RemoteResourceNotFoundException when there are no resources associated with the given remoteLogSegmentMetadataUpdate.
+     * @throws IllegalArgumentException        if the given metadata instance has the state as {@link RemoteLogSegmentState#COPY_SEGMENT_STARTED}
      */
     void updateRemoteLogSegmentMetadata(RemoteLogSegmentMetadataUpdate remoteLogSegmentMetadataUpdate)
             throws RemoteStorageException;
