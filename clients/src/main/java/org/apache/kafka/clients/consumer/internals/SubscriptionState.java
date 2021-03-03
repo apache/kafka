@@ -537,7 +537,7 @@ public class SubscriptionState {
         return assignedState(tp).position;
     }
 
-    synchronized Long partitionLag(TopicPartition tp, IsolationLevel isolationLevel) {
+    public synchronized Long partitionLag(TopicPartition tp, IsolationLevel isolationLevel) {
         TopicPartitionState topicPartitionState = assignedState(tp);
         if (isolationLevel == IsolationLevel.READ_COMMITTED)
             return topicPartitionState.lastStableOffset == null ? null : topicPartitionState.lastStableOffset - topicPartitionState.position.offset;
@@ -560,18 +560,6 @@ public class SubscriptionState {
 
     synchronized void updateLastStableOffset(TopicPartition tp, long lastStableOffset) {
         assignedState(tp).lastStableOffset(lastStableOffset);
-    }
-
-    synchronized Long logStartOffset(TopicPartition tp) {
-        return assignedState(tp).logStartOffset;
-    }
-
-    synchronized Long logEndOffset(TopicPartition tp, IsolationLevel isolationLevel) {
-        TopicPartitionState topicPartitionState = assignedState(tp);
-        if (isolationLevel == IsolationLevel.READ_COMMITTED)
-            return topicPartitionState.lastStableOffset == null ? null : topicPartitionState.lastStableOffset;
-        else
-            return topicPartitionState.highWatermark == null ? null : topicPartitionState.highWatermark;
     }
 
     /**

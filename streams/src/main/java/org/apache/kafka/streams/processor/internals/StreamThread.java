@@ -572,6 +572,11 @@ public class StreamThread extends Thread {
         // until the rebalance is completed before we close and commit the tasks
         while (isRunning() || taskManager.isRebalanceInProgress()) {
             try {
+                if (assignmentErrorCode.get() == AssignorError.SHUTDOWN_REQUESTED.code()) {
+                    log.warn("Detected that shutdown was requested. " +
+                            "All clients in this app will now begin to shutdown");
+                    mainConsumer.enforceRebalance();
+                }
                 runOnce();
                 if (nextProbingRebalanceMs.get() < time.milliseconds()) {
                     log.info("Triggering the followup rebalance scheduled for {} ms.", nextProbingRebalanceMs.get());
@@ -661,10 +666,7 @@ public class StreamThread extends Thread {
     }
 
     public void sendShutdownRequest(final AssignorError assignorError) {
-        log.warn("Detected that shutdown was requested. " +
-                "All clients in this app will now begin to shutdown");
         assignmentErrorCode.set(assignorError.code());
-        mainConsumer.enforceRebalance();
     }
 
     private void handleTaskMigrated(final TaskMigratedException e) {
@@ -892,16 +894,11 @@ public class StreamThread extends Thread {
 
         final int numRecords = records.count();
 
-        log.debug(
-            "Main Consumer poll completed in {} ms and fetched {} records and {} metadata",
-            pollLatency,
-            numRecords,
-            records.metadata().size()
-        );
+        log.debug("Main Consumer poll completed in {} ms and fetched {} records", pollLatency, numRecords);
 
         pollSensor.record(pollLatency, now);
 
-        if (!records.isEmpty() || !records.metadata().isEmpty()) {
+        if (!records.isEmpty()) {
             pollRecordsSensor.record(numRecords, now);
             taskManager.addRecordsToTasks(records);
         }

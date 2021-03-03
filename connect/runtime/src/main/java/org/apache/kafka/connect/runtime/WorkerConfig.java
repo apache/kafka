@@ -147,20 +147,22 @@ public class WorkerConfig extends AbstractConfig {
     public static final long OFFSET_COMMIT_TIMEOUT_MS_DEFAULT = 5000L;
 
     /**
-     * @deprecated As of 1.1.0.
+     * @deprecated As of 1.1.0. Only used when listeners is not set. Use listeners instead.
      */
     @Deprecated
     public static final String REST_HOST_NAME_CONFIG = "rest.host.name";
     private static final String REST_HOST_NAME_DOC
-            = "Hostname for the REST API. If this is set, it will only bind to this interface.";
+            = "Hostname for the REST API. If this is set, it will only bind to this interface.\n" +
+            "Deprecated, only used when listeners is not set. Use listeners instead.";
 
     /**
-     * @deprecated As of 1.1.0.
+     * @deprecated As of 1.1.0. Only used when listeners is not set. Use listeners instead.
      */
     @Deprecated
     public static final String REST_PORT_CONFIG = "rest.port";
     private static final String REST_PORT_DOC
-            = "Port for the REST API to listen on.";
+            = "Port for the REST API to listen on.\n" +
+            "Deprecated, only used when listeners is not set. Use listeners instead.";
     public static final int REST_PORT_DEFAULT = 8083;
 
     public static final String LISTENERS_CONFIG = "listeners";

@@ -14,18 +14,18 @@
 // limitations under the License.
 
 {
-  "apiKey": 39,
+  "apiKey": 66,
   "type": "request",
-  "listeners": ["zkBroker"],
-  "name": "RenewDelegationTokenRequest",
-  // Version 1 is the same as version 0.
-  // Version 2 adds flexible version support
-  "validVersions": "0-2",
-  "flexibleVersions": "2+",
+  "listeners": ["zkBroker", "broker"],
+  "name": "ListTransactionsRequest",
+  "validVersions": "0",
+  "flexibleVersions": "0+",
   "fields": [
-    { "name": "Hmac", "type": "bytes", "versions": "0+",
-      "about": "The HMAC of the delegation token to be renewed." },
-    { "name": "RenewPeriodMs", "type": "int64", "versions": "0+",
-      "about": "The renewal time period in milliseconds." }
+    { "name": "StateFilters", "type": "[]string", "versions": "0+",
+      "about": "The transaction states to filter by: if empty, all transactions are returned; if non-empty, then only transactions matching one of the filtered states will be returned"
+    },
+    { "name": "ProducerIdFilters", "type": "[]int64", "versions": "0+",
+      "about": "The producerIds to filter by: if empty, all transactions will be returned; if non-empty, only transactions which match one of the filtered producerIds will be returned"
+    }
   ]
 }
