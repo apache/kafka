@@ -639,6 +639,9 @@ class RequestQuotaTest extends BaseRequestTest {
           new DescribeTransactionsRequest.Builder(new DescribeTransactionsRequestData()
             .setTransactionalIds(List("test-transactional-id").asJava))
 
+        case ApiKeys.LIST_TRANSACTIONS =>
+          new ListTransactionsRequest.Builder(new ListTransactionsRequestData())
+
         case _ =>
           throw new IllegalArgumentException("Unsupported API key " + apiKey)
     }
