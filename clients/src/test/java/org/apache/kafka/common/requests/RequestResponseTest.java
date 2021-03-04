@@ -126,6 +126,7 @@ import org.apache.kafka.common.message.JoinGroupResponseData;
 import org.apache.kafka.common.message.JoinGroupResponseData.JoinGroupResponseMember;
 import org.apache.kafka.common.message.LeaderAndIsrRequestData.LeaderAndIsrPartitionState;
 import org.apache.kafka.common.message.LeaderAndIsrResponseData;
+import org.apache.kafka.common.message.LeaderAndIsrResponseData.LeaderAndIsrTopicErrorCollection;
 import org.apache.kafka.common.message.LeaveGroupRequestData.MemberIdentity;
 import org.apache.kafka.common.message.LeaveGroupResponseData;
 import org.apache.kafka.common.message.ListGroupsRequestData;
@@ -1685,7 +1686,7 @@ public class RequestResponseTest {
                     new LeaderAndIsrResponseData.LeaderAndIsrPartitionError()
                     .setPartitionIndex(0)
                     .setErrorCode(Errors.NONE.code()));
-            List<LeaderAndIsrResponseData.LeaderAndIsrTopicError> topics = new ArrayList<>();
+            LeaderAndIsrTopicErrorCollection topics = new LeaderAndIsrTopicErrorCollection();
             topics.add(new LeaderAndIsrResponseData.LeaderAndIsrTopicError()
                     .setTopicId(Uuid.randomUuid())
                     .setPartitionErrors(partition));
