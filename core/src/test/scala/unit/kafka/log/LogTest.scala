@@ -34,11 +34,11 @@ import kafka.server.{BrokerTopicStats, FetchDataInfo, FetchHighWatermark, FetchI
 import kafka.utils._
 import org.apache.kafka.common.{InvalidRecordException, KafkaException, TopicPartition, Uuid}
 import org.apache.kafka.common.errors._
+import org.apache.kafka.common.message.FetchResponseData
 import org.apache.kafka.common.record.FileRecords.TimestampAndOffset
 import org.apache.kafka.common.record.MemoryRecords.RecordFilter
 import org.apache.kafka.common.record.MemoryRecords.RecordFilter.BatchRetention
 import org.apache.kafka.common.record._
-import org.apache.kafka.common.requests.FetchResponse.AbortedTransaction
 import org.apache.kafka.common.requests.{ListOffsetsRequest, ListOffsetsResponse}
 import org.apache.kafka.common.utils.{BufferSupplier, Time, Utils}
 import org.easymock.EasyMock
@@ -4725,7 +4725,8 @@ class LogTest {
     assertEquals(1, fetchDataInfo.abortedTransactions.size)
 
     assertTrue(fetchDataInfo.abortedTransactions.isDefined)
-    assertEquals(new AbortedTransaction(pid, 0), fetchDataInfo.abortedTransactions.get.head)
+    assertEquals(new FetchResponseData.AbortedTransaction().setProducerId(pid).setFirstOffset(0),
+      fetchDataInfo.abortedTransactions.get.head)
   }
 
   @Test

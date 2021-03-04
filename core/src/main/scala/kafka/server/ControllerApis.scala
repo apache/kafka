@@ -34,7 +34,6 @@ import org.apache.kafka.common.message.CreateTopicsResponseData.CreatableTopicRe
 import org.apache.kafka.common.message.MetadataResponseData.MetadataResponseBroker
 import org.apache.kafka.common.message.{BeginQuorumEpochResponseData, BrokerHeartbeatResponseData, BrokerRegistrationResponseData, CreateTopicsResponseData, DescribeQuorumResponseData, EndQuorumEpochResponseData, FetchResponseData, MetadataResponseData, SaslAuthenticateResponseData, SaslHandshakeResponseData, UnregisterBrokerResponseData, VoteResponseData}
 import org.apache.kafka.common.protocol.{ApiKeys, ApiMessage, Errors}
-import org.apache.kafka.common.record.BaseRecords
 import org.apache.kafka.common.requests._
 import org.apache.kafka.common.resource.Resource
 import org.apache.kafka.common.resource.Resource.CLUSTER_NAME
@@ -116,7 +115,7 @@ class ControllerApis(val requestChannel: RequestChannel,
 
   private def handleFetch(request: RequestChannel.Request): Unit = {
     authHelper.authorizeClusterOperation(request, CLUSTER_ACTION)
-    handleRaftRequest(request, response => new FetchResponse[BaseRecords](response.asInstanceOf[FetchResponseData]))
+    handleRaftRequest(request, response => new FetchResponse(response.asInstanceOf[FetchResponseData]))
   }
 
   def handleMetadataRequest(request: RequestChannel.Request): Unit = {

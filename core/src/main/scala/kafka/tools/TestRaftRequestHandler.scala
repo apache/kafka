@@ -24,7 +24,6 @@ import kafka.utils.Logging
 import org.apache.kafka.common.internals.FatalExitError
 import org.apache.kafka.common.message.{BeginQuorumEpochResponseData, EndQuorumEpochResponseData, FetchResponseData, FetchSnapshotResponseData, VoteResponseData}
 import org.apache.kafka.common.protocol.{ApiKeys, ApiMessage}
-import org.apache.kafka.common.record.BaseRecords
 import org.apache.kafka.common.requests.{AbstractRequest, AbstractResponse, BeginQuorumEpochResponse, EndQuorumEpochResponse, FetchResponse, FetchSnapshotResponse, VoteResponse}
 import org.apache.kafka.common.utils.Time
 
@@ -81,7 +80,7 @@ class TestRaftRequestHandler(
   }
 
   private def handleFetch(request: RequestChannel.Request): Unit = {
-    handle(request, response => new FetchResponse[BaseRecords](response.asInstanceOf[FetchResponseData]))
+    handle(request, response => new FetchResponse(response.asInstanceOf[FetchResponseData]))
   }
 
   private def handleFetchSnapshot(request: RequestChannel.Request): Unit = {

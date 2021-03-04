@@ -18,14 +18,12 @@ package kafka.server.epoch.util
 
 import java.net.SocketTimeoutException
 import java.util
-
 import kafka.cluster.BrokerEndPoint
 import kafka.server.BlockingSend
 import org.apache.kafka.clients.{ClientRequest, ClientResponse, MockClient, NetworkClientUtils}
-import org.apache.kafka.common.message.OffsetForLeaderEpochResponseData
-import org.apache.kafka.common.message.OffsetForLeaderEpochResponseData.{OffsetForLeaderTopicResult, EpochEndOffset}
+import org.apache.kafka.common.message.{FetchResponseData, OffsetForLeaderEpochResponseData}
+import org.apache.kafka.common.message.OffsetForLeaderEpochResponseData.{EpochEndOffset, OffsetForLeaderTopicResult}
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
-import org.apache.kafka.common.record.Records
 import org.apache.kafka.common.requests.AbstractRequest.Builder
 import org.apache.kafka.common.requests.{AbstractRequest, FetchResponse, OffsetsForLeaderEpochResponse, FetchMetadata => JFetchMetadata}
 import org.apache.kafka.common.utils.{SystemTime, Time}
@@ -52,7 +50,7 @@ class ReplicaFetcherMockBlockingSend(offsets: java.util.Map[TopicPartition, Epoc
   var lastUsedOffsetForLeaderEpochVersion = -1
   var callback: Option[() => Unit] = None
   var currentOffsets: util.Map[TopicPartition, EpochEndOffset] = offsets
-  var fetchPartitionData: Map[TopicPartition, FetchResponse.PartitionData[Records]] = Map.empty
+  var fetchPartitionData: Map[TopicPartition, FetchResponseData.PartitionData] = Map.empty
   private val sourceNode = new Node(sourceBroker.id, sourceBroker.host, sourceBroker.port)
 
   def setEpochRequestCallback(postEpochFunction: () => Unit): Unit = {
@@ -63,7 +61,7 @@ class ReplicaFetcherMockBlockingSend(offsets: java.util.Map[TopicPartition, Epoc
     currentOffsets = newOffsets
   }
 
-  def setFetchPartitionDataForNextResponse(partitionData: Map[TopicPartition, FetchResponse.PartitionData[Records]]): Unit = {
+  def setFetchPartitionDataForNextResponse(partitionData: Map[TopicPartition, FetchResponseData.PartitionData]): Unit = {
     fetchPartitionData = partitionData
   }
 
@@ -97,11 +95,11 @@ class ReplicaFetcherMockBlockingSend(offsets: java.util.Map[TopicPartition, Epoc
 
       case ApiKeys.FETCH =>
         fetchCount += 1
-        val partitionData = new util.LinkedHashMap[TopicPartition, FetchResponse.PartitionData[Records]]
+        val partitionData = new util.LinkedHashMap[TopicPartition, FetchResponseData.PartitionData]
         fetchPartitionData.foreach { case (tp, data) => partitionData.put(tp, data) }
         fetchPartitionData = Map.empty
-        new FetchResponse(Errors.NONE, partitionData, 0,
-          if (partitionData.isEmpty) JFetchMetadata.INVALID_SESSION_ID else 1)
+        FetchResponse.of(Errors.NONE, 0,
+          if (partitionData.isEmpty) JFetchMetadata.INVALID_SESSION_ID else 1, partitionData)
 
       case _ =>
         throw new UnsupportedOperationException

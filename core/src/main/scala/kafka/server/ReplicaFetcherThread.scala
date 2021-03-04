@@ -35,7 +35,7 @@ import org.apache.kafka.common.message.OffsetForLeaderEpochRequestData.OffsetFor
 import org.apache.kafka.common.message.OffsetForLeaderEpochResponseData.EpochEndOffset
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.protocol.Errors
-import org.apache.kafka.common.record.{MemoryRecords, Records}
+import org.apache.kafka.common.record.MemoryRecords
 import org.apache.kafka.common.requests._
 import org.apache.kafka.common.utils.{LogContext, Time}
 
@@ -162,7 +162,7 @@ class ReplicaFetcherThread(name: String,
     val logTrace = isTraceEnabled
     val partition = replicaMgr.getPartitionOrException(topicPartition)
     val log = partition.localLogOrException
-    val records = toMemoryRecords(partitionData.records)
+    val records = toMemoryRecords(FetchResponse.recordsOrFail(partitionData))
 
     maybeWarnIfOversizedRecords(records, topicPartition)
 
@@ -215,7 +215,7 @@ class ReplicaFetcherThread(name: String,
   override protected def fetchFromLeader(fetchRequest: FetchRequest.Builder): Map[TopicPartition, FetchData] = {
     try {
       val clientResponse = leaderEndpoint.sendRequest(fetchRequest)
-      val fetchResponse = clientResponse.responseBody.asInstanceOf[FetchResponse[Records]]
+      val fetchResponse = clientResponse.responseBody.asInstanceOf[FetchResponse]
       if (!fetchSessionHandler.handleResponse(fetchResponse)) {
         Map.empty
       } else {

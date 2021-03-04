@@ -17,37 +17,33 @@
 
 package kafka.server
 
+import kafka.cluster.BrokerEndPoint
+import kafka.common.ClientIdAndBroker
+import kafka.log.LogAppendInfo
+import kafka.metrics.KafkaMetricsGroup
+import kafka.server.AbstractFetcherThread.{ReplicaFetch, ResultWithPartitions}
+import kafka.utils.CoreUtils.inLock
+import kafka.utils.Implicits._
+import kafka.utils.{DelayedItem, Pool, ShutdownableThread}
+import org.apache.kafka.common.errors._
+import org.apache.kafka.common.internals.PartitionStates
+import org.apache.kafka.common.message.OffsetForLeaderEpochResponseData.EpochEndOffset
+import org.apache.kafka.common.message.{FetchResponseData, OffsetForLeaderEpochRequestData}
+import org.apache.kafka.common.protocol.Errors
+import org.apache.kafka.common.record.{FileRecords, MemoryRecords, Records}
+import org.apache.kafka.common.requests.OffsetsForLeaderEpochResponse.{UNDEFINED_EPOCH, UNDEFINED_EPOCH_OFFSET}
+import org.apache.kafka.common.requests._
+import org.apache.kafka.common.{InvalidRecordException, TopicPartition}
+
 import java.nio.ByteBuffer
 import java.util
 import java.util.Optional
+import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicLong
 import java.util.concurrent.locks.ReentrantLock
-
-import kafka.cluster.BrokerEndPoint
-import kafka.utils.{DelayedItem, Pool, ShutdownableThread}
-import kafka.utils.Implicits._
-import org.apache.kafka.common.errors._
-import kafka.common.ClientIdAndBroker
-import kafka.metrics.KafkaMetricsGroup
-import kafka.utils.CoreUtils.inLock
-import org.apache.kafka.common.protocol.Errors
-
 import scala.collection.{Map, Set, mutable}
 import scala.compat.java8.OptionConverters._
 import scala.jdk.CollectionConverters._
-import java.util.concurrent.TimeUnit
-import java.util.concurrent.atomic.AtomicLong
-
-import kafka.log.LogAppendInfo
-import kafka.server.AbstractFetcherThread.ReplicaFetch
-import kafka.server.AbstractFetcherThread.ResultWithPartitions
-import org.apache.kafka.common.{InvalidRecordException, TopicPartition}
-import org.apache.kafka.common.internals.PartitionStates
-import org.apache.kafka.common.message.OffsetForLeaderEpochRequestData
-import org.apache.kafka.common.message.OffsetForLeaderEpochResponseData.EpochEndOffset
-import org.apache.kafka.common.record.{FileRecords, MemoryRecords, Records}
-import org.apache.kafka.common.requests._
-import org.apache.kafka.common.requests.OffsetsForLeaderEpochResponse.{UNDEFINED_EPOCH, UNDEFINED_EPOCH_OFFSET}
-
 import scala.math._
 
 /**
@@ -62,7 +58,7 @@ abstract class AbstractFetcherThread(name: String,
                                      val brokerTopicStats: BrokerTopicStats) //BrokerTopicStats's lifecycle managed by ReplicaManager
   extends ShutdownableThread(name, isInterruptible) {
 
-  type FetchData = FetchResponse.PartitionData[Records]
+  type FetchData = FetchResponseData.PartitionData
   type EpochData = OffsetForLeaderEpochRequestData.OffsetForLeaderPartition
 
   private val partitionStates = new PartitionStates[PartitionFetchState]
@@ -340,7 +336,7 @@ abstract class AbstractFetcherThread(name: String,
             // the current offset is the same as the offset requested.
             val fetchPartitionData = sessionPartitions.get(topicPartition)
             if (fetchPartitionData != null && fetchPartitionData.fetchOffset == currentFetchState.fetchOffset && currentFetchState.isReadyForFetch) {
-              partitionData.error match {
+              Errors.forCode(partitionData.errorCode) match {
                 case Errors.NONE =>
                   try {
                     // Once we hand off the partition data to the subclass, we can't mess with it any more in this thread
@@ -364,7 +360,7 @@ abstract class AbstractFetcherThread(name: String,
                       }
                     }
                     if (isTruncationOnFetchSupported) {
-                      partitionData.divergingEpoch.ifPresent { divergingEpoch =>
+                      FetchResponse.divergingEpoch(partitionData).ifPresent { divergingEpoch =>
                         divergingEndOffsets += topicPartition -> new EpochEndOffset()
                           .setPartition(topicPartition.partition)
                           .setErrorCode(Errors.NONE.code)
@@ -416,9 +412,8 @@ abstract class AbstractFetcherThread(name: String,
                        "expected to persist.")
                   partitionsWithError += topicPartition
 
-                case _ =>
-                  error(s"Error for partition $topicPartition at offset ${currentFetchState.fetchOffset}",
-                    partitionData.error.exception)
+                case partitionError =>
+                  error(s"Error for partition $topicPartition at offset ${currentFetchState.fetchOffset}", partitionError.exception)
                   partitionsWithError += topicPartition
               }
             }

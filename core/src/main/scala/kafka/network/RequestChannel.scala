@@ -192,7 +192,7 @@ object RequestChannel extends Logging {
             resources.add(newResource)
           }
           val data = new IncrementalAlterConfigsRequestData()
-            .setValidateOnly(alterConfigs.data().validateOnly())
+            .setValidateOnly(alterConfigs.data.validateOnly())
             .setResources(resources)
           new IncrementalAlterConfigsRequest.Builder(data).build(alterConfigs.version)
 
