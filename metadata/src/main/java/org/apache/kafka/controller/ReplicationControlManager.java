@@ -624,7 +624,7 @@ public class ReplicationControlManager {
                 results.put(id, ApiError.fromThrowable(e));
             }
         }
-        return new ControllerResult<>(records, results);
+        return ControllerResult.atomicOf(records, results);
     }
 
     void deleteTopic(Uuid id, List<ApiMessageAndVersion> records) {
