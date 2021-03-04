@@ -17,7 +17,6 @@
 
 package org.apache.kafka.controller;
 
-import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
@@ -265,7 +264,7 @@ public final class QuorumController implements Controller {
     class ControlEvent implements EventQueue.Event {
         private final String name;
         private final Runnable handler;
-        private long eventCreatedTimeNs = time.nanoseconds();
+        private final long eventCreatedTimeNs = time.nanoseconds();
         private Optional<Long> startProcessingTimeNs = Optional.empty();
 
         ControlEvent(String name, Runnable handler) {
@@ -307,7 +306,7 @@ public final class QuorumController implements Controller {
         private final String name;
         private final CompletableFuture<T> future;
         private final Supplier<T> handler;
-        private long eventCreatedTimeNs = time.nanoseconds();
+        private final long eventCreatedTimeNs = time.nanoseconds();
         private Optional<Long> startProcessingTimeNs = Optional.empty();
 
         ControllerReadEvent(String name, Supplier<T> handler) {
@@ -389,7 +388,7 @@ public final class QuorumController implements Controller {
         private final String name;
         private final CompletableFuture<T> future;
         private final ControllerWriteOperation<T> op;
-        private long eventCreatedTimeNs = time.nanoseconds();
+        private final long eventCreatedTimeNs = time.nanoseconds();
         private Optional<Long> startProcessingTimeNs = Optional.empty();
         private ControllerResultAndOffset<T> resultAndOffset;
 
@@ -423,8 +422,7 @@ public final class QuorumController implements Controller {
                 if (!maybeOffset.isPresent()) {
                     // If the purgatory is empty, there are no pending operations and no
                     // uncommitted state.  We can return immediately.
-                    resultAndOffset = new ControllerResultAndOffset<>(-1,
-                        new ArrayList<>(), result.response());
+                    resultAndOffset = ControllerResultAndOffset.of(-1, result);
                     log.debug("Completing read-only operation {} immediately because " +
                         "the purgatory is empty.", this);
                     complete(null);
@@ -432,8 +430,7 @@ public final class QuorumController implements Controller {
                 }
                 // If there are operations in the purgatory, we want to wait for the latest
                 // one to complete before returning our result to the user.
-                resultAndOffset = new ControllerResultAndOffset<>(maybeOffset.get(),
-                    result.records(), result.response());
+                resultAndOffset = ControllerResultAndOffset.of(maybeOffset.get(), result);
                 log.debug("Read-only operation {} will be completed when the log " +
                     "reaches offset {}", this, resultAndOffset.offset());
             } else {
@@ -441,11 +438,15 @@ public final class QuorumController implements Controller {
                 // written before we can return our result to the user.  Here, we hand off
                 // the batch of records to the metadata log manager.  They will be written
                 // out asynchronously.
-                long offset = logManager.scheduleWrite(controllerEpoch, result.records());
+                final long offset;
+                if (result.isAtomic()) {
+                    offset = logManager.scheduleAtomicWrite(controllerEpoch, result.records());
+                } else {
+                    offset = logManager.scheduleWrite(controllerEpoch, result.records());
+                }
                 op.processBatchEndOffset(offset);
                 writeOffset = offset;
-                resultAndOffset = new ControllerResultAndOffset<>(offset,
-                    result.records(), result.response());
+                resultAndOffset = ControllerResultAndOffset.of(offset, result);
                 for (ApiMessageAndVersion message : result.records()) {
                     replay(message.message());
                 }
