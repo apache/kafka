@@ -1272,6 +1272,24 @@ checkpoint-latency-ms-avg
         <td></td>
       </tr>
       <tr>
+        <td>Controller Request rate from Broker</td>
+        <td>kafka.controller:type=ControllerChannelManager,name=RequestRateAndQueueTimeMs,brokerId=([0-9]+)</td>
+        <td>The rate (requests per second) at which the ControllerChannelManager takes requests from the
+            queue of the given broker. And the time it takes for a request to stay in this queue before
+            it is taken from the queue.</td>
+      </tr>
+      <tr>
+        <td>Controller Event queue size</td>
+        <td>kafka.controller:type=ControllerEventManager,name=EventQueueSize</td>
+        <td>Size of the ControllerEventManager's queue.</td>
+      </tr>
+      <tr>
+        <td>Controller Event queue time</td>
+        <td>kafka.controller:type=ControllerEventManager,name=EventQueueTimeMs</td>
+        <td>Time that takes for any event (except the Idle event) to wait in the ControllerEventManager's
+            queue before being processed</td>
+      </tr>
+      <tr>
         <td>Request rate</td>
         <td>kafka.network:type=RequestMetrics,name=RequestsPerSec,request={Produce|FetchConsumer|FetchFollower},version=([0-9]+)</td>
         <td></td>
