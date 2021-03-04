@@ -517,7 +517,7 @@ public class Selector implements Selectable, AutoCloseable {
 
             // register all per-connection metrics at once
             sensors.maybeRegisterConnectionMetrics(nodeId);
-            if (idleExpiryManager != null)
+            if (idleExpiryManager != null && !explicitlyMutedChannels.contains(channel))
                 idleExpiryManager.update(nodeId, currentTimeNanos);
 
             try {

@@ -1562,8 +1562,15 @@ class SocketServerTest {
       val testableSelector = testableServer.testableSelector
       testableSelector.updateMinWakeup(2)
 
+      val sleepTimeMs = idleTimeMs / 2 + 1
       val (socket, request) = makeSocketWithBufferedRequests(testableServer, testableSelector, proxyServer)
-      time.sleep(idleTimeMs + 1)
+      time.sleep(sleepTimeMs)
+      testableSelector.operationCounts.clear()
+      testableSelector.waitForOperations(SelectorOperation.Poll, 1)
+
+      time.sleep(sleepTimeMs)
+      testableSelector.operationCounts.clear()
+      testableSelector.waitForOperations(SelectorOperation.Poll, 1)
       testableServer.waitForChannelClose(request.context.connectionId, locallyClosed = false)
 
       val otherSocket = sslConnect(testableServer)
