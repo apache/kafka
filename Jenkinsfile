@@ -46,8 +46,8 @@ def doStreamsArchetype() {
   echo 'Verify that Kafka Streams archetype compiles'
 
   sh '''
-    ./gradlew streams:install clients:install connect:json:install connect:api:install \
-         || { echo 'Could not install kafka-streams.jar (and dependencies) locally`'; exit 1; }
+    ./gradlew streams:publishToMavenLocal clients:publishToMavenLocal connect:json:publishToMavenLocal connect:api:publishToMavenLocal \
+         || { echo 'Could not publish kafka-streams.jar (and dependencies) locally to Maven'; exit 1; }
   '''
 
   VERSION = sh(script: 'grep "^version=" gradle.properties | cut -d= -f 2', returnStdout: true).trim()
