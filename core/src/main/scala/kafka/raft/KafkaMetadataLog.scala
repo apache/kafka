@@ -16,29 +16,20 @@
  */
 package kafka.raft
 
-import java.nio.file.Files
-import java.nio.file.NoSuchFileException
-import java.util.NoSuchElementException
-import java.util.Optional
+import java.io.File
+import java.nio.file.{Files, NoSuchFileException}
 import java.util.concurrent.ConcurrentSkipListSet
+import java.util.{NoSuchElementException, Optional, Properties}
 
-import kafka.log.{AppendOrigin, Log, SnapshotGenerated, LogOffsetSnapshot}
-import kafka.server.{FetchHighWatermark, FetchLogEnd}
+import kafka.api.ApiVersion
+import kafka.log.{AppendOrigin, Log, LogConfig, LogOffsetSnapshot, SnapshotGenerated}
+import kafka.server.{BrokerTopicStats, FetchHighWatermark, FetchLogEnd, LogDirFailureChannel}
+import kafka.utils.Scheduler
 import org.apache.kafka.common.record.{MemoryRecords, Records}
+import org.apache.kafka.common.utils.Time
 import org.apache.kafka.common.{KafkaException, TopicPartition}
-import org.apache.kafka.raft.Isolation
-import org.apache.kafka.raft.LogAppendInfo
-import org.apache.kafka.raft.LogFetchInfo
-import org.apache.kafka.raft.LogOffsetMetadata
-import org.apache.kafka.raft.OffsetAndEpoch
-import org.apache.kafka.raft.OffsetMetadata
-import org.apache.kafka.raft.ReplicatedLog
-import org.apache.kafka.snapshot.FileRawSnapshotReader
-import org.apache.kafka.snapshot.FileRawSnapshotWriter
-import org.apache.kafka.snapshot.RawSnapshotReader
-import org.apache.kafka.snapshot.RawSnapshotWriter
-import org.apache.kafka.snapshot.SnapshotPath
-import org.apache.kafka.snapshot.Snapshots
+import org.apache.kafka.raft.{Isolation, LogAppendInfo, LogFetchInfo, LogOffsetMetadata, OffsetAndEpoch, OffsetMetadata, ReplicatedLog}
+import org.apache.kafka.snapshot.{FileRawSnapshotReader, FileRawSnapshotWriter, RawSnapshotReader, RawSnapshotWriter, SnapshotPath, Snapshots}
 
 import scala.compat.java8.OptionConverters._
 
@@ -297,10 +288,43 @@ final class KafkaMetadataLog private (
 }
 
 object KafkaMetadataLog {
+
   def apply(
+    topicPartition: TopicPartition,
+    dataDir: File,
+    time: Time,
+    scheduler: Scheduler,
+    maxBatchSizeInBytes: Int,
+    maxFetchSizeInBytes: Int
+  ): KafkaMetadataLog = {
+    val props = new Properties()
+    props.put(LogConfig.MaxMessageBytesProp, maxBatchSizeInBytes.toString)
+    props.put(LogConfig.MessageFormatVersionProp, ApiVersion.latestVersion.toString)
+
+    LogConfig.validateValues(props)
+    val defaultLogConfig = LogConfig(props)
+
+    val log = Log(
+      dir = dataDir,
+      config = defaultLogConfig,
+      logStartOffset = 0L,
+      recoveryPoint = 0L,
+      scheduler = scheduler,
+      brokerTopicStats = new BrokerTopicStats,
+      time = time,
+      maxProducerIdExpirationMs = Int.MaxValue,
+      producerIdExpirationCheckIntervalMs = Int.MaxValue,
+      logDirFailureChannel = new LogDirFailureChannel(5),
+      keepPartitionMetadataFile = false
+    )
+
+    KafkaMetadataLog(log, topicPartition, maxFetchSizeInBytes)
+  }
+
+  private def apply(
     log: Log,
     topicPartition: TopicPartition,
-    maxFetchSizeInBytes: Int = 1024 * 1024
+    maxFetchSizeInBytes: Int
   ): KafkaMetadataLog = {
     val snapshotIds = new ConcurrentSkipListSet[OffsetAndEpoch]()
     // Scan the log directory; deleting partial snapshots and remembering immutable snapshots
