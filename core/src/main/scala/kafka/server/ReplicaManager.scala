@@ -57,7 +57,6 @@ import org.apache.kafka.common.replica.PartitionView.DefaultPartitionView
 import org.apache.kafka.common.replica.ReplicaView.DefaultReplicaView
 import org.apache.kafka.common.replica.{ClientMetadata, _}
 import org.apache.kafka.common.requests.FetchRequest.PartitionData
-import org.apache.kafka.common.requests.FetchResponse.AbortedTransaction
 import org.apache.kafka.common.requests.ProduceResponse.PartitionResponse
 import org.apache.kafka.common.requests._
 import org.apache.kafka.common.utils.Time
@@ -150,7 +149,7 @@ case class FetchPartitionData(error: Errors = Errors.NONE,
                               records: Records,
                               divergingEpoch: Option[FetchResponseData.EpochEndOffset],
                               lastStableOffset: Option[Long],
-                              abortedTransactions: Option[List[AbortedTransaction]],
+                              abortedTransactions: Option[List[FetchResponseData.AbortedTransaction]],
                               preferredReadReplica: Option[Int],
                               isReassignmentFetch: Boolean)
 

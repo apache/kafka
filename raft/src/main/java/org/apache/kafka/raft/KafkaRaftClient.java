@@ -40,6 +40,7 @@ import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.ApiMessage;
 import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.common.requests.FetchResponse;
 import org.apache.kafka.common.utils.BufferSupplier;
 import org.apache.kafka.common.record.CompressionType;
 import org.apache.kafka.common.record.MemoryRecords;
@@ -906,7 +907,7 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
     ) {
         return RaftUtil.singletonFetchResponse(log.topicPartition(), Errors.NONE, partitionData -> {
             partitionData
-                .setRecordSet(records)
+                .setRecords(records)
                 .setErrorCode(error.code())
                 .setLogStartOffset(log.startOffset())
                 .setHighWatermark(highWatermark
@@ -991,11 +992,11 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
         }
 
         FetchResponseData response = tryCompleteFetchRequest(request.replicaId(), fetchPartition, currentTimeMs);
-        FetchResponseData.FetchablePartitionResponse partitionResponse =
-            response.responses().get(0).partitionResponses().get(0);
+        FetchResponseData.PartitionData partitionResponse =
+            response.responses().get(0).partitions().get(0);
 
         if (partitionResponse.errorCode() != Errors.NONE.code()
-            || partitionResponse.recordSet().sizeInBytes() > 0
+            || FetchResponse.recordsSize(partitionResponse) > 0
             || request.maxWaitMs() == 0) {
             return completedFuture(response);
         }
@@ -1084,8 +1085,8 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
             return false;
         }
 
-        FetchResponseData.FetchablePartitionResponse partitionResponse =
-            response.responses().get(0).partitionResponses().get(0);
+        FetchResponseData.PartitionData partitionResponse =
+            response.responses().get(0).partitions().get(0);
 
         FetchResponseData.LeaderIdAndEpoch currentLeaderIdAndEpoch = partitionResponse.currentLeader();
         OptionalInt responseLeaderId = optionalLeaderId(currentLeaderIdAndEpoch.leaderId());
@@ -1143,7 +1144,7 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
                     state.setFetchingSnapshot(Optional.of(log.createSnapshot(snapshotId)));
                 }
             } else {
-                Records records = (Records) partitionResponse.recordSet();
+                Records records = FetchResponse.recordsOrFail(partitionResponse);
                 if (records.sizeInBytes() > 0) {
                     appendAsFollower(records);
                 }
