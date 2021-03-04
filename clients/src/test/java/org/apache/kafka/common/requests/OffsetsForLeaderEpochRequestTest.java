@@ -35,7 +35,7 @@ public class OffsetsForLeaderEpochRequestTest {
         }
 
         for (short version = 3; version <= ApiKeys.OFFSET_FOR_LEADER_EPOCH.latestVersion(); version++) {
-            OffsetsForLeaderEpochRequest request = builder.build((short) 3);
+            OffsetsForLeaderEpochRequest request = builder.build(version);
             assertEquals(OffsetsForLeaderEpochRequest.CONSUMER_REPLICA_ID, request.replicaId());
         }
     }
