@@ -65,7 +65,7 @@ public class LeaderAndIsrRequestTest {
         String topicName = "topic";
         int partition = 0;
 
-        for (short version = LEADER_AND_ISR.oldestVersion(); version < LEADER_AND_ISR.latestVersion(); version++) {
+        for (short version = LEADER_AND_ISR.oldestVersion(); version <= LEADER_AND_ISR.latestVersion(); version++) {
             LeaderAndIsrRequest request = new LeaderAndIsrRequest.Builder(version, 0, 0, 0,
                 Collections.singletonList(new LeaderAndIsrPartitionState()
                     .setTopicName(topicName)
@@ -92,7 +92,7 @@ public class LeaderAndIsrRequestTest {
                 assertEquals(topicId, topicState.topicId());
                 assertEquals(
                     Collections.singletonList(new LeaderAndIsrPartitionError()
-                        .setPartitionIndex(0)
+                        .setPartitionIndex(partition)
                         .setErrorCode(Errors.CLUSTER_AUTHORIZATION_FAILED.code())),
                     topicState.partitionErrors());
                 assertEquals(0, response.data().partitionErrors().size());
