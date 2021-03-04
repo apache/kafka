@@ -97,26 +97,26 @@ Examining CI run
 ----------------
 * Set BUILD_ID is travis ci's build id. E.g. build id is 169519874 for the following build
 ```bash
-https://travis-ci.org/apache/kafka/builds/169519874
+https://travis-ci.com/apache/kafka/builds/169519874
 ```
 
 * Getting number of tests that were actually run
 ```bash
-for id in $(curl -sSL https://api.travis-ci.org/builds/$BUILD_ID | jq '.matrix|map(.id)|.[]'); do curl -sSL "https://api.travis-ci.org/jobs/$id/log.txt?deansi=true" ; done | grep -cE 'RunnerClient: Loading test'
+for id in $(curl -sSL https://api.travis-ci.com/builds/$BUILD_ID | jq '.matrix|map(.id)|.[]'); do curl -sSL "https://api.travis-ci.com/jobs/$id/log.txt?deansi=true" ; done | grep -cE 'RunnerClient: Loading test'
 ```
 
 * Getting number of tests that passed
 ```bash
-for id in $(curl -sSL https://api.travis-ci.org/builds/$BUILD_ID | jq '.matrix|map(.id)|.[]'); do curl -sSL "https://api.travis-ci.org/jobs/$id/log.txt?deansi=true" ; done | grep -cE 'RunnerClient.*PASS'
+for id in $(curl -sSL https://api.travis-ci.com/builds/$BUILD_ID | jq '.matrix|map(.id)|.[]'); do curl -sSL "https://api.travis-ci.com/jobs/$id/log.txt?deansi=true" ; done | grep -cE 'RunnerClient.*PASS'
 ```
 * Getting all the logs produced from a run
 ```bash
-for id in $(curl -sSL https://api.travis-ci.org/builds/$BUILD_ID | jq '.matrix|map(.id)|.[]'); do curl -sSL "https://api.travis-ci.org/jobs/$id/log.txt?deansi=true" ; done
+for id in $(curl -sSL https://api.travis-ci.com/builds/$BUILD_ID | jq '.matrix|map(.id)|.[]'); do curl -sSL "https://api.travis-ci.com/jobs/$id/log.txt?deansi=true" ; done
 ```
 * Explanation of curl calls to travis-ci & jq commands
   - We get json information of the build using the following command
 ```bash
-curl -sSL https://api.travis-ci.org/apache/kafka/builds/169519874
+curl -sSL https://api.travis-ci.com/apache/kafka/builds/169519874
 ```
 This produces a json about the build which looks like:
 ```json
@@ -260,7 +260,7 @@ This produces a json about the build which looks like:
 ```
   - By passing this through jq filter `.matrix` we extract the matrix part of the json
 ```bash
-curl -sSL https://api.travis-ci.org/apache/kafka/builds/169519874 | jq '.matrix'
+curl -sSL https://api.travis-ci.com/apache/kafka/builds/169519874 | jq '.matrix'
 ```
 The resulting json looks like:
 ```json
@@ -347,7 +347,7 @@ The resulting json looks like:
   - By further passing this through jq filter `map(.id)` we extract the id of
   the builds for each of the splits
 ```bash
-curl -sSL https://api.travis-ci.org/apache/kafka/builds/169519874 | jq '.matrix|map(.id)'
+curl -sSL https://api.travis-ci.com/apache/kafka/builds/169519874 | jq '.matrix|map(.id)'
 ```
 The resulting json looks like:
 ```json
@@ -364,7 +364,7 @@ The resulting json looks like:
   - To use these ids in for loop we want to get rid of `[]` which is done by
   passing it through `.[]` filter
 ```bash
-curl -sSL https://api.travis-ci.org/apache/kafka/builds/169519874 | jq '.matrix|map(.id)|.[]'
+curl -sSL https://api.travis-ci.com/apache/kafka/builds/169519874 | jq '.matrix|map(.id)|.[]'
 ```
 And we get
 ```text
@@ -378,7 +378,7 @@ And we get
 ```
   - In the for loop we have made calls to fetch logs
 ```bash
-curl -sSL "https://api.travis-ci.org/jobs/169519875/log.txt?deansi=true" | tail
+curl -sSL "https://api.travis-ci.com/jobs/169519875/log.txt?deansi=true" | tail
 ```
 which gives us
 ```text
