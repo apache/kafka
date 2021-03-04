@@ -270,15 +270,11 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
     public void suspend() {
         switch (state()) {
             case CREATED:
-                log.info("Suspended created");
-                transitionTo(State.SUSPENDED);
-                setTimeCurrentIdlingStarted();
+                transitToSuspend();
                 break;
 
             case RESTORING:
-                log.info("Suspended restoring");
-                transitionTo(State.SUSPENDED);
-                setTimeCurrentIdlingStarted();
+                transitToSuspend();
                 break;
 
             case RUNNING:
@@ -290,8 +286,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
                     // re-fetch those records starting from the committed position
                     partitionGroup.clear();
                 } finally {
-                    transitionTo(State.SUSPENDED);
-                    setTimeCurrentIdlingStarted();
+                    transitToSuspend();
                     log.info("Suspended running");
                 }
 
@@ -1155,7 +1150,9 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
         return Collections.unmodifiableMap(highWatermark);
     }
 
-    private void setTimeCurrentIdlingStarted() {
+    private void transitToSuspend() {
+        log.info("Suspended created");
+        transitionTo(State.SUSPENDED);
         timeCurrentIdlingStarted = Optional.of(System.currentTimeMillis());
     }
 
