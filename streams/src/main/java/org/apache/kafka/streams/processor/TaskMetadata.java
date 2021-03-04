@@ -95,6 +95,9 @@ public class TaskMetadata {
         return "TaskMetadata{" +
                 "taskId=" + taskId +
                 ", topicPartitions=" + topicPartitions +
+                ", committedOffsets=" + committedOffsets +
+                ", endOffsets=" + endOffsets +
+                ", timeCurrentIdlingStarted=" + timeCurrentIdlingStarted +
                 '}';
     }
 }
