@@ -444,7 +444,7 @@ if not user_ok("""Requirements:
         </server>
         <server>
             <id>your-gpgkeyId</id>
-            <passphrase>your-gpg-passphase</passphrase>
+            <passphrase>your-gpg-passphrase</passphrase>
         </server>
         <profile>
             <id>gpg-signing</id>
