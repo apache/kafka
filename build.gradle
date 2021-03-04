@@ -1969,7 +1969,8 @@ project(':connect:transforms') {
   archivesBaseName = "connect-transforms"
 
   dependencies {
-    implementation project(':connect:api')
+    api project(':connect:api')
+    
     implementation libs.slf4jApi
 
     testImplementation libs.easymock
@@ -2005,7 +2006,7 @@ project(':connect:json') {
   archivesBaseName = "connect-json"
 
   dependencies {
-    implementation project(':connect:api')
+    api project(':connect:api')
 
     api libs.jacksonDatabind
     api libs.jacksonJDK8Datatypes
