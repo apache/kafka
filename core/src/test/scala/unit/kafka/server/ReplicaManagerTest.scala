@@ -17,24 +17,17 @@
 
 package kafka.server
 
-import java.io.File
-import java.net.InetAddress
-import java.util.concurrent.atomic.{AtomicBoolean, AtomicReference}
-import java.util.concurrent.{CountDownLatch, TimeUnit}
-import java.util.{Collections, Optional, Properties}
-
 import kafka.api._
-import kafka.log.{AppendOrigin, Log, LogConfig, LogManager, ProducerStateManager}
 import kafka.cluster.{BrokerEndPoint, Partition}
-import kafka.log.LeaderOffsetIncremented
+import kafka.log._
 import kafka.server.QuotaFactory.{QuotaManagers, UnboundedQuota}
-import kafka.server.checkpoints.LazyOffsetCheckpoints
-import kafka.server.checkpoints.OffsetCheckpointFile
+import kafka.server.checkpoints.{LazyOffsetCheckpoints, OffsetCheckpointFile}
 import kafka.server.epoch.util.ReplicaFetcherMockBlockingSend
 import kafka.server.metadata.CachedConfigRepository
 import kafka.utils.TestUtils.createBroker
 import kafka.utils.timer.MockTimer
 import kafka.utils.{MockScheduler, MockTime, TestUtils}
+import org.apache.kafka.common.message.FetchResponseData
 import org.apache.kafka.common.message.LeaderAndIsrRequestData
 import org.apache.kafka.common.message.LeaderAndIsrRequestData.LeaderAndIsrPartitionState
 import org.apache.kafka.common.message.OffsetForLeaderEpochResponseData.EpochEndOffset
@@ -45,21 +38,23 @@ import org.apache.kafka.common.record._
 import org.apache.kafka.common.replica.ClientMetadata
 import org.apache.kafka.common.replica.ClientMetadata.DefaultClientMetadata
 import org.apache.kafka.common.requests.FetchRequest.PartitionData
-import org.apache.kafka.common.requests.FetchResponse.AbortedTransaction
 import org.apache.kafka.common.requests.ProduceResponse.PartitionResponse
 import org.apache.kafka.common.requests._
 import org.apache.kafka.common.security.auth.KafkaPrincipal
-import org.apache.kafka.common.utils.Time
-import org.apache.kafka.common.utils.Utils
+import org.apache.kafka.common.utils.{Time, Utils}
 import org.apache.kafka.common.{IsolationLevel, Node, TopicPartition, Uuid}
 import org.easymock.EasyMock
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
 import org.mockito.Mockito
 
-import scala.collection.mutable
+import java.io.File
+import java.net.InetAddress
+import java.util.concurrent.atomic.{AtomicBoolean, AtomicReference}
+import java.util.concurrent.{CountDownLatch, TimeUnit}
+import java.util.{Collections, Optional, Properties}
+import scala.collection.{Map, Seq, mutable}
 import scala.jdk.CollectionConverters._
-import scala.collection.{Map, Seq}
 
 class ReplicaManagerTest {
 
@@ -403,7 +398,7 @@ class ReplicaManagerTest {
       assertEquals(Errors.NONE, fetchData.error)
       assertTrue(fetchData.records.batches.asScala.isEmpty)
       assertEquals(Some(0), fetchData.lastStableOffset)
-      assertEquals(Some(List.empty[AbortedTransaction]), fetchData.abortedTransactions)
+      assertEquals(Some(List.empty[FetchResponseData.AbortedTransaction]), fetchData.abortedTransactions)
 
       // delayed fetch should timeout and return nothing
       consumerFetchResult = fetchAsConsumer(replicaManager, new TopicPartition(topic, 0),
@@ -416,7 +411,7 @@ class ReplicaManagerTest {
       assertEquals(Errors.NONE, fetchData.error)
       assertTrue(fetchData.records.batches.asScala.isEmpty)
       assertEquals(Some(0), fetchData.lastStableOffset)
-      assertEquals(Some(List.empty[AbortedTransaction]), fetchData.abortedTransactions)
+      assertEquals(Some(List.empty[FetchResponseData.AbortedTransaction]), fetchData.abortedTransactions)
 
       // now commit the transaction
       val endTxnMarker = new EndTransactionMarker(ControlRecordType.COMMIT, 0)
@@ -448,7 +443,7 @@ class ReplicaManagerTest {
       fetchData = consumerFetchResult.assertFired
       assertEquals(Errors.NONE, fetchData.error)
       assertEquals(Some(numRecords + 1), fetchData.lastStableOffset)
-      assertEquals(Some(List.empty[AbortedTransaction]), fetchData.abortedTransactions)
+      assertEquals(Some(List.empty[FetchResponseData.AbortedTransaction]), fetchData.abortedTransactions)
       assertEquals(numRecords + 1, fetchData.records.batches.asScala.size)
     } finally {
       replicaManager.shutdown(checkpointHW = false)

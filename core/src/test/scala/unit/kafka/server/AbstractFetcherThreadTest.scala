@@ -20,7 +20,6 @@ package kafka.server
 import java.nio.ByteBuffer
 import java.util.Optional
 import java.util.concurrent.atomic.AtomicInteger
-
 import kafka.cluster.BrokerEndPoint
 import kafka.log.LogAppendInfo
 import kafka.message.NoCompressionCodec
@@ -37,7 +36,7 @@ import org.apache.kafka.common.message.OffsetForLeaderEpochResponseData.EpochEnd
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.record._
 import org.apache.kafka.common.requests.OffsetsForLeaderEpochResponse.{UNDEFINED_EPOCH, UNDEFINED_EPOCH_OFFSET}
-import org.apache.kafka.common.requests.FetchRequest
+import org.apache.kafka.common.requests.{FetchRequest, FetchResponse}
 import org.apache.kafka.common.utils.Time
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{BeforeEach, Test}
@@ -907,8 +906,8 @@ class AbstractFetcherThreadTest {
                                       partitionData: FetchData): Option[LogAppendInfo] = {
       val state = replicaPartitionState(topicPartition)
 
-      if (isTruncationOnFetchSupported && partitionData.divergingEpoch.isPresent) {
-        val divergingEpoch = partitionData.divergingEpoch.get
+      if (isTruncationOnFetchSupported && FetchResponse.isDivergingEpoch(partitionData)) {
+        val divergingEpoch = partitionData.divergingEpoch
         truncateOnFetchResponse(Map(topicPartition -> new EpochEndOffset()
           .setPartition(topicPartition.partition)
           .setErrorCode(Errors.NONE.code)
@@ -923,7 +922,7 @@ class AbstractFetcherThreadTest {
           s"fetched offset = $fetchOffset, log end offset = ${state.logEndOffset}.")
 
       // Now check message's crc
-      val batches = partitionData.records.batches.asScala
+      val batches = FetchResponse.recordsOrFail(partitionData).batches.asScala
       var maxTimestamp = RecordBatch.NO_TIMESTAMP
       var offsetOfMaxTimestamp = -1L
       var lastOffset = state.logEndOffset
@@ -955,7 +954,7 @@ class AbstractFetcherThreadTest {
         sourceCodec = NoCompressionCodec,
         targetCodec = NoCompressionCodec,
         shallowCount = batches.size,
-        validBytes = partitionData.records.sizeInBytes,
+        validBytes = FetchResponse.recordsSize(partitionData),
         offsetsMonotonic = true,
         lastOffsetOfFirstBatch = batches.headOption.map(_.lastOffset).getOrElse(-1)))
     }
@@ -1143,9 +1142,16 @@ class AbstractFetcherThreadTest {
 
           (Errors.NONE, records)
         }
+        val partitionData = new FetchData()
+          .setPartitionIndex(partition.partition)
+          .setErrorCode(error.code)
+          .setHighWatermark(leaderState.highWatermark)
+          .setLastStableOffset(leaderState.highWatermark)
+          .setLogStartOffset(leaderState.logStartOffset)
+          .setRecords(records)
+        divergingEpoch.foreach(partitionData.setDivergingEpoch)
 
-        (partition, new FetchData(error, leaderState.highWatermark, leaderState.highWatermark, leaderState.logStartOffset,
-          Optional.empty[Integer], List.empty.asJava, divergingEpoch.asJava, records))
+        (partition, partitionData)
       }.toMap
     }
 
