@@ -130,10 +130,9 @@ public class FetchResponse extends AbstractResponse {
                              Iterator<Map.Entry<TopicPartition, FetchResponseData.PartitionData>> partIterator) {
         // Since the throttleTimeMs and metadata field sizes are constant and fixed, we can
         // use arbitrary values here without affecting the result.
-        LinkedHashMap<TopicPartition, FetchResponseData.PartitionData> data = new LinkedHashMap<>();
-        partIterator.forEachRemaining(entry -> data.put(entry.getKey(), entry.getValue()));
+        FetchResponseData data = toMessage(Errors.NONE, 0, INVALID_SESSION_ID, partIterator);
         ObjectSerializationCache cache = new ObjectSerializationCache();
-        return 4 + FetchResponse.of(Errors.NONE, 0, INVALID_SESSION_ID, data).data.size(cache, version);
+        return 4 + data.size(cache, version);
     }
 
     @Override
