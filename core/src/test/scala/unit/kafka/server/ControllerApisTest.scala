@@ -277,8 +277,6 @@ class ControllerApisTest {
   def testNotAuthorizedToDeleteWithTopicNotExisting(): Unit = {
     val barId = Uuid.fromString("VlFu5c51ToiNx64wtwkhQw")
     val controller = new MockController.Builder().build()
-    val props = new Properties()
-    props.put(KafkaConfig.DeleteTopicEnableProp, "false")
     val controllerApis = createControllerApis(None, controller)
     val request = new DeleteTopicsRequestData()
     request.topics().add(new DeleteTopicState().setName("foo").setTopicId(ZERO_UUID))

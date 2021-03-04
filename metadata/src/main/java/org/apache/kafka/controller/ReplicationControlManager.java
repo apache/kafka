@@ -363,7 +363,7 @@ public class ReplicationControlManager {
         // Remove this topic from the topics map and the topicsByName map.
         TopicControlInfo topic = topics.remove(record.topicId());
         if (topic == null) {
-            throw new RuntimeException("Can't find topic with ID " + record.topicId() +
+            throw new UnknownTopicIdException("Can't find topic with ID " + record.topicId() +
                 " to remove.");
         }
         topicsByName.remove(topic.name);
@@ -449,12 +449,12 @@ public class ReplicationControlManager {
         Map<Integer, PartitionControlInfo> newParts = new HashMap<>();
         if (!topic.assignments().isEmpty()) {
             if (topic.replicationFactor() != -1) {
-                return new ApiError(Errors.INVALID_REQUEST,
+                return new ApiError(INVALID_REQUEST,
                     "A manual partition assignment was specified, but replication " +
                     "factor was not set to -1.");
             }
             if (topic.numPartitions() != -1) {
-                return new ApiError(Errors.INVALID_REQUEST,
+                return new ApiError(INVALID_REQUEST,
                     "A manual partition assignment was specified, but numPartitions " +
                         "was not set to -1.");
             }
@@ -491,7 +491,7 @@ public class ReplicationControlManager {
             return new ApiError(Errors.INVALID_REPLICATION_FACTOR,
                 "Replication factor was set to an invalid non-positive value.");
         } else if (!topic.assignments().isEmpty()) {
-            return new ApiError(Errors.INVALID_REQUEST,
+            return new ApiError(INVALID_REQUEST,
                 "Replication factor was not set to -1 but a manual partition " +
                     "assignment was specified.");
         } else if (topic.numPartitions() < -1 || topic.numPartitions() == 0) {
@@ -595,11 +595,16 @@ public class ReplicationControlManager {
     Map<Uuid, ResultOrError<String>> findTopicNames(long offset, Collection<Uuid> ids) {
         Map<Uuid, ResultOrError<String>> results = new HashMap<>(ids.size());
         for (Uuid id : ids) {
-            TopicControlInfo topic = topics.get(id, offset);
-            if (topic == null) {
-                results.put(id, new ResultOrError<>(new ApiError(UNKNOWN_TOPIC_ID)));
+            if (id == null || id.equals(Uuid.ZERO_UUID)) {
+                results.put(id, new ResultOrError<>(new ApiError(INVALID_REQUEST,
+                    "Attempt to find topic with invalid topicId " + id)));
             } else {
-                results.put(id, new ResultOrError<>(topic.name));
+                TopicControlInfo topic = topics.get(id, offset);
+                if (topic == null) {
+                    results.put(id, new ResultOrError<>(new ApiError(UNKNOWN_TOPIC_ID)));
+                } else {
+                    results.put(id, new ResultOrError<>(topic.name));
+                }
             }
         }
         return results;
@@ -607,7 +612,7 @@ public class ReplicationControlManager {
 
     ControllerResult<Map<Uuid, ApiError>> deleteTopics(Collection<Uuid> ids) {
         Map<Uuid, ApiError> results = new HashMap<>(ids.size());
-        List<ApiMessageAndVersion> records = new ArrayList<>();
+        List<ApiMessageAndVersion> records = new ArrayList<>(ids.size());
         for (Uuid id : ids) {
             try {
                 deleteTopic(id, records);
@@ -674,7 +679,7 @@ public class ReplicationControlManager {
                 if (request.brokerId() != partition.leader) {
                     responseTopicData.partitions().add(new AlterIsrResponseData.PartitionData().
                         setPartitionIndex(partitionData.partitionIndex()).
-                        setErrorCode(Errors.INVALID_REQUEST.code()));
+                        setErrorCode(INVALID_REQUEST.code()));
                     continue;
                 }
                 if (partitionData.leaderEpoch() != partition.leaderEpoch) {
@@ -693,14 +698,14 @@ public class ReplicationControlManager {
                 if (!Replicas.validateIsr(partition.replicas, newIsr)) {
                     responseTopicData.partitions().add(new AlterIsrResponseData.PartitionData().
                         setPartitionIndex(partitionData.partitionIndex()).
-                        setErrorCode(Errors.INVALID_REQUEST.code()));
+                        setErrorCode(INVALID_REQUEST.code()));
                     continue;
                 }
                 if (!Replicas.contains(newIsr, partition.leader)) {
                     // An alterIsr request can't remove the current leader.
                     responseTopicData.partitions().add(new AlterIsrResponseData.PartitionData().
                         setPartitionIndex(partitionData.partitionIndex()).
-                        setErrorCode(Errors.INVALID_REQUEST.code()));
+                        setErrorCode(INVALID_REQUEST.code()));
                     continue;
                 }
                 records.add(new ApiMessageAndVersion(new PartitionChangeRecord().
