@@ -123,6 +123,8 @@ class MetadataPartitionsBuilder(val brokerId: Int,
 
   def topicIdToName(id: Uuid): Option[String] = Option(newIdMap.get(id))
 
+  def topicNameToId(name: String): Option[Uuid] = Option(newReverseIdMap.get(name))
+
   def removeTopicById(id: Uuid): Iterable[MetadataPartition] = {
     val name = Option(newIdMap.remove(id)).getOrElse {
       throw new RuntimeException(s"Unable to locate topic with ID $id")
