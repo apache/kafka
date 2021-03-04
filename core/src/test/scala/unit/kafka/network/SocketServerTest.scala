@@ -1564,6 +1564,7 @@ class SocketServerTest {
 
       val sleepTimeMs = idleTimeMs / 2 + 1
       val (socket, request) = makeSocketWithBufferedRequests(testableServer, testableSelector, proxyServer)
+      // advance mock time in increments to verify that when sockets with buffered data dont have their idle time updated
       time.sleep(sleepTimeMs)
       testableSelector.operationCounts.clear()
       testableSelector.waitForOperations(SelectorOperation.Poll, 1)
