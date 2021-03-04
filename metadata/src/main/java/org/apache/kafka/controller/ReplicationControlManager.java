@@ -440,7 +440,7 @@ public class ReplicationControlManager {
             resultsPrefix = ", ";
         }
         log.info("createTopics result(s): {}", resultsBuilder.toString());
-        return new ControllerResult<>(records, data);
+        return ControllerResult.atomicOf(records, data);
     }
 
     private ApiError createTopic(CreatableTopic topic,
@@ -721,7 +721,7 @@ public class ReplicationControlManager {
                     setIsr(partitionData.newIsr()));
             }
         }
-        return new ControllerResult<>(records, response);
+        return ControllerResult.of(records, response);
     }
 
     /**
@@ -875,7 +875,7 @@ public class ReplicationControlManager {
                     setErrorMessage(error.message()));
             }
         }
-        return new ControllerResult<>(records, response);
+        return ControllerResult.of(records, response);
     }
 
     static boolean electionIsUnclean(byte electionType) {
@@ -970,7 +970,7 @@ public class ReplicationControlManager {
                 states.next().fenced(),
                 states.next().inControlledShutdown(),
                 states.next().shouldShutDown());
-        return new ControllerResult<>(records, reply);
+        return ControllerResult.of(records, reply);
     }
 
     int bestLeader(int[] replicas, int[] isr, boolean unclean) {
@@ -999,7 +999,7 @@ public class ReplicationControlManager {
         }
         List<ApiMessageAndVersion> records = new ArrayList<>();
         handleBrokerUnregistered(brokerId, registration.epoch(), records);
-        return new ControllerResult<>(records, null);
+        return ControllerResult.of(records, null);
     }
 
     ControllerResult<Void> maybeFenceStaleBrokers() {
@@ -1011,6 +1011,6 @@ public class ReplicationControlManager {
             handleBrokerFenced(brokerId, records);
             heartbeatManager.fence(brokerId);
         }
-        return new ControllerResult<>(records, null);
+        return ControllerResult.of(records, null);
     }
 }
