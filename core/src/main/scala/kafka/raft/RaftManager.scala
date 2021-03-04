@@ -22,9 +22,9 @@ import java.util
 import java.util.OptionalInt
 import java.util.concurrent.CompletableFuture
 
-import kafka.log.{Log, LogConfig, LogManager}
+import kafka.log.Log
 import kafka.raft.KafkaRaftManager.RaftIoThread
-import kafka.server.{BrokerTopicStats, KafkaConfig, LogDirFailureChannel, MetaProperties}
+import kafka.server.{KafkaConfig, MetaProperties}
 import kafka.utils.timer.SystemTimer
 import kafka.utils.{KafkaScheduler, Logging, ShutdownableThread}
 import org.apache.kafka.clients.{ApiVersions, ClientDnsLookup, ManualMetadataUpdater, NetworkClient}
@@ -241,25 +241,14 @@ class KafkaRaftManager[T](
   }
 
   private def buildMetadataLog(): KafkaMetadataLog = {
-    val defaultProps = LogConfig.extractLogConfigMap(config)
-    LogConfig.validateValues(defaultProps)
-    val defaultLogConfig = LogConfig(defaultProps)
-
-    val log = Log(
-      dir = dataDir,
-      config = defaultLogConfig,
-      logStartOffset = 0L,
-      recoveryPoint = 0L,
-      scheduler = scheduler,
-      brokerTopicStats = new BrokerTopicStats,
-      time = time,
-      maxProducerIdExpirationMs = config.transactionalIdExpirationMs,
-      producerIdExpirationCheckIntervalMs = LogManager.ProducerIdExpirationCheckIntervalMs,
-      logDirFailureChannel = new LogDirFailureChannel(5),
-      keepPartitionMetadataFile = config.usesTopicId
+    KafkaMetadataLog(
+      topicPartition,
+      dataDir,
+      time,
+      scheduler,
+      maxBatchSizeInBytes = KafkaRaftClient.MAX_BATCH_SIZE_BYTES,
+      maxFetchSizeInBytes = KafkaRaftClient.MAX_FETCH_SIZE_BYTES
     )
-
-    KafkaMetadataLog(log, topicPartition)
   }
 
   private def buildNetworkClient(): NetworkClient = {

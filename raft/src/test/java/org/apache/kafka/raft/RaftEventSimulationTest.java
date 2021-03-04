@@ -747,7 +747,7 @@ public class RaftEventSimulationTest {
             persistentState.log.reopen();
 
             IntSerde serde = new IntSerde();
-            MemoryPool memoryPool = new BatchMemoryPool(2, KafkaRaftClient.MAX_BATCH_SIZE);
+            MemoryPool memoryPool = new BatchMemoryPool(2, KafkaRaftClient.MAX_BATCH_SIZE_BYTES);
 
             KafkaRaftClient<Integer> client = new KafkaRaftClient<>(
                 serde,
