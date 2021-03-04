@@ -1072,7 +1072,7 @@ class KafkaApisTest {
 
       val response = capturedResponse.getValue.asInstanceOf[OffsetCommitResponse]
       assertEquals(Errors.UNKNOWN_TOPIC_OR_PARTITION,
-        Errors.forCode(response.data().topics().get(0).partitions().get(0).errorCode()))
+        Errors.forCode(response.data.topics().get(0).partitions().get(0).errorCode))
     }
 
     checkInvalidPartition(-1)
@@ -1425,9 +1425,9 @@ class KafkaApisTest {
       val produceRequest = ProduceRequest.forCurrentMagic(new ProduceRequestData()
         .setTopicData(new ProduceRequestData.TopicProduceDataCollection(
           Collections.singletonList(new ProduceRequestData.TopicProduceData()
-            .setName(tp.topic()).setPartitionData(Collections.singletonList(
+            .setName(tp.topic).setPartitionData(Collections.singletonList(
             new ProduceRequestData.PartitionProduceData()
-              .setIndex(tp.partition())
+              .setIndex(tp.partition)
               .setRecords(MemoryRecords.withRecords(CompressionType.NONE, new SimpleRecord("test".getBytes))))))
             .iterator))
         .setAcks(1.toShort)
@@ -1632,21 +1632,21 @@ class KafkaApisTest {
 
     val topicStates = Seq(
       new StopReplicaTopicState()
-        .setTopicName(groupMetadataPartition.topic())
+        .setTopicName(groupMetadataPartition.topic)
         .setPartitionStates(Seq(new StopReplicaPartitionState()
-          .setPartitionIndex(groupMetadataPartition.partition())
+          .setPartitionIndex(groupMetadataPartition.partition)
           .setLeaderEpoch(leaderEpoch)
           .setDeletePartition(deletePartition)).asJava),
       new StopReplicaTopicState()
-        .setTopicName(txnStatePartition.topic())
+        .setTopicName(txnStatePartition.topic)
         .setPartitionStates(Seq(new StopReplicaPartitionState()
-          .setPartitionIndex(txnStatePartition.partition())
+          .setPartitionIndex(txnStatePartition.partition)
           .setLeaderEpoch(leaderEpoch)
           .setDeletePartition(deletePartition)).asJava),
       new StopReplicaTopicState()
-        .setTopicName(fooPartition.topic())
+        .setTopicName(fooPartition.topic)
         .setPartitionStates(Seq(new StopReplicaPartitionState()
-          .setPartitionIndex(fooPartition.partition())
+          .setPartitionIndex(fooPartition.partition)
           .setLeaderEpoch(leaderEpoch)
           .setDeletePartition(deletePartition)).asJava)
     ).asJava
@@ -1806,8 +1806,8 @@ class KafkaApisTest {
 
     val response = capturedResponse.getValue.asInstanceOf[DescribeGroupsResponse]
 
-    val group = response.data().groups().get(0)
-    assertEquals(Errors.NONE, Errors.forCode(group.errorCode()))
+    val group = response.data.groups().get(0)
+    assertEquals(Errors.NONE, Errors.forCode(group.errorCode))
     assertEquals(groupId, group.groupId())
     assertEquals(groupSummary.state, group.groupState())
     assertEquals(groupSummary.protocolType, group.protocolType())
@@ -1873,7 +1873,7 @@ class KafkaApisTest {
     val response = capturedResponse.getValue.asInstanceOf[OffsetDeleteResponse]
 
     def errorForPartition(topic: String, partition: Int): Errors = {
-      Errors.forCode(response.data.topics.find(topic).partitions.find(partition).errorCode())
+      Errors.forCode(response.data.topics.find(topic).partitions.find(partition).errorCode)
     }
 
     assertEquals(2, response.data.topics.size)
@@ -1914,7 +1914,7 @@ class KafkaApisTest {
       val response = capturedResponse.getValue.asInstanceOf[OffsetDeleteResponse]
 
       assertEquals(Errors.UNKNOWN_TOPIC_OR_PARTITION,
-        Errors.forCode(response.data.topics.find(topic).partitions.find(invalidPartitionId).errorCode()))
+        Errors.forCode(response.data.topics.find(topic).partitions.find(invalidPartitionId).errorCode))
     }
 
     checkInvalidPartition(-1)
@@ -1942,7 +1942,7 @@ class KafkaApisTest {
 
     val response = capturedResponse.getValue.asInstanceOf[OffsetDeleteResponse]
 
-    assertEquals(Errors.GROUP_ID_NOT_FOUND, Errors.forCode(response.data.errorCode()))
+    assertEquals(Errors.GROUP_ID_NOT_FOUND, Errors.forCode(response.data.errorCode))
   }
 
   private def testListOffsetFailedGetLeaderReplica(error: Errors): Unit = {
@@ -2130,16 +2130,15 @@ class KafkaApisTest {
     EasyMock.replay(replicaManager, clientQuotaManager, clientRequestQuotaManager, requestChannel, fetchManager)
     createKafkaApis().handleFetchRequest(request)
 
-    val response = capturedResponse.getValue.asInstanceOf[FetchResponse[BaseRecords]]
+    val response = capturedResponse.getValue.asInstanceOf[FetchResponse]
     assertTrue(response.responseData.containsKey(tp))
 
     val partitionData = response.responseData.get(tp)
-    assertEquals(Errors.NONE, partitionData.error)
+    assertEquals(Errors.NONE.code, partitionData.errorCode)
     assertEquals(hw, partitionData.highWatermark)
     assertEquals(-1, partitionData.lastStableOffset)
     assertEquals(0, partitionData.logStartOffset)
-    assertEquals(timestamp,
-      partitionData.records.asInstanceOf[MemoryRecords].batches.iterator.next.maxTimestamp)
+    assertEquals(timestamp, FetchResponse.recordsOrFail(partitionData).batches.iterator.next.maxTimestamp)
     assertNull(partitionData.abortedTransactions)
   }
 
@@ -2563,7 +2562,7 @@ class KafkaApisTest {
         .setPartitions(Collections.singletonList(
           new OffsetCommitResponseData.OffsetCommitResponsePartition()
             .setPartitionIndex(0)
-            .setErrorCode(Errors.UNSUPPORTED_VERSION.code())
+            .setErrorCode(Errors.UNSUPPORTED_VERSION.code)
         ))
     )
     val response = capturedResponse.getValue.asInstanceOf[OffsetCommitResponse]
@@ -2871,9 +2870,9 @@ class KafkaApisTest {
     val fooPartition = new TopicPartition("foo", 0)
     val topicStates = Seq(
       new StopReplicaTopicState()
-        .setTopicName(fooPartition.topic())
+        .setTopicName(fooPartition.topic)
         .setPartitionStates(Seq(new StopReplicaPartitionState()
-          .setPartitionIndex(fooPartition.partition())
+          .setPartitionIndex(fooPartition.partition)
           .setLeaderEpoch(1)
           .setDeletePartition(false)).asJava)
     ).asJava
@@ -3246,15 +3245,18 @@ class KafkaApisTest {
 
   @Test
   def testSizeOfThrottledPartitions(): Unit = {
-    def fetchResponse(data: Map[TopicPartition, String]): FetchResponse[Records] = {
-      val responseData = new util.LinkedHashMap[TopicPartition, FetchResponse.PartitionData[Records]](
+
+    def fetchResponse(data: Map[TopicPartition, String]): FetchResponse = {
+      val responseData = new util.LinkedHashMap[TopicPartition, FetchResponseData.PartitionData](
         data.map { case (tp, raw) =>
-          tp -> new FetchResponse.PartitionData(Errors.NONE,
-            105, 105, 0, Optional.empty(), Collections.emptyList(), Optional.empty(),
-            MemoryRecords.withRecords(CompressionType.NONE,
-              new SimpleRecord(100, raw.getBytes(StandardCharsets.UTF_8))).asInstanceOf[Records])
+          tp -> new FetchResponseData.PartitionData()
+            .setPartitionIndex(tp.partition)
+            .setHighWatermark(105)
+            .setLastStableOffset(105)
+            .setLogStartOffset(0)
+            .setRecords(MemoryRecords.withRecords(CompressionType.NONE, new SimpleRecord(100, raw.getBytes(StandardCharsets.UTF_8))))
       }.toMap.asJava)
-      new FetchResponse(Errors.NONE, responseData, 100, 100)
+      FetchResponse.of(Errors.NONE, 100, 100, responseData)
     }
 
     val throttledPartition = new TopicPartition("throttledData", 0)

@@ -1089,7 +1089,165 @@ checkpoint-latency-ms-avg
   </p>
 
 
-  <h3 class="anchor-heading"><a id="config" class="anchor-link"></a><a href="#config">6.4 Kafka Configuration</a></h3>
+  <h3 class="anchor-heading"><a id="multitenancy" class="anchor-link"></a><a href="#multitenancy">6.4 Multi-Tenancy</a></h3>
+
+  <h4 class="anchor-heading"><a id="multitenancy-overview" class="anchor-link"></a><a href="#multitenancy-overview">Multi-Tenancy Overview</a></h4>
+
+  <p>
+    As a highly scalable event streaming platform, Kafka is used by many users as their central nervous system, connecting in real-time a wide range of different systems and applications from various teams and lines of businesses. Such multi-tenant cluster environments command proper control and management to ensure the peaceful coexistence of these different needs. This section highlights features and best practices to set up such shared environments, which should help you operate clusters that meet SLAs/OLAs and that minimize potential collateral damage caused by "noisy neighbors".
+  </p>
+
+  <p>
+    Multi-tenancy is a many-sided subject, including but not limited to:
+  </p>
+
+  <ul>
+    <li>Creating user spaces for tenants (sometimes called namespaces)</li>
+    <li>Configuring topics with data retention policies and more</li>
+    <li>Securing topics and clusters with encryption, authentication, and authorization</li>
+    <li>Isolating tenants with quotas and rate limits</li>
+    <li>Monitoring and metering</li>
+    <li>Inter-cluster data sharing (cf. geo-replication)</li>
+  </ul>
+
+  <h4 class="anchor-heading"><a id="multitenancy-topic-naming" class="anchor-link"></a><a href="#multitenancy-topic-naming">Creating User Spaces (Namespaces) For Tenants With Topic Naming</a></h4>
+
+  <p>
+    Kafka administrators operating a multi-tenant cluster typically need to define user spaces for each tenant. For the purpose of this section, "user spaces" are a collection of topics, which are grouped together under the management of a single entity or user.
+  </p>
+
+  <p>
+    In Kafka, the main unit of data is the topic. Users can create and name each topic. They can also delete them, but it is not possible to rename a topic directly. Instead, to rename a topic, the user must create a new topic, move the messages from the original topic to the new, and then delete the original. With this in mind, it is recommended to define logical spaces, based on an hierarchical topic naming structure. This setup can then be combined with security features, such as prefixed ACLs, to isolate different spaces and tenants, while also minimizing the administrative overhead for securing the data in the cluster.
+  </p>
+
+  <p>
+    These logical user spaces can be grouped in different ways, and the concrete choice depends on how your organization prefers to use your Kafka clusters. The most common groupings are as follows.
+  </p>
+
+  <p>
+    <em>By team or organizational unit:</em> Here, the team is the main aggregator. In an organization where teams are the main user of the Kafka infrastructure, this might be the best grouping.
+  </p>
+
+  <p>
+    Example topic naming structure:
+  </p>
+
+  <ul>
+    <li><code>&lt;organization&gt;.&lt;team&gt;.&lt;dataset&gt;.&lt;event-name&gt;</code><br />(e.g., "acme.infosec.telemetry.logins")</li>
+  </ul>
+
+  <p>
+    <em>By project or product:</em> Here, a team manages more than one project. Their credentials will be different for each project, so all the controls and settings will always be project related.
+  </p>
+
+  <p>
+    Example topic naming structure:
+  </p>
+
+  <ul>
+    <li><code>&lt;project&gt;.&lt;product&gt;.&lt;event-name&gt;</code><br />(e.g., "mobility.payments.suspicious")</li>
+  </ul>
+
+  <p>
+    Certain information should normally not be put in a topic name, such as information that is likely to change over time (e.g., the name of the intended consumer) or that is a technical detail or metadata that is available elsewhere (e.g., the topic's partition count and other configuration settings).
+  </p>
+
+  <p>
+  To enforce a topic naming structure, several options are available:
+  </p>
+
+  <ul>
+    <li>Use <a href="#security_authz">prefix ACLs</a> (cf. <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-290%3A+Support+for+Prefixed+ACLs">KIP-290</a>) to enforce a common prefix for topic names. For example, team A may only be permitted to create topics whose names start with <code>payments.teamA.</code>.</li>
+    <li>Define a custom <code>CreateTopicPolicy</code> (cf. <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-108%3A+Create+Topic+Policy">KIP-108</a> and the setting <a href="#brokerconfigs_create.topic.policy.class.name">create.topic.policy.class.name</a>) to enforce strict naming patterns. These policies provide the most flexibility and can cover complex patterns and rules to match an organization's needs.</li>
+    <li>Disable topic creation for normal users by denying it with an ACL, and then rely on an external process to create topics on behalf of users (e.g., scripting or your favorite automation toolkit).</li>
+    <li>It may also be useful to disable the Kafka feature to auto-create topics on demand by setting <code>auto.create.topics.enable=false</code> in the broker configuration. Note that you should not rely solely on this option.</li>
+  </ul>
+
+
+  <h4 class="anchor-heading"><a id="multitenancy-topic-configs" class="anchor-link"></a><a href="#multitenancy-topic-configs">Configuring Topics: Data Retention And More</a></h4>
+
+  <p>
+    Kafka's configuration is very flexible due to its fine granularity, and it supports a plethora of <a href="#topicconfigs">per-topic configuration settings</a> to help administrators set up multi-tenant clusters. For example, administrators often need to define data retention policies to control how much and/or for how long data will be stored in a topic, with settings such as <a href="#retention.bytes">retention.bytes</a> (size) and <a href="#retention.ms">retention.ms</a> (time). This limits storage consumption within the cluster, and helps complying with legal requirements such as GDPR.
+  </p>
+
+  <h4 class="anchor-heading"><a id="multitenancy-security" class="anchor-link"></a><a href="#multitenancy-security">Securing Clusters and Topics: Authentication, Authorization, Encryption</a></h4>
+
+  <p>
+  Because the documentation has a dedicated chapter on <a href="#security">security</a> that applies to any Kafka deployment, this section focuses on additional considerations for multi-tenant environments.
+  </p>
+
+  <p>
+Security settings for Kafka fall into three main categories, which are similar to how administrators would secure other client-server data systems, like relational databases and traditional messaging systems.
+  </p>
+
+  <ol>
+    <li><strong>Encryption</strong> of data transferred between Kafka brokers and Kafka clients, between brokers, between brokers and ZooKeeper nodes, and between brokers and other, optional tools.</li>
+    <li><strong>Authentication</strong> of connections from Kafka clients and applications to Kafka brokers, as well as connections from Kafka brokers to ZooKeeper nodes.</li>
+    <li><strong>Authorization</strong> of client operations such as creating, deleting, and altering the configuration of topics; writing events to or reading events from a topic; creating and deleting ACLs. Administrators can also define custom policies to put in place additional restrictions, such as a <code>CreateTopicPolicy</code> and <code>AlterConfigPolicy</code> (see <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-108%3A+Create+Topic+Policy">KIP-108</a> and the settings <a href="#brokerconfigs_create.topic.policy.class.name">create.topic.policy.class.name</a>, <a href="#brokerconfigs_alter.config.policy.class.name">alter.config.policy.class.name</a>).</li>
+  </ol>
+
+  <p>
+  When securing a multi-tenant Kafka environment, the most common administrative task is the third category (authorization), i.e., managing the user/client permissions that grant or deny access to certain topics and thus to the data stored by users within a cluster. This task is performed predominantly through the <a href="#security_authz">setting of access control lists (ACLs)</a>. Here, administrators of multi-tenant environments in particular benefit from putting a hierarchical topic naming structure in place as described in a previous section, because they can conveniently control access to topics through prefixed ACLs (<code>--resource-pattern-type Prefixed</code>). This significantly minimizes the administrative overhead of securing topics in multi-tenant environments: administrators can make their own trade-offs between higher developer convenience (more lenient permissions, using fewer and broader ACLs) vs. tighter security (more stringent permissions, using more and narrower ACLs).
+  </p>
+
+  <p>
+    In the following example, user Alice—a new member of ACME corporation's InfoSec team—is granted write permissions to all topics whose names start with "acme.infosec.", such as "acme.infosec.telemetry.logins" and "acme.infosec.syslogs.events".
+  </p>
+
+<pre class="line-numbers"><code class="language-text"># Grant permissions to user Alice
+$ bin/kafka-acls.sh \
+    --bootstrap-server broker1:9092 \
+    --add --allow-principal User:Alice \
+    --producer \
+    --resource-pattern-type prefixed --topic acme.infosec.
+</code></pre>
+
+  <p>
+    You can similarly use this approach to isolate different customers on the same shared cluster.
+  </p>
+
+  <h4 class="anchor-heading"><a id="multitenancy-isolation" class="anchor-link"></a><a href="#multitenancy-isolation">Isolating Tenants: Quotas, Rate Limiting, Throttling</a></h4>
+
+  <p>
+  Multi-tenant clusters should generally be configured with <a href="#design_quotas">quotas</a>, which protect against users (tenants) eating up too many cluster resources, such as when they attempt to write or read very high volumes of data, or create requests to brokers at an excessively high rate. This may cause network saturation, monopolize broker resources, and impact other clients—all of which you want to avoid in a shared environment.
+  </p>
+
+  <p>
+  <strong>Client quotas:</strong> Kafka supports different types of (per-user principal) client quotas. Because a client's quotas apply irrespective of which topics the client is writing to or reading from, they are a convenient and effective tool to allocate resources in a multi-tenant cluster. <a href="#design_quotascpu">Request rate quotas</a>, for example, help to limit a user's impact on broker CPU usage by limiting the time a broker spends on the <a href="/protocol.html">request handling path</a> for that user, after which throttling kicks in. In many situations, isolating users with request rate quotas has a bigger impact in multi-tenant clusters than setting incoming/outgoing network bandwidth quotas, because excessive broker CPU usage for processing requests reduces the effective bandwidth the broker can serve. Furthermore, administrators can also define quotas on topic operations—such as create, delete, and alter—to prevent Kafka clusters from being overwhelmed by highly concurrent topic operations (see <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-599%3A+Throttle+Create+Topic%2C+Create+Partition+and+Delete+Topic+Operations">KIP-599</a> and the quota type <code>controller_mutations_rate</code>).
+  </p>
+
+  <p>
+    <strong>Server quotas:</strong> Kafka also supports different types of broker-side quotas. For example, administrators can set a limit on the rate with which the <a href="#brokerconfigs_max.connection.creation.rate">broker accepts new connections</a>, set the <a href="#brokerconfigs_max.connections">maximum number of connections per broker</a>, or set the maximum number of connections allowed <a href="#brokerconfigs_max.connections.per.ip">from a specific IP address</a>.
+  </p>
+
+  <p>
+  For more information, please refer to the <a href="#design_quotas">quota overview</a> and <a href="#quotas">how to set quotas</a>.
+  </p>
+
+  <h4 class="anchor-heading"><a id="multitenancy-monitoring" class="anchor-link"></a><a href="#multitenancy-monitoring">Monitoring and Metering</a></h4>
+
+  <p>
+  <a href="#monitoring">Monitoring</a> is a broader subject that is covered <a href="#monitoring">elsewhere</a> in the documentation. Administrators of any Kafka environment, but especially multi-tenant ones, should set up monitoring according to these instructions. Kafka supports a wide range of metrics, such as the rate of failed authentication attempts, request latency, consumer lag, total number of consumer groups, metrics on the quotas described in the previous section, and many more.
+  </p>
+
+  <p>
+  For example, monitoring can be configured to track the size of topic-partitions (with the JMX metric <code>kafka.log.Log.Size.&lt;TOPIC-NAME&gt;</code>), and thus the total size of data stored in a topic. You can then define alerts when tenants on shared clusters are getting close to using too much storage space.
+  </p>
+
+  <h4 class="anchor-heading"><a id="multitenancy-georeplication" class="anchor-link"></a><a href="#multitenancy-georeplication">Multi-Tenancy and Geo-Replication</a></h4>
+
+  <p>
+    Kafka lets you share data across different clusters, which may be located in different geographical regions, data centers, and so on. Apart from use cases such as disaster recovery, this functionality is useful when a multi-tenant setup requires inter-cluster data sharing. See the section <a href="#georeplication">Geo-Replication (Cross-Cluster Data Mirroring)</a> for more information.
+  </p>
+
+  <h4 class="anchor-heading"><a id="multitenancy-more" class="anchor-link"></a><a href="#multitenancy-more">Further considerations</a></h4>
+
+  <p>
+    <strong>Data contracts:</strong> You may need to define data contracts between the producers and the consumers of data in a cluster, using event schemas. This ensures that events written to Kafka can always be read properly again, and prevents malformed or corrupt events being written. The best way to achieve this is to deploy a so-called schema registry alongside the cluster. (Kafka does not include a schema registry, but there are third-party implementations available.) A schema registry manages the event schemas and maps the schemas to topics, so that producers know which topics are accepting which types (schemas) of events, and consumers know how to read and parse events in a topic. Some registry implementations provide further functionality, such as schema evolution, storing a history of all schemas, and schema compatibility settings.
+  </p>
+
+
+  <h3 class="anchor-heading"><a id="config" class="anchor-link"></a><a href="#config">6.5 Kafka Configuration</a></h3>
 
   <h4 class="anchor-heading"><a id="clientconfig" class="anchor-link"></a><a href="#clientconfig">Important Client Configurations</a></h4>
 
@@ -1122,7 +1280,7 @@ checkpoint-latency-ms-avg
 
   Our client configuration varies a fair amount between different use cases.
 
-  <h3 class="anchor-heading"><a id="java" class="anchor-link"></a><a href="#java">6.5 Java Version</a></h3>
+  <h3 class="anchor-heading"><a id="java" class="anchor-link"></a><a href="#java">6.6 Java Version</a></h3>
 
   Java 8 and Java 11 are supported. Java 11 performs significantly better if TLS is enabled, so it is highly recommended (it also includes a number of other
   performance improvements: G1GC, CRC32C, Compact Strings, Thread-Local Handshakes and more).
@@ -1145,7 +1303,7 @@ checkpoint-latency-ms-avg
 
   All of the brokers in that cluster have a 90% GC pause time of about 21ms with less than 1 young GC per second.
 
-  <h3 class="anchor-heading"><a id="hwandos" class="anchor-link"></a><a href="#hwandos">6.6 Hardware and OS</a></h3>
+  <h3 class="anchor-heading"><a id="hwandos" class="anchor-link"></a><a href="#hwandos">6.7 Hardware and OS</a></h3>
   We are using dual quad-core Intel Xeon machines with 24GB of memory.
   <p>
   You need sufficient memory to buffer active readers and writers. You can do a back-of-the-envelope estimate of memory needs by assuming you want to be able to buffer for 30 seconds and compute your memory need as write_throughput*30.
@@ -1230,7 +1388,7 @@ checkpoint-latency-ms-avg
     <li>delalloc: Delayed allocation means that the filesystem avoid allocating any blocks until the physical write occurs. This allows ext4 to allocate a large extent instead of smaller pages and helps ensure the data is written sequentially. This feature is great for throughput. It does seem to involve some locking in the filesystem which adds a bit of latency variance.
   </ul>
 
-  <h3 class="anchor-heading"><a id="monitoring" class="anchor-link"></a><a href="#monitoring">6.7 Monitoring</a></h3>
+  <h3 class="anchor-heading"><a id="monitoring" class="anchor-link"></a><a href="#monitoring">6.8 Monitoring</a></h3>
 
   Kafka uses Yammer Metrics for metrics reporting in the server. The Java clients use Kafka Metrics, a built-in metrics registry that minimizes transitive dependencies pulled into client applications. Both expose metrics via JMX and can be configured to report stats using pluggable stats reporters to hook up to your monitoring system.
   <p>
@@ -1270,6 +1428,24 @@ checkpoint-latency-ms-avg
         <td>Byte in rate from other brokers</td>
         <td>kafka.server:type=BrokerTopicMetrics,name=ReplicationBytesInPerSec</td>
         <td></td>
+      </tr>
+      <tr>
+        <td>Controller Request rate from Broker</td>
+        <td>kafka.controller:type=ControllerChannelManager,name=RequestRateAndQueueTimeMs,brokerId=([0-9]+)</td>
+        <td>The rate (requests per second) at which the ControllerChannelManager takes requests from the
+            queue of the given broker. And the time it takes for a request to stay in this queue before
+            it is taken from the queue.</td>
+      </tr>
+      <tr>
+        <td>Controller Event queue size</td>
+        <td>kafka.controller:type=ControllerEventManager,name=EventQueueSize</td>
+        <td>Size of the ControllerEventManager's queue.</td>
+      </tr>
+      <tr>
+        <td>Controller Event queue time</td>
+        <td>kafka.controller:type=ControllerEventManager,name=EventQueueTimeMs</td>
+        <td>Time that takes for any event (except the Idle event) to wait in the ControllerEventManager's
+            queue before being processed</td>
       </tr>
       <tr>
         <td>Request rate</td>
@@ -2848,7 +3024,7 @@ dropped-records-rate and dropped-records-total which have a recording level of <
 
   On the client side, we recommend monitoring the message/byte rate (global and per topic), request rate/size/time, and on the consumer side, max lag in messages among all partitions and min fetch request rate. For a consumer to keep up, max lag needs to be less than a threshold and min fetch rate needs to be larger than 0.
 
-  <h3 class="anchor-heading"><a id="zk" class="anchor-link"></a><a href="#zk">6.8 ZooKeeper</a></h3>
+  <h3 class="anchor-heading"><a id="zk" class="anchor-link"></a><a href="#zk">6.9 ZooKeeper</a></h3>
 
   <h4 class="anchor-heading"><a id="zkversion" class="anchor-link"></a><a href="#zkversion">Stable version</a></h4>
   The current stable branch is 3.5. Kafka is regularly updated to include the latest release in the 3.5 series.

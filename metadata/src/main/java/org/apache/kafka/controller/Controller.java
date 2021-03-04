@@ -18,6 +18,7 @@
 package org.apache.kafka.controller;
 
 import org.apache.kafka.clients.admin.AlterConfigOp;
+import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.config.ConfigResource;
 import org.apache.kafka.common.message.AlterIsrRequestData;
 import org.apache.kafka.common.message.AlterIsrResponseData;
@@ -68,6 +69,31 @@ public interface Controller extends AutoCloseable {
      *                      unregistered.
      */
     CompletableFuture<Void> unregisterBroker(int brokerId);
+
+    /**
+     * Find the ids for topic names.
+     *
+     * @param topicNames    The topic names to resolve.
+     * @return              A future yielding a map from topic name to id.
+     */
+    CompletableFuture<Map<String, ResultOrError<Uuid>>> findTopicIds(Collection<String> topicNames);
+
+    /**
+     * Find the names for topic ids.
+     *
+     * @param topicIds      The topic ids to resolve.
+     * @return              A future yielding a map from topic id to name.
+     */
+    CompletableFuture<Map<Uuid, ResultOrError<String>>> findTopicNames(Collection<Uuid> topicIds);
+
+    /**
+     * Delete a batch of topics.
+     *
+     * @param topicIds      The IDs of the topics to delete.
+     *
+     * @return              A future yielding the response.
+     */
+    CompletableFuture<Map<Uuid, ApiError>> deleteTopics(Collection<Uuid> topicIds);
 
     /**
      * Describe the current configuration of various resources.
