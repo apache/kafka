@@ -221,6 +221,8 @@ class KafkaRaftManager[T](
 
   private def buildMetadataLog(): KafkaMetadataLog = {
     val defaultProps = LogConfig.extractLogConfigMap(config)
+    defaultProps.put(LogConfig.MaxMessageBytesProp, KafkaRaftClient.MAX_BATCH_SIZE: java.lang.Integer)
+
     LogConfig.validateValues(defaultProps)
     val defaultLogConfig = LogConfig(defaultProps)
 
