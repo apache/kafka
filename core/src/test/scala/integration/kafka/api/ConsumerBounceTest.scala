@@ -482,9 +482,12 @@ class ConsumerBounceTest extends AbstractConsumerTest with Logging {
       }
       def onPartitionsRevoked(partitions: Collection[TopicPartition]): Unit = {
       }})
-    consumer.poll(time.Duration.ofSeconds(3L))
-    TestUtils.waitUntilTrue(() => assignSemaphore.tryAcquire(100, TimeUnit.MILLISECONDS),
-      "Assignment did not complete on time")
+
+    TestUtils.waitUntilTrue(() => {
+      consumer.poll(time.Duration.ZERO)
+      assignSemaphore.tryAcquire()
+    }, "Assignment did not complete on time")
+
     if (committedRecords > 0)
       assertEquals(committedRecords, consumer.committed(Set(tp).asJava).get(tp).offset)
     consumer.close()
