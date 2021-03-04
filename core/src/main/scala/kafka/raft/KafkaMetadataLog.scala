@@ -318,14 +318,23 @@ object KafkaMetadataLog {
       keepPartitionMetadataFile = false
     )
 
-    KafkaMetadataLog(log, topicPartition, maxFetchSizeInBytes)
+    val metadataLog = new KafkaMetadataLog(
+      log,
+      recoverSnapshots(log),
+      topicPartition,
+      maxFetchSizeInBytes
+    )
+
+    // When recovering, truncate fully if the latest snapshot is after the log end offset. This can happen to a follower
+    // when the follower crashes after downloading a snapshot from the leader but before it could truncate the log fully.
+    metadataLog.truncateToLatestSnapshot()
+
+    metadataLog
   }
 
-  private def apply(
-    log: Log,
-    topicPartition: TopicPartition,
-    maxFetchSizeInBytes: Int
-  ): KafkaMetadataLog = {
+  private def recoverSnapshots(
+    log: Log
+  ): ConcurrentSkipListSet[OffsetAndEpoch] = {
     val snapshotIds = new ConcurrentSkipListSet[OffsetAndEpoch]()
     // Scan the log directory; deleting partial snapshots and remembering immutable snapshots
     Files
@@ -346,12 +355,7 @@ object KafkaMetadataLog {
           }
         }
       }
-
-    val replicatedLog = new KafkaMetadataLog(log, snapshotIds, topicPartition, maxFetchSizeInBytes)
-    // When recovering, truncate fully if the latest snapshot is after the log end offset. This can happen to a follower
-    // when the follower crashes after downloading a snapshot from the leader but before it could truncate the log fully.
-    replicatedLog.truncateToLatestSnapshot()
-
-    replicatedLog
+    snapshotIds
   }
+
 }
