@@ -201,7 +201,7 @@ public enum ApiKeys {
 
     public List<Short> allVersions() {
         List<Short> versions = new ArrayList<>(latestVersion() - oldestVersion() + 1);
-        for (short version = oldestVersion(); version < latestVersion(); version++) {
+        for (short version = oldestVersion(); version <= latestVersion(); version++) {
             versions.add(version);
         }
         return versions;

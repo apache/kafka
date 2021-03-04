@@ -116,7 +116,7 @@ public class TxnOffsetCommitRequestTest extends OffsetCommitRequestTest {
                 ))
         );
 
-        for (short version = 0; version <= ApiKeys.TXN_OFFSET_COMMIT.latestVersion(); version++) {
+        for (short version : ApiKeys.TXN_OFFSET_COMMIT.allVersions()) {
             final TxnOffsetCommitRequest request;
             if (version < 3) {
                 request = builder.build(version);

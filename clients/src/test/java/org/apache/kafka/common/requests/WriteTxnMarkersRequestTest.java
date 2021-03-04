@@ -51,7 +51,7 @@ public class WriteTxnMarkersRequestTest {
     @Test
     public void testConstructor() {
         WriteTxnMarkersRequest.Builder builder = new WriteTxnMarkersRequest.Builder(ApiKeys.WRITE_TXN_MARKERS.latestVersion(), markers);
-        for (short version = 0; version <= ApiKeys.WRITE_TXN_MARKERS.latestVersion(); version++) {
+        for (short version : ApiKeys.WRITE_TXN_MARKERS.allVersions()) {
             WriteTxnMarkersRequest request = builder.build(version);
             assertEquals(1, request.markers().size());
             WriteTxnMarkersRequest.TxnMarkerEntry marker = request.markers().get(0);
@@ -66,7 +66,7 @@ public class WriteTxnMarkersRequestTest {
     @Test
     public void testGetErrorResponse() {
         WriteTxnMarkersRequest.Builder builder = new WriteTxnMarkersRequest.Builder(ApiKeys.WRITE_TXN_MARKERS.latestVersion(), markers);
-        for (short version = 0; version <= ApiKeys.WRITE_TXN_MARKERS.latestVersion(); version++) {
+        for (short version : ApiKeys.WRITE_TXN_MARKERS.allVersions()) {
             WriteTxnMarkersRequest request = builder.build(version);
             WriteTxnMarkersResponse errorResponse =
                 request.getErrorResponse(throttleTimeMs, Errors.UNKNOWN_PRODUCER_ID.exception());

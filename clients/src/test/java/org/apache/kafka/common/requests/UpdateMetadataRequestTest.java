@@ -61,7 +61,7 @@ public class UpdateMetadataRequestTest {
 
     @Test
     public void testGetErrorResponse() {
-        for (short version = UPDATE_METADATA.oldestVersion(); version < UPDATE_METADATA.latestVersion(); version++) {
+        for (short version : UPDATE_METADATA.allVersions()) {
             UpdateMetadataRequest.Builder builder = new UpdateMetadataRequest.Builder(
                     version, 0, 0, 0, Collections.emptyList(), Collections.emptyList(), Collections.emptyMap());
             UpdateMetadataRequest request = builder.build();
@@ -81,7 +81,7 @@ public class UpdateMetadataRequestTest {
     public void testVersionLogic() {
         String topic0 = "topic0";
         String topic1 = "topic1";
-        for (short version = UPDATE_METADATA.oldestVersion(); version <= UPDATE_METADATA.latestVersion(); version++) {
+        for (short version : UPDATE_METADATA.allVersions()) {
             List<UpdateMetadataPartitionState> partitionStates = asList(
                 new UpdateMetadataPartitionState()
                     .setTopicName(topic0)
