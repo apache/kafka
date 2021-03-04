@@ -231,9 +231,15 @@ public class ConnectSchema implements Schema {
         }
 
         if (!foundMatch) {
-            throw new DataException(String.format("Invalid Java object for %s: %s for field: \"%s\"",
-                buildSchemaInfo(schema), value.getClass(), name)
-            );
+            StringBuilder exceptionMessage = new StringBuilder("Invalid Java object for schema");
+            if (schema.name() != null) {
+                exceptionMessage.append(" \"").append(schema.name()).append("\"");
+            }
+            exceptionMessage.append(" with type ").append(schema.type()).append(": ").append(value.getClass());
+            if (name != null) {
+                exceptionMessage.append(" for field: \"").append(name).append("\"");
+            }
+            throw new DataException(exceptionMessage.toString());
         }
 
         switch (schema.type()) {
@@ -263,15 +269,6 @@ public class ConnectSchema implements Schema {
         if (expectedClasses == null)
             expectedClasses = SCHEMA_TYPE_CLASSES.getOrDefault(schema.type(), Collections.emptyList());
         return expectedClasses;
-    }
-
-    private static String buildSchemaInfo(Schema schema) {
-        StringBuilder schemaInfo = new StringBuilder("schema");
-        if (schema.name() != null) {
-            schemaInfo.append(" \"").append(schema.name()).append("\"");
-        }
-        schemaInfo.append(" with type ").append(schema.type());
-        return schemaInfo.toString();
     }
 
     /**

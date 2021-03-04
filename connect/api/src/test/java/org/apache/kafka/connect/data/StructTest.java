@@ -318,6 +318,9 @@ public class StructTest {
             Schema.INT8_SCHEMA, new Object()));
         assertEquals("Invalid Java object for schema with type INT8: class java.lang.Object for field: \"field\"",
             e.getMessage());
+
+        e = assertThrows(DataException.class, () -> ConnectSchema.validateValue(Schema.INT8_SCHEMA, new Object()));
+        assertEquals("Invalid Java object for schema with type INT8: class java.lang.Object", e.getMessage());
     }
 
     @Test
@@ -325,7 +328,7 @@ public class StructTest {
         String fieldName = "field";
         long longValue = 1000L;
 
-        // Does not throw​
+        // Does not throw
         ConnectSchema.validateValue(fieldName, Schema.INT64_SCHEMA, longValue);
 
         Exception e = assertThrows(DataException.class, () -> ConnectSchema.validateValue(fieldName,
