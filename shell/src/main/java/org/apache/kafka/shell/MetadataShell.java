@@ -54,6 +54,9 @@ public final class MetadataShell {
         }
 
         public MetadataShell build() throws Exception {
+            if (snapshotPath == null) {
+                throw new RuntimeException("You must supply the log path via --snapshot");
+            }
             MetadataNodeManager nodeManager = null;
             SnapshotFileReader reader = null;
             try {
@@ -99,11 +102,15 @@ public final class MetadataShell {
         }
         if (args == null || args.isEmpty()) {
             // Interactive mode.
+            System.out.println("Loading...");
+            waitUntilCaughtUp();
+            System.out.println("Starting...");
             try (InteractiveShell shell = new InteractiveShell(nodeManager)) {
                 shell.runMainLoop();
             }
         } else {
             // Non-interactive mode.
+            waitUntilCaughtUp();
             Commands commands = new Commands(false);
             try (PrintWriter writer = new PrintWriter(new BufferedWriter(
                     new OutputStreamWriter(System.out, StandardCharsets.UTF_8)))) {
@@ -150,7 +157,6 @@ public final class MetadataShell {
                 }
             });
             MetadataShell shell = builder.build();
-            shell.waitUntilCaughtUp();
             try {
                 shell.run(res.getList("command"));
             } finally {

@@ -284,6 +284,10 @@ public abstract class AbstractRequest implements AbstractRequestResponse {
                 return BrokerHeartbeatRequest.parse(buffer, apiVersion);
             case UNREGISTER_BROKER:
                 return UnregisterBrokerRequest.parse(buffer, apiVersion);
+            case DESCRIBE_TRANSACTIONS:
+                return DescribeTransactionsRequest.parse(buffer, apiVersion);
+            case LIST_TRANSACTIONS:
+                return ListTransactionsRequest.parse(buffer, apiVersion);
             default:
                 throw new AssertionError(String.format("ApiKey %s is not currently handled in `parseRequest`, the " +
                         "code should be updated to do so.", apiKey));

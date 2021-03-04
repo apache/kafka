@@ -1125,7 +1125,6 @@ project(':clients') {
     testCompile libs.bcpkix
     testCompile libs.junitJupiter
     testCompile libs.mockitoCore
-    testCompile libs.hamcrest
 
     testRuntime libs.slf4jlog4j
     testRuntime libs.jacksonDatabind
@@ -1226,6 +1225,7 @@ project(':clients') {
     include "**/org/apache/kafka/server/authorizer/*"
     include "**/org/apache/kafka/server/policy/*"
     include "**/org/apache/kafka/server/quota/*"
+    include "**/org/apache/kafka/server/log/remote/storage/*"
   }
 }
 

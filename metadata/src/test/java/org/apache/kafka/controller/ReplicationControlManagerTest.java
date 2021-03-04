@@ -17,20 +17,17 @@
 
 package org.apache.kafka.controller;
 
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
+import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.errors.StaleBrokerEpochException;
+import org.apache.kafka.common.message.AlterIsrRequestData;
+import org.apache.kafka.common.message.AlterIsrResponseData;
 import org.apache.kafka.common.message.BrokerHeartbeatRequestData;
+import org.apache.kafka.common.message.CreateTopicsRequestData;
 import org.apache.kafka.common.message.CreateTopicsRequestData.CreatableReplicaAssignment;
 import org.apache.kafka.common.message.CreateTopicsRequestData.CreatableTopic;
 import org.apache.kafka.common.message.CreateTopicsRequestData.CreatableTopicCollection;
-import org.apache.kafka.common.message.CreateTopicsRequestData;
-import org.apache.kafka.common.message.CreateTopicsResponseData.CreatableTopicResult;
 import org.apache.kafka.common.message.CreateTopicsResponseData;
+import org.apache.kafka.common.message.CreateTopicsResponseData.CreatableTopicResult;
 import org.apache.kafka.common.metadata.RegisterBrokerRecord;
 import org.apache.kafka.common.metadata.TopicRecord;
 import org.apache.kafka.common.protocol.Errors;
@@ -40,16 +37,30 @@ import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.metadata.ApiMessageAndVersion;
 import org.apache.kafka.metadata.BrokerHeartbeatReply;
+import org.apache.kafka.metadata.BrokerRegistration;
 import org.apache.kafka.timeline.SnapshotRegistry;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.OptionalInt;
+import java.util.Set;
+import java.util.stream.Collectors;
+import java.util.stream.IntStream;
+
 import static org.apache.kafka.common.protocol.Errors.INVALID_TOPIC_EXCEPTION;
-import static org.apache.kafka.controller.BrokersToIsrs.TopicPartition;
+import static org.apache.kafka.controller.BrokersToIsrs.TopicIdPartition;
 import static org.apache.kafka.controller.ReplicationControlManager.PartitionControlInfo;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 
 @Timeout(40)
@@ -74,22 +85,22 @@ public class ReplicationControlManagerTest {
             clusterControl);
     }
 
-    private static void registerBroker(int brokerId, ClusterControlManager clusterControl) {
+    private static void registerBroker(int brokerId, ReplicationControlManager replicationControl) {
         RegisterBrokerRecord brokerRecord = new RegisterBrokerRecord().
-            setBrokerEpoch(100).setBrokerId(brokerId);
+            setBrokerEpoch(brokerId + 100).setBrokerId(brokerId);
         brokerRecord.endPoints().add(new RegisterBrokerRecord.BrokerEndpoint().
             setSecurityProtocol(SecurityProtocol.PLAINTEXT.id).
             setPort((short) 9092 + brokerId).
             setName("PLAINTEXT").
             setHost("localhost"));
-        clusterControl.replay(brokerRecord);
+        replicationControl.clusterControl.replay(brokerRecord);
     }
 
     private static void unfenceBroker(int brokerId,
                                       ReplicationControlManager replicationControl) throws Exception {
         ControllerResult<BrokerHeartbeatReply> result = replicationControl.
             processBrokerHeartbeat(new BrokerHeartbeatRequestData().
-                setBrokerId(brokerId).setBrokerEpoch(100).setCurrentMetadataOffset(1).
+                setBrokerId(brokerId).setBrokerEpoch(brokerId + 100).setCurrentMetadataOffset(1).
                 setWantFence(false).setWantShutDown(false), 0);
         assertEquals(new BrokerHeartbeatReply(true, false, false, false), result.response());
         ControllerTestUtils.replayAll(replicationControl.clusterControl, result.records());
@@ -109,11 +120,11 @@ public class ReplicationControlManagerTest {
                 setErrorMessage("Unable to replicate the partition 3 times: there are only 0 usable brokers"));
         assertEquals(expectedResponse, result.response());
 
-        registerBroker(0, replicationControl.clusterControl);
+        registerBroker(0, replicationControl);
         unfenceBroker(0, replicationControl);
-        registerBroker(1, replicationControl.clusterControl);
+        registerBroker(1, replicationControl);
         unfenceBroker(1, replicationControl);
-        registerBroker(2, replicationControl.clusterControl);
+        registerBroker(2, replicationControl);
         unfenceBroker(2, replicationControl);
         ControllerResult<CreateTopicsResponseData> result2 =
             replicationControl.createTopics(request);
@@ -180,7 +191,7 @@ public class ReplicationControlManagerTest {
     public void testRemoveLeaderships() throws Exception {
         ReplicationControlManager replicationControl = newReplicationControlManager();
         for (int i = 0; i < 6; i++) {
-            registerBroker(i, replicationControl.clusterControl);
+            registerBroker(i, replicationControl);
             unfenceBroker(i, replicationControl);
         }
         CreatableTopicResult result = createTestTopic(replicationControl, "foo",
@@ -190,9 +201,9 @@ public class ReplicationControlManagerTest {
                 new int[] {2, 3, 0},
                 new int[] {0, 2, 1}
             });
-        Set<TopicPartition> expectedPartitions = new HashSet<>();
-        expectedPartitions.add(new TopicPartition(result.topicId(), 0));
-        expectedPartitions.add(new TopicPartition(result.topicId(), 3));
+        Set<TopicIdPartition> expectedPartitions = new HashSet<>();
+        expectedPartitions.add(new TopicIdPartition(result.topicId(), 0));
+        expectedPartitions.add(new TopicIdPartition(result.topicId(), 3));
         assertEquals(expectedPartitions, ControllerTestUtils.
             iteratorToSet(replicationControl.brokersToIsrs().iterator(0, true)));
         List<ApiMessageAndVersion> records = new ArrayList<>();
@@ -201,4 +212,183 @@ public class ReplicationControlManagerTest {
         assertEquals(Collections.emptySet(), ControllerTestUtils.
             iteratorToSet(replicationControl.brokersToIsrs().iterator(0, true)));
     }
+
+    @Test
+    public void testShrinkAndExpandIsr() throws Exception {
+        ReplicationControlManager replicationControl = newReplicationControlManager();
+        for (int i = 0; i < 3; i++) {
+            registerBroker(i, replicationControl);
+            unfenceBroker(i, replicationControl);
+        }
+        CreatableTopicResult createTopicResult = createTestTopic(replicationControl, "foo",
+            new int[][] {new int[] {0, 1, 2}});
+
+        TopicIdPartition topicIdPartition = new TopicIdPartition(createTopicResult.topicId(), 0);
+        TopicPartition topicPartition = new TopicPartition("foo", 0);
+        assertEquals(OptionalInt.of(0), currentLeader(replicationControl, topicIdPartition));
+        long brokerEpoch = currentBrokerEpoch(replicationControl, 0);
+        AlterIsrRequestData.PartitionData shrinkIsrRequest = newAlterIsrPartition(
+            replicationControl, topicIdPartition, Arrays.asList(0, 1));
+        ControllerResult<AlterIsrResponseData> shrinkIsrResult = sendAlterIsr(
+            replicationControl, 0, brokerEpoch, "foo", shrinkIsrRequest);
+        AlterIsrResponseData.PartitionData shrinkIsrResponse = assertAlterIsrResponse(
+            shrinkIsrResult, topicPartition, Errors.NONE);
+        assertConsistentAlterIsrResponse(replicationControl, topicIdPartition, shrinkIsrResponse);
+
+        AlterIsrRequestData.PartitionData expandIsrRequest = newAlterIsrPartition(
+            replicationControl, topicIdPartition, Arrays.asList(0, 1, 2));
+        ControllerResult<AlterIsrResponseData> expandIsrResult = sendAlterIsr(
+            replicationControl, 0, brokerEpoch, "foo", expandIsrRequest);
+        AlterIsrResponseData.PartitionData expandIsrResponse = assertAlterIsrResponse(
+            expandIsrResult, topicPartition, Errors.NONE);
+        assertConsistentAlterIsrResponse(replicationControl, topicIdPartition, expandIsrResponse);
+    }
+
+    @Test
+    public void testInvalidAlterIsrRequests() throws Exception {
+        ReplicationControlManager replicationControl = newReplicationControlManager();
+        for (int i = 0; i < 3; i++) {
+            registerBroker(i, replicationControl);
+            unfenceBroker(i, replicationControl);
+        }
+        CreatableTopicResult createTopicResult = createTestTopic(replicationControl, "foo",
+            new int[][] {new int[] {0, 1, 2}});
+
+        TopicIdPartition topicIdPartition = new TopicIdPartition(createTopicResult.topicId(), 0);
+        TopicPartition topicPartition = new TopicPartition("foo", 0);
+        assertEquals(OptionalInt.of(0), currentLeader(replicationControl, topicIdPartition));
+        long brokerEpoch = currentBrokerEpoch(replicationControl, 0);
+
+        // Invalid leader
+        AlterIsrRequestData.PartitionData invalidLeaderRequest = newAlterIsrPartition(
+            replicationControl, topicIdPartition, Arrays.asList(0, 1));
+        ControllerResult<AlterIsrResponseData> invalidLeaderResult = sendAlterIsr(
+            replicationControl, 1, currentBrokerEpoch(replicationControl, 1),
+            "foo", invalidLeaderRequest);
+        assertAlterIsrResponse(invalidLeaderResult, topicPartition, Errors.INVALID_REQUEST);
+
+        // Stale broker epoch
+        AlterIsrRequestData.PartitionData invalidBrokerEpochRequest = newAlterIsrPartition(
+            replicationControl, topicIdPartition, Arrays.asList(0, 1));
+        assertThrows(StaleBrokerEpochException.class, () -> sendAlterIsr(
+            replicationControl, 0, brokerEpoch - 1, "foo", invalidBrokerEpochRequest));
+
+        // Invalid leader epoch
+        AlterIsrRequestData.PartitionData invalidLeaderEpochRequest = newAlterIsrPartition(
+            replicationControl, topicIdPartition, Arrays.asList(0, 1));
+        invalidLeaderEpochRequest.setLeaderEpoch(500);
+        ControllerResult<AlterIsrResponseData> invalidLeaderEpochResult = sendAlterIsr(
+            replicationControl, 1, currentBrokerEpoch(replicationControl, 1),
+            "foo", invalidLeaderEpochRequest);
+        assertAlterIsrResponse(invalidLeaderEpochResult, topicPartition, Errors.INVALID_REQUEST);
+
+        // Invalid ISR (3 is not a valid replica)
+        AlterIsrRequestData.PartitionData invalidIsrRequest1 = newAlterIsrPartition(
+            replicationControl, topicIdPartition, Arrays.asList(0, 1));
+        invalidIsrRequest1.setNewIsr(Arrays.asList(0, 1, 3));
+        ControllerResult<AlterIsrResponseData> invalidIsrResult1 = sendAlterIsr(
+            replicationControl, 1, currentBrokerEpoch(replicationControl, 1),
+            "foo", invalidIsrRequest1);
+        assertAlterIsrResponse(invalidIsrResult1, topicPartition, Errors.INVALID_REQUEST);
+
+        // Invalid ISR (does not include leader 0)
+        AlterIsrRequestData.PartitionData invalidIsrRequest2 = newAlterIsrPartition(
+            replicationControl, topicIdPartition, Arrays.asList(0, 1));
+        invalidIsrRequest2.setNewIsr(Arrays.asList(1, 2));
+        ControllerResult<AlterIsrResponseData> invalidIsrResult2 = sendAlterIsr(
+            replicationControl, 1, currentBrokerEpoch(replicationControl, 1),
+            "foo", invalidIsrRequest2);
+        assertAlterIsrResponse(invalidIsrResult2, topicPartition, Errors.INVALID_REQUEST);
+    }
+
+    private long currentBrokerEpoch(
+        ReplicationControlManager replicationControl,
+        int brokerId
+    ) {
+        Map<Integer, BrokerRegistration> registrations = replicationControl.clusterControl.brokerRegistrations();
+        BrokerRegistration registration = registrations.get(brokerId);
+        assertNotNull(registration, "No current registration for broker " + brokerId);
+        return registration.epoch();
+    }
+
+    private OptionalInt currentLeader(
+        ReplicationControlManager replicationControl,
+        TopicIdPartition topicIdPartition
+    ) {
+        PartitionControlInfo partitionControl =
+            replicationControl.getPartition(topicIdPartition.topicId(), topicIdPartition.partitionId());
+        if (partitionControl.leader < 0) {
+            return OptionalInt.empty();
+        } else {
+            return OptionalInt.of(partitionControl.leader);
+        }
+    }
+
+    private AlterIsrRequestData.PartitionData newAlterIsrPartition(
+        ReplicationControlManager replicationControl,
+        TopicIdPartition topicIdPartition,
+        List<Integer> newIsr
+    ) {
+        PartitionControlInfo partitionControl =
+            replicationControl.getPartition(topicIdPartition.topicId(), topicIdPartition.partitionId());
+        return new AlterIsrRequestData.PartitionData()
+            .setPartitionIndex(0)
+            .setLeaderEpoch(partitionControl.leaderEpoch)
+            .setCurrentIsrVersion(partitionControl.partitionEpoch)
+            .setNewIsr(newIsr);
+    }
+
+    private ControllerResult<AlterIsrResponseData> sendAlterIsr(
+        ReplicationControlManager replicationControl,
+        int brokerId,
+        long brokerEpoch,
+        String topic,
+        AlterIsrRequestData.PartitionData partitionData
+    ) throws Exception {
+        AlterIsrRequestData request = new AlterIsrRequestData()
+            .setBrokerId(brokerId)
+            .setBrokerEpoch(brokerEpoch);
+
+        AlterIsrRequestData.TopicData topicData = new AlterIsrRequestData.TopicData()
+            .setName(topic);
+        request.topics().add(topicData);
+        topicData.partitions().add(partitionData);
+
+        ControllerResult<AlterIsrResponseData> result = replicationControl.alterIsr(request);
+        ControllerTestUtils.replayAll(replicationControl, result.records());
+        return result;
+    }
+
+    private AlterIsrResponseData.PartitionData assertAlterIsrResponse(
+        ControllerResult<AlterIsrResponseData> alterIsrResult,
+        TopicPartition topicPartition,
+        Errors expectedError
+    ) {
+        AlterIsrResponseData response = alterIsrResult.response();
+        assertEquals(1, response.topics().size());
+
+        AlterIsrResponseData.TopicData topicData = response.topics().get(0);
+        assertEquals(topicPartition.topic(), topicData.name());
+        assertEquals(1, topicData.partitions().size());
+
+        AlterIsrResponseData.PartitionData partitionData = topicData.partitions().get(0);
+        assertEquals(topicPartition.partition(), partitionData.partitionIndex());
+        assertEquals(expectedError, Errors.forCode(partitionData.errorCode()));
+        return partitionData;
+    }
+
+    private void assertConsistentAlterIsrResponse(
+        ReplicationControlManager replicationControl,
+        TopicIdPartition topicIdPartition,
+        AlterIsrResponseData.PartitionData partitionData
+    ) {
+        PartitionControlInfo partitionControl =
+            replicationControl.getPartition(topicIdPartition.topicId(), topicIdPartition.partitionId());
+        assertEquals(partitionControl.leader, partitionData.leaderId());
+        assertEquals(partitionControl.leaderEpoch, partitionData.leaderEpoch());
+        assertEquals(partitionControl.partitionEpoch, partitionData.currentIsrVersion());
+        List<Integer> expectedIsr = IntStream.of(partitionControl.isr).boxed().collect(Collectors.toList());
+        assertEquals(expectedIsr, partitionData.isr());
+    }
+
 }

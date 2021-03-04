@@ -1403,7 +1403,7 @@ class Partition(val topicPartition: TopicPartition,
             case Errors.FENCED_LEADER_EPOCH =>
               debug(s"Failed to update ISR to $proposedIsrState since we sent an old leader epoch. Giving up.")
             case Errors.INVALID_UPDATE_VERSION =>
-              debug(s"Failed to update ISR to $proposedIsrState due to invalid zk version. Giving up.")
+              debug(s"Failed to update ISR to $proposedIsrState due to invalid version. Giving up.")
             case _ =>
               warn(s"Failed to update ISR to $proposedIsrState due to unexpected $error. Retrying.")
               sendAlterIsrRequest(proposedIsrState)
