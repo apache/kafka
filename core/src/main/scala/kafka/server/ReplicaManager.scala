@@ -1828,6 +1828,7 @@ class ReplicaManager(val config: KafkaConfig,
     removeMetric("UnderReplicatedPartitions")
     removeMetric("UnderMinIsrPartitionCount")
     removeMetric("AtMinIsrPartitionCount")
+    removeMetric("ReassigningPartitions")
   }
 
   // High watermark do not need to be checkpointed only when under unit tests
