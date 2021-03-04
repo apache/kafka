@@ -18,21 +18,26 @@
 package kafka.server
 
 import java.util
+import java.util.Collections
+import java.util.concurrent.ExecutionException
 
 import kafka.network.RequestChannel
 import kafka.raft.RaftManager
 import kafka.server.QuotaFactory.QuotaManagers
 import kafka.utils.Logging
 import org.apache.kafka.clients.admin.AlterConfigOp
-import org.apache.kafka.common.Node
-import org.apache.kafka.common.acl.AclOperation.{ALTER, ALTER_CONFIGS, CLUSTER_ACTION, CREATE, DESCRIBE}
+import org.apache.kafka.common.Uuid.ZERO_UUID
+import org.apache.kafka.common.{Node, Uuid}
+import org.apache.kafka.common.acl.AclOperation.{ALTER, ALTER_CONFIGS, CLUSTER_ACTION, CREATE, DELETE, DESCRIBE}
 import org.apache.kafka.common.config.ConfigResource
-import org.apache.kafka.common.errors.{ApiException, ClusterAuthorizationException}
+import org.apache.kafka.common.errors.{ApiException, ClusterAuthorizationException, InvalidRequestException, TopicDeletionDisabledException}
 import org.apache.kafka.common.internals.FatalExitError
 import org.apache.kafka.common.message.CreateTopicsRequestData.CreatableTopicCollection
 import org.apache.kafka.common.message.CreateTopicsResponseData.CreatableTopicResult
+import org.apache.kafka.common.message.DeleteTopicsResponseData.{DeletableTopicResult, DeletableTopicResultCollection}
 import org.apache.kafka.common.message.MetadataResponseData.MetadataResponseBroker
-import org.apache.kafka.common.message.{BeginQuorumEpochResponseData, BrokerHeartbeatResponseData, BrokerRegistrationResponseData, CreateTopicsResponseData, DescribeQuorumResponseData, EndQuorumEpochResponseData, FetchResponseData, MetadataResponseData, SaslAuthenticateResponseData, SaslHandshakeResponseData, UnregisterBrokerResponseData, VoteResponseData}
+import org.apache.kafka.common.message.{BeginQuorumEpochResponseData, BrokerHeartbeatResponseData, BrokerRegistrationResponseData, CreateTopicsResponseData, DeleteTopicsRequestData, DeleteTopicsResponseData, DescribeQuorumResponseData, EndQuorumEpochResponseData, FetchResponseData, MetadataResponseData, SaslAuthenticateResponseData, SaslHandshakeResponseData, UnregisterBrokerResponseData, VoteResponseData}
+import org.apache.kafka.common.protocol.Errors.{INVALID_REQUEST, TOPIC_AUTHORIZATION_FAILED}
 import org.apache.kafka.common.protocol.{ApiKeys, ApiMessage, Errors}
 import org.apache.kafka.common.requests._
 import org.apache.kafka.common.resource.Resource
@@ -45,6 +50,7 @@ import org.apache.kafka.server.authorizer.Authorizer
 
 import scala.collection.mutable
 import scala.jdk.CollectionConverters._
+
 
 /**
  * Request handler for Controller APIs
@@ -70,6 +76,7 @@ class ControllerApis(val requestChannel: RequestChannel,
         case ApiKeys.FETCH => handleFetch(request)
         case ApiKeys.METADATA => handleMetadataRequest(request)
         case ApiKeys.CREATE_TOPICS => handleCreateTopics(request)
+        case ApiKeys.DELETE_TOPICS => handleDeleteTopics(request)
         case ApiKeys.API_VERSIONS => handleApiVersionsRequest(request)
         case ApiKeys.VOTE => handleVote(request)
         case ApiKeys.BEGIN_QUORUM_EPOCH => handleBeginQuorumEpoch(request)
@@ -84,10 +91,11 @@ class ControllerApis(val requestChannel: RequestChannel,
         case ApiKeys.ENVELOPE => handleEnvelopeRequest(request)
         case ApiKeys.SASL_HANDSHAKE => handleSaslHandshakeRequest(request)
         case ApiKeys.SASL_AUTHENTICATE => handleSaslAuthenticateRequest(request)
-        case _ => throw new ApiException(s"Unsupported ApiKey ${request.context.header.apiKey()}")
+        case _ => throw new ApiException(s"Unsupported ApiKey ${request.context.header.apiKey}")
       }
     } catch {
       case e: FatalExitError => throw e
+      case e: ExecutionException => requestHelper.handleError(request, e.getCause)
       case e: Throwable => requestHelper.handleError(request, e)
     }
   }
@@ -124,14 +132,14 @@ class ControllerApis(val requestChannel: RequestChannel,
       val metadataResponseData = new MetadataResponseData()
       metadataResponseData.setThrottleTimeMs(requestThrottleMs)
       controllerNodes.foreach { node =>
-        metadataResponseData.brokers().add(new MetadataResponseBroker()
+        metadataResponseData.brokers.add(new MetadataResponseBroker()
           .setHost(node.host)
           .setNodeId(node.id)
           .setPort(node.port)
           .setRack(node.rack))
       }
       metadataResponseData.setClusterId(metaProperties.clusterId.toString)
-      if (controller.isActive()) {
+      if (controller.isActive) {
         metadataResponseData.setControllerId(config.nodeId)
       } else {
         metadataResponseData.setControllerId(MetadataResponse.NO_CONTROLLER_ID)
@@ -153,17 +161,164 @@ class ControllerApis(val requestChannel: RequestChannel,
       requestThrottleMs => createResponseCallback(requestThrottleMs))
   }
 
+  def handleDeleteTopics(request: RequestChannel.Request): Unit = {
+    val responses = deleteTopics(request.body[DeleteTopicsRequest].data,
+      request.context.apiVersion,
+      authHelper.authorize(request.context, DELETE, CLUSTER, CLUSTER_NAME),
+      names => authHelper.filterByAuthorized(request.context, DESCRIBE, TOPIC, names)(n => n),
+      names => authHelper.filterByAuthorized(request.context, DELETE, TOPIC, names)(n => n))
+    requestHelper.sendResponseMaybeThrottle(request, throttleTimeMs => {
+      val responseData = new DeleteTopicsResponseData().
+        setResponses(new DeletableTopicResultCollection(responses.iterator)).
+        setThrottleTimeMs(throttleTimeMs)
+      new DeleteTopicsResponse(responseData)
+    })
+  }
+
+  def deleteTopics(request: DeleteTopicsRequestData,
+                   apiVersion: Int,
+                   hasClusterAuth: Boolean,
+                   getDescribableTopics: Iterable[String] => Set[String],
+                   getDeletableTopics: Iterable[String] => Set[String]): util.List[DeletableTopicResult] = {
+    // Check if topic deletion is enabled at all.
+    if (!config.deleteTopicEnable) {
+      if (apiVersion < 3) {
+        throw new InvalidRequestException("Topic deletion is disabled.")
+      } else {
+        throw new TopicDeletionDisabledException()
+      }
+    }
+    // The first step is to load up the names and IDs that have been provided by the
+    // request.  This is a bit messy because we support multiple ways of referring to
+    // topics (both by name and by id) and because we need to check for duplicates or
+    // other invalid inputs.
+    val responses = new util.ArrayList[DeletableTopicResult]
+    def appendResponse(name: String, id: Uuid, error: ApiError): Unit = {
+      responses.add(new DeletableTopicResult().
+        setName(name).
+        setTopicId(id).
+        setErrorCode(error.error.code).
+        setErrorMessage(error.message))
+    }
+    val providedNames = new util.HashSet[String]
+    val duplicateProvidedNames = new util.HashSet[String]
+    val providedIds = new util.HashSet[Uuid]
+    val duplicateProvidedIds = new util.HashSet[Uuid]
+    def addProvidedName(name: String): Unit = {
+      if (duplicateProvidedNames.contains(name) || !providedNames.add(name)) {
+        duplicateProvidedNames.add(name)
+        providedNames.remove(name)
+      }
+    }
+    request.topicNames.forEach(addProvidedName)
+    request.topics.forEach {
+      topic => if (topic.name == null) {
+        if (topic.topicId.equals(ZERO_UUID)) {
+          appendResponse(null, ZERO_UUID, new ApiError(INVALID_REQUEST,
+            "Neither topic name nor id were specified."))
+        } else if (duplicateProvidedIds.contains(topic.topicId) || !providedIds.add(topic.topicId)) {
+          duplicateProvidedIds.add(topic.topicId)
+          providedIds.remove(topic.topicId)
+        }
+      } else {
+        if (topic.topicId.equals(ZERO_UUID)) {
+          addProvidedName(topic.name)
+        } else {
+          appendResponse(topic.name, topic.topicId, new ApiError(INVALID_REQUEST,
+            "You may not specify both topic name and topic id."))
+        }
+      }
+    }
+    // Create error responses for duplicates.
+    duplicateProvidedNames.forEach(name => appendResponse(name, ZERO_UUID,
+      new ApiError(INVALID_REQUEST, "Duplicate topic name.")))
+    duplicateProvidedIds.forEach(id => appendResponse(null, id,
+      new ApiError(INVALID_REQUEST, "Duplicate topic id.")))
+    // At this point we have all the valid names and IDs that have been provided.
+    // However, the Authorizer needs topic names as inputs, not topic IDs.  So
+    // we need to resolve all IDs to names.
+    val toAuthenticate = new util.HashSet[String]
+    toAuthenticate.addAll(providedNames)
+    val idToName = new util.HashMap[Uuid, String]
+    controller.findTopicNames(providedIds).get().forEach { (id, nameOrError) =>
+      if (nameOrError.isError) {
+        appendResponse(null, id, nameOrError.error())
+      } else {
+        toAuthenticate.add(nameOrError.result())
+        idToName.put(id, nameOrError.result())
+      }
+    }
+    // Get the list of deletable topics (those we can delete) and the list of describeable
+    // topics.  If a topic can't be deleted or described, we have to act like it doesn't
+    // exist, even when it does.
+    val topicsToAuthenticate = toAuthenticate.asScala
+    val (describeable, deletable) = if (hasClusterAuth) {
+      (topicsToAuthenticate.toSet, topicsToAuthenticate.toSet)
+    } else {
+      (getDescribableTopics(topicsToAuthenticate), getDeletableTopics(topicsToAuthenticate))
+    }
+    // For each topic that was provided by ID, check if authentication failed.
+    // If so, remove it from the idToName map and create an error response for it.
+    val iterator = idToName.entrySet().iterator()
+    while (iterator.hasNext) {
+      val entry = iterator.next()
+      val id = entry.getKey
+      val name = entry.getValue
+      if (!deletable.contains(name)) {
+        if (describeable.contains(name)) {
+          appendResponse(name, id, new ApiError(TOPIC_AUTHORIZATION_FAILED))
+        } else {
+          appendResponse(null, id, new ApiError(TOPIC_AUTHORIZATION_FAILED))
+        }
+        iterator.remove()
+      }
+    }
+    // For each topic that was provided by name, check if authentication failed.
+    // If so, create an error response for it.  Otherwise, add it to the idToName map.
+    controller.findTopicIds(providedNames).get().forEach { (name, idOrError) =>
+      if (!describeable.contains(name)) {
+        appendResponse(name, ZERO_UUID, new ApiError(TOPIC_AUTHORIZATION_FAILED))
+      } else if (idOrError.isError) {
+        appendResponse(name, ZERO_UUID, idOrError.error)
+      } else if (deletable.contains(name)) {
+        val id = idOrError.result()
+        if (duplicateProvidedIds.contains(id) || idToName.put(id, name) != null) {
+          // This is kind of a weird case: what if we supply topic ID X and also a name
+          // that maps to ID X?  In that case, _if authorization succeeds_, we end up
+          // here.  If authorization doesn't succeed, we refrain from commenting on the
+          // situation since it would reveal topic ID mappings.
+          duplicateProvidedIds.add(id)
+          idToName.remove(id)
+          appendResponse(name, id, new ApiError(INVALID_REQUEST,
+            "The provided topic name maps to an ID that was already supplied."))
+        }
+      } else {
+        appendResponse(name, ZERO_UUID, new ApiError(TOPIC_AUTHORIZATION_FAILED))
+      }
+    }
+    // Finally, the idToName map contains all the topics that we are authorized to delete.
+    // Perform the deletion and create responses for each one.
+    val idToError = controller.deleteTopics(idToName.keySet).get()
+    idToError.forEach { (id, error) =>
+        appendResponse(idToName.get(id), id, error)
+    }
+    // Shuffle the responses so that users can not use patterns in their positions to
+    // distinguish between absent topics and topics we are not permitted to see.
+    Collections.shuffle(responses)
+    responses
+  }
+
   def handleCreateTopics(request: RequestChannel.Request): Unit = {
     val createTopicRequest = request.body[CreateTopicsRequest]
     val (authorizedCreateRequest, unauthorizedTopics) =
       if (authHelper.authorize(request.context, CREATE, CLUSTER, CLUSTER_NAME)) {
         (createTopicRequest.data, Seq.empty)
       } else {
-        val duplicate = createTopicRequest.data.duplicate()
+        val duplicate = createTopicRequest.data.duplicate
         val authorizedTopics = new CreatableTopicCollection()
         val unauthorizedTopics = mutable.Buffer.empty[String]
 
-        createTopicRequest.data.topics.asScala.foreach { topicData =>
+        createTopicRequest.data.topics.forEach { topicData =>
           if (authHelper.authorize(request.context, CREATE, TOPIC, topicData.name)) {
             authorizedTopics.add(topicData)
           } else {
@@ -177,7 +332,7 @@ class ControllerApis(val requestChannel: RequestChannel,
       unauthorizedTopics.foreach { topic =>
         val result = new CreatableTopicResult()
           .setName(topic)
-          .setErrorCode(Errors.TOPIC_AUTHORIZATION_FAILED.code)
+          .setErrorCode(TOPIC_AUTHORIZATION_FAILED.code)
         response.topics.add(result)
       }
 
@@ -214,7 +369,7 @@ class ControllerApis(val requestChannel: RequestChannel,
       if (apiVersionRequest.hasUnsupportedRequestVersion) {
         apiVersionRequest.getErrorResponse(requestThrottleMs, Errors.UNSUPPORTED_VERSION.exception)
       } else if (!apiVersionRequest.isValid) {
-        apiVersionRequest.getErrorResponse(requestThrottleMs, Errors.INVALID_REQUEST.exception)
+        apiVersionRequest.getErrorResponse(requestThrottleMs, INVALID_REQUEST.exception)
       } else {
         apiVersionManager.apiVersionResponse(requestThrottleMs)
       }
@@ -245,7 +400,7 @@ class ControllerApis(val requestChannel: RequestChannel,
   def handleAlterIsrRequest(request: RequestChannel.Request): Unit = {
     authHelper.authorizeClusterOperation(request, CLUSTER_ACTION)
     val alterIsrRequest = request.body[AlterIsrRequest]
-    val future = controller.alterIsr(alterIsrRequest.data())
+    val future = controller.alterIsr(alterIsrRequest.data)
     future.whenComplete((result, exception) => {
       val response = if (exception != null) {
         alterIsrRequest.getErrorResponse(exception)
@@ -267,14 +422,14 @@ class ControllerApis(val requestChannel: RequestChannel,
         if (e != null) {
           new BrokerHeartbeatResponse(new BrokerHeartbeatResponseData().
             setThrottleTimeMs(requestThrottleMs).
-            setErrorCode(Errors.forException(e).code()))
+            setErrorCode(Errors.forException(e).code))
         } else {
           new BrokerHeartbeatResponse(new BrokerHeartbeatResponseData().
             setThrottleTimeMs(requestThrottleMs).
-            setErrorCode(Errors.NONE.code()).
-            setIsCaughtUp(reply.isCaughtUp()).
-            setIsFenced(reply.isFenced()).
-            setShouldShutDown(reply.shouldShutDown()))
+            setErrorCode(Errors.NONE.code).
+            setIsCaughtUp(reply.isCaughtUp).
+            setIsFenced(reply.isFenced).
+            setShouldShutDown(reply.shouldShutDown))
         }
       }
       requestHelper.sendResponseMaybeThrottle(request,
@@ -292,7 +447,7 @@ class ControllerApis(val requestChannel: RequestChannel,
         if (e != null) {
           new UnregisterBrokerResponse(new UnregisterBrokerResponseData().
             setThrottleTimeMs(requestThrottleMs).
-            setErrorCode(Errors.forException(e).code()))
+            setErrorCode(Errors.forException(e).code))
         } else {
           new UnregisterBrokerResponse(new UnregisterBrokerResponseData().
             setThrottleTimeMs(requestThrottleMs))
@@ -318,7 +473,7 @@ class ControllerApis(val requestChannel: RequestChannel,
         } else {
           new BrokerRegistrationResponse(new BrokerRegistrationResponseData().
             setThrottleTimeMs(requestThrottleMs).
-            setErrorCode(Errors.NONE.code()).
+            setErrorCode(Errors.NONE.code).
             setBrokerEpoch(reply.epoch))
         }
       }
@@ -346,7 +501,7 @@ class ControllerApis(val requestChannel: RequestChannel,
     val quotaRequest = request.body[AlterClientQuotasRequest]
     authHelper.authorize(request.context, ALTER_CONFIGS, CLUSTER, CLUSTER_NAME)
 
-    controller.alterClientQuotas(quotaRequest.entries(), quotaRequest.validateOnly())
+    controller.alterClientQuotas(quotaRequest.entries, quotaRequest.validateOnly)
       .whenComplete((results, exception) => {
         if (exception != null) {
           requestHelper.handleError(request, exception)
@@ -362,15 +517,15 @@ class ControllerApis(val requestChannel: RequestChannel,
     authHelper.authorize(request.context, ALTER_CONFIGS, CLUSTER, CLUSTER_NAME)
     val configChanges = new util.HashMap[ConfigResource, util.Map[String, util.Map.Entry[AlterConfigOp.OpType, String]]]()
     alterConfigsRequest.data.resources.forEach { resource =>
-      val configResource = new ConfigResource(ConfigResource.Type.forId(resource.resourceType()), resource.resourceName())
+      val configResource = new ConfigResource(ConfigResource.Type.forId(resource.resourceType), resource.resourceName())
       val altersByName = new util.HashMap[String, util.Map.Entry[AlterConfigOp.OpType, String]]()
       resource.configs.forEach { config =>
-        altersByName.put(config.name(), new util.AbstractMap.SimpleEntry[AlterConfigOp.OpType, String](
-          AlterConfigOp.OpType.forId(config.configOperation()), config.value()))
+        altersByName.put(config.name, new util.AbstractMap.SimpleEntry[AlterConfigOp.OpType, String](
+          AlterConfigOp.OpType.forId(config.configOperation), config.value))
       }
       configChanges.put(configResource, altersByName)
     }
-    controller.incrementalAlterConfigs(configChanges, alterConfigsRequest.data().validateOnly())
+    controller.incrementalAlterConfigs(configChanges, alterConfigsRequest.data.validateOnly)
       .whenComplete((results, exception) => {
         if (exception != null) {
           requestHelper.handleError(request, exception)

@@ -30,6 +30,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
 import org.apache.kafka.clients.admin.AlterConfigOp.OpType;
+import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigResource;
 import org.apache.kafka.common.errors.ApiException;
@@ -44,12 +45,14 @@ import org.apache.kafka.common.message.CreateTopicsResponseData;
 import org.apache.kafka.common.message.ElectLeadersRequestData;
 import org.apache.kafka.common.message.ElectLeadersResponseData;
 import org.apache.kafka.common.metadata.ConfigRecord;
+import org.apache.kafka.common.metadata.FeatureLevelRecord;
 import org.apache.kafka.common.metadata.FenceBrokerRecord;
 import org.apache.kafka.common.metadata.MetadataRecordType;
 import org.apache.kafka.common.metadata.PartitionChangeRecord;
 import org.apache.kafka.common.metadata.PartitionRecord;
 import org.apache.kafka.common.metadata.QuotaRecord;
 import org.apache.kafka.common.metadata.RegisterBrokerRecord;
+import org.apache.kafka.common.metadata.RemoveTopicRecord;
 import org.apache.kafka.common.metadata.TopicRecord;
 import org.apache.kafka.common.metadata.UnfenceBrokerRecord;
 import org.apache.kafka.common.metadata.UnregisterBrokerRecord;
@@ -448,7 +451,7 @@ public final class QuorumController implements Controller {
                 writeOffset = offset;
                 resultAndOffset = ControllerResultAndOffset.of(offset, result);
                 for (ApiMessageAndVersion message : result.records()) {
-                    replay(message.message());
+                    replay(message.message(), offset);
                 }
                 snapshotRegistry.createSnapshot(offset);
                 log.debug("Read-write operation {} will be completed when the log " +
@@ -513,7 +516,7 @@ public final class QuorumController implements Controller {
                         }
                     }
                     for (ApiMessage message : messages) {
-                        replay(message);
+                        replay(message, offset);
                     }
                 } else {
                     // If the controller is active, the records were already replayed,
@@ -623,7 +626,7 @@ public final class QuorumController implements Controller {
     }
 
     @SuppressWarnings("unchecked")
-    private void replay(ApiMessage message) {
+    private void replay(ApiMessage message, long offset) {
         try {
             MetadataRecordType type = MetadataRecordType.fromId(message.apiKey());
             switch (type) {
@@ -632,12 +635,6 @@ public final class QuorumController implements Controller {
                     break;
                 case UNREGISTER_BROKER_RECORD:
                     clusterControl.replay((UnregisterBrokerRecord) message);
-                    break;
-                case FENCE_BROKER_RECORD:
-                    clusterControl.replay((FenceBrokerRecord) message);
-                    break;
-                case UNFENCE_BROKER_RECORD:
-                    clusterControl.replay((UnfenceBrokerRecord) message);
                     break;
                 case TOPIC_RECORD:
                     replicationControl.replay((TopicRecord) message);
@@ -648,11 +645,23 @@ public final class QuorumController implements Controller {
                 case CONFIG_RECORD:
                     configurationControl.replay((ConfigRecord) message);
                     break;
-                case QUOTA_RECORD:
-                    clientQuotaControlManager.replay((QuotaRecord) message);
-                    break;
                 case PARTITION_CHANGE_RECORD:
                     replicationControl.replay((PartitionChangeRecord) message);
+                    break;
+                case FENCE_BROKER_RECORD:
+                    clusterControl.replay((FenceBrokerRecord) message);
+                    break;
+                case UNFENCE_BROKER_RECORD:
+                    clusterControl.replay((UnfenceBrokerRecord) message);
+                    break;
+                case REMOVE_TOPIC_RECORD:
+                    replicationControl.replay((RemoveTopicRecord) message);
+                    break;
+                case FEATURE_LEVEL_RECORD:
+                    featureControl.replay((FeatureLevelRecord) message, offset);
+                    break;
+                case QUOTA_RECORD:
+                    clientQuotaControlManager.replay((QuotaRecord) message);
                     break;
                 default:
                     throw new RuntimeException("Unhandled record type " + type);
@@ -793,6 +802,9 @@ public final class QuorumController implements Controller {
 
     @Override
     public CompletableFuture<AlterIsrResponseData> alterIsr(AlterIsrRequestData request) {
+        if (request.topics().isEmpty()) {
+            return CompletableFuture.completedFuture(new AlterIsrResponseData());
+        }
         return appendWriteEvent("alterIsr", () ->
             replicationControl.alterIsr(request));
     }
@@ -800,6 +812,9 @@ public final class QuorumController implements Controller {
     @Override
     public CompletableFuture<CreateTopicsResponseData>
             createTopics(CreateTopicsRequestData request) {
+        if (request.topics().isEmpty()) {
+            return CompletableFuture.completedFuture(new CreateTopicsResponseData());
+        }
         return appendWriteEvent("createTopics", () ->
             replicationControl.createTopics(request));
     }
@@ -808,6 +823,27 @@ public final class QuorumController implements Controller {
     public CompletableFuture<Void> unregisterBroker(int brokerId) {
         return appendWriteEvent("unregisterBroker",
             () -> replicationControl.unregisterBroker(brokerId));
+    }
+
+    @Override
+    public CompletableFuture<Map<String, ResultOrError<Uuid>>> findTopicIds(Collection<String> names) {
+        if (names.isEmpty()) return CompletableFuture.completedFuture(Collections.emptyMap());
+        return appendReadEvent("findTopicIds",
+            () -> replicationControl.findTopicIds(lastCommittedOffset, names));
+    }
+
+    @Override
+    public CompletableFuture<Map<Uuid, ResultOrError<String>>> findTopicNames(Collection<Uuid> ids) {
+        if (ids.isEmpty()) return CompletableFuture.completedFuture(Collections.emptyMap());
+        return appendReadEvent("findTopicNames",
+            () -> replicationControl.findTopicNames(lastCommittedOffset, ids));
+    }
+
+    @Override
+    public CompletableFuture<Map<Uuid, ApiError>> deleteTopics(Collection<Uuid> ids) {
+        if (ids.isEmpty()) return CompletableFuture.completedFuture(Collections.emptyMap());
+        return appendWriteEvent("deleteTopics",
+            () -> replicationControl.deleteTopics(ids));
     }
 
     @Override
@@ -847,7 +883,10 @@ public final class QuorumController implements Controller {
 
     @Override
     public CompletableFuture<Map<ConfigResource, ApiError>> legacyAlterConfigs(
-        Map<ConfigResource, Map<String, String>> newConfigs, boolean validateOnly) {
+            Map<ConfigResource, Map<String, String>> newConfigs, boolean validateOnly) {
+        if (newConfigs.isEmpty()) {
+            return CompletableFuture.completedFuture(Collections.emptyMap());
+        }
         return appendWriteEvent("legacyAlterConfigs", () -> {
             ControllerResult<Map<ConfigResource, ApiError>> result =
                 configurationControl.legacyAlterConfigs(newConfigs);
@@ -901,6 +940,9 @@ public final class QuorumController implements Controller {
     @Override
     public CompletableFuture<Map<ClientQuotaEntity, ApiError>> alterClientQuotas(
             Collection<ClientQuotaAlteration> quotaAlterations, boolean validateOnly) {
+        if (quotaAlterations.isEmpty()) {
+            return CompletableFuture.completedFuture(Collections.emptyMap());
+        }
         return appendWriteEvent("alterClientQuotas", () -> {
             ControllerResult<Map<ClientQuotaEntity, ApiError>> result =
                 clientQuotaControlManager.alterClientQuotas(quotaAlterations);
