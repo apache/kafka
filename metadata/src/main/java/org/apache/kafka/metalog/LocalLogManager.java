@@ -139,7 +139,7 @@ public final class LocalLogManager implements MetaLogManager, AutoCloseable {
             }
             if (nodeId != leader.nodeId()) {
                 log.trace("tryAppend(nodeId={}, epoch={}): the given node id does not " +
-                    "match the current leader id of {}.", nodeId, leader.nodeId());
+                    "match the current leader id of {}.", nodeId, epoch, leader.nodeId());
                 return Long.MAX_VALUE;
             }
             log.trace("tryAppend(nodeId={}): appending {}.", nodeId, batch);
