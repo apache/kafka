@@ -2284,7 +2284,7 @@ $ bin/kafka-acls.sh \
   <h4 class="anchor-heading"><a id="kafka_streams_monitoring" class="anchor-link"></a><a href="#kafka_streams_monitoring">Streams Monitoring</a></h4>
 
   A Kafka Streams instance contains all the producer and consumer metrics as well as additional metrics specific to Streams.
-  By default Kafka Streams has metrics with two recording levels: <code>debug</code> and <code>info</code>.
+  By default Kafka Streams has metrics with three recording levels: <code>info</code>, <code>debug</code>, and <code>trace</code>.
 
   <p>
     Note that the metrics have a 4-layer hierarchy. At the top level there are client-level metrics for each started
@@ -2453,8 +2453,8 @@ All of the following metrics have a recording level of <code>info</code>:
 </table>
 
 <h5 class="anchor-heading"><a id="kafka_streams_task_monitoring" class="anchor-link"></a><a href="#kafka_streams_task_monitoring">Task Metrics</a></h5>
-All of the following metrics have a recording level of <code>debug</code>, except for metrics
-dropped-records-rate and dropped-records-total which have a recording level of <code>info</code>:
+All of the following metrics have a recording level of <code>debug</code>, except for the dropped-records-*,
+active-process-ratio, and record-e2e-latency-* metrics which have a recording level of <code>info</code>:
  <table class="data-table">
       <tbody>
       <tr>
@@ -2532,6 +2532,26 @@ dropped-records-rate and dropped-records-total which have a recording level of <
         <td>The total number of records dropped within this task.</td>
         <td>kafka.streams:type=stream-task-metrics,thread-id=([-.\w]+),task-id=([-.\w]+)</td>
       </tr>
+      <tr>
+        <td>active-process-ratio</td>
+        <td>The total number of records dropped within this task.</td>
+        <td>kafka.streams:type=stream-task-metrics,thread-id=([-.\w]+),task-id=([-.\w]+)</td>
+      </tr>
+      <tr>
+        <td>record-e2e-latency-avg</td>
+        <td>The average end-to-end latency of a record, measured by comparing the record timestamp with the system time when it has been fully processed by the node.</td>
+        <td>kafka.streams:type=stream-task-metrics,thread-id=([-.\w]+),task-id=([-.\w]+)</td>
+      </tr>
+      <tr>
+        <td>record-e2e-latency-max</td>
+        <td>The maximum end-to-end latency of a record, measured by comparing the record timestamp with the system time when it has been fully processed by the node.</td>
+        <td>kafka.streams:type=stream-task-metrics,thread-id=([-.\w]+),task-id=([-.\w]+)</td>
+      </tr>
+      <tr>
+        <td>record-e2e-latency-min</td>
+        <td>The minimum end-to-end latency of a record, measured by comparing the record timestamp with the system time when it has been fully processed by the node.</td>
+        <td>kafka.streams:type=stream-task-metrics,thread-id=([-.\w]+),task-id=([-.\w]+)</td>
+      </tr>
  </tbody>
 </table>
 
@@ -2570,8 +2590,9 @@ dropped-records-rate and dropped-records-total which have a recording level of <
  </table>
 
  <h5 class="anchor-heading"><a id="kafka_streams_store_monitoring" class="anchor-link"></a><a href="#kafka_streams_store_monitoring">State Store Metrics</a></h5>
- All of the following metrics have a recording level of <code>debug</code>. Note that the <code>store-scope</code> value is specified in <code>StoreSupplier#metricsScope()</code> for user's customized
- state stores; for built-in state stores, currently we have:
+All of the following metrics have a recording level of <code>debug</code>, except for the record-e2e-latency-* metrics which have a recording level <code>trace></code>.
+Note that the <code>store-scope</code> value is specified in <code>StoreSupplier#metricsScope()</code> for user's customized state stores;
+for built-in state stores, currently we have:
   <ul>
     <li><code>in-memory-state</code></li>
     <li><code>in-memory-lru-state</code></li>
@@ -2745,6 +2766,21 @@ dropped-records-rate and dropped-records-total which have a recording level of <
         <td>suppression-buffer-count-max</td>
         <td>The maximum number of records buffered over the sampling window.</td>
         <td>kafka.streams:type=stream-state-metrics,thread-id=([-.\w]+),task-id=([-.\w]+),in-memory-suppression-id=([-.\w]+)</td>
+      </tr>
+      <tr>
+        <td>record-e2e-latency-avg</td>
+        <td>The average end-to-end latency of a record, measured by comparing the record timestamp with the system time when it has been fully processed by the node.</td>
+        <td>kafka.streams:type=stream-state-metrics,thread-id=([-.\w]+),task-id=([-.\w]+),[store-scope]-id=([-.\w]+)</td>
+      </tr>
+      <tr>
+        <td>record-e2e-latency-max</td>
+        <td>The maximum end-to-end latency of a record, measured by comparing the record timestamp with the system time when it has been fully processed by the node.</td>
+        <td>kafka.streams:type=stream-state-metrics,thread-id=([-.\w]+),task-id=([-.\w]+),[store-scope]-id=([-.\w]+)</td>
+      </tr>
+      <tr>
+        <td>record-e2e-latency-min</td>
+        <td>The minimum end-to-end latency of a record, measured by comparing the record timestamp with the system time when it has been fully processed by the node.</td>
+        <td>kafka.streams:type=stream-state-metrics,thread-id=([-.\w]+),task-id=([-.\w]+),[store-scope]-id=([-.\w]+)</td>
       </tr>
     </tbody>
  </table>
