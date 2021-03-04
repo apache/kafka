@@ -686,7 +686,7 @@ object ConsumerGroupCommand extends Logging {
 
       unsuccessfulOffsetsForTimes.foreach { entry =>
         println(s"\nWarn: Partition " + entry._1.partition() + " from topic " + entry._1.topic() +
-          " is empty, without a committed record. Falling back to latest known offset.")
+          " is empty. Falling back to latest known offset.")
       }
 
       successfulLogTimestampOffsets ++ getLogEndOffsets(groupId, unsuccessfulOffsetsForTimes.keySet.toSeq)
