@@ -65,7 +65,7 @@ class SecurityTest(EndToEndTest):
         Test that invalid hostname in certificate results in connection failures.
         When security_protocol=SSL, client SSL handshakes are expected to fail due to hostname verification failure.
         When security_protocol=PLAINTEXT and interbroker_security_protocol=SSL, controller connections fail
-        with hostname verification failure. Hence clients are expected to fail with LEADER_NOT_AVAILABLE.
+        with hostname verification failure. Hence clients are expected to fail with INVALID_REPLICATION_FACTOR.
         """
 
         # Start Kafka with valid hostnames in the certs' SANs so that we can create the test topic via the admin client
@@ -111,7 +111,7 @@ class SecurityTest(EndToEndTest):
                 # expected
                 pass
 
-            error = 'SSLHandshakeException' if security_protocol == 'SSL' else 'LEADER_NOT_AVAILABLE'
+            error = 'SSLHandshakeException' if security_protocol == 'SSL' else 'INVALID_REPLICATION_FACTOR'
             wait_until(lambda: self.producer_consumer_have_expected_error(error), timeout_sec=30)
             self.producer.stop()
             self.consumer.stop()
