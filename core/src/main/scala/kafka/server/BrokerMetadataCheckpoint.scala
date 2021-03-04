@@ -239,7 +239,7 @@ class BrokerMetadataCheckpoint(val file: File) extends Logging {
         Some(Utils.loadProps(absolutePath))
       } catch {
         case _: NoSuchFileException =>
-          warn(s"No meta.properties file under dir $absolutePath")
+          info(s"No meta.properties file under dir $absolutePath")
           None
         case e: Exception =>
           error(s"Failed to read meta.properties file under dir $absolutePath", e)
