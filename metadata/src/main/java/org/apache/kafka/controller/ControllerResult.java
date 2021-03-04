@@ -19,7 +19,7 @@ package org.apache.kafka.controller;
 
 import org.apache.kafka.metadata.ApiMessageAndVersion;
 
-import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
 import java.util.stream.Collectors;
@@ -69,14 +69,14 @@ class ControllerResult<T> {
     public String toString() {
         return String.format(
             "ControllerResult(records=%s, response=%s, isAtomic=%s)",
-            String.join(",", records.stream().map(r -> r.toString()).collect(Collectors.toList())),
+            String.join(",", records.stream().map(ApiMessageAndVersion::toString).collect(Collectors.toList())),
             response,
             isAtomic
         );
     }
 
     public ControllerResult<T> withoutRecords() {
-        return new ControllerResult<>(new ArrayList<>(), response, false);
+        return new ControllerResult<>(Collections.emptyList(), response, false);
     }
 
     public static <T> ControllerResult<T> atomicOf(List<ApiMessageAndVersion> records, T response) {

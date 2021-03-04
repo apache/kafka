@@ -18,10 +18,8 @@
 package org.apache.kafka.controller;
 
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import org.apache.kafka.common.metadata.FeatureLevelRecord;
@@ -61,11 +59,11 @@ public class FeatureControlManagerTest {
             rangeMap("foo", 1, 2), snapshotRegistry);
         assertEquals(new FeatureMapAndEpoch(new FeatureMap(Collections.emptyMap()), -1),
             manager.finalizedFeatures(-1));
-        assertEquals(ControllerResult.of(Collections.emptyList(), Collections.
+        assertEquals(ControllerResult.atomicOf(Collections.emptyList(), Collections.
                 singletonMap("foo", new ApiError(Errors.INVALID_UPDATE_VERSION,
                     "The controller does not support the given feature range."))),
             manager.updateFeatures(rangeMap("foo", 1, 3),
-                new HashSet<>(Arrays.asList("foo")),
+                Collections.singleton("foo"),
                 Collections.emptyMap()));
         ControllerResult<Map<String, ApiError>> result = manager.updateFeatures(
             rangeMap("foo", 1, 2, "bar", 1, 1), Collections.emptySet(),
@@ -103,7 +101,7 @@ public class FeatureControlManagerTest {
             rangeMap("foo", 1, 5, "bar", 1, 2), snapshotRegistry);
 
         assertEquals(
-            ControllerResult.of(
+            ControllerResult.atomicOf(
                 Collections.emptyList(),
                 Collections.singletonMap(
                     "foo",
@@ -115,7 +113,7 @@ public class FeatureControlManagerTest {
             ),
             manager.updateFeatures(
                 rangeMap("foo", 1, 3),
-                new HashSet<>(Arrays.asList("foo")),
+                Collections.singleton("foo"),
                 Collections.singletonMap(5, rangeMap())
             )
         );
@@ -126,7 +124,7 @@ public class FeatureControlManagerTest {
         manager.replay((FeatureLevelRecord) result.records().get(0).message(), 3);
         snapshotRegistry.createSnapshot(3);
 
-        assertEquals(ControllerResult.of(Collections.emptyList(), Collections.
+        assertEquals(ControllerResult.atomicOf(Collections.emptyList(), Collections.
                 singletonMap("foo", new ApiError(Errors.INVALID_UPDATE_VERSION,
                     "Can't downgrade the maximum version of this feature without " +
                     "setting downgradable to true."))),
@@ -148,7 +146,8 @@ public class FeatureControlManagerTest {
             ),
             manager.updateFeatures(
                 rangeMap("foo", 1, 2),
-                new HashSet<>(Collections.singletonList("foo")), Collections.emptyMap()
+                Collections.singleton("foo"),
+                Collections.emptyMap()
             )
         );
     }
