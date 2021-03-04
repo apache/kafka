@@ -19,24 +19,15 @@ package org.apache.kafka.controller;
 
 import org.apache.kafka.metadata.ApiMessageAndVersion;
 
-import java.util.ArrayList;
-import java.util.List;
 import java.util.Objects;
 import java.util.stream.Collectors;
 
 
-class ControllerResultAndOffset<T> extends ControllerResult<T> {
+final class ControllerResultAndOffset<T> extends ControllerResult<T> {
     private final long offset;
 
-    public ControllerResultAndOffset(T response) {
-        super(new ArrayList<>(), response);
-        this.offset = -1;
-    }
-
-    public ControllerResultAndOffset(long offset,
-                              List<ApiMessageAndVersion> records,
-                              T response) {
-        super(records, response);
+    private ControllerResultAndOffset(long offset, ControllerResult<T> result) {
+        super(result.records(), result.response(), result.isAtomic());
         this.offset = offset;
     }
 
@@ -52,18 +43,27 @@ class ControllerResultAndOffset<T> extends ControllerResult<T> {
         ControllerResultAndOffset other = (ControllerResultAndOffset) o;
         return records().equals(other.records()) &&
             response().equals(other.response()) &&
+            isAtomic() == other.isAtomic() &&
             offset == other.offset;
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(records(), response(), offset);
+        return Objects.hash(records(), response(), isAtomic(), offset);
     }
 
     @Override
     public String toString() {
-        return "ControllerResultAndOffset(records=" + String.join(",",
-            records().stream().map(r -> r.toString()).collect(Collectors.toList())) +
-            ", response=" + response() + ", offset=" + offset + ")";
+        return String.format(
+            "ControllerResultAndOffset(records=%s, response=%s, isAtomic=%s, offset=%s)",
+            String.join(",", records().stream().map(ApiMessageAndVersion::toString).collect(Collectors.toList())),
+            response(),
+            isAtomic(),
+            offset
+        );
+    }
+
+    public static <T> ControllerResultAndOffset<T> of(long offset, ControllerResult<T> result) {
+        return new ControllerResultAndOffset<>(offset, result);
     }
 }

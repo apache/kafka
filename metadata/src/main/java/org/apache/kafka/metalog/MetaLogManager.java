@@ -50,12 +50,29 @@ public interface MetaLogManager {
      * offset before renouncing its leadership.  The listener should determine this by
      * monitoring the committed offsets.
      *
-     * @param epoch         The controller epoch.
-     * @param batch         The batch of messages to write.
+     * @param epoch         the controller epoch
+     * @param batch         the batch of messages to write
      *
-     * @return              The offset of the message.
+     * @return              the offset of the last message in the batch
+     * @throws IllegalArgumentException if buffer allocatio failed and the client should backoff
      */
     long scheduleWrite(long epoch, List<ApiMessageAndVersion> batch);
+
+    /**
+     * Schedule a atomic write to the log.
+     *
+     * The write will be scheduled to happen at some time in the future.  All of the messages in batch
+     * will be appended atomically in one batch.  The listener may regard the write as successful
+     * if and only if the MetaLogManager reaches the given offset before renouncing its leadership.
+     * The listener should determine this by monitoring the committed offsets.
+     *
+     * @param epoch         the controller epoch
+     * @param batch         the batch of messages to write
+     *
+     * @return              the offset of the last message in the batch
+     * @throws IllegalArgumentException if buffer allocatio failed and the client should backoff
+     */
+    long scheduleAtomicWrite(long epoch, List<ApiMessageAndVersion> batch);
 
     /**
      * Renounce the leadership.

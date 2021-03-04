@@ -213,7 +213,7 @@ public class ClusterControlManager {
 
         List<ApiMessageAndVersion> records = new ArrayList<>();
         records.add(new ApiMessageAndVersion(record, (short) 0));
-        return new ControllerResult<>(records, new BrokerRegistrationReply(brokerEpoch));
+        return ControllerResult.of(records, new BrokerRegistrationReply(brokerEpoch));
     }
 
     public void replay(RegisterBrokerRecord record) {

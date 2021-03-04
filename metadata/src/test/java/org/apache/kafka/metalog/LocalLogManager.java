@@ -371,8 +371,21 @@ public final class LocalLogManager implements MetaLogManager, AutoCloseable {
 
     @Override
     public long scheduleWrite(long epoch, List<ApiMessageAndVersion> batch) {
-        return shared.tryAppend(nodeId, leader.epoch(), new LocalRecordBatch(
-            batch.stream().map(r -> r.message()).collect(Collectors.toList())));
+        return scheduleAtomicWrite(epoch, batch);
+    }
+
+    @Override
+    public long scheduleAtomicWrite(long epoch, List<ApiMessageAndVersion> batch) {
+        return shared.tryAppend(
+            nodeId,
+            leader.epoch(),
+            new LocalRecordBatch(
+                batch
+                    .stream()
+                    .map(ApiMessageAndVersion::message)
+                    .collect(Collectors.toList())
+            )
+        );
     }
 
     @Override

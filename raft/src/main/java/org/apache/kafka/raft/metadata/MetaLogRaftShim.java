@@ -53,8 +53,34 @@ public class MetaLogRaftShim implements MetaLogManager {
     }
 
     @Override
+    public long scheduleAtomicWrite(long epoch, List<ApiMessageAndVersion> batch) {
+        return write(epoch, batch, true);
+    }
+
+    @Override
     public long scheduleWrite(long epoch, List<ApiMessageAndVersion> batch) {
-        return client.scheduleAppend((int) epoch, batch);
+        return write(epoch, batch, false);
+    }
+
+    private long write(long epoch, List<ApiMessageAndVersion> batch, boolean isAtomic) {
+        final Long result;
+        if (isAtomic) {
+            result = client.scheduleAtomicAppend((int) epoch, batch);
+        } else {
+            result = client.scheduleAppend((int) epoch, batch);
+        }
+
+        if (result == null) {
+            throw new IllegalArgumentException(
+                String.format(
+                    "Unable to alloate a buffer for the schedule write operation: epoch %s, batch %s)",
+                    epoch,
+                    batch
+                )
+            );
+        } else {
+            return result;
+        }
     }
 
     @Override
