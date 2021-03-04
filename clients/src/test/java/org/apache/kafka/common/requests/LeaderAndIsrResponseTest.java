@@ -71,7 +71,7 @@ public class LeaderAndIsrResponseTest {
 
     @Test
     public void testErrorCountsWithTopLevelError() {
-        for (short version = LEADER_AND_ISR.oldestVersion(); version < LEADER_AND_ISR.latestVersion(); version++) {
+        for (short version : LEADER_AND_ISR.allVersions()) {
             LeaderAndIsrResponse response;
             if (version < 5) {
                 List<LeaderAndIsrPartitionError> partitions = createPartitions("foo",
@@ -92,7 +92,7 @@ public class LeaderAndIsrResponseTest {
 
     @Test
     public void testErrorCountsNoTopLevelError() {
-        for (short version = LEADER_AND_ISR.oldestVersion(); version < LEADER_AND_ISR.latestVersion(); version++) {
+        for (short version : LEADER_AND_ISR.allVersions()) {
             LeaderAndIsrResponse response;
             if (version < 5) {
                 List<LeaderAndIsrPartitionError> partitions = createPartitions("foo",
@@ -116,7 +116,7 @@ public class LeaderAndIsrResponseTest {
 
     @Test
     public void testToString() {
-        for (short version = LEADER_AND_ISR.oldestVersion(); version < LEADER_AND_ISR.latestVersion(); version++) {
+        for (short version : LEADER_AND_ISR.allVersions()) {
             LeaderAndIsrResponse response;
             if (version < 5) {
                 List<LeaderAndIsrPartitionError> partitions = createPartitions("foo",

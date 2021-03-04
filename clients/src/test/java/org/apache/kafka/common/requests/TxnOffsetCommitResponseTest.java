@@ -54,7 +54,7 @@ public class TxnOffsetCommitResponseTest extends OffsetCommitResponseTest {
                             .setErrorCode(errorTwo.code())))
                 ));
 
-        for (short version = 0; version <= ApiKeys.TXN_OFFSET_COMMIT.latestVersion(); version++) {
+        for (short version : ApiKeys.TXN_OFFSET_COMMIT.allVersions()) {
             TxnOffsetCommitResponse response = TxnOffsetCommitResponse.parse(
                 MessageUtil.toByteBuffer(data, version), version);
             assertEquals(expectedErrorCounts, response.errorCounts());
