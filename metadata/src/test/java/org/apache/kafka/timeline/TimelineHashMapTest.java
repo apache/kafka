@@ -96,6 +96,8 @@ public class TimelineHashMapTest {
         assertEquals("xyz", map.putIfAbsent(1, "ghi"));
         map.putAll(Collections.singletonMap(2, "b"));
         assertTrue(map.containsKey(2));
+        assertEquals("xyz", map.remove(1));
+        assertEquals("b", map.remove(2));
     }
 
     @Test

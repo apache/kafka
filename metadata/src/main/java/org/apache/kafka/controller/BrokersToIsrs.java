@@ -214,6 +214,13 @@ public class BrokersToIsrs {
         }
     }
 
+    void removeTopicEntryForBroker(Uuid topicId, int brokerId) {
+        Map<Uuid, int[]> topicMap = isrMembers.get(brokerId);
+        if (topicMap != null) {
+            topicMap.remove(topicId);
+        }
+    }
+
     private void add(int brokerId, Uuid topicId, int newPartition, boolean leader) {
         if (leader) {
             newPartition = newPartition | LEADER_FLAG;

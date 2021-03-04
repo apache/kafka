@@ -164,9 +164,10 @@ public class TimelineHashMap<K, V>
     }
 
     @Override
-    @SuppressWarnings("unchecked")
     public V remove(Object key) {
-        return (V) snapshottableRemove(new TimelineHashMapEntry<>(key, null));
+        TimelineHashMapEntry<K, V> result = snapshottableRemove(
+            new TimelineHashMapEntry<>(key, null));
+        return result == null ? null : result.value;
     }
 
     @Override
@@ -342,7 +343,7 @@ public class TimelineHashMap<K, V>
             if (epoch != SnapshottableHashTable.LATEST_EPOCH) {
                 throw new RuntimeException("can't modify snapshot");
             }
-            return snapshottableRemove(o) != null;
+            return snapshottableRemove(new TimelineHashMapEntry<>(o, null)) != null;
         }
     }
 
