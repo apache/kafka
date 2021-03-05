@@ -276,6 +276,8 @@ class GroupMetadataManager(brokerId: Int,
           } else {
             debug(s"Metadata from group ${group.groupId} with generation $generationId failed when appending to log " +
               s"due to ${status.error.exceptionName}")
+            System.err.println(s"Metadata from group ${group.groupId} with generation $generationId failed when appending to log " +
+              s"due to ${status.error.exceptionName}")
 
             // transform the log append error code to the corresponding the commit status error code
             status.error match {
@@ -313,6 +315,7 @@ class GroupMetadataManager(brokerId: Int,
         appendForGroup(group, groupMetadataRecords, putCacheCallback)
 
       case None =>
+        System.err.println("no magic value")
         responseCallback(Errors.NOT_COORDINATOR)
         None
     }
