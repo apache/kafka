@@ -823,7 +823,7 @@ class KafkaApis(val requestChannel: RequestChannel,
         data.divergingEpoch.foreach(partitionData.setDivergingEpoch)
         addPartition(tp.topic, partitionData)
       }
-      erroneous.foreach { case (tp, data) => addPartition(tp.topic, data) }
+      erroneous.foreach(entry => addPartition(entry._1.topic, entry._2) )
 
       def createResponse(unconvertedFetchResponse: FetchResponse, throttleTimeMs: Int): FetchResponse = {
         // Down-convert messages for each partition if required
