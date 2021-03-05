@@ -296,7 +296,7 @@ public interface ProcessorContext {
      *
      * <p>
      * Note: this method returns the internally cached system timestamp from the Kafka Stream runtime.
-     * Thus, it may return a different value compared to {@code System.currentTimeMillis()} .
+     * Thus, it may return a different value compared to {@code System.currentTimeMillis()}
      * <p>
      *
      * @return the current system timestamp in milliseconds
