@@ -756,6 +756,7 @@ public abstract class AbstractCoordinator implements Closeable {
                                 future.raise(Errors.INCONSISTENT_GROUP_PROTOCOL);
                             } else {
                                 log.info("Successfully synced group in generation {}", generation);
+                                System.err.println("Successfully synced group in generation:" + generation);
                                 state = MemberState.STABLE;
                                 rejoinNeeded = false;
                                 // record rebalance latency
