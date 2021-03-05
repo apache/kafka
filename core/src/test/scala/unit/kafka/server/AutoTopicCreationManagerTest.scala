@@ -165,41 +165,41 @@ class AutoTopicCreationManagerTest {
   @Test
   def testTopicExistsErrorSwapForNonInternalTopics(): Unit = {
     testErrorWithCreationInZk(Errors.TOPIC_ALREADY_EXISTS, "topic", isInternal = false,
-      expectedError = Errors.LEADER_NOT_AVAILABLE)
+      expectedError = Some(Errors.LEADER_NOT_AVAILABLE))
   }
 
   @Test
   def testTopicExistsErrorSwapForConsumerOffsetsTopic(): Unit = {
     Mockito.when(groupCoordinator.offsetsTopicConfigs).thenReturn(new Properties)
     testErrorWithCreationInZk(Errors.TOPIC_ALREADY_EXISTS, Topic.GROUP_METADATA_TOPIC_NAME, isInternal = true,
-      expectedError = Errors.LEADER_NOT_AVAILABLE)
+      expectedError = Some(Errors.LEADER_NOT_AVAILABLE))
   }
 
   @Test
   def testTopicExistsErrorSwapForTxnOffsetTopic(): Unit = {
     Mockito.when(transactionCoordinator.transactionTopicConfigs).thenReturn(new Properties)
     testErrorWithCreationInZk(Errors.TOPIC_ALREADY_EXISTS, Topic.TRANSACTION_STATE_TOPIC_NAME, isInternal = true,
-      expectedError = Errors.LEADER_NOT_AVAILABLE)
+      expectedError = Some(Errors.LEADER_NOT_AVAILABLE))
   }
 
   @Test
   def testRequestTimeoutErrorSwapForNonInternalTopics(): Unit = {
     testErrorWithCreationInZk(Errors.REQUEST_TIMED_OUT, "topic", isInternal = false,
-      expectedError = Errors.LEADER_NOT_AVAILABLE)
+      expectedError = Some(Errors.LEADER_NOT_AVAILABLE))
   }
 
   @Test
   def testRequestTimeoutErrorSwapForConsumerOffsetTopic(): Unit = {
     Mockito.when(groupCoordinator.offsetsTopicConfigs).thenReturn(new Properties)
     testErrorWithCreationInZk(Errors.REQUEST_TIMED_OUT, Topic.GROUP_METADATA_TOPIC_NAME, isInternal = true,
-      expectedError = Errors.LEADER_NOT_AVAILABLE)
+      expectedError = Some(Errors.LEADER_NOT_AVAILABLE))
   }
 
   @Test
   def testRequestTimeoutErrorSwapForTxnOffsetTopic(): Unit = {
     Mockito.when(transactionCoordinator.transactionTopicConfigs).thenReturn(new Properties)
     testErrorWithCreationInZk(Errors.REQUEST_TIMED_OUT, Topic.TRANSACTION_STATE_TOPIC_NAME, isInternal = true,
-      expectedError = Errors.LEADER_NOT_AVAILABLE)
+      expectedError = Some(Errors.LEADER_NOT_AVAILABLE))
   }
 
   @Test
@@ -222,7 +222,7 @@ class AutoTopicCreationManagerTest {
   private def testErrorWithCreationInZk(error: Errors,
                                         topicName: String,
                                         isInternal: Boolean,
-                                        expectedError: Errors = null): Unit = {
+                                        expectedError: Option[Errors] = None): Unit = {
     autoTopicCreationManager = new DefaultAutoTopicCreationManager(
       config,
       None,
@@ -256,8 +256,7 @@ class AutoTopicCreationManagerTest {
         .apply(topicErrors)
     })
 
-    val errorToVerify = if (expectedError != null) expectedError else error
-    createTopicAndVerifyResult(errorToVerify, topicName, isInternal = isInternal)
+    createTopicAndVerifyResult(expectedError.getOrElse(error), topicName, isInternal = isInternal)
   }
 
   private def createTopicAndVerifyResult(error: Errors,
