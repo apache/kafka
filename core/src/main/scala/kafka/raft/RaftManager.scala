@@ -22,9 +22,9 @@ import java.util
 import java.util.OptionalInt
 import java.util.concurrent.CompletableFuture
 
-import kafka.log.{Log, LogConfig, LogManager}
+import kafka.log.Log
 import kafka.raft.KafkaRaftManager.RaftIoThread
-import kafka.server.{BrokerTopicStats, KafkaConfig, LogDirFailureChannel, MetaProperties}
+import kafka.server.{KafkaConfig, MetaProperties}
 import kafka.utils.timer.SystemTimer
 import kafka.utils.{KafkaScheduler, Logging, ShutdownableThread}
 import org.apache.kafka.clients.{ApiVersions, ClientDnsLookup, ManualMetadataUpdater, NetworkClient}
@@ -92,6 +92,11 @@ trait RaftManager[T] {
     listener: RaftClient.Listener[T]
   ): Unit
 
+  def scheduleAtomicAppend(
+    epoch: Int,
+    records: Seq[T]
+  ): Option[Long]
+
   def scheduleAppend(
     epoch: Int,
     records: Seq[T]
@@ -157,16 +162,32 @@ class KafkaRaftManager[T](
     raftClient.register(listener)
   }
 
+  override def scheduleAtomicAppend(
+    epoch: Int,
+    records: Seq[T]
+  ): Option[Long] = {
+    append(epoch, records, true)
+  }
+
   override def scheduleAppend(
     epoch: Int,
     records: Seq[T]
   ): Option[Long] = {
-    val offset: java.lang.Long = raftClient.scheduleAppend(epoch, records.asJava)
-    if (offset == null) {
-      None
+    append(epoch, records, false)
+  }
+
+  private def append(
+    epoch: Int,
+    records: Seq[T],
+    isAtomic: Boolean
+  ): Option[Long] = {
+    val offset = if (isAtomic) {
+      raftClient.scheduleAtomicAppend(epoch, records.asJava)
     } else {
-      Some(Long.unbox(offset))
+      raftClient.scheduleAppend(epoch, records.asJava)
     }
+
+    Option(offset).map(Long.unbox)
   }
 
   override def handleRequest(
@@ -220,25 +241,14 @@ class KafkaRaftManager[T](
   }
 
   private def buildMetadataLog(): KafkaMetadataLog = {
-    val defaultProps = LogConfig.extractLogConfigMap(config)
-    LogConfig.validateValues(defaultProps)
-    val defaultLogConfig = LogConfig(defaultProps)
-
-    val log = Log(
-      dir = dataDir,
-      config = defaultLogConfig,
-      logStartOffset = 0L,
-      recoveryPoint = 0L,
-      scheduler = scheduler,
-      brokerTopicStats = new BrokerTopicStats,
-      time = time,
-      maxProducerIdExpirationMs = config.transactionalIdExpirationMs,
-      producerIdExpirationCheckIntervalMs = LogManager.ProducerIdExpirationCheckIntervalMs,
-      logDirFailureChannel = new LogDirFailureChannel(5),
-      keepPartitionMetadataFile = config.usesTopicId
+    KafkaMetadataLog(
+      topicPartition,
+      dataDir,
+      time,
+      scheduler,
+      maxBatchSizeInBytes = KafkaRaftClient.MAX_BATCH_SIZE_BYTES,
+      maxFetchSizeInBytes = KafkaRaftClient.MAX_FETCH_SIZE_BYTES
     )
-
-    KafkaMetadataLog(log, topicPartition)
   }
 
   private def buildNetworkClient(): NetworkClient = {

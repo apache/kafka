@@ -426,14 +426,11 @@ public class TaskManager {
             try {
                 task.initializeIfNeeded();
                 task.clearTaskTimeout();
-            } catch (final LockException retriableException) {
+            } catch (final LockException lockException) {
                 // it is possible that if there are multiple threads within the instance that one thread
                 // trying to grab the task from the other, while the other has not released the lock since
                 // it did not participate in the rebalance. In this case we can just retry in the next iteration
-                log.debug(
-                    String.format("Could not initialize %s due to the following exception; will retry", task.id()),
-                    retriableException
-                );
+                log.debug("Could not initialize task {} since: {}; will retry", task.id(), lockException.getMessage());
                 allRunning = false;
             } catch (final TimeoutException timeoutException) {
                 task.maybeInitTaskTimeoutOrThrow(now, timeoutException);
@@ -971,7 +968,7 @@ public class TaskManager {
      * @param records Records, can be null
      */
     void addRecordsToTasks(final ConsumerRecords<byte[], byte[]> records) {
-        for (final TopicPartition partition : union(HashSet::new, records.partitions(), records.metadata().keySet())) {
+        for (final TopicPartition partition : records.partitions()) {
             final Task activeTask = tasks.activeTasksForInputPartition(partition);
 
             if (activeTask == null) {
@@ -981,7 +978,6 @@ public class TaskManager {
             }
 
             activeTask.addRecords(partition, records.records(partition));
-            activeTask.addFetchedMetadata(partition, records.metadata().get(partition));
         }
     }
 

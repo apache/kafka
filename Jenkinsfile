@@ -33,12 +33,12 @@ def doValidation() {
   '''
 }
 
-def doTest() {
-  sh '''
-    ./gradlew -PscalaVersion=$SCALA_VERSION unitTest integrationTest \
+def doTest(target = "unitTest integrationTest") {
+  sh """
+    ./gradlew -PscalaVersion=$SCALA_VERSION ${target} \
         --profile --no-daemon --continue -PtestLoggingEvents=started,passed,skipped,failed \
         -PignoreFailures=true -PmaxParallelForks=2 -PmaxTestRetries=1 -PmaxTestRetryFailures=5
-  '''
+  """
   junit '**/build/test-results/**/TEST-*.xml'
 }
 
@@ -46,8 +46,8 @@ def doStreamsArchetype() {
   echo 'Verify that Kafka Streams archetype compiles'
 
   sh '''
-    ./gradlew streams:install clients:install connect:json:install connect:api:install \
-         || { echo 'Could not install kafka-streams.jar (and dependencies) locally`'; exit 1; }
+    ./gradlew streams:publishToMavenLocal clients:publishToMavenLocal connect:json:publishToMavenLocal connect:api:publishToMavenLocal \
+         || { echo 'Could not publish kafka-streams.jar (and dependencies) locally to Maven'; exit 1; }
   '''
 
   VERSION = sh(script: 'grep "^version=" gradle.properties | cut -d= -f 2', returnStdout: true).trim()
@@ -156,6 +156,25 @@ pipeline {
             doValidation()
             doTest()
             echo 'Skipping Kafka Streams archetype test for Java 15'
+          }
+        }
+
+        stage('ARM') {
+          agent { label 'arm4' }
+          options {
+            timeout(time: 2, unit: 'HOURS') 
+            timestamps()
+          }
+          environment {
+            SCALA_VERSION=2.12
+          }
+          steps {
+            setupGradle()
+            doValidation()
+            catchError(buildResult: 'SUCCESS', stageResult: 'FAILURE') {
+              doTest('unitTest')
+            }
+            echo 'Skipping Kafka Streams archetype test for ARM build'
           }
         }
       }
