@@ -579,7 +579,7 @@ class GroupCoordinator(val brokerId: Int,
                   if (group.is(CompletingRebalance) && generationId == group.generationId) {
                     if (error != Errors.NONE) {
                       resetAndPropagateAssignmentError(group, error)
-                      maybePrepareRebalance(group, s"error when storing group assignment during SyncGroup (member: $memberId)")
+                      maybePrepareRebalance(group, s"error when storing group assignment during SyncGroup (member: $memberId) with error: $error")
                     } else {
                       setAndPropagateAssignment(group, assignment)
                       group.transitionTo(Stable)
