@@ -839,10 +839,9 @@ class KafkaApis(val requestChannel: RequestChannel,
           convertedResponse.responses.add(convertedTopicResponse)
           unconvertedTopicData.partitions.forEach { unconvertedPartitionData =>
             val tp = new TopicPartition(unconvertedTopicData.topic, unconvertedPartitionData.partitionIndex)
-            val error = Errors.forCode(unconvertedPartitionData.errorCode)
-            if (error != Errors.NONE)
+            if (unconvertedPartitionData.errorCode != Errors.NONE.code)
               debug(s"Fetch request with correlation id ${request.header.correlationId} from client $clientId " +
-                s"on partition $tp failed due to ${error.exceptionName}")
+                s"on partition $tp failed due to ${Errors.forCode(unconvertedPartitionData.errorCode).exceptionName}")
             convertedTopicResponse.partitions.add(maybeConvertFetchedData(tp, unconvertedPartitionData))
           }
         }
