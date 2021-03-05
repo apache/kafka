@@ -182,7 +182,7 @@ public class SaslServerAuthenticator implements Authenticator {
                 throw new IllegalArgumentException("Callback handler not specified for SASL mechanism " + mechanism);
             if (!subjects.containsKey(mechanism))
                 throw new IllegalArgumentException("Subject cannot be null for SASL mechanism " + mechanism);
-            LOG.debug("{} for mechanism={}: {}", BrokerSecurityConfigs.CONNECTIONS_MAX_REAUTH_MS, mechanism,
+            LOG.trace("{} for mechanism={}: {}", BrokerSecurityConfigs.CONNECTIONS_MAX_REAUTH_MS, mechanism,
                     connectionsMaxReauthMsByMechanism.get(mechanism));
         }
 
