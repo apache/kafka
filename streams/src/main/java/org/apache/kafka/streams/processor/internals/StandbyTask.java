@@ -31,6 +31,7 @@ import org.apache.kafka.streams.state.internals.ThreadCache;
 
 import java.util.Collections;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 
 /**
@@ -44,7 +45,7 @@ public class StandbyTask extends AbstractTask implements Task {
 
     /**
      * @param id             the ID of this task
-     * @param partitions     input topic partitions, used for thread metadata only
+     * @param inputPartitions     input topic partitions, used for thread metadata only
      * @param topology       the instance of {@link ProcessorTopology}
      * @param config         the {@link StreamsConfig} specified by the user
      * @param streamsMetrics the {@link StreamsMetrics} created by the thread
@@ -279,6 +280,26 @@ public class StandbyTask extends AbstractTask implements Task {
     @Override
     public Map<TopicPartition, Long> changelogOffsets() {
         return Collections.unmodifiableMap(stateMgr.changelogOffsets());
+    }
+
+    @Override
+    public Map<TopicPartition, Long> committedOffsets() {
+        return Collections.emptyMap();
+    }
+
+    @Override
+    public Map<TopicPartition, Long> highWaterMark() {
+        return Collections.emptyMap();
+    }
+
+    @Override
+    public Optional<Long> timeCurrentIdlingStarted() {
+        return Optional.empty();
+    }
+
+    @Override
+    public void updateCommittedOffsets(final TopicPartition topicPartition, final Long offset) {
+
     }
 
     @Override

@@ -847,6 +847,8 @@ public class StreamThreadTest {
         final Task task = niceMock(Task.class);
         expect(task.id()).andStubReturn(task1);
         expect(task.inputPartitions()).andStubReturn(Collections.singleton(t1p1));
+        expect(task.committedOffsets()).andStubReturn(Collections.emptyMap());
+        expect(task.highWaterMark()).andStubReturn(Collections.emptyMap());
         final ActiveTaskCreator activeTaskCreator = mock(ActiveTaskCreator.class);
         expect(activeTaskCreator.createTasks(anyObject(), anyObject())).andStubReturn(Collections.singleton(task));
         expect(activeTaskCreator.producerClientIds()).andStubReturn(Collections.singleton("producerClientId"));
@@ -1638,7 +1640,7 @@ public class StreamThreadTest {
 
         final ThreadMetadata metadata = thread.threadMetadata();
         assertEquals(StreamThread.State.RUNNING.name(), metadata.threadState());
-        assertTrue(metadata.activeTasks().contains(new TaskMetadata(task1.toString(), Utils.mkSet(t1p1))));
+        assertTrue(metadata.activeTasks().contains(new TaskMetadata(task1.toString(), Utils.mkSet(t1p1), new HashMap<>(), new HashMap<>(), Optional.empty())));
         assertTrue(metadata.standbyTasks().isEmpty());
 
         assertTrue("#threadState() was: " + metadata.threadState() + "; expected either RUNNING, STARTING, PARTITIONS_REVOKED, PARTITIONS_ASSIGNED, or CREATED",
@@ -1691,7 +1693,7 @@ public class StreamThreadTest {
 
         final ThreadMetadata threadMetadata = thread.threadMetadata();
         assertEquals(StreamThread.State.RUNNING.name(), threadMetadata.threadState());
-        assertTrue(threadMetadata.standbyTasks().contains(new TaskMetadata(task1.toString(), Utils.mkSet(t1p1))));
+        assertTrue(threadMetadata.standbyTasks().contains(new TaskMetadata(task1.toString(), Utils.mkSet(t1p1), new HashMap<>(), new HashMap<>(), Optional.empty())));
         assertTrue(threadMetadata.activeTasks().isEmpty());
     }
 
@@ -1961,56 +1963,6 @@ public class StreamThreadTest {
         thread.setState(StreamThread.State.RUNNING);
         metadata = thread.threadMetadata();
         assertEquals(StreamThread.State.RUNNING.name(), metadata.threadState());
-    }
-
-    @Test
-    public void shouldAlwaysReturnEmptyTasksMetadataWhileRebalancingStateAndTasksNotRunning() {
-        internalStreamsBuilder.stream(Collections.singleton(topic1), consumed)
-                              .groupByKey().count(Materialized.as("count-one"));
-        internalStreamsBuilder.buildAndOptimizeTopology();
-
-        final StreamThread thread = createStreamThread(CLIENT_ID, config, false);
-        final MockConsumer<byte[], byte[]> restoreConsumer = clientSupplier.restoreConsumer;
-        restoreConsumer.updatePartitions("stream-thread-test-count-one-changelog",
-                                         Arrays.asList(
-                                             new PartitionInfo("stream-thread-test-count-one-changelog",
-                                                               0,
-                                                               null,
-                                                               new Node[0],
-                                                               new Node[0]),
-                                             new PartitionInfo("stream-thread-test-count-one-changelog",
-                                                               1,
-                                                               null,
-                                                               new Node[0],
-                                                               new Node[0])
-                                         ));
-        final HashMap<TopicPartition, Long> offsets = new HashMap<>();
-        offsets.put(new TopicPartition("stream-thread-test-count-one-changelog", 0), 0L);
-        offsets.put(new TopicPartition("stream-thread-test-count-one-changelog", 1), 0L);
-        restoreConsumer.updateEndOffsets(offsets);
-        restoreConsumer.updateBeginningOffsets(offsets);
-
-        clientSupplier.consumer.updateBeginningOffsets(Collections.singletonMap(t1p1, 0L));
-
-        final List<TopicPartition> assignedPartitions = new ArrayList<>();
-
-        thread.setState(StreamThread.State.STARTING);
-        thread.rebalanceListener().onPartitionsRevoked(assignedPartitions);
-        assertThreadMetadataHasEmptyTasksWithState(thread.threadMetadata(), StreamThread.State.PARTITIONS_REVOKED);
-
-        final Map<TaskId, Set<TopicPartition>> activeTasks = new HashMap<>();
-        final Map<TaskId, Set<TopicPartition>> standbyTasks = new HashMap<>();
-
-        // assign single partition
-        assignedPartitions.add(t1p1);
-        activeTasks.put(task1, Collections.singleton(t1p1));
-        standbyTasks.put(task2, Collections.singleton(t1p2));
-
-        thread.taskManager().handleAssignment(activeTasks, standbyTasks);
-
-        thread.rebalanceListener().onPartitionsAssigned(assignedPartitions);
-
-        assertThreadMetadataHasEmptyTasksWithState(thread.threadMetadata(), StreamThread.State.PARTITIONS_ASSIGNED);
     }
 
     private void assertThreadMetadataHasEmptyTasksWithState(final ThreadMetadata metadata, final StreamThread.State state) {

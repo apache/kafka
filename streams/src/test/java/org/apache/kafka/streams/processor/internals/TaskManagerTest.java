@@ -69,6 +69,8 @@ import java.util.HashSet;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
+import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -1086,6 +1088,15 @@ public class TaskManagerTest {
         expect(consumer.groupMetadata()).andReturn(groupMetadata);
         producer.commitTransaction(expectedCommittedOffsets, groupMetadata);
         expectLastCall();
+
+        task00.committedOffsets();
+        EasyMock.expectLastCall();
+        task01.committedOffsets();
+        EasyMock.expectLastCall();
+        task02.committedOffsets();
+        EasyMock.expectLastCall();
+        task10.committedOffsets();
+        EasyMock.expectLastCall();
 
         replay(activeTaskCreator, standbyTaskCreator, consumer, changeLogReader);
 
@@ -3109,6 +3120,27 @@ public class TaskManagerTest {
         @Override
         public Map<TopicPartition, Long> changelogOffsets() {
             return changelogOffsets;
+        }
+
+        @Override
+        public Map<TopicPartition, Long> committedOffsets() {
+            return Collections.emptyMap();
+        }
+
+        @Override
+        public Map<TopicPartition, Long> highWaterMark() {
+            return Collections.emptyMap();
+        }
+
+        @Override
+        public Optional<Long> timeCurrentIdlingStarted() {
+            return Optional.empty();
+        }
+
+        @Override
+        public void updateCommittedOffsets(final TopicPartition topicPartition, final Long offset) {
+            Objects.requireNonNull(topicPartition);
+            assertThat("It must be from an owned topic", inputPartitions.contains(topicPartition));
         }
 
         @Override
