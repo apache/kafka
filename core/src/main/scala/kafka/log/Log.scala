@@ -768,6 +768,11 @@ class Log(@volatile private var _dir: File,
       // must fall within the range of existing segment(s). If we cannot find such a segment, it means the deletion
       // of that segment was successful. In such an event, we should simply rename the .swap to .log without having to
       // do a replace with an existing segment.
+      //
+      // For case 1 (log cleaning), we may have old segments before or after the swap segment that were cleaned.
+      // Unfortunately, since the baseOffset and the readNextOffset were changed, these segments will not be removed on
+      // recovery. A subsequent cleaning that succeeds will correctly remove these segments.
+      // ie. segments [0, 1000), [1000, 2000), [2000, 3000) cleaned into [1500, 1750).swap -> [0. 1000), [1500, 1750), [2000, 3000)
       val oldSegments = logSegments(swapSegment.baseOffset, swapSegment.readNextOffset).filter { segment =>
         segment.readNextOffset > swapSegment.baseOffset
       }
@@ -2402,7 +2407,9 @@ class Log(@volatile private var _dir: File,
       // okay we are safe now, remove the swap suffix
       sortedNewSegments.foreach(_.changeFileSuffixes(Log.SwapFileSuffix, ""))
 
-      maybeIncrementLogStartOffset(segments.firstEntry.getValue.baseOffset, LogCompaction)
+      // If not recovered swap file we need to increment logStartOffset here. Otherwise, we do this when loading the log.
+      if (!isRecoveredSwapFile)
+         maybeIncrementLogStartOffset(segments.firstEntry.getValue.baseOffset, LogCompaction)
     }
   }
 
