@@ -438,26 +438,28 @@ class IncrementalFetchContext(private val time: Time,
 
   /**
    * goes over the given partition map and selects partitions that need to be included in the response.
-   * @param topics topic data
+   * @param topicResponses topic data
    * @param updateFetchContextAndRemoveUnselected true, the fetch context will be updated for the selected partitions
    * @return new collection having matched data
    */
-  private def filterResponseData(topics: FetchSession.RESP_MAP, updateFetchContextAndRemoveUnselected: Boolean): FetchSession.RESP_MAP = {
-    val filterTopicResponses = new util.ArrayList[FetchResponseData.FetchableTopicResponse]()
-    topics.forEach { topicData =>
-      val filterTopicData = new FetchResponseData.FetchableTopicResponse().setTopic(topicData.topic)
-      filterTopicResponses.add(filterTopicData)
-      topicData.partitions.forEach { partitionData =>
-        val cachedPart = session.partitionMap.find(new CachedPartition(topicData.topic, partitionData.partitionIndex))
-        val mustRespond = cachedPart.maybeUpdateResponseData(partitionData, updateFetchContextAndRemoveUnselected)
+  private def filterResponseData(topicResponses: FetchSession.RESP_MAP, updateFetchContextAndRemoveUnselected: Boolean): FetchSession.RESP_MAP = {
+    val filterTopicResponses = new util.ArrayList[FetchResponseData.FetchableTopicResponse](topicResponses.size)
+    topicResponses.forEach { topicResponse =>
+      val filterTopicResponse = new FetchResponseData.FetchableTopicResponse()
+        .setTopic(topicResponse.topic)
+        .setPartitions(new util.ArrayList[FetchResponseData.PartitionData](topicResponse.partitions.size))
+      topicResponse.partitions.forEach { partitionResponse =>
+        val cachedPart = session.partitionMap.find(new CachedPartition(topicResponse.topic, partitionResponse.partitionIndex))
+        val mustRespond = cachedPart.maybeUpdateResponseData(partitionResponse, updateFetchContextAndRemoveUnselected)
         if (mustRespond) {
-          filterTopicData.partitions().add(partitionData)
+          filterTopicResponse.partitions().add(partitionResponse)
           if (updateFetchContextAndRemoveUnselected) {
             session.partitionMap.remove(cachedPart)
             session.partitionMap.mustAdd(cachedPart)
           }
         }
       }
+      if (!filterTopicResponse.partitions().isEmpty) filterTopicResponses.add(filterTopicResponse)
     }
     filterTopicResponses
   }
