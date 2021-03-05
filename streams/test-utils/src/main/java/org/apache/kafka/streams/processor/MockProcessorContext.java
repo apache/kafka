@@ -371,13 +371,13 @@ public class MockProcessorContext implements ProcessorContext, RecordCollector.S
      * The context exposes this metadata for use in the processor. Normally, they are set by the Kafka Streams framework,
      * but for the purpose of driving unit tests, you can set it directly. Setting this attribute doesn't affect the others.
      *
-     * @param recordTimestamp A record timestamp
+     * @param timestamp A record timestamp
      * @deprecated Use {@link MockProcessorContext#setRecordTimestamp(long)} instead.
      */
     @Deprecated
     @SuppressWarnings({"WeakerAccess", "unused"})
-    public void setTimestamp(final long recordTimestamp) {
-        this.recordTimestamp = recordTimestamp;
+    public void setTimestamp(final long timestamp) {
+        this.recordTimestamp = timestamp;
     }
 
     /**
