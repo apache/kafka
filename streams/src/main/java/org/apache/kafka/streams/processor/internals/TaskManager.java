@@ -258,6 +258,13 @@ public class TaskManager {
                      "\tExisting standby tasks: {}",
                  activeTasks.keySet(), standbyTasks.keySet(), activeTaskIds(), standbyTaskIds());
 
+//        System.err.println(("Handle new assignment with:\n" +
+//                "\tNew active tasks: {}\n" +
+//                "\tNew standby tasks: {}\n" +
+//                "\tExisting active tasks: {}\n" +
+//                "\tExisting standby tasks: {}",
+//            activeTasks.keySet(), standbyTasks.keySet(), activeTaskIds(), standbyTaskIds());
+
         builder.addSubscribedTopicsFromAssignment(
             activeTasks.values().stream().flatMap(Collection::stream).collect(Collectors.toList()),
             logPrefix

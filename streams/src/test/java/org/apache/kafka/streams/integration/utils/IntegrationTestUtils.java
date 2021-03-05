@@ -1185,7 +1185,7 @@ public class IntegrationTestUtils {
             final ConsumerRecords<K, V> records = consumer.poll(Duration.ofMillis(pollIntervalMs));
 
             for (final ConsumerRecord<K, V> record : records) {
-                System.err.println("!!! record:" + record);
+//                System.err.println("!!! record:" + record);
                 consumerRecords.add(record);
             }
         }
