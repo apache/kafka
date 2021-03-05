@@ -403,6 +403,10 @@ public class MockClient implements KafkaClient {
         prepareResponseFrom(matcher, response, node, false, false);
     }
 
+    public void prepareResponseFrom(RequestMatcher matcher, AbstractResponse response, Node node, boolean disconnected) {
+        prepareResponseFrom(matcher, response, node, disconnected, false);
+    }
+
     public void prepareResponse(AbstractResponse response, boolean disconnected) {
         prepareResponse(ALWAYS_TRUE, response, disconnected);
     }
