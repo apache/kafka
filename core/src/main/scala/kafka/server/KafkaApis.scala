@@ -724,8 +724,9 @@ class KafkaApis(val requestChannel: RequestChannel,
       }
     }
 
-    def maybeConvertFetchedData(tp: TopicPartition,
-                                partitionData: FetchResponseData.PartitionData): FetchResponseData.PartitionData = {
+    def createConvertedPartition(topicName: String,
+                                 partitionData: FetchResponseData.PartitionData): FetchResponseData.PartitionData = {
+      val tp = new TopicPartition(topicName, partitionData.partitionIndex)
       val logConfig = replicaManager.getLogConfig(tp)
 
       if (logConfig.exists(_.compressionType == ZStdCompressionCodec.name) && versionId < 10) {
@@ -793,9 +794,8 @@ class KafkaApis(val requestChannel: RequestChannel,
       }
     }
 
-    // the callback for process a fetch response, invoked before throttling
-    def processResponseCallback(responsePartitionData: Seq[(TopicPartition, FetchPartitionData)]): Unit = {
-      val topicResponses = new util.ArrayList[FetchResponseData.FetchableTopicResponse]()
+    def mergeErrors(responsePartitionData: Seq[(TopicPartition, FetchPartitionData)]): util.ArrayList[FetchResponseData.FetchableTopicResponse] = {
+      val topicResponses = new util.ArrayList[FetchResponseData.FetchableTopicResponse](responsePartitionData.size + erroneous.size)
 
       def addPartition(topicName: String, partitionData: FetchResponseData.PartitionData): Unit = {
         var topicData = if (topicResponses.isEmpty) null else topicResponses.get(topicResponses.size - 1)
@@ -806,74 +806,80 @@ class KafkaApis(val requestChannel: RequestChannel,
         topicData.partitions.add(partitionData)
       }
 
-      val reassigningPartitions = mutable.Set[TopicPartition]()
       responsePartitionData.foreach { case (tp, data) =>
-        val abortedTransactions = data.abortedTransactions.map(_.asJava).orNull
-        val lastStableOffset = data.lastStableOffset.getOrElse(FetchResponse.INVALID_LAST_STABLE_OFFSET)
-        if (data.isReassignmentFetch) reassigningPartitions.add(tp)
         val partitionData = new FetchResponseData.PartitionData()
           .setPartitionIndex(tp.partition)
           .setErrorCode(maybeDownConvertStorageError(data.error).code)
           .setHighWatermark(data.highWatermark)
-          .setLastStableOffset(lastStableOffset)
           .setLogStartOffset(data.logStartOffset)
-          .setAbortedTransactions(abortedTransactions)
           .setRecords(data.records)
-          .setPreferredReadReplica(data.preferredReadReplica.getOrElse(FetchResponse.INVALID_PREFERRED_REPLICA_ID))
+          // abortedTransactions is nullable so we set null to it.
+          .setAbortedTransactions(data.abortedTransactions.map(_.asJava).orNull)
+        data.lastStableOffset.foreach(partitionData.setLastStableOffset)
+        data.preferredReadReplica.foreach(partitionData.setPreferredReadReplica)
         data.divergingEpoch.foreach(partitionData.setDivergingEpoch)
         addPartition(tp.topic, partitionData)
       }
       erroneous.foreach(entry => addPartition(entry._1.topic, entry._2) )
 
-      def createResponse(unconvertedFetchResponse: FetchResponse, throttleTimeMs: Int): FetchResponse = {
-        // Down-convert messages for each partition if required
-        val convertedResponse = new FetchResponseData()
-          .setErrorCode(unconvertedFetchResponse.error.code)
-          .setThrottleTimeMs(throttleTimeMs)
-          .setSessionId(unconvertedFetchResponse.sessionId)
-          .setResponses(new util.ArrayList[FetchResponseData.FetchableTopicResponse](unconvertedFetchResponse.data.responses.size))
-        unconvertedFetchResponse.data.responses.forEach { unconvertedTopicData =>
-          val convertedTopicResponse = new FetchResponseData.FetchableTopicResponse()
-            .setTopic(unconvertedTopicData.topic)
-            .setPartitions(new util.ArrayList[FetchResponseData.PartitionData](unconvertedTopicData.partitions.size))
-          convertedResponse.responses.add(convertedTopicResponse)
-          unconvertedTopicData.partitions.forEach { unconvertedPartitionData =>
-            val tp = new TopicPartition(unconvertedTopicData.topic, unconvertedPartitionData.partitionIndex)
-            if (unconvertedPartitionData.errorCode != Errors.NONE.code)
-              debug(s"Fetch request with correlation id ${request.header.correlationId} from client $clientId " +
-                s"on partition $tp failed due to ${Errors.forCode(unconvertedPartitionData.errorCode).exceptionName}")
-            convertedTopicResponse.partitions.add(maybeConvertFetchedData(tp, unconvertedPartitionData))
-          }
-        }
-        // record the bytes out metrics only when the response is being sent
-        convertedResponse.responses.forEach { topicData =>
-          topicData.partitions.forEach { partitionData =>
-            brokerTopicStats.updateBytesOut(topicData.topic, fetchRequest.isFromFollower,
-              reassigningPartitions.contains(new TopicPartition(topicData.topic, partitionData.partitionIndex)),
-              FetchResponse.recordsSize(partitionData))
-          }
-        }
-        new FetchResponse(convertedResponse)
-      }
+      topicResponses
+    }
 
-      def updateConversionStats(send: Send): Unit = {
-        send match {
-          case send: MultiRecordsSend if send.recordConversionStats != null =>
-            send.recordConversionStats.asScala.toMap.foreach {
-              case (tp, stats) => updateRecordConversionStats(request, tp, stats)
-            }
-          case _ =>
+    def updateConversionStats(send: Send): Unit = {
+      send match {
+        case send: MultiRecordsSend if send.recordConversionStats != null =>
+          send.recordConversionStats.asScala.toMap.forKeyValue((tp, stats) => updateRecordConversionStats(request, tp, stats))
+        case _ =>
+      }
+    }
+
+    /**
+     * update partition data of fetch response. We don't want to create copy of large collection so the converted
+     * partition data is reassigned to inner array of fetch response.
+     */
+    def updateResponseWithConvertedPartition(fetchResponse: FetchResponse, throttleTimeMs: Int): Unit = {
+      fetchResponse.data().setThrottleTimeMs(throttleTimeMs)
+      fetchResponse.data.responses.forEach { topicResponse =>
+        (0 until topicResponse.partitions().size()).foreach { index =>
+          val partitionData = topicResponse.partitions().get(index)
+          if (partitionData.errorCode != Errors.NONE.code)
+            debug(s"Fetch request with correlation id ${request.header.correlationId} from client $clientId " +
+              s"on partition ${new TopicPartition(topicResponse.topic, partitionData.partitionIndex)} " +
+              s"failed due to ${Errors.forCode(partitionData.errorCode).exceptionName}")
+          topicResponse.partitions().set(index, createConvertedPartition(topicResponse.topic, partitionData))
         }
       }
+    }
+
+    /**
+     * record the bytes out metrics of being sent response
+     */
+    def updateBytesOut(fetchResponse: FetchResponse,
+                       responsePartitionData: Seq[(TopicPartition, FetchPartitionData)]): Unit = {
+      val reassigningPartitions = responsePartitionData.filter(_._2.isReassignmentFetch).map(_._1).toSet
+      fetchResponse.data.responses.forEach { topicData =>
+        topicData.partitions.forEach { partitionData =>
+          brokerTopicStats.updateBytesOut(topicData.topic, fetchRequest.isFromFollower,
+            reassigningPartitions.contains(new TopicPartition(topicData.topic, partitionData.partitionIndex)),
+            FetchResponse.recordsSize(partitionData))
+        }
+      }
+    }
+
+    // the callback for process a fetch response, invoked before throttling
+    def processResponseCallback(responsePartitionData: Seq[(TopicPartition, FetchPartitionData)]): Unit = {
+
+      val topicResponses = mergeErrors(responsePartitionData)
 
       if (fetchRequest.isFromFollower) {
         // We've already evaluated against the quota and are good to go. Just need to record it now.
-        val unconvertedFetchResponse = fetchContext.updateAndGenerateResponseData(topicResponses)
-        val responseSize = KafkaApis.sizeOfThrottledPartitions(versionId, unconvertedFetchResponse, quotas.leader)
-        quotas.leader.record(responseSize)
-        trace(s"Sending Fetch response with partitions.size=${unconvertedFetchResponse.responseData.size}, " +
-          s"metadata=${unconvertedFetchResponse.sessionId}")
-        requestHelper.sendResponseExemptThrottle(request, createResponse(unconvertedFetchResponse, 0), Some(updateConversionStats))
+        val fetchResponse = fetchContext.updateAndGenerateResponseData(topicResponses)
+        quotas.leader.record(KafkaApis.sizeOfThrottledPartitions(versionId, fetchResponse, quotas.leader))
+        trace(s"Sending Fetch response with partitions.size=${fetchResponse.responseData.size}, " +
+          s"metadata=${fetchResponse.sessionId}")
+        updateResponseWithConvertedPartition(fetchResponse, 0)
+        updateBytesOut(fetchResponse, responsePartitionData)
+        requestHelper.sendResponseExemptThrottle(request, fetchResponse , Some(updateConversionStats))
       } else {
         // Fetch size used to determine throttle time is calculated before any down conversions.
         // This may be slightly different from the actual response size. But since down conversions
@@ -888,7 +894,7 @@ class KafkaApis(val requestChannel: RequestChannel,
         val bandwidthThrottleTimeMs = quotas.fetch.maybeRecordAndGetThrottleTimeMs(request, responseSize, timeMs)
 
         val maxThrottleTimeMs = math.max(bandwidthThrottleTimeMs, requestThrottleTimeMs)
-        val unconvertedFetchResponse = if (maxThrottleTimeMs > 0) {
+        val fetchResponse = if (maxThrottleTimeMs > 0) {
           request.apiThrottleTimeMs = maxThrottleTimeMs
           // Even if we need to throttle for request quota violation, we should "unrecord" the already recorded value
           // from the fetch quota because we are going to return an empty response.
@@ -906,9 +912,10 @@ class KafkaApis(val requestChannel: RequestChannel,
           trace(s"Sending Fetch response with partitions.size=$responseSize, metadata=${response.sessionId}")
           response
         }
-
+        updateResponseWithConvertedPartition(fetchResponse, maxThrottleTimeMs)
+        updateBytesOut(fetchResponse, responsePartitionData)
         // Send the response immediately.
-        requestChannel.sendResponse(request, createResponse(unconvertedFetchResponse, maxThrottleTimeMs), Some(updateConversionStats))
+        requestChannel.sendResponse(request, fetchResponse , Some(updateConversionStats))
       }
     }
 
