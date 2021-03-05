@@ -21,28 +21,31 @@ import org.apache.kafka.clients.admin.AlterConfigOp.OpType;
 import org.apache.kafka.common.ElectionType;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.config.ConfigResource;
+import org.apache.kafka.common.errors.ApiException;
 import org.apache.kafka.common.errors.BrokerIdNotRegisteredException;
 import org.apache.kafka.common.errors.InvalidReplicationFactorException;
 import org.apache.kafka.common.errors.InvalidRequestException;
 import org.apache.kafka.common.errors.InvalidTopicException;
+import org.apache.kafka.common.errors.UnknownTopicIdException;
 import org.apache.kafka.common.internals.Topic;
 import org.apache.kafka.common.message.AlterIsrRequestData;
 import org.apache.kafka.common.message.AlterIsrResponseData;
 import org.apache.kafka.common.message.BrokerHeartbeatRequestData;
+import org.apache.kafka.common.message.CreateTopicsRequestData;
 import org.apache.kafka.common.message.CreateTopicsRequestData.CreatableReplicaAssignment;
 import org.apache.kafka.common.message.CreateTopicsRequestData.CreatableTopic;
 import org.apache.kafka.common.message.CreateTopicsRequestData.CreatableTopicCollection;
-import org.apache.kafka.common.message.CreateTopicsRequestData;
-import org.apache.kafka.common.message.CreateTopicsResponseData.CreatableTopicResult;
 import org.apache.kafka.common.message.CreateTopicsResponseData;
-import org.apache.kafka.common.message.ElectLeadersRequestData.TopicPartitions;
+import org.apache.kafka.common.message.CreateTopicsResponseData.CreatableTopicResult;
 import org.apache.kafka.common.message.ElectLeadersRequestData;
+import org.apache.kafka.common.message.ElectLeadersRequestData.TopicPartitions;
+import org.apache.kafka.common.message.ElectLeadersResponseData;
 import org.apache.kafka.common.message.ElectLeadersResponseData.PartitionResult;
 import org.apache.kafka.common.message.ElectLeadersResponseData.ReplicaElectionResult;
-import org.apache.kafka.common.message.ElectLeadersResponseData;
 import org.apache.kafka.common.metadata.FenceBrokerRecord;
 import org.apache.kafka.common.metadata.PartitionChangeRecord;
 import org.apache.kafka.common.metadata.PartitionRecord;
+import org.apache.kafka.common.metadata.RemoveTopicRecord;
 import org.apache.kafka.common.metadata.TopicRecord;
 import org.apache.kafka.common.metadata.UnfenceBrokerRecord;
 import org.apache.kafka.common.metadata.UnregisterBrokerRecord;
@@ -60,6 +63,7 @@ import org.slf4j.Logger;
 import java.util.AbstractMap.SimpleImmutableEntry;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -72,6 +76,9 @@ import java.util.Random;
 
 import static org.apache.kafka.clients.admin.AlterConfigOp.OpType.SET;
 import static org.apache.kafka.common.config.ConfigResource.Type.TOPIC;
+import static org.apache.kafka.common.protocol.Errors.INVALID_REQUEST;
+import static org.apache.kafka.common.protocol.Errors.UNKNOWN_TOPIC_ID;
+import static org.apache.kafka.common.protocol.Errors.UNKNOWN_TOPIC_OR_PARTITION;
 
 
 /**
@@ -92,10 +99,12 @@ public class ReplicationControlManager {
     public static final int NO_LEADER_CHANGE = -2;
 
     static class TopicControlInfo {
+        private final String name;
         private final Uuid id;
         private final TimelineHashMap<Integer, PartitionControlInfo> parts;
 
-        TopicControlInfo(SnapshotRegistry snapshotRegistry, Uuid id) {
+        TopicControlInfo(String name, SnapshotRegistry snapshotRegistry, Uuid id) {
+            this.name = name;
             this.id = id;
             this.parts = new TimelineHashMap<>(snapshotRegistry, 0);
         }
@@ -261,7 +270,7 @@ public class ReplicationControlManager {
     /**
      * A reference to the controller's cluster control manager.
      */
-    final ClusterControlManager clusterControl;
+    private final ClusterControlManager clusterControl;
 
     /**
      * Maps topic names to topic UUIDs.
@@ -299,7 +308,8 @@ public class ReplicationControlManager {
 
     public void replay(TopicRecord record) {
         topicsByName.put(record.name(), record.topicId());
-        topics.put(record.topicId(), new TopicControlInfo(snapshotRegistry, record.topicId()));
+        topics.put(record.topicId(),
+            new TopicControlInfo(record.name(), snapshotRegistry, record.topicId()));
         log.info("Created topic {} with ID {}.", record.name(), record.topicId());
     }
 
@@ -347,6 +357,29 @@ public class ReplicationControlManager {
             prevPartitionInfo.isr, newPartitionInfo.isr, prevPartitionInfo.leader,
             newPartitionInfo.leader);
         log.debug("Applied ISR change record: {}", record.toString());
+    }
+
+    public void replay(RemoveTopicRecord record) {
+        // Remove this topic from the topics map and the topicsByName map.
+        TopicControlInfo topic = topics.remove(record.topicId());
+        if (topic == null) {
+            throw new UnknownTopicIdException("Can't find topic with ID " + record.topicId() +
+                " to remove.");
+        }
+        topicsByName.remove(topic.name);
+
+        // Delete the configurations associated with this topic.
+        configurationControl.deleteTopicConfigs(topic.name);
+
+        // Remove the entries for this topic in brokersToIsrs.
+        for (PartitionControlInfo partition : topic.parts.values()) {
+            for (int i = 0; i < partition.isr.length; i++) {
+                brokersToIsrs.removeTopicEntryForBroker(topic.id, partition.isr[i]);
+            }
+        }
+        brokersToIsrs.removeTopicEntryForBroker(topic.id, NO_LEADER);
+
+        log.info("Removed topic {} with ID {}.", topic.name, record.topicId());
     }
 
     ControllerResult<CreateTopicsResponseData>
@@ -407,7 +440,7 @@ public class ReplicationControlManager {
             resultsPrefix = ", ";
         }
         log.info("createTopics result(s): {}", resultsBuilder.toString());
-        return new ControllerResult<>(records, data);
+        return ControllerResult.atomicOf(records, data);
     }
 
     private ApiError createTopic(CreatableTopic topic,
@@ -416,12 +449,12 @@ public class ReplicationControlManager {
         Map<Integer, PartitionControlInfo> newParts = new HashMap<>();
         if (!topic.assignments().isEmpty()) {
             if (topic.replicationFactor() != -1) {
-                return new ApiError(Errors.INVALID_REQUEST,
+                return new ApiError(INVALID_REQUEST,
                     "A manual partition assignment was specified, but replication " +
                     "factor was not set to -1.");
             }
             if (topic.numPartitions() != -1) {
-                return new ApiError(Errors.INVALID_REQUEST,
+                return new ApiError(INVALID_REQUEST,
                     "A manual partition assignment was specified, but numPartitions " +
                         "was not set to -1.");
             }
@@ -458,7 +491,7 @@ public class ReplicationControlManager {
             return new ApiError(Errors.INVALID_REPLICATION_FACTOR,
                 "Replication factor was set to an invalid non-positive value.");
         } else if (!topic.assignments().isEmpty()) {
-            return new ApiError(Errors.INVALID_REQUEST,
+            return new ApiError(INVALID_REQUEST,
                 "Replication factor was not set to -1 but a manual partition " +
                     "assignment was specified.");
         } else if (topic.numPartitions() < -1 || topic.numPartitions() == 0) {
@@ -541,6 +574,68 @@ public class ReplicationControlManager {
         return configChanges;
     }
 
+    Map<String, ResultOrError<Uuid>> findTopicIds(long offset, Collection<String> names) {
+        Map<String, ResultOrError<Uuid>> results = new HashMap<>(names.size());
+        for (String name : names) {
+            if (name == null) {
+                results.put(null, new ResultOrError<>(INVALID_REQUEST, "Invalid null topic name."));
+            } else {
+                Uuid id = topicsByName.get(name, offset);
+                if (id == null) {
+                    results.put(name, new ResultOrError<>(
+                        new ApiError(UNKNOWN_TOPIC_OR_PARTITION)));
+                } else {
+                    results.put(name, new ResultOrError<>(id));
+                }
+            }
+        }
+        return results;
+    }
+
+    Map<Uuid, ResultOrError<String>> findTopicNames(long offset, Collection<Uuid> ids) {
+        Map<Uuid, ResultOrError<String>> results = new HashMap<>(ids.size());
+        for (Uuid id : ids) {
+            if (id == null || id.equals(Uuid.ZERO_UUID)) {
+                results.put(id, new ResultOrError<>(new ApiError(INVALID_REQUEST,
+                    "Attempt to find topic with invalid topicId " + id)));
+            } else {
+                TopicControlInfo topic = topics.get(id, offset);
+                if (topic == null) {
+                    results.put(id, new ResultOrError<>(new ApiError(UNKNOWN_TOPIC_ID)));
+                } else {
+                    results.put(id, new ResultOrError<>(topic.name));
+                }
+            }
+        }
+        return results;
+    }
+
+    ControllerResult<Map<Uuid, ApiError>> deleteTopics(Collection<Uuid> ids) {
+        Map<Uuid, ApiError> results = new HashMap<>(ids.size());
+        List<ApiMessageAndVersion> records = new ArrayList<>(ids.size());
+        for (Uuid id : ids) {
+            try {
+                deleteTopic(id, records);
+                results.put(id, ApiError.NONE);
+            } catch (ApiException e) {
+                results.put(id, ApiError.fromThrowable(e));
+            } catch (Exception e) {
+                log.error("Unexpected deleteTopics error for {}", id, e);
+                results.put(id, ApiError.fromThrowable(e));
+            }
+        }
+        return ControllerResult.atomicOf(records, results);
+    }
+
+    void deleteTopic(Uuid id, List<ApiMessageAndVersion> records) {
+        TopicControlInfo topic = topics.get(id);
+        if (topic == null) {
+            throw new UnknownTopicIdException(UNKNOWN_TOPIC_ID.message());
+        }
+        records.add(new ApiMessageAndVersion(new RemoveTopicRecord().
+            setTopicId(id), (short) 0));
+    }
+
     // VisibleForTesting
     PartitionControlInfo getPartition(Uuid topicId, int partitionId) {
         TopicControlInfo topic = topics.get(topicId);
@@ -568,7 +663,7 @@ public class ReplicationControlManager {
                 for (AlterIsrRequestData.PartitionData partitionData : topicData.partitions()) {
                     responseTopicData.partitions().add(new AlterIsrResponseData.PartitionData().
                         setPartitionIndex(partitionData.partitionIndex()).
-                        setErrorCode(Errors.UNKNOWN_TOPIC_OR_PARTITION.code()));
+                        setErrorCode(UNKNOWN_TOPIC_OR_PARTITION.code()));
                 }
                 continue;
             }
@@ -578,13 +673,13 @@ public class ReplicationControlManager {
                 if (partition == null) {
                     responseTopicData.partitions().add(new AlterIsrResponseData.PartitionData().
                         setPartitionIndex(partitionData.partitionIndex()).
-                        setErrorCode(Errors.UNKNOWN_TOPIC_OR_PARTITION.code()));
+                        setErrorCode(UNKNOWN_TOPIC_OR_PARTITION.code()));
                     continue;
                 }
                 if (request.brokerId() != partition.leader) {
                     responseTopicData.partitions().add(new AlterIsrResponseData.PartitionData().
                         setPartitionIndex(partitionData.partitionIndex()).
-                        setErrorCode(Errors.INVALID_REQUEST.code()));
+                        setErrorCode(INVALID_REQUEST.code()));
                     continue;
                 }
                 if (partitionData.leaderEpoch() != partition.leaderEpoch) {
@@ -603,14 +698,14 @@ public class ReplicationControlManager {
                 if (!Replicas.validateIsr(partition.replicas, newIsr)) {
                     responseTopicData.partitions().add(new AlterIsrResponseData.PartitionData().
                         setPartitionIndex(partitionData.partitionIndex()).
-                        setErrorCode(Errors.INVALID_REQUEST.code()));
+                        setErrorCode(INVALID_REQUEST.code()));
                     continue;
                 }
                 if (!Replicas.contains(newIsr, partition.leader)) {
                     // An alterIsr request can't remove the current leader.
                     responseTopicData.partitions().add(new AlterIsrResponseData.PartitionData().
                         setPartitionIndex(partitionData.partitionIndex()).
-                        setErrorCode(Errors.INVALID_REQUEST.code()));
+                        setErrorCode(INVALID_REQUEST.code()));
                     continue;
                 }
                 records.add(new ApiMessageAndVersion(new PartitionChangeRecord().
@@ -626,7 +721,7 @@ public class ReplicationControlManager {
                     setIsr(partitionData.newIsr()));
             }
         }
-        return new ControllerResult<>(records, response);
+        return ControllerResult.of(records, response);
     }
 
     /**
@@ -780,7 +875,7 @@ public class ReplicationControlManager {
                     setErrorMessage(error.message()));
             }
         }
-        return new ControllerResult<>(records, response);
+        return ControllerResult.of(records, response);
     }
 
     static boolean electionIsUnclean(byte electionType) {
@@ -797,17 +892,17 @@ public class ReplicationControlManager {
                          List<ApiMessageAndVersion> records) {
         Uuid topicId = topicsByName.get(topic);
         if (topicId == null) {
-            return new ApiError(Errors.UNKNOWN_TOPIC_OR_PARTITION,
+            return new ApiError(UNKNOWN_TOPIC_OR_PARTITION,
                 "No such topic as " + topic);
         }
         TopicControlInfo topicInfo = topics.get(topicId);
         if (topicInfo == null) {
-            return new ApiError(Errors.UNKNOWN_TOPIC_OR_PARTITION,
+            return new ApiError(UNKNOWN_TOPIC_OR_PARTITION,
                 "No such topic id as " + topicId);
         }
         PartitionControlInfo partitionInfo = topicInfo.parts.get(partitionId);
         if (partitionInfo == null) {
-            return new ApiError(Errors.UNKNOWN_TOPIC_OR_PARTITION,
+            return new ApiError(UNKNOWN_TOPIC_OR_PARTITION,
                 "No such partition as " + topic + "-" + partitionId);
         }
         int newLeader = bestLeader(partitionInfo.replicas, partitionInfo.isr, unclean);
@@ -875,7 +970,7 @@ public class ReplicationControlManager {
                 states.next().fenced(),
                 states.next().inControlledShutdown(),
                 states.next().shouldShutDown());
-        return new ControllerResult<>(records, reply);
+        return ControllerResult.of(records, reply);
     }
 
     int bestLeader(int[] replicas, int[] isr, boolean unclean) {
@@ -904,7 +999,7 @@ public class ReplicationControlManager {
         }
         List<ApiMessageAndVersion> records = new ArrayList<>();
         handleBrokerUnregistered(brokerId, registration.epoch(), records);
-        return new ControllerResult<>(records, null);
+        return ControllerResult.of(records, null);
     }
 
     ControllerResult<Void> maybeFenceStaleBrokers() {
@@ -916,6 +1011,6 @@ public class ReplicationControlManager {
             handleBrokerFenced(brokerId, records);
             heartbeatManager.fence(brokerId);
         }
-        return new ControllerResult<>(records, null);
+        return ControllerResult.of(records, null);
     }
 }

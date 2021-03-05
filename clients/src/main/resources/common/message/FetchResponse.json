@@ -53,9 +53,9 @@
       "about": "The response topics.", "fields": [
       { "name": "Topic", "type": "string", "versions": "0+", "entityType": "topicName",
         "about": "The topic name." },
-      { "name": "PartitionResponses", "type": "[]FetchablePartitionResponse", "versions": "0+",
+      { "name": "Partitions", "type": "[]PartitionData", "versions": "0+",
         "about": "The topic partitions.", "fields": [
-        { "name": "Partition", "type": "int32", "versions": "0+",
+        { "name": "PartitionIndex", "type": "int32", "versions": "0+",
           "about": "The partition index." },
         { "name": "ErrorCode", "type": "int16", "versions": "0+",
           "about": "The error code, or 0 if there was no fetch error." },
@@ -94,7 +94,7 @@
         ]},
         { "name": "PreferredReadReplica", "type": "int32", "versions": "11+", "default": "-1", "ignorable": false,
           "about": "The preferred read replica for the consumer to use on its next fetch request"},
-        { "name": "RecordSet", "type": "records", "versions": "0+", "nullableVersions": "0+", "about": "The record data."}
+        { "name": "Records", "type": "records", "versions": "0+", "nullableVersions": "0+", "about": "The record data."}
       ]}
     ]}
   ]

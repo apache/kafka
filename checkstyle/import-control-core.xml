@@ -59,6 +59,8 @@
   </subpackage>
 
   <subpackage name="test">
+    <allow pkg="org.apache.kafka.controller"/>
+    <allow pkg="org.apache.kafka.metadata"/>
     <allow pkg="kafka.test.annotation"/>
     <allow pkg="kafka.test.junit"/>
     <allow pkg="kafka.network"/>

@@ -43,7 +43,7 @@ public class AddPartitionsToTxnRequestTest {
 
         AddPartitionsToTxnRequest.Builder builder = new AddPartitionsToTxnRequest.Builder(transactionalId, producerId, producerEpoch, partitions);
 
-        for (short version = 0; version <= ApiKeys.ADD_PARTITIONS_TO_TXN.latestVersion(); version++) {
+        for (short version : ApiKeys.ADD_PARTITIONS_TO_TXN.allVersions()) {
             AddPartitionsToTxnRequest request = builder.build(version);
 
             assertEquals(transactionalId, request.data().transactionalId());

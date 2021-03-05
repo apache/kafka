@@ -17,17 +17,16 @@
 
 package kafka.server
 
-import java.util.{Optional, Properties}
 import kafka.log.LogConfig
 import kafka.utils.TestUtils
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerRecord}
 import org.apache.kafka.common.TopicPartition
-import org.apache.kafka.common.record.MemoryRecords
 import org.apache.kafka.common.requests.FetchRequest.PartitionData
 import org.apache.kafka.common.requests.{FetchRequest, FetchResponse}
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
 
+import java.util.{Optional, Properties}
 import scala.jdk.CollectionConverters._
 
 /**
@@ -92,8 +91,8 @@ class FetchRequestMaxBytesTest extends BaseRequestTest {
     })
   }
 
-  private def sendFetchRequest(leaderId: Int, request: FetchRequest): FetchResponse[MemoryRecords] = {
-    connectAndReceive[FetchResponse[MemoryRecords]](request, destination = brokerSocketServer(leaderId))
+  private def sendFetchRequest(leaderId: Int, request: FetchRequest): FetchResponse = {
+    connectAndReceive[FetchResponse](request, destination = brokerSocketServer(leaderId))
   }
 
   /**
@@ -117,7 +116,7 @@ class FetchRequestMaxBytesTest extends BaseRequestTest {
       FetchRequest.Builder.forConsumer(Int.MaxValue, 0,
         Map(testTopicPartition ->
           new PartitionData(fetchOffset, 0, Integer.MAX_VALUE, Optional.empty())).asJava).build(3))
-    val records = response.responseData().get(testTopicPartition).records.records()
+    val records = FetchResponse.recordsOrFail(response.responseData.get(testTopicPartition)).records()
     assertNotNull(records)
     val recordsList = records.asScala.toList
     assertEquals(expected.size, recordsList.size)
