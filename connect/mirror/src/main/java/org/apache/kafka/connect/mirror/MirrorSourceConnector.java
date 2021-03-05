@@ -686,7 +686,7 @@ public class MirrorSourceConnector extends SourceConnector {
         String source = replicationPolicy.topicSource(topic);
         if (source == null) {
             return false;
-        } else if (source.equals(sourceAndTarget.target())) {
+        } else if (source.equals(sourceAndTarget.source()) || source.equals(sourceAndTarget.target())) {
             return true;
         } else {
             String upstreamTopic = replicationPolicy.upstreamTopic(topic);
