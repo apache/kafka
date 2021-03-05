@@ -23,7 +23,6 @@ import java.util
 import java.util.Arrays.asList
 import java.util.concurrent.TimeUnit
 import java.util.{Collections, Optional, Properties, Random}
-
 import kafka.api.{ApiVersion, KAFKA_0_10_2_IV0, KAFKA_2_2_IV1, LeaderAndIsr}
 import kafka.cluster.{Broker, Partition}
 import kafka.controller.{ControllerContext, KafkaController}
@@ -3245,31 +3244,39 @@ class KafkaApisTest {
 
   @Test
   def testSizeOfThrottledPartitions(): Unit = {
-
     def fetchResponse(data: Map[TopicPartition, String]): FetchResponse = {
-      val responseData = new util.LinkedHashMap[TopicPartition, FetchResponseData.PartitionData](
-        data.map { case (tp, raw) =>
-          tp -> new FetchResponseData.PartitionData()
-            .setPartitionIndex(tp.partition)
-            .setHighWatermark(105)
-            .setLastStableOffset(105)
-            .setLogStartOffset(0)
-            .setRecords(MemoryRecords.withRecords(CompressionType.NONE, new SimpleRecord(100, raw.getBytes(StandardCharsets.UTF_8))))
-      }.toMap.asJava)
-      FetchResponse.of(Errors.NONE, 100, 100, responseData)
+      val topicResponses = data.map { case (tp, raw) =>
+        tp -> new FetchResponseData.PartitionData()
+          .setPartitionIndex(tp.partition)
+          .setHighWatermark(105)
+          .setLastStableOffset(105)
+          .setLogStartOffset(0)
+          .setRecords(MemoryRecords.withRecords(CompressionType.NONE, new SimpleRecord(100, raw.getBytes(StandardCharsets.UTF_8))))
+      }.groupBy[String](_._1.topic)
+        .map(entry => new FetchResponseData.FetchableTopicResponse()
+          .setTopic(entry._1)
+          .setPartitions(entry._2.values.toSeq.asJava))
+        .toSeq.asJava
+
+      new FetchResponse(new FetchResponseData()
+        .setThrottleTimeMs(100)
+        .setErrorCode(Errors.NONE.code)
+        .setSessionId(100)
+        .setResponses(topicResponses))
     }
 
     val throttledPartition = new TopicPartition("throttledData", 0)
     val throttledData = Map(throttledPartition -> "throttledData")
-    val expectedSize = FetchResponse.sizeOf(FetchResponseData.HIGHEST_SUPPORTED_VERSION,
-      fetchResponse(throttledData).responseData.entrySet.iterator)
+    val expectedSize = FetchResponse.sizeOf(FetchResponseData.HIGHEST_SUPPORTED_VERSION, fetchResponse(throttledData).data.responses)
 
     val response = fetchResponse(throttledData ++ Map(new TopicPartition("nonThrottledData", 0) -> "nonThrottledData"))
 
     val quota = Mockito.mock(classOf[ReplicationQuotaManager])
-    Mockito.when(quota.isThrottled(ArgumentMatchers.any(classOf[TopicPartition])))
-      .thenAnswer(invocation => throttledPartition == invocation.getArgument(0).asInstanceOf[TopicPartition])
-
+    Mockito.when(quota.isThrottled(ArgumentMatchers.any(classOf[String]), ArgumentMatchers.any(classOf[Int])))
+      .thenAnswer { invocation =>
+        throttledPartition.topic == invocation.getArgument(0).asInstanceOf[String] &&
+          throttledPartition.partition == invocation.getArgument(1).asInstanceOf[Int]
+      }
     assertEquals(expectedSize, KafkaApis.sizeOfThrottledPartitions(FetchResponseData.HIGHEST_SUPPORTED_VERSION, response, quota))
   }
 

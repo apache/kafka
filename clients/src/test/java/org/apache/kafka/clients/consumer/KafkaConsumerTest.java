@@ -108,7 +108,6 @@ import java.util.ConcurrentModificationException;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -2277,7 +2276,7 @@ public class KafkaConsumerTest {
     }
 
     private FetchResponse fetchResponse(Map<TopicPartition, FetchInfo> fetches) {
-        LinkedHashMap<TopicPartition, FetchResponseData.PartitionData> tpResponses = new LinkedHashMap<>();
+        List<FetchResponseData.FetchableTopicResponse> topicResponses = new ArrayList<>();
         for (Map.Entry<TopicPartition, FetchInfo> fetchEntry : fetches.entrySet()) {
             TopicPartition partition = fetchEntry.getKey();
             long fetchOffset = fetchEntry.getValue().offset;
@@ -2294,14 +2293,19 @@ public class KafkaConsumerTest {
                     builder.append(0L, ("key-" + i).getBytes(), ("value-" + i).getBytes());
                 records = builder.build();
             }
-            tpResponses.put(partition,
-                new FetchResponseData.PartitionData()
+            topicResponses.add(new FetchResponseData.FetchableTopicResponse()
+                .setTopic(partition.topic())
+                .setPartitions(Collections.singletonList(new FetchResponseData.PartitionData()
                     .setPartitionIndex(partition.partition())
                     .setHighWatermark(highWatermark)
                     .setLogStartOffset(logStartOffset)
-                    .setRecords(records));
+                    .setRecords(records))));
         }
-        return FetchResponse.of(Errors.NONE, 0, INVALID_SESSION_ID, tpResponses);
+        return new FetchResponse(new FetchResponseData()
+            .setErrorCode(Errors.NONE.code())
+            .setThrottleTimeMs(0)
+            .setSessionId(INVALID_SESSION_ID)
+            .setResponses(topicResponses));
     }
 
     private FetchResponse fetchResponse(TopicPartition partition, long fetchOffset, int count) {

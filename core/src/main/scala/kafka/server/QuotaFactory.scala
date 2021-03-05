@@ -18,7 +18,6 @@ package kafka.server
 
 import kafka.server.QuotaType._
 import kafka.utils.Logging
-import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.server.quota.ClientQuotaCallback
 import org.apache.kafka.common.utils.Time
@@ -49,7 +48,7 @@ sealed trait QuotaType
 object QuotaFactory extends Logging {
 
   object UnboundedQuota extends ReplicaQuota {
-    override def isThrottled(topicPartition: TopicPartition): Boolean = false
+    override def isThrottled(topicName: String, partition: Int): Boolean = false
     override def isQuotaExceeded: Boolean = false
     def record(value: Long): Unit = ()
   }

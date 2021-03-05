@@ -54,7 +54,8 @@ object ReplicationQuotaManagerConfig {
 
 trait ReplicaQuota {
   def record(value: Long): Unit
-  def isThrottled(topicPartition: TopicPartition): Boolean
+  def isThrottled(topicName: String, partition: Int): Boolean
+  def isThrottled(topicPartition: TopicPartition): Boolean = isThrottled(topicPartition.topic, topicPartition.partition)
   def isQuotaExceeded: Boolean
 }
 
@@ -120,10 +121,10 @@ class ReplicationQuotaManager(val config: ReplicationQuotaManagerConfig,
     * @param topicPartition the partition to check
     * @return
     */
-  override def isThrottled(topicPartition: TopicPartition): Boolean = {
-    val partitions = throttledPartitions.get(topicPartition.topic)
+  override def isThrottled(topicName: String, partition: Int): Boolean = {
+    val partitions = throttledPartitions.get(topicName)
     if (partitions != null)
-      (partitions eq AllReplicas) || partitions.contains(topicPartition.partition)
+      (partitions eq AllReplicas) || partitions.contains(partition)
     else false
   }
 

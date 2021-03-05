@@ -30,6 +30,7 @@ import org.apache.kafka.common.utils.{SystemTime, Time}
 import org.apache.kafka.common.{Node, TopicPartition}
 
 import scala.collection.Map
+import scala.jdk.CollectionConverters._
 
 /**
   * Stub network client used for testing the ReplicaFetcher, wraps the MockClient used for consumer testing
@@ -95,11 +96,17 @@ class ReplicaFetcherMockBlockingSend(offsets: java.util.Map[TopicPartition, Epoc
 
       case ApiKeys.FETCH =>
         fetchCount += 1
-        val partitionData = new util.LinkedHashMap[TopicPartition, FetchResponseData.PartitionData]
-        fetchPartitionData.foreach { case (tp, data) => partitionData.put(tp, data) }
+        val topicResponses = fetchPartitionData.groupBy[String](_._1.topic)
+          .map(entry => new FetchResponseData.FetchableTopicResponse()
+            .setTopic(entry._1)
+            .setPartitions(entry._2.values.toSeq.asJava))
+          .toSeq.asJava
         fetchPartitionData = Map.empty
-        FetchResponse.of(Errors.NONE, 0,
-          if (partitionData.isEmpty) JFetchMetadata.INVALID_SESSION_ID else 1, partitionData)
+        new FetchResponse(new FetchResponseData()
+          .setThrottleTimeMs(0)
+          .setErrorCode(Errors.NONE.code)
+          .setSessionId(if (topicResponses.isEmpty) JFetchMetadata.INVALID_SESSION_ID else 1)
+          .setResponses(topicResponses))
 
       case _ =>
         throw new UnsupportedOperationException

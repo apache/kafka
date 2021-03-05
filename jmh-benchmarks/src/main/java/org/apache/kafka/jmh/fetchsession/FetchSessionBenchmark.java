@@ -38,6 +38,7 @@ import org.openjdk.jmh.annotations.State;
 import org.openjdk.jmh.annotations.Warmup;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Optional;
@@ -70,21 +71,27 @@ public class FetchSessionBenchmark {
         handler = new FetchSessionHandler(LOG_CONTEXT, 1);
         FetchSessionHandler.Builder builder = handler.newBuilder();
 
-        LinkedHashMap<TopicPartition, FetchResponseData.PartitionData> respMap = new LinkedHashMap<>();
+        FetchResponseData.FetchableTopicResponse topicResponses = new FetchResponseData.FetchableTopicResponse()
+                .setTopic("foo");
+        FetchResponseData fetchedData = new FetchResponseData()
+                .setErrorCode(Errors.NONE.code())
+                .setThrottleTimeMs(0)
+                .setSessionId(1)
+                .setResponses(Collections.singletonList(topicResponses));
         for (int i = 0; i < partitionCount; i++) {
-            TopicPartition tp = new TopicPartition("foo", i);
+            TopicPartition tp = new TopicPartition(topicResponses.topic(), i);
             FetchRequest.PartitionData partitionData = new FetchRequest.PartitionData(0, 0, 200,
                     Optional.empty());
             fetches.put(tp, partitionData);
             builder.add(tp, partitionData);
-            respMap.put(tp, new FetchResponseData.PartitionData()
-                            .setPartitionIndex(tp.partition())
-                            .setLastStableOffset(0)
-                            .setLogStartOffset(0));
+            topicResponses.partitions().add(new FetchResponseData.PartitionData()
+                    .setPartitionIndex(tp.partition())
+                    .setLastStableOffset(0)
+                    .setLogStartOffset(0));
         }
         builder.build();
         // build and handle an initial response so that the next fetch will be incremental
-        handler.handleResponse(FetchResponse.of(Errors.NONE, 0, 1, respMap));
+        handler.handleResponse(new FetchResponse(fetchedData));
 
         int counter = 0;
         for (TopicPartition topicPartition: new ArrayList<>(fetches.keySet())) {
