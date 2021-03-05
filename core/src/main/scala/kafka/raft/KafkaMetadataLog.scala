@@ -345,6 +345,7 @@ object KafkaMetadataLog {
 
     val metadataLog = new KafkaMetadataLog(
       log,
+      scheduler,
       recoverSnapshots(log),
       topicPartition,
       maxFetchSizeInBytes
