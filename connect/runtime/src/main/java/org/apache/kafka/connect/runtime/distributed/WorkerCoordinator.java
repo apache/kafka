@@ -101,7 +101,8 @@ public class WorkerCoordinator extends AbstractCoordinator implements Closeable 
     }
 
     @Override
-    public void requestRejoin() {
+    public void requestRejoin(final String reason) {
+        log.debug("Request joining group due to: {}", reason);
         rejoinRequested = true;
     }
 

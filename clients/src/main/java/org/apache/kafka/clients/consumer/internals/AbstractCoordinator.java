@@ -476,9 +476,7 @@ public abstract class AbstractCoordinator implements Closeable {
                 else if (!future.isRetriable())
                     throw exception;
 
-                if (!(exception instanceof CoordinatorLoadInProgressException))
-                    resetStateAndRejoin(String.format("rebalance failed with retriable error %s", exception));
-
+                resetStateAndRejoin(String.format("rebalance failed with retriable error %s", exception));
                 timer.sleep(rebalanceConfig.retryBackoffMs);
             }
         }
