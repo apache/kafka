@@ -21,6 +21,7 @@ import org.apache.kafka.clients.GroupRebalanceConfig;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.errors.AuthenticationException;
+import org.apache.kafka.common.errors.CoordinatorLoadInProgressException;
 import org.apache.kafka.common.errors.DisconnectException;
 import org.apache.kafka.common.errors.FencedInstanceIdException;
 import org.apache.kafka.common.errors.GroupAuthorizationException;
@@ -465,22 +466,19 @@ public abstract class AbstractCoordinator implements Closeable {
             } else {
                 final RuntimeException exception = future.exception();
 
-                // we do not need to log error for memberId required,
-                // since it is not really an error and is transient
-                if (!(exception instanceof MemberIdRequiredException)) {
-                    log.info("Rebalance failed.", exception);
-                }
-
                 resetJoinGroupFuture();
+
                 if (exception instanceof UnknownMemberIdException ||
-                    exception instanceof RebalanceInProgressException ||
                     exception instanceof IllegalGenerationException ||
+                    exception instanceof RebalanceInProgressException ||
                     exception instanceof MemberIdRequiredException)
                     continue;
                 else if (!future.isRetriable())
                     throw exception;
 
-                resetStateAndRejoin(String.format("rebalance failed with retriable error %s", exception));
+                if (!(exception instanceof CoordinatorLoadInProgressException))
+                    resetStateAndRejoin(String.format("rebalance failed with retriable error %s", exception));
+
                 timer.sleep(rebalanceConfig.retryBackoffMs);
             }
         }
@@ -656,6 +654,8 @@ public abstract class AbstractCoordinator implements Closeable {
                 synchronized (AbstractCoordinator.this) {
                     AbstractCoordinator.this.generation = new Generation(OffsetCommitRequest.DEFAULT_GENERATION_ID, memberId, null);
                 }
+                requestRejoin("need to re-join with the given member-id");
+
                 future.raise(error);
             } else if (error == Errors.REBALANCE_IN_PROGRESS) {
                 log.info("JoinGroup failed due to non-fatal error: REBALANCE_IN_PROGRESS, " +
@@ -801,10 +801,8 @@ public abstract class AbstractCoordinator implements Closeable {
                     log.info("SyncGroup failed: {} Marking coordinator unknown. Sent generation was {}",
                              error.message(), sentGeneration);
                     markCoordinatorUnknown(error);
-                    requestRejoinOnResponseError(ApiKeys.SYNC_GROUP, error);
                     future.raise(error);
                 } else {
-                    requestRejoinOnResponseError(ApiKeys.SYNC_GROUP, error);
                     future.raise(new KafkaException("Unexpected error from SyncGroup: " + error.message()));
                 }
             }
@@ -962,7 +960,7 @@ public abstract class AbstractCoordinator implements Closeable {
         return generation.memberId;
     }
 
-    private synchronized void resetState(final String reason) {
+    private synchronized void resetStateAndGeneration(final String reason) {
         log.info("Resetting generation due to: {}", reason);
 
         state = MemberState.UNJOINED;
@@ -970,7 +968,7 @@ public abstract class AbstractCoordinator implements Closeable {
     }
 
     private synchronized void resetStateAndRejoin(final String reason) {
-        resetState(reason);
+        resetStateAndGeneration(reason);
         requestRejoin(reason);
     }
 
