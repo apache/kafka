@@ -47,6 +47,14 @@ case class MetadataImageBuilder(brokerId: Int,
     }
   }
 
+  def topicNameToId(topicName: String): Option[Uuid] = {
+    if (_partitionsBuilder != null) {
+      _partitionsBuilder.topicNameToId(topicName)
+    } else {
+      prevImage.topicNameToId(topicName)
+    }
+  }
+
   def controllerId(controllerId: Option[Int]): Unit = {
     _controllerId = controllerId
   }
@@ -102,7 +110,7 @@ case class MetadataImage(partitions: MetadataPartitions,
                          controllerId: Option[Int],
                          brokers: MetadataBrokers) {
   def this() = {
-    this(MetadataPartitions(Collections.emptyMap(), Collections.emptyMap()),
+    this(MetadataPartitions(Collections.emptyMap(), Collections.emptyMap(), Collections.emptyMap()),
       None,
       new MetadataBrokers(Collections.emptyList(), new util.HashMap[Integer, MetadataBroker]()))
   }

@@ -23,6 +23,7 @@ import java.util.concurrent.atomic.AtomicBoolean
 
 import kafka.cluster.Partition
 import kafka.server.QuotaFactory.QuotaManagers
+import kafka.server.checkpoints.LazyOffsetCheckpoints
 import kafka.server.metadata.{CachedConfigRepository, MetadataBroker, MetadataBrokers, MetadataImage, MetadataImageBuilder, MetadataPartition, RaftMetadataCache}
 import kafka.utils.{MockScheduler, MockTime, TestUtils}
 import org.apache.kafka.common.{TopicPartition, Uuid}
@@ -131,6 +132,11 @@ class RaftReplicaManagerTest {
     val partition0 =  Partition(topicPartition0, time, configRepository, rrm)
     val partition1 =  Partition(topicPartition1, time, configRepository, rrm)
 
+    rrm.createPartition(topicPartition0).createLogIfNotExists(isNew = false, isFutureReplica = false,
+      new LazyOffsetCheckpoints(rrm.highWatermarkCheckpoints))
+    rrm.createPartition(topicPartition1).createLogIfNotExists(isNew = false, isFutureReplica = false,
+      new LazyOffsetCheckpoints(rrm.highWatermarkCheckpoints))
+
     processTopicPartitionMetadata(rrm)
     // verify changes would have been deferred
     val partitionsNewMapCaptor: ArgumentCaptor[mutable.Map[Partition, Boolean]] =
@@ -161,6 +167,9 @@ class RaftReplicaManagerTest {
 
     // leadership change callbacks
     verifyLeadershipChangeCallbacks(List(partition0), List(partition1))
+
+    // partition.metadata file
+    verifyPartitionMetadataFile(rrm, List(topicPartition0, topicPartition1))
   }
 
   @Test
@@ -169,6 +178,12 @@ class RaftReplicaManagerTest {
     rrm.delegate = mockDelegate
     val partition0 = Partition(topicPartition0, time, configRepository, rrm)
     val partition1 = Partition(topicPartition1, time, configRepository, rrm)
+
+    rrm.createPartition(topicPartition0).createLogIfNotExists(isNew = false, isFutureReplica = false,
+      new LazyOffsetCheckpoints(rrm.highWatermarkCheckpoints))
+    rrm.createPartition(topicPartition1).createLogIfNotExists(isNew = false, isFutureReplica = false,
+      new LazyOffsetCheckpoints(rrm.highWatermarkCheckpoints))
+
     rrm.endMetadataChangeDeferral(onLeadershipChange)
 
     // define some return values to avoid NPE
@@ -188,6 +203,9 @@ class RaftReplicaManagerTest {
 
     // leadership change callbacks
     verifyLeadershipChangeCallbacks(List(partition0), List(partition1))
+
+    // partition.metadata file
+    verifyPartitionMetadataFile(rrm, List(topicPartition0, topicPartition1))
   }
 
   private def verifyMakeLeaders(expectedPrevPartitionsAlreadyExisting: Set[MetadataPartition],
@@ -219,6 +237,18 @@ class RaftReplicaManagerTest {
     verify(onLeadershipChangeHandler).onLeadershipChange(updatedLeadersCaptor.capture(), updatedFollowersCaptor.capture())
     assertEquals(expectedUpdatedLeaders, updatedLeadersCaptor.getValue.toList)
     assertEquals(expectedUpdatedFollowers, updatedFollowersCaptor.getValue.toList)
+  }
+
+  private def verifyPartitionMetadataFile(rrm: RaftReplicaManager, topicPartitions: List[TopicPartition]) = {
+    topicPartitions.foreach ( topicPartition => {
+      val log = rrm.getLog(topicPartition).get
+      assertTrue(log.partitionMetadataFile.exists())
+      val partitionMetadata = log.partitionMetadataFile.read()
+
+      // Current version of PartitionMetadataFile is 0.
+      assertEquals(0, partitionMetadata.version)
+      assertEquals(topicId, partitionMetadata.topicId)
+    })
   }
 
   private def processTopicPartitionMetadata(raftReplicaManager: RaftReplicaManager): Unit = {

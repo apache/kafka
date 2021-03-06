@@ -425,36 +425,35 @@ class Partition(val topicPartition: TopicPartition,
   }
 
   /**
-   * Checks if the topic ID provided in the request is consistent with the topic ID in the log.
+   * Checks if the topic ID received is consistent with the topic ID in the log.
    * If a valid topic ID is provided, and the log exists but has no ID set, set the log ID to be the request ID.
    *
-   * @param requestTopicId the topic ID from the request
+   * @param receivedTopicId the topic ID from the LeaderAndIsr request or from the metadata records
    * @return true if the request topic id is consistent, false otherwise
    */
-  def checkOrSetTopicId(requestTopicId: Uuid): Boolean = {
-    // If the request had an invalid topic ID, then we assume that topic IDs are not supported.
-    // The topic ID was not inconsistent, so return true.
-    // If the log is empty, then we can not say that topic ID is inconsistent, so return true.
-    if (requestTopicId == null || requestTopicId == Uuid.ZERO_UUID)
-      true
-    else {
+  def checkOrSetTopicId(receivedTopicId: Uuid, usingRaft: Boolean): Boolean = {
+    // If the request had an invalid topic ID, then we assume that topic IDs are not supported so ID is consistent.
+    // This is only the case when from LeaderAndIsr Request. Raft code should never have invalid topic IDs.
+    if (receivedTopicId == null || receivedTopicId == Uuid.ZERO_UUID) {
+      if (usingRaft) false else true
+    } else {
       log match {
-        case None => true
+        case None => true // log is empty, so we can not say topic ID is inconsistent
         case Some(log) => {
           // Check if topic ID is in memory, if not, it must be new to the broker and does not have a metadata file.
           // This is because if the broker previously wrote it to file, it would be recovered on restart after failure.
           // Topic ID is consistent since we are just setting it here.
           if (log.topicId == Uuid.ZERO_UUID) {
-            log.partitionMetadataFile.write(requestTopicId)
-            log.topicId = requestTopicId
+            log.partitionMetadataFile.write(receivedTopicId)
+            log.topicId = receivedTopicId
             true
-          } else if (log.topicId != requestTopicId) {
+          } else if (log.topicId != receivedTopicId) {
             stateChangeLogger.error(s"Topic Id in memory: ${log.topicId} does not" +
-              s" match the topic Id for partition $topicPartition provided in the request: " +
-              s"$requestTopicId.")
+              s" match the topic Id for partition $topicPartition provided in the " +
+              s"${if (usingRaft) "metadata records" else "request"}: $receivedTopicId.")
             false
           } else {
-            // topic ID in log exists and matches request topic ID
+            // topic ID in log exists and matches received topic ID
             true
           }
         }

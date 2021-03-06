@@ -1369,7 +1369,7 @@ class ReplicaManager(val config: KafkaConfig,
               val requestLeaderEpoch = partitionState.leaderEpoch
               val requestTopicId = topicIds.get(topicPartition.topic)
 
-              if (!partition.checkOrSetTopicId(requestTopicId)) {
+              if (!partition.checkOrSetTopicId(requestTopicId, false)) {
                 responseMap.put(topicPartition, Errors.INCONSISTENT_TOPIC_ID)
               } else if (requestLeaderEpoch > currentLeaderEpoch) {
                 // If the leader epoch is valid record the epoch of the controller that made the leadership decision.

@@ -251,6 +251,12 @@ class RaftReplicaManager(config: KafkaConfig,
               (Some(Partition(topicPartition, time, configRepository, this)), None)
           }
           partition.foreach { partition =>
+            builder.topicNameToId(partition.topic) match {
+              case Some(id) => partition.checkOrSetTopicId(id, true) // not sure if we should do things to handle case where topic ID is inconsistent
+              case None => throw new IllegalStateException(
+                s"Topic partition ${partition.topicPartition} is missing a topic ID"
+              )
+            }
             val isNew = priorDeferredMetadata match {
               case Some(alreadyDeferred) => alreadyDeferred.isNew
               case _ => prevPartitions.topicPartition(topicPartition.topic(), topicPartition.partition()).isEmpty
@@ -286,6 +292,12 @@ class RaftReplicaManager(config: KafkaConfig,
               Some(partition)
           }
           partition.foreach { partition =>
+            builder.topicNameToId(partition.topic) match {
+              case Some(id) => partition.checkOrSetTopicId(id, true) // not sure if we should do things to handle case where topic ID is inconsistent
+              case None => throw new IllegalStateException(
+                s"Topic partition ${partition.topicPartition} is missing a topic ID"
+              )
+            }
             if (currentState.leaderId == localBrokerId) {
               partitionsToBeLeader.put(partition, currentState)
             } else {

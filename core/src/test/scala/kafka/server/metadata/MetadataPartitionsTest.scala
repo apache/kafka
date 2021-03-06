@@ -33,7 +33,7 @@ import scala.jdk.CollectionConverters._
 @Timeout(value = 120000, unit = TimeUnit.MILLISECONDS)
 class MetadataPartitionsTest {
 
-  private val emptyPartitions = MetadataPartitions(Collections.emptyMap(), Collections.emptyMap())
+  private val emptyPartitions = MetadataPartitions(Collections.emptyMap(), Collections.emptyMap(), Collections.emptyMap())
 
   private def newPartition(topicName: String,
                            partitionIndex: Int,

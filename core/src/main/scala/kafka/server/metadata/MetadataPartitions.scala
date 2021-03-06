@@ -116,16 +116,21 @@ class MetadataPartitionsBuilder(val brokerId: Int,
                                 val prevPartitions: MetadataPartitions) {
   private var newNameMap = prevPartitions.copyNameMap()
   private var newIdMap = prevPartitions.copyIdMap()
+  private var newReverseIdMap = prevPartitions.copyReverseIdMap()
   private val changed = Collections.newSetFromMap[Any](new util.IdentityHashMap())
   private val _localChanged = new util.HashSet[MetadataPartition]
   private val _localRemoved = new util.HashSet[MetadataPartition]
 
   def topicIdToName(id: Uuid): Option[String] = Option(newIdMap.get(id))
 
+  def topicNameToId(name: String): Option[Uuid] = Option(newReverseIdMap.get(name))
+
   def removeTopicById(id: Uuid): Iterable[MetadataPartition] = {
     Option(newIdMap.remove(id)) match {
       case None => throw new RuntimeException(s"Unable to locate topic with ID $id")
-      case Some(name) => newNameMap.remove(name).values().asScala
+      case Some(name) =>
+        newReverseIdMap.remove(name)
+        newNameMap.remove(name).values().asScala
     }
   }
 
@@ -144,10 +149,14 @@ class MetadataPartitionsBuilder(val brokerId: Int,
 
   def addUuidMapping(name: String, id: Uuid): Unit = {
     newIdMap.put(id, name)
+    newReverseIdMap.put(name, id)
   }
 
   def removeUuidMapping(id: Uuid): Unit = {
-    newIdMap.remove(id)
+    Option(newIdMap.remove(id)) match {
+      case Some(name) => newReverseIdMap.remove(name)
+      case None =>
+    }
   }
 
   def get(topicName: String, partitionId: Int): Option[MetadataPartition] = {
@@ -204,9 +213,10 @@ class MetadataPartitionsBuilder(val brokerId: Int,
   }
 
   def build(): MetadataPartitions = {
-    val result = MetadataPartitions(newNameMap, newIdMap)
+    val result = MetadataPartitions(newNameMap, newIdMap, newReverseIdMap)
     newNameMap = Collections.unmodifiableMap(newNameMap)
     newIdMap = Collections.unmodifiableMap(newIdMap)
+    newReverseIdMap = Collections.unmodifiableMap(newReverseIdMap)
     result
   }
 
@@ -217,9 +227,9 @@ class MetadataPartitionsBuilder(val brokerId: Int,
 
 object MetadataPartitions {
   def apply(nameMap: util.Map[String, util.Map[Int, MetadataPartition]],
-            idMap: util.Map[Uuid, String]): MetadataPartitions = {
-    val reverseMap = idMap.asScala.map(_.swap).toMap.asJava
-    new MetadataPartitions(nameMap, idMap, reverseMap)
+            idMap: util.Map[Uuid, String],
+            reverseIdMap: util.Map[String, Uuid]): MetadataPartitions = {
+    new MetadataPartitions(nameMap, idMap, reverseIdMap)
   }
 }
 
@@ -240,6 +250,12 @@ case class MetadataPartitions(private val nameMap: util.Map[String, util.Map[Int
   def copyIdMap(): util.Map[Uuid, String] = {
     val copy = new util.HashMap[Uuid, String](idMap.size())
     copy.putAll(idMap)
+    copy
+  }
+
+  def copyReverseIdMap(): util.Map[String, Uuid] = {
+    val copy = new util.HashMap[String, Uuid](reverseIdMap.size())
+    copy.putAll(reverseIdMap)
     copy
   }
 
