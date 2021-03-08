@@ -89,8 +89,8 @@ import static org.junit.Assert.fail;
 
 @RunWith(Parameterized.class)
 @Category({IntegrationTest.class})
-public class EosIntegrationTest {
-    private static final Logger LOG = LoggerFactory.getLogger(EosIntegrationTest.class);
+public class EosIntegration15Test {
+    private static final Logger LOG = LoggerFactory.getLogger(EosIntegration15Test.class);
     private static final int NUM_BROKERS = 3;
     private static final int MAX_POLL_INTERVAL_MS = 5 * 1000;
     private static final int MAX_WAIT_TIME_MS = 60 * 1000;
