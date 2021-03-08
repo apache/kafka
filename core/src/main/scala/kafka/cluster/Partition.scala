@@ -372,12 +372,14 @@ class Partition(val topicPartition: TopicPartition,
     checkCurrentLeaderEpoch(currentLeaderEpoch) match {
       case Errors.NONE =>
         if (requireLeader && !isLeader) {
+          System.err.println("!!! leader:" + requireLeader + isLeader + currentLeaderEpoch + ", log:" + log)
           Right(Errors.NOT_LEADER_OR_FOLLOWER)
         } else {
           log match {
             case Some(partitionLog) =>
               Left(partitionLog)
             case _ =>
+              System.err.println("!!! leader:" + requireLeader + isLeader + currentLeaderEpoch + ", log:" + log)
               Right(Errors.NOT_LEADER_OR_FOLLOWER)
           }
         }
@@ -410,6 +412,9 @@ class Partition(val topicPartition: TopicPartition,
     getLocalLog(currentLeaderEpoch, requireLeader) match {
       case Left(localLog) => localLog
       case Right(error) =>
+        System.err.println(s"Failed to find ${if (requireLeader) "leader" else ""} log for " +
+          s"partition $topicPartition with leader epoch $currentLeaderEpoch. The current leader " +
+          s"is $leaderReplicaIdOpt and the current epoch $leaderEpoch")
         throw error.exception(s"Failed to find ${if (requireLeader) "leader" else ""} log for " +
           s"partition $topicPartition with leader epoch $currentLeaderEpoch. The current leader " +
           s"is $leaderReplicaIdOpt and the current epoch $leaderEpoch")

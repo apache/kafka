@@ -124,6 +124,12 @@ class DelayedProduce(delayMs: Long,
    */
   override def onComplete(): Unit = {
     val responseStatus = produceMetadata.produceStatus.map { case (k, status) => k -> status.responseStatus }
+//    System.err.println("!!! onComplete:" + responseStatus)
+//    val elements = Thread.currentThread.getStackTrace
+//    for (i <- 1 until elements.length) {
+//      val s = elements(i)
+//      System.out.println("\tat " + s.getClassName + "." + s.getMethodName + "(" + s.getFileName + ":" + s.getLineNumber + ")")
+//    }
     responseCallback(responseStatus)
   }
 }
