@@ -24,8 +24,10 @@ import joptsimple.OptionException
 import kafka.network.SocketServer
 import kafka.raft.{KafkaRaftManager, RaftManager}
 import kafka.security.CredentialProvider
-import kafka.server.{KafkaConfig, KafkaRequestHandlerPool, MetaProperties}
+import kafka.server.{KafkaConfig, KafkaRequestHandlerPool, MetaProperties, SimpleApiVersionManager}
 import kafka.utils.{CommandDefaultOptions, CommandLineUtils, CoreUtils, Exit, Logging, ShutdownableThread}
+import org.apache.kafka.common.errors.InvalidConfigurationException
+import org.apache.kafka.common.message.ApiMessageType.ListenerType
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.metrics.stats.Percentiles.BucketSizing
 import org.apache.kafka.common.metrics.stats.{Meter, Percentile, Percentiles}
@@ -67,7 +69,8 @@ class TestRaftServer(
     tokenCache = new DelegationTokenCache(ScramMechanism.mechanismNames)
     credentialProvider = new CredentialProvider(ScramMechanism.mechanismNames, tokenCache)
 
-    socketServer = new SocketServer(config, metrics, time, credentialProvider, allowControllerOnlyApis = true)
+    val apiVersionManager = new SimpleApiVersionManager(ListenerType.CONTROLLER)
+    socketServer = new SocketServer(config, metrics, time, credentialProvider, apiVersionManager)
     socketServer.startup(startProcessingRequests = false)
 
     val metaProperties = MetaProperties(
@@ -95,7 +98,8 @@ class TestRaftServer(
     val requestHandler = new TestRaftRequestHandler(
       raftManager,
       socketServer.dataPlaneRequestChannel,
-      time
+      time,
+      apiVersionManager
     )
 
     dataPlaneRequestHandlerPool = new KafkaRequestHandlerPool(
@@ -160,7 +164,7 @@ class TestRaftServer(
       eventQueue.offer(HandleClaim(epoch))
     }
 
-    override def handleResign(): Unit = {
+    override def handleResign(epoch: Int): Unit = {
       eventQueue.offer(HandleResign)
     }
 
@@ -419,6 +423,9 @@ object TestRaftServer extends Logging {
         "Standalone raft server for performance testing")
 
       val configFile = opts.options.valueOf(opts.configOpt)
+      if (configFile == null) {
+        throw new InvalidConfigurationException("Missing configuration file. Should specify with '--config'")
+      }
       val serverProps = Utils.loadProps(configFile)
 
       // KafkaConfig requires either `process.roles` or `zookeeper.connect`. Neither are

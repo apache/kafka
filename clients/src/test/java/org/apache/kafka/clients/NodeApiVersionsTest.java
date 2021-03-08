@@ -16,18 +16,21 @@
  */
 package org.apache.kafka.clients;
 
-import java.util.ArrayList;
-import java.util.LinkedList;
-import java.util.List;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
+import org.apache.kafka.common.message.ApiMessageType;
 import org.apache.kafka.common.message.ApiVersionsResponseData.ApiVersion;
 import org.apache.kafka.common.message.ApiVersionsResponseData.ApiVersionCollection;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.requests.ApiVersionsResponse;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
+
+import java.util.ArrayList;
+import java.util.LinkedList;
+import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -38,7 +41,7 @@ public class NodeApiVersionsTest {
         NodeApiVersions versions = new NodeApiVersions(new ApiVersionCollection());
         StringBuilder bld = new StringBuilder();
         String prefix = "(";
-        for (ApiKeys apiKey : ApiKeys.brokerApis()) {
+        for (ApiKeys apiKey : ApiKeys.zkBrokerApis()) {
             bld.append(prefix).append(apiKey.name).
                     append("(").append(apiKey.id).append("): UNSUPPORTED");
             prefix = ", ";
@@ -133,27 +136,26 @@ public class NodeApiVersionsTest {
             () -> apiVersions.latestUsableVersion(ApiKeys.PRODUCE));
     }
 
-    @Test
-    public void testUsableVersionLatestVersions() {
-        List<ApiVersion> versionList = new LinkedList<>(ApiVersionsResponse.DEFAULT_API_VERSIONS_RESPONSE.data().apiKeys());
+    @ParameterizedTest
+    @EnumSource(ApiMessageType.ListenerType.class)
+    public void testUsableVersionLatestVersions(ApiMessageType.ListenerType scope) {
+        ApiVersionsResponse defaultResponse = ApiVersionsResponse.defaultApiVersionsResponse(scope);
+        List<ApiVersion> versionList = new LinkedList<>(defaultResponse.data().apiKeys());
         // Add an API key that we don't know about.
         versionList.add(new ApiVersion()
                 .setApiKey((short) 100)
                 .setMinVersion((short) 0)
                 .setMaxVersion((short) 1));
         NodeApiVersions versions = new NodeApiVersions(versionList);
-        for (ApiKeys apiKey: ApiKeys.values()) {
-            if (apiKey.isControllerOnlyApi) {
-                assertNull(versions.apiVersion(apiKey));
-            } else {
-                assertEquals(apiKey.latestVersion(), versions.latestUsableVersion(apiKey));
-            }
+        for (ApiKeys apiKey: ApiKeys.apisForListener(scope)) {
+            assertEquals(apiKey.latestVersion(), versions.latestUsableVersion(apiKey));
         }
     }
 
-    @Test
-    public void testConstructionFromApiVersionsResponse() {
-        ApiVersionsResponse apiVersionsResponse = ApiVersionsResponse.DEFAULT_API_VERSIONS_RESPONSE;
+    @ParameterizedTest
+    @EnumSource(ApiMessageType.ListenerType.class)
+    public void testConstructionFromApiVersionsResponse(ApiMessageType.ListenerType scope) {
+        ApiVersionsResponse apiVersionsResponse = ApiVersionsResponse.defaultApiVersionsResponse(scope);
         NodeApiVersions versions = new NodeApiVersions(apiVersionsResponse.data().apiKeys());
 
         for (ApiVersion apiVersionKey : apiVersionsResponse.data().apiKeys()) {

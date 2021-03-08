@@ -22,18 +22,19 @@ import java.util
 import java.util.OptionalInt
 import java.util.concurrent.CompletableFuture
 
-import kafka.log.{Log, LogConfig, LogManager}
+import kafka.log.Log
 import kafka.raft.KafkaRaftManager.RaftIoThread
-import kafka.server.{BrokerTopicStats, KafkaConfig, LogDirFailureChannel, MetaProperties}
+import kafka.server.{KafkaConfig, MetaProperties}
 import kafka.utils.timer.SystemTimer
 import kafka.utils.{KafkaScheduler, Logging, ShutdownableThread}
 import org.apache.kafka.clients.{ApiVersions, ClientDnsLookup, ManualMetadataUpdater, NetworkClient}
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.metrics.Metrics
-import org.apache.kafka.common.network.{ChannelBuilders, NetworkReceive, Selectable, Selector}
+import org.apache.kafka.common.network.{ChannelBuilders, ListenerName, NetworkReceive, Selectable, Selector}
 import org.apache.kafka.common.protocol.ApiMessage
 import org.apache.kafka.common.requests.RequestHeader
 import org.apache.kafka.common.security.JaasContext
+import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.common.utils.{LogContext, Time}
 import org.apache.kafka.raft.RaftConfig.{AddressSpec, InetAddressSpec, NON_ROUTABLE_ADDRESS, UnknownAddressSpec}
 import org.apache.kafka.raft.{FileBasedStateStore, KafkaRaftClient, RaftClient, RaftConfig, RaftRequest, RecordSerde}
@@ -91,6 +92,11 @@ trait RaftManager[T] {
     listener: RaftClient.Listener[T]
   ): Unit
 
+  def scheduleAtomicAppend(
+    epoch: Int,
+    records: Seq[T]
+  ): Option[Long]
+
   def scheduleAppend(
     epoch: Int,
     records: Seq[T]
@@ -120,6 +126,8 @@ class KafkaRaftManager[T](
   private val netChannel = buildNetworkChannel()
   private val raftClient = buildRaftClient()
   private val raftIoThread = new RaftIoThread(raftClient, threadNamePrefix)
+
+  def kafkaRaftClient: KafkaRaftClient[T] = raftClient
 
   def startup(): Unit = {
     // Update the voter endpoints (if valid) with what's in RaftConfig
@@ -154,16 +162,32 @@ class KafkaRaftManager[T](
     raftClient.register(listener)
   }
 
+  override def scheduleAtomicAppend(
+    epoch: Int,
+    records: Seq[T]
+  ): Option[Long] = {
+    append(epoch, records, true)
+  }
+
   override def scheduleAppend(
     epoch: Int,
     records: Seq[T]
   ): Option[Long] = {
-    val offset: java.lang.Long = raftClient.scheduleAppend(epoch, records.asJava)
-    if (offset == null) {
-      None
+    append(epoch, records, false)
+  }
+
+  private def append(
+    epoch: Int,
+    records: Seq[T],
+    isAtomic: Boolean
+  ): Option[Long] = {
+    val offset = if (isAtomic) {
+      raftClient.scheduleAtomicAppend(epoch, records.asJava)
     } else {
-      Some(Long.unbox(offset))
+      raftClient.scheduleAppend(epoch, records.asJava)
     }
+
+    Option(offset).map(Long.unbox)
   }
 
   override def handleRequest(
@@ -198,6 +222,7 @@ class KafkaRaftManager[T](
       metrics,
       expirationService,
       logContext,
+      metaProperties.clusterId.toString,
       OptionalInt.of(config.nodeId),
       raftConfig
     )
@@ -216,33 +241,25 @@ class KafkaRaftManager[T](
   }
 
   private def buildMetadataLog(): KafkaMetadataLog = {
-    val defaultProps = LogConfig.extractLogConfigMap(config)
-    LogConfig.validateValues(defaultProps)
-    val defaultLogConfig = LogConfig(defaultProps)
-
-    val log = Log(
-      dir = dataDir,
-      config = defaultLogConfig,
-      logStartOffset = 0L,
-      recoveryPoint = 0L,
-      scheduler = scheduler,
-      brokerTopicStats = new BrokerTopicStats,
-      time = time,
-      maxProducerIdExpirationMs = config.transactionalIdExpirationMs,
-      producerIdExpirationCheckIntervalMs = LogManager.ProducerIdExpirationCheckIntervalMs,
-      logDirFailureChannel = new LogDirFailureChannel(5)
+    KafkaMetadataLog(
+      topicPartition,
+      dataDir,
+      time,
+      scheduler,
+      maxBatchSizeInBytes = KafkaRaftClient.MAX_BATCH_SIZE_BYTES,
+      maxFetchSizeInBytes = KafkaRaftClient.MAX_FETCH_SIZE_BYTES
     )
-
-    KafkaMetadataLog(log, topicPartition)
   }
 
   private def buildNetworkClient(): NetworkClient = {
+    val controllerListenerName = new ListenerName(config.controllerListenerNames.head)
+    val controllerSecurityProtocol = config.listenerSecurityProtocolMap.getOrElse(controllerListenerName, SecurityProtocol.forName(controllerListenerName.value()))
     val channelBuilder = ChannelBuilders.clientChannelBuilder(
-      config.interBrokerSecurityProtocol,
+      controllerSecurityProtocol,
       JaasContext.Type.SERVER,
       config,
-      config.interBrokerListenerName,
-      config.saslMechanismInterBrokerProtocol,
+      controllerListenerName,
+      config.saslMechanismControllerProtocol,
       time,
       config.saslInterBrokerHandshakeRequestEnable,
       logContext
@@ -267,7 +284,7 @@ class KafkaRaftManager[T](
     val maxInflightRequestsPerConnection = 1
     val reconnectBackoffMs = 50
     val reconnectBackoffMsMs = 500
-    val discoverBrokerVersions = false
+    val discoverBrokerVersions = true
 
     new NetworkClient(
       selector,

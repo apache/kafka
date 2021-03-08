@@ -95,7 +95,7 @@ For a detailed description of spotbugs bug categories, see https://spotbugs.read
 
     <!-- false positive in Java 11, related to https://github.com/spotbugs/spotbugs/issues/756 but more complex -->
     <Match>
-        <Class name="org.apache.kafka.common.record.KafkaLZ4BlockOutputStream"/>
+        <Class name="org.apache.kafka.common.compress.KafkaLZ4BlockOutputStream"/>
         <Bug pattern="RCN_REDUNDANT_NULLCHECK_OF_NONNULL_VALUE"/>
     </Match>
 

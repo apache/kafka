@@ -161,7 +161,7 @@ class TransactionMetadataTest {
       txnStartTimestamp = time.milliseconds(),
       txnLastUpdateTimestamp = time.milliseconds())
 
-    // let new time be smaller; when transting from Empty the start time would be updated to the update-time
+    // let new time be smaller; when transiting from Empty the start time would be updated to the update-time
     var transitMetadata = txnMetadata.prepareAddPartitions(Set[TopicPartition](new TopicPartition("topic1", 0)), time.milliseconds() - 1)
     txnMetadata.completeTransitionTo(transitMetadata)
     assertEquals(Set[TopicPartition](new TopicPartition("topic1", 0)), txnMetadata.topicPartitions)
@@ -458,6 +458,43 @@ class TransactionMetadataTest {
     val result = txnMetadata.prepareIncrementProducerEpoch(30000, Some((lastProducerEpoch - 1).toShort),
       time.milliseconds())
     assertEquals(Left(Errors.PRODUCER_FENCED), result)
+  }
+
+  @Test
+  def testTransactionStateIdAndNameMapping(): Unit = {
+    for (state <- TransactionState.AllStates) {
+      assertEquals(state, TransactionState.fromId(state.id))
+      assertEquals(Some(state), TransactionState.fromName(state.name))
+    }
+  }
+
+  @Test
+  def testAllTransactionStatesAreMapped(): Unit = {
+    val unmatchedStates = mutable.Set(
+      Empty,
+      Ongoing,
+      PrepareCommit,
+      PrepareAbort,
+      CompleteCommit,
+      CompleteAbort,
+      PrepareEpochFence,
+      Dead
+    )
+
+    // The exhaustive match is intentional here to ensure that we are
+    // forced to update the test case if a new state is added.
+    TransactionState.AllStates.foreach {
+      case Empty => assertTrue(unmatchedStates.remove(Empty))
+      case Ongoing => assertTrue(unmatchedStates.remove(Ongoing))
+      case PrepareCommit => assertTrue(unmatchedStates.remove(PrepareCommit))
+      case PrepareAbort => assertTrue(unmatchedStates.remove(PrepareAbort))
+      case CompleteCommit => assertTrue(unmatchedStates.remove(CompleteCommit))
+      case CompleteAbort => assertTrue(unmatchedStates.remove(CompleteAbort))
+      case PrepareEpochFence => assertTrue(unmatchedStates.remove(PrepareEpochFence))
+      case Dead => assertTrue(unmatchedStates.remove(Dead))
+    }
+
+    assertEquals(Set.empty, unmatchedStates)
   }
 
   private def testRotateProducerIdInOngoingState(state: TransactionState): Unit = {

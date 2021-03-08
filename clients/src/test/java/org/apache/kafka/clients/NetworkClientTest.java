@@ -22,6 +22,7 @@ import org.apache.kafka.common.Node;
 import org.apache.kafka.common.errors.AuthenticationException;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.internals.ClusterResourceListeners;
+import org.apache.kafka.common.message.ApiMessageType;
 import org.apache.kafka.common.message.ApiVersionsResponseData;
 import org.apache.kafka.common.message.ApiVersionsResponseData.ApiVersion;
 import org.apache.kafka.common.message.ApiVersionsResponseData.ApiVersionCollection;
@@ -247,7 +248,8 @@ public class NetworkClientTest {
 
     private void awaitReady(NetworkClient client, Node node) {
         if (client.discoverBrokerVersions()) {
-            setExpectedApiVersionsResponse(ApiVersionsResponse.DEFAULT_API_VERSIONS_RESPONSE);
+            setExpectedApiVersionsResponse(ApiVersionsResponse.defaultApiVersionsResponse(
+                ApiMessageType.ListenerType.ZK_BROKER));
         }
         while (!client.ready(node, time.milliseconds()))
             client.poll(1, time.milliseconds());
@@ -295,8 +297,7 @@ public class NetworkClientTest {
         assertTrue(client.hasInFlightRequests(node.idString()));
 
         // prepare response
-        delayedApiVersionsResponse(0, ApiKeys.API_VERSIONS.latestVersion(),
-            ApiVersionsResponse.DEFAULT_API_VERSIONS_RESPONSE);
+        delayedApiVersionsResponse(0, ApiKeys.API_VERSIONS.latestVersion(), defaultApiVersionsResponse());
 
         // handle completed receives
         client.poll(0, time.milliseconds());
@@ -367,8 +368,7 @@ public class NetworkClientTest {
         assertEquals(2, header.apiVersion());
 
         // prepare response
-        delayedApiVersionsResponse(1, (short) 0,
-            ApiVersionsResponse.DEFAULT_API_VERSIONS_RESPONSE);
+        delayedApiVersionsResponse(1, (short) 0, defaultApiVersionsResponse());
 
         // handle completed receives
         client.poll(0, time.milliseconds());
@@ -434,8 +434,7 @@ public class NetworkClientTest {
         assertEquals(0, header.apiVersion());
 
         // prepare response
-        delayedApiVersionsResponse(1, (short) 0,
-            ApiVersionsResponse.DEFAULT_API_VERSIONS_RESPONSE);
+        delayedApiVersionsResponse(1, (short) 0, defaultApiVersionsResponse());
 
         // handle completed receives
         client.poll(0, time.milliseconds());
@@ -1077,6 +1076,10 @@ public class NetworkClientTest {
             return client.hasInFlightRequests(node.idString());
         }, 1000, "");
         assertFalse(client.isReady(node, time.milliseconds()));
+    }
+
+    private ApiVersionsResponse defaultApiVersionsResponse() {
+        return ApiVersionsResponse.defaultApiVersionsResponse(ApiMessageType.ListenerType.ZK_BROKER);
     }
 
     private static class TestCallbackHandler implements RequestCompletionHandler {

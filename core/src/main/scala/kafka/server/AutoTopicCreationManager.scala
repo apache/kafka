@@ -24,7 +24,6 @@ import java.util.concurrent.atomic.AtomicReference
 import kafka.controller.KafkaController
 import kafka.coordinator.group.GroupCoordinator
 import kafka.coordinator.transaction.TransactionCoordinator
-import kafka.server.metadata.MetadataBroker
 import kafka.utils.Logging
 import org.apache.kafka.clients.ClientResponse
 import org.apache.kafka.common.errors.InvalidTopicException
@@ -61,8 +60,8 @@ object AutoTopicCreationManager {
     time: Time,
     metrics: Metrics,
     threadNamePrefix: Option[String],
-    adminManager: ZkAdminManager,
-    controller: KafkaController,
+    adminManager: Option[ZkAdminManager],
+    controller: Option[KafkaController],
     groupCoordinator: GroupCoordinator,
     txnCoordinator: TransactionCoordinator,
     enableForwarding: Boolean
@@ -82,20 +81,22 @@ object AutoTopicCreationManager {
         ))
       else
         None
-    new DefaultAutoTopicCreationManager(config, metadataCache, channelManager, adminManager,
+    new DefaultAutoTopicCreationManager(config, channelManager, adminManager,
       controller, groupCoordinator, txnCoordinator)
   }
 }
 
 class DefaultAutoTopicCreationManager(
   config: KafkaConfig,
-  metadataCache: MetadataCache,
   channelManager: Option[BrokerToControllerChannelManager],
-  adminManager: ZkAdminManager,
-  controller: KafkaController,
+  adminManager: Option[ZkAdminManager],
+  controller: Option[KafkaController],
   groupCoordinator: GroupCoordinator,
   txnCoordinator: TransactionCoordinator
 ) extends AutoTopicCreationManager with Logging {
+  if (controller.isEmpty && channelManager.isEmpty) {
+    throw new IllegalArgumentException("Must supply a channel manager if not supplying a controller")
+  }
 
   private val inflightTopics = Collections.newSetFromMap(new ConcurrentHashMap[String, java.lang.Boolean]())
 
@@ -116,7 +117,7 @@ class DefaultAutoTopicCreationManager(
 
     val creatableTopicResponses = if (creatableTopics.isEmpty) {
       Seq.empty
-    } else if (!controller.isActive && channelManager.isDefined) {
+    } else if (controller.isEmpty || !controller.get.isActive && channelManager.isDefined) {
       sendCreateTopicRequest(creatableTopics)
     } else {
       createTopicsInZk(creatableTopics, controllerMutationQuota)
@@ -133,7 +134,7 @@ class DefaultAutoTopicCreationManager(
     try {
       // Note that we use timeout = 0 since we do not need to wait for metadata propagation
       // and we want to get the response error immediately.
-      adminManager.createTopics(
+      adminManager.get.createTopics(
         timeout = 0,
         validateOnly = false,
         creatableTopics,
@@ -263,7 +264,6 @@ class DefaultAutoTopicCreationManager(
     topics: Set[String]
   ): (Map[String, CreatableTopic], Seq[MetadataResponseTopic]) = {
 
-    val aliveBrokers = metadataCache.getAliveBrokers
     val creatableTopics = mutable.Map.empty[String, CreatableTopic]
     val uncreatableTopics = mutable.Buffer.empty[MetadataResponseTopic]
 
@@ -271,8 +271,6 @@ class DefaultAutoTopicCreationManager(
       // Attempt basic topic validation before sending any requests to the controller.
       val validationError: Option[Errors] = if (!isValidTopicName(topic)) {
         Some(Errors.INVALID_TOPIC_EXCEPTION)
-      } else if (!hasEnoughLiveBrokers(topic, aliveBrokers)) {
-        Some(Errors.INVALID_REPLICATION_FACTOR)
       } else if (!inflightTopics.add(topic)) {
         Some(Errors.UNKNOWN_TOPIC_OR_PARTITION)
       } else {
@@ -292,30 +290,4 @@ class DefaultAutoTopicCreationManager(
 
     (creatableTopics, uncreatableTopics)
   }
-
-  private def hasEnoughLiveBrokers(
-    topicName: String,
-    aliveBrokers: Seq[MetadataBroker]
-  ): Boolean = {
-    val (replicationFactor, replicationFactorConfig) = topicName match {
-      case GROUP_METADATA_TOPIC_NAME =>
-        (config.offsetsTopicReplicationFactor.intValue, KafkaConfig.OffsetsTopicReplicationFactorProp)
-
-      case TRANSACTION_STATE_TOPIC_NAME =>
-        (config.transactionTopicReplicationFactor.intValue, KafkaConfig.TransactionsTopicReplicationFactorProp)
-
-      case _ =>
-        (config.defaultReplicationFactor, KafkaConfig.DefaultReplicationFactorProp)
-    }
-
-    if (aliveBrokers.size < replicationFactor) {
-      error(s"Number of alive brokers '${aliveBrokers.size}' does not meet the required replication factor " +
-        s"'$replicationFactor' for auto creation of topic '$topicName' which is configured by $replicationFactorConfig. " +
-        "This error can be ignored if the cluster is starting up and not all brokers are up yet.")
-      false
-    } else {
-      true
-    }
-  }
-
 }

@@ -37,6 +37,8 @@ public final class MessageSpec {
 
     private final Versions flexibleVersions;
 
+    private final List<RequestListenerType> listeners;
+
     @JsonCreator
     public MessageSpec(@JsonProperty("name") String name,
                        @JsonProperty("validVersions") String validVersions,
@@ -44,7 +46,8 @@ public final class MessageSpec {
                        @JsonProperty("apiKey") Short apiKey,
                        @JsonProperty("type") MessageSpecType type,
                        @JsonProperty("commonStructs") List<StructSpec> commonStructs,
-                       @JsonProperty("flexibleVersions") String flexibleVersions) {
+                       @JsonProperty("flexibleVersions") String flexibleVersions,
+                       @JsonProperty("listeners") List<RequestListenerType> listeners) {
         this.struct = new StructSpec(name, validVersions, fields);
         this.apiKey = apiKey == null ? Optional.empty() : Optional.of(apiKey);
         this.type = Objects.requireNonNull(type);
@@ -57,6 +60,12 @@ public final class MessageSpec {
                 this.flexibleVersions + ", which is not open-ended.  flexibleVersions must " +
                 "be either none, or an open-ended range (that ends with a plus sign).");
         }
+
+        if (listeners != null && !listeners.isEmpty() && type != MessageSpecType.REQUEST) {
+            throw new RuntimeException("The `requestScope` property is only valid for " +
+                "messages with type `request`");
+        }
+        this.listeners = listeners;
     }
 
     public StructSpec struct() {
@@ -104,6 +113,11 @@ public final class MessageSpec {
     @JsonProperty("flexibleVersions")
     public String flexibleVersionsString() {
         return flexibleVersions.toString();
+    }
+
+    @JsonProperty("listeners")
+    public List<RequestListenerType> listeners() {
+        return listeners;
     }
 
     public String dataClassName() {
