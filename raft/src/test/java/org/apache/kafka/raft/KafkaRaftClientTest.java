@@ -849,6 +849,63 @@ public class KafkaRaftClientTest {
         context.pollUntilResponse();
         context.assertSentFetchPartitionResponse(Errors.NONE, epoch, OptionalInt.of(localId));
         assertEquals(OptionalLong.of(1L), context.client.highWatermark());
+        System.out.println(context.log.lastFlushedOffset());
+        assertEquals(OptionalLong.empty(), context.listener.lastCommitOffset());
+
+        // Let the follower send another fetch from offset 4
+        context.deliverRequest(context.fetchRequest(epoch, otherNodeId, 4L, epoch, 500));
+        context.pollUntil(() -> context.client.highWatermark().equals(OptionalLong.of(4L)));
+        assertEquals(records, context.listener.commitWithLastOffset(offset));
+    }
+
+    @Test
+    public void testFlushDeferralOnLeaderUntilHWMUpdated() throws Exception {
+        int localId = 0;
+        int otherNodeId = 1;
+        int epoch = 5;
+        Set<Integer> voters = Utils.mkSet(localId, otherNodeId);
+
+        RaftClientTestContext context = RaftClientTestContext.initializeAsLeader(localId, voters, epoch);
+
+        // First poll has no high watermark advance
+        context.client.poll();
+        assertEquals(OptionalLong.empty(), context.client.highWatermark());
+        // The control message should get flushed and get reflected on both
+        // the log and the flush end offset on the leader.
+        assertEquals(1L, context.log.lastFlushedOffset());
+        assertEquals(1L, context.client.quorum().leaderStateOrThrow().getFlushEndOffset().get().offset);
+
+        // Let follower send a fetch to initialize the high watermark,
+        // note the offset 0 would be a control message for becoming the leader
+        context.deliverRequest(context.fetchRequest(epoch, otherNodeId, 0L, epoch, 500));
+        context.pollUntilResponse();
+        context.assertSentFetchPartitionResponse(Errors.NONE, epoch, OptionalInt.of(localId));
+        assertEquals(OptionalLong.of(0L), context.client.highWatermark());
+        assertEquals(1L, context.log.lastFlushedOffset());
+        assertEquals(1L, context.client.quorum().leaderStateOrThrow().getFlushEndOffset().get().offset);
+
+        List<String> records = Arrays.asList("a", "b", "c");
+        long offset = context.client.scheduleAppend(epoch, records);
+        context.client.poll();
+        assertEquals(OptionalLong.empty(), context.listener.lastCommitOffset());
+        assertEquals(4L, context.log.endOffset().offset);
+        // Last Flushed offset should be at 1 as offset 0 has the control message
+        // for LeaderChange message which always gets flushed, while the appended messages
+        // haven't yet been fetched by the followers, so HWM won't move. This, in effect, is the
+        // fsync deferral.
+        assertEquals(1L, context.log.lastFlushedOffset());
+        assertEquals(1L, context.client.quorum().leaderStateOrThrow().getFlushEndOffset().get().offset);
+        assertEquals(OptionalLong.of(0L), context.client.highWatermark());
+
+        // Let the follower send a fetch, it should advance the high watermark
+        context.deliverRequest(context.fetchRequest(epoch, otherNodeId, 1L, epoch, 500));
+        context.pollUntilResponse();
+        context.assertSentFetchPartitionResponse(Errors.NONE, epoch, OptionalInt.of(localId));
+        assertEquals(OptionalLong.of(1L), context.client.highWatermark());
+        // Since the HWM advanced and the leader had records to flush, the
+        // flushed offset goes upto 4.
+        assertEquals(4L, context.log.lastFlushedOffset());
+        assertEquals(4L, context.client.quorum().leaderStateOrThrow().getFlushEndOffset().get().offset);
         assertEquals(OptionalLong.empty(), context.listener.lastCommitOffset());
 
         // Let the follower send another fetch from offset 4

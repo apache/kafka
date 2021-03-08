@@ -273,12 +273,13 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
 
     private void updateLeaderEndOffsetAndTimestamp(
         LeaderState state,
-        long currentTimeMs
+        long currentTimeMs,
+        boolean flushLeaderLogOnHwmUpdate
     ) {
         final LogOffsetMetadata endOffsetMetadata = log.endOffset();
 
         if (state.updateLocalState(currentTimeMs, endOffsetMetadata)) {
-            onUpdateLeaderHighWatermark(state, currentTimeMs);
+            onUpdateLeaderHighWatermark(state, currentTimeMs, flushLeaderLogOnHwmUpdate);
         }
 
         fetchPurgatory.maybeComplete(endOffsetMetadata.offset, currentTimeMs);
@@ -286,11 +287,19 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
 
     private void onUpdateLeaderHighWatermark(
         LeaderState state,
-        long currentTimeMs
+        long currentTimeMs,
+        boolean flushLeaderLogOnHwmUpdate
     ) {
         state.highWatermark().ifPresent(highWatermark -> {
             logger.debug("Leader high watermark updated to {}", highWatermark);
             log.updateHighWatermark(highWatermark);
+
+            // Leader logs are flushed only when the flag flushLeaderLogOnHwmUpdate
+            // is set to true and the LEO is greater than the last flush offset for
+            // the leader.
+            if (flushLeaderLogOnHwmUpdate && state.maybeFlush(log.endOffset())) {
+                flushLogAndUpdateFlushOffset(state);
+            }
 
             // After updating the high watermark, we first clear the append
             // purgatory so that we have an opportunity to route the pending
@@ -404,7 +413,7 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
         // from the new leader's epoch. Hence we write a control message immediately
         // to ensure there is no delay committing pending data.
         appendLeaderChangeMessage(state, log.endOffset().offset, currentTimeMs);
-        updateLeaderEndOffsetAndTimestamp(state, currentTimeMs);
+        updateLeaderEndOffsetAndTimestamp(state, currentTimeMs, false);
 
         resetConnections();
 
@@ -448,13 +457,24 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
         );
 
         appendAsLeader(records);
-        flushLeaderLog(state, currentTimeMs);
+        // For a LeaderChange message, flushLeaderLogOnHwmUpdate is set to false
+        // as we have to flush the log irrespective of whether the HWM moved or not.
+        flushLeaderLog(state, currentTimeMs, false);
     }
 
-    private void flushLeaderLog(LeaderState state, long currentTimeMs) {
+    private void flushLeaderLog(LeaderState state, long currentTimeMs, boolean flushLeaderLogOnHwmUpdate) {
         // We update the end offset before flushing so that parked fetches can return sooner
-        updateLeaderEndOffsetAndTimestamp(state, currentTimeMs);
+        updateLeaderEndOffsetAndTimestamp(state, currentTimeMs, flushLeaderLogOnHwmUpdate);
+        if (!flushLeaderLogOnHwmUpdate) {
+            flushLogAndUpdateFlushOffset(state);
+        }
+    }
+
+    // If the flush happened but the flush offset didn't get updated, that should still be ok
+    // as it might lead to another flush call in the future which potentially could have been avoided.
+    private void flushLogAndUpdateFlushOffset(LeaderState state) {
         log.flush();
+        state.updateFlushEndOffset(log.endOffset());
     }
 
     private boolean maybeTransitionToLeader(CandidateState state, long currentTimeMs) throws IOException {
@@ -1063,7 +1083,7 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
                 LogFetchInfo info = log.read(fetchOffset, Isolation.UNCOMMITTED);
 
                 if (state.updateReplicaState(replicaId, currentTimeMs, info.startOffsetMetadata)) {
-                    onUpdateLeaderHighWatermark(state, currentTimeMs);
+                    onUpdateLeaderHighWatermark(state, currentTimeMs, true);
                 }
 
                 records = info.records;
@@ -1919,7 +1939,7 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
                     BatchAccumulator.CompletedBatch<T> batch = iterator.next();
                     appendBatch(state, batch, currentTimeMs);
                 }
-                flushLeaderLog(state, currentTimeMs);
+                flushLeaderLog(state, currentTimeMs, true);
             } finally {
                 // Release and discard any batches which failed to be appended
                 while (iterator.hasNext()) {
