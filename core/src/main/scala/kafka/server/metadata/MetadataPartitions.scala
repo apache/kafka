@@ -236,7 +236,7 @@ class MetadataPartitionsBuilder(val brokerId: Int,
         Option(prevPartitionMap.get(partitionId)).map { prevPartition =>
           val newPartitionMap = new util.HashMap[Int, MetadataPartition](prevPartitionMap.size() - 1)
           prevPartitionMap.forEach { (prevPartitionId, prevPartition) =>
-            if (!prevPartitionId.equals(partitionId)) {
+            if (prevPartitionId != partitionId) {
               newPartitionMap.put(prevPartitionId, prevPartition)
             }
           }
