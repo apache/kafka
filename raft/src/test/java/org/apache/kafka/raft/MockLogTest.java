@@ -556,6 +556,102 @@ public class MockLogTest {
         assertFalse(log.truncateToLatestSnapshot());
     }
 
+    @Test
+    public void testValidateEpochGreaterThanLastKnownEpoch() {
+        int numberOfRecords = 1;
+        int epoch = 1;
+
+        appendBatch(numberOfRecords, epoch);
+
+        ValidOffsetAndEpoch resultOffsetAndEpoch = log.validateOffsetAndEpoch(numberOfRecords, epoch + 1);
+        assertEquals(new ValidOffsetAndEpoch(ValidOffsetAndEpoch.Type.DIVERGING, new OffsetAndEpoch(log.endOffset().offset, epoch)),
+                resultOffsetAndEpoch);
+    }
+
+    @Test
+    public void testValidateEpochLessThanOldestSnapshotEpoch() throws IOException {
+        int offset = 1;
+        int epoch = 1;
+
+        OffsetAndEpoch olderEpochSnapshotId = new OffsetAndEpoch(offset, epoch);
+        try (RawSnapshotWriter snapshot = log.createSnapshot(olderEpochSnapshotId)) {
+            snapshot.freeze();
+        }
+        log.truncateToLatestSnapshot();
+
+        ValidOffsetAndEpoch resultOffsetAndEpoch = log.validateOffsetAndEpoch(offset, epoch - 1);
+        assertEquals(new ValidOffsetAndEpoch(ValidOffsetAndEpoch.Type.SNAPSHOT, new OffsetAndEpoch(offset, epoch)),
+                resultOffsetAndEpoch);
+    }
+
+    @Test
+    public void testValidateOffsetLessThanOldestSnapshotOffset() throws IOException {
+        int offset = 2;
+        int epoch = 1;
+
+        OffsetAndEpoch olderEpochSnapshotId = new OffsetAndEpoch(offset, epoch);
+        try (RawSnapshotWriter snapshot = log.createSnapshot(olderEpochSnapshotId)) {
+            snapshot.freeze();
+        }
+        log.truncateToLatestSnapshot();
+
+        ValidOffsetAndEpoch resultOffsetAndEpoch = log.validateOffsetAndEpoch(offset - 1, epoch);
+        assertEquals(new ValidOffsetAndEpoch(ValidOffsetAndEpoch.Type.SNAPSHOT, new OffsetAndEpoch(offset, epoch)),
+                resultOffsetAndEpoch);
+    }
+
+    @Test
+    public void testValidateOffsetEqualToOldestSnapshotOffset() throws IOException {
+        int offset = 2;
+        int epoch = 1;
+
+        OffsetAndEpoch olderEpochSnapshotId = new OffsetAndEpoch(offset, epoch);
+        try (RawSnapshotWriter snapshot = log.createSnapshot(olderEpochSnapshotId)) {
+            snapshot.freeze();
+        }
+        log.truncateToLatestSnapshot();
+
+        ValidOffsetAndEpoch resultOffsetAndEpoch = log.validateOffsetAndEpoch(offset, epoch);
+        assertEquals(new ValidOffsetAndEpoch(ValidOffsetAndEpoch.Type.VALID, new OffsetAndEpoch(offset, epoch)),
+                resultOffsetAndEpoch);
+    }
+
+    @Test
+    public void testValidateEpochUnknown() {
+        int numberOfRecords = 1;
+        int epoch = 1;
+
+        appendBatch(numberOfRecords, epoch);
+
+        ValidOffsetAndEpoch resultOffsetAndEpoch = log.validateOffsetAndEpoch(numberOfRecords + 1, epoch + 1);
+        assertEquals(new ValidOffsetAndEpoch(ValidOffsetAndEpoch.Type.DIVERGING, new OffsetAndEpoch(log.endOffset().offset, epoch)),
+                resultOffsetAndEpoch);
+    }
+
+    @Test
+    public void testValidateOffsetGreatThanEndOffset() {
+        int numberOfRecords = 1;
+        int epoch = 1;
+
+        appendBatch(numberOfRecords, epoch);
+
+        ValidOffsetAndEpoch resultOffsetAndEpoch = log.validateOffsetAndEpoch(numberOfRecords + 1, epoch);
+        assertEquals(new ValidOffsetAndEpoch(ValidOffsetAndEpoch.Type.DIVERGING, new OffsetAndEpoch(log.endOffset().offset, epoch)),
+                resultOffsetAndEpoch);
+    }
+
+    @Test
+    public void testValidateValidEpochAndOffset() {
+        int numberOfRecords = 1;
+        int epoch = 1;
+
+        appendBatch(numberOfRecords, epoch);
+
+        ValidOffsetAndEpoch resultOffsetAndEpoch = log.validateOffsetAndEpoch(numberOfRecords, epoch);
+        assertEquals(new ValidOffsetAndEpoch(ValidOffsetAndEpoch.Type.VALID, new OffsetAndEpoch(numberOfRecords, epoch)),
+                resultOffsetAndEpoch);
+    }
+
     private Optional<OffsetRange> readOffsets(long startOffset, Isolation isolation) {
         Records records = log.read(startOffset, isolation).records;
         long firstReadOffset = -1L;
