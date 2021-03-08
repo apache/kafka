@@ -1121,7 +1121,7 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
 
     def parse_describe_topic(self, topic_description):
         """Parse output of kafka-topics.sh --describe (or describe_topic() method above), which is a string of form
-        Topic:test_topic\tTopicId:AAAAAAAAAAAAAAAAAAAAAA\tPartitionCount:2\tReplicationFactor:2\tConfigs:
+        Topic:test_topic\tTopicId:<topic_id>\tPartitionCount:2\tReplicationFactor:2\tConfigs:
             Topic: test_topic\ttPartition: 0\tLeader: 3\tReplicas: 3,1\tIsr: 3,1
             Topic: test_topic\tPartition: 1\tLeader: 1\tReplicas: 1,2\tIsr: 1,2
         into a dictionary structure appropriate for use with reassign-partitions tool:
@@ -1415,8 +1415,10 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
                 # -> [test_topic, <topic_id>, 2, 2, ...]
                 # -> <topic_id>
                 topic_id = list(map(lambda x: x.split(" ")[1], fields))[1]
+                self.logger.info("Topic ID assigned for topic %s is %s" % (topic, topic_id))
 
                 return topic_id
+            raise Exception("Error finding topic ID for topic %s." % topic)
         else:
             self.logger.info("No topic ID assigned for topic %s" % topic)
             return None
