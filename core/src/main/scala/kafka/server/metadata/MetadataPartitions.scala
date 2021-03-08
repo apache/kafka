@@ -264,9 +264,9 @@ class MetadataPartitionsBuilder(val brokerId: Int,
 
 object MetadataPartitions {
   def apply(nameMap: util.Map[String, util.Map[Int, MetadataPartition]],
-            idMap: util.Map[Uuid, String],
-            reverseIdMap: util.Map[String, Uuid]): MetadataPartitions = {
-    new MetadataPartitions(nameMap, idMap, reverseIdMap)
+            idMap: util.Map[Uuid, String]): MetadataPartitions = {
+    val reverseMap = idMap.asScala.map(_.swap).toMap.asJava
+    new MetadataPartitions(nameMap, idMap, reverseMap)
   }
 }
 
