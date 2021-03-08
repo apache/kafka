@@ -16,6 +16,8 @@
  */
 package org.apache.kafka.raft;
 
+import java.util.Objects;
+
 public final class ValidOffsetAndEpoch {
     final private Type type;
     final private OffsetAndEpoch offsetAndEpoch;
@@ -51,5 +53,19 @@ public final class ValidOffsetAndEpoch {
 
     public static ValidOffsetAndEpoch valid() {
         return valid(new OffsetAndEpoch(-1, -1));
+    }
+
+    @Override
+    public boolean equals(Object obj) {
+        if (this == obj) return true;
+        if (obj == null || getClass() != obj.getClass()) return false;
+        ValidOffsetAndEpoch that = (ValidOffsetAndEpoch) obj;
+        return type == that.type &&
+                offsetAndEpoch.equals(that.offsetAndEpoch);
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(type, offsetAndEpoch);
     }
 }
