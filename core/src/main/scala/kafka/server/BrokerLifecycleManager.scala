@@ -372,10 +372,10 @@ class BrokerLifecycleManager(val config: KafkaConfig,
                 _state = BrokerState.RECOVERY
                 initialCatchUpFuture.complete(null)
               } else {
-                info(s"The broker is STARTING. Still waiting to catch up with cluster metadata.")
+                debug(s"The broker is STARTING. Still waiting to catch up with cluster metadata.")
               }
               // Schedule the heartbeat after only 10 ms so that in the case where
-              //there is no recovery work to be done, we start up a bit quicker.
+              // there is no recovery work to be done, we start up a bit quicker.
               scheduleNextCommunication(NANOSECONDS.convert(10, MILLISECONDS))
             case BrokerState.RECOVERY =>
               if (!message.data().isFenced()) {
