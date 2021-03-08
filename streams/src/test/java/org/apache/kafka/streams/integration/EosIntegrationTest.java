@@ -262,7 +262,7 @@ public class EosIntegrationTest {
                             Utils.mkProperties(Collections.singletonMap(
                                 ConsumerConfig.ISOLATION_LEVEL_CONFIG,
                                 IsolationLevel.READ_COMMITTED.name().toLowerCase(Locale.ROOT)))
-                            ),
+                        ),
                         outputTopic,
                         inputData.size()
                     );
@@ -342,7 +342,7 @@ public class EosIntegrationTest {
                         Utils.mkProperties(Collections.singletonMap(
                             ConsumerConfig.ISOLATION_LEVEL_CONFIG,
                             IsolationLevel.READ_COMMITTED.name().toLowerCase(Locale.ROOT)))
-                        ),
+                    ),
                     SINGLE_PARTITION_OUTPUT_TOPIC,
                     firstBurstOfData.size()
                 );
@@ -366,7 +366,7 @@ public class EosIntegrationTest {
                         Utils.mkProperties(Collections.singletonMap(
                             ConsumerConfig.ISOLATION_LEVEL_CONFIG,
                             IsolationLevel.READ_COMMITTED.name().toLowerCase(Locale.ROOT)))
-                        ),
+                    ),
                     SINGLE_PARTITION_OUTPUT_TOPIC,
                     secondBurstOfData.size()
                 );
@@ -473,11 +473,8 @@ public class EosIntegrationTest {
 
             writeInputData(uncommittedDataBeforeFailure);
 
-            System.err.println("read unc");
             final List<KeyValue<Long, Long>> uncommittedRecords = readResult(dataBeforeFailure.size(), null);
-            System.err.println("uncommittedRecords:" + uncommittedRecords);
             final List<KeyValue<Long, Long>> committedRecords = readResult(committedDataBeforeFailure.size(), CONSUMER_GROUP_ID);
-            System.err.println("committedRecords:" + committedRecords);
 
             final List<KeyValue<Long, Long>> expectedResultBeforeFailure = computeExpectedResult(dataBeforeFailure);
             checkResultPerKey(committedRecords, computeExpectedResult(committedDataBeforeFailure));
@@ -623,7 +620,7 @@ public class EosIntegrationTest {
 
             final List<KeyValue<Long, Long>> allCommittedRecords = readResult(
                 committedDataBeforeStall.size() + uncommittedDataBeforeStall.size()
-                + dataToTriggerFirstRebalance.size() + dataAfterSecondRebalance.size(),
+                    + dataToTriggerFirstRebalance.size() + dataAfterSecondRebalance.size(),
                 CONSUMER_GROUP_ID + "_ALL");
 
             final List<KeyValue<Long, Long>> allExpectedCommittedRecordsAfterRecovery = new ArrayList<>();
@@ -722,7 +719,7 @@ public class EosIntegrationTest {
                                 sum += value;
                             }
                             state.put(key, sum);
-                            System.err.println("res:" + key + "," + value + "," + sum);
+                            System.err.println("res: " + key + "," + value + "," + sum);
                             state.flush();
                         }
 

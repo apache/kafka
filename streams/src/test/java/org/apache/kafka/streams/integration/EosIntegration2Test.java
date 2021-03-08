@@ -90,7 +90,7 @@ import static org.junit.Assert.fail;
 @RunWith(Parameterized.class)
 @Category({IntegrationTest.class})
 public class EosIntegration2Test {
-    private static final Logger LOG = LoggerFactory.getLogger(EosIntegration2Test.class);
+    private static final Logger LOG = LoggerFactory.getLogger(EosIntegrationTest.class);
     private static final int NUM_BROKERS = 3;
     private static final int MAX_POLL_INTERVAL_MS = 5 * 1000;
     private static final int MAX_WAIT_TIME_MS = 60 * 1000;
@@ -262,23 +262,24 @@ public class EosIntegration2Test {
                             Utils.mkProperties(Collections.singletonMap(
                                 ConsumerConfig.ISOLATION_LEVEL_CONFIG,
                                 IsolationLevel.READ_COMMITTED.name().toLowerCase(Locale.ROOT)))
-                            ),
+                        ),
                         outputTopic,
                         inputData.size()
                     );
 
-                checkResultPerKey(committedRecords, inputData);
+                checkResultPerKey(committedRecords, inputData, "The committed records do not match what expected");
             }
         }
     }
 
-    private void checkResultPerKey(final List<KeyValue<Long, Long>> result, final List<KeyValue<Long, Long>> expectedResult) {
+    private void checkResultPerKey(final List<KeyValue<Long, Long>> result, final List<KeyValue<Long, Long>> expectedResult,
+                                   final String reason) {
         final Set<Long> allKeys = new HashSet<>();
         addAllKeys(allKeys, result);
         addAllKeys(allKeys, expectedResult);
 
         for (final Long key : allKeys) {
-            assertThat(getAllRecordPerKey(key, result), equalTo(getAllRecordPerKey(key, expectedResult)));
+            assertThat(reason, getAllRecordPerKey(key, result), equalTo(getAllRecordPerKey(key, expectedResult)));
         }
     }
 
@@ -342,7 +343,7 @@ public class EosIntegration2Test {
                         Utils.mkProperties(Collections.singletonMap(
                             ConsumerConfig.ISOLATION_LEVEL_CONFIG,
                             IsolationLevel.READ_COMMITTED.name().toLowerCase(Locale.ROOT)))
-                        ),
+                    ),
                     SINGLE_PARTITION_OUTPUT_TOPIC,
                     firstBurstOfData.size()
                 );
@@ -366,7 +367,7 @@ public class EosIntegration2Test {
                         Utils.mkProperties(Collections.singletonMap(
                             ConsumerConfig.ISOLATION_LEVEL_CONFIG,
                             IsolationLevel.READ_COMMITTED.name().toLowerCase(Locale.ROOT)))
-                        ),
+                    ),
                     SINGLE_PARTITION_OUTPUT_TOPIC,
                     secondBurstOfData.size()
                 );
@@ -391,7 +392,8 @@ public class EosIntegration2Test {
             final List<KeyValue<Long, Long>> committedDataBeforeFailure = prepareData(0L, 10L, 0L, 1L);
             final List<KeyValue<Long, Long>> uncommittedDataBeforeFailure = prepareData(10L, 15L, 0L, 1L);
 
-            final List<KeyValue<Long, Long>> dataBeforeFailure = new ArrayList<>();
+            final List<KeyValue<Long, Long>> dataBeforeFailure = new ArrayList<>(
+                committedDataBeforeFailure.size() + uncommittedDataBeforeFailure.size());
             dataBeforeFailure.addAll(committedDataBeforeFailure);
             dataBeforeFailure.addAll(uncommittedDataBeforeFailure);
 
@@ -403,13 +405,15 @@ public class EosIntegration2Test {
                 () -> commitRequested.get() == 2, MAX_WAIT_TIME_MS,
                 "StreamsTasks did not request commit.");
 
+            final List<KeyValue<Long, Long>> committedRecords = readResult(committedDataBeforeFailure.size(), CONSUMER_GROUP_ID);
+            checkResultPerKey(committedRecords, committedDataBeforeFailure,
+                "The committed records before failure do not match what expected");
+
             writeInputData(uncommittedDataBeforeFailure);
 
             final List<KeyValue<Long, Long>> uncommittedRecords = readResult(dataBeforeFailure.size(), null);
-            final List<KeyValue<Long, Long>> committedRecords = readResult(committedDataBeforeFailure.size(), CONSUMER_GROUP_ID);
-
-            checkResultPerKey(committedRecords, committedDataBeforeFailure);
-            checkResultPerKey(uncommittedRecords, dataBeforeFailure);
+            checkResultPerKey(uncommittedRecords, dataBeforeFailure,
+                "The uncommitted records before failure do not match what expected");
 
             errorInjected.set(true);
             writeInputData(dataAfterFailure);
@@ -426,17 +430,22 @@ public class EosIntegration2Test {
                 uncommittedDataBeforeFailure.size() + dataAfterFailure.size(),
                 CONSUMER_GROUP_ID);
 
-            final List<KeyValue<Long, Long>> allExpectedCommittedRecordsAfterRecovery = new ArrayList<>();
+            final int allCommittedRecordsAfterRecoverySize = committedDataBeforeFailure.size() +
+                uncommittedDataBeforeFailure.size() + dataAfterFailure.size();
+            final List<KeyValue<Long, Long>> allExpectedCommittedRecordsAfterRecovery = new ArrayList<>(allCommittedRecordsAfterRecoverySize);
             allExpectedCommittedRecordsAfterRecovery.addAll(committedDataBeforeFailure);
             allExpectedCommittedRecordsAfterRecovery.addAll(uncommittedDataBeforeFailure);
             allExpectedCommittedRecordsAfterRecovery.addAll(dataAfterFailure);
 
-            final List<KeyValue<Long, Long>> expectedCommittedRecordsAfterRecovery = new ArrayList<>();
+            final int committedRecordsAfterRecoverySize = uncommittedDataBeforeFailure.size() + dataAfterFailure.size();
+            final List<KeyValue<Long, Long>> expectedCommittedRecordsAfterRecovery = new ArrayList<>(committedRecordsAfterRecoverySize);
             expectedCommittedRecordsAfterRecovery.addAll(uncommittedDataBeforeFailure);
             expectedCommittedRecordsAfterRecovery.addAll(dataAfterFailure);
 
-            checkResultPerKey(allCommittedRecords, allExpectedCommittedRecordsAfterRecovery);
-            checkResultPerKey(committedRecordsAfterFailure, expectedCommittedRecordsAfterRecovery);
+            checkResultPerKey(allCommittedRecords, allExpectedCommittedRecordsAfterRecovery,
+                "The all committed records after recovery do not match what expected");
+            checkResultPerKey(committedRecordsAfterFailure, expectedCommittedRecordsAfterRecovery,
+                "The committed records after recovery do not match what expected");
         }
     }
 
@@ -459,7 +468,8 @@ public class EosIntegration2Test {
             final List<KeyValue<Long, Long>> committedDataBeforeFailure = prepareData(0L, 10L, 0L, 1L);
             final List<KeyValue<Long, Long>> uncommittedDataBeforeFailure = prepareData(10L, 15L, 0L, 1L, 2L, 3L);
 
-            final List<KeyValue<Long, Long>> dataBeforeFailure = new ArrayList<>();
+            final List<KeyValue<Long, Long>> dataBeforeFailure = new ArrayList<>(
+                committedDataBeforeFailure.size() + uncommittedDataBeforeFailure.size());
             dataBeforeFailure.addAll(committedDataBeforeFailure);
             dataBeforeFailure.addAll(uncommittedDataBeforeFailure);
 
@@ -471,18 +481,20 @@ public class EosIntegration2Test {
                 () -> commitRequested.get() == 2, MAX_WAIT_TIME_MS,
                 "SteamsTasks did not request commit.");
 
+            final List<KeyValue<Long, Long>> committedRecords = readResult(committedDataBeforeFailure.size(), CONSUMER_GROUP_ID);
+            checkResultPerKey(committedRecords, computeExpectedResult(committedDataBeforeFailure),
+                "The committed records before failure do not match what expected");
+
             writeInputData(uncommittedDataBeforeFailure);
 
-            System.err.println("read unc");
             final List<KeyValue<Long, Long>> uncommittedRecords = readResult(dataBeforeFailure.size(), null);
-            System.err.println("uncommittedRecords:" + uncommittedRecords);
-            final List<KeyValue<Long, Long>> committedRecords = readResult(committedDataBeforeFailure.size(), CONSUMER_GROUP_ID);
-            System.err.println("committedRecords:" + committedRecords);
-
             final List<KeyValue<Long, Long>> expectedResultBeforeFailure = computeExpectedResult(dataBeforeFailure);
-            checkResultPerKey(committedRecords, computeExpectedResult(committedDataBeforeFailure));
-            checkResultPerKey(uncommittedRecords, expectedResultBeforeFailure);
-            verifyStateStore(streams, getMaxPerKey(expectedResultBeforeFailure));
+
+
+            checkResultPerKey(uncommittedRecords, expectedResultBeforeFailure,
+                "The uncommitted records before failure do not match what expected");
+            verifyStateStore(streams, getMaxPerKey(expectedResultBeforeFailure),
+                "The state store content before failure do not match what expected");
 
             errorInjected.set(true);
             writeInputData(dataAfterFailure);
@@ -499,19 +511,24 @@ public class EosIntegration2Test {
                 uncommittedDataBeforeFailure.size() + dataAfterFailure.size(),
                 CONSUMER_GROUP_ID);
 
-            final List<KeyValue<Long, Long>> allExpectedCommittedRecordsAfterRecovery = new ArrayList<>();
+            final int allCommittedRecordsAfterRecoverySize = committedDataBeforeFailure.size() +
+                uncommittedDataBeforeFailure.size() + dataAfterFailure.size();
+            final List<KeyValue<Long, Long>> allExpectedCommittedRecordsAfterRecovery = new ArrayList<>(allCommittedRecordsAfterRecoverySize);
             allExpectedCommittedRecordsAfterRecovery.addAll(committedDataBeforeFailure);
             allExpectedCommittedRecordsAfterRecovery.addAll(uncommittedDataBeforeFailure);
             allExpectedCommittedRecordsAfterRecovery.addAll(dataAfterFailure);
 
             final List<KeyValue<Long, Long>> expectedResult = computeExpectedResult(allExpectedCommittedRecordsAfterRecovery);
 
-            checkResultPerKey(allCommittedRecords, expectedResult);
+            checkResultPerKey(allCommittedRecords, expectedResult,
+                "The all committed records after recovery do not match what expected");
             checkResultPerKey(
                 committedRecordsAfterFailure,
-                expectedResult.subList(committedDataBeforeFailure.size(), expectedResult.size()));
+                expectedResult.subList(committedDataBeforeFailure.size(), expectedResult.size()),
+                "The committed records after recovery do not match what expected");
 
-            verifyStateStore(streams, getMaxPerKey(expectedResult));
+            verifyStateStore(streams, getMaxPerKey(expectedResult),
+                "The state store content after recovery do not match what expected");
         }
     }
 
@@ -538,7 +555,8 @@ public class EosIntegration2Test {
             final List<KeyValue<Long, Long>> committedDataBeforeStall = prepareData(0L, 10L, 0L, 1L);
             final List<KeyValue<Long, Long>> uncommittedDataBeforeStall = prepareData(10L, 15L, 0L, 1L);
 
-            final List<KeyValue<Long, Long>> dataBeforeStall = new ArrayList<>();
+            final List<KeyValue<Long, Long>> dataBeforeStall = new ArrayList<>(
+                committedDataBeforeStall.size() + uncommittedDataBeforeStall.size());
             dataBeforeStall.addAll(committedDataBeforeStall);
             dataBeforeStall.addAll(uncommittedDataBeforeStall);
 
@@ -552,13 +570,15 @@ public class EosIntegration2Test {
                 () -> commitRequested.get() == 2, MAX_WAIT_TIME_MS,
                 "SteamsTasks did not request commit.");
 
+            final List<KeyValue<Long, Long>> committedRecords = readResult(committedDataBeforeStall.size(), CONSUMER_GROUP_ID);
+            checkResultPerKey(committedRecords, committedDataBeforeStall,
+                "The committed records before stall do not match what expected");
+
             writeInputData(uncommittedDataBeforeStall);
 
             final List<KeyValue<Long, Long>> uncommittedRecords = readResult(dataBeforeStall.size(), null);
-            final List<KeyValue<Long, Long>> committedRecords = readResult(committedDataBeforeStall.size(), CONSUMER_GROUP_ID);
-
-            checkResultPerKey(committedRecords, committedDataBeforeStall);
-            checkResultPerKey(uncommittedRecords, dataBeforeStall);
+            checkResultPerKey(uncommittedRecords, dataBeforeStall,
+                "The uncommitted records before stall do not match what expected");
 
             LOG.info("Injecting Stall");
             stallInjected.set(true);
@@ -598,11 +618,13 @@ public class EosIntegration2Test {
                 uncommittedDataBeforeStall.size() + dataToTriggerFirstRebalance.size(),
                 CONSUMER_GROUP_ID);
 
-            final List<KeyValue<Long, Long>> expectedCommittedRecordsAfterRebalance = new ArrayList<>();
+            final List<KeyValue<Long, Long>> expectedCommittedRecordsAfterRebalance = new ArrayList<>(
+                uncommittedDataBeforeStall.size() + dataToTriggerFirstRebalance.size());
             expectedCommittedRecordsAfterRebalance.addAll(uncommittedDataBeforeStall);
             expectedCommittedRecordsAfterRebalance.addAll(dataToTriggerFirstRebalance);
 
-            checkResultPerKey(committedRecordsAfterRebalance, expectedCommittedRecordsAfterRebalance);
+            checkResultPerKey(committedRecordsAfterRebalance, expectedCommittedRecordsAfterRebalance,
+                "The all committed records after rebalance do not match what expected");
 
             LOG.info("Releasing Stall");
             doStall = false;
@@ -623,23 +645,27 @@ public class EosIntegration2Test {
 
             final List<KeyValue<Long, Long>> allCommittedRecords = readResult(
                 committedDataBeforeStall.size() + uncommittedDataBeforeStall.size()
-                + dataToTriggerFirstRebalance.size() + dataAfterSecondRebalance.size(),
+                    + dataToTriggerFirstRebalance.size() + dataAfterSecondRebalance.size(),
                 CONSUMER_GROUP_ID + "_ALL");
 
+            final int allCommittedRecordsAfterRecoverySize = committedDataBeforeStall.size() +
+                uncommittedDataBeforeStall.size() + dataToTriggerFirstRebalance.size() + dataAfterSecondRebalance.size();
             final List<KeyValue<Long, Long>> allExpectedCommittedRecordsAfterRecovery = new ArrayList<>();
             allExpectedCommittedRecordsAfterRecovery.addAll(committedDataBeforeStall);
             allExpectedCommittedRecordsAfterRecovery.addAll(uncommittedDataBeforeStall);
             allExpectedCommittedRecordsAfterRecovery.addAll(dataToTriggerFirstRebalance);
             allExpectedCommittedRecordsAfterRecovery.addAll(dataAfterSecondRebalance);
 
-            checkResultPerKey(allCommittedRecords, allExpectedCommittedRecordsAfterRecovery);
+            checkResultPerKey(allCommittedRecords, allExpectedCommittedRecordsAfterRecovery,
+                "The all committed records after recovery do not match what expected");
         }
     }
 
     private List<KeyValue<Long, Long>> prepareData(final long fromInclusive,
                                                    final long toExclusive,
                                                    final Long... keys) {
-        final List<KeyValue<Long, Long>> data = new ArrayList<>();
+        final Long dataSize = keys.length * (toExclusive - fromInclusive);
+        final List<KeyValue<Long, Long>> data = new ArrayList<>(dataSize.intValue());
 
         for (final Long k : keys) {
             for (long v = fromInclusive; v < toExclusive; ++v) {
@@ -722,7 +748,6 @@ public class EosIntegration2Test {
                                 sum += value;
                             }
                             state.put(key, sum);
-                            System.err.println("res:" + key + "," + value + "," + sum);
                             state.flush();
                         }
 
@@ -852,16 +877,17 @@ public class EosIntegration2Test {
     }
 
     private void verifyStateStore(final KafkaStreams streams,
-                                  final Set<KeyValue<Long, Long>> expectedStoreContent) throws Exception {
+                                  final Set<KeyValue<Long, Long>> expectedStoreContent,
+                                  final String reason) throws Exception {
         final ReadOnlyKeyValueStore<Long, Long> store = IntegrationTestUtils
             .getStore(300_000L, storeName, streams, QueryableStoreTypes.keyValueStore());
         assertNotNull(store);
 
         final KeyValueIterator<Long, Long> it = store.all();
         while (it.hasNext()) {
-            assertTrue(expectedStoreContent.remove(it.next()));
+            assertTrue(reason, expectedStoreContent.remove(it.next()));
         }
 
-        assertTrue(expectedStoreContent.isEmpty());
+        assertTrue(reason, expectedStoreContent.isEmpty());
     }
 }

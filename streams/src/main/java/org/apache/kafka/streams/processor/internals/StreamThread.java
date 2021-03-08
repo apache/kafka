@@ -768,6 +768,7 @@ public class StreamThread extends Thread {
                 log.debug("Processed {} records with {} iterations; invoking punctuators if necessary",
                           processed,
                           numIterations);
+                System.err.println("processed record:" + processed + "," + numIterations);
 
                 final int punctuated = taskManager.punctuate();
                 totalPunctuatorsSinceLastSummary += punctuated;
@@ -1002,6 +1003,7 @@ public class StreamThread extends Thread {
                 log.debug("Committing all active tasks {} and standby tasks {} since {}ms has elapsed (commit interval is {}ms)",
                           taskManager.activeTaskIds(), taskManager.standbyTaskIds(), now - lastCommitMs, commitTimeMs);
             }
+            System.err.println("ms has elapsed:" + (now - lastCommitMs) + "," + commitTimeMs);
 
             committed = taskManager.commit(
                 taskManager.tasks()
