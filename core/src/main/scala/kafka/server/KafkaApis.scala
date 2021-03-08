@@ -794,13 +794,16 @@ class KafkaApis(val requestChannel: RequestChannel,
       }
     }
 
-    def mergeErrors(responsePartitionData: Seq[(TopicPartition, FetchPartitionData)]): util.ArrayList[FetchResponseData.FetchableTopicResponse] = {
-      val topicResponses = new util.ArrayList[FetchResponseData.FetchableTopicResponse](responsePartitionData.size + erroneous.size)
+    def mergeErrors(responsePartitionData: Seq[(TopicPartition, FetchPartitionData)]): util.List[FetchResponseData.FetchableTopicResponse] = {
+      // we use linked list rather than array list since the method `updateAndGenerateResponseData` directly update
+      // input data to avoid collection copy. the performance of removing element from array list is not good.
+      val topicResponses = new util.LinkedList[FetchResponseData.FetchableTopicResponse]()
 
       def addPartition(topicName: String, partitionData: FetchResponseData.PartitionData): Unit = {
         var topicData = if (topicResponses.isEmpty) null else topicResponses.get(topicResponses.size - 1)
         if (topicData == null || topicData.topic != topicName) {
           topicData = new FetchResponseData.FetchableTopicResponse().setTopic(topicName)
+            .setPartitions(new util.LinkedList[FetchResponseData.PartitionData]())
           topicResponses.add(topicData)
         }
         topicData.partitions.add(partitionData)
@@ -869,11 +872,9 @@ class KafkaApis(val requestChannel: RequestChannel,
     // the callback for process a fetch response, invoked before throttling
     def processResponseCallback(responsePartitionData: Seq[(TopicPartition, FetchPartitionData)]): Unit = {
 
-      val topicResponses = mergeErrors(responsePartitionData)
-
       if (fetchRequest.isFromFollower) {
         // We've already evaluated against the quota and are good to go. Just need to record it now.
-        val fetchResponse = fetchContext.updateAndGenerateResponseData(topicResponses)
+        val fetchResponse = fetchContext.updateAndGenerateResponseData(mergeErrors(responsePartitionData))
         quotas.leader.record(KafkaApis.sizeOfThrottledPartitions(versionId, fetchResponse, quotas.leader))
         trace(s"Sending Fetch response with partitions.size=${fetchResponse.responseData.size}, " +
           s"metadata=${fetchResponse.sessionId}")
@@ -888,6 +889,7 @@ class KafkaApis(val requestChannel: RequestChannel,
         // Record both bandwidth and request quota-specific values and throttle by muting the channel if any of the
         // quotas have been violated. If both quotas have been violated, use the max throttle time between the two
         // quotas. When throttled, we unrecord the recorded bandwidth quota value
+        val topicResponses = mergeErrors(responsePartitionData)
         val responseSize = fetchContext.getResponseSize(topicResponses, versionId)
         val timeMs = time.milliseconds()
         val requestThrottleTimeMs = quotas.request.maybeRecordAndGetThrottleTimeMs(request, timeMs)
@@ -908,7 +910,7 @@ class KafkaApis(val requestChannel: RequestChannel,
           fetchContext.getThrottledResponse(maxThrottleTimeMs)
         } else {
           // Get the actual response. This will update the fetch context.
-          val response = fetchContext.updateAndGenerateResponseData(topicResponses)
+          val response = fetchContext.updateAndGenerateResponseData(mergeErrors(responsePartitionData))
           trace(s"Sending Fetch response with partitions.size=$responseSize, metadata=${response.sessionId}")
           response
         }

@@ -289,9 +289,12 @@ trait FetchContext extends Logging {
   def getResponseSize(updates: FetchSession.RESP_MAP, versionId: Short): Int
 
   /**
-    * Updates the fetch context with new partition information.  Generates response data.
-    * The response data may require subsequent down-conversion.
-    */
+   * Updates the fetch context with new partition information.  Generates response data.
+   * The response data may require subsequent down-conversion.
+   *
+   * @param updates this method may modify elements of it directly.
+   * @return FetchResponse with modified updates
+   */
   def updateAndGenerateResponseData(updates: FetchSession.RESP_MAP): FetchResponse
 
   def partitionsToLogString(topics: FetchSession.RESP_MAP): String = {
@@ -437,31 +440,27 @@ class IncrementalFetchContext(private val time: Time,
   }
 
   /**
-   * goes over the given partition map and selects partitions that need to be included in the response.
+   * goes over the given partition map and remove partitions that need to be excluded in the response.
    * @param topicResponses topic data
    * @param updateFetchContextAndRemoveUnselected true, the fetch context will be updated for the selected partitions
-   * @return new collection having matched data
    */
-  private def filterResponseData(topicResponses: FetchSession.RESP_MAP, updateFetchContextAndRemoveUnselected: Boolean): FetchSession.RESP_MAP = {
-    val filterTopicResponses = new util.ArrayList[FetchResponseData.FetchableTopicResponse](topicResponses.size)
-    topicResponses.forEach { topicResponse =>
-      val filterTopicResponse = new FetchResponseData.FetchableTopicResponse()
-        .setTopic(topicResponse.topic)
-        .setPartitions(new util.ArrayList[FetchResponseData.PartitionData](topicResponse.partitions.size))
-      topicResponse.partitions.forEach { partitionResponse =>
+  private def keepRespondData(topicResponses: FetchSession.RESP_MAP, updateFetchContextAndRemoveUnselected: Boolean): Unit = {
+    val topicIter = topicResponses.iterator
+    while (topicIter.hasNext) {
+      val topicResponse = topicIter.next
+      val partitionIter = topicResponse.partitions().iterator
+      while (partitionIter.hasNext) {
+        val partitionResponse = partitionIter.next
         val cachedPart = session.partitionMap.find(new CachedPartition(topicResponse.topic, partitionResponse.partitionIndex))
         val mustRespond = cachedPart.maybeUpdateResponseData(partitionResponse, updateFetchContextAndRemoveUnselected)
-        if (mustRespond) {
-          filterTopicResponse.partitions().add(partitionResponse)
-          if (updateFetchContextAndRemoveUnselected) {
-            session.partitionMap.remove(cachedPart)
-            session.partitionMap.mustAdd(cachedPart)
-          }
+        if (mustRespond && updateFetchContextAndRemoveUnselected) {
+          session.partitionMap.remove(cachedPart)
+          session.partitionMap.mustAdd(cachedPart)
         }
+        if (!mustRespond) partitionIter.remove()
       }
-      if (!filterTopicResponse.partitions().isEmpty) filterTopicResponses.add(filterTopicResponse)
+      if (topicResponse.partitions().isEmpty) topicIter.remove()
     }
-    filterTopicResponses
   }
 
   override def getResponseSize(updates: FetchSession.RESP_MAP, versionId: Short): Int = {
@@ -470,8 +469,16 @@ class IncrementalFetchContext(private val time: Time,
       if (session.epoch != expectedEpoch) {
         FetchResponse.sizeOf(versionId, util.Collections.emptyList())
       } else {
+        // we have to create a copy as `keepRespondData` remove the elements which can't be responded
+        val copy = new util.LinkedList[FetchResponseData.FetchableTopicResponse]()
+        updates.forEach { topicResponse =>
+          copy.add(new FetchResponseData.FetchableTopicResponse()
+            .setTopic(topicResponse.topic)
+            .setPartitions(new util.LinkedList[FetchResponseData.PartitionData](topicResponse.partitions)))
+        }
         // Pass the partition iterator which updates neither the fetch context nor the partition map.
-        FetchResponse.sizeOf(versionId, filterResponseData(updates, false))
+        keepRespondData(copy, false)
+        FetchResponse.sizeOf(versionId, copy)
       }
     }
   }
@@ -489,14 +496,14 @@ class IncrementalFetchContext(private val time: Time,
           .setThrottleTimeMs(0)
           .setSessionId(session.id))
       } else {
-        val filteredUpdates = filterResponseData(updates, true)
+        keepRespondData(updates, true)
         debug(s"Incremental fetch context with session id ${session.id} returning " +
-          s"${partitionsToLogString(filteredUpdates)}")
+          s"${partitionsToLogString(updates)}")
         new FetchResponse(new FetchResponseData()
           .setErrorCode(Errors.NONE.code)
           .setThrottleTimeMs(0)
           .setSessionId(session.id)
-          .setResponses(filteredUpdates))
+          .setResponses(updates))
       }
     }
   }
