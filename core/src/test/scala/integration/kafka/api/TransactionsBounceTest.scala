@@ -91,6 +91,7 @@ class TransactionsBounceTest extends IntegrationTestHarness {
     val numInputRecords = 10000
     createTopics()
 
+    
     TestUtils.seedTopicWithNumberedRecords(inputTopic, numInputRecords, servers)
     val consumer = createConsumerAndSubscribe(consumerGroup, List(inputTopic))
     val producer = createTransactionalProducer("test-txn")
