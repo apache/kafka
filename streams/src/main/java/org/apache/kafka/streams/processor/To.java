@@ -78,7 +78,7 @@ public class To {
      * @param headers the output record headers
      * @return itself (i.e., {@code this})
      */
-    public To withHeaders(Headers headers) {
+    public To withHeaders(final Headers headers) {
         this.headers = headers;
         return this;
     }

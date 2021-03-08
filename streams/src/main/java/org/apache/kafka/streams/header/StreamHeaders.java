@@ -1,3 +1,19 @@
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements. See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to You under the Apache License, Version 2.0
+ * (the "License"); you may not use this file except in compliance with
+ * the License. You may obtain a copy of the License at
+ *
+ *    http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 package org.apache.kafka.streams.header;
 
 import java.util.Collections;
@@ -20,18 +36,18 @@ public class StreamHeaders implements Headers {
     public StreamHeaders() {
     }
 
-    public StreamHeaders(Iterable<Header> original) {
+    public StreamHeaders(final Iterable<Header> original) {
         if (original == null) {
             return;
         }
         if (original instanceof StreamHeaders) {
-            StreamHeaders originalHeaders = (StreamHeaders) original;
+            final StreamHeaders originalHeaders = (StreamHeaders) original;
             if (!originalHeaders.isEmpty()) {
                 headers = new LinkedList<>(originalHeaders.headers);
             }
         } else {
             headers = new LinkedList<>();
-            for (Header header : original) {
+            for (final Header header : original) {
                 Objects.requireNonNull(header, "Unable to add a null header.");
                 headers.add(header);
             }
@@ -39,15 +55,15 @@ public class StreamHeaders implements Headers {
     }
 
 
-    public static Headers wrap(org.apache.kafka.common.header.Headers originals) {
-        LinkedList<Header> headers = new LinkedList<>();
+    public static Headers wrap(final org.apache.kafka.common.header.Headers originals) {
+        final LinkedList<Header> headers = new LinkedList<>();
         originals.forEach(header -> headers.add(StreamHeader.wrap(header)));
         return new StreamHeaders(headers);
     }
 
-    public static Headers wrap(org.apache.kafka.common.header.Header[] originals) {
-        LinkedList<Header> headers = new LinkedList<>();
-        for (org.apache.kafka.common.header.Header header : originals) {
+    public static Headers wrap(final org.apache.kafka.common.header.Header[] originals) {
+        final LinkedList<Header> headers = new LinkedList<>();
+        for (final org.apache.kafka.common.header.Header header : originals) {
             headers.add(StreamHeader.wrap(header));
         }
         return new StreamHeaders(headers);
@@ -72,7 +88,7 @@ public class StreamHeaders implements Headers {
     }
 
     @Override
-    public Headers add(Header header) {
+    public Headers add(final Header header) {
         Objects.requireNonNull(header, "Unable to add a null header.");
         if (headers == null) {
             headers = new LinkedList<>();
@@ -82,7 +98,7 @@ public class StreamHeaders implements Headers {
     }
 
     @Override
-    public Headers add(String key, byte[] value) {
+    public Headers add(final String key, final byte[] value) {
         Objects.requireNonNull(key, "Unable to add a null header key.");
         if (headers == null) {
             headers = new LinkedList<>();
@@ -92,7 +108,7 @@ public class StreamHeaders implements Headers {
     }
 
     @Override
-    public Headers addUtf8(String key, String value) {
+    public Headers addUtf8(final String key, final String value) {
         Objects.requireNonNull(key, "Unable to add a null header key.");
         if (headers == null) {
             headers = new LinkedList<>();
@@ -102,12 +118,12 @@ public class StreamHeaders implements Headers {
     }
 
     @Override
-    public Header lastWithName(String key) {
+    public Header lastWithName(final String key) {
         Objects.requireNonNull(key, "Header key cannot be null");
         if (headers != null) {
-            ListIterator<Header> iter = headers.listIterator(headers.size());
+            final ListIterator<Header> iter = headers.listIterator(headers.size());
             while (iter.hasPrevious()) {
-                Header header = iter.previous();
+                final Header header = iter.previous();
                 if (key.equals(header.key())) {
                     return header;
                 }
@@ -117,10 +133,10 @@ public class StreamHeaders implements Headers {
     }
 
     @Override
-    public boolean hasWithName(String key) {
+    public boolean hasWithName(final String key) {
         Objects.requireNonNull(key, "Header key cannot be null");
         if (headers != null) {
-            for (Header header : headers) {
+            for (final Header header : headers) {
                 if (key.equals(header.key())) {
                     return true;
                 }
@@ -130,7 +146,7 @@ public class StreamHeaders implements Headers {
     }
 
     @Override
-    public Iterator<Header> allWithName(String key) {
+    public Iterator<Header> allWithName(final String key) {
         return new FilterByKeyIterator(iterator(), key);
     }
 
@@ -142,10 +158,10 @@ public class StreamHeaders implements Headers {
 
 
     @Override
-    public Headers remove(String key) {
+    public Headers remove(final String key) {
         Objects.requireNonNull(key, "Header key cannot be null");
         if (!isEmpty()) {
-            Iterator<Header> iterator = iterator();
+            final Iterator<Header> iterator = iterator();
             while (iterator.hasNext()) {
                 if (iterator.next().key().equals(key)) {
                     iterator.remove();
@@ -158,11 +174,11 @@ public class StreamHeaders implements Headers {
     @Override
     public Headers retainLatest() {
         if (!isEmpty()) {
-            Set<String> keys = new HashSet<>();
-            ListIterator<Header> iter = headers.listIterator(headers.size());
+            final Set<String> keys = new HashSet<>();
+            final ListIterator<Header> iter = headers.listIterator(headers.size());
             while (iter.hasPrevious()) {
-                Header header = iter.previous();
-                String key = header.key();
+                final Header header = iter.previous();
+                final String key = header.key();
                 if (!keys.add(key)) {
                     iter.remove();
                 }
@@ -172,13 +188,13 @@ public class StreamHeaders implements Headers {
     }
 
     @Override
-    public Headers retainLatest(String key) {
+    public Headers retainLatest(final String key) {
         Objects.requireNonNull(key, "Header key cannot be null");
         if (!isEmpty()) {
             boolean found = false;
-            ListIterator<Header> iter = headers.listIterator(headers.size());
+            final ListIterator<Header> iter = headers.listIterator(headers.size());
             while (iter.hasPrevious()) {
-                String headerKey = iter.previous().key();
+                final String headerKey = iter.previous().key();
                 if (key.equals(headerKey)) {
                     if (found) {
                         iter.remove();
@@ -191,14 +207,14 @@ public class StreamHeaders implements Headers {
     }
 
     @Override
-    public Headers apply(String key, Headers.HeaderTransform transform) {
+    public Headers apply(final String key, final Headers.HeaderTransform transform) {
         Objects.requireNonNull(key, "Header key cannot be null");
         if (!isEmpty()) {
-            ListIterator<Header> iter = headers.listIterator();
+            final ListIterator<Header> iter = headers.listIterator();
             while (iter.hasNext()) {
-                Header orig = iter.next();
+                final Header orig = iter.next();
                 if (orig.key().equals(key)) {
-                    Header updated = transform.apply(orig);
+                    final Header updated = transform.apply(orig);
                     if (updated != null) {
                         iter.set(updated);
                     } else {
@@ -211,12 +227,12 @@ public class StreamHeaders implements Headers {
     }
 
     @Override
-    public Headers apply(Headers.HeaderTransform transform) {
+    public Headers apply(final Headers.HeaderTransform transform) {
         if (!isEmpty()) {
-            ListIterator<Header> iter = headers.listIterator();
+            final ListIterator<Header> iter = headers.listIterator();
             while (iter.hasNext()) {
-                Header orig = iter.next();
-                Header updated = transform.apply(orig);
+                final Header orig = iter.next();
+                final Header updated = transform.apply(orig);
                 if (updated != null) {
                     iter.set(updated);
                 } else {
@@ -233,14 +249,14 @@ public class StreamHeaders implements Headers {
     }
 
     @Override
-    public boolean equals(Object obj) {
+    public boolean equals(final Object obj) {
         if (obj == this) {
             return true;
         }
         if (obj instanceof Headers) {
-            Headers that = (Headers) obj;
-            Iterator<Header> thisIter = this.iterator();
-            Iterator<Header> thatIter = that.iterator();
+            final Headers that = (Headers) obj;
+            final Iterator<Header> thisIter = this.iterator();
+            final Iterator<Header> thatIter = that.iterator();
             while (thisIter.hasNext() && thatIter.hasNext()) {
                 if (!Objects.equals(thisIter.next(), thatIter.next())) {
                     return false;
@@ -264,7 +280,7 @@ public class StreamHeaders implements Headers {
 
     @Override
     public org.apache.kafka.common.header.Headers unwrap() {
-        RecordHeaders headers = new RecordHeaders();
+        final RecordHeaders headers = new RecordHeaders();
         if (!isEmpty()) {
             this.headers.forEach(header -> headers.add(header.key(), header.value()));
         }
@@ -277,7 +293,7 @@ public class StreamHeaders implements Headers {
         private final Iterator<Header> original;
         private final String key;
 
-        private FilterByKeyIterator(Iterator<Header> original, String key) {
+        private FilterByKeyIterator(final Iterator<Header> original, final String key) {
             this.original = original;
             this.key = key;
         }
@@ -285,7 +301,7 @@ public class StreamHeaders implements Headers {
         @Override
         protected Header makeNext() {
             while (original.hasNext()) {
-                Header header = original.next();
+                final Header header = original.next();
                 if (!header.key().equals(key)) {
                     continue;
                 }

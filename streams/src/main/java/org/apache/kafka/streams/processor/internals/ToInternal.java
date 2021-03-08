@@ -21,35 +21,35 @@ import org.apache.kafka.streams.processor.To;
 
 public class ToInternal extends To {
 
-  public ToInternal() {
-    super(To.all());
-  }
+    public ToInternal() {
+        super(To.all());
+    }
 
-  public ToInternal(final To to) {
-    super(to);
-  }
+    public ToInternal(final To to) {
+        super(to);
+    }
 
-  public void update(final To to) {
-    super.update(to);
-  }
+    public void update(final To to) {
+        super.update(to);
+    }
 
-  public boolean hasTimestamp() {
-    return timestamp != -1;
-  }
+    public boolean hasTimestamp() {
+        return timestamp != -1;
+    }
 
-  public boolean hasHeaders() {
-    return headers != null;
-  }
+    public boolean hasHeaders() {
+        return headers != null;
+    }
 
-  public long timestamp() {
-    return timestamp;
-  }
+    public long timestamp() {
+        return timestamp;
+    }
 
-  public Headers headers() {
-    return headers;
-  }
+    public Headers headers() {
+        return headers;
+    }
 
-  public String child() {
-    return childName;
-  }
+    public String child() {
+        return childName;
+    }
 }

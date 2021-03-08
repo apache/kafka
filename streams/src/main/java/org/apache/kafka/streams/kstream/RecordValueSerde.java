@@ -1,3 +1,19 @@
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements. See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to You under the Apache License, Version 2.0
+ * (the "License"); you may not use this file except in compliance with
+ * the License. You may obtain a copy of the License at
+ *
+ *    http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 package org.apache.kafka.streams.kstream;
 
 import java.io.ByteArrayOutputStream;
@@ -5,14 +21,11 @@ import java.io.DataOutputStream;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import org.apache.kafka.common.InvalidRecordException;
-import org.apache.kafka.common.errors.SerializationException;
 import org.apache.kafka.common.header.Header;
 import org.apache.kafka.common.header.internals.RecordHeader;
-import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.record.Record;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.Serde;
-import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.utils.ByteUtils;
 import org.apache.kafka.common.utils.Utils;
@@ -21,7 +34,7 @@ public class RecordValueSerde<V> implements Serde<RecordValue<V>> {
 
     final Serde<V> valueSerde;
 
-    public RecordValueSerde(Serde<V> valueSerde) {
+    public RecordValueSerde(final Serde<V> valueSerde) {
         this.valueSerde = valueSerde;
     }
 
@@ -39,12 +52,12 @@ public class RecordValueSerde<V> implements Serde<RecordValue<V>> {
 
         final Serializer<V> valueSerializer;
 
-        RecordValueSerializer(Serializer<V> valueSerializer) {
+        RecordValueSerializer(final Serializer<V> valueSerializer) {
             this.valueSerializer = valueSerializer;
         }
 
         @Override
-        public byte[] serialize(String topic, RecordValue<V> data) {
+        public byte[] serialize(final String topic, final RecordValue<V> data) {
             try (final ByteArrayOutputStream outputStream = new ByteArrayOutputStream()) {
                 try (final DataOutputStream buffer = new DataOutputStream(outputStream)) {
                     // write value
@@ -87,7 +100,7 @@ public class RecordValueSerde<V> implements Serde<RecordValue<V>> {
 
                     return outputStream.toByteArray();
                 }
-            } catch (IOException e) {
+            } catch (final IOException e) {
                 throw new RuntimeException(e); //TODO check what to do here
             }
         }
@@ -97,24 +110,23 @@ public class RecordValueSerde<V> implements Serde<RecordValue<V>> {
 
         final Deserializer<V> valueDeserializer;
 
-        RecordValueDeserializer(
-            Deserializer<V> valueDeserializer) {
+        RecordValueDeserializer(final Deserializer<V> valueDeserializer) {
             this.valueDeserializer = valueDeserializer;
         }
 
         @Override
-        public RecordValue<V> deserialize(String t, byte[] data) {
+        public RecordValue<V> deserialize(final String t, final byte[] data) {
             final ByteBuffer buffer = ByteBuffer.wrap(data);
 
             // read value
             final int valueSize = ByteUtils.readVarint(buffer);
             if (valueSize < 0) {
-                throw new IllegalArgumentException("");//TODO
+                throw new IllegalArgumentException(""); //TODO
             }
             final ByteBuffer valueBuffer = buffer.slice();
             valueBuffer.limit(valueSize);
             buffer.position(buffer.position() + valueSize);
-            byte[] valueSerialized = new byte[valueBuffer.remaining()];
+            final byte[] valueSerialized = new byte[valueBuffer.remaining()];
             valueBuffer.get(valueSerialized);
             valueBuffer.clear();
             final V value = valueDeserializer.deserialize(t, valueSerialized);
@@ -122,7 +134,7 @@ public class RecordValueSerde<V> implements Serde<RecordValue<V>> {
             // read record metadata
             final int topicSize = ByteUtils.readVarint(buffer);
             if (topicSize < 0) {
-                throw new IllegalArgumentException("");//TODO
+                throw new IllegalArgumentException(""); //TODO
             }
             final ByteBuffer topicBuffer = buffer.slice();
             topicBuffer.limit(topicSize);
@@ -173,19 +185,6 @@ public class RecordValueSerde<V> implements Serde<RecordValue<V>> {
             }
 
             return headers;
-        }
-    }
-
-    public static void main(String[] args) {
-        try {
-            RecordValueSerde<Long> serde = new RecordValueSerde<>(Serdes.Long());
-            RecordValue<Long> val = new RecordValue<>(
-                "t1", 0, 1L, 1L, 0L, new RecordHeaders());
-            byte[] ser = serde.serializer().serialize("t1", val);
-            RecordValue<Long> des = serde.deserializer().deserialize("t1", ser);
-            System.out.println(val.equals(des));
-        } catch (SerializationException e) {
-            e.printStackTrace();
         }
     }
 }

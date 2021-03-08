@@ -329,7 +329,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
     }
 
     @Override
-    public KStream<K, RecordValue<V>> mapRecordValue(Named named) {
+    public KStream<K, RecordValue<V>> mapRecordValue(final Named named) {
         Objects.requireNonNull(named, "named can't be null");
 
         final String name = new NamedInternal(named).orElseGenerateWithPrefix(builder, MAPRECORDVALUE_NAME);
@@ -353,8 +353,8 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
     }
 
     @Override
-    public KStream<K, V> setRecordHeaders(RecordHeadersMapper<? super K, ? super V> mapper,
-        Named named) {
+    public KStream<K, V> setRecordHeaders(final RecordHeadersMapper<? super K, ? super V> mapper,
+        final Named named) {
         Objects.requireNonNull(mapper, "mapper can't be null");
         Objects.requireNonNull(named, "named can't be null");
 
@@ -378,7 +378,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
     }
 
     @Override
-    public KStream<K, V> setRecordHeaders(RecordHeadersMapper<? super K, ? super V> action) {
+    public KStream<K, V> setRecordHeaders(final RecordHeadersMapper<? super K, ? super V> action) {
         return setRecordHeaders(action, NamedInternal.empty());
     }
 
