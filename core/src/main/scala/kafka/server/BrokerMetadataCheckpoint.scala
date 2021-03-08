@@ -171,7 +171,8 @@ object BrokerMetadataCheckpoint extends Logging {
             brokerMetadataMap += logDir -> properties
           case None =>
             if (!ignoreMissing) {
-              throw new KafkaException(s"No `meta.properties` found in $logDir")
+              throw new KafkaException(s"No `meta.properties` found in $logDir " +
+                "(have you run `kafka-storage.sh` to format the directory?)")
             }
         }
       } catch {
