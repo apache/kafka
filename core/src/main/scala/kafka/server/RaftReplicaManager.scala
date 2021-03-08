@@ -27,7 +27,7 @@ import kafka.server.checkpoints.LazyOffsetCheckpoints
 import kafka.server.metadata.{ConfigRepository, MetadataImage, MetadataImageBuilder, MetadataPartition, RaftMetadataCache}
 import kafka.utils.Scheduler
 import org.apache.kafka.common.TopicPartition
-import org.apache.kafka.common.errors.KafkaStorageException
+import org.apache.kafka.common.errors.{InconsistentTopicIdException, KafkaStorageException}
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.utils.Time
 
@@ -252,7 +252,9 @@ class RaftReplicaManager(config: KafkaConfig,
           }
           partition.foreach { partition =>
             builder.topicNameToId(partition.topic) match {
-              case Some(id) => partition.checkOrSetTopicId(id, true) // not sure if we should do things to handle case where topic ID is inconsistent
+              case Some(id) =>
+                if (!partition.checkOrSetTopicId(id, true))
+                  throw new InconsistentTopicIdException(s"Topic partition ${partition.topicPartition} had an inconsistent topic ID." )
               case None => throw new IllegalStateException(
                 s"Topic partition ${partition.topicPartition} is missing a topic ID"
               )
@@ -293,7 +295,9 @@ class RaftReplicaManager(config: KafkaConfig,
           }
           partition.foreach { partition =>
             builder.topicNameToId(partition.topic) match {
-              case Some(id) => partition.checkOrSetTopicId(id, true) // not sure if we should do things to handle case where topic ID is inconsistent
+              case Some(id) =>
+                if (!partition.checkOrSetTopicId(id, true))
+                   throw new InconsistentTopicIdException(s"Topic partition ${partition.topicPartition} had an inconsistent topic ID." )
               case None => throw new IllegalStateException(
                 s"Topic partition ${partition.topicPartition} is missing a topic ID"
               )

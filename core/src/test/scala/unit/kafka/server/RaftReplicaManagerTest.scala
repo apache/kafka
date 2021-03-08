@@ -26,6 +26,7 @@ import kafka.server.QuotaFactory.QuotaManagers
 import kafka.server.checkpoints.LazyOffsetCheckpoints
 import kafka.server.metadata.{CachedConfigRepository, MetadataBroker, MetadataBrokers, MetadataImage, MetadataImageBuilder, MetadataPartition, RaftMetadataCache}
 import kafka.utils.{MockScheduler, MockTime, TestUtils}
+import org.apache.kafka.common.errors.InconsistentTopicIdException
 import org.apache.kafka.common.{TopicPartition, Uuid}
 import org.apache.kafka.common.metadata.PartitionRecord
 import org.apache.kafka.common.metrics.Metrics
@@ -206,6 +207,56 @@ class RaftReplicaManagerTest {
 
     // partition.metadata file
     verifyPartitionMetadataFile(rrm, List(topicPartition0, topicPartition1))
+  }
+
+  @Test
+  def testInconsistentTopicIdDefersChanges(): Unit = {
+    val rrm = createRaftReplicaManager()
+    rrm.delegate = mockDelegate
+    val partition0 = rrm.createPartition(topicPartition0)
+    val partition1 = rrm.createPartition(topicPartition1)
+
+    partition0.createLogIfNotExists(isNew = false, isFutureReplica = false,
+      new LazyOffsetCheckpoints(rrm.highWatermarkCheckpoints))
+    partition1.createLogIfNotExists(isNew = false, isFutureReplica = false,
+      new LazyOffsetCheckpoints(rrm.highWatermarkCheckpoints))
+
+    assertTrue(partition0.log.isDefined)
+    partition0.log.get.topicId = Uuid.randomUuid()
+
+    try {
+      processTopicPartitionMetadata(rrm)
+    } catch {
+      case e: Throwable => assertTrue(e.isInstanceOf[InconsistentTopicIdException])
+    }
+  }
+
+  @Test
+  def testInconsistentTopicIdWhenNotDeferring(): Unit = {
+    val rrm = createRaftReplicaManager()
+    rrm.delegate = mockDelegate
+    val partition0 = rrm.createPartition(topicPartition0)
+    val partition1 = rrm.createPartition(topicPartition1)
+
+    partition0.createLogIfNotExists(isNew = false, isFutureReplica = false,
+      new LazyOffsetCheckpoints(rrm.highWatermarkCheckpoints))
+    partition1.createLogIfNotExists(isNew = false, isFutureReplica = false,
+      new LazyOffsetCheckpoints(rrm.highWatermarkCheckpoints))
+
+    assertTrue(partition1.log.isDefined)
+    partition1.log.get.topicId = Uuid.randomUuid()
+
+    rrm.endMetadataChangeDeferral(onLeadershipChange)
+
+    // define some return values to avoid NPE
+    when(mockDelegate.makeLeaders(any(), any(), any(), ArgumentMatchers.eq(Some(offset1)))).thenReturn(Set(partition0))
+    when(mockDelegate.makeFollowers(any(), any(), any(), any(), ArgumentMatchers.eq(Some(offset1)))).thenReturn(Set(partition1))
+
+    try {
+      processTopicPartitionMetadata(rrm)
+    } catch {
+      case e: Throwable => assertTrue(e.isInstanceOf[InconsistentTopicIdException])
+    }
   }
 
   private def verifyMakeLeaders(expectedPrevPartitionsAlreadyExisting: Set[MetadataPartition],
