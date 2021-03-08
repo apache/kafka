@@ -96,11 +96,16 @@ class CachedConfigRepository extends ConfigRepository {
 
   override def config(configResource: ConfigResource): Properties = {
     val properties = new Properties()
-    Option(configMap.get(configResource)).foreach {
-      _.entrySet().iterator().asScala.foreach { case e =>
-        properties.put(e.getKey, e.getValue)
+    Option(configMap.get(configResource)).foreach { resourceConfigMap =>
+      resourceConfigMap.entrySet.iterator.asScala.foreach { entry =>
+        properties.put(entry.getKey, entry.getValue)
       }
     }
     properties
   }
+
+  def remove(configResource: ConfigResource): Unit = {
+    configMap.remove(configResource)
+  }
+
 }

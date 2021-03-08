@@ -20,7 +20,6 @@ import java.util
 import java.util.concurrent.TimeUnit
 import kafka.coordinator.group.GroupCoordinator
 import kafka.coordinator.transaction.TransactionCoordinator
-import kafka.log.LogManager
 import kafka.metrics.KafkaMetricsGroup
 import kafka.server.{RaftReplicaManager, RequestHandlerHelper}
 import org.apache.kafka.common.config.ConfigResource
@@ -45,7 +44,6 @@ class BrokerMetadataListener(brokerId: Int,
                              groupCoordinator: GroupCoordinator,
                              replicaManager: RaftReplicaManager,
                              txnCoordinator: TransactionCoordinator,
-                             logManager: LogManager,
                              threadNamePrefix: Option[String],
                              clientQuotaManager: ClientQuotaMetadataManager
                             ) extends MetaLogListener with KafkaMetricsGroup {
@@ -77,6 +75,11 @@ class BrokerMetadataListener(brokerId: Int,
    */
   override def handleCommits(lastOffset: Long, records: util.List[ApiMessage]): Unit = {
     eventQueue.append(new HandleCommitsEvent(lastOffset, records))
+  }
+
+  // Visible for testing. It's useful to execute events synchronously
+  private[metadata] def execCommits(lastOffset: Long, records: util.List[ApiMessage]): Unit = {
+    new HandleCommitsEvent(lastOffset, records).run()
   }
 
   class HandleCommitsEvent(lastOffset: Long,
@@ -142,28 +145,19 @@ class BrokerMetadataListener(brokerId: Int,
       case e: Exception => throw new RuntimeException("Unknown metadata record type " +
       s"${record.apiKey()} in batch ending at offset ${lastOffset}.")
     }
-    recordType match {
-      case REGISTER_BROKER_RECORD => handleRegisterBrokerRecord(imageBuilder,
-        record.asInstanceOf[RegisterBrokerRecord])
-      case UNREGISTER_BROKER_RECORD => handleUnregisterBrokerRecord(imageBuilder,
-        record.asInstanceOf[UnregisterBrokerRecord])
-      case TOPIC_RECORD => handleTopicRecord(imageBuilder,
-        record.asInstanceOf[TopicRecord])
-      case PARTITION_RECORD => handlePartitionRecord(imageBuilder,
-        record.asInstanceOf[PartitionRecord])
-      case CONFIG_RECORD => handleConfigRecord(record.asInstanceOf[ConfigRecord])
-      case PARTITION_CHANGE_RECORD => handlePartitionChangeRecord(imageBuilder,
-        record.asInstanceOf[PartitionChangeRecord])
-      case FENCE_BROKER_RECORD => handleFenceBrokerRecord(imageBuilder,
-        record.asInstanceOf[FenceBrokerRecord])
-      case UNFENCE_BROKER_RECORD => handleUnfenceBrokerRecord(imageBuilder,
-        record.asInstanceOf[UnfenceBrokerRecord])
-      case REMOVE_TOPIC_RECORD => handleRemoveTopicRecord(imageBuilder,
-        record.asInstanceOf[RemoveTopicRecord])
-      case QUOTA_RECORD => handleQuotaRecord(imageBuilder,
-        record.asInstanceOf[QuotaRecord])
-      // TODO: handle FEATURE_LEVEL_RECORD
-      case _ => throw new RuntimeException(s"Unsupported record type ${recordType}")
+
+    record match {
+      case rec: RegisterBrokerRecord => handleRegisterBrokerRecord(imageBuilder, rec)
+      case rec: UnregisterBrokerRecord => handleUnregisterBrokerRecord(imageBuilder, rec)
+      case rec: FenceBrokerRecord => handleFenceBrokerRecord(imageBuilder, rec)
+      case rec: UnfenceBrokerRecord => handleUnfenceBrokerRecord(imageBuilder, rec)
+      case rec: TopicRecord => handleTopicRecord(imageBuilder, rec)
+      case rec: PartitionRecord => handlePartitionRecord(imageBuilder, rec)
+      case rec: PartitionChangeRecord => handlePartitionChangeRecord(imageBuilder, rec)
+      case rec: RemoveTopicRecord => handleRemoveTopicRecord(imageBuilder, rec)
+      case rec: ConfigRecord => handleConfigRecord(rec)
+      case rec: QuotaRecord => handleQuotaRecord(imageBuilder, rec)
+      case _ => throw new RuntimeException(s"Unhandled record $record with type $recordType")
     }
   }
 
@@ -222,9 +216,16 @@ class BrokerMetadataListener(brokerId: Int,
 
   def handleRemoveTopicRecord(imageBuilder: MetadataImageBuilder,
                               record: RemoveTopicRecord): Unit = {
-    val removedPartitions = imageBuilder.partitionsBuilder().
-      removeTopicById(record.topicId())
-    groupCoordinator.handleDeletedPartitions(removedPartitions.map(_.toTopicPartition).toSeq)
+    imageBuilder.topicIdToName(record.topicId()) match {
+      case None =>
+        throw new RuntimeException(s"Unable to locate topic with ID ${record.topicId}")
+
+      case Some(topicName) =>
+        info(s"Processing deletion of topic $topicName with id ${record.topicId}")
+        val removedPartitions = imageBuilder.partitionsBuilder().removeTopicById(record.topicId())
+        groupCoordinator.handleDeletedPartitions(removedPartitions.map(_.toTopicPartition).toSeq)
+        configRepository.remove(new ConfigResource(ConfigResource.Type.TOPIC, topicName))
+    }
   }
 
   def handleQuotaRecord(imageBuilder: MetadataImageBuilder,

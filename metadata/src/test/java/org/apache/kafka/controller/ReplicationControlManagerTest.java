@@ -84,7 +84,6 @@ public class ReplicationControlManagerTest {
             new LogContext(), snapshotRegistry, Collections.emptyMap());
         final ReplicationControlManager replicationControl = new ReplicationControlManager(snapshotRegistry,
             new LogContext(),
-            random,
             (short) 3,
             1,
             configurationControl,

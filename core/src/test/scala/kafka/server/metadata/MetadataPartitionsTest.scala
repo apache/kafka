@@ -18,13 +18,12 @@
 package kafka.server.metadata
 
 import java.util.Collections
-
-import org.apache.kafka.common.Uuid
-import org.junit.jupiter.api.Assertions._
-import org.junit.jupiter.api.{Test, Timeout}
 import java.util.concurrent.TimeUnit
 
+import org.apache.kafka.common.{TopicPartition, Uuid}
 import org.apache.kafka.common.metadata.PartitionChangeRecord
+import org.junit.jupiter.api.Assertions._
+import org.junit.jupiter.api.{Test, Timeout}
 
 import scala.collection.mutable
 import scala.jdk.CollectionConverters._
@@ -38,9 +37,12 @@ class MetadataPartitionsTest {
   private def newPartition(topicName: String,
                            partitionIndex: Int,
                            replicas: Option[Seq[Int]] = None,
-                           isr: Option[Seq[Int]] = None): MetadataPartition = {
-    val effectiveReplicas = asJavaList(replicas
-      .getOrElse(List(partitionIndex, partitionIndex + 1, partitionIndex + 2)))
+                           isr: Option[Seq[Int]] = None,
+                           numBrokers: Int = 6): MetadataPartition = {
+    val effectiveReplicas = asJavaList(replicas.getOrElse {
+      val preferredLeaderId = partitionIndex % numBrokers
+      List(preferredLeaderId, preferredLeaderId + 1, preferredLeaderId + 2)
+    })
 
     val effectiveIsr = isr match {
       case None => effectiveReplicas
@@ -127,12 +129,9 @@ class MetadataPartitionsTest {
   @Test
   def testAllTopicNames(): Unit = {
     val builder = new MetadataPartitionsBuilder(0, emptyPartitions)
-    builder.set(newPartition("foo", 0))
-    builder.set(newPartition("foo", 1))
-    builder.set(newPartition("foo", 2))
-    builder.set(newPartition("bar", 0))
-    builder.set(newPartition("baz", 0))
-    builder.set(newPartition("baz", 1))
+    createTopic("foo", numPartitions = 3, builder)
+    createTopic("bar", numPartitions = 2, builder)
+    createTopic("baz", numPartitions = 3, builder)
     val image = builder.build()
     val expectedTopicNames = new mutable.HashSet[String]()
     expectedTopicNames += "foo"
@@ -183,6 +182,139 @@ class MetadataPartitionsTest {
     assertEquals(initialMetadata.leaderEpoch + 1, updatedLeader.leaderEpoch)
     assertEquals(initialMetadata.partitionEpoch + 1, updatedLeader.partitionEpoch)
     assertEquals(2, updatedLeader.leaderId)
+  }
+
+  @Test
+  def testTopicCreateAndDelete(): Unit = {
+    val topic = "foo"
+    val numPartitions = 3
+    val topicPartitions = (0 until numPartitions).map(new TopicPartition(topic, _)).toSet
+    val builder = new MetadataPartitionsBuilder(0, emptyPartitions)
+    val topicId = createTopic(topic, numPartitions, builder)
+    val localTopicPartitions = localChanged(builder)
+
+    assertTrue(localTopicPartitions.subsetOf(topicPartitions))
+    assertTrue(localTopicPartitions.nonEmpty)
+    assertNotEquals(topicPartitions, localTopicPartitions)
+
+    builder.removeTopicById(topicId)
+    assertEquals(None, builder.topicIdToName(topicId))
+    assertEquals(None, builder.topicNameToId(topic))
+    assertEquals(Set.empty, filterPartitions(builder, topicPartitions))
+    assertEquals(Set.empty, localRemoved(builder))
+    assertEquals(Set.empty, localChanged(builder))
+
+    val metadata = builder.build()
+    assertEquals(Set.empty, metadata.allTopicNames())
+    assertEquals(None, metadata.topicIdToName(topicId))
+    assertEquals(None, metadata.topicNameToId(topic))
+    assertEquals(Set.empty, metadata.topicPartitions(topic).toSet)
+  }
+
+  @Test
+  def testTopicRemoval(): Unit = {
+    val brokerId = 0
+    val topic = "foo"
+    val numPartitions = 3
+    val topicPartitions = (0 until numPartitions).map(new TopicPartition(topic, _)).toSet
+    val createBuilder = new MetadataPartitionsBuilder(brokerId, emptyPartitions)
+    val topicId = createTopic(topic, numPartitions, createBuilder)
+    val localTopicPartitions = localChanged(createBuilder)
+    val createMetadata = createBuilder.build()
+
+    assertTrue(localTopicPartitions.subsetOf(topicPartitions))
+    assertTrue(localTopicPartitions.nonEmpty)
+    assertNotEquals(topicPartitions, localTopicPartitions)
+
+    val deleteBuilder = new MetadataPartitionsBuilder(brokerId = 0, createMetadata)
+    deleteBuilder.removeTopicById(topicId)
+    assertEquals(None, deleteBuilder.topicIdToName(topicId))
+    assertEquals(None, deleteBuilder.topicNameToId(topic))
+    assertEquals(Set.empty, filterPartitions(deleteBuilder, topicPartitions))
+    assertEquals(localTopicPartitions, localRemoved(deleteBuilder))
+    assertEquals(Set.empty, localChanged(deleteBuilder))
+
+    val deleteMetadata = deleteBuilder.build()
+    assertEquals(Set.empty, deleteMetadata.allTopicNames())
+    assertEquals(None, deleteMetadata.topicIdToName(topicId))
+    assertEquals(None, deleteMetadata.topicNameToId(topic))
+    assertEquals(Set.empty, deleteMetadata.topicPartitions(topic).toSet)
+  }
+
+  @Test
+  def testTopicDeleteAndRecreate(): Unit = {
+    val topic = "foo"
+    val numPartitions = 3
+    val initialBuilder = new MetadataPartitionsBuilder(0, emptyPartitions)
+    val initialTopicId = createTopic(topic, numPartitions, initialBuilder)
+    val initialLocalTopicPartitions = initialBuilder.localChanged().map(_.toTopicPartition).toSet
+    val initialMetadata = initialBuilder.build()
+
+    val recreateBuilder = new MetadataPartitionsBuilder(brokerId = 0, initialMetadata)
+    recreateBuilder.removeTopicById(initialTopicId)
+    assertEquals(initialLocalTopicPartitions, localRemoved(recreateBuilder))
+
+    val recreatedNumPartitions = 10
+    val recreatedTopicId = createTopic(topic, recreatedNumPartitions, recreateBuilder)
+    val recreatedTopicPartitions = (0 until recreatedNumPartitions).map(new TopicPartition(topic, _)).toSet
+    val recreatedLocalTopicPartitions = localChanged(recreateBuilder)
+
+    assertTrue(recreatedLocalTopicPartitions.nonEmpty)
+    assertNotEquals(recreatedLocalTopicPartitions, recreatedTopicPartitions)
+    assertTrue(recreatedLocalTopicPartitions.subsetOf(recreatedTopicPartitions))
+    assertFalse(recreatedLocalTopicPartitions.subsetOf(initialLocalTopicPartitions))
+    assertEquals(Some(topic), recreateBuilder.topicIdToName(recreatedTopicId))
+    assertEquals(Some(recreatedTopicId), recreateBuilder.topicNameToId(topic))
+    assertEquals(recreatedTopicPartitions, filterPartitions(recreateBuilder, recreatedTopicPartitions))
+    assertEquals(initialLocalTopicPartitions, localRemoved(recreateBuilder))
+
+    val recreatedMetadata = recreateBuilder.build()
+    assertEquals(recreatedTopicPartitions, filterPartitions(recreatedMetadata, topic))
+    assertEquals(Some(recreatedTopicId), recreatedMetadata.topicNameToId(topic))
+    assertEquals(Some(topic), recreatedMetadata.topicIdToName(recreatedTopicId))
+  }
+
+  private def localRemoved(
+    builder: MetadataPartitionsBuilder
+  ): Set[TopicPartition] = {
+    builder.localRemoved().toSet[MetadataPartition].map(_.toTopicPartition)
+  }
+
+  private def localChanged(
+    builder: MetadataPartitionsBuilder
+  ): Set[TopicPartition] = {
+    builder.localChanged().toSet[MetadataPartition].map(_.toTopicPartition)
+  }
+
+  private def filterPartitions(
+    metadata: MetadataPartitions,
+    topic: String
+  ): Set[TopicPartition] = {
+    metadata.topicPartitions(topic).map(_.toTopicPartition).toSet
+  }
+
+  private def filterPartitions(
+    builder: MetadataPartitionsBuilder,
+    topicPartitions: Set[TopicPartition]
+  ): Set[TopicPartition] = {
+    topicPartitions.filter { topicPartition =>
+      builder.get(topicPartition.topic, topicPartition.partition).isDefined
+    }
+  }
+
+  private def createTopic(
+    topic: String,
+    numPartitions: Int,
+    builder: MetadataPartitionsBuilder
+  ): Uuid = {
+    val topicId = Uuid.randomUuid()
+    builder.addUuidMapping(topic, topicId)
+
+    (0 until numPartitions).foreach { partition =>
+      builder.set(newPartition(topic, partition))
+    }
+
+    topicId
   }
 
   private def asJavaList(replicas: Iterable[Int]): java.util.List[Integer] = {

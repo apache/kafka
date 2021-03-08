@@ -266,7 +266,6 @@ class BrokerServer(
         groupCoordinator,
         replicaManager,
         transactionCoordinator,
-        logManager,
         threadNamePrefix,
         clientQuotaMetadataManager)
 
