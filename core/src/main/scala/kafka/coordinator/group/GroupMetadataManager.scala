@@ -278,6 +278,11 @@ class GroupMetadataManager(brokerId: Int,
               s"due to ${status.error.exceptionName}")
             System.err.println(s"Metadata from group ${group.groupId} with generation $generationId failed when appending to log " +
               s"due to ${status.error.exceptionName}")
+            val elements = Thread.currentThread.getStackTrace
+            for (i <- 1 until elements.length) {
+              val s = elements(i)
+              System.out.print(" - " + "(" + s.getFileName + ":" + s.getLineNumber + ")")
+            }
 
             // transform the log append error code to the corresponding the commit status error code
             status.error match {
