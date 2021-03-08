@@ -136,6 +136,8 @@ public class PartitionLeaderStrategy implements AdminApiLookupStrategy<TopicPart
                 break;
 
             default:
+                log.error("Received unexpected error for partition {} in `Metadata` response",
+                    topicPartition, partitionError.exception());
                 failed.put(topicPartition, partitionError.exception(
                     "Unexpected error during metadata lookup for " + topicPartition));
         }

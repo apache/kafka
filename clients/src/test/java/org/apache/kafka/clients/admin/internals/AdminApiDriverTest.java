@@ -141,7 +141,6 @@ class AdminApiDriverTest {
 
         ctx.poll(lookupRequests, emptyMap());
 
-
         Map<Set<String>, LookupResult<String>> fooRetry = map(
             mkSet("foo"), mapped("foo", 1)
         );
