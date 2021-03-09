@@ -444,14 +444,11 @@ public class TaskManager {
             try {
                 task.initializeIfNeeded();
                 task.clearTaskTimeout();
-            } catch (final LockException retriableException) {
+            } catch (final LockException lockException) {
                 // it is possible that if there are multiple threads within the instance that one thread
                 // trying to grab the task from the other, while the other has not released the lock since
                 // it did not participate in the rebalance. In this case we can just retry in the next iteration
-                log.debug(
-                    String.format("Could not initialize %s due to the following exception; will retry", task.id()),
-                    retriableException
-                );
+                log.debug("Could not initialize task {} since: {}; will retry", task.id(), lockException.getMessage());
                 allRunning = false;
             } catch (final TimeoutException timeoutException) {
                 task.maybeInitTaskTimeoutOrThrow(now, timeoutException);
@@ -989,7 +986,7 @@ public class TaskManager {
      * @param records Records, can be null
      */
     void addRecordsToTasks(final ConsumerRecords<byte[], byte[]> records) {
-        for (final TopicPartition partition : union(HashSet::new, records.partitions(), records.metadata().keySet())) {
+        for (final TopicPartition partition : records.partitions()) {
             final Task activeTask = tasks.activeTasksForInputPartition(partition);
 
             if (activeTask == null) {
@@ -999,7 +996,6 @@ public class TaskManager {
             }
 
             activeTask.addRecords(partition, records.records(partition));
-            activeTask.addFetchedMetadata(partition, records.metadata().get(partition));
         }
     }
 
@@ -1073,6 +1069,7 @@ public class TaskManager {
                     try {
                         tasks.streamsProducerForTask(task.id())
                             .commitTransaction(taskToCommit.getValue(), mainConsumer.groupMetadata());
+                        updateTaskMetadata(taskToCommit.getValue());
                     } catch (final TimeoutException timeoutException) {
                         log.error(
                             String.format("Committing task %s failed.", task.id()),
@@ -1088,6 +1085,7 @@ public class TaskManager {
                 if (processingMode == EXACTLY_ONCE_BETA) {
                     try {
                         tasks.threadProducer().commitTransaction(allOffsets, mainConsumer.groupMetadata());
+                        updateTaskMetadata(allOffsets);
                     } catch (final TimeoutException timeoutException) {
                         log.error(
                             String.format("Committing task(s) %s failed.",
@@ -1105,6 +1103,7 @@ public class TaskManager {
                 } else {
                     try {
                         mainConsumer.commitSync(allOffsets);
+                        updateTaskMetadata(allOffsets);
                     } catch (final CommitFailedException error) {
                         throw new TaskMigratedException("Consumer committing offsets failed, " +
                                                             "indicating the corresponding thread is no longer part of the group", error);
@@ -1127,6 +1126,16 @@ public class TaskManager {
 
             if (!corruptedTasks.isEmpty()) {
                 throw new TaskCorruptedException(corruptedTasks);
+            }
+        }
+    }
+
+    private void updateTaskMetadata(final Map<TopicPartition, OffsetAndMetadata> allOffsets) {
+        for (final Task task: tasks.activeTasks()) {
+            for (final TopicPartition topicPartition: task.inputPartitions()) {
+                if (allOffsets.containsKey(topicPartition)) {
+                    task.updateCommittedOffsets(topicPartition, allOffsets.get(topicPartition).offset());
+                }
             }
         }
     }

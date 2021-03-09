@@ -26,6 +26,7 @@ import java.time.Duration;
 import java.util.Collection;
 import java.util.List;
 import java.util.Map;
+import java.util.OptionalLong;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
 import java.util.regex.Pattern;
@@ -242,6 +243,11 @@ public interface Consumer<K, V> extends Closeable {
      * @see KafkaConsumer#endOffsets(Collection, Duration)
      */
     Map<TopicPartition, Long> endOffsets(Collection<TopicPartition> partitions, Duration timeout);
+
+    /**
+     * @see KafkaConsumer#currentLag(TopicPartition)
+     */
+    OptionalLong currentLag(TopicPartition topicPartition);
 
     /**
      * @see KafkaConsumer#groupMetadata()

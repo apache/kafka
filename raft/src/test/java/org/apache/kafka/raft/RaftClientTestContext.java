@@ -87,7 +87,7 @@ public final class RaftClientTestContext {
 
     final TopicPartition metadataPartition = Builder.METADATA_PARTITION;
     final int electionBackoffMaxMs = Builder.ELECTION_BACKOFF_MAX_MS;
-    final int electionFetchMaxWaitMs = Builder.FETCH_MAX_WAIT_MS;
+    final int fetchMaxWaitMs = Builder.FETCH_MAX_WAIT_MS;
     final int fetchTimeoutMs = Builder.FETCH_TIMEOUT_MS;
     final int retryBackoffMs = Builder.RETRY_BACKOFF_MS;
 
@@ -606,7 +606,7 @@ public final class RaftClientTestContext {
         return raftMessage.correlationId();
     }
 
-    FetchResponseData.FetchablePartitionResponse assertSentFetchPartitionResponse() {
+    FetchResponseData.PartitionData assertSentFetchPartitionResponse() {
         List<RaftResponse.Outbound> sentMessages = drainSentResponses(ApiKeys.FETCH);
         assertEquals(
             1, sentMessages.size(), "Found unexpected sent messages " + sentMessages);
@@ -617,8 +617,8 @@ public final class RaftClientTestContext {
 
         assertEquals(1, response.responses().size());
         assertEquals(metadataPartition.topic(), response.responses().get(0).topic());
-        assertEquals(1, response.responses().get(0).partitionResponses().size());
-        return response.responses().get(0).partitionResponses().get(0);
+        assertEquals(1, response.responses().get(0).partitions().size());
+        return response.responses().get(0).partitions().get(0);
     }
 
     void assertSentFetchPartitionResponse(Errors error) {
@@ -637,7 +637,7 @@ public final class RaftClientTestContext {
         int epoch,
         OptionalInt leaderId
     ) {
-        FetchResponseData.FetchablePartitionResponse partitionResponse = assertSentFetchPartitionResponse();
+        FetchResponseData.PartitionData partitionResponse = assertSentFetchPartitionResponse();
         assertEquals(error, Errors.forCode(partitionResponse.errorCode()));
         assertEquals(epoch, partitionResponse.currentLeader().leaderEpoch());
         assertEquals(leaderId.orElse(-1), partitionResponse.currentLeader().leaderId());
@@ -645,14 +645,14 @@ public final class RaftClientTestContext {
         assertEquals(-1, partitionResponse.divergingEpoch().epoch());
         assertEquals(-1, partitionResponse.snapshotId().endOffset());
         assertEquals(-1, partitionResponse.snapshotId().epoch());
-        return (MemoryRecords) partitionResponse.recordSet();
+        return (MemoryRecords) partitionResponse.records();
     }
 
     MemoryRecords assertSentFetchPartitionResponse(
         long highWatermark,
         int leaderEpoch
     ) {
-        FetchResponseData.FetchablePartitionResponse partitionResponse = assertSentFetchPartitionResponse();
+        FetchResponseData.PartitionData partitionResponse = assertSentFetchPartitionResponse();
         assertEquals(Errors.NONE, Errors.forCode(partitionResponse.errorCode()));
         assertEquals(leaderEpoch, partitionResponse.currentLeader().leaderEpoch());
         assertEquals(highWatermark, partitionResponse.highWatermark());
@@ -660,7 +660,7 @@ public final class RaftClientTestContext {
         assertEquals(-1, partitionResponse.divergingEpoch().epoch());
         assertEquals(-1, partitionResponse.snapshotId().endOffset());
         assertEquals(-1, partitionResponse.snapshotId().epoch());
-        return (MemoryRecords) partitionResponse.recordSet();
+        return (MemoryRecords) partitionResponse.records();
     }
 
     RaftRequest.Outbound assertSentFetchSnapshotRequest() {
@@ -870,6 +870,8 @@ public final class RaftClientTestContext {
         assertTrue(
             message.data() instanceof FetchRequestData, "Unexpected request type " + message.data());
         FetchRequestData request = (FetchRequestData) message.data();
+        assertEquals(KafkaRaftClient.MAX_FETCH_SIZE_BYTES, request.maxBytes());
+        assertEquals(fetchMaxWaitMs, request.maxWaitMs());
 
         assertEquals(1, request.topics().size());
         assertEquals(metadataPartition.topic(), request.topics().get(0).topic());
@@ -928,7 +930,7 @@ public final class RaftClientTestContext {
     ) {
         return RaftUtil.singletonFetchResponse(metadataPartition, Errors.NONE, partitionData -> {
             partitionData
-                .setRecordSet(records)
+                .setRecords(records)
                 .setErrorCode(error.code())
                 .setHighWatermark(highWatermark);
 
@@ -946,9 +948,7 @@ public final class RaftClientTestContext {
         long highWatermark
     ) {
         return RaftUtil.singletonFetchResponse(metadataPartition, Errors.NONE, partitionData -> {
-            partitionData
-                .setErrorCode(Errors.NONE.code())
-                .setHighWatermark(highWatermark);
+            partitionData.setHighWatermark(highWatermark);
 
             partitionData.currentLeader()
                 .setLeaderEpoch(epoch)

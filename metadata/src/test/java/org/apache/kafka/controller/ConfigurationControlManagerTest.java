@@ -135,18 +135,42 @@ public class ConfigurationControlManagerTest {
         SnapshotRegistry snapshotRegistry = new SnapshotRegistry(new LogContext());
         ConfigurationControlManager manager =
             new ConfigurationControlManager(new LogContext(), snapshotRegistry, CONFIGS);
-        assertEquals(new ControllerResult<Map<ConfigResource, ApiError>>(Collections.singletonList(
-            new ApiMessageAndVersion(new ConfigRecord().
-                setResourceType(TOPIC.id()).setResourceName("mytopic").
-                setName("abc").setValue("123"), (short) 0)),
-            toMap(entry(BROKER0, new ApiError(
-                Errors.INVALID_REQUEST, "A DELETE op was given with a non-null value.")),
-                entry(MYTOPIC, ApiError.NONE))),
-            manager.incrementalAlterConfigs(toMap(entry(BROKER0, toMap(
-                entry("foo.bar", entry(DELETE, "abc")),
-                entry("quux", entry(SET, "abc")))),
-            entry(MYTOPIC, toMap(
-                entry("abc", entry(APPEND, "123")))))));
+        assertEquals(
+            ControllerResult.atomicOf(
+                Collections.singletonList(
+                    new ApiMessageAndVersion(
+                        new ConfigRecord()
+                            .setResourceType(TOPIC.id())
+                            .setResourceName("mytopic")
+                            .setName("abc")
+                            .setValue("123"),
+                        (short) 0
+                    )
+                ),
+                toMap(
+                    entry(
+                        BROKER0,
+                        new ApiError(
+                            Errors.INVALID_REQUEST,
+                            "A DELETE op was given with a non-null value."
+                        )
+                    ),
+                    entry(MYTOPIC, ApiError.NONE)
+                )
+            ),
+            manager.incrementalAlterConfigs(
+                toMap(
+                    entry(
+                        BROKER0,
+                        toMap(
+                            entry("foo.bar", entry(DELETE, "abc")),
+                            entry("quux", entry(SET, "abc"))
+                        )
+                    ),
+                    entry(MYTOPIC, toMap(entry("abc", entry(APPEND, "123"))))
+                )
+            )
+        );
     }
 
     @Test
@@ -184,20 +208,33 @@ public class ConfigurationControlManagerTest {
             new ApiMessageAndVersion(new ConfigRecord().
                 setResourceType(TOPIC.id()).setResourceName("mytopic").
                 setName("def").setValue("901"), (short) 0));
-        assertEquals(new ControllerResult<Map<ConfigResource, ApiError>>(
+        assertEquals(
+            ControllerResult.atomicOf(
                 expectedRecords1,
-                toMap(entry(MYTOPIC, ApiError.NONE))),
-            manager.legacyAlterConfigs(toMap(entry(MYTOPIC, toMap(
-                entry("abc", "456"), entry("def", "901"))))));
+                toMap(entry(MYTOPIC, ApiError.NONE))
+            ),
+            manager.legacyAlterConfigs(
+                toMap(entry(MYTOPIC, toMap(entry("abc", "456"), entry("def", "901"))))
+            )
+        );
         for (ApiMessageAndVersion message : expectedRecords1) {
             manager.replay((ConfigRecord) message.message());
         }
-        assertEquals(new ControllerResult<Map<ConfigResource, ApiError>>(Arrays.asList(
-            new ApiMessageAndVersion(new ConfigRecord().
-                setResourceType(TOPIC.id()).setResourceName("mytopic").
-                setName("abc").setValue(null), (short) 0)),
-                toMap(entry(MYTOPIC, ApiError.NONE))),
-            manager.legacyAlterConfigs(toMap(entry(MYTOPIC, toMap(
-                entry("def", "901"))))));
+        assertEquals(
+            ControllerResult.atomicOf(
+                Arrays.asList(
+                    new ApiMessageAndVersion(
+                        new ConfigRecord()
+                            .setResourceType(TOPIC.id())
+                            .setResourceName("mytopic")
+                            .setName("abc")
+                            .setValue(null),
+                        (short) 0
+                    )
+                ),
+                toMap(entry(MYTOPIC, ApiError.NONE))
+            ),
+            manager.legacyAlterConfigs(toMap(entry(MYTOPIC, toMap(entry("def", "901")))))
+        );
     }
 }

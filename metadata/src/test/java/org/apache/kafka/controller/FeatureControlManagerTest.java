@@ -18,10 +18,8 @@
 package org.apache.kafka.controller;
 
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import org.apache.kafka.common.metadata.FeatureLevelRecord;
@@ -61,11 +59,11 @@ public class FeatureControlManagerTest {
             rangeMap("foo", 1, 2), snapshotRegistry);
         assertEquals(new FeatureMapAndEpoch(new FeatureMap(Collections.emptyMap()), -1),
             manager.finalizedFeatures(-1));
-        assertEquals(new ControllerResult<>(Collections.
+        assertEquals(ControllerResult.atomicOf(Collections.emptyList(), Collections.
                 singletonMap("foo", new ApiError(Errors.INVALID_UPDATE_VERSION,
                     "The controller does not support the given feature range."))),
             manager.updateFeatures(rangeMap("foo", 1, 3),
-                new HashSet<>(Arrays.asList("foo")),
+                Collections.singleton("foo"),
                 Collections.emptyMap()));
         ControllerResult<Map<String, ApiError>> result = manager.updateFeatures(
             rangeMap("foo", 1, 2, "bar", 1, 1), Collections.emptySet(),
@@ -101,12 +99,24 @@ public class FeatureControlManagerTest {
         SnapshotRegistry snapshotRegistry = new SnapshotRegistry(new LogContext());
         FeatureControlManager manager = new FeatureControlManager(
             rangeMap("foo", 1, 5, "bar", 1, 2), snapshotRegistry);
-        assertEquals(new ControllerResult<>(Collections.
-                singletonMap("foo", new ApiError(Errors.INVALID_UPDATE_VERSION,
-                    "Broker 5 does not support the given feature range."))),
-            manager.updateFeatures(rangeMap("foo", 1, 3),
-                new HashSet<>(Arrays.asList("foo")),
-                Collections.singletonMap(5, rangeMap())));
+
+        assertEquals(
+            ControllerResult.atomicOf(
+                Collections.emptyList(),
+                Collections.singletonMap(
+                    "foo",
+                    new ApiError(
+                        Errors.INVALID_UPDATE_VERSION,
+                        "Broker 5 does not support the given feature range."
+                    )
+                )
+            ),
+            manager.updateFeatures(
+                rangeMap("foo", 1, 3),
+                Collections.singleton("foo"),
+                Collections.singletonMap(5, rangeMap())
+            )
+        );
 
         ControllerResult<Map<String, ApiError>> result = manager.updateFeatures(
             rangeMap("foo", 1, 3), Collections.emptySet(), Collections.emptyMap());
@@ -114,19 +124,31 @@ public class FeatureControlManagerTest {
         manager.replay((FeatureLevelRecord) result.records().get(0).message(), 3);
         snapshotRegistry.createSnapshot(3);
 
-        assertEquals(new ControllerResult<>(Collections.
+        assertEquals(ControllerResult.atomicOf(Collections.emptyList(), Collections.
                 singletonMap("foo", new ApiError(Errors.INVALID_UPDATE_VERSION,
                     "Can't downgrade the maximum version of this feature without " +
                     "setting downgradable to true."))),
             manager.updateFeatures(rangeMap("foo", 1, 2),
                 Collections.emptySet(), Collections.emptyMap()));
 
-        assertEquals(new ControllerResult<>(
-            Collections.singletonList(new ApiMessageAndVersion(new FeatureLevelRecord().
-                    setName("foo").setMinFeatureLevel((short) 1).setMaxFeatureLevel((short) 2),
-                    (short) 0)),
-                Collections.singletonMap("foo", ApiError.NONE)),
-            manager.updateFeatures(rangeMap("foo", 1, 2),
-                new HashSet<>(Collections.singletonList("foo")), Collections.emptyMap()));
+        assertEquals(
+            ControllerResult.atomicOf(
+                Collections.singletonList(
+                    new ApiMessageAndVersion(
+                        new FeatureLevelRecord()
+                            .setName("foo")
+                            .setMinFeatureLevel((short) 1)
+                            .setMaxFeatureLevel((short) 2),
+                        (short) 0
+                    )
+                ),
+                Collections.singletonMap("foo", ApiError.NONE)
+            ),
+            manager.updateFeatures(
+                rangeMap("foo", 1, 2),
+                Collections.singleton("foo"),
+                Collections.emptyMap()
+            )
+        );
     }
 }

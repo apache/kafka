@@ -106,7 +106,8 @@ public enum ApiKeys {
     BROKER_REGISTRATION(ApiMessageType.BROKER_REGISTRATION, true, RecordBatch.MAGIC_VALUE_V0, false),
     BROKER_HEARTBEAT(ApiMessageType.BROKER_HEARTBEAT, true, RecordBatch.MAGIC_VALUE_V0, false),
     UNREGISTER_BROKER(ApiMessageType.UNREGISTER_BROKER, false, RecordBatch.MAGIC_VALUE_V0, true),
-    DESCRIBE_TRANSACTIONS(ApiMessageType.DESCRIBE_TRANSACTIONS);
+    DESCRIBE_TRANSACTIONS(ApiMessageType.DESCRIBE_TRANSACTIONS),
+    LIST_TRANSACTIONS(ApiMessageType.LIST_TRANSACTIONS);
 
     private static final Map<ApiMessageType.ListenerType, EnumSet<ApiKeys>> APIS_BY_LISTENER =
         new EnumMap<>(ApiMessageType.ListenerType.class);
@@ -200,7 +201,7 @@ public enum ApiKeys {
 
     public List<Short> allVersions() {
         List<Short> versions = new ArrayList<>(latestVersion() - oldestVersion() + 1);
-        for (short version = oldestVersion(); version < latestVersion(); version++) {
+        for (short version = oldestVersion(); version <= latestVersion(); version++) {
             versions.add(version);
         }
         return versions;

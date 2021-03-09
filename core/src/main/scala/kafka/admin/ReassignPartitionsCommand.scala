@@ -812,6 +812,26 @@ object ReassignPartitionsCommand extends Logging {
     proposedAssignments
   }
 
+  private def describeTopics(adminClient: Admin,
+                             topics: Set[String])
+                             : Map[String, TopicDescription] = {
+    adminClient.describeTopics(topics.asJava).values.asScala.map {
+      case (topicName, topicDescriptionFuture) =>
+        try {
+          topicName -> topicDescriptionFuture.get
+        }
+        catch {
+          case t: ExecutionException =>
+            if (classOf[UnknownTopicOrPartitionException].isInstance(t.getCause)) {
+              throw new ExecutionException(
+                new UnknownTopicOrPartitionException(s"Topic $topicName not found."))
+            } else {
+              throw t
+            }
+        }
+    }
+  }
+
   /**
    * Get the current replica assignments for some topics.
    *
@@ -823,12 +843,10 @@ object ReassignPartitionsCommand extends Logging {
   def getReplicaAssignmentForTopics(adminClient: Admin,
                                     topics: Seq[String])
                                     : Map[TopicPartition, Seq[Int]] = {
-    adminClient.describeTopics(topics.asJava).all().get().asScala.flatMap {
-      case (topicName, topicDescription) =>
-        topicDescription.partitions.asScala.map {
-          info => (new TopicPartition(topicName, info.partition),
-            info.replicas.asScala.map(_.id))
-        }
+    describeTopics(adminClient, topics.toSet).flatMap {
+      case (topicName, topicDescription) => topicDescription.partitions.asScala.map { info =>
+        (new TopicPartition(topicName, info.partition), info.replicas.asScala.map(_.id))
+      }
     }
   }
 
@@ -843,15 +861,14 @@ object ReassignPartitionsCommand extends Logging {
   def getReplicaAssignmentForPartitions(adminClient: Admin,
                                         partitions: Set[TopicPartition])
                                         : Map[TopicPartition, Seq[Int]] = {
-    adminClient.describeTopics(partitions.map(_.topic).asJava).all().get().asScala.flatMap {
-      case (topicName, topicDescription) =>
-        topicDescription.partitions.asScala.flatMap {
-          info => if (partitions.contains(new TopicPartition(topicName, info.partition))) {
-            Some(new TopicPartition(topicName, info.partition()),
-                info.replicas.asScala.map(_.id))
-          } else {
-            None
-          }
+    describeTopics(adminClient, partitions.map(_.topic)).flatMap {
+      case (topicName, topicDescription) => topicDescription.partitions.asScala.flatMap { info =>
+        val tp = new TopicPartition(topicName, info.partition)
+        if (partitions.contains(tp)) {
+          Some(tp, info.replicas.asScala.map(_.id))
+        } else {
+          None
+        }
       }
     }
   }

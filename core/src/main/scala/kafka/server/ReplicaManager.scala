@@ -57,7 +57,6 @@ import org.apache.kafka.common.replica.PartitionView.DefaultPartitionView
 import org.apache.kafka.common.replica.ReplicaView.DefaultReplicaView
 import org.apache.kafka.common.replica.{ClientMetadata, _}
 import org.apache.kafka.common.requests.FetchRequest.PartitionData
-import org.apache.kafka.common.requests.FetchResponse.AbortedTransaction
 import org.apache.kafka.common.requests.ProduceResponse.PartitionResponse
 import org.apache.kafka.common.requests._
 import org.apache.kafka.common.utils.Time
@@ -150,7 +149,7 @@ case class FetchPartitionData(error: Errors = Errors.NONE,
                               records: Records,
                               divergingEpoch: Option[FetchResponseData.EpochEndOffset],
                               lastStableOffset: Option[Long],
-                              abortedTransactions: Option[List[AbortedTransaction]],
+                              abortedTransactions: Option[List[FetchResponseData.AbortedTransaction]],
                               preferredReadReplica: Option[Int],
                               isReassignmentFetch: Boolean)
 
@@ -1441,38 +1440,29 @@ class ReplicaManager(val config: KafkaConfig,
           replicaFetcherManager.shutdownIdleFetcherThreads()
           replicaAlterLogDirsManager.shutdownIdleFetcherThreads()
           onLeadershipChange(partitionsBecomeLeader, partitionsBecomeFollower)
-          if (leaderAndIsrRequest.version() < 5) {
-            val responsePartitions = responseMap.iterator.map { case (tp, error) =>
-              new LeaderAndIsrPartitionError()
+
+          val data = new LeaderAndIsrResponseData().setErrorCode(Errors.NONE.code)
+          if (leaderAndIsrRequest.version < 5) {
+            responseMap.forKeyValue { (tp, error) =>
+              data.partitionErrors.add(new LeaderAndIsrPartitionError()
                 .setTopicName(tp.topic)
                 .setPartitionIndex(tp.partition)
-                .setErrorCode(error.code)
-            }.toBuffer
-            new LeaderAndIsrResponse(new LeaderAndIsrResponseData()
-              .setErrorCode(Errors.NONE.code)
-              .setPartitionErrors(responsePartitions.asJava), leaderAndIsrRequest.version())
-          } else {
-            val topics = new mutable.HashMap[String, List[LeaderAndIsrPartitionError]]
-            responseMap.asJava.forEach { case (tp, error) =>
-              if (!topics.contains(tp.topic)) {
-                topics.put(tp.topic, List(new LeaderAndIsrPartitionError()
-                                                                .setPartitionIndex(tp.partition)
-                                                                .setErrorCode(error.code)))
-              } else {
-                topics.put(tp.topic, new LeaderAndIsrPartitionError()
-                  .setPartitionIndex(tp.partition)
-                  .setErrorCode(error.code)::topics(tp.topic))
-              }
+                .setErrorCode(error.code))
             }
-            val topicErrors = topics.iterator.map { case (topic, partitionError) =>
-              new LeaderAndIsrTopicError()
-                .setTopicId(topicIds.get(topic))
-                .setPartitionErrors(partitionError.asJava)
-            }.toBuffer
-            new LeaderAndIsrResponse(new LeaderAndIsrResponseData()
-              .setErrorCode(Errors.NONE.code)
-              .setTopics(topicErrors.asJava), leaderAndIsrRequest.version())
+          } else {
+            responseMap.forKeyValue { (tp, error) =>
+              val topicId = topicIds.get(tp.topic)
+              var topic = data.topics.find(topicId)
+              if (topic == null) {
+                topic = new LeaderAndIsrTopicError().setTopicId(topicId)
+                data.topics.add(topic)
+              }
+              topic.partitionErrors.add(new LeaderAndIsrPartitionError()
+                .setPartitionIndex(tp.partition)
+                .setErrorCode(error.code))
+            }
           }
+          new LeaderAndIsrResponse(data, leaderAndIsrRequest.version)
         }
       }
       val endMs = time.milliseconds()
@@ -1875,6 +1865,7 @@ class ReplicaManager(val config: KafkaConfig,
     removeMetric("UnderReplicatedPartitions")
     removeMetric("UnderMinIsrPartitionCount")
     removeMetric("AtMinIsrPartitionCount")
+    removeMetric("ReassigningPartitions")
   }
 
   // High watermark do not need to be checkpointed only when under unit tests
