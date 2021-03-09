@@ -771,7 +771,7 @@ public class EosIntegration20Test {
 //                e.printStackTrace(System.err);
 //                fail("Should only get one uncaught exception from Streams.");
 //            }
-            System.err.println("uncaught:" + e);
+            System.err.println("uncaught:" + e.getMessage());
             uncaughtException = e;
         });
 

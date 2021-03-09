@@ -94,7 +94,7 @@ public class EosIntegrationTest {
     private static final int MAX_POLL_INTERVAL_MS = 5 * 1000;
     private static final int MAX_WAIT_TIME_MS = 60 * 1000;
 
-    
+
     @ClassRule
     public static final EmbeddedKafkaCluster CLUSTER = new EmbeddedKafkaCluster(
         NUM_BROKERS,
@@ -772,7 +772,7 @@ public class EosIntegrationTest {
 //                e.printStackTrace(System.err);
 //                fail("Should only get one uncaught exception from Streams.");
 //            }
-            System.err.println("uncaught:" + e);
+            System.err.println("uncaught:" + e.getMessage());
             uncaughtException = e;
         });
 
