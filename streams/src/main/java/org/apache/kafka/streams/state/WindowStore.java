@@ -100,7 +100,6 @@ public interface WindowStore<K, V> extends StateStore, ReadOnlyWindowStore<K, V>
      * @throws NullPointerException       if the given key is {@code null}
      */
     // note, this method must be kept if super#fetch(...) is removed
-    @SuppressWarnings("deprecation")
     WindowStoreIterator<V> fetch(K key, long timeFrom, long timeTo);
 
     @Override
@@ -143,7 +142,6 @@ public interface WindowStore<K, V> extends StateStore, ReadOnlyWindowStore<K, V>
      * @throws NullPointerException       if one of the given keys is {@code null}
      */
     // note, this method must be kept if super#fetch(...) is removed
-    @SuppressWarnings("deprecation")
     KeyValueIterator<Windowed<K>, V> fetch(K keyFrom, K keyTo, long timeFrom, long timeTo);
 
     @Override
@@ -186,7 +184,6 @@ public interface WindowStore<K, V> extends StateStore, ReadOnlyWindowStore<K, V>
      * @throws InvalidStateStoreException if the store is not initialized
      */
     // note, this method must be kept if super#fetchAll(...) is removed
-    @SuppressWarnings("deprecation")
     KeyValueIterator<Windowed<K>, V> fetchAll(long timeFrom, long timeTo);
 
     @Override
