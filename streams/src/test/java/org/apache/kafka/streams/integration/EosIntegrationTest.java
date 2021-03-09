@@ -94,6 +94,7 @@ public class EosIntegrationTest {
     private static final int MAX_POLL_INTERVAL_MS = 5 * 1000;
     private static final int MAX_WAIT_TIME_MS = 60 * 1000;
 
+    
     @ClassRule
     public static final EmbeddedKafkaCluster CLUSTER = new EmbeddedKafkaCluster(
         NUM_BROKERS,
