@@ -77,7 +77,7 @@ public class DescribeProducersHandlerTest {
 
         DescribeProducersHandler handler = newHandler(
             topicPartitions,
-            new DescribeProducersOptions().setBrokerId(brokerId)
+            new DescribeProducersOptions().brokerId(brokerId)
         );
 
         AdminApiHandler.KeyMappings<TopicPartition> keyMappings = handler.initializeKeys();
@@ -185,7 +185,7 @@ public class DescribeProducersHandlerTest {
     @Test
     public void testFatalNotLeaderErrorIfStaticMapped() {
         TopicPartition topicPartition = new TopicPartition("foo", 5);
-        DescribeProducersOptions options = new DescribeProducersOptions().setBrokerId(1);
+        DescribeProducersOptions options = new DescribeProducersOptions().brokerId(1);
 
         ApiResult<TopicPartition, PartitionProducerState> result =
             handleResponseWithError(options, topicPartition, Errors.NOT_LEADER_OR_FOLLOWER);
@@ -199,7 +199,7 @@ public class DescribeProducersHandlerTest {
     @Test
     public void testCompletedResult() {
         TopicPartition topicPartition = new TopicPartition("foo", 5);
-        DescribeProducersOptions options = new DescribeProducersOptions().setBrokerId(1);
+        DescribeProducersOptions options = new DescribeProducersOptions().brokerId(1);
         DescribeProducersHandler handler = newHandler(mkSet(topicPartition), options);
 
         int brokerId = 3;

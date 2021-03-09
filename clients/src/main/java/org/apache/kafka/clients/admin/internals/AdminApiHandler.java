@@ -95,7 +95,7 @@ public interface AdminApiHandler<K, V> {
         public final Map<K, Integer> keys;
 
         public StaticKeyMapping(Map<K, Integer> keys) {
-            this.keys = keys;
+            this.keys = Collections.unmodifiableMap(keys);
         }
     }
 
@@ -104,7 +104,7 @@ public interface AdminApiHandler<K, V> {
         public final AdminApiLookupStrategy<K> lookupStrategy;
 
         public DynamicKeyMapping(Set<K> keys, AdminApiLookupStrategy<K> lookupStrategy) {
-            this.keys = keys;
+            this.keys = Collections.unmodifiableSet(keys);
             this.lookupStrategy = lookupStrategy;
         }
     }

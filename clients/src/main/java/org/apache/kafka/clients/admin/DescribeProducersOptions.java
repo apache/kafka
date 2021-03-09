@@ -31,7 +31,7 @@ import java.util.OptionalInt;
 public class DescribeProducersOptions extends AbstractOptions<DescribeProducersOptions> {
     private OptionalInt brokerId = OptionalInt.empty();
 
-    public DescribeProducersOptions setBrokerId(int brokerId) {
+    public DescribeProducersOptions brokerId(int brokerId) {
         this.brokerId = OptionalInt.of(brokerId);
         return this;
     }
@@ -40,17 +40,23 @@ public class DescribeProducersOptions extends AbstractOptions<DescribeProducersO
         return brokerId;
     }
 
+    public DescribeProducersOptions timeoutMs(Integer timeoutMs) {
+        super.timeoutMs(timeoutMs);
+        return this;
+    }
+
     @Override
     public boolean equals(Object o) {
         if (this == o) return true;
         if (o == null || getClass() != o.getClass()) return false;
         DescribeProducersOptions that = (DescribeProducersOptions) o;
-        return Objects.equals(brokerId, that.brokerId);
+        return Objects.equals(brokerId, that.brokerId) &&
+            Objects.equals(timeoutMs, that.timeoutMs);
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(brokerId);
+        return Objects.hash(brokerId, timeoutMs);
     }
 
     @Override

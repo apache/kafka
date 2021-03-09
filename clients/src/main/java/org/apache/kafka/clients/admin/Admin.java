@@ -1540,7 +1540,7 @@ public interface Admin extends AutoCloseable {
 
     /**
      * Describe active producer state on a set of topic partitions. Unless a specific broker
-     * is requested through {@link DescribeProducersOptions#setBrokerId(int)}, this will
+     * is requested through {@link DescribeProducersOptions#brokerId(int)}, this will
      * query the partition leader to find the producer state.
      *
      * @param partitions The set of partitions to query

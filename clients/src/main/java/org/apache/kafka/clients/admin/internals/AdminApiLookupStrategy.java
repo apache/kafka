@@ -89,6 +89,6 @@ public interface AdminApiLookupStrategy<T> {
     interface RequestScope {
         default OptionalInt destinationBrokerId() {
             return OptionalInt.empty();
-        };
+        }
     }
 }
