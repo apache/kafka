@@ -934,6 +934,7 @@ public abstract class AbstractCoordinator implements Closeable {
         }
     }
 
+
     /**
      * Get the current generation state, regardless of whether it is currently stable.
      * Note that the generation information can be updated while we are still in the middle
