@@ -561,7 +561,8 @@ class GroupCoordinator(val brokerId: Int,
 
             // if this is the leader, then we can attempt to persist state and transition to stable
             if (group.isLeader(memberId)) {
-              info(s"Assignment received from leader for group ${group.groupId} for generation ${group.generationId}")
+              info(s"Assignment received from leader for group ${group.groupId} for generation ${group.generationId}. " +
+                s"The group has ${group.size} members, ${group.allStaticMembers.size} of which are static.")
 
               // fill any missing members with an empty assignment
               val missing = group.allMembers.diff(groupAssignment.keySet)
@@ -1378,7 +1379,7 @@ class GroupCoordinator(val brokerId: Int,
     group.inLock {
       val notYetRejoinedDynamicMembers = group.notYetRejoinedMembers.filterNot(_._2.isStaticMember)
       if (notYetRejoinedDynamicMembers.nonEmpty) {
-        info(s"Group ${group.groupId} remove dynamic members " +
+        info(s"Group ${group.groupId} removed dynamic members " +
           s"who haven't joined: ${notYetRejoinedDynamicMembers.keySet}")
 
         notYetRejoinedDynamicMembers.values foreach { failedMember =>
@@ -1413,7 +1414,7 @@ class GroupCoordinator(val brokerId: Int,
           })
         } else {
           info(s"Stabilized group ${group.groupId} generation ${group.generationId} " +
-            s"(${Topic.GROUP_METADATA_TOPIC_NAME}-${partitionFor(group.groupId)})")
+            s"(${Topic.GROUP_METADATA_TOPIC_NAME}-${partitionFor(group.groupId)}) with ${group.size} members")
 
           // trigger the awaiting join group response callback for all the members after rebalancing
           for (member <- group.allMemberMetadata) {
