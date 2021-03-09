@@ -790,7 +790,7 @@ public final class QuorumController implements Controller {
             snapshotRegistry, sessionTimeoutNs, replicaPlacementPolicy);
         this.featureControl = new FeatureControlManager(supportedFeatures, snapshotRegistry);
         this.replicationControl = new ReplicationControlManager(snapshotRegistry,
-            logContext, new Random(), defaultReplicationFactor, defaultNumPartitions,
+            logContext, defaultReplicationFactor, defaultNumPartitions,
             configurationControl, clusterControl);
         this.logManager = logManager;
         this.metaLogListener = new QuorumMetaLogListener();
