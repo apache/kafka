@@ -21,7 +21,7 @@
   "validVersions": "0",
   "flexibleVersions": "0+",
   "fields": [
-    { "name": "ClusterId", "type": "string", "versions": "0+",
+    { "name": "ClusterId", "type": "string", "versions": "0+",  "ignorable": true,
       "nullableVersions": "0+", "default": "null"},
     { "name": "Topics", "type": "[]TopicData",
       "versions": "0+", "fields": [

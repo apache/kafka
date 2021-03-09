@@ -560,6 +560,10 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
     ) throws IOException {
         VoteRequestData request = (VoteRequestData) requestMetadata.data;
 
+        if (!hasValidClusterId(request)) {
+            return new VoteResponseData().setErrorCode(Errors.INCONSISTENT_CLUSTER_ID.code());
+        }
+
         if (!hasValidTopicPartition(request, log.topicPartition())) {
             // Until we support multi-raft, we treat topic partition mismatches as invalid requests
             return new VoteResponseData().setErrorCode(Errors.INVALID_REQUEST.code());
@@ -731,6 +735,10 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
     ) throws IOException {
         BeginQuorumEpochRequestData request = (BeginQuorumEpochRequestData) requestMetadata.data;
 
+        if (!hasValidClusterId(request)) {
+            return new BeginQuorumEpochResponseData().setErrorCode(Errors.INCONSISTENT_CLUSTER_ID.code());
+        }
+
         if (!hasValidTopicPartition(request, log.topicPartition())) {
             // Until we support multi-raft, we treat topic partition mismatches as invalid requests
             return new BeginQuorumEpochResponseData().setErrorCode(Errors.INVALID_REQUEST.code());
@@ -813,6 +821,10 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
         long currentTimeMs
     ) throws IOException {
         EndQuorumEpochRequestData request = (EndQuorumEpochRequestData) requestMetadata.data;
+
+        if (!hasValidClusterId(request)) {
+            return new EndQuorumEpochResponseData().setErrorCode(Errors.INCONSISTENT_CLUSTER_ID.code());
+        }
 
         if (!hasValidTopicPartition(request, log.topicPartition())) {
             // Until we support multi-raft, we treat topic partition mismatches as invalid requests
@@ -939,12 +951,27 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
         );
     }
 
-    private boolean hasValidClusterId(FetchRequestData request) {
+    private boolean hasValidClusterId(ApiMessage request) {
+        String requestClusterId = getClusterId(request);
         // We don't enforce the cluster id if it is not provided.
-        if (request.clusterId() == null) {
+        if (requestClusterId == null) {
             return true;
         }
-        return clusterId.equals(request.clusterId());
+        return clusterId.equals(requestClusterId);
+    }
+
+    private String getClusterId(ApiMessage requestData) {
+        if (requestData instanceof FetchRequestData)
+            return ((FetchRequestData) requestData).clusterId();
+        if (requestData instanceof VoteRequestData)
+            return ((VoteRequestData) requestData).clusterId();
+        if (requestData instanceof BeginQuorumEpochRequestData)
+            return ((BeginQuorumEpochRequestData) requestData).clusterId();
+        if (requestData instanceof EndQuorumEpochRequestData)
+            return ((EndQuorumEpochRequestData) requestData).clusterId();
+        if (requestData instanceof FetchSnapshotRequestData)
+            return ((FetchSnapshotRequestData) requestData).clusterId();
+        throw new IllegalArgumentException("Unexpected type to get clusterId for requestData: " + requestData);
     }
 
     /**
@@ -1204,6 +1231,10 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
         RaftRequest.Inbound requestMetadata
     ) throws IOException {
         FetchSnapshotRequestData data = (FetchSnapshotRequestData) requestMetadata.data;
+
+        if (!hasValidClusterId(data)) {
+            return new FetchSnapshotResponseData().setErrorCode(Errors.INCONSISTENT_CLUSTER_ID.code());
+        }
 
         if (data.topics().size() != 1 && data.topics().get(0).partitions().size() != 1) {
             return FetchSnapshotResponse.withTopLevelError(Errors.INVALID_REQUEST);
@@ -1728,6 +1759,7 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
     ) {
         return EndQuorumEpochRequest.singletonRequest(
             log.topicPartition(),
+            clusterId,
             quorum.epoch(),
             quorum.localIdOrThrow(),
             state.preferredSuccessors()
@@ -1752,6 +1784,7 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
     private BeginQuorumEpochRequestData buildBeginQuorumEpochRequest() {
         return BeginQuorumEpochRequest.singletonRequest(
             log.topicPartition(),
+            clusterId,
             quorum.epoch(),
             quorum.localIdOrThrow()
         );
@@ -1761,6 +1794,7 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
         OffsetAndEpoch endOffset = endOffset();
         return VoteRequest.singletonRequest(
             log.topicPartition(),
+            clusterId,
             quorum.epoch(),
             quorum.localIdOrThrow(),
             endOffset.epoch,
@@ -1801,6 +1835,7 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
             .setEndOffset(snapshotId.offset);
 
         FetchSnapshotRequestData request = FetchSnapshotRequest.singleton(
+            clusterId,
             log.topicPartition(),
             snapshotPartition -> {
                 return snapshotPartition
