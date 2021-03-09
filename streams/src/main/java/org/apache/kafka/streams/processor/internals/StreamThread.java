@@ -768,7 +768,7 @@ public class StreamThread extends Thread {
                 log.debug("Processed {} records with {} iterations; invoking punctuators if necessary",
                           processed,
                           numIterations);
-                System.err.println("processed record:" + processed + "," + numIterations);
+//                System.err.println("processed record:" + processed + "," + numIterations);
 
                 final int punctuated = taskManager.punctuate();
                 totalPunctuatorsSinceLastSummary += punctuated;

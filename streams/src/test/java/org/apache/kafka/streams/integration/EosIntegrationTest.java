@@ -442,6 +442,7 @@ public class EosIntegrationTest {
 
     @Test
     public void shouldNotViolateEosIfOneTaskFailsWithState() throws Exception {
+        System.err.println("st");
         // this test updates a store with 10 + 5 + 5 records per partition (running with 2 partitions)
         // the app is supposed to emit all 40 update records into the output topic
         // the app commits after each 10 records per partition, and thus will have 2*5 uncommitted writes
@@ -474,7 +475,9 @@ public class EosIntegrationTest {
             writeInputData(uncommittedDataBeforeFailure);
 
             final List<KeyValue<Long, Long>> uncommittedRecords = readResult(dataBeforeFailure.size(), null);
+            System.err.println("unc:" + uncommittedRecords);
             final List<KeyValue<Long, Long>> committedRecords = readResult(committedDataBeforeFailure.size(), CONSUMER_GROUP_ID);
+            System.err.println("com:" + committedRecords);
 
             final List<KeyValue<Long, Long>> expectedResultBeforeFailure = computeExpectedResult(dataBeforeFailure);
             checkResultPerKey(committedRecords, computeExpectedResult(committedDataBeforeFailure));

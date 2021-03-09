@@ -452,7 +452,7 @@ public class EosIntegration15Test {
         // -> the failure only kills one thread
         // after fail over, we should read 40 committed records and the state stores should contain the correct sums
         // per key (even if some records got processed twice)
-
+        System.err.println("st");
         try (final KafkaStreams streams = getKafkaStreams("dummy", true, "appDir", 2, eosConfig)) {
             startKafkaStreamsAndWaitForRunningState(streams, MAX_WAIT_TIME_MS);
 
@@ -474,7 +474,9 @@ public class EosIntegration15Test {
             writeInputData(uncommittedDataBeforeFailure);
 
             final List<KeyValue<Long, Long>> uncommittedRecords = readResult(dataBeforeFailure.size(), null);
+            System.err.println("unc:" + uncommittedRecords);
             final List<KeyValue<Long, Long>> committedRecords = readResult(committedDataBeforeFailure.size(), CONSUMER_GROUP_ID);
+            System.err.println("com:" + committedRecords);
 
             final List<KeyValue<Long, Long>> expectedResultBeforeFailure = computeExpectedResult(dataBeforeFailure);
             checkResultPerKey(committedRecords, computeExpectedResult(committedDataBeforeFailure));

@@ -909,6 +909,7 @@ public abstract class AbstractCoordinator implements Closeable {
     }
 
     protected synchronized void markCoordinatorUnknown(boolean isDisconnected, String cause) {
+        System.err.println("Group coordinator:" + this.coordinator.idString() + ", cause:" + cause + ",isDis:" + isDisconnected);
         if (this.coordinator != null) {
             log.info("Group coordinator {} is unavailable or invalid due to cause: {}."
                     + "isDisconnected: {}. Rediscovery will be attempted.", this.coordinator,
@@ -1043,6 +1044,7 @@ public abstract class AbstractCoordinator implements Closeable {
             // attempt any resending if the request fails or times out.
             log.info("Member {} sending LeaveGroup request to coordinator {} due to {}",
                 generation.memberId, coordinator, leaveReason);
+            System.err.println("Member " + generation.memberId + "leave:" + leaveReason);
             LeaveGroupRequest.Builder request = new LeaveGroupRequest.Builder(
                 rebalanceConfig.groupId,
                 Collections.singletonList(new MemberIdentity().setMemberId(generation.memberId))

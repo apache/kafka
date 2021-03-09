@@ -640,8 +640,10 @@ public class NetworkClient implements KafkaClient {
     }
 
     private void ensureActive() {
-        if (!active())
+        if (!active()) {
+            System.err.println("NetworkClient is no longer active, state is " + state);
             throw new DisconnectException("NetworkClient is no longer active, state is " + state);
+        }
     }
 
     /**
