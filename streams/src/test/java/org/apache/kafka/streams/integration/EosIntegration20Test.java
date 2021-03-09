@@ -760,6 +760,7 @@ public class EosIntegration20Test {
         properties.put(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory().getPath() + File.separator + appDir);
         properties.put(StreamsConfig.APPLICATION_SERVER_CONFIG, dummyHostName + ":2142");
 
+        
         final Properties config = StreamsTestUtils.getStreamsConfig(
             applicationId,
             CLUSTER.bootstrapServers(),
