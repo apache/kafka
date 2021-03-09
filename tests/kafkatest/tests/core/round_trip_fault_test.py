@@ -75,13 +75,11 @@ class RoundTripFaultTest(Test):
             return []
 
     @cluster(num_nodes=9)
-    @matrix(metadata_quorum=quorum.all_non_upgrade)
     def test_round_trip_workload(self, metadata_quorum=quorum.zk):
         workload1 = self.trogdor.create_task("workload1", self.round_trip_spec)
         workload1.wait_for_done(timeout_sec=600)
 
     @cluster(num_nodes=9)
-    @matrix(metadata_quorum=quorum.all_non_upgrade)
     def test_round_trip_workload_with_broker_partition(self, metadata_quorum=quorum.zk):
         workload1 = self.trogdor.create_task("workload1", self.round_trip_spec)
         time.sleep(2)
@@ -95,7 +93,6 @@ class RoundTripFaultTest(Test):
         partition1.wait_for_done()
 
     @cluster(num_nodes=9)
-    @matrix(metadata_quorum=quorum.all_non_upgrade)
     def test_produce_consume_with_broker_pause(self, metadata_quorum=quorum.zk):
         workload1 = self.trogdor.create_task("workload1", self.round_trip_spec)
         time.sleep(2)
@@ -108,7 +105,6 @@ class RoundTripFaultTest(Test):
         self.kafka.stop_node(self.kafka.nodes[0], False)
 
     @cluster(num_nodes=9)
-    @matrix(metadata_quorum=quorum.all_non_upgrade)
     def test_produce_consume_with_client_partition(self, metadata_quorum=quorum.zk):
         workload1 = self.trogdor.create_task("workload1", self.round_trip_spec)
         time.sleep(2)
@@ -121,7 +117,6 @@ class RoundTripFaultTest(Test):
         stop1.wait_for_done()
 
     @cluster(num_nodes=9)
-    @matrix(metadata_quorum=quorum.all_non_upgrade)
     def test_produce_consume_with_latency(self, metadata_quorum=quorum.zk):
         workload1 = self.trogdor.create_task("workload1", self.round_trip_spec)
         time.sleep(2)
