@@ -372,7 +372,7 @@ public class MockProcessorContext implements ProcessorContext, RecordCollector.S
      * but for the purpose of driving unit tests, you can set it directly. Setting this attribute doesn't affect the others.
      *
      * @param timestamp A record timestamp
-     * @deprecated Use {@link MockProcessorContext#setRecordTimestamp(long)} instead.
+     * @deprecated Since 3.0.0; use {@link MockProcessorContext#setRecordTimestamp(long)} instead.
      */
     @Deprecated
     @SuppressWarnings({"WeakerAccess", "unused"})
