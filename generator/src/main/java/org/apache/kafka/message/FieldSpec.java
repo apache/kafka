@@ -89,7 +89,12 @@ public final class FieldSpec {
         }
         this.fields = Collections.unmodifiableList(fields == null ?
             Collections.emptyList() : new ArrayList<>(fields));
-        this.type = FieldType.parse(Objects.requireNonNull(type));
+        this.entityType = (entityType == null) ? EntityType.UNKNOWN : entityType;
+        if (type == null && entityType == EntityType.UNKNOWN) {
+            throw new RuntimeException("You must specify either type or entity type for field " + name);
+        }
+        this.type = type == null ? this.entityType.baseType : FieldType.parse(type);
+        this.entityType.verifyTypeMatches(name, this.type);
         this.mapKey = mapKey;
         this.nullableVersions = Versions.parse(nullableVersions, Versions.NONE);
         if (!this.nullableVersions.empty()) {
@@ -99,8 +104,6 @@ public final class FieldSpec {
         }
         this.fieldDefault = fieldDefault == null ? "" : fieldDefault;
         this.ignorable = ignorable;
-        this.entityType = (entityType == null) ? EntityType.UNKNOWN : entityType;
-        this.entityType.verifyTypeMatches(name, this.type);
 
         this.about = about == null ? "" : about;
         if (!this.fields().isEmpty()) {

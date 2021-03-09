@@ -38,7 +38,7 @@ public enum EntityType {
     @JsonProperty("brokerId")
     BROKER_ID(FieldType.Int32FieldType.INSTANCE);
 
-    private final FieldType baseType;
+    final FieldType baseType;
 
     EntityType(FieldType baseType) {
         this.baseType = baseType;
