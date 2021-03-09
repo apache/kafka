@@ -77,7 +77,7 @@ public class BlockingConnectorTest {
     private static final String NORMAL_CONNECTOR_NAME = "normal-connector";
     private static final String TEST_TOPIC = "normal-topic";
     private static final int NUM_RECORDS_PRODUCED = 100;
-    private static final long CONNECT_WORKER_STARTUP_TIMEOUT = TimeUnit.SECONDS.toMillis(30);
+    private static final long CONNECT_WORKER_STARTUP_TIMEOUT = TimeUnit.SECONDS.toMillis(60);
     private static final long RECORD_TRANSFER_DURATION_MS = TimeUnit.SECONDS.toMillis(30);
     private static final long REST_REQUEST_TIMEOUT = Worker.CONNECTOR_GRACEFUL_SHUTDOWN_TIMEOUT_MS * 2;
 
