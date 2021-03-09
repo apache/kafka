@@ -1455,7 +1455,7 @@ class LogCleanerTest {
 
   /**
    * Tests a scenario where the base offset of the cleaned segment will be higher than the original base offset.
-   * Tests recovery if broker crashes at the following stages during the cleaning sequence
+   * Tests recovery if broker crashes at the following stage during the cleaning sequence
    * <ol>
    *   <li> .cleaned log renamed to .swap, old segment files not yet renamed to .deleted
    * </ol>
@@ -1473,7 +1473,8 @@ class LogCleanerTest {
     for (k <- 0 until (log.numberOfSegments - 1))
       offsetMap.put(key(k), (k + 1) * numMessagesPerKey - 1)
 
-    val cleanedKeys = cleanLogWithDuplicateKeysFirstChunk(log, offsetMap, cleaner)
+    // clean first 9 segments
+    val cleanedKeys = cleanLogWithDuplicateKeysFirstChunk(log, offsetMap, cleaner, 9)
     // [ 012345678, 9999, ... 17 17 17 17, 18]
 
     // Simulate recovery just after first swap file is created, before old segment files are
@@ -1486,6 +1487,7 @@ class LogCleanerTest {
     log = recoverAndCheck(config, cleanedKeys)
     // [ 012345678, 9999, ... 17 17 17 17, 18]
     assertEquals(3, log.logStartOffset)
+    log.close()
   }
 
   /**
@@ -1511,8 +1513,8 @@ class LogCleanerTest {
     for (k <- 0 until (log.numberOfSegments / 2))
       offsetMap.put(key(k), (k + 1) * numMessagesPerKey - 1)
 
-    // clean the log
-    cleanLogWithDuplicateKeysFirstChunk(log, offsetMap, cleaner)
+    // clean first 9 segments
+    cleanLogWithDuplicateKeysFirstChunk(log, offsetMap, cleaner, 9)
     // [0123, 4444, 5555, 5555, 6666, 6666, 7777, 7777, 8888, 8888, 9]
 
     // 1) Simulate recovery just after first .cleaned file is created, before rename to .swap
@@ -1522,17 +1524,17 @@ class LogCleanerTest {
       Utils.atomicMoveWithFallback(file.toPath, Paths.get(CoreUtils.replaceSuffix(file.getPath, Log.DeletedFileSuffix, "")))
     }
     log = recoverAndCheck(config, allKeys)
-    // Should have log [0000, 0000, 1111, 1111, 2222, 2222, 3333, 3333, 4444, 4444, 5555, 5555, 6666, 6666, 7777, 7777, 8888, 8888, 9999, 9]
+    // [0000, 0000, 1111, 1111, 2222, 2222, 3333, 3333, 4444, 4444, 5555, 5555, 6666, 6666, 7777, 7777, 8888, 8888, 9999, 9]
     assertEquals(0, log.logStartOffset)
     log.updateHighWatermark(log.activeSegment.baseOffset)
 
-    // clean again
-    var cleanedKeys = cleanLogWithDuplicateKeysFirstChunk(log, offsetMap, cleaner)
-    // Due to recovery handling, we keep the segment before and after the cleaned segment.
-    val mixedKeys = allKeys.toList.take(4) ++ cleanedKeys.take(4) ++ allKeys.toList.drop(32).take(4) ++ cleanedKeys.drop(4)
+    // clean first 9 segments again
+    var cleanedKeys = cleanLogWithDuplicateKeysFirstChunk(log, offsetMap, cleaner, 9)
+    // [0123, 4444, 5555, 5555, 6666, 6666, 7777, 7777, 8888, 8888, 9]
 
     // 2) Simulate recovery just after first swap file is created, before old segment files are
-    //    renamed to .deleted. Clean operation is resumed during recovery.
+    //    renamed to .deleted. Due to recovery handling, we keep the segment before and after the cleaned segment.
+    val mixedKeys = allKeys.toList.take(4) ++ cleanedKeys.take(4) ++ allKeys.toList.drop(32).take(4) ++ cleanedKeys.drop(4)
     log.logSegments.take(1).foreach(_.changeFileSuffixes("", Log.SwapFileSuffix))
     for (file <- dir.listFiles if file.getName.endsWith(Log.DeletedFileSuffix)) {
       Utils.atomicMoveWithFallback(file.toPath, Paths.get(CoreUtils.replaceSuffix(file.getPath, Log.DeletedFileSuffix, "")))
@@ -1550,79 +1552,7 @@ class LogCleanerTest {
     log = recoverAndCheck(config, cleanedKeys)
     // [0123, 4444, 5555, 5555, 6666, 6666, 7777, 7777, 8888, 8888, 9]
     assertEquals(7, log.logStartOffset)
-  }
-
-  /**
-   * Tests a scenario where the base offset of the cleaned segment will be higher than the original base offset.
-   * Tests recovery if broker crashes at the following stage during the cleaning sequence
-   * <ol>
-   *   <li> Cleaner has created .cleaned log for second chunk of segments, swap sequence not yet started
-   * </ol>
-   */
-  @Test
-  def testRecoveryAfterCrashBaseOffsetUpdatedSecondSegmentChunkCleaned(): Unit = {
-    val cleaner = makeCleaner(Int.MaxValue)
-
-    // Number of messages with the same key. Hard-coded so one key fills two segments.
-    val numMessagesPerKey = 8
-    var (log, config) = createLogWithDuplicateKeys(numMessagesPerKey)
-    val allKeys = LogTest.keysInLog(log)
-
-    // Clean keys 1-8
-    val offsetMap = new FakeOffsetMap(Int.MaxValue)
-    for (k <- 0 until (log.numberOfSegments / 2))
-      offsetMap.put(key(k), (k + 1) * numMessagesPerKey - 1)
-
-    // clean the log
-    val (cleanedKeys, firstChunkFiles) = cleanLogWithDuplicateKeysInTwoChunks(log, offsetMap, cleaner)
-    val secondChunkFiles = dir.listFiles.filter(file => file.getName.endsWith(Log.DeletedFileSuffix) && !firstChunkFiles.contains(file)).toList
-    // [0123, 45678, 9]
-
-    // 1) Simulate recovery just after second .cleaned file is created, before rename to .swap
-    //    On recovery, clean operation is aborted. First cleaned segment should remain but not the second.
-    log.logSegments.takeRight(2).take(1).foreach(_.changeFileSuffixes("", Log.CleanedFileSuffix))
-    for (file <- secondChunkFiles) {
-      Utils.atomicMoveWithFallback(file.toPath, Paths.get(CoreUtils.replaceSuffix(file.getPath, Log.DeletedFileSuffix, "")))
-    }
-    val mixedKeys = cleanedKeys.toList.dropRight(6) ++ allKeys.toList.drop(36)
-    log = recoverAndCheck(config, mixedKeys)
-    // should have log [0123, 4444, 5555, 5555, 6666, 6666, 7777, 7777, 8888, 8888, 9]
-    assertEquals(7, log.logStartOffset)
-  }
-
-  /**
-   * Tests a scenario where the base offset of the cleaned segment will be higher than the original base offset.
-   * Tests recovery if broker crashes at the following stage during the cleaning sequence
-   * <ol>
-   *   <li> second chunk .cleaned log renamed to .swap, old segment files not yet renamed to .deleted
-   * </ol>
-   */
-  @Test
-  def testRecoveryAfterCrashBaseOffsetUpdatedSecondSegmentChunkSwap(): Unit = {
-    val cleaner = makeCleaner(Int.MaxValue)
-
-    // Number of messages with the same key. Hard-coded so one key fills two segments.
-    val numMessagesPerKey = 8
-    var (log, config) = createLogWithDuplicateKeys(numMessagesPerKey)
-
-    // Clean keys 1-8
-    val offsetMap = new FakeOffsetMap(Int.MaxValue)
-    for (k <- 0 until (log.numberOfSegments / 2))
-      offsetMap.put(key(k), (k + 1) * numMessagesPerKey - 1)
-
-    // clean log
-    val (cleanedKeys, firstChunkFiles) = cleanLogWithDuplicateKeysInTwoChunks(log, offsetMap, cleaner)
-    val secondChunkFiles = dir.listFiles.filter(file => file.getName.endsWith(Log.DeletedFileSuffix) && !firstChunkFiles.contains(file)).toList
-
-    // Simulate recovery just after second swap file is created, before old segment files are
-    // renamed to .deleted. Clean operation is resumed during recovery.
-    log.logSegments.takeRight(2).take(1).foreach(_.changeFileSuffixes("", Log.SwapFileSuffix))
-    for (file <- secondChunkFiles) {
-      Utils.atomicMoveWithFallback(file.toPath, Paths.get(CoreUtils.replaceSuffix(file.getPath, Log.DeletedFileSuffix, "")))
-    }
-    log = recoverAndCheck(config, cleanedKeys)
-    // [0123, 45678, 9]
-    assertEquals(7, log.logStartOffset)
+    log.close()
   }
 
   /**
@@ -1633,7 +1563,7 @@ class LogCleanerTest {
    * </ol>
    */
   @Test
-  def testRecoveryAfterCrashBaseOffsetUpdatedSecondSegmentSwapNeedAsyncDeletion(): Unit = {
+  def testRecoveryAfterCrashBaseOffsetUpdatedFirstSegmentSwapAndDeletedSuffixes(): Unit = {
     val cleaner = makeCleaner(Int.MaxValue)
 
     // Number of messages with the same key. Hard-coded so one key fills two segments.
@@ -1645,43 +1575,15 @@ class LogCleanerTest {
     for (k <- 0 until (log.numberOfSegments / 2))
       offsetMap.put(key(k), (k + 1) * numMessagesPerKey - 1)
 
-    val (cleanedKeys, _) = cleanLogWithDuplicateKeysInTwoChunks(log, offsetMap, cleaner)
-    log.logSegments.takeRight(2).take(1).foreach(_.changeFileSuffixes("", Log.SwapFileSuffix))
+    // clean first 9 segments
+    val cleanedKeys = cleanLogWithDuplicateKeysFirstChunk(log, offsetMap, cleaner, 9)
+    // [0123, 4444, 5555, 5555, 6666, 6666, 7777, 7777, 8888, 8888, 9]
 
-    // Simulate recovery after swap file is created and old segments files are renamed
+    // Simulate recovery after first swap file is created and old segments files are renamed
     // to .deleted. Clean operation is resumed during recovery.
+    log.logSegments.take(1).foreach(_.changeFileSuffixes("", Log.SwapFileSuffix))
     log = recoverAndCheck(config, cleanedKeys)
-    // [0123, 45678, 9]
-    assertEquals(7, log.logStartOffset)
-    log.close()
-  }
-
-  /**
-   * Tests a scenario where the base offset of the cleaned segment will be higher than the original base offset.
-   * Tests recovery if broker crashes at the following stage during the cleaning sequence
-   * <ol>
-   *   <li> .swap suffixes removed, completing the swap, but async delete of .deleted files not yet complete
-   * </ol>
-   */
-  @Test
-  def testRecoveryAfterCrashBaseOffsetUpdatedNeedAsyncDeletion(): Unit = {
-    val cleaner = makeCleaner(Int.MaxValue)
-
-    // Number of messages with the same key. Hard-coded so one key fills two segments.
-    val numMessagesPerKey = 8
-    var (log, config) = createLogWithDuplicateKeys(numMessagesPerKey)
-
-    // Clean keys 1-8
-    val offsetMap = new FakeOffsetMap(Int.MaxValue)
-    for (k <- 0 until (log.numberOfSegments / 2))
-      offsetMap.put(key(k), (k + 1) * numMessagesPerKey - 1)
-
-    val (cleanedKeys, _) = cleanLogWithDuplicateKeysInTwoChunks(log, offsetMap, cleaner)
-
-    // Simulate recovery after swap is complete, but async deletion
-    // is not yet complete. Clean operation is resumed during recovery.
-    log = recoverAndCheck(config, cleanedKeys)
-    // [0123, 45678, 9]
+    // [0123, 4444, 5555, 5555, 6666, 6666, 7777, 7777, 8888, 8888, 9]
     assertEquals(7, log.logStartOffset)
     log.close()
   }
@@ -1711,8 +1613,8 @@ class LogCleanerTest {
     (log, config)
   }
 
-  private def cleanLogWithDuplicateKeysFirstChunk(log: Log, offsetMap: OffsetMap, cleaner: Cleaner): Iterable[Long] = {
-    val firstHalf = log.logSegments.take(9).toSeq
+  private def cleanLogWithDuplicateKeysFirstChunk(log: Log, offsetMap: OffsetMap, cleaner: Cleaner, numSegments: Int): Iterable[Long] = {
+    val firstHalf = log.logSegments.take(numSegments).toSeq
     cleaner.cleanSegments(log, firstHalf, offsetMap, 0L, new CleanerStats(),
       new CleanedTransactionMetadata)
     // clear scheduler so that async deletes don't run
@@ -1720,22 +1622,6 @@ class LogCleanerTest {
     val cleanedKeys = LogTest.keysInLog(log)
     log.close()
     cleanedKeys
-  }
-
-  private def cleanLogWithDuplicateKeysInTwoChunks(log: Log, offsetMap: OffsetMap, cleaner: Cleaner): (Iterable[Long], List[File]) = {
-    val firstHalf = log.logSegments.take(9).toSeq
-    val secondHalf = log.logSegments.takeRight(10).take(9).toSeq
-    cleaner.cleanSegments(log, firstHalf, offsetMap, 0L, new CleanerStats(),
-      new CleanedTransactionMetadata)
-    // clear scheduler so that async deletes don't run
-    time.scheduler.clear()
-    val firstChunkFiles = dir.listFiles.filter(_.getName.endsWith(Log.DeletedFileSuffix))
-    cleaner.cleanSegments(log, secondHalf, offsetMap, 0L, new CleanerStats(),
-      new CleanedTransactionMetadata)
-    time.scheduler.clear()
-    val cleanedKeys = LogTest.keysInLog(log)
-    log.close()
-    (cleanedKeys, firstChunkFiles.toList)
   }
 
   @Test

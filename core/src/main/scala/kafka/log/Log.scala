@@ -771,8 +771,9 @@ class Log(@volatile private var _dir: File,
       //
       // For case 1 (log cleaning), we may have old segments before or after the swap segment that were cleaned.
       // Unfortunately, since the baseOffset and the readNextOffset were changed, these segments will not be removed on
-      // recovery. A subsequent cleaning that succeeds will correctly remove these segments.
-      // ie. segments [0, 1000), [1000, 2000), [2000, 3000) cleaned into [1500, 1750).swap -> [0. 1000), [1500, 1750), [2000, 3000)
+      // recovery if they were not yet given a DeletedFileSuffix. A subsequent cleaning that succeeds will correctly remove these segments.
+      // ie. segments [0, 1000), [1000, 2000), [2000, 3000) cleaned into [1500, 1750).swap without marking old segments with DeletedFileSuffix
+      // -> [0. 1000), [1500, 1750), [2000, 3000)
       val oldSegments = logSegments(swapSegment.baseOffset, swapSegment.readNextOffset).filter { segment =>
         segment.readNextOffset > swapSegment.baseOffset
       }
