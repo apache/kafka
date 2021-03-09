@@ -562,7 +562,7 @@ class GroupCoordinator(val brokerId: Int,
             // if this is the leader, then we can attempt to persist state and transition to stable
             if (group.isLeader(memberId)) {
               info(s"Assignment received from leader for group ${group.groupId} for generation ${group.generationId}. " +
-                s"The group has ${group.allMembers.size} members, ${group.allStaticMembers.size} of which are static.")
+                s"The group has ${group.size} members, ${group.allStaticMembers.size} of which are static.")
 
               // fill any missing members with an empty assignment
               val missing = group.allMembers.diff(groupAssignment.keySet)
