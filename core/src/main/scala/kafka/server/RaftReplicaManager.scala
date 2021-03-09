@@ -26,7 +26,7 @@ import kafka.server.QuotaFactory.QuotaManagers
 import kafka.server.checkpoints.LazyOffsetCheckpoints
 import kafka.server.metadata.{ConfigRepository, MetadataImage, MetadataImageBuilder, MetadataPartition, RaftMetadataCache}
 import kafka.utils.Scheduler
-import org.apache.kafka.common.TopicPartition
+import org.apache.kafka.common.{TopicPartition, Uuid}
 import org.apache.kafka.common.errors.{InconsistentTopicIdException, KafkaStorageException}
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.utils.Time
@@ -251,14 +251,7 @@ class RaftReplicaManager(config: KafkaConfig,
               (Some(Partition(topicPartition, time, configRepository, this)), None)
           }
           partition.foreach { partition =>
-            builder.topicNameToId(partition.topic) match {
-              case Some(id) =>
-                if (!partition.checkOrSetTopicId(id, true))
-                  throw new InconsistentTopicIdException(s"Topic partition ${partition.topicPartition} had an inconsistent topic ID." )
-              case None => throw new IllegalStateException(
-                s"Topic partition ${partition.topicPartition} is missing a topic ID"
-              )
-            }
+            checkOrSetTopicId(builder.topicNameToId(partition.topic), partition)
             val isNew = priorDeferredMetadata match {
               case Some(alreadyDeferred) => alreadyDeferred.isNew
               case _ => prevPartitions.topicPartition(topicPartition.topic(), topicPartition.partition()).isEmpty
@@ -294,14 +287,7 @@ class RaftReplicaManager(config: KafkaConfig,
               Some(partition)
           }
           partition.foreach { partition =>
-            builder.topicNameToId(partition.topic) match {
-              case Some(id) =>
-                if (!partition.checkOrSetTopicId(id, true))
-                   throw new InconsistentTopicIdException(s"Topic partition ${partition.topicPartition} had an inconsistent topic ID." )
-              case None => throw new IllegalStateException(
-                s"Topic partition ${partition.topicPartition} is missing a topic ID"
-              )
-            }
+            checkOrSetTopicId(builder.topicNameToId(partition.topic), partition)
             if (currentState.leaderId == localBrokerId) {
               partitionsToBeLeader.put(partition, currentState)
             } else {
@@ -391,5 +377,16 @@ class RaftReplicaManager(config: KafkaConfig,
   private def cachedState(metadataImage: MetadataImage, partition: Partition): MetadataPartition = {
     metadataImage.partitions.topicPartition(partition.topic, partition.partitionId).getOrElse(
       throw new IllegalStateException(s"Partition has metadata changes but does not exist in the metadata cache: ${partition.topicPartition}"))
+  }
+
+  private def checkOrSetTopicId(topicIdOpt: Option[Uuid], partition: Partition)= {
+     topicIdOpt match {
+      case Some(id) =>
+        if (!partition.checkOrSetTopicId(id, usingRaft = true))
+          throw new InconsistentTopicIdException(s"Topic partition ${partition.topicPartition} had an inconsistent topic ID." )
+      case None => throw new IllegalStateException(
+        s"Topic partition ${partition.topicPartition} is missing a topic ID"
+      )
+    }
   }
 }

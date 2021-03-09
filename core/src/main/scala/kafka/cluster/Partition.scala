@@ -429,13 +429,13 @@ class Partition(val topicPartition: TopicPartition,
    * If a valid topic ID is provided, and the log exists but has no ID set, set the log ID to be the request ID.
    *
    * @param receivedTopicId the topic ID from the LeaderAndIsr request or from the metadata records
-   * @return true if the request topic id is consistent, false otherwise
+   * @return true if the received topic id is consistent, false otherwise
    */
   def checkOrSetTopicId(receivedTopicId: Uuid, usingRaft: Boolean): Boolean = {
     // If the request had an invalid topic ID, then we assume that topic IDs are not supported so ID is consistent.
     // This is only the case when from LeaderAndIsr Request. Raft code should never have invalid topic IDs.
     if (receivedTopicId == null || receivedTopicId == Uuid.ZERO_UUID) {
-      if (usingRaft) false else true
+      !usingRaft // only acceptable when not using Raft
     } else {
       log match {
         case None => true // log is empty, so we can not say topic ID is inconsistent

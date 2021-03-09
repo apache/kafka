@@ -1894,7 +1894,7 @@ class KafkaConfig(val props: java.util.Map[_, _], doLog: Boolean, dynamicConfigO
 
   // Topic IDs are used with all self-managed quorum clusters and ZK cluster with IBP greater than or equal to 2.8
   def usesTopicId: Boolean =
-    usesSelfManagedQuorum || (requiresZookeeper && interBrokerProtocolVersion >= KAFKA_2_8_IV0)
+    usesSelfManagedQuorum || interBrokerProtocolVersion >= KAFKA_2_8_IV0
 
   validateValues()
 
