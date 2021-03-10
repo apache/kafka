@@ -19,9 +19,8 @@ package kafka.raft
 import java.io.{File, IOException}
 import java.nio.file.{Files, NoSuchFileException}
 import java.util.concurrent.ConcurrentSkipListSet
-import java.util.{NoSuchElementException, Optional, Properties}
+import java.util.{NoSuchElementException, Optional}
 
-import kafka.api.ApiVersion
 import kafka.log.{AppendOrigin, Log, LogConfig, LogOffsetSnapshot, SnapshotGenerated}
 import kafka.server.{BrokerTopicStats, FetchHighWatermark, FetchLogEnd, LogDirFailureChannel}
 import kafka.utils.{Logging, Scheduler}
@@ -35,6 +34,7 @@ import scala.compat.java8.OptionConverters._
 
 final class KafkaMetadataLog private (
   log: Log,
+  config: LogConfig,
   scheduler: Scheduler,
   // This object needs to be thread-safe because it is used by the snapshotting thread to notify the
   // polling thread when snapshots are created.
@@ -303,7 +303,7 @@ final class KafkaMetadataLog private (
       scheduler.schedule(
         "delete-snapshot-file",
         () => Snapshots.deleteSnapshotIfExists(log.dir.toPath, snapshotId),
-        60 * 1000L)
+        config.fileDeleteDelayMs)
     }
   }
 
@@ -316,18 +316,13 @@ object KafkaMetadataLog {
 
   def apply(
     topicPartition: TopicPartition,
+    defaultLogConfig: LogConfig,
     dataDir: File,
     time: Time,
     scheduler: Scheduler,
     maxBatchSizeInBytes: Int,
     maxFetchSizeInBytes: Int
   ): KafkaMetadataLog = {
-    val props = new Properties()
-    props.put(LogConfig.MaxMessageBytesProp, maxBatchSizeInBytes.toString)
-    props.put(LogConfig.MessageFormatVersionProp, ApiVersion.latestVersion.toString)
-
-    LogConfig.validateValues(props)
-    val defaultLogConfig = LogConfig(props)
 
     val log = Log(
       dir = dataDir,
@@ -345,6 +340,7 @@ object KafkaMetadataLog {
 
     val metadataLog = new KafkaMetadataLog(
       log,
+      defaultLogConfig,
       scheduler,
       recoverSnapshots(log),
       topicPartition,
@@ -367,20 +363,18 @@ object KafkaMetadataLog {
     Files
       .walk(log.dir.toPath, 1)
       .map[Optional[SnapshotPath]] { path =>
-
-        if (path == log.dir.toPath) {
-          Optional.empty()
-        } else if (path.endsWith(Snapshots.DELETE_SUFFIX)) {
-          Files.deleteIfExists(path)
-          Optional.empty()
-        } else {
+        if (path != log.dir.toPath) {
           Snapshots.parse(path)
+        } else {
+          Optional.empty()
         }
       }
       .forEach { path =>
         path.ifPresent { snapshotPath =>
-          if (snapshotPath.partial || snapshotPath.snapshotId.offset < log.logStartOffset) {
-            // Delete partial snapshot and older snapshot
+          if (snapshotPath.partial ||
+            snapshotPath.deleted ||
+            snapshotPath.snapshotId.offset < log.logStartOffset) {
+            // Delete partial snapshot, deleted snapshot and older snapshot
             Files.deleteIfExists(snapshotPath.path)
           } else {
             snapshotIds.add(snapshotPath.snapshotId)

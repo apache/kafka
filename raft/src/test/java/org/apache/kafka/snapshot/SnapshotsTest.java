@@ -20,6 +20,8 @@ import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.raft.OffsetAndEpoch;
 import org.apache.kafka.test.TestUtils;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import java.io.IOException;
 import java.nio.file.FileSystems;
@@ -45,6 +47,7 @@ final public class SnapshotsTest {
         assertEquals(path, snapshotPath.path);
         assertEquals(snapshotId, snapshotPath.snapshotId);
         assertFalse(snapshotPath.partial);
+        assertFalse(snapshotPath.deleted);
     }
 
     @Test
@@ -66,6 +69,20 @@ final public class SnapshotsTest {
     }
 
     @Test
+    public void testValidDeletedSnapshotFilename() {
+        OffsetAndEpoch snapshotId = new OffsetAndEpoch(
+            TestUtils.RANDOM.nextInt(Integer.MAX_VALUE),
+            TestUtils.RANDOM.nextInt(Integer.MAX_VALUE)
+        );
+        Path path = Snapshots.snapshotPath(TestUtils.tempDirectory().toPath(), snapshotId);
+        Path deletedPath = Snapshots.deleteRename(path, snapshotId);
+        SnapshotPath snapshotPath = Snapshots.parse(deletedPath).get();
+
+        assertEquals(snapshotId, snapshotPath.snapshotId);
+        assertTrue(snapshotPath.deleted);
+    }
+
+    @Test
     public void testInvalidSnapshotFilenames() {
         Path root = FileSystems.getDefault().getPath("/");
         // Doesn't parse log files
@@ -79,12 +96,11 @@ final public class SnapshotsTest {
         assertEquals(Optional.empty(), Snapshots.parse(root.resolve("leader-epoch-checkpoint")));
         // partition metadata
         assertEquals(Optional.empty(), Snapshots.parse(root.resolve("partition.metadata")));
-        // deleted file
-        assertEquals(Optional.empty(), Snapshots.parse(root.resolve("00000000000000000000.deleted")));
     }
 
-    @Test
-    public void testDeleteSnapshot() throws IOException {
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    public void testDeleteSnapshot(boolean renameBeforeDeleting) throws IOException {
 
         OffsetAndEpoch snapshotId = new OffsetAndEpoch(
             TestUtils.RANDOM.nextInt(Integer.MAX_VALUE),
@@ -98,25 +114,13 @@ final public class SnapshotsTest {
             Path snapshotPath = Snapshots.snapshotPath(logDirPath, snapshotId);
             assertTrue(Files.exists(snapshotPath));
 
-            // delete snapshot directly
-            assertTrue(Snapshots.deleteSnapshotIfExists(logDirPath, snapshot.snapshotId()));
-            assertFalse(Files.exists(snapshotPath));
-            assertFalse(Files.exists(Snapshots.deleteRename(snapshotPath, snapshotId)));
-        }
-
-        try (FileRawSnapshotWriter snapshot = FileRawSnapshotWriter.create(logDirPath, snapshotId, Optional.empty())) {
-            snapshot.freeze();
-
-            Path snapshotPath = Snapshots.snapshotPath(logDirPath, snapshotId);
-            assertTrue(Files.exists(snapshotPath));
-
-            // rename snapshot before deleting
-            Utils.atomicMoveWithFallback(snapshotPath, Snapshots.deleteRename(snapshotPath, snapshotId));
+            if (renameBeforeDeleting)
+                // rename snapshot before deleting
+                Utils.atomicMoveWithFallback(snapshotPath, Snapshots.deleteRename(snapshotPath, snapshotId));
 
             assertTrue(Snapshots.deleteSnapshotIfExists(logDirPath, snapshot.snapshotId()));
             assertFalse(Files.exists(snapshotPath));
             assertFalse(Files.exists(Snapshots.deleteRename(snapshotPath, snapshotId)));
         }
-
     }
 }

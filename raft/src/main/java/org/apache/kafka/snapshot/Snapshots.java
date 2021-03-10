@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.snapshot;
 
-import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.raft.OffsetAndEpoch;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -29,9 +28,9 @@ import java.util.Optional;
 
 public final class Snapshots {
     private static final Logger log = LoggerFactory.getLogger(Snapshots.class);
-    public static final String SUFFIX = ".checkpoint";
-    public static final String PARTIAL_SUFFIX = String.format("%s.part", SUFFIX);
-    public static final String DELETE_SUFFIX = ".deleted";
+    private static final String SUFFIX = ".checkpoint";
+    private static final String PARTIAL_SUFFIX = String.format("%s.part", SUFFIX);
+    private static final String DELETE_SUFFIX = String.format("%s.deleted", SUFFIX);
 
     private static final NumberFormat OFFSET_FORMATTER = NumberFormat.getInstance();
     private static final NumberFormat EPOCH_FORMATTER = NumberFormat.getInstance();
@@ -86,12 +85,13 @@ public final class Snapshots {
 
         String name = filename.toString();
 
-        boolean partial;
+        boolean partial = false;
+        boolean deleted = false;
         if (name.endsWith(PARTIAL_SUFFIX)) {
             partial = true;
-        } else if (name.endsWith(SUFFIX)) {
-            partial = false;
-        } else {
+        } else if (name.endsWith(DELETE_SUFFIX)) {
+            deleted = true;
+        } else if (!name.endsWith(SUFFIX)) {
             return Optional.empty();
         }
 
@@ -100,24 +100,20 @@ public final class Snapshots {
             name.substring(OFFSET_WIDTH + 1, OFFSET_WIDTH + EPOCH_WIDTH + 1)
         );
 
-        return Optional.of(new SnapshotPath(path, new OffsetAndEpoch(endOffset, epoch), partial));
+        return Optional.of(new SnapshotPath(path, new OffsetAndEpoch(endOffset, epoch), partial, deleted));
     }
 
     /**
-     * Delete the snapshot from the filesystem, we will firstly tried to rename snapshot file to
-     * ${file}.deleted, or delete the file directly if its already renamed.
+     * Delete the snapshot from the filesystem, the caller may firstly rename snapshot file to
+     * ${file}.deleted, so we try to delete the file as well as the renamed file if exists.
      */
     public static boolean deleteSnapshotIfExists(Path logDir, OffsetAndEpoch snapshotId) {
-        Path path = Snapshots.snapshotPath(logDir, snapshotId);
-        Path destination = Snapshots.deleteRename(path, snapshotId);
+        Path immutablePath = Snapshots.snapshotPath(logDir, snapshotId);
+        Path deletingPath = Snapshots.deleteRename(immutablePath, snapshotId);
         try {
-            // rename before deleting if target file is not renamed
-            if (Files.exists(path) || Files.notExists(destination)) {
-                Utils.atomicMoveWithFallback(path, destination);
-            }
-            return Files.deleteIfExists(destination);
+            return Files.deleteIfExists(immutablePath) | Files.deleteIfExists(deletingPath);
         } catch (IOException e) {
-            log.error("Error deleting snapshot file " + destination, e);
+            log.error("Error deleting snapshot file " + deletingPath, e);
             return false;
         }
     }

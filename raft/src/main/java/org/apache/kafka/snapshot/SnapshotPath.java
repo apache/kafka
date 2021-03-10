@@ -23,11 +23,13 @@ public final class SnapshotPath {
     public final Path path;
     public final OffsetAndEpoch snapshotId;
     public final boolean partial;
+    public final boolean deleted;
 
-    public SnapshotPath(Path path, OffsetAndEpoch snapshotId, boolean partial) {
+    public SnapshotPath(Path path, OffsetAndEpoch snapshotId, boolean partial, boolean deleted) {
         this.path = path;
         this.snapshotId = snapshotId;
         this.partial = partial;
+        this.deleted = deleted;
     }
 
     @Override

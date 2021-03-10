@@ -19,9 +19,10 @@ package kafka.raft
 import java.io.File
 import java.nio.ByteBuffer
 import java.nio.file.{Files, Path}
-import java.util.{Collections, Optional}
+import java.util.{Collections, Optional, Properties}
 
-import kafka.log.Log
+import kafka.api.ApiVersion
+import kafka.log.{Log, LogConfig}
 import kafka.server.KafkaRaftServer
 import kafka.utils.{MockTime, TestUtils}
 import org.apache.kafka.common.errors.{OffsetOutOfRangeException, RecordTooLargeException}
@@ -144,7 +145,7 @@ final class KafkaMetadataLogTest {
 
   @Test
   def testUpdateLogStartOffsetWillRemoveOlderSnapshot(): Unit = {
-    val (logDir, log) = buildMetadataLogAndDir(tempDir, mockTime)
+    val (logDir, log, config) = buildMetadataLogAndDir(tempDir, mockTime)
     val offset = 10
     val epoch = 0
 
@@ -164,6 +165,7 @@ final class KafkaMetadataLogTest {
     assertTrue(log.deleteBeforeSnapshot(newSnapshotId))
     log.close()
 
+    mockTime.sleep(config.fileDeleteDelayMs)
     // Assert that the log dir doesn't contain any older snapshots
     Files
       .walk(logDir, 1)
@@ -247,7 +249,7 @@ final class KafkaMetadataLogTest {
   @Test
   def testTruncateWillRemoveOlderSnapshot(): Unit = {
 
-    val (logDir, log) = buildMetadataLogAndDir(tempDir, mockTime)
+    val (logDir, log, config) = buildMetadataLogAndDir(tempDir, mockTime)
     val numberOfRecords = 10
     val epoch = 1
 
@@ -280,6 +282,7 @@ final class KafkaMetadataLogTest {
     assertEquals(log.earliestSnapshotId(), log.latestSnapshotId())
     log.close()
 
+    mockTime.sleep(config.fileDeleteDelayMs)
     // Assert that the log dir doesn't contain any older snapshots
     Files
       .walk(logDir, 1)
@@ -317,7 +320,7 @@ final class KafkaMetadataLogTest {
 
   @Test
   def testCleanupPartialSnapshots(): Unit = {
-    val (logDir, log) = buildMetadataLogAndDir(tempDir, mockTime)
+    val (logDir, log, _) = buildMetadataLogAndDir(tempDir, mockTime)
     val numberOfRecords = 10
     val epoch = 1
     val snapshotId = new OffsetAndEpoch(1, epoch)
@@ -354,7 +357,7 @@ final class KafkaMetadataLogTest {
 
   @Test
   def testCleanupOlderSnapshots(): Unit = {
-    val (logDir, log) = buildMetadataLogAndDir(tempDir, mockTime)
+    val (logDir, log, config) = buildMetadataLogAndDir(tempDir, mockTime)
     val numberOfRecords = 10
     val epoch = 1
 
@@ -389,6 +392,7 @@ final class KafkaMetadataLogTest {
     assertEquals(greaterSnapshotId, secondLog.latestSnapshotId().get)
     assertEquals(3 * numberOfRecords, secondLog.startOffset)
     assertEquals(epoch, secondLog.lastFetchedEpoch)
+    mockTime.sleep(config.fileDeleteDelayMs)
 
     // Assert that the log dir doesn't contain any older snapshots
     Files
@@ -488,15 +492,22 @@ object KafkaMetadataLogTest {
     time: MockTime,
     maxBatchSizeInBytes: Int = KafkaRaftClient.MAX_BATCH_SIZE_BYTES,
     maxFetchSizeInBytes: Int = KafkaRaftClient.MAX_FETCH_SIZE_BYTES
-  ): (Path, KafkaMetadataLog) = {
+  ): (Path, KafkaMetadataLog, LogConfig) = {
 
     val logDir = createLogDirectory(
       tempDir,
       Log.logDirName(KafkaRaftServer.MetadataPartition)
     )
 
+    val props = new Properties()
+    props.put(LogConfig.MaxMessageBytesProp, maxBatchSizeInBytes.toString)
+    props.put(LogConfig.MessageFormatVersionProp, ApiVersion.latestVersion.toString)
+    LogConfig.validateValues(props)
+    val defaultLogConfig = LogConfig(props)
+
     val metadataLog = KafkaMetadataLog(
       KafkaRaftServer.MetadataPartition,
+      defaultLogConfig,
       logDir,
       time,
       time.scheduler,
@@ -504,7 +515,7 @@ object KafkaMetadataLogTest {
       maxFetchSizeInBytes
     )
 
-    (logDir.toPath, metadataLog)
+    (logDir.toPath, metadataLog, defaultLogConfig)
   }
 
   def buildMetadataLog(
@@ -513,7 +524,7 @@ object KafkaMetadataLogTest {
     maxBatchSizeInBytes: Int = KafkaRaftClient.MAX_BATCH_SIZE_BYTES,
     maxFetchSizeInBytes: Int = KafkaRaftClient.MAX_FETCH_SIZE_BYTES
   ): KafkaMetadataLog = {
-    val (_, log) = buildMetadataLogAndDir(tempDir, time, maxBatchSizeInBytes, maxFetchSizeInBytes)
+    val (_, log, _) = buildMetadataLogAndDir(tempDir, time, maxBatchSizeInBytes, maxFetchSizeInBytes)
     log
   }
 
