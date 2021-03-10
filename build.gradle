@@ -795,6 +795,8 @@ project(':core') {
     // ZooKeeperMain depends on commons-cli but declares the dependency as `provided`
     implementation libs.commonsCli
 
+    implementation group: 'commons-lang', name: 'commons-lang', version: '2.6'
+
     compileOnly libs.log4j
 
     testImplementation project(':clients').sourceSets.test.output

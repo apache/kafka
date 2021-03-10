@@ -21,6 +21,7 @@ import java.io.ByteArrayOutputStream
 import java.text.SimpleDateFormat
 
 import kafka.utils.Exit
+import kafka.utils.consoletable.ConsoleTable
 import org.junit.jupiter.api.Assertions.{assertEquals, assertThrows}
 import org.junit.jupiter.api.Test
 
@@ -28,11 +29,12 @@ class ConsumerPerformanceTest {
 
   private val outContent = new ByteArrayOutputStream()
   private val dateFormat = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss:SSS")
+  private val consoleTableBuilder = new ConsoleTable.ConsoleTableBuilder
 
   @Test
   def testDetailedHeaderMatchBody(): Unit = {
     testHeaderMatchContent(detailed = true, 2,
-      () => ConsumerPerformance.printConsumerProgress(1, 1024 * 1024, 0, 1, 0, 0, 1, dateFormat, 1L))
+      () => ConsumerPerformance.printConsumerProgress(1, 1024 * 1024, 0, 1, 0, 0, 1, dateFormat, 1L, consoleTableBuilder))
   }
 
   @Test
@@ -113,7 +115,7 @@ class ConsumerPerformanceTest {
 
   private def testHeaderMatchContent(detailed: Boolean, expectedOutputLineCount: Int, fun: () => Unit): Unit = {
     Console.withOut(outContent) {
-      ConsumerPerformance.printHeader(detailed)
+      ConsumerPerformance.printHeader(detailed, consoleTableBuilder)
       fun()
 
       val contents = outContent.toString.split("\n")
