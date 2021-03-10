@@ -79,8 +79,7 @@ public class DescribeProducersHandler implements AdminApiHandler<TopicPartition,
                 Optional.empty()
             );
         } else {
-            PartitionLeaderStrategy lookupStrategy =
-                new PartitionLeaderStrategy(topicPartitions, logContext);
+            PartitionLeaderStrategy lookupStrategy = new PartitionLeaderStrategy(logContext);
             return new KeyMappings<>(
                 Optional.empty(),
                 Optional.of(new DynamicKeyMapping<>(topicPartitions, lookupStrategy))

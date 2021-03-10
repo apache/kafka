@@ -48,8 +48,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class PartitionLeaderStrategyTest {
 
-    private PartitionLeaderStrategy newStrategy(Set<TopicPartition> topicPartitions) {
-        return new PartitionLeaderStrategy(topicPartitions, new LogContext());
+    private PartitionLeaderStrategy newStrategy() {
+        return new PartitionLeaderStrategy(new LogContext());
     }
 
     @Test
@@ -61,7 +61,7 @@ public class PartitionLeaderStrategyTest {
             new TopicPartition("baz", 0)
         );
 
-        PartitionLeaderStrategy strategy = newStrategy(topicPartitions);
+        PartitionLeaderStrategy strategy = newStrategy();
 
         MetadataRequest allRequest = strategy.buildRequest(topicPartitions).build();
         assertEquals(mkSet("foo", "bar", "baz"), new HashSet<>(allRequest.topics()));
@@ -249,7 +249,7 @@ public class PartitionLeaderStrategyTest {
         Set<TopicPartition> topicPartitions,
         MetadataResponse response
     ) {
-        PartitionLeaderStrategy strategy = newStrategy(topicPartitions);
+        PartitionLeaderStrategy strategy = newStrategy();
         return strategy.handleResponse(topicPartitions, response);
     }
 

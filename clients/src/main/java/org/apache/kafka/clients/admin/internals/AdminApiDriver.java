@@ -135,10 +135,6 @@ public class AdminApiDriver<K, V> {
     private void map(K key, Integer brokerId) {
         lookupMap.remove(key);
         fulfillmentMap.put(new BrokerScope(brokerId), key);
-
-        // To allow for derived keys, we create futures dynamically if they
-        // do not already exist in the future map
-        futures.computeIfAbsent(key, k -> new KafkaFutureImpl<>());
     }
 
     /**
@@ -264,6 +260,9 @@ public class AdminApiDriver<K, V> {
             log.debug("Node disconnected before response could be received for request {}. " +
                 "Will attempt retry", spec.request);
             dynamicMapping.ifPresent(mapping -> {
+                // After a disconnect, we want the driver to attempt to lookup the key
+                // again. This gives us a chance to find a new coordinator or partition
+                // leader for example.
                 if (mapping.keys.containsAll(spec.keys)) {
                     spec.keys.forEach(this::unmap);
                 }
@@ -362,6 +361,19 @@ public class AdminApiDriver<K, V> {
             this.nextAllowedTryMs = nextAllowedTryMs;
             this.deadlineMs = deadlineMs;
             this.tries = tries;
+        }
+
+        @Override
+        public String toString() {
+            return "RequestSpec(" +
+                "name='" + name + '\'' +
+                ", scope=" + scope +
+                ", keys=" + keys +
+                ", request=" + request +
+                ", nextAllowedTryMs=" + nextAllowedTryMs +
+                ", deadlineMs=" + deadlineMs +
+                ", tries=" + tries +
+                ')';
         }
     }
 

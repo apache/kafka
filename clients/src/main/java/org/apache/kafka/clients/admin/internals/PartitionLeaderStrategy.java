@@ -42,14 +42,9 @@ public class PartitionLeaderStrategy implements AdminApiLookupStrategy<TopicPart
     private static final RequestScope SINGLE_REQUEST_SCOPE = new RequestScope() {
     };
 
-    protected final Set<TopicPartition> topicPartitions;
     private final Logger log;
 
-    public PartitionLeaderStrategy(
-        Set<TopicPartition> topicPartitions,
-        LogContext logContext
-    ) {
-        this.topicPartitions = Collections.unmodifiableSet(topicPartitions);
+    public PartitionLeaderStrategy(LogContext logContext) {
         this.log = logContext.logger(PartitionLeaderStrategy.class);
     }
 
@@ -164,7 +159,7 @@ public class PartitionLeaderStrategy implements AdminApiLookupStrategy<TopicPart
                 Errors partitionError = partitionMetadata.error;
 
 
-                if (!topicPartitions.contains(topicPartition)) {
+                if (!requestPartitions.contains(topicPartition)) {
                     // The `Metadata` response always returns all partitions for requested
                     // topics, so we have to filter any that we are not interested in.
                     continue;
