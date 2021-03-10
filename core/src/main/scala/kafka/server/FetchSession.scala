@@ -411,6 +411,14 @@ class IncrementalFetchContext(private val time: Time,
     }
   }
 
+  def cachedPartition(topicPartition: TopicPartition): CachedPartition =
+    session.partitionMap.find(new CachedPartition(topicPartition))
+
+  def update(cachedPartition: CachedPartition): Unit = {
+    session.partitionMap.remove(cachedPartition)
+    session.partitionMap.mustAdd(cachedPartition)
+  }
+
   // Iterator that goes over the given partition map and selects partitions that need to be included in the response.
   // If updateFetchContextAndRemoveUnselected is set to true, the fetch context will be updated for the selected
   // partitions and also remove unselected ones as they are encountered.
@@ -424,14 +432,11 @@ class IncrementalFetchContext(private val time: Time,
         val element = iter.next()
         val topicPart = element.getKey
         val respData = element.getValue
-        val cachedPart = session.partitionMap.find(new CachedPartition(topicPart))
+        val cachedPart = cachedPartition(topicPart)
         val mustRespond = cachedPart.maybeUpdateResponseData(respData, updateFetchContextAndRemoveUnselected)
         if (mustRespond) {
           nextElement = element
-          if (updateFetchContextAndRemoveUnselected) {
-            session.partitionMap.remove(cachedPart)
-            session.partitionMap.mustAdd(cachedPart)
-          }
+          if (updateFetchContextAndRemoveUnselected) update(cachedPart)
         } else {
           if (updateFetchContextAndRemoveUnselected) {
             iter.remove()
