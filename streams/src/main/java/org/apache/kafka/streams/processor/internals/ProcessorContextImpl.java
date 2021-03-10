@@ -338,6 +338,11 @@ public class ProcessorContextImpl extends AbstractProcessorContext implements Re
     }
 
     @Override
+    public long currentStreamTimeMs() {
+        return streamTask.streamTime();
+    }
+
+    @Override
     public ProcessorNode<?, ?, ?, ?> currentNode() {
         throwUnsupportedOperationExceptionIfStandby("currentNode");
         return super.currentNode();

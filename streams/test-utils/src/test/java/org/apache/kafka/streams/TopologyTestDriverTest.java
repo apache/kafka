@@ -955,7 +955,7 @@ public abstract class TopologyTestDriverTest {
     }
 
     @SuppressWarnings("deprecation")
-    //Testing already deprecatd methods until methods removed
+    //Testing already deprecated methods until methods removed
     @Test
     public void shouldPunctuateOnWallClockTimeDeprecated() {
         final MockPunctuator mockPunctuator = new MockPunctuator();
@@ -965,7 +965,6 @@ public abstract class TopologyTestDriverTest {
             0);
 
         final List<Long> expectedPunctuations = new LinkedList<>();
-
         testDriver.advanceWallClockTime(5L);
         assertThat(mockPunctuator.punctuatedAt, equalTo(expectedPunctuations));
 

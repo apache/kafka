@@ -121,6 +121,16 @@ public class NoOpProcessorContext extends AbstractProcessorContext {
     public void commit() {}
 
     @Override
+    public long currentSystemTimeMs() {
+        throw new UnsupportedOperationException("Not implemented yet.");
+    }
+
+    @Override
+    public long currentStreamTimeMs() {
+        throw new UnsupportedOperationException("Not implemented yet.");
+    }
+
+    @Override
     public void initialize() {
         initialized = true;
     }
