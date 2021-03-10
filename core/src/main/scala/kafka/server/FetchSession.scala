@@ -451,16 +451,21 @@ class IncrementalFetchContext(private val time: Time,
       val partitionIter = topicResponse.partitions().iterator
       while (partitionIter.hasNext) {
         val partitionResponse = partitionIter.next
-        val cachedPart = session.partitionMap.find(new CachedPartition(topicResponse.topic, partitionResponse.partitionIndex))
+        val cachedPart = cachedPartition(topicResponse.topic, partitionResponse.partitionIndex)
         val mustRespond = cachedPart.maybeUpdateResponseData(partitionResponse, updateFetchContextAndRemoveUnselected)
-        if (mustRespond && updateFetchContextAndRemoveUnselected) {
-          session.partitionMap.remove(cachedPart)
-          session.partitionMap.mustAdd(cachedPart)
-        }
+        if (mustRespond && updateFetchContextAndRemoveUnselected) update(cachedPart)
         if (!mustRespond) partitionIter.remove()
       }
       if (topicResponse.partitions().isEmpty) topicIter.remove()
     }
+  }
+
+  def cachedPartition(topic: String, partition: Int): CachedPartition =
+    session.partitionMap.find(new CachedPartition(topic, partition))
+
+  def update(cachedPartition: CachedPartition): Unit = {
+    session.partitionMap.remove(cachedPartition)
+    session.partitionMap.mustAdd(cachedPartition)
   }
 
   override def getResponseSize(updates: FetchSession.RESP_MAP, versionId: Short): Int = {
