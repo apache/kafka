@@ -123,16 +123,6 @@ class ChangeLoggingWindowBytesStore
         return wrapped().backwardFetchAll(timeFrom, timeTo);
     }
 
-    @Deprecated
-    @Override
-    public void put(final Bytes key, final byte[] value) {
-        // Note: It's incorrect to bypass the wrapped store here by delegating to another method,
-        // but we have no alternative. We must send a timestamped key to the changelog, which means
-        // we need to know what timestamp gets used for the record. Hopefully, we can deprecate this
-        // method in the future to resolve the situation.
-        put(key, value, context.timestamp());
-    }
-
     @Override
     public void put(final Bytes key,
                     final byte[] value,

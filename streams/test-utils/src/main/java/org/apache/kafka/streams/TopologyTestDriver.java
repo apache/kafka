@@ -1360,13 +1360,6 @@ public class TopologyTestDriver implements Closeable {
             inner.init(context, root);
         }
 
-        @Deprecated
-        @Override
-        public void put(final K key,
-                        final V value) {
-            inner.put(key, ValueAndTimestamp.make(value, ConsumerRecord.NO_TIMESTAMP));
-        }
-
         @Override
         public void put(final K key,
                         final V value,
