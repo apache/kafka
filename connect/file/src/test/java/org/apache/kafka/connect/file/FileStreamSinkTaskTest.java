@@ -47,7 +47,7 @@ public class FileStreamSinkTaskTest {
     private String outputFile;
 
     @BeforeEach
-    public void setup() throws Exception {
+    public void setup() {
         os = new ByteArrayOutputStream();
         printStream = new PrintStream(os);
         task = new FileStreamSinkTask(printStream);

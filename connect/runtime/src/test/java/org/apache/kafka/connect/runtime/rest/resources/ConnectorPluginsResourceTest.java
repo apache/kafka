@@ -427,8 +427,7 @@ public class ConnectorPluginsResourceTest {
     }
 
     public static class MockConnectorPluginDesc extends PluginDesc<Connector> {
-        public MockConnectorPluginDesc(Class<? extends Connector> klass, String version)
-                throws Exception {
+        public MockConnectorPluginDesc(Class<? extends Connector> klass, String version) {
             super(klass, version, new MockPluginClassLoader(null, new URL[0]));
         }
 
