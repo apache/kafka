@@ -101,6 +101,11 @@ public class InmemoryRemoteLogMetadataManagerTest {
                 System.currentTimeMillis(), RemoteLogSegmentState.COPY_SEGMENT_FINISHED, brokerId);
         rlmm.updateRemoteLogSegmentMetadata(segMetFooTp0s250e400Update);
 
+        //////////////////////////////////////////////////////////////////////////////////////////
+        //  Search for RLMM.remoteLogSegmentMetadata(TP, offset, leaderEpoch)  for different
+        // epochs and offsets
+        //////////////////////////////////////////////////////////////////////////////////////////
+
         // Search for offset 40, epoch 1
         Optional<RemoteLogSegmentMetadata> segO40E1 = rlmm.remoteLogSegmentMetadata(TP0, 40, 1);
         Assertions.assertEquals(segMetFooTp0s0e100.createRemoteLogSegmentWithUpdates(segMetFooTp0s0e100Update),
@@ -125,6 +130,10 @@ public class InmemoryRemoteLogMetadataManagerTest {
         Assertions.assertEquals(segMetFooTp0s250e400.createRemoteLogSegmentWithUpdates(segMetFooTp0s250e400Update),
                 segO2500E3.orElse(null));
 
+        //search for highest offset for leader epoch 3
+        Optional<Long> highestOffsetForEpoch3 = rlmm.highestLogOffset(TP0, 3);
+        Assertions.assertEquals(369, highestOffsetForEpoch3.get());
+
         // Search for offset 375, epoch 4
         Optional<RemoteLogSegmentMetadata> segO3750E4 = rlmm.remoteLogSegmentMetadata(TP0, 375, 4);
         Assertions.assertEquals(segMetFooTp0s250e400.createRemoteLogSegmentWithUpdates(segMetFooTp0s250e400Update),
@@ -133,6 +142,26 @@ public class InmemoryRemoteLogMetadataManagerTest {
         // Search for offset 401, epoch 4
         Optional<RemoteLogSegmentMetadata> segO4010E4 = rlmm.remoteLogSegmentMetadata(TP0, 401, 4);
         Assertions.assertFalse(segO4010E4.isPresent());
+
+        //////////////////////////////////////////////////////////////////////////////////////////
+        //  Search for RLMM.highestLogOffset(TP, leaderEpoch)  for all the leader epochs
+        //////////////////////////////////////////////////////////////////////////////////////////
+
+        //search for highest offset for leader epoch 0
+        Optional<Long> highestOffsetForEpoch0 = rlmm.highestLogOffset(TP0, 0);
+        Assertions.assertEquals(19, highestOffsetForEpoch0.orElse(null));
+
+        //search for highest offset for leader epoch 1
+        Optional<Long> highestOffsetForEpoch1 = rlmm.highestLogOffset(TP0, 1);
+        Assertions.assertEquals(79, highestOffsetForEpoch1.orElse(null));
+
+        //search for highest offset for leader epoch 2
+        Optional<Long> highestOffsetForEpoch2 = rlmm.highestLogOffset(TP0, 2);
+        Assertions.assertEquals(239, highestOffsetForEpoch2.orElse(null));
+
+        //search for highest offset for leader epoch 4
+        Optional<Long> highestOffsetForEpoch4 = rlmm.highestLogOffset(TP0, 4);
+        Assertions.assertEquals(400, highestOffsetForEpoch4.orElse(null));
 
         // Update segment with state as DELETE_SEGMENT_STARTED.
         // It should be available when we search for that segment.

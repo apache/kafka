@@ -28,6 +28,9 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.ConcurrentHashMap;
 
+/**
+ * This class is an implementation of {@link RemoteStorageManager} backed by inmemory store.
+ */
 public class InmemoryRemoteStorageManager implements RemoteStorageManager {
     private static final Logger log = LoggerFactory.getLogger(InmemoryRemoteStorageManager.class);
 
@@ -55,9 +58,9 @@ public class InmemoryRemoteStorageManager implements RemoteStorageManager {
     public void copyLogSegmentData(RemoteLogSegmentMetadata remoteLogSegmentMetadata,
                                    LogSegmentData logSegmentData)
             throws RemoteStorageException {
+        log.debug("copying log segment and indexes for : {}", remoteLogSegmentMetadata);
         Objects.requireNonNull(remoteLogSegmentMetadata, "remoteLogSegmentMetadata can not be null");
         Objects.requireNonNull(logSegmentData, "logSegmentData can not be null");
-        log.debug("copying log segment and indexes for : {}", remoteLogSegmentMetadata);
         try {
             keyToLogData.put(generateKeyForSegment(remoteLogSegmentMetadata),
                     Files.readAllBytes(logSegmentData.logSegment().toPath()));
@@ -81,8 +84,8 @@ public class InmemoryRemoteStorageManager implements RemoteStorageManager {
     public InputStream fetchLogSegment(RemoteLogSegmentMetadata remoteLogSegmentMetadata,
                                        int startPosition)
             throws RemoteStorageException {
-        Objects.requireNonNull(remoteLogSegmentMetadata, "remoteLogSegmentMetadata can not be null");
         log.debug("Received fetch segment request at start position: [{}] for [{}]", startPosition, remoteLogSegmentMetadata);
+        Objects.requireNonNull(remoteLogSegmentMetadata, "remoteLogSegmentMetadata can not be null");
 
         return fetchLogSegment(remoteLogSegmentMetadata, startPosition, Integer.MAX_VALUE);
     }
@@ -91,6 +94,9 @@ public class InmemoryRemoteStorageManager implements RemoteStorageManager {
     public InputStream fetchLogSegment(RemoteLogSegmentMetadata remoteLogSegmentMetadata,
                                        int startPosition,
                                        int endPosition) throws RemoteStorageException {
+        log.debug("Received fetch segment request at start position: [{}] and end position: [{}] for segment [{}]",
+                startPosition, endPosition, remoteLogSegmentMetadata);
+
         Objects.requireNonNull(remoteLogSegmentMetadata, "remoteLogSegmentMetadata can not be null");
 
         if (startPosition < 0 || endPosition < 0) {
@@ -100,9 +106,6 @@ public class InmemoryRemoteStorageManager implements RemoteStorageManager {
         if (endPosition < startPosition) {
             throw new IllegalArgumentException("end position must be greater than start position");
         }
-
-        log.debug("Received fetch segment request at start position: [{}] and end position: [{}] for segment [{}]",
-                startPosition, endPosition, remoteLogSegmentMetadata);
 
         String key = generateKeyForSegment(remoteLogSegmentMetadata);
         byte[] segment = keyToLogData.get(key);
@@ -129,10 +132,9 @@ public class InmemoryRemoteStorageManager implements RemoteStorageManager {
     @Override
     public InputStream fetchIndex(RemoteLogSegmentMetadata remoteLogSegmentMetadata,
                                   IndexType indexType) throws RemoteStorageException {
+        log.debug("Received fetch request for index type: [{}], segment [{}]", indexType, remoteLogSegmentMetadata);
         Objects.requireNonNull(remoteLogSegmentMetadata, "remoteLogSegmentMetadata can not be null");
         Objects.requireNonNull(indexType, "indexType can not be null");
-
-        log.debug("Received fetch request for index type: [{}], segment [{}]", indexType, remoteLogSegmentMetadata);
 
         String key = generateKeyForIndex(remoteLogSegmentMetadata, indexType);
         byte[] index = keyToLogData.get(key);
@@ -147,8 +149,8 @@ public class InmemoryRemoteStorageManager implements RemoteStorageManager {
 
     @Override
     public void deleteLogSegmentData(RemoteLogSegmentMetadata remoteLogSegmentMetadata) throws RemoteStorageException {
-        Objects.requireNonNull(remoteLogSegmentMetadata, "remoteLogSegmentMetadata can not be null");
         log.info("Deleting log segment for: [{}]", remoteLogSegmentMetadata);
+        Objects.requireNonNull(remoteLogSegmentMetadata, "remoteLogSegmentMetadata can not be null");
         String segmentKey = generateKeyForSegment(remoteLogSegmentMetadata);
         keyToLogData.remove(segmentKey);
         for (IndexType indexType : IndexType.values()) {

@@ -29,6 +29,9 @@ import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 
+/**
+ * This class is an implementation of {@link RemoteLogMetadataManager} backed by inmemory store.
+ */
 public class InmemoryRemoteLogMetadataManager implements RemoteLogMetadataManager {
     private static final Logger log = LoggerFactory.getLogger(InmemoryRemoteLogMetadataManager.class);
 
@@ -41,6 +44,7 @@ public class InmemoryRemoteLogMetadataManager implements RemoteLogMetadataManage
     @Override
     public void addRemoteLogSegmentMetadata(RemoteLogSegmentMetadata remoteLogSegmentMetadata)
             throws RemoteStorageException {
+        log.debug("Adding remote log segment : [{}]", remoteLogSegmentMetadata);
         Objects.requireNonNull(remoteLogSegmentMetadata, "remoteLogSegmentMetadata can not be null");
 
         // this method is allowed only to add remote log segment with the initial state(which is RemoteLogSegmentState.COPY_SEGMENT_STARTED)
@@ -49,8 +53,6 @@ public class InmemoryRemoteLogMetadataManager implements RemoteLogMetadataManage
             throw new IllegalArgumentException("Given remoteLogSegmentMetadata should have state as " + RemoteLogSegmentState.COPY_SEGMENT_STARTED
                     + " but it contains state as: " + remoteLogSegmentMetadata.state());
         }
-
-        log.debug("Adding remote log segment : [{}]", remoteLogSegmentMetadata);
 
         RemoteLogSegmentId remoteLogSegmentId = remoteLogSegmentMetadata.remoteLogSegmentId();
 
@@ -61,25 +63,27 @@ public class InmemoryRemoteLogMetadataManager implements RemoteLogMetadataManage
     }
 
     @Override
-    public void updateRemoteLogSegmentMetadata(RemoteLogSegmentMetadataUpdate rlsmUpdate)
+    public void updateRemoteLogSegmentMetadata(RemoteLogSegmentMetadataUpdate metadataUpdate)
             throws RemoteStorageException {
-        Objects.requireNonNull(rlsmUpdate, "rlsmUpdate can not be null");
+        log.debug("Updating remote log segment: [{}]", metadataUpdate);
+        Objects.requireNonNull(metadataUpdate, "metadataUpdate can not be null");
 
+        RemoteLogSegmentState targetState = metadataUpdate.state();
         // Callers should use putRemoteLogSegmentMetadata to add RemoteLogSegmentMetadata with state as
         // RemoteLogSegmentState.COPY_SEGMENT_STARTED.
-        if (rlsmUpdate.state() == RemoteLogSegmentState.COPY_SEGMENT_STARTED) {
+        if (targetState == RemoteLogSegmentState.COPY_SEGMENT_STARTED) {
             throw new IllegalArgumentException("Given remoteLogSegmentMetadata should not have the state as: "
                                                + RemoteLogSegmentState.COPY_SEGMENT_STARTED);
         }
-        log.debug("Updating remote log segment: [{}]", rlsmUpdate);
-        RemoteLogSegmentId remoteLogSegmentId = rlsmUpdate.remoteLogSegmentId();
+
+        RemoteLogSegmentId remoteLogSegmentId = metadataUpdate.remoteLogSegmentId();
         TopicIdPartition topicIdPartition = remoteLogSegmentId.topicIdPartition();
         RemoteLogMetadataCache remoteLogMetadataCache = partitionToRemoteLogMetadataCache.get(topicIdPartition);
         if (remoteLogMetadataCache == null) {
-            throw new RemoteResourceNotFoundException("No partition metadata found for : " + topicIdPartition);
+            throw new RemoteResourceNotFoundException("No metadata found for partition: " + topicIdPartition);
         }
 
-        remoteLogMetadataCache.updateRemoteLogSegmentMetadata(rlsmUpdate);
+        remoteLogMetadataCache.updateRemoteLogSegmentMetadata(metadataUpdate);
     }
 
     @Override
@@ -104,23 +108,30 @@ public class InmemoryRemoteLogMetadataManager implements RemoteLogMetadataManage
 
         RemoteLogMetadataCache remoteLogMetadataCache = partitionToRemoteLogMetadataCache.get(topicIdPartition);
         if (remoteLogMetadataCache == null) {
-            throw new RemoteResourceNotFoundException("No resource found for partition: " + topicIdPartition);
+            throw new RemoteResourceNotFoundException("No metadata found for partition: " + topicIdPartition);
         }
 
-        Long highestKey = remoteLogMetadataCache.highestLogOffset(leaderEpoch);
-        return Optional.ofNullable(highestKey);
+        return remoteLogMetadataCache.highestLogOffset(leaderEpoch);    
     }
 
     @Override
     public void putRemotePartitionDeleteMetadata(RemotePartitionDeleteMetadata remotePartitionDeleteMetadata)
             throws RemoteStorageException {
-        Objects.requireNonNull(remotePartitionDeleteMetadata, "remotePartitionDeleteMetadata can not be null");
         log.debug("Adding delete state with: [{}]", remotePartitionDeleteMetadata);
-        TopicIdPartition topicIdPartition = remotePartitionDeleteMetadata.topicIdPartition();
-        idToPartitionDeleteMetadata.put(topicIdPartition, remotePartitionDeleteMetadata);
-        // there will be a trigger to receive delete partition marker and act on that to delete all the segments.
+        Objects.requireNonNull(remotePartitionDeleteMetadata, "remotePartitionDeleteMetadata can not be null");
 
-        if (remotePartitionDeleteMetadata.state() == RemotePartitionDeleteState.DELETE_PARTITION_FINISHED) {
+        TopicIdPartition topicIdPartition = remotePartitionDeleteMetadata.topicIdPartition();
+
+        RemotePartitionDeleteState targetState = remotePartitionDeleteMetadata.state();
+        RemotePartitionDeleteMetadata existingMetadata = idToPartitionDeleteMetadata.get(topicIdPartition);
+        RemotePartitionDeleteState existingState = existingMetadata != null ? existingMetadata.state() : null;
+        if (!RemotePartitionDeleteState.isValidTransition(existingState, targetState)) {
+            throw new IllegalStateException("Current state: " + existingState + ", target state: " + targetState);
+        }
+
+        idToPartitionDeleteMetadata.put(topicIdPartition, remotePartitionDeleteMetadata);
+
+        if (targetState == RemotePartitionDeleteState.DELETE_PARTITION_FINISHED) {
             // remove the association for the partition.
             partitionToRemoteLogMetadataCache.remove(topicIdPartition);
             idToPartitionDeleteMetadata.remove(topicIdPartition);
@@ -132,7 +143,7 @@ public class InmemoryRemoteLogMetadataManager implements RemoteLogMetadataManage
             throws RemoteStorageException {
         RemoteLogMetadataCache remoteLogMetadataCache = partitionToRemoteLogMetadataCache.get(topicIdPartition);
         if (remoteLogMetadataCache == null) {
-            throw new RemoteResourceNotFoundException("No resource found for partition: " + topicIdPartition);
+            throw new RemoteResourceNotFoundException("No metadata found for partition: " + topicIdPartition);
         }
 
         return remoteLogMetadataCache.listAllRemoteLogSegments();
@@ -145,7 +156,7 @@ public class InmemoryRemoteLogMetadataManager implements RemoteLogMetadataManage
 
         RemoteLogMetadataCache remoteLogMetadataCache = partitionToRemoteLogMetadataCache.get(topicIdPartition);
         if (remoteLogMetadataCache == null) {
-            throw new RemoteResourceNotFoundException("No resource found for partition: " + topicIdPartition);
+            throw new RemoteResourceNotFoundException("No metadata found for partition: " + topicIdPartition);
         }
 
         return remoteLogMetadataCache.listRemoteLogSegments(leaderEpoch);
@@ -154,10 +165,14 @@ public class InmemoryRemoteLogMetadataManager implements RemoteLogMetadataManage
     @Override
     public void onPartitionLeadershipChanges(Set<TopicIdPartition> leaderPartitions,
                                              Set<TopicIdPartition> followerPartitions) {
+        // It is not applicable for this implementation. This will track the segments that are added/updated as part of
+        // this instance. It does not depend upon any leader or follower transitions.
     }
 
     @Override
     public void onStopPartitions(Set<TopicIdPartition> partitions) {
+        // It is not applicable for this implementation. This will track the segments that are added/updated as part of
+        // this instance. It does not depend upon stopped partitions.
     }
 
     @Override
