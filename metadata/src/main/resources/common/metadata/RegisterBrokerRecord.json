@@ -19,7 +19,7 @@
   "name": "RegisterBrokerRecord",
   "validVersions": "0",
   "fields": [
-    { "name": "BrokerId", "type": "int32", "versions": "0+",
+    { "name": "BrokerId", "type": "int32", "versions": "0+", "entityType": "brokerId",
       "about": "The broker id." },
     { "name": "IncarnationId", "type": "uuid", "versions": "0+",
       "about": "The incarnation ID of the broker process" },
