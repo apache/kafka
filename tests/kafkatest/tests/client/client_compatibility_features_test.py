@@ -19,7 +19,7 @@ import errno
 import time
 from random import randint
 
-from ducktape.mark import matrix, parametrize
+from ducktape.mark import parametrize
 from ducktape.mark.resource import cluster
 from ducktape.tests.test import TestContext
 
@@ -109,7 +109,7 @@ class ClientCompatibilityFeaturesTest(Test):
           raise
 
     @cluster(num_nodes=7)
-    @matrix(broker_version=[str(DEV_BRANCH)], metadata_quorum=quorum.all_non_upgrade)
+    @parametrize(broker_version=str(DEV_BRANCH))
     @parametrize(broker_version=str(LATEST_0_10_0))
     @parametrize(broker_version=str(LATEST_0_10_1))
     @parametrize(broker_version=str(LATEST_0_10_2))
