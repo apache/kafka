@@ -28,7 +28,7 @@
       "about": "The top-level error message, or `null` if there was no top-level error." },
     { "name": "Results", "type": "[]UpdatableFeatureResult", "versions": "0+",
       "about": "Results for each feature update.", "fields": [
-      {"name": "Feature", "type": "string", "versions": "0+", "mapKey": true,
+      { "name": "Feature", "type": "string", "versions": "0+", "mapKey": true,
         "about": "The name of the finalized feature."},
       { "name": "ErrorCode", "type": "int16", "versions": "0+",
         "about": "The feature update error code or `0` if the feature update succeeded." },

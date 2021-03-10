@@ -36,7 +36,7 @@ public class ClientUtilsTest {
     private HostResolver hostResolver = new DefaultHostResolver();
 
     @Test
-    public void testParseAndValidateAddresses() throws UnknownHostException {
+    public void testParseAndValidateAddresses() {
         checkWithoutLookup("127.0.0.1:8000");
         checkWithoutLookup("localhost:8080");
         checkWithoutLookup("[::1]:8000");
