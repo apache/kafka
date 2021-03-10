@@ -81,8 +81,12 @@ class ClientCompatibilityFeaturesTest(Test):
         self.kafka = KafkaService(test_context, num_nodes=3, zk=self.zk, topics=self.topics)
 
     def invoke_compatibility_program(self, features):
-        # Run the compatibility test on the first Kafka node.
-        node = self.kafka.nodes[0]
+        if self.zk:
+            # kafka nodes are set to older version so resolved script path is linked to older assembly.
+            # run the compatibility test on the first zk node to get script path linked to latest(dev) assembly.
+            node = self.zk.nodes[0]
+        else:
+            node = self.kafka.nodes[0]
         cmd = ("%s org.apache.kafka.tools.ClientCompatibilityTest "
                "--bootstrap-server %s "
                "--num-cluster-nodes %d "
@@ -130,4 +134,7 @@ class ClientCompatibilityFeaturesTest(Test):
         self.kafka.set_version(KafkaVersion(broker_version))
         self.kafka.start()
         features = get_broker_features(broker_version)
+        if not self.zk:
+            # this is supported by zkBroker currently
+            features["describe-acls-supported"] = False
         self.invoke_compatibility_program(features)
