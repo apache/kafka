@@ -792,7 +792,7 @@ public class KafkaAdminClient extends AdminClient {
          * @param now           The current time in milliseconds.
          * @param throwable     The failure exception.
          */
-        void fail(long now, Throwable throwable) {
+        final void fail(long now, Throwable throwable) {
             if (aborted) {
                 // If the call was aborted while in flight due to a timeout, deliver a
                 // TimeoutException. In this case, we do not get any more retries - the call has
@@ -814,7 +814,7 @@ public class KafkaAdminClient extends AdminClient {
             nextAllowedTryMs = now + retryBackoffMs;
 
             // If the call has timed out, fail.
-            if (calcTimeoutMsRemainingAsInt(now, deadlineMs) < 0) {
+            if (calcTimeoutMsRemainingAsInt(now, deadlineMs) <= 0) {
                 failWithTimeout(now, throwable);
                 return;
             }
@@ -836,6 +836,10 @@ public class KafkaAdminClient extends AdminClient {
                 log.debug("{} failed: {}. Beginning retry #{}",
                     this, prettyPrintException(throwable), tries);
             }
+            maybeRetry(now, throwable);
+        }
+
+        void maybeRetry(long now, Throwable throwable) {
             runnable.enqueue(this, now);
         }
 
@@ -4738,7 +4742,7 @@ public class KafkaAdminClient extends AdminClient {
             }
 
             @Override
-            void fail(long currentTimeMs, Throwable throwable) {
+            void maybeRetry(long currentTimeMs, Throwable throwable) {
                 if (throwable instanceof DisconnectException) {
                     // Disconnects are a special case. We want to give the driver a chance
                     // to retry lookup rather than getting stuck on a node which is down.
@@ -4748,7 +4752,7 @@ public class KafkaAdminClient extends AdminClient {
                     driver.onFailure(currentTimeMs, spec, throwable);
                     maybeSendRequests(driver, currentTimeMs);
                 } else {
-                    super.fail(currentTimeMs, throwable);
+                    super.maybeRetry(currentTimeMs, throwable);
                 }
             }
         };

@@ -186,6 +186,8 @@ import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.test.TestUtils;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -5343,6 +5345,34 @@ public class KafkaAdminClientTest {
             KafkaFuture<DescribeProducersResult.PartitionProducerState> partitionFuture =
                 result.partitionResult(topicPartition);
             assertEquals(new HashSet<>(expected), new HashSet<>(partitionFuture.get().activeProducers()));
+        }
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    public void testDescribeProducersTimeout(boolean timeoutInMetadataLookup) throws Exception {
+        MockTime time = new MockTime();
+        try (AdminClientUnitTestEnv env = mockClientEnv(time)) {
+            TopicPartition topicPartition = new TopicPartition("foo", 0);
+            int requestTimeoutMs = 15000;
+
+            if (!timeoutInMetadataLookup) {
+                Node leader = env.cluster().nodes().iterator().next();
+                expectMetadataRequest(env, topicPartition, leader);
+            }
+
+            DescribeProducersOptions options = new DescribeProducersOptions().timeoutMs(requestTimeoutMs);
+            DescribeProducersResult result = env.adminClient().describeProducers(
+                singleton(topicPartition), options);
+            assertFalse(result.all().isDone());
+
+            time.sleep(requestTimeoutMs);
+            TestUtils.waitForCondition(() -> result.all().isDone(),
+                "Future failed to timeout after expiration of timeout");
+
+            assertTrue(result.all().isCompletedExceptionally());
+            TestUtils.assertFutureThrows(result.all(), TimeoutException.class);
+            assertFalse(env.kafkaClient().hasInFlightRequests());
         }
     }
 
