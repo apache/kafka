@@ -84,7 +84,6 @@ public class ChangeLoggingWindowBytesStoreTest {
     }
 
     @Test
-    @SuppressWarnings("deprecation")
     public void shouldLogPuts() {
         inner.put(bytesKey, value, 0);
         EasyMock.expectLastCall();
@@ -98,7 +97,7 @@ public class ChangeLoggingWindowBytesStoreTest {
         context.logChange(store.name(), key, value, 0L);
 
         EasyMock.replay(context);
-        store.put(bytesKey, value);
+        store.put(bytesKey, value, context.timestamp());
 
         EasyMock.verify(inner, context);
     }
@@ -152,7 +151,6 @@ public class ChangeLoggingWindowBytesStoreTest {
     }
 
     @Test
-    @SuppressWarnings("deprecation")
     public void shouldRetainDuplicatesWhenSet() {
         store = new ChangeLoggingWindowBytesStore(inner, true);
 
@@ -171,8 +169,8 @@ public class ChangeLoggingWindowBytesStoreTest {
 
         EasyMock.replay(context);
 
-        store.put(bytesKey, value);
-        store.put(bytesKey, value);
+        store.put(bytesKey, value, context.timestamp());
+        store.put(bytesKey, value, context.timestamp());
 
         EasyMock.verify(inner, context);
     }
