@@ -40,7 +40,6 @@ import org.apache.kafka.common.errors._
 import org.apache.kafka.common.message.{DescribeProducersResponseData, FetchResponseData}
 import org.apache.kafka.common.record.FileRecords.TimestampAndOffset
 import org.apache.kafka.common.record._
-import org.apache.kafka.common.requests.FetchResponse.AbortedTransaction
 import org.apache.kafka.common.requests.ListOffsetsRequest
 import org.apache.kafka.common.requests.OffsetsForLeaderEpochResponse.UNDEFINED_EPOCH_OFFSET
 import org.apache.kafka.common.requests.ProduceResponse.RecordError
@@ -1572,7 +1571,7 @@ class Log(@volatile private var _dir: File,
   private def emptyFetchDataInfo(fetchOffsetMetadata: LogOffsetMetadata,
                                  includeAbortedTxns: Boolean): FetchDataInfo = {
     val abortedTransactions =
-      if (includeAbortedTxns) Some(List.empty[AbortedTransaction])
+      if (includeAbortedTxns) Some(List.empty[FetchResponseData.AbortedTransaction])
       else None
     FetchDataInfo(fetchOffsetMetadata,
       MemoryRecords.EMPTY,
@@ -1676,7 +1675,7 @@ class Log(@volatile private var _dir: File,
         logEndOffset
     }
 
-    val abortedTransactions = ListBuffer.empty[AbortedTransaction]
+    val abortedTransactions = ListBuffer.empty[FetchResponseData.AbortedTransaction]
     def accumulator(abortedTxns: List[AbortedTxn]): Unit = abortedTransactions ++= abortedTxns.map(_.asAbortedTransaction)
     collectAbortedTransactions(startOffset, upperBoundOffset, segmentEntry, accumulator)
 

@@ -81,6 +81,25 @@ def job = {
         } else if (config.isPreviewJob) {
           publishStep('artifactory_preview_release_settings')
         }
+
+        stage('ARM') {
+          agent { label 'arm4' }
+          options {
+            timeout(time: 2, unit: 'HOURS') 
+            timestamps()
+          }
+          environment {
+            SCALA_VERSION=2.12
+          }
+          steps {
+            setupGradle()
+            doValidation()
+            catchError(buildResult: 'SUCCESS', stageResult: 'FAILURE') {
+              doTest('unitTest')
+            }
+            echo 'Skipping Kafka Streams archetype test for ARM build'
+          }
+        }
       }
     }
 

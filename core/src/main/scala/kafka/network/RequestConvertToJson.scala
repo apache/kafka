@@ -135,7 +135,7 @@ object RequestConvertToJson {
       case res: EndQuorumEpochResponse => EndQuorumEpochResponseDataJsonConverter.write(res.data, version)
       case res: EnvelopeResponse => EnvelopeResponseDataJsonConverter.write(res.data, version)
       case res: ExpireDelegationTokenResponse => ExpireDelegationTokenResponseDataJsonConverter.write(res.data, version)
-      case res: FetchResponse[_] => FetchResponseDataJsonConverter.write(res.data, version, false)
+      case res: FetchResponse => FetchResponseDataJsonConverter.write(res.data, version, false)
       case res: FindCoordinatorResponse => FindCoordinatorResponseDataJsonConverter.write(res.data, version)
       case res: HeartbeatResponse => HeartbeatResponseDataJsonConverter.write(res.data, version)
       case res: IncrementalAlterConfigsResponse => IncrementalAlterConfigsResponseDataJsonConverter.write(res.data, version)
