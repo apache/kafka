@@ -47,8 +47,10 @@ object LogDirsCommand {
         }
 
         val nonExistBrokers: Array[Int] = brokerList.filterNot(brokerId => clusterBrokers.contains(brokerId))
-        if (!nonExistBrokers.isEmpty)
-            System.err.println(s"The given node(s) does not exist from broker-list ${nonExistBrokers.mkString(",")}")
+        if (!nonExistBrokers.isEmpty) {
+          System.err.println(s"The given node(s) does not exist from broker-list ${nonExistBrokers.mkString(",")}")
+          sys.exit(1)
+        }
 
         out.println("Querying brokers for log directories information")
         val describeLogDirsResult: DescribeLogDirsResult = adminClient.describeLogDirs(brokerList.map(Integer.valueOf).toSeq.asJava)
