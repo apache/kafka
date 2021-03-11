@@ -912,7 +912,7 @@ public class StreamsConfigTest {
     public void shouldLogWarningWhenPartitionGrouperIsUsed() {
         props.put(
             StreamsConfig.PARTITION_GROUPER_CLASS_CONFIG,
-            org.apache.kafka.streams.processor.DefaultPartitionGrouper.class
+            org.apache.kafka.streams.processor.internals.DefaultPartitionGrouper.class
         );
 
         LogCaptureAppender.setClassLoggerToDebug(StreamsConfig.class);

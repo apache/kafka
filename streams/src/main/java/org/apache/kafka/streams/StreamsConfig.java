@@ -775,7 +775,7 @@ public class StreamsConfig extends AbstractConfig {
                     CommonClientConfigs.METRICS_SAMPLE_WINDOW_MS_DOC)
             .define(PARTITION_GROUPER_CLASS_CONFIG,
                     Type.CLASS,
-                    org.apache.kafka.streams.processor.DefaultPartitionGrouper.class.getName(),
+                    org.apache.kafka.streams.processor.internals.DefaultPartitionGrouper.class.getName(),
                     Importance.LOW,
                     PARTITION_GROUPER_CLASS_DOC)
             .define(POLL_MS_CONFIG,
