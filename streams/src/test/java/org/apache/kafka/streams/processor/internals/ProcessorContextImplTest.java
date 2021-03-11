@@ -71,7 +71,7 @@ public class ProcessorContextImplTest {
 
     private final StreamsConfig streamsConfig = streamsConfigMock();
 
-    private RecordCollector recordCollector = mock(RecordCollector.class);
+    private final RecordCollector recordCollector = mock(RecordCollector.class);
 
     private static final String KEY = "key";
     private static final Bytes KEY_BYTES = Bytes.wrap(KEY.getBytes());
@@ -439,26 +439,6 @@ public class ProcessorContextImplTest {
         );
     }
 
-    @SuppressWarnings("deprecation")
-    @Test
-    public void shouldThrowUnsupportedOperationExceptionOnForwardWithChildIndex() {
-        context = getStandbyContext();
-        assertThrows(
-            UnsupportedOperationException.class,
-            () -> context.forward("key", "value", 0)
-        );
-    }
-
-    @SuppressWarnings("deprecation")
-    @Test
-    public void shouldThrowUnsupportedOperationExceptionOnForwardWithChildName() {
-        context = getStandbyContext();
-        assertThrows(
-            UnsupportedOperationException.class,
-            () -> context.forward("key", "value", "child-name")
-        );
-    }
-
     @Test
     public void shouldThrowUnsupportedOperationExceptionOnForwardWithTo() {
         context = getStandbyContext();
@@ -749,11 +729,10 @@ public class ProcessorContextImplTest {
     }
 
     private <T extends StateStore> void doTest(final String name, final Consumer<T> checker) {
-        final Processor processor = new Processor<String, Long>() {
+        final Processor<String, Long> processor = new Processor<String, Long>() {
             @Override
-            @SuppressWarnings("unchecked")
             public void init(final ProcessorContext context) {
-                final T store = (T) context.getStateStore(name);
+                final T store = context.getStateStore(name);
                 checker.accept(store);
             }
 
