@@ -100,7 +100,7 @@ abstract class AbstractCreateTopicsRequestTest extends BaseRequestTest {
     request.data.topics.forEach { topic =>
       def verifyMetadata(socketServer: SocketServer) = {
         val metadata = sendMetadataRequest(
-          new MetadataRequest.Builder(List(topic.name()).asJava, true).build()).topicMetadata.asScala
+          new MetadataRequest.Builder(List(topic.name()).asJava, false).build()).topicMetadata.asScala
         val metadataForTopic = metadata.filter(_.topic == topic.name()).head
 
         val partitions = if (!topic.assignments().isEmpty)
@@ -140,7 +140,7 @@ abstract class AbstractCreateTopicsRequestTest extends BaseRequestTest {
       verifyMetadata(controllerSocketServer)
       if (!request.data.validateOnly) {
         // Wait until metadata is propagated and validate non-controller broker has the correct metadata
-        TestUtils.waitUntilMetadataIsPropagated(servers, topic.name(), 0)
+        TestUtils.waitForPartitionMetadata(servers, topic.name(), 0)
       }
       verifyMetadata(notControllerSocketServer)
     }
@@ -173,7 +173,7 @@ abstract class AbstractCreateTopicsRequestTest extends BaseRequestTest {
   }
 
   protected def validateTopicExists(topic: String): Unit = {
-    TestUtils.waitUntilMetadataIsPropagated(servers, topic, 0)
+    TestUtils.waitForPartitionMetadata(servers, topic, 0)
     val metadata = sendMetadataRequest(
       new MetadataRequest.Builder(List(topic).asJava, true).build()).topicMetadata.asScala
     assertTrue(metadata.exists(p => p.topic.equals(topic) && p.error == Errors.NONE), "The topic should be created")

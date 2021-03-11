@@ -14,11 +14,12 @@
 # limitations under the License.
 
 from ducktape.cluster.remoteaccount import RemoteCommandError
-from ducktape.mark import parametrize
+from ducktape.mark import matrix
 from ducktape.mark.resource import cluster
 from ducktape.utils.util import wait_until
 from ducktape.errors import TimeoutError
 
+from kafkatest.services.kafka import quorum
 from kafkatest.services.security.security_config import SecurityConfig
 from kafkatest.services.security.security_config import SslStores
 from kafkatest.tests.end_to_end import EndToEndTest
@@ -56,54 +57,72 @@ class SecurityTest(EndToEndTest):
 
         return True
 
-    @cluster(num_nodes=7)
-    @parametrize(security_protocol='PLAINTEXT', interbroker_security_protocol='SSL')
-    @parametrize(security_protocol='SSL', interbroker_security_protocol='PLAINTEXT')
-    def test_client_ssl_endpoint_validation_failure(self, security_protocol, interbroker_security_protocol):
+    @cluster(num_nodes=6)
+    @matrix(security_protocol=['PLAINTEXT'], interbroker_security_protocol=['SSL'], metadata_quorum=quorum.all_non_upgrade)
+    @matrix(security_protocol=['SSL'], interbroker_security_protocol=['PLAINTEXT'], metadata_quorum=quorum.all_non_upgrade)
+    def test_client_ssl_endpoint_validation_failure(self, security_protocol, interbroker_security_protocol, metadata_quorum=quorum.zk):
         """
         Test that invalid hostname in certificate results in connection failures.
         When security_protocol=SSL, client SSL handshakes are expected to fail due to hostname verification failure.
         When security_protocol=PLAINTEXT and interbroker_security_protocol=SSL, controller connections fail
-        with hostname verification failure. Hence clients are expected to fail with LEADER_NOT_AVAILABLE.
+        with hostname verification failure. Since metadata cannot be propagated in the cluster without a valid certificate,
+        the broker's metadata caches will be empty. Hence we expect Metadata requests to fail with an INVALID_REPLICATION_FACTOR
+        error since the broker will attempt to create the topic automatically as it does not exist in the metadata cache,
+        and there will be no online brokers.
         """
 
         # Start Kafka with valid hostnames in the certs' SANs so that we can create the test topic via the admin client
         SecurityConfig.ssl_stores = TestSslStores(self.test_context.local_scratch_dir,
                                                   valid_hostname=True)
 
-        self.create_zookeeper()
-        self.zk.start()
+        self.create_zookeeper_if_necessary()
+        if self.zk:
+            self.zk.start()
 
         self.create_kafka(security_protocol=security_protocol,
                           interbroker_security_protocol=interbroker_security_protocol)
+        if self.kafka.quorum_info.using_raft and interbroker_security_protocol == 'SSL':
+            # we don't want to interfere with communication to the controller quorum
+            # (we separately test this below) so make sure it isn't using TLS
+            # (it uses the inter-broker security information by default)
+            controller_quorum = self.kafka.controller_quorum
+            controller_quorum.controller_security_protocol = 'PLAINTEXT'
+            controller_quorum.intercontroller_security_protocol = 'PLAINTEXT'
         self.kafka.start()
 
         # now set the certs to have invalid hostnames so we can run the actual test
         SecurityConfig.ssl_stores.valid_hostname = False
         self.kafka.restart_cluster()
 
-        # We need more verbose logging to catch the expected errors
-        self.create_and_start_clients(log_level="DEBUG")
+        if self.kafka.quorum_info.using_raft and security_protocol == 'PLAINTEXT':
+            # the inter-broker security protocol using TLS with a hostname verification failure
+            # doesn't impact a producer in case of a single broker with a Raft Controller,
+            # so confirm that this is in fact the observed behavior
+            self.create_and_start_clients(log_level="INFO")
+            self.run_validation()
+        else:
+            # We need more verbose logging to catch the expected errors
+            self.create_and_start_clients(log_level="DEBUG")
 
-        try:
-            wait_until(lambda: self.producer.num_acked > 0, timeout_sec=30)
+            try:
+                wait_until(lambda: self.producer.num_acked > 0, timeout_sec=30)
 
-            # Fail quickly if messages are successfully acked
-            raise RuntimeError("Messages published successfully but should not have!"
-                               " Endpoint validation did not fail with invalid hostname")
-        except TimeoutError:
-            # expected
-            pass
+                # Fail quickly if messages are successfully acked
+                raise RuntimeError("Messages published successfully but should not have!"
+                                   " Endpoint validation did not fail with invalid hostname")
+            except TimeoutError:
+                # expected
+                pass
 
-        error = 'SSLHandshakeException' if security_protocol == 'SSL' else 'LEADER_NOT_AVAILABLE'
-        wait_until(lambda: self.producer_consumer_have_expected_error(error), timeout_sec=30)
-        self.producer.stop()
-        self.consumer.stop()
+            error = 'SSLHandshakeException' if security_protocol == 'SSL' else 'INVALID_REPLICATION_FACTOR'
+            wait_until(lambda: self.producer_consumer_have_expected_error(error), timeout_sec=30)
+            self.producer.stop()
+            self.consumer.stop()
 
-        SecurityConfig.ssl_stores.valid_hostname = True
-        self.kafka.restart_cluster()
-        self.create_and_start_clients(log_level="INFO")
-        self.run_validation()
+            SecurityConfig.ssl_stores.valid_hostname = True
+            self.kafka.restart_cluster()
+            self.create_and_start_clients(log_level="INFO")
+            self.run_validation()
 
     def create_and_start_clients(self, log_level):
         self.create_producer(log_level=log_level)
@@ -111,3 +130,47 @@ class SecurityTest(EndToEndTest):
 
         self.create_consumer(log_level=log_level)
         self.consumer.start()
+
+    @cluster(num_nodes=2)
+    @matrix(metadata_quorum=[quorum.zk, quorum.remote_raft])
+    def test_quorum_ssl_endpoint_validation_failure(self, metadata_quorum=quorum.zk):
+        """
+        Test that invalid hostname in ZooKeeper or Raft Controller results in broker inability to start.
+        """
+        # Start ZooKeeper/Raft-based Controller with valid hostnames in the certs' SANs
+        # so that we can start Kafka
+        SecurityConfig.ssl_stores = TestSslStores(self.test_context.local_scratch_dir,
+                                                  valid_hostname=True)
+
+        self.create_zookeeper_if_necessary(num_nodes=1,
+                                           zk_client_port = False,
+                                           zk_client_secure_port = True,
+                                           zk_tls_encrypt_only = True,
+                                           )
+        if self.zk:
+            self.zk.start()
+
+        self.create_kafka(num_nodes=1,
+                          interbroker_security_protocol='SSL', # also sets the broker-to-raft-controller security protocol for the Raft case
+                          zk_client_secure=True, # ignored if we aren't using ZooKeeper
+                          )
+        self.kafka.start()
+
+        # now stop the Kafka broker
+        # and set the cert for ZooKeeper/Raft-based Controller to have an invalid hostname
+        # so we can restart Kafka and ensure it is unable to start
+        self.kafka.stop_node(self.kafka.nodes[0])
+
+        SecurityConfig.ssl_stores.valid_hostname = False
+        if quorum.for_test(self.test_context) == quorum.zk:
+            self.kafka.zk.restart_cluster()
+        else:
+            self.kafka.remote_controller_quorum.restart_cluster()
+
+        try:
+            self.kafka.start_node(self.kafka.nodes[0], timeout_sec=30)
+            raise RuntimeError("Kafka restarted successfully but should not have!"
+                               " Endpoint validation did not fail with invalid hostname")
+        except TimeoutError:
+            # expected
+            pass

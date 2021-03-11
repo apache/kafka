@@ -17,30 +17,23 @@
 
 package kafka.server
 
-import java.util.{Optional, Properties}
+import java.util.Optional
 
-import kafka.network.SocketServer
 import kafka.utils.TestUtils
 import org.apache.kafka.common.Uuid
 import org.apache.kafka.common.errors.UnsupportedVersionException
 import org.apache.kafka.common.internals.Topic
-import org.apache.kafka.common.message.MetadataRequestData
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests.{MetadataRequest, MetadataResponse}
+import org.apache.kafka.metadata.BrokerState
 import org.apache.kafka.test.TestUtils.isValidClusterId
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{BeforeEach, Test}
 
-import scala.jdk.CollectionConverters._
 import scala.collection.Seq
+import scala.jdk.CollectionConverters._
 
-class MetadataRequestTest extends BaseRequestTest {
-
-  override def brokerPropertyOverrides(properties: Properties): Unit = {
-    properties.setProperty(KafkaConfig.OffsetsTopicPartitionsProp, "1")
-    properties.setProperty(KafkaConfig.DefaultReplicationFactorProp, "2")
-    properties.setProperty(KafkaConfig.RackProp, s"rack/${properties.getProperty(KafkaConfig.BrokerIdProp)}")
-  }
+class MetadataRequestTest extends AbstractMetadataRequestTest {
 
   @BeforeEach
   override def setUp(): Unit = {
@@ -127,19 +120,12 @@ class MetadataRequestTest extends BaseRequestTest {
 
   @Test
   def testAutoTopicCreation(): Unit = {
-    def checkAutoCreatedTopic(autoCreatedTopic: String, response: MetadataResponse): Unit = {
-      assertEquals(Errors.LEADER_NOT_AVAILABLE, response.errors.get(autoCreatedTopic))
-      assertEquals(Some(servers.head.config.numPartitions), zkClient.getTopicPartitionCount(autoCreatedTopic))
-      for (i <- 0 until servers.head.config.numPartitions)
-        TestUtils.waitUntilMetadataIsPropagated(servers, autoCreatedTopic, i)
-    }
-
     val topic1 = "t1"
     val topic2 = "t2"
     val topic3 = "t3"
     val topic4 = "t4"
     val topic5 = "t5"
-    createTopic(topic1, numPartitions = 1, replicationFactor = 1)
+    createTopic(topic1)
 
     val response1 = sendMetadataRequest(new MetadataRequest.Builder(Seq(topic1, topic2).asJava, true).build())
     assertNull(response1.errors.get(topic1))
@@ -177,23 +163,24 @@ class MetadataRequestTest extends BaseRequestTest {
 
   @Test
   def testAutoCreateOfCollidingTopics(): Unit = {
-    val topic1 = "testAutoCreate_Topic"
-    val topic2 = "testAutoCreate.Topic"
+    val topic1 = "testAutoCreate.Topic"
+    val topic2 = "testAutoCreate_Topic"
     val response1 = sendMetadataRequest(new MetadataRequest.Builder(Seq(topic1, topic2).asJava, true).build)
     assertEquals(2, response1.topicMetadata.size)
-    var topicMetadata1 = response1.topicMetadata.asScala.head
-    val topicMetadata2 = response1.topicMetadata.asScala.toSeq(1)
-    assertEquals(Errors.LEADER_NOT_AVAILABLE, topicMetadata1.error)
-    assertEquals(topic1, topicMetadata1.topic)
-    assertEquals(Errors.INVALID_TOPIC_EXCEPTION, topicMetadata2.error)
-    assertEquals(topic2, topicMetadata2.topic)
 
-    TestUtils.waitUntilLeaderIsElectedOrChanged(zkClient, topic1, 0)
-    TestUtils.waitUntilMetadataIsPropagated(servers, topic1, 0)
+    val responseMap = response1.topicMetadata.asScala.map(metadata => (metadata.topic(), metadata.error)).toMap
+
+    assertEquals(Set(topic1, topic2), responseMap.keySet)
+    // The topic creation will be delayed, and the name collision error will be swallowed.
+    assertEquals(Set(Errors.LEADER_NOT_AVAILABLE, Errors.INVALID_TOPIC_EXCEPTION), responseMap.values.toSet)
+
+    val topicCreated = responseMap.head._1
+    TestUtils.waitUntilLeaderIsElectedOrChanged(zkClient, topicCreated, 0)
+    TestUtils.waitForPartitionMetadata(servers, topicCreated, 0)
 
     // retry the metadata for the first auto created topic
-    val response2 = sendMetadataRequest(new MetadataRequest.Builder(Seq(topic1).asJava, true).build)
-    topicMetadata1 = response2.topicMetadata.asScala.head
+    val response2 = sendMetadataRequest(new MetadataRequest.Builder(Seq(topicCreated).asJava, true).build)
+    val topicMetadata1 = response2.topicMetadata.asScala.head
     assertEquals(Errors.NONE, topicMetadata1.error)
     assertEquals(Seq(Errors.NONE), topicMetadata1.partitionMetadata.asScala.map(_.error))
     assertEquals(1, topicMetadata1.partitionMetadata.size)
@@ -274,15 +261,6 @@ class MetadataRequestTest extends BaseRequestTest {
     }
   }
 
-  def requestData(topics: List[String], allowAutoTopicCreation: Boolean): MetadataRequestData = {
-    val data = new MetadataRequestData
-    if (topics == null) data.setTopics(null)
-    else topics.foreach(topic => data.topics.add(new MetadataRequestData.MetadataRequestTopic().setName(topic)))
-
-    data.setAllowAutoTopicCreation(allowAutoTopicCreation)
-    data
-  }
-
   @Test
   def testReplicaDownResponse(): Unit = {
     val replicaDownTopic = "replicaDown"
@@ -307,12 +285,11 @@ class MetadataRequestTest extends BaseRequestTest {
       !response.brokers.asScala.exists(_.id == downNode.dataPlaneRequestProcessor.brokerId)
     }, "Replica was not found down", 5000)
 
-
     // Validate version 0 still filters unavailable replicas and contains error
     val v0MetadataResponse = sendMetadataRequest(new MetadataRequest(requestData(List(replicaDownTopic), true), 0.toShort))
     val v0BrokerIds = v0MetadataResponse.brokers().asScala.map(_.id).toSeq
     assertTrue(v0MetadataResponse.errors.isEmpty, "Response should have no errors")
-    assertFalse(v0BrokerIds.contains(downNode), s"The downed broker should not be in the brokers list")
+    assertFalse(v0BrokerIds.contains(downNode.config.brokerId), s"The downed broker should not be in the brokers list")
     assertTrue(v0MetadataResponse.topicMetadata.size == 1, "Response should have one topic")
     val v0PartitionMetadata = v0MetadataResponse.topicMetadata.asScala.head.partitionMetadata.asScala.head
     assertTrue(v0PartitionMetadata.error == Errors.REPLICA_NOT_AVAILABLE, "PartitionMetadata should have an error")
@@ -322,7 +299,7 @@ class MetadataRequestTest extends BaseRequestTest {
     val v1MetadataResponse = sendMetadataRequest(new MetadataRequest.Builder(List(replicaDownTopic).asJava, true).build(1))
     val v1BrokerIds = v1MetadataResponse.brokers().asScala.map(_.id).toSeq
     assertTrue(v1MetadataResponse.errors.isEmpty, "Response should have no errors")
-    assertFalse(v1BrokerIds.contains(downNode), s"The downed broker should not be in the brokers list")
+    assertFalse(v1BrokerIds.contains(downNode.config.brokerId), s"The downed broker should not be in the brokers list")
     assertEquals(1, v1MetadataResponse.topicMetadata.size, "Response should have one topic")
     val v1PartitionMetadata = v1MetadataResponse.topicMetadata.asScala.head.partitionMetadata.asScala.head
     assertEquals(Errors.NONE, v1PartitionMetadata.error, "PartitionMetadata should have no errors")
@@ -332,7 +309,7 @@ class MetadataRequestTest extends BaseRequestTest {
   @Test
   def testIsrAfterBrokerShutDownAndJoinsBack(): Unit = {
     def checkIsr(servers: Seq[KafkaServer], topic: String): Unit = {
-      val activeBrokers = servers.filter(_.brokerState.currentState != NotRunning.state)
+      val activeBrokers = servers.filter(_.brokerState != BrokerState.NOT_RUNNING)
       val expectedIsr = activeBrokers.map(_.config.brokerId).toSet
 
       // Assert that topic metadata at new brokers is updated correctly
@@ -378,7 +355,7 @@ class MetadataRequestTest extends BaseRequestTest {
       val brokersInController = controllerMetadataResponse.get.brokers.asScala.toSeq.sortBy(_.id)
 
       // Assert that metadata is propagated correctly
-      servers.filter(_.brokerState.currentState != NotRunning.state).foreach { broker =>
+      servers.filter(_.brokerState != BrokerState.NOT_RUNNING).foreach { broker =>
         TestUtils.waitUntilTrue(() => {
           val metadataResponse = sendMetadataRequest(MetadataRequest.Builder.allTopics.build,
             Some(brokerSocketServer(broker.config.brokerId)))
@@ -397,9 +374,4 @@ class MetadataRequestTest extends BaseRequestTest {
     serverToShutdown.startup()
     checkMetadata(servers, servers.size)
   }
-
-  private def sendMetadataRequest(request: MetadataRequest, destination: Option[SocketServer] = None): MetadataResponse = {
-    connectAndReceive[MetadataResponse](request, destination = destination.getOrElse(anySocketServer))
-  }
-
 }

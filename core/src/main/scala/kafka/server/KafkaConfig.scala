@@ -70,6 +70,12 @@ object Defaults {
   val BackgroundThreads = 10
   val QueuedMaxRequests = 500
   val QueuedMaxRequestBytes = -1
+  val InitialBrokerRegistrationTimeoutMs = 60000
+  val BrokerHeartbeatIntervalMs = 2000
+  val BrokerSessionTimeoutMs = 9000
+
+  /** KIP-500 Configuration */
+  val EmptyNodeId: Int = -1
 
   /************* Authorizer Configuration ***********/
   val AuthorizerClassName = ""
@@ -363,7 +369,16 @@ object KafkaConfig {
   val RequestTimeoutMsProp = CommonClientConfigs.REQUEST_TIMEOUT_MS_CONFIG
   val ConnectionSetupTimeoutMsProp = CommonClientConfigs.SOCKET_CONNECTION_SETUP_TIMEOUT_MS_CONFIG
   val ConnectionSetupTimeoutMaxMsProp = CommonClientConfigs.SOCKET_CONNECTION_SETUP_TIMEOUT_MAX_MS_CONFIG
+
+  /** KIP-500 Configuration */
   val ProcessRolesProp = "process.roles"
+  val InitialBrokerRegistrationTimeoutMsProp = "initial.broker.registration.timeout.ms"
+  val BrokerHeartbeatIntervalMsProp = "broker.heartbeat.interval.ms"
+  val BrokerSessionTimeoutMsProp = "broker.session.timeout.ms"
+  val NodeIdProp = "node.id"
+  val MetadataLogDirProp = "metadata.log.dir"
+  val ControllerListenerNamesProp = "controller.listener.names"
+  val SaslMechanismControllerProtocolProp = "sasl.mechanism.controller.protocol"
 
   /************* Authorizer Configuration ***********/
   val AuthorizerClassNameProp = "authorizer.class.name"
@@ -647,9 +662,22 @@ object KafkaConfig {
   val RequestTimeoutMsDoc = CommonClientConfigs.REQUEST_TIMEOUT_MS_DOC
   val ConnectionSetupTimeoutMsDoc = CommonClientConfigs.SOCKET_CONNECTION_SETUP_TIMEOUT_MS_DOC
   val ConnectionSetupTimeoutMaxMsDoc = CommonClientConfigs.SOCKET_CONNECTION_SETUP_TIMEOUT_MAX_MS_DOC
+
+  /** KIP-500 Config Documentation */
   val ProcessRolesDoc = "The roles that this process plays: 'broker', 'controller', or 'broker,controller' if it is both. " +
     "This configuration is only for clusters upgraded for KIP-500, which replaces the dependence on Zookeeper with " +
     "a self-managed Raft quorum. Leave this config undefined or empty for Zookeeper clusters."
+  val InitialBrokerRegistrationTimeoutMsDoc = "When initially registering with the controller quorum, the number of milliseconds to wait before declaring failure and exiting the broker process."
+  val BrokerHeartbeatIntervalMsDoc = "The length of time in milliseconds between broker heartbeats. Used when running in KIP-500 mode."
+  val BrokerSessionTimeoutMsDoc = "The length of time in milliseconds that a broker lease lasts if no heartbeats are made. Used when running in KIP-500 mode."
+  val NodeIdDoc = "The node ID associated with the roles this process is playing when `process.roles` is non-empty. " +
+    "This is required configuration when the self-managed quorum is enabled."
+  val MetadataLogDirDoc = "This configuration determines where we put the metadata log for clusters upgraded to " +
+    "KIP-500. If it is not set, the metadata log is placed in the first log directory from log.dirs."
+  val ControllerListenerNamesDoc = "A comma-separated list of the names of the listeners used by the KIP-500 controller. This is required " +
+    "if this process is a KIP-500 controller. The ZK-based controller will not use this configuration."
+  val SaslMechanismControllerProtocolDoc = "SASL mechanism used for communication with controllers. Default is GSSAPI."
+
   /************* Authorizer Configuration ***********/
   val AuthorizerClassNameDoc = s"The fully qualified name of a class that implements s${classOf[Authorizer].getName}" +
   " interface, which is used by the broker for authorization. This config also supports authorizers that implement the deprecated" +
@@ -999,7 +1027,7 @@ object KafkaConfig {
   val PasswordEncoderKeyLengthDoc =  "The key length used for encoding dynamically configured passwords."
   val PasswordEncoderIterationsDoc =  "The iteration count used for encoding dynamically configured passwords."
 
-  private val configDef = {
+  private[server] val configDef = {
     import ConfigDef.Importance._
     import ConfigDef.Range._
     import ConfigDef.Type._
@@ -1043,7 +1071,19 @@ object KafkaConfig {
       .define(RequestTimeoutMsProp, INT, Defaults.RequestTimeoutMs, HIGH, RequestTimeoutMsDoc)
       .define(ConnectionSetupTimeoutMsProp, LONG, Defaults.ConnectionSetupTimeoutMs, MEDIUM, ConnectionSetupTimeoutMsDoc)
       .define(ConnectionSetupTimeoutMaxMsProp, LONG, Defaults.ConnectionSetupTimeoutMaxMs, MEDIUM, ConnectionSetupTimeoutMaxMsDoc)
+
+      /*
+       * KIP-500 Configuration. Note that these configs are defined as internal. We will make
+       * them public once we are ready to enable KIP-500 in a release.
+       */
       .defineInternal(ProcessRolesProp, LIST, Collections.emptyList(), ValidList.in("broker", "controller"), HIGH, ProcessRolesDoc)
+      .defineInternal(NodeIdProp, INT, Defaults.EmptyNodeId, null, HIGH, NodeIdDoc)
+      .defineInternal(InitialBrokerRegistrationTimeoutMsProp, INT, Defaults.InitialBrokerRegistrationTimeoutMs, null, MEDIUM, InitialBrokerRegistrationTimeoutMsDoc)
+      .defineInternal(BrokerHeartbeatIntervalMsProp, INT, Defaults.BrokerHeartbeatIntervalMs, null, MEDIUM, BrokerHeartbeatIntervalMsDoc)
+      .defineInternal(BrokerSessionTimeoutMsProp, INT, Defaults.BrokerSessionTimeoutMs, null, MEDIUM, BrokerSessionTimeoutMsDoc)
+      .defineInternal(MetadataLogDirProp, STRING, null, null, HIGH, MetadataLogDirDoc)
+      .defineInternal(ControllerListenerNamesProp, STRING, null, null, HIGH, ControllerListenerNamesDoc)
+      .defineInternal(SaslMechanismControllerProtocolProp, STRING, SaslConfigs.DEFAULT_SASL_MECHANISM, null, HIGH, SaslMechanismControllerProtocolDoc)
 
       /************* Authorizer Configuration ***********/
       .define(AuthorizerClassNameProp, STRING, Defaults.AuthorizerClassName, LOW, AuthorizerClassNameDoc)
@@ -1473,10 +1513,22 @@ class KafkaConfig(val props: java.util.Map[_, _], doLog: Boolean, dynamicConfigO
   /** ********* General Configuration ***********/
   val brokerIdGenerationEnable: Boolean = getBoolean(KafkaConfig.BrokerIdGenerationEnableProp)
   val maxReservedBrokerId: Int = getInt(KafkaConfig.MaxReservedBrokerIdProp)
-  var brokerId: Int = getInt(KafkaConfig.BrokerIdProp)
-  val processRoles = parseProcessRoles()
+  var brokerId: Int = {
+    val nodeId = getInt(KafkaConfig.NodeIdProp)
+    if (nodeId < 0) {
+      getInt(KafkaConfig.BrokerIdProp)
+    } else {
+      nodeId
+    }
+  }
+  val nodeId: Int = brokerId
+  val processRoles: Set[ProcessRole] = parseProcessRoles()
+  val initialRegistrationTimeoutMs: Int = getInt(KafkaConfig.InitialBrokerRegistrationTimeoutMsProp)
+  val brokerHeartbeatIntervalMs: Int = getInt(KafkaConfig.BrokerHeartbeatIntervalMsProp)
+  val brokerSessionTimeoutMs: Int = getInt(KafkaConfig.BrokerSessionTimeoutMsProp)
 
   def requiresZookeeper: Boolean = processRoles.isEmpty
+  def usesSelfManagedQuorum: Boolean = processRoles.nonEmpty
 
   private def parseProcessRoles(): Set[ProcessRole] = {
     val roles = getList(KafkaConfig.ProcessRolesProp).asScala.map {
@@ -1493,6 +1545,13 @@ class KafkaConfig(val props: java.util.Map[_, _], doLog: Boolean, dynamicConfigO
     }
 
     distinctRoles
+  }
+
+  def metadataLogDir: String = {
+    Option(getString(KafkaConfig.MetadataLogDirProp)) match {
+      case Some(dir) => dir
+      case None => logDirs.head
+    }
   }
 
   def numNetworkThreads = getInt(KafkaConfig.NumNetworkThreadsProp)
@@ -1752,6 +1811,14 @@ class KafkaConfig(val props: java.util.Map[_, _], doLog: Boolean, dynamicConfigO
     }.getOrElse(CoreUtils.listenerListToEndPoints("PLAINTEXT://" + hostName + ":" + port, listenerSecurityProtocolMap))
   }
 
+  def controllerListenerNames: Seq[String] =
+    Option(getString(KafkaConfig.ControllerListenerNamesProp)).getOrElse("").split(",")
+
+  def controllerListeners: Seq[EndPoint] =
+    listeners.filter(l => controllerListenerNames.contains(l.listenerName.value()))
+
+  def saslMechanismControllerProtocol = getString(KafkaConfig.SaslMechanismControllerProtocolProp)
+
   def controlPlaneListener: Option[EndPoint] = {
     controlPlaneListenerName.map { listenerName =>
       listeners.filter(endpoint => endpoint.listenerName.value() == listenerName.value()).head
@@ -1759,9 +1826,10 @@ class KafkaConfig(val props: java.util.Map[_, _], doLog: Boolean, dynamicConfigO
   }
 
   def dataPlaneListeners: Seq[EndPoint] = {
-    Option(getString(KafkaConfig.ControlPlaneListenerNameProp)) match {
-      case Some(controlPlaneListenerName) => listeners.filterNot(_.listenerName.value() == controlPlaneListenerName)
-      case None => listeners
+    listeners.filterNot { listener =>
+      val name = listener.listenerName.value()
+      name.equals(getString(KafkaConfig.ControlPlaneListenerNameProp)) ||
+        controllerListenerNames.contains(name)
     }
   }
 
@@ -1775,7 +1843,7 @@ class KafkaConfig(val props: java.util.Map[_, _], doLog: Boolean, dynamicConfigO
     else if (getString(KafkaConfig.AdvertisedHostNameProp) != null || getInt(KafkaConfig.AdvertisedPortProp) != null)
       CoreUtils.listenerListToEndPoints("PLAINTEXT://" + advertisedHostName + ":" + advertisedPort, listenerSecurityProtocolMap, requireDistinctPorts=false)
     else
-      listeners
+      listeners.filterNot(l => controllerListenerNames.contains(l.listenerName.value()))
   }
 
   private def getInterBrokerListenerNameAndSecurityProtocol: (ListenerName, SecurityProtocol) = {
@@ -1830,14 +1898,25 @@ class KafkaConfig(val props: java.util.Map[_, _], doLog: Boolean, dynamicConfigO
   validateValues()
 
   private def validateValues(): Unit = {
-    if(brokerIdGenerationEnable) {
-      require(brokerId >= -1 && brokerId <= maxReservedBrokerId, "broker.id must be equal or greater than -1 and not greater than reserved.broker.max.id")
+    if (requiresZookeeper) {
+      if (zkConnect == null) {
+        throw new ConfigException(s"Missing required configuration `${KafkaConfig.ZkConnectProp}` which has no default value.")
+      }
+      if (brokerIdGenerationEnable) {
+        require(brokerId >= -1 && brokerId <= maxReservedBrokerId, "broker.id must be greater than or equal to -1 and not greater than reserved.broker.max.id")
+      } else {
+        require(brokerId >= 0, "broker.id must be greater than or equal to 0")
+      }
     } else {
-      require(brokerId >= 0, "broker.id must be equal or greater than 0")
+      // Raft-based metadata quorum
+      if (nodeId < 0) {
+        throw new ConfigException(s"Missing configuration `${KafkaConfig.NodeIdProp}` which is required " +
+          s"when `process.roles` is defined (i.e. when using the self-managed quorum).")
+      }
     }
-    require(logRollTimeMillis >= 1, "log.roll.ms must be equal or greater than 1")
-    require(logRollTimeJitterMillis >= 0, "log.roll.jitter.ms must be equal or greater than 0")
-    require(logRetentionTimeMillis >= 1 || logRetentionTimeMillis == -1, "log.retention.ms must be unlimited (-1) or, equal or greater than 1")
+    require(logRollTimeMillis >= 1, "log.roll.ms must be greater than or equal to 1")
+    require(logRollTimeJitterMillis >= 0, "log.roll.jitter.ms must be greater than or equal to 0")
+    require(logRetentionTimeMillis >= 1 || logRetentionTimeMillis == -1, "log.retention.ms must be unlimited (-1) or, greater than or equal to 1")
     require(logDirs.nonEmpty, "At least one log directory must be defined via log.dirs or log.dir.")
     require(logCleanerDedupeBufferSize / logCleanerThreads > 1024 * 1024, "log.cleaner.dedupe.buffer.size must be at least 1MB per cleaner thread.")
     require(replicaFetchWaitMaxMs <= replicaSocketTimeoutMs, "replica.socket.timeout.ms should always be at least replica.fetch.wait.max.ms" +
@@ -1851,17 +1930,24 @@ class KafkaConfig(val props: java.util.Map[_, _], doLog: Boolean, dynamicConfigO
 
     val advertisedListenerNames = advertisedListeners.map(_.listenerName).toSet
     val listenerNames = listeners.map(_.listenerName).toSet
-    require(advertisedListenerNames.contains(interBrokerListenerName),
-      s"${KafkaConfig.InterBrokerListenerNameProp} must be a listener name defined in ${KafkaConfig.AdvertisedListenersProp}. " +
-      s"The valid options based on currently configured listeners are ${advertisedListenerNames.map(_.value).mkString(",")}")
-    require(advertisedListenerNames.subsetOf(listenerNames),
-      s"${KafkaConfig.AdvertisedListenersProp} listener names must be equal to or a subset of the ones defined in ${KafkaConfig.ListenersProp}. " +
-      s"Found ${advertisedListenerNames.map(_.value).mkString(",")}. The valid options based on the current configuration " +
-      s"are ${listenerNames.map(_.value).mkString(",")}"
-    )
+    if (processRoles.isEmpty || processRoles.contains(BrokerRole)) {
+      require(advertisedListenerNames.contains(interBrokerListenerName),
+        s"${KafkaConfig.InterBrokerListenerNameProp} must be a listener name defined in ${KafkaConfig.AdvertisedListenersProp}. " +
+          s"The valid options based on currently configured listeners are ${advertisedListenerNames.map(_.value).mkString(",")}")
+      require(advertisedListenerNames.subsetOf(listenerNames),
+        s"${KafkaConfig.AdvertisedListenersProp} listener names must be equal to or a subset of the ones defined in ${KafkaConfig.ListenersProp}. " +
+          s"Found ${advertisedListenerNames.map(_.value).mkString(",")}. The valid options based on the current configuration " +
+          s"are ${listenerNames.map(_.value).mkString(",")}"
+      )
+    }
+
     require(!advertisedListeners.exists(endpoint => endpoint.host=="0.0.0.0"),
       s"${KafkaConfig.AdvertisedListenersProp} cannot use the nonroutable meta-address 0.0.0.0. "+
       s"Use a routable IP address.")
+
+    // Ensure controller listeners are not in the advertised listeners list
+    require(!controllerListeners.exists(advertisedListeners.contains),
+      s"${KafkaConfig.AdvertisedListenersProp} cannot contain any of ${KafkaConfig.ControllerListenerNamesProp}")
 
     // validate controller.listener.name config
     if (controlPlaneListenerName.isDefined) {
@@ -1905,9 +1991,5 @@ class KafkaConfig(val props: java.util.Map[_, _], doLog: Boolean, dynamicConfigO
         s"${KafkaConfig.FailedAuthenticationDelayMsProp}=$failedAuthenticationDelayMs should always be less than" +
         s" ${KafkaConfig.ConnectionsMaxIdleMsProp}=$connectionsMaxIdleMs to prevent failed" +
         s" authentication responses from timing out")
-
-    if (requiresZookeeper && zkConnect == null) {
-      throw new ConfigException(s"Missing required configuration '${KafkaConfig.ZkConnectProp}' which has no default value.")
-    }
   }
 }

@@ -166,13 +166,10 @@ public class OffsetStorageWriter {
             log.debug("Submitting {} entries to backing store. The offsets are: {}", offsetsSerialized.size(), toFlush);
         }
 
-        return backingStore.set(offsetsSerialized, new Callback<Void>() {
-            @Override
-            public void onCompletion(Throwable error, Void result) {
-                boolean isCurrent = handleFinishWrite(flushId, error, result);
-                if (isCurrent && callback != null) {
-                    callback.onCompletion(error, result);
-                }
+        return backingStore.set(offsetsSerialized, (error, result) -> {
+            boolean isCurrent = handleFinishWrite(flushId, error, result);
+            if (isCurrent && callback != null) {
+                callback.onCompletion(error, result);
             }
         });
     }

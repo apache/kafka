@@ -9,14 +9,14 @@ we have a standalone test server which can be used for performance testing.
 Below we describe the details to set this up.
 
 ### Run Single Quorum ###
-    bin/test-raft-server-start.sh config/raft.properties
+    bin/test-raft-server-start.sh --config config/raft.properties
 
 ### Run Multi Node Quorum ###
 Create 3 separate raft quorum properties as the following:
 
 `cat << EOF >> config/raft-quorum-1.properties`
     
-    broker.id=1
+    node.id=1
     listeners=PLAINTEXT://localhost:9092
     controller.quorum.voters=1@localhost:9092,2@localhost:9093,3@localhost:9094
     log.dirs=/tmp/raft-logs-1
@@ -24,7 +24,7 @@ Create 3 separate raft quorum properties as the following:
 
 `cat << EOF >> config/raft-quorum-2.properties`
     
-    broker.id=2
+    node.id=2
     listeners=PLAINTEXT://localhost:9093
     controller.quorum.voters=1@localhost:9092,2@localhost:9093,3@localhost:9094
     log.dirs=/tmp/raft-logs-2
@@ -32,7 +32,7 @@ Create 3 separate raft quorum properties as the following:
     
 `cat << EOF >> config/raft-quorum-3.properties`
     
-    broker.id=3
+    node.id=3
     listeners=PLAINTEXT://localhost:9094
     controller.quorum.voters=1@localhost:9092,2@localhost:9093,3@localhost:9094
     log.dirs=/tmp/raft-logs-3

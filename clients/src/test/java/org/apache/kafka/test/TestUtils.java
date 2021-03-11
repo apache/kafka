@@ -358,7 +358,7 @@ public class TestUtils {
                 }
             } catch (final Exception e) {
                 if (expectedEnd <= System.currentTimeMillis()) {
-                    throw new AssertionError(e);
+                    throw new AssertionError(String.format("Assertion failed with an exception after %s ms", timeoutMs), e);
                 }
             }
             Thread.sleep(Math.min(pollIntervalMs, timeoutMs));

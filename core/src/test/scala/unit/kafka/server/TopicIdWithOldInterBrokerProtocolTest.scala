@@ -21,13 +21,11 @@ import java.util.{Arrays, LinkedHashMap, Optional, Properties}
 
 import kafka.api.KAFKA_2_7_IV0
 import kafka.network.SocketServer
-import kafka.server.{BaseRequestTest, KafkaConfig}
 import kafka.utils.TestUtils
 import org.apache.kafka.common.{TopicPartition, Uuid}
 import org.apache.kafka.common.message.DeleteTopicsRequestData
 import org.apache.kafka.common.message.DeleteTopicsRequestData.DeleteTopicState
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
-import org.apache.kafka.common.record.MemoryRecords
 import org.apache.kafka.common.requests.{DeleteTopicsRequest, DeleteTopicsResponse, FetchRequest, FetchResponse, MetadataRequest, MetadataResponse}
 import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
 import org.junit.jupiter.api.{BeforeEach, Test}
@@ -79,7 +77,7 @@ class TopicIdWithOldInterBrokerProtocolTest extends BaseRequestTest {
     val resp = sendFetchRequest(leadersMap(0), req)
 
     val responseData = resp.responseData(topicNames.asJava, ApiKeys.FETCH.latestVersion())
-    assertEquals(Errors.UNSUPPORTED_VERSION, responseData.get(tp0).error());
+    assertEquals(Errors.UNSUPPORTED_VERSION.code, responseData.get(tp0).errorCode);
   }
 
   @Test
@@ -99,7 +97,7 @@ class TopicIdWithOldInterBrokerProtocolTest extends BaseRequestTest {
     assertEquals(Errors.NONE, resp.error())
 
     val responseData = resp.responseData(topicNames.asJava, 12)
-    assertEquals(Errors.NONE, responseData.get(tp0).error());
+    assertEquals(Errors.NONE.code, responseData.get(tp0).errorCode);
   }
 
   @Test
@@ -160,8 +158,8 @@ class TopicIdWithOldInterBrokerProtocolTest extends BaseRequestTest {
     partitionMap
   }
 
-  private def sendFetchRequest(leaderId: Int, request: FetchRequest): FetchResponse[MemoryRecords] = {
-    connectAndReceive[FetchResponse[MemoryRecords]](request, destination = brokerSocketServer(leaderId))
+  private def sendFetchRequest(leaderId: Int, request: FetchRequest): FetchResponse = {
+    connectAndReceive[FetchResponse](request, destination = brokerSocketServer(leaderId))
   }
 
   private def sendDeleteTopicsRequest(request: DeleteTopicsRequest, socketServer: SocketServer = controllerSocketServer): DeleteTopicsResponse = {

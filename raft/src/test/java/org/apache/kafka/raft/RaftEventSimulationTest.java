@@ -17,8 +17,10 @@
 package org.apache.kafka.raft;
 
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.memory.MemoryPool;
 import org.apache.kafka.common.metrics.Metrics;
+import org.apache.kafka.common.protocol.ObjectSerializationCache;
 import org.apache.kafka.common.protocol.Readable;
 import org.apache.kafka.common.protocol.Writable;
 import org.apache.kafka.common.protocol.types.Type;
@@ -561,6 +563,7 @@ public class RaftEventSimulationTest {
         final Random random;
         final AtomicInteger correlationIdCounter = new AtomicInteger();
         final MockTime time = new MockTime();
+        final Uuid clusterId = Uuid.randomUuid();
         final Set<Integer> voters = new HashSet<>();
         final Map<Integer, PersistentState> nodes = new HashMap<>();
         final Map<Integer, RaftNode> running = new HashMap<>();
@@ -744,7 +747,7 @@ public class RaftEventSimulationTest {
             persistentState.log.reopen();
 
             IntSerde serde = new IntSerde();
-            MemoryPool memoryPool = new BatchMemoryPool(2, KafkaRaftClient.MAX_BATCH_SIZE);
+            MemoryPool memoryPool = new BatchMemoryPool(2, KafkaRaftClient.MAX_BATCH_SIZE_BYTES);
 
             KafkaRaftClient<Integer> client = new KafkaRaftClient<>(
                 serde,
@@ -757,6 +760,7 @@ public class RaftEventSimulationTest {
                 metrics,
                 new MockExpirationService(time),
                 FETCH_MAX_WAIT_MS,
+                clusterId.toString(),
                 OptionalInt.of(nodeId),
                 logContext,
                 random,
@@ -1124,12 +1128,12 @@ public class RaftEventSimulationTest {
 
     private static class IntSerde implements RecordSerde<Integer> {
         @Override
-        public int recordSize(Integer data, Object context) {
+        public int recordSize(Integer data, ObjectSerializationCache serializationCache) {
             return Type.INT32.sizeOf(data);
         }
 
         @Override
-        public void write(Integer data, Object context, Writable out) {
+        public void write(Integer data, ObjectSerializationCache serializationCache, Writable out) {
             out.writeInt(data);
         }
 

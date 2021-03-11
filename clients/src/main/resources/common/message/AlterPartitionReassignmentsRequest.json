@@ -16,6 +16,7 @@
 {
   "apiKey": 45,
   "type": "request",
+  "listeners": ["zkBroker"],
   "name": "AlterPartitionReassignmentsRequest",
   "validVersions": "0",
   "flexibleVersions": "0+",

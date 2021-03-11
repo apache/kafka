@@ -491,7 +491,7 @@ public class FetchSessionHandler {
      * @return          True if the response is well-formed; false if it can't be processed
      *                  because of missing or unexpected partitions.
      */
-    public boolean handleResponse(FetchResponse<?> response, short version) {
+    public boolean handleResponse(FetchResponse response, short version) {
         if (response.error() != Errors.NONE) {
             log.info("Node {} was unable to process the fetch request with {}: {}.",
                 node, nextMetadata, response.error());

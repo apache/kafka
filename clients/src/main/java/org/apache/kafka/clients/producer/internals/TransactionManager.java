@@ -1550,7 +1550,7 @@ public class TransactionManager {
             } else if (findCoordinatorResponse.error() == Errors.GROUP_AUTHORIZATION_FAILED) {
                 abortableError(GroupAuthorizationException.forGroupId(builder.data().key()));
             } else {
-                fatalError(new KafkaException(String.format("Could not find a coordinator with type %s with key %s due to" +
+                fatalError(new KafkaException(String.format("Could not find a coordinator with type %s with key %s due to " +
                         "unexpected error: %s", coordinatorType, builder.data().key(),
                         findCoordinatorResponse.data().errorMessage())));
             }

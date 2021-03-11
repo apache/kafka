@@ -24,7 +24,6 @@ import org.apache.kafka.common.message.FetchResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.record.MemoryRecords;
 import org.apache.kafka.common.record.RecordBatch;
 import org.apache.kafka.common.utils.Utils;
 
@@ -488,32 +487,28 @@ public class FetchRequest extends AbstractRequest {
         // is essential for them.
         Errors error = Errors.forException(e);
         if (version() < 13) {
-            LinkedHashMap<TopicPartition, FetchResponse.PartitionData<MemoryRecords>> responseData = new LinkedHashMap<>();
+            LinkedHashMap<TopicPartition, FetchResponseData.PartitionData> responseData = new LinkedHashMap<>();
             for (Map.Entry<TopicPartition, PartitionData> entry : fetchData.entrySet()) {
-                FetchResponse.PartitionData<MemoryRecords> partitionResponse = new FetchResponse.PartitionData<>(error,
-                        FetchResponse.INVALID_HIGHWATERMARK, FetchResponse.INVALID_LAST_STABLE_OFFSET,
-                        FetchResponse.INVALID_LOG_START_OFFSET, Optional.empty(), null, MemoryRecords.EMPTY);
-                responseData.put(entry.getKey(), partitionResponse);
+                responseData.put(entry.getKey(), FetchResponse.partitionResponse(entry.getKey().partition(), error));
             }
-            return new FetchResponse<>(error, responseData, Collections.emptyList(), Collections.emptyMap(), throttleTimeMs, data.sessionId());
+            return FetchResponse.of(error, throttleTimeMs, data.sessionId(), responseData);
         }
         List<FetchResponseData.FetchableTopicResponse> topicResponseList = new ArrayList<>();
         data.topics().forEach(topic -> {
-            List<FetchResponseData.FetchablePartitionResponse> partitionResponses = topic.partitions().stream().map(partition ->
-                    new FetchResponseData.FetchablePartitionResponse()
-                            .setPartition(partition.partition())
+            List<FetchResponseData.PartitionData> partitionResponses = topic.partitions().stream().map(partition ->
+                    new FetchResponseData.PartitionData()
+                            .setPartitionIndex(partition.partition())
                             .setErrorCode(error.code())
-                            .setHighWatermark(FetchResponse.INVALID_HIGHWATERMARK)
+                            .setHighWatermark(FetchResponse.INVALID_HIGH_WATERMARK)
                             .setLastStableOffset(FetchResponse.INVALID_LAST_STABLE_OFFSET)
                             .setLogStartOffset(FetchResponse.INVALID_LOG_START_OFFSET)
                             .setAbortedTransactions(null)
-                            .setPreferredReadReplica(FetchResponse.INVALID_PREFERRED_REPLICA_ID)
-                            .setRecordSet(MemoryRecords.EMPTY)).collect(Collectors.toList());
+                            .setPreferredReadReplica(FetchResponse.INVALID_PREFERRED_REPLICA_ID)).collect(Collectors.toList());
             topicResponseList.add(new FetchResponseData.FetchableTopicResponse()
                     .setTopicId(topic.topicId())
-                    .setPartitionResponses(partitionResponses));
+                    .setPartitions(partitionResponses));
         });
-        return new FetchResponse<>(new FetchResponseData()
+        return new FetchResponse(new FetchResponseData()
                 .setThrottleTimeMs(throttleTimeMs)
                 .setErrorCode(error.code())
                 .setSessionId(data.sessionId())

@@ -16,6 +16,7 @@
 {
   "apiKey": 22,
   "type": "request",
+  "listeners": ["zkBroker"],
   "name": "InitProducerIdRequest",
   // Version 1 is the same as version 0.
   //

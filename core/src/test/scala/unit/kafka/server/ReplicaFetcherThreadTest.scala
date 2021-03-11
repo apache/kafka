@@ -16,9 +16,6 @@
   */
 package kafka.server
 
-import java.nio.charset.StandardCharsets
-import java.util.{Collections, Optional}
-
 import kafka.api.{ApiVersion, KAFKA_2_6_IV0}
 import kafka.cluster.{BrokerEndPoint, Partition}
 import kafka.log.{Log, LogAppendInfo, LogManager}
@@ -32,17 +29,19 @@ import org.apache.kafka.common.message.OffsetForLeaderEpochResponseData.EpochEnd
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.protocol.Errors._
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
-import org.apache.kafka.common.record.{CompressionType, MemoryRecords, Records, SimpleRecord}
+import org.apache.kafka.common.record.{CompressionType, MemoryRecords, SimpleRecord}
 import org.apache.kafka.common.requests.OffsetsForLeaderEpochResponse.{UNDEFINED_EPOCH, UNDEFINED_EPOCH_OFFSET}
-import org.apache.kafka.common.requests.{FetchResponse, UpdateMetadataRequest}
+import org.apache.kafka.common.requests.UpdateMetadataRequest
 import org.apache.kafka.common.utils.SystemTime
 import org.easymock.EasyMock._
 import org.easymock.{Capture, CaptureType}
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, Test}
 
-import scala.jdk.CollectionConverters._
+import java.nio.charset.StandardCharsets
+import java.util.Collections
 import scala.collection.{Map, mutable}
+import scala.jdk.CollectionConverters._
 
 class ReplicaFetcherThreadTest {
 
@@ -75,7 +74,8 @@ class ReplicaFetcherThreadTest {
 
   private val updateMetadataRequest = new UpdateMetadataRequest.Builder(ApiKeys.UPDATE_METADATA.latestVersion(),
     0, 0, 0, partitionStates, Collections.emptyList(), topicIds.asJava).build()
-  private val metadataCache = new MetadataCache(0)
+  // TODO: support raft code?
+  private val metadataCache = new ZkMetadataCache(0)
   metadataCache.updateMetadata(0, updateMetadataRequest)
 
   private def initialFetchState(fetchOffset: Long, leaderEpoch: Int = 1): InitialFetchState = {
@@ -562,16 +562,18 @@ class ReplicaFetcherThreadTest {
     assertEquals(1, mockNetwork.fetchCount)
     partitions.foreach { tp => assertEquals(Fetching, thread.fetchState(tp).get.state) }
 
-    def partitionData(divergingEpoch: FetchResponseData.EpochEndOffset): FetchResponse.PartitionData[Records] = {
-      new FetchResponse.PartitionData[Records](
-        Errors.NONE, 0, 0, 0, Optional.empty(), Collections.emptyList(),
-        Optional.of(divergingEpoch), MemoryRecords.EMPTY)
+    def partitionData(partition: Int, divergingEpoch: FetchResponseData.EpochEndOffset): FetchResponseData.PartitionData = {
+      new FetchResponseData.PartitionData()
+        .setPartitionIndex(partition)
+        .setLastStableOffset(0)
+        .setLogStartOffset(0)
+        .setDivergingEpoch(divergingEpoch)
     }
 
     // Loop 2 should truncate based on diverging epoch and continue to send fetch requests.
     mockNetwork.setFetchPartitionDataForNextResponse(Map(
-      t1p0 -> partitionData(new FetchResponseData.EpochEndOffset().setEpoch(4).setEndOffset(140)),
-      t1p1 -> partitionData(new FetchResponseData.EpochEndOffset().setEpoch(4).setEndOffset(141))
+      t1p0 -> partitionData(t1p0.partition, new FetchResponseData.EpochEndOffset().setEpoch(4).setEndOffset(140)),
+      t1p1 -> partitionData(t1p1.partition, new FetchResponseData.EpochEndOffset().setEpoch(4).setEndOffset(141))
     ))
     mockNetwork.setIdsForNextResponse(topicIds)
     latestLogEpoch = Some(4)
@@ -587,8 +589,8 @@ class ReplicaFetcherThreadTest {
     // Loop 3 should truncate because of diverging epoch. Offset truncation is not complete
     // because divergent epoch is not known to follower. We truncate and stay in Fetching state.
     mockNetwork.setFetchPartitionDataForNextResponse(Map(
-      t1p0 -> partitionData(new FetchResponseData.EpochEndOffset().setEpoch(3).setEndOffset(130)),
-      t1p1 -> partitionData(new FetchResponseData.EpochEndOffset().setEpoch(3).setEndOffset(131))
+      t1p0 -> partitionData(t1p0.partition, new FetchResponseData.EpochEndOffset().setEpoch(3).setEndOffset(130)),
+      t1p1 -> partitionData(t1p1.partition, new FetchResponseData.EpochEndOffset().setEpoch(3).setEndOffset(131))
     ))
     mockNetwork.setIdsForNextResponse(topicIds)
     thread.doWork()
@@ -602,8 +604,8 @@ class ReplicaFetcherThreadTest {
     // because divergent epoch is not known to follower. Last fetched epoch cannot be determined
     // from the log. We truncate and stay in Fetching state.
     mockNetwork.setFetchPartitionDataForNextResponse(Map(
-      t1p0 -> partitionData(new FetchResponseData.EpochEndOffset().setEpoch(2).setEndOffset(120)),
-      t1p1 -> partitionData(new FetchResponseData.EpochEndOffset().setEpoch(2).setEndOffset(121))
+      t1p0 -> partitionData(t1p0.partition, new FetchResponseData.EpochEndOffset().setEpoch(2).setEndOffset(120)),
+      t1p1 -> partitionData(t1p1.partition, new FetchResponseData.EpochEndOffset().setEpoch(2).setEndOffset(121))
     ))
     mockNetwork.setIdsForNextResponse(topicIds)
     latestLogEpoch = None
@@ -981,7 +983,7 @@ class ReplicaFetcherThreadTest {
     expect(partition.isAddingLocalReplica).andReturn(isReassigning)
 
     val replicaManager: ReplicaManager = createNiceMock(classOf[ReplicaManager])
-    expect(replicaManager.nonOfflinePartition(anyObject[TopicPartition])).andReturn(Some(partition))
+    expect(replicaManager.getPartitionOrException(anyObject[TopicPartition])).andReturn(partition)
     val brokerTopicStats = new BrokerTopicStats
     expect(replicaManager.brokerTopicStats).andReturn(brokerTopicStats).anyTimes()
 
@@ -1002,9 +1004,11 @@ class ReplicaFetcherThreadTest {
 
     val records = MemoryRecords.withRecords(CompressionType.NONE,
       new SimpleRecord(1000, "foo".getBytes(StandardCharsets.UTF_8)))
-
-    val partitionData: thread.FetchData = new FetchResponse.PartitionData[Records](
-      Errors.NONE, 0, 0, 0, Optional.empty(), Collections.emptyList(), records)
+    val partitionData: thread.FetchData = new FetchResponseData.PartitionData()
+      .setPartitionIndex(t1p0.partition)
+      .setLastStableOffset(0)
+      .setLogStartOffset(0)
+      .setRecords(records)
     thread.processPartitionData(t1p0, 0, partitionData)
 
     if (isReassigning)
@@ -1017,11 +1021,11 @@ class ReplicaFetcherThreadTest {
 
   def stub(partition: Partition, replicaManager: ReplicaManager, log: Log): Unit = {
     expect(replicaManager.localLogOrException(t1p0)).andReturn(log).anyTimes()
-    expect(replicaManager.nonOfflinePartition(t1p0)).andReturn(Some(partition)).anyTimes()
+    expect(replicaManager.getPartitionOrException(t1p0)).andReturn(partition).anyTimes()
     expect(replicaManager.localLogOrException(t1p1)).andReturn(log).anyTimes()
-    expect(replicaManager.nonOfflinePartition(t1p1)).andReturn(Some(partition)).anyTimes()
+    expect(replicaManager.getPartitionOrException(t1p1)).andReturn(partition).anyTimes()
     expect(replicaManager.localLogOrException(t2p1)).andReturn(log).anyTimes()
-    expect(replicaManager.nonOfflinePartition(t2p1)).andReturn(Some(partition)).anyTimes()
+    expect(replicaManager.getPartitionOrException(t2p1)).andReturn(partition).anyTimes()
   }
 
   private def kafkaConfigNoTruncateOnFetch: KafkaConfig = {

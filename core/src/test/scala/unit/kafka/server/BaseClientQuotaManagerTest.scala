@@ -21,9 +21,7 @@ import java.util
 import java.util.Collections
 
 import kafka.network.RequestChannel
-import kafka.network.RequestChannel.EndThrottlingResponse
 import kafka.network.RequestChannel.Session
-import kafka.network.RequestChannel.StartThrottlingResponse
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.memory.MemoryPool
 import org.apache.kafka.common.metrics.MetricConfig
@@ -49,11 +47,11 @@ class BaseClientQuotaManagerTest {
     metrics.close()
   }
 
-  protected def callback(response: RequestChannel.Response): Unit = {
-    // Count how many times this callback is called for notifyThrottlingDone().
-    (response: @unchecked) match {
-      case _: StartThrottlingResponse =>
-      case _: EndThrottlingResponse => numCallbacks += 1
+  protected def callback: ThrottleCallback = new ThrottleCallback {
+    override def startThrottling(): Unit = {}
+    override def endThrottling(): Unit = {
+      // Count how many times this callback is called for notifyThrottlingDone().
+      numCallbacks += 1
     }
   }
 
@@ -84,8 +82,8 @@ class BaseClientQuotaManagerTest {
   }
 
   protected def throttle(quotaManager: ClientQuotaManager, user: String, clientId: String, throttleTimeMs: Int,
-                         channelThrottlingCallback: RequestChannel.Response => Unit): Unit = {
+                         channelThrottlingCallback: ThrottleCallback): Unit = {
     val (_, request) = buildRequest(FetchRequest.Builder.forConsumer(ApiKeys.FETCH.latestVersion, 0, 1000, new util.HashMap[TopicPartition, PartitionData], Collections.emptyMap()))
-    quotaManager.throttle(request, throttleTimeMs, channelThrottlingCallback)
+    quotaManager.throttle(request, channelThrottlingCallback, throttleTimeMs)
   }
 }

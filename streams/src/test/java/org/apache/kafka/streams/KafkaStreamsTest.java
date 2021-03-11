@@ -232,8 +232,8 @@ public class KafkaStreamsTest {
         EasyMock.expect(StreamThread.processingMode(anyObject(StreamsConfig.class))).andReturn(StreamThread.ProcessingMode.AT_LEAST_ONCE).anyTimes();
         EasyMock.expect(streamThreadOne.getId()).andReturn(0L).anyTimes();
         EasyMock.expect(streamThreadTwo.getId()).andReturn(1L).anyTimes();
-        prepareStreamThread(streamThreadOne, true);
-        prepareStreamThread(streamThreadTwo, false);
+        prepareStreamThread(streamThreadOne, 1, true);
+        prepareStreamThread(streamThreadTwo, 2, false);
 
         // setup global threads
         final AtomicReference<GlobalStreamThread.State> globalThreadState = new AtomicReference<>(GlobalStreamThread.State.CREATED);
@@ -293,7 +293,7 @@ public class KafkaStreamsTest {
         );
     }
 
-    private void prepareStreamThread(final StreamThread thread, final boolean terminable) throws Exception {
+    private void prepareStreamThread(final StreamThread thread, final int threadId, final boolean terminable) throws Exception {
         final AtomicReference<StreamThread.State> state = new AtomicReference<>(StreamThread.State.CREATED);
         EasyMock.expect(thread.state()).andAnswer(state::get).anyTimes();
 
@@ -321,7 +321,7 @@ public class KafkaStreamsTest {
         }).anyTimes();
         EasyMock.expect(thread.getGroupInstanceID()).andStubReturn(Optional.empty());
         EasyMock.expect(thread.threadMetadata()).andReturn(new ThreadMetadata(
-                "newThead",
+                "processId-StreamThread-" + threadId,
                 "DEAD",
                 "",
                 "",
@@ -337,7 +337,7 @@ public class KafkaStreamsTest {
         EasyMock.expectLastCall().anyTimes();
         thread.requestLeaveGroupDuringShutdown();
         EasyMock.expectLastCall().anyTimes();
-        EasyMock.expect(thread.getName()).andStubReturn("newThread");
+        EasyMock.expect(thread.getName()).andStubReturn("processId-StreamThread-" + threadId);
         thread.shutdown();
         EasyMock.expectLastCall().andAnswer(() -> {
             supplier.consumer.close();
@@ -564,7 +564,7 @@ public class KafkaStreamsTest {
         streams.start();
         final int oldSize = streams.threads.size();
         TestUtils.waitForCondition(() -> streams.state() == KafkaStreams.State.RUNNING, 15L, "wait until running");
-        assertThat(streams.addStreamThread(), equalTo(Optional.of("newThread")));
+        assertThat(streams.addStreamThread(), equalTo(Optional.of("processId-StreamThread-" + 2)));
         assertThat(streams.threads.size(), equalTo(oldSize + 1));
     }
 
@@ -613,7 +613,7 @@ public class KafkaStreamsTest {
         final int oldSize = streams.threads.size();
         TestUtils.waitForCondition(() -> streams.state() == KafkaStreams.State.RUNNING, 15L,
             "Kafka Streams client did not reach state RUNNING");
-        assertThat(streams.removeStreamThread(), equalTo(Optional.of("newThread")));
+        assertThat(streams.removeStreamThread(), equalTo(Optional.of("processId-StreamThread-" + 1)));
         assertThat(streams.threads.size(), equalTo(oldSize - 1));
     }
 
@@ -880,6 +880,8 @@ public class KafkaStreamsTest {
             anyObject(Time.class),
             EasyMock.eq(true)
         ).andReturn(stateDirectory);
+        EasyMock.expect(stateDirectory.initializeProcessId()).andReturn(UUID.randomUUID());
+        stateDirectory.close();
         PowerMock.replayAll(Executors.class, cleanupSchedule, stateDirectory);
 
         props.setProperty(StreamsConfig.STATE_CLEANUP_DELAY_MS_CONFIG, "1");
@@ -1049,6 +1051,7 @@ public class KafkaStreamsTest {
             anyObject(Time.class),
             EasyMock.eq(shouldFilesExist)
         ).andReturn(stateDirectory);
+        EasyMock.expect(stateDirectory.initializeProcessId()).andReturn(UUID.randomUUID());
 
         PowerMock.replayAll();
 

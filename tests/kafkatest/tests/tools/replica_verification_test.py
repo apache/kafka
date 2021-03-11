@@ -14,13 +14,14 @@
 # limitations under the License.
 
 
+from ducktape.mark import matrix
+from ducktape.mark.resource import cluster
 from ducktape.utils.util import wait_until
 from ducktape.tests.test import Test
-from ducktape.mark.resource import cluster
 
 from kafkatest.services.verifiable_producer import VerifiableProducer
 from kafkatest.services.zookeeper import ZookeeperService
-from kafkatest.services.kafka import KafkaService
+from kafkatest.services.kafka import KafkaService, quorum
 from kafkatest.services.replica_verification_tool import ReplicaVerificationTool
 
 TOPIC = "topic-replica-verification"
@@ -39,19 +40,21 @@ class ReplicaVerificationToolTest(Test):
             TOPIC: {'partitions': 1, 'replication-factor': 2}
         }
 
-        self.zk = ZookeeperService(test_context, self.num_zk)
+        self.zk = ZookeeperService(test_context, self.num_zk) if quorum.for_test(test_context) == quorum.zk else None
         self.kafka = None
         self.producer = None
         self.replica_verifier = None
 
     def setUp(self):
-        self.zk.start()
+        if self.zk:
+            self.zk.start()
 
     def start_kafka(self, security_protocol, interbroker_security_protocol):
         self.kafka = KafkaService(
             self.test_context, self.num_brokers,
             self.zk, security_protocol=security_protocol,
-            interbroker_security_protocol=interbroker_security_protocol, topics=self.topics)
+            interbroker_security_protocol=interbroker_security_protocol, topics=self.topics,
+            controller_num_nodes_override=self.num_zk)
         self.kafka.start()
 
     def start_replica_verification_tool(self, security_protocol):
@@ -70,7 +73,8 @@ class ReplicaVerificationToolTest(Test):
         self.producer.stop()
 
     @cluster(num_nodes=6)
-    def test_replica_lags(self, security_protocol='PLAINTEXT'):
+    @matrix(metadata_quorum=quorum.all_non_upgrade)
+    def test_replica_lags(self, security_protocol='PLAINTEXT', metadata_quorum=quorum.zk):
         """
         Tests ReplicaVerificationTool
         :return: None

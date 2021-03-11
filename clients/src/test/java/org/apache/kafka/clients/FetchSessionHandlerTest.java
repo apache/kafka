@@ -19,8 +19,8 @@ package org.apache.kafka.clients;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.protocol.ApiKeys;
+import org.apache.kafka.common.message.FetchResponseData;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.record.MemoryRecords;
 import org.apache.kafka.common.requests.FetchRequest;
 import org.apache.kafka.common.requests.FetchResponse;
 import org.apache.kafka.common.utils.LogContext;
@@ -158,22 +158,21 @@ public class FetchSessionHandlerTest {
 
     private static final class RespEntry {
         final TopicPartition part;
-        final FetchResponse.PartitionData<MemoryRecords> data;
+        final FetchResponseData.PartitionData data;
 
         RespEntry(String topic, int partition, long highWatermark, long lastStableOffset) {
             this.part = new TopicPartition(topic, partition);
-            this.data = new FetchResponse.PartitionData<>(
-                Errors.NONE,
-                highWatermark,
-                lastStableOffset,
-                0,
-                null,
-                null);
+
+            this.data = new FetchResponseData.PartitionData()
+                .setPartitionIndex(partition)
+                .setHighWatermark(highWatermark)
+                .setLastStableOffset(lastStableOffset)
+                .setLogStartOffset(0);
         }
     }
 
-    private static LinkedHashMap<TopicPartition, FetchResponse.PartitionData<MemoryRecords>> respMap(RespEntry... entries) {
-        LinkedHashMap<TopicPartition, FetchResponse.PartitionData<MemoryRecords>> map = new LinkedHashMap<>();
+    private static LinkedHashMap<TopicPartition, FetchResponseData.PartitionData> respMap(RespEntry... entries) {
+        LinkedHashMap<TopicPartition, FetchResponseData.PartitionData> map = new LinkedHashMap<>();
         for (RespEntry entry : entries) {
             map.put(entry.part, entry.data);
         }
@@ -200,8 +199,7 @@ public class FetchSessionHandlerTest {
         assertEquals(INVALID_SESSION_ID, data.metadata().sessionId());
         assertEquals(INITIAL_EPOCH, data.metadata().epoch());
 
-        // Double wrap the response so we get the behavior where responseMap is null
-        FetchResponse<MemoryRecords> resp = FetchResponse.prepareResponse(Errors.NONE,
+        FetchResponse resp = FetchResponse.prepareResponse(Errors.NONE,
             respMap(new RespEntry("foo", 0, 0, 0),
                     new RespEntry("foo", 1, 0, 0)),
                 Collections.emptyList(), topicIds,
@@ -233,7 +231,7 @@ public class FetchSessionHandlerTest {
         assertEquals(INVALID_SESSION_ID, data.metadata().sessionId());
         assertEquals(INITIAL_EPOCH, data.metadata().epoch());
 
-        FetchResponse<MemoryRecords> resp = FetchResponse.prepareResponse(Errors.NONE,
+        FetchResponse resp = FetchResponse.prepareResponse(Errors.NONE,
                 respMap(new RespEntry("foo", 0, 0, 0),
                         new RespEntry("foo", 1, 0, 0)),
                 Collections.emptyList(), EMPTY_IDS,
@@ -269,8 +267,7 @@ public class FetchSessionHandlerTest {
         assertEquals(INVALID_SESSION_ID, data.metadata().sessionId());
         assertEquals(INITIAL_EPOCH, data.metadata().epoch());
 
-        // Double wrap the response so we get the behavior where responseMap is null
-        FetchResponse<MemoryRecords> resp = FetchResponse.prepareResponse(Errors.NONE,
+        FetchResponse resp = FetchResponse.prepareResponse(Errors.NONE,
             respMap(new RespEntry("foo", 0, 10, 20),
                     new RespEntry("foo", 1, 10, 20)),
             Collections.emptyList(), topicIds, 0, 123);
@@ -295,14 +292,14 @@ public class FetchSessionHandlerTest {
                 new ReqEntry("foo", 1, 10, 120, 210)),
             data2.toSend());
 
-        FetchResponse<MemoryRecords> resp2 = FetchResponse.prepareResponse(Errors.NONE,
+        FetchResponse resp2 = FetchResponse.prepareResponse(Errors.NONE,
             respMap(new RespEntry("foo", 1, 20, 20)),
                 Collections.emptyList(), topicIds, 0, 123);
         handler.handleResponse(resp2, ApiKeys.FETCH.latestVersion());
 
         // Skip building a new request.  Test that handling an invalid fetch session epoch response results
         // in a request which closes the session.
-        FetchResponse<MemoryRecords> resp3 = FetchResponse.prepareResponse(Errors.INVALID_FETCH_SESSION_EPOCH, respMap(),
+        FetchResponse resp3 = FetchResponse.prepareResponse(Errors.INVALID_FETCH_SESSION_EPOCH, respMap(),
             Collections.emptyList(), topicIds, 0, INVALID_SESSION_ID);
         handler.handleResponse(resp3, ApiKeys.FETCH.latestVersion());
 
@@ -338,7 +335,7 @@ public class FetchSessionHandlerTest {
         assertEquals(INVALID_SESSION_ID, data.metadata().sessionId());
         assertEquals(INITIAL_EPOCH, data.metadata().epoch());
 
-        FetchResponse<MemoryRecords> resp = FetchResponse.prepareResponse(Errors.NONE,
+        FetchResponse resp = FetchResponse.prepareResponse(Errors.NONE,
                 respMap(new RespEntry("foo", 0, 10, 20),
                         new RespEntry("foo", 1, 10, 20)),
                 Collections.emptyList(), EMPTY_IDS, 0, 123);
@@ -362,14 +359,14 @@ public class FetchSessionHandlerTest {
                 new ReqEntry("foo", 1, 10, 120, 210)),
                 data2.toSend());
 
-        FetchResponse<MemoryRecords> resp2 = FetchResponse.prepareResponse(Errors.NONE,
+        FetchResponse resp2 = FetchResponse.prepareResponse(Errors.NONE,
                 respMap(new RespEntry("foo", 1, 20, 20)),
                 Collections.emptyList(), EMPTY_IDS, 0, 123);
         handler.handleResponse(resp2, (short) 12);
 
         // Skip building a new request.  Test that handling an invalid fetch session epoch response results
         // in a request which closes the session.
-        FetchResponse<MemoryRecords> resp3 = FetchResponse.prepareResponse(Errors.INVALID_FETCH_SESSION_EPOCH, respMap(),
+        FetchResponse resp3 = FetchResponse.prepareResponse(Errors.INVALID_FETCH_SESSION_EPOCH, respMap(),
                 Collections.emptyList(), EMPTY_IDS, 0, INVALID_SESSION_ID);
         handler.handleResponse(resp3, (short) 12);
 
@@ -428,7 +425,7 @@ public class FetchSessionHandlerTest {
         assertTrue(data.metadata().isFull());
 
         // Build so we get null responseMap
-        FetchResponse<MemoryRecords> resp = FetchResponse.prepareResponse(Errors.NONE,
+        FetchResponse resp = FetchResponse.prepareResponse(Errors.NONE,
             respMap(new RespEntry("foo", 0, 10, 20),
                     new RespEntry("foo", 1, 10, 20),
                     new RespEntry("bar", 0, 10, 20)),
@@ -453,9 +450,10 @@ public class FetchSessionHandlerTest {
 
         // A FETCH_SESSION_ID_NOT_FOUND response triggers us to close the session.
         // The next request is a session establishing FULL request.
-        FetchResponse<MemoryRecords> resp2 = FetchResponse.prepareResponse(Errors.FETCH_SESSION_ID_NOT_FOUND,
+        FetchResponse resp2 = FetchResponse.prepareResponse(Errors.FETCH_SESSION_ID_NOT_FOUND,
             respMap(), Collections.emptyList(), topicIds, 0, INVALID_SESSION_ID);
         handler.handleResponse(resp2, ApiKeys.FETCH.latestVersion());
+
         FetchSessionHandler.Builder builder3 = handler.newBuilder();
         builder3.add(new TopicPartition("foo", 0), topicIds.get("foo"),
             new FetchRequest.PartitionData(0, 100, 200, Optional.empty()));
@@ -484,7 +482,7 @@ public class FetchSessionHandlerTest {
                 data.toSend(), data.sessionPartitions());
         assertTrue(data.metadata().isFull());
 
-        FetchResponse<MemoryRecords> resp = FetchResponse.prepareResponse(Errors.NONE,
+        FetchResponse resp = FetchResponse.prepareResponse(Errors.NONE,
                 respMap(new RespEntry("foo", 0, 10, 20),
                         new RespEntry("foo", 1, 10, 20),
                         new RespEntry("bar", 0, 10, 20)),
@@ -509,7 +507,7 @@ public class FetchSessionHandlerTest {
 
         // A FETCH_SESSION_ID_NOT_FOUND response triggers us to close the session.
         // The next request is a session establishing FULL request.
-        FetchResponse<MemoryRecords> resp2 = FetchResponse.prepareResponse(Errors.FETCH_SESSION_ID_NOT_FOUND,
+        FetchResponse resp2 = FetchResponse.prepareResponse(Errors.FETCH_SESSION_ID_NOT_FOUND,
                 respMap(), Collections.emptyList(), EMPTY_IDS, 0, INVALID_SESSION_ID);
         handler.handleResponse(resp2, (short) 12);
         FetchSessionHandler.Builder builder3 = handler.newBuilder();
@@ -529,7 +527,7 @@ public class FetchSessionHandlerTest {
         addTopicId("foo");
         addTopicId("bar");
         // Double wrap the response so we get the behavior where responseMap is null
-        FetchResponse<MemoryRecords> resp1 = FetchResponse.prepareResponse(Errors.NONE,
+        FetchResponse resp1 = FetchResponse.prepareResponse(Errors.NONE,
                 respMap(new RespEntry("foo", 0, 10, 20),
                         new RespEntry("foo", 1, 10, 20),
                         new RespEntry("bar", 0, 10, 20)),
@@ -546,7 +544,7 @@ public class FetchSessionHandlerTest {
         builder.add(new TopicPartition("bar", 0), topicIds.get("bar"),
             new FetchRequest.PartitionData(20, 120, 220, Optional.empty()));
         builder.build();
-        FetchResponse<MemoryRecords> resp2 = FetchResponse.prepareResponse(Errors.NONE,
+        FetchResponse resp2 = FetchResponse.prepareResponse(Errors.NONE,
                 respMap(new RespEntry("foo", 0, 10, 20),
                         new RespEntry("foo", 1, 10, 20),
                         new RespEntry("bar", 0, 10, 20)),
@@ -554,7 +552,7 @@ public class FetchSessionHandlerTest {
         String issue2 = handler.verifyFullFetchResponsePartitions(resp2.responseData(topicNames, ApiKeys.FETCH.latestVersion()).keySet(),
                 resp2.topicIds(), ApiKeys.FETCH.latestVersion());
         assertTrue(issue2 == null);
-        FetchResponse<MemoryRecords> resp3 = FetchResponse.prepareResponse(Errors.NONE,
+        FetchResponse resp3 = FetchResponse.prepareResponse(Errors.NONE,
                 respMap(new RespEntry("foo", 0, 10, 20),
                         new RespEntry("foo", 1, 10, 20)),
                 Collections.emptyList(), topicIds, 0, INVALID_SESSION_ID);
@@ -567,7 +565,7 @@ public class FetchSessionHandlerTest {
     @Test
     public void testVerifyFullFetchResponsePartitionsOldVersion() throws Exception {
         FetchSessionHandler handler = new FetchSessionHandler(LOG_CONTEXT, 1);
-        FetchResponse<MemoryRecords> resp1 = FetchResponse.prepareResponse(Errors.NONE,
+        FetchResponse resp1 = FetchResponse.prepareResponse(Errors.NONE,
                 respMap(new RespEntry("foo", 0, 10, 20),
                         new RespEntry("foo", 1, 10, 20),
                         new RespEntry("bar", 0, 10, 20)),
@@ -583,14 +581,14 @@ public class FetchSessionHandlerTest {
         builder.add(new TopicPartition("bar", 0), Uuid.ZERO_UUID,
                 new FetchRequest.PartitionData(20, 120, 220, Optional.empty()));
         builder.build();
-        FetchResponse<MemoryRecords> resp2 = FetchResponse.prepareResponse(Errors.NONE,
+        FetchResponse resp2 = FetchResponse.prepareResponse(Errors.NONE,
                 respMap(new RespEntry("foo", 0, 10, 20),
                         new RespEntry("foo", 1, 10, 20),
                         new RespEntry("bar", 0, 10, 20)),
                 Collections.emptyList(), EMPTY_IDS, 0, INVALID_SESSION_ID);
         String issue2 = handler.verifyFullFetchResponsePartitions(resp2.responseData(topicNames, (short) 12).keySet(), resp2.topicIds(), (short) 12);
         assertTrue(issue2 == null);
-        FetchResponse<MemoryRecords> resp3 = FetchResponse.prepareResponse(Errors.NONE,
+        FetchResponse resp3 = FetchResponse.prepareResponse(Errors.NONE,
                 respMap(new RespEntry("foo", 0, 10, 20),
                         new RespEntry("foo", 1, 10, 20)),
                 Collections.emptyList(), EMPTY_IDS, 0, INVALID_SESSION_ID);
@@ -607,7 +605,7 @@ public class FetchSessionHandlerTest {
         Uuid extraId = Uuid.randomUuid();
         topicIds.put("extra", extraId);
         // Double wrap the response so we get the behavior where responseMap is null
-        FetchResponse<MemoryRecords> resp1 = FetchResponse.prepareResponse(Errors.NONE,
+        FetchResponse resp1 = FetchResponse.prepareResponse(Errors.NONE,
                 respMap(new RespEntry("foo", 0, 10, 20),
                         new RespEntry("extra", 1, 10, 20),
                         new RespEntry("bar", 0, 10, 20)),
@@ -623,7 +621,7 @@ public class FetchSessionHandlerTest {
         builder.add(new TopicPartition("bar", 0), topicIds.get("bar"),
                 new FetchRequest.PartitionData(20, 120, 220, Optional.empty()));
         builder.build();
-        FetchResponse<MemoryRecords> resp2 = FetchResponse.prepareResponse(Errors.NONE,
+        FetchResponse resp2 = FetchResponse.prepareResponse(Errors.NONE,
                 respMap(new RespEntry("foo", 0, 10, 20),
                         new RespEntry("extra", 1, 10, 20),
                         new RespEntry("bar", 0, 10, 20)),
@@ -634,7 +632,7 @@ public class FetchSessionHandlerTest {
         assertTrue(issue2.contains("extraIds="));
         assertFalse(issue2.contains("omitted"));
         topicNames.put(extraId, "extra");
-        FetchResponse<MemoryRecords> resp3 = FetchResponse.prepareResponse(Errors.NONE,
+        FetchResponse resp3 = FetchResponse.prepareResponse(Errors.NONE,
                 respMap(new RespEntry("foo", 0, 10, 20),
                         new RespEntry("bar", 0, 10, 20)),
                 Collections.emptyList(), topicIds, 0, INVALID_SESSION_ID);

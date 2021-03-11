@@ -79,6 +79,8 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Set;
+import java.util.concurrent.Executor;
 
 import static java.util.Collections.emptyMap;
 import static java.util.Collections.singletonList;
@@ -529,7 +531,10 @@ public class ErrorHandlingTaskWithTopicCreationTest {
             EasyMock.expect(admin.describeTopics(topic)).andReturn(Collections.emptyMap());
 
             Capture<NewTopic> newTopicCapture = EasyMock.newCapture();
-            EasyMock.expect(admin.createTopic(EasyMock.capture(newTopicCapture))).andReturn(true);
+            Set<String> created = Collections.singleton(topic);
+            Set<String> existing = Collections.emptySet();
+            TopicAdmin.TopicCreationResponse response = new TopicAdmin.TopicCreationResponse(created, existing);
+            EasyMock.expect(admin.createOrFindTopics(EasyMock.capture(newTopicCapture))).andReturn(response);
         }
     }
 
@@ -577,7 +582,7 @@ public class ErrorHandlingTaskWithTopicCreationTest {
                 producer, admin, TopicCreationGroup.configuredGroups(sourceConfig),
                 offsetReader, offsetWriter, workerConfig,
                 ClusterConfigState.EMPTY, metrics, pluginLoader, time, retryWithToleranceOperator,
-                statusBackingStore);
+                statusBackingStore, (Executor) Runnable::run);
     }
 
     private ConsumerRecords<byte[], byte[]> records(ConsumerRecord<byte[], byte[]> record) {

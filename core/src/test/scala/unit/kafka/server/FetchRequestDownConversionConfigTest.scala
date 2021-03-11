@@ -23,7 +23,6 @@ import kafka.utils.TestUtils
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerRecord}
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
-import org.apache.kafka.common.record.MemoryRecords
 import org.apache.kafka.common.requests.{FetchRequest, FetchResponse}
 import org.apache.kafka.common.serialization.StringSerializer
 import org.junit.jupiter.api.Assertions._
@@ -81,8 +80,8 @@ class FetchRequestDownConversionConfigTest extends BaseRequestTest {
     partitionMap
   }
 
-  private def sendFetchRequest(leaderId: Int, request: FetchRequest): FetchResponse[MemoryRecords] = {
-    connectAndReceive[FetchResponse[MemoryRecords]](request, destination = brokerSocketServer(leaderId))
+  private def sendFetchRequest(leaderId: Int, request: FetchRequest): FetchResponse = {
+    connectAndReceive[FetchResponse](request, destination = brokerSocketServer(leaderId))
   }
 
   /**
@@ -98,7 +97,8 @@ class FetchRequestDownConversionConfigTest extends BaseRequestTest {
     val fetchRequest = FetchRequest.Builder.forConsumer(1, Int.MaxValue, 0, createPartitionMap(1024,
       topicPartitions), topicIds.asJava).build(1)
     val fetchResponse = sendFetchRequest(topicMap.head._2, fetchRequest)
-    topicPartitions.foreach(tp => assertEquals(Errors.UNSUPPORTED_VERSION, fetchResponse.responseData(topicNames.asJava, 1).get(tp).error))
+    val fetchResponseData = fetchResponse.responseData(topicNames.asJava, 1)
+    topicPartitions.foreach(tp => assertEquals(Errors.UNSUPPORTED_VERSION, Errors.forCode(fetchResponseData.get(tp).errorCode)))
   }
 
   /**
@@ -114,7 +114,8 @@ class FetchRequestDownConversionConfigTest extends BaseRequestTest {
     val fetchRequest = FetchRequest.Builder.forConsumer(ApiKeys.FETCH.latestVersion, Int.MaxValue, 0, createPartitionMap(1024,
       topicPartitions), topicIds.asJava).build()
     val fetchResponse = sendFetchRequest(topicMap.head._2, fetchRequest)
-    topicPartitions.foreach(tp => assertEquals(Errors.NONE, fetchResponse.responseData(topicNames.asJava, ApiKeys.FETCH.latestVersion).get(tp).error))
+    val fetchResponseData = fetchResponse.responseData(topicNames.asJava, ApiKeys.FETCH.latestVersion)
+    topicPartitions.foreach(tp => assertEquals(Errors.NONE, Errors.forCode(fetchResponseData.get(tp).errorCode)))
   }
 
   /**
@@ -130,7 +131,8 @@ class FetchRequestDownConversionConfigTest extends BaseRequestTest {
     val fetchRequest = FetchRequest.Builder.forConsumer(ApiKeys.FETCH.latestVersion, Int.MaxValue, 0, createPartitionMap(1024,
       topicPartitions), topicIds.asJava).build(12)
     val fetchResponse = sendFetchRequest(topicMap.head._2, fetchRequest)
-    topicPartitions.foreach(tp => assertEquals(Errors.NONE, fetchResponse.responseData(topicNames.asJava, 12).get(tp).error))
+    val fetchResponseData = fetchResponse.responseData(topicNames.asJava, 12)
+    topicPartitions.foreach(tp => assertEquals(Errors.NONE, Errors.forCode(fetchResponseData.get(tp).errorCode)))
   }
 
   /**
@@ -158,8 +160,9 @@ class FetchRequestDownConversionConfigTest extends BaseRequestTest {
       allTopics), topicIds.asJava).build(1)
     val fetchResponse = sendFetchRequest(leaderId, fetchRequest)
 
-    conversionDisabledTopicPartitions.foreach(tp => assertEquals(Errors.UNSUPPORTED_VERSION, fetchResponse.responseData(topicNames.asJava, 1).get(tp).error))
-    conversionEnabledTopicPartitions.foreach(tp => assertEquals(Errors.NONE, fetchResponse.responseData(topicNames.asJava, 1).get(tp).error))
+    val fetchResponseData = fetchResponse.responseData(topicNames.asJava, 1)
+    conversionDisabledTopicPartitions.foreach(tp => assertEquals(Errors.UNSUPPORTED_VERSION, Errors.forCode(fetchResponseData.get(tp).errorCode)))
+    conversionEnabledTopicPartitions.foreach(tp => assertEquals(Errors.NONE, Errors.forCode(fetchResponseData.get(tp).errorCode)))
   }
 
   /**
@@ -181,11 +184,11 @@ class FetchRequestDownConversionConfigTest extends BaseRequestTest {
     val topicNames = topicIds.map(_.swap)
     val leaderId = conversionDisabledTopicsMap.head._2
 
-    allTopicPartitions.foreach(tp => producer.send(new ProducerRecord(tp.topic(), "key", "value")).get())
+    allTopicPartitions.foreach(tp => producer.send(new ProducerRecord(tp.topic, "key", "value")).get())
     val fetchRequest = FetchRequest.Builder.forReplica(1, 1, Int.MaxValue, 0,
       createPartitionMap(1024, allTopicPartitions), topicIds.asJava).build()
     val fetchResponse = sendFetchRequest(leaderId, fetchRequest)
-
-    allTopicPartitions.foreach(tp => assertEquals(Errors.NONE, fetchResponse.responseData(topicNames.asJava, 1).get(tp).error))
+    val fetchResponseData = fetchResponse.responseData(topicNames.asJava, 1)
+    allTopicPartitions.foreach(tp => assertEquals(Errors.NONE, Errors.forCode(fetchResponseData.get(tp).errorCode)))
   }
 }

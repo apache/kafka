@@ -53,7 +53,7 @@ class FetchRequestBetweenDifferentIbpTest extends BaseRequestTest {
     // Ensure controller version = KAFKA_2_8_IV0, and then create a topic where leader of partition 0 is not the controller.
     ensureControllerIn(Seq(0))
     val partitionLeaders = createTopic(topic,  Map(0 -> Seq(1, 0, 2), 1 -> Seq(0, 2, 1)))
-    TestUtils.waitUntilMetadataIsPropagated(servers, topic, 0)
+    TestUtils.waitForAllPartitionsMetadata(servers, topic, 2)
 
     assertEquals(1, partitionLeaders(0))
     assertEquals(0, partitionLeaders(1))
@@ -78,7 +78,7 @@ class FetchRequestBetweenDifferentIbpTest extends BaseRequestTest {
     // Ensure controller version = KAFKA_2_8_IV1, and then create a topic where leader of partition 1 is the old version.
     ensureControllerIn(Seq(2))
     val partitionLeaders = createTopic(topic,  Map(0 -> Seq(1, 0, 2), 1 -> Seq(0, 2, 1)))
-    TestUtils.waitUntilMetadataIsPropagated(servers, topic, 0)
+    TestUtils.waitForAllPartitionsMetadata(servers, topic, 2)
 
     assertEquals(1, partitionLeaders(0))
     assertEquals(0, partitionLeaders(1))
@@ -104,7 +104,7 @@ class FetchRequestBetweenDifferentIbpTest extends BaseRequestTest {
     // Ensure controller version = KAFKA_2_8_IV1
     ensureControllerIn(Seq(1))
     val partitionLeaders = createTopic(topic,  Map(0 -> Seq(1, 0, 2), 1 -> Seq(0, 2, 1)))
-    TestUtils.waitUntilMetadataIsPropagated(servers, topic, 0)
+    TestUtils.waitForAllPartitionsMetadata(servers, topic, 2)
     assertEquals(1, partitionLeaders(0))
     assertEquals(0, partitionLeaders(1))
 
@@ -124,7 +124,7 @@ class FetchRequestBetweenDifferentIbpTest extends BaseRequestTest {
     // Restart the broker whose version=KAFKA_2_8_IV1, and the controller will send metadata request to it
     killBroker(1)
     restartDeadBrokers()
-    TestUtils.waitUntilMetadataIsPropagated(servers, topic, 0)
+    TestUtils.waitForAllPartitionsMetadata(servers, topic, 2)
 
     val record3 = new ProducerRecord(topic, 0, null, "key".getBytes, "value".getBytes)
     val record4 = new ProducerRecord(topic, 1, null, "key".getBytes, "value".getBytes)

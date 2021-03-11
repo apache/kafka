@@ -18,7 +18,6 @@ package org.apache.kafka.streams.processor.internals;
 
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
-import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.clients.consumer.MockConsumer;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.consumer.OffsetResetStrategy;
@@ -47,6 +46,7 @@ import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.LockException;
 import org.apache.kafka.streams.errors.ProcessorStateException;
 import org.apache.kafka.streams.errors.StreamsException;
+import org.apache.kafka.streams.errors.TaskCorruptedException;
 import org.apache.kafka.streams.errors.TaskMigratedException;
 import org.apache.kafka.streams.errors.TopologyException;
 import org.apache.kafka.streams.processor.PunctuationType;
@@ -145,6 +145,12 @@ public class StreamTaskTest {
         @Override
         public void close() {
             throw new RuntimeException("KABOOM!");
+        }
+    };
+    private final MockSourceNode<Integer, Integer, ?, ?> timeoutSource = new MockSourceNode<Integer, Integer, Object, Object>(intDeserializer, intDeserializer) {
+        @Override
+        public void process(final Record<Integer, Integer> record) {
+            throw new TimeoutException("Kaboom!");
         }
     };
     private final MockProcessorNode<Integer, Integer, ?, ?> processorStreamTime = new MockProcessorNode<>(10L);
@@ -417,9 +423,6 @@ public class StreamTaskTest {
         assertEquals(asList(101, 102, 103), source1.values);
         assertEquals(singletonList(201), source2.values);
 
-        // tell the task that it doesn't need to wait for more records on partition1
-        task.addFetchedMetadata(partition1, new ConsumerRecords.Metadata(0L, 30L, 30L));
-
         assertTrue(task.process(0L));
         assertEquals(1, task.numBuffered());
         assertEquals(3, source1.numReceived);
@@ -427,8 +430,6 @@ public class StreamTaskTest {
         assertEquals(asList(101, 102, 103), source1.values);
         assertEquals(asList(201, 202), source2.values);
 
-        // tell the task that it doesn't need to wait for more records on partition1
-        task.addFetchedMetadata(partition1, new ConsumerRecords.Metadata(0L, 30L, 30L));
         assertTrue(task.process(0L));
         assertEquals(0, task.numBuffered());
         assertEquals(3, source1.numReceived);
@@ -640,6 +641,43 @@ public class StreamTaskTest {
         assertThat(terminalAvg.metricValue(), equalTo(16.5));
         assertThat(terminalMin.metricValue(), equalTo(10.0));
         assertThat(terminalMax.metricValue(), equalTo(23.0));
+    }
+
+    @Test
+    public void shouldThrowOnTimeoutExceptionAndBufferRecordForRetryIfEosDisabled() {
+        createTimeoutTask(AT_LEAST_ONCE);
+
+        task.addRecords(partition1, singletonList(getConsumerRecordWithOffsetAsTimestamp(0, 0L)));
+
+        final TimeoutException exception = assertThrows(
+            TimeoutException.class,
+            () -> task.process(0)
+        );
+        assertThat(exception.getMessage(), equalTo("Kaboom!"));
+
+        // we have only a single record that was not successfully processed
+        // however, the record should not be in the record buffer any longer, but should be cached within the task itself
+        assertThat(task.commitNeeded(), equalTo(false));
+        assertThat(task.hasRecordsQueued(), equalTo(false));
+
+        // -> thus the task should try process the cached record now (that thus throw again)
+        final TimeoutException nextException = assertThrows(
+            TimeoutException.class,
+            () -> task.process(0)
+        );
+        assertThat(nextException.getMessage(), equalTo("Kaboom!"));
+    }
+
+    @Test
+    public void shouldThrowTaskCorruptedExceptionOnTimeoutExceptionIfEosEnabled() {
+        createTimeoutTask(StreamsConfig.EXACTLY_ONCE);
+
+        task.addRecords(partition1, singletonList(getConsumerRecordWithOffsetAsTimestamp(0, 0L)));
+
+        assertThrows(
+            TaskCorruptedException.class,
+            () -> task.process(0)
+        );
     }
 
     @Test
@@ -922,9 +960,6 @@ public class StreamTaskTest {
         assertEquals(4, source1.numReceived);
         assertEquals(3, source2.numReceived);
         assertTrue(task.maybePunctuateStreamTime());
-
-        // tell the task that it doesn't need to wait for new data on partition1
-        task.addFetchedMetadata(partition1, new ConsumerRecords.Metadata(0L, 160L, 160L));
 
         // st: 161
         assertTrue(task.process(0L));
@@ -1267,6 +1302,7 @@ public class StreamTaskTest {
             getConsumerRecordWithOffsetAsTimestamp(partition2, 45)
         ));
 
+        assertThat("Map was not empty", task.highWaterMark().isEmpty());
         assertThrows(StreamsException.class, () -> task.process(0L));
     }
 
@@ -1322,6 +1358,7 @@ public class StreamTaskTest {
         EasyMock.reset(recordCollector);
         EasyMock.expect(recordCollector.offsets()).andReturn(emptyMap());
         EasyMock.replay(recordCollector);
+        assertThat("Map was not empty", task.highWaterMark().isEmpty());
     }
 
     @Test
@@ -1349,6 +1386,7 @@ public class StreamTaskTest {
         task.postCommit(false);   // should not checkpoint
 
         EasyMock.verify(stateManager, recordCollector);
+        assertThat("Map was not empty", task.highWaterMark().containsValue(offset));
     }
 
     @Test
@@ -1378,6 +1416,7 @@ public class StreamTaskTest {
         task.postCommit(false);
 
         EasyMock.verify(recordCollector);
+        assertThat("Map was not empty", task.highWaterMark().containsValue(offset));
     }
 
     @Test
@@ -1516,7 +1555,6 @@ public class StreamTaskTest {
         task.addRecords(repartition, singletonList(getConsumerRecordWithOffsetAsTimestamp(repartition, 10L)));
 
         assertTrue(task.process(0L));
-        task.addFetchedMetadata(partition1, new ConsumerRecords.Metadata(0L, 5L, 5L));
         assertTrue(task.process(0L));
 
         task.prepareCommit();
@@ -2138,7 +2176,9 @@ public class StreamTaskTest {
             time,
             stateManager,
             recordCollector,
-            context, logContext);
+            context,
+            logContext
+        );
     }
 
     private StreamTask createDisconnectedTask(final StreamsConfig config) {
@@ -2177,7 +2217,9 @@ public class StreamTaskTest {
             time,
             stateManager,
             recordCollector,
-            context, logContext);
+            context,
+            logContext
+        );
     }
 
     private StreamTask createFaultyStatefulTask(final StreamsConfig config) {
@@ -2185,7 +2227,8 @@ public class StreamTaskTest {
             asList(source1, source3),
             mkMap(mkEntry(topic1, source1), mkEntry(topic2, source3)),
             singletonList(stateStore),
-            emptyMap());
+            emptyMap()
+        );
 
         final InternalProcessorContext context = new ProcessorContextImpl(
             taskId,
@@ -2207,7 +2250,9 @@ public class StreamTaskTest {
             time,
             stateManager,
             recordCollector,
-            context, logContext);
+            context,
+            logContext
+        );
     }
 
     private StreamTask createStatefulTask(final StreamsConfig config, final boolean logged) {
@@ -2243,7 +2288,9 @@ public class StreamTaskTest {
             time,
             stateManager,
             recordCollector,
-            context, logContext);
+            context,
+            logContext
+        );
     }
 
     private StreamTask createSingleSourceStateless(final StreamsConfig config,
@@ -2281,7 +2328,9 @@ public class StreamTaskTest {
             time,
             stateManager,
             recordCollector,
-            context, logContext);
+            context,
+            logContext
+        );
     }
 
     private StreamTask createStatelessTask(final StreamsConfig config,
@@ -2321,7 +2370,9 @@ public class StreamTaskTest {
             time,
             stateManager,
             recordCollector,
-            context, logContext);
+            context,
+            logContext
+        );
     }
 
     private StreamTask createStatelessTaskWithForwardingTopology(final SourceNode<Integer, Integer, Integer, Integer> sourceNode) {
@@ -2358,7 +2409,43 @@ public class StreamTaskTest {
             time,
             stateManager,
             recordCollector,
-            context, logContext);
+            context,
+            logContext
+        );
+    }
+
+    private void createTimeoutTask(final String eosConfig) {
+        EasyMock.replay(stateManager);
+
+        final ProcessorTopology topology = withSources(
+            singletonList(timeoutSource),
+            mkMap(mkEntry(topic1, timeoutSource))
+        );
+
+        final StreamsConfig config = createConfig(eosConfig, "0");
+        final InternalProcessorContext context = new ProcessorContextImpl(
+            taskId,
+            config,
+            stateManager,
+            streamsMetrics,
+            null
+        );
+
+        task = new StreamTask(
+            taskId,
+            mkSet(partition1),
+            topology,
+            consumer,
+            config,
+            streamsMetrics,
+            stateDirectory,
+            cache,
+            time,
+            stateManager,
+            recordCollector,
+            context,
+            logContext
+        );
     }
 
     private ConsumerRecord<byte[], byte[]> getConsumerRecordWithOffsetAsTimestamp(final TopicPartition topicPartition,

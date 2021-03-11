@@ -85,6 +85,7 @@ import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.ExecutionException;
+import java.util.concurrent.Executor;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.TimeUnit;
 
@@ -175,7 +176,6 @@ public class WorkerWithTopicCreationTest extends ThreadedTest {
             ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.ByteArraySerializer");
         defaultProducerConfigs.put(
             ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.ByteArraySerializer");
-        defaultProducerConfigs.put(ProducerConfig.REQUEST_TIMEOUT_MS_CONFIG, Integer.toString(Integer.MAX_VALUE));
         defaultProducerConfigs.put(ProducerConfig.MAX_BLOCK_MS_CONFIG, Long.toString(Long.MAX_VALUE));
         defaultProducerConfigs.put(ProducerConfig.ACKS_CONFIG, "all");
         defaultProducerConfigs.put(ProducerConfig.MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION, "1");
@@ -1060,7 +1060,7 @@ public class WorkerWithTopicCreationTest extends ThreadedTest {
     @Test
     public void testProducerConfigsWithoutOverrides() {
         EasyMock.expect(connectorConfig.originalsWithPrefix(ConnectorConfig.CONNECTOR_CLIENT_PRODUCER_OVERRIDES_PREFIX)).andReturn(
-            new HashMap<String, Object>());
+            new HashMap<>());
         PowerMock.replayAll();
         Map<String, String> expectedConfigs = new HashMap<>(defaultProducerConfigs);
         expectedConfigs.put("client.id", "connector-producer-job-0");
@@ -1083,7 +1083,7 @@ public class WorkerWithTopicCreationTest extends ThreadedTest {
         expectedConfigs.put("client.id", "producer-test-id");
         expectedConfigs.put("metrics.context.connect.kafka.cluster.id", "test-cluster");
         EasyMock.expect(connectorConfig.originalsWithPrefix(ConnectorConfig.CONNECTOR_CLIENT_PRODUCER_OVERRIDES_PREFIX)).andReturn(
-            new HashMap<String, Object>());
+            new HashMap<>());
         PowerMock.replayAll();
         assertEquals(expectedConfigs,
                      Worker.producerConfigs(TASK_ID, "connector-producer-" + TASK_ID, configWithOverrides, connectorConfig, null, allConnectorClientConfigOverridePolicy, CLUSTER_ID));
@@ -1103,7 +1103,7 @@ public class WorkerWithTopicCreationTest extends ThreadedTest {
         expectedConfigs.put("batch.size", "1000");
         expectedConfigs.put("client.id", "producer-test-id");
         expectedConfigs.put("metrics.context.connect.kafka.cluster.id", "test-cluster");
-        Map<String, Object> connConfig = new HashMap<String, Object>();
+        Map<String, Object> connConfig = new HashMap<>();
         connConfig.put("linger.ms", "5000");
         connConfig.put("batch.size", "1000");
         EasyMock.expect(connectorConfig.originalsWithPrefix(ConnectorConfig.CONNECTOR_CLIENT_PRODUCER_OVERRIDES_PREFIX))
@@ -1160,7 +1160,7 @@ public class WorkerWithTopicCreationTest extends ThreadedTest {
         expectedConfigs.put("max.poll.interval.ms", "1000");
         expectedConfigs.put("client.id", "connector-consumer-test-1");
         expectedConfigs.put("metrics.context.connect.kafka.cluster.id", "test-cluster");
-        Map<String, Object> connConfig = new HashMap<String, Object>();
+        Map<String, Object> connConfig = new HashMap<>();
         connConfig.put("max.poll.records", "5000");
         connConfig.put("max.poll.interval.ms", "1000");
         EasyMock.expect(connectorConfig.originalsWithPrefix(ConnectorConfig.CONNECTOR_CLIENT_CONSUMER_OVERRIDES_PREFIX))
@@ -1196,7 +1196,7 @@ public class WorkerWithTopicCreationTest extends ThreadedTest {
         props.put("consumer.bootstrap.servers", "localhost:4761");
         WorkerConfig configWithOverrides = new StandaloneConfig(props);
 
-        Map<String, Object> connConfig = new HashMap<String, Object>();
+        Map<String, Object> connConfig = new HashMap<>();
         connConfig.put("metadata.max.age.ms", "10000");
 
         Map<String, String> expectedConfigs = new HashMap<>(workerProps);
@@ -1220,7 +1220,7 @@ public class WorkerWithTopicCreationTest extends ThreadedTest {
         props.put("admin.metadata.max.age.ms", "5000");
         WorkerConfig configWithOverrides = new StandaloneConfig(props);
 
-        Map<String, Object> connConfig = new HashMap<String, Object>();
+        Map<String, Object> connConfig = new HashMap<>();
         connConfig.put("metadata.max.age.ms", "10000");
 
         EasyMock.expect(connectorConfig.originalsWithPrefix(ConnectorConfig.CONNECTOR_CLIENT_ADMIN_OVERRIDES_PREFIX))
@@ -1390,7 +1390,8 @@ public class WorkerWithTopicCreationTest extends ThreadedTest {
                 EasyMock.eq(pluginLoader),
                 anyObject(Time.class),
                 anyObject(RetryWithToleranceOperator.class),
-                anyObject(StatusBackingStore.class))
+                anyObject(StatusBackingStore.class),
+                anyObject(Executor.class))
                 .andReturn(workerTask);
     }
 
