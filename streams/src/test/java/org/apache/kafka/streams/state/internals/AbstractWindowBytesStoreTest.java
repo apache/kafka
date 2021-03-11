@@ -711,8 +711,70 @@ public abstract class AbstractWindowBytesStoreTest {
     }
 
     @Test
+    public void testPutSameKeyTimestamp() {
+        windowStore = buildWindowStore(RETENTION_PERIOD, WINDOW_SIZE, true, Serdes.Integer(), Serdes.String());
+        windowStore.init((StateStoreContext) context, windowStore);
+
+        final long startTime = SEGMENT_INTERVAL - 4L;
+
+//        context.setRecordContext(createRecordContext(startTime));
+        windowStore.put(0, "zero", startTime);
+
+        assertEquals(
+            new HashSet<>(Collections.singletonList("zero")),
+            valuesToSet(windowStore.fetch(0, ofEpochMilli(startTime - WINDOW_SIZE),
+                ofEpochMilli(startTime + WINDOW_SIZE))));
+
+        windowStore.put(0, "zero", startTime);
+        windowStore.put(0, "zero+", startTime);
+        windowStore.put(0, "zero++", startTime);
+
+        assertEquals(
+            new HashSet<>(asList("zero", "zero", "zero+", "zero++")),
+            valuesToSet(windowStore.fetch(
+                0,
+                ofEpochMilli(startTime - WINDOW_SIZE),
+                ofEpochMilli(startTime + WINDOW_SIZE))));
+        assertEquals(
+            new HashSet<>(asList("zero", "zero", "zero+", "zero++")),
+            valuesToSet(windowStore.fetch(
+                0,
+                ofEpochMilli(startTime + 1L - WINDOW_SIZE),
+                ofEpochMilli(startTime + 1L + WINDOW_SIZE))));
+        assertEquals(
+            new HashSet<>(asList("zero", "zero", "zero+", "zero++")),
+            valuesToSet(windowStore.fetch(
+                0,
+                ofEpochMilli(startTime + 2L - WINDOW_SIZE),
+                ofEpochMilli(startTime + 2L + WINDOW_SIZE))));
+        assertEquals(
+            new HashSet<>(asList("zero", "zero", "zero+", "zero++")),
+            valuesToSet(windowStore.fetch(
+                0,
+                ofEpochMilli(startTime + 3L - WINDOW_SIZE),
+                ofEpochMilli(startTime + 3L + WINDOW_SIZE))));
+        assertEquals(
+            new HashSet<>(Collections.emptyList()),
+            valuesToSet(windowStore.fetch(
+                0,
+                ofEpochMilli(startTime + 4L - WINDOW_SIZE),
+                ofEpochMilli(startTime + 4L + WINDOW_SIZE))));
+
+        // Flush the store and verify all current entries were properly flushed ...
+        windowStore.flush();
+
+        final List<KeyValue<byte[], byte[]>> changeLog = new ArrayList<>();
+        for (final ProducerRecord<Object, Object> record : recordCollector.collected()) {
+            changeLog.add(new KeyValue<>(((Bytes) record.key()).get(), (byte[]) record.value()));
+        }
+
+        final Map<Integer, Set<String>> entriesByKey = entriesByKey(changeLog, startTime);
+
+        assertEquals(Utils.mkSet("zero@0", "zero@0", "zero+@0", "zero++@0"), entriesByKey.get(0));
+    }
+
+    @Test
     public void shouldCloseOpenIteratorsWhenStoreIsClosedAndNotThrowInvalidStateStoreExceptionOnHasNext() {
-        context.setRecordContext(createRecordContext(0));
         windowStore.put(1, "one", 1L);
         windowStore.put(1, "two", 2L);
         windowStore.put(1, "three", 3L);
