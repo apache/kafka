@@ -19,11 +19,10 @@ package kafka.raft
 import java.io.File
 import java.nio.file.Files
 import java.util
-import java.util.{OptionalInt, Properties}
+import java.util.OptionalInt
 import java.util.concurrent.CompletableFuture
 
-import kafka.api.ApiVersion
-import kafka.log.{Log, LogConfig}
+import kafka.log.Log
 import kafka.raft.KafkaRaftManager.RaftIoThread
 import kafka.server.{KafkaConfig, MetaProperties}
 import kafka.utils.timer.SystemTimer
@@ -242,16 +241,8 @@ class KafkaRaftManager[T](
   }
 
   private def buildMetadataLog(): KafkaMetadataLog = {
-    val props = new Properties()
-    props.put(LogConfig.MaxMessageBytesProp, KafkaRaftClient.MAX_BATCH_SIZE_BYTES.toString)
-    props.put(LogConfig.MessageFormatVersionProp, ApiVersion.latestVersion.toString)
-
-    LogConfig.validateValues(props)
-    val defaultLogConfig = LogConfig(props)
-
     KafkaMetadataLog(
       topicPartition,
-      defaultLogConfig,
       dataDir,
       time,
       scheduler,

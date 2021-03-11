@@ -19,8 +19,9 @@ package kafka.raft
 import java.io.{File, IOException}
 import java.nio.file.{Files, NoSuchFileException}
 import java.util.concurrent.ConcurrentSkipListSet
-import java.util.{NoSuchElementException, Optional}
+import java.util.{NoSuchElementException, Optional, Properties}
 
+import kafka.api.ApiVersion
 import kafka.log.{AppendOrigin, Log, LogConfig, LogOffsetSnapshot, SnapshotGenerated}
 import kafka.server.{BrokerTopicStats, FetchHighWatermark, FetchLogEnd, LogDirFailureChannel}
 import kafka.utils.{Logging, Scheduler}
@@ -34,13 +35,13 @@ import scala.compat.java8.OptionConverters._
 
 final class KafkaMetadataLog private (
   log: Log,
-  config: LogConfig,
   scheduler: Scheduler,
   // This object needs to be thread-safe because it is used by the snapshotting thread to notify the
   // polling thread when snapshots are created.
   snapshotIds: ConcurrentSkipListSet[OffsetAndEpoch],
   topicPartition: TopicPartition,
-  maxFetchSizeInBytes: Int
+  maxFetchSizeInBytes: Int,
+  val fileDeleteDelayMs: Long // Visible for testing,
 ) extends ReplicatedLog with Logging {
 
   override def read(startOffset: Long, readIsolation: Isolation): LogFetchInfo = {
@@ -303,7 +304,7 @@ final class KafkaMetadataLog private (
       scheduler.schedule(
         "delete-snapshot-file",
         () => Snapshots.deleteSnapshotIfExists(log.dir.toPath, snapshotId),
-        config.fileDeleteDelayMs)
+        fileDeleteDelayMs)
     }
   }
 
@@ -316,13 +317,18 @@ object KafkaMetadataLog {
 
   def apply(
     topicPartition: TopicPartition,
-    defaultLogConfig: LogConfig,
     dataDir: File,
     time: Time,
     scheduler: Scheduler,
     maxBatchSizeInBytes: Int,
     maxFetchSizeInBytes: Int
   ): KafkaMetadataLog = {
+    val props = new Properties()
+    props.put(LogConfig.MaxMessageBytesProp, maxBatchSizeInBytes.toString)
+    props.put(LogConfig.MessageFormatVersionProp, ApiVersion.latestVersion.toString)
+
+    LogConfig.validateValues(props)
+    val defaultLogConfig = LogConfig(props)
 
     val log = Log(
       dir = dataDir,
@@ -340,11 +346,11 @@ object KafkaMetadataLog {
 
     val metadataLog = new KafkaMetadataLog(
       log,
-      defaultLogConfig,
       scheduler,
       recoverSnapshots(log),
       topicPartition,
-      maxFetchSizeInBytes
+      maxFetchSizeInBytes,
+      defaultLogConfig.fileDeleteDelayMs
     )
 
     // When recovering, truncate fully if the latest snapshot is after the log end offset. This can happen to a follower
