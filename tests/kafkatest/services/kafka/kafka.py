@@ -947,7 +947,7 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
     def all_nodes_support_topic_ids(self):
         if self.quorum_info.using_raft: return True
         for node in self.nodes:
-            if not self.node_inter_broker_protocol_version(node).zk_supports_topic_ids():
+            if not self.node_inter_broker_protocol_version(node).supports_topic_ids_when_using_zk():
                 return False
         return True
 
@@ -1121,8 +1121,8 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
 
     def parse_describe_topic(self, topic_description):
         """Parse output of kafka-topics.sh --describe (or describe_topic() method above), which is a string of form
-        Topic:test_topic\tTopicId:<topic_id>\tPartitionCount:2\tReplicationFactor:2\tConfigs:
-            Topic: test_topic\ttPartition: 0\tLeader: 3\tReplicas: 3,1\tIsr: 3,1
+        Topic: test_topic\tTopicId: <topic_id>\tPartitionCount: 2\tReplicationFactor: 2\tConfigs:
+            Topic: test_topic\tPartition: 0\tLeader: 3\tReplicas: 3,1\tIsr: 3,1
             Topic: test_topic\tPartition: 1\tLeader: 1\tReplicas: 1,2\tIsr: 1,2
         into a dictionary structure appropriate for use with reassign-partitions tool:
         {

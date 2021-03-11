@@ -101,7 +101,7 @@ class KafkaVersion(LooseVersion):
         # User SCRAM Credentials (KIP-554)
         return self >= V_2_7_0
 
-    def zk_supports_topic_ids(self):
+    def supports_topic_ids_when_using_zk(self):
         # Supports topic IDs as described by KIP-516
         return self >= V_2_8_0
 
