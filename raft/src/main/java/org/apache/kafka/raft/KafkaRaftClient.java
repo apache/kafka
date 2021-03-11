@@ -317,12 +317,13 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
         for (ListenerContext listenerContext : listenerContexts) {
             listenerContext.nextExpectedOffset().ifPresent(nextExpectedOffset -> {
                 if (nextExpectedOffset < log.startOffset() && nextExpectedOffset < highWatermark) {
-                    SnapshotReader<T> snapshot = oldestSnapshot().orElseThrow(() -> {
+                    SnapshotReader<T> snapshot = earliestSnapshot().orElseThrow(() -> {
                         return new IllegalStateException(
                             String.format(
-                                "Snapshot expected when next offset is %s and log start offset is %s",
+                                "Snapshot expected when next offset is %s, log start offset is %s and high-watermark is %s",
                                 nextExpectedOffset,
-                                log.startOffset()
+                                log.startOffset(),
+                                highWatermark
                             )
                         );
                     });
@@ -340,15 +341,15 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
         }
     }
 
-    private Optional<SnapshotReader<T>> oldestSnapshot() {
-        return log.oldestSnapshotId().flatMap(oldestSnapshotId -> {
+    private Optional<SnapshotReader<T>> earliestSnapshot() {
+        return log.earliestSnapshotId().flatMap(earliestSnapshoId -> {
             try {
                 return log
-                    .readSnapshot(oldestSnapshotId)
+                    .readSnapshot(earliestSnapshoId)
                     .map(reader -> new SnapshotReader<>(reader, serde, BufferSupplier.create()));
             } catch (IOException e) {
                 logger.error(
-                    String.format("Unable to read snapshot: %s", oldestSnapshotId),
+                    String.format("Unable to read snapshot: %s", earliestSnapshoId),
                     e
                 );
 
