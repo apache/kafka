@@ -17,18 +17,17 @@
 
 package kafka.log
 
-import java.io.{File, RandomAccessFile}
+import java.io.{BufferedWriter, File, FileWriter, RandomAccessFile}
 import java.nio._
 import java.nio.charset.StandardCharsets
 import java.nio.file.Paths
 import java.util.Properties
 import java.util.concurrent.{CountDownLatch, TimeUnit}
-
 import kafka.common._
 import kafka.server.{BrokerTopicStats, LogDirFailureChannel}
 import kafka.utils._
 import org.apache.kafka.common.TopicPartition
-import org.apache.kafka.common.errors.CorruptRecordException
+import org.apache.kafka.common.errors.{CorruptRecordException, KafkaStorageException}
 import org.apache.kafka.common.record._
 import org.apache.kafka.common.utils.Utils
 import org.junit.jupiter.api.Assertions._
@@ -1424,6 +1423,87 @@ class LogCleanerTest {
     //    is not yet complete. Clean operation is resumed during recovery.
     log = recoverAndCheck(config, cleanedKeys)
     log.close()
+  }
+
+  @Test
+  def testRecoveryRebuildsIndices(): Unit = {
+    val cleaner = makeCleaner(Int.MaxValue)
+    val logProps = new Properties()
+    logProps.put(LogConfig.SegmentBytesProp, 300: java.lang.Integer)
+    logProps.put(LogConfig.IndexIntervalBytesProp, 1: java.lang.Integer)
+    logProps.put(LogConfig.FileDeleteDelayMsProp, 10: java.lang.Integer)
+
+    val config = LogConfig.fromProps(logConfig.originals, logProps)
+
+    // create a log and append some messages
+    var log = makeLog(config = config)
+    var messageCount = 0
+    while (log.numberOfSegments < 10) {
+      log.appendAsLeader(record(log.logEndOffset.toInt, log.logEndOffset.toInt), leaderEpoch = 0)
+      messageCount += 1
+    }
+
+    // pretend we have odd-numbered keys
+    val offsetMap = new FakeOffsetMap(Int.MaxValue)
+    for (k <- 1 until messageCount by 2)
+      offsetMap.put(key(k), Long.MaxValue)
+
+    // clean the log
+    cleaner.cleanSegments(log, log.logSegments.take(5).toSeq, offsetMap, 0L, new CleanerStats(),
+      new CleanedTransactionMetadata)
+    // clear scheduler so that async deletes don't run
+    time.scheduler.clear()
+    val cleanedKeys = LogTest.keysInLog(log)
+
+    // pretend we are cleaning one of the segments in the log
+    val segmentBeingCleaned = log.logSegments.take(5).last
+    val offsetIndex = segmentBeingCleaned.offsetIndex
+    offsetIndex.sanityCheck()
+    val allEntries =
+      for (entryNum <- 0 until offsetIndex.entries)
+        yield offsetIndex.entry(entryNum)
+
+    // Simulate log recovery after swap file is created and old segment is deleted. Also delete the corresponding
+    // offset index and validate that it is recreated after recovery.
+    log.close()
+    segmentBeingCleaned.changeFileSuffixes("", Log.SwapFileSuffix)
+    segmentBeingCleaned.offsetIndex.deleteIfExists()
+    log = recoverAndCheck(config, cleanedKeys)
+    val recoveredSegment = log.logSegments.find(_.baseOffset == segmentBeingCleaned.baseOffset).get
+    val recoveredOffsetIndex = recoveredSegment.offsetIndex
+    val recoveredEntries =
+      for (entryNum <- 0 until recoveredOffsetIndex.entries)
+        yield recoveredOffsetIndex.entry(entryNum)
+    assertEquals(allEntries, recoveredEntries)
+  }
+
+  @Test
+  def testRecoveryWithCorruptedSegment(): Unit = {
+    val logProps = new Properties()
+    logProps.put(LogConfig.SegmentBytesProp, 300: java.lang.Integer)
+    logProps.put(LogConfig.IndexIntervalBytesProp, 1: java.lang.Integer)
+    logProps.put(LogConfig.FileDeleteDelayMsProp, 10: java.lang.Integer)
+
+    val config = LogConfig.fromProps(logConfig.originals, logProps)
+
+    // create a log and append some messages
+    val log = makeLog(config = config)
+    var messageCount = 0
+    while (log.numberOfSegments < 10) {
+      log.appendAsLeader(record(log.logEndOffset.toInt, log.logEndOffset.toInt), leaderEpoch = 0)
+      messageCount += 1
+    }
+    log.close()
+
+    // pretend we are cleaning one of the segments in the log
+    val segmentBeingCleaned = log.logSegments.take(5).last
+    segmentBeingCleaned.changeFileSuffixes("", Log.SwapFileSuffix)
+    val bw = new BufferedWriter(new FileWriter(segmentBeingCleaned.log.file))
+    bw.write("corruptRecord")
+    bw.close()
+
+    // reopening the log will fail because of the corrupted log
+    assertThrows(classOf[KafkaStorageException], () => makeLog(config = config))
   }
 
   @Test

@@ -27,6 +27,7 @@ import kafka.server.{FetchDataInfo, LogOffsetMetadata}
 import kafka.utils._
 import org.apache.kafka.common.InvalidRecordException
 import org.apache.kafka.common.errors.CorruptRecordException
+import org.apache.kafka.common.record.FileLogInputStream.FileChannelRecordBatch
 import org.apache.kafka.common.record.FileRecords.{LogOffsetPosition, TimestampAndOffset}
 import org.apache.kafka.common.record._
 import org.apache.kafka.common.utils.{BufferSupplier, Time}
@@ -322,17 +323,14 @@ class LogSegment private[log] (val log: FileRecords,
      offsetIndex.fetchUpperBoundOffset(startOffsetPosition, fetchSize).map(_.offset)
 
   /**
-   * Run recovery on the given segment. This will rebuild the index from the log file and lop off any invalid bytes
-   * from the end of the log and index.
+   * Ensure batches in the segment are valid and rebuild all corresponding indices.
    *
-   * @param producerStateManager Producer state corresponding to the segment's base offset. This is needed to recover
-   *                             the transaction index.
-   * @param leaderEpochCache Optionally a cache for updating the leader epoch during recovery.
-   * @return The number of bytes truncated from the log
+   * @param batchCallbackOpt Optional callback invoked for all valid batches in segment
+   * @return The number of invalid bytes at the end of the segment
    * @throws LogSegmentOffsetOverflowException if the log segment contains an offset that causes the index offset to overflow
    */
   @nonthreadsafe
-  def recover(producerStateManager: ProducerStateManager, leaderEpochCache: Option[LeaderEpochFileCache] = None): Int = {
+  def validateSegmentAndRebuildIndices(batchCallbackOpt: Option[FileChannelRecordBatch => Unit] = None) : Int = {
     offsetIndex.reset()
     timeIndex.reset()
     txnIndex.reset()
@@ -358,12 +356,8 @@ class LogSegment private[log] (val log: FileRecords,
         }
         validBytes += batch.sizeInBytes()
 
-        if (batch.magic >= RecordBatch.MAGIC_VALUE_V2) {
-          leaderEpochCache.foreach { cache =>
-            if (batch.partitionLeaderEpoch >= 0 && cache.latestEpoch.forall(batch.partitionLeaderEpoch > _))
-              cache.assign(batch.partitionLeaderEpoch, batch.baseOffset)
-          }
-          updateProducerState(producerStateManager, batch)
+        batchCallbackOpt.foreach { callback =>
+          callback(batch)
         }
       }
     } catch {
@@ -371,16 +365,43 @@ class LogSegment private[log] (val log: FileRecords,
         warn("Found invalid messages in log segment %s at byte offset %d: %s. %s"
           .format(log.file.getAbsolutePath, validBytes, e.getMessage, e.getCause))
     }
-    val truncated = log.sizeInBytes - validBytes
-    if (truncated > 0)
-      debug(s"Truncated $truncated invalid bytes at the end of segment ${log.file.getAbsoluteFile} during recovery")
+
+    log.sizeInBytes - validBytes
+  }
+
+  /**
+   * Run recovery on the given segment. This will rebuild the index from the log file and lop off any invalid bytes
+   * from the end of the log and index.
+   *
+   * @param producerStateManager Producer state corresponding to the segment's base offset. This is needed to recover
+   *                             the transaction index.
+   * @param leaderEpochCache Optionally a cache for updating the leader epoch during recovery.
+   * @return The number of bytes truncated from the log
+   * @throws LogSegmentOffsetOverflowException if the log segment contains an offset that causes the index offset to overflow
+   */
+  @nonthreadsafe
+  def recover(producerStateManager: ProducerStateManager, leaderEpochCache: Option[LeaderEpochFileCache] = None): Int = {
+    def callback(batch: FileChannelRecordBatch): Unit = {
+      if (batch.magic >= RecordBatch.MAGIC_VALUE_V2) {
+        leaderEpochCache.foreach { cache =>
+          if (batch.partitionLeaderEpoch >= 0 && cache.latestEpoch.forall(batch.partitionLeaderEpoch > _))
+            cache.assign(batch.partitionLeaderEpoch, batch.baseOffset)
+        }
+        updateProducerState(producerStateManager, batch)
+      }
+    }
+
+    val invalidBytes = validateSegmentAndRebuildIndices(Some(callback))
+    val validBytes = log.sizeInBytes - invalidBytes
+    if (invalidBytes > 0)
+      debug(s"Truncating $invalidBytes invalid bytes at the end of segment ${log.file.getAbsoluteFile} during recovery")
 
     log.truncateTo(validBytes)
     offsetIndex.trimToValidSize()
     // A normally closed segment always appends the biggest timestamp ever seen into log segment, we do this as well.
     timeIndex.maybeAppend(maxTimestampSoFar, offsetOfMaxTimestampSoFar, skipFullCheck = true)
     timeIndex.trimToValidSize()
-    truncated
+    invalidBytes
   }
 
   private def loadLargestTimestamp(): Unit = {

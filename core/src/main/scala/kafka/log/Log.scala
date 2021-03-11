@@ -749,7 +749,8 @@ class Log(@volatile private var _dir: File,
         time = time,
         fileSuffix = SwapFileSuffix)
       info(s"Found log file ${swapFile.getPath} from interrupted swap operation, repairing.")
-      recoverSegment(swapSegment)
+      if (swapSegment.validateSegmentAndRebuildIndices() > 0)
+        throw new KafkaStorageException("Found invalid or corrupted messages in swap segment " + swapSegment.log.file());
 
       // We create swap files for two cases:
       // (1) Log cleaning where multiple segments are merged into one, and
