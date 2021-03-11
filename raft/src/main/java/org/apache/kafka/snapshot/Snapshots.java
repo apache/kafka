@@ -16,16 +16,21 @@
  */
 package org.apache.kafka.snapshot;
 
+import org.apache.kafka.raft.OffsetAndEpoch;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.text.NumberFormat;
 import java.util.Optional;
-import org.apache.kafka.raft.OffsetAndEpoch;
 
 public final class Snapshots {
-    private static final String SUFFIX =  ".checkpoint";
+    private static final Logger log = LoggerFactory.getLogger(Snapshots.class);
+    private static final String SUFFIX = ".checkpoint";
     private static final String PARTIAL_SUFFIX = String.format("%s.part", SUFFIX);
+    private static final String DELETE_SUFFIX = String.format("%s.deleted", SUFFIX);
 
     private static final NumberFormat OFFSET_FORMATTER = NumberFormat.getInstance();
     private static final NumberFormat EPOCH_FORMATTER = NumberFormat.getInstance();
@@ -45,7 +50,7 @@ public final class Snapshots {
         return logDir;
     }
 
-    static Path snapshotPath(Path logDir, OffsetAndEpoch snapshotId) {
+    public static Path snapshotPath(Path logDir, OffsetAndEpoch snapshotId) {
         return snapshotDir(logDir).resolve(filenameFromSnapshotId(snapshotId) + SUFFIX);
     }
 
@@ -55,6 +60,10 @@ public final class Snapshots {
 
     static Path moveRename(Path source, OffsetAndEpoch snapshotId) {
         return source.resolveSibling(filenameFromSnapshotId(snapshotId) + SUFFIX);
+    }
+
+    public static Path deleteRename(Path source, OffsetAndEpoch snapshotId) {
+        return source.resolveSibling(filenameFromSnapshotId(snapshotId) + DELETE_SUFFIX);
     }
 
     public static Path createTempFile(Path logDir, OffsetAndEpoch snapshotId) throws IOException {
@@ -76,12 +85,13 @@ public final class Snapshots {
 
         String name = filename.toString();
 
-        boolean partial;
+        boolean partial = false;
+        boolean deleted = false;
         if (name.endsWith(PARTIAL_SUFFIX)) {
             partial = true;
-        } else if (name.endsWith(SUFFIX)) {
-            partial = false;
-        } else {
+        } else if (name.endsWith(DELETE_SUFFIX)) {
+            deleted = true;
+        } else if (!name.endsWith(SUFFIX)) {
             return Optional.empty();
         }
 
@@ -90,6 +100,22 @@ public final class Snapshots {
             name.substring(OFFSET_WIDTH + 1, OFFSET_WIDTH + EPOCH_WIDTH + 1)
         );
 
-        return Optional.of(new SnapshotPath(path, new OffsetAndEpoch(endOffset, epoch), partial));
+        return Optional.of(new SnapshotPath(path, new OffsetAndEpoch(endOffset, epoch), partial, deleted));
     }
+
+    /**
+     * Delete the snapshot from the filesystem, the caller may firstly rename snapshot file to
+     * ${file}.deleted, so we try to delete the file as well as the renamed file if exists.
+     */
+    public static boolean deleteSnapshotIfExists(Path logDir, OffsetAndEpoch snapshotId) {
+        Path immutablePath = Snapshots.snapshotPath(logDir, snapshotId);
+        Path deletingPath = Snapshots.deleteRename(immutablePath, snapshotId);
+        try {
+            return Files.deleteIfExists(immutablePath) | Files.deleteIfExists(deletingPath);
+        } catch (IOException e) {
+            log.error("Error deleting snapshot file " + deletingPath, e);
+            return false;
+        }
+    }
+
 }

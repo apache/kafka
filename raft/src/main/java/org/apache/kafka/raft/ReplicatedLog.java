@@ -85,10 +85,10 @@ public interface ReplicatedLog extends Closeable {
         if (startOffset() == 0 && offset == 0) {
             return ValidOffsetAndEpoch.valid(new OffsetAndEpoch(0, 0));
         } else if (
-                oldestSnapshotId().isPresent() &&
+                earliestSnapshotId().isPresent() &&
                 ((offset < startOffset()) ||
-                 (offset == startOffset() && epoch != oldestSnapshotId().get().epoch) ||
-                 (epoch < oldestSnapshotId().get().epoch))
+                 (offset == startOffset() && epoch != earliestSnapshotId().get().epoch) ||
+                 (epoch < earliestSnapshotId().get().epoch))
         ) {
             /* Send a snapshot if the leader has a snapshot at the log start offset and
              * 1. the fetch offset is less than the log start offset or
@@ -96,15 +96,12 @@ public interface ReplicatedLog extends Closeable {
              *    the oldest snapshot or
              * 3. last fetch epoch is less than the oldest snapshot's epoch
              */
-
-            OffsetAndEpoch latestSnapshotId = latestSnapshotId().orElseThrow(() -> {
-                return new IllegalStateException(
-                    String.format(
-                        "Log start offset (%s) is greater than zero but latest snapshot was not found",
-                        startOffset()
-                    )
-                );
-            });
+            OffsetAndEpoch latestSnapshotId = latestSnapshotId().orElseThrow(() -> new IllegalStateException(
+                String.format(
+                    "Log start offset (%s) is greater than zero but latest snapshot was not found",
+                    startOffset()
+                )
+            ));
 
             return ValidOffsetAndEpoch.snapshot(latestSnapshotId);
         } else {
@@ -263,7 +260,7 @@ public interface ReplicatedLog extends Closeable {
      * @return an Optional snapshot id at the log start offset if nonzero, otherwise returns an empty
      *         Optional
      */
-    Optional<OffsetAndEpoch> oldestSnapshotId();
+    Optional<OffsetAndEpoch> earliestSnapshotId();
 
     /**
      * Notifies the replicated log when a new snapshot is available.

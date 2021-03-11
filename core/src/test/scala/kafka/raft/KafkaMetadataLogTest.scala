@@ -32,13 +32,13 @@ import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.raft.internals.BatchBuilder
 import org.apache.kafka.raft.{KafkaRaftClient, LogAppendInfo, LogOffsetMetadata, OffsetAndEpoch, RecordSerde, ReplicatedLog}
 import org.apache.kafka.snapshot.{SnapshotPath, Snapshots}
-import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertThrows, assertTrue}
+import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertNotEquals, assertThrows, assertTrue}
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
 
 final class KafkaMetadataLogTest {
   import KafkaMetadataLogTest._
 
-  var tempDir: File = null
+  var tempDir: File = _
   val mockTime = new MockTime()
 
   @BeforeEach
@@ -143,6 +143,39 @@ final class KafkaMetadataLogTest {
   }
 
   @Test
+  def testUpdateLogStartOffsetWillRemoveOlderSnapshot(): Unit = {
+    val (logDir, log) = buildMetadataLogAndDir(tempDir, mockTime)
+    val offset = 10
+    val epoch = 0
+
+    append(log, offset, epoch)
+    val oldSnapshotId = new OffsetAndEpoch(offset, epoch)
+    TestUtils.resource(log.createSnapshot(oldSnapshotId)) { snapshot =>
+      snapshot.freeze()
+    }
+
+    append(log, offset, epoch, log.endOffset.offset)
+    val newSnapshotId = new OffsetAndEpoch(offset * 2, epoch)
+    TestUtils.resource(log.createSnapshot(newSnapshotId)) { snapshot =>
+      snapshot.freeze()
+    }
+
+    log.updateHighWatermark(new LogOffsetMetadata(offset * 2))
+    assertTrue(log.deleteBeforeSnapshot(newSnapshotId))
+    log.close()
+
+    mockTime.sleep(log.fileDeleteDelayMs)
+    // Assert that the log dir doesn't contain any older snapshots
+    Files
+      .walk(logDir, 1)
+      .map[Optional[SnapshotPath]](Snapshots.parse)
+      .filter(_.isPresent)
+      .forEach { path =>
+        assertFalse(path.get.snapshotId.offset < log.startOffset)
+      }
+  }
+
+  @Test
   def testUpdateLogStartOffsetWithMissingSnapshot(): Unit = {
     val log = buildMetadataLog(tempDir, mockTime)
     val offset = 10
@@ -213,6 +246,53 @@ final class KafkaMetadataLogTest {
   }
 
   @Test
+  def testTruncateWillRemoveOlderSnapshot(): Unit = {
+
+    val (logDir, log) = buildMetadataLogAndDir(tempDir, mockTime)
+    val numberOfRecords = 10
+    val epoch = 1
+
+    append(log, 1, epoch - 1)
+    val oldSnapshotId1 = new OffsetAndEpoch(1, epoch - 1)
+    TestUtils.resource(log.createSnapshot(oldSnapshotId1)) { snapshot =>
+      snapshot.freeze()
+    }
+
+    append(log, 1, epoch, log.endOffset.offset)
+    val oldSnapshotId2 = new OffsetAndEpoch(2, epoch)
+    TestUtils.resource(log.createSnapshot(oldSnapshotId2)) { snapshot =>
+      snapshot.freeze()
+    }
+
+    append(log, numberOfRecords - 2, epoch, log.endOffset.offset)
+    val oldSnapshotId3 = new OffsetAndEpoch(numberOfRecords, epoch)
+    TestUtils.resource(log.createSnapshot(oldSnapshotId3)) { snapshot =>
+      snapshot.freeze()
+    }
+
+    val greaterSnapshotId = new OffsetAndEpoch(3 * numberOfRecords, epoch)
+    append(log, numberOfRecords, epoch, log.endOffset.offset)
+    TestUtils.resource(log.createSnapshot(greaterSnapshotId)) { snapshot =>
+      snapshot.freeze()
+    }
+
+    assertNotEquals(log.earliestSnapshotId(), log.latestSnapshotId())
+    assertTrue(log.truncateToLatestSnapshot())
+    assertEquals(log.earliestSnapshotId(), log.latestSnapshotId())
+    log.close()
+
+    mockTime.sleep(log.fileDeleteDelayMs)
+    // Assert that the log dir doesn't contain any older snapshots
+    Files
+      .walk(logDir, 1)
+      .map[Optional[SnapshotPath]](Snapshots.parse)
+      .filter(_.isPresent)
+      .forEach { path =>
+        assertFalse(path.get.snapshotId.offset < log.startOffset)
+      }
+  }
+
+  @Test
   def testDoesntTruncateFully(): Unit = {
     val log = buildMetadataLog(tempDir, mockTime)
     val numberOfRecords = 10
@@ -238,7 +318,7 @@ final class KafkaMetadataLogTest {
   }
 
   @Test
-  def testCleanupSnapshots(): Unit = {
+  def testCleanupPartialSnapshots(): Unit = {
     val (logDir, log) = buildMetadataLogAndDir(tempDir, mockTime)
     val numberOfRecords = 10
     val epoch = 1
@@ -258,7 +338,7 @@ final class KafkaMetadataLogTest {
 
     val secondLog = buildMetadataLog(tempDir, mockTime)
 
-    assertEquals(snapshotId, secondLog.latestSnapshotId.get)
+    assertEquals(snapshotId, secondLog.latestSnapshotId().get)
     assertEquals(0, log.startOffset)
     assertEquals(epoch, log.lastFetchedEpoch)
     assertEquals(numberOfRecords, log.endOffset().offset)
@@ -271,6 +351,55 @@ final class KafkaMetadataLogTest {
       .filter(_.isPresent)
       .forEach { path =>
         assertFalse(path.get.partial)
+      }
+  }
+
+  @Test
+  def testCleanupOlderSnapshots(): Unit = {
+    val (logDir, log) = buildMetadataLogAndDir(tempDir, mockTime)
+    val numberOfRecords = 10
+    val epoch = 1
+
+    append(log, 1, epoch - 1)
+    val oldSnapshotId1 = new OffsetAndEpoch(1, epoch - 1)
+    TestUtils.resource(log.createSnapshot(oldSnapshotId1)) { snapshot =>
+      snapshot.freeze()
+    }
+
+    append(log, 1, epoch, log.endOffset.offset)
+    val oldSnapshotId2 = new OffsetAndEpoch(2, epoch)
+    TestUtils.resource(log.createSnapshot(oldSnapshotId2)) { snapshot =>
+      snapshot.freeze()
+    }
+
+    append(log, numberOfRecords - 2, epoch, log.endOffset.offset)
+    val oldSnapshotId3 = new OffsetAndEpoch(numberOfRecords, epoch)
+    TestUtils.resource(log.createSnapshot(oldSnapshotId3)) { snapshot =>
+      snapshot.freeze()
+    }
+
+    val greaterSnapshotId = new OffsetAndEpoch(3 * numberOfRecords, epoch)
+    append(log, numberOfRecords, epoch, log.endOffset.offset)
+    TestUtils.resource(log.createSnapshot(greaterSnapshotId)) { snapshot =>
+      snapshot.freeze()
+    }
+
+    log.close()
+
+    val secondLog = buildMetadataLog(tempDir, mockTime)
+
+    assertEquals(greaterSnapshotId, secondLog.latestSnapshotId().get)
+    assertEquals(3 * numberOfRecords, secondLog.startOffset)
+    assertEquals(epoch, secondLog.lastFetchedEpoch)
+    mockTime.sleep(log.fileDeleteDelayMs)
+
+    // Assert that the log dir doesn't contain any older snapshots
+    Files
+      .walk(logDir, 1)
+      .map[Optional[SnapshotPath]](Snapshots.parse)
+      .filter(_.isPresent)
+      .forEach { path =>
+        assertFalse(path.get.snapshotId.offset < log.startOffset)
       }
   }
 
@@ -290,7 +419,7 @@ final class KafkaMetadataLogTest {
 
     val secondLog = buildMetadataLog(tempDir, mockTime)
 
-    assertEquals(snapshotId, secondLog.latestSnapshotId.get)
+    assertEquals(snapshotId, secondLog.latestSnapshotId().get)
     assertEquals(snapshotId.offset, secondLog.startOffset)
     assertEquals(snapshotId.epoch, secondLog.lastFetchedEpoch)
     assertEquals(snapshotId.offset, secondLog.endOffset().offset)
@@ -406,7 +535,7 @@ object KafkaMetadataLogTest {
   private def createLogDirectory(logDir: File, logDirName: String): File = {
     val logDirPath = logDir.getAbsolutePath
     val dir = new File(logDirPath, logDirName)
-    if (!Files.exists((dir.toPath))) {
+    if (!Files.exists(dir.toPath)) {
       Files.createDirectories(dir.toPath)
     }
     dir
