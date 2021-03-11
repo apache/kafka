@@ -284,6 +284,7 @@ class GroupMetadataManager(brokerId: Int,
               val s = elements(i)
               System.err.print(" - " + "(" + s.getFileName + ":" + s.getLineNumber + ")")
             }
+            
 
             // transform the log append error code to the corresponding the commit status error code
             status.error match {
