@@ -58,6 +58,7 @@ import org.apache.kafka.connect.storage.StringConverter;
 import org.apache.kafka.connect.transforms.Transformation;
 import org.apache.kafka.connect.transforms.util.SimpleConfig;
 import org.apache.kafka.connect.util.ConnectorTaskId;
+import org.apache.kafka.connect.util.ParameterizedTest;
 import org.apache.kafka.connect.util.TopicAdmin;
 import org.apache.kafka.connect.util.TopicCreationGroup;
 import org.easymock.Capture;
@@ -67,8 +68,6 @@ import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
-import org.junit.runners.Parameterized;
-import org.junit.runners.Parameterized.Parameters;
 import org.powermock.api.easymock.PowerMock;
 import org.powermock.api.easymock.annotation.Mock;
 import org.powermock.core.classloader.annotations.PowerMockIgnore;
@@ -103,7 +102,7 @@ import static org.apache.kafka.connect.runtime.WorkerConfig.TOPIC_CREATION_ENABL
 import static org.junit.Assert.assertEquals;
 
 @RunWith(PowerMockRunner.class)
-@PowerMockRunnerDelegate(Parameterized.class)
+@PowerMockRunnerDelegate(ParameterizedTest.class)
 @PrepareForTest({WorkerSinkTask.class, WorkerSourceTask.class})
 @PowerMockIgnore("javax.management.*")
 public class ErrorHandlingTaskTest {
@@ -176,7 +175,7 @@ public class ErrorHandlingTaskTest {
 
     private boolean enableTopicCreation;
 
-    @Parameters
+    @ParameterizedTest.Parameters
     public static Collection<Boolean> parameters() {
         return Arrays.asList(false, true);
     }

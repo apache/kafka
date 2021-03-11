@@ -56,6 +56,7 @@ import org.apache.kafka.connect.storage.StatusBackingStore;
 import org.apache.kafka.connect.storage.StringConverter;
 import org.apache.kafka.connect.util.Callback;
 import org.apache.kafka.connect.util.ConnectorTaskId;
+import org.apache.kafka.connect.util.ParameterizedTest;
 import org.apache.kafka.connect.util.ThreadedTest;
 import org.apache.kafka.connect.util.TopicAdmin;
 import org.apache.kafka.connect.util.TopicCreationGroup;
@@ -66,8 +67,6 @@ import org.easymock.IExpectationSetters;
 import org.junit.After;
 import org.junit.Test;
 import org.junit.runner.RunWith;
-import org.junit.runners.Parameterized;
-import org.junit.runners.Parameterized.Parameters;
 import org.powermock.api.easymock.PowerMock;
 import org.powermock.api.easymock.annotation.Mock;
 import org.powermock.api.easymock.annotation.MockStrict;
@@ -114,7 +113,7 @@ import static org.junit.Assert.assertTrue;
 @PowerMockIgnore({"javax.management.*",
                   "org.apache.log4j.*"})
 @RunWith(PowerMockRunner.class)
-@PowerMockRunnerDelegate(Parameterized.class)
+@PowerMockRunnerDelegate(ParameterizedTest.class)
 public class WorkerSourceTaskTest extends ThreadedTest {
     private static final String TOPIC = "topic";
     private static final String OTHER_TOPIC = "other-topic";
@@ -167,7 +166,7 @@ public class WorkerSourceTaskTest extends ThreadedTest {
 
     private boolean enableTopicCreation;
 
-    @Parameters
+    @ParameterizedTest.Parameters
     public static Collection<Boolean> parameters() {
         return Arrays.asList(false, true);
     }
