@@ -684,6 +684,11 @@ object ConsumerGroupCommand extends Logging {
         case (topicPartition, listOffsetsResultInfo) => topicPartition -> LogOffsetResult.LogOffset(listOffsetsResultInfo.offset)
       }.toMap
 
+      unsuccessfulOffsetsForTimes.foreach { entry =>
+        println(s"\nWarn: Partition " + entry._1.partition() + " from topic " + entry._1.topic() +
+          " is empty. Falling back to latest known offset.")
+      }
+
       successfulLogTimestampOffsets ++ getLogEndOffsets(groupId, unsuccessfulOffsetsForTimes.keySet.toSeq)
     }
 
