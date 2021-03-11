@@ -158,7 +158,7 @@
               files="StreamThread.java"/>
 
     <suppress checks="ClassDataAbstractionCoupling"
-              files="(KStreamImpl|KTableImpl).java"/>
+              files="(KStreamImpl|KTableImpl|WorkerSourceTaskTest).java"/>
 
     <suppress checks="CyclomaticComplexity"
               files="(StreamsPartitionAssignor|StreamThread|TaskManager|PartitionGroup).java"/>
