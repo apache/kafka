@@ -40,10 +40,15 @@ object LogDirsCommand {
         val opts = new LogDirsCommandOptions(args)
         val adminClient = createAdminClient(opts)
         val topicList = opts.options.valueOf(opts.topicListOpt).split(",").filter(!_.isEmpty)
+        val clusterBrokers: Array[Int] = adminClient.describeCluster().nodes().get().asScala.map(_.id()).toArray
         val brokerList = Option(opts.options.valueOf(opts.brokerListOpt)) match {
             case Some(brokerListStr) => brokerListStr.split(',').filter(!_.isEmpty).map(_.toInt)
-            case None => adminClient.describeCluster().nodes().get().asScala.map(_.id()).toArray
+            case None => clusterBrokers
         }
+
+        val nonExistBrokers: Array[Int] = brokerList.filterNot(brokerId => clusterBrokers.contains(brokerId))
+        if (!nonExistBrokers.isEmpty)
+            System.err.println(s"The given node(s) does not exist from broker-list ${nonExistBrokers.mkString(",")}")
 
         out.println("Querying brokers for log directories information")
         val describeLogDirsResult: DescribeLogDirsResult = adminClient.describeLogDirs(brokerList.map(Integer.valueOf).toSeq.asJava)
