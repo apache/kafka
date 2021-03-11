@@ -283,6 +283,7 @@
     <allow pkg="org.apache.kafka.queue"/>
     <allow pkg="org.apache.kafka.raft"/>
     <allow pkg="org.apache.kafka.shell"/>
+    <allow pkg="org.apache.kafka.snapshot"/>
     <allow pkg="org.apache.log4j" />
     <allow pkg="org.jline"/>
     <allow pkg="scala.compat"/>

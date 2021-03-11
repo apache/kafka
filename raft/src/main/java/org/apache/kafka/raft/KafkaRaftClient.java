@@ -2452,6 +2452,7 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
 
         public synchronized void onClose(BatchReader<T> reader) {
             OptionalLong lastOffset = reader.lastOffset();
+
             if (lastOffset.isPresent()) {
                 nextOffset = lastOffset.getAsLong() + 1;
             }

@@ -358,33 +358,30 @@ public class MockLog implements ReplicatedLog {
         }
 
         ByteBuffer buffer = ByteBuffer.allocate(512);
-        LogEntry firstEntry = null;
+        LogOffsetMetadata batchStartOffset = null;
 
         for (LogBatch batch : batches) {
             // Note that start offset is inclusive while max offset is exclusive. We only return
             // complete batches, so batches which end at an offset larger than the max offset are
             // filtered, which is effectively the same as having the consumer drop an incomplete
             // batch returned in a fetch response.
-            if (batch.lastOffset() >= startOffset) {
-                if (batch.lastOffset() < maxOffset) {
-                    buffer = batch.writeTo(buffer);
-                }
+            if (batch.lastOffset() >= startOffset && batch.lastOffset() < maxOffset && !batch.entries.isEmpty()) {
+                buffer = batch.writeTo(buffer);
+                batchStartOffset = batch.entries.get(0).logOffsetMetadata();
 
-                if (firstEntry == null && !batch.entries.isEmpty()) {
-                    firstEntry = batch.entries.get(0);
-                }
+                break;
             }
         }
 
         buffer.flip();
         Records records = MemoryRecords.readableRecords(buffer);
 
-        if (firstEntry == null) {
+        if (batchStartOffset == null) {
             throw new RuntimeException("Expected to find at least one entry starting from offset " +
                 startOffset + " but found none");
         }
 
-        return new LogFetchInfo(records, firstEntry.logOffsetMetadata());
+        return new LogFetchInfo(records, batchStartOffset);
     }
 
     @Override
@@ -589,6 +586,11 @@ public class MockLog implements ReplicatedLog {
 
             builder.close();
             return builder.buffer();
+        }
+
+        @Override
+        public String toString() {
+            return String.format("LogBatch(entries=%s, epoch=%s, isControlBatch=%s)", entries, epoch, isControlBatch);
         }
     }
 

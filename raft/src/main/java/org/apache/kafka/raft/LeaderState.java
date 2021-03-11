@@ -275,6 +275,16 @@ public class LeaderState implements EpochState {
             else
                 return Long.compare(that.endOffset.get().offset, this.endOffset.get().offset);
         }
+
+        @Override
+        public String toString() {
+            return String.format(
+                "ReplicaState(nodeId=%s, endOffset=%s, lastFetchTimestamp=%s)",
+                nodeId,
+                endOffset,
+                lastFetchTimestamp
+            );
+        }
     }
 
     private static class VoterState extends ReplicaState {
@@ -285,15 +295,29 @@ public class LeaderState implements EpochState {
             super(nodeId);
             this.hasAcknowledgedLeader = hasAcknowledgedLeader;
         }
+
+        @Override
+        public String toString() {
+            return String.format(
+                "VoterState(nodeId=%s, endOffset=%s, lastFetchTimestamp=%s, hasAcknowledgedLeader=%s)",
+                nodeId,
+                endOffset,
+                lastFetchTimestamp,
+                hasAcknowledgedLeader
+            );
+        }
     }
 
     @Override
     public String toString() {
-        return "Leader(" +
-            "localId=" + localId +
-            ", epoch=" + epoch +
-            ", epochStartOffset=" + epochStartOffset +
-            ')';
+        return String.format(
+            "Leader(localId=%s, epoch=%s, epochStartOffset=%s, highWatermark=%s, voterReplicaStates=%s)",
+            localId,
+            epoch,
+            epochStartOffset,
+            highWatermark,
+            voterReplicaStates
+        );
     }
 
     @Override

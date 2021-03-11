@@ -43,11 +43,13 @@ import org.apache.kafka.queue.EventQueue;
 import org.apache.kafka.queue.KafkaEventQueue;
 import org.apache.kafka.raft.BatchReader;
 import org.apache.kafka.raft.RaftClient;
+import org.apache.kafka.snapshot.SnapshotReader;
 import org.apache.kafka.shell.MetadataNode.DirectoryNode;
 import org.apache.kafka.shell.MetadataNode.FileNode;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.IOException;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.function.Consumer;
@@ -103,6 +105,25 @@ public final class MetadataNodeManager implements AutoCloseable {
                     handleMessage(message);
                 }
             }, null);
+        }
+
+        @Override
+        public void handleSnapshot(SnapshotReader<ApiMessageAndVersion> reader) {
+            // TODO: Create Jira: Need to cover the case where handle snapshot invalidates previous commits
+            //                    Need to handle that reader.snapshotId() means that every record up to that offset is committed
+            try {
+                for (List<ApiMessageAndVersion> batch : reader) {
+                    for (ApiMessageAndVersion messageAndVersion : batch) {
+                        handleMessage(messageAndVersion.message());
+                    }
+                }
+            } finally {
+                try {
+                    reader.close();
+                } catch (IOException e) {
+                    log.error("Unable to close snapshot {}", reader.snapshotId(), e);
+                }
+            }
         }
 
         @Override

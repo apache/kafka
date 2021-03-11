@@ -42,6 +42,7 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.Optional;
 import java.util.OptionalInt;
+import java.util.OptionalLong;
 import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -85,7 +86,7 @@ final public class KafkaRaftClientSnapshotTest {
         int leaderId = localId + 1;
         Set<Integer> voters = Utils.mkSet(localId, leaderId);
         int epoch = 2;
-        OffsetAndEpoch snapshotId = new OffsetAndEpoch(3L, 1);
+        OffsetAndEpoch snapshotId = new OffsetAndEpoch(3, 1);
 
         RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
             .appendToLog(snapshotId.epoch, Arrays.asList("a", "b", "c"))
@@ -122,7 +123,7 @@ final public class KafkaRaftClientSnapshotTest {
         int leaderId = localId + 1;
         Set<Integer> voters = Utils.mkSet(localId, leaderId);
         int epoch = 2;
-        OffsetAndEpoch snapshotId = new OffsetAndEpoch(3L, 1);
+        OffsetAndEpoch snapshotId = new OffsetAndEpoch(3, 1);
 
         RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
             .appendToLog(snapshotId.epoch, Arrays.asList("a", "b", "c"))
@@ -174,16 +175,15 @@ final public class KafkaRaftClientSnapshotTest {
         context.becomeLeader();
         int epoch = context.currentEpoch();
 
-        // Stop the the listener from reading commit batches
+        // Stop the listener from reading commit batches
         context.listener.updateReadCommit(false);
 
         // Advance the highWatermark
-        context.deliverRequest(
-            context.fetchRequest(epoch, otherNodeId, snapshotId.offset, snapshotId.epoch, 0)
-        );
+        long localLogEndOffset = context.log.endOffset().offset;
+        context.deliverRequest(context.fetchRequest(epoch, otherNodeId, localLogEndOffset, epoch, 0));
         context.pollUntilResponse();
         context.assertSentFetchPartitionResponse(Errors.NONE, epoch, OptionalInt.of(localId));
-        assertEquals(snapshotId.offset, context.client.highWatermark().getAsLong());
+        assertEquals(localLogEndOffset, context.client.highWatermark().getAsLong());
 
         // Check that listener was notified of the new snapshot
         try (SnapshotReader<String> snapshot = context.listener.takeSnapshot().get()) {
@@ -192,10 +192,14 @@ final public class KafkaRaftClientSnapshotTest {
         }
 
         // Generate a new snapshot
-        OffsetAndEpoch secondSnapshot = new OffsetAndEpoch(6, snapshotId.epoch);
-        try (SnapshotWriter<String> snapshot = context.client.createSnapshot(snapshotId)) {
+        OffsetAndEpoch secondSnapshot = new OffsetAndEpoch(localLogEndOffset, epoch);
+        try (SnapshotWriter<String> snapshot = context.client.createSnapshot(secondSnapshot)) {
             snapshot.freeze();
         }
+        context.client.poll();
+
+        // Resume the listener from reading commit batches
+        context.listener.updateReadCommit(true);
 
         context.client.poll();
         // Check that listener was notified of the second snapshot
@@ -265,6 +269,7 @@ final public class KafkaRaftClientSnapshotTest {
 
         RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
             .appendToLog(oldestSnapshotId.epoch, Arrays.asList("a", "b", "c"))
+            .appendToLog(oldestSnapshotId.epoch, Arrays.asList("d", "e", "f"))
             .withAppendLingerMs(1)
             .build();
 
@@ -285,7 +290,7 @@ final public class KafkaRaftClientSnapshotTest {
         }
         context.client.poll();
 
-        context.client.scheduleAppend(epoch, Arrays.asList("d", "e", "f"));
+        context.client.scheduleAppend(epoch, Arrays.asList("g", "h", "i"));
         context.time.sleep(context.appendLingerMs());
         context.client.poll();
 
@@ -352,7 +357,8 @@ final public class KafkaRaftClientSnapshotTest {
 
         RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
             .appendToLog(oldestSnapshotId.epoch, Arrays.asList("a", "b", "c"))
-            .appendToLog(oldestSnapshotId.epoch + 2, Arrays.asList("d", "e", "f"))
+            .appendToLog(oldestSnapshotId.epoch, Arrays.asList("d", "e", "f"))
+            .appendToLog(oldestSnapshotId.epoch + 2, Arrays.asList("g", "h", "i"))
             .withAppendLingerMs(1)
             .build();
 
@@ -393,7 +399,8 @@ final public class KafkaRaftClientSnapshotTest {
 
         RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
             .appendToLog(oldestSnapshotId.epoch, Arrays.asList("a", "b", "c"))
-            .appendToLog(oldestSnapshotId.epoch + 2, Arrays.asList("d", "e", "f"))
+            .appendToLog(oldestSnapshotId.epoch, Arrays.asList("d", "e", "f"))
+            .appendToLog(oldestSnapshotId.epoch + 2, Arrays.asList("g", "h", "i"))
             .withAppendLingerMs(1)
             .build();
 
