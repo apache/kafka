@@ -27,7 +27,7 @@ public final class ValidOffsetAndEpoch {
         this.offsetAndEpoch = offsetAndEpoch;
     }
 
-    public Type type() {
+    public Type getType() {
         return type;
     }
 

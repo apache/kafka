@@ -350,7 +350,7 @@ final class KafkaMetadataLogTest {
     append(log, numberOfRecords, epoch)
 
     val resultOffsetAndEpoch = log.validateOffsetAndEpoch(numberOfRecords, epoch + 1)
-    assertEquals(ValidOffsetAndEpoch.Type.DIVERGING, resultOffsetAndEpoch.`type`())
+    assertEquals(ValidOffsetAndEpoch.Type.DIVERGING, resultOffsetAndEpoch.getType())
     assertEquals(new OffsetAndEpoch(log.endOffset.offset, epoch), resultOffsetAndEpoch.offsetAndEpoch())
   }
 
@@ -371,7 +371,7 @@ final class KafkaMetadataLogTest {
     assertTrue(log.deleteBeforeSnapshot(snapshotId))
 
     val resultOffsetAndEpoch = log.validateOffsetAndEpoch(numberOfRecords, epoch - 1)
-    assertEquals(ValidOffsetAndEpoch.Type.SNAPSHOT, resultOffsetAndEpoch.`type`())
+    assertEquals(ValidOffsetAndEpoch.Type.SNAPSHOT, resultOffsetAndEpoch.getType())
     assertEquals(new OffsetAndEpoch(numberOfRecords, epoch), resultOffsetAndEpoch.offsetAndEpoch())
   }
 
@@ -392,7 +392,7 @@ final class KafkaMetadataLogTest {
     assertTrue(log.deleteBeforeSnapshot(snapshotId))
 
     val resultOffsetAndEpoch = log.validateOffsetAndEpoch(offset - 1, epoch)
-    assertEquals(ValidOffsetAndEpoch.Type.SNAPSHOT, resultOffsetAndEpoch.`type`())
+    assertEquals(ValidOffsetAndEpoch.Type.SNAPSHOT, resultOffsetAndEpoch.getType())
     assertEquals(new OffsetAndEpoch(offset, epoch), resultOffsetAndEpoch.offsetAndEpoch())
   }
 
@@ -413,7 +413,7 @@ final class KafkaMetadataLogTest {
     assertTrue(log.deleteBeforeSnapshot(snapshotId))
 
     val resultOffsetAndEpoch = log.validateOffsetAndEpoch(offset, epoch)
-    assertEquals(ValidOffsetAndEpoch.Type.VALID, resultOffsetAndEpoch.`type`())
+    assertEquals(ValidOffsetAndEpoch.Type.VALID, resultOffsetAndEpoch.getType())
     assertEquals(new OffsetAndEpoch(offset, epoch), resultOffsetAndEpoch.offsetAndEpoch())
   }
 
@@ -427,7 +427,7 @@ final class KafkaMetadataLogTest {
     append(log, numberOfRecords, epoch)
 
     val resultOffsetAndEpoch = log.validateOffsetAndEpoch(numberOfRecords, epoch + 10)
-    assertEquals(ValidOffsetAndEpoch.Type.DIVERGING, resultOffsetAndEpoch.`type`())
+    assertEquals(ValidOffsetAndEpoch.Type.DIVERGING, resultOffsetAndEpoch.getType())
     assertEquals(new OffsetAndEpoch(log.endOffset.offset, epoch), resultOffsetAndEpoch.offsetAndEpoch())
   }
 
@@ -441,7 +441,7 @@ final class KafkaMetadataLogTest {
     append(log, numberOfRecords, epoch)
 
     val resultOffsetAndEpoch = log.validateOffsetAndEpoch(numberOfRecords + 1, epoch)
-    assertEquals(ValidOffsetAndEpoch.Type.DIVERGING, resultOffsetAndEpoch.`type`())
+    assertEquals(ValidOffsetAndEpoch.Type.DIVERGING, resultOffsetAndEpoch.getType())
     assertEquals(new OffsetAndEpoch(log.endOffset.offset, epoch), resultOffsetAndEpoch.offsetAndEpoch())
   }
 
@@ -455,7 +455,7 @@ final class KafkaMetadataLogTest {
     append(log, numberOfRecords, epoch)
 
     val resultOffsetAndEpoch = log.validateOffsetAndEpoch(numberOfRecords, epoch)
-    assertEquals(ValidOffsetAndEpoch.Type.VALID, resultOffsetAndEpoch.`type`())
+    assertEquals(ValidOffsetAndEpoch.Type.VALID, resultOffsetAndEpoch.getType())
     assertEquals(new OffsetAndEpoch(numberOfRecords, epoch), resultOffsetAndEpoch.offsetAndEpoch())
   }
 }
