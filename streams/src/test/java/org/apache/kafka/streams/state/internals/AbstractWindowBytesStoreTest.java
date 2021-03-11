@@ -717,7 +717,6 @@ public abstract class AbstractWindowBytesStoreTest {
 
         final long startTime = SEGMENT_INTERVAL - 4L;
 
-//        context.setRecordContext(createRecordContext(startTime));
         windowStore.put(0, "zero", startTime);
 
         assertEquals(
